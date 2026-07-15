@@ -7,7 +7,7 @@ The spectral_norm benchmark computes the spectral norm of an infinite matrix A u
 **Performance Results (instruction counts):**
 - Rust: 5,093,977 (n=100, 10 iterations)
 - OCaml: 22,589,955 (n=100, 10 iterations) - 4.43x slower than Rust
-- **Dark: 14,296** (`n=3`, 10 iterations; reduced-size result, omitted from the main comparison table)
+- Dark: 14,296 (`n=3`, 10 iterations; reduced-size result, skipped from the aggregate Dark ratio)
 
 **Key Issues:**
 1. **Reduced implementation**: Dark computes the complete power-iteration algorithm only at `n=3`
@@ -278,11 +278,11 @@ matA:
 
 So the old note that dynamic `matA(i, j)` calls might remain in recursive hot loops is no longer current for this reduced benchmark. The remaining open question is whether the same inlining survives a future array-backed full `n=100` implementation with larger helper bodies and more register pressure.
 
-### Problem 4: Tuple Allocation in Outer Iteration
+### Problem 4: Tuple Allocation and Non-Tail Outer Iteration
 
 Current Dark evidence shows the reduced-size tuple implementation allocates fresh 3-float tuples for intermediate vectors. This is correct for immutable values, but it is a benchmark-specific cost that would disappear with mutable arrays or an unboxed fixed-size tuple representation.
 
-The LIR for `iterate` allocates vectors during each recursive power-iteration step:
+The LIR for `iterate` allocates vectors during each recursive power-iteration step, then makes a normal recursive `Call(iterate, ...)` rather than a branch-loop tail call:
 
 ```
 iterate:
@@ -298,13 +298,14 @@ iterate:
     HeapStore(X21, 8, Reg X9)
     HeapStore(X21, 16, Reg X9)
     X22 <- Call(atav3, [Reg X21])
+    X19 <- Call(iterate, [Reg X19, Reg X22, Reg X21])
     ...
     RefCountDec(X22, 24, generic)
     RefCountDec(X21, 24, generic)
     RefCountDec(X20, 24, generic)
 ```
 
-This makes mutable arrays the main full-parity blocker, but it also identifies a secondary optimization opportunity for small fixed numeric tuples: avoid boxing float tuple fields through generic heap objects when their shape is statically known.
+This recursion is bounded to 10 iterations in the current benchmark, so it is not the dominant reduced-size cost. It still shows that cleanup after recursive calls can block tail-call lowering when heap-owned intermediates must be decremented after the recursive result returns. Mutable arrays remain the main full-parity blocker, but the reduced implementation also identifies two secondary opportunities: avoid boxing float tuple fields through generic heap objects when their shape is statically known, and make lifetime cleanup compatible with tail-position loop lowering where possible.
 
 ## Identified Optimization Opportunities
 
@@ -413,12 +414,12 @@ Keep this as a regression guard for the full implementation:
 
 ---
 
-### 4. Avoid Boxing Small Numeric Tuples
+### 4. Avoid Boxing Small Numeric Tuples and Preserve Tail Loops
 
 **Impact: Reduces reduced-size benchmark overhead; not a substitute for full mutable arrays**
 
 **Root Cause:**
-The current `n=3` implementation models vectors as `(Float, Float, Float)`, which are heap-allocated generic tuples. Each intermediate vector in `atav3` and `iterate` allocates a 24-byte tuple, stores float bit patterns through general-purpose registers, and later decrements the tuple reference count.
+The current `n=3` implementation models vectors as `(Float, Float, Float)`, which are heap-allocated generic tuples. Each intermediate vector in `atav3` and `iterate` allocates a 24-byte tuple, stores float bit patterns through general-purpose registers, and later decrements the tuple reference count. In `iterate`, those decrements remain after the recursive call, so the outer power-iteration recursion is not lowered to a local branch loop.
 
 **Evidence - register-allocated LIR from `iterate`:**
 ```
@@ -427,11 +428,12 @@ HeapStore(X20, 0, Reg X9)
 HeapStore(X20, 8, Reg X9)
 HeapStore(X20, 16, Reg X9)
 ...
+X19 <- Call(iterate, [Reg X19, Reg X22, Reg X21])
 RefCountDec(X20, 24, generic)
 ```
 
 **Proposed Solution:**
-Consider an unboxed fixed-size tuple or specialized float-tuple representation only if other benchmarks also show the same pattern. For spectral_norm full parity, mutable arrays remain the more important optimization.
+Consider an unboxed fixed-size tuple or specialized float-tuple representation only if other benchmarks also show the same pattern. Separately, investigate whether ownership transfer or earlier cleanup can let recursive loops remain in tail position without dropping required refcount decrements. For spectral_norm full parity, mutable arrays remain the more important optimization.
 
 **Files to Modify:**
 - `src/DarkCompiler/Types.fs` / tuple representation sites - identify statically known float tuple shapes
@@ -507,7 +509,7 @@ def spectralNorm(n: Int64) : Float =
 | Mutable Arrays | 10-100x vs Dict | High | Yes |
 | Loop Constructs | Code clarity + 10-20% | Medium | No (can use recursion) |
 | Preserve Aggressive Inlining | Prevents hot-loop regression | Medium | No |
-| Avoid Boxing Small Numeric Tuples | Reduced benchmark overhead | Medium | No |
+| Avoid Boxing Small Numeric Tuples / Preserve Tail Loops | Reduced benchmark overhead | Medium | No |
 | Complete Implementation | Required | Medium | Yes |
 
 **With arrays, Dark spectral_norm could achieve:**
@@ -520,7 +522,7 @@ def spectralNorm(n: Int64) : Float =
 2. **Complete the Implementation** - Make it produce correct output
 3. **Preserve Aggressive Inlining** - Keep the hot numeric loops call-free
 4. **Loop Constructs** - Improve ergonomics (optional)
-5. **Avoid Boxing Small Numeric Tuples** - Consider only if broader evidence supports it
+5. **Avoid Boxing Small Numeric Tuples / Preserve Tail Loops** - Consider only if broader evidence supports it
 
 ## Appendix: Full IR Dumps
 
