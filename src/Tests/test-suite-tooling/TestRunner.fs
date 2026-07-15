@@ -288,6 +288,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Test Runner Args Tests"; Tests = TestRunnerArgsTests.tests }
         { Name = "Pass Test Runner Tests"; Tests = PassTestRunnerTests.tests }
         { Name = "Optimization Format Tests"; Tests = OptimizationFormatTests.tests }
+        { Name = "Type Checking Format Tests"; Tests = TypeCheckingFormatTests.tests }
         { Name = "Progress Bar Tests"; Tests = ProgressBarTests.tests }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
         { Name = "ARM64 Binary Tests"; Tests = ARM64BinaryTests.tests }

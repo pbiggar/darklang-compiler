@@ -36,6 +36,7 @@
     <Compile Include="test-suite-tooling-tests/TestRunnerArgsTests.fs" />
     <Compile Include="test-suite-tooling-tests/PassTestRunnerTests.fs" />
     <Compile Include="test-suite-tooling-tests/OptimizationFormatTests.fs" />
+    <Compile Include="test-suite-tooling-tests/TypeCheckingFormatTests.fs" />
     <Compile Include="test-suite-tooling-tests/ProgressBarTests.fs" />
     <Compile Include="test-suite-tooling-tests/FormattingRoundtripTests.fs" />
     <Compile Include="test-suite-tooling-tests/E2EFormatTests.fs" />

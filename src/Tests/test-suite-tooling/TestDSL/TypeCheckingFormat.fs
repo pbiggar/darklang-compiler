@@ -45,11 +45,21 @@ let private parseType (typeStr: string) : Result<AST.Type, string> =
 let private parseTestLine (line: string) (lineNumber: int) : Result<TypeCheckingTest, string> =
     // First, remove any comment
     let lineWithoutComment, comment =
-        let commentIdx = line.IndexOf("//")
-        if commentIdx >= 0 then
+        let rec findCommentStart (i: int) (inQuotes: bool) : int option =
+            if i >= line.Length - 1 then
+                None
+            elif line.[i] = '"' then
+                findCommentStart (i + 1) (not inQuotes)
+            elif line.[i] = '/' && line.[i + 1] = '/' && not inQuotes then
+                Some i
+            else
+                findCommentStart (i + 1) inQuotes
+
+        match findCommentStart 0 false with
+        | Some commentIdx ->
             (line.Substring(0, commentIdx).Trim(),
              Some (line.Substring(commentIdx + 2).Trim()))
-        else
+        | None ->
             (line, None)
 
     // Find the : that separates source from expectation
