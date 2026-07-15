@@ -87,7 +87,26 @@ let testRemoveFloatingCopyBackMovesFromAllocatedFunction () : TestResult =
         else
             Error $"Expected copy-back moves to be removed, got: {cleanedBlock.Instrs}"
 
+let testFNegMoveChainFusesWhenTempDies () : TestResult =
+    let instrs = [
+        FNeg (FPhysical D0, FPhysical D2)
+        FMov (FPhysical D2, FPhysical D0)
+        PrintInt64 (Physical X0)
+    ]
+
+    let expected = [
+        FNeg (FPhysical D2, FPhysical D2)
+        PrintInt64 (Physical X0)
+    ]
+
+    let optimized = removeSelfMovesFromInstrs instrs
+    if optimized = expected then
+        Ok ()
+    else
+        Error $"Expected dead FNeg/FMov chain to fuse, got: {optimized}"
+
 let tests = [
     ("LIR peephole removes self-moves from allocated function", testRemoveSelfMovesFromAllocatedFunction)
     ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
+    ("LIR peephole fuses FNeg followed by dead-temp FMov", testFNegMoveChainFusesWhenTempDies)
 ]

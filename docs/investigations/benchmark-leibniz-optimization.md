@@ -109,36 +109,7 @@ Add an induction variable detection pass in `3.5_MIR_Optimize.fs` that:
 
 ---
 
-### 2. Redundant Move Chain Elimination in Register Allocator
-
-**Impact: small remaining improvement (estimated)**
-
-**Root Cause:**
-The register allocator still emits a move chain that survives in optimized LIR after register allocation. The current LIR after register allocation shows:
-- Move chain: `D0 <- FNeg(D2)` then `D2 <- FMov(D0)`
-
-**Evidence from LIR (After Register Allocation):**
-```
-D0 <- FNeg(D2)
-D2 <- FMov(D0)           // Move chain through D0
-```
-
-This is one remaining instruction of copy traffic in the hot loop.
-
-**Why This Happens:**
-The tail-call optimization converts the recursive call into a loop, which requires moving values from their computed locations to the parameter positions for the next iteration. The phi nodes in SSA form generate move instructions during register allocation. Post-allocation cleanup removes trivial integer and floating-point self-moves, but move coalescing is not eliminating this copy.
-
-**Implementation Approach:**
-1. Improve phi coalescing in register allocation to reduce move generation
-2. Add dead store elimination for safe overwrites where the destination is not read before the overwrite
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Improve phi coalescing
-- `src/DarkCompiler/passes/4.5_LIR_Peephole.fs` - Extend post-allocation cleanup when safe
-
----
-
-### 3. Phi Resolution Move Optimization
+### 2. Phi Resolution Move Optimization
 
 **Impact: ~20-30% performance improvement (estimated)**
 
@@ -172,7 +143,7 @@ The loop-invariant value `v1` (the loop bound `n`) is being copied through inter
 
 ---
 
-### 4. Tail Call Loop Optimization
+### 3. Tail Call Loop Optimization
 
 **Impact: ~10-15% performance improvement (estimated)**
 
@@ -201,7 +172,6 @@ This is correctly detected as a tail call. However, the conversion to a loop in 
 
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
-| Redundant Move Chain Elimination | Small remaining | Medium |
 | Phi Resolution Optimization | 20-30% | Medium |
 | Induction Variable Optimization | 15-20% | High |
 | Tail Call Loop Optimization | 10-15% | Medium |
@@ -210,10 +180,9 @@ This is correctly detected as a tail call. However, the conversion to a loop in 
 
 ## Recommended Implementation Order
 
-1. **Redundant Move Chain Elimination** - Small cleanup remaining after trivial self-move cleanup
-2. **Phi Resolution Optimization** - Medium complexity, good payoff
-3. **Induction Variable Optimization** - Higher complexity but important for numerical code
-4. **Tail Call Loop Optimization** - Builds on other improvements
+1. **Phi Resolution Optimization** - Medium complexity, good payoff
+2. **Induction Variable Optimization** - Higher complexity but important for numerical code
+3. **Tail Call Loop Optimization** - Builds on other improvements
 
 ## Appendix: Full IR Dumps
 

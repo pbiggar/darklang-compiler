@@ -418,18 +418,64 @@ let optimizeInstr (instr: Instr) : Instr option =
     // For now, keep the instruction as-is
     | _ -> Some instr
 
+let private fRegUsedInInstr (target: FReg) (instr: Instr) : bool =
+    let same = sameFReg target
+    match instr with
+    | FArgMoves moves ->
+        moves |> List.exists (fun (_, src) -> same src)
+    | PrintFloat src
+    | PrintFloatNoNewline src
+    | FMov (_, src)
+    | FNeg (_, src)
+    | FAbs (_, src)
+    | FSqrt (_, src)
+    | FloatToInt64 (_, src)
+    | FloatToBits (_, src)
+    | FpToGp (_, src)
+    | FloatToString (_, src) ->
+        same src
+    | FAdd (_, left, right)
+    | FSub (_, left, right)
+    | FMul (_, left, right)
+    | FDiv (_, left, right)
+    | FCmp (left, right) ->
+        same left || same right
+    | FPhi (_, sources) ->
+        sources |> List.exists (fun (src, _) -> same src)
+    | _ -> false
+
+let private fRegUsedInInstrs (target: FReg) (instrs: Instr list) : bool =
+    instrs |> List.exists (fRegUsedInInstr target)
+
 /// Optimize a list of instructions (single-pass peephole)
 let optimizeInstrs (instrs: Instr list) : Instr list =
-    instrs
-    |> List.choose optimizeInstr
+    let rec loop remaining =
+        match remaining with
+        | FNeg (temp, src) :: FMov (dest, moveSrc) :: rest
+            when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
+            FNeg (dest, src) :: loop rest
+        | instr :: rest ->
+            match optimizeInstr instr with
+            | Some instr' -> instr' :: loop rest
+            | None -> loop rest
+        | [] -> []
+
+    loop instrs
 
 let removeSelfMovesFromInstrs (instrs: Instr list) : Instr list =
-    instrs
-    |> List.filter (fun instr ->
-        match instr with
-        | Mov (dest, Reg src) when sameReg dest src -> false
-        | FMov (dest, src) when sameFReg dest src -> false
-        | _ -> true)
+    let rec loop remaining =
+        match remaining with
+        | FNeg (temp, src) :: FMov (dest, moveSrc) :: rest
+            when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
+            FNeg (dest, src) :: loop rest
+        | instr :: rest ->
+            match instr with
+            | Mov (dest, Reg src) when sameReg dest src -> loop rest
+            | FMov (dest, src) when sameFReg dest src -> loop rest
+            | _ -> instr :: loop rest
+        | [] -> []
+
+    loop instrs
 
 let removeSelfMovesFromFunction (func: Function) : Function =
     let blocks =
