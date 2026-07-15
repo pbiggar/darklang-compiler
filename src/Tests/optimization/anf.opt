@@ -1130,3 +1130,22 @@ Function f:
 let TempId 1 = t0 + 1
 let TempId 5 = t1 + t1
 return t5
+
+---NAME---
+cse_reuses_duplicate_tuple_get
+---INPUT---
+def f(t: (Int64, Int64)) : Int64 =
+  let a = t.0 in
+  let b = t.0 in
+  a + b
+f((1, 2))
+---EXPECTED---
+Function f:
+let TempId 1 = t0.0
+let TempId 5 = t1 + t1
+return t5
+
+Main:
+let TempId 6 = (1, 2)
+let TempId 7 = f(t6)
+return t7

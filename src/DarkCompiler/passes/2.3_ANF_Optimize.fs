@@ -557,7 +557,8 @@ let private cseKey (cexpr: CExpr) : CExpr =
 let private isCSEEligible (cexpr: CExpr) : bool =
     match cexpr with
     | Prim _
-    | UnaryPrim _ -> true
+    | UnaryPrim _
+    | TupleGet _ -> true
     | _ -> false
 
 let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =

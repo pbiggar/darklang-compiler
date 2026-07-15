@@ -253,6 +253,15 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Existing ANF optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Implemented in `tryStrengthReduce`.
 
+## Common subexpression elimination
+
+### Duplicate tuple projection reuse
+
+- Optimization name: Duplicate tuple projection reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, low-risk extension of ANF CSE for immutable tuple reads; avoids repeating the same tuple field load before MIR lowering.
+- Notes: Implemented for repeated `TupleGet(tuple, index)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_tuple_get` in `src/Tests/optimization/anf.opt`; tuple-heavy tests and benchmarks provide broader regression coverage but do not isolate this micro-pattern.
+
 ## Dead code elimination
 
 ### Unused ANF binding elimination
