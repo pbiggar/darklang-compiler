@@ -120,18 +120,20 @@ Update liveness analysis and allocation for new instruction:
     // Use: minuend, multiplicand, multiplier
 ```
 
-### Step 12: Code Generation (`src/DarkCompiler/passes/6_CodeGen.fs`)
+### Step 12: Code Generation (`src/DarkCompiler/passes/arm64/6_CodeGen.fs`, `src/DarkCompiler/passes/x64/6_CodeGen.fs`)
 
-Generate ARM64 instructions:
+Generate backend-specific instructions. ARM64 can lower modulo directly to
+`MSUB`; x64 needs the equivalent target-specific sequence.
 
 ```fsharp
 | LIR.Msub (dest, minuend, multiplicand, multiplier) ->
     ARM64.MSUB (toReg dest, toReg minuend, toReg multiplicand, toReg multiplier)
 ```
 
-### Step 13: ARM64 Encoding (`src/DarkCompiler/passes/7_ARM64_Encoding.fs`)
+### Step 13: Encoding (`src/DarkCompiler/passes/arm64/7_Encoding.fs`, `src/DarkCompiler/passes/x64/7_Encoding.fs`)
 
-Encode to machine code bytes:
+Encode any new backend instruction forms to machine code bytes. For ARM64
+`MSUB`:
 
 ```fsharp
 | ARM64.MSUB (rd, rn, rm, ra) ->
