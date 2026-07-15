@@ -5,9 +5,10 @@ without using an external assembler or linker.
 
 ## Overview
 
-The compiler generates native ARM64 binaries directly:
-- **macOS**: Mach-O format (requires code signing)
-- **Linux**: ELF format (no signing needed)
+The compiler generates native binaries directly:
+- **macOS ARM64**: Mach-O format (requires code signing)
+- **Linux ARM64**: ELF format (no signing needed)
+- **Linux x86-64**: ELF format (no signing needed)
 
 This approach eliminates dependencies on external tools (as, ld) and gives full
 control over the binary layout.
@@ -21,7 +22,7 @@ control over the binary layout.
 
 ## Mach-O Format (macOS)
 
-Implemented in `8_Binary_Generation_MachO.fs`.
+Implemented for ARM64 in `src/DarkCompiler/passes/arm64/8_Binary_Generation_MachO.fs`.
 
 ### File Structure
 
@@ -73,7 +74,8 @@ The `-s -` flag performs ad-hoc signing (no certificate needed).
 
 ## ELF Format (Linux)
 
-Implemented in `8_Binary_Generation_ELF.fs`.
+Implemented for ARM64 in `src/DarkCompiler/passes/arm64/8_Binary_Generation_ELF.fs`
+and for x86-64 in `src/DarkCompiler/passes/x64/8_Binary_Generation_ELF.fs`.
 
 ### File Structure
 
@@ -96,7 +98,7 @@ Implemented in `8_Binary_Generation_ELF.fs`.
 type Elf64Header = {
     Ident: byte array       // Magic: 0x7F 'E' 'L' 'F', class, endian
     Type: uint16            // ET_EXEC (executable)
-    Machine: uint16         // EM_AARCH64 (ARM64)
+    Machine: uint16         // EM_AARCH64 (ARM64) or EM_X86_64
     Entry: uint64           // Entry point virtual address
     PhOff: uint64           // Program header offset
     // ...
@@ -131,6 +133,7 @@ type Elf64ProgramHeader = {
 After machine code, the binary contains:
 1. **Float pool** - 8-byte IEEE 754 doubles, indexed by `FloatRef`
 2. **String pool** - Null-terminated UTF-8 strings, indexed by `StringRef`
+3. **Leak counter** - Optional 8-byte `_leak_count` slot when leak checking is enabled
 
 Data is 8-byte aligned for efficient float access.
 
@@ -156,8 +159,9 @@ Code generation handles these differences at the MIR/CodeGen level.
 
 | File | Purpose |
 |------|---------|
-| `8_Binary_Generation_MachO.fs` | Mach-O generation (547 lines) |
-| `8_Binary_Generation_ELF.fs` | ELF generation (227 lines) |
+| `passes/arm64/8_Binary_Generation_MachO.fs` | ARM64 Mach-O generation |
+| `passes/arm64/8_Binary_Generation_ELF.fs` | ARM64 ELF generation |
+| `passes/x64/8_Binary_Generation_ELF.fs` | x86-64 ELF generation |
 | `Binary.fs` | Common types for binary structures |
 | `Binary_ELF.fs` | ELF-specific type definitions |
 
@@ -175,10 +179,15 @@ Code generation handles these differences at the MIR/CodeGen level.
 
 ```fsharp
 // Mach-O
-let bytes = createExecutableWithPools machineCode stringPool floatPool
+let bytes = createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
 writeToFile path bytes |> Result.bind codeSign
 
-// ELF
-let bytes = createExecutableWithPools machineCode stringPool floatPool
+// ARM64 ELF
+let bytes = createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
 writeToFile path bytes  // No signing needed
+
+// x86-64 ELF
+let bytes =
+    Binary_Generation_ELF_X86_64.createExecutableWithPools
+        machineCode stringPool floatPool enableLeakCheck entryOffset
 ```
