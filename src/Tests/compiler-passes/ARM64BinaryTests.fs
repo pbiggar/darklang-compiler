@@ -137,6 +137,37 @@ let testCreateExecutableContainsCode () : TestResult =
     else
         Ok ()
 
+let private readUInt32LE (bytes: byte array) (offset: int) : uint32 =
+    uint32 bytes.[offset]
+    ||| (uint32 bytes.[offset + 1] <<< 8)
+    ||| (uint32 bytes.[offset + 2] <<< 16)
+    ||| (uint32 bytes.[offset + 3] <<< 24)
+
+let testMachOConstSectionOffsetPointsToAlignedData () : TestResult =
+    let (_stringId, stringPool) =
+        LiteralPool.addString LiteralPool.emptyStringPool "abc"
+
+    let binary =
+        createExecutableWithPools [0xD65F03C0u] stringPool LiteralPool.emptyFloatPool false
+
+    let textSegmentOffset = 32 + 72
+    let firstSectionOffset = textSegmentOffset + 72
+    let secondSectionOffset = firstSectionOffset + 80
+    let sectionFileOffsetField = 48
+    let constFileOffset =
+        readUInt32LE binary (secondSectionOffset + sectionFileOffsetField)
+        |> int
+
+    let expectedLengthPrefix = [| 3uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy |]
+    let actualLengthPrefix = binary.[constFileOffset .. constFileOffset + 7]
+
+    if constFileOffset % 8 <> 0 then
+        Error $"Expected __const section file offset to be 8-byte aligned, got {constFileOffset}"
+    elif actualLengthPrefix <> expectedLengthPrefix then
+        Error $"Expected __const section offset to point at string length prefix, got {actualLengthPrefix}"
+    else
+        Ok ()
+
 let testCompleteEncodingPipeline () : TestResult =
     // Test the complete pipeline: instructions -> encoding -> binary
     let movInstr = MOVZ (X0, 42us, 0)
@@ -173,6 +204,7 @@ let tests = [
     ("createExecutable non-empty", testCreateExecutableNonEmpty)
     ("createExecutable magic", testCreateExecutableMagic)
     ("createExecutable contains code", testCreateExecutableContainsCode)
+    ("Mach-O __const section offset points to aligned data", testMachOConstSectionOffsetPointsToAlignedData)
     ("complete encoding pipeline", testCompleteEncodingPipeline)
 ]
 

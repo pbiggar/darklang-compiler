@@ -362,9 +362,9 @@ let createExecutableWithPools
     let codeFileOffset = uint64 ((headerSize + commandsSize + 200 + 7) &&& ~~~7)
     let vmCodeOffset = codeFileOffset
 
-    // Constant data (floats + strings) goes right after code
-    let dataFileOffset = codeFileOffset + codeSize
-    let vmDataOffset = vmCodeOffset + codeSize
+    // Constant data (floats + strings) is serialized after 8-byte padding.
+    let dataFileOffset = (codeFileOffset + codeSize + 7UL) &&& (~~~7UL)
+    let vmDataOffset = (vmCodeOffset + codeSize + 7UL) &&& (~~~7UL)
 
     // __PAGEZERO segment (required by modern macOS)
     let pageZeroCommand : Binary.SegmentCommand64 = {
