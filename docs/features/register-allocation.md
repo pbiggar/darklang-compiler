@@ -1,23 +1,28 @@
 # Register Allocation
 
 This document describes the register allocation pass that maps virtual registers
-to physical ARM64 registers.
+to target physical registers.
 
 ## Overview
 
 The Dark compiler uses **chordal graph coloring** for register allocation, which is
 optimal for SSA-form programs. SSA guarantees that interference graphs are chordal,
 enabling optimal coloring in linear time. Virtual registers from LIR are mapped to
-physical ARM64 registers, with spilling to stack when register pressure is too high.
+target physical registers, with spilling to stack when register pressure is too high.
 
-## ARM64 Register Conventions
+## Register Conventions
 
-### General-Purpose Registers
+The allocator shares the same liveness, interference, and coloring pipeline
+across targets, then chooses allocatable registers from the detected
+architecture.
+
+### ARM64 General-Purpose Registers
 
 | Registers | Purpose |
 |-----------|---------|
 | X0 | Return value |
-| X1-X8 | Caller-saved, preferred for allocation |
+| X1-X7 | Caller-saved, preferred for allocation |
+| X8 | Excluded (used by StringConcat byte copying) |
 | X9-X10 | Excluded (used by StringHash/StringEq internally) |
 | X11-X13 | Reserved as scratch registers for spill code |
 | X19-X26 | Callee-saved, used when caller-saved exhausted |
@@ -33,6 +38,19 @@ physical ARM64 registers, with spilling to stack when register pressure is too h
 | D0 | Float return value |
 | D0-D7 | Caller-saved float registers |
 | D8-D15 | Callee-saved float registers |
+
+### x86_64 General-Purpose Registers
+
+The LIR physical register type keeps ARM-style names, but the x64 backend maps
+the allocatable subset onto x86_64 registers during code generation.
+
+| LIR Registers | x86_64 Role |
+|---------------|-------------|
+| X0 | Return value |
+| X1-X7 | Caller-saved, preferred for allocation |
+| X8-X13 | Reserved as scratch registers |
+| X19-X21 | Callee-saved, used when caller-saved registers are exhausted |
+| X22-X23 | Reserved for heap and free-list pointers |
 
 ## Algorithm
 
@@ -114,7 +132,7 @@ Higher addresses
 Lower addresses (SP)
 ```
 
-Stack is 16-byte aligned as required by ARM64 ABI.
+Stack is 16-byte aligned as required by the target ABI.
 
 ## Caller-Saved Register Optimization
 

@@ -1,6 +1,6 @@
-// 5_RegisterAllocation.fs - Register Allocation with Liveness Analysis (Pass 5)
+// 5_RegisterAllocation.fs - Architecture-aware register allocation (Pass 5)
 //
-// Allocates physical ARM64 registers to virtual registers in LIR CFG.
+// Allocates target physical registers to virtual registers in LIR CFG.
 //
 // Algorithm:
 // 1. Compute liveness information using backward dataflow analysis
@@ -11,9 +11,10 @@
 //    - Phi coalescing preferences to reduce register moves
 // 4. Spill to stack when register pressure exceeds available registers
 //
-// General-Purpose Registers:
+// ARM64 General-Purpose Registers:
 // - X0: reserved for return values
-// - X1-X8: caller-saved (preferred for allocation)
+// - X1-X7: caller-saved (preferred for allocation)
+// - X8: excluded (used by StringConcat byte copying)
 // - X9-X10: excluded (used as compiler scratch registers)
 // - X11-X13: reserved as scratch registers for spill code
 // - X19-X26: callee-saved (used when caller-saved exhausted)
@@ -22,12 +23,13 @@
 // - X29: frame pointer
 // - X30: link register
 //
-// Float Registers:
+// ARM64 Float Registers:
 // - D0: float return value
 // - D0-D7: caller-saved (saved around calls when live)
 // - D8-D15: callee-saved
 //
-// Callee-saved registers (X19-X26, D8-D15) are saved/restored in prologue/epilogue.
+// Callee-saved registers are saved/restored in prologue/epilogue according to
+// the active target architecture.
 //
 // See docs/features/register-allocation.md for detailed documentation.
 
