@@ -93,6 +93,13 @@ let x = 42 in Stdlib.Int64.toFloat(x)
 return 42
 
 ---NAME---
+const_fold_float_to_int64
+---INPUT---
+let x = 42.9 in Stdlib.Float.toInt(x)
+---EXPECTED---
+return 42
+
+---NAME---
 const_fold_float_to_bits
 ---INPUT---
 let x = 1.0 in Float.toBits(x)

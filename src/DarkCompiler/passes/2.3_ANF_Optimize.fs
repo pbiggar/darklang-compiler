@@ -62,6 +62,14 @@ let euclideanMod (a: int64) (b: int64) : int64 =
     elif (remainder > 0L && b < 0L) || (remainder < 0L && b > 0L) then remainder + b
     else remainder
 
+let tryTruncateFloatToInt64 (f: float) : int64 option =
+    let int64Min = -9223372036854775808.0
+    let int64MaxExclusive = 9223372036854775808.0
+    if System.Double.IsFinite f && f >= int64Min && f < int64MaxExclusive then
+        Some (int64 (System.Math.Truncate f))
+    else
+        None
+
 /// Fold a binary operation on constants
 /// Only folds Int64 for now - other integer types need proper overflow handling at runtime
 let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
@@ -496,6 +504,9 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
             | FloatAbs (FloatLiteral f) -> Some (Atom (FloatLiteral (abs f)))
             | FloatSqrt (FloatLiteral f) -> Some (Atom (FloatLiteral (sqrt f)))
             | Int64ToFloat (IntLiteral (Int64 n)) -> Some (Atom (FloatLiteral (float n)))
+            | FloatToInt64 (FloatLiteral f) ->
+                tryTruncateFloatToInt64 f
+                |> Option.map (fun n -> Atom (IntLiteral (Int64 n)))
             | FloatToBits (FloatLiteral f) ->
                 Some (Atom (IntLiteral (UInt64 (System.BitConverter.DoubleToUInt64Bits f))))
             | Call ("__string_eq", [Var leftTid; Var rightTid]) when leftTid = rightTid ->
