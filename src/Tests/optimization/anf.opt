@@ -890,6 +890,42 @@ Function f:
 return t0
 
 ---NAME---
+internal_string_eq_self_comparison
+---INPUT---
+def f(x: String) : Bool = __string_eq(x, x)
+---EXPECTED---
+Function f:
+return true
+
+---NAME---
+source_string_eq_self_not_folded
+---INPUT---
+def f(x: String) : Bool = x == x
+---EXPECTED---
+Function f:
+let TempId 1 = Stdlib.String.equals(t0, t0)
+return t1
+
+---NAME---
+source_string_neq_self_not_folded
+---INPUT---
+def f(x: String) : Bool = x != x
+---EXPECTED---
+Function f:
+let TempId 1 = Stdlib.String.equals(t0, t0)
+let TempId 2 = !t1
+return t2
+
+---NAME---
+stdlib_string_equals_self_not_folded
+---INPUT---
+def f(x: String) : Bool = String.equals(x, x)
+---EXPECTED---
+Function f:
+let TempId 1 = Stdlib.String.equals(t0, t0)
+return t1
+
+---NAME---
 identity_bitwise_double_not
 ---INPUT---
 def f(x: Int64) : Int64 = ~~~(~~~x)

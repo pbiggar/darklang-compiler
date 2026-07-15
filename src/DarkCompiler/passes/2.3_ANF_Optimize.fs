@@ -498,6 +498,8 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
             | Int64ToFloat (IntLiteral (Int64 n)) -> Some (Atom (FloatLiteral (float n)))
             | FloatToBits (FloatLiteral f) ->
                 Some (Atom (IntLiteral (UInt64 (System.BitConverter.DoubleToUInt64Bits f))))
+            | Call ("__string_eq", [Var leftTid; Var rightTid]) when leftTid = rightTid ->
+                Some (Atom (BoolLiteral true))
             | IfValue (BoolLiteral true, thenVal, _) -> Some (Atom thenVal)
             | IfValue (BoolLiteral false, _, elseVal) -> Some (Atom elseVal)
             | _ -> None
