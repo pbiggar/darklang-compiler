@@ -58,12 +58,14 @@ ClosureCall(clos, args)  →  ClosureTailCall(clos, args)
 
 The tail call skips SaveRegs/RestoreRegs because the callee will return directly to the caller's caller.
 
-### ARM64 Instructions
+### Backend Instructions
 
 | Call Type | Regular | Tail |
 |-----------|---------|------|
-| Direct | BL label | B label |
-| Indirect | BLR Xn | BR Xn |
+| ARM64 direct | BL label | B label |
+| ARM64 indirect | BLR Xn | BR Xn |
+| x64 direct | CALL label | JMP label |
+| x64 indirect | CALL reg | JMP reg |
 
 ## The Parallel Move Problem
 
@@ -165,5 +167,6 @@ From `virtual-tumbling-bunny.md`:
 - `src/DarkCompiler/passes/2.7_TailCallDetection.fs` - Tail position detection
 - `src/DarkCompiler/passes/4_MIR_to_LIR.fs` - TailArgMoves generation
 - `src/DarkCompiler/ANF.fs` - TailCall, IndirectTailCall, ClosureTailCall types
-- `src/DarkCompiler/passes/6_CodeGen.fs` - B/BR emission
+- `src/DarkCompiler/passes/arm64/6_CodeGen.fs` - ARM64 B/BR emission
+- `src/DarkCompiler/passes/x64/6_CodeGen.fs` - x64 JMP emission
 - `src/Tests/e2e/tailcall.e2e` - Test cases (minimal - 16 lines)
