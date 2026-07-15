@@ -510,6 +510,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Mul({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
     | LIR.Sdiv (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- Sdiv({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
+    | LIR.Udiv (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- Udiv({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
     | LIR.Msub (dest, mulLeft, mulRight, sub) ->
         $"{prettyPrintLIRReg dest} <- Msub({prettyPrintLIRReg mulLeft}, {prettyPrintLIRReg mulRight}, {prettyPrintLIRReg sub})"
     | LIR.Madd (dest, mulLeft, mulRight, add) ->

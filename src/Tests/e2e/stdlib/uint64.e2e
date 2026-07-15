@@ -128,6 +128,7 @@ UInt64.greaterThanOrEqualTo(5UL, 5UL) = true
 UInt64.lessThan(6UL, 8UL) = true
 UInt64.lessThan(8UL, 6UL) = false
 UInt64.lessThan(5UL, 5UL) = false
+UInt64.lessThan(18446744073709551615UL, 10UL) = false
 
 // ===================================================================
 // UInt64.lessThanOrEqualTo - Less than or equal comparison
@@ -136,6 +137,7 @@ UInt64.lessThan(5UL, 5UL) = false
 UInt64.lessThanOrEqualTo(6UL, 8UL) = true
 UInt64.lessThanOrEqualTo(8UL, 6UL) = false
 UInt64.lessThanOrEqualTo(5UL, 5UL) = true
+UInt64.lessThanOrEqualTo(18446744073709551615UL, 10UL) = false
 
 // ===================================================================
 // UInt64.toString - Convert integer to string
@@ -145,6 +147,7 @@ UInt64.toString(0UL) = "0"
 UInt64.toString(42UL) = "42"
 UInt64.toString(5UL) = "5"
 UInt64.toString(1234567890UL) = "1234567890"
+UInt64.toString(18446744073709551615UL) = "18446744073709551615"
 
 // ===================================================================
 // UInt64.isEven - Check if integer is even

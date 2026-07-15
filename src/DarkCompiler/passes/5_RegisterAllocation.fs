@@ -385,7 +385,7 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         regToVReg src |> Option.toList
     | LIR.Add (_, left, right) | LIR.Sub (_, left, right) ->
         (regToVReg left |> Option.toList) @ (operandToVReg right |> Option.toList)
-    | LIR.Mul (_, left, right) | LIR.Sdiv (_, left, right)
+    | LIR.Mul (_, left, right) | LIR.Sdiv (_, left, right) | LIR.Udiv (_, left, right)
     | LIR.And (_, left, right) | LIR.Orr (_, left, right) | LIR.Eor (_, left, right)
     | LIR.Lsl (_, left, right) | LIR.Lsr (_, left, right) ->
         (regToVReg left |> Option.toList) @ (regToVReg right |> Option.toList)
@@ -530,7 +530,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     match instr with
     | LIR.Mov (dest, _) -> regToVReg dest
     | LIR.Add (dest, _, _) | LIR.Sub (dest, _, _) -> regToVReg dest
-    | LIR.Mul (dest, _, _) | LIR.Sdiv (dest, _, _) | LIR.Msub (dest, _, _, _) | LIR.Madd (dest, _, _, _) -> regToVReg dest
+    | LIR.Mul (dest, _, _) | LIR.Sdiv (dest, _, _) | LIR.Udiv (dest, _, _) | LIR.Msub (dest, _, _, _) | LIR.Madd (dest, _, _, _) -> regToVReg dest
     | LIR.Cset (dest, _) -> regToVReg dest
     | LIR.And (dest, _, _) | LIR.And_imm (dest, _, _) | LIR.Orr (dest, _, _) | LIR.Eor (dest, _, _)
     | LIR.Lsl (dest, _, _) | LIR.Lsr (dest, _, _) | LIR.Lsl_imm (dest, _, _) | LIR.Lsr_imm (dest, _, _) -> regToVReg dest
@@ -2255,6 +2255,16 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (destReg, destAlloc) = applyToReg mapping dest
         let ((leftReg, leftLoads), (rightReg, rightLoads)) = loadSpilledPair arch mapping left right destReg
         let divInstr = LIR.Sdiv (destReg, leftReg, rightReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        leftLoads @ rightLoads @ [divInstr] @ storeInstrs
+
+    | LIR.Udiv (dest, left, right) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let ((leftReg, leftLoads), (rightReg, rightLoads)) = loadSpilledPair arch mapping left right destReg
+        let divInstr = LIR.Udiv (destReg, leftReg, rightReg)
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]

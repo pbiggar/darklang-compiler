@@ -52,6 +52,10 @@ type Condition =
     | GT
     | LE
     | GE
+    | ULT
+    | UGT
+    | ULE
+    | UGE
 
 /// Reference-count operation kind
 type RcKind =
@@ -72,6 +76,7 @@ type Instr =
     | Sub of dest:Reg * left:Reg * right:Operand
     | Mul of dest:Reg * left:Reg * right:Reg
     | Sdiv of dest:Reg * left:Reg * right:Reg
+    | Udiv of dest:Reg * left:Reg * right:Reg
     | Msub of dest:Reg * mulLeft:Reg * mulRight:Reg * sub:Reg
     | Madd of dest:Reg * mulLeft:Reg * mulRight:Reg * add:Reg
     | Cmp of left:Reg * right:Operand

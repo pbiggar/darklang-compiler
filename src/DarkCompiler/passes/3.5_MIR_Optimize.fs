@@ -1096,6 +1096,14 @@ let isTotallyOrderedIntegerType (opType: AST.Type) : bool =
     | AST.TUInt128 -> true
     | _ -> false
 
+let isUnsignedIntegerType (opType: AST.Type) : bool =
+    match opType with
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64 -> true
+    | _ -> false
+
 /// Constant Folding for MIR
 /// Evaluate operations on constants at compile time
 let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type) : Operand option =
@@ -1105,12 +1113,21 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type)
     | Sub, Int64Const a, Int64Const b -> Some (Int64Const (truncateToType (a - b) opType))
     | Mul, Int64Const a, Int64Const b -> Some (Int64Const (truncateToType (a * b) opType))
     // Division: avoid divide by zero and INT64_MIN / -1 overflow
-    | Div, Int64Const a, Int64Const b when b <> 0L && not (a = System.Int64.MinValue && b = -1L) -> Some (Int64Const (truncateToType (a / b) opType))
+    | Div, Int64Const a, Int64Const b when isUnsignedIntegerType opType && b <> 0L ->
+        Some (Int64Const (int64 (uint64 a / uint64 b)))
+    | Div, Int64Const a, Int64Const b when b <> 0L && not (a = System.Int64.MinValue && b = -1L) ->
+        Some (Int64Const (truncateToType (a / b) opType))
+    | Mod, Int64Const a, Int64Const b when isUnsignedIntegerType opType && b <> 0L ->
+        Some (Int64Const (int64 (uint64 a % uint64 b)))
     | Mod, Int64Const a, Int64Const b when b > 0L -> Some (Int64Const (truncateToType (euclideanMod a b) opType))
 
     // Comparisons
     | Eq, Int64Const a, Int64Const b -> Some (BoolConst (a = b))
     | Neq, Int64Const a, Int64Const b -> Some (BoolConst (a <> b))
+    | Lt, Int64Const a, Int64Const b when isUnsignedIntegerType opType -> Some (BoolConst (uint64 a < uint64 b))
+    | Gt, Int64Const a, Int64Const b when isUnsignedIntegerType opType -> Some (BoolConst (uint64 a > uint64 b))
+    | Lte, Int64Const a, Int64Const b when isUnsignedIntegerType opType -> Some (BoolConst (uint64 a <= uint64 b))
+    | Gte, Int64Const a, Int64Const b when isUnsignedIntegerType opType -> Some (BoolConst (uint64 a >= uint64 b))
     | Lt, Int64Const a, Int64Const b -> Some (BoolConst (a < b))
     | Gt, Int64Const a, Int64Const b -> Some (BoolConst (a > b))
     | Lte, Int64Const a, Int64Const b -> Some (BoolConst (a <= b))

@@ -74,6 +74,10 @@ type Condition =
     | GT   // Greater than (signed)
     | LE   // Less than or equal (signed)
     | GE   // Greater than or equal (signed)
+    | LO   // Lower than (unsigned)
+    | HI   // Higher than (unsigned)
+    | LS   // Lower than or same (unsigned)
+    | HS   // Higher than or same (unsigned)
 
 /// ARM64 instruction types
 type Instr =

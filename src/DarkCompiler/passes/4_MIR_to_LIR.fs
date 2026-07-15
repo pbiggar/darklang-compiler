@@ -188,6 +188,26 @@ let shouldCheckNegativeDivisor (operandType: AST.Type) : bool =
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 -> true
     | _ -> false
 
+let isUnsignedIntegerType (operandType: AST.Type) : bool =
+    match operandType with
+    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> true
+    | _ -> false
+
+let comparisonCondition (operandType: AST.Type) (op: MIR.BinOp) : LIR.Condition =
+    let unsigned = isUnsignedIntegerType operandType
+    match op, unsigned with
+    | MIR.Eq, _ -> LIR.EQ
+    | MIR.Neq, _ -> LIR.NE
+    | MIR.Lt, true -> LIR.ULT
+    | MIR.Gt, true -> LIR.UGT
+    | MIR.Lte, true -> LIR.ULE
+    | MIR.Gte, true -> LIR.UGE
+    | MIR.Lt, false -> LIR.LT
+    | MIR.Gt, false -> LIR.GT
+    | MIR.Lte, false -> LIR.LE
+    | MIR.Gte, false -> LIR.GE
+    | _ -> Crash.crash $"comparisonCondition: non-comparison op {op}"
+
 let buildIntegerModuloParts
     (destReg: LIR.Reg)
     (left: MIR.Operand)
@@ -202,24 +222,31 @@ let buildIntegerModuloParts
     | Error err -> Error err
     | Ok (rightInstrs, rightReg, stateAfterRight) ->
         let (quotReg, stateAfterQuot) = freshTempReg stateAfterRight
-        let (xorReg, stateAfterXor) = freshTempReg stateAfterQuot
-        let (remNonZeroReg, stateAfterRemNonZero) = freshTempReg stateAfterXor
-        let (signMismatchReg, stateAfterSignMismatch) = freshTempReg stateAfterRemNonZero
-        let (adjustFlagReg, stateAfterAdjustFlag) = freshTempReg stateAfterSignMismatch
-        let (adjustReg, nextState) = freshTempReg stateAfterAdjustFlag
         let truncInstrs = truncateForType destReg operandType
-        let modInstrs =
-            [LIR.Sdiv (quotReg, leftReg, rightReg);
-             LIR.Msub (destReg, quotReg, rightReg, leftReg);
-             LIR.Cmp (destReg, LIR.Imm 0L);
-             LIR.Cset (remNonZeroReg, LIR.NE);
-             LIR.Eor (xorReg, destReg, rightReg);
-             LIR.Cmp (xorReg, LIR.Imm 0L);
-             LIR.Cset (signMismatchReg, LIR.LT);
-             LIR.And (adjustFlagReg, remNonZeroReg, signMismatchReg);
-             LIR.Mul (adjustReg, adjustFlagReg, rightReg);
-             LIR.Add (destReg, destReg, LIR.Reg adjustReg)]
-            @ truncInstrs
+        let (modInstrs, nextState) =
+            if isUnsignedIntegerType operandType then
+                ([LIR.Udiv (quotReg, leftReg, rightReg);
+                  LIR.Msub (destReg, quotReg, rightReg, leftReg)]
+                 @ truncInstrs,
+                 stateAfterQuot)
+            else
+                let (xorReg, stateAfterXor) = freshTempReg stateAfterQuot
+                let (remNonZeroReg, stateAfterRemNonZero) = freshTempReg stateAfterXor
+                let (signMismatchReg, stateAfterSignMismatch) = freshTempReg stateAfterRemNonZero
+                let (adjustFlagReg, stateAfterAdjustFlag) = freshTempReg stateAfterSignMismatch
+                let (adjustReg, nextState) = freshTempReg stateAfterAdjustFlag
+                ([LIR.Sdiv (quotReg, leftReg, rightReg);
+                  LIR.Msub (destReg, quotReg, rightReg, leftReg);
+                  LIR.Cmp (destReg, LIR.Imm 0L);
+                  LIR.Cset (remNonZeroReg, LIR.NE);
+                  LIR.Eor (xorReg, destReg, rightReg);
+                  LIR.Cmp (xorReg, LIR.Imm 0L);
+                  LIR.Cset (signMismatchReg, LIR.LT);
+                  LIR.And (adjustFlagReg, remNonZeroReg, signMismatchReg);
+                  LIR.Mul (adjustReg, adjustFlagReg, rightReg);
+                  LIR.Add (destReg, destReg, LIR.Reg adjustReg)]
+                 @ truncInstrs,
+                 nextState)
         Ok (leftInstrs @ rightInstrs, rightReg, modInstrs, nextState)
 
 let buildFloatArgMoves
@@ -420,14 +447,19 @@ let selectInstr
                     Ok (leftInstrs @ rightInstrs @ [LIR.Mul (lirDest, leftReg, rightReg)] @ truncInstrs, nextState)
 
             | MIR.Div ->
-                // SDIV requires both operands in registers
+                // Division requires both operands in registers.
                 match ensureInRegister left state with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg, stateAfterLeft) ->
                 match ensureInRegister right stateAfterLeft with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg, nextState) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)] @ truncInstrs, nextState)
+                    let divInstr =
+                        if isUnsignedIntegerType operandType then
+                            LIR.Udiv (lirDest, leftReg, rightReg)
+                        else
+                            LIR.Sdiv (lirDest, leftReg, rightReg)
+                    Ok (leftInstrs @ rightInstrs @ [divInstr] @ truncInstrs, nextState)
 
             | MIR.Mod ->
                 buildIntegerModuloParts lirDest left right operandType state
@@ -451,25 +483,25 @@ let selectInstr
                 match ensureInRegister left state with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg, nextState) ->
-                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LT)], nextState)
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, comparisonCondition operandType MIR.Lt)], nextState)
 
             | MIR.Gt ->
                 match ensureInRegister left state with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg, nextState) ->
-                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GT)], nextState)
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, comparisonCondition operandType MIR.Gt)], nextState)
 
             | MIR.Lte ->
                 match ensureInRegister left state with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg, nextState) ->
-                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LE)], nextState)
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, comparisonCondition operandType MIR.Lte)], nextState)
 
             | MIR.Gte ->
                 match ensureInRegister left state with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg, nextState) ->
-                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GE)], nextState)
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, comparisonCondition operandType MIR.Gte)], nextState)
 
             // Boolean operations (bitwise for 0/1 values)
             | MIR.And ->

@@ -82,6 +82,10 @@ let LT: Condition = ARM64.LT
 let GT: Condition = ARM64.GT
 let LE: Condition = ARM64.LE
 let GE: Condition = ARM64.GE
+let LO: Condition = ARM64.LO
+let HI: Condition = ARM64.HI
+let LS: Condition = ARM64.LS
+let HS: Condition = ARM64.HS
 
 /// Data references for late pool resolution
 type DataRef =

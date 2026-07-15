@@ -2412,6 +2412,31 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                     @ loadImm64 destReg System.Int64.MinValue
                     @ [X86_64.Label (overflowLabel + "_end")])))
 
+    | LIR.Udiv (dest, left, right) ->
+        resolveReg dest
+        |> Result.bind (fun destReg ->
+            resolveReg left
+            |> Result.bind (fun leftReg ->
+                resolveReg right
+                |> Result.map (fun rightReg ->
+                    let divisor =
+                        if rightReg = X86_64.RAX || rightReg = X86_64.RDX then scratch
+                        else rightReg
+                    let saveDivisor =
+                        if rightReg = X86_64.RAX || rightReg = X86_64.RDX then
+                            [X86_64.MOV_reg (scratch, rightReg)]
+                        else []
+                    saveDivisor
+                    @ (if leftReg <> X86_64.RAX then [X86_64.MOV_reg (X86_64.RAX, leftReg)] else [])
+                    @ [X86_64.MOV_store (X86_64.RSP, -8, X86_64.RDX)
+                       X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
+                       X86_64.DIV divisor]
+                    @ (if destReg = X86_64.RDX then [X86_64.MOV_reg (scratch, X86_64.RAX)]
+                       elif destReg <> X86_64.RAX then [X86_64.MOV_reg (destReg, X86_64.RAX)]
+                       else [])
+                    @ [X86_64.MOV_load (X86_64.RDX, X86_64.RSP, -8)]
+                    @ (if destReg = X86_64.RDX then [X86_64.MOV_reg (X86_64.RDX, scratch)] else []))))
+
     | LIR.Msub (dest, mulLeft, mulRight, sub) ->
         // dest = sub - mulLeft * mulRight
         // No fused instruction on x86_64: IMUL tmp, mulLeft, mulRight; MOV dest, sub; SUB dest, tmp
@@ -2482,16 +2507,18 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                      X86_64.SETcc (X86_64.P, scratch)
                      X86_64.MOVZX_byte (scratch, scratch)
                      X86_64.OR_reg (destReg, scratch)]
-                | LIR.LT -> [X86_64.SETcc (X86_64.B, destReg); X86_64.MOVZX_byte (destReg, destReg)]
-                | LIR.GT -> [X86_64.SETcc (X86_64.A, destReg); X86_64.MOVZX_byte (destReg, destReg)]
-                | LIR.LE -> [X86_64.SETcc (X86_64.BE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
-                | LIR.GE -> [X86_64.SETcc (X86_64.AE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                | LIR.LT | LIR.ULT -> [X86_64.SETcc (X86_64.B, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                | LIR.GT | LIR.UGT -> [X86_64.SETcc (X86_64.A, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                | LIR.LE | LIR.ULE -> [X86_64.SETcc (X86_64.BE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                | LIR.GE | LIR.UGE -> [X86_64.SETcc (X86_64.AE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
             else
                 let x86Cond =
                     match cond with
                     | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
                     | LIR.LT -> X86_64.LT | LIR.GT -> X86_64.GT
                     | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
+                    | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
+                    | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
                 [X86_64.SETcc (x86Cond, destReg); X86_64.MOVZX_byte (destReg, destReg)])
 
     | LIR.And (dest, left, right) ->
@@ -4367,13 +4394,15 @@ let private translateTerminator (epilogueLabel: string) (term: LIR.Terminator) :
             if lastCompWasFloat then
                 match cond with
                 | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
-                | LIR.LT -> X86_64.B  | LIR.GT -> X86_64.A
-                | LIR.LE -> X86_64.BE | LIR.GE -> X86_64.AE
+                | LIR.LT | LIR.ULT -> X86_64.B  | LIR.GT | LIR.UGT -> X86_64.A
+                | LIR.LE | LIR.ULE -> X86_64.BE | LIR.GE | LIR.UGE -> X86_64.AE
             else
                 match cond with
                 | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
                 | LIR.LT -> X86_64.LT | LIR.GT -> X86_64.GT
                 | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
+                | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
+                | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
         Ok [X86_64.Jcc (x86Cond, trueLabel)
             X86_64.JMP falseLabel]
     | LIR.BranchBitZero (reg, bit, LIR.Label zeroLabel, LIR.Label nonZeroLabel) ->

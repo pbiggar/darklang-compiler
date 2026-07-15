@@ -415,6 +415,10 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
             | ARM64.GT -> 0b1100u  // Greater than (signed)
             | ARM64.LE -> 0b1101u  // Less than or equal (signed)
             | ARM64.GE -> 0b1010u  // Greater than or equal (signed)
+            | ARM64.LO -> 0b0011u  // Lower than (unsigned)
+            | ARM64.HI -> 0b1000u  // Higher than (unsigned)
+            | ARM64.LS -> 0b1001u  // Lower than or same (unsigned)
+            | ARM64.HS -> 0b0010u  // Higher than or same (unsigned)
         [op ||| imm19 ||| condBits]
 
     | ARM64.CMP_imm (src, imm) ->
@@ -460,6 +464,10 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
             | ARM64.GT -> 0b1101u  // Inverted from LE
             | ARM64.LE -> 0b1100u  // Inverted from GT
             | ARM64.GE -> 0b1011u  // Inverted from LT
+            | ARM64.LO -> 0b0010u  // Inverted from HS
+            | ARM64.HI -> 0b1001u  // Inverted from LS
+            | ARM64.LS -> 0b1000u  // Inverted from HI
+            | ARM64.HS -> 0b0011u  // Inverted from LO
         let condBits = condCode <<< 12
         let fixedBits = 0b01u <<< 10  // CSINC vs CSEL
         let rn = 31u <<< 5  // XZR
@@ -1264,6 +1272,10 @@ let encodeWithLabels
                 | ARM64.GT -> 0b1100u
                 | ARM64.LE -> 0b1101u
                 | ARM64.GE -> 0b1010u
+                | ARM64.LO -> 0b0011u
+                | ARM64.HI -> 0b1000u
+                | ARM64.LS -> 0b1001u
+                | ARM64.HS -> 0b0010u
             [op ||| imm19 ||| condBits]
         | None ->
             Crash.crash $"B.cond: Label '{label}' not found in labelMap"
