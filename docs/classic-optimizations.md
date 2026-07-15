@@ -167,6 +167,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical float simplification that removes redundant paired absolute-value operations in ANF before backend lowering.
 - Notes: Implemented for `Float.abs(Float.abs(x)) -> Float.abs(x)` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_float_abs_idempotent` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Identical if branch simplification
+
+- Optimization name: Identical if branch simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical control-flow simplification that removes a conditional when both optimized branches are syntactically identical.
+- Notes: Implemented for ANF `if cond then expr else expr -> expr` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_if_same_branches` in `src/Tests/optimization/anf.opt`; existing branch-heavy tests provide correctness coverage but do not isolate this micro-pattern.
+
 ### Bitwise all-ones identity simplification
 
 - Optimization name: Bitwise all-ones identity simplification

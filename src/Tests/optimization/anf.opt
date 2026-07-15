@@ -707,6 +707,19 @@ let TempId 3 = f(true)
 return t3
 
 ---NAME---
+identity_if_same_branches
+---INPUT---
+def f(cond: Bool, x: Int64) : Int64 = if cond then x else x
+f(true, 42)
+---EXPECTED---
+Function f:
+return t1
+
+Main:
+let TempId 2 = f(true, 42)
+return t2
+
+---NAME---
 identity_bitand_self
 ---INPUT---
 def f(x: Int64) : Int64 = x & x

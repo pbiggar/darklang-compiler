@@ -691,12 +691,19 @@ let rec private optimizeAExprWithUses
         | _ ->
             let thenResult = optimizeAExprWithUses context options env typeEnv cseEnv thenBranch
             let elseResult = optimizeAExprWithUses context options env typeEnv cseEnv elseBranch
-            let uses = Set.unionMany [collectAtomUses cond'; thenResult.Uses; elseResult.Uses]
-            {
-                Expr = If (cond', thenResult.Expr, elseResult.Expr)
-                Changed = cond' <> cond || thenResult.Changed || elseResult.Changed
-                Uses = uses
-            }
+            if options.EnableConstFolding && thenResult.Expr = elseResult.Expr then
+                {
+                    Expr = thenResult.Expr
+                    Changed = true
+                    Uses = thenResult.Uses
+                }
+            else
+                let uses = Set.unionMany [collectAtomUses cond'; thenResult.Uses; elseResult.Uses]
+                {
+                    Expr = If (cond', thenResult.Expr, elseResult.Expr)
+                    Changed = cond' <> cond || thenResult.Changed || elseResult.Changed
+                    Uses = uses
+                }
 
 /// Optimize an AExpr
 let optimizeAExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (aexpr: AExpr) : AExpr * bool =
