@@ -13,7 +13,7 @@ Into an efficient loop that updates parameters in place and jumps back to the lo
 
 ## How It Works
 
-### 1. Detection (ANF_to_MIR.fs)
+### 1. Detection (`3_ANF_to_MIR.fs`)
 
 When converting ANF to MIR, we detect `TailCall` where the function name matches the current function:
 
@@ -37,7 +37,7 @@ entry_block  →  loop_body  ←  recurse_block
                return_block
 ```
 
-### 3. SSA Construction (3.1_SSA_Construction.fs)
+### 3. SSA Construction (`3.1_SSA_Construction.fs`)
 
 SSA construction sees multiple definitions of each parameter:
 - In entry block: from function arguments
@@ -50,9 +50,9 @@ loop_body:
   acc_ssa = phi [(acc_entry, entry), (acc_recurse, recurse)]
 ```
 
-### 4. SSA Destruction (3.9_SSA_Destruction.fs)
+### 4. Phi Resolution (`5_RegisterAllocation.fs`)
 
-Phi nodes are converted back to copies at the end of predecessor blocks:
+Phi nodes are resolved to copies at the end of predecessor blocks during register allocation:
 - Entry block gets: `n_ssa = n_entry; acc_ssa = acc_entry`
 - Recurse block gets: `n_ssa = n_recurse; acc_ssa = acc_recurse`
 
