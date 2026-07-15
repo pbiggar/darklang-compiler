@@ -2,7 +2,7 @@
 
 ## Current Status
 
-As of commit `89c36312`, `binary_trees` runs correctly and reports
+As of commit `3312b4d5`, `binary_trees` runs correctly and reports
 `6553500`. The current cachegrind run records Dark at `154,007,725`
 instructions, compared with OCaml at `82,339,690` and Rust at
 `1,842,791,955`.
@@ -108,6 +108,44 @@ The previous entry-shuffle issue is likewise resolved at the LIR level:
 `countTree_entry` contains only `X19 <- Mov(Reg X0)` before jumping to the body,
 not the older `x0 -> temp -> x0 -> worker` sequence.
 
+## Current Assembly Evidence
+
+Disassembling the generated ARM64 ELF confirms that the remaining hot cost is
+not tuple allocation or tail-loop lowering in the executed path. `_start` calls
+`stressTest` directly, and the `makeTree` function is emitted but never called
+from the benchmark entry path.
+
+The hot `countTree` function has a compact recursive body, but every call still
+pays a non-leaf function frame and callee-saved register traffic:
+
+```asm
+3dc: stp x29, x30, [sp, #-16]!
+3e4: sub sp, sp, #0x20
+3e8: stp x19, x20, [sp]
+3ec: str x21, [sp, #16]
+...
+408: sub x19, x19, #0x1
+410: bl 0x3dc
+414: mov x20, x0
+418: mov x21, #0x1
+41c: add x20, x21, x20
+420: mov x0, x19
+424: bl 0x3dc
+428: mov x19, x0
+42c: add x19, x20, x19
+...
+444: ldp x19, x20, [sp]
+448: ldr x21, [sp, #16]
+450: ldp x29, x30, [sp], #16
+454: ret
+```
+
+This reinforces the current prioritization: for this benchmark, the next useful
+optimization work is around self-recursive integer calling conventions,
+callee-saved register pressure, or recursive frame minimization. Common
+subexpression elimination for `depth - 1` and loop phi cleanup no longer appear
+to be limiting factors in the generated machine code.
+
 ## Remaining Optimization Opportunities
 
 ### 1. Hot Recursive Calling Convention Pressure
@@ -126,8 +164,6 @@ entry argument shuffling.
 
 **Evidence to inspect next:**
 
-- concrete emitted prologue/epilogue once the generated ELF can be disassembled
-  in this environment,
 - whether allocating the hot temporary/result values to caller-saved registers
   reduces save/restore traffic,
 - whether recursive self-calls could use a specialized internal convention.
@@ -155,6 +191,7 @@ Evidence gathered in this pass:
 
 - `./dark -vvv --dump-anf --dump-mir --dump-lir benchmarks/problems/binary_trees/dark/main.dark -o /tmp/binary_trees_dark`
 - `/tmp/binary_trees_dark` produced `6553500`
+- `objdump -D -b binary -m aarch64 /tmp/binary_trees_dark`
 - `./benchmarks/run_benchmarks.sh binary_trees`
 - `ocamlopt -O3 -o /tmp/binary_trees_ocaml benchmarks/problems/binary_trees/ocaml/main.ml`
 
