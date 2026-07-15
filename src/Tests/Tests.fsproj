@@ -33,6 +33,7 @@
 
     <!-- Tests for test suite tooling -->
     <Compile Include="test-suite-tooling-tests/ScriptHelperTests.fs" />
+    <Compile Include="test-suite-tooling-tests/StdlibSourceTests.fs" />
     <Compile Include="test-suite-tooling-tests/TestRunnerArgsTests.fs" />
     <Compile Include="test-suite-tooling-tests/PassTestRunnerTests.fs" />
     <Compile Include="test-suite-tooling-tests/OptimizationFormatTests.fs" />

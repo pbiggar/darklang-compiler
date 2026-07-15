@@ -285,6 +285,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "LIR Peephole Tests"; Tests = LIRPeepholeTests.tests }
         { Name = "ANF Optimize Tests"; Tests = ANFOptimizeTests.tests }
         { Name = "Script Helper Tests"; Tests = ScriptHelperTests.tests }
+        { Name = "Stdlib Source Tests"; Tests = StdlibSourceTests.tests }
         { Name = "Test Runner Args Tests"; Tests = TestRunnerArgsTests.tests }
         { Name = "Pass Test Runner Tests"; Tests = PassTestRunnerTests.tests }
         { Name = "Optimization Format Tests"; Tests = OptimizationFormatTests.tests }

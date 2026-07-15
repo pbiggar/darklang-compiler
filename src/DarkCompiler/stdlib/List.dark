@@ -107,36 +107,6 @@ def Stdlib.List.reverse<a>(list: List<a>) : List<a> =
     let len = Stdlib.__FingerTree.length<a>(list) in
     Stdlib.List.__reverseByIndexHelper<a>(list, len - 1, Stdlib.__FingerTree.empty<a>())
 
-def Stdlib.List.sortByComparator<a>(list: List<a>, comparator: (a, a) -> Int32) : Stdlib.Result.Result<List<a>, String> =
-    Stdlib.List.__sortByComparatorHelper<a>(list, comparator, Stdlib.__FingerTree.empty<a>())
-
-def Stdlib.List.__sortByComparatorHelper<a>(list: List<a>, comparator: (a, a) -> Int32, acc: List<a>) : Stdlib.Result.Result<List<a>, String> =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then Ok(acc)
-    else
-        match Stdlib.__FingerTree.head<a>(list) with
-        | None -> Ok(acc)
-        | Some(h) ->
-            match Stdlib.List.__sortByComparatorInsert<a>(acc, h, comparator) with
-            | Error(err) -> Error(err)
-            | Ok(newAcc) ->
-                Stdlib.List.__sortByComparatorHelper<a>(Stdlib.__FingerTree.tail<a>(list), comparator, newAcc)
-
-def Stdlib.List.__sortByComparatorInsert<a>(sorted: List<a>, item: a, comparator: (a, a) -> Int32) : Stdlib.Result.Result<List<a>, String> =
-    if Stdlib.__FingerTree.isEmpty<a>(sorted) then Ok([item])
-    else
-        match Stdlib.__FingerTree.head<a>(sorted) with
-        | None -> Ok([item])
-        | Some(h) ->
-            let cmp = comparator(item, h) in
-            if cmp == -1l then
-                Ok([item, ...sorted])
-            else if cmp == 0l || cmp == 1l then
-                match Stdlib.List.__sortByComparatorInsert<a>(Stdlib.__FingerTree.tail<a>(sorted), item, comparator) with
-                | Error(err) -> Error(err)
-                | Ok(rest) -> Ok([h, ...rest])
-            else
-                Error("Expected comparator function to return -1, 0, or 1, but it returned " ++ Stdlib.Int32.toString(cmp))
-
 def Stdlib.List.__reverseHelper<a>(list: List<a>, acc: List<a>) : List<a> =
     let len = Stdlib.__FingerTree.length<a>(list) in
     Stdlib.List.__reverseByIndexHelper<a>(list, len - 1, acc)
