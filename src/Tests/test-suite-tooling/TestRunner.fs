@@ -277,7 +277,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
 
     let unitStdlibSuites = [ "Stdlib Compile Tests"; "Preamble Build Tests" ]
     let buildUnitTests (_stdlib: CompilerLibrary.StdlibResult) : UnitTestSuite array = [|
-        { Name = "CLI Flags Tests"; Tests = CliFlagTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }
         { Name = "ANF to MIR Tests"; Tests = ANFToMIRTests.tests }

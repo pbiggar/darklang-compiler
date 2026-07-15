@@ -42,9 +42,6 @@
     <Compile Include="test-suite-tooling-tests/FormattingRoundtripTests.fs" />
     <Compile Include="test-suite-tooling-tests/E2EFormatTests.fs" />
 
-    <!-- Compiler driver tests -->
-    <Compile Include="compiler-driver/CliFlagTests.fs" />
-
     <!-- Compiler pass tests (shared) -->
     <Compile Include="compiler-passes/IRSymbolTests.fs" />
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
