@@ -5,6 +5,7 @@
 **Benchmark:** primes (prime counting via trial division)
 **Current Dark output:** `1229`
 **Current Dark instructions:** 5,443,919
+**Current Dark branches:** 1,030,520
 **Cached Rust baseline:** 1,249,930 instructions
 **Current Dark ratio:** 4.36x cached Rust baseline
 
@@ -17,17 +18,19 @@ sets around calls.
 The largest remaining opportunities are not register spills or local CSE in
 this benchmark. Current evidence points to integer-square-root strategy,
 signed modulo semantics overhead, and function-call boundaries in the hot prime
-test path.
+test path. Cachegrind also shows the gap is instruction and branch count rather
+than memory traffic: Dark reports fewer data references than Rust, but about
+3.4x as many branches.
 
 ## Current Evidence
 
-Evidence was gathered on commit `16719658`.
+Evidence was refreshed on commit `3312b4d5`.
 
-- `./dark benchmarks/problems/primes/dark/main.dark` built `dark.out`.
-- `./dark.out` printed `1229`, matching `benchmarks/problems/primes/expected_output.txt`.
+- `./dark benchmarks/problems/primes/dark/main.dark -o /tmp/primes_dark` built a local binary.
+- `/tmp/primes_dark` printed `1229`, matching `benchmarks/problems/primes/expected_output.txt`.
 - `./dark --dump-anf benchmarks/problems/primes/dark/main.dark` showed current ANF before and after optimization.
 - `./dark --dump-lir benchmarks/problems/primes/dark/main.dark` showed LIR before and after register allocation.
-- `./benchmarks/run_benchmarks.sh --refresh-baseline=rust primes` measured Dark at 5,443,919 Cachegrind instructions. Rust could not be refreshed because `rustc` is not installed in this sandbox, so the Rust comparison remains the cached 1,249,930-instruction baseline from `benchmarks/RESULTS.md`.
+- `./benchmarks/run_benchmarks.sh primes` measured Dark at 5,443,919 Cachegrind instructions, 40,013 data references, 1,030,520 branches, and 1.2% branch misprediction. Rust could not be refreshed because `rustc` is not installed in this sandbox, so the Rust comparison remains the cached 1,249,930-instruction baseline from `benchmarks/RESULTS.md`.
 
 ## Benchmark Shape
 
@@ -192,6 +195,17 @@ Inlining alone would not address the square-root algorithm, but it could expose
 the positive-divisor fact and other loop-local simplifications to later passes.
 This opportunity is secondary to the square-root and modulo improvements.
 
+### 4. Reduce branch work in the hot trial-division path
+
+The current Cachegrind profile reports 1,030,520 Dark branches versus the cached
+Rust baseline's 305,748 branches, even though Dark's data references are lower
+than Rust's 100,090. That fits the IR and LIR shape: recursive `isqrt`,
+recursive `isDivisible`, and general modulo correction all introduce repeated
+conditional control flow in the hot path. This is mostly an effect of the
+square-root, modulo, and inlining opportunities above, but it is worth tracking
+explicitly so future optimization work does not focus on memory traffic for this
+benchmark.
+
 ## Current Priority
 
 | Opportunity | Status | Priority |
@@ -199,6 +213,7 @@ This opportunity is secondary to the square-root and modulo improvements.
 | Hardware-backed integer square root | Not implemented | High |
 | Positive-divisor modulo simplification | Not implemented | Medium |
 | Hot helper inlining for `isqrt`/`isDivisible` | Not implemented | Medium |
+| Branch count reduction in trial division path | Not implemented | Medium |
 | ANF CSE for repeated `guess + 1` | Implemented | Done |
 | Evenness modulo-to-bit-test rewrite | Implemented | Done |
 | Remove call-site stack spills in this benchmark | No longer observed | Done |
