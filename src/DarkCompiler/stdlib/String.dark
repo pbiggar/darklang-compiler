@@ -100,7 +100,7 @@ def Stdlib.String.__copyBytesToPtr(src: String, srcStart: Int64, dest: RawPtr, d
         let _ = __raw_write_byte(dest, destStart, byte) in
         Stdlib.String.__copyBytesToPtr(src, srcStart + 1, dest, destStart + 1, count - 1)
 
-// Extract substring from start index to end index (exclusive)
+// Extract substring from start byte index to end byte index (exclusive)
 // String format: [length:8 bytes][data:N bytes][padding to 8][refcount:8 bytes]
 def Stdlib.String.slice(s: String, start: Int64, end_: Int64) : String =
     let sLen = Stdlib.String.length(s) in
@@ -126,15 +126,15 @@ def Stdlib.String.slice(s: String, start: Int64, end_: Int64) : String =
         // Convert raw pointer to string
         __rawptr_to_string(ptr)
 
-// Get substring from start to end (excluding end) - same as slice
+// Get substring from start byte index to end byte index (excluding end) - same as slice
 def Stdlib.String.substring(s: String, start: Int64, end_: Int64) : String =
     Stdlib.String.slice(s, start, end_)
 
-// Get first n characters
+// Get first n bytes
 def Stdlib.String.take(s: String, n: Int64) : String =
     Stdlib.String.slice(s, 0, n)
 
-// Drop first n characters
+// Drop first n bytes
 def Stdlib.String.drop(s: String, n: Int64) : String =
     let sLen = Stdlib.String.length(s) in
     Stdlib.String.slice(s, n, sLen)
