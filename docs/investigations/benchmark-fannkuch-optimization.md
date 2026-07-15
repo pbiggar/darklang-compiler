@@ -5,7 +5,7 @@
 The fannkuch benchmark computes the maximum number of "pancake flips" needed to sort any permutation of n elements. The algorithm generates all n! permutations and counts flips for each.
 
 **Key Finding:**
-Dark uses **immutable FingerTree-backed lists** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. Current cachegrind evidence shows this remains the dominant source of the performance difference: Dark executes 16,187,857,653 instructions for `fannkuch`, 1203.2x Rust and 519.1x OCaml.
+Dark uses **immutable FingerTree-backed lists** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. Current cachegrind evidence shows this remains the dominant source of the performance difference: Dark executes 15,997,493,901 instructions for `fannkuch`, 1189.1x Rust and 513.0x OCaml.
 
 ## Benchmark Source Code
 
@@ -57,9 +57,9 @@ Current local cachegrind evidence from `./benchmarks/run_benchmarks.sh fannkuch`
 |----------|--------------|---------|-----------|----------|
 | Rust | 13,453,488 | baseline | 5,901,371 | 2,031,853 |
 | OCaml | 31,185,180 | 2.3x | 10,530,754 | 5,946,748 |
-| Dark | 16,187,857,653 | 1203.2x | 6,887,185,349 | 1,919,467,469 |
+| Dark | 15,997,493,901 | 1189.1x | 6,776,390,729 | 1,895,560,437 |
 
-The Dark result is not just branch-heavy. The decisive gap is data traffic: the Dark run performs roughly 1167x the Rust data references, matching the list reconstruction and reference-count churn visible in LIR.
+The Dark result is not just branch-heavy. The decisive gap is data traffic: the Dark run performs roughly 1148x the Rust data references, matching the list reconstruction and reference-count churn visible in LIR. A correctness smoke check with `./dark -r benchmarks/problems/fannkuch/dark/main.dark` prints `23` and exits 0.
 
 ### Data Structure Difference (Root Cause)
 
