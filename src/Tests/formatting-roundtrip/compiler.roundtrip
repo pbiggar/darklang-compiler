@@ -7,3 +7,4 @@ def triple(x: Int64) : Int64 = x * 3 triple(7) + triple(7) // top-level expressi
 def f(x: Int64) : Int64 = x * 2 f(1) + f(2) + f(3) // top-level expression after def with chained add is preserved
 match [1] with | [x] -> (match [x] with | [a] -> a | _ -> 0) | _ -> 0 // nested match branch body keeps required parentheses
 match [1] with | [x] -> (let y = x in match [y] with | [z] -> z | _ -> 0) | _ -> 0 // let wrapping nested match branch body keeps required parentheses
+"https://darklang.com/docs" // string literal containing comment marker

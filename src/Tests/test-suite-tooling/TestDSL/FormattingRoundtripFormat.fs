@@ -17,8 +17,20 @@ type FormattingRoundtripCase = {
 }
 
 let private splitLineComment (line: string) : string * string option =
-    let commentIdx = line.IndexOf("//")
-    if commentIdx >= 0 then
+    let rec firstCommentIndex index inString escaped =
+        if index >= line.Length - 1 then
+            None
+        else
+            match line.[index], inString, escaped with
+            | _, true, true -> firstCommentIndex (index + 1) true false
+            | '\\', true, false -> firstCommentIndex (index + 1) true true
+            | '"', true, false -> firstCommentIndex (index + 1) false false
+            | '"', false, false -> firstCommentIndex (index + 1) true false
+            | '/', false, false when line.[index + 1] = '/' -> Some index
+            | _ -> firstCommentIndex (index + 1) inString false
+
+    match firstCommentIndex 0 false false with
+    | Some commentIdx ->
         let source = line.Substring(0, commentIdx).Trim()
         let comment = line.Substring(commentIdx + 2).Trim()
         let displayName =
@@ -27,7 +39,7 @@ let private splitLineComment (line: string) : string * string option =
             else
                 Some comment
         (source, displayName)
-    else
+    | None ->
         (line.Trim(), None)
 
 let parseFormattingRoundtripFile (path: string) : Result<FormattingRoundtripCase list, string> =
