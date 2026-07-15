@@ -12,12 +12,6 @@ module LIR_Peephole
 
 open LIR
 
-(* Plan:
-   1) Mirror MIR's loop discovery in LIR: build predecessor/successor maps and dominators.
-   2) Identify natural loops with a single preheader that jumps to the header.
-   3) Hoist loop-invariant Mov(Imm ...) for virtual regs into the preheader and remove from loop blocks.
-   4) Run LICM alongside existing peephole passes in optimizeCFGOnce. *)
-
 type private DomBitSet = Bitset.Bitset
 
 type private Dominators = {
