@@ -95,7 +95,8 @@ let rec exprHasTailCalls (expr: AExpr) : bool =
 /// Collect all function names called in a CExpr
 let collectCallsInCExpr (cexpr: CExpr) : Set<string> =
     match cexpr with
-    | Call (name, _) -> Set.singleton name
+    | Call (name, _)
+    | BorrowedCall (name, _)
     | TailCall (name, _) -> Set.singleton name
     | _ -> Set.empty
 
@@ -365,7 +366,8 @@ let rec private isSimpleExternalExpr (expr: AExpr) : bool =
 
 let rec private countCallsToNames (names: Set<string>) (expr: AExpr) : int =
     match expr with
-    | Let (_, Call (name, _), body) ->
+    | Let (_, Call (name, _), body)
+    | Let (_, BorrowedCall (name, _), body) ->
         (if Set.contains name names then 1 else 0) + countCallsToNames names body
     | Let (_, _, body) ->
         countCallsToNames names body

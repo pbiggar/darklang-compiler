@@ -272,6 +272,32 @@ let testExternalInliningHonorsCallerBudget () : TestResult =
     else
         Error $"Expected 9 external calls to remain over caller budget, but found {remainingCalls}"
 
+let testBorrowedSelfCallBlocksInlining () : TestResult =
+    let param = { Id = TempId 0; Type = AST.TString }
+    let borrowedSelf =
+        { Name = "borrowSelf"
+          TypedParams = [param]
+          ReturnType = AST.TString
+          ReturnOwnership = BorrowedReturn
+          Body =
+            Let (
+                TempId 1,
+                BorrowedCall ("borrowSelf", [Var param.Id]),
+                Return (Var (TempId 1))
+            ) }
+    let main =
+        Let (
+            TempId 2,
+            Call ("borrowSelf", [StringLiteral "x"]),
+            Return (Var (TempId 2))
+        )
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramDefault (Program ([borrowedSelf], main))
+    if containsCall "borrowSelf" inlinedMain then
+        Ok ()
+    else
+        Error "Expected function with borrowed self-call to remain recursive and not be inlined"
+
 let tests = [
     ("Inlining literal args removes call", testInliningWithLiteralArgumentsRemovesCall)
     ("Inlining literal args binds literal TempId", testInliningWithLiteralArgumentsBindsTemp)
@@ -281,4 +307,5 @@ let tests = [
     ("External raw allocation candidates are not inlined", testExternalInlineCandidateRejectsRawAllocBody)
     ("External control-flow candidates are not inlined", testExternalInlineCandidateRejectsControlFlowBody)
     ("External inlining honors caller budget", testExternalInliningHonorsCallerBudget)
+    ("Borrowed self-call blocks inlining", testBorrowedSelfCallBlocksInlining)
 ]
