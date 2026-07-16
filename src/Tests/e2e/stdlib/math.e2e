@@ -58,14 +58,17 @@ Math.ceiling(-3.7) = -3
 Math.ceiling(-3.0) = -3
 
 // ===================================================================
-// Math.round - Round to nearest
+// Math.round - Round to nearest, ties to even
 // ===================================================================
 
-Math.round(3.4) = 3
+Math.round(2.5) = 2
 Math.round(3.5) = 4
+Math.round(3.4) = 3
 Math.round(3.0) = 3
-Math.round(-3.4) = -3
+Math.round(-2.5) = -2
 Math.round(-3.5) = -4
+Math.round(-3.4) = -3
+Math.round(-3.0) = -3
 
 // ===================================================================
 // NOTE: More comprehensive float tests would require:

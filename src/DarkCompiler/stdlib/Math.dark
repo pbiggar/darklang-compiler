@@ -35,9 +35,15 @@ def Stdlib.Math.ceiling(x: Float) : Int64 =
     let truncated = Float.toInt(x) in
     if x > Int64.toFloat(truncated) then truncated + 1 else truncated
 
-// Round to nearest integer, with halves rounded away from zero
+// Round to nearest integer, with half values rounded to the nearest even integer
 def Stdlib.Math.round(x: Float) : Int64 =
-    if x < 0.0 then Stdlib.Math.ceiling(x - 0.5) else Stdlib.Math.floor(x + 0.5)
+    let lower = Stdlib.Math.floor(x) in
+    let upper = Stdlib.Math.ceiling(x) in
+    let distanceFromLower = x - Int64.toFloat(lower) in
+    if distanceFromLower < 0.5 then lower
+    else if distanceFromLower > 0.5 then upper
+    else if lower % 2 == 0 then lower
+    else upper
 
 // NOTE: The following functions still require compiler/runtime support:
 // - Math.pow (needs float multiplication)
