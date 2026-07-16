@@ -19,14 +19,23 @@ The merkletrees benchmark:
 - Runs 50 iterations
 - Each iteration builds a tree, verifies it by rebuilding, and accumulates a checksum
 - Core hot path: `hashLoop` (8-iteration FNV-1a hash) called from `buildTree`
+- Computes and compares root hashes only; despite the benchmark source comment,
+  it does not allocate tree nodes in the current Dark, Rust, or OCaml programs.
 
 ## Performance Data
 
-| Language | Instructions | vs Rust |
-|----------|-------------|---------|
-| Rust     | 113,304,119 | 1.00x   |
-| **Dark** | **733,993,597** | **6.48x** |
-| OCaml    | 1,004,581,199 | 8.87x |
+Current Cachegrind evidence for Dark, with cached Rust and OCaml baselines:
+
+| Language | Instructions | vs Rust | Data refs | Branches | Mispred |
+|----------|-------------:|--------:|----------:|---------:|--------:|
+| Rust     | 113,304,119 | 1.00x | 19,760,299 | 3,322,450 | 12.8% |
+| **Dark** | **733,993,597** | **6.48x** | **104,856,036** | **65,535,215** | **15.1%** |
+| OCaml    | 1,004,581,199 | 8.87x | 226,897,520 | 124,769,269 | 8.6% |
+
+The Dark run has about 5.3x Rust's data references and about 19.7x Rust's
+branches. The branch delta is consistent with the current evidence below:
+`benchmark` rebuilds the same tree twice per iteration, and `hashLoop` remains a
+small recursive loop rather than Rust's unrolled straight-line hash sequence.
 
 ## Optimization Opportunities
 
