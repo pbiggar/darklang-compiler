@@ -179,18 +179,10 @@ complexNested(false, false, true) = 240
 complexNested(false, false, false) = 240
 
 // ===================================================================
-// Inlining Change Flag in If Expression (Mutation #43)
+// Inlining in If Expression Branches
 // ===================================================================
-// Tests for the change flag propagation in inlineInExpr's If case (line 403).
-// The mutation changes || to && when combining changed1 and changed2.
-//
-// With ||: changed = changed1 || changed2 (either branch having inlining is enough)
-// With &&: changed = changed1 && changed2 (WRONG - both branches must have inlining)
-//
-// Note: This is an "equivalent mutant" - the changed flag is currently unused
-// in the inlining pass (it's computed but discarded). These tests document
-// the behavior and ensure inlining works correctly when only one branch of
-// an If expression contains a function call that gets inlined.
+// Ensure inlining works when only one branch of an If expression contains a
+// function call that gets inlined.
 
 // Small helper function that will be inlined (size 1, well under MaxFunctionSize=20)
 def addTwo(x: Int64) : Int64 = x + 2
@@ -199,10 +191,10 @@ def addTwo(x: Int64) : Int64 = x + 2
 // The else-branch is a simple expression with no function calls
 def ifWithInlineInThenOnly(flag: Bool, n: Int64) : Int64 =
   if flag then
-    let result = addTwo(n) in  // This call will be inlined (changed1 = true)
+    let result = addTwo(n) in  // This call will be inlined
     result
   else
-    n * 3                      // No call to inline (changed2 = false)
+    n * 3                      // No call to inline
 
 ifWithInlineInThenOnly(true, 10) = 12
 ifWithInlineInThenOnly(false, 10) = 30
@@ -211,22 +203,22 @@ ifWithInlineInThenOnly(false, 10) = 30
 // The then-branch is a simple expression with no function calls
 def ifWithInlineInElseOnly(flag: Bool, n: Int64) : Int64 =
   if flag then
-    n * 4                      // No call to inline (changed1 = false)
+    n * 4                      // No call to inline
   else
-    let result = addTwo(n) in  // This call will be inlined (changed2 = true)
+    let result = addTwo(n) in  // This call will be inlined
     result
 
 ifWithInlineInElseOnly(true, 5) = 20
 ifWithInlineInElseOnly(false, 5) = 7
 
 // Nested If where inner If has inlining only in one branch
-// This tests change flag propagation through nested structures
+// This tests inlining through nested structures
 def nestedIfWithPartialInline(outer: Bool, inner: Bool, n: Int64) : Int64 =
   if outer then
     if inner then
-      addTwo(n)    // Inlined (changed = true for inner If)
+      addTwo(n)    // Inlined
     else
-      n + 100      // Not a call (changed = false for inner If's else)
+      n + 100      // Not a call
   else
     n * 5          // No calls in outer else branch
 
@@ -236,18 +228,10 @@ nestedIfWithPartialInline(false, true, 10) = 50
 nestedIfWithPartialInline(false, false, 10) = 50
 
 // ===================================================================
-// Program-Level Inlining Change Flag (Mutation #44)
+// Program-Level Inlining Across Multiple Functions
 // ===================================================================
-// Tests for the anyChanged flag accumulation in inlineProgram's fold (line 452).
-// The mutation changes || to && when combining anyChanged and changed.
-//
-// With ||: anyChanged becomes true if ANY function had inlining
-// With &&: anyChanged would only be true if ALL functions had inlining
-//
-// Note: This is an "equivalent mutant" - the anyChanged flag is computed
-// but discarded with _ on line 448. These tests document the behavior and
-// ensure that inlining works correctly across multiple functions, where
-// some functions have inlining opportunities and others don't.
+// Ensure inlining works across multiple functions, where some functions have
+// inlining opportunities and others do not.
 
 // Small helper that will be inlined (size 1)
 def tiny(x: Int64) : Int64 = x + 1
@@ -265,14 +249,6 @@ def noInline(n: Int64) : Int64 =
   y
 
 // Test that both functions work correctly when processed together.
-// The fold processes functions in order. With the mutation:
-// - callerWithInline: changed=true (has inlining)
-// - noInline: changed=false (no calls to inline)
-// With ||: anyChanged = true || false = true (then true && false = false for 2nd)
-// Actually: fold goes: ([], varGen, false) -> callerWithInline -> (funcs, varGen', true)
-//                                           -> noInline -> (funcs', varGen'', true || false = true)
-// With &&: anyChanged = true && false = false
-// The actual inlining still happens regardless of the flag value.
 callerWithInline(5) = 7
 noInline(10) = 23
 

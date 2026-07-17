@@ -452,50 +452,50 @@ let inlineCallBody (info: FunctionInfo) (args: Atom list) (varGen: VarGen)
 /// Recursively inline calls in an expression
 let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
                      (depth: int) (varGen: VarGen) (expr: AExpr)
-    : AExpr * VarGen * bool =  // Returns (expr, varGen, changed)
+    : AExpr * VarGen =
     match expr with
     | Let (tid, Call (funcName, args), body) ->
         // Check if this is a regular call (not tail call) to a user function
         match Map.tryFind funcName funcs with
         | Some info when shouldInline info config depth ->
             if info.IsExternal then
-                let (body', varGen', changedInContinuation) =
+                let (body', varGen') =
                     inlineInExpr funcs config depth varGen body
                 let (inlinedBody, varGen'') = inlineCallBody info args varGen'
-                let (inlinedBody', varGen''', changedInCallee) =
+                let (inlinedBody', varGen''') =
                     inlineInExpr funcs config (depth + 1) varGen'' inlinedBody
                 let result = substituteReturn tid body' inlinedBody'
-                (result, varGen''', true || changedInContinuation || changedInCallee)
+                (result, varGen''')
             else
                 let (inlinedBody, varGen') = inlineCallBody info args varGen
                 let inlinedExpr = substituteReturn tid body inlinedBody
-                let (result, varGen'', _) =
+                let (result, varGen'') =
                     inlineInExpr funcs config (depth + 1) varGen' inlinedExpr
-                (result, varGen'', true)
+                (result, varGen'')
         | _ ->
             // Don't inline - continue processing body
-            let (body', varGen', changed) = inlineInExpr funcs config depth varGen body
-            (Let (tid, Call (funcName, args), body'), varGen', changed)
+            let (body', varGen') = inlineInExpr funcs config depth varGen body
+            (Let (tid, Call (funcName, args), body'), varGen')
 
     | Let (tid, cexpr, body) ->
         // Not a call, just process the body
-        let (body', varGen', changed) = inlineInExpr funcs config depth varGen body
-        (Let (tid, cexpr, body'), varGen', changed)
+        let (body', varGen') = inlineInExpr funcs config depth varGen body
+        (Let (tid, cexpr, body'), varGen')
 
     | Return atom ->
-        (Return atom, varGen, false)
+        (Return atom, varGen)
 
     | If (cond, thenBranch, elseBranch) ->
-        let (thenBranch', varGen', changed1) = inlineInExpr funcs config depth varGen thenBranch
-        let (elseBranch', varGen'', changed2) = inlineInExpr funcs config depth varGen' elseBranch
-        (If (cond, thenBranch', elseBranch'), varGen'', changed1 || changed2)
+        let (thenBranch', varGen') = inlineInExpr funcs config depth varGen thenBranch
+        let (elseBranch', varGen'') = inlineInExpr funcs config depth varGen' elseBranch
+        (If (cond, thenBranch', elseBranch'), varGen'')
 
 /// Inline in a function body
 let inlineInFunction (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
                      (varGen: VarGen) (func: Function)
-    : Function * VarGen * bool =
-    let (body', varGen', changed) = inlineInExpr funcs config 0 varGen func.Body
-    ({ func with Body = body' }, varGen', changed)
+    : Function * VarGen =
+    let (body', varGen') = inlineInExpr funcs config 0 varGen func.Body
+    ({ func with Body = body' }, varGen')
 
 /// Find the maximum TempId used in an expression
 let rec maxTempId (expr: AExpr) : int =
@@ -558,15 +558,15 @@ let inlineProgramWithExternalCandidates
     let startVarGen = VarGen (maxTempIdInProgram program + 1)
 
     // Inline in each function (single pass for now)
-    let (funcs', varGen', _) =
+    let (funcs', varGen') =
         funcs
-        |> List.fold (fun (accFuncs, varGen, anyChanged) func ->
-            let (func', varGen', changed) = inlineInFunction (funcsForBody func.Body) config varGen func
-            (func' :: accFuncs, varGen', anyChanged || changed)
-        ) ([], startVarGen, false)
+        |> List.fold (fun (accFuncs, varGen) func ->
+            let (func', varGen') = inlineInFunction (funcsForBody func.Body) config varGen func
+            (func' :: accFuncs, varGen')
+        ) ([], startVarGen)
 
     // Inline in main expression
-    let (main', _, _) = inlineInExpr (funcsForBody main) config 0 varGen' main
+    let (main', _) = inlineInExpr (funcsForBody main) config 0 varGen' main
 
     Program (List.rev funcs', main')
 
