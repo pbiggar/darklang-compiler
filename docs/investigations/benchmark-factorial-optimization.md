@@ -11,17 +11,22 @@ The factorial benchmark computes `factorial(20)` 10,000 times using a `repeat` h
 
 **Key insight**: Rust achieves its extreme performance through **complete compile-time evaluation**. LLVM constant-folds `factorial(20)` and `repeat(10000, 0)` at compile time, resulting in a program that simply prints a pre-computed constant. Dark is actually faster than OCaml on this benchmark.
 
-Current Dark evidence still shows one runtime `factorial(20)` call on every
-tail-recursive `repeat` iteration. Register allocation now removes the older
-redundant self-moves in the `repeat` loop, so the remaining benchmark gap is
-not caused by those moves.
+Current Dark evidence at `2d5c4276` still shows one runtime `factorial(20)`
+call on every tail-recursive `repeat` iteration. Register allocation now
+removes the older redundant self-moves in the `repeat` loop, so the remaining
+benchmark gap is not caused by those moves.
 
-Current focused Cachegrind evidence confirms the gap is stable: Dark still
-runs at 4,420,203 instructions, or 17.3x the cached Rust baseline. The same
-run reports 1,600,034 data references and 210,025 branches for Dark, consistent
-with repeated unboxed recursive integer work rather than heap allocation or
-cache behavior. The Rust, OCaml, F#, Python, and Node rows in that focused run
-used cached baselines from `benchmarks/BASELINES.md`.
+Current focused Cachegrind evidence at `2d5c4276` confirms the gap is stable:
+Dark still runs at 4,420,203 instructions, or 17.3x the cached Rust baseline.
+The same run reports 1,600,034 data references and 210,025 branches for Dark,
+consistent with repeated unboxed recursive integer work rather than heap
+allocation or cache behavior. The Rust, OCaml, F#, Python, and Node rows in
+that focused run used cached baselines from `benchmarks/BASELINES.md`.
+
+The local sandbox used for this refresh did not have `rustc`, so the Rust
+assembly evidence below comes from the checked-in
+`benchmarks/problems/factorial/rust/main.s` artifact rather than a regenerated
+compiler output.
 
 ## Benchmark Source Code
 
