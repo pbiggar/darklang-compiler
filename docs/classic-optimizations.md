@@ -261,3 +261,12 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Taxonomy category: Dead code elimination
 - Priority/rationale: Existing optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Covered by existing ANF optimization tests.
+
+## Common subexpression elimination
+
+### Commutative ANF CSE
+
+- Optimization name: Commutative ANF CSE
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, canonical extension of existing ANF CSE that reuses equivalent pure binary expressions when only commutative operand order differs.
+- Notes: Implemented for commutative `Prim` operations in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_commuted_integer_add` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmarks provide regression coverage but do not isolate this micro-pattern.

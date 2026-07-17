@@ -1117,3 +1117,16 @@ Function f:
 let TempId 1 = t0 + 1
 let TempId 5 = t1 + t1
 return t5
+
+---NAME---
+cse_reuses_commuted_integer_add
+---INPUT---
+def f(x: Int64) : Int64 =
+  let y = x + 1 in
+  let z = 1 + x in
+  y + z
+---EXPECTED---
+Function f:
+let TempId 1 = t0 + 1
+let TempId 5 = t1 + t1
+return t5

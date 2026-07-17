@@ -527,6 +527,33 @@ type OptimizeAExprResult = {
 
 type CSEnv = Map<CExpr, TempId>
 
+let private isCommutativeBinOp (op: BinOp) : bool =
+    match op with
+    | Add
+    | Mul
+    | Eq
+    | Neq
+    | And
+    | Or
+    | BitAnd
+    | BitOr
+    | BitXor -> true
+    | Sub
+    | Div
+    | Mod
+    | Lt
+    | Gt
+    | Lte
+    | Gte
+    | Shl
+    | Shr -> false
+
+let private cseKey (cexpr: CExpr) : CExpr =
+    match cexpr with
+    | Prim (op, left, right) when isCommutativeBinOp op && compare right left < 0 ->
+        Prim (op, right, left)
+    | _ -> cexpr
+
 let private isCSEEligible (cexpr: CExpr) : bool =
     match cexpr with
     | Prim _
@@ -575,9 +602,10 @@ let rec private optimizeAExprWithUses
         let (cexpr', cexprChanged) = optimizeCExpr options env typeEnv cexpr
         let (cexpr'', cseChanged, cseEnv') =
             if options.EnableCSE && isCSEEligible cexpr' then
-                match Map.tryFind cexpr' cseEnv with
+                let key = cseKey cexpr'
+                match Map.tryFind key cseEnv with
                 | Some existingTid -> (Atom (Var existingTid), true, cseEnv)
-                | None -> (cexpr', false, Map.add cexpr' tid cseEnv)
+                | None -> (cexpr', false, Map.add key tid cseEnv)
             else
                 (cexpr', false, cseEnv)
 
