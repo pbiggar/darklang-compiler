@@ -22,6 +22,12 @@ let private parseRejected (label: string) (args: string array) : TestResult =
     | Ok _ -> Error $"Expected {label} to be rejected"
     | Error _ -> Ok ()
 
+let testVersionText () : TestResult =
+    Program.versionLines ()
+    |> List.contains "Darklang native compiler for macOS and Linux"
+    |> fun found ->
+        ensure found "Expected version text to describe the supported macOS and Linux native compiler"
+
 /// Single CLI test that validates all supported flag parsing behaviors.
 let testCliFlags () : TestResult =
     parseOk "dump flags" [| "--dump-anf"; "--dump-mir"; "--dump-lir"; "input.dark" |]
@@ -104,6 +110,7 @@ let testCliFlags () : TestResult =
         parseRejected "invalid syntax value" [| "--syntax=banana"; "input.dark" |])
 
 let tests = [
+    ("CLI version text", testVersionText)
     ("CLI flags", testCliFlags)
 ]
 

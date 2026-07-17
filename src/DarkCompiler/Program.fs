@@ -13,8 +13,9 @@
 //   3. ANF_to_MIR: ANF → MIR
 //   4. MIR_to_LIR: MIR → LIR
 //   5. RegisterAllocation: LIR (virtual) → LIR (physical)
-//   6. CodeGen: LIR → ARM64 instructions
-//   7. ARM64_Emit: ARM64 instructions → platform binary (encoding + layout)
+//   6. CodeGen: LIR → target ISA instructions
+//   7. Encoding: target ISA instructions → machine code
+//   8. Binary generation: machine code → platform executable
 
 module Program
 
@@ -470,9 +471,14 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
     execResult.ExitCode
 
 /// Print version information
+let versionLines () : string list =
+    [
+        "Dark Compiler v0.1.0"
+        "Darklang native compiler for macOS and Linux"
+    ]
+
 let printVersion () =
-    println "Dark Compiler v0.1.0"
-    println "Darklang ARM64 compiler for macOS"
+    versionLines () |> List.iter println
 
 /// Print usage information
 let printUsage () =
