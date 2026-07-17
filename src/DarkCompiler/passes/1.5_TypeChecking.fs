@@ -3194,14 +3194,15 @@ let rec checkExprWithParamNames
                     | None ->
                         Error (GenericError $"Record type {typeName} has no field '{fieldName}'")
                     | Some (_, fieldTypePattern) ->
-                        let fieldType =
-                            match buildRecordFieldSubstitution fields typeArgs with
-                            | Ok subst -> applySubst subst fieldTypePattern
-                            | Error _ -> fieldTypePattern
-                        match expectedType with
-                        | Some expected when not (typesCompatibleWithAliases aliasReg expected fieldType) ->
-                            Error (TypeMismatch (expected, fieldType, $"field access .{fieldName}"))
-                        | _ -> Ok (fieldType, RecordAccess (recordExpr', fieldName))
+                        match buildRecordFieldSubstitution fields typeArgs with
+                        | Error msg ->
+                            Error (GenericError msg)
+                        | Ok subst ->
+                            let fieldType = applySubst subst fieldTypePattern
+                            match expectedType with
+                            | Some expected when not (typesCompatibleWithAliases aliasReg expected fieldType) ->
+                                Error (TypeMismatch (expected, fieldType, $"field access .{fieldName}"))
+                            | _ -> Ok (fieldType, RecordAccess (recordExpr', fieldName))
             | other ->
                 Error (GenericError $"Cannot access .{fieldName} on non-record type {typeToString other}"))
 

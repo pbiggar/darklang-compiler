@@ -164,6 +164,31 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
     | Error err ->
         Error $"Type checking failed: {typeErrorToString err}"
 
+/// Record access should report invalid generic record arity instead of
+/// silently treating the field's type variables as concrete field types.
+let testRecordAccessRejectsInvalidRecordArity () : TestResult =
+    let recordDef =
+        TypeDef (RecordDef ("ArityBoxTc", ["a"], [("value", TVar "a")]))
+
+    let funcDef =
+        FunctionDef {
+            Name = "main"
+            TypeParams = []
+            Params = NonEmptyList.singleton ("box", TRecord ("ArityBoxTc", [TInt64; TBool]))
+            ReturnType = TInt64
+            Body = RecordAccess (Var "box", "value")
+        }
+
+    let program = Program [recordDef; funcDef]
+
+    match checkProgram program with
+    | Ok _ ->
+        Error "Expected invalid record type argument arity to fail type checking"
+    | Error (GenericError msg) when msg.Contains("Record type argument arity mismatch") ->
+        Ok ()
+    | Error err ->
+        Error $"Expected record arity mismatch, got: {typeErrorToString err}"
+
 /// Test that addition of integers has type TInt64
 let testAddition () : TestResult =
     expectType (BinOp (Add, Int64Literal 2L, Int64Literal 3L)) TInt64
@@ -206,6 +231,7 @@ let tests = [
     ("Int128 literal", testInt128Literal)
     ("UInt128 literal", testUInt128Literal)
     ("Sum equality uses single pair match", testSumEqualityUsesSinglePairMatch)
+    ("Record access rejects invalid record arity", testRecordAccessRejectsInvalidRecordArity)
     ("Addition", testAddition)
     ("Subtraction", testSubtraction)
     ("Multiplication", testMultiplication)
