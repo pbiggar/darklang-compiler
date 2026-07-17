@@ -49,13 +49,14 @@ let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.Variant
         (typeName, typeParams, (variantName, tagIndex, payloadType)))
     |> List.groupBy (fun (typeName, _, _) -> typeName)
     |> List.map (fun (typeName, entries) ->
-        // Get typeParams from first entry (all entries for same type have same params)
-        let typeParams = entries |> List.head |> (fun (_, tp, _) -> tp)
-        let variants =
-            entries
-            |> List.map (fun (_, _, (name, tag, payload)) -> mkVariantInfo name tag payload)
-            |> List.sortBy (fun v -> v.Tag)
-        (typeName, mkTypeVariants typeParams variants))
+        match entries with
+        | [] -> Crash.crash $"ANF_to_MIR: variant group for type '{typeName}' had no variants"
+        | (_, typeParams, _) :: _ ->
+            let variants =
+                entries
+                |> List.map (fun (_, _, (name, tag, payload)) -> mkVariantInfo name tag payload)
+                |> List.sortBy (fun v -> v.Tag)
+            (typeName, mkTypeVariants typeParams variants))
     |> Map.ofList
 
 /// Build RecordRegistry from TypeReg
