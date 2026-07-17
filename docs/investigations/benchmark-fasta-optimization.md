@@ -4,23 +4,18 @@
 
 This investigation analyzes why the Dark compiler performs worse than Rust and OCaml on the fasta benchmark, which generates pseudo-random DNA sequences using a linear congruential generator (LCG) and computes a checksum.
 
-## 2026-03-03 Regression Investigation
+## Current Local Evidence
 
-### Observed Regression
+Measured in the current `benchmarks/RESULTS.md`, `fasta` runs at
+`2,493,333,492` Dark instructions, or `116.3x` the Rust baseline. The benchmark
+still produces the expected checksum `830939461`.
 
-Comparing clean commit `c50b586a` against the current local allocator-guard changes:
+The current Dark executable built for `benchmarks/problems/fasta/dark/main.dark`
+is `209,760` bytes on Linux ARM64. That means the older shared OOM trap note
+claiming the binary had shrunk to about `114 KB` is no longer current for this
+checkout.
 
-- Clean `c50b586a`: `2,436,771,495` instructions, `106,657,107` branches
-- Local guarded allocator: `2,446,245,270` instructions, `108,551,862` branches
-- Delta: `+9,473,775` instructions, `+1,894,755` branches, `+212,594` branch mispredicts
-
-The instruction delta divides exactly by the branch delta:
-
-- `9,473,775 / 1,894,755 = 5.0`
-
-This is a direct signature of a fixed per-allocation hot-path cost increase.
-
-### Root Cause
+### Allocator Guard Cost Remains Allocation-Sensitive
 
 `withHeapBoundsCheck` in `6_CodeGen.fs` adds a bounds-check sequence on every bump allocation:
 
@@ -32,31 +27,12 @@ This is a direct signature of a fixed per-allocation hot-path cost increase.
 
 That is 5 additional instructions and 1 additional conditional branch per allocation attempt.
 
-`fasta` performs enough allocations that this overhead shows up clearly in cachegrind totals.
-
-### Secondary Effect
-
-The generated `fasta` binary grows substantially with the current guard implementation:
-
-- Clean `c50b586a` binary: `99,172` bytes
-- Local guarded allocator binary: `209,540` bytes
-
-Most of this growth comes from inlining the OOM trap path at each allocation site.
-
-### Follow-up After Shared OOM Trap Label
-
-A follow-up codegen change now emits a shared per-function OOM trap label instead of inlining trap code at every allocation site.
-
-Measured on `2026-03-03`:
-
-- Previous guarded run: `2,446,245,270` instructions
-- After shared OOM trap label: `2,446,245,402` instructions (`+132`, effectively unchanged)
-
-Conclusion:
-
-- This change fixes the code-size inflation (current `fasta` binary is `114,076` bytes, much smaller than `209,540`).
-- It does **not** materially change hot-path instruction count.
-- The remaining `fasta` regression is still dominated by per-allocation heap-end recomputation (`MOVZ + ADD`) plus the extra bounds-check branch.
+`fasta` performs enough allocations that this overhead remains relevant to both
+instruction count and generated code size. Current IR evidence still shows large
+constant-list construction in `_start` through repeated `RawAlloc(16)` nodes,
+plus per-iteration heap allocation for the `makeRandomFasta` return tuple.
+The remaining allocator-bound cost is still dominated by per-allocation heap-end
+recomputation (`MOVZ + ADD`) plus the extra bounds-check branch.
 
 ### Remaining Fix Strategy
 
