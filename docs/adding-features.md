@@ -274,8 +274,8 @@ The compiler generates:
 
 ## Debugging Tips
 
-1. **Use verbose output**: `./dark -v program.dark`
-2. **Check intermediate representations**: Add print statements in passes
+1. **Use verbose output**: `./dark -vvv program.dark`
+2. **Check intermediate representations**: Use `--dump-anf`, `--dump-mir`, or `--dump-lir`
 3. **Write minimal test case**: Reduce to smallest failing example
 4. **Check exhaustiveness warnings**: F# compiler shows all missing cases
 5. **Run tests frequently**: `./run-tests --ai` catches regressions early
