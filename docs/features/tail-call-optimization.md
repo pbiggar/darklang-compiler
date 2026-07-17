@@ -136,6 +136,10 @@ def sumFloats(n: Int64, acc: Float) : Float =
 sumFloats(10, 0.0)  // Expected: 10.0
 ```
 
+`src/Tests/e2e/tco-refcounting.e2e` separately guards the interaction between
+tail calls and reference-count cleanup, especially cases where self-tailcall
+lowering to loops must not drop `RefCountDec` work.
+
 ## Why TCO Matters
 
 Without TCO, recursion is limited by stack size (~8MB = ~500K calls). With TCO:
@@ -158,22 +162,6 @@ Key commits:
 - `9446a3d` - Disable TCO due to parallel move resolution bugs
 - (later) - Re-enable TCO after fixing DCE bug (TailCall now recognized as function call)
 
-## Design from Claude Plan
-
-From `virtual-tumbling-bunny.md`:
-
-**Implementation Phases:**
-1. Add TailCall variants to ANF, MIR, LIR, ARM64
-2. Create TailCallDetection pass
-3. Update MIR optimization for side effects
-4. Skip SaveRegs in MIR→LIR for tail calls
-5. Emit B/BR instead of BL/BLR
-6. Encode BR instruction
-
-**V1 Simplifications:**
-- Skip RefCountDec cases (safety first)
-- Assume stack frame handled by jump target's prologue
-
 ## Related Files
 
 - `src/DarkCompiler/passes/2.7_TailCallDetection.fs` - Tail position detection
@@ -183,3 +171,4 @@ From `virtual-tumbling-bunny.md`:
 - `src/DarkCompiler/passes/x64/6_CodeGen.fs` - x64 JMP emission
 - `src/Tests/e2e/tailcall.e2e` - End-to-end tail-call regression tests
 - `src/Tests/compiler-passes/TailCallDetectionTests.fs` - Tail-call detection and cleanup ordering tests
+- `src/Tests/e2e/tco-refcounting.e2e` - Tail-call/reference-counting regressions
