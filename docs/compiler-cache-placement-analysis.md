@@ -8,9 +8,9 @@ artifacts in the compiler pipeline. It focuses on correctness, invalidation
 precision, and opportunities to move caching earlier without missing
 dependencies.
 
-## Current Placement (Post-ANF Optimization + Inlining + RC + TCO)
+## Removed Placement (Post-ANF Optimization + Inlining + RC + TCO)
 
-Today, function dependency hashes are computed from ANF after:
+The removed function cache computed dependency hashes from ANF after:
 
 - ANF optimization
 - ANF inlining
@@ -33,10 +33,9 @@ The dependency hash includes:
 External functions are hashed via function type + associated record/sum type
 definitions.
 
-This placement ensures that any inlining changes (caller body changes due to
-callee changes) are captured, because the body hash is taken after inlining.
-It also ensures that post-optimization ANF is represented, and the key covers
-RC-related type dependencies.
+This placement captured inlining changes (caller body changes due to callee
+changes), because the body hash was taken after inlining. It also represented
+post-optimization ANF, and the key covered RC-related type dependencies.
 
 ## What Drives Correctness
 
@@ -76,10 +75,10 @@ optimized result. This can be correct, but:
 
 ### 3) Pre-RC Insertion
 
-The current type hash includes types used in the function body and type
-definitions from registries. Today, part of that type usage is inferred from
-the RC insertion type map. Moving earlier would require a new, deterministic
-type-use analysis that does not depend on RC insertion.
+The removed type hash included types used in the function body and type
+definitions from registries. Part of that type usage was inferred from the RC
+insertion type map. Moving earlier would have required a new, deterministic
+type-use analysis that did not depend on RC insertion.
 
 Without a replacement type map, pre-RC hashing risks missing type
 dependencies introduced by temp values or inferred return types, which is
@@ -104,5 +103,5 @@ Earlier hashing is possible but either:
 - requires a new type map analysis to avoid missing type dependencies, or
 - needs a different cached artifact (pre-ANF or pre-opt IR).
 
-Given the current cache artifact (LIR post-regalloc), the safest and
-most precise placement is post-inlining and post-ANF optimization.
+Given the removed cache artifact (LIR post-regalloc), the safest and most
+precise placement was post-inlining and post-ANF optimization.
