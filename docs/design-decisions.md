@@ -6,7 +6,7 @@ This document explains the key architectural and implementation decisions in the
 
 **Decision**: Use a multi-stage pipeline with distinct intermediate representations:
 ```
-Source → AST → ANF → MIR → LIR → ARM64 → Binary
+Source → AST → ANF → MIR → LIR → target ISA → Binary
 ```
 
 **Rationale**:
@@ -14,9 +14,9 @@ Source → AST → ANF → MIR → LIR → ARM64 → Binary
 - **AST**: Preserves source structure for error messages and future tooling
 - **ANF**: Makes evaluation order explicit, simplifies code generation
 - **MIR**: Platform-independent 3-address code, enables future optimizations
-- **LIR**: Target-specific (ARM64) with virtual registers, clean separation from register allocation
+- **LIR**: Target-neutral instruction shapes with virtual registers, clean separation from register allocation
 - Easier to test each pass in isolation
-- Enables future backend targets (x86, WASM) by swapping post-MIR stages
+- Enables backend targets (ARM64 and x86-64 today, WASM in the future) by swapping post-MIR stages
 
 ## Desugaring Strategy: AST-level vs Lexer-level
 
@@ -115,19 +115,19 @@ Source → AST → ANF → MIR → LIR → ARM64 → Binary
 - Pattern matching with exhaustiveness guidance
 - Type-directed field lookup for record access
 
-## ARM64-First Target
+## Native Backend Targets
 
-**Decision**: Target ARM64 (Apple Silicon) as the primary architecture.
+**Decision**: Support ARM64 on macOS/Linux and x86-64 on Linux, with ARM64 remaining the primary development target.
 
 **Rationale**:
 - **Development hardware**: Primary development on Apple Silicon Macs
-- **Modern ISA**: Clean, regular instruction set easier to target
+- **Modern ARM64 ISA**: Clean, regular instruction set easier to target
 - **Performance**: Native performance on development machines
-- **Linux support**: ARM64 Linux (including Docker) works with same backend
+- **Linux support**: ARM64 and x86-64 Linux (including Docker) are selected at runtime by platform detection
 
-**Notable ARM64 considerations**:
+**Notable backend considerations**:
 - No native modulo instruction: implemented as `sdiv` + `msub` sequence
-- Immediate value constraints require careful handling
+- Immediate value constraints require careful per-ISA handling
 - Caller-saved vs callee-saved register conventions affect allocation strategy
 
 ## HAMT-Based Immutable Dictionary
