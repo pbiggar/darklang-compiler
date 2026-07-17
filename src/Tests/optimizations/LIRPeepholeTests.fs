@@ -87,6 +87,38 @@ let testRemoveFloatingCopyBackMovesFromAllocatedFunction () : TestResult =
         else
             Error $"Expected copy-back moves to be removed, got: {cleanedBlock.Instrs}"
 
+let testFloatingCopyBackKeepsMoveAfterFPhiWritesSource () : TestResult =
+    let label = Label "entry"
+    let sourceLabel = Label "source"
+    let block : BasicBlock = {
+        Label = label
+        Instrs = [
+            FMov (FPhysical D3, FPhysical D5)
+            FPhi (FPhysical D5, [(FPhysical D2, sourceLabel)])
+            FMov (FPhysical D3, FPhysical D5)
+        ]
+        Terminator = Ret
+    }
+    let func : Function = {
+        Name = "floating_copy_back_phi_write"
+        TypedParams = []
+        CFG = {
+            Entry = label
+            Blocks = Map.ofList [(label, block)]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+
+    match removePostAllocationMovesFromFunction func |> fun f -> Map.tryFind label f.CFG.Blocks with
+    | None ->
+        Error "Expected cleanup to preserve the entry block"
+    | Some cleanedBlock ->
+        if cleanedBlock.Instrs = block.Instrs then
+            Ok ()
+        else
+            Error $"Expected FPhi write to invalidate stale float aliases, got: {cleanedBlock.Instrs}"
+
 let testFNegMoveChainFusesWhenTempDies () : TestResult =
     let instrs = [
         FNeg (FPhysical D0, FPhysical D2)
@@ -134,6 +166,7 @@ let testMulConstantKeepsLiveConstRegister () : TestResult =
 let tests = [
     ("LIR peephole removes self-moves from allocated function", testRemoveSelfMovesFromAllocatedFunction)
     ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
+    ("LIR peephole keeps floating copy-back after FPhi writes source", testFloatingCopyBackKeepsMoveAfterFPhiWritesSource)
     ("LIR peephole fuses FNeg followed by dead-temp FMov", testFNegMoveChainFusesWhenTempDies)
     ("LIR peephole keeps MUL temp used by later print", testMulAddFusionKeepsLiveTempForPrint)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)

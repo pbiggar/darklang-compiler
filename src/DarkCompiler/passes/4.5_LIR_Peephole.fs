@@ -510,6 +510,7 @@ let private recordFRegWrite (dest: FReg) (aliases: Map<FReg, FReg>) : Map<FReg, 
 
 let private fRegWriteDest (instr: Instr) : FReg option =
     match instr with
+    | FPhi (dest, _)
     | FLoad (dest, _)
     | FAdd (dest, _, _)
     | FSub (dest, _, _)
