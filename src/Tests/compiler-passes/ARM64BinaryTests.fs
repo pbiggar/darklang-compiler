@@ -204,6 +204,184 @@ let testCreateExecutableWithCoverageIncludesCoverageSection () : TestResult =
         else
             Ok ()
 
+let private minimalMachOBinaryWithTextSection (textSection: Section64) (textFileSize: uint64) : MachOBinary =
+    let pageZeroCommandSize = 72u
+    let textSegmentCommandSize = 152u
+    let linkeditSegmentCommandSize = 72u
+    let dylinkerCommandSize = 32u
+    let dylibCommandSize = 56u
+    let symtabCommandSize = 24u
+    let dysymtabCommandSize = 80u
+    let uuidCommandSize = 24u
+    let buildVersionCommandSize = 24u
+    let mainCommandSize = 24u
+    let commandsSize =
+        pageZeroCommandSize +
+        textSegmentCommandSize +
+        linkeditSegmentCommandSize +
+        dylinkerCommandSize +
+        dylibCommandSize +
+        symtabCommandSize +
+        dysymtabCommandSize +
+        uuidCommandSize +
+        buildVersionCommandSize +
+        mainCommandSize
+
+    {
+        Header = {
+            Magic = MH_MAGIC_64
+            CpuType = CPU_TYPE_ARM64
+            CpuSubType = CPU_SUBTYPE_ARM64_ALL
+            FileType = MH_EXECUTE
+            NumCommands = 10u
+            SizeOfCommands = commandsSize
+            Flags = MH_NOUNDEFS
+            Reserved = 0u
+        }
+        PageZeroCommand = {
+            Command = LC_SEGMENT_64
+            CommandSize = pageZeroCommandSize
+            SegmentName = "__PAGEZERO"
+            VmAddress = 0UL
+            VmSize = 0x100000000UL
+            FileOffset = 0UL
+            FileSize = 0UL
+            MaxProt = 0u
+            InitProt = 0u
+            NumSections = 0u
+            Flags = 0u
+            Sections = []
+        }
+        TextSegmentCommand = {
+            Command = LC_SEGMENT_64
+            CommandSize = textSegmentCommandSize
+            SegmentName = "__TEXT"
+            VmAddress = 0x100000000UL
+            VmSize = textFileSize
+            FileOffset = 0UL
+            FileSize = textFileSize
+            MaxProt = VM_PROT_READ ||| VM_PROT_EXECUTE
+            InitProt = VM_PROT_READ ||| VM_PROT_EXECUTE
+            NumSections = 1u
+            Flags = 0u
+            Sections = [textSection]
+        }
+        LinkeditSegmentCommand = {
+            Command = LC_SEGMENT_64
+            CommandSize = linkeditSegmentCommandSize
+            SegmentName = "__LINKEDIT"
+            VmAddress = 0x100004000UL
+            VmSize = 0UL
+            FileOffset = textFileSize
+            FileSize = 0UL
+            MaxProt = VM_PROT_READ
+            InitProt = VM_PROT_READ
+            NumSections = 0u
+            Flags = 0u
+            Sections = []
+        }
+        DylinkerCommand = {
+            Command = LC_LOAD_DYLINKER
+            CommandSize = dylinkerCommandSize
+            Name = "/usr/lib/dyld"
+        }
+        DylibCommand = {
+            Command = LC_LOAD_DYLIB
+            CommandSize = dylibCommandSize
+            Name = "/usr/lib/libSystem.B.dylib"
+            Timestamp = 2u
+            CurrentVersion = 0u
+            CompatibilityVersion = 0x00010000u
+        }
+        SymtabCommand = {
+            Command = LC_SYMTAB
+            CommandSize = symtabCommandSize
+            SymbolTableOffset = 0u
+            NumSymbols = 0u
+            StringTableOffset = 0u
+            StringTableSize = 0u
+        }
+        DysymtabCommand = {
+            Command = LC_DYSYMTAB
+            CommandSize = dysymtabCommandSize
+            LocalSymIndex = 0u
+            NumLocalSymbols = 0u
+            ExtDefSymIndex = 0u
+            NumExtDefSymbols = 0u
+            UndefSymIndex = 0u
+            NumUndefSymbols = 0u
+            TocOffset = 0u
+            NumTocEntries = 0u
+            ModTableOffset = 0u
+            NumModTableEntries = 0u
+            ExtRefSymOffset = 0u
+            NumExtRefSyms = 0u
+            IndirectSymOffset = 0u
+            NumIndirectSyms = 0u
+            ExtRelOffset = 0u
+            NumExtRel = 0u
+            LocRelOffset = 0u
+            NumLocRel = 0u
+        }
+        UuidCommand = {
+            Command = LC_UUID
+            CommandSize = uuidCommandSize
+            Uuid = Array.create 16 0uy
+        }
+        BuildVersionCommand = {
+            Command = LC_BUILD_VERSION
+            CommandSize = buildVersionCommandSize
+            Platform = 1u
+            MinOS = 0xB0000u
+            Sdk = 0xF0500u
+            NumTools = 0u
+        }
+        MainCommand = {
+            Command = LC_MAIN
+            CommandSize = mainCommandSize
+            EntryOffset = uint64 textSection.Offset
+            StackSize = 0UL
+        }
+        MachineCode = [| 0xC0uy; 0x03uy; 0x5Fuy; 0xD6uy |]
+        StringData = [||]
+    }
+
+let private minimalTextSectionAtOffset (offset: uint32) : Section64 =
+    {
+        SectionName = "__text"
+        SegmentName = "__TEXT"
+        Address = 0x100000000UL
+        Size = 4UL
+        Offset = offset
+        Align = 2u
+        RelocationOffset = 0u
+        NumRelocations = 0u
+        Flags = S_REGULAR ||| S_ATTR_PURE_INSTRUCTIONS ||| S_ATTR_SOME_INSTRUCTIONS
+        Reserved1 = 0u
+        Reserved2 = 0u
+        Reserved3 = 0u
+    }
+
+let private expectMachOLayoutCrash (expectedMessage: string) (binary: MachOBinary) : TestResult =
+    try
+        serializeMachO binary |> ignore
+        Error $"Expected serializeMachO to crash with '{expectedMessage}'"
+    with
+    | ex when ex.Message = expectedMessage -> Ok ()
+    | ex -> Error $"Expected Mach-O layout error '{expectedMessage}', got '{ex.Message}'"
+
+let testSerializeMachOReportsInvalidCodeOffset () : TestResult =
+    let textSection = minimalTextSectionAtOffset 64u
+    let binary = minimalMachOBinaryWithTextSection textSection 0x4000UL
+    let expectedMessage = "MachO: code offset 64 is before end of load commands 592"
+    expectMachOLayoutCrash expectedMessage binary
+
+let testSerializeMachOReportsTextSegmentTooSmall () : TestResult =
+    let textSection = minimalTextSectionAtOffset 0x1000u
+    let binary = minimalMachOBinaryWithTextSection textSection 0x1000UL
+    let expectedMessage = "MachO: __TEXT file size 4096 is too small for code and data ending at 4104"
+    expectMachOLayoutCrash expectedMessage binary
+
 let testCompleteEncodingPipeline () : TestResult =
     // Test the complete pipeline: instructions -> encoding -> binary
     let movInstr = MOVZ (X0, 42us, 0)
@@ -255,6 +433,8 @@ let tests = [
     ("Mach-O __const section offset points to aligned data", testMachOConstSectionOffsetPointsToAlignedData)
     ("ELF writeToFile returns Error for invalid path", testElfWriteToFileReturnsErrorForInvalidPath)
     ("createExecutableWithCoverage includes coverage section", testCreateExecutableWithCoverageIncludesCoverageSection)
+    ("serializeMachO reports invalid code offset", testSerializeMachOReportsInvalidCodeOffset)
+    ("serializeMachO reports undersized __TEXT segment", testSerializeMachOReportsTextSegmentTooSmall)
     ("complete encoding pipeline", testCompleteEncodingPipeline)
     ("writeToFile returns Error for invalid path", testWriteToFileReturnsErrorForInvalidPath)
 ]

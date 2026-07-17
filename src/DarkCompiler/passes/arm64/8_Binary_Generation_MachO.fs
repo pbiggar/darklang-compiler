@@ -225,6 +225,8 @@ let serializeMachO (binary: Binary.MachOBinary) : byte array =
         | [] -> Crash.crash "MachO: TextSegmentCommand has no sections"
 
     let paddingBeforeCode = codeOffset - dataStart
+    if paddingBeforeCode < 0 then
+        Crash.crash $"MachO: code offset {codeOffset} is before end of load commands {dataStart}"
     let paddingBefore = Array.create paddingBeforeCode 0uy
 
     // Pad to fill the entire __TEXT segment
@@ -235,6 +237,8 @@ let serializeMachO (binary: Binary.MachOBinary) : byte array =
     let alignmentPadding = Array.create (alignedDataStart - codeOffset - codeSize) 0uy
     let stringSize = binary.StringData.Length
     let paddingAfterCode = textSegmentSize - alignedDataStart - stringSize
+    if paddingAfterCode < 0 then
+        Crash.crash $"MachO: __TEXT file size {textSegmentSize} is too small for code and data ending at {alignedDataStart + stringSize}"
     let paddingAfter = Array.create paddingAfterCode 0uy
 
     [|
