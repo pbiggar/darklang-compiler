@@ -24,7 +24,9 @@ let private optimizedBlockForLabel
     : Result<BasicBlock, string> =
     match Map.tryFind label optimizedFunc.CFG.Blocks with
     | Some block -> Ok block
-    | None -> Error $"{testName}: optimizer removed expected block {label}"
+    | None ->
+        let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
+        Error $"{testName}: optimizer removed expected block {label}.\nActual:\n{actual}"
 
 let testCseAfterCopyPropFixpoint () : TestResult =
     let entry = Label "entry"
@@ -203,24 +205,26 @@ let testCfgSimplifyRemovesRetPhiJoin () : TestResult =
 
     let program = Program ([func], Map.empty, Map.empty)
     let (Program (functions, _, _)) = optimizeProgram program
-    let optimizedFunc = functions |> List.head
-    let blocks = optimizedFunc.CFG.Blocks
+    match singleOptimizedFunction "testCfgSimplifyRemovesRetPhiJoin" functions with
+    | Error e -> Error e
+    | Ok optimizedFunc ->
+        let blocks = optimizedFunc.CFG.Blocks
 
-    let joinRemoved = not (Map.containsKey joinLabel blocks)
-    let thenRet =
-        match Map.tryFind thenLabel blocks with
-        | Some block -> block.Terminator = Ret (Int64Const 1L)
-        | None -> false
-    let elseRet =
-        match Map.tryFind elseLabel blocks with
-        | Some block -> block.Terminator = Ret (Int64Const 2L)
-        | None -> false
+        let joinRemoved = not (Map.containsKey joinLabel blocks)
+        let thenRet =
+            match Map.tryFind thenLabel blocks with
+            | Some block -> block.Terminator = Ret (Int64Const 1L)
+            | None -> false
+        let elseRet =
+            match Map.tryFind elseLabel blocks with
+            | Some block -> block.Terminator = Ret (Int64Const 2L)
+            | None -> false
 
-    if joinRemoved && thenRet && elseRet then
-        Ok ()
-    else
-        let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
-        Error $"Expected ret-phi join simplification.\nActual:\n{actual}"
+        if joinRemoved && thenRet && elseRet then
+            Ok ()
+        else
+            let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
+            Error $"Expected ret-phi join simplification.\nActual:\n{actual}"
 
 let testEmptyBlockRemovalRewritesPhiSourceToPredecessor () : TestResult =
     let entry = Label "entry"
