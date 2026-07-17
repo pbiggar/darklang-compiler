@@ -144,6 +144,7 @@ Int8.lessThanOrEqualTo(5y, 5y) = true
 Int8.toString(0y) = "0"
 Int8.toString(42y) = "42"
 Int8.toString(-5y) = "-5"
+Int8.toString(-128y) = "-128"
 Int8.toString(120y) = "120"
 
 // ===================================================================

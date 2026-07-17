@@ -84,7 +84,11 @@ def Stdlib.Int16.__digitToString(n: Int16) : String =
 
 // Convert an integer to its string representation
 def Stdlib.Int16.toString(n: Int16) : String =
-    if n < 0s then "-" ++ Stdlib.Int16.toString(0s - n)
+    if n < 0s then
+        if n < -9s then
+            let quotient = n / 10s in
+            Stdlib.Int16.toString(quotient) ++ Stdlib.Int16.__digitToString(0s - (n - (quotient * 10s)))
+        else "-" ++ Stdlib.Int16.__digitToString(0s - n)
     else if n < 10s then Stdlib.Int16.__digitToString(n)
     else Stdlib.Int16.toString(n / 10s) ++ Stdlib.Int16.__digitToString(n % 10s)
 

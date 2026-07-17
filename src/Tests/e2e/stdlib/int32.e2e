@@ -145,6 +145,7 @@ Int32.lessThanOrEqualTo(5l, 5l) = true
 Int32.toString(0l) = "0"
 Int32.toString(42l) = "42"
 Int32.toString(-5l) = "-5"
+Int32.toString(-2147483648l) = "-2147483648"
 Int32.toString(1234567890l) = "1234567890"
 
 // ===================================================================

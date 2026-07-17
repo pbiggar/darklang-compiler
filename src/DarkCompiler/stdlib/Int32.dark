@@ -85,7 +85,11 @@ def Stdlib.Int32.__digitToString(n: Int32) : String =
 
 // Convert an integer to its string representation
 def Stdlib.Int32.toString(n: Int32) : String =
-    if n < 0l then "-" ++ Stdlib.Int32.toString(0l - n)
+    if n < 0l then
+        if n < -9l then
+            let quotient = n / 10l in
+            Stdlib.Int32.toString(quotient) ++ Stdlib.Int32.__digitToString(0l - (n - (quotient * 10l)))
+        else "-" ++ Stdlib.Int32.__digitToString(0l - n)
     else if n < 10l then Stdlib.Int32.__digitToString(n)
     else Stdlib.Int32.toString(n / 10l) ++ Stdlib.Int32.__digitToString(n % 10l)
 

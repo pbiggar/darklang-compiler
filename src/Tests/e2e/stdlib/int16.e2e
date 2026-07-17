@@ -145,6 +145,7 @@ Int16.lessThanOrEqualTo(5s, 5s) = true
 Int16.toString(0s) = "0"
 Int16.toString(42s) = "42"
 Int16.toString(-5s) = "-5"
+Int16.toString(-32768s) = "-32768"
 Int16.toString(12345s) = "12345"
 
 // ===================================================================
