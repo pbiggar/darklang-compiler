@@ -9,6 +9,9 @@ module PrintInsertion
 
 open ANF
 
+let unsupportedListDisplay (elemType: AST.Type) : 'a =
+    Crash.crash $"Unsupported list result display element type: {TypeChecking.typeToString elemType}"
+
 /// Wrap the return value with a Print instruction
 /// Transforms: Return atom  →  Let (_, Print (atom, type), Return atom)
 /// For list types, generates: Call toDisplayString, then Print the string
@@ -42,9 +45,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
                 let printExpr = Print (atom, printType)
                 (Let (keepFunc, keepExpr, Let (printTmp, printExpr, Return atom)), varGen2)
             | None ->
-                // Unsupported element type, fall back to simple print
-                let (printTmp, varGen') = freshVar varGen
-                (Let (printTmp, Print (atom, printType), Return atom), varGen')
+                unsupportedListDisplay elemType
         | AST.TList elemType ->
             match ListDisplay.getDisplayStringFunc elemType with
             | Some toDisplayStringName ->
@@ -56,9 +57,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
                 let printExpr = Print (Var strTmp, AST.TString)
                 (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
             | None ->
-                // Unsupported element type, fall back to simple print
-                let (printTmp, varGen') = freshVar varGen
-                (Let (printTmp, Print (atom, printType), Return atom), varGen')
+                unsupportedListDisplay elemType
         | AST.TFloat64 ->
             // For Float64, call Float.toString first, then print the string
             let (strTmp, varGen1) = freshVar varGen

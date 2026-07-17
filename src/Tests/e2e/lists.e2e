@@ -782,3 +782,7 @@ testListInBranch169(true) = 55
 // This test combines the closure pattern from #168 with the branch context
 // from #169 to exercise the TFunction->TList case in convertExprToOperand.
 def makeList170(n: Int64) : List<Int64> = [77 + n, 154, 231] def testBranch170(flag: Bool) : Int64 = if flag then let f = makeList170 in match f(0) with | [h, ...t] -> h | [] -> 0 else 999 testBranch170(true) = 77
+
+// Unsupported list result display should fail at compile time instead of
+// falling through to a generic runtime list print path.
+[(1, 2)] = error="Unsupported list result display element type: (Int64, Int64)"
