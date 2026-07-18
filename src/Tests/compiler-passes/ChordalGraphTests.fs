@@ -153,7 +153,7 @@ let testPrecoloring () : TestResult =
 
 /// Test 9: MCS produces valid ordering
 let testMCSOrdering () : TestResult =
-    // Diamond graph: 0--1, 0--2, 1--3, 2--3
+    // Four-cycle join shape: 0--1, 0--2, 1--3, 2--3
     let graph = makeGraph [0; 1; 2; 3] [(0, 1); (0, 2); (1, 3); (2, 3)]
     let ordering = maximumCardinalitySearch graph
     // Ordering should contain all vertices exactly once
@@ -173,20 +173,20 @@ let testMCSProfileLinear () : TestResult =
     else
         Error $"Expected SelectionChecks {vertices.Length}, got {profile.SelectionChecks}"
 
-/// Test 11: Diamond CFG pattern (common in SSA)
+/// Test 11: Branch/join CFG pattern (common in SSA)
 /// Simulates: v0 defined in A, used in B and C, phi in D
 /// v1 defined in B, v2 defined in C, v3 = phi(v1, v2)
-let testDiamondCFG () : TestResult =
-    // Interferences from typical diamond:
+let testBranchJoinCFG () : TestResult =
+    // Interferences from a typical branch/join:
     // v0 live with v1 (in block B), v0 live with v2 (in block C)
     // v1 live at phi point with v3, v2 live at phi point with v3
     let graph = makeGraph [0; 1; 2; 3] [(0, 1); (0, 2); (1, 3); (2, 3)]
     let result = chordalGraphColor graph [] 8 [] []
-    // Diamond is chordal and should need at most 3 colors
+    // This shape should need at most 3 colors.
     if result.ChromaticNumber <= 3 then
         Ok ()
     else
-        Error $"Diamond CFG should need at most 3 colors, got {result.ChromaticNumber}"
+        Error $"Branch/join CFG should need at most 3 colors, got {result.ChromaticNumber}"
 
 /// Test 12: Star graph (one central vertex connected to all others)
 let testStarGraph () : TestResult =
@@ -511,7 +511,7 @@ let tests = [
     ("Pre-coloring respected", testPrecoloring)
     ("MCS ordering", testMCSOrdering)
     ("MCS profile linear", testMCSProfileLinear)
-    ("Diamond CFG", testDiamondCFG)
+    ("Branch/join CFG", testBranchJoinCFG)
     ("Star graph", testStarGraph)
     ("Multiple pre-colored", testMultiplePrecolored)
     ("Exact clique", testExactClique)
