@@ -76,6 +76,7 @@
     <!-- Optimization tests -->
     <Compile Include="optimizations/MIROptimizeTests.fs" />
     <Compile Include="optimizations/LIRPeepholeTests.fs" />
+    <Compile Include="optimizations/DeadCodeEliminationTests.fs" />
     <Compile Include="optimizations/ANFOptimizeTests.fs" />
     <Compile Include="optimizations/ANFInliningTests.fs" />
 
