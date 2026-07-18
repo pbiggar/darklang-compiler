@@ -1,7 +1,7 @@
 # Known Bugs and Issues
 
-This document tracks currently known bugs that have not been fixed yet. For each
-open bug, include reproduction steps, analysis of the likely cause, and
+This document tracks currently known bugs and resolved historical bugs. For
+each open bug, include reproduction steps, analysis of the likely cause, and
 workarounds.
 
 ---
