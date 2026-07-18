@@ -1,8 +1,7 @@
 // Integer Overflow Tests
 //
 // These tests verify that arithmetic overflow happens at the correct bit width.
-// Currently these tests FAIL because all integers are computed as 64-bit.
-// After implementing SizedInt, these tests should PASS.
+// Sized integer arithmetic should wrap at the value's declared width.
 
 // ===================================================================
 // Signed Integer Overflow Tests
@@ -10,19 +9,19 @@
 
 // Int8: range -128 to 127
 127y + 1y = -127y - 1y // MAX + 1 wraps to MIN
--127y - 2y = 127y// MIN - 1 wraps to MAX (use -127-2 instead of -128-1)
-100y + 100y = -56y// 200 wraps to -56 (200 - 256)
-let f = (a: Int8, b: Int8, c: Int8) => a + b + c in f(60y, 60y, 120y) = -16y// chained Int8 addition must not widen to Int64
-let x = 120y in x + 120y = -16y// let-bound Int8 literals must not widen to Int64
+-127y - 2y = 127y // MIN - 1 wraps to MAX (use -127-2 instead of -128-1)
+100y + 100y = -56y // 200 wraps to -56 (200 - 256)
+let f = (a: Int8, b: Int8, c: Int8) => a + b + c in f(60y, 60y, 120y) = -16y // chained Int8 addition must not widen to Int64
+let x = 120y in x + 120y = -16y // let-bound Int8 literals must not widen to Int64
 
 // Int16: range -32768 to 32767
 32767s + 1s = -32767s - 1s // MAX + 1 wraps to MIN
--32767s - 2s = 32767s// MIN - 1 wraps to MAX (use -32767-2 instead of -32768-1)
-20000s + 20000s = -25536s// 40000 wraps to -25536 (40000 - 65536)
+-32767s - 2s = 32767s // MIN - 1 wraps to MAX (use -32767-2 instead of -32768-1)
+20000s + 20000s = -25536s // 40000 wraps to -25536 (40000 - 65536)
 
 // Int32: range -2147483648 to 2147483647
 2147483647l + 1l = -2147483647l - 1l // MAX + 1 wraps to MIN
--2147483647l - 2l = 2147483647l// MIN - 1 wraps to MAX
+-2147483647l - 2l = 2147483647l // MIN - 1 wraps to MAX
 
 
 // ===================================================================
@@ -30,35 +29,35 @@ let x = 120y in x + 120y = -16y// let-bound Int8 literals must not widen to Int6
 // ===================================================================
 
 // UInt8: range 0 to 255
-255uy + 1uy = 0uy// MAX + 1 wraps to 0
-0uy - 1uy = 255uy// 0 - 1 wraps to MAX
-200uy + 100uy = 44uy// 300 wraps to 44 (300 - 256)
+255uy + 1uy = 0uy // MAX + 1 wraps to 0
+0uy - 1uy = 255uy // 0 - 1 wraps to MAX
+200uy + 100uy = 44uy // 300 wraps to 44 (300 - 256)
 
 // UInt16: range 0 to 65535
-65535us + 1us = 0us// MAX + 1 wraps to 0
-0us - 1us = 65535us// 0 - 1 wraps to MAX
-40000us + 40000us = 14464us// 80000 wraps to 14464 (80000 - 65536)
+65535us + 1us = 0us // MAX + 1 wraps to 0
+0us - 1us = 65535us // 0 - 1 wraps to MAX
+40000us + 40000us = 14464us // 80000 wraps to 14464 (80000 - 65536)
 
 // UInt32: range 0 to 4294967295
-4294967295ul + 1ul = 0ul// MAX + 1 wraps to 0
-0ul - 1ul = 4294967295ul// 0 - 1 wraps to MAX
+4294967295ul + 1ul = 0ul // MAX + 1 wraps to 0
+0ul - 1ul = 4294967295ul // 0 - 1 wraps to MAX
 
 // ===================================================================
 // Multiplication Overflow Tests
 // ===================================================================
 
 // Int8 multiplication overflow
-16y * 16y = 0y// 256 wraps to 0 (mod 256)
-10y * 20y = -56y// 200 wraps to -56
+16y * 16y = 0y // 256 wraps to 0 (mod 256)
+10y * 20y = -56y // 200 wraps to -56
 
 // Int16 multiplication overflow
-256s * 256s = 0s// 65536 wraps to 0 (mod 65536)
-200s * 200s = -25536s// 40000 wraps to -25536
+256s * 256s = 0s // 65536 wraps to 0 (mod 65536)
+200s * 200s = -25536s // 40000 wraps to -25536
 
 // UInt8 multiplication overflow
-16uy * 16uy = 0uy// 256 wraps to 0
-20uy * 20uy = 144uy// 400 wraps to 144 (400 - 256)
+16uy * 16uy = 0uy // 256 wraps to 0
+20uy * 20uy = 144uy // 400 wraps to 144 (400 - 256)
 
 // UInt16 multiplication overflow
-256us * 256us = 0us// 65536 wraps to 0
-300us * 300us = 24464us// 90000 wraps to 24464 (90000 - 65536)
+256us * 256us = 0us // 65536 wraps to 0
+300us * 300us = 24464us // 90000 wraps to 24464 (90000 - 65536)
