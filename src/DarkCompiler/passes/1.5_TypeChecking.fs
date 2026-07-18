@@ -8,9 +8,9 @@
 // - Type checking proceeds top-down (expression context known from surrounding code)
 // - No type inference - when type cannot be determined from context, require annotation
 //
-// Current Phase 0 implementation:
-// - Only integers supported (TInt64)
-// - All operations must be on integers
+// Current implementation:
+// - Supports the language's scalar, compound, function, and generic types
+// - Validates operations against the concrete types they accept
 // - Returns Result<Type, TypeError> for functional error handling
 //
 // Example:
