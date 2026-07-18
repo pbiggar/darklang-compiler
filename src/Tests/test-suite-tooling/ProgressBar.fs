@@ -19,15 +19,18 @@ let create label total = { Total = total; Completed = 0; Failed = 0; Label = lab
 
 let update (state: State) =
     lock lockObj (fun () ->
+        let displayCompleted =
+            if state.Total <= 0 then 0
+            else max 0 (min state.Completed state.Total)
         let rawPct =
             if state.Total = 0 then 0.0
-            else float state.Completed / float state.Total
+            else float displayCompleted / float state.Total
         let pct = max 0.0 (min 1.0 rawPct)
         let filled = int (pct * float barWidth)
         let bar = String.replicate filled "=" + String.replicate (barWidth - filled) " "
         let failStr = if state.Failed > 0 then $" ({Colors.red}{state.Failed} failed{Colors.reset})" else ""
         // Use \r to return to start of line, \x1b[K to clear to end of line
-        eprint $"\r\x1b[K  {state.Label}: [{bar}] {state.Completed}/{state.Total}{failStr}"
+        eprint $"\r\x1b[K  {state.Label}: [{bar}] {displayCompleted}/{state.Total}{failStr}"
         // Flush stderr so progress updates are visible in buffered environments.
         System.Console.Error.Flush()
     )
