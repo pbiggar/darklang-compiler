@@ -63,6 +63,12 @@ let private machineCodeToBytes (machineCode: uint32 list) : byte array =
             writeWords (offset + 4) rest
     writeWords 0 machineCode
 
+let private align8Int (value: int) : int =
+    ((value + 7) / 8) * 8
+
+let private align8UInt64 (value: uint64) : uint64 =
+    (value + 7UL) &&& (~~~7UL)
+
 /// Serialize ELF64 header to bytes
 let serializeElf64Header (header: Binary_ELF.Elf64Header) : byte array =
     [|
@@ -101,7 +107,7 @@ let serializeElf (binary: Binary_ELF.ElfBinary) : byte array =
     // Calculate alignment padding needed after code
     let headerSize = 64 + (56 * binary.ProgramHeaders.Length)
     let codeEnd = headerSize + binary.MachineCode.Length
-    let alignedDataStart = (codeEnd + 7) &&& (~~~7)
+    let alignedDataStart = align8Int codeEnd
     let alignmentPadding = Array.create (alignedDataStart - codeEnd) 0uy
     [|
         yield! serializeElf64Header binary.Header
@@ -140,7 +146,7 @@ let createStringData (stringPool: LiteralPool.StringPool) : byte array =
         |> List.map (fun (_idx, (str, len)) ->
             let lenBytes = uint64ToBytes (uint64 len)  // 8-byte length
             let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
-            let alignedLen = ((len + 7) / 8) * 8
+            let alignedLen = align8Int len
             let padding = Array.zeroCreate (alignedLen - len)
             let sentinel = System.BitConverter.GetBytes(System.Int64.MaxValue)
             Array.concat [| lenBytes; strBytes; padding; sentinel |])
@@ -178,7 +184,7 @@ let private createLoadSegment
     (dataSize: uint64)
     (segmentFlags: uint32)
     : Binary_ELF.Elf64ProgramHeader =
-    let alignedDataOffset = (codeFileOffset + codeSize + 7UL) &&& (~~~7UL)
+    let alignedDataOffset = align8UInt64 (codeFileOffset + codeSize)
     let alignmentPadding = alignedDataOffset - (codeFileOffset + codeSize)
     let segmentFileSize = codeFileOffset + codeSize + alignmentPadding + dataSize
 
@@ -236,7 +242,7 @@ let createExecutableWithPools
     let dataBytes =
         let floatAndStringBytes = Array.append floatBytes stringBytes
         let leakBytes = if enableLeakCheck then Array.create 8 0uy else [||]
-        let leakStart = ((floatAndStringBytes.Length + 7) / 8) * 8
+        let leakStart = align8Int floatAndStringBytes.Length
         let leakPadding = Array.create (leakStart - floatAndStringBytes.Length) 0uy
         if enableLeakCheck then
             Array.concat [floatAndStringBytes; leakPadding; leakBytes]
@@ -269,15 +275,15 @@ let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: Literal
     let stringBytes = createStringData stringPool
 
     // Create coverage data (zeros, 8 bytes per expression, 8-byte aligned)
-    let coverageSize = ((coverageExprCount * 8 + 7) / 8) * 8
+    let coverageSize = align8Int (coverageExprCount * 8)
     let coverageBytes = Array.create coverageSize 0uy
 
     let floatAndStringBytes = Array.append floatBytes stringBytes
-    let alignedCoverageStart = ((floatAndStringBytes.Length + 7) / 8) * 8
+    let alignedCoverageStart = align8Int floatAndStringBytes.Length
     let coveragePadding = Array.create (alignedCoverageStart - floatAndStringBytes.Length) 0uy
     let afterCoverage = alignedCoverageStart + coverageBytes.Length
     let leakBytes = if enableLeakCheck then Array.create 8 0uy else [||]
-    let leakStart = ((afterCoverage + 7) / 8) * 8
+    let leakStart = align8Int afterCoverage
     let leakPadding = Array.create (leakStart - afterCoverage) 0uy
     let dataBytes =
         if enableLeakCheck then
