@@ -441,13 +441,24 @@ let private fRegUsedInInstr (target: FReg) (instr: Instr) : bool =
 let private fRegUsedInInstrs (target: FReg) (instrs: Instr list) : bool =
     instrs |> List.exists (fRegUsedInInstr target)
 
+let private tryFoldFNegIntoMove (instr: Instr) (next: Instr) (rest: Instr list) : Instr option =
+    match instr, next with
+    | FNeg (temp, src), FMov (dest, moveSrc)
+        when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
+        Some (FNeg (dest, src))
+    | _ -> None
+
 /// Optimize a list of instructions (single-pass peephole)
 let optimizeInstrs (instrs: Instr list) : Instr list =
     let rec loop remaining =
         match remaining with
-        | FNeg (temp, src) :: FMov (dest, moveSrc) :: rest
-            when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
-            FNeg (dest, src) :: loop rest
+        | instr :: next :: rest ->
+            match tryFoldFNegIntoMove instr next rest with
+            | Some folded -> folded :: loop rest
+            | None ->
+                match optimizeInstr instr with
+                | Some instr' -> instr' :: loop (next :: rest)
+                | None -> loop (next :: rest)
         | instr :: rest ->
             match optimizeInstr instr with
             | Some instr' -> instr' :: loop rest
@@ -459,9 +470,14 @@ let optimizeInstrs (instrs: Instr list) : Instr list =
 let removeSelfMovesFromInstrs (instrs: Instr list) : Instr list =
     let rec loop remaining =
         match remaining with
-        | FNeg (temp, src) :: FMov (dest, moveSrc) :: rest
-            when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
-            FNeg (dest, src) :: loop rest
+        | instr :: next :: rest ->
+            match tryFoldFNegIntoMove instr next rest with
+            | Some folded -> folded :: loop rest
+            | None ->
+                match instr with
+                | Mov (dest, Reg src) when sameReg dest src -> loop (next :: rest)
+                | FMov (dest, src) when sameFReg dest src -> loop (next :: rest)
+                | _ -> instr :: loop (next :: rest)
         | instr :: rest ->
             match instr with
             | Mov (dest, Reg src) when sameReg dest src -> loop rest
