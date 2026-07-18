@@ -380,7 +380,8 @@ let runLIR2ARM64Test (input: LIR.Program) (expected: ARM64Symbolic.Instr list) :
     | Ok actualRaw ->
         // Filter out Label pseudo-instructions for comparison
         let actual = actualRaw |> List.filter (function | ARM64Symbolic.Label _ -> false | _ -> true)
-        if actual = expected then
+        let expectedForComparison = expected |> List.filter (function | ARM64Symbolic.Label _ -> false | _ -> true)
+        if actual = expectedForComparison then
             { Success = true
               Message = "Test passed"
               Expected = None

@@ -275,6 +275,36 @@ let testARM64SymbolicParserAcceptsBranchInstructions () : TestResult =
     | Error msg ->
         Error $"Expected symbolic branch instructions to parse, got: {msg}"
 
+let testLIRToARM64ComparisonIgnoresExpectedLabels () : TestResult =
+    let inputText =
+        [
+            "X1 <- Mov(Imm 10)"
+            "X1 <- Sub(X1, Imm 3)"
+            "X0 <- Mov(Reg X1)"
+            "Ret"
+        ]
+        |> String.concat "\n"
+
+    match parseLIR inputText with
+    | Error msg -> Error $"Failed to parse LIR input: {msg}"
+    | Ok input ->
+        let renamedInput = renameLIRFunctions "test" input
+        let expected =
+            [
+                ARM64Symbolic.Label "test"
+                ARM64Symbolic.STP_pre (ARM64.X29, ARM64.X30, ARM64.SP, -16s)
+                ARM64Symbolic.MOV_reg (ARM64.X29, ARM64.SP)
+                ARM64Symbolic.MOVZ (ARM64.X1, 10us, 0)
+                ARM64Symbolic.SUB_imm (ARM64.X1, ARM64.X1, 3us)
+                ARM64Symbolic.MOV_reg (ARM64.X0, ARM64.X1)
+                ARM64Symbolic.LDP_post (ARM64.X29, ARM64.X30, ARM64.SP, 16s)
+                ARM64Symbolic.RET
+            ]
+
+        match runLIR2ARM64Test renamedInput expected with
+        | { Success = true } -> Ok ()
+        | result -> Error $"Expected comparison to ignore expected labels, got: {result.Message}"
+
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
@@ -290,6 +320,7 @@ let tests = [
     ("ARM64 symbolic parser reports original line number", testARM64SymbolicParserReportsOriginalLineNumber)
     ("LIR parser reports original line number", testLIRParserReportsOriginalLineNumber)
     ("ARM64 symbolic parser accepts branch instructions", testARM64SymbolicParserAcceptsBranchInstructions)
+    ("LIR to ARM64 comparison ignores expected labels", testLIRToARM64ComparisonIgnoresExpectedLabels)
 ]
 
 let runAll () : TestResult =
