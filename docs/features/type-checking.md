@@ -4,14 +4,15 @@ This document describes the type checking pass in the Dark compiler.
 
 ## Overview
 
-The Dark compiler uses **top-down type checking** rather than full type inference.
-Function parameters and return types require explicit annotations; let bindings
-have optional annotations.
+The Dark compiler uses **top-down type checking** with targeted local inference
+for generic call sites. Function parameters and return types require explicit
+annotations; let bindings have optional annotations.
 
 ## Design Philosophy
 
 - **Explicit over implicit**: Type annotations required at function boundaries
-- **Simple implementation**: No unification algorithm or constraint solving
+- **Simple implementation**: Local type-variable unification for generics, not
+  global constraint solving
 - **Fast compilation**: Single-pass, no iteration to fixed point for types
 
 ## Type System
@@ -131,7 +132,8 @@ Generic functions use type parameters:
 def identity<T>(x: T) : T = x
 ```
 
-At call sites, type arguments can be explicit or inferred:
+At call sites, type arguments can be explicit or inferred from argument types,
+and in some contexts from the expected return type:
 ```dark
 identity<Int64>(42)  // Explicit
 identity(42)         // Inferred from argument
@@ -144,6 +146,20 @@ capture:
 ```fsharp
 let freshenTypeParams (typeParams: string list) : string list * Map<string, string>
 ```
+
+### Local Unification
+
+Generic calls use local unification to match parameter and return type patterns
+against concrete call-site types:
+
+```fsharp
+type Substitution = Map<string, Type>
+let unifyTypes (pattern: Type) (actual: Type) : Result<Substitution, string>
+let applySubst (subst: Substitution) (typ: Type) : Type
+```
+
+This supports generic type argument inference without introducing whole-program
+constraint solving.
 
 ## Error Types
 
