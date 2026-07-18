@@ -30,6 +30,12 @@ if [ -z "$EXPR" ]; then
     exit 1
 fi
 
+if ! "$RUN" objdump -i 2>/dev/null | grep -q 'i386:x86-64'; then
+    echo "debug-stack.sh: x86_64 objdump support is unavailable in this container." >&2
+    echo "Run this x64 debugging helper from an x86_64 devcontainer." >&2
+    exit 1
+fi
+
 BINPATH="/tmp/debug_stack_test"
 rm -f "$BINPATH"
 
@@ -44,9 +50,7 @@ fi
 echo ""
 echo "=== Finding function entry points ==="
 "$RUN" objdump -D -M intel -b binary -m i386:x86-64 --adjust-vma=0x400000 "$BINPATH" 2>&1 | \
-    grep "push.*rbp$" | awk '{print $1}' | sed 's/://' | while read -r addr; do
-    echo "  Function at 0x$addr"
-done
+    awk '/push.*rbp$/ { gsub(":", "", $1); print "  Function at 0x" $1 }'
 
 echo ""
 echo "=== Running with GDB crash analysis ==="
