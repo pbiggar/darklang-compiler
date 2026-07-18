@@ -5,7 +5,7 @@
 // - Common subexpression elimination (CSE): reuse identical computations
 // - Copy propagation: eliminate trivial moves and phis
 // - Dead code elimination (DCE): remove unused instructions
-// - CFG simplification: remove empty blocks, merge blocks
+// - CFG simplification: fold constant branches, prune unreachable blocks, and remove empty jumps
 // - Loop-invariant code motion (LICM): hoist loop-invariant expressions
 //
 // These optimizations leverage SSA form where each variable is defined exactly once.
