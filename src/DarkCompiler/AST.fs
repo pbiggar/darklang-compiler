@@ -20,7 +20,7 @@ let defaultWarningSettings : WarningSettings = {
     WarnOnDuplicatePatternBindings = true
 }
 
-/// Type system - will be used for type checking in Phase 0+
+/// Type system shared by parsing, type checking, ANF lowering, and later passes.
 type Type =
     // Signed integers
     | TInt8
@@ -188,10 +188,10 @@ type FunctionDef = {
     Body: Expr
 }
 
-/// Variant in a sum type (with optional payload type for M4)
+/// Variant in a sum type, optionally carrying one payload type.
 type Variant = {
     Name: string
-    Payload: Type option  // None for simple enums, Some for payloads (M4)
+    Payload: Type option  // None for simple enums, Some for payload-carrying variants
 }
 
 /// Type definition (record types, sum types, etc.)
