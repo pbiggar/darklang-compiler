@@ -20,7 +20,8 @@ This document lists the language features currently supported by the Dark compil
 ## Expressions
 
 - Integer, float, boolean, string, and unit literals (with string escape sequences); unsuffixed integer literals are Int64
-- Arithmetic: `+`, `-`, `*`, `/`
+- Arithmetic and remainder: `+`, `-`, `*`, `/`, `%`
+- Bitwise integer operators: `&`, `|||`, `^`, `~~~`, `<<`, `>>`
 - Comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=`
 - Logical operators: `&&`, `||`, `!`
 - Parentheses for grouping
