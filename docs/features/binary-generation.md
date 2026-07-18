@@ -167,8 +167,15 @@ Code generation handles these differences at the MIR/CodeGen level.
 
 ## How It Works
 
-1. **CodeGen** produces `uint32 list` (ARM64 instructions)
-2. **Binary generation** wraps instructions in appropriate format:
+1. **CodeGen** produces a target-specific symbolic instruction list
+   (`ARM64Symbolic.Instr list` on ARM64, `X86_64.Instr list` on x64)
+2. **Resolve/encoding** turns symbolic instructions into machine code:
+   - ARM64 resolves literal pools and labels, then encodes fixed-width
+     instructions as `uint32 list`
+   - x64 resolves labels and RIP-relative data references, then encodes
+     variable-width instructions as bytes
+3. **Binary generation** wraps encoded machine code in the target executable
+   format:
    - Compute segment sizes and offsets
    - Create headers and load commands
    - Serialize everything to bytes
