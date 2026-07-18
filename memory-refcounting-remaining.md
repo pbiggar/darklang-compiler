@@ -449,9 +449,9 @@ closure/bytes/list/dict payload release, plus initial `RcShape` storage-class
 classification used by RC insertion's legacy fixed-root compatibility
 predicate:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
-- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `104 passed`
-- Full-suite baseline: `scripts/run-in-container ./run-tests`:
+- `scripts/run-in-container ./run-tests --ai --filter=refcounting`: `205 passed`
+- `scripts/run-in-container ./run-tests --ai --filter="x64 codegen"`: `104 passed`
+- Full-suite baseline: `scripts/run-in-container ./run-tests --ai`:
   `4820 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
