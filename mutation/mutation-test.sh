@@ -11,7 +11,8 @@
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-COMPILER_DIR="${SCRIPT_DIR}/../src/DarkCompiler"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+COMPILER_DIR="${REPO_ROOT}/src/DarkCompiler"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 CHECKPOINT_FILE="${RESULTS_DIR}/checkpoint.txt"
 SITES_FILE="${RESULTS_DIR}/mutation_sites.txt"
@@ -47,6 +48,14 @@ log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[PASS]${NC} $1"; }
 log_fail() { echo -e "${RED}[FAIL]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
+resolve_source_file() {
+    local file="$1"
+    case "$file" in
+        /*) echo "$file" ;;
+        *) echo "${REPO_ROOT}/${file}" ;;
+    esac
+}
 
 # Parse arguments
 for arg in "$@"; do
@@ -168,7 +177,8 @@ find_mutation_sites() {
                         ;;
                 esac
 
-                echo "${type}:${file}:${linenum}"
+                local display_file="${file#${REPO_ROOT}/}"
+                echo "${type}:${display_file}:${linenum}"
             done
         done
     done >> "$SITES_FILE"
@@ -188,30 +198,34 @@ apply_sed() {
 # Apply a mutation
 apply_mutation() {
     local type="$1" file="$2" linenum="$3"
-    local backup="${file}.mutation_backup"
+    local source_file
+    source_file=$(resolve_source_file "$file")
+    local backup="${source_file}.mutation_backup"
 
-    cp "$file" "$backup"
+    cp "$source_file" "$backup"
 
     case "$type" in
-        ARITH_ADD) apply_sed "$linenum" " + " " - " "$file" ;;
-        ARITH_SUB) apply_sed "$linenum" " - " " + " "$file" ;;
-        ARITH_MUL) apply_sed "$linenum" " \* " " \/ " "$file" ;;
-        ARITH_DIV) apply_sed "$linenum" " \/ " " * " "$file" ;;
-        CMP_LT)    apply_sed "$linenum" " < " " > " "$file" ;;
-        CMP_GT)    apply_sed "$linenum" " > " " < " "$file" ;;
-        CMP_LTE)   apply_sed "$linenum" " <= " " >= " "$file" ;;
-        CMP_GTE)   apply_sed "$linenum" " >= " " <= " "$file" ;;
-        CMP_NEQ)   apply_sed "$linenum" " <> " " = " "$file" ;;
-        LOGIC_AND) apply_sed "$linenum" " && " " || " "$file" ;;
-        LOGIC_OR)  apply_sed "$linenum" " || " " \\&\\& " "$file" ;;
+        ARITH_ADD) apply_sed "$linenum" " + " " - " "$source_file" ;;
+        ARITH_SUB) apply_sed "$linenum" " - " " + " "$source_file" ;;
+        ARITH_MUL) apply_sed "$linenum" " \* " " \/ " "$source_file" ;;
+        ARITH_DIV) apply_sed "$linenum" " \/ " " * " "$source_file" ;;
+        CMP_LT)    apply_sed "$linenum" " < " " > " "$source_file" ;;
+        CMP_GT)    apply_sed "$linenum" " > " " < " "$source_file" ;;
+        CMP_LTE)   apply_sed "$linenum" " <= " " >= " "$source_file" ;;
+        CMP_GTE)   apply_sed "$linenum" " >= " " <= " "$source_file" ;;
+        CMP_NEQ)   apply_sed "$linenum" " <> " " = " "$source_file" ;;
+        LOGIC_AND) apply_sed "$linenum" " && " " || " "$source_file" ;;
+        LOGIC_OR)  apply_sed "$linenum" " || " " \\&\\& " "$source_file" ;;
     esac
 }
 
 # Restore from backup
 restore_file() {
     local file="$1"
-    local backup="${file}.mutation_backup"
-    [[ -f "$backup" ]] && mv "$backup" "$file"
+    local source_file
+    source_file=$(resolve_source_file "$file")
+    local backup="${source_file}.mutation_backup"
+    [[ -f "$backup" ]] && mv "$backup" "$source_file"
 }
 
 # Run tests for a mutation
@@ -307,7 +321,9 @@ main() {
         log_info "Dry run - showing first 50 mutations:"
         head -50 "$SITES_FILE" | while IFS=: read -r type file linenum; do
             local line
-            line=$(sed -n "${linenum}p" "$file" 2>/dev/null | head -c 80)
+            local source_file
+            source_file=$(resolve_source_file "$file")
+            line=$(sed -n "${linenum}p" "$source_file" 2>/dev/null | head -c 80)
             echo "  [$type] $(basename "$file"):${linenum}"
             echo "    ${line}..."
         done

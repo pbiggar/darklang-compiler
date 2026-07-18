@@ -7,6 +7,7 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RESULTS_CSV="${SCRIPT_DIR}/results/results.csv"
 ADDRESSED_FILE="${SCRIPT_DIR}/results/addressed.txt"
 
@@ -110,6 +111,14 @@ get_operator_change() {
     esac
 }
 
+resolve_source_file() {
+    local file="$1"
+    case "$file" in
+        /*) echo "$file" ;;
+        *) echo "${REPO_ROOT}/${file}" ;;
+    esac
+}
+
 # Find the first unaddressed SURVIVED mutation matching filters
 find_mutation() {
     local addressed_ids
@@ -148,13 +157,15 @@ find_mutation() {
 get_source_context() {
     local file="$1"
     local line="$2"
+    local source_file
     local start=$((line - 7))
     local end=$((line + 7))
 
     [[ $start -lt 1 ]] && start=1
+    source_file=$(resolve_source_file "$file")
 
-    if [[ -f "$file" ]]; then
-        sed -n "${start},${end}p" "$file" | nl -ba -v "$start"
+    if [[ -f "$source_file" ]]; then
+        sed -n "${start},${end}p" "$source_file" | nl -ba -v "$start"
     else
         echo "(Source file not found: $file)"
     fi
