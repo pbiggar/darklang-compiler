@@ -12,11 +12,10 @@ dotnet build
 ## Test
 
 ```bash
-./run-tests                      # Build and run the full suite
-./run-tests --ai                 # AI-friendly progress output
+./run-tests --ai                 # Build and run the full suite with bounded output
 ./run-tests --quiet              # Less output
-./run-tests --filter=tuple       # Filter by case-insensitive substring
-./run-tests --filter=List.map    # Filter by test name fragment
+./run-tests --ai --filter=tuple    # Filter by case-insensitive substring
+./run-tests --ai --filter=List.map # Filter by test name fragment
 ./run-tests --build-only         # Just build, don't run
 ./run-tests --help               # All options
 ```
