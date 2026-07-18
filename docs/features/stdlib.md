@@ -173,7 +173,8 @@ Uses platform-specific random source:
 
 ## How Stdlib is Included
 
-1. **Compilation start**: Load intrinsic module signatures from `Stdlib.fs`
+1. **Compilation start**: Load intrinsic module signatures from
+   `src/DarkCompiler/Stdlib.fs`
    and the ordered Dark stdlib source files from `src/DarkCompiler/stdlib/`
 2. **Parse**: Parse stdlib definitions
 3. **Combine**: Merge with user program
@@ -184,11 +185,11 @@ Stdlib functions are only included if called (dead code elimination).
 
 ## Implementation Files
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `Stdlib.fs` | | Intrinsic module definitions |
-| `stdlib/*.dark` | | Dark implementations |
-| `CompilerLibrary.fs` | | Stdlib loading logic |
+| File | Purpose |
+|------|---------|
+| `src/DarkCompiler/Stdlib.fs` | Intrinsic module definitions |
+| `src/DarkCompiler/stdlib/*.dark` | Dark stdlib implementations |
+| `src/DarkCompiler/CompilerLibrary.fs` | Stdlib loading logic |
 
 ## Generic Function Monomorphization
 
@@ -203,6 +204,6 @@ Creates `Stdlib.List.map_i64_String` specialized function.
 ## Adding New Stdlib Functions
 
 1. **Dark function**: Add to the appropriate file in `src/DarkCompiler/stdlib/`
-2. **Intrinsic**: Add to `Stdlib.fs` + implement in codegen
+2. **Intrinsic**: Add to `src/DarkCompiler/Stdlib.fs` + implement in codegen
 
 See `docs/adding-features.md` for details.
