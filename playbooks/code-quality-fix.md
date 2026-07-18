@@ -37,7 +37,9 @@ You are going to fix EXACTLY ONE code quality issue that does not require adding
    - Why that coverage exercises the fixed path
    - Any benchmark impact (include the Performance ratio if `RESULTS.md` changed)
 
-8. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After approval, commit the code and any intentional benchmark-result updates, then land using `./scripts/land-on-main.sh`.
+8. Follow the current repository and orchestrator review workflow for committing,
+   landing, and benchmark-result files. Do not let this playbook override the
+   active workflow for the environment you are using.
 
 ## Policies for code quality fixes
 
