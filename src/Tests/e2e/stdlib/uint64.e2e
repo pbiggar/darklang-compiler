@@ -96,6 +96,20 @@ UInt64.power(5UL, 1UL) = 5UL
 UInt64.power(2UL, 8UL) = 256UL
 
 // ===================================================================
+// UInt64 bitwise operations
+// ===================================================================
+
+UInt64.bitwiseAnd(12UL, 10UL) = 8UL
+UInt64.bitwiseOr(12UL, 10UL) = 14UL
+UInt64.bitwiseXor(12UL, 10UL) = 6UL
+UInt64.bitwiseNot(0UL) = 18446744073709551615UL
+UInt64.shiftLeft(1UL, 4UL) = 16UL
+UInt64.shiftRight(16UL, 4UL) = 1UL
+UInt64.popcount(0UL) = 0UL
+UInt64.popcount(18446744073709551615UL) = 64UL
+UInt64.popcount(1085102592571150095UL) = 32UL
+
+// ===================================================================
 // UInt64.clamp - Clamp value between limits
 // ===================================================================
 
