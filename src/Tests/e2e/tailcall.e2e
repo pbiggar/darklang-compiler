@@ -9,8 +9,10 @@ def sumTo(n: Int64, acc: Int64) : Int64 =
 sumTo(10, 0) = 55
 
 // Large N that would overflow stack without TCO
-// TODO: Re-enable when TCO is fixed
-// def countDown(n: Int64) : Int64 = if n <= 0 then 0 else countDown(n - 1) countDown(100000) = 0
+def countDown(n: Int64) : Int64 =
+    if n <= 0 then 0 else countDown(n - 1)
+
+countDown(100000) = 0
 
 // Non-tail recursive - should NOT be optimized
 // (the multiply happens after the recursive call)
