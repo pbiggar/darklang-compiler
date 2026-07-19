@@ -1604,7 +1604,7 @@ let rec checkExprWithParamNames
                 | Mul -> "*"
                 | Div -> "/"
                 | Mod -> "%"
-                | _ -> "?"
+                | _ -> Crash.crash $"Non-arithmetic operator reached arithmetic type-checking path: {op}"
 
             let tryAsNumericType (typ: Type) : Type option =
                 match resolveType aliasReg typ with
@@ -1699,7 +1699,7 @@ let rec checkExprWithParamNames
                 | Gt -> ">"
                 | Lte -> "<="
                 | Gte -> ">="
-                | _ -> "?"
+                | _ -> Crash.crash $"Non-comparison operator reached comparison type-checking path: {op}"
 
             let lambdaLiteralFastPath : Result<Type * Expr, TypeError> option =
                 match (op, left, right) with
@@ -1826,7 +1826,7 @@ let rec checkExprWithParamNames
                 | BitAnd -> "&"
                 | BitOr -> "|"
                 | BitXor -> "^"
-                | _ -> "?"
+                | _ -> Crash.crash $"Non-bitwise operator reached bitwise type-checking path: {op}"
 
             let isIntegerType (typ: Type) =
                 match typ with
