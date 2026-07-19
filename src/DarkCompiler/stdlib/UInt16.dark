@@ -51,7 +51,7 @@ def Stdlib.UInt16.shiftLeft(a: UInt16, shift: UInt16) : UInt16 = a << shift
 
 def Stdlib.UInt16.shiftRight(a: UInt16, shift: UInt16) : UInt16 = a >> shift
 
-def Stdlib.UInt16.bitwiseNot(a: UInt16) : UInt16 = ~~~a
+def Stdlib.UInt16.bitwiseNot(a: UInt16) : UInt16 = a ^ 65535us
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)

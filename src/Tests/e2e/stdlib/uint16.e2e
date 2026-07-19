@@ -138,6 +138,28 @@ UInt16.lessThanOrEqualTo(8us, 6us) = false
 UInt16.lessThanOrEqualTo(5us, 5us) = true
 
 // ===================================================================
+// UInt16 bitwise operations
+// ===================================================================
+
+UInt16.bitwiseAnd(61680us, 4080us) = 240us
+UInt16.bitwiseAnd(65535us, 43690us) = 43690us
+UInt16.bitwiseOr(61680us, 4080us) = 65520us
+UInt16.bitwiseOr(0us, 43690us) = 43690us
+UInt16.bitwiseXor(61680us, 4080us) = 65280us
+UInt16.bitwiseXor(65535us, 43690us) = 21845us
+UInt16.shiftLeft(1us, 8us) = 256us
+UInt16.shiftLeft(255us, 4us) = 4080us
+UInt16.shiftRight(65280us, 8us) = 255us
+UInt16.shiftRight(43690us, 1us) = 21845us
+UInt16.bitwiseNot(0us) = 65535us
+UInt16.bitwiseNot(65535us) = 0us
+UInt16.bitwiseNot(43690us) = 21845us
+UInt16.popcount(0us) = 0us
+UInt16.popcount(65535us) = 16us
+UInt16.popcount(43690us) = 8us
+UInt16.popcount(3855us) = 8us
+
+// ===================================================================
 // UInt16.toString - Convert integer to string
 // ===================================================================
 
