@@ -8,7 +8,7 @@ as a tail-recursive loop over available positions, with one non-tail recursive
 call when a partial board needs deeper search.
 
 Current cachegrind context from `./benchmarks/run_benchmarks.sh nqueen`
-at compiler commit `3312b4d5`:
+at compiler commit `f88e41ff`:
 
 | Implementation | Instructions | Relative to Rust | Data refs | Branches | Mispred |
 |----------------|--------------|------------------|-----------|----------|---------|
@@ -23,6 +23,13 @@ Rust. Dark's branch count is essentially the same as Rust's, but its
 instruction count and data references are much higher. The current gap is
 therefore better explained by per-iteration instruction and stack/register
 traffic than by extra high-level branching in the N-Queens search.
+
+The source programs are still directly comparable. Rust and OCaml express the
+inner position iteration as an imperative loop local to each recursive depth.
+Dark expresses the same iteration as a six-argument worker carrying `avail` and
+`count`; tail-call optimization lowers that worker call back into a loop, so the
+current investigation should focus on generated loop and call mechanics rather
+than on a different search algorithm.
 
 ## Current Compiler Evidence
 
