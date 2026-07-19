@@ -92,8 +92,11 @@ let internal runElfBinary (binary: byte array) : Result<int, string> =
         psi.RedirectStandardError <- true
 
         use proc = System.Diagnostics.Process.Start(psi)
-        proc.WaitForExit(10000) |> ignore
-        Ok proc.ExitCode
+        if proc.WaitForExit(10000) then
+            Ok proc.ExitCode
+        else
+            proc.Kill()
+            Error "Timed out executing x86-64 ELF binary"
     with ex ->
         Error $"Failed to execute binary: {ex.Message}"
     |> fun result ->
