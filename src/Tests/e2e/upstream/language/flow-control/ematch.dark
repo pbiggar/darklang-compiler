@@ -693,10 +693,9 @@ module TypeErrors =
   // enum with fewer pattern params than actual args
   (match TestType.OneArg 1L with
    | OneArg -> "wrong number") = error="Non-exhaustive match: No matching case found for value TestType.OneArg(1) in match expression"
-  // TODO implement MPIgnored
-  // // enum with a single wildcard
-  // (match TestType.TwoArgs(1L, 2L) with
-  //  | TwoArgs _ -> "wildcards allowed") = "wildcards allowed"
+  // enum with a single wildcard
+  (match TestType.TwoArgs(1L, 2L) with
+   | TwoArgs _ -> "wildcards allowed") = "wildcards allowed"
 
 
 module GuardClause =
