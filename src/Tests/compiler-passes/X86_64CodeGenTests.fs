@@ -183,10 +183,14 @@ let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck
                 psi.RedirectStandardOutput <- true
                 psi.RedirectStandardError <- true
                 use proc = System.Diagnostics.Process.Start(psi)
-                let stdout = proc.StandardOutput.ReadToEnd()
-                let stderr = proc.StandardError.ReadToEnd()
-                proc.WaitForExit(10000) |> ignore
-                Ok (proc.ExitCode, stdout, stderr)
+                let stdoutTask = proc.StandardOutput.ReadToEndAsync()
+                let stderrTask = proc.StandardError.ReadToEndAsync()
+
+                if proc.WaitForExit(10000) then
+                    Ok (proc.ExitCode, stdoutTask.Result, stderrTask.Result)
+                else
+                    try proc.Kill(true) with _ -> ()
+                    Error "Execution timed out after 10000ms"
             with ex -> Error $"Execution failed: {ex.Message}"
             |> fun result ->
                 try System.IO.File.Delete(tempPath) with _ -> ()
