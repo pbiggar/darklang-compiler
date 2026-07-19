@@ -91,6 +91,43 @@ let testFormatLIR () : TestResult =
     let actual = formatLIR program
     expectFormatted "formatLIR" expected actual
 
+let testFormatLIREscapedStringSymbol () : TestResult =
+    let entry = LIR.Label "entry"
+    let block: LIR.BasicBlock = {
+        Label = entry
+        Instrs = [
+            LIR.Mov (LIR.Virtual 0, LIR.StringSymbol "a \"quote\"\nnext\\slash")
+        ]
+        Terminator = LIR.Ret
+    }
+    let cfg: LIR.CFG = {
+        Entry = entry
+        Blocks = Map.ofList [ (entry, block) ]
+    }
+    let func: LIR.Function = {
+        Name = "lir_string_escape"
+        TypedParams = []
+        CFG = cfg
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+    let program = LIR.Program ([func], Map.empty, Map.empty)
+    let expected =
+        [
+            "lir_string_escape:"
+            "  StackSize: 0"
+            "  UsedCalleeSaved: []"
+            "  Label \"entry\":"
+            "    v0 <- Mov(str[a \\\"quote\\\"\\nnext\\\\slash])"
+            "    Ret"
+        ]
+        |> String.concat "\n"
+    let actual = formatLIR program
+    if actual = expected then
+        Ok ()
+    else
+        Error $"formatLIR escaped string symbol did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+
 let testFormatANFUInt64Max () : TestResult =
     let program = ANF.Program ([], ANF.Return (ANF.IntLiteral (ANF.UInt64 System.UInt64.MaxValue)))
     let expected = "return 18446744073709551615"
@@ -106,6 +143,7 @@ let testFormatANFEscapedString () : TestResult =
 let tests = [
     ("format MIR", testFormatMIR)
     ("format LIR", testFormatLIR)
+    ("format LIR escaped string symbol", testFormatLIREscapedStringSymbol)
     ("format ANF UInt64 max", testFormatANFUInt64Max)
     ("format ANF escaped string", testFormatANFEscapedString)
 ]

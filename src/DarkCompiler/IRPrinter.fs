@@ -481,7 +481,7 @@ let private prettyPrintLIROperand = function
     | LIR.FloatImm f -> $"FloatImm {f}"
     | LIR.Reg reg -> $"Reg {prettyPrintLIRReg reg}"
     | LIR.StackSlot n -> $"Stack {n}"
-    | LIR.StringSymbol value -> $"str[{value}]"
+    | LIR.StringSymbol value -> $"str[{escapeStringContent value}]"
     | LIR.FloatSymbol value -> $"float[{value}]"
     | LIR.FuncAddr name -> $"&{name}"
 
