@@ -28,6 +28,8 @@ let private dominatorSetsEqual (left: DomBitSet array) (right: DomBitSet array) 
     left.Length = right.Length
     && Array.forall2 (fun leftSet rightSet -> Bitset.equal leftSet rightSet) left right
 
+let private labelName (Label name) : string = name
+
 /// Check if two registers are the same
 let sameReg (r1: Reg) (r2: Reg) : bool =
     match r1, r2 with
@@ -74,6 +76,17 @@ let buildPredecessors (cfg: CFG) : Map<Label, Label list> =
 /// Build successor map for the CFG
 let buildSuccessors (cfg: CFG) : Map<Label, Label list> =
     cfg.Blocks |> Map.map (fun _ block -> getSuccessors block.Terminator)
+
+let private validateCFGShape (cfg: CFG) : unit =
+    if not (Map.containsKey cfg.Entry cfg.Blocks) then
+        Crash.crash $"LIR Peephole: entry label {labelName cfg.Entry} not found in CFG blocks"
+    else
+        cfg.Blocks
+        |> Map.iter (fun label block ->
+            getSuccessors block.Terminator
+            |> List.iter (fun succ ->
+                if not (Map.containsKey succ cfg.Blocks) then
+                    Crash.crash $"LIR Peephole: block {labelName label} has missing successor label {labelName succ}"))
 
 /// Compute dominator sets for each block
 let private computeDominators (cfg: CFG) (preds: Map<Label, Label list>) : Dominators =
@@ -296,7 +309,6 @@ let private applyLoopInvariantConstHoist
     else
     let (loops, cache') = findNaturalLoopsWithCache cfg domCache
     let preds = buildPredecessors cfg
-    let labelName (LIR.Label name) = name
 
     let result =
         loops
@@ -951,6 +963,8 @@ let private optimizeCFGOnce
 
 /// Optimize a CFG until fixed point
 let optimizeCFG (cfg: CFG) : CFG =
+    validateCFGShape cfg
+
     let rec loop current remaining iteration domCache =
         if remaining <= 0 then
             current

@@ -163,6 +163,26 @@ let testMulConstantKeepsLiveConstRegister () : TestResult =
     else
         Error $"Expected live constant register to block strength reduction, got: {optimized}"
 
+let testOptimizeCFGRejectsMissingSuccessorLabel () : TestResult =
+    let entry = Label "entry"
+    let missing = Label "missing"
+    let block : BasicBlock = {
+        Label = entry
+        Instrs = []
+        Terminator = Jump missing
+    }
+    let cfg : CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, block)]
+    }
+
+    try
+        optimizeCFG cfg |> ignore
+        Error "Expected LIR peephole to reject a missing successor label"
+    with
+    | ex when ex.Message.Contains("successor label") -> Ok ()
+    | ex -> Error $"Expected missing successor label crash, got: {ex.Message}"
+
 let tests = [
     ("LIR peephole removes self-moves from allocated function", testRemoveSelfMovesFromAllocatedFunction)
     ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
@@ -170,4 +190,5 @@ let tests = [
     ("LIR peephole fuses FNeg followed by dead-temp FMov", testFNegMoveChainFusesWhenTempDies)
     ("LIR peephole keeps MUL temp used by later print", testMulAddFusionKeepsLiveTempForPrint)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
+    ("LIR peephole rejects missing successor labels", testOptimizeCFGRejectsMissingSuccessorLabel)
 ]
