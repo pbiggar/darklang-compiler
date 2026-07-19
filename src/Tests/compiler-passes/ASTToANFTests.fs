@@ -1,12 +1,18 @@
-// ASTToANFTests.fs - Unit tests for AST to ANF conversion error handling
+// ASTToANFTests.fs - Unit tests for AST to ANF conversion behavior
 //
-// Ensures missing variant payload type info is surfaced as an error.
+// Covers targeted AST-to-ANF regression cases that are easier to express
+// directly at the pass boundary than through end-to-end language tests.
 
 module ASTToANFTests
 
 open AST_to_ANF
 
 type TestResult = Result<unit, string>
+
+let private emptyTypeReg : TypeRegistry = Map.empty
+let private emptyVariantLookup : VariantLookup = Map.empty
+let private emptyFuncReg : FunctionRegistry = Map.empty
+let private emptyModuleRegistry : AST.ModuleRegistry = Map.empty
 
 let testMissingVariantPayloadTypeErrors () : TestResult =
     let env : VarEnv =
@@ -19,12 +25,8 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
     | Some patterns ->
         let matchCase : AST.MatchCase = { Patterns = patterns; Guard = None; Body = AST.Var "payload" }
         let expr = AST.Match (AST.Var "x", [matchCase])
-        let typeReg : TypeRegistry = Map.empty
-        let variantLookup : VariantLookup = Map.empty
-        let funcReg : FunctionRegistry = Map.empty
-        let moduleRegistry : AST.ModuleRegistry = Map.empty
 
-        match toANF expr ANF.initialVarGen env typeReg variantLookup funcReg moduleRegistry with
+        match toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup emptyFuncReg emptyModuleRegistry with
         | Ok _ -> Error "Expected error when constructor payload type is missing from variant lookup"
         | Error msg ->
             if msg.Contains "MissingCtor" then Ok ()
@@ -89,13 +91,10 @@ let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
     let funcName = "Stdlib.__FingerTree.__TAG_SINGLE"
     let expr = AST.Call (funcName, AST.NonEmptyList.singleton AST.UnitLiteral)
     let env : VarEnv = Map.empty
-    let typeReg : TypeRegistry = Map.empty
-    let variantLookup : VariantLookup = Map.empty
     let funcReg : FunctionRegistry =
         Map.ofList [ (funcName, AST.TFunction ([], AST.TInt64)) ]
-    let moduleRegistry : AST.ModuleRegistry = Map.empty
 
-    match toANF expr ANF.initialVarGen env typeReg variantLookup funcReg moduleRegistry with
+    match toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup funcReg emptyModuleRegistry with
     | Error err ->
         Error $"Unexpected conversion error: {err}"
     | Ok (anfExpr, _) ->
@@ -118,7 +117,7 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
     let funcReg : FunctionRegistry =
         Map.ofList [ ("syntheticNullary", AST.TFunction ([], AST.TInt64)) ]
 
-    match convertFunction funcDef ANF.initialVarGen Map.empty Map.empty funcReg Map.empty with
+    match convertFunction funcDef ANF.initialVarGen emptyTypeReg emptyVariantLookup funcReg emptyModuleRegistry with
     | Error err ->
         Error $"Unexpected conversion error: {err}"
     | Ok (anfFunc, _) ->
