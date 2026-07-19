@@ -1069,29 +1069,6 @@ let selectInstr
                 let srcOp = convertOperand src
                 [LIR.Mov (tupleAddrReg, srcOp)]
 
-            // Helper to generate print instructions for a value based on its type
-            let rec printValue (valueReg: LIR.Reg) (valueType: AST.Type) : LIR.Instr list =
-                match valueType with
-                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
-                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 ->
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
-                     LIR.PrintInt64 (LIR.Physical LIR.X0)]
-                | AST.TBool ->
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
-                     LIR.PrintBool (LIR.Physical LIR.X0)]
-                | AST.TFloat64 ->
-                    // Float value is in integer register as raw bits, move to D0 for printing
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
-                     LIR.GpToFp (LIR.FPhysical LIR.D0, LIR.Physical LIR.X0)
-                     LIR.PrintFloat (LIR.FPhysical LIR.D0)]
-                | AST.TInt128 | AST.TUInt128 ->
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
-                     LIR.PrintHeapString (LIR.Physical LIR.X0)]
-                | _ ->
-                    // Other types: print address for now
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
-                     LIR.PrintInt64 (LIR.Physical LIR.X0)]
-
             // Generate instructions to print each element
             // Use no-newline versions for tuple elements
             let elemInstrs =
