@@ -1,7 +1,7 @@
 // SSAConstructionTests.fs - Unit tests for MIR SSA construction invariants.
 //
-// These tests cover internal CFG invariant reporting that cannot be exercised
-// cleanly through source-level end-to-end programs.
+// These tests cover internal CFG invariants that cannot be exercised cleanly
+// through source-level end-to-end programs.
 
 module SSAConstructionTests
 
@@ -37,6 +37,30 @@ let testComputeLivenessReportsMissingSuccessorBlock () : TestResult =
         else
             Error $"Expected contextual SSA missing-block message, got: {ex.Message}"
 
+let testSSAVersionsStartAboveParameterRegisters () : TestResult =
+    let entry = label "entry"
+    let parameter = { Reg = vreg 10000; Type = AST.TInt64 }
+    let func =
+        { Name = "test"
+          TypedParams = [parameter]
+          ReturnType = AST.TInt64
+          CFG =
+            { Entry = entry
+              Blocks =
+                [ makeBlock entry [RawAlloc (vreg 0, Int64Const 8L)] (Ret (Register parameter.Reg)) ]
+                |> List.map (fun block -> (block.Label, block))
+                |> Map.ofList }
+          FloatRegs = Set.empty }
+
+    let converted = convertFunctionToSSA func
+    match Map.tryFind converted.CFG.Entry converted.CFG.Blocks with
+    | Some { Instrs = RawAlloc (VReg destination, _) :: _ } when destination <> 10000 -> Ok ()
+    | Some { Instrs = RawAlloc (VReg destination, _) :: _ } ->
+        Error $"SSA construction reused parameter VReg 10000 for instruction destination {destination}"
+    | Some block -> Error $"Expected converted entry block to start with RawAlloc, got {block.Instrs}"
+    | None -> Error "Expected converted CFG to contain its entry block"
+
 let tests = [
     ("computeLiveness reports missing successor block", testComputeLivenessReportsMissingSuccessorBlock)
+    ("SSA versions start above parameter registers", testSSAVersionsStartAboveParameterRegisters)
 ]

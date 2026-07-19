@@ -598,43 +598,31 @@ type RenamingState = {
     FloatRegs: Set<int>
 }
 
+let private vregId (VReg id) : int = id
+
 /// Create initial renaming state, starting VReg numbers above any existing VRegs
-let createInitialRenamingState (cfg: CFG) (floatRegs: Set<int>) : RenamingState =
-    // Find the highest VReg number used in the CFG
-    let maxVReg =
-        cfg.Blocks
-        |> Map.fold (fun maxSoFar _ block ->
-            let blockMax =
-                block.Instrs
-                |> List.fold (fun m instr ->
-                    match instr with
-                    | Mov (VReg n, _, _) -> max m n
-                    | BinOp (VReg n, _, _, _, _) -> max m n
-                    | UnaryOp (VReg n, _, _) -> max m n
-                    | Call (VReg n, _, _, _, _) -> max m n
-                    | IndirectCall (VReg n, _, _, _, _) -> max m n
-                    | ClosureAlloc (VReg n, _, _) -> max m n
-                    | ClosureCall (VReg n, _, _, _, _) -> max m n
-                    | HeapAlloc (VReg n, _) -> max m n
-                    | HeapLoad (VReg n, _, _, _) -> max m n
-                    | StringConcat (VReg n, _, _) -> max m n
-                    | FileReadText (VReg n, _) -> max m n
-                    | FileExists (VReg n, _) -> max m n
-                    | FileWriteText (VReg n, _, _) -> max m n
-                    | FileAppendText (VReg n, _, _) -> max m n
-                    | FileDelete (VReg n, _) -> max m n
-                    | FileSetExecutable (VReg n, _) -> max m n
-                    | FileWriteFromPtr (VReg n, _, _, _) -> max m n
-                    | Phi (VReg n, _, _) -> max m n
-                    | _ -> m
-                ) 0
-            max maxSoFar blockMax
-        ) 0
+let createInitialRenamingState (cfg: CFG) (floatRegs: Set<int>) (extraRegs: VReg list) : RenamingState =
+    // Preserve the existing numbering scheme of starting 10000 above CFG
+    // definitions, while also staying above parameter registers that are not
+    // materialized as MIR definitions.
+    let nextVersionStart =
+        let cfgMax =
+            cfg.Blocks
+            |> Map.fold (fun regs _ block ->
+                Set.union regs (getBlockDefs block)
+            ) Set.empty
+            |> Set.fold (fun maxSoFar reg -> max maxSoFar (vregId reg)) 0
+
+        let extraMax =
+            extraRegs
+            |> List.fold (fun maxSoFar reg -> max maxSoFar (vregId reg)) 0
+
+        max (cfgMax + 10000) (extraMax + 1)
 
     {
         CurrentVersion = Map.empty
         VersionStack = Map.empty
-        NextVersion = maxVReg + 10000  // Start SSA VRegs well above original VRegs
+        NextVersion = nextVersionStart
         VersionToReg = Map.empty
         OriginalFloatRegs = floatRegs
         FloatRegs = floatRegs  // Start with original floatRegs, will be extended
@@ -1039,7 +1027,7 @@ let popVersions (state: RenamingState) (block: BasicBlock) : RenamingState =
 /// Rename CFG using dominator tree traversal
 /// Rename CFG to SSA form
 /// Returns (renamed CFG, updated floatRegs set with SSA versions)
-let renameCFG (cfg: CFG) (idoms: Dominators) (floatRegs: Set<int>) : CFG * Set<int> =
+let renameCFG (cfg: CFG) (idoms: Dominators) (floatRegs: Set<int>) (paramRegs: VReg list) : CFG * Set<int> =
     let domTree = buildDomTree idoms
 
     // DFS traversal of dominator tree
@@ -1077,7 +1065,7 @@ let renameCFG (cfg: CFG) (idoms: Dominators) (floatRegs: Set<int>) : CFG * Set<i
         (cfg'''', stateAfterPop)
 
     // Start from entry with initial state based on CFG's existing VRegs
-    let initialState = createInitialRenamingState cfg floatRegs
+    let initialState = createInitialRenamingState cfg floatRegs paramRegs
     let (resultCfg, finalState) = visit cfg.Entry initialState cfg
     (resultCfg, finalState.FloatRegs)
 
@@ -1098,7 +1086,7 @@ let convertFunctionToSSA (func: Function) : Function =
     let cfgWithPhis = insertPhiNodes cfg df preds liveIn paramRegs paramTypes
 
     // Rename variables and update floatRegs with SSA versions
-    let (ssaCFG, updatedFloatRegs) = renameCFG cfgWithPhis idoms func.FloatRegs
+    let (ssaCFG, updatedFloatRegs) = renameCFG cfgWithPhis idoms func.FloatRegs paramRegs
 
     { func with CFG = ssaCFG; FloatRegs = updatedFloatRegs }
 
