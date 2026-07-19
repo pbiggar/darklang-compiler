@@ -19,6 +19,9 @@ module AST_to_ANF
 open ANF
 open Output
 
+/// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
+type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
+
 let private int128ToCanonicalString (value: System.Int128) : string =
     value.ToString(System.Globalization.CultureInfo.InvariantCulture)
 
@@ -93,12 +96,9 @@ let private normalizeNullaryIntrinsicArgs (args: ANF.Atom list) : ANF.Atom list 
     | [ANF.UnitLiteral] -> []
     | _ -> args
 
-/// Parse mangled type names used by monomorphized raw intrinsics.
-/// This is duplicated early in the file so raw-intrinsic lowering can recover value types.
-let private tryParseMangledTypeForRawIntrinsic
-    (variantLookup: Map<string, (string * string list * int * AST.Type option)>)
-    (mangled: string)
-    : AST.Type option =
+/// Parse a mangled type name (from typeToMangledName) into an AST type.
+/// Returns Error if the mangled form is ambiguous or unsupported.
+let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Result<AST.Type, string> =
     let tokens = mangled.Split('_') |> Array.toList
     let sumTypeNames =
         variantLookup
@@ -190,8 +190,15 @@ let private tryParseMangledTypeForRawIntrinsic
                 retParses |> List.map (fun ret -> (AST.TFunction (paramTypes, ret), [])))
 
     match parseType tokens |> List.filter (fun (_, rem) -> rem = []) with
-    | [ (typ, _) ] -> Some typ
-    | _ -> None
+    | [ (typ, _) ] -> Ok typ
+    | [] -> Error $"Could not parse mangled type: {mangled}"
+    | _ -> Error $"Ambiguous mangled type: {mangled}"
+
+/// Parse mangled type names used by monomorphized raw intrinsics.
+let private tryParseMangledTypeForRawIntrinsic (variantLookup: VariantLookup) (mangled: string) : AST.Type option =
+    match tryParseMangledType variantLookup mangled with
+    | Ok typ -> Some typ
+    | Error _ -> None
 
 /// Try to convert a function call to a Float intrinsic CExpr
 /// Returns Some CExpr if it's a Float intrinsic, None otherwise
@@ -411,9 +418,6 @@ let private unwrapErrorPayloadToString (expr: AST.Expr) : string option =
 
 /// Type registry - maps record type names to their field definitions
 type TypeRegistry = Map<string, (string * AST.Type) list>
-
-/// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
-type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
 
 let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcSumShapeRegistry =
     let addVariant
@@ -671,105 +675,6 @@ let rec containsTypeVar (t: AST.Type) : bool =
     | AST.TList elemType -> containsTypeVar elemType
     | AST.TDict (keyType, valueType) -> containsTypeVar keyType || containsTypeVar valueType
     | _ -> false
-
-/// Parse a mangled type name (from typeToMangledName) into an AST type.
-/// Returns Error if the mangled form is ambiguous or unsupported.
-let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Result<AST.Type, string> =
-    let tokens = mangled.Split('_') |> Array.toList
-    let sumTypeNames =
-        variantLookup
-        |> Map.toList
-        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
-        |> Set.ofList
-
-    let mkNamedType (name: string) (args: AST.Type list) : AST.Type =
-        if Set.contains name sumTypeNames then AST.TSum (name, args) else AST.TRecord (name, args)
-
-    let isFreshenedTypeVarName (tok: string) : bool =
-        tok.Contains("$")
-
-    let tryPrimitive (tok: string) : AST.Type option =
-        match tok with
-        | "i8" -> Some AST.TInt8
-        | "i16" -> Some AST.TInt16
-        | "i32" -> Some AST.TInt32
-        | "i64" -> Some AST.TInt64
-        | "i128" -> Some AST.TInt128
-        | "u8" -> Some AST.TUInt8
-        | "u16" -> Some AST.TUInt16
-        | "u32" -> Some AST.TUInt32
-        | "u64" -> Some AST.TUInt64
-        | "u128" -> Some AST.TUInt128
-        | "bool" -> Some AST.TBool
-        | "f64" -> Some AST.TFloat64
-        | "str" -> Some AST.TString
-        | "bytes" -> Some AST.TBytes
-        | "char" -> Some AST.TChar
-        | "unit" -> Some AST.TUnit
-        | "rawptr" -> Some AST.TRawPtr
-        | _ -> None
-
-    let rec parseType (toks: string list) : (AST.Type * string list) list =
-        match toks with
-        | [] -> []
-        | tok :: rest ->
-            match tok with
-            | "list" ->
-                parseType rest |> List.map (fun (elemT, rem) -> (AST.TList elemT, rem))
-            | "dict" ->
-                parseType rest
-                |> List.collect (fun (keyT, rem1) ->
-                    parseType rem1 |> List.map (fun (valueT, rem2) -> (AST.TDict (keyT, valueT), rem2)))
-            | "tup" ->
-                parseTupleElems rest |> List.map (fun (elems, rem) -> (AST.TTuple elems, rem))
-            | "fn" ->
-                parseFunction rest
-            | _ ->
-                match tryPrimitive tok with
-                | Some prim -> [ (prim, rest) ]
-                | None when isFreshenedTypeVarName tok -> [ (AST.TVar tok, rest) ]
-                | None ->
-                    // Parse as named type with optional type arguments.
-                    let baseType = (mkNamedType tok [], rest)
-                    let withArgs =
-                        parseTupleElems rest
-                        |> List.map (fun (args, rem) -> (mkNamedType tok args, rem))
-                    baseType :: withArgs
-
-    and parseTupleElems (toks: string list) : (AST.Type list * string list) list =
-        parseType toks
-        |> List.collect (fun (firstT, rem1) ->
-            let single = ([firstT], rem1)
-            let more =
-                parseTupleElems rem1
-                |> List.map (fun (restTs, rem2) -> (firstT :: restTs, rem2))
-            single :: more)
-
-    and parseFunction (toks: string list) : (AST.Type * string list) list =
-        let rec splitParams (acc: string list) (remaining: string list) =
-            match remaining with
-            | [] -> None
-            | "to" :: rest -> Some (List.rev acc, rest)
-            | tok :: rest -> splitParams (tok :: acc) rest
-        match splitParams [] toks with
-        | None -> []
-        | Some (paramTokens, retTokens) ->
-            let paramParses =
-                parseTupleElems paramTokens
-                |> List.filter (fun (_, rem) -> rem = [])
-                |> List.map fst
-            let retParses =
-                parseType retTokens
-                |> List.filter (fun (_, rem) -> rem = [])
-                |> List.map fst
-            paramParses
-            |> List.collect (fun paramTypes ->
-                retParses |> List.map (fun ret -> (AST.TFunction (paramTypes, ret), [])))
-
-    match parseType tokens |> List.filter (fun (_, rem) -> rem = []) with
-    | [ (typ, _) ] -> Ok typ
-    | [] -> Error $"Could not parse mangled type: {mangled}"
-    | _ -> Error $"Ambiguous mangled type: {mangled}"
 
 /// Generate a specialized function name
 let specName (funcName: string) (typeArgs: AST.Type list) : string =
