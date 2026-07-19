@@ -10,6 +10,12 @@ open IRPrinter
 
 type TestResult = Result<unit, string>
 
+let private expectFormatted (label: string) (expected: string) (actual: string) : TestResult =
+    if actual = expected then
+        Ok ()
+    else
+        Error $"{label} did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+
 let testFormatMIR () : TestResult =
     let entry = Label "entry"
     let exit = Label "exit"
@@ -47,10 +53,7 @@ let testFormatMIR () : TestResult =
         ]
         |> String.concat "\n"
     let actual = formatMIR program
-    if actual = expected then
-        Ok ()
-    else
-        Error $"formatMIR did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+    expectFormatted "formatMIR" expected actual
 
 let testFormatLIR () : TestResult =
     let entry = LIR.Label "entry"
@@ -86,28 +89,19 @@ let testFormatLIR () : TestResult =
         ]
         |> String.concat "\n"
     let actual = formatLIR program
-    if actual = expected then
-        Ok ()
-    else
-        Error $"formatLIR did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+    expectFormatted "formatLIR" expected actual
 
 let testFormatANFUInt64Max () : TestResult =
     let program = ANF.Program ([], ANF.Return (ANF.IntLiteral (ANF.UInt64 System.UInt64.MaxValue)))
     let expected = "return 18446744073709551615"
     let actual = formatANF program
-    if actual = expected then
-        Ok ()
-    else
-        Error $"formatANF UInt64 max did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+    expectFormatted "formatANF UInt64 max" expected actual
 
 let testFormatANFEscapedString () : TestResult =
     let program = ANF.Program ([], ANF.Return (ANF.StringLiteral "a \"quote\"\nnext\\slash"))
     let expected = "return \"a \\\"quote\\\"\\nnext\\\\slash\""
     let actual = formatANF program
-    if actual = expected then
-        Ok ()
-    else
-        Error $"formatANF escaped string did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+    expectFormatted "formatANF escaped string" expected actual
 
 let tests = [
     ("format MIR", testFormatMIR)
