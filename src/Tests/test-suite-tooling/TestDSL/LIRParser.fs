@@ -236,7 +236,7 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
         let rec splitInstructions items =
             match items with
             | [] -> Error "Empty LIR program"
-            | [ Choice1Of2 instr ] -> Ok ([ instr ], Ret)
+            | [ Choice1Of2 _ ] -> Error "LIR program must end with an explicit terminator"
             | [ Choice2Of2 term ] -> Ok ([], term)
             | Choice1Of2 instr :: rest ->
                 match splitInstructions rest with

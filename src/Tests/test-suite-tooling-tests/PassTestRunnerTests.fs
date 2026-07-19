@@ -71,6 +71,17 @@ let testParseLIRRejectsNonFinalTerminator () : TestResult =
     | Error msg -> Error $"Expected non-final terminator error, got: {msg}"
     | Ok _ -> Error "Expected parseLIR to reject a terminator before the final line"
 
+let testParseLIRRejectsMissingTerminator () : TestResult =
+    let text =
+        [
+            "v0 <- Mov(Imm 1)"
+        ]
+        |> String.concat "\n"
+    match parseLIR text with
+    | Error msg when msg.Contains("terminator") -> Ok ()
+    | Error msg -> Error $"Expected missing terminator error, got: {msg}"
+    | Ok _ -> Error "Expected parseLIR to reject LIR without an explicit terminator"
+
 let testMIRParserRejectsOutOfRangeVirtualRegister () : TestResult =
     match parseVReg "v999999999999999999999999999999999999999" with
     | Error msg when msg.Contains("Invalid register format") -> Ok ()
@@ -203,7 +214,7 @@ let testLIRParserAcceptsAllPhysicalRegisters () : TestResult =
         (fun state reg ->
             state
             |> Result.bind (fun () ->
-                match parseLIR $"{reg} <- Mov(Reg X0)" with
+                match parseLIR $"{reg} <- Mov(Reg X0)\nRet" with
                 | Ok _ -> Ok ()
                 | Error msg -> Error $"Expected LIR parser success for {reg}, got: {msg}"))
         (Ok ())
@@ -267,6 +278,7 @@ let testARM64SymbolicParserAcceptsBranchInstructions () : TestResult =
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
+    ("parse LIR rejects missing terminator", testParseLIRRejectsMissingTerminator)
     ("MIR parser rejects out-of-range virtual register", testMIRParserRejectsOutOfRangeVirtualRegister)
     ("MIR parser accepts negative move literal", testMIRParserAcceptsNegativeMoveLiteral)
     ("ANF parser rejects out-of-range temp id", testANFParserRejectsOutOfRangeTempId)
