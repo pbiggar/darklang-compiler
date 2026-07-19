@@ -220,7 +220,8 @@ In `1.5_TypeChecking.fs`:
 
 ### Option A: Implement in Dark (Preferred)
 
-Add to `src/DarkCompiler/stdlib.dark`:
+Add to the appropriate module file under `src/DarkCompiler/stdlib/`, such as
+`src/DarkCompiler/stdlib/Int64.dark`:
 
 ```dark
 def Stdlib.Int64.abs(n: Int64) : Int64 =
