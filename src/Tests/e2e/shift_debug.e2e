@@ -1,4 +1,8 @@
-// Test shifts with large values to debug the shift bug
+// Regression coverage for Int64 left shifts of large values.
+//
+// These cases protect values whose bit 31 is set. Earlier shift lowering bugs
+// could accidentally treat intermediate chunks as signed 32-bit values instead
+// of preserving the full Int64 value.
 
 // Small shifts - baseline
 1 << 10 = 1024
@@ -24,19 +28,19 @@
 // Test with value 0xC0000000 = 3221225472
 3221225472 << 1 = 6442450944
 
-// Test each 16-bit chunk separately
+// Check each 16-bit chunk separately
 48525 << 10 = 49689600
 50084 << 10 = 51286016
 
 // Large values shifted by 1
 4000000000 << 1 = 8000000000
 
-// Test 0xBD8D0000 (the low 16 bits shifted to high position)
+// Check 0xBD8D0000 (the low 16 bits shifted to high position)
 // If shifted right by 6, we get value for comparison
 48525 << 16 = 3180134400
 
 // Value: 0xC3A40000 (high 16 bits only)
 3282051072 << 10 = 3360820297728
 
-// Check if value loading is correct
+// Check value loading independently of the shift operation
 3282089901 + 0 = 3282089901
