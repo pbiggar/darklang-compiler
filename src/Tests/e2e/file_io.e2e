@@ -5,10 +5,6 @@
 // - File reading (Stdlib.File.readText)
 // - File writing (Stdlib.File.writeText, Stdlib.File.appendText)
 //
-// Known limitation: Expressions with 3+ heap-allocating file operations
-// (readText, writeText, appendText) in sequence may segfault due to a
-// register/heap allocation issue. This is tracked for future investigation.
-
 
 // ===================================================================
 // File Existence
