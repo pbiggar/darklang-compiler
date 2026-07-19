@@ -5,8 +5,8 @@
 #   scripts/x64/disasm-func.sh /path/to/binary ADDR  # disassemble function at ADDR
 #   scripts/x64/disasm-func.sh /path/to/binary        # list all function entry points
 #
-# ADDR is a hex address (e.g., 40283a). The tool finds the function starting at
-# that address and shows all instructions until the next RET.
+# ADDR is a hex address (e.g., 40283a or 0x40283a). The tool finds the function
+# starting at that address and shows all instructions until the next RET.
 
 set -euo pipefail
 
@@ -15,6 +15,7 @@ RUN="$HERE/../run-in-container"
 
 BIN="${1:-}"
 ADDR="${2:-}"
+ADDR_HEX="${ADDR#0x}"
 
 if [ -z "$BIN" ]; then
     echo "Usage: $0 /path/to/binary [hex_addr]"
@@ -35,6 +36,11 @@ if [ -z "$ADDR" ]; then
         }
     '
 else
-    echo "=== Function at 0x$ADDR ==="
-    disasm | sed -n "/^  ${ADDR}.*push.*rbp/,/c3.*ret$/p"
+    if [[ ! "$ADDR_HEX" =~ ^[0-9a-fA-F]+$ ]]; then
+        echo "ADDR must be a hex address, with or without a 0x prefix."
+        exit 1
+    fi
+
+    echo "=== Function at 0x$ADDR_HEX ==="
+    disasm | sed -n "/^  ${ADDR_HEX}.*push.*rbp/,/c3.*ret$/p"
 fi
