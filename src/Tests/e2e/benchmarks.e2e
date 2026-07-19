@@ -396,19 +396,3 @@ let spectralV = spectralAtav3((1.0, 1.0, 1.0)) in let spectralU = spectralAtav3(
 // ===================================================================
 
 42 = 42
-
-
-// ===================================================================
-// BLOCKED BENCHMARKS - require compiler bug fixes
-// ===================================================================
-//
-// nsieve is blocked by a tail call optimization bug:
-//
-// Bug: Lists built by TAIL-RECURSIVE functions get corrupted when modified.
-// Non-tail-recursive list building works correctly.
-//
-// Corrupts: def repeat(v, n, acc) = repeat(v, n-1, [v, ...acc])  // tail-recursive
-// Works:    def repeat(v, n) = [v, ...repeat(v, n-1)]            // non-tail-recursive
-//
-// List.repeat and List.setAt both use tail recursion, triggering corruption.
-// The tail call optimization appears to incorrectly reuse memory for cons cells.
