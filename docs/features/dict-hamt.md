@@ -268,6 +268,8 @@ def filter<k, v>(dict: Dict<k, v>, f: (k, v) -> Bool) : Dict<k, v>
 def merge<k, v>(dict1: Dict<k, v>, dict2: Dict<k, v>) : Dict<k, v>
 def fromList<k, v>(pairs: List<(k, v)>) : Dict<k, v>
 def getOrDefault<k, v>(dict: Dict<k, v>, key: k, default: v) : v
+def singleton<k, v>(key: k, value: v) : Dict<k, v>
+def toList<k, v>(dict: Dict<k, v>) : List<(k, v)>
 ```
 
 ## Performance Characteristics
