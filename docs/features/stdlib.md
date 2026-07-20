@@ -103,6 +103,16 @@ def shiftRight(a: Int64, shift: Int64) : Int64
 
 These modules mirror the `Stdlib.Int64` API for their respective widths.
 
+## Stdlib.Bool
+
+```dark
+def not(b: Bool) : Bool
+def and(a: Bool, b: Bool) : Bool
+def or(a: Bool, b: Bool) : Bool
+def xor(a: Bool, b: Bool) : Bool
+def toString(b: Bool) : String
+```
+
 ## Stdlib.Option
 
 ```dark
