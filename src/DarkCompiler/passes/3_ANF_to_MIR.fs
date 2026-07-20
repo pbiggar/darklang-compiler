@@ -150,6 +150,13 @@ let maxTempIdInAtom (atom: ANF.Atom) : int =
     | ANF.Var (ANF.TempId id) -> id
     | _ -> -1
 
+/// Find the maximum TempId across atoms without allocating an intermediate list
+let private maxTempIdInAtoms (atoms: ANF.Atom list) : int =
+    atoms |> List.fold (fun maxId atom -> max maxId (maxTempIdInAtom atom)) -1
+
+let private maxTempIdWithAtoms (first: ANF.Atom) (rest: ANF.Atom list) : int =
+    max (maxTempIdInAtom first) (maxTempIdInAtoms rest)
+
 /// Find the maximum TempId in a CExpr
 let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     match cexpr with
@@ -162,15 +169,15 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
         max (maxTempIdInAtom cond) (max (maxTempIdInAtom thenVal) (maxTempIdInAtom elseVal))
     | ANF.Call (_, args)
     | ANF.BorrowedCall (_, args) ->
-        args |> List.map maxTempIdInAtom |> List.fold max -1
+        maxTempIdInAtoms args
     | ANF.TailCall (_, args) ->
-        args |> List.map maxTempIdInAtom |> List.fold max -1
+        maxTempIdInAtoms args
     | ANF.IndirectCall (func, args) ->
-        max (maxTempIdInAtom func) (args |> List.map maxTempIdInAtom |> List.fold max -1)
+        maxTempIdWithAtoms func args
     | ANF.IndirectTailCall (func, args) ->
-        max (maxTempIdInAtom func) (args |> List.map maxTempIdInAtom |> List.fold max -1)
+        maxTempIdWithAtoms func args
     | ANF.TupleAlloc atoms ->
-        atoms |> List.map maxTempIdInAtom |> List.fold max -1
+        maxTempIdInAtoms atoms
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
     | ANF.StringConcat (left, right) ->
         max (maxTempIdInAtom left) (maxTempIdInAtom right)
@@ -179,11 +186,11 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.Print (atom, _) -> maxTempIdInAtom atom
     | ANF.RuntimeError _ -> -1
     | ANF.ClosureAlloc (_, captures) ->
-        captures |> List.map maxTempIdInAtom |> List.fold max -1
+        maxTempIdInAtoms captures
     | ANF.ClosureCall (closure, args) ->
-        max (maxTempIdInAtom closure) (args |> List.map maxTempIdInAtom |> List.fold max -1)
+        maxTempIdWithAtoms closure args
     | ANF.ClosureTailCall (closure, args) ->
-        max (maxTempIdInAtom closure) (args |> List.map maxTempIdInAtom |> List.fold max -1)
+        maxTempIdWithAtoms closure args
     | ANF.FileReadText path -> maxTempIdInAtom path
     | ANF.FileExists path -> maxTempIdInAtom path
     | ANF.FileWriteText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
