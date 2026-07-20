@@ -29,7 +29,7 @@ let private testToolingSourceFiles () : string array =
 let private scriptPath (relativePath: string) : string =
     Path.Combine(repoRoot, relativePath)
 
-let private findFailwithUsesIn (sourceFiles: unit -> string array) : Result<string list, string> =
+let private findTextUsesIn (needle: string) (sourceFiles: unit -> string array) : Result<string list, string> =
     let folder (state: Result<string list, string>) (path: string) =
         match state with
         | Error _ -> state
@@ -37,7 +37,7 @@ let private findFailwithUsesIn (sourceFiles: unit -> string array) : Result<stri
             match readFile path with
             | Error msg -> Error msg
             | Ok text ->
-                if text.Contains "failwith" then
+                if text.Contains needle then
                     Ok (path :: acc)
                 else
                     Ok acc
@@ -46,7 +46,7 @@ let private findFailwithUsesIn (sourceFiles: unit -> string array) : Result<stri
     |> Result.map List.rev
 
 let testCompilerAvoidsFailwith () : TestResult =
-    match findFailwithUsesIn compilerSourceFiles with
+    match findTextUsesIn "failwith" compilerSourceFiles with
     | Error msg -> Error msg
     | Ok paths ->
         let offenders =
@@ -60,7 +60,7 @@ let testCompilerAvoidsFailwith () : TestResult =
             Error $"Unexpected failwith usage in compiler: {details}"
 
 let testTestToolingAvoidsFailwith () : TestResult =
-    match findFailwithUsesIn testToolingSourceFiles with
+    match findTextUsesIn "failwith" testToolingSourceFiles with
     | Error msg -> Error msg
     | Ok paths ->
         let offenders =
@@ -71,6 +71,19 @@ let testTestToolingAvoidsFailwith () : TestResult =
         | _ ->
             let details = String.concat ", " offenders
             Error $"Unexpected failwith usage in test tooling: {details}"
+
+let testCompilerAvoidsOptionGet () : TestResult =
+    match findTextUsesIn "Option.get" compilerSourceFiles with
+    | Error msg -> Error msg
+    | Ok paths ->
+        let offenders =
+            paths
+            |> List.map (fun path -> Path.GetRelativePath(repoRoot, path))
+        match offenders with
+        | [] -> Ok ()
+        | _ ->
+            let details = String.concat ", " offenders
+            Error $"Unexpected Option.get usage in compiler: {details}"
 
 let testInstallerFormatsAssetListWithStableDelimiter () : TestResult =
     let path = scriptPath "scripts/install-darklang-interpreter.sh"
@@ -109,6 +122,7 @@ let testDumpLirFuncDoesNotSuppressCompilerFailures () : TestResult =
 let tests = [
     ("compiler avoids failwith", testCompilerAvoidsFailwith)
     ("test tooling avoids failwith", testTestToolingAvoidsFailwith)
+    ("compiler avoids Option.get", testCompilerAvoidsOptionGet)
     ("installer formats asset list with stable delimiter", testInstallerFormatsAssetListWithStableDelimiter)
     ("shellcheck scans all tracked bash scripts", testShellcheckScansAllTrackedBashScripts)
     ("dump-lir-func does not suppress compiler failures", testDumpLirFuncDoesNotSuppressCompilerFailures)
