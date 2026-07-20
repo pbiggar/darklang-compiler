@@ -291,6 +291,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Script Helper Tests"; Tests = ScriptHelperTests.tests }
         { Name = "Stdlib Source Tests"; Tests = StdlibSourceTests.tests }
         { Name = "Test Runner Args Tests"; Tests = TestRunnerArgsTests.tests }
+        { Name = "Type Checking Test Runner Tests"; Tests = TypeCheckingTestRunnerTests.tests }
         { Name = "Pass Test Runner Tests"; Tests = PassTestRunnerTests.tests }
         { Name = "Optimization Format Tests"; Tests = OptimizationFormatTests.tests }
         { Name = "Type Checking Format Tests"; Tests = TypeCheckingFormatTests.tests }

@@ -28,11 +28,11 @@ let runTypeCheckingTest (test: TypeCheckingTest) : TypeCheckingTestResult =
 
     match parseResult with
     | Error parseErr ->
-        // Parse error - check if error was expected
+        // Type checking tests should only accept errors produced after parsing.
         match test.Expectation with
         | ExpectError ->
-            { Success = true
-              Message = "Parse error as expected"
+            { Success = false
+              Message = "Parse failed but type error was expected"
               ExpectedType = None
               ActualType = None
               ExpectedError = true
