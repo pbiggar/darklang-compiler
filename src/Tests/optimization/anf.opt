@@ -1346,3 +1346,29 @@ return t5
 Main:
 let TempId 6 = f(9)
 return t6
+
+---NAME---
+identity_string_concat_empty_right
+---INPUT---
+def f(x: String) : String = x ++ ""
+f("dark")
+---EXPECTED---
+Function f:
+return t0
+
+Main:
+let TempId 2 = f("dark")
+return t2
+
+---NAME---
+identity_string_concat_empty_left
+---INPUT---
+def f(x: String) : String = "" ++ x
+f("dark")
+---EXPECTED---
+Function f:
+return t0
+
+Main:
+let TempId 2 = f("dark")
+return t2

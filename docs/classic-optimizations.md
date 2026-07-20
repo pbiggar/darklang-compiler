@@ -153,6 +153,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical simplification that avoids a runtime string equality call when both operands are the same ANF variable.
 - Notes: Implemented only for the internal `__string_eq(x, x) -> true` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Source-level `x == x`, `x != x`, and `String.equals(x, x)` remain explicit stdlib calls. Covered by `internal_string_eq_self_comparison`, `source_string_eq_self_not_folded`, `source_string_neq_self_not_folded`, and `stdlib_string_equals_self_not_folded` in `src/Tests/optimization/anf.opt`; existing string benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Empty string concatenation simplification
+
+- Optimization name: Empty string concatenation simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical string simplification that removes unnecessary allocation for concatenating an already-known empty string.
+- Notes: Implemented for `x ++ "" -> x` and `"" ++ x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_string_concat_empty_right` and `identity_string_concat_empty_left` in `src/Tests/optimization/anf.opt`; existing string E2E tests provide correctness coverage while benchmark programs do not isolate this micro-pattern.
+
 ### Bitwise double-not simplification
 
 - Optimization name: Bitwise double-not simplification
