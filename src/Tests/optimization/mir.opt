@@ -1,8 +1,8 @@
 // MIR Optimization Tests
-// Tests loop-invariant code motion in MIR (SSA).
+// Tests MIR optimizations such as loop-invariant code motion in SSA form.
 
 ---NAME---
-licm_hoist_hash
+licm_keeps_side_effecting_call_in_loop
 ---INPUT---
 def loop(n: Int64, acc: Int64) : Int64 =
     if n < 1 then acc
