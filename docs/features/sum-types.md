@@ -15,9 +15,9 @@ user-defined types.
 ```dark
 type Color = Red | Green | Blue
 
-type Option<T> = Some of T | None
+type Option<t> = Some of t | None
 
-type Result<T, E> = Ok of T | Error of E
+type Result<t, e> = Ok of t | Error of e
 ```
 
 ### Construction
@@ -102,7 +102,7 @@ Matching on sum types:
 
 ## Polymorphic Sum Types
 
-Generic sum types like `Option<T>` are monomorphized:
+Generic sum types like `Option<t>` are monomorphized:
 
 ```dark
 let x: Option<Int64> = Some(42)
@@ -116,13 +116,13 @@ concrete payload types.
 
 ### Option
 ```dark
-type Stdlib.Option.Option<T> = Some of T | None
+type Stdlib.Option.Option<t> = Some of t | None
 ```
 Used for values that may or may not exist.
 
 ### Result
 ```dark
-type Stdlib.Result.Result<T, E> = Ok of T | Error of E
+type Stdlib.Result.Result<t, e> = Ok of t | Error of e
 ```
 Used for computations that may fail.
 
