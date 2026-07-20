@@ -4,6 +4,15 @@
 
 set -euo pipefail
 
+usage() {
+    echo "Usage: ./ralph.sh <playbook> [--iterations=N] [--dry-run]" >&2
+}
+
+if [[ $# -lt 1 ]]; then
+    usage
+    exit 64
+fi
+
 playbook="$1"; shift
 iterations=1
 dry_run=false
