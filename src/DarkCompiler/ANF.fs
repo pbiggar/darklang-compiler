@@ -699,45 +699,35 @@ let rcShapeNeedsManagedAliasRootPreservation (shape: RcShape) : bool =
 
 /// Release plan for a value with the given runtime shape.
 let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
-    let fieldReleasePlans (fieldShapes: RcShape list) : RcFieldRelease list =
-        fieldShapes
-        |> List.mapi (fun index fieldShape -> (index * 8, rcShapeReleasePlan fieldShape))
-        |> List.choose (fun (offset, releasePlan) ->
-            match releasePlan with
+    let releasePlansAtOffsets (fields: (int * RcShape) list) : RcFieldRelease list =
+        fields
+        |> List.choose (fun (offset, fieldShape) ->
+            match rcShapeReleasePlan fieldShape with
             | NoReleasePlan ->
                 None
-            | _ ->
-                Some (FieldRelease (offset, releasePlan)))
+            | plan ->
+                Some (FieldRelease (offset, plan)))
+
+    let fieldReleasePlans (fieldShapes: RcShape list) : RcFieldRelease list =
+        fieldShapes
+        |> List.mapi (fun index fieldShape -> (index * 8, fieldShape))
+        |> releasePlansAtOffsets
 
     let rootPayloadPlan (rootShape: RcShape) : RcPayloadReleasePlan =
         match rootShape with
         | FixedBlock (payloadSize, fieldShapes) ->
             FixedBlockPayloadRelease (payloadSize, fieldReleasePlans fieldShapes)
         | BoxedSum (payloadSize, fieldShapes, variants) ->
-            let fieldReleases =
-                fieldShapes
-                |> List.choose (fun (offset, fieldShape) ->
-                    match rcShapeReleasePlan fieldShape with
-                    | NoReleasePlan ->
-                        None
-                    | releasePlan ->
-                        Some (FieldRelease (offset, releasePlan)))
-
             let variantReleases =
                 variants
                 |> List.map (fun variant ->
                     let releases =
                         variant.FieldShapes
-                        |> List.choose (fun (offset, fieldShape) ->
-                            match rcShapeReleasePlan fieldShape with
-                            | NoReleasePlan ->
-                                None
-                            | releasePlan ->
-                                Some (FieldRelease (offset, releasePlan)))
+                        |> releasePlansAtOffsets
 
                     { Tag = variant.Tag; FieldReleases = releases })
 
-            BoxedSumPayloadRelease (payloadSize, fieldReleases, variantReleases)
+            BoxedSumPayloadRelease (payloadSize, releasePlansAtOffsets fieldShapes, variantReleases)
         | TaggedListShape elementShape ->
             TaggedListPayloadRelease (rcShapeReleasePlan elementShape)
         | DictRoot (keyShape, valueShape) ->
