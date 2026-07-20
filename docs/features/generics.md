@@ -110,7 +110,7 @@ Key commits in the evolution of generics:
 
 ## Related Files
 
-- `src/DarkCompiler/passes/2_AST_to_ANF.fs` - Monomorphization implementation (lines 1162-1290)
+- `src/DarkCompiler/passes/2_AST_to_ANF.fs` - Monomorphization helpers and entry points (`specializeFromSpecs`, `monomorphize`, `monomorphizeWithExternalDefs`)
 - `src/DarkCompiler/passes/1.5_TypeChecking.fs` - Generic type validation
 - `src/DarkCompiler/AST.fs` - `TVar`, `TypeApp` type definitions
 - `src/Tests/e2e/generics.e2e` - Test cases
