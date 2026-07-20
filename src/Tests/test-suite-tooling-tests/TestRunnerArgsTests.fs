@@ -25,7 +25,20 @@ let testAiProgressSecondsRejectsZero () : TestResult =
     | Error "--ai-progress-seconds must be a positive integer" -> Ok ()
     | Error msg -> Error $"Unexpected error: {msg}"
 
+let testTimingsJsonParsesPath () : TestResult =
+    match parseTimingsJsonArg [| "--timings-json=/tmp/timings.json" |] with
+    | Ok value -> expectEqual (Some "/tmp/timings.json") value
+    | Error msg -> Error $"Expected valid timings JSON path, got error: {msg}"
+
+let testTimingsJsonRejectsEmptyPath () : TestResult =
+    match parseTimingsJsonArg [| "--timings-json=" |] with
+    | Ok value -> Error $"Expected invalid timings JSON path, got {value}"
+    | Error "--timings-json requires a non-empty path" -> Ok ()
+    | Error msg -> Error $"Unexpected error: {msg}"
+
 let tests = [
     ("AI progress seconds parses positive integer", testAiProgressSecondsParsesPositiveInteger)
     ("AI progress seconds rejects zero", testAiProgressSecondsRejectsZero)
+    ("timings JSON parses path", testTimingsJsonParsesPath)
+    ("timings JSON rejects empty path", testTimingsJsonRejectsEmptyPath)
 ]

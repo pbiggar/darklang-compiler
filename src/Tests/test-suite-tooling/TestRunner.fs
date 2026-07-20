@@ -126,11 +126,14 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     // Print timing for every test in the final timing section.
     let showAllTestTimings = hasAllTestTimingsArg args
 
-    // Optionally write machine-readable timing data to JSON.
-    let timingsJsonPath = parseTimingsJsonArg args
-
     // Check for --verbose flag (print failing tests immediately)
     let verbose = hasVerboseArg args
+
+    // Optionally write machine-readable timing data to JSON.
+    let timingsJsonPath =
+        match parseTimingsJsonArg args with
+        | Ok path -> path
+        | Error msg -> Crash.crash msg
 
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
     match filter with
@@ -144,8 +147,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     if showAllTestTimings then
         println $"{Colors.gray}  Per-test timings: all tests (mode enabled){Colors.reset}"
     match timingsJsonPath with
-    | Some path when path.Trim() = "" ->
-        Crash.crash "--timings-json requires a non-empty path"
     | Some path ->
         println $"{Colors.gray}  Timing JSON output: {path}{Colors.reset}"
     | None -> ()

@@ -4,11 +4,14 @@
 
 module TestRunnerArgs
 
+let private parsePrefixedArg (prefix: string) (args: string array) : string option =
+    args
+    |> Array.tryFind (fun arg -> arg.StartsWith(prefix))
+    |> Option.map (fun arg -> arg.Substring(prefix.Length))
+
 // Parse command line for --filter=PATTERN option
 let parseFilterArg (args: string array) : string option =
-    args
-    |> Array.tryFind (fun arg -> arg.StartsWith("--filter="))
-    |> Option.map (fun arg -> arg.Substring(9))
+    parsePrefixedArg "--filter=" args
 
 // Check if --coverage flag is present (show inline coverage after tests)
 let hasCoverageArg (args: string array) : bool =
@@ -44,22 +47,19 @@ let hasAiArg (args: string array) : bool =
 
 // Parse --ai-progress-seconds=N option
 let parseAiProgressSecondsArg (args: string array) : Result<int option, string> =
-    let arg =
-        args
-        |> Array.tryFind (fun arg -> arg.StartsWith("--ai-progress-seconds="))
-    match arg with
+    match parsePrefixedArg "--ai-progress-seconds=" args with
     | None -> Ok None
-    | Some value ->
-        let text = value.Substring("--ai-progress-seconds=".Length)
+    | Some text ->
         match System.Int32.TryParse(text) with
         | true, seconds when seconds > 0 -> Ok (Some seconds)
         | _ -> Error "--ai-progress-seconds must be a positive integer"
 
 // Parse --timings-json=PATH option
-let parseTimingsJsonArg (args: string array) : string option =
-    args
-    |> Array.tryFind (fun arg -> arg.StartsWith("--timings-json="))
-    |> Option.map (fun arg -> arg.Substring(15))
+let parseTimingsJsonArg (args: string array) : Result<string option, string> =
+    match parsePrefixedArg "--timings-json=" args with
+    | None -> Ok None
+    | Some path when path.Trim() = "" -> Error "--timings-json requires a non-empty path"
+    | Some path -> Ok (Some path)
 
 // Check if a test name matches the filter (case-insensitive substring match)
 let matchesFilter (filter: string option) (testName: string) : bool =
