@@ -78,6 +78,17 @@ let testShlImm () : Result<unit, string> =
     // SHL RAX, 3 → REX.W C1 /4 ib
     assertEncoding "SHL RAX,3" (SHL_imm (RAX, 3)) [| 0x48uy; 0xC1uy; 0xE0uy; 0x03uy |]
 
+let testMemoryOperands () : Result<unit, string> =
+    assertEncoding "MOV RAX,[RSP]" (MOV_load (RAX, RSP, 0)) [| 0x48uy; 0x8Buy; 0x04uy; 0x24uy |]
+    |> Result.bind (fun () ->
+        assertEncoding "MOV [R13],RAX" (MOV_store (R13, 0, RAX)) [| 0x49uy; 0x89uy; 0x45uy; 0x00uy |])
+    |> Result.bind (fun () ->
+        assertEncoding "LEA R8,[RBP+128]" (LEA (R8, RBP, 128)) [| 0x4Cuy; 0x8Duy; 0x85uy; 0x80uy; 0x00uy; 0x00uy; 0x00uy |])
+    |> Result.bind (fun () ->
+        assertEncoding "MOVZX R9,[R12-1]" (MOV_load_byte (R9, R12, -1)) [| 0x45uy; 0x0Fuy; 0xB6uy; 0x4Cuy; 0x24uy; 0xFFuy |])
+    |> Result.bind (fun () ->
+        assertEncoding "MOVSD [RSP+16],XMM8" (MOVSD_store (RSP, 16, XMM8)) [| 0xF2uy; 0x44uy; 0x0Fuy; 0x11uy; 0x44uy; 0x24uy; 0x10uy |])
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("MOV reg,reg", testMovRegReg)
     ("MOV reg,imm32", testMovImm32)
@@ -90,4 +101,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("CMP imm", testCmpImm)
     ("IMUL reg", testImulReg)
     ("SHL imm", testShlImm)
+    ("Memory operands", testMemoryOperands)
 ]
