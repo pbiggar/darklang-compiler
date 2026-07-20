@@ -209,9 +209,9 @@ let lex (input: string) : Result<Token list, string> =
 
             // Check if this is a float (has decimal point or exponent)
             match afterInt with
-            | '.' :: rest when not (List.isEmpty rest) && System.Char.IsDigit(List.head rest) ->
+            | '.' :: d :: rest when System.Char.IsDigit(d) ->
                 // Float with decimal point: 3.14
-                let (fracDigits, afterFrac) = collectDigits rest []
+                let (fracDigits, afterFrac) = collectDigits (d :: rest) []
                 // Check for exponent
                 match afterFrac with
                 | ('e' :: rest' | 'E' :: rest') ->
