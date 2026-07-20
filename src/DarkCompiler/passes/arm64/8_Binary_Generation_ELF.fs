@@ -147,6 +147,74 @@ let createStringData (stringPool: LiteralPool.StringPool) : byte array =
         |> Array.ofList
         |> Array.concat
 
+let private elfHeaderSize = 64UL
+let private programHeaderSize = 56UL
+let private numProgramHeaders = 1us
+let private baseVAddr = 0x400000UL
+
+let private codeFileOffset =
+    elfHeaderSize + (uint64 numProgramHeaders * programHeaderSize)
+
+let private createElfHeader (entryVAddr: uint64) : Binary_ELF.Elf64Header =
+    {
+        Ident = Binary_ELF.createIdent ()
+        Type = Binary_ELF.ET_EXEC
+        Machine = Binary_ELF.EM_AARCH64
+        Version = 1u
+        Entry = entryVAddr
+        PhOff = elfHeaderSize
+        ShOff = 0UL
+        Flags = 0u
+        EhSize = uint16 elfHeaderSize
+        PhEntSize = uint16 programHeaderSize
+        PhNum = numProgramHeaders
+        ShEntSize = 0us
+        ShNum = 0us
+        ShStrNdx = 0us
+    }
+
+let private createLoadSegment
+    (codeSize: uint64)
+    (dataSize: uint64)
+    (segmentFlags: uint32)
+    : Binary_ELF.Elf64ProgramHeader =
+    let alignedDataOffset = (codeFileOffset + codeSize + 7UL) &&& (~~~7UL)
+    let alignmentPadding = alignedDataOffset - (codeFileOffset + codeSize)
+    let segmentFileSize = codeFileOffset + codeSize + alignmentPadding + dataSize
+
+    {
+        Type = Binary_ELF.PT_LOAD
+        Flags = segmentFlags
+        Offset = 0UL
+        VAddr = baseVAddr
+        PAddr = baseVAddr
+        FileSize = segmentFileSize
+        MemSize = segmentFileSize
+        Align = 0x1000UL
+    }
+
+let private codeEntryVAddr =
+    baseVAddr + codeFileOffset
+
+let private executableSegmentFlags (enableLeakCheck: bool) : uint32 =
+    if enableLeakCheck then
+        Binary_ELF.PF_R ||| Binary_ELF.PF_W ||| Binary_ELF.PF_X
+    else
+        Binary_ELF.PF_R ||| Binary_ELF.PF_X
+
+let private createBinary
+    (codeBytes: byte array)
+    (dataBytes: byte array)
+    (segmentFlags: uint32)
+    : Binary_ELF.ElfBinary =
+    {
+        Header = createElfHeader codeEntryVAddr
+        ProgramHeaders =
+            [createLoadSegment (uint64 codeBytes.Length) (uint64 dataBytes.Length) segmentFlags]
+        MachineCode = codeBytes
+        StringData = dataBytes
+    }
+
 /// Create an ELF executable with float and string data
 let createExecutableWithPools
     (machineCode: uint32 list)
@@ -175,71 +243,8 @@ let createExecutableWithPools
         else
             floatAndStringBytes
 
-    let codeSize = uint64 codeBytes.Length
-    let dataSize = uint64 dataBytes.Length
-
-    // ELF structures
-    let elfHeaderSize = 64UL
-    let programHeaderSize = 56UL
-    let numProgramHeaders = 1us
-
-    // Load address - typical for user-space programs
-    let baseVAddr = 0x400000UL
-
-    // Code starts right after headers
-    let codeFileOffset = elfHeaderSize + (uint64 numProgramHeaders * programHeaderSize)
-    let codeVAddr = baseVAddr + codeFileOffset
-
-    let header : Binary_ELF.Elf64Header = {
-        Ident = Binary_ELF.createIdent ()
-        Type = Binary_ELF.ET_EXEC
-        Machine = Binary_ELF.EM_AARCH64
-        Version = 1u  // Current version
-        Entry = codeVAddr  // Entry point
-        PhOff = elfHeaderSize  // Program headers start after ELF header
-        ShOff = 0UL  // No section headers
-        Flags = 0u  // No processor-specific flags
-        EhSize = uint16 elfHeaderSize
-        PhEntSize = uint16 programHeaderSize
-        PhNum = numProgramHeaders
-        ShEntSize = 0us  // No section headers
-        ShNum = 0us
-        ShStrNdx = 0us
-    }
-
-    // Create executable code segment
-    // The PT_LOAD segment must include the ELF header, program headers, code, and constant data
-    // so the kernel can access them during execution
-    // Account for 8-byte alignment padding between code and data
-    let alignedDataOffset = (codeFileOffset + codeSize + 7UL) &&& (~~~7UL)
-    let alignmentPadding = alignedDataOffset - (codeFileOffset + codeSize)
-    let segmentFileSize = codeFileOffset + codeSize + alignmentPadding + dataSize
-    let segmentMemSize = segmentFileSize
-
-    let segmentFlags =
-        if enableLeakCheck then
-            Binary_ELF.PF_R ||| Binary_ELF.PF_W ||| Binary_ELF.PF_X
-        else
-            Binary_ELF.PF_R ||| Binary_ELF.PF_X
-    let codeSegment : Binary_ELF.Elf64ProgramHeader = {
-        Type = Binary_ELF.PT_LOAD
-        Flags = segmentFlags
-        Offset = 0UL  // Load from beginning of file (includes headers)
-        VAddr = baseVAddr  // Load at base address
-        PAddr = baseVAddr  // Physical = virtual for user programs
-        FileSize = segmentFileSize  // Includes headers + code + data
-        MemSize = segmentMemSize  // Same as file size
-        Align = 0x1000UL  // 4KB alignment (page size)
-    }
-
-    let binary : Binary_ELF.ElfBinary = {
-        Header = header
-        ProgramHeaders = [codeSegment]
-        MachineCode = codeBytes
-        StringData = dataBytes  // Contains floats + strings
-    }
-
-    serializeElf binary
+    createBinary codeBytes dataBytes (executableSegmentFlags enableLeakCheck)
+    |> serializeElf
 
 /// Create an ELF executable with string data (legacy wrapper for backwards compatibility)
 let createExecutableWithStrings (machineCode: uint32 list) (stringPool: LiteralPool.StringPool) : byte array =
@@ -280,65 +285,10 @@ let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: Literal
         else
             Array.concat [floatAndStringBytes; coveragePadding; coverageBytes]
 
-    let codeSize = uint64 codeBytes.Length
-    let dataSize = uint64 dataBytes.Length
-
-    // ELF structures
-    let elfHeaderSize = 64UL
-    let programHeaderSize = 56UL
-    let numProgramHeaders = 1us
-
-    // Load address
-    let baseVAddr = 0x400000UL
-
-    // Code starts right after headers
-    let codeFileOffset = elfHeaderSize + (uint64 numProgramHeaders * programHeaderSize)
-    let codeVAddr = baseVAddr + codeFileOffset
-
-    let header : Binary_ELF.Elf64Header = {
-        Ident = Binary_ELF.createIdent ()
-        Type = Binary_ELF.ET_EXEC
-        Machine = Binary_ELF.EM_AARCH64
-        Version = 1u
-        Entry = codeVAddr
-        PhOff = elfHeaderSize
-        ShOff = 0UL
-        Flags = 0u
-        EhSize = uint16 elfHeaderSize
-        PhEntSize = uint16 programHeaderSize
-        PhNum = numProgramHeaders
-        ShEntSize = 0us
-        ShNum = 0us
-        ShStrNdx = 0us
-    }
-
-    // Calculate segment size
-    let alignedDataOffset = (codeFileOffset + codeSize + 7UL) &&& (~~~7UL)
-    let alignmentPadding = alignedDataOffset - (codeFileOffset + codeSize)
-    let segmentFileSize = codeFileOffset + codeSize + alignmentPadding + dataSize
-    let segmentMemSize = segmentFileSize
-
     // Single segment: RWX (code + read-only data + coverage data)
     // Note: RWX is not ideal for security but simplifies the implementation
-    let segment : Binary_ELF.Elf64ProgramHeader = {
-        Type = Binary_ELF.PT_LOAD
-        Flags = Binary_ELF.PF_R ||| Binary_ELF.PF_W ||| Binary_ELF.PF_X  // RWX
-        Offset = 0UL
-        VAddr = baseVAddr
-        PAddr = baseVAddr
-        FileSize = segmentFileSize
-        MemSize = segmentMemSize
-        Align = 0x1000UL
-    }
-
-    let binary : Binary_ELF.ElfBinary = {
-        Header = header
-        ProgramHeaders = [segment]
-        MachineCode = codeBytes
-        StringData = dataBytes
-    }
-
-    serializeElf binary
+    createBinary codeBytes dataBytes (Binary_ELF.PF_R ||| Binary_ELF.PF_W ||| Binary_ELF.PF_X)
+    |> serializeElf
 
 /// Write bytes to file (Linux - no code signing needed)
 let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =
