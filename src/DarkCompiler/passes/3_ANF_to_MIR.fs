@@ -572,6 +572,86 @@ let private closureCallReturnType (builder: CFGBuilder) (resultTempId: ANF.TempI
         | None -> resultTempType ()
     | _ -> resultTempType ()
 
+let private directCallReturnType (builder: CFGBuilder) (funcName: string) : AST.Type =
+    match Map.tryFind funcName builder.ReturnTypeReg with
+    | Some t -> t
+    | None ->
+        match tryGetIntrinsicReturnType funcName with
+        | Some t -> t
+        | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
+
+let private tupleGetDestType
+    (builder: CFGBuilder)
+    (tempId: ANF.TempId)
+    (tupleGetAliasType: AST.Type option)
+    (tupleId: ANF.TempId)
+    (index: int)
+    : AST.Type option =
+    match tupleGetAliasType with
+    | Some AST.TFloat64 -> Some AST.TFloat64
+    | _ ->
+        match tryFindType builder tempId with
+        | Some AST.TFloat64 -> Some AST.TFloat64
+        | _ ->
+            match tryFindType builder tupleId with
+            | Some (AST.TTuple elemTypes) when index < List.length elemTypes ->
+                let elemType = List.item index elemTypes
+                if elemType = AST.TFloat64 then Some AST.TFloat64 else None
+            | Some (AST.TList elemType) ->
+                // List is a Cons cell: (tag, head, tail) - index 1 is head
+                if index = 1 && elemType = AST.TFloat64 then Some AST.TFloat64 else None
+            | Some (AST.TFunction (_, AST.TList elemType)) ->
+                // Function returning list - extract list element type.
+                if index = 1 && elemType = AST.TFloat64 then Some AST.TFloat64 else None
+            | Some (AST.TSum (_typeName, typeArgs)) ->
+                // Sum type: [tag:8][payload:8], index 1 is payload.
+                match index, typeArgs with
+                | 1, [singleType] when singleType = AST.TFloat64 -> Some AST.TFloat64
+                | _ -> None
+            | _ -> None
+
+let private inferSimpleCExprDestType
+    (builder: CFGBuilder)
+    (tempId: ANF.TempId)
+    (tupleGetAliasType: AST.Type option)
+    (cexpr: ANF.CExpr)
+    : AST.Type option =
+    match cexpr with
+    | ANF.Atom atom -> Some (atomType builder atom)
+    | ANF.TypedAtom (_, aType) -> Some aType
+    | ANF.Prim (op, leftAtom, rightAtom) ->
+        match op with
+        | ANF.Eq | ANF.Neq | ANF.Lt | ANF.Gt | ANF.Lte | ANF.Gte
+        | ANF.And | ANF.Or -> Some AST.TBool
+        | _ -> Some (binOpType builder leftAtom rightAtom)
+    | ANF.UnaryPrim (op, atom) ->
+        match op with
+        | ANF.Not -> Some AST.TBool
+        | _ -> Some (atomType builder atom)
+    | ANF.Call (funcName, _)
+    | ANF.BorrowedCall (funcName, _) ->
+        Some (directCallReturnType builder funcName)
+    | ANF.IndirectCall (func, _) ->
+        match atomType builder func with
+        | AST.TFunction (_, retType) -> Some retType
+        | other -> Crash.crash $"IndirectCall: Expected TFunction type for func, got {other}"
+    | ANF.ClosureCall (closure, _) -> Some (closureCallReturnType builder tempId closure)
+    | ANF.TupleGet (ANF.Var tupleId, index) ->
+        tupleGetDestType builder tempId tupleGetAliasType tupleId index
+    | ANF.StringToRawPtr _
+    | ANF.BytesToRawPtr _
+    | ANF.DictToRawPtr _
+    | ANF.ListToRawPtr _ -> Some AST.TRawPtr
+    | ANF.RawPtrToString _ -> Some AST.TString
+    | ANF.RawPtrToBytes _ -> Some AST.TBytes
+    | ANF.RawPtrToDict (_, _, dictType) -> Some dictType
+    | ANF.RawPtrToList (_, _, listType) -> Some listType
+    | ANF.FloatSqrt _
+    | ANF.FloatAbs _
+    | ANF.FloatNeg _
+    | ANF.Int64ToFloat _ -> Some AST.TFloat64
+    | _ -> None
+
 /// Get the type of an MIR operand (for generating type-specific instructions)
 let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.Type =
     match operand with
@@ -917,18 +997,15 @@ let rec convertExpr
         | _ ->
             // Simple CExpr: add instruction(s) to current block, continue
             // Track if dest is float type for later builder update
-            let destType = ref None
-            let setDestType typ = destType := Some typ
+            let destType = inferSimpleCExprDestType builder tempId tupleGetAliasType cexpr
             let instrsResult =
                 match cexpr with
                 | ANF.Atom atom ->
                     let aType = atomType builder atom
-                    setDestType aType
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
                 | ANF.TypedAtom (atom, aType) ->
                     // Use the explicit type annotation (for pattern matching with correct types)
-                    setDestType aType
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
                 | ANF.Prim (op, leftAtom, rightAtom) ->
@@ -939,7 +1016,6 @@ let rec convertExpr
                         | ANF.Eq | ANF.Neq | ANF.Lt | ANF.Gt | ANF.Lte | ANF.Gte
                         | ANF.And | ANF.Or -> AST.TBool
                         | _ -> opType
-                    setDestType resultType
                     atomToOperand builder leftAtom
                     |> Result.bind (fun leftOp ->
                         atomToOperand builder rightAtom
@@ -951,7 +1027,6 @@ let rec convertExpr
                         match op with
                         | ANF.Not -> AST.TBool
                         | _ -> atomTy
-                    setDestType resultType
                     atomToOperand builder atom
                     |> Result.map (fun operand ->
                         match op with
@@ -973,7 +1048,6 @@ let rec convertExpr
                             match tryGetIntrinsicReturnType funcName with
                             | Some t -> t
                             | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
-                    setDestType returnType  // Track call result type for FloatRegs update
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1013,7 +1087,6 @@ let rec convertExpr
                     // Call through closure: extract func_ptr, call with (closure, args...)
                     let argTypes = args |> List.map (atomType builder)
                     let returnType = closureCallReturnType builder tempId closure
-                    setDestType returnType
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
                         args
@@ -1080,36 +1153,8 @@ let rec convertExpr
                     match tupleAtom with
                     | ANF.Var tid ->
                         let tupleReg = tempToVReg tid
-                        match tupleGetAliasType with
-                        | Some AST.TFloat64 -> setDestType AST.TFloat64
-                        | _ -> ()
-                        match tryFindType builder tempId with
-                        | Some AST.TFloat64 -> setDestType AST.TFloat64
-                        | _ -> ()
-                        // Look up the tuple's type to determine the element type at this index
-                        // This is needed for Float elements to be properly tracked in FloatRegs
-                        let tupleType = tryFindType builder tid
-                        let _ =
-                            match tupleType with
-                            | Some (AST.TTuple elemTypes) when index < List.length elemTypes ->
-                                let elemType = List.item index elemTypes
-                                if elemType = AST.TFloat64 then setDestType AST.TFloat64
-                            | Some (AST.TList elemType) ->
-                                // List is a Cons cell: (tag, head, tail) - index 1 is head
-                                if index = 1 && elemType = AST.TFloat64 then setDestType AST.TFloat64
-                            | Some (AST.TFunction (_, AST.TList elemType)) ->
-                                // Function returning list - extract list element type
-                                // This happens when TypeMap contains TFunction instead of just the return type
-                                if index = 1 && elemType = AST.TFloat64 then setDestType AST.TFloat64
-                            | Some (AST.TSum (_typeName, typeArgs)) ->
-                                // Sum type: [tag:8][payload:8], index 1 is payload
-                                // For single type arg sums like Option<Float>, payload is that type
-                                match index, typeArgs with
-                                | 1, [singleType] when singleType = AST.TFloat64 -> setDestType AST.TFloat64
-                                | _ -> ()
-                            | _ -> ()
                         let loadType =
-                            match !destType with
+                            match destType with
                             | Some AST.TFloat64 -> Some AST.TFloat64
                             | _ -> None
                         Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]
@@ -1214,55 +1259,43 @@ let rec convertExpr
                             |> Result.map (fun valueOp ->
                                 [MIR.RawSlotInit (ptrOp, offsetOp, valueOp, valueType)])))
                 | ANF.StringToRawPtr valueAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder valueAtom
                     |> Result.map (fun valueOp -> [MIR.StringToRawPtr (destReg, valueOp)])
                 | ANF.RawPtrToString ptrAtom ->
-                    setDestType AST.TString
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawPtrToString (destReg, ptrOp)])
                 | ANF.BytesToRawPtr valueAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder valueAtom
                     |> Result.map (fun valueOp -> [MIR.BytesToRawPtr (destReg, valueOp)])
                 | ANF.RawPtrToBytes ptrAtom ->
-                    setDestType AST.TBytes
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawPtrToBytes (destReg, ptrOp)])
                 | ANF.DictToRawPtr dictAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder dictAtom
                     |> Result.map (fun dictOp -> [MIR.DictToRawPtr (destReg, dictOp)])
-                | ANF.RawPtrToDict (ptrAtom, tagAtom, dictType) ->
-                    setDestType dictType
+                | ANF.RawPtrToDict (ptrAtom, tagAtom, _dictType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder tagAtom
                         |> Result.map (fun tagOp -> [MIR.RawPtrToDict (destReg, ptrOp, tagOp)]))
                 | ANF.ListToRawPtr listAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder listAtom
                     |> Result.map (fun listOp -> [MIR.ListToRawPtr (destReg, listOp)])
-                | ANF.RawPtrToList (ptrAtom, tagAtom, listType) ->
-                    setDestType listType
+                | ANF.RawPtrToList (ptrAtom, tagAtom, _listType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder tagAtom
                         |> Result.map (fun tagOp -> [MIR.RawPtrToList (destReg, ptrOp, tagOp)]))
                 | ANF.FloatSqrt atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatSqrt (destReg, op)])
                 | ANF.FloatAbs atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatAbs (destReg, op)])
                 | ANF.FloatNeg atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatNeg (destReg, op)])
                 | ANF.Int64ToFloat atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Int64ToFloat (destReg, op)])
                 | ANF.FloatToInt64 atom ->
@@ -1306,7 +1339,7 @@ let rec convertExpr
                 // Update FloatRegs if this dest is a float
                 let (MIR.VReg destId) = destReg
                 let builder' =
-                    match !destType with
+                    match destType with
                     | Some AST.TFloat64 ->
                         { builderWithClosure with FloatRegs = Set.add destId builderWithClosure.FloatRegs }
                     | _ ->
@@ -1598,18 +1631,15 @@ and convertExprToOperand
         | _ ->
             // Simple CExpr: create instruction(s) and accumulate
             // Track if dest is float type for later builder update
-            let destType = ref None
-            let setDestType typ = destType := Some typ
+            let destType = inferSimpleCExprDestType builder tempId tupleGetAliasType cexpr
             let instrsResult =
                 match cexpr with
                 | ANF.Atom atom ->
                     let aType = atomType builder atom
-                    setDestType aType
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
                 | ANF.TypedAtom (atom, aType) ->
                     // Use the explicit type annotation (for pattern matching with correct types)
-                    setDestType aType
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
                 | ANF.Prim (op, leftAtom, rightAtom) ->
@@ -1620,7 +1650,6 @@ and convertExprToOperand
                         | ANF.Eq | ANF.Neq | ANF.Lt | ANF.Gt | ANF.Lte | ANF.Gte
                         | ANF.And | ANF.Or -> AST.TBool
                         | _ -> opType
-                    setDestType resultType
                     atomToOperand builder leftAtom
                     |> Result.bind (fun leftOp ->
                         atomToOperand builder rightAtom
@@ -1632,7 +1661,6 @@ and convertExprToOperand
                         match op with
                         | ANF.Not -> AST.TBool
                         | _ -> atomTy
-                    setDestType resultType
                     atomToOperand builder atom
                     |> Result.map (fun operand ->
                         match op with
@@ -1654,7 +1682,6 @@ and convertExprToOperand
                             match tryGetIntrinsicReturnType funcName with
                             | Some t -> t
                             | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
-                    setDestType returnType  // Track call result type for FloatRegs update
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1694,7 +1721,6 @@ and convertExprToOperand
                     // Call through closure: extract func_ptr, call with (closure, args...)
                     let argTypes = args |> List.map (atomType builder)
                     let returnType = closureCallReturnType builder tempId closure
-                    setDestType returnType
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
                         args
@@ -1761,36 +1787,8 @@ and convertExprToOperand
                     match tupleAtom with
                     | ANF.Var tid ->
                         let tupleReg = tempToVReg tid
-                        match tupleGetAliasType with
-                        | Some AST.TFloat64 -> setDestType AST.TFloat64
-                        | _ -> ()
-                        match tryFindType builder tempId with
-                        | Some AST.TFloat64 -> setDestType AST.TFloat64
-                        | _ -> ()
-                        // Look up the tuple's type to determine the element type at this index
-                        // This is needed for Float elements to be properly tracked in FloatRegs
-                        let tupleType = tryFindType builder tid
-                        let _ =
-                            match tupleType with
-                            | Some (AST.TTuple elemTypes) when index < List.length elemTypes ->
-                                let elemType = List.item index elemTypes
-                                if elemType = AST.TFloat64 then setDestType AST.TFloat64
-                            | Some (AST.TList elemType) ->
-                                // List is a Cons cell: (tag, head, tail) - index 1 is head
-                                if index = 1 && elemType = AST.TFloat64 then setDestType AST.TFloat64
-                            | Some (AST.TFunction (_, AST.TList elemType)) ->
-                                // Function returning list - extract list element type
-                                // This happens when TypeMap contains TFunction instead of just the return type
-                                if index = 1 && elemType = AST.TFloat64 then setDestType AST.TFloat64
-                            | Some (AST.TSum (_typeName, typeArgs)) ->
-                                // Sum type: [tag:8][payload:8], index 1 is payload
-                                // For single type arg sums like Option<Float>, payload is that type
-                                match index, typeArgs with
-                                | 1, [singleType] when singleType = AST.TFloat64 -> setDestType AST.TFloat64
-                                | _ -> ()
-                            | _ -> ()
                         let loadType =
-                            match !destType with
+                            match destType with
                             | Some AST.TFloat64 -> Some AST.TFloat64
                             | _ -> None
                         Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]
@@ -1895,55 +1893,43 @@ and convertExprToOperand
                             |> Result.map (fun valueOp ->
                                 [MIR.RawSlotInit (ptrOp, offsetOp, valueOp, valueType)])))
                 | ANF.StringToRawPtr valueAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder valueAtom
                     |> Result.map (fun valueOp -> [MIR.StringToRawPtr (destReg, valueOp)])
                 | ANF.RawPtrToString ptrAtom ->
-                    setDestType AST.TString
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawPtrToString (destReg, ptrOp)])
                 | ANF.BytesToRawPtr valueAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder valueAtom
                     |> Result.map (fun valueOp -> [MIR.BytesToRawPtr (destReg, valueOp)])
                 | ANF.RawPtrToBytes ptrAtom ->
-                    setDestType AST.TBytes
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawPtrToBytes (destReg, ptrOp)])
                 | ANF.DictToRawPtr dictAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder dictAtom
                     |> Result.map (fun dictOp -> [MIR.DictToRawPtr (destReg, dictOp)])
-                | ANF.RawPtrToDict (ptrAtom, tagAtom, dictType) ->
-                    setDestType dictType
+                | ANF.RawPtrToDict (ptrAtom, tagAtom, _dictType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder tagAtom
                         |> Result.map (fun tagOp -> [MIR.RawPtrToDict (destReg, ptrOp, tagOp)]))
                 | ANF.ListToRawPtr listAtom ->
-                    setDestType AST.TRawPtr
                     atomToOperand builder listAtom
                     |> Result.map (fun listOp -> [MIR.ListToRawPtr (destReg, listOp)])
-                | ANF.RawPtrToList (ptrAtom, tagAtom, listType) ->
-                    setDestType listType
+                | ANF.RawPtrToList (ptrAtom, tagAtom, _listType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder tagAtom
                         |> Result.map (fun tagOp -> [MIR.RawPtrToList (destReg, ptrOp, tagOp)]))
                 | ANF.FloatSqrt atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatSqrt (destReg, op)])
                 | ANF.FloatAbs atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatAbs (destReg, op)])
                 | ANF.FloatNeg atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatNeg (destReg, op)])
                 | ANF.Int64ToFloat atom ->
-                    setDestType AST.TFloat64
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Int64ToFloat (destReg, op)])
                 | ANF.FloatToInt64 atom ->
@@ -1985,7 +1971,7 @@ and convertExprToOperand
                 // Update FloatRegs if this dest is a float
                 let (MIR.VReg destId) = destReg
                 let builder' =
-                    match !destType with
+                    match destType with
                     | Some AST.TFloat64 ->
                         { builderWithClosure with FloatRegs = Set.add destId builderWithClosure.FloatRegs }
                     | _ ->
