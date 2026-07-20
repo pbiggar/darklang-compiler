@@ -496,6 +496,27 @@ let private collectProgramReferencedPreambleFuncs
             Set.empty)
     |> List.fold Set.union Set.empty
 
+let private collectFunctionReferencedPreambleFuncs
+    (knownPreambleFunctions: Set<string>)
+    (funcDef: FunctionDef)
+    : Set<string> =
+    let paramBoundVars =
+        funcDef.Params
+        |> NonEmptyList.toList
+        |> List.map fst
+        |> Set.ofList
+    collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions paramBoundVars funcDef.Body
+
+let private buildPreambleFunctionDependencyMap
+    (preambleFunctionNames: Set<string>)
+    (preambleFunctionDefs: FunctionDef list)
+    : Map<string, Set<string>> =
+    preambleFunctionDefs
+    |> List.map (fun funcDef ->
+        let deps = collectFunctionReferencedPreambleFuncs preambleFunctionNames funcDef
+        (funcDef.Name, deps))
+    |> Map.ofList
+
 let private expandRequiredPreambleFunctions
     (dependencyMap: Map<string, Set<string>>)
     (initial: Set<string>)
@@ -514,6 +535,16 @@ let private expandRequiredPreambleFunctions
                 |> Set.filter (fun name -> not (Set.contains name required))
             loop discovered (Set.union required discovered)
     loop initial initial
+
+let private reducePreambleTopLevelsToRequiredFunctions
+    (requiredFunctions: Set<string>)
+    (preambleTopLevels: TopLevel list)
+    : TopLevel list =
+    preambleTopLevels
+    |> List.filter (function
+        | TypeDef _ -> true
+        | FunctionDef funcDef -> Set.contains funcDef.Name requiredFunctions
+        | Expression _ -> false)
 
 let private parsePreambleAsProgram
     (sourceSyntax: CompilerLibrary.SourceSyntax)
@@ -606,20 +637,7 @@ let private analyzePreambleWithReducedFunctionSet
             |> List.map (fun funcDef -> funcDef.Name)
             |> Set.ofList
         let dependencyMap =
-            preambleFunctionDefs
-            |> List.map (fun funcDef ->
-                let paramBoundVars =
-                    funcDef.Params
-                    |> NonEmptyList.toList
-                    |> List.map fst
-                    |> Set.ofList
-                let deps =
-                    collectExprReferencedPreambleFuncsWithBound
-                        preambleFunctionNames
-                        paramBoundVars
-                        funcDef.Body
-                (funcDef.Name, deps))
-            |> Map.ofList
+            buildPreambleFunctionDependencyMap preambleFunctionNames preambleFunctionDefs
 
         let runnableTests =
             tests
@@ -648,11 +666,7 @@ let private analyzePreambleWithReducedFunctionSet
             |> expandRequiredPreambleFunctions dependencyMap
 
         let reducedTopLevels =
-            preambleTopLevels
-            |> List.filter (function
-                | TypeDef _ -> true
-                | FunctionDef funcDef -> Set.contains funcDef.Name requiredFunctions
-                | Expression _ -> false)
+            reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
 
         let reducedProgram =
             Program (reducedTopLevels @ [Expression (Int64Literal 0L)])
@@ -1027,20 +1041,7 @@ let private tryBuildReducedPreambleForTest
             |> Set.ofList
 
         let dependencyMap =
-            preambleFunctionDefs
-            |> List.map (fun funcDef ->
-                let paramBoundVars =
-                    funcDef.Params
-                    |> NonEmptyList.toList
-                    |> List.map fst
-                    |> Set.ofList
-                let deps =
-                    collectExprReferencedPreambleFuncsWithBound
-                        preambleFunctionNames
-                        paramBoundVars
-                        funcDef.Body
-                (funcDef.Name, deps))
-            |> Map.ofList
+            buildPreambleFunctionDependencyMap preambleFunctionNames preambleFunctionDefs
 
         let seedFunctions =
             collectProgramReferencedPreambleFuncs preambleFunctionNames testProgram
@@ -1051,11 +1052,7 @@ let private tryBuildReducedPreambleForTest
             |> expandRequiredPreambleFunctions dependencyMap
 
         let reducedTopLevels =
-            preambleTopLevels
-            |> List.filter (function
-                | TypeDef _ -> true
-                | FunctionDef funcDef -> Set.contains funcDef.Name requiredFunctions
-                | Expression _ -> false)
+            reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
 
         let prettySyntax = prettySyntaxForSourceSyntax sourceSyntax
         let reducedPreambleSource = ASTPrettyPrinter.formatProgram prettySyntax (Program reducedTopLevels)
