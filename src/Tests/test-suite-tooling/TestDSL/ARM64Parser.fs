@@ -13,6 +13,7 @@ module TestDSL.ARM64Parser
 open System
 open System.Text.RegularExpressions
 open ARM64
+open ResultList
 open TestDSL.Common
 
 /// Parse ARM64 register from text like "X0", "X1", etc.
@@ -365,13 +366,6 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
 let parseARM64 (text: string) : Result<Instr list, string> =
     let lines = stripCommentsAndEmpty text
 
-    // Parse each line into an instruction
-    let results = lines |> List.mapi (fun i line -> parseInstruction (i+1) line)
-
-    // Collect all results, stopping at first error
-    let rec collectResults acc = function
-        | [] -> Ok (List.rev acc)
-        | (Ok instr) :: rest -> collectResults (instr :: acc) rest
-        | (Error e) :: _ -> Error e
-
-    collectResults [] results
+    lines
+    |> List.mapi (fun i line -> parseInstruction (i + 1) line)
+    |> sequenceResults
