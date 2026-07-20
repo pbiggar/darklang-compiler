@@ -2163,6 +2163,12 @@ let loadSpilled (allocation: AllocationResult) (reg: LIR.Reg) (tempReg: LIR.Phys
 let private isX86_64 (arch: Platform.Arch) =
     match arch with Platform.X86_64 -> true | Platform.ARM64 -> false
 
+let private aliasesX86ScratchReg (reg: LIR.PhysReg) : bool =
+    match reg with
+    | LIR.X8 | LIR.X9 | LIR.X10 | LIR.X11 | LIR.X12
+    | LIR.X13 | LIR.X14 | LIR.X15 | LIR.X16 | LIR.X17 -> true
+    | _ -> false
+
 /// On x86_64, when loading two spilled Reg-typed operands, the first must go to a
 /// register that won't be clobbered by the second load (into X12=R11). This function
 /// picks a safe register by checking what physical register the right operand uses.
@@ -2184,14 +2190,17 @@ let private loadSpilledPair (arch: Platform.Arch) (mapping: AllocationResult) (l
             | _ -> false
         if leftIsSpilled && rightIsSpilled then
             // Both spilled: load left into dest, right into X12
-            let destPhys = match destReg with LIR.Physical p -> p | _ -> LIR.X12
+            let destPhys =
+                match destReg with
+                | LIR.Physical p -> p
+                | LIR.Virtual id ->
+                    Crash.crash $"loadSpilledPair: destination vreg {id} was not allocated before x86_64 spill repair"
             // Check that dest doesn't also alias R11
             let leftTemp =
-                if destPhys <> LIR.X11 && destPhys <> LIR.X8 && destPhys <> LIR.X9 && destPhys <> LIR.X10
-                   && destPhys <> LIR.X12 && destPhys <> LIR.X13 && destPhys <> LIR.X14
-                   && destPhys <> LIR.X15 && destPhys <> LIR.X16 && destPhys <> LIR.X17
-                then destPhys
-                else LIR.X12  // fallback - both will be R11, but this is rare
+                if aliasesX86ScratchReg destPhys then
+                    Crash.crash $"loadSpilledPair: destination register {destPhys} aliases x86_64 scratch register R11"
+                else
+                    destPhys
             (loadSpilled mapping left leftTemp, loadSpilled mapping right LIR.X12)
         elif leftIsSpilled then
             // Only left is spilled; the right operand remains in place.
