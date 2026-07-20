@@ -26,6 +26,10 @@ let testAddIndexInPlaceRejectsOutOfRangeIndex () : TestResult =
     let bits = Bitset.empty 1
     expectCrash "addIndexInPlace" (fun () -> Bitset.addIndexInPlace 64 bits)
 
+let testAddRejectsOutOfRangeIndex () : TestResult =
+    let bits = Bitset.empty 0
+    expectCrash "add" (fun () -> Bitset.add 0 bits |> ignore)
+
 let testRemoveIndexInPlaceRejectsOutOfRangeIndex () : TestResult =
     let bits = Bitset.all 64
     expectCrash "removeIndexInPlace" (fun () -> Bitset.removeIndexInPlace 64 bits)
@@ -43,6 +47,7 @@ let testIntersectManyRejectsMismatchedWordCounts () : TestResult =
 
 let tests = [
     ("addIndexInPlace rejects out-of-range index", testAddIndexInPlaceRejectsOutOfRangeIndex)
+    ("add rejects out-of-range index", testAddRejectsOutOfRangeIndex)
     ("removeIndexInPlace rejects out-of-range index", testRemoveIndexInPlaceRejectsOutOfRangeIndex)
     ("singleton rejects out-of-range index", testSingletonRejectsOutOfRangeIndex)
     ("intersectMany rejects mismatched word counts", testIntersectManyRejectsMismatchedWordCounts)

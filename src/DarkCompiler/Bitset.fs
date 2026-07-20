@@ -92,12 +92,10 @@ let addIndexInPlace (idx: int) (bits: Bitset) : unit =
         bits.[wordIdx] <- bits.[wordIdx] ||| (1UL <<< bitIdx)
 
 let add (idx: int) (bits: Bitset) : Bitset =
-    if bits.Length = 0 then
-        bits
-    else
-        let updated = Array.copy bits
-        addIndexInPlace idx updated
-        updated
+    requireIndexInRange "Bitset.add" bits.Length idx
+    let updated = Array.copy bits
+    addIndexInPlace idx updated
+    updated
 
 let removeIndexInPlace (idx: int) (bits: Bitset) : unit =
     requireIndexInRange "Bitset.removeIndexInPlace" bits.Length idx
