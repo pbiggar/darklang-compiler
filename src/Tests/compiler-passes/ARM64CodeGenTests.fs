@@ -101,6 +101,32 @@ let private makeEmptyFunction
         UsedCalleeSaved = []
     }
 
+/// Test: malformed ARM64 CFGs should be reported as codegen errors instead of silently dropping the entry.
+let testReportsMissingEntryBlock () : TestResult =
+    let entryLabel = LIR.Label "_start_entry"
+    let bodyLabel = LIR.Label "_start_body"
+    let bodyBlock : LIR.BasicBlock = {
+        Label = bodyLabel
+        Instrs = []
+        Terminator = LIR.Ret
+    }
+    let func : LIR.Function = {
+        Name = "_start"
+        TypedParams = []
+        CFG = {
+            Entry = entryLabel
+            Blocks = Map.ofList [(bodyLabel, bodyBlock)]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+    let program = LIR.Program ([func], Map.empty, Map.empty)
+
+    match CodeGen.generateARM64 program with
+    | Error e when e.Contains "missing entry block" -> Ok ()
+    | Error e -> Error $"Expected missing entry block error, got '{e}'"
+    | Ok _ -> Error "Expected ARM64 codegen to reject a CFG whose entry block is absent"
+
 let private convertRawAlloc
     (dest: LIR.PhysReg)
     (numBytes: LIR.PhysReg)
@@ -1220,6 +1246,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
             Error "Closure capture boxed-sum bytes payload release did not consume the variant release plan"
 
 let tests : (string * (unit -> TestResult)) list = [
+    ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
     ("ARM64 FLoad encodable constants use immediate", testArm64FLoadEncodableConstantsUseImmediate)
     ("RawAlloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)

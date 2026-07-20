@@ -5783,20 +5783,17 @@ let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (block: LIR.Basic
 /// epilogueLabel: passed through to blocks for Ret handling
 let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64Symbolic.Instr list, string> =
     // Get blocks in a deterministic order (entry first, then Map's label order).
-    let entryBlock =
-        match Map.tryFind cfg.Entry cfg.Blocks with
-        | Some block -> [block]
-        | None -> []
+    match Map.tryFind cfg.Entry cfg.Blocks with
+    | None ->
+        Error $"ARM64 codegen: function {ctx.FunctionName} missing entry block {cfg.Entry}"
+    | Some entryBlock ->
+        let otherBlocks =
+            cfg.Blocks
+            |> Map.toList
+            |> List.filter (fun (label, _) -> label <> cfg.Entry)
+            |> List.map snd
 
-    let otherBlocks =
-        cfg.Blocks
-        |> Map.toList
-        |> List.filter (fun (label, _) -> label <> cfg.Entry)
-        |> List.map snd
-
-    let allBlocks = entryBlock @ otherBlocks
-
-    ResultList.collectResults (convertBlock ctx epilogueLabel) allBlocks
+        ResultList.collectResults (convertBlock ctx epilogueLabel) (entryBlock :: otherBlocks)
 
 /// Generate heap initialization code for _start function
 /// Uses mmap to allocate 512MB of heap space and initializes X27/X28
