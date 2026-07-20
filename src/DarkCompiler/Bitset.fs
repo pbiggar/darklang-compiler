@@ -123,13 +123,7 @@ let diffInPlace (left: Bitset) (right: Bitset) : unit =
 
 let intersects (left: Bitset) (right: Bitset) : bool =
     requireMatchingWordCount "intersection" left right
-    let mutable found = false
-    let mutable i = 0
-    while not found && i < left.Length do
-        if (left.[i] &&& right.[i]) <> 0UL then
-            found <- true
-        i <- i + 1
-    found
+    Array.exists2 (fun leftWord rightWord -> (leftWord &&& rightWord) <> 0UL) left right
 
 let iterIndices (bits: Bitset) (f: int -> unit) : unit =
     for wordIdx in 0 .. bits.Length - 1 do
