@@ -364,6 +364,13 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
         else
             Ok opts
 
+let private sourceFileForDiagnostics (cliOpts: CliOptions) : string =
+    match cliOpts.IsExpression, cliOpts.Argument with
+    | true, _ -> ""
+    | false, Some sourceFile -> sourceFile
+    | false, None ->
+        Crash.crash "sourceFileForDiagnostics: compile/run called without a validated input source"
+
 /// Compile source expression to executable
 let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int =
     let showNormal = shouldShowNormal verbosity
@@ -373,9 +380,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
 
     // Use library for compilation
     let options = buildCompilerOptions cliOpts
-    let sourceFile =
-        if cliOpts.IsExpression then ""
-        else cliOpts.Argument |> Option.defaultValue ""
+    let sourceFile = sourceFileForDiagnostics cliOpts
 
     match CompilerLibrary.buildStdlib () with
     | Error err ->
@@ -428,9 +433,7 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
     // Use library for compile and run
     let options = buildCompilerOptions cliOpts
     let execResult : CompilerLibrary.ExecutionOutput =
-        let sourceFile =
-            if cliOpts.IsExpression then ""
-            else cliOpts.Argument |> Option.defaultValue ""
+        let sourceFile = sourceFileForDiagnostics cliOpts
 
         match CompilerLibrary.buildStdlib () with
         | Error err ->
