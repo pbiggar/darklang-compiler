@@ -1,4 +1,4 @@
-// 7_ARM64_Emit.fs - ARM64 Emission (Encoding + Binary Generation)
+// 7_Emit.fs - ARM64 Emission (Encoding + Binary Generation)
 //
 // Resolves symbolic data labels into literal pools, encodes ARM64 instructions,
 // and produces a platform-specific binary in a single pass.
