@@ -5,8 +5,10 @@
 
 module LIR
 
-/// ARM64 general-purpose registers
-/// X16/X17 are IP0/IP1 scratch registers, X27/X28 are reserved for runtime state.
+/// ARM64 general-purpose registers used in LIR.
+/// X16/X17 are IP0/IP1 scratch registers, X27 is reserved for free-list state,
+/// and X28 is intentionally omitted because it is the target-specific heap bump
+/// pointer rather than an allocatable or spillable LIR register.
 type PhysReg =
     | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 | X8 | X9
     | X10 | X11 | X12 | X13 | X14 | X15 | X16 | X17
