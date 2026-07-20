@@ -459,6 +459,43 @@ let generatePrintInt64NoExit () : ARM64.Instr list =
         ARM64.B (-26)  // Jump to check_zero: 9 - 35 = -26
     ]
 
+/// Generate ARM64 instructions to print uint64 in X0 to stdout with newline (NO EXIT)
+let generatePrintUInt64NoExit () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
+    let syscalls = ARM64.syscallConfigFor os
+    [
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
+        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31us)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X0)
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+        ARM64.STRB (ARM64.X3, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+        ARM64.CBZ_offset (ARM64.X2, 16)
+        ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3)
+        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2)
+        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48us)
+        ARM64.STRB (ARM64.X5, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X4)
+        ARM64.CBNZ_offset (ARM64.X2, -6)
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)
+        ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)
+        ARM64.B 5
+        ARM64.MOVZ (ARM64.X2, 48us, 0)
+        ARM64.STRB (ARM64.X2, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.B -11
+    ]
+
 /// Generate ARM64 instructions to print int64 in X0 to stderr with newline (NO EXIT)
 /// Same as generatePrintInt64NoExit but writes to file descriptor 2
 let generatePrintInt64ToStderrNoExit () : ARM64.Instr list =
@@ -637,6 +674,40 @@ let generatePrintInt64NoNewline () : ARM64.Instr list =
         ARM64.NEG (ARM64.X2, ARM64.X2)
         ARM64.MOVZ (ARM64.X6, 1us, 0)
         ARM64.B (-25)  // Jump to digit_loop at index 8: 8 - 33 = -25
+    ]
+
+/// Generate ARM64 instructions to print uint64 in X0 to stdout WITHOUT newline
+let generatePrintUInt64NoNewline () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
+    let syscalls = ARM64.syscallConfigFor os
+    [
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
+        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 30us)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X0)
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+        ARM64.CBZ_offset (ARM64.X2, 16)
+        ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3)
+        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2)
+        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48us)
+        ARM64.STRB (ARM64.X5, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X4)
+        ARM64.CBNZ_offset (ARM64.X2, -6)
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.ADD_imm (ARM64.X2, ARM64.SP, 31us)
+        ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)
+        ARM64.B 5
+        ARM64.MOVZ (ARM64.X2, 48us, 0)
+        ARM64.STRB (ARM64.X2, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.B -11
     ]
 
 /// Generate ARM64 instructions to print boolean in X0 to stdout WITHOUT newline

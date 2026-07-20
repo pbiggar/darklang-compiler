@@ -111,8 +111,10 @@ type Instr =
     | TailArgMoves of (PhysReg * Operand) list
     | FArgMoves of (PhysFPReg * FReg) list
     | PrintInt64 of Reg
+    | PrintUInt64 of Reg
     | PrintBool of Reg
     | PrintInt64NoNewline of Reg
+    | PrintUInt64NoNewline of Reg
     | PrintBoolNoNewline of Reg
     | PrintFloat of FReg
     | PrintFloatNoNewline of FReg

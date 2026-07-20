@@ -340,6 +340,54 @@ let private genPrintInt64 (srcReg: X86_64.Reg) (addNewline: bool) : X86_64.Instr
         X86_64.Label doneLabel
     ]
 
+/// Generate x86-64 instructions to print an unsigned 64-bit integer to stdout.
+let private genPrintUInt64 (srcReg: X86_64.Reg) (addNewline: bool) : X86_64.Instr list =
+    let loopLabel = freshLabel "utoa_loop"
+    let zeroLabel = freshLabel "utoa_zero"
+    let writeLabel = freshLabel "utoa_write"
+
+    [
+        X86_64.SUB_imm (X86_64.RSP, 32)
+        X86_64.LEA (X86_64.RCX, X86_64.RSP, 31)
+    ]
+    @ (if addNewline then [
+        X86_64.MOV_imm32 (scratch, 10)
+        X86_64.MOV_store_byte (X86_64.RCX, 0, scratch)
+        X86_64.SUB_imm (X86_64.RCX, 1)
+    ] else [])
+    @ [
+        X86_64.MOV_reg (X86_64.R8, srcReg)
+        X86_64.TEST_reg (X86_64.R8, X86_64.R8)
+        X86_64.Jcc (X86_64.EQ, zeroLabel)
+
+        X86_64.Label loopLabel
+        X86_64.MOV_reg (X86_64.RAX, X86_64.R8)
+        X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
+        X86_64.MOV_imm32 (X86_64.RSI, 10)
+        X86_64.DIV X86_64.RSI
+        X86_64.ADD_imm (X86_64.RDX, 48)
+        X86_64.MOV_store_byte (X86_64.RCX, 0, X86_64.RDX)
+        X86_64.SUB_imm (X86_64.RCX, 1)
+        X86_64.MOV_reg (X86_64.R8, X86_64.RAX)
+        X86_64.TEST_reg (X86_64.R8, X86_64.R8)
+        X86_64.Jcc (X86_64.NE, loopLabel)
+        X86_64.JMP writeLabel
+
+        X86_64.Label zeroLabel
+        X86_64.MOV_imm32 (scratch, 48)
+        X86_64.MOV_store_byte (X86_64.RCX, 0, scratch)
+        X86_64.SUB_imm (X86_64.RCX, 1)
+
+        X86_64.Label writeLabel
+        X86_64.ADD_imm (X86_64.RCX, 1)
+        X86_64.LEA (X86_64.RDX, X86_64.RSP, 32)
+        X86_64.SUB_reg (X86_64.RDX, X86_64.RCX)
+        X86_64.MOV_imm32 (X86_64.RDI, 1)
+        X86_64.MOV_reg (X86_64.RSI, X86_64.RCX)
+    ]
+    @ genWriteSyscall
+    @ [X86_64.ADD_imm (X86_64.RSP, 32)]
+
 /// Generate PrintInt64 + exit(0)
 let private genPrintInt64AndExit (srcReg: X86_64.Reg) : X86_64.Instr list =
     genPrintInt64 srcReg true
@@ -2603,9 +2651,17 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
         resolveReg reg
         |> Result.map (fun srcReg -> genPrintInt64 srcReg true)
 
+    | LIR.PrintUInt64 reg ->
+        resolveReg reg
+        |> Result.map (fun srcReg -> genPrintUInt64 srcReg true)
+
     | LIR.PrintInt64NoNewline reg ->
         resolveReg reg
         |> Result.map (fun srcReg -> genPrintInt64 srcReg false)
+
+    | LIR.PrintUInt64NoNewline reg ->
+        resolveReg reg
+        |> Result.map (fun srcReg -> genPrintUInt64 srcReg false)
 
     | LIR.PrintBool reg ->
         resolveReg reg

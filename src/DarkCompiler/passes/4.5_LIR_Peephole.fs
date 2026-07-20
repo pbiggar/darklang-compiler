@@ -603,8 +603,10 @@ let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
         sources |> List.exists (fun (src, _) -> usedInOperand src)
     | Store (_, src)
     | PrintInt64 src
+    | PrintUInt64 src
     | PrintBool src
     | PrintInt64NoNewline src
+    | PrintUInt64NoNewline src
     | PrintBoolNoNewline src
     | PrintHeapStringNoNewline src
     | PrintBytes src

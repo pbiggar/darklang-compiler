@@ -71,8 +71,10 @@ let private extractCallsFromInstr (instr: LIR.Instr) : string list =
         moves |> List.map snd |> extractFromOperands
     | LIR.FArgMoves _
     | LIR.PrintInt64 _
+    | LIR.PrintUInt64 _
     | LIR.PrintBool _
     | LIR.PrintInt64NoNewline _
+    | LIR.PrintUInt64NoNewline _
     | LIR.PrintBoolNoNewline _
     | LIR.PrintFloat _
     | LIR.PrintFloatNoNewline _

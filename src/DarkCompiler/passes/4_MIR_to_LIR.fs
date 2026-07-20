@@ -1024,13 +1024,20 @@ let selectInstr
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             finishPrint (moveToX0 @ [LIR.PrintBool (LIR.Physical LIR.X0)])
         | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
-        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 ->
+        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 ->
             let lirSrc = convertOperand src
             let moveToX0 =
                 match lirSrc with
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             finishPrint (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)])
+        | AST.TUInt64 ->
+            let lirSrc = convertOperand src
+            let moveToX0 =
+                match lirSrc with
+                | LIR.Reg (LIR.Physical LIR.X0) -> []
+                | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
+            finishPrint (moveToX0 @ [LIR.PrintUInt64 (LIR.Physical LIR.X0)])
         | AST.TFloat64 ->
             // Float needs to be in D0 for printing
             match src with
@@ -1082,8 +1089,10 @@ let selectInstr
                     let printInstrs =
                         match elemType with
                         | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
-                        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 ->
+                        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 ->
                             [LIR.PrintInt64NoNewline (LIR.Physical LIR.X0)]
+                        | AST.TUInt64 ->
+                            [LIR.PrintUInt64NoNewline (LIR.Physical LIR.X0)]
                         | AST.TBool ->
                             [LIR.PrintBoolNoNewline (LIR.Physical LIR.X0)]
                         | AST.TFloat64 ->

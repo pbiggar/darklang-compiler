@@ -595,6 +595,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"FArgMoves({movesText})"
     | LIR.PrintInt64 reg ->
         $"PrintInt64({prettyPrintLIRReg reg})"
+    | LIR.PrintUInt64 reg ->
+        $"PrintUInt64({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
         $"PrintBool({prettyPrintLIRReg reg})"
     | LIR.PrintFloat freg ->
@@ -610,6 +612,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintBytes({prettyPrintLIRReg reg})"
     | LIR.PrintInt64NoNewline reg ->
         $"PrintIntNoNewline({prettyPrintLIRReg reg})"
+    | LIR.PrintUInt64NoNewline reg ->
+        $"PrintUInt64NoNewline({prettyPrintLIRReg reg})"
     | LIR.PrintBoolNoNewline reg ->
         $"PrintBoolNoNewline({prettyPrintLIRReg reg})"
     | LIR.PrintFloatNoNewline freg ->

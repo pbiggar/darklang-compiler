@@ -78,6 +78,44 @@ let private emitsPlannedListHelperLabel (instrs: ARM64Symbolic.Instr list) : boo
         | _ ->
             false)
 
+let private uint64ZeroBranchTargetsDigit (instrs: ARM64.Instr list) : bool =
+    instrs
+    |> List.mapi (fun index instr -> index, instr)
+    |> List.tryPick (fun (index, instr) ->
+        match instr with
+        | ARM64.CBZ_offset (ARM64.X2, offset) -> Some (index + offset)
+        | _ -> None)
+    |> Option.bind (fun targetIndex -> List.tryItem targetIndex instrs)
+    |> Option.exists (function
+        | ARM64.MOVZ (ARM64.X2, 48us, 0) -> true
+        | _ -> false)
+
+let testPrintUInt64RuntimeZeroBranches () : TestResult =
+    let withNewline = Runtime.generatePrintUInt64NoExit ()
+    let withoutNewline = Runtime.generatePrintUInt64NoNewline ()
+
+    if not (uint64ZeroBranchTargetsDigit withNewline) then
+        Error "ARM64 UInt64 newline printer zero branch does not target the zero digit handler"
+    else if not (uint64ZeroBranchTargetsDigit withoutNewline) then
+        Error "ARM64 UInt64 no-newline printer zero branch does not target the zero digit handler"
+    else
+        Ok ()
+
+let testPrintUInt64RuntimePreservesNewline () : TestResult =
+    let preservesNewline =
+        Runtime.generatePrintUInt64NoExit ()
+        |> List.windowed 3
+        |> List.exists (function
+            | [ ARM64.MOVZ (ARM64.X3, 10us, 0)
+                ARM64.STRB (ARM64.X3, ARM64.X1, 0)
+                ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us) ] -> true
+            | _ -> false)
+
+    if preservesNewline then
+        Ok ()
+    else
+        Error "ARM64 UInt64 newline printer does not move the digit cursor before conversion"
+
 let private makeEmptyFunction
     (name: string)
     (typedParams: LIR.TypedLIRParam list)
@@ -1248,6 +1286,8 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
 let tests : (string * (unit -> TestResult)) list = [
     ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
+    ("ARM64 UInt64 runtime zero branches target digit handlers", testPrintUInt64RuntimeZeroBranches)
+    ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)
     ("ARM64 FLoad encodable constants use immediate", testArm64FLoadEncodableConstantsUseImmediate)
     ("RawAlloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)

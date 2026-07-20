@@ -441,8 +441,8 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         let closureVReg = regToVReg closure |> Option.toList
         let argsVRegs = args |> List.choose operandToVReg
         closureVReg @ argsVRegs
-    | LIR.PrintInt64 reg | LIR.PrintBool reg
-    | LIR.PrintInt64NoNewline reg | LIR.PrintBoolNoNewline reg
+    | LIR.PrintInt64 reg | LIR.PrintUInt64 reg | LIR.PrintBool reg
+    | LIR.PrintInt64NoNewline reg | LIR.PrintUInt64NoNewline reg | LIR.PrintBoolNoNewline reg
     | LIR.PrintHeapStringNoNewline reg | LIR.PrintList (reg, _)
     | LIR.PrintSum (reg, _) | LIR.PrintRecord (reg, _, _) ->
         regToVReg reg |> Option.toList
@@ -2674,6 +2674,10 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.PrintInt64 regFinal]
 
+    | LIR.PrintUInt64 reg ->
+        let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.PrintUInt64 regFinal]
+
     | LIR.PrintBool reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.PrintBool regFinal]
@@ -2681,6 +2685,10 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
     | LIR.PrintInt64NoNewline reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.PrintInt64NoNewline regFinal]
+
+    | LIR.PrintUInt64NoNewline reg ->
+        let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.PrintUInt64NoNewline regFinal]
 
     | LIR.PrintBoolNoNewline reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12

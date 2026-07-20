@@ -3003,6 +3003,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         let elemPrintCode =
             match elemType with
             | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
+            | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
             | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
             | AST.TFloat64 ->
                 // Need to move from X0 to D0 for float
@@ -3052,6 +3053,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                         let printElem =
                             match eType with
                             | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
+                            | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
                             | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
                             | AST.TFloat64 ->
                                 [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
@@ -3494,6 +3496,15 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             else
                 runtimeInstrs (Runtime.generatePrintInt64NoNewline ()))
 
+    | LIR.PrintUInt64NoNewline reg ->
+        // Print unsigned integer without newline (for tuple elements)
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            if regARM64 <> ARM64Symbolic.X0 then
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
+            else
+                runtimeInstrs (Runtime.generatePrintUInt64NoNewline ()))
+
     | LIR.PrintBoolNoNewline reg ->
         // Print boolean without newline (for tuple elements)
         lirRegToARM64Reg reg
@@ -3601,6 +3612,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                             let printPayloadValue =
                                 match pType with
                                 | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
+                                | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
                                 | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
                                 | AST.TFloat64 ->
                                     [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
@@ -3709,6 +3721,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     let printValue =
                         match fieldType with
                         | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
+                        | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
                         | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
                         | AST.TFloat64 ->
                             [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
@@ -4171,6 +4184,15 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintInt64NoExit ())
             else
                 runtimeInstrs (Runtime.generatePrintInt64NoExit ()))
+
+    | LIR.PrintUInt64 reg ->
+        // Value to print should be in X0 (no exit)
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            if regARM64 <> ARM64Symbolic.X0 then
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintUInt64NoExit ())
+            else
+                runtimeInstrs (Runtime.generatePrintUInt64NoExit ()))
 
     | LIR.Exit ->
         // Exit program with code 0
