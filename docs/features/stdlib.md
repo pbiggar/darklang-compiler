@@ -21,6 +21,7 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.UInt32` | 32-bit unsigned integer operations |
 | `Stdlib.UInt64` | 64-bit unsigned integer operations |
 | `Stdlib.Bool` | Boolean operations |
+| `Stdlib.Builtin` | Builtin helper functions |
 | `Stdlib.Float` | Floating-point operations |
 | `Stdlib.String` | String manipulation |
 | `Stdlib.List` | List operations |
@@ -28,10 +29,18 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.Result` | Error handling |
 | `Stdlib.Tuple2/3` | Tuple operations |
 | `Stdlib.Dict` | Hash map (HAMT) |
+| `Stdlib.Bytes` | Byte array operations |
+| `Stdlib.Char` | Character helpers |
+| `Stdlib.Crypto` | Hashing and HMAC helpers |
+| `Stdlib.Base64` | Base64 encoding and decoding |
+| `Stdlib.AWS` | AWS signing helpers |
 | `Stdlib.File` | File I/O |
 | `Stdlib.Path` | Path operations |
 | `Stdlib.Platform` | Platform detection |
 | `Stdlib.Random` | Random numbers |
+| `Stdlib.Date` / `Stdlib.DateTime` | Date/time operations |
+| `Stdlib.Math` | Math helpers |
+| `Stdlib.Uuid` | UUID helpers |
 
 ## Implementation Types
 
@@ -155,7 +164,7 @@ Uses platform-specific random source:
 ## How Stdlib is Included
 
 1. **Compilation start**: Load intrinsic module signatures from `Stdlib.fs`
-   and Dark stdlib source files from `src/DarkCompiler/stdlib/`
+   and the ordered Dark stdlib source files from `src/DarkCompiler/stdlib/`
 2. **Parse**: Parse stdlib definitions
 3. **Combine**: Merge with user program
 4. **Type check**: Stdlib + user code together
@@ -183,7 +192,7 @@ Creates `Stdlib.List.map_i64_String` specialized function.
 
 ## Adding New Stdlib Functions
 
-1. **Dark function**: Add to `stdlib.dark`
+1. **Dark function**: Add to the appropriate file in `src/DarkCompiler/stdlib/`
 2. **Intrinsic**: Add to `Stdlib.fs` + implement in codegen
 
 See `docs/adding-features.md` for details.
