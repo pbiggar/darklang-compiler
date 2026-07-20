@@ -180,6 +180,30 @@ let testElfWriteToFileReturnsErrorForInvalidPath () : TestResult =
         else
             Ok ()
 
+let testCreateExecutableWithCoverageIncludesCoverageSection () : TestResult =
+    let binary =
+        createExecutableWithCoverage [0xD65F03C0u] LiteralPool.emptyStringPool LiteralPool.emptyFloatPool 3 false
+
+    let textSegmentOffset = 32 + 72
+    let textSegmentNumSectionsOffset = 64
+    let numSections =
+        readUInt32LE binary (textSegmentOffset + textSegmentNumSectionsOffset)
+
+    if numSections <> 2u then
+        Error $"Expected coverage binary to include __text and __const sections, got {numSections} sections"
+    else
+        let firstSectionOffset = textSegmentOffset + 72
+        let secondSectionOffset = firstSectionOffset + 80
+        let sectionSizeField = 40
+        let constSectionSize =
+            readUInt32LE binary (secondSectionOffset + sectionSizeField)
+            |> int
+
+        if constSectionSize < 24 then
+            Error $"Expected __const section to include 24 coverage bytes, got {constSectionSize}"
+        else
+            Ok ()
+
 let testCompleteEncodingPipeline () : TestResult =
     // Test the complete pipeline: instructions -> encoding -> binary
     let movInstr = MOVZ (X0, 42us, 0)
@@ -230,6 +254,7 @@ let tests = [
     ("createExecutable contains code", testCreateExecutableContainsCode)
     ("Mach-O __const section offset points to aligned data", testMachOConstSectionOffsetPointsToAlignedData)
     ("ELF writeToFile returns Error for invalid path", testElfWriteToFileReturnsErrorForInvalidPath)
+    ("createExecutableWithCoverage includes coverage section", testCreateExecutableWithCoverageIncludesCoverageSection)
     ("complete encoding pipeline", testCompleteEncodingPipeline)
     ("writeToFile returns Error for invalid path", testWriteToFileReturnsErrorForInvalidPath)
 ]

@@ -305,33 +305,15 @@ let createStringData (stringPool: LiteralPool.StringPool) : byte array * Map<str
         let allBytes = segmentsRev |> List.rev |> Array.concat
         (allBytes, labelMap)
 
-/// Create a Mach-O executable with float and string data
-let createExecutableWithPools
+/// Create a Mach-O executable with already-laid-out constant data.
+let private createExecutableWithDataBytes
     (machineCode: uint32 list)
-    (stringPool: LiteralPool.StringPool)
-    (floatPool: LiteralPool.FloatPool)
+    (dataBytes: byte array)
     (enableLeakCheck: bool)
     : byte array =
     let codeBytes =
         machineCodeToBytes machineCode
 
-    // Create float data (goes after code, before strings)
-    let floatBytes =
-        createFloatData floatPool
-
-    // Create string data
-    let (stringBytes, _stringLabelMap) =
-        createStringData stringPool
-
-    let dataBytes =
-        let floatAndStringBytes = Array.append floatBytes stringBytes
-        let leakBytes = if enableLeakCheck then Array.create 8 0uy else [||]
-        let leakStart = ((floatAndStringBytes.Length + 7) / 8) * 8
-        let leakPadding = Array.create (leakStart - floatAndStringBytes.Length) 0uy
-        if enableLeakCheck then
-            Array.concat [floatAndStringBytes; leakPadding; leakBytes]
-        else
-            floatAndStringBytes
     let hasData = dataBytes.Length > 0
 
     let codeSize = uint64 codeBytes.Length
@@ -555,10 +537,37 @@ let createExecutableWithPools
         BuildVersionCommand = buildVersionCommand
         MainCommand = mainCommand
         MachineCode = codeBytes
-        StringData = dataBytes  // Contains floats + strings
+        StringData = dataBytes
     }
 
     serializeMachO binary
+
+/// Create a Mach-O executable with float and string data
+let createExecutableWithPools
+    (machineCode: uint32 list)
+    (stringPool: LiteralPool.StringPool)
+    (floatPool: LiteralPool.FloatPool)
+    (enableLeakCheck: bool)
+    : byte array =
+    // Create float data (goes after code, before strings)
+    let floatBytes =
+        createFloatData floatPool
+
+    // Create string data
+    let (stringBytes, _stringLabelMap) =
+        createStringData stringPool
+
+    let dataBytes =
+        let floatAndStringBytes = Array.append floatBytes stringBytes
+        let leakBytes = if enableLeakCheck then Array.create 8 0uy else [||]
+        let leakStart = ((floatAndStringBytes.Length + 7) / 8) * 8
+        let leakPadding = Array.create (leakStart - floatAndStringBytes.Length) 0uy
+        if enableLeakCheck then
+            Array.concat [floatAndStringBytes; leakPadding; leakBytes]
+        else
+            floatAndStringBytes
+
+    createExecutableWithDataBytes machineCode dataBytes enableLeakCheck
 
 /// Create a Mach-O executable with string data (legacy wrapper for backwards compatibility)
 let createExecutableWithStrings (machineCode: uint32 list) (stringPool: LiteralPool.StringPool) : byte array =
@@ -601,9 +610,8 @@ let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: Literal
         else
             Array.concat [floatAndStringBytes; coveragePadding; coverageBytes]
 
-    // For now, use the existing creation logic but with extended data
     // This is a simplified approach - proper coverage on macOS needs __DATA segment
-    createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
+    createExecutableWithDataBytes machineCode allDataBytes enableLeakCheck
 
 let private tryWriteAllBytes (path: string) (bytes: byte array) : Result<unit, string> =
     try
