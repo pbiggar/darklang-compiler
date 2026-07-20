@@ -3642,10 +3642,10 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
 
             let totalVariantCodeLen = List.sum blockLengths
 
-            let variantBlocksWithBranches, _ =
+            let variantCode =
                 variants
-                |> List.mapi (fun i variant -> i, variant)
-                |> List.mapFold (fun currentPos (i, (_, tag, _)) ->
+                |> List.mapi (fun i (_, tag, _) -> i, tag)
+                |> List.mapFold (fun currentPos (i, tag) ->
                     let (printName, printPayload) = variantBlocks.[i]
                     let blockLen = 2 + List.length printName + List.length printPayload + 1
                     // B.NE is at position 1, next block CMP is at position blockLen
@@ -3660,8 +3660,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     [cmpInstr; branchNeInstr] @ printName @ printPayload @ [branchEndInstr],
                     currentPos + blockLen)
                     0
-
-            let variantCode = variantBlocksWithBranches |> List.concat
+                |> fst
+                |> List.concat
 
             setup @ variantCode @ printNewline)
 
