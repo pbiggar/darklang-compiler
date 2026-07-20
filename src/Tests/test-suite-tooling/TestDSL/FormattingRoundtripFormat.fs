@@ -47,46 +47,40 @@ let parseFormattingRoundtripFile (path: string) : Result<FormattingRoundtripCase
         Error $"Formatting roundtrip file not found: {path}"
     else
         let lines = File.ReadAllLines(path)
-        let parseLine (i: int) (line: string) : Result<FormattingRoundtripCase option, string> =
+        let collectLine
+            (tests, errors)
+            (i: int)
+            (line: string)
+            : FormattingRoundtripCase list * string list =
             let lineNumber = i + 1
             let trimmed = line.Trim()
 
             if trimmed.Length > 0 && not (trimmed.StartsWith("//")) then
                 let source, displayNameOpt = splitLineComment line
                 if String.IsNullOrWhiteSpace source then
-                    Error $"Line {lineNumber}: missing expression before comment"
+                    (tests, $"Line {lineNumber}: missing expression before comment" :: errors)
                 else
                     let displayName = displayNameOpt |> Option.defaultValue source
-                    Ok (
-                        Some {
+                    (
+                        {
                             Name = $"L{lineNumber}: {displayName}"
                             Source = source
                             SourceFile = path
-                        }
+                        } :: tests,
+                        errors
                     )
             else
-                Ok None
+                (tests, errors)
 
-        let parsedLines =
+        let (tests, errors) =
             lines
-            |> Array.mapi parseLine
-            |> Array.toList
-
-        let tests =
-            parsedLines
-            |> List.choose (fun result ->
-                match result with
-                | Ok (Some testCase) -> Some testCase
-                | _ -> None)
-
-        let errors =
-            parsedLines
-            |> List.choose (fun result ->
-                match result with
-                | Error error -> Some error
-                | _ -> None)
+            |> Array.indexed
+            |> Array.fold (fun state (i, line) -> collectLine state i line) ([], [])
 
         if List.isEmpty errors then
-            Ok tests
+            Ok (List.rev tests)
         else
-            Error (String.concat "\n" errors)
+            errors
+            |> List.rev
+            |> String.concat "\n"
+            |> Error
