@@ -318,6 +318,20 @@ def Stdlib.List.toDisplayString_i64(list: List<Int64>) : String =
     let strs = Stdlib.List.__int64sToStrings(list, Stdlib.__FingerTree.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
+def Stdlib.List.__i64ListsToStrings(list: List<List<Int64>>, acc: List<String>) : List<String> =
+    if Stdlib.__FingerTree.isEmpty<List<Int64>>(list) then acc
+    else
+        match Stdlib.__FingerTree.head<List<Int64>>(list) with
+        | None -> acc
+        | Some(h) ->
+            let s = Stdlib.List.toDisplayString_i64(h) in
+            let newAcc = Stdlib.__FingerTree.pushBack<String>(acc, s) in
+            Stdlib.List.__i64ListsToStrings(Stdlib.__FingerTree.tail<List<Int64>>(list), newAcc)
+
+def Stdlib.List.toDisplayString_list_i64(list: List<List<Int64>>) : String =
+    let strs = Stdlib.List.__i64ListsToStrings(list, Stdlib.__FingerTree.empty<String>()) in
+    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+
 // Helper to build string list from String list (with double quotes for display)
 def Stdlib.List.__stringsToStrings(list: List<String>, acc: List<String>) : List<String> =
     if Stdlib.__FingerTree.isEmpty<String>(list) then acc

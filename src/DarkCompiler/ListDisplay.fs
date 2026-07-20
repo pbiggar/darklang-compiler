@@ -12,6 +12,7 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TString -> Some "Stdlib.List.toDisplayString_str"
     | AST.TChar -> Some "Stdlib.List.toDisplayString_char"
     | AST.TFloat64 -> Some "Stdlib.List.toDisplayString_f64"
+    | AST.TList AST.TInt64 -> Some "Stdlib.List.toDisplayString_list_i64"
     | AST.TInt8
     | AST.TInt16
     | AST.TInt32

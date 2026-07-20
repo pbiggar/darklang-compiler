@@ -12,6 +12,23 @@ open ANF
 let unsupportedListDisplay (elemType: AST.Type) : 'a =
     Crash.crash $"Unsupported list result display element type: {TypeChecking.typeToString elemType}"
 
+let private metadataForPrintRelease (valueType: AST.Type) : ANF.RcMetadata =
+    {
+        ReleasePlan = Some (ANF.rcReleasePlanOfType Map.empty valueType)
+        SourceType = Some valueType
+    }
+
+let private releasePrintedRoot (atom: Atom) (valueType: AST.Type) (body: AExpr) (varGen: VarGen) : AExpr * VarGen =
+    match ANF.rcShapeReleaseOperation (ANF.rcShapeOfType Map.empty valueType) with
+    | Some (ANF.FixedSizeRoot (payloadSize, kind)) ->
+        let (releaseTmp, varGen') = freshVar varGen
+        let releaseExpr = RefCountDec (atom, payloadSize, kind, Some (metadataForPrintRelease valueType))
+        (Let (releaseTmp, releaseExpr, body), varGen')
+    | Some ANF.DynamicStringBuffer
+    | Some ANF.DynamicBytesBuffer
+    | None ->
+        (body, varGen)
+
 /// Wrap the return value with a Print instruction
 /// Transforms: Return atom  →  Let (_, Print (atom, type), Return atom)
 /// For list types, generates: Call toDisplayString, then Print the string
@@ -50,12 +67,14 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             match ListDisplay.getDisplayStringFunc elemType with
             | Some toDisplayStringName ->
                 // Generate: let strTmp = Call(toDisplayString, [list]) in
-                //           let _ = Print(strTmp, String) in Return atom
+                //           let _ = Print(strTmp, String) in release list; Return atom
                 let (strTmp, varGen1) = freshVar varGen
                 let (printTmp, varGen2) = freshVar varGen1
+                let (returnWithRelease, varGen3) =
+                    releasePrintedRoot atom printType (Return atom) varGen2
                 let callExpr = Call (toDisplayStringName, [atom])
                 let printExpr = Print (Var strTmp, AST.TString)
-                (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
+                (Let (strTmp, callExpr, Let (printTmp, printExpr, returnWithRelease)), varGen3)
             | None ->
                 unsupportedListDisplay elemType
         | AST.TFloat64 ->

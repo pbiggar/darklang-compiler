@@ -20,6 +20,9 @@ match [] with | [] -> true | [x] -> x | _ -> false = true
 // Empty list should not erase element types when cons'ing tuples
 let xs = [] in let ys = [("hi", "there"), ...xs] in match ys with | [(a, b)] -> a ++ b | [] -> "" = "hithere"
 
+// Nested Int64 list display should format inner lists, not read inner list pointers as integers.
+[[1, 2], [3, 4]] = stdout="[[1, 2], [3, 4]]\n" stderr=""
+
 // === Single Element List ===
 
 // Single element list
