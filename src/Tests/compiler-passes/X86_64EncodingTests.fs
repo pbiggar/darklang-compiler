@@ -31,6 +31,19 @@ let testMovImm32 () : Result<unit, string> =
     // MOV RAX, 42 → REX.W C7 /0 imm32
     assertEncoding "MOV RAX,42" (MOV_imm32 (RAX, 42)) [| 0x48uy; 0xC7uy; 0xC0uy; 0x2Auy; 0x00uy; 0x00uy; 0x00uy |]
 
+let testMemoryAddressing () : Result<unit, string> =
+    // MOV RAX, [RSP] → REX.W 8B /r with SIB for RSP base
+    assertEncoding "MOV RAX,[RSP]" (MOV_load (RAX, RSP, 0)) [| 0x48uy; 0x8Buy; 0x04uy; 0x24uy |]
+    |> Result.bind (fun () ->
+        // MOV [R12], RAX → REX.WB 89 /r with SIB for R12 base
+        assertEncoding "MOV [R12],RAX" (MOV_store (R12, 0, RAX)) [| 0x49uy; 0x89uy; 0x04uy; 0x24uy |])
+    |> Result.bind (fun () ->
+        // LEA RAX, [RBP] must use disp8=0 because mod=00 r/m=101 means RIP-relative
+        assertEncoding "LEA RAX,[RBP]" (LEA (RAX, RBP, 0)) [| 0x48uy; 0x8Duy; 0x45uy; 0x00uy |])
+    |> Result.bind (fun () ->
+        // MOV RAX, [R13] has the same disp8=0 rule as RBP plus REX.B
+        assertEncoding "MOV RAX,[R13]" (MOV_load (RAX, R13, 0)) [| 0x49uy; 0x8Buy; 0x45uy; 0x00uy |])
+
 let testAddSubImm () : Result<unit, string> =
     // ADD RSP, 8 → REX.W 83 /0 ib
     assertEncoding "ADD RSP,8" (ADD_imm (RSP, 8)) [| 0x48uy; 0x83uy; 0xC4uy; 0x08uy |]
@@ -92,6 +105,7 @@ let testMemoryOperands () : Result<unit, string> =
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("MOV reg,reg", testMovRegReg)
     ("MOV reg,imm32", testMovImm32)
+    ("Memory addressing", testMemoryAddressing)
     ("ADD/SUB imm", testAddSubImm)
     ("PUSH/POP", testPushPop)
     ("Simple instructions", testSimpleInstructions)
