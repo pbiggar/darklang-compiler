@@ -419,7 +419,10 @@ let buildReturnTypeReg
         : Map<string, AST.Type> =
         match queue with
         | [] -> currentReg
-        | _ when stepsRemaining <= 0 -> currentReg
+        | _ when stepsRemaining <= 0 ->
+            let remainingFunctions = System.String.Join(", ", queue)
+            Crash.crash
+                $"ANF_to_MIR: return type inference did not converge after {maxSteps} steps; remaining functions: {remainingFunctions}"
         | funcName :: rest ->
             let queued' = Set.remove funcName queued
             match Map.tryFind funcName funcByName with
