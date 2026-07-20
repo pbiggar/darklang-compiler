@@ -175,21 +175,16 @@ let rec detectTailCalls
         if inTailPosition && isCallExpr cexpr && isReturnOf tempId body then
             // This is a tail call! Convert the call to tail call variant
             let tailCall = convertToTailCall cexpr
-            match tailCall with
-            | TailCall _ ->
-                // Execute movable cleanup decs before the tailcall. Any dec left
-                // after a tailcall would be unreachable; if cleanup overlaps with a
-                // tail argument, keep a normal call to preserve the post-call unwind work.
-                let tailArgTemps = tailCallArgTempIds aliasRoots tailCall
-                let (movableDecs, remainingBody) = collectMovableDecPrefix aliasRoots tailArgTemps body
-                if isDirectReturnOf tempId remainingBody then
-                    wrapBindings movableDecs (Let (tempId, tailCall, remainingBody))
-                else
-                    let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
-                    let body' = detectTailCalls currentFuncName inTailPosition aliasRoots' body
-                    Let (tempId, cexpr, body')
-            | _ ->
-                Let (tempId, tailCall, body)
+            let tailArgTemps = tailCallArgTempIds aliasRoots tailCall
+            let (movableDecs, remainingBody) = collectMovableDecPrefix aliasRoots tailArgTemps body
+            if isDirectReturnOf tempId remainingBody then
+                wrapBindings movableDecs (Let (tempId, tailCall, remainingBody))
+            else
+                // Cleanup remains after the call (typically overlap with a tail argument),
+                // so keep a normal call to preserve the post-call unwind work.
+                let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
+                let body' = detectTailCalls currentFuncName inTailPosition aliasRoots' body
+                Let (tempId, cexpr, body')
         else
             // Not a tail call - recurse into body
             // Body is in tail position if current expression is
