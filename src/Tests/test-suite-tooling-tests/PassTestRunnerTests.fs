@@ -95,6 +95,19 @@ let testANFParserRejectsOutOfRangeTempId () : TestResult =
     | Error msg -> Error $"Expected invalid temp id error, got: {msg}"
     | Ok tempId -> Error $"Expected parseTempId to reject out-of-range temp id, got: {tempId}"
 
+let testANFParserRejectsTrailingLinesAfterReturn () : TestResult =
+    let text =
+        [
+            "return 1"
+            "let t0 = 2 + 3"
+        ]
+        |> String.concat "\n"
+
+    match parseANF text with
+    | Error msg when msg.Contains("after return") -> Ok ()
+    | Error msg -> Error $"Expected trailing line error after return, got: {msg}"
+    | Ok _ -> Error "Expected parseANF to reject trailing lines after return"
+
 let testLIRParserRejectsOutOfRangeNumericFields () : TestResult =
     let cases =
         [
@@ -242,6 +255,7 @@ let tests = [
     ("MIR parser rejects out-of-range virtual register", testMIRParserRejectsOutOfRangeVirtualRegister)
     ("MIR parser accepts negative move literal", testMIRParserAcceptsNegativeMoveLiteral)
     ("ANF parser rejects out-of-range temp id", testANFParserRejectsOutOfRangeTempId)
+    ("ANF parser rejects trailing lines after return", testANFParserRejectsTrailingLinesAfterReturn)
     ("LIR parser rejects out-of-range numeric fields", testLIRParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)

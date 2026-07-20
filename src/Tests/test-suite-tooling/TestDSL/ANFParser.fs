@@ -79,9 +79,12 @@ let rec parseAExpr (lineNum: int) (lines: string list) : Result<AExpr, string> =
         // Try return pattern: "return t0"
         let retMatch = Regex.Match(line, @"^return\s+(.+)$")
         if retMatch.Success then
-            match parseAtom retMatch.Groups.[1].Value with
-            | Ok atom -> Ok (Return atom)
-            | Error e -> Error $"Line {lineNum}: {e}"
+            match rest with
+            | _ :: _ -> Error $"Line {lineNum + 1}: Unexpected line after return"
+            | [] ->
+                match parseAtom retMatch.Groups.[1].Value with
+                | Ok atom -> Ok (Return atom)
+                | Error e -> Error $"Line {lineNum}: {e}"
         else
             // Try let pattern: "let t0 = 3 + 4"
             let letMatch = Regex.Match(line, @"^let\s+(t\d+)\s*=\s*(.+)$")
