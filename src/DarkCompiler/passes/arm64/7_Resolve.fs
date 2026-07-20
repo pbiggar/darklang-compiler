@@ -1,4 +1,4 @@
-// 7_ARM64_Resolve.fs - ARM64 Symbolic Resolution
+// 7_ARM64_Resolve.fs - ARM64 symbolic literal-pool collection
 //
 // Collects literal pools for symbolic string and float label references before
 // ARM64 encoding assigns concrete offsets.
