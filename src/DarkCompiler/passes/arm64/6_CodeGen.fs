@@ -3630,16 +3630,10 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             // Calculate end label offset from each variant block
             // We'll build the code and calculate offsets manually
 
-            // Print newline at end
             let printNewline = printLiteral "\n"
-            let endBlockLen = List.length printNewline
 
             // Build variant blocks with branching
             // For each variant: CMP(1) + B.NE(1) + name + payload + B(1) to end
-            let mutable codeBlocks : ARM64Symbolic.Instr list list = []
-            let mutable cumulativeOffset = 0
-
-            // First pass: calculate total length to know where "end" is
             let blockLengths =
                 variants
                 |> List.mapi (fun i (_, _tag, _) ->
@@ -3647,27 +3641,27 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     2 + List.length printName + List.length printPayload + 1)  // CMP + B.NE + name + payload + B
 
             let totalVariantCodeLen = List.sum blockLengths
-            let endOffset = totalVariantCodeLen + endBlockLen
 
-            // Second pass: build actual code with correct offsets
-            let mutable currentPos = 0
-            let variantCode =
+            let variantBlocksWithBranches, _ =
                 variants
-                |> List.mapi (fun i (_, tag, _) ->
+                |> List.mapi (fun i variant -> i, variant)
+                |> List.mapFold (fun currentPos (i, (_, tag, _)) ->
                     let (printName, printPayload) = variantBlocks.[i]
                     let blockLen = 2 + List.length printName + List.length printPayload + 1
                     // B.NE is at position 1, next block CMP is at position blockLen
                     // So offset = blockLen - 1 (forward jump from B.NE to next CMP)
                     let nextBlockOffset = blockLen - 1
                     let endFromHere = totalVariantCodeLen - currentPos - blockLen + 1  // Jump to after all variant blocks
-                    currentPos <- currentPos + blockLen
 
                     let cmpInstr = ARM64Symbolic.CMP_imm (ARM64Symbolic.X20, uint16 tag)
                     let branchNeInstr = ARM64Symbolic.B_cond (ARM64Symbolic.NE, nextBlockOffset)  // Skip this variant's code
                     let branchEndInstr = ARM64Symbolic.B endFromHere  // Jump to end (after all variant code)
 
-                    [cmpInstr; branchNeInstr] @ printName @ printPayload @ [branchEndInstr])
-                |> List.concat
+                    [cmpInstr; branchNeInstr] @ printName @ printPayload @ [branchEndInstr],
+                    currentPos + blockLen)
+                    0
+
+            let variantCode = variantBlocksWithBranches |> List.concat
 
             setup @ variantCode @ printNewline)
 
