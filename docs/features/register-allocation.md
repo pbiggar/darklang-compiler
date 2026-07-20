@@ -165,14 +165,22 @@ The allocator prefers to eliminate redundant moves:
 ## Key Data Structures
 
 ```fsharp
+type VRegDomain = {
+    Ids: int array                    // Dense VReg id domain
+    IndexOf: int array                // Dense lookup table for VReg id -> domain index
+    IndexOffset: int                  // Offset applied to IndexOf lookups
+    WordCount: int                    // Bitset word count for this domain
+}
+
 type AllocationResult = {
-    Mapping: Map<int, Allocation>     // VRegId -> register or stack slot
+    Domain: VRegDomain                // Dense domain shared by allocation arrays
+    Allocations: Allocation option array // Domain index -> register or stack slot
     StackSize: int                     // Total stack frame size
-    UsedCalleeSaved: PhysReg list      // Callee-saved regs to save/restore
+    UsedCalleeSaved: LIR.PhysReg list  // Callee-saved regs to save/restore
 }
 
 type Allocation =
-    | PhysReg of PhysReg
+    | PhysReg of LIR.PhysReg
     | StackSlot of int                 // Negative offset from frame pointer
 
 type LiveInterval = {
@@ -194,11 +202,11 @@ type LiveInterval = {
 
 | File | Purpose |
 |------|---------|
-| `5_RegisterAllocation.fs:85-400` | Liveness analysis |
-| `5_RegisterAllocation.fs:743-906` | Interference graph construction |
-| `5_RegisterAllocation.fs:907-951` | Maximum Cardinality Search (PEO) |
-| `5_RegisterAllocation.fs:952-1092` | Greedy coloring with coalescing preferences |
-| `5_RegisterAllocation.fs:1093-1140` | Main chordal allocation entry points |
+| `5_RegisterAllocation.fs` | Liveness analysis |
+| `5_RegisterAllocation.fs` | Interference graph construction |
+| `5_RegisterAllocation.fs` | Maximum Cardinality Search (PEO) |
+| `5_RegisterAllocation.fs` | Greedy coloring with coalescing preferences |
+| `5_RegisterAllocation.fs` | Main chordal allocation entry points |
 
 ## Tests
 
