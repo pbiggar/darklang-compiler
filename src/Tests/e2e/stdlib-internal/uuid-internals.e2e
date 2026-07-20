@@ -1,0 +1,5 @@
+// Stdlib.Uuid internal helper tests
+//
+// Internal UUID helpers should make invalid impossible states visible.
+
+Stdlib.Uuid.__nibbleToHex(16) = error="Uncaught exception: Invalid UUID hex nibble"
