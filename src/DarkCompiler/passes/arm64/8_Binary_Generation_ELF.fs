@@ -290,11 +290,23 @@ let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: Literal
     createBinary codeBytes dataBytes (Binary_ELF.PF_R ||| Binary_ELF.PF_W ||| Binary_ELF.PF_X)
     |> serializeElf
 
+let private tryWriteAllBytes (path: string) (bytes: byte array) : Result<unit, string> =
+    try
+        System.IO.File.WriteAllBytes(path, bytes)
+        Ok ()
+    with ex ->
+        Error $"Failed to write ELF executable to {path}: {ex.Message}"
+
+let private tryAddUserExecute (path: string) : Result<unit, string> =
+    try
+        let permissions = System.IO.File.GetUnixFileMode(path)
+        System.IO.File.SetUnixFileMode(path, permissions ||| System.IO.UnixFileMode.UserExecute)
+        Ok ()
+    with ex ->
+        Error $"Failed to make ELF executable {path}: {ex.Message}"
+
 /// Write bytes to file (Linux - no code signing needed)
 let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =
-    System.IO.File.WriteAllBytes(path, bytes)
-    // Make executable using Unix file mode
-    let permissions = System.IO.File.GetUnixFileMode(path)
-    System.IO.File.SetUnixFileMode(path, permissions ||| System.IO.UnixFileMode.UserExecute)
-    // No code signing needed on Linux!
-    Ok ()
+    match tryWriteAllBytes path bytes with
+    | Error err -> Error err
+    | Ok () -> tryAddUserExecute path

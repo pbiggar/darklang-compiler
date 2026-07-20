@@ -164,6 +164,22 @@ let testMachOConstSectionOffsetPointsToAlignedData () : TestResult =
     else
         Ok ()
 
+let testElfWriteToFileReturnsErrorForInvalidPath () : TestResult =
+    let invalidPath =
+        System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            $"dark-elf-missing-{System.Guid.NewGuid()}",
+            "out"
+        )
+
+    match Binary_Generation_ELF.writeToFile invalidPath [| 0uy |] with
+    | Ok () -> Error "Expected invalid output path to return Error"
+    | Error msg ->
+        if msg = "" then
+            Error "Expected writeToFile error message to describe failure"
+        else
+            Ok ()
+
 let testCompleteEncodingPipeline () : TestResult =
     // Test the complete pipeline: instructions -> encoding -> binary
     let movInstr = MOVZ (X0, 42us, 0)
@@ -213,6 +229,7 @@ let tests = [
     ("createExecutable magic", testCreateExecutableMagic)
     ("createExecutable contains code", testCreateExecutableContainsCode)
     ("Mach-O __const section offset points to aligned data", testMachOConstSectionOffsetPointsToAlignedData)
+    ("ELF writeToFile returns Error for invalid path", testElfWriteToFileReturnsErrorForInvalidPath)
     ("complete encoding pipeline", testCompleteEncodingPipeline)
     ("writeToFile returns Error for invalid path", testWriteToFileReturnsErrorForInvalidPath)
 ]
