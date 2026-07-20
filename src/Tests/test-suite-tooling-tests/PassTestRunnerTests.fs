@@ -223,6 +223,21 @@ let testARM64SymbolicParserReportsOriginalLineNumber () : TestResult =
     | Error msg -> Error $"Expected original source line 4 in parser error, got: {msg}"
     | Ok _ -> Error "Expected parser error for invalid symbolic ARM64 register"
 
+let testLIRParserReportsOriginalLineNumber () : TestResult =
+    let text =
+        [
+            "// generated setup"
+            ""
+            "v0 <- Mov(Imm 1)"
+            "v1 <- Mov(Reg NOPE)"
+        ]
+        |> String.concat "\n"
+
+    match parseLIR text with
+    | Error msg when msg.Contains("Line 4:") -> Ok ()
+    | Error msg -> Error $"Expected original source line 4 in parser error, got: {msg}"
+    | Ok _ -> Error "Expected parser error for invalid LIR register"
+
 let testARM64SymbolicParserAcceptsBranchInstructions () : TestResult =
     let text =
         [
@@ -261,6 +276,7 @@ let tests = [
     ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)
     ("LIR parser accepts all physical registers", testLIRParserAcceptsAllPhysicalRegisters)
     ("ARM64 symbolic parser reports original line number", testARM64SymbolicParserReportsOriginalLineNumber)
+    ("LIR parser reports original line number", testLIRParserReportsOriginalLineNumber)
     ("ARM64 symbolic parser accepts branch instructions", testARM64SymbolicParserAcceptsBranchInstructions)
 ]
 

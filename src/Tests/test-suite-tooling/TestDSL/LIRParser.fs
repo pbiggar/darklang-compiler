@@ -217,19 +217,19 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
 let parseLIR (text: string) : Result<LIR.Program, string> =
     let lines =
         text.Split('\n')
-        |> Array.map (fun line -> line.Trim())
-        |> Array.filter (fun line -> line <> "" && not (line.StartsWith("//")))
+        |> Array.mapi (fun i line -> (i + 1, line.Trim()))
+        |> Array.filter (fun (_, line) -> line <> "" && not (line.StartsWith("//")))
         |> Array.toList
 
     // Parse all instructions/terminators
-    let rec parseLines lineNum acc = function
+    let rec parseLines acc = function
         | [] -> Ok (List.rev acc)
-        | line :: rest ->
+        | (lineNum, line) :: rest ->
             match parseInstructionOrTerminator lineNum line with
             | Error e -> Error e
-            | Ok result -> parseLines (lineNum + 1) (result :: acc) rest
+            | Ok result -> parseLines (result :: acc) rest
 
-    match parseLines 1 [] lines with
+    match parseLines [] lines with
     | Error e -> Error e
     | Ok [] -> Error "Empty LIR program"
     | Ok parsed ->
