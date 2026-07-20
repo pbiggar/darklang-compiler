@@ -10,6 +10,7 @@
 Tuple3.first(Tuple3.create(1, 2, 3)) = 1
 Tuple3.second(Tuple3.create(1, 2, 3)) = 2
 Tuple3.third(Tuple3.create(1, 2, 3)) = 3
+Tuple3.create("one", 2, "pi") = ("one", 2, "pi")
 
 // ===================================================================
 // Stdlib.Tuple3.first - Returns the first value of a triple
@@ -18,6 +19,7 @@ Tuple3.third(Tuple3.create(1, 2, 3)) = 3
 Tuple3.first((1, 2, 3)) = 1
 Tuple3.first((42, 0, 99)) = 42
 Tuple3.first((true, false, true)) = true
+Tuple3.first(("one", 2, "pi")) = "one"
 
 // ===================================================================
 // Stdlib.Tuple3.second - Returns the second value of a triple
@@ -25,6 +27,7 @@ Tuple3.first((true, false, true)) = true
 
 Tuple3.second((1, 2, 3)) = 2
 Tuple3.second((0, 42, 99)) = 42
+Tuple3.second(("one", 2, "pi")) = 2
 
 // ===================================================================
 // Stdlib.Tuple3.third - Returns the third value of a triple
@@ -32,6 +35,7 @@ Tuple3.second((0, 42, 99)) = 42
 
 Tuple3.third((1, 2, 3)) = 3
 Tuple3.third((0, 0, 42)) = 42
+Tuple3.third(("one", 2, "pi")) = "pi"
 
 // ===================================================================
 // Stdlib.Tuple3.mapFirst - Transform the first value in a triple
@@ -40,6 +44,7 @@ Tuple3.third((0, 0, 42)) = 42
 Tuple3.first(Tuple3.mapFirst((x: Int64) => x + 1, (5, 10, 15))) = 6
 Tuple3.second(Tuple3.mapFirst((x: Int64) => x + 1, (5, 10, 15))) = 10
 Tuple3.third(Tuple3.mapFirst((x: Int64) => x + 1, (5, 10, 15))) = 15
+Tuple3.mapFirst((x: String) => String.toUpperCase(x), ("one", 2, "pi")) = ("ONE", 2, "pi")
 
 // ===================================================================
 // Stdlib.Tuple3.mapSecond - Transform the second value in a triple
@@ -48,6 +53,7 @@ Tuple3.third(Tuple3.mapFirst((x: Int64) => x + 1, (5, 10, 15))) = 15
 Tuple3.first(Tuple3.mapSecond((x: Int64) => x + 1, (5, 10, 15))) = 5
 Tuple3.second(Tuple3.mapSecond((x: Int64) => x + 1, (5, 10, 15))) = 11
 Tuple3.third(Tuple3.mapSecond((x: Int64) => x + 1, (5, 10, 15))) = 15
+Tuple3.mapSecond((x: Int64) => x - 2, ("one", 2, "pi")) = ("one", 0, "pi")
 
 // ===================================================================
 // Stdlib.Tuple3.mapThird - Transform the third value in a triple
@@ -56,6 +62,7 @@ Tuple3.third(Tuple3.mapSecond((x: Int64) => x + 1, (5, 10, 15))) = 15
 Tuple3.first(Tuple3.mapThird((x: Int64) => x + 1, (5, 10, 15))) = 5
 Tuple3.second(Tuple3.mapThird((x: Int64) => x + 1, (5, 10, 15))) = 10
 Tuple3.third(Tuple3.mapThird((x: Int64) => x + 1, (5, 10, 15))) = 16
+Tuple3.mapThird((x: String) => String.toUpperCase(x), ("one", 2, "pi")) = ("one", 2, "PI")
 
 // ===================================================================
 // Stdlib.Tuple3.mapAllThree - Transform all three values in a triple
@@ -64,3 +71,4 @@ Tuple3.third(Tuple3.mapThird((x: Int64) => x + 1, (5, 10, 15))) = 16
 Tuple3.first(Tuple3.mapAllThree((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 6
 Tuple3.second(Tuple3.mapAllThree((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 20
 Tuple3.third(Tuple3.mapAllThree((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 14
+Tuple3.mapAllThree((x: String) => String.toUpperCase(x), (y: Int64) => y - 2, (z: String) => String.toUpperCase(z), ("one", 2, "pi")) = ("ONE", 0, "PI")
