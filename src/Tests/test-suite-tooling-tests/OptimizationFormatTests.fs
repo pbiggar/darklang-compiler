@@ -41,8 +41,32 @@ let testParseCRLFOptimizationFile () : TestResult =
         | Error msg ->
             Error $"Expected CRLF optimization test file to parse, got: {msg}")
 
+let testUnknownOptimizationSectionFails () : TestResult =
+    let content =
+        [
+            "---NAME---"
+            "fold_add"
+            "---INPUT---"
+            "1 + 2"
+            "---EXPECTED---"
+            "return 3"
+            "---OUTPUT---"
+            "ignored"
+        ]
+        |> String.concat "\n"
+
+    withTempFile content (fun path ->
+        match parseTestFile ANF path with
+        | Error msg when msg.Contains("Unknown optimization section: OUTPUT") ->
+            Ok ()
+        | Ok _ ->
+            Error "Expected unknown optimization section to fail"
+        | Error msg ->
+            Error $"Expected unknown section error, got: {msg}")
+
 let tests = [
     ("parse CRLF optimization file", testParseCRLFOptimizationFile)
+    ("unknown optimization section fails", testUnknownOptimizationSectionFails)
 ]
 
 let runAll () : TestResult =

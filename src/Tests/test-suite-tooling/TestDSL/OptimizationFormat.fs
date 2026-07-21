@@ -31,17 +31,29 @@ type OptimizationTest = {
     SourceFile: string
 }
 
+type private SectionName =
+    | Name
+    | Input
+    | Expected
+
 type private ParseState = {
     Tests: OptimizationTest list
-    Sections: Map<string, string>
-    CurrentSection: string option
+    Sections: Map<SectionName, string>
+    CurrentSection: SectionName option
     CurrentContent: string list
     Errors: string list
 }
 
+let private tryParseSectionName (sectionName: string) : Result<SectionName, string> =
+    match sectionName with
+    | "NAME" -> Ok Name
+    | "INPUT" -> Ok Input
+    | "EXPECTED" -> Ok Expected
+    | unknown -> Error $"Unknown optimization section: {unknown}"
+
 /// Parse a single test from sections
-let parseTest (stage: IRStage) (filePath: string) (sections: Map<string, string>) : Result<OptimizationTest, string> =
-    match Map.tryFind "NAME" sections, Map.tryFind "INPUT" sections, Map.tryFind "EXPECTED" sections with
+let private parseTest (stage: IRStage) (filePath: string) (sections: Map<SectionName, string>) : Result<OptimizationTest, string> =
+    match Map.tryFind Name sections, Map.tryFind Input sections, Map.tryFind Expected sections with
     | Some name, Some input, Some expected ->
         Ok {
             Name = name.Trim()
@@ -90,10 +102,10 @@ let parseTestFile (stage: IRStage) (path: string) : Result<OptimizationTest list
                         Sections = Map.empty
                         Errors = e :: state.Errors }
 
-        let startSection (sectionName: string) (state: ParseState) : ParseState =
+        let startSection (sectionName: SectionName) (state: ParseState) : ParseState =
             let stateWithSavedSection = saveCurrentSection state
             let stateForNewSection =
-                if sectionName = "NAME" then
+                if sectionName = Name then
                     parseCompletedTest stateWithSavedSection
                 else
                     stateWithSavedSection
@@ -108,7 +120,15 @@ let parseTestFile (stage: IRStage) (path: string) : Result<OptimizationTest list
         let parseLine (state: ParseState) (line: string) : ParseState =
             if line.StartsWith("---", StringComparison.Ordinal) && line.EndsWith("---", StringComparison.Ordinal) && line.Length > 6 then
                 let sectionName = line.Substring(3, line.Length - 6)
-                startSection sectionName state
+                match tryParseSectionName sectionName with
+                | Ok parsedSectionName ->
+                    startSection parsedSectionName state
+                | Error msg ->
+                    let stateWithSavedSection = saveCurrentSection state
+                    { stateWithSavedSection with
+                        CurrentSection = None
+                        CurrentContent = []
+                        Errors = msg :: stateWithSavedSection.Errors }
             else
                 appendContentLine line state
 
