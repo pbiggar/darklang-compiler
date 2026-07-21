@@ -106,8 +106,11 @@ Chordal graphs can be optimally colored using a simple greedy algorithm:
    - Reduces register moves at control flow join points
    - Two-pass approach: first color non-deferred, then color deferred with partner preferences
 
-**Register preference**: Caller-saved registers (X1-X8) are preferred over
-callee-saved (X19-X26) to minimize prologue/epilogue overhead.
+**Register preference**: The allocator chooses register order from the
+function's calling pattern. Functions with non-tail calls prefer callee-saved
+registers to avoid repeated save/restore around each call; leaf functions and
+tail-call-only functions prefer caller-saved registers. The caller-saved
+allocatable set is X1-X7; X8 is reserved.
 
 ### Phase 4: Spill Code Generation
 
