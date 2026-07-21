@@ -1975,10 +1975,15 @@ let rec simpleInferType
     | AST.TupleLiteral elements ->
         // Recursively infer types of tuple elements
         let elemTypes = elements |> List.map (fun e -> simpleInferType e typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup)
-        if List.forall Option.isSome elemTypes then
-            Some (AST.TTuple (elemTypes |> List.map Option.get))
-        else
-            None
+        let rec collectTypes remaining acc =
+            match remaining with
+            | [] -> Some (List.rev acc)
+            | Some typ :: rest -> collectTypes rest (typ :: acc)
+            | None :: _ -> None
+
+        match collectTypes elemTypes [] with
+        | Some types -> Some (AST.TTuple types)
+        | None -> None
     | AST.TupleAccess (tupleExpr, index) ->
         match simpleInferType tupleExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some (AST.TTuple elemTypes) when index >= 0 && index < List.length elemTypes ->
