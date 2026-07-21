@@ -110,6 +110,15 @@ let private tailCallArgTempIds
     | _ ->
         Set.empty
 
+let private atomOverlapsTailArgs
+    (aliasRoots: Map<TempId, TempId>)
+    (tailArgTemps: Set<TempId>)
+    (atom: Atom)
+    : bool =
+    match atom with
+    | Var tid -> Set.contains (canonicalTempId aliasRoots tid) tailArgTemps
+    | _ -> false
+
 let rec private collectMovableDecPrefix
     (aliasRoots: Map<TempId, TempId>)
     (tailArgTemps: Set<TempId>)
@@ -120,26 +129,18 @@ let rec private collectMovableDecPrefix
         when not (Set.contains (canonicalTempId aliasRoots tid) tailArgTemps) ->
         let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
         ((tmpId, RefCountDec (Var tid, size, kind, sourceType)) :: bindings, remaining)
-    | Let (tmpId, RefCountDecString atom, rest) ->
-        let overlaps =
-            match atom with
-            | Var tid -> Set.contains (canonicalTempId aliasRoots tid) tailArgTemps
-            | _ -> false
-        if overlaps then
-            ([], expr)
-        else
-            let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
-            ((tmpId, RefCountDecString atom) :: bindings, remaining)
-    | Let (tmpId, RefCountDecBytes atom, rest) ->
-        let overlaps =
-            match atom with
-            | Var tid -> Set.contains (canonicalTempId aliasRoots tid) tailArgTemps
-            | _ -> false
-        if overlaps then
-            ([], expr)
-        else
-            let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
-            ((tmpId, RefCountDecBytes atom) :: bindings, remaining)
+    | Let (tmpId, RefCountDecString atom, rest)
+        when not (atomOverlapsTailArgs aliasRoots tailArgTemps atom) ->
+        let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
+        ((tmpId, RefCountDecString atom) :: bindings, remaining)
+    | Let (_, RefCountDecString _, _) ->
+        ([], expr)
+    | Let (tmpId, RefCountDecBytes atom, rest)
+        when not (atomOverlapsTailArgs aliasRoots tailArgTemps atom) ->
+        let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
+        ((tmpId, RefCountDecBytes atom) :: bindings, remaining)
+    | Let (_, RefCountDecBytes _, _) ->
+        ([], expr)
     | _ ->
         ([], expr)
 
