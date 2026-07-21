@@ -16,9 +16,12 @@ let private readFile (path: string) : Result<string, string> =
     try Ok (File.ReadAllText(path))
     with ex -> Error $"Failed to read {path}: {ex.Message}"
 
-let private stdlibFiles () : string array =
+let private stdlibFiles () : Result<string array, string> =
     let stdlibDir = Path.Combine(repoRoot, "src", "DarkCompiler", "stdlib")
-    Directory.GetFiles(stdlibDir, "*.dark", SearchOption.AllDirectories)
+    try
+        Ok (Directory.GetFiles(stdlibDir, "*.dark", SearchOption.AllDirectories))
+    with ex ->
+        Error $"Failed to list stdlib files in {stdlibDir}: {ex.Message}"
 
 let private definitionName (line: string) : string option =
     let trimmed = line.TrimStart()
@@ -53,8 +56,11 @@ let private findDuplicateDefinitions () : Result<string list, string> =
             match duplicateDefinitionsInFile path with
             | Error msg -> Error msg
             | Ok duplicates -> Ok (acc @ duplicates)
-    stdlibFiles ()
-    |> Array.fold folder (Ok [])
+    match stdlibFiles () with
+    | Error msg -> Error msg
+    | Ok files ->
+        files
+        |> Array.fold folder (Ok [])
 
 let testStdlibHasNoDuplicateDefinitions () : TestResult =
     match findDuplicateDefinitions () with
