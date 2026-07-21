@@ -6,9 +6,17 @@ This investigation analyzes why the Dark compiler performs worse than Rust and O
 
 ## Current Local Evidence
 
-Measured in the current `benchmarks/RESULTS.md`, `fasta` runs at
-`2,493,333,492` Dark instructions, or `116.3x` the Rust baseline. The benchmark
-still produces the expected checksum `830939461`.
+Measured locally with
+`./benchmarks/run_benchmarks.sh --refresh-baseline=rust,ocaml fasta` on commit
+`f88e41ff`, `fasta` runs at `2,493,333,492` Dark instructions, or `123.1x`
+the refreshed Rust baseline. The benchmark still produces the expected
+checksum `830939461`.
+
+| Language | Instructions | vs Rust |
+|----------|--------------|---------|
+| Rust | 20,252,639 | baseline |
+| OCaml | 1,862,549,081 | 92.0x |
+| Dark | 2,493,333,492 | 123.1x |
 
 The current Dark executable built for `benchmarks/problems/fasta/dark/main.dark`
 is `209,760` bytes on Linux ARM64. That means the older shared OOM trap note
@@ -30,8 +38,9 @@ That is 5 additional instructions and 1 additional conditional branch per alloca
 `fasta` performs enough allocations that this overhead remains relevant to both
 instruction count and generated code size. Current IR evidence still shows large
 constant-list construction in `_start` through repeated `RawAlloc(16)` nodes,
-plus per-iteration heap allocation for the `makeRandomFasta` return tuple.
-The remaining allocator-bound cost is still dominated by per-allocation heap-end
+including the 15-element IUB table and 4-element homosapiens table, plus
+per-call heap allocation for `makeRandomFasta` base-case return tuples. The
+remaining allocator-bound cost is still dominated by per-allocation heap-end
 recomputation (`MOVZ + ADD`) plus the extra bounds-check branch.
 
 ### Remaining Fix Strategy
