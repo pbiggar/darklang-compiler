@@ -5,18 +5,20 @@
 
 module Output
 
+open System
+
 /// Print to stdout without newline
 let print (s: string) : unit =
-    printf "%s" s
+    Console.Write(s)
 
 /// Print to stdout with newline
 let println (s: string) : unit =
-    printf "%s\n" s
+    Console.WriteLine(s)
 
 /// Print to stderr without newline
 let eprint (s: string) : unit =
-    eprintf "%s" s
+    Console.Error.Write(s)
 
 /// Print to stderr with newline
 let eprintln (s: string) : unit =
-    eprintf "%s\n" s
+    Console.Error.WriteLine(s)
