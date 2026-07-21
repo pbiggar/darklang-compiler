@@ -1,5 +1,5 @@
 #!/bin/bash
-# mutation-test.sh - Mutation Testing for the Ralph F# Compiler
+# mutation-test.sh - Mutation Testing for the Dark compiler
 #
 # Usage: ./mutation-test.sh [OPTIONS]
 #   --file=PATTERN    Only mutate files matching PATTERN
@@ -286,7 +286,7 @@ EOF
 
 # Main
 main() {
-    log_info "Ralph Compiler Mutation Testing"
+    log_info "Dark Compiler Mutation Testing"
     log_info "================================"
 
     mkdir -p "$RESULTS_DIR"

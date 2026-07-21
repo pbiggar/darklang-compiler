@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ralph-loop.sh - Mutation-to-E2E Test Workflow
+# ralph-loop.sh - Dark mutation-to-E2E test workflow
 # Iterates through SURVIVED mutations and invokes Claude Code to write E2E tests
 
 set -euo pipefail
@@ -271,7 +271,7 @@ process_mutation() {
 
 # Main execution
 main() {
-    echo -e "${BLUE}=== Ralph Loop: Mutation-to-E2E Test Workflow ===${NC}"
+    echo -e "${BLUE}=== Dark mutation-to-E2E test workflow ===${NC}"
     echo ""
 
     local processed=0
