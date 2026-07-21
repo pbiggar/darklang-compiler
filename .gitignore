@@ -24,6 +24,10 @@ artifacts/
 TestResults/
 *.trx
 *.coverage
+mutation/results/checkpoint.txt
+mutation/results/mutation_sites.txt
+mutation/results/report.txt
+mutation/results/results.csv
 
 # Output files
 *.exe
