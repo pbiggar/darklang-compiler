@@ -222,6 +222,58 @@ let testCfgSimplifyRemovesRetPhiJoin () : TestResult =
         let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
         Error $"Expected ret-phi join simplification.\nActual:\n{actual}"
 
+let testEmptyBlockRemovalRewritesPhiSourceToPredecessor () : TestResult =
+    let entry = Label "entry"
+    let empty = Label "empty"
+    let join = Label "join"
+
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [Mov (VReg 0, Int64Const 41L, Some AST.TInt64)]
+        Terminator = Jump empty
+    }
+
+    let emptyBlock: BasicBlock = {
+        Label = empty
+        Instrs = []
+        Terminator = Jump join
+    }
+
+    let joinBlock: BasicBlock = {
+        Label = join
+        Instrs = [
+            Phi (
+                VReg 1,
+                [(Register (VReg 0), empty)],
+                Some AST.TInt64
+            )
+            BinOp (VReg 2, Add, Register (VReg 1), Int64Const 1L, AST.TInt64)
+        ]
+        Terminator = Ret (Register (VReg 2))
+    }
+
+    let cfg: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, entryBlock)
+                (empty, emptyBlock)
+                (join, joinBlock)
+            ]
+    }
+
+    let (optimized, changed) = simplifyEmptyBlocks cfg
+
+    match Map.tryFind join optimized.Blocks with
+    | Some block ->
+        match block.Instrs with
+        | Phi (_, [(Register (VReg 0), sourceLabel)], _) :: _ when changed && sourceLabel = entry -> Ok ()
+        | _ ->
+            let actual = formatMIR (Program ([{ Name = "empty_phi"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
+            Error $"Expected phi source to be rewritten from removed empty block to entry predecessor.\nActual:\n{actual}"
+    | None ->
+        Error "Expected join block to remain after empty block removal"
+
 let testSelfComparisonFoldingRequiresConcreteSafeType () : TestResult =
     let sameOperand = Register (VReg 0)
 
@@ -274,6 +326,7 @@ let tests = [
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
     ("MIR optimize removes dead self-referential phi", testDceRemovesSelfReferentialDeadPhi)
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
+    ("MIR empty block removal rewrites phi source to predecessor", testEmptyBlockRemovalRewritesPhiSourceToPredecessor)
     ("MIR self-comparison folding requires concrete safe type", testSelfComparisonFoldingRequiresConcreteSafeType)
     ("MIR self-comparison folding requires same register", testSelfComparisonFoldingRequiresSameRegister)
 ]

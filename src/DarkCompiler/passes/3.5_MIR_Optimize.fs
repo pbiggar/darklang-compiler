@@ -870,6 +870,8 @@ let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
     if Map.isEmpty emptyBlocks then
         (cfg, false)
     else
+        let preds = buildPredecessors cfg
+
         // Redirect jumps through empty blocks (follow chains)
         let redirectLabel label =
             let rec follow visited current =
@@ -880,6 +882,21 @@ let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
                     | None -> current
                     | Some next -> follow (Set.add current visited) next
             follow Set.empty label
+
+        let replacementPhiSourceLabels label =
+            let rec collect visited current =
+                if Set.contains current visited then
+                    []
+                elif Map.containsKey current emptyBlocks then
+                    Map.tryFind current preds
+                    |> Option.defaultValue []
+                    |> List.collect (collect (Set.add current visited))
+                else
+                    [current]
+
+            match collect Set.empty label |> List.distinct with
+            | [] -> Crash.crash $"simplifyEmptyBlocks: no remaining predecessor for phi source {label}"
+            | labels -> labels
 
         let blocks' =
             cfg.Blocks
@@ -898,7 +915,11 @@ let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
                     |> List.map (fun instr ->
                         match instr with
                         | Phi (dest, sources, valueType) ->
-                            let sources' = sources |> List.map (fun (op, lbl) -> (op, redirectLabel lbl))
+                            let sources' =
+                                sources
+                                |> List.collect (fun (op, lbl) ->
+                                    replacementPhiSourceLabels lbl
+                                    |> List.map (fun replacement -> (op, replacement)))
                             Phi (dest, sources', valueType)
                         | other -> other
                     )
