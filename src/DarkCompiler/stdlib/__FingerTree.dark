@@ -14,6 +14,7 @@
 //   2: Deep node [measure:8][prefix_count:8][p0-p3:32][middle:8][suffix_count:8][s0-s3:32]
 //   3: Node2 [elem0:8][elem1:8]
 //   4: Node3 [elem0:8][elem1:8][elem2:8]
+//   5: Leaf [value:8]
 //
 // Digits (prefix/suffix) store 1-4 elements inline with a count byte.
 // The measure field caches the total element count for O(1) length queries.
@@ -133,7 +134,7 @@ def Stdlib.__FingerTree.__node3GetChild<a>(node: List<a>, index: Int64) : List<a
 // -----------------------------------------------------------------------------
 // Deep layout: [measure:8][prefix_count:8][p0:8][p1:8][p2:8][p3:8][middle:8][suffix_count:8][s0:8][s1:8][s2:8][s3:8]
 // Offsets:     0          8               16    24    32    40    48       56              64    72    80    88
-// Total: 96 bytes
+// Payload: 96 bytes, followed by refcount at offset 96 (104 bytes total)
 
 def Stdlib.__FingerTree.__DEEP_MEASURE_OFF() : Int64 = 0
 def Stdlib.__FingerTree.__DEEP_PREFIX_COUNT_OFF() : Int64 = 8
