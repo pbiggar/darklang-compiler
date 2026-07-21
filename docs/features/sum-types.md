@@ -163,12 +163,11 @@ remaining refcounting work.
 
 | File | Purpose |
 |------|---------|
-| `AST.fs:42` | TSum type definition |
-| `AST.fs:128` | Constructor expression |
-| `AST.fs:85` | PConstructor pattern |
-| `1.5_TypeChecking.fs` | SumTypeRegistry, VariantLookup |
-| `2_AST_to_ANF.fs` | Constructor and match compilation |
-| `6_CodeGen.fs` | Runtime representation |
+| `src/DarkCompiler/AST.fs` | `TSum`, `Constructor`, and `PConstructor` definitions |
+| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | Sum type registry, variant lookup, constructor typing, and pattern typing |
+| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | Constructor lowering and match compilation |
+| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 runtime representation for printing and reference-counting |
+| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 runtime representation for printing and reference-counting |
 
 ## Tests
 
