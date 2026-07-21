@@ -2194,12 +2194,7 @@ let private loadSpilledPair (arch: Platform.Arch) (mapping: AllocationResult) (l
                 else LIR.X12  // fallback - both will be R11, but this is rare
             (loadSpilled mapping left leftTemp, loadSpilled mapping right LIR.X12)
         elif leftIsSpilled then
-            // Only left spilled: check if right occupies the same register as X12
-            let rightPhys =
-                match right with
-                | LIR.Physical p -> Some p
-                | LIR.Virtual id -> match tryAllocation mapping id with Some (PhysReg p) -> Some p | _ -> None
-            // If right is in a real register, use X12 for left (no conflict with right)
+            // Only left is spilled; the right operand remains in place.
             (loadSpilled mapping left LIR.X12, loadSpilled mapping right LIR.X12)
         else
             // Right spilled or neither: use X12 for left, X12 for right (OK since left isn't spilled)
