@@ -38,8 +38,8 @@ type SizedInt =
     | UInt32 of uint32
     | UInt64 of uint64
 
-/// Extract int64 value from SizedInt (for codegen)
-/// Note: UInt64 values > Int64.MaxValue will be converted incorrectly
+/// Convert a SizedInt to the signed 64-bit payload used by MIR integer constants.
+/// UInt64 values above Int64.MaxValue intentionally wrap to the same 64 bits.
 let sizedIntToInt64 (si: SizedInt) : int64 =
     match si with
     | Int8 n -> int64 n
@@ -49,7 +49,7 @@ let sizedIntToInt64 (si: SizedInt) : int64 =
     | UInt8 n -> int64 n
     | UInt16 n -> int64 n
     | UInt32 n -> int64 n
-    | UInt64 n -> int64 n  // May lose high bit for values > Int64.MaxValue
+    | UInt64 n -> int64 n
 
 /// Format a SizedInt as the corresponding source-level integer value.
 let sizedIntToString (si: SizedInt) : string =
