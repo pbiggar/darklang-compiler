@@ -128,6 +128,15 @@ let r = AllFloats { a = 1.0, b = 2.0, c = 3.0 } in r.a + r.b + r.c = 6.0
 type Point = { x: Int64, y: Int64 }
 let p = Point { x = 10, y = 20 } in { p with x = 5 }.y = 20
 
+// Record update where a later field is replaced and earlier fields are preserved
+type Point = { x: Int64, y: Int64 }
+let p = Point { x = 10, y = 20 } in { p with y = 5 }.x = 10
+let p = Point { x = 10, y = 20 } in { p with y = 5 }.y = 5
+
+// Record update on a three-field record preserves all untouched fields
+type Vec3 = { x: Int64, y: Int64, z: Int64 }
+let v = Vec3 { x = 10, y = 20, z = 30 } in { v with z = 5 }.x + { v with z = 5 }.y + { v with z = 5 }.z = 35
+
 // Record update where variable only appears in the update part
 type Point = { x: Int64, y: Int64 }
 let val = 100 in { Point { x = 1, y = 2 } with x = val }.x = 100
