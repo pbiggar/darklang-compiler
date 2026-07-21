@@ -305,25 +305,29 @@ let rec calleeNamesInAExpr (expr: ANF.AExpr) : Set<string> =
     | ANF.If (_, thenBranch, elseBranch) ->
         Set.union (calleeNamesInAExpr thenBranch) (calleeNamesInAExpr elseBranch)
 
+let private returnTypeForAtom (context: string) (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (atom: ANF.Atom) : AST.Type =
+    match atom with
+    | ANF.FloatLiteral _ -> AST.TFloat64
+    | ANF.IntLiteral n -> ANF.sizedIntToType n
+    | ANF.BoolLiteral _ -> AST.TBool
+    | ANF.StringLiteral _ -> AST.TString
+    | ANF.UnitLiteral -> AST.TUnit
+    | ANF.Var (ANF.TempId id) ->
+        if Set.contains id floatRegs then
+            AST.TFloat64
+        else
+            match Map.tryFind (ANF.TempId id) typeMap with
+            | Some t -> t
+            | None -> Crash.crash $"{context}: unknown return type for TempId {id}"
+    | ANF.FuncRef _ -> AST.TInt64
+
 /// Analyze return statements in an ANF expression, tracking float temps
 /// Returns the type of the expression's result
 /// returnTypeReg: map from function name to return type (for checking Call results)
 let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (returnTypeReg: Map<string, AST.Type>) (expr: ANF.AExpr) : AST.Type =
     match expr with
     | ANF.Return atom ->
-        match atom with
-        | ANF.FloatLiteral _ -> AST.TFloat64
-        | ANF.IntLiteral n -> ANF.sizedIntToType n  // Use actual type from SizedInt
-        | ANF.BoolLiteral _ -> AST.TBool
-        | ANF.StringLiteral _ -> AST.TString
-        | ANF.UnitLiteral -> AST.TUnit
-        | ANF.Var (ANF.TempId id) ->
-            if Set.contains id floatRegs then AST.TFloat64
-            else
-                match Map.tryFind (ANF.TempId id) typeMap with
-                | Some t -> t
-                | None -> Crash.crash $"getExprReturnType: unknown type for TempId {id}"
-        | ANF.FuncRef _ -> AST.TInt64
+        returnTypeForAtom "getExprReturnType" floatRegs typeMap atom
     | ANF.Let (ANF.TempId destId, cexpr, rest) ->
         // Update floatRegs if this binding produces a float
         let floatRegs' =
@@ -344,21 +348,7 @@ let rec getReturnTypeAndMaxTempId
     match expr with
     | ANF.Return atom ->
         let maxId = maxTempIdInAtom atom
-        let retType =
-            match atom with
-            | ANF.FloatLiteral _ -> AST.TFloat64
-            | ANF.IntLiteral n -> ANF.sizedIntToType n
-            | ANF.BoolLiteral _ -> AST.TBool
-            | ANF.StringLiteral _ -> AST.TString
-            | ANF.UnitLiteral -> AST.TUnit
-            | ANF.Var (ANF.TempId id) ->
-                if Set.contains id floatRegs then AST.TFloat64
-                else
-                    match Map.tryFind (ANF.TempId id) typeMap with
-                    | Some t -> t
-                    | None ->
-                        Crash.crash $"maxTempAndReturnType: unknown return type for TempId {id}"
-            | ANF.FuncRef _ -> AST.TInt64
+        let retType = returnTypeForAtom "maxTempAndReturnType" floatRegs typeMap atom
         (maxId, retType)
     | ANF.Let (ANF.TempId destId, cexpr, rest) ->
         let maxInCExpr = maxTempIdInCExpr cexpr
