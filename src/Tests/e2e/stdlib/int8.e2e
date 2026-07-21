@@ -181,13 +181,13 @@ Int8.sum([1y, -1y, 2y, -2y]) = 0y
 Int8.sum([10y, 20y, 30y]) = 60y
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// Int8.sqrt - needs Float type
+// Int8.sqrt - not implemented
 // Int8.sqrt(4) = 2.0
 
-// Int8.toFloat - needs Float type
+// Int8.toFloat - not implemented
 // Int8.toFloat(2) = 2.0
 
 // Int8.parse - needs Result type (blocked by type checker bug)

@@ -184,13 +184,13 @@ UInt64.sum([1UL, 1UL, 2UL, 2UL]) = 6UL
 UInt64.sum([10UL, 20UL, 30UL]) = 60UL
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// UInt64.sqrt - needs Float type
+// UInt64.sqrt - not implemented
 // UInt64.sqrt(4) = 2.0
 
-// UInt64.toFloat - needs Float type
+// UInt64.toFloat - not implemented
 // UInt64.toFloat(2) = 2.0
 
 // UInt64.parse - needs Result type (blocked by type checker bug)

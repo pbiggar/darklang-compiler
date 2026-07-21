@@ -182,13 +182,13 @@ Int16.sum([1s, -1s, 2s, -2s]) = 0s
 Int16.sum([10s, 20s, 30s]) = 60s
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// Int16.sqrt - needs Float type
+// Int16.sqrt - not implemented
 // Int16.sqrt(4) = 2.0
 
-// Int16.toFloat - needs Float type
+// Int16.toFloat - not implemented
 // Int16.toFloat(2) = 2.0
 
 // Int16.parse - needs Result type (blocked by type checker bug)

@@ -181,14 +181,14 @@ Int64.sum([1, -1, 2, -2]) = 0
 Int64.sum([10, 20, 30]) = 60
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// Int64.sqrt - needs Float type
+// Int64.sqrt - not implemented
 // Int64.sqrt(4) = 2.0
 // Int64.sqrt(100) = 10.0
 
-// Int64.toFloat - needs Float type
+// Int64.toFloat - implemented and covered in float.e2e
 // Int64.toFloat(2) = 2.0
 // Int64.toFloat(-5) = -5.0
 

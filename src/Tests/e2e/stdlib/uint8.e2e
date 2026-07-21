@@ -181,13 +181,13 @@ UInt8.sum([1uy, 1uy, 2uy, 2uy]) = 6uy
 UInt8.sum([10uy, 20uy, 30uy]) = 60uy
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// UInt8.sqrt - needs Float type
+// UInt8.sqrt - not implemented
 // UInt8.sqrt(4) = 2.0
 
-// UInt8.toFloat - needs Float type
+// UInt8.toFloat - not implemented
 // UInt8.toFloat(2) = 2.0
 
 // UInt8.parse - needs Result type (blocked by type checker bug)

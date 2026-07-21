@@ -181,13 +181,13 @@ UInt16.sum([1us, 1us, 2us, 2us]) = 6us
 UInt16.sum([10us, 20us, 30us]) = 60us
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// UInt16.sqrt - needs Float type
+// UInt16.sqrt - not implemented
 // UInt16.sqrt(4) = 2.0
 
-// UInt16.toFloat - needs Float type
+// UInt16.toFloat - not implemented
 // UInt16.toFloat(2) = 2.0
 
 // UInt16.parse - needs Result type (blocked by type checker bug)

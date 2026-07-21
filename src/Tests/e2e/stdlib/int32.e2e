@@ -182,13 +182,13 @@ Int32.sum([1l, -1l, 2l, -2l]) = 0l
 Int32.sum([10l, 20l, 30l]) = 60l
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// Int32.sqrt - needs Float type
+// Int32.sqrt - not implemented
 // Int32.sqrt(4) = 2.0
 
-// Int32.toFloat - needs Float type
+// Int32.toFloat - not implemented
 // Int32.toFloat(2) = 2.0
 
 // Int32.parse - needs Result type (blocked by type checker bug)

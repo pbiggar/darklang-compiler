@@ -181,13 +181,13 @@ UInt32.sum([1ul, 1ul, 2ul, 2ul]) = 6ul
 UInt32.sum([10ul, 20ul, 30ul]) = 60ul
 
 // ===================================================================
-// NOTE: Functions not yet implemented due to missing types or features
+// NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// UInt32.sqrt - needs Float type
+// UInt32.sqrt - not implemented
 // UInt32.sqrt(4) = 2.0
 
-// UInt32.toFloat - needs Float type
+// UInt32.toFloat - not implemented
 // UInt32.toFloat(2) = 2.0
 
 // UInt32.parse - needs Result type (blocked by type checker bug)
