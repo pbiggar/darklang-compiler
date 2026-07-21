@@ -117,8 +117,9 @@ def Stdlib.Base64.__decode4Chars(c0: Int64, c1: Int64, c2: Int64, c3: Int64) : (
     let v1 = Stdlib.Base64.__decodeChar(c1) in
     let v2 = Stdlib.Base64.__decodeChar(c2) in
     let v3 = Stdlib.Base64.__decodeChar(c3) in
-    // Check for invalid characters
-    if v0 == -1 || v1 == -1 || (v2 == -1 && v2 != -2) || (v3 == -1 && v3 != -2) then
+    // Padding is only valid as the final one or two characters.
+    if v0 == -1 || v1 == -1 || v2 == -1 || v3 == -1 ||
+       v0 == -2 || v1 == -2 || (v2 == -2 && v3 != -2) then
         ([], true)
     else if v2 == -2 then
         // Two padding chars - 1 output byte

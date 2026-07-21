@@ -60,6 +60,9 @@ match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.get(b, 4) | Error(_) -> -1
 // Invalid base64 - wrong length
 Result.isError<Bytes, String>(Base64.decode("ABC")) = true
 
+// Invalid base64 - padding is only valid in the final two positions
+Result.isError<Bytes, String>(Base64.decode("=AAA")) = true
+
 // ===================================================================
 // Roundtrip tests
 // ===================================================================
