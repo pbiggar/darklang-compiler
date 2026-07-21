@@ -34,6 +34,9 @@ Let (tempId, Call(funcName, args), Return (Var tempId))
 ```
 
 If a `Let` binds a call result and the body immediately returns that same variable, it's a tail call.
+The implementation also recognizes refcount cleanup between the call and the
+return, then keeps the optimization only when that cleanup can be moved before
+the tail call without releasing a value still needed as a tail-call argument.
 
 **Transformation:**
 ```fsharp
@@ -97,12 +100,15 @@ These bugs were fixed and TCO is now enabled:
 ## Interaction with Reference Counting
 
 TCO runs AFTER RefCountInsertion. The implementation looks through RefCountDec operations
-between the call and return to detect tail calls. This is crucial because without TCO,
-functions like `__reverseHelper` would use regular calls, causing intermediate cons cells
-to be freed prematurely when the free list reuses those cells.
+between the call and return to detect tail calls. Since a tail call does not
+return to the current function, any cleanup left after the tail call would be
+unreachable. The detection pass therefore moves non-overlapping cleanup before
+the tail call and leaves the call unoptimized when required cleanup overlaps
+with one of the tail-call arguments.
 
 ```dark
-// CAN be optimized - looks through RefCountDec to find tail position
+// Can be optimized only if RefCountDec(someValue) does not release a value
+// needed by tailCall's arguments.
 let result = tailCall() in
 let _ = RefCountDec(someValue) in
 return result
@@ -112,8 +118,11 @@ return result
 
 `src/Tests/e2e/tailcall.e2e` is the maintained end-to-end regression suite for
 tail-call behavior. It covers simple self-recursion, argument swap and rotation
-cases, generic tail recursion, string/reference-counted arguments, and float
-parameter self-recursion.
+cases, generic tail recursion, string/reference-counted arguments, float
+parameter self-recursion, and float literals in tail-call arguments. Focused
+pass-level tests in
+`src/Tests/compiler-passes/TailCallDetectionTests.fs` cover cleanup movement
+around tail calls.
 
 ```dark
 // Simple tail recursion
@@ -121,10 +130,10 @@ def sumTo(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc else sumTo(n - 1, acc + n)
 sumTo(10, 0)  // Expected: 55
 
-// Large N stress case, currently left as a disabled note in the suite
-def countDown(n: Int64) : Int64 =
-    if n <= 0 then 0 else countDown(n - 1)
-countDown(100000)  // Expected: 0
+// Float parameter self-recursion
+def sumFloats(n: Int64, acc: Float) : Float =
+    if n <= 0 then acc else sumFloats(n - 1, acc + 1.0)
+sumFloats(10, 0.0)  // Expected: 10.0
 ```
 
 ## Why TCO Matters
@@ -145,7 +154,7 @@ Key commits:
 - `6223fa0` - Add tail call IR variants and instruction encoding (Phase 1/7 TCO)
 - `eb7cf84` - Fix TailArgMoves parallel move resolution bugs
 - `57f0f20` - Fix TailCall float return type tracking
-- `9dcb1f4` - Disable countDown(100000) test - TCO not fully working
+- `9dcb1f4` - Historical disable of countDown(100000) while TCO was not fully working
 - `9446a3d` - Disable TCO due to parallel move resolution bugs
 - (later) - Re-enable TCO after fixing DCE bug (TailCall now recognized as function call)
 
@@ -173,3 +182,4 @@ From `virtual-tumbling-bunny.md`:
 - `src/DarkCompiler/passes/arm64/6_CodeGen.fs` - ARM64 B/BR emission
 - `src/DarkCompiler/passes/x64/6_CodeGen.fs` - x64 JMP emission
 - `src/Tests/e2e/tailcall.e2e` - End-to-end tail-call regression tests
+- `src/Tests/compiler-passes/TailCallDetectionTests.fs` - Tail-call detection and cleanup ordering tests
