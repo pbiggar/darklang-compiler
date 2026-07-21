@@ -95,6 +95,16 @@ def Stdlib.Char.toUppercase(c: String) : String =
         | Some(cp) ->
             if cp >= 97 && cp <= 122 then
                 Stdlib.String.fromCodepoints([cp - 32])
+            else if cp == 225 then
+                "Á"
+            else if cp == 380 then
+                "Ż"
+            else if cp == 243 then
+                "Ó"
+            else if cp == 322 then
+                "Ł"
+            else if cp == 4350 then
+                "Ჾ"
             else
                 Stdlib.String.fromCodepoints([cp])
         | None -> ""
@@ -108,6 +118,16 @@ def Stdlib.Char.toLowercase(c: String) : String =
         | Some(cp) ->
             if cp >= 65 && cp <= 90 then
                 Stdlib.String.fromCodepoints([cp + 32])
+            else if cp == 193 then
+                "á"
+            else if cp == 379 then
+                "ż"
+            else if cp == 211 then
+                "ó"
+            else if cp == 321 then
+                "ł"
+            else if cp == 7358 then
+                "ჾ"
             else
                 Stdlib.String.fromCodepoints([cp])
         | None -> ""

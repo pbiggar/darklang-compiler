@@ -127,6 +127,11 @@ Char.toUppercase("z") = "Z"
 Char.toUppercase("A") = "A"
 Char.toUppercase("5") = "5"
 Char.toUppercase("") = ""
+Char.toUppercase("á") = "Á"
+Char.toUppercase("ż") = "Ż"
+Char.toUppercase("ó") = "Ó"
+Char.toUppercase("ł") = "Ł"
+Char.toUppercase("ჾ") = "Ჾ"
 
 // ===================================================================
 // Char.toLowercase - Convert to lowercase
@@ -137,6 +142,11 @@ Char.toLowercase("Z") = "z"
 Char.toLowercase("a") = "a"
 Char.toLowercase("5") = "5"
 Char.toLowercase("") = ""
+Char.toLowercase("Á") = "á"
+Char.toLowercase("Ż") = "ż"
+Char.toLowercase("Ó") = "ó"
+Char.toLowercase("Ł") = "ł"
+Char.toLowercase("Ჾ") = "ჾ"
 
 // ===================================================================
 // Char.toCode - Get codepoint value
