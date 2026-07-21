@@ -1129,6 +1129,25 @@ let private ensureParamGroupNonEmpty (paramIndex: int) (parameters: (string * Ty
 /// Type parameters are optional: def name(params) : type = body is also valid
 /// Qualified names supported: def Stdlib.Int64.add(params) : type = body
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
+    let rec parseAdditionalParamGroups
+        (parseGroup: Token list -> Result<(string * Type) list * Token list, string>)
+        (accParams: (string * Type) list)
+        (remaining: Token list)
+        : Result<(string * Type) list * Token list, string> =
+        match remaining with
+        | TRParen :: TLParen :: nextGroupStart ->
+            let nextGroupResult =
+                match nextGroupStart with
+                | TRParen :: _ -> Ok ([], nextGroupStart)
+                | _ -> parseGroup nextGroupStart
+
+            nextGroupResult
+            |> Result.bind (fun (nextParams, nextRemaining) ->
+                let normalizedNextParams = ensureParamGroupNonEmpty (List.length accParams) nextParams
+                parseAdditionalParamGroups parseGroup (accParams @ normalizedNextParams) nextRemaining)
+        | _ ->
+            Ok (accParams, remaining)
+
     match tokens with
     | TDef :: TIdent firstName :: rest ->
         // Parse potentially qualified function name (e.g., Stdlib.Int64.add)
@@ -1154,26 +1173,31 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                     paramsResult
                     |> Result.bind (fun (parameters, remaining) ->
                         let normalizedParameters = ensureParamGroupNonEmpty 0 parameters
-                        match remaining with
-                        | TRParen :: TColon :: rest'' ->
-                            // Parse return type with type params in scope
-                            parseTypeWithContext typeParamsSet rest''
-                            |> Result.bind (fun (returnType, remaining') ->
-                                match remaining' with
-                                | TEquals :: rest''' ->
-                                    // Parse body
-                                    parseExpr rest'''
-                                    |> Result.map (fun (body, remaining'') ->
-                                        let funcDef = {
-                                            Name = name
-                                            TypeParams = typeParams
-                                            Params = NonEmptyList.fromList normalizedParameters
-                                            ReturnType = returnType
-                                            Body = body
-                                        }
-                                        (funcDef, remaining''))
-                                | _ -> Error "Expected '=' after function return type")
-                        | _ -> Error "Expected ':' after function parameters")
+                        parseAdditionalParamGroups
+                            (fun toks -> parseParamsWithContext typeParamsSet toks [])
+                            normalizedParameters
+                            remaining
+                        |> Result.bind (fun (allParameters, remainingWithGroups) ->
+                            match remainingWithGroups with
+                            | TRParen :: TColon :: rest'' ->
+                                // Parse return type with type params in scope
+                                parseTypeWithContext typeParamsSet rest''
+                                |> Result.bind (fun (returnType, remaining') ->
+                                    match remaining' with
+                                    | TEquals :: rest''' ->
+                                        // Parse body
+                                        parseExpr rest'''
+                                        |> Result.map (fun (body, remaining'') ->
+                                            let funcDef = {
+                                                Name = name
+                                                TypeParams = typeParams
+                                                Params = NonEmptyList.fromList allParameters
+                                                ReturnType = returnType
+                                                Body = body
+                                            }
+                                            (funcDef, remaining''))
+                                    | _ -> Error "Expected '=' after function return type")
+                            | _ -> Error "Expected ':' after function parameters"))
                 | _ -> Error "Expected '(' after type parameters")
         | TLParen :: rest' ->
             // Non-generic function: def name(...)
@@ -1185,26 +1209,31 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
             paramsResult
             |> Result.bind (fun (parameters, remaining) ->
                 let normalizedParameters = ensureParamGroupNonEmpty 0 parameters
-                match remaining with
-                | TRParen :: TColon :: rest'' ->
-                    // Parse return type
-                    parseType rest''
-                    |> Result.bind (fun (returnType, remaining') ->
-                        match remaining' with
-                        | TEquals :: rest''' ->
-                            // Parse body
-                            parseExpr rest'''
-                            |> Result.map (fun (body, remaining'') ->
-                                let funcDef = {
-                                    Name = name
-                                    TypeParams = []
-                                    Params = NonEmptyList.fromList normalizedParameters
-                                    ReturnType = returnType
-                                    Body = body
-                                }
-                                (funcDef, remaining''))
-                        | _ -> Error "Expected '=' after function return type")
-                | _ -> Error "Expected ':' after function parameters")
+                parseAdditionalParamGroups
+                    (fun toks -> parseParams toks [])
+                    normalizedParameters
+                    remaining
+                |> Result.bind (fun (allParameters, remainingWithGroups) ->
+                    match remainingWithGroups with
+                    | TRParen :: TColon :: rest'' ->
+                        // Parse return type
+                        parseType rest''
+                        |> Result.bind (fun (returnType, remaining') ->
+                            match remaining' with
+                            | TEquals :: rest''' ->
+                                // Parse body
+                                parseExpr rest'''
+                                |> Result.map (fun (body, remaining'') ->
+                                    let funcDef = {
+                                        Name = name
+                                        TypeParams = []
+                                        Params = NonEmptyList.fromList allParameters
+                                        ReturnType = returnType
+                                        Body = body
+                                    }
+                                    (funcDef, remaining''))
+                            | _ -> Error "Expected '=' after function return type")
+                    | _ -> Error "Expected ':' after function parameters"))
         | _ -> Error $"Expected '<' or '(' after function name '{name}'"
     | _ -> Error "Expected function definition (def name(params) : type = body)"
 

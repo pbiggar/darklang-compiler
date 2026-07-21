@@ -408,6 +408,20 @@ let testInterpreterParserParsesCurriedTopLevelLetFunctionDef () : TestResult =
     | Ok other ->
         Error $"Unexpected AST for interpreter curried top-level let function definition: {other}"
 
+let testCompilerParserParsesCurriedFunctionDef () : TestResult =
+    let source = "def addCurried(x: Int64)(y: Int64) : Int64 = x + y"
+    match Parser.parseString false source with
+    | Error err ->
+        Error $"Compiler parser failed on curried function definition: {err}"
+    | Ok (Program [FunctionDef fnDef]) ->
+        match NonEmptyList.toList fnDef.Params with
+        | [("x", AST.TInt64); ("y", AST.TInt64)] ->
+            Ok ()
+        | _ ->
+            Error $"Unexpected parameters parsed for compiler curried function definition: {fnDef.Params}"
+    | Ok other ->
+        Error $"Unexpected AST for compiler curried function definition: {other}"
+
 let testParseInterpreterRecordFunctionFieldType () : TestResult =
     let source =
         "type RecordWithFn = { fn: Int64 -> Int64 }\n"
@@ -938,6 +952,7 @@ let tests = [
     ("parse interpreter elif chains", testInterpreterParserParsesElifChains)
     ("parse interpreter all-underscore identifier", testInterpreterParserAllowsAllUnderscoreIdentifiers)
     ("parse interpreter curried top-level let function def", testInterpreterParserParsesCurriedTopLevelLetFunctionDef)
+    ("parse compiler curried function def", testCompilerParserParsesCurriedFunctionDef)
     ("parse interpreter record function field type", testParseInterpreterRecordFunctionFieldType)
     ("parse interpreter newline-delimited let body", testParseInterpreterNewlineDelimitedLetBody)
     ("parse interpreter newline-delimited let body after applied call value", testParseInterpreterNewlineDelimitedLetBodyAfterAppliedCallValue)
