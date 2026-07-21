@@ -443,6 +443,23 @@ let testParsesSqlErrorExpectationShorthand () : TestResult =
             | _ ->
                 Error $"Expected exactly 1 parsed test, got {tests.Length}")
 
+let testParsesEscapedBackslashBeforeNAsLiteralText () : TestResult =
+    let testSource = "print \"ignored\" = stdout=\"\\\\n\"\n"
+
+    withTempFileNamed "test.e2e" testSource (fun path ->
+        match parseE2ETestFile path with
+        | Error msg ->
+            Error $"Expected escaped backslash-n stdout to parse, but got error: {msg}"
+        | Ok tests ->
+            match tests with
+            | [ test ] ->
+                if test.ExpectedStdout <> Some "\\n" then
+                    Error $"Expected stdout to contain literal backslash-n, got: {test.ExpectedStdout}"
+                else
+                    Ok ()
+            | _ ->
+                Error $"Expected exactly 1 parsed test, got {tests.Length}")
+
 let tests = [
     ("parses multiline expectation on next line", testParsesMultilineExpectationOnNextLine)
     ("parses skip attribute", testParsesSkipAttribute)
@@ -461,4 +478,5 @@ let tests = [
     ("parses single-line dotted rhs without consuming next test", testParsesSingleLineDottedRhsWithoutConsumingNextTest)
     ("parses multiline Dict rhs without preamble leakage", testParsesMultilineDictExpectationWithoutPreambleLeakage)
     ("parses sqlerror shorthand expectation", testParsesSqlErrorExpectationShorthand)
+    ("parses escaped backslash before n as literal text", testParsesEscapedBackslashBeforeNAsLiteralText)
 ]

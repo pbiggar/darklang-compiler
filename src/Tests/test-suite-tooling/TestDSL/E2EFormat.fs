@@ -126,13 +126,21 @@ let private parseStringLiteral (s: string) : Result<string, string> =
         Error $"String literal must be quoted: {s}"
     else
         let content = s.Substring(1, s.Length - 2)
-        let result =
-            content
-                .Replace("\\n", "\n")
-                .Replace("\\t", "\t")
-                .Replace("\\\\", "\\")
-                .Replace("\\\"", "\"")
-        Ok result
+        let rec loop (i: int) (charsRev: char list) : string =
+            if i >= content.Length then
+                charsRev |> List.rev |> List.toArray |> String
+            elif content.[i] = '\\' && i + 1 < content.Length then
+                match content.[i + 1] with
+                | 'n' -> loop (i + 2) ('\n' :: charsRev)
+                | 't' -> loop (i + 2) ('\t' :: charsRev)
+                | '\\' -> loop (i + 2) ('\\' :: charsRev)
+                | '"' -> loop (i + 2) ('"' :: charsRev)
+                | escaped ->
+                    loop (i + 2) (escaped :: '\\' :: charsRev)
+            else
+                loop (i + 1) (content.[i] :: charsRev)
+
+        Ok (loop 0 [])
 
 /// Parse triple-quoted string literal """..."""
 let private parseTripleQuotedStringLiteral (s: string) : Result<string, string> =
