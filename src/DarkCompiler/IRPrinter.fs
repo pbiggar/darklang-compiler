@@ -26,6 +26,9 @@ let private appendTypeSuffix (typOpt: AST.Type option) (value: string) : string 
     | None -> value
     | Some typ -> $"{value} : {typ}"
 
+let private commaSeparated (printer: 'a -> string) (values: 'a list) : string =
+    values |> List.map printer |> String.concat ", "
+
 /// Pretty-print ANF atom
 let private prettyPrintANFAtom = function
     | ANF.UnitLiteral -> "()"
@@ -78,24 +81,24 @@ let private prettyPrintANFCExpr = function
     | ANF.UnaryPrim (op, operand) ->
         $"{prettyPrintANFUnaryOp op}{prettyPrintANFAtom operand}"
     | ANF.Call (funcName, args) ->
-        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintANFAtom
         $"{funcName}({argStr})"
     | ANF.BorrowedCall (funcName, args) ->
-        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintANFAtom
         $"borrowed {funcName}({argStr})"
     | ANF.IndirectCall (func, args) ->
-        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintANFAtom
         $"IndirectCall({prettyPrintANFAtom func}, [{argStr}])"
     | ANF.ClosureAlloc (funcName, captures) ->
-        let capsStr = captures |> List.map prettyPrintANFAtom |> String.concat ", "
+        let capsStr = captures |> commaSeparated prettyPrintANFAtom
         $"ClosureAlloc({funcName}, [{capsStr}])"
     | ANF.ClosureCall (closure, args) ->
-        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintANFAtom
         $"ClosureCall({prettyPrintANFAtom closure}, [{argStr}])"
     | ANF.IfValue (cond, thenAtom, elseAtom) ->
         $"if {prettyPrintANFAtom cond} then {prettyPrintANFAtom thenAtom} else {prettyPrintANFAtom elseAtom}"
     | ANF.TupleAlloc elems ->
-        let elemsStr = elems |> List.map prettyPrintANFAtom |> String.concat ", "
+        let elemsStr = elems |> commaSeparated prettyPrintANFAtom
         $"({elemsStr})"
     | ANF.TupleGet (tupleAtom, index) ->
         $"{prettyPrintANFAtom tupleAtom}.{index}"
@@ -182,13 +185,13 @@ let private prettyPrintANFCExpr = function
     | ANF.DateNow ->
         "DateNow()"
     | ANF.TailCall (funcName, args) ->
-        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintANFAtom
         $"TailCall({funcName}, [{argStr}])"
     | ANF.IndirectTailCall (func, args) ->
-        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintANFAtom
         $"IndirectTailCall({prettyPrintANFAtom func}, [{argStr}])"
     | ANF.ClosureTailCall (closure, args) ->
-        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintANFAtom
         $"ClosureTailCall({prettyPrintANFAtom closure}, [{argStr}])"
 
 /// Pretty-print ANF expression
@@ -280,25 +283,25 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
     | MIR.UnaryOp (dest, op, src) ->
         $"{prettyPrintMIRVReg dest} <- {prettyPrintMIRUnaryOp op}{prettyPrintMIROperand src}"
     | MIR.Call (dest, funcName, args, _, _) ->
-        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintMIROperand
         $"{prettyPrintMIRVReg dest} <- Call({funcName}, [{argStr}])"
     | MIR.TailCall (funcName, args, _, _) ->
-        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintMIROperand
         $"TailCall({funcName}, [{argStr}])"
     | MIR.IndirectCall (dest, func, args, _, _) ->
-        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintMIROperand
         $"{prettyPrintMIRVReg dest} <- IndirectCall({prettyPrintMIROperand func}, [{argStr}])"
     | MIR.IndirectTailCall (func, args, _, _) ->
-        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintMIROperand
         $"IndirectTailCall({prettyPrintMIROperand func}, [{argStr}])"
     | MIR.ClosureAlloc (dest, funcName, captures) ->
-        let capsStr = captures |> List.map prettyPrintMIROperand |> String.concat ", "
+        let capsStr = captures |> commaSeparated prettyPrintMIROperand
         $"{prettyPrintMIRVReg dest} <- ClosureAlloc({funcName}, [{capsStr}])"
     | MIR.ClosureCall (dest, closure, args, _, _) ->
-        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintMIROperand
         $"{prettyPrintMIRVReg dest} <- ClosureCall({prettyPrintMIROperand closure}, [{argStr}])"
     | MIR.ClosureTailCall (closure, args, _) ->
-        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintMIROperand
         $"ClosureTailCall({prettyPrintMIROperand closure}, [{argStr}])"
     | MIR.HeapAlloc (dest, sizeBytes) ->
         $"{prettyPrintMIRVReg dest} <- HeapAlloc({sizeBytes})"
@@ -393,8 +396,7 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
     | MIR.Phi (dest, sources, valueType) ->
         let srcStrs =
             sources
-            |> List.map (fun (operand, label) -> $"({prettyPrintMIROperand operand}, {prettyPrintMIRLabel label})")
-            |> String.concat ", "
+            |> commaSeparated (fun (operand, label) -> $"({prettyPrintMIROperand operand}, {prettyPrintMIRLabel label})")
         let baseText = $"{prettyPrintMIRVReg dest} <- Phi([{srcStrs}])"
         appendTypeSuffix valueType baseText
     | MIR.CoverageHit exprId ->
@@ -495,10 +497,10 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.Mov (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mov({prettyPrintLIROperand src})"
     | LIR.Phi (dest, sources, _) ->
-        let srcs = sources |> List.map (fun (op, LIR.Label lbl) -> $"({prettyPrintLIROperand op}, {lbl})") |> String.concat ", "
+        let srcs = sources |> commaSeparated (fun (op, LIR.Label lbl) -> $"({prettyPrintLIROperand op}, {lbl})")
         $"{prettyPrintLIRReg dest} <- Phi([{srcs}])"
     | LIR.FPhi (dest, sources) ->
-        let srcs = sources |> List.map (fun (freg, LIR.Label lbl) -> $"({prettyPrintLIRFReg freg}, {lbl})") |> String.concat ", "
+        let srcs = sources |> commaSeparated (fun (freg, LIR.Label lbl) -> $"({prettyPrintLIRFReg freg}, {lbl})")
         $"{prettyPrintLIRFReg dest} <- FPhi([{srcs}])"
     | LIR.Store (offset, src) ->
         $"Store(Stack {offset}, {prettyPrintLIRReg src})"
@@ -551,25 +553,25 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.Uxtw (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Uxtw({prettyPrintLIRReg src})"
     | LIR.Call (dest, funcName, args) ->
-        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintLIROperand
         $"{prettyPrintLIRReg dest} <- Call({funcName}, [{argStr}])"
     | LIR.TailCall (funcName, args) ->
-        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintLIROperand
         $"TailCall({funcName}, [{argStr}])"
     | LIR.IndirectCall (dest, func, args) ->
-        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintLIROperand
         $"{prettyPrintLIRReg dest} <- IndirectCall({prettyPrintLIRReg func}, [{argStr}])"
     | LIR.IndirectTailCall (func, args) ->
-        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintLIROperand
         $"IndirectTailCall({prettyPrintLIRReg func}, [{argStr}])"
     | LIR.ClosureAlloc (dest, funcName, captures) ->
-        let capsStr = captures |> List.map prettyPrintLIROperand |> String.concat ", "
+        let capsStr = captures |> commaSeparated prettyPrintLIROperand
         $"{prettyPrintLIRReg dest} <- ClosureAlloc({funcName}, [{capsStr}])"
     | LIR.ClosureCall (dest, closure, args) ->
-        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintLIROperand
         $"{prettyPrintLIRReg dest} <- ClosureCall({prettyPrintLIRReg closure}, [{argStr}])"
     | LIR.ClosureTailCall (closure, args) ->
-        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        let argStr = args |> commaSeparated prettyPrintLIROperand
         $"ClosureTailCall({prettyPrintLIRReg closure}, [{argStr}])"
     | LIR.SaveRegs (intRegs, floatRegs) ->
         let intStr = intRegs |> List.map (sprintf "%A") |> String.concat ", "
