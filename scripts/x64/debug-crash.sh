@@ -34,8 +34,9 @@ usage() {
 while [ $# -gt 0 ]; do
     case "$1" in
         --watch-func)
-            if [ $# -lt 2 ]; then
+            if [ $# -lt 2 ] || [ -z "$2" ]; then
                 usage
+                echo "error: --watch-func requires an address" >&2
                 exit 1
             fi
             WATCH_ADDR="$2"
@@ -43,6 +44,8 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --trace-calls) MODE="trace"; shift ;;
+        --help|-h) usage; exit 0 ;;
+        --*) usage; echo "error: unknown option '$1'" >&2; exit 1 ;;
         *) EXPR="$1"; shift ;;
     esac
 done
