@@ -40,6 +40,13 @@ let graphNeighbors (graph: InterferenceGraph) (vregId: int) : Set<int> =
 let graphHasVertex (graph: InterferenceGraph) (vregId: int) : bool =
     RegisterAllocation.graphHasVertex graph vregId
 
+let cliqueEdges (vertices: int list) : (int * int) list =
+    vertices
+    |> List.collect (fun i ->
+        vertices
+        |> List.filter (fun j -> i < j)
+        |> List.map (fun j -> (i, j)))
+
 // =============================================================================
 // Test Cases
 // =============================================================================
@@ -115,11 +122,7 @@ let testChain () : TestResult =
 let testSpillRequired () : TestResult =
     // Create a clique of 10 vertices (all pairs interfere)
     let vertices = [0..9]
-    let edges = [
-        for i in 0..9 do
-            for j in i+1..9 do
-                yield (i, j)
-    ]
+    let edges = cliqueEdges vertices
     let graph = makeGraph vertices edges
     let result = chordalGraphColor graph [] 8 [] []
     // Should spill at least 2 vertices (10 - 8 = 2)
@@ -224,11 +227,7 @@ let testMultiplePrecolored () : TestResult =
 let testExactClique () : TestResult =
     // Clique of 8 with 8 colors - should use all colors, no spills
     let vertices = [0..7]
-    let edges = [
-        for i in 0..7 do
-            for j in i+1..7 do
-                yield (i, j)
-    ]
+    let edges = cliqueEdges vertices
     let graph = makeGraph vertices edges
     let result = chordalGraphColor graph [] 8 [] []
     if result.ChromaticNumber = 8 && spillCount result = 0 then
