@@ -123,14 +123,10 @@ let testCreateExecutableContainsCode () : TestResult =
     let machineCode = [0xD65F03C0u]
     let binary = createExecutable machineCode
     let retBytes = [| 0xC0uy; 0x03uy; 0x5Fuy; 0xD6uy |]
-
-    let mutable found = false
-    for i in 0 .. binary.Length - 4 do
-        if binary.[i] = retBytes.[0] &&
-           binary.[i+1] = retBytes.[1] &&
-           binary.[i+2] = retBytes.[2] &&
-           binary.[i+3] = retBytes.[3] then
-            found <- true
+    let found =
+        binary
+        |> Array.windowed retBytes.Length
+        |> Array.exists (fun bytes -> bytes = retBytes)
 
     if not found then
         Error "createExecutable: RET instruction not found in binary"
