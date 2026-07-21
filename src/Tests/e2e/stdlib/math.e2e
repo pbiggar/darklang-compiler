@@ -40,25 +40,32 @@ Math.truncate(-3.7) = -3
 Math.truncate(0.0) = 0
 
 // ===================================================================
-// Math.floor - Floor function (simplified - same as truncate for now)
+// Math.floor - Floor function
 // ===================================================================
 
 Math.floor(3.7) = 3
 Math.floor(3.0) = 3
+Math.floor(-3.7) = -4
+Math.floor(-3.0) = -3
 
 // ===================================================================
-// Math.ceiling - Ceiling function (simplified - same as truncate for now)
+// Math.ceiling - Ceiling function
 // ===================================================================
 
-Math.ceiling(3.7) = 3
+Math.ceiling(3.7) = 4
 Math.ceiling(3.0) = 3
+Math.ceiling(-3.7) = -3
+Math.ceiling(-3.0) = -3
 
 // ===================================================================
-// Math.round - Round to nearest (simplified - same as truncate for now)
+// Math.round - Round to nearest
 // ===================================================================
 
-Math.round(3.5) = 3
+Math.round(3.4) = 3
+Math.round(3.5) = 4
 Math.round(3.0) = 3
+Math.round(-3.4) = -3
+Math.round(-3.5) = -4
 
 // ===================================================================
 // NOTE: More comprehensive float tests would require:

@@ -26,20 +26,18 @@ def Stdlib.Math.truncate(x: Float) : Int64 =
     Float.toInt(x)
 
 // Floor: largest integer less than or equal to x
-// Note: Float.toInt truncates toward zero, so we need to adjust for negative numbers
 def Stdlib.Math.floor(x: Float) : Int64 =
     let truncated = Float.toInt(x) in
-    let floatTruncated = Float.abs(x) in  // placeholder - we don't have Int64.toFloat
-    truncated  // Simplified: just truncate for now
+    if x < Int64.toFloat(truncated) then truncated - 1 else truncated
 
 // Ceiling: smallest integer greater than or equal to x
 def Stdlib.Math.ceiling(x: Float) : Int64 =
     let truncated = Float.toInt(x) in
-    truncated  // Simplified: just truncate for now
+    if x > Int64.toFloat(truncated) then truncated + 1 else truncated
 
 // Round to nearest integer
 def Stdlib.Math.round(x: Float) : Int64 =
-    Float.toInt(x)  // Simplified: just truncate for now
+    if x < 0.0 then Stdlib.Math.ceiling(x - 0.5) else Stdlib.Math.floor(x + 0.5)
 
 // NOTE: Float comparison and arithmetic operators are not fully implemented yet.
 // The following functions require compiler support for float operations:
