@@ -805,10 +805,11 @@ let rec convertExpr
                         // Use temps to avoid swap issues
                         let (tempRegs, rg) =
                             argOperands
-                            |> List.fold (fun (temps, rg) _ ->
+                            |> List.fold (fun (tempsRev, rg) _ ->
                                 let (temp, rg') = MIR.freshReg rg
-                                (temps @ [temp], rg')
+                                (temp :: tempsRev, rg')
                             ) ([], builder.RegGen)
+                            |> fun (tempsRev, rg) -> (List.rev tempsRev, rg)
                         // First capture all arg values into temps
                         let captures =
                             List.zip3 tempRegs argOperands argTypes
@@ -1496,10 +1497,11 @@ and convertExprToOperand
                         // Use temps to avoid swap issues
                         let (tempRegs, rg) =
                             argOperands
-                            |> List.fold (fun (temps, rg) _ ->
+                            |> List.fold (fun (tempsRev, rg) _ ->
                                 let (temp, rg') = MIR.freshReg rg
-                                (temps @ [temp], rg')
+                                (temp :: tempsRev, rg')
                             ) ([], builder.RegGen)
+                            |> fun (tempsRev, rg) -> (List.rev tempsRev, rg)
                         let captures =
                             List.zip3 tempRegs argOperands argTypes
                             |> List.map (fun (temp, argOp, argType) ->
