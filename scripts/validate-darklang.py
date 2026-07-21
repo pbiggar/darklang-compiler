@@ -6,11 +6,11 @@ This script parses .e2e test files, converts compiler syntax to Darklang syntax,
 runs expressions through the darklang-interpreter, and compares results.
 
 USAGE:
-    python scripts/validate-darklang.py                    # Validate all e2e tests
-    python scripts/validate-darklang.py path/to/test.e2e   # Validate specific file
-    python scripts/validate-darklang.py --verbose          # Show all results
-    python scripts/validate-darklang.py --show-conversions # Show syntax conversions
-    python scripts/validate-darklang.py --show-failures    # Show only failures
+    python3 scripts/validate-darklang.py                    # Validate all e2e tests
+    python3 scripts/validate-darklang.py path/to/test.e2e   # Validate specific file
+    python3 scripts/validate-darklang.py --verbose          # Show all results
+    python3 scripts/validate-darklang.py --show-conversions # Show syntax conversions
+    python3 scripts/validate-darklang.py --show-failures    # Show only failures
 
 MANUAL VALIDATION:
     Run a single expression (limited support):

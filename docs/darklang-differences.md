@@ -13,8 +13,8 @@ Darklang interpreter. It serves as:
 
 To validate tests against the interpreter, run:
 ```bash
-python scripts/validate-darklang.py --help-full  # See detailed documentation
-python scripts/validate-darklang.py              # Run validation
+python3 scripts/validate-darklang.py --help-full  # See detailed documentation
+python3 scripts/validate-darklang.py              # Run validation
 ```
 
 ---
