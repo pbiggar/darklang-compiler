@@ -113,7 +113,9 @@ match Stdlib.File.appendText("/nonexistent/directory/file.txt", "test") with | O
 Path.combine("foo", "bar") = "foo/bar"
 Path.combine("/usr", "bin") = "/usr/bin"
 Path.combine("", "file.txt") = "/file.txt"
+Path.combine("/", "tmp") = "/tmp"
 Path.combine("/tmp", "test.txt") = "/tmp/test.txt"
+Path.combine("/tmp/", "test.txt") = "/tmp/test.txt"
 
 // Path.tempDir returns /tmp
 Path.tempDir() = "/tmp"
