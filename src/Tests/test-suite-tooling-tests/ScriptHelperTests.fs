@@ -96,9 +96,20 @@ let testShellcheckScansAllTrackedBashScripts () : TestResult =
         else
             Ok ()
 
+let testDumpLirFuncDoesNotSuppressCompilerFailures () : TestResult =
+    let path = scriptPath "scripts/dump-lir-func.sh"
+    match readFile path with
+    | Error msg -> Error msg
+    | Ok text ->
+        if text.Contains "|| true" then
+            Error "dump-lir-func.sh suppresses ./dark --dump-lir failures with `|| true`, so failed dumps can look successful"
+        else
+            Ok ()
+
 let tests = [
     ("compiler avoids failwith", testCompilerAvoidsFailwith)
     ("test tooling avoids failwith", testTestToolingAvoidsFailwith)
     ("installer formats asset list with stable delimiter", testInstallerFormatsAssetListWithStableDelimiter)
     ("shellcheck scans all tracked bash scripts", testShellcheckScansAllTrackedBashScripts)
+    ("dump-lir-func does not suppress compiler failures", testDumpLirFuncDoesNotSuppressCompilerFailures)
 ]

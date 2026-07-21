@@ -32,7 +32,8 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Compile and dump LIR
+# Compile and dump LIR. Keep the captured compiler output for filtering on
+# success, but print it when the dump itself fails.
 if [ -f "$EXPR" ]; then
     if "$RUN" ./dark --dump-lir "$EXPR" -o "$OUTFILE" > "$TMPFILE" 2>&1; then
         compile_status=0
