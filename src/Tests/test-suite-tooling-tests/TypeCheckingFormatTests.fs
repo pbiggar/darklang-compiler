@@ -57,9 +57,24 @@ let testParsesTypeKeywordsWithCultureInvariantCasing () : TestResult =
         CultureInfo.CurrentCulture <- originalCulture
         CultureInfo.CurrentUICulture <- originalUICulture
 
+let testParsesEscapedQuoteBeforeSlashSlashInsideStringLiteral () : TestResult =
+    let content = "\"say \\\"//\\\"\" : string  // string containing escaped quote and slashes"
+
+    withTempFile content (fun path ->
+        match parseTypeCheckingTestFile path with
+        | Ok [ test ] when test.Source = "\"say \\\"//\\\"\"" ->
+            Ok ()
+        | Ok [ test ] ->
+            Error $"Expected source to preserve escaped quotes before //, got: {test.Source}"
+        | Ok tests ->
+            Error $"Expected one parsed type checking test, got {List.length tests}"
+        | Error msg ->
+            Error $"Expected type checking test with escaped quote before // to parse, got: {msg}")
+
 let tests = [
     ("parse // inside type checking string literal", testParsesSlashSlashInsideStringLiteral)
     ("parse type keywords with culture-invariant casing", testParsesTypeKeywordsWithCultureInvariantCasing)
+    ("parse escaped quote before // inside type checking string literal", testParsesEscapedQuoteBeforeSlashSlashInsideStringLiteral)
 ]
 
 let runAll () : TestResult =

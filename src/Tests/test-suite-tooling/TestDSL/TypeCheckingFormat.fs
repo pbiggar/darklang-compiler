@@ -40,6 +40,15 @@ let private parseType (typeStr: string) : Result<AST.Type, string> =
     | "error" -> Error "Use 'error' keyword, not as a type"
     | other -> Error $"Unknown type: {other}"
 
+let private isEscapedQuote (text: string) (quoteIndex: int) : bool =
+    let rec countBackslashes index count =
+        if index < 0 || text.[index] <> '\\' then
+            count
+        else
+            countBackslashes (index - 1) (count + 1)
+
+    (countBackslashes (quoteIndex - 1) 0) % 2 = 1
+
 /// Parse a single test line
 /// Format: source : expectation  // comment
 let private parseTestLine (line: string) (lineNumber: int) : Result<TypeCheckingTest, string> =
@@ -48,7 +57,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<TypeChecking
         let rec findCommentStart (i: int) (inQuotes: bool) : int option =
             if i >= line.Length - 1 then
                 None
-            elif line.[i] = '"' then
+            elif line.[i] = '"' && not (isEscapedQuote line i) then
                 findCommentStart (i + 1) (not inQuotes)
             elif line.[i] = '/' && line.[i + 1] = '/' && not inQuotes then
                 Some i
@@ -68,7 +77,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<TypeChecking
         let rec findLast (i: int) (inQuotes: bool) (lastColonIdx: int option) : int option =
             if i >= s.Length then
                 lastColonIdx
-            elif s.[i] = '"' then
+            elif s.[i] = '"' && not (isEscapedQuote s i) then
                 findLast (i + 1) (not inQuotes) lastColonIdx
             elif s.[i] = ':' && not inQuotes then
                 findLast (i + 1) inQuotes (Some i)
