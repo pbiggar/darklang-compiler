@@ -83,6 +83,19 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             | _, Error e -> Error e
     else
 
+    // Try MOVN: "MOVN(X1, 10, 0)"
+    let movnMatch = Regex.Match(line, @"^MOVN\((.+?),\s*(\d+),\s*(\d+)\)$")
+    if movnMatch.Success then
+        match parseReg movnMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok dest ->
+            match parseUInt16Operand lineNum "MOVN immediate" movnMatch.Groups.[2].Value,
+                  parseIntOperand lineNum "MOVN shift" movnMatch.Groups.[3].Value with
+            | Ok imm, Ok shift -> Ok (MOVN (dest, imm, shift))
+            | Error e, _ -> Error e
+            | _, Error e -> Error e
+    else
+
     // Try MOVK: "MOVK(X1, 10, 16)"
     let movkMatch = Regex.Match(line, @"^MOVK\((.+?),\s*(\d+),\s*(\d+)\)$")
     if movkMatch.Success then

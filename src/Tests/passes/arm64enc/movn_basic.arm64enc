@@ -1,0 +1,8 @@
+---NAME---
+Encode MOVN instruction
+
+---INPUT-ARM64---
+MOVN(X0, 0, 0)
+
+---OUTPUT-HEX---
+0x92800000
