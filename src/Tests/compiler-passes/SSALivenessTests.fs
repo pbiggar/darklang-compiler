@@ -19,6 +19,9 @@ let makeLabel (name: string) = LIR.Label name
 /// Create a virtual register
 let vr (n: int) = LIR.Virtual n
 
+/// Create a virtual floating-point register
+let fvr (n: int) = LIR.FVirtual n
+
 /// Create a VReg operand
 let vreg (n: int) = Reg (LIR.Virtual n)
 
@@ -61,6 +64,30 @@ let isLiveOut
     : bool =
     match RegisterAllocation.blockLivenessForLabel blockIndex liveness label with
     | Some bl -> RegisterAllocation.bitsetContains domain bl.LiveOut vregId
+    | None -> false
+
+/// Check if an FVirtual is in the LiveIn set
+let isFloatLiveIn
+    (domain: RegisterAllocation.VRegDomain)
+    (blockIndex: RegisterAllocation.BlockIndex)
+    (liveness: RegisterAllocation.BlockLiveness array)
+    (label: Label)
+    (fregId: int)
+    : bool =
+    match RegisterAllocation.blockLivenessForLabel blockIndex liveness label with
+    | Some bl -> RegisterAllocation.bitsetContains domain bl.LiveIn fregId
+    | None -> false
+
+/// Check if an FVirtual is in the LiveOut set
+let isFloatLiveOut
+    (domain: RegisterAllocation.VRegDomain)
+    (blockIndex: RegisterAllocation.BlockIndex)
+    (liveness: RegisterAllocation.BlockLiveness array)
+    (label: Label)
+    (fregId: int)
+    : bool =
+    match RegisterAllocation.blockLivenessForLabel blockIndex liveness label with
+    | Some bl -> RegisterAllocation.bitsetContains domain bl.LiveOut fregId
     | None -> false
 
 // =============================================================================
@@ -281,12 +308,45 @@ let testBitsetLivenessBehavior () : TestResult =
     else
         Error $"Bitset liveness missing phi uses. LiveOut B contains v0: {liveOutB}, LiveOut C contains v1: {liveOutC}"
 
+/// Test: Float phi sources are live at predecessor exits, not at phi's block
+/// Mirrors integer phi liveness for the independent float liveness path.
+let testFloatPhiSourceLivenessScoped () : TestResult =
+    let labelA = makeLabel "A"
+    let labelB = makeLabel "B"
+    let labelC = makeLabel "C"
+    let labelD = makeLabel "D"
+
+    let condReg = vr 99
+
+    let blockA = makeBranchBlock labelA [Mov (condReg, Imm 1L)] condReg labelB labelC
+    let blockB = makeJumpBlock labelB [FLoad (fvr 0, 10.0)] labelD
+    let blockC = makeJumpBlock labelC [FLoad (fvr 1, 20.0)] labelD
+    let phiInstr = FPhi (fvr 2, [(fvr 0, labelB); (fvr 1, labelC)])
+    let blockD = makeRetBlock labelD [phiInstr; FAdd (fvr 3, fvr 2, fvr 2)]
+
+    let cfg = makeCFG labelA [blockA; blockB; blockC; blockD]
+    let (domain, blockIndex, liveness) = RegisterAllocation.computeFloatLivenessBits cfg
+
+    if not (isFloatLiveOut domain blockIndex liveness labelB 0) then
+        Error "f0 should be live-out of B (used by float phi)"
+    else if isFloatLiveOut domain blockIndex liveness labelC 0 then
+        Error "f0 should NOT be live-out of C (not in float phi from C)"
+    else if not (isFloatLiveOut domain blockIndex liveness labelC 1) then
+        Error "f1 should be live-out of C (used by float phi)"
+    else if isFloatLiveOut domain blockIndex liveness labelB 1 then
+        Error "f1 should NOT be live-out of B (not in float phi from B)"
+    else if isFloatLiveIn domain blockIndex liveness labelD 2 then
+        Error "f2 should NOT be live-in to D (defined by float phi)"
+    else
+        Ok ()
+
 let tests = [
     ("phi def at block entry", testPhiDefAtBlockEntry)
     ("phi source liveness scoped", testPhiSourceLivenessScoped)
     ("multiple phis same block", testMultiplePhisSameBlock)
     ("loop phi", testLoopPhi)
     ("bitset liveness behavior", testBitsetLivenessBehavior)
+    ("float phi source liveness scoped", testFloatPhiSourceLivenessScoped)
 ]
 
 /// Run all SSA liveness tests
