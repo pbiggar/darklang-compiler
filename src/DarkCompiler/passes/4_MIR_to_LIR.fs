@@ -38,7 +38,11 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
 /// Apply type substitution - replaces type variables with concrete types
 let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.Type list) (typ: AST.Type) : AST.Type =
     // Build substitution map from type params to type args
-    let subst = List.zip typeParams typeArgs |> Map.ofList
+    let subst =
+        if List.length typeParams = List.length typeArgs then
+            List.zip typeParams typeArgs |> Map.ofList
+        else
+            Crash.crash $"applyTypeSubst: type argument mismatch: params={typeParams.Length}, args={typeArgs.Length}"
     let rec substitute t =
         match t with
         | AST.TVar name ->
@@ -1145,7 +1149,7 @@ let selectInstr
                     typeVariants.Variants |> List.map (fun v ->
                         let subPayload =
                             match v.Payload with
-                            | Some payload when List.length typeVariants.TypeParams = List.length typeArgs ->
+                            | Some payload ->
                                 Some (applyTypeSubst typeVariants.TypeParams typeArgs payload)
                             | other -> other
                         (v.Name, v.Tag, subPayload))
