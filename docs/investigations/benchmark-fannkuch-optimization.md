@@ -5,7 +5,7 @@
 The fannkuch benchmark computes the maximum number of "pancake flips" needed to sort any permutation of n elements. The algorithm generates all n! permutations and counts flips for each.
 
 **Key Finding:**
-Dark uses **immutable FingerTree-backed lists** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. Current cachegrind evidence shows this remains the dominant source of the performance difference: Dark executes 15,995,282,805 instructions for `fannkuch`, 1188.9x Rust and 513.0x OCaml.
+Dark uses **immutable FingerTree-backed lists** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. Current cachegrind evidence shows this remains the dominant source of the performance difference: Dark executes 15,995,282,805 instructions for `fannkuch`, 1188.9x Rust and 512.9x OCaml.
 
 ## Benchmark Source Code
 
@@ -162,7 +162,7 @@ Each flip in Dark allocates:
 3. FingerTree nodes for `reverse` result
 4. FingerTree nodes for `append` result
 
-For n=9 (standard benchmark), this means **hundreds of allocations per permutation**, vs **zero allocations** per permutation in Rust/OCaml.
+For n=9 (standard benchmark), this means **many list allocations per flip and rotation**. Rust is not allocation-free for every permutation in this benchmark because it clones the working `Vec` before counting flips for a non-zero first element; current optimized assembly shows a 72-byte `__rust_alloc` in that path. The important distinction is still that Rust pays for one contiguous copy before the flip-counting loop, then performs each prefix reversal in place, while Dark reconstructs multiple FingerTree lists inside the loop.
 
 ## Identified Optimization Opportunities
 
