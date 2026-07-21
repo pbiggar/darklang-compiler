@@ -4,20 +4,20 @@
 
 module X86_64CodeGenTests
 
-let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegistry =
-    let merge left right =
-        Map.fold
-            (fun acc typeName variants ->
-                match Map.tryFind typeName acc with
-                | None ->
-                    Map.add typeName variants acc
-                | Some existing when existing = variants ->
-                    acc
-                | Some _ ->
-                    Crash.crash $"Conflicting inferred test variant metadata for {typeName}")
-            left
-            right
+let private mergeFixtureVariantRegistries (left: LIR.VariantRegistry) (right: LIR.VariantRegistry) : LIR.VariantRegistry =
+    Map.fold
+        (fun acc typeName variants ->
+            match Map.tryFind typeName acc with
+            | None ->
+                Map.add typeName variants acc
+            | Some existing when existing = variants ->
+                acc
+            | Some _ ->
+                Crash.crash $"Conflicting inferred test variant metadata for {typeName}")
+        left
+        right
 
+let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegistry =
     match typ with
     | AST.TSum (name, typeArgs) ->
         let self =
@@ -41,23 +41,23 @@ let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegist
 
         typeArgs
         |> List.map inferFixtureVariantsFromType
-        |> List.fold merge self
+        |> List.fold mergeFixtureVariantRegistries self
     | AST.TTuple fields ->
         fields
         |> List.map inferFixtureVariantsFromType
-        |> List.fold merge Map.empty
+        |> List.fold mergeFixtureVariantRegistries Map.empty
     | AST.TRecord (_, typeArgs) ->
         typeArgs
         |> List.map inferFixtureVariantsFromType
-        |> List.fold merge Map.empty
+        |> List.fold mergeFixtureVariantRegistries Map.empty
     | AST.TList elemType ->
         inferFixtureVariantsFromType elemType
     | AST.TDict (keyType, valueType) ->
-        merge (inferFixtureVariantsFromType keyType) (inferFixtureVariantsFromType valueType)
+        mergeFixtureVariantRegistries (inferFixtureVariantsFromType keyType) (inferFixtureVariantsFromType valueType)
     | AST.TFunction (paramTypes, returnType) ->
         returnType :: paramTypes
         |> List.map inferFixtureVariantsFromType
-        |> List.fold merge Map.empty
+        |> List.fold mergeFixtureVariantRegistries Map.empty
     | AST.TInt8
     | AST.TInt16
     | AST.TInt32
@@ -86,19 +86,6 @@ let private inferFixtureVariantsFromRcMetadata (metadata: ANF.RcMetadata option)
     |> Option.defaultValue Map.empty
 
 let private inferFixtureVariantsFromInstr (instr: LIR.Instr) : LIR.VariantRegistry =
-    let merge left right =
-        Map.fold
-            (fun acc typeName variants ->
-                match Map.tryFind typeName acc with
-                | None ->
-                    Map.add typeName variants acc
-                | Some existing when existing = variants ->
-                    acc
-                | Some _ ->
-                    Crash.crash $"Conflicting inferred test variant metadata for {typeName}")
-            left
-            right
-
     match instr with
     | LIR.Phi (_, _, Some typ)
     | LIR.HeapStore (_, _, _, Some typ)
@@ -113,38 +100,25 @@ let private inferFixtureVariantsFromInstr (instr: LIR.Instr) : LIR.VariantRegist
         variants
         |> List.choose (fun (_, _, payload) -> payload)
         |> List.map inferFixtureVariantsFromType
-        |> List.fold merge Map.empty
+        |> List.fold mergeFixtureVariantRegistries Map.empty
     | LIR.PrintRecord (_, _, fields) ->
         fields
         |> List.map (fun (_, fieldType) -> inferFixtureVariantsFromType fieldType)
-        |> List.fold merge Map.empty
+        |> List.fold mergeFixtureVariantRegistries Map.empty
     | _ ->
         Map.empty
 
 let private inferFixtureVariantsFromFunction (func: LIR.Function) : LIR.VariantRegistry =
-    let merge left right =
-        Map.fold
-            (fun acc typeName variants ->
-                match Map.tryFind typeName acc with
-                | None ->
-                    Map.add typeName variants acc
-                | Some existing when existing = variants ->
-                    acc
-                | Some _ ->
-                    Crash.crash $"Conflicting inferred test variant metadata for {typeName}")
-            left
-            right
-
     let paramVariants =
         func.TypedParams
         |> List.map (fun param -> inferFixtureVariantsFromType param.Type)
-        |> List.fold merge Map.empty
+        |> List.fold mergeFixtureVariantRegistries Map.empty
 
     func.CFG.Blocks
     |> Map.toList
     |> List.collect (fun (_, block) -> block.Instrs)
     |> List.map inferFixtureVariantsFromInstr
-    |> List.fold merge paramVariants
+    |> List.fold mergeFixtureVariantRegistries paramVariants
 
 let private completeFixtureVariants (program: LIR.Program) : LIR.Program =
     let mergeInferred explicit inferred =
