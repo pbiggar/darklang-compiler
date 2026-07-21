@@ -254,6 +254,7 @@ Stdlib.String.slice("hello", 5, 5) = ""
 // Clamping behavior
 Stdlib.String.slice("hello", 0, 100) = "hello"
 Stdlib.String.slice("hello", 10, 15) = ""
+Stdlib.String.slice("hello", 4, 2) = ""
 
 // =============================================================================
 // Stdlib.String.take and drop Tests
@@ -263,11 +264,13 @@ Stdlib.String.slice("hello", 10, 15) = ""
 Stdlib.String.take("hello world", 5) = "hello"
 Stdlib.String.take("hello", 0) = ""
 Stdlib.String.take("hello", 100) = "hello"
+Stdlib.String.take("hello", -1) = ""
 
 // drop
 Stdlib.String.drop("hello world", 6) = "world"
 Stdlib.String.drop("hello", 0) = "hello"
 Stdlib.String.drop("hello", 100) = ""
+Stdlib.String.drop("hello", -1) = "hello"
 
 // =============================================================================
 // Stdlib.String.substring Tests
