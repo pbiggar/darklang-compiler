@@ -114,13 +114,13 @@ let _ = RefCountDec(someValue) in
 return result
 ```
 
-## Test Cases
+## Test Coverage
 
 `src/Tests/e2e/tailcall.e2e` is the maintained end-to-end regression suite for
-tail-call behavior. It covers simple self-recursion, argument swap and rotation
-cases, generic tail recursion, string/reference-counted arguments, float
-parameter self-recursion, and float literals in tail-call arguments. Focused
-pass-level tests in
+tail-call behavior. It covers simple self-recursion, argument swaps and
+three-way rotations, higher-arity tail calls, generic tail recursion,
+string/reference-counted arguments, float parameter self-recursion, and float
+literals in tail-call arguments. Focused pass-level tests in
 `src/Tests/compiler-passes/TailCallDetectionTests.fs` cover cleanup movement
 around tail calls.
 
