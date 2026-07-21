@@ -36,3 +36,8 @@ Stdlib.Int64.popcount(1000) = 6
 Stdlib.Int64.popcount(12345) = 6
 Stdlib.Int64.popcount(65536) = 1
 Stdlib.Int64.popcount(1048575) = 20
+
+// Negative Int64 values count two's-complement set bits
+Stdlib.Int64.popcount(-1) = 64
+Stdlib.Int64.popcount(-2) = 63
+Stdlib.Int64.popcount(-9223372036854775808) = 1
