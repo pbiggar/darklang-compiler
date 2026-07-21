@@ -193,6 +193,18 @@ let testCompleteEncodingPipeline () : TestResult =
             else
                 Ok ()
 
+let testWriteToFileReturnsErrorForInvalidPath () : TestResult =
+    let missingDir =
+        System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            $"dark-macho-missing-{System.Guid.NewGuid()}",
+            "out"
+        )
+
+    match writeToFile missingDir [| 0uy |] with
+    | Ok () -> Error "Expected invalid output path to return Error"
+    | Error _ -> Ok ()
+
 let tests = [
     ("uint32ToBytes", testUint32ToBytes)
     ("uint64ToBytes", testUint64ToBytes)
@@ -206,6 +218,7 @@ let tests = [
     ("createExecutable contains code", testCreateExecutableContainsCode)
     ("Mach-O __const section offset points to aligned data", testMachOConstSectionOffsetPointsToAlignedData)
     ("complete encoding pipeline", testCompleteEncodingPipeline)
+    ("writeToFile returns Error for invalid path", testWriteToFileReturnsErrorForInvalidPath)
 ]
 
 /// Run all binary generation unit tests

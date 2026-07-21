@@ -605,26 +605,54 @@ let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: Literal
     // This is a simplified approach - proper coverage on macOS needs __DATA segment
     createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
 
+let private tryWriteAllBytes (path: string) (bytes: byte array) : Result<unit, string> =
+    try
+        System.IO.File.WriteAllBytes(path, bytes)
+        Ok ()
+    with ex ->
+        Error $"Failed to write Mach-O executable to {path}: {ex.Message}"
+
+let private tryAddUserExecute (path: string) : Result<unit, string> =
+    try
+        let permissions = System.IO.File.GetUnixFileMode(path)
+        System.IO.File.SetUnixFileMode(path, permissions ||| System.IO.UnixFileMode.UserExecute)
+        Ok ()
+    with ex ->
+        Error $"Failed to make Mach-O executable {path}: {ex.Message}"
+
+let private tryStartProcess (startInfo: System.Diagnostics.ProcessStartInfo) : Result<System.Diagnostics.Process, string> =
+    try
+        let proc = System.Diagnostics.Process.Start(startInfo)
+        if isNull proc then
+            Error $"Failed to start {startInfo.FileName}"
+        else
+            Ok proc
+    with ex ->
+        Error $"Failed to start {startInfo.FileName}: {ex.Message}"
+
 /// Write bytes to file and sign it
 let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =
-    System.IO.File.WriteAllBytes(path, bytes)
-    // Make executable
-    let permissions = System.IO.File.GetUnixFileMode(path)
-    System.IO.File.SetUnixFileMode(path, permissions ||| System.IO.UnixFileMode.UserExecute)
+    match tryWriteAllBytes path bytes with
+    | Error err -> Error err
+    | Ok () ->
+        match tryAddUserExecute path with
+        | Error err -> Error err
+        | Ok () ->
+            // Code sign with adhoc signature (required for macOS to execute)
+            let startInfo = System.Diagnostics.ProcessStartInfo()
+            startInfo.FileName <- "codesign"
+            startInfo.Arguments <- $"-s - \"{path}\""
+            startInfo.RedirectStandardOutput <- true
+            startInfo.RedirectStandardError <- true
+            startInfo.UseShellExecute <- false
 
-    // Code sign with adhoc signature (required for macOS to execute)
-    let startInfo = System.Diagnostics.ProcessStartInfo()
-    startInfo.FileName <- "codesign"
-    startInfo.Arguments <- $"-s - \"{path}\""
-    startInfo.RedirectStandardOutput <- true
-    startInfo.RedirectStandardError <- true
-    startInfo.UseShellExecute <- false
+            match tryStartProcess startInfo with
+            | Error err -> Error err
+            | Ok proc ->
+                proc.WaitForExit()
 
-    let proc = System.Diagnostics.Process.Start(startInfo)
-    proc.WaitForExit()
-
-    if proc.ExitCode <> 0 then
-        let stderr = proc.StandardError.ReadToEnd()
-        Error $"Code signing failed: {stderr}"
-    else
-        Ok ()
+                if proc.ExitCode <> 0 then
+                    let stderr = proc.StandardError.ReadToEnd()
+                    Error $"Code signing failed: {stderr}"
+                else
+                    Ok ()
