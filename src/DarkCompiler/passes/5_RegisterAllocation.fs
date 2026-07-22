@@ -125,9 +125,12 @@ let private buildVRegDomain (ids: int list) : VRegDomain =
     match ordered with
     | [] ->
         { Ids = idsArray; IndexOf = [||]; IndexOffset = 0; WordCount = 0 }
-    | _ ->
-        let minId = List.head ordered
-        let maxId = List.last ordered
+    | minId :: _ ->
+        let rec lastId (current: int) (remaining: int list) : int =
+            match remaining with
+            | [] -> current
+            | head :: tail -> lastId head tail
+        let maxId = lastId minId ordered
         let size = maxId - minId + 1
         let indexOf = Array.create size -1
         ordered |> List.iteri (fun idx id -> indexOf.[id - minId] <- idx)
