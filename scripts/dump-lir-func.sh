@@ -11,11 +11,11 @@
 #
 # Shows both pre- and post-register-allocation LIR for the named function.
 
-set -e
+set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN="$HERE/run-in-container"
-EXPR="$1"
+EXPR="${1:-}"
 FUNC="${2:-}"
 
 if [ -z "$EXPR" ]; then
