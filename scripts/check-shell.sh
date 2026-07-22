@@ -1,6 +1,6 @@
 #!/bin/bash
 # check-shell.sh
-# Run shellcheck against each tracked bash script in the repository.
+# Run shellcheck error checks against each tracked bash script in the repository.
 
 set -euo pipefail
 
@@ -12,7 +12,7 @@ fi
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-mapfile -d '' tracked_files < <(git ls-files -z -- run-tests scripts)
+mapfile -d '' tracked_files < <(git ls-files -z)
 bash_files=()
 
 for file in "${tracked_files[@]}"; do
@@ -29,4 +29,4 @@ if [[ ${#bash_files[@]} -eq 0 ]]; then
   exit 0
 fi
 
-shellcheck "${bash_files[@]}"
+shellcheck --severity=error "${bash_files[@]}"

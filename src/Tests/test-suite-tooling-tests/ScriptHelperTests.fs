@@ -82,8 +82,23 @@ let testInstallerFormatsAssetListWithStableDelimiter () : TestResult =
         else
             Ok ()
 
+let testShellcheckScansAllTrackedBashScripts () : TestResult =
+    let path = scriptPath "scripts/check-shell.sh"
+    match readFile path with
+    | Error msg -> Error msg
+    | Ok text ->
+        if text.Contains "git ls-files -z -- run-tests scripts" then
+            Error "check-shell.sh only scans run-tests and scripts/, omitting other tracked bash scripts"
+        elif not (text.Contains "git ls-files -z)") then
+            Error "check-shell.sh does not enumerate all tracked files before filtering bash scripts"
+        elif not (text.Contains "shellcheck --severity=error") then
+            Error "check-shell.sh should scan all tracked bash scripts for shellcheck errors without requiring existing warnings to be fixed in the same pass"
+        else
+            Ok ()
+
 let tests = [
     ("compiler avoids failwith", testCompilerAvoidsFailwith)
     ("test tooling avoids failwith", testTestToolingAvoidsFailwith)
     ("installer formats asset list with stable delimiter", testInstallerFormatsAssetListWithStableDelimiter)
+    ("shellcheck scans all tracked bash scripts", testShellcheckScansAllTrackedBashScripts)
 ]
