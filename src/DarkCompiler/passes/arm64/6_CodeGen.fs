@@ -5796,7 +5796,7 @@ let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (block: LIR.Basic
 /// Convert LIR CFG to ARM64 instructions
 /// epilogueLabel: passed through to blocks for Ret handling
 let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64Symbolic.Instr list, string> =
-    // Get blocks in a deterministic order (entry first, then sorted by label)
+    // Get blocks in a deterministic order (entry first, then Map's label order).
     let entryBlock =
         match Map.tryFind cfg.Entry cfg.Blocks with
         | Some block -> [block]
@@ -5806,7 +5806,6 @@ let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Re
         cfg.Blocks
         |> Map.toList
         |> List.filter (fun (label, _) -> label <> cfg.Entry)
-        |> List.sortBy fst
         |> List.map snd
 
     let allBlocks = entryBlock @ otherBlocks
@@ -5872,8 +5871,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
     let overflowLabel = heapOverflowLabelPrefix + func.Name
     let needsHeapOverflowTrap =
         func.CFG.Blocks
-        |> Map.toList
-        |> List.exists (fun (_, block) ->
+        |> Map.exists (fun _ block ->
             block.Instrs
             |> List.exists (function
                 | LIR.HeapAlloc _ -> true
@@ -6102,11 +6100,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
 
     // Ensure _start is first (entry point)
     let sortedFunctions =
-        match List.tryFind (fun (f: LIR.Function) -> f.Name = "_start") functions with
-        | Some startFunc ->
-            let otherFuncs = List.filter (fun (f: LIR.Function) -> f.Name <> "_start") functions
-            startFunc :: otherFuncs
-        | None -> functions  // No _start, keep original order
+        match List.partition (fun (f: LIR.Function) -> f.Name = "_start") functions with
+        | startFunc :: _, otherFuncs -> startFunc :: otherFuncs
+        | [], _ -> functions  // No _start, keep original order
 
     let unionLabelSets (sets: Set<string> list) : Set<string> =
         match sets with
