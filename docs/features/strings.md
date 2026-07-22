@@ -42,9 +42,10 @@ Unicode helpers are layered on top of the byte representation:
 - `fromCodepoints` allocates a dynamic string and encodes UTF-8 bytes.
 - `codepointLength`, `toUpperCase`, `toLowerCase`, and `reverse` use the
   codepoint conversion helpers.
-- `toGraphemes` and `graphemeLength` use a simplified UAX #29-style segmenter
-  with explicit handling for combining marks, variation selectors, skin tone
-  modifiers, zero-width joiner, and CR/LF.
+- `toGraphemes` and `graphemeLength` use a simplified UAX #29-style segmenter.
+  It keeps combining marks, variation selectors, selected emoji modifiers, and
+  CR/LF with their surrounding cluster, but it does not implement the full UAX
+  #29 rules needed for complex skin-tone and zero-width-joiner emoji sequences.
 
 Higher-level stdlib functions such as `repeat`, `join`, `trim`, `split`,
 `replace`, `first`, `last`, `dropFirst`, `dropLast`, `head`, `padStart`, and
