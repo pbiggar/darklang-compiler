@@ -1750,6 +1750,9 @@ let selectCFG
     : Result<LIR.CFG, string> =
     let lirEntry = convertLabel cfg.Entry
 
+    match Map.tryFind cfg.Entry cfg.Blocks with
+    | None -> Error $"MIR to LIR: missing entry block {cfg.Entry}"
+    | Some _ ->
     let blockList = cfg.Blocks |> Map.toList
     let rec buildBlocks remaining currentState blocksAcc labelMapAcc =
         match remaining with

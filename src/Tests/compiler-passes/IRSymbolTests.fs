@@ -43,8 +43,30 @@ let testMirToLirSymbolicOperands () : TestResult =
             else Error "Expected MIR→LIR to preserve symbolic operands"
         | _ -> Error "Expected a single LIR function"
 
+let testMirToLirReportsMissingEntryBlock () : TestResult =
+    let entry = MIR.Label "entry"
+    let actual = MIR.Label "actual"
+    let block: MIR.BasicBlock =
+        { Label = actual
+          Instrs = [MIR.Mov (MIR.VReg 0, MIR.Int64Const 42L, Some AST.TInt64)]
+          Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
+    let cfg: MIR.CFG = { Entry = entry; Blocks = Map.ofList [ (actual, block) ] }
+    let func: MIR.Function =
+        { Name = "missing_entry"
+          TypedParams = []
+          ReturnType = AST.TInt64
+          CFG = cfg
+          FloatRegs = Set.empty }
+    let program = MIR.Program ([func], Map.empty, Map.empty)
+
+    match MIR_to_LIR.toLIR program with
+    | Error err when err.Contains "missing entry block" -> Ok ()
+    | Error err -> Error $"Expected missing entry block error, got '{err}'"
+    | Ok _ -> Error "Expected MIR→LIR to reject a CFG whose entry block is absent"
+
 let tests = [
     ("mir → lir symbolic operands", testMirToLirSymbolicOperands)
+    ("mir → lir reports missing entry block", testMirToLirReportsMissingEntryBlock)
 ]
 
 /// Run all symbolic LIR unit tests
