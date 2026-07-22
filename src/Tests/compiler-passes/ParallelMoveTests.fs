@@ -32,21 +32,6 @@ let convertTailArgMoves (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64
     }
     CodeGen.convertInstr ctx (LIR.TailArgMoves moves)
 
-/// Helper to convert LIR RawAlloc to ARM64 instructions via CodeGen
-let convertRawAlloc (dest: LIR.PhysReg) (numBytes: LIR.PhysReg) : Result<ARM64Symbolic.Instr list, string> =
-    let ctx : CodeGen.CodeGenContext = {
-        Options = CodeGen.defaultOptions
-        SumShapeRegistry = Map.empty
-        RecordRegistry = Map.empty
-        ClosurePayloadSizes = Map.empty
-        ClosureCaptureTypes = Map.empty
-        FunctionName = "test"
-        StackSize = 0
-        UsedCalleeSaved = []
-        HeapOverflowLabel = "__heap_oom_test"
-    }
-    CodeGen.convertInstr ctx (LIR.RawAlloc (LIR.Physical dest, LIR.Physical numBytes))
-
 /// Helper to check if ARM64 instruction is a MOV_reg
 let isMoveReg (instr: ARM64Symbolic.Instr) : bool =
     match instr with
@@ -195,47 +180,6 @@ let testMoveFromStackSlot () : TestResult =
         else
             Ok ()
 
-/// RawAlloc should branch to a shared overflow label, rather than inlining
-/// the full overflow trap sequence at each allocation site.
-let testRawAllocUsesSharedHeapOverflowPath () : TestResult =
-    match convertRawAlloc LIR.X0 LIR.X1 with
-    | Error e -> Error $"Failed to convert RawAlloc: {e}"
-    | Ok instrs ->
-        let hasHeapEndCmp =
-            instrs
-            |> List.exists (function
-                | ARM64Symbolic.CMP_reg (ARM64.X14, ARM64.X11) -> true
-                | _ -> false)
-
-        let hasInlineHeapEndRecompute =
-            instrs
-            |> List.exists (function
-                | ARM64Symbolic.MOVZ (ARM64.X11, imm, 16) when imm = 0x2000us -> true
-                | _ -> false)
-
-        let hasOverflowLabelBranch =
-            instrs
-            |> List.exists (function
-                | ARM64Symbolic.B_cond_label (ARM64.GT, _) -> true
-                | _ -> false)
-
-        let hasInlinedOverflowTrap =
-            instrs
-            |> List.exists (function
-                | ARM64Symbolic.SVC _ -> true
-                | _ -> false)
-
-        if not hasHeapEndCmp then
-            Error "Expected RawAlloc bounds check to compare next pointer against computed heap end in X11"
-        else if not hasInlineHeapEndRecompute then
-            Error "Expected RawAlloc bounds check to compute heap end in X11"
-        else if not hasOverflowLabelBranch then
-            Error "Expected RawAlloc bounds check to branch to shared overflow label (B_cond_label GT)"
-        else if hasInlinedOverflowTrap then
-            Error "RawAlloc still inlines overflow trap path (found SVC in fast path conversion)"
-        else
-            Ok ()
-
 let tests = [
     ("simple move", testSimpleMove)
     ("chain moves", testChainMoves)
@@ -245,7 +189,6 @@ let tests = [
     ("mixed cycle and independent", testMixedCycleAndIndependent)
     ("move from immediate", testMoveFromImmediate)
     ("move from stack slot", testMoveFromStackSlot)
-    ("raw alloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)
 ]
 
 /// Run all parallel move tests

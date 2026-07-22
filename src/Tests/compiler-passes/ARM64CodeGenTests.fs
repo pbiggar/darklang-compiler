@@ -101,6 +101,23 @@ let private makeEmptyFunction
         UsedCalleeSaved = []
     }
 
+let private convertRawAlloc
+    (dest: LIR.PhysReg)
+    (numBytes: LIR.PhysReg)
+    : Result<ARM64Symbolic.Instr list, string> =
+    let ctx : CodeGen.CodeGenContext = {
+        Options = CodeGen.defaultOptions
+        SumShapeRegistry = Map.empty
+        RecordRegistry = Map.empty
+        ClosurePayloadSizes = Map.empty
+        ClosureCaptureTypes = Map.empty
+        FunctionName = "test"
+        StackSize = 0
+        UsedCalleeSaved = []
+        HeapOverflowLabel = "__heap_oom_test"
+    }
+    CodeGen.convertInstr ctx (LIR.RawAlloc (LIR.Physical dest, LIR.Physical numBytes))
+
 let testGeneratedCodeEliminatesSelfMoves () : TestResult =
     let program =
         makeSimpleProgramWithVariants
@@ -176,6 +193,47 @@ let testArm64FLoadEncodableConstantsUseImmediate () : TestResult =
             Error "FLoad 4.0 did not emit a floating-point immediate"
         elif hasLiteralLoad then
             Error "Encodable FLoad used a literal-pool load instead of an immediate"
+        else
+            Ok ()
+
+/// RawAlloc should branch to a shared overflow label, rather than inlining
+/// the full overflow trap sequence at each allocation site.
+let testRawAllocUsesSharedHeapOverflowPath () : TestResult =
+    match convertRawAlloc LIR.X0 LIR.X1 with
+    | Error e -> Error $"Failed to convert RawAlloc: {e}"
+    | Ok instrs ->
+        let hasHeapEndCmp =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.CMP_reg (ARM64.X14, ARM64.X11) -> true
+                | _ -> false)
+
+        let hasInlineHeapEndRecompute =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.MOVZ (ARM64.X11, imm, 16) when imm = 0x2000us -> true
+                | _ -> false)
+
+        let hasOverflowLabelBranch =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.B_cond_label (ARM64.GT, _) -> true
+                | _ -> false)
+
+        let hasInlinedOverflowTrap =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.SVC _ -> true
+                | _ -> false)
+
+        if not hasHeapEndCmp then
+            Error "Expected RawAlloc bounds check to compare next pointer against computed heap end in X11"
+        else if not hasInlineHeapEndRecompute then
+            Error "Expected RawAlloc bounds check to compute heap end in X11"
+        else if not hasOverflowLabelBranch then
+            Error "Expected RawAlloc bounds check to branch to shared overflow label (B_cond_label GT)"
+        else if hasInlinedOverflowTrap then
+            Error "RawAlloc still inlines overflow trap path (found SVC in fast path conversion)"
         else
             Ok ()
 
@@ -1164,6 +1222,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
 let tests : (string * (unit -> TestResult)) list = [
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
     ("ARM64 FLoad encodable constants use immediate", testArm64FLoadEncodableConstantsUseImmediate)
+    ("RawAlloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
