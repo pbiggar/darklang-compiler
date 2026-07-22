@@ -1160,7 +1160,7 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type)
     | Mul, Int64Const -1L, x -> None  // Could transform to Neg, but need instruction change
     | Mul, x, Int64Const -1L -> None  // Could transform to Neg
     | Div, x, Int64Const 1L -> Some x
-    | Div, x, y when x = y && y <> Int64Const 0L -> Some (Int64Const 1L)  // x / x = 1 (if x != 0)
+    // Do not fold x / x: when x is zero, preserving the runtime operation matters.
     | Mod, _, Int64Const 1L -> Some (Int64Const 0L)  // x % 1 = 0
 
     // Bitwise identities

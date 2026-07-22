@@ -171,6 +171,19 @@ Function pick:
     branch v10006 ? pick_L0 : pick_L1
 
 ---NAME---
+self_division_not_folded
+---INPUT---
+def divideSelf(n: Int64) : Int64 =
+    n / n
+---EXPECTED---
+Function divideSelf:
+  divideSelf_entry:
+    jump divideSelf_body
+  divideSelf_body:
+    v10001 <- v0 / v0 : TInt64
+    ret v10001
+
+---NAME---
 licm_hoist_tuple_load
 ---INPUT---
 def loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
