@@ -16,8 +16,11 @@ mapfile -d '' tracked_files < <(git ls-files -z -- run-tests scripts)
 bash_files=()
 
 for file in "${tracked_files[@]}"; do
-  if [[ -f "$file" ]] && head -n 1 "$file" | rg -q '^#!.*bash'; then
-    bash_files+=("$file")
+  if [[ -f "$file" ]]; then
+    IFS= read -r first_line < "$file" || first_line=""
+    if [[ "$first_line" == '#!'*bash* ]]; then
+      bash_files+=("$file")
+    fi
   fi
 done
 
