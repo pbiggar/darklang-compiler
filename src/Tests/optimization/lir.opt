@@ -18,14 +18,14 @@ collatzSteps:
   Label "collatzSteps_L1":
     BranchBitZero(v10021, #0, Label "collatzSteps_L3", Label "collatzSteps_L4")
   Label "collatzSteps_L3":
-    v10030 <- Lsr_imm(v10021, #1)
+    v10030 <- Sdiv(v10021, Reg v10034)
     v10031 <- Add(v10020, Imm 1)
     v10032 <- Mov(Reg v10030)
     v10033 <- Mov(Reg v10031)
     Jump(Label "collatzSteps_body")
   Label "collatzSteps_L4":
-    v10034 <- Lsl_imm(v10021, #1)
-    v10025 <- Add(v10021, Reg v10034)
+    v10035 <- Lsl_imm(v10021, #1)
+    v10025 <- Add(v10021, Reg v10035)
     v10026 <- Add(v10025, Imm 1)
     v10027 <- Add(v10020, Imm 1)
     v10028 <- Mov(Reg v10026)
@@ -37,6 +37,7 @@ collatzSteps:
     Cmp(v10021, Imm 1)
     CondBranch(EQ, Label "collatzSteps_L0", Label "collatzSteps_L1")
   Label "collatzSteps_entry":
+    v10034 <- Mov(Imm 2)
     Jump(Label "collatzSteps_body")
 
 ---NAME---

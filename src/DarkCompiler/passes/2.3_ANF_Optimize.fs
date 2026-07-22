@@ -214,6 +214,21 @@ let private isBoolAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
         | _ -> false
     | _ -> false
 
+let private isUnsignedIntegerAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
+    match atom with
+    | IntLiteral (UInt8 _)
+    | IntLiteral (UInt16 _)
+    | IntLiteral (UInt32 _)
+    | IntLiteral (UInt64 _) -> true
+    | Var tid ->
+        match Map.tryFind tid typeEnv with
+        | Some AST.TUInt8
+        | Some AST.TUInt16
+        | Some AST.TUInt32
+        | Some AST.TUInt64 -> true
+        | _ -> false
+    | _ -> false
+
 let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     match op, left, right with
     | Add, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
@@ -251,7 +266,7 @@ let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) 
         match tryLog2 n with
         | Some _ -> Some (Prim (BitAnd, x, IntLiteral (Int64 (n - 1L))))
         | None -> None
-    | Div, x, IntLiteral (Int64 n) when n > 0L ->
+    | Div, x, IntLiteral (Int64 n) when n > 0L && isUnsignedIntegerAtom typeEnv x ->
         match tryLog2 n with
         | Some shift -> Some (Prim (Shr, x, IntLiteral (Int64 shift)))
         | None -> None

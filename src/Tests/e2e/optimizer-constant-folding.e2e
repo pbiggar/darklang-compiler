@@ -86,8 +86,17 @@ let a = 2 in let b = a + 1 in let c = b + 2 in let d = c + 3 in d = 8
 // replacing the variable with its constant value before strength reduction runs.
 
 // Modulo by power of 2 with negative dividend (tests tryLog2 boundary check)
-// Without optimization: -7 % 2 = -1, but with optimization: -7 & 1 = 1
+// For positive power-of-two divisors, Euclidean modulo matches bit masking:
+// -7 % 2 = 1 and -7 & 1 = 1.
 def mod2(x: Int64) : Int64 = x % 2 mod2(-7) = 1
+
+// Division by a power of 2 must preserve signed division semantics.
+// Rewriting signed division to logical shift-right turns negative dividends
+// into huge positive results.
+def signedDiv2(x: Int64) : Int64 = x / 2
+signedDiv2(-8) = -4
+def signedDiv4(x: Int64) : Int64 = x / 4
+signedDiv4(-7) = -1
 
 // ===================================================================
 // Return Statement Constant Propagation
