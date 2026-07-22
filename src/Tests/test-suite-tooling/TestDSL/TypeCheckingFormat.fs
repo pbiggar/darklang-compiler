@@ -31,7 +31,7 @@ type TypeCheckingTest = {
 
 /// Parse type string to AST.Type
 let private parseType (typeStr: string) : Result<AST.Type, string> =
-    match typeStr.Trim().ToLower() with
+    match typeStr.Trim().ToLowerInvariant() with
     | "int" | "int64" -> Ok AST.TInt64
     | "bool" | "boolean" -> Ok AST.TBool
     | "float" | "float64" -> Ok AST.TFloat64
@@ -85,7 +85,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<TypeChecking
 
         // Parse expectation
         let expectation =
-            if expectationStr.ToLower() = "error" then
+            if expectationStr.ToLowerInvariant() = "error" then
                 Ok ExpectError
             else
                 match parseType expectationStr with

@@ -5,6 +5,7 @@
 module TypeCheckingFormatTests
 
 open System
+open System.Globalization
 open System.IO
 open TestDSL.TypeCheckingFormat
 
@@ -33,8 +34,32 @@ let testParsesSlashSlashInsideStringLiteral () : TestResult =
         | Error msg ->
             Error $"Expected type checking test with // inside string literal to parse, got: {msg}")
 
+let testParsesTypeKeywordsWithCultureInvariantCasing () : TestResult =
+    let content = "1 : INT"
+    let originalCulture = CultureInfo.CurrentCulture
+    let originalUICulture = CultureInfo.CurrentUICulture
+
+    try
+        CultureInfo.CurrentCulture <- CultureInfo.GetCultureInfo("tr-TR")
+        CultureInfo.CurrentUICulture <- CultureInfo.GetCultureInfo("tr-TR")
+
+        withTempFile content (fun path ->
+            match parseTypeCheckingTestFile path with
+            | Ok [ test ] ->
+                match test.Expectation with
+                | ExpectType AST.TInt64 -> Ok ()
+                | other -> Error $"Expected INT to parse as int64, got: {other}"
+            | Ok tests ->
+                Error $"Expected one parsed type checking test, got {List.length tests}"
+            | Error msg ->
+                Error $"Expected uppercase INT to parse under Turkish culture, got: {msg}")
+    finally
+        CultureInfo.CurrentCulture <- originalCulture
+        CultureInfo.CurrentUICulture <- originalUICulture
+
 let tests = [
     ("parse // inside type checking string literal", testParsesSlashSlashInsideStringLiteral)
+    ("parse type keywords with culture-invariant casing", testParsesTypeKeywordsWithCultureInvariantCasing)
 ]
 
 let runAll () : TestResult =
