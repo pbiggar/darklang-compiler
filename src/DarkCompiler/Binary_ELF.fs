@@ -12,9 +12,9 @@
 // - Data: The actual code and data
 //
 // Our minimal executable has:
-// - ELF64 header for the selected target architecture
+// - ELF64 header for the selected Linux architecture
 // - One PT_LOAD program header (executable code segment)
-// - The machine code
+// - The machine code and optional literal data
 
 module Binary_ELF
 
