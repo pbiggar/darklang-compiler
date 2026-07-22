@@ -1,7 +1,7 @@
-// E2E tests for function definitions and calls (Phase 4)
+// E2E tests for function definitions, calls, recursion, and return-type inference
 
 // =====================================================
-// Simple Expressions (moved from old main() tests)
+// Simple Expressions
 // =====================================================
 
 // Test 1: Simple constant
@@ -35,7 +35,7 @@ if true && false then 0 else 42 = 42
 if true then if false then 0 else 42 else 0 = 42
 
 // =====================================================
-// Function Calls (Milestone 4)
+// Function Calls
 // =====================================================
 
 // Test 11: Simple function call - double
@@ -72,7 +72,7 @@ def triple(x: Int64) : Int64 = x * 3 triple(7) + triple(7) = 42
 def sum4(a: Int64, b: Int64, c: Int64, d: Int64) : Int64 = a + b + c + d sum4(10, 11, 12, 9) = 42
 
 // =====================================================
-// Recursive Functions (Milestone 5)
+// Recursive Functions
 // =====================================================
 
 // Test 21: Factorial - classic recursion
