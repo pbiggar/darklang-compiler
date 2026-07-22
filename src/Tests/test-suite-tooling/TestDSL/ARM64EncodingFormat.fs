@@ -46,6 +46,12 @@ let parseHexValue (text: string) : Result<uint32, string> =
     else
         Error $"Hex value must start with '0x': '{text}'"
 
+let private parseAssertDifferent (text: string) : Result<bool, string> =
+    match text.Trim().ToLowerInvariant() with
+    | "true" -> Ok true
+    | "false" -> Ok false
+    | value -> Error $"Invalid ASSERT-DIFFERENT value '{value}' (expected 'true' or 'false')"
+
 /// Parse ARM64 encoding test from file content
 let parseARM64EncodingTest (content: string) : Result<ARM64EncodingTest, string> =
     let testFile = parseTestFile content
@@ -89,21 +95,19 @@ let parseARM64EncodingTest (content: string) : Result<ARM64EncodingTest, string>
                         Error $"Instruction count ({instructions.Length}) does not match hex value count ({hexValues.Length})"
                     else
                         // Parse ASSERT-DIFFERENT (optional)
-                        let parseAssertDifferent () =
-                            match getOptionalSection "ASSERT-DIFFERENT" testFile with
-                            | Some text ->
-                                match text.Trim().ToLower() with
-                                | "true" -> Ok true
-                                | "false" -> Ok false
-                                | value -> Error $"Invalid ASSERT-DIFFERENT value: '{value}'"
-                            | None -> Ok false
-
-                        match parseAssertDifferent () with
-                        | Error e -> Error e
-                        | Ok assertDifferent ->
-                            Ok {
+                        match getOptionalSection "ASSERT-DIFFERENT" testFile with
+                        | Some text ->
+                            parseAssertDifferent text
+                            |> Result.map (fun assertDifferent -> {
                                 Name = name
                                 Instructions = instructions
                                 ExpectedHex = hexValues
                                 AssertDifferent = assertDifferent
+                            })
+                        | None ->
+                            Ok {
+                                Name = name
+                                Instructions = instructions
+                                ExpectedHex = hexValues
+                                AssertDifferent = false
                             }

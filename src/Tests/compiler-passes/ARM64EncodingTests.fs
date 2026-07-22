@@ -7,6 +7,7 @@ module ARM64EncodingTests
 
 open ARM64
 open ARM64_Encoding
+open TestDSL.ARM64EncodingFormat
 
 /// Test result type
 type TestResult = Result<unit, string>
@@ -154,6 +155,23 @@ let testFMOVImmediateEncoding () : TestResult =
 
     check cases
 
+let testInvalidAssertDifferentValueIsRejected () : TestResult =
+    let content =
+        """---INPUT-ARM64---
+RET
+
+---OUTPUT-HEX---
+0xD65F03C0
+
+---ASSERT-DIFFERENT---
+maybe
+"""
+
+    match parseARM64EncodingTest content with
+    | Ok _ -> Error "expected invalid ASSERT-DIFFERENT value to be rejected"
+    | Error msg when msg.Contains("ASSERT-DIFFERENT") -> Ok ()
+    | Error msg -> Error $"expected ASSERT-DIFFERENT parse error, got: {msg}"
+
 let tests = [
     ("encodeReg", testEncodeReg)
     ("MOVK shift encoding", testMOVKShiftEncoding)
@@ -161,6 +179,7 @@ let tests = [
     ("unsigned memory offsets reject invalid values", testUnsignedMemoryOffsetsRejectInvalidValues)
     ("signed pair offsets reject invalid values", testSignedPairOffsetsRejectInvalidValues)
     ("FMOV immediate encoding", testFMOVImmediateEncoding)
+    ("invalid ASSERT-DIFFERENT value is rejected", testInvalidAssertDifferentValueIsRejected)
 ]
 
 /// Run all encoding unit tests
