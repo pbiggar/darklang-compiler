@@ -5,6 +5,9 @@
 // Empty list should not default to Int64 element type
 List.length(if true then [] else [true]) = 0
 
+// Top-level char lists should print through the string-list display helper
+['a', 'b'] = stdout="[a, b]\n"
+
 // Empty list is Nil (represented as 0)
 match [] with | [] -> 1 | _ -> 0 = 1
 

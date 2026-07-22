@@ -10,6 +10,7 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
     | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
     | AST.TString -> Some "Stdlib.List.toDisplayString_str"
+    | AST.TChar -> Some "Stdlib.List.toDisplayString_char"
     | AST.TFloat64 -> Some "Stdlib.List.toDisplayString_f64"
     | AST.TInt8
     | AST.TInt16
@@ -21,7 +22,6 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TUInt64
     | AST.TUInt128
     | AST.TBytes
-    | AST.TChar
     | AST.TUnit
     | AST.TRuntimeError
     | AST.TFunction _

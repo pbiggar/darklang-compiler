@@ -346,6 +346,18 @@ def Stdlib.List.__stringsDisplayItems(list: List<String>, first: Bool) : String 
 def Stdlib.List.toDisplayString_str(list: List<String>) : String =
     "[" ++ Stdlib.List.__stringsDisplayItems(list, true) ++ "]"
 
+def Stdlib.List.__charsDisplayItems(list: List<Char>, first: Bool) : String =
+    match list with
+    | [] -> ""
+    | [h] ->
+        if first then h else ", " ++ h
+    | [h, ...t] ->
+        let rest = Stdlib.List.__charsDisplayItems(t, false) in
+        if first then h ++ rest else ", " ++ h ++ rest
+
+def Stdlib.List.toDisplayString_char(list: List<Char>) : String =
+    "[" ++ Stdlib.List.__charsDisplayItems(list, true) ++ "]"
+
 // Helper to build string list from Bool list
 def Stdlib.List.__boolsToStrings(list: List<Bool>, acc: List<String>) : List<String> =
     if Stdlib.__FingerTree.isEmpty<Bool>(list) then acc
