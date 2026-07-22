@@ -561,7 +561,7 @@ let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liv
                             let phiInstr = Phi (vreg, phiSources, valueType)
 
                             // Add to block (at the beginning)
-                            let existingBlock = Map.find dfBlock c.Blocks
+                            let existingBlock = requireBlock "inserting phi node" c.Blocks dfBlock
                             let newBlock = { existingBlock with Instrs = phiInstr :: existingBlock.Instrs }
                             let c' = { c with Blocks = Map.add dfBlock newBlock c.Blocks }
 
@@ -980,7 +980,7 @@ let renameBlock (state: RenamingState) (block: BasicBlock) : BasicBlock * Renami
 
 /// Update phi sources for successors
 let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: RenamingState) : CFG =
-    let block = Map.find currentLabel cfg.Blocks
+    let block = requireBlock "updating successor phi sources" cfg.Blocks currentLabel
 
     // Get successor labels from terminator
     let terminatorSuccessors =
@@ -992,7 +992,7 @@ let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: Renam
     // For each successor, update phi nodes that come from currentLabel
     terminatorSuccessors
     |> List.fold (fun cfg' succLabel ->
-        let succBlock = Map.find succLabel cfg'.Blocks
+        let succBlock = requireBlock "updating successor phi sources" cfg'.Blocks succLabel
         let instrs' =
             succBlock.Instrs
             |> List.map (fun instr ->
@@ -1045,7 +1045,7 @@ let renameCFG (cfg: CFG) (idoms: Dominators) (floatRegs: Set<int>) : CFG * Set<i
     // DFS traversal of dominator tree
     // Returns (cfg, state) where state has updated NextVersion for siblings
     let rec visit (label: Label) (state: RenamingState) (cfg': CFG) : CFG * RenamingState =
-        let block = Map.find label cfg'.Blocks
+        let block = requireBlock "renaming CFG block" cfg'.Blocks label
 
         // Rename this block
         let (block', state') = renameBlock state block
