@@ -1817,26 +1817,64 @@ let selectCFG
                 Blocks = remappedBlocks |> List.map (fun block -> (block.Label, block)) |> Map.ofList
             }
 
-/// Check if any function has more than 8 parameters (ARM64 calling convention limit)
+let private argRegisterCounts (types: AST.Type list) : int * int =
+    types
+    |> List.fold (fun (intCount, floatCount) typ ->
+        if typ = AST.TFloat64 then
+            (intCount, floatCount + 1)
+        else
+            (intCount + 1, floatCount)) (0, 0)
+
+let private validateRegisterBankLimits
+    (description: string)
+    (intCount: int)
+    (floatCount: int)
+    : string option =
+    if intCount > 8 then
+        Some $"{description} has {intCount} integer/pointer arguments, but only 8 are supported (ARM64 calling convention limit)"
+    elif floatCount > 8 then
+        Some $"{description} has {floatCount} float arguments, but only 8 are supported (ARM64 calling convention limit)"
+    else
+        None
+
+/// Check if any function exceeds ARM64 parameter register-bank limits.
 let private checkParameterLimits (mirFuncs: MIR.Function list) : Result<unit, string> =
-    let funcWithTooManyParams =
+    let invalidFunc =
         mirFuncs
-        |> List.tryFind (fun f -> List.length f.TypedParams > 8)
-    match funcWithTooManyParams with
-    | Some f ->
-        Error $"Function '{f.Name}' has {List.length f.TypedParams} parameters, but only 8 are supported (ARM64 calling convention limit)"
+        |> List.tryPick (fun f ->
+            let types = f.TypedParams |> List.map (fun tp -> tp.Type)
+            let (intCount, floatCount) = argRegisterCounts types
+            validateRegisterBankLimits $"Function '{f.Name}'" intCount floatCount)
+    match invalidFunc with
+    | Some err -> Error err
     | None -> Ok ()
 
-/// Check if any function call has more than 8 arguments
+/// Check if any function call exceeds ARM64 argument register-bank limits.
 let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, string> =
+    let validateCall description argTypes =
+        let (intCount, floatCount) = argRegisterCounts argTypes
+        validateRegisterBankLimits description intCount floatCount
+
+    let validateClosureCall description argTypes =
+        let (intArgCount, floatCount) = argRegisterCounts argTypes
+        validateRegisterBankLimits description (intArgCount + 1) floatCount
+
     let checkBlock (block: MIR.BasicBlock) =
         block.Instrs
         |> List.tryPick (fun instr ->
             match instr with
-            | MIR.Call (_, funcName, args, _, _) when List.length args > 8 ->
-                Some $"Call to '{funcName}' has {List.length args} arguments, but only 8 are supported (ARM64 calling convention limit)"
-            | MIR.IndirectCall (_, _, args, _, _) when List.length args > 8 ->
-                Some $"Indirect call has {List.length args} arguments, but only 8 are supported (ARM64 calling convention limit)"
+            | MIR.Call (_, funcName, _, argTypes, _) ->
+                validateCall $"Call to '{funcName}'" argTypes
+            | MIR.TailCall (funcName, _, argTypes, _) ->
+                validateCall $"Tail call to '{funcName}'" argTypes
+            | MIR.IndirectCall (_, _, _, argTypes, _) ->
+                validateCall "Indirect call" argTypes
+            | MIR.IndirectTailCall (_, _, argTypes, _) ->
+                validateCall "Indirect tail call" argTypes
+            | MIR.ClosureCall (_, _, _, argTypes, _) ->
+                validateClosureCall "Closure call" argTypes
+            | MIR.ClosureTailCall (_, _, argTypes) ->
+                validateClosureCall "Closure tail call" argTypes
             | _ -> None)
 
     let checkFunc (func: MIR.Function) =

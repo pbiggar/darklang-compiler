@@ -146,6 +146,12 @@ def mixedTail(x: Int64, f: Float, n: Int64) : Int64 = if n <= 0 then x + Stdlib.
 
 mixedTail(0, 0.0, 5) = 10
 
+// Mixed integer and float parameters use separate calling-convention register banks
+def mixedNineArgs(a: Int64, b: Int64, c: Int64, d: Int64, e: Float, f: Float, g: Float, h: Float, i: Float) : Float =
+  e + f + g + h + i
+
+Stdlib.Float.toInt(mixedNineArgs(1, 2, 3, 4, 1.0, 2.0, 3.0, 4.0, 5.0)) = 15
+
 // Mixed GP/FP rotation (tests independent GP and FP parallel moves)
 def mixedRotate(x: Int64, f: Float, y: Int64, g: Float, n: Int64) : Int64 =
   if n <= 0 then x + y else mixedRotate(y, g, x, f, n - 1)
