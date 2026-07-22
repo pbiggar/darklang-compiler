@@ -1220,6 +1220,24 @@ let TempId 7 = f(t6)
 return t7
 
 ---NAME---
+cse_reuses_duplicate_float_to_int64
+---INPUT---
+def f(x: Float) : Int64 =
+  let y = Stdlib.Float.toInt(x) in
+  let z = Stdlib.Float.toInt(x) in
+  y + z
+f(42.5)
+---EXPECTED---
+Function f:
+let TempId 1 = FloatToInt64(t0)
+let TempId 5 = t1 + t1
+return t5
+
+Main:
+let TempId 6 = f(42.5)
+return t6
+
+---NAME---
 cse_reuses_duplicate_int64_to_float
 ---INPUT---
 def f(x: Int64) : Float =

@@ -297,6 +297,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk extension of ANF CSE for immutable tuple reads; avoids repeating the same tuple field load before MIR lowering.
 - Notes: Implemented for repeated `TupleGet(tuple, index)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_tuple_get` in `src/Tests/optimization/anf.opt`; tuple-heavy tests and benchmarks provide broader regression coverage but do not isolate this micro-pattern.
 
+### Duplicate Float.toInt conversion reuse
+
+- Optimization name: Duplicate Float.toInt conversion reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, low-risk extension of ANF CSE for pure scalar conversions; avoids repeating identical Float-to-Int64 conversions before MIR lowering.
+- Notes: Implemented for repeated `FloatToInt64(atom)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_float_to_int64` in `src/Tests/optimization/anf.opt`; existing float-heavy tests and benchmarks provide broader regression coverage but do not isolate this micro-pattern.
+
 ### Duplicate FloatNeg reuse
 
 - Optimization name: Duplicate FloatNeg reuse
