@@ -133,6 +133,10 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     // Algebraic identities (strength reduction) - Int64
     | Add, IntLiteral (Int64 0L), x -> Some (Atom x)
     | Add, x, IntLiteral (Int64 0L) -> Some (Atom x)
+    | Add, x, IntLiteral (Int64 n) when n < 0L && n <> System.Int64.MinValue ->
+        Some (Prim (Sub, x, IntLiteral (Int64 (-n))))
+    | Add, IntLiteral (Int64 n), x when n < 0L && n <> System.Int64.MinValue ->
+        Some (Prim (Sub, x, IntLiteral (Int64 (-n))))
     | Sub, x, IntLiteral (Int64 0L) -> Some (Atom x)
     | Sub, x, IntLiteral (Int64 n) when n < 0L && n <> System.Int64.MinValue ->
         Some (Prim (Add, x, IntLiteral (Int64 (-n))))
