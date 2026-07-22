@@ -1,6 +1,10 @@
 #!/bin/bash
 # debug-stack.sh — Diagnose callee-saved register corruption in compiled Dark programs.
 #
+# shellcheck disable=SC2016
+# GDB command strings intentionally use single quotes so GDB, not the shell,
+# expands register variables such as $rip and $rbp.
+#
 # Usage: scripts/x64/debug-stack.sh "expression" [function_addr_hex]
 # Example: scripts/x64/debug-stack.sh 'iter([1,2,3,4,5,6,7,8,9], 2)' 40283a
 #
@@ -40,7 +44,7 @@ fi
 echo ""
 echo "=== Finding function entry points ==="
 "$RUN" objdump -D -M intel -b binary -m i386:x86-64 --adjust-vma=0x400000 "$BINPATH" 2>&1 | \
-    grep "push.*rbp$" | awk '{print $1}' | sed 's/://' | while read addr; do
+    grep "push.*rbp$" | awk '{print $1}' | sed 's/://' | while read -r addr; do
     echo "  Function at 0x$addr"
 done
 

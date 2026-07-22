@@ -1,6 +1,10 @@
 #!/bin/bash
 # debug-crash.sh — Diagnose codegen crashes in compiled Dark programs.
 #
+# shellcheck disable=SC2016
+# GDB command strings intentionally use single quotes so GDB, not the shell,
+# expands register variables such as $rip and $rbp.
+#
 # Usage:
 #   scripts/x64/debug-crash.sh "dark expression"
 #   scripts/x64/debug-crash.sh path/to/file.dark
