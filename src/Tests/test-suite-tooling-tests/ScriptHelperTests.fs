@@ -15,14 +15,21 @@ let private readFile (path: string) : Result<string, string> =
     try Ok (File.ReadAllText(path))
     with ex -> Error $"Failed to read {path}: {ex.Message}"
 
+let private sourceFilesUnder (relativeDir: string) : string array =
+    let dir = Path.Combine(repoRoot, relativeDir)
+    Directory.GetFiles(dir, "*.fs", SearchOption.AllDirectories)
+
 let private compilerSourceFiles () : string array =
     let compilerDir = Path.Combine(repoRoot, "src", "DarkCompiler")
     Directory.GetFiles(compilerDir, "*.fs", SearchOption.AllDirectories)
 
+let private testToolingSourceFiles () : string array =
+    sourceFilesUnder (Path.Combine("src", "Tests", "test-suite-tooling"))
+
 let private scriptPath (relativePath: string) : string =
     Path.Combine(repoRoot, relativePath)
 
-let private findFailwithUses () : Result<string list, string> =
+let private findFailwithUsesIn (sourceFiles: unit -> string array) : Result<string list, string> =
     let folder (state: Result<string list, string>) (path: string) =
         match state with
         | Error _ -> state
@@ -34,12 +41,12 @@ let private findFailwithUses () : Result<string list, string> =
                     Ok (path :: acc)
                 else
                     Ok acc
-    compilerSourceFiles ()
+    sourceFiles ()
     |> Array.fold folder (Ok [])
     |> Result.map List.rev
 
 let testCompilerAvoidsFailwith () : TestResult =
-    match findFailwithUses () with
+    match findFailwithUsesIn compilerSourceFiles with
     | Error msg -> Error msg
     | Ok paths ->
         let offenders =
@@ -51,6 +58,19 @@ let testCompilerAvoidsFailwith () : TestResult =
         | _ ->
             let details = String.concat ", " offenders
             Error $"Unexpected failwith usage in compiler: {details}"
+
+let testTestToolingAvoidsFailwith () : TestResult =
+    match findFailwithUsesIn testToolingSourceFiles with
+    | Error msg -> Error msg
+    | Ok paths ->
+        let offenders =
+            paths
+            |> List.map (fun path -> Path.GetRelativePath(repoRoot, path))
+        match offenders with
+        | [] -> Ok ()
+        | _ ->
+            let details = String.concat ", " offenders
+            Error $"Unexpected failwith usage in test tooling: {details}"
 
 let testInstallerFormatsAssetListWithStableDelimiter () : TestResult =
     let path = scriptPath "scripts/install-darklang-interpreter.sh"
@@ -64,5 +84,6 @@ let testInstallerFormatsAssetListWithStableDelimiter () : TestResult =
 
 let tests = [
     ("compiler avoids failwith", testCompilerAvoidsFailwith)
+    ("test tooling avoids failwith", testTestToolingAvoidsFailwith)
     ("installer formats asset list with stable delimiter", testInstallerFormatsAssetListWithStableDelimiter)
 ]

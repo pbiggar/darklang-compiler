@@ -386,7 +386,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let stdlib =
         match CompilerLibrary.buildStdlibWithTrace (Some recordPassTiming) with
         | Ok stdlib -> stdlib
-        | Error err -> failwith $"Stdlib didnt build with error: {err}"
+        | Error err -> Crash.crash $"Stdlib did not build with error: {err}"
     let elapsed = timer.Elapsed
     let stdlibPassTimingEnd = passTimingTotal ()
     recordPhaseOverhead "Stdlib Build Overhead" elapsed stdlibPassTimingStart stdlibPassTimingEnd
