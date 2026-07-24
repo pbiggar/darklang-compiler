@@ -588,6 +588,7 @@ let private isCSEEligible (cexpr: CExpr) : bool =
     match cexpr with
     | Prim _
     | UnaryPrim _
+    | FloatNeg _
     | TupleGet _ -> true
     | _ -> false
 

@@ -290,6 +290,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk extension of ANF CSE for immutable tuple reads; avoids repeating the same tuple field load before MIR lowering.
 - Notes: Implemented for repeated `TupleGet(tuple, index)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_tuple_get` in `src/Tests/optimization/anf.opt`; tuple-heavy tests and benchmarks provide broader regression coverage but do not isolate this micro-pattern.
 
+### Duplicate FloatNeg reuse
+
+- Optimization name: Duplicate FloatNeg reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, low-risk extension of ANF CSE for pure float negation; avoids repeating equivalent unary float negation before MIR lowering.
+- Notes: Implemented for repeated `FloatNeg(x)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_float_neg` in `src/Tests/optimization/anf.opt`; existing float-heavy tests and benchmarks provide regression coverage but do not isolate this micro-pattern.
+
 ## Dead code elimination
 
 ### Unused ANF binding elimination

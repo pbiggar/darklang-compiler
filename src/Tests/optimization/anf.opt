@@ -1002,6 +1002,19 @@ let TempId 2 = FloatAbs(t0)
 return t2
 
 ---NAME---
+cse_reuses_duplicate_float_neg
+---INPUT---
+def f(x: Float) : Float =
+  let a = -x in
+  let b = -x in
+  a + b
+---EXPECTED---
+Function f:
+let TempId 1 = FloatNeg(t0)
+let TempId 5 = t1 + t1
+return t5
+
+---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & -1
