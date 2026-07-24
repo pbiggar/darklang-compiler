@@ -1,0 +1,8 @@
+// Internal stdlib helper tests: Int32.__digitToString
+//
+// Internal identifiers are only allowed in stdlib-internal test files.
+
+Stdlib.Int32.__digitToString(0l) = "0"
+Stdlib.Int32.__digitToString(5l) = "5"
+Stdlib.Int32.__digitToString(9l) = "9"
+Stdlib.Int32.__digitToString(10l) = error="Uncaught exception: Stdlib.Int32.__digitToString expected a digit from 0 to 9"
