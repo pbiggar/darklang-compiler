@@ -1,6 +1,6 @@
 // LiteralPool.fs - Literal pool storage for late constant resolution
 //
-// Provides string and float literal pools used during ARM64 emission/encoding.
+// Provides string and float literal pools used during backend emission/encoding.
 
 module LiteralPool
 
