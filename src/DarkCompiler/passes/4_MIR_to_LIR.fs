@@ -54,6 +54,21 @@ let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.Type list) (typ:
         | _ -> t  // Concrete types unchanged
     substitute typ
 
+let private collectTypeVars (typ: AST.Type) : string list =
+    let rec collect t =
+        match t with
+        | AST.TVar name -> [name]
+        | AST.TFunction (paramTypes, retType) -> List.collect collect paramTypes @ collect retType
+        | AST.TTuple elemTypes -> List.collect collect elemTypes
+        | AST.TList elemType -> collect elemType
+        | AST.TDict (keyType, valType) -> collect keyType @ collect valType
+        | AST.TRecord (_, args) | AST.TSum (_, args) -> List.collect collect args
+        | _ -> []
+    collect typ |> List.distinct
+
+let private inferRecordTypeParamsFromFields (fields: MIR.RecordField list) : string list =
+    fields |> List.collect (fun field -> collectTypeVars field.Type) |> List.distinct
+
 type TempState =
     { NextRegId: int
       NextFRegId: int }
@@ -1145,7 +1160,7 @@ let selectInstr
             | None ->
                 Crash.crash $"Missing sum variant metadata for printing sum type '{typeName}'"
 
-        | AST.TRecord (typeName, _) ->
+        | AST.TRecord (typeName, typeArgs) ->
             // Print record with field names and values
             match Map.tryFind typeName recordRegistry with
             | Some fields ->
@@ -1156,7 +1171,16 @@ let selectInstr
                     | LIR.Reg (LIR.Physical LIR.X19) -> []
                     | _ -> [LIR.Mov (LIR.Physical LIR.X19, lirSrc)]
                 // Convert RecordField list to tuple format for LIR
-                let fieldTuples = fields |> List.map (fun f -> (f.Name, f.Type))
+                let typeParams = inferRecordTypeParamsFromFields fields
+                let fieldTuples =
+                    fields
+                    |> List.map (fun f ->
+                        let fieldType =
+                            if List.length typeParams = List.length typeArgs then
+                                applyTypeSubst typeParams typeArgs f.Type
+                            else
+                                Crash.crash $"Record print type argument mismatch for '{typeName}': params={typeParams.Length}, args={typeArgs.Length}"
+                        (f.Name, fieldType))
                 finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintRecord (LIR.Physical LIR.X19, typeName, fieldTuples)])
             | None ->
                 Error $"Print: Record type '{typeName}' not found in recordRegistry"

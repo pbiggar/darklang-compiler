@@ -372,6 +372,38 @@ let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.Typ
     else
         Crash.crash $"rcShapeOfTypeWithSums: sum type argument mismatch: params={typeParams.Length}, args={typeArgs.Length}"
 
+let private collectTypeVarsInOrder (typ: AST.Type) : string list =
+    let rec collect t =
+        match t with
+        | AST.TVar name -> [name]
+        | AST.TTuple elemTypes -> elemTypes |> List.collect collect
+        | AST.TRecord (_, typeArgs) -> typeArgs |> List.collect collect
+        | AST.TList elemType -> collect elemType
+        | AST.TDict (keyType, valueType) -> collect keyType @ collect valueType
+        | AST.TSum (_, typeArgs) -> typeArgs |> List.collect collect
+        | AST.TFunction (paramTypes, returnType) ->
+            (paramTypes |> List.collect collect) @ collect returnType
+        | AST.TInt8
+        | AST.TInt16
+        | AST.TInt32
+        | AST.TInt64
+        | AST.TInt128
+        | AST.TUInt8
+        | AST.TUInt16
+        | AST.TUInt32
+        | AST.TUInt64
+        | AST.TUInt128
+        | AST.TBool
+        | AST.TFloat64
+        | AST.TString
+        | AST.TBytes
+        | AST.TChar
+        | AST.TUnit
+        | AST.TRawPtr
+        | AST.TRuntimeError ->
+            []
+    collect typ |> List.distinct
+
 let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
     match typ with
     | AST.TVar name ->
@@ -424,10 +456,19 @@ let rec rcShapeOfTypeWithSums
     match t with
     | AST.TTuple elemTypes ->
         FixedBlock (List.length elemTypes * 8, elemTypes |> List.map classify)
-    | AST.TRecord (name, _) ->
+    | AST.TRecord (name, typeArgs) ->
         match Map.tryFind name typeReg with
         | Some fields ->
-            FixedBlock (List.length fields * 8, fields |> List.map (fun (_, fieldType) -> classify fieldType))
+            let typeParams =
+                fields
+                |> List.collect (fun (_, fieldType) -> collectTypeVarsInOrder fieldType)
+                |> List.distinct
+            let subst = rcShapeTypeSubstitution typeParams typeArgs
+            let fieldShapes =
+                fields
+                |> List.map (fun (_, fieldType) ->
+                    fieldType |> applyRcShapeTypeSubstitution subst |> classify)
+            FixedBlock (List.length fields * 8, fieldShapes)
         | None ->
             Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
     | AST.TSum (name, typeArgs) ->
