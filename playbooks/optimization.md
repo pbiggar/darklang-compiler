@@ -40,6 +40,7 @@ You are going to implement EXACTLY ONE optimization.
 
    - Benchmarks should complete with no failures
    - Compare results against baseline in RESULTS.md
+   - Report the performance ratio from the RESULTS.md table header
    - The optimization should show measurable improvement in at least one benchmark
    - If no improvement is visible, investigate why (the optimization may not be triggering, or the benchmark may not exercise the optimized code path)
 
