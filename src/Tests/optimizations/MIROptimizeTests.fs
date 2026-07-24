@@ -11,6 +11,21 @@ open IRPrinter
 
 type TestResult = Result<unit, string>
 
+let private singleOptimizedFunction (testName: string) (functions: Function list) : Result<Function, string> =
+    match functions with
+    | [func] -> Ok func
+    | [] -> Error $"{testName}: optimizer returned no functions"
+    | _ -> Error $"{testName}: optimizer returned multiple functions"
+
+let private optimizedBlockForLabel
+    (testName: string)
+    (label: Label)
+    (optimizedFunc: Function)
+    : Result<BasicBlock, string> =
+    match Map.tryFind label optimizedFunc.CFG.Blocks with
+    | Some block -> Ok block
+    | None -> Error $"{testName}: optimizer removed expected block {label}"
+
 let testCseAfterCopyPropFixpoint () : TestResult =
     let entry = Label "entry"
     let block: BasicBlock = {
@@ -40,20 +55,23 @@ let testCseAfterCopyPropFixpoint () : TestResult =
     let program = Program ([func], Map.empty, Map.empty)
 
     let (Program (functions, _, _)) = optimizeProgram program
-    let optimizedFunc = functions |> List.head
-    let optimizedBlock = optimizedFunc.CFG.Blocks |> Map.find entry
+    match singleOptimizedFunction "testCseAfterCopyPropFixpoint" functions with
+    | Error e -> Error e
+    | Ok optimizedFunc ->
+        match optimizedBlockForLabel "testCseAfterCopyPropFixpoint" entry optimizedFunc with
+        | Error e -> Error e
+        | Ok optimizedBlock ->
+            let expectedInstrs = [
+                BinOp (VReg 3, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+                BinOp (VReg 5, Add, Register (VReg 3), Register (VReg 3), AST.TInt64)
+            ]
+            let expectedBlock = { block with Instrs = expectedInstrs }
 
-    let expectedInstrs = [
-        BinOp (VReg 3, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
-        BinOp (VReg 5, Add, Register (VReg 3), Register (VReg 3), AST.TInt64)
-    ]
-    let expectedBlock = { block with Instrs = expectedInstrs }
-
-    if optimizedBlock = expectedBlock then
-        Ok ()
-    else
-        let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
-        Error $"MIR optimization did not reach fixpoint.\nActual:\n{actual}"
+            if optimizedBlock = expectedBlock then
+                Ok ()
+            else
+                let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
+                Error $"MIR optimization did not reach fixpoint.\nActual:\n{actual}"
 
 let testDceRemovesSelfReferentialDeadPhi () : TestResult =
     let entry = Label "entry"
@@ -107,20 +125,23 @@ let testDceRemovesSelfReferentialDeadPhi () : TestResult =
 
     let program = Program ([func], Map.empty, Map.empty)
     let (Program (functions, _, _)) = optimizeProgram program
-    let optimizedFunc = functions |> List.head
-    let optimizedLoop = optimizedFunc.CFG.Blocks |> Map.find loop
+    match singleOptimizedFunction "testDceRemovesSelfReferentialDeadPhi" functions with
+    | Error e -> Error e
+    | Ok optimizedFunc ->
+        match optimizedBlockForLabel "testDceRemovesSelfReferentialDeadPhi" loop optimizedFunc with
+        | Error e -> Error e
+        | Ok optimizedLoop ->
+            let hasPhi =
+                optimizedLoop.Instrs
+                |> List.exists (function
+                    | Phi _ -> true
+                    | _ -> false)
 
-    let hasPhi =
-        optimizedLoop.Instrs
-        |> List.exists (function
-            | Phi _ -> true
-            | _ -> false)
-
-    if hasPhi then
-        let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
-        Error $"Expected dead self-referential phi to be removed by DCE.\nActual:\n{actual}"
-    else
-        Ok ()
+            if hasPhi then
+                let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
+                Error $"Expected dead self-referential phi to be removed by DCE.\nActual:\n{actual}"
+            else
+                Ok ()
 
 let testCfgSimplifyRemovesRetPhiJoin () : TestResult =
     let entry = Label "entry"
