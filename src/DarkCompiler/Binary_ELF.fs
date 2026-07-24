@@ -12,7 +12,7 @@
 // - Data: The actual code and data
 //
 // Our minimal executable has:
-// - ELF64 header for ARM64
+// - ELF64 header for the selected target architecture
 // - One PT_LOAD program header (executable code segment)
 // - The machine code
 
@@ -69,7 +69,7 @@ let PF_R = 4u  // Read
 type Elf64Header = {
     Ident: byte array         // 16 bytes: ELF identification
     Type: uint16              // Object file type (ET_EXEC)
-    Machine: uint16           // Architecture (EM_AARCH64)
+    Machine: uint16           // Architecture (for example, EM_AARCH64 or EM_X86_64)
     Version: uint32           // ELF version
     Entry: uint64             // Entry point virtual address
     PhOff: uint64             // Program header table file offset
