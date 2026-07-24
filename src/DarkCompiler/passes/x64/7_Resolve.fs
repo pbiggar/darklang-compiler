@@ -52,82 +52,112 @@ let patchRel32 (machineCode: byte array) (patchOffset: int) (rel: int) : unit =
     machineCode.[patchOffset + 2] <- relBytes.[2]
     machineCode.[patchOffset + 3] <- relBytes.[3]
 
+type private EncodeState = {
+    LabelPositions: Map<string, int>
+    Fixups: Fixup list
+    Offset: int
+    EncodedChunks: byte array list
+}
+
+let private addFixup
+    (state: EncodeState)
+    (instr: Instr)
+    (patchOffsetFromInstrStart: int)
+    (targetLabel: string)
+    : EncodeState =
+    let bytes = X86_64_Encoding.encodeInstruction instr
+    { state with
+        Fixups =
+            { PatchOffset = state.Offset + patchOffsetFromInstrStart
+              NextInstrOffset = state.Offset + bytes.Length
+              TargetLabel = targetLabel } :: state.Fixups
+        Offset = state.Offset + bytes.Length
+        EncodedChunks = bytes :: state.EncodedChunks }
+
+let private addEncodedInstruction (state: EncodeState) (instr: Instr) : EncodeState =
+    let bytes = X86_64_Encoding.encodeInstruction instr
+    { state with
+        Offset = state.Offset + bytes.Length
+        EncodedChunks = bytes :: state.EncodedChunks }
+
+let private encodeInstruction (state: EncodeState) (instr: Instr) : EncodeState =
+    match instr with
+    | Label name ->
+        { state with LabelPositions = Map.add name state.Offset state.LabelPositions }
+    | CALL label ->
+        addFixup state instr 1 label
+    | JMP label ->
+        addFixup state instr 1 label
+    | Jcc (_, label) ->
+        addFixup state instr 2 label
+    | LEA_rip (_, label) ->
+        addFixup state instr 3 label
+    | _ ->
+        addEncodedInstruction state instr
+
+type private PatchState = { Errors: string list }
+
 /// Returns the final machine code bytes and label positions.
 let resolveAndEncode (instructions: Instr list) : Result<ResolveResult, string> =
     // Pass 1: encode all instructions, collect label positions and fixups
-    let mutable labelPositions : Map<string, int> = Map.empty
-    let mutable fixups : Fixup list = []
-    let mutable offset = 0
-    let mutable encodedChunks : (byte array) list = []
-
-    for instr in instructions do
-        match instr with
-        | Label name ->
-            labelPositions <- Map.add name offset labelPositions
-            // Labels emit no bytes
-        | CALL label ->
-            let bytes = X86_64_Encoding.encodeInstruction instr
-            fixups <- { PatchOffset = offset + 1  // rel32 starts after the 0xE8 opcode byte
-                        NextInstrOffset = offset + bytes.Length
-                        TargetLabel = label } :: fixups
-            encodedChunks <- bytes :: encodedChunks
-            offset <- offset + bytes.Length
-        | JMP label ->
-            let bytes = X86_64_Encoding.encodeInstruction instr
-            fixups <- { PatchOffset = offset + 1  // rel32 starts after the 0xE9 opcode byte
-                        NextInstrOffset = offset + bytes.Length
-                        TargetLabel = label } :: fixups
-            encodedChunks <- bytes :: encodedChunks
-            offset <- offset + bytes.Length
-        | Jcc (_, label) ->
-            let bytes = X86_64_Encoding.encodeInstruction instr
-            fixups <- { PatchOffset = offset + 2  // rel32 starts after 0F 8x (2-byte opcode)
-                        NextInstrOffset = offset + bytes.Length
-                        TargetLabel = label } :: fixups
-            encodedChunks <- bytes :: encodedChunks
-            offset <- offset + bytes.Length
-        | LEA_rip (_, label) ->
-            let bytes = X86_64_Encoding.encodeInstruction instr
-            // REX.W 8D ModR/M disp32 — the disp32 starts at offset 3 (REX + opcode + ModR/M)
-            fixups <- { PatchOffset = offset + 3
-                        NextInstrOffset = offset + bytes.Length
-                        TargetLabel = label } :: fixups
-            encodedChunks <- bytes :: encodedChunks
-            offset <- offset + bytes.Length
-        | _ ->
-            let bytes = X86_64_Encoding.encodeInstruction instr
-            encodedChunks <- bytes :: encodedChunks
-            offset <- offset + bytes.Length
+    let encodeState =
+        instructions
+        |> List.fold
+            encodeInstruction
+            { LabelPositions = Map.empty
+              Fixups = []
+              Offset = 0
+              EncodedChunks = [] }
 
     // Concatenate all encoded chunks
-    let result = encodedChunks |> List.rev |> Array.concat
+    let result = encodeState.EncodedChunks |> List.rev |> Array.concat
 
     // Pass 2: apply fixups (defer unknown labels for data label patching later)
-    let mutable deferred : Fixup list = []
-    for fixup in fixups do
-        match Map.tryFind fixup.TargetLabel labelPositions with
-        | None ->
-            deferred <- fixup :: deferred
-        | Some targetOffset ->
-            // rel32 = target - nextInstr
-            let rel = targetOffset - fixup.NextInstrOffset
-            patchRel32 result fixup.PatchOffset rel
+    let deferred =
+        encodeState.Fixups
+        |> List.fold
+            (fun deferred fixup ->
+                match Map.tryFind fixup.TargetLabel encodeState.LabelPositions with
+                | None ->
+                    fixup :: deferred
+                | Some targetOffset ->
+                    // rel32 = target - nextInstr
+                    let rel = targetOffset - fixup.NextInstrOffset
+                    patchRel32 result fixup.PatchOffset rel
+                    deferred)
+            []
 
-    Ok { MachineCode = result; LabelPositions = labelPositions; DeferredFixups = List.rev deferred }
+    Ok
+        { MachineCode = result
+          LabelPositions = encodeState.LabelPositions
+          DeferredFixups = List.rev deferred }
+
+let private patchDataLabel
+    (dataLabels: Map<string, int>)
+    (codeFileOffset: int)
+    (machineCode: byte array)
+    (state: PatchState)
+    (fixup: Fixup)
+    : PatchState =
+    match Map.tryFind fixup.TargetLabel dataLabels with
+    | None ->
+        { state with Errors = $"Undefined label: {fixup.TargetLabel}" :: state.Errors }
+    | Some fileOffset ->
+        let targetCodeOffset = fileOffset - codeFileOffset
+        let rel = targetCodeOffset - fixup.NextInstrOffset
+        patchRel32 machineCode fixup.PatchOffset rel
+        state
 
 /// Patch deferred fixups with data label positions.
 /// dataLabels maps label names to file offsets. codeFileOffset is where code starts in the file.
 let patchDataLabels (result: ResolveResult) (dataLabels: Map<string, int>) (codeFileOffset: int) : Result<ResolveResult, string> =
-    let mutable errors : string list = []
-    for fixup in result.DeferredFixups do
-        match Map.tryFind fixup.TargetLabel dataLabels with
-        | None ->
-            errors <- $"Undefined label: {fixup.TargetLabel}" :: errors
-        | Some fileOffset ->
-            let targetCodeOffset = fileOffset - codeFileOffset
-            let rel = targetCodeOffset - fixup.NextInstrOffset
-            patchRel32 result.MachineCode fixup.PatchOffset rel
-    if errors.IsEmpty then
+    let patchState =
+        result.DeferredFixups
+        |> List.fold
+            (patchDataLabel dataLabels codeFileOffset result.MachineCode)
+            { Errors = [] }
+
+    if patchState.Errors.IsEmpty then
         Ok { result with DeferredFixups = [] }
     else
-        Error (String.concat "\n" (List.rev errors))
+        Error (String.concat "\n" (List.rev patchState.Errors))
