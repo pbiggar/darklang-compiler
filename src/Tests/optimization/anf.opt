@@ -1218,3 +1218,21 @@ Function f:
 let TempId 1 = Int64ToFloat(t0)
 let TempId 5 = t1 + t1
 return t5
+
+---NAME---
+cse_reuses_duplicate_float_to_bits
+---INPUT---
+def f(x: Float) : (UInt64, UInt64) =
+  let a = Float.toBits(x) in
+  let b = Float.toBits(x) in
+  (a, b)
+f(1.5)
+---EXPECTED---
+Function f:
+let TempId 1 = FloatToBits(t0)
+let TempId 5 = (t1, t1)
+return t5
+
+Main:
+let TempId 6 = f(1.5)
+return t6
