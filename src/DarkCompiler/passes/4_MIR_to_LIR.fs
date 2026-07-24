@@ -4,8 +4,8 @@
 //
 // Instruction selection algorithm:
 // - Converts MIR basic blocks to LIR basic blocks
-// - Selects appropriate ARM64 instructions for each MIR operation
-// - Handles ARM64 operand constraints:
+// - Selects target-neutral LIR operations for each MIR operation
+// - Handles LIR operand constraints that later backends lower to real instructions:
 //   - ADD/SUB: support 12-bit immediates, left operand must be register
 //   - MUL/SDIV: both operands must be registers
 // - Inserts MOV instructions to load immediates when needed
