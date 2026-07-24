@@ -170,12 +170,12 @@ let bitsetContains (domain: VRegDomain) (bits: BitSet) (value: int) : bool =
 let private bitsetAddInPlace (domain: VRegDomain) (value: int) (bits: BitSet) : unit =
     match tryIndexOf domain value with
     | Some idx -> Bitset.addIndexInPlace idx bits
-    | None -> ()
+    | None -> Crash.crash $"RegisterAllocation: missing vreg {value} in bitset domain"
 
 let private bitsetRemoveInPlace (domain: VRegDomain) (value: int) (bits: BitSet) : unit =
     match tryIndexOf domain value with
     | Some idx -> Bitset.removeIndexInPlace idx bits
-    | None -> ()
+    | None -> Crash.crash $"RegisterAllocation: missing vreg {value} in bitset domain"
 
 let private bitsetAddIndexInPlace (idx: int) (bits: BitSet) : unit =
     Bitset.addIndexInPlace idx bits
@@ -592,10 +592,14 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
 // Float Register Liveness Analysis
 // ============================================================================
 
+let private isFixedFVRegId (id: int) : bool =
+    id = 1000 || id = 1001 || id = 2000 || (id >= 3000 && id < 4000)
+
 /// Get FVirtual register IDs used (read) by an instruction
 let getUsedFVRegs (instr: LIR.Instr) : int list =
     let fregToId (freg: LIR.FReg) : int option =
         match freg with
+        | LIR.FVirtual id when isFixedFVRegId id -> None
         | LIR.FVirtual id -> Some id
         | LIR.FPhysical _ -> None
 
@@ -625,6 +629,7 @@ let getUsedFVRegs (instr: LIR.Instr) : int list =
 let getDefinedFVReg (instr: LIR.Instr) : int option =
     let fregToId (freg: LIR.FReg) : int option =
         match freg with
+        | LIR.FVirtual id when isFixedFVRegId id -> None
         | LIR.FVirtual id -> Some id
         | LIR.FPhysical _ -> None
 
