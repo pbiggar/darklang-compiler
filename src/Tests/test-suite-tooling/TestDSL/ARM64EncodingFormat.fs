@@ -89,18 +89,21 @@ let parseARM64EncodingTest (content: string) : Result<ARM64EncodingTest, string>
                         Error $"Instruction count ({instructions.Length}) does not match hex value count ({hexValues.Length})"
                     else
                         // Parse ASSERT-DIFFERENT (optional)
-                        let assertDifferent =
+                        let parseAssertDifferent () =
                             match getOptionalSection "ASSERT-DIFFERENT" testFile with
                             | Some text ->
                                 match text.Trim().ToLower() with
-                                | "true" -> true
-                                | "false" -> false
-                                | _ -> false
-                            | None -> false
+                                | "true" -> Ok true
+                                | "false" -> Ok false
+                                | value -> Error $"Invalid ASSERT-DIFFERENT value: '{value}'"
+                            | None -> Ok false
 
-                        Ok {
-                            Name = name
-                            Instructions = instructions
-                            ExpectedHex = hexValues
-                            AssertDifferent = assertDifferent
-                        }
+                        match parseAssertDifferent () with
+                        | Error e -> Error e
+                        | Ok assertDifferent ->
+                            Ok {
+                                Name = name
+                                Instructions = instructions
+                                ExpectedHex = hexValues
+                                AssertDifferent = assertDifferent
+                            }
