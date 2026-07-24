@@ -24,8 +24,7 @@ let parseSections (content: string) : Section list =
     if matches.Count = 0 then
         []
     else
-        let sections = ResizeArray<Section>()
-        for i in 0 .. matches.Count - 1 do
+        [ for i in 0 .. matches.Count - 1 ->
             let sectionName = matches.[i].Groups.[1].Value
             let startIdx = matches.[i].Index + matches.[i].Length
             let endIdx =
@@ -34,8 +33,7 @@ let parseSections (content: string) : Section list =
                 else
                     content.Length
             let sectionContent = content.Substring(startIdx, endIdx - startIdx)
-            sections.Add((sectionName, sectionContent))
-        List.ofSeq sections
+            (sectionName, sectionContent) ]
 
 /// Parse test file into sections
 let parseTestFile (content: string) : TestFile =
