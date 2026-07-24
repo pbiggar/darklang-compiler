@@ -54,7 +54,8 @@ These generate syscalls or special code sequences.
 
 ### Dark Functions
 
-Defined in `stdlib.dark`, compiled like user code:
+Defined in modular `src/DarkCompiler/stdlib/*.dark` files and compiled like
+user code:
 
 ```dark
 def Stdlib.Int64.max(a: Int64, b: Int64) : Int64 =
@@ -153,7 +154,8 @@ Uses platform-specific random source:
 
 ## How Stdlib is Included
 
-1. **Compilation start**: Load `stdlib.dark` source
+1. **Compilation start**: Load intrinsic module signatures from `Stdlib.fs`
+   and Dark stdlib source files from `src/DarkCompiler/stdlib/`
 2. **Parse**: Parse stdlib definitions
 3. **Combine**: Merge with user program
 4. **Type check**: Stdlib + user code together
@@ -165,8 +167,8 @@ Stdlib functions are only included if called (dead code elimination).
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `Stdlib.fs` | ~100 | Intrinsic module definitions |
-| `stdlib.dark` | 1628 | Dark implementations |
+| `Stdlib.fs` | | Intrinsic module definitions |
+| `stdlib/*.dark` | | Dark implementations |
 | `CompilerLibrary.fs` | | Stdlib loading logic |
 
 ## Generic Function Monomorphization
