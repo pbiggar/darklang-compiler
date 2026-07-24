@@ -18,6 +18,10 @@ let private requireIndexInRange (operation: string) (wordCount: int) (idx: int) 
     if idx < 0 || idx >= bitCapacity then
         Crash.crash $"{operation} index {idx} is outside bitset capacity {bitCapacity}"
 
+let private requireMatchingWordCount (operation: string) (left: Bitset) (right: Bitset) : unit =
+    if left.Length <> right.Length then
+        Crash.crash $"Bitset {operation} requires matching word counts"
+
 let all (bitCount: int) : Bitset =
     let wordCount = wordCount bitCount
     if wordCount = 0 then
@@ -47,15 +51,12 @@ let isEmpty (bits: Bitset) : bool =
     bits |> Array.forall (fun word -> word = 0UL)
 
 let equal (left: Bitset) (right: Bitset) : bool =
-    if left.Length <> right.Length then
-        Crash.crash "Bitset equality requires matching word counts"
-    else
-        Array.forall2 (=) left right
+    requireMatchingWordCount "equality" left right
+    Array.forall2 (=) left right
 
 let union (left: Bitset) (right: Bitset) : Bitset =
-    if left.Length <> right.Length then
-        Crash.crash "Bitset union requires matching word counts"
-    else if isEmpty left then
+    requireMatchingWordCount "union" left right
+    if isEmpty left then
         right
     else if isEmpty right then
         left
@@ -63,15 +64,15 @@ let union (left: Bitset) (right: Bitset) : Bitset =
         Array.init left.Length (fun i -> left.[i] ||| right.[i])
 
 let diff (left: Bitset) (right: Bitset) : Bitset =
-    if left.Length <> right.Length then
-        Crash.crash "Bitset difference requires matching word counts"
-    else if isEmpty right then
+    requireMatchingWordCount "difference" left right
+    if isEmpty right then
         left
     else
         Array.init left.Length (fun i -> left.[i] &&& (~~~right.[i]))
 
 let intersectMany (first: Bitset) (rest: Bitset list) : Bitset =
     let wordCount = first.Length
+    rest |> List.iter (requireMatchingWordCount "intersection" first)
     Array.init wordCount (fun i ->
         rest |> List.fold (fun acc set -> acc &&& set.[i]) first.[i])
 
@@ -106,37 +107,29 @@ let removeIndexInPlace (idx: int) (bits: Bitset) : unit =
         bits.[wordIdx] <- bits.[wordIdx] &&& (~~~(1UL <<< bitIdx))
 
 let unionInPlace (left: Bitset) (right: Bitset) : unit =
-    if left.Length <> right.Length then
-        Crash.crash "Bitset union requires matching word counts"
-    else
-        for i in 0 .. left.Length - 1 do
-            left.[i] <- left.[i] ||| right.[i]
+    requireMatchingWordCount "union" left right
+    for i in 0 .. left.Length - 1 do
+        left.[i] <- left.[i] ||| right.[i]
 
 let intersectInPlace (left: Bitset) (right: Bitset) : unit =
-    if left.Length <> right.Length then
-        Crash.crash "Bitset intersection requires matching word counts"
-    else
-        for i in 0 .. left.Length - 1 do
-            left.[i] <- left.[i] &&& right.[i]
+    requireMatchingWordCount "intersection" left right
+    for i in 0 .. left.Length - 1 do
+        left.[i] <- left.[i] &&& right.[i]
 
 let diffInPlace (left: Bitset) (right: Bitset) : unit =
-    if left.Length <> right.Length then
-        Crash.crash "Bitset difference requires matching word counts"
-    else
-        for i in 0 .. left.Length - 1 do
-            left.[i] <- left.[i] &&& (~~~right.[i])
+    requireMatchingWordCount "difference" left right
+    for i in 0 .. left.Length - 1 do
+        left.[i] <- left.[i] &&& (~~~right.[i])
 
 let intersects (left: Bitset) (right: Bitset) : bool =
-    if left.Length <> right.Length then
-        Crash.crash "Bitset intersection requires matching word counts"
-    else
-        let mutable found = false
-        let mutable i = 0
-        while not found && i < left.Length do
-            if (left.[i] &&& right.[i]) <> 0UL then
-                found <- true
-            i <- i + 1
-        found
+    requireMatchingWordCount "intersection" left right
+    let mutable found = false
+    let mutable i = 0
+    while not found && i < left.Length do
+        if (left.[i] &&& right.[i]) <> 0UL then
+            found <- true
+        i <- i + 1
+    found
 
 let iterIndices (bits: Bitset) (f: int -> unit) : unit =
     for wordIdx in 0 .. bits.Length - 1 do
