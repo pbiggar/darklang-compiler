@@ -297,6 +297,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk extension of ANF CSE for pure float negation; avoids repeating equivalent unary float negation before MIR lowering.
 - Notes: Implemented for repeated `FloatNeg(x)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_float_neg` in `src/Tests/optimization/anf.opt`; existing float-heavy tests and benchmarks provide regression coverage but do not isolate this micro-pattern.
 
+### Duplicate Int64.toFloat conversion reuse
+
+- Optimization name: Duplicate Int64.toFloat conversion reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, low-risk extension of ANF CSE for a pure numeric conversion; avoids repeating the same Int64-to-Float conversion before MIR lowering.
+- Notes: Implemented for repeated `Int64ToFloat(value)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_int64_to_float` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmarks provide regression coverage but do not isolate this micro-pattern.
+
 ## Dead code elimination
 
 ### Unused ANF binding elimination

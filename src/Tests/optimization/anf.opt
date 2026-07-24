@@ -1205,3 +1205,16 @@ Main:
 let TempId 6 = (1, 2)
 let TempId 7 = f(t6)
 return t7
+
+---NAME---
+cse_reuses_duplicate_int64_to_float
+---INPUT---
+def f(x: Int64) : Float =
+  let a = Int64.toFloat(x) in
+  let b = Int64.toFloat(x) in
+  a + b
+---EXPECTED---
+Function f:
+let TempId 1 = Int64ToFloat(t0)
+let TempId 5 = t1 + t1
+return t5

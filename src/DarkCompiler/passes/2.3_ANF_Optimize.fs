@@ -589,7 +589,8 @@ let private isCSEEligible (cexpr: CExpr) : bool =
     | Prim _
     | UnaryPrim _
     | FloatNeg _
-    | TupleGet _ -> true
+    | TupleGet _
+    | Int64ToFloat _ -> true
     | _ -> false
 
 let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
