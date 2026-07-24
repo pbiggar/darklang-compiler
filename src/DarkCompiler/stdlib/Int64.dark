@@ -83,7 +83,7 @@ def Stdlib.Int64.__digitToString(n: Int64) : String =
     | 7 -> "7"
     | 8 -> "8"
     | 9 -> "9"
-    | _ -> "?"
+    | _ -> Builtin.testRuntimeError("Int64.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
 def Stdlib.Int64.toString(n: Int64) : String =
@@ -102,4 +102,3 @@ def Stdlib.Int64.isOdd(n: Int64) : Bool =
 // Sum all integers in a list
 def Stdlib.Int64.sum(list: List<Int64>) : Int64 =
     Stdlib.List.fold<Int64, Int64>(list, 0, (acc: Int64, x: Int64) => acc + x)
-

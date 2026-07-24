@@ -5,3 +5,4 @@
 Stdlib.Int64.__digitToString(0) = "0"
 Stdlib.Int64.__digitToString(5) = "5"
 Stdlib.Int64.__digitToString(9) = "9"
+Stdlib.Int64.__digitToString(10) = error="Uncaught exception: Int64.__digitToString expected a digit from 0 to 9"
