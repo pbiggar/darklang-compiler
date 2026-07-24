@@ -249,10 +249,6 @@ let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) 
         Some (Atom (BoolLiteral true))
     | Gte, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
         Some (Atom (BoolLiteral true))
-    | Eq, Var leftTid, Var rightTid when leftTid = rightTid && isBoolAtom typeEnv left ->
-        Some (Atom (BoolLiteral true))
-    | Neq, Var leftTid, Var rightTid when leftTid = rightTid && isBoolAtom typeEnv left ->
-        Some (Atom (BoolLiteral false))
     | Mul, x, IntLiteral (Int64 n) ->
         match tryLog2 n with
         | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
