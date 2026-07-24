@@ -34,9 +34,22 @@ trap cleanup EXIT
 
 # Compile and dump LIR
 if [ -f "$EXPR" ]; then
-    "$RUN" ./dark --dump-lir "$EXPR" -o "$OUTFILE" > "$TMPFILE" 2>&1 || true
+    if "$RUN" ./dark --dump-lir "$EXPR" -o "$OUTFILE" > "$TMPFILE" 2>&1; then
+        compile_status=0
+    else
+        compile_status=$?
+    fi
 else
-    "$RUN" ./dark --dump-lir -e "$EXPR" -o "$OUTFILE" > "$TMPFILE" 2>&1 || true
+    if "$RUN" ./dark --dump-lir -e "$EXPR" -o "$OUTFILE" > "$TMPFILE" 2>&1; then
+        compile_status=0
+    else
+        compile_status=$?
+    fi
+fi
+
+if [ "$compile_status" -ne 0 ]; then
+    cat "$TMPFILE"
+    exit "$compile_status"
 fi
 
 if [ -z "$FUNC" ]; then
