@@ -13,7 +13,7 @@
 #   3. With --watch-func: sets hardware watchpoints on saved callee-saved regs.
 #   4. With --trace-calls: enumerates function entries and runs valgrind.
 
-set -e
+set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN="$HERE/../run-in-container"
@@ -23,16 +23,28 @@ MODE="crash"
 WATCH_ADDR=""
 EXPR=""
 
+usage() {
+    echo "Usage: $0 'dark-expression-or-file' [--watch-func ADDR] [--trace-calls]"
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
-        --watch-func) WATCH_ADDR="$2"; MODE="watch"; shift 2 ;;
+        --watch-func)
+            if [ $# -lt 2 ]; then
+                usage
+                exit 1
+            fi
+            WATCH_ADDR="$2"
+            MODE="watch"
+            shift 2
+            ;;
         --trace-calls) MODE="trace"; shift ;;
         *) EXPR="$1"; shift ;;
     esac
 done
 
 if [ -z "$EXPR" ]; then
-    echo "Usage: $0 'dark-expression-or-file' [--watch-func ADDR] [--trace-calls]"
+    usage
     exit 1
 fi
 
