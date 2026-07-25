@@ -176,6 +176,25 @@ let testARM64ParsersAcceptAllGeneralPurposeRegisters () : TestResult =
                     | Error msg -> Error $"Expected parser success for {description}, got: {msg}"))
             (Ok ()))
 
+let testLIRParserAcceptsAllPhysicalRegisters () : TestResult =
+    let registerNames =
+        [
+            "X0"; "X1"; "X2"; "X3"; "X4"; "X5"; "X6"; "X7"; "X8"; "X9"
+            "X10"; "X11"; "X12"; "X13"; "X14"; "X15"; "X16"; "X17"
+            "X19"; "X20"; "X21"; "X22"; "X23"; "X24"; "X25"; "X26"; "X27"
+            "X29"; "X30"; "SP"
+        ]
+
+    registerNames
+    |> List.fold
+        (fun state reg ->
+            state
+            |> Result.bind (fun () ->
+                match parseLIR $"{reg} <- Mov(Reg X0)" with
+                | Ok _ -> Ok ()
+                | Error msg -> Error $"Expected LIR parser success for {reg}, got: {msg}"))
+        (Ok ())
+
 let testARM64SymbolicParserReportsOriginalLineNumber () : TestResult =
     let text =
         [
@@ -226,6 +245,7 @@ let tests = [
     ("LIR parser rejects out-of-range numeric fields", testLIRParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)
+    ("LIR parser accepts all physical registers", testLIRParserAcceptsAllPhysicalRegisters)
     ("ARM64 symbolic parser reports original line number", testARM64SymbolicParserReportsOriginalLineNumber)
     ("ARM64 symbolic parser accepts branch instructions", testARM64SymbolicParserAcceptsBranchInstructions)
 ]

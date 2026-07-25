@@ -45,10 +45,21 @@ let parsePhysReg (text: string) : Result<PhysReg, string> =
     | "X13" -> Ok X13
     | "X14" -> Ok X14
     | "X15" -> Ok X15
+    | "X16" -> Ok X16
+    | "X17" -> Ok X17
+    | "X19" -> Ok X19
+    | "X20" -> Ok X20
+    | "X21" -> Ok X21
+    | "X22" -> Ok X22
+    | "X23" -> Ok X23
+    | "X24" -> Ok X24
+    | "X25" -> Ok X25
+    | "X26" -> Ok X26
+    | "X27" -> Ok X27
     | "X29" -> Ok X29
     | "X30" -> Ok X30
     | "SP" -> Ok SP
-    | reg -> Error $"Invalid physical register '{reg}' (expected X0-X15, X29, X30, or SP)"
+    | reg -> Error $"Invalid physical register '{reg}' (expected X0-X17, X19-X27, X29, X30, or SP)"
 
 /// Parse register (physical or virtual) from text
 let parseRegister (text: string) : Result<Reg, string> =
