@@ -110,7 +110,10 @@ return result
 
 ## Test Cases
 
-From `src/Tests/e2e/tailcall.e2e`:
+`src/Tests/e2e/tailcall.e2e` is the maintained end-to-end regression suite for
+tail-call behavior. It covers simple self-recursion, argument swap and rotation
+cases, generic tail recursion, string/reference-counted arguments, and float
+parameter self-recursion.
 
 ```dark
 // Simple tail recursion
@@ -118,10 +121,10 @@ def sumTo(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc else sumTo(n - 1, acc + n)
 sumTo(10, 0)  // Expected: 55
 
-// Large N (would overflow without TCO) - CURRENTLY DISABLED
+// Large N stress case, currently left as a disabled note in the suite
 def countDown(n: Int64) : Int64 =
     if n <= 0 then 0 else countDown(n - 1)
-countDown(100000)  // Expected: 0, but test disabled
+countDown(100000)  // Expected: 0
 ```
 
 ## Why TCO Matters
@@ -169,4 +172,4 @@ From `virtual-tumbling-bunny.md`:
 - `src/DarkCompiler/ANF.fs` - TailCall, IndirectTailCall, ClosureTailCall types
 - `src/DarkCompiler/passes/arm64/6_CodeGen.fs` - ARM64 B/BR emission
 - `src/DarkCompiler/passes/x64/6_CodeGen.fs` - x64 JMP emission
-- `src/Tests/e2e/tailcall.e2e` - Test cases (minimal - 16 lines)
+- `src/Tests/e2e/tailcall.e2e` - End-to-end tail-call regression tests
