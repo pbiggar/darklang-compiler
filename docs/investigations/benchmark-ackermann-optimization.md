@@ -171,7 +171,6 @@ Jump(Label "ackermann_body")
 | Nine MOVs in `ackermann_entry` | Mostly implemented for this benchmark; current entry has two argument moves. |
 | Redundant post-register-allocation self moves | Implemented by target-independent post-allocation LIR cleanup. |
 | Dead `ackermann_L5` in final LIR | Still visible in `--dump-mir`, but absent from post-register-allocation LIR. Early raw-MIR pruning was rejected after measurement. |
-| `BranchZero` should lower to ARM64 `CBZ`/`CBNZ` | Implemented for `BranchZero` on ARM64; codegen emits `CBZ` plus branch to the non-zero label. |
 
 ## Recommended Next Checks
 
