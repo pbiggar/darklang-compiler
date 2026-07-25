@@ -4,9 +4,8 @@ Only supported status:
 1. `Int ✅ / Comp ❌`: implement compiler or stdlib behavior to match the interpreter. All other status combinations are skipped.
 
 Prep (once per session)
-1. `git rebase main`
-2. Read `docs/adding-features.md` and `docs/result-patterns.md`.
-3. Open `interpreter-compiler-modules.md` and choose a row with `Int ✅ / Comp ❌`.
+1. Read `docs/adding-features.md`, `docs/result-patterns.md`, and `docs/verification.md`.
+2. Open `interpreter-compiler-modules.md` and choose a row with `Int ✅ / Comp ❌`.
 
 Loop (one actionable item per iteration)
 1. Write a one-line hypothesis: “Compiler differs from interpreter for X when input is Y.”
@@ -20,7 +19,8 @@ Loop (one actionable item per iteration)
 9. Follow repo rules: pure functional style, `Result`/`Option`, no exceptions, no mutation, no defaults.
 10. Run `./run-tests --ai` and confirm the test passes.
 11. Update `interpreter-compiler-modules.md` to flip `Comp` to `✅`.
-12. Commit with message: `Align compiler with interpreter: <module>.<name>`, then proceed to the next actionable item.
+12. Run any additional validation required by `docs/verification.md`, including benchmarks when the compiler, stdlib, tests, or benchmark-adjacent areas changed.
+13. Report the chosen module/function, behavior evidence, implementation summary, validation results, and residual risk for review.
 
 Stop criteria
 1. If the change requires more than one compiler pass, stop.
