@@ -377,6 +377,62 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 | Error e -> Error e
                 | Ok offset -> Ok (LDUR (dest, addr, offset))
     else
+
+    // Try CBZ: "CBZ(X0, label)"
+    let cbzMatch = Regex.Match(line, @"^CBZ\((.+?),\s*(.+?)\)$")
+    if cbzMatch.Success then
+        match parseReg cbzMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok reg ->
+            let label = cbzMatch.Groups.[2].Value
+            Ok (CBZ (reg, label))
+    else
+
+    // Try CBNZ: "CBNZ(X0, label)"
+    let cbnzMatch = Regex.Match(line, @"^CBNZ\((.+?),\s*(.+?)\)$")
+    if cbnzMatch.Success then
+        match parseReg cbnzMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok reg ->
+            let label = cbnzMatch.Groups.[2].Value
+            Ok (CBNZ (reg, label))
+    else
+
+    // Try B_label: "B_label(done)"
+    let bLabelMatch = Regex.Match(line, @"^B_label\((.+?)\)$")
+    if bLabelMatch.Success then
+        let label = bLabelMatch.Groups.[1].Value
+        Ok (B_label label)
+    else
+
+    // Try B_cond_label: "B_cond_label(EQ, label)"
+    let bCondLabelMatch = Regex.Match(line, @"^B_cond_label\((.+?),\s*(.+?)\)$")
+    if bCondLabelMatch.Success then
+        match parseCond bCondLabelMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok cond ->
+            let label = bCondLabelMatch.Groups.[2].Value
+            Ok (B_cond_label (cond, label))
+    else
+
+    // Try B: "B(12)"
+    let bMatch = Regex.Match(line, @"^B\((-?\d+)\)$")
+    if bMatch.Success then
+        match parseIntOperand lineNum "B offset" bMatch.Groups.[1].Value with
+        | Error e -> Error e
+        | Ok offset -> Ok (B offset)
+    else
+
+    // Try B_cond: "B_cond(NE, -4)"
+    let bCondMatch = Regex.Match(line, @"^B_cond\((.+?),\s*(-?\d+)\)$")
+    if bCondMatch.Success then
+        match parseCond bCondMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok cond ->
+            match parseIntOperand lineNum "B_cond offset" bCondMatch.Groups.[2].Value with
+            | Error e -> Error e
+            | Ok offset -> Ok (B_cond (cond, offset))
+    else
         Error $"Line {lineNum}: Invalid instruction format '{line}'"
 
 /// Parse ARM64 program from text

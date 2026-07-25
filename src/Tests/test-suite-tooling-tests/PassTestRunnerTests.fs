@@ -191,6 +191,32 @@ let testARM64SymbolicParserReportsOriginalLineNumber () : TestResult =
     | Error msg -> Error $"Expected original source line 4 in parser error, got: {msg}"
     | Ok _ -> Error "Expected parser error for invalid symbolic ARM64 register"
 
+let testARM64SymbolicParserAcceptsBranchInstructions () : TestResult =
+    let text =
+        [
+            "CBZ(X0, zero_label)"
+            "CBNZ(X1, nonzero_label)"
+            "B_label(done)"
+            "B_cond_label(EQ, equal_label)"
+            "B(12)"
+            "B_cond(NE, -4)"
+        ]
+        |> String.concat "\n"
+
+    match TestDSL.ARM64SymbolicParser.parseARM64Symbolic text with
+    | Ok [
+        global.ARM64Symbolic.CBZ (ARM64.X0, "zero_label")
+        global.ARM64Symbolic.CBNZ (ARM64.X1, "nonzero_label")
+        global.ARM64Symbolic.B_label "done"
+        global.ARM64Symbolic.B_cond_label (ARM64.EQ, "equal_label")
+        global.ARM64Symbolic.B 12
+        global.ARM64Symbolic.B_cond (ARM64.NE, -4)
+      ] -> Ok ()
+    | Ok instrs ->
+        Error $"Expected symbolic branch instructions to parse exactly, got: {instrs}"
+    | Error msg ->
+        Error $"Expected symbolic branch instructions to parse, got: {msg}"
+
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
@@ -201,6 +227,7 @@ let tests = [
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)
     ("ARM64 symbolic parser reports original line number", testARM64SymbolicParserReportsOriginalLineNumber)
+    ("ARM64 symbolic parser accepts branch instructions", testARM64SymbolicParserAcceptsBranchInstructions)
 ]
 
 let runAll () : TestResult =
