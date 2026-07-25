@@ -831,10 +831,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     if optTestFiles.Length > 0 then
         let runOptimizationFile testFile =
             let fileName = Path.GetFileNameWithoutExtension (testFile: string)
+            let loweredFileName = fileName.ToLowerInvariant()
             let stage =
-                if fileName.ToLower().Contains("anf") then TestDSL.OptimizationFormat.ANF
-                elif fileName.ToLower().Contains("mir") then TestDSL.OptimizationFormat.MIR
-                elif fileName.ToLower().Contains("lir") then TestDSL.OptimizationFormat.LIR
+                if loweredFileName.Contains("anf") then TestDSL.OptimizationFormat.ANF
+                elif loweredFileName.Contains("mir") then TestDSL.OptimizationFormat.MIR
+                elif loweredFileName.Contains("lir") then TestDSL.OptimizationFormat.LIR
                 else TestDSL.OptimizationFormat.ANF
             TestDSL.OptimizationTestRunner.runTestFile stdlib stage testFile
         let handleOptimizationSuccess
