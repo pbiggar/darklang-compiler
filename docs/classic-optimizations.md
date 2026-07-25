@@ -188,6 +188,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical control-flow simplification that removes a conditional when both optimized branches are syntactically identical.
 - Notes: Implemented for ANF `if cond then expr else expr -> expr` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_if_same_branches` in `src/Tests/optimization/anf.opt`; existing branch-heavy tests provide correctness coverage but do not isolate this micro-pattern.
 
+### Boolean literal if branch simplification
+
+- Optimization name: Boolean literal if branch simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical control-flow simplification that removes a conditional when the branches return the condition's boolean literals directly.
+- Notes: Implemented for ANF `if cond then true else false -> cond` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_if_bool_literal_branches` in `src/Tests/optimization/anf.opt`; existing branch-heavy and boolean-heavy tests provide broader regression coverage but do not isolate this micro-pattern.
+
 ### Bitwise all-ones identity simplification
 
 - Optimization name: Bitwise all-ones identity simplification

@@ -734,6 +734,19 @@ let TempId 2 = f(true, 42)
 return t2
 
 ---NAME---
+identity_if_bool_literal_branches
+---INPUT---
+def f(cond: Bool) : Bool = if cond then true else false
+f(true)
+---EXPECTED---
+Function f:
+return t0
+
+Main:
+let TempId 1 = f(true)
+return t1
+
+---NAME---
 identity_bitand_self
 ---INPUT---
 def f(x: Int64) : Int64 = x & x

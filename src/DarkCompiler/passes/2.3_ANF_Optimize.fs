@@ -716,7 +716,13 @@ let rec private optimizeAExprWithUses
         | _ ->
             let thenResult = optimizeAExprWithUses context options env typeEnv cseEnv thenBranch
             let elseResult = optimizeAExprWithUses context options env typeEnv cseEnv elseBranch
-            if options.EnableConstFolding && thenResult.Expr = elseResult.Expr then
+            if options.EnableConstFolding && thenResult.Expr = Return (BoolLiteral true) && elseResult.Expr = Return (BoolLiteral false) then
+                {
+                    Expr = Return cond'
+                    Changed = true
+                    Uses = collectAtomUses cond'
+                }
+            elif options.EnableConstFolding && thenResult.Expr = elseResult.Expr then
                 {
                     Expr = thenResult.Expr
                     Changed = true
