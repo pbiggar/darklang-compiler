@@ -591,6 +591,7 @@ let private isCSEEligible (cexpr: CExpr) : bool =
     | FloatNeg _
     | FloatAbs _
     | FloatToBits _
+    | FloatSqrt _
     | TupleGet _
     | Int64ToFloat _ -> true
     | _ -> false

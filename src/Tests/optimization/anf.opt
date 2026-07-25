@@ -1267,3 +1267,21 @@ return t5
 Main:
 let TempId 6 = f(-3.5)
 return t6
+
+---NAME---
+cse_reuses_duplicate_float_sqrt
+---INPUT---
+def f(x: Float) : Float =
+  let y = Float.sqrt(x) in
+  let z = Float.sqrt(x) in
+  y + z
+f(9.0)
+---EXPECTED---
+Function f:
+let TempId 1 = FloatSqrt(t0)
+let TempId 5 = t1 + t1
+return t5
+
+Main:
+let TempId 6 = f(9)
+return t6

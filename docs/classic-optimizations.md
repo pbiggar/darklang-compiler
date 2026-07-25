@@ -325,6 +325,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk extension of ANF CSE for a pure unary float operation; avoids repeating the same absolute-value computation before MIR lowering.
 - Notes: Implemented for repeated `FloatAbs(atom)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_float_abs` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Duplicate Float.sqrt reuse
+
+- Optimization name: Duplicate Float.sqrt reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, low-risk extension of ANF CSE for a pure floating-point operation; avoids repeating the same square-root computation before MIR lowering.
+- Notes: Implemented for repeated `FloatSqrt(atom)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_float_sqrt` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ## Dead code elimination
 
 ### Unused ANF binding elimination
