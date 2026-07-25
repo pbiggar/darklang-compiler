@@ -1,4 +1,4 @@
-// Enum (simple sum type) tests for Phase 7 Milestone 3
+// Enum (simple sum type) regression tests.
 
 // Basic enum type - first variant (tag 0)
 type Color = Red | Green | Blue Red = Red
