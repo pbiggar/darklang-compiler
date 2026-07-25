@@ -608,6 +608,9 @@ let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : 
     | FloatAbs source, Let (absTid, FloatAbs (Var sourceTid), absBody)
         when sourceTid = tid ->
         Some (Let (absTid, FloatAbs source, absBody))
+    | FloatNeg source, Let (absTid, FloatAbs (Var sourceTid), absBody)
+        when sourceTid = tid ->
+        Some (Let (absTid, FloatAbs source, absBody))
     | _ -> None
 
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
