@@ -41,32 +41,25 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
 /// Run ARM64 encoding test
 let runARM64EncodingTest (test: ARM64EncodingTest) : PassTestResult =
     // Encode each instruction
-    let encodeResults =
-        test.Instructions
-        |> List.mapi (fun i instr ->
+    let rec encodeInstructions index instructions =
+        match instructions with
+        | [] -> Ok []
+        | instr :: rest ->
             let codes = encode instr
             if codes.Length <> 1 then
-                Error $"Instruction {i}: Expected single machine code word per instruction, got {codes.Length}"
+                Error $"Instruction {index}: Expected single machine code word per instruction, got {codes.Length}"
             else
-                Ok codes.[0])
+                match encodeInstructions (index + 1) rest with
+                | Ok encodedRest -> Ok (codes.[0] :: encodedRest)
+                | Error msg -> Error msg
 
-    // Check if any encoding failed
-    let firstError =
-        encodeResults
-        |> List.tryFind (function | Error _ -> true | Ok _ -> false)
-
-    match firstError with
-    | Some (Error msg) ->
+    match encodeInstructions 0 test.Instructions with
+    | Error msg ->
         { Success = false
           Message = msg
           Expected = None
           Actual = None }
-    | _ ->
-        // Extract all successful encodings
-        let results =
-            encodeResults
-            |> List.map (function | Ok code -> code | Error _ -> 0u)
-
+    | Ok results ->
         // Check each encoding matches expected
         let mismatches =
             List.zip3 test.Instructions results test.ExpectedHex
