@@ -9,7 +9,7 @@ open Output
 let private barWidth = 20
 let private lockObj = obj()
 type State = {
-    mutable Total: int
+    Total: int
     mutable Completed: int
     mutable Failed: int
     Label: string
