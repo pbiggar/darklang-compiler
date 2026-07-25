@@ -118,9 +118,23 @@ let testMulAddFusionKeepsLiveTempForPrint () : TestResult =
     else
         Error $"Expected MUL temp used by PrintInt64 to stay available, got: {optimized}"
 
+let testMulConstantKeepsLiveConstRegister () : TestResult =
+    let instrs = [
+        Mov (Physical X1, Imm 3L)
+        Mul (Physical X2, Physical X3, Physical X1)
+        PrintInt64 (Physical X1)
+    ]
+
+    let optimized = tryMulByConstant instrs
+    if optimized = instrs then
+        Ok ()
+    else
+        Error $"Expected live constant register to block strength reduction, got: {optimized}"
+
 let tests = [
     ("LIR peephole removes self-moves from allocated function", testRemoveSelfMovesFromAllocatedFunction)
     ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
     ("LIR peephole fuses FNeg followed by dead-temp FMov", testFNegMoveChainFusesWhenTempDies)
     ("LIR peephole keeps MUL temp used by later print", testMulAddFusionKeepsLiveTempForPrint)
+    ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
 ]
