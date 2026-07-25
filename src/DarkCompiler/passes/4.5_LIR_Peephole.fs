@@ -561,22 +561,142 @@ let removePostAllocationMovesFromFunction (func: Function) : Function =
                     |> removeRedundantFloatingCopyBackMoves })
     { func with CFG = { func.CFG with Blocks = blocks } }
 
+let private regUsedInOperand (target: Reg) (operand: Operand) : bool =
+    match operand with
+    | Reg reg -> sameReg reg target
+    | Imm _
+    | FloatImm _
+    | StackSlot _
+    | StringSymbol _
+    | FloatSymbol _
+    | FuncAddr _ -> false
+
+/// Check if a register is read by an instruction.
+let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
+    let usedInOperand = regUsedInOperand target
+    let same = sameReg target
+    match instr with
+    | Mov (_, src)
+    | RefCountIncString src
+    | RefCountDecString src
+    | RefCountIncBytes src
+    | RefCountDecBytes src ->
+        usedInOperand src
+    | Phi (_, sources, _) ->
+        sources |> List.exists (fun (src, _) -> usedInOperand src)
+    | Store (_, src)
+    | PrintInt64 src
+    | PrintBool src
+    | PrintInt64NoNewline src
+    | PrintBoolNoNewline src
+    | PrintHeapStringNoNewline src
+    | PrintBytes src
+    | PrintList (src, _)
+    | PrintSum (src, _)
+    | PrintRecord (src, _, _)
+    | Int64ToFloat (_, src)
+    | GpToFp (_, src)
+    | RawFree src
+    | FloatToString (src, _) ->
+        same src
+    | Add (_, left, right)
+    | Sub (_, left, right)
+    | Cmp (left, right) ->
+        same left || usedInOperand right
+    | Mul (_, left, right)
+    | Sdiv (_, left, right)
+    | Udiv (_, left, right)
+    | And (_, left, right)
+    | Orr (_, left, right)
+    | Eor (_, left, right)
+    | Lsl (_, left, right)
+    | Lsr (_, left, right)
+    | RawGet (_, left, right)
+    | RawGetByte (_, left, right) ->
+        same left || same right
+    | RawAlloc (_, numBytes) ->
+        same numBytes
+    | FileWriteFromPtr (_, path, ptr, length) ->
+        usedInOperand path || same ptr || same length
+    | Msub (_, mulLeft, mulRight, sub)
+    | Madd (_, mulLeft, mulRight, sub)
+    | RawWriteWord (mulLeft, mulRight, sub)
+    | RawWriteByte (mulLeft, mulRight, sub)
+    | RawSlotInit (mulLeft, mulRight, sub, _) ->
+        same mulLeft || same mulRight || same sub
+    | And_imm (_, src, _)
+    | Lsl_imm (_, src, _)
+    | Lsr_imm (_, src, _)
+    | Mvn (_, src)
+    | Sxtb (_, src)
+    | Sxth (_, src)
+    | Sxtw (_, src)
+    | Uxtb (_, src)
+    | Uxth (_, src)
+    | Uxtw (_, src)
+    | PrintHeapString src
+    | HeapLoad (_, src, _)
+    | RefCountInc (src, _, _, _)
+    | RefCountDec (src, _, _, _) ->
+        same src
+    | Call (_, _, args)
+    | TailCall (_, args) ->
+        args |> List.exists usedInOperand
+    | ArgMoves args
+    | TailArgMoves args ->
+        args |> List.exists (fun (_, src) -> usedInOperand src)
+    | IndirectCall (_, func, args)
+    | IndirectTailCall (func, args) ->
+        same func || (args |> List.exists usedInOperand)
+    | ClosureCall (_, closure, args)
+    | ClosureTailCall (closure, args) ->
+        same closure || (args |> List.exists usedInOperand)
+    | ClosureAlloc (_, _, captures) ->
+        captures |> List.exists usedInOperand
+    | HeapStore (addr, _, src, _) ->
+        same addr || usedInOperand src
+    | StringConcat (_, left, right)
+    | FileWriteText (_, left, right)
+    | FileAppendText (_, left, right) ->
+        usedInOperand left || usedInOperand right
+    | FileReadText (_, path)
+    | FileExists (_, path)
+    | FileDelete (_, path)
+    | FileSetExecutable (_, path) ->
+        usedInOperand path
+    | Cset _
+    | SaveRegs _
+    | RestoreRegs _
+    | FArgMoves _
+    | PrintFloat _
+    | PrintFloatNoNewline _
+    | PrintString _
+    | RuntimeError _
+    | PrintChars _
+    | Exit
+    | FPhi _
+    | FMov _
+    | FLoad _
+    | FAdd _
+    | FSub _
+    | FMul _
+    | FDiv _
+    | FNeg _
+    | FAbs _
+    | FSqrt _
+    | FCmp _
+    | FloatToInt64 _
+    | FloatToBits _
+    | FpToGp _
+    | HeapAlloc _
+    | LoadFuncAddr _
+    | RandomInt64 _
+    | DateNow _
+    | CoverageHit _ -> false
+
 /// Check if a register is used in any instruction (for dead code detection)
 let isRegUsedInInstrs (reg: Reg) (instrs: Instr list) : bool =
-    instrs |> List.exists (fun instr ->
-        match instr with
-        | Mov (_, Reg r) -> sameReg r reg
-        | Mov (_, _) -> false
-        | Add (_, left, Reg right) -> sameReg left reg || sameReg right reg
-        | Add (_, left, _) -> sameReg left reg
-        | Sub (_, left, Reg right) -> sameReg left reg || sameReg right reg
-        | Sub (_, left, _) -> sameReg left reg
-        | Mul (_, left, right) -> sameReg left reg || sameReg right reg
-        | Cmp (left, Reg right) -> sameReg left reg || sameReg right reg
-        | Cmp (left, _) -> sameReg left reg
-        | Cset _ -> false  // Cset only writes, doesn't read
-        | _ -> false  // Conservative: assume not used for other instructions
-    )
+    instrs |> List.exists (regUsedInInstr reg)
 
 /// Check if a value is suitable for multiply-by-constant strength reduction
 /// Returns Some (shift, isAdd) where:

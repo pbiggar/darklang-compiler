@@ -105,8 +105,22 @@ let testFNegMoveChainFusesWhenTempDies () : TestResult =
     else
         Error $"Expected dead FNeg/FMov chain to fuse, got: {optimized}"
 
+let testMulAddFusionKeepsLiveTempForPrint () : TestResult =
+    let instrs = [
+        Mul (Virtual 1, Virtual 2, Virtual 3)
+        Add (Virtual 4, Virtual 1, Reg (Virtual 5))
+        PrintInt64 (Virtual 1)
+    ]
+
+    let optimized = tryFuseMulAdd instrs
+    if optimized = instrs then
+        Ok ()
+    else
+        Error $"Expected MUL temp used by PrintInt64 to stay available, got: {optimized}"
+
 let tests = [
     ("LIR peephole removes self-moves from allocated function", testRemoveSelfMovesFromAllocatedFunction)
     ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
     ("LIR peephole fuses FNeg followed by dead-temp FMov", testFNegMoveChainFusesWhenTempDies)
+    ("LIR peephole keeps MUL temp used by later print", testMulAddFusionKeepsLiveTempForPrint)
 ]
