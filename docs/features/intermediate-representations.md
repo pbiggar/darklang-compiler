@@ -8,11 +8,12 @@ used in the Dark compiler pipeline.
 The compiler uses two IRs between ANF and machine code:
 
 ```
-ANF → MIR → LIR → target ISA
+ANF → MIR → LIR → target ISA → Binary
 ```
 
 - **MIR**: Platform-independent three-address code with CFG
-- **LIR**: target-neutral instruction shapes with virtual registers
+- **LIR**: Shared low-level instructions with virtual registers and abstract
+  physical register names that each backend maps to its target ISA
 
 ## Dumping IRs
 
@@ -109,6 +110,7 @@ LIR prepares code for architecture-specific lowering:
 - Target-neutral instruction shapes consumed by both backends
 - Operand constraints (registers vs immediates)
 - Virtual → physical register transition
+- Abstract physical registers that map to ARM64 or x86_64 registers in pass 6
 
 ### Key Types
 
@@ -132,7 +134,8 @@ type Operand =
 
 ### Instructions
 
-LIR instructions map closely to the backend instruction selectors:
+LIR instructions are close to machine code, but remain target-neutral enough
+for both ARM64 and x86_64 code generators:
 
 ```fsharp
 type Instr =
@@ -155,7 +158,8 @@ type Instr =
 
 Key transformations in `4_MIR_to_LIR.fs`:
 
-1. **Operand constraints**: Backends require certain operands in registers
+1. **Operand constraints**: operations that require registers get explicit
+   register operands before code generation
 2. **Immediate limits**: 12-bit immediates for ADD/SUB
 3. **Insert MOV**: Load large constants into registers first
 4. **Float handling**: Separate FP register file
@@ -171,8 +175,10 @@ LIR: X12 <- Mov(Imm 1000000)  // Load large immediate
 
 LIR stores string/float constants by value (`StringSymbol`/`FloatSymbol`)
 instead of pool indices. This avoids remapping constants when merging
-prebuilt functions (stdlib, preamble, user code). Pools are built during
-backend emission once the full program layout is known.
+prebuilt functions (stdlib, preamble, user code). ARM64 builds literal pools
+during resolution once the full program layout is known. x64 instead
+materializes float bits as immediates and allocates string literals during code
+generation, so it does not emit float or string pools.
 
 Key differences from older indexed LIR:
 - `StringSymbol "hello"` and `FloatSymbol 1.5` are used directly.
@@ -180,8 +186,8 @@ Key differences from older indexed LIR:
 
 ## Constant Pools
 
-Literal pools are defined in `LiteralPool.fs` and built during backend
-resolution (`passes/{arm64,x64}/7_Resolve.fs`).
+Literal pools are defined in `LiteralPool.fs` and built during ARM64 resolution
+(`passes/arm64/7_Resolve.fs`). The x64 backend does not use them.
 
 ### String Pool
 ```fsharp
@@ -221,21 +227,25 @@ Before register allocation, code uses virtual registers:
 - SSA form: single assignment
 
 After register allocation (Pass 5):
-- Physical registers
+- Physical LIR registers mapped by the selected backend
 - Spill code for overflow
 - Stack slots for spilled values
 
+The physical LIR register names use an ARM64-like `X0`-`X30` abstraction.
+Pass 6 maps those names to ARM64 registers directly or to x86_64 registers
+according to the backend's calling convention and reserved-register rules.
+
 ## Implementation Files
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `MIR.fs` | ~200 | MIR types |
-| `LIR.fs` | ~200 | LIR types |
-| `3_ANF_to_MIR.fs` | 2318 | ANF → MIR |
-| `4_MIR_to_LIR.fs` | 1901 | MIR → LIR |
-| `3.1_SSA_Construction.fs` | 1090 | SSA form |
-| `3.5_MIR_Optimize.fs` | 1401 | MIR optimizations |
-| `5_RegisterAllocation.fs` | 3861 | Register allocation and phi resolution |
+| File | Purpose |
+|------|---------|
+| `MIR.fs` | MIR types |
+| `LIR.fs` | LIR types |
+| `3_ANF_to_MIR.fs` | ANF → MIR |
+| `4_MIR_to_LIR.fs` | MIR → LIR |
+| `3.1_SSA_Construction.fs` | SSA form |
+| `3.5_MIR_Optimize.fs` | MIR optimizations |
+| `5_RegisterAllocation.fs` | Register allocation and phi resolution |
 
 ## Example Pipeline
 
