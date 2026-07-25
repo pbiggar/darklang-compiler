@@ -11,27 +11,37 @@ variable bindings.
 
 ## Pattern Types
 
-Defined in `AST.fs:80-93`:
+Defined in `AST.fs`:
 
 ```fsharp
 type Pattern =
-    | PUnit                    // () - matches unit value
-    | PWildcard                // _ - matches anything
-    | PVar of string           // x - binds value to variable
-    | PConstructor of string * Pattern option  // Some(x), None
-    | PLiteral of int64        // 42 - exact integer match
-    | PBool of bool            // true, false
-    | PString of string        // "hello"
-    | PFloat of float          // 3.14
-    | PTuple of Pattern list   // (a, b, c)
-    | PRecord of string * (string * Pattern) list  // { x = a, y = b }
-    | PList of Pattern list    // [a, b, c] - exact length
-    | PListCons of Pattern list * Pattern  // [a, b, ...rest]
+    | PUnit
+    | PWildcard
+    | PVar of string
+    | PConstructor of variantName:string * payload:Pattern option
+    | PInt64 of int64
+    | PInt128Literal of System.Int128
+    | PInt8Literal of sbyte
+    | PInt16Literal of int16
+    | PInt32Literal of int32
+    | PUInt8Literal of byte
+    | PUInt16Literal of uint16
+    | PUInt32Literal of uint32
+    | PUInt64Literal of uint64
+    | PUInt128Literal of System.UInt128
+    | PBool of bool
+    | PString of string
+    | PChar of string
+    | PFloat of float
+    | PTuple of Pattern list
+    | PRecord of typeName:string * fields:(string * Pattern) list
+    | PList of Pattern list
+    | PListCons of head:Pattern list * tail:Pattern
 ```
 
 ## Match Compilation
 
-Implemented in `2_AST_to_ANF.fs:2303+`.
+Implemented in `2_AST_to_ANF.fs`.
 
 ### Algorithm
 
@@ -254,13 +264,11 @@ match c with
 
 | File | Purpose |
 |------|---------|
-| `AST.fs:80-93` | Pattern type definitions |
-| `2_AST_to_ANF.fs:2303-2600` | Match compilation |
-| `2_AST_to_ANF.fs:2336-2347` | `patternAlwaysMatches` exhaustiveness |
-| `2_AST_to_ANF.fs:2347-2600` | `extractAndCompileBody` binding extraction |
+| `AST.fs` | Pattern type definitions |
+| `2_AST_to_ANF.fs` | Match compilation, exhaustiveness, and binding extraction |
 
 ## Tests
 
-- `src/Tests/e2e/adt.e2e` - Constructor patterns
-- `src/Tests/e2e/tuple.e2e` - Tuple patterns
-- `src/Tests/e2e/list.e2e` - List patterns
+- `src/Tests/e2e/adts.e2e` - Constructor patterns
+- `src/Tests/e2e/tuples.e2e` - Tuple patterns
+- `src/Tests/e2e/lists.e2e` - List patterns
