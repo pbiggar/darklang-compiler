@@ -77,6 +77,18 @@ let testMIRParserRejectsOutOfRangeVirtualRegister () : TestResult =
     | Error msg -> Error $"Expected invalid register format error, got: {msg}"
     | Ok reg -> Error $"Expected parseVReg to reject out-of-range register, got: {reg}"
 
+let testMIRParserAcceptsNegativeMoveLiteral () : TestResult =
+    let text =
+        [
+            "v0 <- -1"
+            "ret v0"
+        ]
+        |> String.concat "\n"
+
+    match parseMIR text with
+    | Ok _ -> Ok ()
+    | Error msg -> Error $"Expected parseMIR to accept a negative move literal, got: {msg}"
+
 let testANFParserRejectsOutOfRangeTempId () : TestResult =
     match parseTempId "t999999999999999999999999999999999999999" with
     | Error msg when msg.Contains("Invalid temp id") -> Ok ()
@@ -179,6 +191,7 @@ let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
     ("MIR parser rejects out-of-range virtual register", testMIRParserRejectsOutOfRangeVirtualRegister)
+    ("MIR parser accepts negative move literal", testMIRParserAcceptsNegativeMoveLiteral)
     ("ANF parser rejects out-of-range temp id", testANFParserRejectsOutOfRangeTempId)
     ("LIR parser rejects out-of-range numeric fields", testLIRParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)

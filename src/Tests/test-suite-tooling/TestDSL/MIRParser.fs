@@ -67,7 +67,7 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
     else
 
     // Try binop pattern: "v0 <- v1 + 3"
-    let binopMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*(.+?)\s*([+\-*/]|==|!=|<=|>=|<|>|&&|\|\|)\s*(.+)$")
+    let binopMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*(v\d+|-?\d+)\s*(==|!=|<=|>=|&&|\|\||[+\-*/]|<|>)\s*(v\d+|-?\d+)$")
     if binopMatch.Success then
         match parseVReg binopMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
@@ -84,7 +84,7 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
     else
 
     // Try move pattern: "v0 <- 42" or "v0 <- v1"
-    let movMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*([^+\-*/!<>=&|]+)$")
+    let movMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*(.+)$")
     if movMatch.Success then
         match parseVReg movMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
