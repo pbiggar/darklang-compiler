@@ -79,11 +79,10 @@ let buildAllocationResult
     (domain: RegisterAllocation.VRegDomain)
     (pairs: (int * RegisterAllocation.Allocation) list)
     : RegisterAllocation.AllocationResult =
-    let allocations = Array.create domain.Ids.Length None
-    for (vregId, alloc) in pairs do
-        match domain.Ids |> Array.tryFindIndex (fun id -> id = vregId) with
-        | Some idx -> allocations.[idx] <- Some alloc
-        | None -> ()
+    let allocationById = pairs |> Map.ofList
+    let allocations =
+        domain.Ids
+        |> Array.map (fun vregId -> Map.tryFind vregId allocationById)
     { Domain = domain; Allocations = allocations; StackSize = 0; UsedCalleeSaved = [] }
 
 let cfgFromBlocks (entry: Label) (labels: Label array) (blocks: BasicBlock array) : CFG =
