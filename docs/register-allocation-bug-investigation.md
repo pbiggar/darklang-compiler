@@ -1,8 +1,22 @@
-# Register Allocation Bug Investigation (2025-12-25)
+# Resolved Register Allocation Bug Investigation (2025-12-25)
 
 ## Summary
 
-A bug was found where list pattern matching fails when there are 5+ let bindings before the match, causing register spilling.
+This note records a resolved register allocation bug where list pattern
+matching failed when there were 5+ let bindings before the match, causing
+register spilling. The regression cases now live in
+`src/Tests/e2e/register_allocation.e2e` under "Register Pressure with Pattern
+Matching".
+
+## Current Status
+
+The original failing cases now pass:
+
+- direct return of the first extracted element (`[a, b] -> a`) returns `7`
+- direct return of the second extracted element (`[a, b] -> b`) returns `8`
+- constant return (`[a, b] -> 42`) returns `42`
+
+Keep this document as historical debugging context, not as an open bug report.
 
 ## Symptoms
 
@@ -22,10 +36,10 @@ let x = 1 in let y = 2 in let z = 3 in let w = 4 in
 match [7, 8] with | [a, b] -> a | _ -> 99
 // Returns: 7 ✓
 
-// Fails (5 lets)
+// Originally failed (5 lets), now covered by regression tests
 let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in
 match [7, 8] with | [a, b] -> a | _ -> 99
-// Returns: 99 ✗ (should be 7)
+// Returns: 7 ✓
 
 // But this works with 5 lets!
 let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in
