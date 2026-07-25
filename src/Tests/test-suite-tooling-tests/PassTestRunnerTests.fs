@@ -114,11 +114,15 @@ let testARM64ParserRejectsOutOfRangeNumericFields () : TestResult =
     let rawCases =
         [
             "raw MOVZ immediate", TestDSL.ARM64Parser.parseARM64 "MOVZ(X0, 65536, 0)"
+            "raw ADD_imm immediate", TestDSL.ARM64Parser.parseARM64 "ADD_imm(X0, X1, 4096)"
+            "raw SUB_imm immediate", TestDSL.ARM64Parser.parseARM64 "SUB_imm(X0, X1, 4096)"
             "raw STR offset", TestDSL.ARM64Parser.parseARM64 "STR(X0, SP, 32768)"
         ]
     let symbolicCases =
         [
             "symbolic MOVZ immediate", TestDSL.ARM64SymbolicParser.parseARM64Symbolic "MOVZ(X0, 65536, 0)"
+            "symbolic ADD_imm immediate", TestDSL.ARM64SymbolicParser.parseARM64Symbolic "ADD_imm(X0, X1, 4096)"
+            "symbolic SUB_imm immediate", TestDSL.ARM64SymbolicParser.parseARM64Symbolic "SUB_imm(X0, X1, 4096)"
             "symbolic STR offset", TestDSL.ARM64SymbolicParser.parseARM64Symbolic "STR(X0, SP, 32768)"
         ]
     rawCases

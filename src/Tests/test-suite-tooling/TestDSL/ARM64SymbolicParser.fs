@@ -46,6 +46,12 @@ let private parseUInt16Operand (lineNum: int) (fieldName: string) (text: string)
     | true, value -> Ok value
     | _ -> Error $"Line {lineNum}: Invalid {fieldName} '{text}'"
 
+let private parseUInt12Operand (lineNum: int) (fieldName: string) (text: string) : Result<uint16, string> =
+    match parseUInt16Operand lineNum fieldName text with
+    | Ok value when value <= 4095us -> Ok value
+    | Ok _ -> Error $"Line {lineNum}: Invalid {fieldName} '{text}'"
+    | Error e -> Error e
+
 let private parseInt16Operand (lineNum: int) (fieldName: string) (text: string) : Result<int16, string> =
     match Int16.TryParse(text.Trim()) with
     | true, value -> Ok value
@@ -118,7 +124,7 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg addImmMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok src ->
-                match parseUInt16Operand lineNum "ADD_imm immediate" addImmMatch.Groups.[3].Value with
+                match parseUInt12Operand lineNum "ADD_imm immediate" addImmMatch.Groups.[3].Value with
                 | Error e -> Error e
                 | Ok imm -> Ok (ADD_imm (dest, src, imm))
     else
@@ -146,7 +152,7 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg subImmMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok src ->
-                match parseUInt16Operand lineNum "SUB_imm immediate" subImmMatch.Groups.[3].Value with
+                match parseUInt12Operand lineNum "SUB_imm immediate" subImmMatch.Groups.[3].Value with
                 | Error e -> Error e
                 | Ok imm -> Ok (SUB_imm (dest, src, imm))
     else
