@@ -128,10 +128,8 @@ Path.combine(Path.tempDir(), "myfile.txt") = "/tmp/myfile.txt"
 // Platform Detection
 // ===================================================================
 
-// Platform detection functions return booleans
-// Note: These are constant-folded at compile time
-// On Linux, isLinux() returns false (as defined in stdlib - placeholder)
-// These tests verify the functions compile and run
+// Platform detection functions return booleans.
+// These calls are constant-folded at compile time based on the compiler host.
 
 // At least one must be callable (we can't predict which platform)
 if Platform.isMacOS() then true else if Platform.isLinux() then true else true = true
