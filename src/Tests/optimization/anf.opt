@@ -1249,3 +1249,21 @@ return t5
 Main:
 let TempId 6 = f(1.5)
 return t6
+
+---NAME---
+cse_reuses_duplicate_float_abs
+---INPUT---
+def f(x: Float) : Float =
+  let a = Float.abs(x) in
+  let b = Float.abs(x) in
+  a + b
+f(-3.5)
+---EXPECTED---
+Function f:
+let TempId 1 = FloatAbs(t0)
+let TempId 5 = t1 + t1
+return t5
+
+Main:
+let TempId 6 = f(-3.5)
+return t6
