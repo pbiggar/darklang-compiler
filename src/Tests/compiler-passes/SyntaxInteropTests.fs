@@ -629,6 +629,22 @@ let testPrettyPrintCompilerSyntaxEscapesKeywordFieldNames () : TestResult =
                 else
                     Error $"Compiler pretty-print escaped keyword field names changed AST.\nPrinted: {printed}\nReparsed: {reparsedAst}"
 
+let testPrettyPrintCompilerSyntaxEscapesLiteralInterpolationBraces () : TestResult =
+    let source = "$\"literal \\{ brace \\}\""
+    match Parser.parseString false source with
+    | Error err ->
+        Error $"Compiler parser failed before interpolation-brace escape test: {err}"
+    | Ok ast ->
+        let printed = ASTPrettyPrinter.formatProgram CompilerSyntax ast
+        match Parser.parseString false printed with
+        | Error err ->
+            Error $"Compiler parser failed reparsing escaped interpolation braces: {err}\nPrinted: {printed}"
+        | Ok reparsedAst ->
+            if reparsedAst = ast then
+                Ok ()
+            else
+                Error $"Compiler pretty-print escaped interpolation braces changed AST.\nPrinted: {printed}\nReparsed: {reparsedAst}"
+
 let testInterpreterParserParsesBareIntLiteral () : TestResult =
     let source = "let x = 5 in x"
     match InterpreterParser.parseString false source with
@@ -938,6 +954,7 @@ let tests = [
     ("pretty-print compiler preserves constructor apply roundtrip", testPrettyPrintCompilerSyntaxPreservesConstructorApplyRoundtrip)
     ("parse compiler backtick identifiers", testCompilerParserParsesBacktickIdentifiers)
     ("pretty-print compiler escapes keyword field names", testPrettyPrintCompilerSyntaxEscapesKeywordFieldNames)
+    ("pretty-print compiler escapes literal interpolation braces", testPrettyPrintCompilerSyntaxEscapesLiteralInterpolationBraces)
     ("parse bare int literal", testInterpreterParserParsesBareIntLiteral)
     ("parse upstream I-suffixed int literal", testInterpreterParserParsesUpstreamIntSuffixLiteral)
     ("parse oversized upstream I-suffixed int literal", testInterpreterParserParsesOversizedUpstreamIntSuffixLiteral)

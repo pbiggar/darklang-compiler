@@ -22,6 +22,20 @@ let private escapeStringContent (input: string) : string =
         | '\000' -> "\\0"
         | _ -> string c)
 
+let private escapeInterpolatedStringText (input: string) : string =
+    input
+    |> String.collect (fun c ->
+        match c with
+        | '\\' -> "\\\\"
+        | '"' -> "\\\""
+        | '\n' -> "\\n"
+        | '\r' -> "\\r"
+        | '\t' -> "\\t"
+        | '\000' -> "\\0"
+        | '{' -> "\\{"
+        | '}' -> "\\}"
+        | _ -> string c)
+
 let private escapeCharContent (input: string) : string =
     input
     |> String.collect (fun c ->
@@ -512,7 +526,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         let partsText =
             parts
             |> List.map (function
-                | StringText t -> escapeStringContent t
+                | StringText t -> escapeInterpolatedStringText t
                 | StringExpr e -> $"{{{formatExpr syntax e}}}")
             |> String.concat ""
         $"$\"{partsText}\""
