@@ -36,7 +36,7 @@ You are going to implement EXACTLY ONE optimization.
    - The optimization may have exposed a latent bug - fix it
    - Repeat until all tests pass
 
-7. RUN ALL BENCHMARKS using `./benchmarks/run_benchmarks.sh`:
+7. RUN ALL BENCHMARKS using `./benchmarks/run_benchmarks.sh all`:
 
    - Compare results against baseline in RESULTS.md
    - The optimization should show measurable improvement in at least one benchmark
@@ -57,10 +57,9 @@ You are going to implement EXACTLY ONE optimization.
    - Benchmark results (show the RESULTS.md diff if there are changes)
    - Any issues encountered or follow-up work identified
 
-10. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After approval:
-    - Commit the code, tests, and updated RESULTS.md
-    - Include a detailed commit message explaining the optimization
-    - Land using ./scripts/land-on-main.sh
+10. Prepare the change for human review under the shared orchestrator review workflow.
+    Include the code, tests, and any accepted benchmark evidence in one coherent
+    reviewable unit, but leave integration decisions to the shared workflow.
 
 Include before/after benchmark data in the commit message:
 
