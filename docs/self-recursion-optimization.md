@@ -91,9 +91,10 @@ For computed expressions like `sumTo(n-1, acc+n)`, no temps are needed since the
 
 ## Current Limitations
 
-1. **Float parameters**: Functions with float parameters fall back to regular TailCall (phi nodes lack type information)
+1. **Mutual recursion**: Only self-recursion is optimized; `A -> B -> A` chains use regular tail calls
 
-2. **Mutual recursion**: Only self-recursion is optimized; `A → B → A` chains use regular tail calls
+Float parameters are supported by typed phi nodes. The regression coverage lives in
+`src/Tests/e2e/tailcall.e2e` under the float parameter self-recursion cases.
 
 ## Performance Results
 
@@ -155,14 +156,8 @@ Put condition check at loop end instead of beginning to eliminate one branch per
 **Current:** `entry → header → body → header`
 **Optimal:** `entry → body → check → body` (do-while form)
 
-### 4. Float Parameter Support
+### 4. Broaden Typed Loop Optimizations
 
-Add type information to phi nodes to support self-recursion optimization for functions with float parameters:
-
-```fsharp
-// Current
-| Phi of dest:VReg * sources:(Operand * Label) list
-
-// Proposed
-| Phi of dest:VReg * sources:(Operand * Label) list * valueType:AST.Type option
-```
+Typed phi nodes now cover float parameter self-recursion. Future work should look
+for other cases where missing or imprecise type information keeps an otherwise
+tail-recursive function on the more general tail-call path.
