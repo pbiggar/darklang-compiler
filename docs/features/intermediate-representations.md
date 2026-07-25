@@ -8,11 +8,11 @@ used in the Dark compiler pipeline.
 The compiler uses two IRs between ANF and machine code:
 
 ```
-ANF → MIR → LIR → ARM64
+ANF → MIR → LIR → target ISA
 ```
 
 - **MIR**: Platform-independent three-address code with CFG
-- **LIR**: ARM64-specific instructions with virtual registers
+- **LIR**: target-neutral instruction shapes with virtual registers
 
 ## Dumping IRs
 
@@ -71,7 +71,7 @@ type BasicBlock = {
 }
 
 type Terminator =
-    | Return of Operand option
+    | Ret of Operand
     | Jump of Label
     | Branch of cond:VReg * thenLabel:Label * elseLabel:Label
 ```
@@ -105,8 +105,8 @@ MIR: v1 <- v0 + 5
 
 ### Purpose
 
-LIR prepares code for ARM64:
-- ARM64-specific instructions
+LIR prepares code for architecture-specific lowering:
+- Target-neutral instruction shapes consumed by both backends
 - Operand constraints (registers vs immediates)
 - Virtual → physical register transition
 
@@ -122,29 +122,32 @@ type Reg =
 
 type Operand =
     | Imm of int64
+    | FloatImm of float
     | Reg of Reg
     | StackSlot of int
-    | StringRef of int
-    | FloatRef of int
+    | StringSymbol of string
+    | FloatSymbol of float
     | FuncAddr of string
 ```
 
 ### Instructions
 
-LIR instructions map closely to ARM64:
+LIR instructions map closely to the backend instruction selectors:
 
 ```fsharp
 type Instr =
     | Mov of dest:Reg * src:Operand
+    | Phi of dest:Reg * sources:(Operand * Label) list * valueType:AST.Type option
     | Add of dest:Reg * left:Reg * right:Operand
     | Sub of dest:Reg * left:Reg * right:Operand
-    | Mul of dest:Reg * left:Reg * right:Reg  // ARM64: both must be regs
+    | Mul of dest:Reg * left:Reg * right:Reg
     | Cmp of left:Reg * right:Operand
     | Cset of dest:Reg * cond:Condition
     | Call of dest:Reg * funcName:string * args:Operand list
     // Floating-point
+    | FPhi of dest:FReg * sources:(FReg * Label) list
     | FAdd of dest:FReg * left:FReg * right:FReg
-    | FLoad of dest:FReg * floatIdx:int
+    | FLoad of dest:FReg * floatValue:float
     // ...
 ```
 
@@ -152,7 +155,7 @@ type Instr =
 
 Key transformations in `4_MIR_to_LIR.fs`:
 
-1. **Operand constraints**: ARM64 requires certain operands in registers
+1. **Operand constraints**: Backends require certain operands in registers
 2. **Immediate limits**: 12-bit immediates for ADD/SUB
 3. **Insert MOV**: Load large constants into registers first
 4. **Float handling**: Separate FP register file
@@ -169,7 +172,7 @@ LIR: X12 <- Mov(Imm 1000000)  // Load large immediate
 LIR stores string/float constants by value (`StringSymbol`/`FloatSymbol`)
 instead of pool indices. This avoids remapping constants when merging
 prebuilt functions (stdlib, preamble, user code). Pools are built during
-ARM64 emission once the full program layout is known.
+backend emission once the full program layout is known.
 
 Key differences from older indexed LIR:
 - `StringSymbol "hello"` and `FloatSymbol 1.5` are used directly.
@@ -177,8 +180,8 @@ Key differences from older indexed LIR:
 
 ## Constant Pools
 
-Literal pools are defined in `LiteralPool.fs` and built during ARM64 resolution
-(`7_ARM64_Resolve.fs`).
+Literal pools are defined in `LiteralPool.fs` and built during backend
+resolution (`passes/{arm64,x64}/7_Resolve.fs`).
 
 ### String Pool
 ```fsharp
@@ -203,8 +206,9 @@ type FloatPool = {
 ### SSA Construction (Pass 3.1)
 Converts CFG to SSA form with phi nodes.
 
-### SSA Destruction (Pass 3.9)
-Converts out of SSA, inserting copy instructions.
+### Phi Resolution (Pass 5)
+Register allocation resolves phi nodes by inserting parallel moves at
+predecessor exits, then removes the phi nodes before code generation.
 
 ### Dead Code Elimination
 Removes unused instructions and blocks.
@@ -217,7 +221,7 @@ Before register allocation, code uses virtual registers:
 - SSA form: single assignment
 
 After register allocation (Pass 5):
-- Physical ARM64 registers
+- Physical registers
 - Spill code for overflow
 - Stack slots for spilled values
 
@@ -227,10 +231,11 @@ After register allocation (Pass 5):
 |------|-------|---------|
 | `MIR.fs` | ~200 | MIR types |
 | `LIR.fs` | ~200 | LIR types |
-| `3_ANF_to_MIR.fs` | 1787 | ANF → MIR |
-| `4_MIR_to_LIR.fs` | 1355 | MIR → LIR |
-| `3.1_SSA_Construction.fs` | 875 | SSA form |
-| `3.9_SSA_Destruction.fs` | 324 | Out of SSA |
+| `3_ANF_to_MIR.fs` | 2318 | ANF → MIR |
+| `4_MIR_to_LIR.fs` | 1901 | MIR → LIR |
+| `3.1_SSA_Construction.fs` | 1090 | SSA form |
+| `3.5_MIR_Optimize.fs` | 1401 | MIR optimizations |
+| `5_RegisterAllocation.fs` | 3861 | Register allocation and phi resolution |
 
 ## Example Pipeline
 
