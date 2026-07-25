@@ -10,6 +10,40 @@ workarounds.
 
 ---
 
+## FingerTree Deep Operation Chain Bug
+
+**Status**: Fixed or no longer reproducible through the public language surface
+**Severity**: Previously Medium
+**Discovered**: Investigation of Dict.fromList failures
+**Revalidated**: Public Dict.fromList and List.fold cases with 5 elements now pass
+
+### Original Description
+
+The original investigation reported incorrect values after 4 or more chained
+FingerTree tail operations followed by element extraction. The notes pointed at
+register allocation or stack management for deeply nested function calls.
+
+The old internal reproduction used `Stdlib.FingerTree.tail` and
+`Stdlib.FingerTree.headUnsafe`, but those names are not public language symbols.
+The corresponding internal helpers are also rejected from user code because
+internal identifiers cannot be referenced directly.
+
+### Public Regression Coverage
+
+The originally reported user-visible impact is now covered by public behavior:
+
+```dark
+Stdlib.Dict.size(Stdlib.Dict.fromList([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]))
+
+Stdlib.Dict.getOrDefault(Stdlib.Dict.fromList([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]), 5, -1)
+
+List.fold([1, 2, 3, 4, 5], 0, (acc: Int64, x: Int64) => acc + x)
+```
+
+These currently return `5`, `50`, and `15` respectively.
+
+---
+
 ## Chained String Concatenation Bug
 
 **Status**: Fixed
@@ -78,62 +112,6 @@ match zipped with
 ---
 
 ## Open Bugs
-
----
-
-## FingerTree Deep Operation Chain Bug
-
-**Status**: Open
-**Severity**: Medium (affects recursive list operations with 5+ elements)
-**Discovered**: Investigation of Dict.fromList failures
-
-### Description
-
-When performing 4 or more chained FingerTree tail operations followed by element extraction
-(headUnsafe, getAt), incorrect values are returned. The issue appears to be related to
-register allocation or stack management for deeply nested function calls.
-
-### Reproduction
-
-```dark
-// Works (3 tails + headUnsafe)
-let nums = [1L, 2L, 3L, 4L, 5L] in
-let rest0 = Stdlib.FingerTree.tail<Int64>(nums) in
-let rest1 = Stdlib.FingerTree.tail<Int64>(rest0) in
-let rest2 = Stdlib.FingerTree.tail<Int64>(rest1) in
-Stdlib.FingerTree.headUnsafe<Int64>(rest2)  // Returns 4 (correct)
-
-// Fails (4 tails + headUnsafe)
-let nums = [1L, 2L, 3L, 4L, 5L] in
-let rest0 = Stdlib.FingerTree.tail<Int64>(nums) in
-let rest1 = Stdlib.FingerTree.tail<Int64>(rest0) in
-let rest2 = Stdlib.FingerTree.tail<Int64>(rest1) in
-let rest3 = Stdlib.FingerTree.tail<Int64>(rest2) in
-Stdlib.FingerTree.headUnsafe<Int64>(rest3)  // Returns garbage instead of 5
-```
-
-### Key Observations
-
-1. `length` still works correctly after 4 tails (returns 1)
-2. `__getTag` returns correct tag (1 = SINGLE)
-3. The issue is specific to value extraction (headUnsafe, getAt)
-4. Affects Option<List> extraction as well (wrapping in Some and extracting)
-
-### Impact
-
-- Dict.fromList with 5+ tuple elements fails
-- Recursive list iteration with 5+ elements produces wrong values
-- List.fold with 5+ elements produces wrong values
-
-### Likely Cause
-
-Register spilling edge case in code generation. The compiled code for deeply nested
-FingerTree operations may be corrupting local variables or using wrong register values.
-
-### Workaround
-
-Use iteration/fold patterns that don't require deep chains, or limit operations to
-fewer than 4 consecutive FingerTree operations.
 
 ---
 
