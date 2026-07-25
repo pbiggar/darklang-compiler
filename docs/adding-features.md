@@ -271,8 +271,8 @@ The compiler generates:
 
 ## Debugging Tips
 
-1. **Use verbose output**: `./compile --verbose program.dark`
+1. **Use verbose output**: `./dark -v program.dark`
 2. **Check intermediate representations**: Add print statements in passes
 3. **Write minimal test case**: Reduce to smallest failing example
 4. **Check exhaustiveness warnings**: F# compiler shows all missing cases
-5. **Run tests frequently**: `dotnet test` catches regressions early
+5. **Run tests frequently**: `./run-tests --ai` catches regressions early
