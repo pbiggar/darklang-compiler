@@ -2,6 +2,31 @@
 
 This file records benchmark optimization candidates that were investigated and removed from active investigation notes because measured evidence did not justify keeping the implementation.
 
+## 2026-07-20: primes positive-divisor modulo simplification
+
+- Source candidate: `docs/investigations/benchmark-primes-optimization.md`, "Prove positive divisor ranges to remove general modulo correction"
+- Target benchmark: `primes`
+- Attempt: inspected the current optimizer and MIR-to-LIR modulo lowering to determine whether the benchmark-specific fact that `isDivisible` starts at divisor `3` can be used as a narrow local optimization.
+- Correctness evidence: no implementation was kept. Existing modulo strength reduction is limited to constant divisors, with tests documenting semantic risk for negative dividends; there is no range-analysis IR state proving a variable divisor is positive at a modulo site.
+- IR evidence: `src/DarkCompiler/passes/4_MIR_to_LIR.fs` lowers `MIR.Mod` through `shouldCheckNegativeDivisor`, `selectBlocksWithModuloChecks`, and `buildIntegerModuloParts`, while repository search found no positive-range analysis or nonnegative-value facts available to that lowering.
+- Runtime evidence: no compiler implementation was kept, so benchmark evidence is verification-only for the documentation cleanup.
+- Compile-time evidence: no compiler implementation was kept, so compile-time evidence is verification-only for the documentation cleanup.
+- Commands run: `./run-tests --ai` passed; `./benchmarks/run_benchmarks.sh all` passed and reported Dark performance ratio `11.1x`.
+- Reason rejected: this is not a narrow modulo-lowering optimization; it depends on adding and maintaining interprocedural or recursive-loop range facts before LIR lowering. Implementing an unsound benchmark-specific shortcut would risk changing Dark modulo semantics, and a correct range analysis is broader than this candidate's medium-complexity active entry suggests.
+- Outcome: no compiler code was changed; the active candidate was removed from the source investigation file so future work can focus on the remaining square-root and helper-inlining opportunities.
+
+## 2026-07-25: primes hardware-backed integer square root
+
+- Source candidate: `docs/investigations/benchmark-primes-optimization.md`, "Replace recursive integer square root with a faster primitive"
+- Target benchmark: `primes`
+- Attempt: inspected the benchmark source, current stdlib intrinsics, current float intrinsic lowering, and the optimization path required to replace the recursive `isqrt` helper with a hardware-backed integer square-root operation.
+- Correctness evidence: no implementation was kept. The existing language surface exposes `Stdlib.Float.sqrt`, `Stdlib.Int64.toFloat`, and `Stdlib.Float.toInt`, but not an integer square-root primitive with documented rounding and negative-input semantics.
+- IR evidence: the benchmark still contains a source-level recursive `isqrt(n, guess)` helper; replacing it with hardware sqrt would require adding or committing to a new public `Int64` primitive or a benchmark-specific semantic rewrite rather than a localized optimizer cleanup.
+- Runtime evidence: no compiler implementation was kept, so runtime evidence is verification-only for the documentation cleanup.
+- Compile-time evidence: no compiler implementation was kept, so compile-time evidence is verification-only for the documentation cleanup.
+- Reason rejected: the candidate is a real algorithmic gap, but as written it is a feature/API design task rather than a small optimization experiment. Adding a new integer sqrt primitive would need language and stdlib semantics review before it belongs in the optimization implementer queue.
+- Outcome: no compiler code was changed; the active source investigation entry was removed so future optimization trials focus on localized compiler work such as positive-divisor modulo simplification or helper inlining.
+
 ## 2026-07-10: fasta dedicated heap-end register
 
 - Source candidate: `docs/investigations/benchmark-fasta-optimization.md`, "Hoist heap end into a dedicated register"
