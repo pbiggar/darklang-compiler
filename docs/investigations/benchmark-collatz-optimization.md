@@ -176,20 +176,6 @@ Likely implementation areas:
 - `src/DarkCompiler/LIR.fs`, `src/DarkCompiler/ARM64.fs`, and ARM64 codegen if a
   first-class conditional-select LIR instruction is needed.
 
-### 2. Consider branch-local commoning of `steps + 1`
-
-Both parity arms independently emit:
-
-```text
-X2 <- Add(X2, Imm 1)
-```
-
-If full if-conversion is too broad, a narrower transformation could sink or
-hoist the common step increment around the parity diamond. This would remove one
-duplicated instruction from the static loop body, but it would not remove the
-unpredictable parity branch. It is therefore lower priority than conditional
-select.
-
 ## Implemented or No Longer Current
 
 - `% 2 -> & 1` is implemented in optimized ANF.
@@ -203,6 +189,11 @@ select.
   post-allocation LIR and emitted assembly.
 - The older same-loop register moves in `collatzSteps` are gone from current
   post-allocation LIR.
+- Branch-local commoning of `steps + 1` is not a current standalone candidate:
+  one parity arm executes per loop iteration, so sinking the shared increment
+  would primarily reduce static code size while leaving the measured dynamic
+  instruction-count and branch-misprediction gap intact. Keep the shared
+  increment shape as part of the broader if-conversion target instead.
 
 ## Verification Commands Used
 

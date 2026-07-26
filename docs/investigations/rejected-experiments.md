@@ -2,6 +2,18 @@
 
 This file records benchmark optimization candidates that were investigated and removed from active investigation notes because measured evidence did not justify keeping the implementation.
 
+## 2026-07-25: collatz branch-local step increment commoning
+
+- Source candidate: `docs/investigations/benchmark-collatz-optimization.md`, "Consider branch-local commoning of `steps + 1`"
+- Target benchmark: `collatz`
+- Attempt: inspected current post-allocation LIR for `collatzSteps` and evaluated the candidate as a standalone narrow alternative to full parity if-conversion.
+- Correctness evidence: no compiler implementation was kept; the current Collatz benchmark still compiles successfully with `./dark --dump-lir benchmarks/problems/collatz/dark/main.dark -o /tmp/collatz_dark`.
+- IR evidence: current post-allocation LIR has one `X2 <- Add(X2, Imm 1)` in each parity arm, followed by jumps to the shared loop body. Since only one parity arm executes per loop iteration, hoisting the increment would not remove a dynamic add from the hot path.
+- Runtime evidence: no implementation was kept, so benchmark evidence is verification-only for the documentation cleanup.
+- Compile-time evidence: no compiler implementation was kept, so compile-time evidence is verification-only for the documentation cleanup.
+- Reason rejected: the candidate mainly reduces static loop-body duplication and does not address the measured Collatz gap, which the investigation identifies as branch/control-flow cost. The shared increment remains appropriate as part of the broader conditional-select if-conversion target.
+- Outcome: the standalone branch-local commoning candidate was removed from the active Collatz investigation list.
+
 ## 2026-07-20: primes positive-divisor modulo simplification
 
 - Source candidate: `docs/investigations/benchmark-primes-optimization.md`, "Prove positive divisor ranges to remove general modulo correction"
