@@ -14,7 +14,7 @@ You are going to resolve EXACTLY ONE type checking issue.
 
 6. If the failing tests are incorrect and should be failing, continue and tell the developer.
 
-7. After all tests pass, run all Dark benchmarks. Ignore and don't mention the quicksort failure - it's a known issue. If RESULT.md has changed, show the results.
+7. After all tests pass, run all Dark benchmarks. If RESULT.md has changed, show the results.
 
 8. If there is any valuable documentation to create or information to capture, create a doc or add it to an existing doc.
 

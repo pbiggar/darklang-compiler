@@ -3,12 +3,12 @@
 ## Executive Summary
 
 **Benchmark:** quicksort (functional quicksort with three-way partition)
-**Current Dark status:** direct full-size run succeeds locally, but `run_benchmarks.sh` still skips the Dark quicksort benchmark
-**Current benchmark table context:** Rust 6,506,788 instructions; OCaml 47,643,021 instructions (7.32x Rust); Dark has no table entry because it is skipped
+**Current Dark status:** direct full-size run succeeds locally, and `run_benchmarks.sh` includes quicksort in the full suite
+**Current benchmark table context:** Dark 61,351,600,082 instructions (9429x Rust); Rust 6,506,788 instructions; OCaml 47,643,021 instructions (7.32x Rust)
 
-Current local evidence changes the old status: `benchmarks/problems/quicksort/dark/main.dark` now compiles and runs through `./dark -r`, producing checksum `600660212`. The benchmark harness still has `SKIP_BENCHMARKS=("quicksort")`, so `benchmarks/RESULTS.md` does not yet contain a current Dark instruction count for this benchmark.
+Current local evidence changes the old status: `benchmarks/problems/quicksort/dark/main.dark` now compiles and runs through `./dark -r`, producing checksum `600660212`. The benchmark harness now has an empty `SKIP_BENCHMARKS` list, and `benchmarks/RESULTS.md` includes a current Dark instruction count for quicksort.
 
-The remaining compiler evidence still points at allocation-heavy and call-heavy list partitioning. Each non-base quicksort partition allocates three predicate closures, performs three full `Stdlib.List.filter_i64` traversals over the same list, recursively sorts two partitions, and appends twice. This makes a single-pass partition implementation or list-filter specialization the most durable quicksort-specific optimization target, but the first benchmark action should be to remove or revalidate the stale skip so future investigations can use a current Dark instruction count.
+The remaining compiler evidence still points at allocation-heavy and call-heavy list partitioning. Each non-base quicksort partition allocates three predicate closures, performs three full `Stdlib.List.filter_i64` traversals over the same list, recursively sorts two partitions, and appends twice. This makes a single-pass partition implementation or list-filter specialization the most durable quicksort-specific optimization target now that the benchmark harness provides a current Dark instruction count.
 
 ## Benchmark Implementation
 
@@ -47,7 +47,7 @@ Result:
 Exit code: 0
 ```
 
-This means the prior direct-run OOM status is stale. `benchmarks/run_benchmarks.sh` still skips quicksort, and the current `benchmarks/RESULTS.md` table therefore still shows no Dark instruction count for quicksort.
+This means the prior direct-run OOM status is stale. `benchmarks/run_benchmarks.sh` includes quicksort in full benchmark runs, and the current `benchmarks/RESULTS.md` table shows Dark quicksort at 61,351,600,082 instructions.
 
 ### Current ANF Shape
 
@@ -95,11 +95,7 @@ At completion, the accumulated result is reversed through `Stdlib.List.__reverse
 
 ## Durable Optimization Opportunities
 
-### 1. Re-enable or Rebaseline Dark Quicksort in the Benchmark Harness
-
-The direct full-size program now succeeds, but the benchmark runner still skips it. Before ranking quicksort optimizations by measured impact, remove or revalidate that skip and collect a current Dark instruction count. Until then, the investigation can only compare compiler IR shape against Rust and OCaml baselines, not current Dark benchmark performance.
-
-### 2. Single-Pass Three-Way Partition
+### 1. Single-Pass Three-Way Partition
 
 The benchmark currently traverses the same list three times:
 
@@ -109,18 +105,14 @@ The benchmark currently traverses the same list three times:
 
 A single traversal that builds `(left, middle, right)` would remove two full list scans per partition and reduce intermediate list churn. This is the most direct quicksort-specific optimization because it preserves the benchmark algorithm while targeting the dominant current IR shape.
 
-### 3. Specialize Trivial Filter Predicates
+### 2. Specialize Trivial Filter Predicates
 
 The three predicates are closure-allocated wrappers around primitive integer comparisons. A specialization that inlines simple captured comparisons into list traversal would remove closure allocation and indirect closure calls from every partition. This is smaller than single-pass partitioning, because it keeps three traversals, but it is a reusable optimization for filter-heavy code.
 
-### 4. Improve Sequential List Traversal
+### 3. Improve Sequential List Traversal
 
 Current `filter_i64` traverses by repeated indexed `getAt_i64` and reverses the accumulated result at the end. For sequential list operations, an iterator or destructuring helper that avoids per-element indexed lookup and option materialization would reduce overhead across `filter`, `reverse`, and checksum-like folds.
 
 ## Current Next Step
 
-Update the benchmark harness status for quicksort before making compiler optimization decisions from benchmark numbers. The documentation status is now:
-
-- direct Dark full-size quicksort succeeds locally,
-- the full benchmark table still omits Dark quicksort because the harness skips it,
-- the strongest current IR evidence is three independent filter traversals with trivial closure predicates.
+Use the current benchmark table and IR evidence to rank quicksort optimizations. The strongest current IR evidence is three independent filter traversals with trivial closure predicates.

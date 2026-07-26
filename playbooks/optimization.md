@@ -38,7 +38,6 @@ You are going to implement EXACTLY ONE optimization.
 
 7. RUN ALL BENCHMARKS using `./benchmarks/run_benchmarks.sh`:
 
-   - Ignore the quicksort failure (known issue)
    - Compare results against baseline in RESULTS.md
    - The optimization should show measurable improvement in at least one benchmark
    - If no improvement is visible, investigate why (the optimization may not be triggering, or the benchmark may not exercise the optimized code path)
