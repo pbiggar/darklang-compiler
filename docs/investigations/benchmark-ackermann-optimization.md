@@ -144,15 +144,16 @@ Remaining local inefficiencies visible in current LIR:
 
 ARM64 code generation now maps `LIR.BranchZero` directly to `ARM64Symbolic.CBZ` followed by an unconditional branch to the non-zero label.
 
-## Current Optimization Opportunities
+## Completed Nested-Recursion Register Check
 
-### 1. Re-check Register Allocation Around Nested Recursion
+The current entry block is no longer the old nine-move cycle, so the previous
+high-impact "register entry block" opportunity should be considered mostly
+implemented for this benchmark. A follow-up check confirmed that `X21`
+preservation across the inner recursive call is the live `m - 1` value needed
+after the call returns, and the post-call moves restore the call result and
+outer-loop `m` parameter for the jump back to `ackermann_body`.
 
-**Impact: unknown; needs measurement**
-
-The current entry block is no longer the old nine-move cycle, so the previous high-impact "register entry block" opportunity should be considered mostly implemented for this benchmark. The remaining register-allocation question is whether `X21` preservation across the inner call and the post-call moves are minimal for the nested-recursive case.
-
-Evidence to compare against future work:
+Current allocated LIR evidence:
 
 ```text
 X21 <- Sub(X20, Imm 1)
@@ -169,7 +170,6 @@ Jump(Label "ackermann_body")
 | Older opportunity | Current status |
 |-------------------|----------------|
 | Nine MOVs in `ackermann_entry` | Mostly implemented for this benchmark; current entry has two argument moves. |
-| Redundant post-register-allocation self moves | Implemented by target-independent post-allocation LIR cleanup. |
 | Dead `ackermann_L5` in final LIR | Still visible in `--dump-mir`, but absent from post-register-allocation LIR. Early raw-MIR pruning was rejected after measurement. |
 
 ## Recommended Next Checks

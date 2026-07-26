@@ -27,6 +27,30 @@ This file records benchmark optimization candidates that were investigated and r
 - Reason rejected: the candidate is a real algorithmic gap, but as written it is a feature/API design task rather than a small optimization experiment. Adding a new integer sqrt primitive would need language and stdlib semantics review before it belongs in the optimization implementer queue.
 - Outcome: no compiler code was changed; the active source investigation entry was removed so future optimization trials focus on localized compiler work such as positive-divisor modulo simplification or helper inlining.
 
+## 2026-07-20: ackermann nested-recursion register allocation re-check
+
+- Source candidate: `docs/investigations/benchmark-ackermann-optimization.md`, "Re-check Register Allocation Around Nested Recursion"
+- Target benchmark: `ackermann`
+- Attempt: pre-checked the current allocated LIR around the nested recursive call before implementing a register-allocation change.
+- Correctness evidence: existing Ackermann benchmark E2E coverage in `src/Tests/e2e/benchmarks.e2e` covers the nested-recursive source shape through `ackermann(3, 3) = 61`; no compiler implementation was kept.
+- IR evidence: `./dark --dump-lir benchmarks/problems/ackermann/dark/quick.dark` shows `X21 <- Sub(X20, Imm 1)` before the inner call, followed by `X19 <- Call(ackermann, [Reg X20, Reg X19])`, `X19 <- Mov(Reg X0)`, and `X20 <- Mov(Reg X21)`. The preserved `X21` value is the outer `m - 1` needed after the inner call returns, so the local register traffic is not a redundant cleanup opportunity.
+- Runtime evidence: no implementation was kept, so benchmark evidence is verification-only for the documentation cleanup.
+- Compile-time evidence: no compiler implementation was kept, so compile-time evidence is verification-only for the documentation cleanup.
+- Reason rejected: the active note was a re-check rather than an absent optimization, and the concrete LIR evidence shows the suspect preservation is required for the nested-recursive control flow.
+- Outcome: no compiler code was changed; the active candidate was removed from the source investigation file and the evidence was preserved here.
+
+## 2026-07-20: LIR empty SaveRegs/RestoreRegs cleanup
+
+- Source candidate: `docs/investigations/benchmark-ackermann-optimization.md`, empty `SaveRegs([], [])` and `RestoreRegs([], [])` placeholders visible in the nested recursive call LIR.
+- Target benchmark: `ackermann`
+- Attempt: changed the target-independent LIR peephole pass to remove empty `SaveRegs` and `RestoreRegs` instructions, and updated `src/Tests/optimization/lir.opt` so the call-loop LIR expectation no longer contained those placeholders.
+- Correctness evidence: the focused optimization expectation failed before the implementation because the optimized LIR still contained the empty placeholders. After the attempted implementation, the optimization tests passed but full `./run-tests --ai` failed with 458 E2E failures, mostly exit code 139 in list and pattern-matching programs.
+- IR evidence: the attempted implementation removed the empty placeholders from optimized LIR around calls such as `ArgMoves; Call`, but this changed later code generation behavior rather than only cleaning the dump.
+- Runtime evidence: no benchmark run was performed because the attempted implementation failed correctness validation and was not safe to measure.
+- Compile-time evidence: no compile-time comparison was performed because the attempted implementation failed correctness validation.
+- Reason rejected: empty save/restore placeholders are not safe to remove in the target-independent LIR peephole stage; ARM64 call-argument lowering uses the call-save boundary even when no registers are saved.
+- Outcome: implementation and test-expectation changes were reverted; future work should only remove these placeholders after call-argument lowering no longer depends on them, or in a backend-local stage where that invariant is explicit.
+
 ## 2026-07-10: fasta dedicated heap-end register
 
 - Source candidate: `docs/investigations/benchmark-fasta-optimization.md`, "Hoist heap end into a dedicated register"
