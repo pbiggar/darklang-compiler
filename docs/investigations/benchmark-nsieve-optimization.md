@@ -3,28 +3,24 @@
 ## Summary
 
 The `nsieve` benchmark counts primes with the Sieve of Eratosthenes. The
-current Dark benchmark intentionally runs the reduced input `nsieve(1000)`,
-while the Rust and OCaml baselines run `nsieve(100000)` for 100 iterations.
-That makes Dark's current instruction count useful as local compiler evidence,
-but not as algorithmic parity evidence against the baselines.
+current Dark benchmark now runs the full input `nsieve(100000)`, matching the
+reference implementations' input size.
 
 The main optimization blocker is still the benchmark representation: Dark uses
 `Dict<Int64, Bool>` as a persistent HAMT-backed composite set, while Rust and
 OCaml use mutable contiguous boolean arrays. The current compiler also leaves
 the composite-marking recursion as real calls after reference-count insertion,
-so full-size `n=100000` remains exposed to deep stack growth.
+so further scale increases remain exposed to stack growth.
 
 ## Current Local Evidence
 
-Evidence gathered on commit `a98dffe7`:
+Evidence refreshed on commit `f88e41ff`:
 
-- `./dark -r benchmarks/problems/nsieve/dark/main.dark` prints `168`.
-- `./benchmarks/run_benchmarks.sh nsieve` records Dark at `28,100,515`
-  Cachegrind instructions for the reduced-size Dark run and skips writing the
-  Dark result into the comparison table because the benchmark is reduced-size.
-- Cached baseline context in the same run reports Rust at `234,163,043`
-  instructions and OCaml at `559,365,264` instructions for their full-size
-  `n=100000`, 100-iteration implementations.
+- `./dark -r benchmarks/problems/nsieve/dark/main.dark` prints `9592`.
+- `benchmarks/RESULTS.md` records Dark at `16,533,914,689` Cachegrind
+  instructions for the full-size run.
+- The same result table reports Rust at `234,163,043` instructions and OCaml at
+  `559,365,264` instructions.
 - `./dark --dump-mir benchmarks/problems/nsieve/dark/main.dark` shows
   `markMultiples` still calls `Stdlib.__HAMT.__setHelper_i64_bool` and then
   calls itself before decrementing the new Dict.
@@ -57,11 +53,11 @@ markMultiples_L1:
   Ret
 ```
 
-The current benchmark source still documents the reduced input:
+The current benchmark source documents the full input:
 
 ```dark
 // Single run
-nsieve(1000)
+nsieve(100000)
 ```
 
 ## Benchmark Shape
@@ -108,10 +104,10 @@ tail-call shaped after reference-count insertion. The new Dict returned by
 `Stdlib.__HAMT.__setHelper_i64_bool` is decremented after the recursive
 `markMultiples` call returns.
 
-That post-call cleanup means the full-size benchmark has a stack-depth problem
-even before considering HAMT helper recursion. Tail-call preservation across
-reference-count insertion would make the reduced-size benchmark more robust, but
-it would not address the larger data-structure mismatch by itself.
+That post-call cleanup means larger runs still have a stack-depth risk even
+before considering HAMT helper recursion. Tail-call preservation across
+reference-count insertion would make the benchmark more robust, but it would not
+address the larger data-structure mismatch by itself.
 
 ### 3. HAMT Path Copying and Allocation Still Dominate the Dark Representation
 
@@ -134,8 +130,7 @@ state.
 
 ## Remaining Uncertainties
 
-- The current local benchmark command intentionally does not compare equivalent
-  inputs across languages for Dark because the Dark benchmark is reduced-size.
-- Full-size Dark behavior should be rechecked after tail-call or stack changes,
-  but the benchmark should not be treated as comparable to Rust/OCaml until Dark
-  can use an array-like representation.
+- Runtime comparisons are now input-size comparable, but still compare different
+  data structures because Dark uses persistent `Dict` while Rust and OCaml use
+  mutable arrays.
+- Larger stress runs should be rechecked after tail-call or stack changes.
