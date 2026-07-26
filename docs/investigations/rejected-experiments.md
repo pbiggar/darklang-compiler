@@ -51,6 +51,19 @@ This file records benchmark optimization candidates that were investigated and r
 - Reason rejected: empty save/restore placeholders are not safe to remove in the target-independent LIR peephole stage; ARM64 call-argument lowering uses the call-save boundary even when no registers are saved.
 - Outcome: implementation and test-expectation changes were reverted; future work should only remove these placeholders after call-argument lowering no longer depends on them, or in a backend-local stage where that invariant is explicit.
 
+## 2026-07-17: nqueen compact caller-save stack reservation
+
+- Source candidate: `docs/investigations/benchmark-nqueen-optimization.md`, "Reduce Recursive Call Preservation Overhead"
+- Target benchmark: `nqueen`
+- Attempt: changed ARM64 `SaveRegs`/`RestoreRegs` lowering to keep the existing fixed X1-X10 offsets for `ArgMoves` compatibility while reserving only the aligned stack prefix needed by the saved registers. For the hot nqueen recursive call this changed the X1/X2 caller-save reservation from 0x50 bytes to 0x10 bytes.
+- Correctness evidence: a focused `ARM64CodeGenTests` case failed before the implementation because `SaveRegs([X1; X2], [])` still emitted an 80-byte reservation, then passed after the implementation. The compiled nqueen benchmark printed the expected `73712`.
+- IR evidence: `./dark --dump-lir benchmarks/problems/nqueen/dark/main.dark` showed the hot recursive call still had `SaveRegs([X1, X2], [])` around `Call(nqueenSolve, ...)`, so the experiment targeted the documented active path.
+- Generated-code evidence: `aarch64-linux-gnu-objdump -D -b binary -m aarch64 /tmp/nqueen_dark` showed the attempted implementation emitted `sub sp, sp, #0x10`, `stp x1, x2, [sp]`, `ldp x1, x2, [sp]`, and `add sp, sp, #0x10` around the recursive call.
+- Runtime evidence: `./benchmarks/run_benchmarks.sh nqueen` completed with Dark at `304,488,643` instructions, `110,428,280` data references, `13,950,966` branches, and `25.0%` branch misprediction, matching the existing nqueen profile.
+- Compile-time evidence: no retained implementation changed compile-time behavior; `TIMEFORMAT='compile_seconds %3R'; time ./dark benchmarks/problems/nqueen/dark/main.dark -o /tmp/nqueen_compile_timing -q` completed in `4.336s` during the rejected attempt.
+- Reason rejected: shrinking the caller-save reservation changed stack pointer immediates and stack footprint but did not reduce executed instructions, data references, or branches for the target benchmark.
+- Outcome: implementation and focused test changes were reverted; the active source investigation entry was narrowed to the remaining call-preservation issue of avoiding X1/X2 liveness across the recursive call.
+
 ## 2026-07-10: fasta dedicated heap-end register
 
 - Source candidate: `docs/investigations/benchmark-fasta-optimization.md`, "Hoist heap end into a dedicated register"

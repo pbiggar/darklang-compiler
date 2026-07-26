@@ -187,9 +187,12 @@ Jump(Label "nqueenSolve_body")
 ```
 
 Investigate whether the allocator or call-lowering can avoid keeping
-`newCols`/`newDiag1` live in caller-saved argument registers across the call, or
-avoid emitting the 0x50-byte stack adjustment when only X1/X2 need temporary
-preservation.
+`newCols`/`newDiag1` live in caller-saved argument registers across the call.
+Do not retry merely shrinking the fixed caller-save stack reservation from
+0x50 bytes to the live X1/X2 prefix: that changes the immediate in the stack
+adjustment but did not change measured nqueen instructions, data references, or
+branch counts. The rejected experiment is recorded in
+`docs/investigations/rejected-experiments.md`.
 
 Likely areas:
 
