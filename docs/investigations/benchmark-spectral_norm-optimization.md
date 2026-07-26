@@ -441,12 +441,24 @@ Consider an unboxed fixed-size tuple or specialized float-tuple representation o
 
 ---
 
-### 5. Complete the Dark Implementation
+### 5. Full-size Dark Implementation After Array Support
 
-**Impact: Required to run the benchmark at all**
+**Impact: Required for full `n=100` benchmark parity**
 
 **Root Cause:**
-The current Dark implementation computes the full power-iteration algorithm only for a fixed 3-element vector. It needs array-backed vectors to run the full `n=100` benchmark used by the other implementations.
+The current Dark implementation now runs the full power-iteration algorithm at
+the repository's reduced 3-vector size. Current benchmark status and results
+therefore no longer support treating this as "make spectral_norm run at all"
+work. The remaining gap is full-size parity: Dark still needs array-backed
+numeric vectors to run the full `n=100` benchmark used by the other
+implementations.
+
+**Current evidence:**
+- `benchmarks/CURRENT-STATUS.md` lists `spectral_norm` as `Working (reduced)`.
+- `benchmarks/RESULTS.md` reports a current Dark `spectral_norm` instruction
+  count instead of `-`.
+- `benchmarks/problems/spectral_norm/dark/main.dark` computes the power
+  iteration at fixed 3-vector size with tuple-backed vectors.
 
 **Once arrays and loops are available, implementation would be:**
 ```dark
@@ -510,7 +522,7 @@ def spectralNorm(n: Int64) : Float =
 | Loop Constructs | Code clarity + 10-20% | Medium | No (can use recursion) |
 | Preserve Aggressive Inlining | Prevents hot-loop regression | Medium | No |
 | Avoid Boxing Small Numeric Tuples / Preserve Tail Loops | Reduced benchmark overhead | Medium | No |
-| Complete Implementation | Required | Medium | Yes |
+| Full-size implementation after arrays | Required for n=100 parity | Medium | Yes |
 
 **With arrays, Dark spectral_norm could achieve:**
 - ~2-4x of Rust performance (typical for a non-SIMD implementation)
@@ -519,7 +531,9 @@ def spectralNorm(n: Int64) : Float =
 ## Recommended Implementation Order
 
 1. **Mutable Arrays** - Essential prerequisite for the algorithm
-2. **Complete the Implementation** - Make it produce correct output
+2. **Full-size implementation after arrays** - Preserve the current reduced
+   working benchmark while adding the full `n=100` version once numeric arrays
+   are available
 3. **Preserve Aggressive Inlining** - Keep the hot numeric loops call-free
 4. **Loop Constructs** - Improve ergonomics (optional)
 5. **Avoid Boxing Small Numeric Tuples / Preserve Tail Loops** - Consider only if broader evidence supports it
