@@ -173,18 +173,6 @@ entry argument shuffling.
 - `src/DarkCompiler/passes/5_RegisterAllocation.fs`
 - `src/DarkCompiler/passes/arm64/6_CodeGen.fs`
 
-## Corrected Findings
-
-The earlier version of this investigation listed tail-call phi-node resolution
-and entry-point register shuffling as active `binary_trees` issues. Current
-compiler evidence no longer supports those claims:
-
-| Finding | Current status | Evidence |
-| ------- | -------------- | -------- |
-| Tail-call phi overwrite moves | Resolved | `stressTest_L1` jumps directly to `stressTest_body` after updating `X20` and `X21`. |
-| Entry argument shuffle through temporaries | Resolved at LIR | Function entries move arguments directly into worker registers. |
-| `depth - 1` duplicate in hot recursive calls | Resolved after ANF | ANF shows duplicate expressions, but LIR reuses one lowered subtraction for both calls. |
-
 ## Validation Notes
 
 Evidence gathered in this pass:
