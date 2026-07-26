@@ -236,9 +236,6 @@ pattern by reducing 100 identical `sumTo` calls to 1.
 | Constant folding for pure functions | High (up to 27.3x) | Medium | P1 |
 | Loop-invariant code motion | High (~100x for repeated inner work) | Medium | P1 |
 
-Direct conditional-branch fusion has already been implemented for this loop
-shape and is no longer an open recommendation for `sum_to_n`.
-
 ## Conclusion
 
 The primary performance gap between Dark and Rust on this benchmark is due to Rust's aggressive constant folding. While implementing full interprocedural constant folding is complex, significant gains can be achieved through:
