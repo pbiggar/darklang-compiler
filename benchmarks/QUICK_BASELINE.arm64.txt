@@ -1,24 +1,25 @@
 # Quick benchmark baseline - instruction counts
 # Architecture: arm64
-# Generated: 2026-07-02T10:19:53+00:00
-# Compiler: b3f372e4
+# Generated: 2026-08-01T08:21:06+00:00
+# Compiler: 71a6a274
 ackermann=2750785
 binary_trees=240651
-collatz=462558
-edigits=8235015
+collatz=463558
+edigits=7140021
 factorial=44403
-fannkuch=1075810
-fasta=3395889
+fannkuch=914911
+fasta=2862898
 fib=503566
-leibniz=1200148
-mandelbrot=1615317
-matmul=58517
+leibniz=1100144
+mandelbrot=1363253
+matmul=50837
 merkletrees=2292932
-nqueen=1271704
-nsieve=827947
-pisum=130461
+nbody=134
+nqueen=534693
+nsieve=802453
+pisum=110461
 primes=206983
-quicksort=1117420
-spectral_norm=124
+quicksort=941134
+spectral_norm=1608
 sum_to_n=700366
 tak=1622089

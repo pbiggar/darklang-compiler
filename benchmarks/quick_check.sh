@@ -196,9 +196,10 @@ for bench in $BENCHMARKS; do
                 pretty_ok "$bench: $I_REFS (unchanged)"
             fi
         fi
-    else
+    elif [ "$SAVE_BASELINE" = false ]; then
+        FAILURES+=("$bench: missing baseline in $BASELINE_FILE")
         if [ "$QUIET_MODE" != true ]; then
-            pretty_info "$bench: $I_REFS (no baseline)"
+            pretty_fail "$bench: $I_REFS (missing baseline)"
         fi
     fi
 done
