@@ -80,57 +80,64 @@ let private addEncodedInstruction (state: EncodeState) (instr: Instr) : EncodeSt
         Offset = state.Offset + bytes.Length
         EncodedChunks = bytes :: state.EncodedChunks }
 
-let private encodeInstruction (state: EncodeState) (instr: Instr) : EncodeState =
+let private encodeInstruction (state: EncodeState) (instr: Instr) : Result<EncodeState, string> =
     match instr with
     | Label name ->
-        { state with LabelPositions = Map.add name state.Offset state.LabelPositions }
+        if Map.containsKey name state.LabelPositions then
+            Error $"Duplicate label: {name}"
+        else
+            Ok { state with LabelPositions = Map.add name state.Offset state.LabelPositions }
     | CALL label ->
-        addFixup state instr 1 label
+        Ok (addFixup state instr 1 label)
     | JMP label ->
-        addFixup state instr 1 label
+        Ok (addFixup state instr 1 label)
     | Jcc (_, label) ->
-        addFixup state instr 2 label
+        Ok (addFixup state instr 2 label)
     | LEA_rip (_, label) ->
-        addFixup state instr 3 label
+        Ok (addFixup state instr 3 label)
     | _ ->
-        addEncodedInstruction state instr
+        Ok (addEncodedInstruction state instr)
 
 type private PatchState = { Errors: string list }
 
 /// Returns the final machine code bytes and label positions.
 let resolveAndEncode (instructions: Instr list) : Result<ResolveResult, string> =
     // Pass 1: encode all instructions, collect label positions and fixups
-    let encodeState =
+    let encodeResult =
         instructions
         |> List.fold
-            encodeInstruction
-            { LabelPositions = Map.empty
-              Fixups = []
-              Offset = 0
-              EncodedChunks = [] }
+            (fun state instr -> state |> Result.bind (fun state -> encodeInstruction state instr))
+            (Ok
+                { LabelPositions = Map.empty
+                  Fixups = []
+                  Offset = 0
+                  EncodedChunks = [] })
 
-    // Concatenate all encoded chunks
-    let result = encodeState.EncodedChunks |> List.rev |> Array.concat
+    match encodeResult with
+    | Error err -> Error err
+    | Ok encodeState ->
+        // Concatenate all encoded chunks
+        let result = encodeState.EncodedChunks |> List.rev |> Array.concat
 
-    // Pass 2: apply fixups (defer unknown labels for data label patching later)
-    let deferred =
-        encodeState.Fixups
-        |> List.fold
-            (fun deferred fixup ->
-                match Map.tryFind fixup.TargetLabel encodeState.LabelPositions with
-                | None ->
-                    fixup :: deferred
-                | Some targetOffset ->
-                    // rel32 = target - nextInstr
-                    let rel = targetOffset - fixup.NextInstrOffset
-                    patchRel32 result fixup.PatchOffset rel
-                    deferred)
-            []
+        // Pass 2: apply fixups (defer unknown labels for data label patching later)
+        let deferred =
+            encodeState.Fixups
+            |> List.fold
+                (fun deferred fixup ->
+                    match Map.tryFind fixup.TargetLabel encodeState.LabelPositions with
+                    | None ->
+                        fixup :: deferred
+                    | Some targetOffset ->
+                        // rel32 = target - nextInstr
+                        let rel = targetOffset - fixup.NextInstrOffset
+                        patchRel32 result fixup.PatchOffset rel
+                        deferred)
+                []
 
-    Ok
-        { MachineCode = result
-          LabelPositions = encodeState.LabelPositions
-          DeferredFixups = List.rev deferred }
+        Ok
+            { MachineCode = result
+              LabelPositions = encodeState.LabelPositions
+              DeferredFixups = List.rev deferred }
 
 let private patchDataLabel
     (dataLabels: Map<string, int>)

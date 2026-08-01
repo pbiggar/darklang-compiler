@@ -1649,12 +1649,6 @@ let private generateDictRefCountDecHelper
     let collectLoop = label "collect_loop"
     let freeNode = label "free_node"
     let skipFreeList = label "skip_freelist"
-    let skipLeafListValueRelease = label "skip_leaf_list_value_release"
-    let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
-    let skipLeafClosureValueRelease = label "skip_leaf_closure_value_release"
-    let skipLeafFixedBlockValueRelease = label "skip_leaf_fixed_block_value_release"
-    let skipLeafDynamicKeyRelease = label "skip_leaf_dynamic_key_release"
-    let skipLeafDynamicValueRelease = label "skip_leaf_dynamic_value_release"
     let skipLeafPayloadRelease = label "skip_leaf_payload_release"
     let skipCollisionPayloadRelease = label "skip_collision_payload_release"
     let collisionPayloadLoop = label "collision_payload_loop"
@@ -1736,15 +1730,15 @@ let private generateDictRefCountDecHelper
         @ restores
         @ [X86_64.Label skipLabel]
 
-    let releaseDynamicBufferKeyInstrs baseReg =
+    let releaseDynamicBufferKeyInstrs baseReg skipLabel =
         if releaseLeafDynamicKey then
-            releaseDynamicBufferFieldInstrs baseReg 0 skipLeafDynamicKeyRelease
+            releaseDynamicBufferFieldInstrs baseReg 0 skipLabel
         else
             []
 
-    let releaseDynamicBufferValueInstrs baseReg =
+    let releaseDynamicBufferValueInstrs baseReg skipLabel =
         if releaseLeafDynamicValue then
-            releaseDynamicBufferFieldInstrs baseReg 8 skipLeafDynamicValueRelease
+            releaseDynamicBufferFieldInstrs baseReg 8 skipLabel
         else
             []
 
@@ -1753,6 +1747,7 @@ let private generateDictRefCountDecHelper
         (fieldOffset: int)
         (payloadSize: int)
         (releasePlan: ANF.RcReleasePlan)
+        (skipLabel: string)
         =
         let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
         let saves = saveRegs |> List.map X86_64.PUSH
@@ -1761,9 +1756,15 @@ let private generateDictRefCountDecHelper
         @ [X86_64.MOV_load (X86_64.RAX, baseReg, fieldOffset)]
         @ genRefCountDecGenericWithPlan helperCtx X86_64.RAX payloadSize (Some releasePlan)
         @ restores
-        @ [X86_64.Label skipLeafFixedBlockValueRelease]
+        @ [X86_64.Label skipLabel]
 
-    let releasePayloadInstrs (baseReg: X86_64.Reg) =
+    let releasePayloadInstrs (baseReg: X86_64.Reg) (suffix: string) =
+        let skipLeafListValueRelease = label $"skip_leaf_list_value_release_{suffix}"
+        let skipLeafDictValueRelease = label $"skip_leaf_dict_value_release_{suffix}"
+        let skipLeafClosureValueRelease = label $"skip_leaf_closure_value_release_{suffix}"
+        let skipLeafFixedBlockValueRelease = label $"skip_leaf_fixed_block_value_release_{suffix}"
+        let skipLeafDynamicKeyRelease = label $"skip_leaf_dynamic_key_release_{suffix}"
+        let skipLeafDynamicValueRelease = label $"skip_leaf_dynamic_value_release_{suffix}"
         let listValueInstrs =
             if releaseLeafListValue then
                 releaseManagedRootValueInstrs baseReg 8 listRefCountDecHelperLabel skipLeafListValueRelease
@@ -1783,11 +1784,11 @@ let private generateDictRefCountDecHelper
         let fixedBlockValueInstrs =
             match leafFixedBlockValueRelease with
             | Some (payloadSize, releasePlan) ->
-                releaseFixedBlockValueInstrs baseReg 8 payloadSize releasePlan
+                releaseFixedBlockValueInstrs baseReg 8 payloadSize releasePlan skipLeafFixedBlockValueRelease
             | None ->
                 []
 
-        releaseDynamicBufferKeyInstrs baseReg @ releaseDynamicBufferValueInstrs baseReg @ listValueInstrs @ dictValueInstrs @ closureValueInstrs @ fixedBlockValueInstrs
+        releaseDynamicBufferKeyInstrs baseReg skipLeafDynamicKeyRelease @ releaseDynamicBufferValueInstrs baseReg skipLeafDynamicValueRelease @ listValueInstrs @ dictValueInstrs @ closureValueInstrs @ fixedBlockValueInstrs
 
     let hasPayloadRelease =
         releaseLeafDynamicKey
@@ -1801,7 +1802,7 @@ let private generateDictRefCountDecHelper
         if hasPayloadRelease then
             [X86_64.CMP_imm (X86_64.RDX, 2)
              X86_64.Jcc (X86_64.NE, skipLeafPayloadRelease)]
-            @ releasePayloadInstrs X86_64.RDI
+            @ releasePayloadInstrs X86_64.RDI "leaf"
             @ [X86_64.Label skipLeafPayloadRelease]
         else
             []
@@ -1819,7 +1820,7 @@ let private generateDictRefCountDecHelper
              X86_64.SHL_imm (X86_64.R10, 4)
              X86_64.ADD_imm (X86_64.R10, 8)
              X86_64.ADD_reg (X86_64.R10, X86_64.RDI)]
-            @ releasePayloadInstrs X86_64.R10
+            @ releasePayloadInstrs X86_64.R10 "collision"
             @ [X86_64.ADD_imm (X86_64.R9, 1)
                X86_64.JMP collisionPayloadLoop
                X86_64.Label collisionPayloadDone

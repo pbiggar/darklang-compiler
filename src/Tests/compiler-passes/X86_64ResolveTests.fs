@@ -76,6 +76,20 @@ let testUndefinedLabelDeferredFixup () : Result<unit, string> =
            && result.DeferredFixups.[0].TargetLabel = "nonexistent" then Ok ()
         else Error $"Expected 1 deferred fixup for 'nonexistent', got {result.DeferredFixups}"
 
+/// Test duplicate labels are reported instead of silently choosing one target.
+let testDuplicateLabel () : Result<unit, string> =
+    let instructions = [
+        Label "again"
+        MOV_imm32 (RAX, 1)
+        Label "again"
+        RET
+    ]
+    match X86_64_Resolve.resolveAndEncode instructions with
+    | Ok _ -> Error "Expected duplicate label to fail"
+    | Error msg ->
+        if msg.Contains "Duplicate label: again" then Ok ()
+        else Error $"Expected duplicate label error, got: {msg}"
+
 /// Test: entry labels should be required explicitly, not replaced with offset 0.
 let testRequireLabelPositionRejectsMissingStart () : Result<unit, string> =
     match X86_64_Resolve.requireLabelPosition "_start" Map.empty with
@@ -114,6 +128,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("Backward JMP", testBackwardJump)
     ("Forward CALL", testCallForward)
     ("Undefined label deferred fixup", testUndefinedLabelDeferredFixup)
+    ("Duplicate label error", testDuplicateLabel)
     ("Require label position rejects missing _start", testRequireLabelPositionRejectsMissingStart)
     ("CALL + execute", testCallAndExecute)
 ]
