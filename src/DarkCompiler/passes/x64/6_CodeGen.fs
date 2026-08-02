@@ -4571,6 +4571,19 @@ let translateFunction
                    [X86_64.RET])
         Ok (funcLabel @ prologue @ heapInit @ blockInstrs @ epilogue)
 
+/// Reference-count runtime helpers required by the program's LIR instructions.
+/// Keeping these requirements together lets code generation discover them in one pass.
+type private RcHelperRequirements = {
+    ListDecHelperLabels: Set<string>
+    PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
+    PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
+    DictDecHelperLabels: Set<string>
+    NeedsListRcIncHelper: bool
+    NeedsDictRcIncHelper: bool
+    NeedsClosureRcIncHelper: bool
+    NeedsClosureRcDecHelper: bool
+}
+
 /// Translate a complete LIR program to x86-64 instructions
 let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) (enableLeakCheck: bool) : Result<X86_64.Instr list, string> =
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
@@ -4699,18 +4712,6 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         |> Option.map listDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
-    let listDecHelperLabelsInMetadata metadata =
-        metadata
-        |> rcMetadataReleasePlan
-        |> Option.map listDecHelperLabelsInReleasePlan
-        |> Option.defaultValue Set.empty
-
-    let plannedListDecHelpersInMetadata metadata =
-        metadata
-        |> rcMetadataReleasePlan
-        |> Option.map plannedListDecHelpersInReleasePlan
-        |> Option.defaultValue Map.empty
-
     let plannedListDecHelpersInType sourceType =
         sourceType
         |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
@@ -4753,12 +4754,6 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         | ANF.DynamicBufferRelease _ ->
             Map.empty
 
-    let plannedDictDecHelpersInMetadata metadata =
-        metadata
-        |> rcMetadataReleasePlan
-        |> Option.map plannedDictDecHelpersInReleasePlan
-        |> Option.defaultValue Map.empty
-
     let plannedDictDecHelpersInType sourceType =
         sourceType
         |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
@@ -4792,110 +4787,173 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         | ANF.DynamicBufferRelease _ ->
             Set.empty
 
-    let dictDecHelperLabelsInMetadata metadata =
-        metadata
-        |> rcMetadataReleasePlan
-        |> Option.map dictDecHelperLabelsInReleasePlan
-        |> Option.defaultValue Set.empty
-
     let dictDecHelperLabelsInType sourceType =
         sourceType
         |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
         |> Option.map dictDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
+    let emptyRcHelperRequirements = {
+        ListDecHelperLabels = Set.empty
+        PlannedListDecHelpers = Map.empty
+        PlannedDictDecHelpers = Map.empty
+        DictDecHelperLabels = Set.empty
+        NeedsListRcIncHelper = false
+        NeedsDictRcIncHelper = false
+        NeedsClosureRcIncHelper = false
+        NeedsClosureRcDecHelper = false
+    }
+
+    let collectRcHelperRequirementsFromInstr requirements instr =
+        let collectReleasePlanRequirements releasePlan requirements =
+            {
+                requirements with
+                    PlannedListDecHelpers =
+                        mergePlannedListDecHelperMaps
+                            requirements.PlannedListDecHelpers
+                            (plannedListDecHelpersInReleasePlan releasePlan)
+                    PlannedDictDecHelpers =
+                        mergePlannedDictDecHelperMaps
+                            requirements.PlannedDictDecHelpers
+                            (plannedDictDecHelpersInReleasePlan releasePlan)
+            }
+
+        match instr with
+        | LIR.RefCountDec (_, _, LIR.TaggedList, metadata) ->
+            let releasePlan =
+                requiredRcMetadataReleasePlan
+                    "TaggedList RefCountDec helper selection"
+                    metadata
+            let withPlanRequirements =
+                collectReleasePlanRequirements releasePlan requirements
+            {
+                withPlanRequirements with
+                    ListDecHelperLabels =
+                        Set.add
+                            (listDecHelperForReleasePlan releasePlan)
+                            withPlanRequirements.ListDecHelperLabels
+            }
+        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata) ->
+            let releasePlan =
+                requiredRcMetadataReleasePlan
+                    "DictHeap RefCountDec helper selection"
+                    metadata
+            let withPlanRequirements =
+                collectReleasePlanRequirements releasePlan requirements
+            {
+                withPlanRequirements with
+                    DictDecHelperLabels =
+                        Set.add
+                            (dictDecHelperForReleasePlan releasePlan)
+                            withPlanRequirements.DictDecHelperLabels
+            }
+        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+            match rcMetadataReleasePlan metadata with
+            | None ->
+                requirements
+            | Some releasePlan ->
+                let withPlanRequirements =
+                    collectReleasePlanRequirements releasePlan requirements
+                {
+                    withPlanRequirements with
+                        ListDecHelperLabels =
+                            Set.union
+                                withPlanRequirements.ListDecHelperLabels
+                                (listDecHelperLabelsInReleasePlan releasePlan)
+                        DictDecHelperLabels =
+                            Set.union
+                                withPlanRequirements.DictDecHelperLabels
+                                (dictDecHelperLabelsInReleasePlan releasePlan)
+                        NeedsClosureRcDecHelper =
+                            withPlanRequirements.NeedsClosureRcDecHelper
+                            || rcReleasePlanContains
+                                (releasePlanIsRootKind ANF.ClosureHeap)
+                                releasePlan
+                }
+        | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) ->
+            { requirements with NeedsClosureRcDecHelper = true }
+        | LIR.RefCountInc (_, _, LIR.TaggedList, _) ->
+            { requirements with NeedsListRcIncHelper = true }
+        | LIR.RefCountInc (_, _, LIR.DictHeap, _) ->
+            { requirements with NeedsDictRcIncHelper = true }
+        | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) ->
+            { requirements with NeedsClosureRcIncHelper = true }
+        | LIR.RawSlotInit (_, _, _, valueType) ->
+            match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
+            | Some SlotInitListRootRetain ->
+                { requirements with NeedsListRcIncHelper = true }
+            | Some SlotInitDictRootRetain ->
+                { requirements with NeedsDictRcIncHelper = true }
+            | Some SlotInitClosureRootRetain ->
+                { requirements with NeedsClosureRcIncHelper = true }
+            | Some SlotInitDynamicBufferRetain
+            | Some (SlotInitGenericRootRetain _) ->
+                requirements
+            | None ->
+                requirements
+        | _ ->
+            requirements
+
+    let instructionRcHelperRequirements =
+        functions
+        |> List.fold (fun functionRequirements func ->
+            func.CFG.Blocks
+            |> Map.fold (fun blockRequirements _ block ->
+                block.Instrs
+                |> List.fold collectRcHelperRequirementsFromInstr blockRequirements)
+                functionRequirements)
+            emptyRcHelperRequirements
+
+    let closureCaptureListDecHelperLabels =
+        closureCaptureTypes
+        |> Map.toList
+        |> List.map (fun (_, captureTypes) ->
+            captureTypes
+            |> List.map listDecHelperLabelsInType
+            |> unionLabelSets)
+        |> unionLabelSets
+
+    let closureCapturePlannedListDecHelpers =
+        closureCaptureTypes
+        |> Map.toList
+        |> List.map (fun (_, captureTypes) ->
+            captureTypes
+            |> List.map plannedListDecHelpersInType
+            |> unionPlannedListDecHelperMaps)
+        |> unionPlannedListDecHelperMaps
+
+    let closureCapturePlannedDictDecHelpers =
+        closureCaptureTypes
+        |> Map.toList
+        |> List.map (fun (_, captureTypes) ->
+            captureTypes
+            |> List.map plannedDictDecHelpersInType
+            |> unionPlannedDictDecHelperMaps)
+        |> unionPlannedDictDecHelperMaps
+
+    let closureCaptureDictDecHelperLabels =
+        closureCaptureTypes
+        |> Map.toList
+        |> List.map (fun (_, captureTypes) ->
+            captureTypes
+            |> List.map dictDecHelperLabelsInType
+            |> unionLabelSets)
+        |> unionLabelSets
+
     let neededListDecHelperLabels =
-        let labelsFromFunctions =
-            functions
-            |> List.map (fun func ->
-                func.CFG.Blocks
-                |> Map.toList
-                |> List.map (fun (_, block) ->
-                    block.Instrs
-                    |> List.map (function
-                        | LIR.RefCountDec (_, _, LIR.TaggedList, metadata) ->
-                            metadata
-                            |> requiredRcMetadataReleasePlan "TaggedList RefCountDec helper selection"
-                            |> listDecHelperForReleasePlan
-                            |> Set.singleton
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                            listDecHelperLabelsInMetadata metadata
-                        | _ ->
-                            Set.empty)
-                    |> unionLabelSets)
-                |> unionLabelSets)
-            |> unionLabelSets
-
-        let labelsFromClosureCaptures =
-            closureCaptureTypes
-            |> Map.toList
-            |> List.map (fun (_, captureTypes) ->
-                captureTypes
-                |> List.map listDecHelperLabelsInType
-                |> unionLabelSets)
-            |> unionLabelSets
-
-        Set.union labelsFromFunctions labelsFromClosureCaptures
+        Set.union
+            instructionRcHelperRequirements.ListDecHelperLabels
+            closureCaptureListDecHelperLabels
 
     let neededPlannedListDecHelpers =
-        let helpersFromFunctions =
-            functions
-            |> List.map (fun func ->
-                func.CFG.Blocks
-                |> Map.toList
-                |> List.map (fun (_, block) ->
-                    block.Instrs
-                    |> List.map (function
-                        | LIR.RefCountDec (_, _, LIR.TaggedList, metadata)
-                        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata)
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                            plannedListDecHelpersInMetadata metadata
-                        | _ ->
-                            Map.empty)
-                    |> unionPlannedListDecHelperMaps)
-                |> unionPlannedListDecHelperMaps)
-            |> unionPlannedListDecHelperMaps
-
-        let helpersFromClosureCaptures =
-            closureCaptureTypes
-            |> Map.toList
-            |> List.map (fun (_, captureTypes) ->
-                captureTypes
-                |> List.map plannedListDecHelpersInType
-                |> unionPlannedListDecHelperMaps)
-            |> unionPlannedListDecHelperMaps
-
-        mergePlannedListDecHelperMaps helpersFromFunctions helpersFromClosureCaptures
+        mergePlannedListDecHelperMaps
+            instructionRcHelperRequirements.PlannedListDecHelpers
+            closureCapturePlannedListDecHelpers
 
     let neededPlannedDictDecHelpers =
-        let helpersFromFunctions =
-            functions
-            |> List.map (fun func ->
-                func.CFG.Blocks
-                |> Map.toList
-                |> List.map (fun (_, block) ->
-                    block.Instrs
-                    |> List.map (function
-                        | LIR.RefCountDec (_, _, LIR.TaggedList, metadata)
-                        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata)
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                            plannedDictDecHelpersInMetadata metadata
-                        | _ ->
-                            Map.empty)
-                    |> unionPlannedDictDecHelperMaps)
-                |> unionPlannedDictDecHelperMaps)
-            |> unionPlannedDictDecHelperMaps
-
-        let helpersFromClosureCaptures =
-            closureCaptureTypes
-            |> Map.toList
-            |> List.map (fun (_, captureTypes) ->
-                captureTypes
-                |> List.map plannedDictDecHelpersInType
-                |> unionPlannedDictDecHelperMaps)
-            |> unionPlannedDictDecHelperMaps
-
-        mergePlannedDictDecHelperMaps helpersFromFunctions helpersFromClosureCaptures
+        mergePlannedDictDecHelperMaps
+            instructionRcHelperRequirements.PlannedDictDecHelpers
+            closureCapturePlannedDictDecHelpers
 
     let plannedDictDecHelpersNeedListDecHelperLabels =
         neededPlannedDictDecHelpers
@@ -4904,38 +4962,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         |> unionLabelSets
 
     let neededDictDecHelperLabels =
-        let labelsFromFunctions =
-            functions
-            |> List.map (fun func ->
-                func.CFG.Blocks
-                |> Map.toList
-                |> List.map (fun (_, block) ->
-                    block.Instrs
-                    |> List.map (function
-                        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata) ->
-                            metadata
-                            |> requiredRcMetadataReleasePlan "DictHeap RefCountDec helper selection"
-                            |> dictDecHelperForReleasePlan
-                            |> Set.singleton
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                            metadata
-                            |> dictDecHelperLabelsInMetadata
-                        | _ ->
-                            Set.empty)
-                    |> unionLabelSets)
-                |> unionLabelSets)
-            |> unionLabelSets
-
-        let labelsFromClosureCaptures =
-            closureCaptureTypes
-            |> Map.toList
-            |> List.map (fun (_, captureTypes) ->
-                captureTypes
-                |> List.map dictDecHelperLabelsInType
-                |> unionLabelSets)
-            |> unionLabelSets
-
-        Set.union labelsFromFunctions labelsFromClosureCaptures
+        Set.union
+            instructionRcHelperRequirements.DictDecHelperLabels
+            closureCaptureDictDecHelperLabels
 
     let typedDictDecHelpersNeedListDecHelper =
         if Set.contains dictRefCountDecListValueHelperLabel neededDictDecHelperLabels
@@ -5021,32 +5050,10 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             rcReleasePlanContains (releasePlanIsRootKind ANF.ClosureHeap) releasePlan)
 
     let needsListRcIncHelper =
-        functions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
-                    | LIR.RawSlotInit (_, _, _, valueType) ->
-                        match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
-                        | Some SlotInitListRootRetain -> true
-                        | _ -> false
-                    | _ -> false)))
+        instructionRcHelperRequirements.NeedsListRcIncHelper
 
     let needsDictRcIncHelper =
-        functions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
-                    | LIR.RawSlotInit (_, _, _, valueType) ->
-                        match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
-                        | Some SlotInitDictRootRetain -> true
-                        | _ -> false
-                    | _ -> false)))
+        instructionRcHelperRequirements.NeedsDictRcIncHelper
 
     let needsDictRcDecHelper =
         Set.contains dictRefCountDecHelperLabel neededDictDecHelperLabels
@@ -5091,32 +5098,10 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         Set.contains dictRefCountDecSumStringValueHelperLabel neededDictDecHelperLabels
 
     let needsClosureRcIncHelper =
-        functions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) -> true
-                    | LIR.RawSlotInit (_, _, _, valueType) ->
-                        match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
-                        | Some SlotInitClosureRootRetain -> true
-                        | _ -> false
-                    | _ -> false)))
+        instructionRcHelperRequirements.NeedsClosureRcIncHelper
 
     let needsClosureRcDecHelper =
-        functions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                        metadata
-                        |> rcMetadataReleasePlan
-                        |> Option.exists (rcReleasePlanContains (releasePlanIsRootKind ANF.ClosureHeap))
-                    | _ -> false)))
+        instructionRcHelperRequirements.NeedsClosureRcDecHelper
 
     let closurePayloadSizes =
         Map.fold
