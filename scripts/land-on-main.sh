@@ -20,7 +20,7 @@ fi
 main_worktree="$(
   git worktree list --porcelain | awk '
     $1 == "worktree" { wt = $2 }
-    $1 == "branch" && $2 == "refs/heads/main" { print wt; exit }
+    $1 == "branch" && $2 == "refs/heads/main" && !found { print wt; found = 1 }
   '
 )"
 if [[ -z "$main_worktree" ]]; then
