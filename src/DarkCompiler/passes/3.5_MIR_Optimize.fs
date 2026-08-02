@@ -1339,11 +1339,11 @@ let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
         if options.EnableCSE then applyCSE cfg1 else (cfg1, false)
     let (cfg3, changed3) =
         if options.EnableCopyProp then applyCopyPropagation cfg2 else (cfg2, false)
-    // Run constant folding again after copy propagation
+    // Run constant folding again only when copy propagation changed the CFG.
     // This catches cases like: v1 = -127; v2 = v1 - 2
     // After copy prop: v2 = Int64Const(-127) - Int64Const(2) -> can fold
     let (cfg4, changed4) =
-        if options.EnableConstFolding then applyConstantFolding cfg3 else (cfg3, false)
+        if options.EnableConstFolding && changed3 then applyConstantFolding cfg3 else (cfg3, false)
     let (cfg5, changed5) =
         if options.EnableLICM then applyLoopInvariantCodeMotion cfg4 else (cfg4, false)
     let (cfg6, changed6) =
