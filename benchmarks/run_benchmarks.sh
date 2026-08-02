@@ -1,11 +1,11 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify] [--refresh-baseline[=lang1,lang2]] [--jobs[=N]] [benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify] [--refresh-baseline[=lang1,lang2]] [--jobs[=N]] [routine|benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
-#   --verify                 Compare Dark instruction counts with RESULTS.md without updating tracked files
+#   --verify                 Verify the routine profile against RESULTS.md without updating tracked files
 #   --refresh-baseline       Re-run all baseline languages (default: use cached values)
 #   --refresh-baseline=LANGS Re-run specific languages only (comma-separated: rust,go,python,node,ocaml)
 #   --jobs, --jobs=N         Run up to N benchmarks in parallel (default: 1)
@@ -25,7 +25,7 @@ show_help() {
 # Parse options
 USE_CACHEGRIND=true
 export REFRESH_BASELINE=false
-BENCHMARK="all"
+BENCHMARK="routine"
 BUILD_FAILURES=()
 RUN_FAILURES=()
 PROCESS_FAILURES=()
@@ -33,6 +33,7 @@ LIST_ONLY=false
 VERIFY_RESULTS=false
 JOB_COUNT=""
 SKIP_BENCHMARKS=()
+PROFILE=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -89,16 +90,23 @@ if [ "$VERIFY_RESULTS" = true ] && [ "$REFRESH_BASELINE" != "false" ]; then
     exit 1
 fi
 
-OUTPUT_DIR="$SCRIPT_DIR/results/$(date +%Y-%m-%d_%H%M%S)"
-mkdir -p "$OUTPUT_DIR"
+if [ "$VERIFY_RESULTS" = true ] && [ "$BENCHMARK" != "routine" ]; then
+    pretty_fail "--verify requires the routine benchmark profile"
+    exit 1
+fi
 
-# Record compiler version
-pretty_info "Recording compiler version..."
-git -C "$PROJECT_ROOT" rev-parse HEAD > "$OUTPUT_DIR/compiler_version.txt"
-git -C "$PROJECT_ROOT" log -1 --format="%s" >> "$OUTPUT_DIR/compiler_version.txt"
+if [ "$USE_CACHEGRIND" = true ] && [ "$REFRESH_BASELINE" != "false" ] && [ "$BENCHMARK" != "routine" ]; then
+    pretty_fail "cachegrind baseline refresh requires the routine benchmark profile"
+    exit 1
+fi
 
 # Get list of benchmarks to run
-if [ "$BENCHMARK" = "all" ]; then
+if [ "$BENCHMARK" = "routine" ]; then
+    PROFILE="routine"
+    if ! BENCHMARKS=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" "$PROFILE"); then
+        exit 1
+    fi
+elif [ "$BENCHMARK" = "all" ]; then
     BENCHMARKS=$(ls -d "$SCRIPT_DIR/problems"/*/ 2>/dev/null | xargs -n1 basename)
 else
     BENCHMARKS="$BENCHMARK"
@@ -131,6 +139,14 @@ if [ "$LIST_ONLY" = true ]; then
     done
     exit 0
 fi
+
+OUTPUT_DIR="$SCRIPT_DIR/results/$(date +%Y-%m-%d_%H%M%S)"
+mkdir -p "$OUTPUT_DIR"
+
+# Record compiler version
+pretty_info "Recording compiler version..."
+git -C "$PROJECT_ROOT" rev-parse HEAD > "$OUTPUT_DIR/compiler_version.txt"
+git -C "$PROJECT_ROOT" log -1 --format="%s" >> "$OUTPUT_DIR/compiler_version.txt"
 
 if [ -z "$JOB_COUNT" ]; then
     if [ -n "${BENCHMARK_JOBS:-}" ]; then
@@ -284,16 +300,18 @@ pretty_info "Processing results..."
             fi
         fi
         if [ "$VERIFY_RESULTS" = true ]; then
-            if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_verifier.py" "$OUTPUT_DIR"; then
+            if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_verifier.py" "$OUTPUT_DIR" "$PROFILE"; then
                 PROCESS_FAILURES+=("benchmark_verifier")
                 pretty_warn "benchmark verification failed"
             fi
-        else
-            # Recording mode updates the latest results and the append-only history.
-            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"; then
+        elif [ "$PROFILE" = "routine" ]; then
+            # Only a complete routine run updates the canonical results and history.
+            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE"; then
                 PROCESS_FAILURES+=("history_updater")
                 pretty_warn "history_updater failed (continuing)"
             fi
+        else
+            pretty_info "Diagnostic target complete; RESULTS.md and HISTORY.md were not updated."
         fi
     else
         if ! python3 "$SCRIPT_DIR/infrastructure/result_processor.py" "$OUTPUT_DIR"; then

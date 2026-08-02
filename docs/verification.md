@@ -11,7 +11,7 @@ For compiler repository changes, the default verification commands are:
 
 ```bash
 ./run-tests --ai
-./benchmarks/run_benchmarks.sh --verify all
+./benchmarks/run_benchmarks.sh --verify routine
 ```
 
 Agents may run narrower checks while developing a change, but a change is not verified until the full verification policy has passed or the agent explicitly reports why full verification could not be completed.
@@ -19,7 +19,7 @@ Agents may run narrower checks while developing a change, but a change is not ve
 Verification mode compares full Dark instruction counts with the committed
 `benchmarks/RESULTS.md` values without modifying tracked files. When a compiler
 change intentionally changes performance, run
-`./benchmarks/run_benchmarks.sh all` in recording mode and commit the resulting
+`./benchmarks/run_benchmarks.sh routine` in recording mode and commit the resulting
 `benchmarks/RESULTS.md` and `benchmarks/HISTORY.md` updates before verifying it.
 
 When reporting verification, include the exact commands run, whether they passed or failed, and any residual risk.

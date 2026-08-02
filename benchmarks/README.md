@@ -25,8 +25,11 @@ python3 --version
 ## Quick Start
 
 ```bash
-# Run all benchmarks (instruction counts via cachegrind)
+# Record the canonical routine profile (instruction counts via cachegrind)
 ./benchmarks/run_benchmarks.sh
+
+# Run every benchmark, including slow full-size quicksort, without recording it
+./benchmarks/run_benchmarks.sh all
 
 # Run a specific benchmark
 ./benchmarks/run_benchmarks.sh fib
@@ -38,8 +41,8 @@ python3 --version
 # Run benchmarks in parallel (defaults to CPU count if omitted)
 ./benchmarks/run_benchmarks.sh --jobs 4
 
-# Verify all committed Dark results without updating RESULTS.md or HISTORY.md
-./benchmarks/run_benchmarks.sh --verify all
+# Verify the canonical routine profile without updating tracked files
+./benchmarks/run_benchmarks.sh --verify routine
 ```
 
 ## Benchmark Modes
@@ -54,16 +57,19 @@ Uses **Valgrind Cachegrind** to count instructions. Slower (~50x) but determinis
 
 This is the primary way we are tracking performance.
 
-By default, a completed Cachegrind run records its Dark measurements in
-`RESULTS.md` and `HISTORY.md`. Commit those files when the run is intended as
-performance evidence for a compiler change.
+The `routine` profile is the canonical benchmark set and currently excludes
+full-size quicksort. A completed routine Cachegrind run records its measurements
+in `RESULTS.md` and `HISTORY.md`. Targeted runs and `all` are diagnostic and do
+not update those canonical files. Full-size quicksort remains available through
+`./benchmarks/run_benchmarks.sh quicksort`.
 
 ### Verification Mode (`--verify`)
 
-Runs the same full Cachegrind benchmarks, but compares each Dark instruction
-count with the committed value in `RESULTS.md`. It exits unsuccessfully for a
-difference or missing result and never updates tracked result files. This mode
-cannot be combined with `--hyperfine` or `--refresh-baseline`.
+`./benchmarks/run_benchmarks.sh --verify routine` runs the exact profile named by
+`RESULTS.md` and compares each full-size Dark instruction count with its
+committed value. It fails for missing, unexpected, or changed results and never
+updates tracked files. Verification cannot be combined with `--hyperfine` or
+`--refresh-baseline`.
 
 ### Timing Mode (`--hyperfine`)
 

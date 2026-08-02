@@ -14,7 +14,7 @@ You are going to resolve EXACTLY ONE type checking issue.
 
 6. If the failing tests are incorrect and should be failing, continue and tell the developer.
 
-7. After all tests pass, run all Dark benchmarks (`./benchmarks/run_benchmarks.sh all`). Benchmarks should complete with no failures. If RESULTS.md has changed, show the results.
+7. After all tests pass, run the routine Dark benchmark profile (`./benchmarks/run_benchmarks.sh routine`). Benchmarks should complete with no failures. If RESULTS.md has changed, show the results.
 
 8. If there is any valuable documentation to create or information to capture, create a doc or add it to an existing doc.
 

@@ -3,11 +3,11 @@
 Update benchmark result files after a benchmark run.
 
 Manages three files:
-- RESULTS.md: Quick overview of latest Dark results vs other languages
+- RESULTS.md: Latest complete routine profile vs other languages
 - BASELINES.md: Detailed baseline metrics for reference languages (no Dark)
 - HISTORY.md: Append-only log of all Dark benchmark runs
 
-Usage: python3 history_updater.py <results_dir> [--refresh-baseline]
+Usage: python3 history_updater.py <results_dir> --profile <profile> [--refresh-baseline]
 """
 
 import json
@@ -16,6 +16,8 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+
+from benchmark_profiles import load_profile
 
 RESULTS_FILE = "RESULTS.md"
 BASELINES_FILE = "BASELINES.md"
@@ -156,17 +158,18 @@ def load_results_file(benchmarks_dir: Path) -> dict:
     return results
 
 
-def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dict, metadata: dict):
+def update_results_file(
+    benchmarks_dir: Path,
+    json_results: dict,
+    baselines: dict,
+    metadata: dict,
+    profile: list[str],
+):
     """Update RESULTS.md with latest results."""
     results_path = benchmarks_dir / RESULTS_FILE
 
-    # Discover all benchmarks from problem directory structure
-    existing = {}
-    problems_dir = benchmarks_dir / "problems"
-    if problems_dir.exists():
-        for problem_dir in problems_dir.iterdir():
-            if problem_dir.is_dir():
-                existing[problem_dir.name] = {}
+    # RESULTS.md is the complete latest snapshot of one named profile.
+    existing = {benchmark: {} for benchmark in profile}
 
     # Merge with existing results from file
     for benchmark, langs in load_results_file(benchmarks_dir).items():
@@ -189,7 +192,7 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
     # Merge with baselines
     for benchmark, baseline_list in baselines.items():
         if benchmark not in existing:
-            existing[benchmark] = {}
+            continue
         for b in baseline_list:
             lang = b.get("language", "").lower()
             instrs = b.get("instructions", 0)
@@ -249,7 +252,7 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
     lines = [
         "# Benchmark Results",
         "",
-        "Latest Dark compiler performance vs other languages (instruction counts).",
+        "Latest routine-profile compiler performance vs other languages (instruction counts).",
         "",
         f"**Last Updated:** {metadata['timestamp']}",
         f"**Commit:** `{metadata['commit_hash']}`" + (f" - {metadata['commit_message']}" if metadata['commit_message'] else ""),
@@ -486,8 +489,11 @@ def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
 # ============================================================================
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 history_updater.py <results_dir> [--refresh-baseline]")
+    if len(sys.argv) < 4 or sys.argv[2] != "--profile":
+        print(
+            "Usage: python3 history_updater.py <results_dir> "
+            "--profile <profile> [--refresh-baseline]"
+        )
         sys.exit(1)
 
     results_dir = Path(sys.argv[1])
@@ -499,11 +505,27 @@ def main():
 
     # Determine benchmarks directory (parent of results/)
     benchmarks_dir = results_dir.parent.parent
+    try:
+        profile = load_profile(benchmarks_dir, sys.argv[3])
+    except ValueError as error:
+        print(f"Error: {error}")
+        sys.exit(1)
 
     json_results = load_json_results(results_dir)
     if not json_results:
         print("No cachegrind results found, skipping updates.")
         sys.exit(0)
+
+    actual_names = set(json_results)
+    profile_names = set(profile)
+    if actual_names != profile_names:
+        missing = sorted(profile_names - actual_names)
+        unexpected = sorted(actual_names - profile_names)
+        if missing:
+            print(f"Error: profile run is missing results: {', '.join(missing)}")
+        if unexpected:
+            print(f"Error: profile run has unexpected results: {', '.join(unexpected)}")
+        sys.exit(1)
 
     metadata = get_run_metadata(results_dir)
 
@@ -511,7 +533,7 @@ def main():
     baselines = load_baselines_file(benchmarks_dir)
 
     # Always update RESULTS.md with latest Dark + cached baselines
-    update_results_file(benchmarks_dir, json_results, baselines, metadata)
+    update_results_file(benchmarks_dir, json_results, baselines, metadata, profile)
 
     # Always append Dark results to HISTORY.md
     append_to_history(benchmarks_dir, json_results, metadata)

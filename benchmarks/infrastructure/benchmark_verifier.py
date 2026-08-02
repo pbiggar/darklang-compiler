@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Verify full Dark benchmark results without modifying tracked result files."""
+"""Verify a named Dark benchmark profile without modifying tracked files."""
 
 import sys
 from pathlib import Path
 
+from benchmark_profiles import load_profile
 from history_updater import (
     is_reduced_size_benchmark,
     load_json_results,
@@ -12,8 +13,8 @@ from history_updater import (
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("Usage: python3 benchmark_verifier.py <results_dir>")
+    if len(sys.argv) != 3:
+        print("Usage: python3 benchmark_verifier.py <results_dir> <profile>")
         return 1
 
     results_dir = Path(sys.argv[1])
@@ -22,12 +23,32 @@ def main() -> int:
         return 1
 
     benchmarks_dir = results_dir.parent.parent
+    try:
+        profile = load_profile(benchmarks_dir, sys.argv[2])
+    except ValueError as error:
+        print(f"Error: {error}")
+        return 1
     expected = load_results_file(benchmarks_dir)
     actual = load_json_results(results_dir)
     failures = []
     verified = 0
 
-    for benchmark, results in sorted(actual.items()):
+    profile_names = set(profile)
+    actual_names = set(actual)
+    expected_names = set(expected)
+    for benchmark in sorted(profile_names - actual_names):
+        failures.append(f"{benchmark}: missing result from profile run")
+    for benchmark in sorted(actual_names - profile_names):
+        failures.append(f"{benchmark}: unexpected result outside profile")
+    for benchmark in sorted(profile_names - expected_names):
+        failures.append(f"{benchmark}: missing row in RESULTS.md")
+    for benchmark in sorted(expected_names - profile_names):
+        failures.append(f"{benchmark}: unexpected RESULTS.md row outside profile")
+
+    for benchmark in profile:
+        if benchmark not in actual:
+            continue
+        results = actual[benchmark]
         if is_reduced_size_benchmark(benchmarks_dir, benchmark):
             print(f"Skipping {benchmark}: reduced-size Dark benchmark")
             continue
@@ -66,7 +87,10 @@ def main() -> int:
             print(f"  {failure}")
         return 1
 
-    print(f"Verified {verified} benchmark result(s) against RESULTS.md")
+    print(
+        f"Verified {verified} full-size result(s) across the "
+        f"{len(profile)}-benchmark {sys.argv[2]} profile against RESULTS.md"
+    )
     return 0
 
 

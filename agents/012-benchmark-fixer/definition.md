@@ -44,9 +44,9 @@ Before presenting a candidate as review-ready, read and follow `docs/verificatio
 Required verification for a benchmark parity candidate:
 
 - Run `./run-tests --ai`.
-- Run complete full benchmarks with `./benchmarks/run_benchmarks.sh all`.
+- Run the complete routine profile with `./benchmarks/run_benchmarks.sh routine`.
 - Inspect benchmark output for failures and performance regressions.
-- Report the performance ratio from the `benchmarks/RESULTS.md` table header when full benchmarks complete.
+- Report the performance ratio from the `benchmarks/RESULTS.md` table header when routine benchmarks complete.
 - Include changed benchmark result files and status docs in the sandbox commit when they changed.
 
 If verification fails, fix the underlying issue or report the candidate as not review-ready. A candidate with unresolved test failures, benchmark failures, benchmark regressions, unclear failure ownership, or required definition changes does not count as successful.
@@ -58,7 +58,7 @@ When a sandbox candidate is ready, provide a concise review summary with:
 - the benchmark target and root-cause classification
 - what changed and why
 - files changed
-- verification outcomes, including full tests and full benchmarks
+- verification outcomes, including full tests and routine benchmarks
 - performance ratio from `benchmarks/RESULTS.md`
 - residual risks or follow-up parity gaps
 

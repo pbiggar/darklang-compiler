@@ -36,7 +36,7 @@ You are going to implement EXACTLY ONE optimization.
    - The optimization may have exposed a latent bug - fix it
    - Repeat until all tests pass
 
-7. RUN ALL BENCHMARKS using `./benchmarks/run_benchmarks.sh all`:
+7. RUN THE ROUTINE BENCHMARK PROFILE using `./benchmarks/run_benchmarks.sh routine`:
 
    - Benchmarks should complete with no failures
    - Compare results against baseline in RESULTS.md

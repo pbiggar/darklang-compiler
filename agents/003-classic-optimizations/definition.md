@@ -46,8 +46,8 @@ For the selected optimization:
 3. Implement the optimization in the smallest appropriate location.
 4. Run the full test suite.
 5. Run relevant benchmarks.
-6. Run the full benchmark suite before the proposed change report is complete.
-7. Report the measured benchmark improvement or loss from the full benchmark run, including the performance ratio from `benchmarks/RESULTS.md`.
+6. Run the routine benchmark profile before the proposed change report is complete.
+7. Report the measured benchmark improvement or loss from the routine benchmark run, including the performance ratio from `benchmarks/RESULTS.md`.
 8. Add or identify a benchmark when existing benchmarks do not exercise the optimized pattern.
 9. Update `docs/classic-optimizations.md` for the selected optimization.
 10. Commit the implementation, tests, and backlog update together as one coherent reviewable unit in the isolated workspace used for implementation work.

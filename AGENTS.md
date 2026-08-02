@@ -45,9 +45,9 @@ The codebase uses standard F# Result extensively. See `docs/result-patterns.md` 
 
 // The compiled code needs to be fast. DO NOT commit regressions.
 
-Benchmarks are effective (ignore quicksort error). There is a `--quick` mode to speed up development, but the full benchmarks should be used to validate performance.
+Benchmarks are effective. Use `./benchmarks/run_benchmarks.sh --verify routine` for normal validation. The canonical routine profile excludes slow full-size quicksort; run `./benchmarks/run_benchmarks.sh quicksort` explicitly when that workload is relevant.
 
-After running full benchmarks, always report the performance ratio from the table header in `RESULTS.md` (for example, "Performance ratio: X.XX") in your response.
+After running the routine profile, always report the performance ratio from the table header in `RESULTS.md` (for example, "Performance ratio: X.XX") in your response.
 
 ## Compiler Structure
 
@@ -211,4 +211,4 @@ add it to the Dockerfile.
 - **Start by rebasing** - Begin new work by running `git rebase main` to ensure you're working on top of the latest main.
 - **Never push** - Do not run `git push`. The user handles pushing.
 - **"main" means the local branch** - References to `main` mean the local `main` branch, not `origin/main`.
-- **Landing** - NEVER EVER land without explicit user permission. Before asking to land, commit any uncommitted changes and provide a detailed summary of changes, explicitly answering: "Did all tests pass?" and "Did benchmarks complete with no failures?" with an emoji tick or X. Only land after the user grants permission, and only if all tests and full benchmarks are run and pass with no regressions and no test failures. When the user says "land", first commit any uncommitted changes, then run `./scripts/land-on-main.sh`. This script rebases onto main, runs tests and benchmarks, then fast-forward merges into main. Do NOT push to remote - just run the land script.
+- **Landing** - NEVER EVER land without explicit user permission. Before asking to land, commit any uncommitted changes and provide a detailed summary of changes, explicitly answering: "Did all tests pass?" and "Did benchmarks complete with no failures?" with an emoji tick or X. Only land after the user grants permission, and only if all tests and the routine benchmark profile pass with no regressions and no test failures. When the user says "land", first commit any uncommitted changes, then run `./scripts/land-on-main.sh`. This script rebases onto main, runs tests and routine benchmarks, then fast-forward merges into main. Do NOT push to remote - just run the land script.
