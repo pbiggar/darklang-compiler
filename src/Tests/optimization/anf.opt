@@ -212,6 +212,27 @@ const_fold_int_bitxor
 return 5
 
 ---NAME---
+const_fold_uint64_bitand
+---INPUT---
+18446744073709551615UL & 9223372036854775808UL
+---EXPECTED---
+return 9223372036854775808
+
+---NAME---
+const_fold_uint64_bitor
+---INPUT---
+9223372036854775808UL ||| 7UL
+---EXPECTED---
+return 9223372036854775815
+
+---NAME---
+const_fold_uint64_bitxor
+---INPUT---
+18446744073709551615UL ^ 1UL
+---EXPECTED---
+return 18446744073709551614
+
+---NAME---
 identity_add_zero_right
 ---INPUT---
 let x = 42 in x + 0

@@ -71,7 +71,6 @@ let tryTruncateFloatToInt64 (f: float) : int64 option =
         None
 
 /// Fold a binary operation on constants
-/// Only folds Int64 for now - other integer types need proper overflow handling at runtime
 let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     match op, left, right with
     // Int64 arithmetic (unchecked - overflow wraps)
@@ -87,6 +86,11 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | BitAnd, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a &&& b))))
     | BitOr, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a ||| b))))
     | BitXor, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a ^^^ b))))
+
+    // UInt64 bitwise operations
+    | BitAnd, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a &&& b))))
+    | BitOr, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a ||| b))))
+    | BitXor, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a ^^^ b))))
 
     // Float arithmetic
     | Add, FloatLiteral a, FloatLiteral b -> Some (Atom (FloatLiteral (a + b)))

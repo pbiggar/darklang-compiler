@@ -67,6 +67,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical fold that removes runtime bitwise operations when both Int64 operands are literals.
 - Notes: Implemented for literal `BitAnd`, `BitOr`, and `BitXor` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `const_fold_int_bitand`, `const_fold_int_bitor`, and `const_fold_int_bitxor` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Constant UInt64 bitwise folding
+
+- Optimization name: Constant UInt64 bitwise folding
+- Taxonomy category: Constant folding
+- Priority/rationale: Small, low-risk unsigned companion to Int64 bitwise folding that removes runtime operations and preserves the UInt64 literal type.
+- Notes: Implemented for literal `BitAnd`, `BitOr`, and `BitXor` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `const_fold_uint64_bitand`, `const_fold_uint64_bitor`, and `const_fold_uint64_bitxor` in `src/Tests/optimization/anf.opt`; existing UInt64-heavy stdlib code exercises these patterns but no benchmark isolates them.
+
 ## Algebraic simplification
 
 ### Modulo by one elimination
