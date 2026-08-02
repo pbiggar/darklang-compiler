@@ -147,13 +147,7 @@ let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName:
 /// Infer the type of a CExpr in the given context
 let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     match cexpr with
-    | Atom (UnitLiteral) -> Some AST.TUnit
-    | Atom (IntLiteral n) -> Some (ANF.sizedIntToType n)
-    | Atom (BoolLiteral _) -> Some AST.TBool
-    | Atom (StringLiteral _) -> Some AST.TString
-    | Atom (FloatLiteral _) -> Some AST.TFloat64
-    | Atom (Var tid) -> tryGetType ctx tid
-    | Atom (FuncRef funcName) -> Map.tryFind funcName ctx.FuncReg
+    | Atom atom -> inferAtomType ctx atom
     | TypedAtom (_, typ) -> Some typ  // Use the explicit type annotation
     | Prim (op, left, right) ->
         // Binary ops return int or bool depending on op
@@ -211,16 +205,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FloatToString _ -> Some AST.TString
     | RandomInt64 -> Some AST.TInt64
     | DateNow -> Some AST.TInt64
-    | IfValue (_, thenAtom, _) ->
-        // Type is the type of the branches (should be the same)
-        match thenAtom with
-        | Var tid -> tryGetType ctx tid
-        | UnitLiteral -> Some AST.TUnit
-        | IntLiteral n -> Some (ANF.sizedIntToType n)
-        | BoolLiteral _ -> Some AST.TBool
-        | StringLiteral _ -> Some AST.TString
-        | FloatLiteral _ -> Some AST.TFloat64
-        | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg
+    | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
     | Call (funcName, args)
     | BorrowedCall (funcName, args) ->
         // Return type from function registry (with special-case inference for stdlib list/tuple helpers)
