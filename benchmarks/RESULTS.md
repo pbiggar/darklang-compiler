@@ -1,11 +1,11 @@
 # Benchmark Results
 
-Latest Dark compiler performance vs other languages (instruction counts).
+Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-01 08:24:22
-**Commit:** `a134bd2b` - Refresh ARM64 quick benchmark baseline
+**Last Updated:** 2026-08-02 20:25:42
+**Commit:** `9372f8ce` - Define routine benchmark profile
 
-| Benchmark     |           Dark (11.1x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
+| Benchmark     |           Dark (7.43x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
 | ackermann     | 11,450,298,027 (2.29x) | 5,009,839,130 | 8,946,136,766 (1.79x) |                      - | 3,094,160,411 (0.62x) |
 | binary_trees  |    154,007,725 (0.08x) | 1,842,791,955 |    82,339,690 (0.04x) | 24,066,589,690 (13.1x) |   699,817,640 (0.38x) |
@@ -24,7 +24,6 @@ Latest Dark compiler performance vs other languages (instruction counts).
 | nsieve        | 16,533,914,689 (70.6x) |   234,163,043 |   559,365,264 (2.39x) | 16,683,353,450 (71.2x) | 1,229,182,783 (5.25x) |
 | pisum         |     55,014,671 (1.22x) |    45,257,632 |    80,422,857 (1.78x) |  4,207,829,244 (93.0x) |   477,390,403 (10.5x) |
 | primes        |      5,443,919 (4.36x) |     1,249,930 |     8,621,503 (6.90x) |     91,373,724 (73.1x) |    432,249,217 (346x) |
-| quicksort     | 61,351,602,854 (9429x) |     6,506,788 |    47,643,021 (7.32x) |    110,817,924 (17.0x) |   493,043,509 (75.8x) |
 | spectral_norm |                      - |     5,093,977 |    22,589,955 (4.43x) |     854,810,286 (168x) |   462,646,283 (90.8x) |
 | sum_to_n      |      7,002,526 (27.3x) |       256,081 |     9,421,844 (36.8x) |    940,653,312 (3673x) |   386,134,136 (1508x) |
 | tak           |    635,804,177 (16.2x) |    39,336,450 |   424,289,197 (10.8x) |  12,227,140,145 (311x) | 1,607,169,992 (40.9x) |
