@@ -41,18 +41,9 @@ let hasAllTestTimingsArg (args: string array) : bool =
 let hasQuietArg (args: string array) : bool =
     args |> Array.exists (fun arg -> arg = "--quiet")
 
-// Check if AI mode is present (compact output with sparse progress updates)
+// Check if AI mode is present (compact output with test-count progress)
 let hasAiArg (args: string array) : bool =
     args |> Array.exists (fun arg -> arg = "--ai")
-
-// Parse --ai-progress-seconds=N option
-let parseAiProgressSecondsArg (args: string array) : Result<int option, string> =
-    match parsePrefixedArg "--ai-progress-seconds=" args with
-    | None -> Ok None
-    | Some text ->
-        match System.Int32.TryParse(text) with
-        | true, seconds when seconds > 0 -> Ok (Some seconds)
-        | _ -> Error "--ai-progress-seconds must be a positive integer"
 
 // Parse --timings-json=PATH option
 let parseTimingsJsonArg (args: string array) : Result<string option, string> =

@@ -33,8 +33,7 @@ let printHelp () =
     println "  --all-test-timings  Print timing for every test in final timing summary"
     println "  --timings-json=PATH  Write machine-readable timing data to PATH"
     println "  --quiet            Quiet mode: print 'success' or list failed tests"
-    println "  --ai               AI mode: compact output with sparse running updates"
-    println "  --ai-progress-seconds=N  Seconds between AI mode running updates (default: 30)"
+    println "  --ai               AI mode: compact output with a dot every 250 completed tests"
     println "  --verbose, -v      Print failing tests as soon as they occur"
     println "  --help, -h         Show this help message"
     println ""
@@ -55,7 +54,7 @@ type private TestRunResult =
       TotalTime: TimeSpan
       UnaccountedBreakdown: UnaccountedTimeBreakdown }
 
-let private defaultAiProgressSeconds = 30
+let private aiProgressTestInterval = 250
 
 let private emptyRunResult (exitCode: int) : TestRunResult =
     { ExitCode = exitCode
@@ -1316,69 +1315,42 @@ let private printQuietResult (result: TestRunResult) : int =
             printStructuredFailures result.State 20
         1
 
-let private waitForAiRunWithProgress
-    (writer: TextWriter)
-    (progressSeconds: int)
-    (task: Task<TestRunResult>)
-    : unit =
-    let progressDelay = TimeSpan.FromSeconds(float progressSeconds)
-    let timer = Stopwatch.StartNew()
-    let rec loop () =
-        let completed =
-            Task.WhenAny(task :> Task, Task.Delay(progressDelay)).GetAwaiter().GetResult()
-        if Object.ReferenceEquals(completed, task) then
-            ()
-        else
-            let elapsedSeconds =
-                int (Math.Floor(timer.Elapsed.TotalSeconds))
-            writer.WriteLine($"still running: {elapsedSeconds}s elapsed")
-            writer.Flush()
-            loop ()
-    loop ()
-
 let private runAiMode (args: string array) : int =
     let originalOut = Console.Out
     let originalError = Console.Error
-    match parseAiProgressSecondsArg args with
-    | Error msg ->
-        originalOut.WriteLine(msg)
-        1
-    | Ok requestedProgressSeconds ->
-        let progressSeconds =
-            requestedProgressSeconds
-            |> Option.defaultValue defaultAiProgressSeconds
+    let reportCompletedTest completed =
+        if completed % aiProgressTestInterval = 0 then
+            originalOut.Write(".")
+            originalOut.Flush()
 
-        use buffer = new StringWriter(CultureInfo.InvariantCulture)
-        Console.SetOut(buffer)
-        Console.SetError(buffer)
-        let task = Task.Run(fun () -> runTestsWithProgressReporter None args)
-        originalOut.WriteLine("running tests (AI mode)")
-        waitForAiRunWithProgress originalOut progressSeconds task
+    Console.SetOut(TextWriter.Null)
+    Console.SetError(TextWriter.Null)
+    originalOut.WriteLine("running tests (AI mode)")
+    let task =
+        Task.Run(fun () ->
+            runTestsWithProgressReporter (Some reportCompletedTest) args)
 
-        let result =
-            try
-                task.GetAwaiter().GetResult()
-            finally
-                Console.Out.Flush()
-                Console.Error.Flush()
-                Console.SetOut(originalOut)
-                Console.SetError(originalError)
+    let result =
+        try
+            task.GetAwaiter().GetResult()
+        finally
+            Console.SetOut(originalOut)
+            Console.SetError(originalError)
 
-        let capturedOutput = buffer.ToString()
-        if not (String.IsNullOrEmpty(capturedOutput)) then
-            originalOut.Write(capturedOutput)
+    let total = result.State.Passed + result.State.Failed
+    if total >= aiProgressTestInterval then
+        originalOut.WriteLine()
 
-        let total = result.State.Passed + result.State.Failed
-        let totalSecondsText =
-            result.TotalTime.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)
-        if result.ExitCode = 0 then
-            originalOut.WriteLine($"success: {result.State.Passed}/{total} passed in {totalSecondsText}s")
-        else
-            originalOut.WriteLine("failed")
-            originalOut.WriteLine($"summary: {result.State.Passed} passed, {result.State.Failed} failed, {totalSecondsText}s")
-            printStructuredFailures result.State 20
+    let totalSecondsText =
+        result.TotalTime.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)
+    if result.ExitCode = 0 then
+        originalOut.WriteLine($"success: {result.State.Passed}/{total} passed in {totalSecondsText}s")
+    else
+        originalOut.WriteLine("failed")
+        originalOut.WriteLine($"summary: {result.State.Passed} passed, {result.State.Failed} failed, {totalSecondsText}s")
+        printStructuredFailures result.State 20
 
-        result.ExitCode
+    result.ExitCode
 
 [<EntryPoint>]
 let main args =

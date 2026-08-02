@@ -14,17 +14,6 @@ let private expectEqual expected actual : TestResult =
     else
         Error $"Expected {expected}, got {actual}"
 
-let testAiProgressSecondsParsesPositiveInteger () : TestResult =
-    match parseAiProgressSecondsArg [| "--ai"; "--ai-progress-seconds=5" |] with
-    | Ok value -> expectEqual (Some 5) value
-    | Error msg -> Error $"Expected valid AI progress seconds, got error: {msg}"
-
-let testAiProgressSecondsRejectsZero () : TestResult =
-    match parseAiProgressSecondsArg [| "--ai-progress-seconds=0" |] with
-    | Ok value -> Error $"Expected invalid AI progress seconds, got {value}"
-    | Error "--ai-progress-seconds must be a positive integer" -> Ok ()
-    | Error msg -> Error $"Unexpected error: {msg}"
-
 let testTimingsJsonParsesPath () : TestResult =
     match parseTimingsJsonArg [| "--timings-json=/tmp/timings.json" |] with
     | Ok value -> expectEqual (Some "/tmp/timings.json") value
@@ -37,8 +26,6 @@ let testTimingsJsonRejectsEmptyPath () : TestResult =
     | Error msg -> Error $"Unexpected error: {msg}"
 
 let tests = [
-    ("AI progress seconds parses positive integer", testAiProgressSecondsParsesPositiveInteger)
-    ("AI progress seconds rejects zero", testAiProgressSecondsRejectsZero)
     ("timings JSON parses path", testTimingsJsonParsesPath)
     ("timings JSON rejects empty path", testTimingsJsonRejectsEmptyPath)
 ]
