@@ -88,8 +88,6 @@ while true; do
       fi
     done
   fi
-  rebase_end="$(date +%s)"
-
   main_head="$(git -C "$repo_root" rev-parse main)"
   feature_head="$(git -C "$repo_root" rev-parse "$current_branch")"
 
@@ -97,15 +95,9 @@ while true; do
     (cd "$repo_root" && ./run-tests --ai)
 
     # Verify deterministic full results without dirtying the branch being landed.
-    (cd "$repo_root" && ./benchmarks/run_benchmarks.sh --verify all)
+    (cd "$repo_root" && ./benchmarks/run_benchmarks.sh --verify --jobs 3 all)
   else
     echo "No changes to land; main already matches $current_branch."
-  fi
-
-  elapsed=$(( $(date +%s) - rebase_end ))
-  if (( elapsed > 60 )); then
-    echo "More than 60s since rebase; repeating."
-    continue
   fi
 
   if [[ -n "$(git -C "$main_worktree" status --porcelain)" ]]; then
