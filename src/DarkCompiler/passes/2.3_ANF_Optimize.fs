@@ -665,8 +665,23 @@ let private tryAbsorbedAtom (outer: Atom) (nestedLeft: Atom) (nestedRight: Atom)
     if outer = nestedLeft || outer = nestedRight then Some outer
     else None
 
+let rec private aExprUsesTemp (tid: TempId) (expr: AExpr) : bool =
+    match expr with
+    | Return atom -> Set.contains tid (collectAtomUses atom)
+    | Let (_, cexpr, body) ->
+        Set.contains tid (collectCExprUses cexpr) || aExprUsesTemp tid body
+    | If (cond, thenBranch, elseBranch) ->
+        Set.contains tid (collectAtomUses cond)
+        || aExprUsesTemp tid thenBranch
+        || aExprUsesTemp tid elseBranch
+
 let private trySimplifyAdjacentLet (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
+    | UnaryPrim (Not, source), If (Var conditionTid, thenBranch, elseBranch)
+        when conditionTid = tid
+             && not (aExprUsesTemp tid thenBranch)
+             && not (aExprUsesTemp tid elseBranch) ->
+        Some (If (source, elseBranch, thenBranch))
     | UnaryPrim (Not, source), Let (notTid, UnaryPrim (Not, Var sourceTid), notBody)
         when sourceTid = tid ->
         Some (Let (notTid, Atom source, notBody))

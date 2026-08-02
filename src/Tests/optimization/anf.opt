@@ -872,6 +872,41 @@ let TempId 1 = f(true)
 return t1
 
 ---NAME---
+branch_on_single_use_bool_negation
+---INPUT---
+def f(cond: Bool) : Int64 = if !cond then 1 else 2
+f(true)
+---EXPECTED---
+Function f:
+if t0 then
+return 2
+else
+return 1
+
+Main:
+let TempId 2 = f(true)
+return t2
+
+---NAME---
+branch_on_reused_bool_negation_not_rewritten
+---INPUT---
+def f(cond: Bool) : Bool =
+  let negated = !cond in
+  if negated then negated else false
+f(true)
+---EXPECTED---
+Function f:
+let TempId 1 = !t0
+if t1 then
+return t1
+else
+return false
+
+Main:
+let TempId 3 = f(true)
+return t3
+
+---NAME---
 self_comparison_uint64_eq
 ---INPUT---
 def f(x: UInt64) : Bool = x == x

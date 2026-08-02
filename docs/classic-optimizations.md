@@ -237,6 +237,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical control-flow simplification that removes a conditional when the branches return the condition's boolean literals directly.
 - Notes: Implemented for ANF `if cond then true else false -> cond` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_if_bool_literal_branches` in `src/Tests/optimization/anf.opt`; existing branch-heavy and boolean-heavy tests provide broader regression coverage but do not isolate this micro-pattern. The inverse `if cond then false else true -> !cond` remains intentionally unfused because this optimizer stage does not currently introduce fresh temporaries for new bindings.
 
+### Negated branch condition simplification
+
+- Optimization name: Negated branch condition simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical control-flow simplification that removes a single-use Boolean negation and exposes the original condition directly to later passes.
+- Notes: Implemented for adjacent ANF `let negated = !cond in if negated then a else b -> if cond then b else a`, only when `negated` is absent from both branches. Covered by `branch_on_single_use_bool_negation` and `branch_on_reused_bool_negation_not_rewritten` in `src/Tests/optimization/anf.opt`; existing branch-heavy benchmarks provide regression coverage but do not isolate this micro-pattern.
+
 ### Bitwise all-ones identity simplification
 
 - Optimization name: Bitwise all-ones identity simplification
