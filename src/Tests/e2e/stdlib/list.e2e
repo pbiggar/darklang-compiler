@@ -136,12 +136,12 @@ List.forAll([1, 2, 3], (x: Int64) => x > 2) = false
 List.forAll<Int64>([], (x: Int64) => x > 0) = true
 
 // ===================================================================
-// List.exists - Check if any element satisfies predicate
+// List.any - Check if any element satisfies predicate
 // ===================================================================
 
-List.exists([1, 2, 3], (x: Int64) => x > 2) = true
-List.exists([1, 2, 3], (x: Int64) => x > 10) = false
-List.exists<Int64>([], (x: Int64) => x > 0) = false
+List.any([1, 2, 3], (x: Int64) => x > 2) = true
+List.any([1, 2, 3], (x: Int64) => x > 10) = false
+List.any<Int64>([], (x: Int64) => x > 0) = false
 
 // ===================================================================
 // List.last - Get last element or None

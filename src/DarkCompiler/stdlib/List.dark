@@ -230,14 +230,14 @@ def Stdlib.List.forAll<a>(list: List<a>, fn: (a) -> Bool) : Bool =
             else false
 
 // Check if any element satisfies a predicate - O(n)
-def Stdlib.List.exists<a>(list: List<a>, fn: (a) -> Bool) : Bool =
+def Stdlib.List.any<a>(list: List<a>, fn: (a) -> Bool) : Bool =
     if Stdlib.__FingerTree.isEmpty<a>(list) then false
     else
         match Stdlib.__FingerTree.head<a>(list) with
         | None -> false
         | Some(h) ->
             if fn(h) then true
-            else Stdlib.List.exists<a>(Stdlib.__FingerTree.tail<a>(list), fn)
+            else Stdlib.List.any<a>(Stdlib.__FingerTree.tail<a>(list), fn)
 
 // Get the last element of a list, or None if empty - O(1)
 def Stdlib.List.last<a>(list: List<a>) : Stdlib.Option.Option<a> =

@@ -570,7 +570,7 @@ Int8                         | toFloat                             | ✅   | ❌
 Int8                         | toString                            | ✅   | ✅
 List                         | ChunkBySizeError                    | ✅   | ❌
 List                         | all                                 | ✅   | ❌
-List                         | any                                 | ✅   | ❌
+List                         | any                                 | ✅   | ✅
 List                         | append                              | ✅   | ❌
 List                         | chunkBySize                         | ✅   | ❌
 List                         | chunkBySizeHelper                   | ✅   | ❌
