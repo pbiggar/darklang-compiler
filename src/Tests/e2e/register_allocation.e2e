@@ -532,25 +532,11 @@ let sp1 = 1 in let sp2 = 2 in let sp3 = 3 in let sp4 = 4 in let sp5 = 5 in let s
 
 
 // ===================================================================
-// Liveness Count Validation Tests (Mutation #255)
+// SaveRegs Liveness Snapshot Tests
 // ===================================================================
 
-// Mutation #255 targets the assertion in applyToBlockWithLiveness:
-//   if instrCount <> livenessCount || instrCount <> floatLivenessCount then
-// This validates that instruction count matches liveness list lengths.
-//
-// The mutation changes || to &&, which would:
-// - Original: Crash if EITHER count mismatches
-// - Mutated: Crash only if BOTH counts mismatch
-//
-// This assertion guards an internal invariant: computeInstructionLiveness
-// and computeFloatInstructionLiveness always produce lists with exactly
-// one element per instruction. Since the invariant is always maintained
-// in correct operation, this mutation is equivalent - both original and
-// mutated code proceed without triggering the assertion.
-//
 // The following tests exercise the applyToBlockWithLiveness function
-// to verify the liveness computation and register allocation work correctly.
+// to verify that integer and floating-point liveness is captured at SaveRegs.
 
 // Integer liveness across function calls - exercises int instruction liveness
 let intLive1 = 10 in let intLive2 = 20 in let intLive3 = 30 in let _ = Stdlib.List.length<Int64>([1, 2, 3]) in intLive1 + intLive2 + intLive3 = 60
@@ -559,7 +545,7 @@ let intLive1 = 10 in let intLive2 = 20 in let intLive3 = 30 in let _ = Stdlib.Li
 def floatLiveTest(x: Float) : Float = let f1 = 1.0 in let f2 = 2.0 in let f3 = 3.0 in let _ = Stdlib.List.length<Int64>([1, 2]) in x + f1 + f2 + f3
 floatLiveTest(10.0) = 16.0
 
-// Mixed int and float liveness - both liveness lists must match instruction count
+// Mixed int and float liveness across the same call site
 def mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 200 in let mixFloat = mixedHelper(5.0) in Stdlib.Float.toInt(mixFloat) + mixInt1 + mixInt2 = 306
 
 

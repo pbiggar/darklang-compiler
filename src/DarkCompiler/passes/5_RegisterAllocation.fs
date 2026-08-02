@@ -958,57 +958,54 @@ let computeFloatLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiv
     let (domain, liveness) = computeFloatLivenessBitsRaw blockIndex blocks []
     (domain, blockIndex, liveness)
 
-/// Compute liveness at each instruction index within a block
-/// Returns a list of live VReg sets, one per instruction (same order as Instrs)
-let computeInstructionLiveness (domain: VRegDomain) (block: LIR.BasicBlock) (liveOut: BitSet) : BitSet list =
-    // Walk backwards from the terminator, tracking liveness
-    let live = bitsetClone liveOut
+/// Compute integer and floating-point liveness only where an empty SaveRegs
+/// placeholder consumes it. The snapshots are returned in instruction order.
+let private computeSaveRegsLiveness
+    (intDomain: VRegDomain)
+    (floatDomain: VRegDomain)
+    (block: LIR.BasicBlock)
+    (intLiveOut: BitSet)
+    (floatLiveOut: BitSet)
+    : (BitSet * BitSet) list =
+    let intLive = bitsetClone intLiveOut
+    let floatLive = bitsetClone floatLiveOut
 
-    // Handle terminator uses first
-    let termUses = getTerminatorUsedVRegs block.Terminator
-    for u in termUses do
-        bitsetAddInPlace domain u live
+    getTerminatorUsedVRegs block.Terminator
+    |> List.iter (fun id -> bitsetAddInPlace intDomain id intLive)
 
-    // Walk instructions in reverse, collecting liveness at each point
-    // We want liveness AFTER each instruction (what's live when that instruction completes)
-    let instrsReversed = List.rev block.Instrs
-    let mutable livenessListReversed = []
+    let rec walkBackwards
+        (instrs: LIR.Instr list)
+        (snapshots: (BitSet * BitSet) list)
+        : (BitSet * BitSet) list =
+        match instrs with
+        | [] -> snapshots
+        | instr :: remaining ->
+            let snapshots =
+                match instr with
+                | LIR.SaveRegs ([], []) ->
+                    (bitsetClone intLive, bitsetClone floatLive) :: snapshots
+                | _ -> snapshots
 
-    for instr in instrsReversed do
-        // Record liveness at this point (after the instruction executes)
-        livenessListReversed <- bitsetClone live :: livenessListReversed
+            match getDefinedVReg instr with
+            | Some id -> bitsetRemoveInPlace intDomain id intLive
+            | None -> ()
+            getUsedVRegs instr
+            |> List.iter (fun id -> bitsetAddInPlace intDomain id intLive)
 
-        // Update liveness: remove definition, add uses
-        match getDefinedVReg instr with
-        | Some def -> bitsetRemoveInPlace domain def live
-        | None -> ()
+            match getDefinedFVReg instr with
+            | Some id -> bitsetRemoveInPlace floatDomain id floatLive
+            | None -> ()
+            getUsedFVRegs instr
+            |> List.iter (fun id -> bitsetAddInPlace floatDomain id floatLive)
 
-        for used in getUsedVRegs instr do
-            bitsetAddInPlace domain used live
+            walkBackwards remaining snapshots
 
-    // Since we walked backwards and prepended each result, the list is already
-    // in forward order (matching the original instruction order)
-    livenessListReversed
+    walkBackwards (List.rev block.Instrs) []
 
-/// Compute float liveness at each instruction index within a block
-/// Returns a list of live FVirtual ID sets, one per instruction (same order as Instrs)
-let computeFloatInstructionLiveness (domain: VRegDomain) (block: LIR.BasicBlock) (liveOut: BitSet) : BitSet list =
-    let live = bitsetClone liveOut
-
-    let instrsReversed = List.rev block.Instrs
-    let mutable livenessListReversed = []
-
-    for instr in instrsReversed do
-        livenessListReversed <- bitsetClone live :: livenessListReversed
-
-        match getDefinedFVReg instr with
-        | Some def -> bitsetRemoveInPlace domain def live
-        | None -> ()
-
-        for used in getUsedFVRegs instr do
-            bitsetAddInPlace domain used live
-
-    livenessListReversed
+let private isEmptySaveRegs (instr: LIR.Instr) : bool =
+    match instr with
+    | LIR.SaveRegs ([], []) -> true
+    | _ -> false
 
 // ============================================================================
 // Register Definitions
@@ -3166,51 +3163,50 @@ let applyToBlockWithLiveness
     (block: LIR.BasicBlock)
     : LIR.BasicBlock =
 
-    // Compute liveness at each instruction point
-    let instrLiveness = computeInstructionLiveness mapping.Domain block liveOut
-    let floatInstrLiveness = computeFloatInstructionLiveness floatAllocation.Domain block floatLiveOut
-
-    // Process each instruction with its corresponding liveness
-    // Debug: check lengths match
-    let instrCount = List.length block.Instrs
-    let livenessCount = List.length instrLiveness
-    let floatLivenessCount = List.length floatInstrLiveness
-    if instrCount <> livenessCount || instrCount <> floatLivenessCount then
-        let message =
-            $"Instruction count ({instrCount}) doesn't match liveness count ({livenessCount}) or float liveness count ({floatLivenessCount})"
-        Crash.crash message
+    let saveRegsLiveness =
+        if List.exists isEmptySaveRegs block.Instrs then
+            computeSaveRegsLiveness
+                mapping.Domain
+                floatAllocation.Domain
+                block
+                liveOut
+                floatLiveOut
+        else
+            []
 
     // First pass: find SaveRegs/RestoreRegs pairs and compute the registers to save
-    // For each SaveRegs, look ahead to find the matching RestoreRegs and use its liveness
+    // For each SaveRegs, use the liveness immediately after the placeholder.
     // This ensures SaveRegs and RestoreRegs have matching register lists
-    let mutable savedRegsStack : (LIR.PhysReg list * LIR.PhysFPReg list) list = []
-
-    let allocatedInstrs =
-        List.zip3 block.Instrs instrLiveness floatInstrLiveness
-        |> List.collect (fun (instr, liveAfter, floatLiveAfter) ->
+    let allocatedInstrGroups, (_, remainingLiveness) =
+        block.Instrs
+        |> List.mapFold (fun (savedRegsStack, remainingLiveness) instr ->
             match instr with
             | LIR.SaveRegs ([], []) ->
-                // At SaveRegs, we need to save registers that are:
-                // 1. Currently live (have values that might be clobbered by the call)
-                // 2. Needed after the call
-                // The liveAfter here includes both categories, so we use it
-                let liveCallerSaved = getLiveCallerSavedRegs mapping liveAfter
-                let liveCallerSavedFloat = getLiveCallerSavedFloatRegs floatLiveAfter floatAllocation
-                // Push onto stack for matching RestoreRegs
-                savedRegsStack <- (liveCallerSaved, liveCallerSavedFloat) :: savedRegsStack
-                applyToInstr arch mapping (LIR.SaveRegs (liveCallerSaved, liveCallerSavedFloat))
+                match remainingLiveness with
+                | (liveAfter, floatLiveAfter) :: remainingLiveness ->
+                    let liveCallerSaved = getLiveCallerSavedRegs mapping liveAfter
+                    let liveCallerSavedFloat =
+                        getLiveCallerSavedFloatRegs floatLiveAfter floatAllocation
+                    let regs = (liveCallerSaved, liveCallerSavedFloat)
+                    let allocated = applyToInstr arch mapping (LIR.SaveRegs regs)
+                    (allocated, (regs :: savedRegsStack, remainingLiveness))
+                | [] ->
+                    Crash.crash "Missing liveness snapshot for SaveRegs"
             | LIR.RestoreRegs ([], []) ->
-                // Pop the matching SaveRegs registers
-                let (liveCallerSaved, liveCallerSavedFloat) =
-                    match savedRegsStack with
-                    | (intRegs, floatRegs) :: tail ->
-                        savedRegsStack <- tail
-                        (intRegs, floatRegs)
-                    | [] ->
-                        Crash.crash "Unmatched RestoreRegs: SaveRegs stack is empty"
-                applyToInstr arch mapping (LIR.RestoreRegs (liveCallerSaved, liveCallerSavedFloat))
+                match savedRegsStack with
+                | regs :: savedRegsStack ->
+                    let allocated = applyToInstr arch mapping (LIR.RestoreRegs regs)
+                    (allocated, (savedRegsStack, remainingLiveness))
+                | [] ->
+                    Crash.crash "Unmatched RestoreRegs: SaveRegs stack is empty"
             | _ ->
-                applyToInstr arch mapping instr)
+                (applyToInstr arch mapping instr, (savedRegsStack, remainingLiveness))
+        ) ([], saveRegsLiveness)
+
+    if not (List.isEmpty remainingLiveness) then
+        Crash.crash "Unused liveness snapshot for SaveRegs"
+
+    let allocatedInstrs = List.concat allocatedInstrGroups
 
     let (termLoads, allocatedTerm) = applyToTerminator mapping block.Terminator
     { Label = block.Label
