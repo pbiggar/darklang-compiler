@@ -358,6 +358,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Existing ANF optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Implemented in `tryStrengthReduce`.
 
+### UInt64 division by power-of-two lowering
+
+- Optimization name: UInt64 division by power-of-two lowering
+- Taxonomy category: Strength reduction
+- Priority/rationale: Canonical, low-risk lowering that replaces an expensive unsigned division by a literal power of two with a logical right shift.
+- Notes: Implemented for the full UInt64 power-of-two range in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `strength_reduce_uint64_div_power_of_two` in `src/Tests/optimization/anf.opt`. No current benchmark exercises this source pattern; a future UInt64 bitmap word-index workload using repeated runtime-value division by `64UL` would isolate it without distorting unrelated routine benchmarks.
+
 ## Common subexpression elimination
 
 ### Duplicate tuple projection reuse

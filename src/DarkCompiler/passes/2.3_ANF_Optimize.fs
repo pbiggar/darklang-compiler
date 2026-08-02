@@ -55,6 +55,15 @@ let tryLog2 (n: int64) : int64 option =
             else countBits (acc + 1L) (x >>> 1)
         Some (countBits 0L n)
 
+/// Check if an unsigned n is a power of 2, and if so return its log2
+let tryLog2UInt64 (n: uint64) : int64 option =
+    if n = 0UL || (n &&& (n - 1UL)) <> 0UL then None
+    else
+        let rec countBits acc x =
+            if x = 1UL then acc
+            else countBits (acc + 1L) (x >>> 1)
+        Some (countBits 0L n)
+
 /// Euclidean modulo: result has the sign of the divisor
 let euclideanMod (a: int64) (b: int64) : int64 =
     let remainder = a % b
@@ -225,6 +234,15 @@ let private isInt64Atom (typeEnv: TypeEnv) (atom: Atom) : bool =
         | _ -> false
     | _ -> false
 
+let private isUInt64Atom (typeEnv: TypeEnv) (atom: Atom) : bool =
+    match atom with
+    | IntLiteral (UInt64 _) -> true
+    | Var tid ->
+        match Map.tryFind tid typeEnv with
+        | Some AST.TUInt64 -> true
+        | _ -> false
+    | _ -> false
+
 let private isBoolAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
     match atom with
     | BoolLiteral _ -> true
@@ -302,6 +320,10 @@ let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) 
         | None -> None
     | Div, x, IntLiteral (Int64 n) when n > 0L && isUnsignedIntegerAtom typeEnv x ->
         match tryLog2 n with
+        | Some shift -> Some (Prim (Shr, x, IntLiteral (Int64 shift)))
+        | None -> None
+    | Div, x, IntLiteral (UInt64 n) when isUInt64Atom typeEnv x ->
+        match tryLog2UInt64 n with
         | Some shift -> Some (Prim (Shr, x, IntLiteral (Int64 shift)))
         | None -> None
     // Float strength reduction: 2.0 * x -> x + x

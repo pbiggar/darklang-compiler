@@ -344,6 +344,15 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+strength_reduce_uint64_div_power_of_two
+---INPUT---
+def f(x: UInt64) : UInt64 = x / 8UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 >> 3
+return t1
+
+---NAME---
 identity_uint64_mul_one_right
 ---INPUT---
 def f(x: UInt64) : UInt64 = x * 1UL
