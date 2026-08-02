@@ -1710,9 +1710,9 @@ let selectBlocksWithModuloChecks
     (state: TempState)
     : Result<LIR.BasicBlock list * LIR.Label * TempState, string> =
     let (MIR.Label baseLabel) = block.Label
-    let rec loop instrs counter currentLabel currentInstrs blocksRev currentState =
+    let rec loop instrs counter currentLabel currentInstrsRev blocksRev currentState =
         match instrs with
-        | [] -> Ok (blocksRev, counter, currentLabel, currentInstrs, currentState)
+        | [] -> Ok (blocksRev, counter, currentLabel, currentInstrsRev, currentState)
         | instr :: rest ->
             match instr with
             | MIR.BinOp (dest, MIR.Mod, left, right, operandType) when shouldCheckNegativeDivisor operandType ->
@@ -1722,7 +1722,7 @@ let selectBlocksWithModuloChecks
                 | Ok (loadInstrs, rightReg, modInstrs, nextState) ->
                     let nextLabel = LIR.Label $"{baseLabel}_mod_cont_{counter}"
                     let checkInstrs =
-                        currentInstrs
+                        List.rev currentInstrsRev
                         @ loadInstrs
                         @ [LIR.Cmp (rightReg, LIR.Imm 0L)]
                     let checkBlock : LIR.BasicBlock =
@@ -1731,23 +1731,26 @@ let selectBlocksWithModuloChecks
                             Instrs = checkInstrs
                             Terminator = LIR.CondBranch (LIR.LT, errorLabel, nextLabel)
                         }
-                    loop rest (counter + 1) nextLabel modInstrs (checkBlock :: blocksRev) nextState
+                    loop rest (counter + 1) nextLabel (List.rev modInstrs) (checkBlock :: blocksRev) nextState
             | _ ->
                 match selectInstr instr variantRegistry recordRegistry floatRegs currentState with
                 | Error err -> Error err
                 | Ok (lirInstrs, nextState) ->
-                    loop rest counter currentLabel (currentInstrs @ lirInstrs) blocksRev nextState
+                    let nextInstrsRev =
+                        lirInstrs
+                        |> List.fold (fun instrsRev lirInstr -> lirInstr :: instrsRev) currentInstrsRev
+                    loop rest counter currentLabel nextInstrsRev blocksRev nextState
 
     match loop block.Instrs 0 (convertLabel block.Label) [] [] state with
     | Error err -> Error err
-    | Ok (blocksRev, _counter, currentLabel, currentInstrs, stateAfterInstrs) ->
+    | Ok (blocksRev, _counter, currentLabel, currentInstrsRev, stateAfterInstrs) ->
         match selectTerminator block.Terminator returnType stateAfterInstrs with
         | Error err -> Error err
         | Ok (termInstrs, lirTerm, nextState) ->
             let finalBlock : LIR.BasicBlock =
                 {
                     Label = currentLabel
-                    Instrs = currentInstrs @ termInstrs
+                    Instrs = List.rev currentInstrsRev @ termInstrs
                     Terminator = lirTerm
                 }
             Ok (List.rev (finalBlock :: blocksRev), currentLabel, nextState)
