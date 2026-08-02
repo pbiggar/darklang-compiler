@@ -20,6 +20,12 @@ type private LabelIndex = {
     IndexOf: Map<Label, int>
 }
 
+type private VRegIndex = {
+    VRegs: VReg array
+    IndexOf: Map<VReg, int>
+    WordCount: int
+}
+
 let private buildLabelIndex (cfg: CFG) : LabelIndex =
     let labels = cfg.Blocks |> Map.keys |> Seq.toArray
     let indexOf =
@@ -28,6 +34,17 @@ let private buildLabelIndex (cfg: CFG) : LabelIndex =
         |> Array.toList
         |> Map.ofList
     { Labels = labels; IndexOf = indexOf }
+
+let private buildVRegIndex (vregs: Set<VReg>) : VRegIndex =
+    let values = vregs |> Set.toArray
+    let indexOf =
+        values
+        |> Array.mapi (fun idx vreg -> (vreg, idx))
+        |> Array.toList
+        |> Map.ofList
+    { VRegs = values
+      IndexOf = indexOf
+      WordCount = Bitset.wordCount values.Length }
 
 /// Build predecessors map from CFG
 let buildPredecessors (cfg: CFG) : Predecessors =
@@ -434,76 +451,93 @@ let private requireBlock (context: string) (blocks: Map<Label, BasicBlock>) (lab
     | Some block -> block
     | None -> Crash.crash $"SSA: Missing CFG block {labelName label} while {context}"
 
-let private requireVRegSet (context: string) (sets: Map<Label, Set<VReg>>) (label: Label) : Set<VReg> =
-    match Map.tryFind label sets with
-    | Some vregs -> vregs
-    | None -> Crash.crash $"SSA: Missing liveness set for block {labelName label} while {context}"
-
 /// Compute liveness information for the CFG
 /// Returns (liveIn, liveOut) maps from Label to Set<VReg>
 /// A variable is live-in at a block if it may be used before being defined
 /// A variable is live-out at a block if it's live-in at any successor
 let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
-    let labels = cfg.Blocks |> Map.keys |> List.ofSeq
+    let labelIndex = buildLabelIndex cfg
+    let labels = labelIndex.Labels
+    let labelCount = labels.Length
 
-    // Precompute uses and defs for each block
-    let blockUses =
+    let usesAndDefs =
         labels
-        |> List.map (fun l -> (l, getBlockUses (requireBlock "precomputing liveness uses" cfg.Blocks l)))
-        |> Map.ofList
-    let blockDefs =
+        |> Array.map (fun label ->
+            let block = requireBlock "precomputing liveness" cfg.Blocks label
+            (getBlockUses block, getBlockDefs block))
+
+    let allVRegs =
+        usesAndDefs
+        |> Array.fold (fun all (uses, defs) ->
+            all |> Set.union uses |> Set.union defs) Set.empty
+    let vregIndex = buildVRegIndex allVRegs
+
+    let requireVRegIndex (vreg: VReg) : int =
+        match Map.tryFind vreg vregIndex.IndexOf with
+        | Some idx -> idx
+        | None -> Crash.crash $"SSA: Missing VReg index for {vreg} while computing liveness"
+
+    let setToBits (vregs: Set<VReg>) : Bitset.Bitset =
+        let bits = Bitset.empty vregIndex.WordCount
+        vregs
+        |> Set.iter (fun vreg ->
+            Bitset.addIndexInPlace (requireVRegIndex vreg) bits)
+        bits
+
+    let blockUses = usesAndDefs |> Array.map (fst >> setToBits)
+    let blockDefs = usesAndDefs |> Array.map (snd >> setToBits)
+
+    let successorIndices =
         labels
-        |> List.map (fun l -> (l, getBlockDefs (requireBlock "precomputing liveness definitions" cfg.Blocks l)))
-        |> Map.ofList
+        |> Array.map (fun label ->
+            let block = requireBlock "computing liveness for block" cfg.Blocks label
+            getSuccessors block
+            |> List.map (fun successor ->
+                let _successorBlock =
+                    requireBlock "computing liveness successor" cfg.Blocks successor
+                match Map.tryFind successor labelIndex.IndexOf with
+                | Some idx -> idx
+                | None ->
+                    Crash.crash
+                        $"SSA: Missing label index for {labelName successor} while computing liveness successor"))
 
-    // Initialize live-out to empty
-    let initialLiveOut = labels |> List.map (fun l -> (l, Set.empty)) |> Map.ofList
+    // Iterate over dense arrays. Each block allocates one compact result bitset per
+    // round instead of persistent tree nodes for every union and difference.
+    let rec fixpoint (liveOut: Bitset.Bitset array) : Bitset.Bitset array =
+        let updated =
+            Array.init labelCount (fun blockIdx ->
+                Array.init vregIndex.WordCount (fun wordIdx ->
+                    successorIndices.[blockIdx]
+                    |> List.fold (fun word successorIdx ->
+                        word
+                        ||| blockUses.[successorIdx].[wordIdx]
+                        ||| (liveOut.[successorIdx].[wordIdx]
+                             &&& (~~~blockDefs.[successorIdx].[wordIdx]))) 0UL))
+        if Array.forall2 Bitset.equal liveOut updated then updated else fixpoint updated
 
-    // Iterative dataflow analysis (backward)
-    let rec fixpoint (liveOut: Map<Label, Set<VReg>>) =
-        let (changed, liveOut') =
-            labels
-            |> List.fold (fun (changed, lo) label ->
-                let block = requireBlock "computing liveness for block" cfg.Blocks label
-                let successors = getSuccessors block
+    let finalLiveOut =
+        Array.init labelCount (fun _ -> Bitset.empty vregIndex.WordCount)
+        |> fixpoint
 
-                // Live-out = union of live-in of all successors
-                let newLiveOut =
-                    successors
-                    |> List.fold (fun acc succ ->
-                        let _succBlock = requireBlock "computing liveness successor" cfg.Blocks succ
-                        // Live-in of successor = uses + (live-out - defs)
-                        let succUses = requireVRegSet "computing liveness successor uses" blockUses succ
-                        let succDefs = requireVRegSet "computing liveness successor definitions" blockDefs succ
-                        let succLiveOut = Map.tryFind succ lo |> Option.defaultValue Set.empty
-                        let succLiveIn = Set.union succUses (Set.difference succLiveOut succDefs)
-                        Set.union acc succLiveIn
-                    ) Set.empty
-
-                let oldLiveOut = requireVRegSet "checking liveness fixed point" lo label
-                if newLiveOut = oldLiveOut then
-                    (changed, lo)
-                else
-                    (true, Map.add label newLiveOut lo)
-            ) (false, liveOut)
-
-        if changed then fixpoint liveOut' else liveOut'
-
-    let finalLiveOut = fixpoint initialLiveOut
-
-    // Compute live-in from live-out
     let liveIn =
-        labels
-        |> List.map (fun label ->
-            let uses = requireVRegSet "computing final live-in uses" blockUses label
-            let defs = requireVRegSet "computing final live-in definitions" blockDefs label
-            let lo = requireVRegSet "computing final live-in live-out" finalLiveOut label
-            let li = Set.union uses (Set.difference lo defs)
-            (label, li)
-        )
+        Array.init labelCount (fun blockIdx ->
+            Array.init vregIndex.WordCount (fun wordIdx ->
+                blockUses.[blockIdx].[wordIdx]
+                ||| (finalLiveOut.[blockIdx].[wordIdx]
+                     &&& (~~~blockDefs.[blockIdx].[wordIdx]))))
+
+    let bitsetsToMap (bitsets: Bitset.Bitset array) : Map<Label, Set<VReg>> =
+        Array.map2 (fun label bits ->
+            let vregs =
+                bits
+                |> Bitset.indicesToList
+                |> List.map (fun idx -> vregIndex.VRegs.[idx])
+                |> Set.ofList
+            (label, vregs)) labels bitsets
+        |> Array.toList
         |> Map.ofList
 
-    (liveIn, finalLiveOut)
+    (bitsetsToMap liveIn, bitsetsToMap finalLiveOut)
 
 /// Insert phi nodes at dominance frontiers
 /// For each variable v defined in block b:
