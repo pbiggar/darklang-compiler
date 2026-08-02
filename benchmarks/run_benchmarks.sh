@@ -1,10 +1,11 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--refresh-baseline[=lang1,lang2]] [--jobs[=N]] [benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify] [--refresh-baseline[=lang1,lang2]] [--jobs[=N]] [benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
+#   --verify                 Compare Dark instruction counts with RESULTS.md without updating tracked files
 #   --refresh-baseline       Re-run all baseline languages (default: use cached values)
 #   --refresh-baseline=LANGS Re-run specific languages only (comma-separated: rust,go,python,node,ocaml)
 #   --jobs, --jobs=N         Run up to N benchmarks in parallel (default: 1)
@@ -29,6 +30,7 @@ BUILD_FAILURES=()
 RUN_FAILURES=()
 PROCESS_FAILURES=()
 LIST_ONLY=false
+VERIFY_RESULTS=false
 JOB_COUNT=""
 SKIP_BENCHMARKS=()
 
@@ -40,6 +42,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --hyperfine)
             USE_CACHEGRIND=false
+            shift
+            ;;
+        --verify)
+            VERIFY_RESULTS=true
             shift
             ;;
         --refresh-baseline)
@@ -72,6 +78,16 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [ "$VERIFY_RESULTS" = true ] && [ "$USE_CACHEGRIND" != true ]; then
+    pretty_fail "--verify cannot be combined with --hyperfine"
+    exit 1
+fi
+
+if [ "$VERIFY_RESULTS" = true ] && [ "$REFRESH_BASELINE" != "false" ]; then
+    pretty_fail "--verify cannot be combined with --refresh-baseline"
+    exit 1
+fi
 
 OUTPUT_DIR="$SCRIPT_DIR/results/$(date +%Y-%m-%d_%H%M%S)"
 mkdir -p "$OUTPUT_DIR"
@@ -267,10 +283,17 @@ pretty_info "Processing results..."
                 pretty_warn "cachegrind_processor failed (continuing)"
             fi
         fi
-        # Update history log with cachegrind results
-        if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"; then
-            PROCESS_FAILURES+=("history_updater")
-            pretty_warn "history_updater failed (continuing)"
+        if [ "$VERIFY_RESULTS" = true ]; then
+            if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_verifier.py" "$OUTPUT_DIR"; then
+                PROCESS_FAILURES+=("benchmark_verifier")
+                pretty_warn "benchmark verification failed"
+            fi
+        else
+            # Recording mode updates the latest results and the append-only history.
+            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"; then
+                PROCESS_FAILURES+=("history_updater")
+                pretty_warn "history_updater failed (continuing)"
+            fi
         fi
     else
         if ! python3 "$SCRIPT_DIR/infrastructure/result_processor.py" "$OUTPUT_DIR"; then

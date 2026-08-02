@@ -37,6 +37,9 @@ python3 --version
 
 # Run benchmarks in parallel (defaults to CPU count if omitted)
 ./benchmarks/run_benchmarks.sh --jobs 4
+
+# Verify all committed Dark results without updating RESULTS.md or HISTORY.md
+./benchmarks/run_benchmarks.sh --verify all
 ```
 
 ## Benchmark Modes
@@ -50,6 +53,17 @@ Uses **Valgrind Cachegrind** to count instructions. Slower (~50x) but determinis
 - Tracking optimization improvements over time
 
 This is the primary way we are tracking performance.
+
+By default, a completed Cachegrind run records its Dark measurements in
+`RESULTS.md` and `HISTORY.md`. Commit those files when the run is intended as
+performance evidence for a compiler change.
+
+### Verification Mode (`--verify`)
+
+Runs the same full Cachegrind benchmarks, but compares each Dark instruction
+count with the committed value in `RESULTS.md`. It exits unsuccessfully for a
+difference or missing result and never updates tracked result files. This mode
+cannot be combined with `--hyperfine` or `--refresh-baseline`.
 
 ### Timing Mode (`--hyperfine`)
 

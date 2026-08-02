@@ -96,8 +96,8 @@ while true; do
   if [[ "$main_head" != "$feature_head" ]]; then
     (cd "$repo_root" && ./run-tests --ai)
 
-    # Full benchmark regression check (deterministic instruction counts)
-    (cd "$repo_root" && ./benchmarks/run_benchmarks.sh all)
+    # Verify deterministic full results without dirtying the branch being landed.
+    (cd "$repo_root" && ./benchmarks/run_benchmarks.sh --verify all)
   else
     echo "No changes to land; main already matches $current_branch."
   fi
