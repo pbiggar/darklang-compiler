@@ -35,9 +35,14 @@ def Stdlib.Option.andThen<t, u>(opt: Stdlib.Option.Option<t>, fn: (t) -> Stdlib.
     | Some(v) -> fn(v)
     | None -> None
 
+// Return the first option when it has a value, otherwise return the fallback
+def Stdlib.Option.or<t>(first: Stdlib.Option.Option<t>, second: Stdlib.Option.Option<t>) : Stdlib.Option.Option<t> =
+    match first with
+    | Some(v) -> Some(v)
+    | None -> second
+
 // Convert Option to a single-element or empty list
 def Stdlib.Option.toList<t>(opt: Stdlib.Option.Option<t>) : List<t> =
     match opt with
     | Some(v) -> [v]
     | None -> []
-

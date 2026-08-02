@@ -43,6 +43,15 @@ Option.isNone(Option.andThen(Option.None, (x: Int64) => Option.Some(x * 2))) = t
 Option.isNone(Option.andThen<Int64, Int64>(Option.Some(5), (x: Int64) => Option.None)) = true
 
 // ===================================================================
+// Option.or - Return the first Some, or fall back to the second option
+// ===================================================================
+
+Option.or(Option.Some(6), Option.Some(5)) = Option.Some(6)
+Option.or(Option.Some(6), Option.None) = Option.Some(6)
+Option.or(Option.None, Option.Some(5)) = Option.Some(5)
+Option.or(Option.None, Option.None) = Option.None
+
+// ===================================================================
 // Option.toList - Convert to a list
 // ===================================================================
 

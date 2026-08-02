@@ -666,7 +666,7 @@ Option                       | map3                                | ✅   | ❌
 Option                       | map4                                | ✅   | ❌
 Option                       | map5                                | ✅   | ❌
 Option                       | mapWithDefault                      | ✅   | ❌
-Option                       | or                                  | ✅   | ❌
+Option                       | or                                  | ✅   | ✅
 Option                       | toList                              | ✅   | ✅
 Option                       | toResult                            | ✅   | ❌
 Option                       | values                              | ✅   | ❌
