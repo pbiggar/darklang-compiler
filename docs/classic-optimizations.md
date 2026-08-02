@@ -53,6 +53,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical fold that removes literal-only float comparisons and exposes constant branches to the existing ANF optimizer.
 - Notes: Implemented for literal Float `==`, `!=`, `<`, `>`, `<=`, and `>=` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `const_fold_float_lt` and `const_fold_float_eq` in `src/Tests/optimization/anf.opt`; existing float comparison E2E tests provide correctness coverage but do not isolate this micro-pattern.
 
+### Constant string concatenation folding
+
+- Optimization name: Constant string concatenation folding
+- Taxonomy category: Constant folding
+- Priority/rationale: Small, low-risk canonical fold that eliminates runtime allocation when both concatenation operands are known string literals.
+- Notes: Implemented for `StringConcat(StringLiteral, StringLiteral) -> StringLiteral` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `const_fold_string_concat` in `src/Tests/optimization/anf.opt`; existing benchmarks do not isolate this micro-pattern.
+
 ### Constant Int64 shift folding
 
 - Optimization name: Constant Int64 shift folding

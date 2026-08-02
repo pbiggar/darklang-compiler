@@ -1510,6 +1510,13 @@ let TempId 2 = f("dark")
 return t2
 
 ---NAME---
+const_fold_string_concat
+---INPUT---
+"dark" ++ "lang"
+---EXPECTED---
+return "darklang"
+
+---NAME---
 identity_string_concat_empty_left
 ---INPUT---
 def f(x: String) : String = "" ++ x

@@ -566,6 +566,8 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                 |> Option.map (fun n -> Atom (IntLiteral (Int64 n)))
             | FloatToBits (FloatLiteral f) ->
                 Some (Atom (IntLiteral (UInt64 (System.BitConverter.DoubleToUInt64Bits f))))
+            | StringConcat (StringLiteral left, StringLiteral right) ->
+                Some (Atom (StringLiteral (left + right)))
             | StringConcat (left, StringLiteral "") -> Some (Atom left)
             | StringConcat (StringLiteral "", right) -> Some (Atom right)
             | Call ("__string_eq", [Var leftTid; Var rightTid]) when leftTid = rightTid ->

@@ -2,6 +2,7 @@
 // These tests rely on internal runtime helpers.
 
 def __stringRefcount(s: String): Int64 = let len = Stdlib.String.length(s) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__string_to_rawptr(s), 8 + dataSize)
+def dynamicString(s: String): String = s ++ "b"
 
 // Raw float load should preserve float type through if-join
 let rawPtr = __raw_alloc(8) in let _ = __raw_slot_init<Float>(rawPtr, 0, 1.5) in let rawVal = __raw_get<Float>(rawPtr, 0) in if true then rawVal else 2.5 = 1.5
@@ -18,7 +19,7 @@ let p1 = __raw_alloc(600000000) in let p2 = __raw_alloc(8) in let _ = __raw_writ
 
 // Raw slot initialization distinguishes typed slot edges from raw metadata writes.
 let p = __raw_alloc(8) in let _ = __raw_slot_init<Float>(p, 0, 1.5) in let rawVal = __raw_get<Float>(p, 0) in rawVal = 1.5
-let p = __raw_alloc(16) in let s = "a" ++ "b" in let _ = __raw_slot_init<String>(p, 0, s) in __stringRefcount(s) = stdout="2\n" // RawSlotInit<String> retains typed slot edge
+let p = __raw_alloc(16) in let s = dynamicString("a") in let _ = __raw_slot_init<String>(p, 0, s) in __stringRefcount(s) = stdout="2\n" // RawSlotInit<String> retains typed slot edge
 
 // Structured values expose RawPtr views without routing through Int64.
 let s = "a" ++ "b" in __raw_get<Int64>(__string_to_rawptr(s), 0) = 2
