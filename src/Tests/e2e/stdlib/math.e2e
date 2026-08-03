@@ -5,9 +5,14 @@
 // Math.pi - Pi constant
 // ===================================================================
 
-// Pi should be approximately 3.14159...
-// We can't test float equality directly, so check it's positive
+// Pi should be approximately 3.14159..., with an integer part of 3
 Math.truncate(Math.pi()) = 3
+
+// ===================================================================
+// Math.tau - Circle constant equal to exactly twice pi
+// ===================================================================
+
+Math.tau() = 2.0 * Math.pi()
 
 // ===================================================================
 // Math.e - Euler's number constant
@@ -69,10 +74,3 @@ Math.round(-2.5) = -2
 Math.round(-3.5) = -4
 Math.round(-3.4) = -3
 Math.round(-3.0) = -3
-
-// ===================================================================
-// NOTE: More comprehensive float tests would require:
-// - Float comparison operators
-// - Float arithmetic operators
-// - Float literals beyond basic values
-// ===================================================================

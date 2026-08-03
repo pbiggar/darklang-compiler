@@ -9,6 +9,9 @@
 // 3.141592653589793
 def Stdlib.Math.pi() : Float = 3.141592653589793
 
+// Tau constant, exactly twice pi
+def Stdlib.Math.tau() : Float = 2.0 * Stdlib.Math.pi()
+
 // Euler's number e (approximation to 15 decimal places)
 // 2.718281828459045
 def Stdlib.Math.e() : Float = 2.718281828459045

@@ -647,7 +647,7 @@ Math                         | sinh                                | ✅   | ❌
 Math                         | sqrt                                | ❌   | ✅
 Math                         | tan                                 | ✅   | ❌
 Math                         | tanh                                | ✅   | ❌
-Math                         | tau                                 | ✅   | ❌
+Math                         | tau                                 | ✅   | ✅
 Math                         | truncate                            | ❌   | ✅
 Math                         | turns                               | ✅   | ❌
 Option                       | Option                              | ✅   | ✅
