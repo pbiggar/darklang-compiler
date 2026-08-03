@@ -665,6 +665,10 @@ let private isCommutativeBinOp (op: BinOp) : bool =
 
 let private cseKey (cexpr: CExpr) : CExpr =
     match cexpr with
+    // Canonicalize relational comparisons to their less-than spelling so
+    // reversing both the operator and operands produces the same CSE key.
+    | Prim (Gt, left, right) -> Prim (Lt, right, left)
+    | Prim (Gte, left, right) -> Prim (Lte, right, left)
     | Prim (op, left, right) when isCommutativeBinOp op && compare right left < 0 ->
         Prim (op, right, left)
     | _ -> cexpr

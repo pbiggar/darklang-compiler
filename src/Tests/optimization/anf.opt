@@ -1450,6 +1450,32 @@ let TempId 5 = t1 + t1
 return t5
 
 ---NAME---
+cse_reuses_reversed_strict_comparison
+---INPUT---
+def f(a: Int64, b: Int64) : (Bool, Bool) =
+  let forward = a < b in
+  let reverse = b > a in
+  (forward, reverse)
+---EXPECTED---
+Function f:
+let TempId 2 = t0 < t1
+let TempId 6 = (t2, t2)
+return t6
+
+---NAME---
+cse_reuses_reversed_inclusive_comparison
+---INPUT---
+def f(a: Int64, b: Int64) : (Bool, Bool) =
+  let forward = a <= b in
+  let reverse = b >= a in
+  (forward, reverse)
+---EXPECTED---
+Function f:
+let TempId 2 = t0 <= t1
+let TempId 6 = (t2, t2)
+return t6
+
+---NAME---
 cse_reuses_duplicate_tuple_get
 ---INPUT---
 def f(t: (Int64, Int64)) : Int64 =

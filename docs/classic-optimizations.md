@@ -465,3 +465,10 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Taxonomy category: Common subexpression elimination
 - Priority/rationale: Small, canonical extension of existing ANF CSE that reuses equivalent pure binary expressions when only commutative operand order differs.
 - Notes: Implemented for commutative `Prim` operations in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_commuted_integer_add` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmarks provide regression coverage but do not isolate this micro-pattern.
+
+### Reversed relational comparison reuse
+
+- Optimization name: Reversed relational comparison reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, low-risk extension of ANF CSE that removes duplicate relational comparisons when both the operator and operand order are reversed.
+- Notes: Implemented by canonicalizing `b > a` to the same CSE key as `a < b`, and `b >= a` to the same key as `a <= b`, in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `cse_reuses_reversed_strict_comparison` and `cse_reuses_reversed_inclusive_comparison` in `src/Tests/optimization/anf.opt`; existing comparison-heavy benchmarks provide regression coverage but do not isolate this micro-pattern.
