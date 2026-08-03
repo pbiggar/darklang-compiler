@@ -44,80 +44,80 @@ let defaultConfig = {
 /// Information about a function for inlining decisions
 type FunctionInfo = {
     Func: Function
-    Size: int            // Count of TempIds (Let bindings) in body
-    IsRecursive: bool    // Calls itself directly
-    HasClosures: bool    // Contains ClosureAlloc or ClosureCall
-    HasTailCalls: bool   // Contains TailCall or ClosureTailCall
-    IsExternal: bool     // Body is available only as an inline candidate
+    Calls: Set<string>  // Functions called by the body
+    Size: int  // Count of TempIds (Let bindings) in body
+    IsRecursive: bool  // Calls itself directly
+    HasClosures: bool  // Contains ClosureAlloc or ClosureCall
+    HasTailCalls: bool  // Contains TailCall or ClosureTailCall
+    IsExternal: bool  // Body is available only as an inline candidate
 }
 
 // ============================================================================
 // Phase 1: Analysis - Build function info map
 // ============================================================================
 
-/// Count TempIds (Let bindings) in an expression
-let rec countTempIds (expr: AExpr) : int =
-    match expr with
-    | Let (_, _, body) -> 1 + countTempIds body
-    | Return _ -> 0
-    | If (_, thenBranch, elseBranch) ->
-        countTempIds thenBranch + countTempIds elseBranch
+/// Properties used by call-graph construction and inlining eligibility.
+/// Collecting them together keeps function analysis to one ANF traversal.
+type private FunctionAnalysis = {
+    Calls: Set<string>
+    Size: int
+    HasClosures: bool
+    HasTailCalls: bool
+}
 
-/// Check if a CExpr contains closures
-let cexprHasClosures (cexpr: CExpr) : bool =
-    match cexpr with
-    | ClosureAlloc _ | ClosureCall _ | ClosureTailCall _ -> true
-    | _ -> false
+let private emptyAnalysis = {
+    Calls = Set.empty
+    Size = 0
+    HasClosures = false
+    HasTailCalls = false
+}
 
-/// Check if expression contains closures
-let rec exprHasClosures (expr: AExpr) : bool =
-    match expr with
-    | Let (_, cexpr, body) ->
-        cexprHasClosures cexpr || exprHasClosures body
-    | Return _ -> false
-    | If (_, thenBranch, elseBranch) ->
-        exprHasClosures thenBranch || exprHasClosures elseBranch
-
-let cexprHasTailCalls (cexpr: CExpr) : bool =
-    match cexpr with
-    | TailCall _ | ClosureTailCall _ | IndirectTailCall _ -> true
-    | _ -> false
-
-let rec exprHasTailCalls (expr: AExpr) : bool =
+let rec private analyzeExpr (expr: AExpr) : FunctionAnalysis =
     match expr with
     | Let (_, cexpr, body) ->
-        cexprHasTailCalls cexpr || exprHasTailCalls body
-    | Return _ -> false
+        let bodyAnalysis = analyzeExpr body
+        match cexpr with
+        | Call (name, _)
+        | BorrowedCall (name, _) ->
+            { bodyAnalysis with
+                Calls = Set.add name bodyAnalysis.Calls
+                Size = bodyAnalysis.Size + 1 }
+        | TailCall (name, _) ->
+            { bodyAnalysis with
+                Calls = Set.add name bodyAnalysis.Calls
+                Size = bodyAnalysis.Size + 1
+                HasTailCalls = true }
+        | ClosureTailCall _ ->
+            { bodyAnalysis with
+                Size = bodyAnalysis.Size + 1
+                HasClosures = true
+                HasTailCalls = true }
+        | IndirectTailCall _ ->
+            { bodyAnalysis with
+                Size = bodyAnalysis.Size + 1
+                HasTailCalls = true }
+        | ClosureAlloc _
+        | ClosureCall _ ->
+            { bodyAnalysis with
+                Size = bodyAnalysis.Size + 1
+                HasClosures = true }
+        | _ ->
+            { bodyAnalysis with Size = bodyAnalysis.Size + 1 }
+    | Return _ -> emptyAnalysis
     | If (_, thenBranch, elseBranch) ->
-        exprHasTailCalls thenBranch || exprHasTailCalls elseBranch
-
-/// Collect all function names called in a CExpr
-let collectCallsInCExpr (cexpr: CExpr) : Set<string> =
-    match cexpr with
-    | Call (name, _)
-    | BorrowedCall (name, _)
-    | TailCall (name, _) -> Set.singleton name
-    | _ -> Set.empty
-
-/// Collect all function names called in an expression
-let rec collectCalls (expr: AExpr) : Set<string> =
-    match expr with
-    | Let (_, cexpr, body) ->
-        Set.union (collectCallsInCExpr cexpr) (collectCalls body)
-    | Return _ -> Set.empty
-    | If (_, thenBranch, elseBranch) ->
-        Set.union (collectCalls thenBranch) (collectCalls elseBranch)
+        let thenAnalysis = analyzeExpr thenBranch
+        let elseAnalysis = analyzeExpr elseBranch
+        {
+            Calls = Set.union thenAnalysis.Calls elseAnalysis.Calls
+            Size = thenAnalysis.Size + elseAnalysis.Size
+            HasClosures = thenAnalysis.HasClosures || elseAnalysis.HasClosures
+            HasTailCalls = thenAnalysis.HasTailCalls || elseAnalysis.HasTailCalls
+        }
 
 // ============================================================================
 // Mutual Recursion Detection via SCC (Strongly Connected Components)
 // Uses Kosaraju's algorithm to find SCCs in the call graph
 // ============================================================================
-
-/// Build a call graph from functions: Map<caller, Set<callees>>
-let buildCallGraph (funcs: Function list) : Map<string, Set<string>> =
-    funcs
-    |> List.map (fun f -> (f.Name, collectCalls f.Body))
-    |> Map.ofList
 
 /// Build reverse call graph: Map<callee, Set<callers>>
 let buildReverseCallGraph (callGraph: Map<string, Set<string>>) : Map<string, Set<string>> =
@@ -163,9 +163,10 @@ let rec dfsCollectSCC (graph: Map<string, Set<string>>) (node: string)
 
 /// Find all SCCs using Kosaraju's algorithm
 /// Returns list of SCCs, where each SCC is a Set of function names
-let findSCCs (funcs: Function list) : Set<string> list =
-    let funcNames = funcs |> List.map (fun f -> f.Name) |> Set.ofList
-    let callGraph = buildCallGraph funcs
+let findSCCs
+    (funcNames: Set<string>)
+    (callGraph: Map<string, Set<string>>)
+    : Set<string> list =
     let reverseGraph = buildReverseCallGraph callGraph
 
     // Step 1: DFS on original graph to get finish order
@@ -190,9 +191,12 @@ let findSCCs (funcs: Function list) : Set<string> list =
 
 /// Find all functions involved in mutual recursion (in SCCs of size > 1)
 /// or direct self-recursion (calls itself)
-let findRecursiveFunctions (funcs: Function list) : Set<string> =
-    let sccs = findSCCs funcs
-    let callGraph = buildCallGraph funcs
+let findRecursiveFunctions
+    (funcs: Function list)
+    (callGraph: Map<string, Set<string>>)
+    : Set<string> =
+    let funcNames = funcs |> List.map (fun f -> f.Name) |> Set.ofList
+    let sccs = findSCCs funcNames callGraph
 
     // Functions in SCCs of size > 1 (mutual recursion)
     let mutuallyRecursive =
@@ -213,23 +217,32 @@ let findRecursiveFunctions (funcs: Function list) : Set<string> =
     Set.union mutuallyRecursive directlyRecursive
 
 /// Build function info for a single function
-let buildFunctionInfo (recursiveFuncs: Set<string>) (func: Function) : FunctionInfo =
+let private buildFunctionInfo
+    (recursiveFuncs: Set<string>)
+    (func: Function)
+    (analysis: FunctionAnalysis)
+    : FunctionInfo =
     {
         Func = func
-        Size = countTempIds func.Body
+        Calls = analysis.Calls
+        Size = analysis.Size
         IsRecursive = Set.contains func.Name recursiveFuncs
-        HasClosures = exprHasClosures func.Body
-        HasTailCalls = exprHasTailCalls func.Body
+        HasClosures = analysis.HasClosures
+        HasTailCalls = analysis.HasTailCalls
         IsExternal = false
     }
 
 /// Build function info map for all functions
 let buildFunctionInfoMap (funcs: Function list) : Map<string, FunctionInfo> =
-    // First, find all recursive functions (direct and mutual)
-    let recursiveFuncs = findRecursiveFunctions funcs
-    // Then build info for each function
-    funcs
-    |> List.map (fun f -> (f.Name, buildFunctionInfo recursiveFuncs f))
+    let analyzedFuncs = funcs |> List.map (fun func -> (func, analyzeExpr func.Body))
+    let callGraph =
+        analyzedFuncs
+        |> List.map (fun (func, analysis) -> (func.Name, analysis.Calls))
+        |> Map.ofList
+    let recursiveFuncs = findRecursiveFunctions funcs callGraph
+    analyzedFuncs
+    |> List.map (fun (func, analysis) ->
+        (func.Name, buildFunctionInfo recursiveFuncs func analysis))
     |> Map.ofList
 
 // ============================================================================
@@ -375,7 +388,7 @@ let rec private countCallsToNames (names: Set<string>) (expr: AExpr) : int =
 
 let private shouldUseExternalCandidate (info: FunctionInfo) (config: InliningConfig) : bool =
     shouldInline info config 0
-    && Set.isEmpty (collectCalls info.Func.Body)
+    && Set.isEmpty info.Calls
     && isSimpleExternalExpr info.Func.Body
 
 let filterExternalCandidates (config: InliningConfig) (functions: Function list) : Function list =
@@ -529,9 +542,10 @@ let inlineProgramWithExternalCandidates
     : Program =
     let (Program (funcs, main)) = program
 
+    let localInfoMap = buildFunctionInfoMap funcs
     let calledNames =
-        funcs
-        |> List.fold (fun acc func -> Set.union acc (collectCalls func.Body)) (collectCalls main)
+        localInfoMap
+        |> Map.fold (fun acc _ info -> Set.union acc info.Calls) (analyzeExpr main).Calls
 
     let externalCandidatesCalledByProgram =
         externalCandidates
@@ -541,7 +555,6 @@ let inlineProgramWithExternalCandidates
         buildFunctionInfoMap externalCandidatesCalledByProgram
         |> Map.filter (fun _ info -> shouldUseExternalCandidate info config)
         |> Map.map (fun _ info -> { info with IsExternal = true })
-    let localInfoMap = buildFunctionInfoMap funcs
     let funcInfoMap =
         Map.fold (fun acc name info -> Map.add name info acc) localInfoMap externalInfoMap
     let externalNames =
