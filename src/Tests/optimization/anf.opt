@@ -149,6 +149,48 @@ if 1 != 2 then 10 else 20
 return 10
 
 ---NAME---
+const_fold_uint64_eq
+---INPUT---
+if 18446744073709551615UL == 0UL then 10 else 20
+---EXPECTED---
+return 20
+
+---NAME---
+const_fold_uint64_neq
+---INPUT---
+if 18446744073709551615UL != 0UL then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_uint64_lt
+---INPUT---
+if 18446744073709551615UL < 0UL then 10 else 20
+---EXPECTED---
+return 20
+
+---NAME---
+const_fold_uint64_gt
+---INPUT---
+if 18446744073709551615UL > 0UL then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_uint64_lte
+---INPUT---
+if 18446744073709551615UL <= 0UL then 10 else 20
+---EXPECTED---
+return 20
+
+---NAME---
+const_fold_uint64_gte
+---INPUT---
+if 18446744073709551615UL >= 0UL then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
 const_fold_bool_and_true
 ---INPUT---
 if true && true then 1 else 0

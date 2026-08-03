@@ -126,6 +126,14 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Lte, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a <= b)))
     | Gte, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a >= b)))
 
+    // UInt64 comparisons
+    | Eq, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (BoolLiteral (a = b)))
+    | Neq, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (BoolLiteral (a <> b)))
+    | Lt, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (BoolLiteral (a < b)))
+    | Gt, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (BoolLiteral (a > b)))
+    | Lte, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (BoolLiteral (a <= b)))
+    | Gte, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (BoolLiteral (a >= b)))
+
     // Boolean comparisons
     | Eq, BoolLiteral a, BoolLiteral b -> Some (Atom (BoolLiteral (a = b)))
     | Neq, BoolLiteral a, BoolLiteral b -> Some (Atom (BoolLiteral (a <> b)))

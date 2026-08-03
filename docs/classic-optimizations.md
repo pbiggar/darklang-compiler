@@ -60,6 +60,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical fold that eliminates runtime allocation when both concatenation operands are known string literals.
 - Notes: Implemented for `StringConcat(StringLiteral, StringLiteral) -> StringLiteral` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `const_fold_string_concat` in `src/Tests/optimization/anf.opt`; existing benchmarks do not isolate this micro-pattern.
 
+### Constant UInt64 comparison folding
+
+- Optimization name: Constant UInt64 comparison folding
+- Taxonomy category: Constant folding
+- Priority/rationale: Small, low-risk canonical fold that removes literal-only unsigned comparisons and exposes constant branches to existing ANF cleanup.
+- Notes: Implemented for literal UInt64 `==`, `!=`, `<`, `>`, `<=`, and `>=` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by the six `const_fold_uint64_*` before/after ANF snapshots in `src/Tests/optimization/anf.opt`; existing benchmarks do not isolate this micro-pattern.
+
 ### Constant Int64 shift folding
 
 - Optimization name: Constant Int64 shift folding
