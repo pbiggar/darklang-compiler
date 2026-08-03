@@ -1049,6 +1049,19 @@ let computeSymbolicLabelPositions (instructions: ARM64Symbolic.Instr list) : Map
                 loop rest (offset + 4) labelMap
     loop instructions 0 Map.empty
 
+/// Compute symbolic code size and label positions in one instruction-list pass.
+let computeSymbolicLayout (instructions: ARM64Symbolic.Instr list) : int * Map<string, int> =
+    let rec loop instrs offset labelMap =
+        match instrs with
+        | [] -> (offset, labelMap)
+        | instr :: rest ->
+            match instr with
+            | ARM64Symbolic.Label name ->
+                loop rest offset (Map.add name offset labelMap)
+            | _ ->
+                loop rest (offset + 4) labelMap
+    loop instructions 0 Map.empty
+
 /// Compute the size of code in bytes from symbolic instructions
 let getSymbolicCodeSize (instructions: ARM64Symbolic.Instr list) : int =
     instructions
@@ -1574,9 +1587,9 @@ let encodeSymbolicWithPools
     : ARM64.MachineCode list =
     let codeFileOffset =
         computeCodeFileOffset os stringPool floatPool enableLeakCheck
-    // Step 1: Compute code size
-    let codeSize =
-        getSymbolicCodeSize instructions
+    // Step 1: Compute code size and code label positions in one pass.
+    let (codeSize, rawCodeLabels) =
+        computeSymbolicLayout instructions
 
     // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
     let floatLabels =
@@ -1596,9 +1609,7 @@ let encodeSymbolicWithPools
         else
             Map.empty
 
-    // Step 4: Compute code label positions (relative to code start, add file offset)
-    let rawCodeLabels =
-        computeSymbolicLabelPositions instructions
+    // Step 4: Convert code label positions from code-relative to file-relative offsets.
     let codeLabelMap =
         rawCodeLabels |> Map.map (fun _ offset -> codeFileOffset + offset)
 
