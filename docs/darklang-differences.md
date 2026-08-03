@@ -96,6 +96,7 @@ Areas where compiler produces WRONG output. These need to be fixed to match Dark
 |-----|-------------|-------------|--------|
 | Division `/` | `semantic:division` | Integer vs float division | Needs fix |
 | Modulo `%` | `semantic:modulo` | Negative divisor handling | Fixed |
+| `Int64.power` | `eval:error_result` | Negative exponent handling | Fixed |
 | Float precision | `eval:float_precision` | High-precision floats have different representation | Needs fix |
 
 ### 2.1 Modulo Operator (`%`)
@@ -113,6 +114,14 @@ darklang-interpreter eval "10L % -3L"
 ```
 
 **Status:** Fixed. Compiler now errors when the divisor is negative, matching the interpreter.
+
+### 2.2 `Int64.power` Negative Exponents
+
+**Skip reason:** `eval:error_result`
+
+The official interpreter reports `Cannot raise integer to a negative exponent`.
+The compiler now reports the same runtime error instead of recursively decrementing
+the exponent until the generated program crashes.
 
 ## 3. Tooling Differences
 

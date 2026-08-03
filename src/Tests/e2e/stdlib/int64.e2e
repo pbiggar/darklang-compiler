@@ -94,6 +94,7 @@ Int64.power(0, 0) = 1
 Int64.power(5, 0) = 1
 Int64.power(5, 1) = 5
 Int64.power(2, 8) = 256
+Int64.power(2, -3) = error="Cannot raise integer to a negative exponent"
 
 // ===================================================================
 // Int64.clamp - Clamp value between limits
