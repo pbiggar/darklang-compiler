@@ -1008,13 +1008,15 @@ let simplifyRetPhiJoins (cfg: CFG) : CFG * bool =
 
         ({ cfg with Blocks = blocks' }, true)
 
-/// Simplify branches with constant boolean conditions
+/// Simplify branches whose target is independent of their condition
 let simplifyConstantBranches (cfg: CFG) : CFG * bool =
     let (blocks', changed) =
         cfg.Blocks
         |> Map.fold (fun (acc, ch) label block ->
             let term' =
                 match block.Terminator with
+                | Branch (_, trueLabel, falseLabel) when trueLabel = falseLabel ->
+                    Jump trueLabel
                 | Branch (BoolConst true, trueLabel, _) -> Jump trueLabel
                 | Branch (BoolConst false, _, falseLabel) -> Jump falseLabel
                 | other -> other

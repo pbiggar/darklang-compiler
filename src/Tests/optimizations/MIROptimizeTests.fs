@@ -1,7 +1,7 @@
 // MIROptimizeTests.fs - Unit tests for MIR optimizer fixpoint behavior
 //
-// Verifies that MIR optimization re-runs to a fixed point when copy propagation
-// creates new CSE opportunities.
+// Verifies MIR optimizer transformations that depend on fixpoint iteration or
+// require direct construction of CFG shapes not preserved by earlier passes.
 
 module MIROptimizeTests
 
@@ -278,6 +278,58 @@ let testEmptyBlockRemovalRewritesPhiSourceToPredecessor () : TestResult =
     | None ->
         Error "Expected join block to remain after empty block removal"
 
+let testSameTargetBranchBecomesJumpAndDropsCondition () : TestResult =
+    let entry = Label "entry"
+    let target = Label "target"
+
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [
+            BinOp (
+                VReg 2,
+                Eq,
+                Register (VReg 0),
+                Register (VReg 1),
+                AST.TBool
+            )
+        ]
+        Terminator = Branch (Register (VReg 2), target, target)
+    }
+
+    let targetBlock: BasicBlock = {
+        Label = target
+        Instrs = []
+        Terminator = Ret (Int64Const 1L)
+    }
+
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, entryBlock); (target, targetBlock)]
+    }
+
+    let optimized = optimizeCFG cfg
+    match Map.tryFind entry optimized.Blocks with
+    | Some block when block.Instrs = [] && block.Terminator = Jump target -> Ok ()
+    | _ ->
+        let actual =
+            formatMIR (
+                Program (
+                    [{
+                        Name = "same_target_branch"
+                        TypedParams = [
+                            { Reg = VReg 0; Type = AST.TBool }
+                            { Reg = VReg 1; Type = AST.TBool }
+                        ]
+                        ReturnType = AST.TInt64
+                        CFG = optimized
+                        FloatRegs = Set.empty
+                    }],
+                    Map.empty,
+                    Map.empty
+                )
+            )
+        Error $"Expected same-target branch to become a jump and its dead condition to be removed.\nActual:\n{actual}"
+
 let testSelfComparisonFoldingRequiresConcreteSafeType () : TestResult =
     let sameOperand = Register (VReg 0)
 
@@ -331,6 +383,7 @@ let tests = [
     ("MIR optimize removes dead self-referential phi", testDceRemovesSelfReferentialDeadPhi)
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
     ("MIR empty block removal rewrites phi source to predecessor", testEmptyBlockRemovalRewritesPhiSourceToPredecessor)
+    ("MIR same-target branch becomes jump and drops condition", testSameTargetBranchBecomesJumpAndDropsCondition)
     ("MIR self-comparison folding requires concrete safe type", testSelfComparisonFoldingRequiresConcreteSafeType)
     ("MIR self-comparison folding requires same register", testSelfComparisonFoldingRequiresSameRegister)
 ]

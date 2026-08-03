@@ -448,6 +448,15 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Existing optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Covered by existing ANF optimization tests.
 
+## Control-flow simplification
+
+### Same-target branch elimination
+
+- Optimization name: Same-target branch elimination
+- Taxonomy category: Control-flow simplification
+- Priority/rationale: Small, low-risk canonical CFG simplification that makes an unconditional successor explicit and allows dead-code elimination to remove a now-unused condition computation.
+- Notes: Implemented for MIR `Branch (cond, target, target) -> Jump target` in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`. Covered by `testSameTargetBranchBecomesJumpAndDropsCondition` in `src/Tests/optimizations/MIROptimizeTests.fs`, which checks both the terminator rewrite and removal of the dead condition at the optimizer fixpoint. The routine benchmark profile retained every recorded instruction count, so measured improvement/loss is 0%; direct source-level identical branches are already removed in ANF, making synthetic MIR coverage the focused exercise for this CFG shape.
+
 ## Common subexpression elimination
 
 ### Commutative ANF CSE
