@@ -150,6 +150,42 @@ let testMulAddFusionKeepsLiveTempForPrint () : TestResult =
     else
         Error $"Expected MUL temp used by PrintInt64 to stay available, got: {optimized}"
 
+let private optimizeBlockInstrs (instrs: Instr list) : Instr list =
+    let label = Label "entry"
+    let block : BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = Ret
+    }
+
+    optimizeBlock block |> fst |> fun optimized -> optimized.Instrs
+
+let testMulSubFusionReplacesDeadTemp () : TestResult =
+    let instrs = [
+        Mul (Virtual 1, Virtual 2, Virtual 3)
+        Sub (Virtual 4, Virtual 5, Reg (Virtual 1))
+    ]
+
+    let expected = [Msub (Virtual 4, Virtual 2, Virtual 3, Virtual 5)]
+    let optimized = optimizeBlockInstrs instrs
+    if optimized = expected then
+        Ok ()
+    else
+        Error $"Expected dead MUL/SUB temporary to fuse into MSUB, got: {optimized}"
+
+let testMulSubFusionKeepsLiveTempForPrint () : TestResult =
+    let instrs = [
+        Mul (Virtual 1, Virtual 2, Virtual 3)
+        Sub (Virtual 4, Virtual 5, Reg (Virtual 1))
+        PrintInt64 (Virtual 1)
+    ]
+
+    let optimized = optimizeBlockInstrs instrs
+    if optimized = instrs then
+        Ok ()
+    else
+        Error $"Expected MUL temp used by PrintInt64 to stay available, got: {optimized}"
+
 let testMulConstantKeepsLiveConstRegister () : TestResult =
     let instrs = [
         Mov (Physical X1, Imm 3L)
@@ -189,6 +225,8 @@ let tests = [
     ("LIR peephole keeps floating copy-back after FPhi writes source", testFloatingCopyBackKeepsMoveAfterFPhiWritesSource)
     ("LIR peephole fuses FNeg followed by dead-temp FMov", testFNegMoveChainFusesWhenTempDies)
     ("LIR peephole keeps MUL temp used by later print", testMulAddFusionKeepsLiveTempForPrint)
+    ("LIR peephole fuses dead MUL/SUB temporary into MSUB", testMulSubFusionReplacesDeadTemp)
+    ("LIR peephole keeps MUL/SUB temporary used by later print", testMulSubFusionKeepsLiveTempForPrint)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
     ("LIR peephole rejects missing successor labels", testOptimizeCFGRejectsMissingSuccessorLabel)
 ]

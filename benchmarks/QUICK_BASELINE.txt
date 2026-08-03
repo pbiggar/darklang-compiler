@@ -14,6 +14,7 @@ leibniz=1800168
 mandelbrot=1712261
 matmul=55102
 merkletrees=2201076
+multiply_subtract=70111
 nqueen=1645807
 nsieve=253041
 pisum=140458

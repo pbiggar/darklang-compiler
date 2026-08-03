@@ -486,3 +486,12 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Taxonomy category: Common subexpression elimination
 - Priority/rationale: Small, low-risk extension of ANF CSE that removes duplicate relational comparisons when both the operator and operand order are reversed.
 - Notes: Implemented by canonicalizing `b > a` to the same CSE key as `a < b`, and `b >= a` to the same key as `a <= b`, in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `cse_reuses_reversed_strict_comparison` and `cse_reuses_reversed_inclusive_comparison` in `src/Tests/optimization/anf.opt`; existing comparison-heavy benchmarks provide regression coverage but do not isolate this micro-pattern.
+
+## Instruction combining
+
+### Dead multiply-subtract fusion
+
+- Optimization name: Dead multiply-subtract temporary fusion
+- Taxonomy category: Instruction combining
+- Priority/rationale: Canonical low-risk fusion that exposes the native ARM64 multiply-subtract instruction and mirrors the existing multiply-add peephole.
+- Notes: Implemented for adjacent integer `Mul temp, left, right; Sub dest, minuend, temp` when `temp` is not subsequently read. Direct LIR tests cover both fusion and live-temporary preservation, `fuse_multiply_subtract` covers source-to-LIR output, and `multiply_subtract` provides focused benchmark coverage. On ARM64, the focused Cachegrind benchmark fell from 8,000,111 to 7,000,111 instructions (12.5%); an earlier x64 comparison was unchanged because that backend expands `Msub`.

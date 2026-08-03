@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-02 20:25:42
-**Commit:** `9372f8ce` - Define routine benchmark profile
+**Last Updated:** 2026-08-03 06:00:40
+**Commit:** `81c76806` - Compute liveness snapshots only for SaveRegs
 
 | Benchmark     |           Dark (7.43x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

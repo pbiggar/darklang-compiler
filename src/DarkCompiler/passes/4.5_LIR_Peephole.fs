@@ -864,6 +864,37 @@ let tryFuseMulAdd (instrs: Instr list) : Instr list =
             | instr :: rest -> loop (index + 1) (instr :: acc) rest
         loop 0 [] instrs
 
+let private mulSubCandidates (instrs: Instr list) : Set<Reg> =
+    let rec loop candidates remaining =
+        match remaining with
+        | Mul (mulDest, _, _) :: Sub (_, minuend, Reg subtrahend) :: rest
+            when sameReg mulDest subtrahend && not (sameReg mulDest minuend) ->
+            loop (Set.add mulDest candidates) rest
+        | _ :: rest -> loop candidates rest
+        | [] -> candidates
+    loop Set.empty instrs
+
+/// Try to fuse MUL + SUB into MSUB (multiply-subtract)
+/// Pattern: MUL temp, a, b; SUB dest, minuend, Reg temp → MSUB dest, a, b, minuend
+let tryFuseMulSub (instrs: Instr list) : Instr list =
+    let candidates = mulSubCandidates instrs
+    if Set.isEmpty candidates then
+        instrs
+    else
+        let lastUses = lastRelevantRegUses candidates instrs
+        let rec loop index acc remaining =
+            match remaining with
+            | [] -> List.rev acc
+            | [single] -> List.rev (single :: acc)
+            | Mul (mulDest, mulLeft, mulRight) :: Sub (subDest, minuend, Reg subtrahend) :: rest
+                when sameReg mulDest subtrahend && not (sameReg mulDest minuend) ->
+                if not (regUsedAfter lastUses (index + 1) mulDest) then
+                    loop (index + 2) (Msub (subDest, mulLeft, mulRight, minuend) :: acc) rest
+                else
+                    loop (index + 1) (Mul (mulDest, mulLeft, mulRight) :: acc) (Sub (subDest, minuend, Reg subtrahend) :: rest)
+            | instr :: rest -> loop (index + 1) (instr :: acc) rest
+        loop 0 [] instrs
+
 /// Try to fuse Cset + Branch into CondBranch
 /// Pattern: last instruction is Cset dest, cond; terminator is Branch dest, trueL, falseL
 /// Result: remove Cset, replace Branch with CondBranch cond, trueL, falseL
@@ -957,7 +988,9 @@ let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
     // Apply multiply-by-constant strength reduction (Mov + Mul → Lsl + Add/Sub)
     let instrs1 = tryMulByConstant instrsCopyCleaned
     // Apply MUL + ADD → MADD fusion
-    let instrs'' = tryFuseMulAdd instrs1
+    let instrs2 = tryFuseMulAdd instrs1
+    // Apply MUL + SUB → MSUB fusion
+    let instrs'' = tryFuseMulSub instrs2
 
     // Try to fuse Cset + Branch into CondBranch
     let (instrs''', terminator') =

@@ -109,3 +109,19 @@ loop:
     BranchZero(v10063, Label "loop_L2", Label "loop_L1")
   Label "loop_entry":
     Jump(Label "loop_body")
+
+---NAME---
+fuse_multiply_subtract
+---INPUT---
+def multiplySubtract(minuend: Int64, left: Int64, right: Int64) : Int64 =
+    minuend - (left * right)
+---EXPECTED---
+multiplySubtract:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "multiplySubtract_body":
+    v10005 <- Msub(v1, v2, v0)
+    X0 <- Mov(Reg v10005)
+    Ret
+  Label "multiplySubtract_entry":
+    Jump(Label "multiplySubtract_body")
