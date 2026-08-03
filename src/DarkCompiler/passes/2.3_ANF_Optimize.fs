@@ -700,6 +700,8 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                 Map.tryFind tupleTid tupleEnv
                 |> Option.bind (Map.tryFind index)
                 |> Option.map Atom
+            | Call ("__string_eq", [StringLiteral left; StringLiteral right]) ->
+                Some (Atom (BoolLiteral (left = right)))
             | Call ("__string_eq", [Var leftTid; Var rightTid]) when leftTid = rightTid ->
                 Some (Atom (BoolLiteral true))
             | IfValue (BoolLiteral true, thenVal, _) -> Some (Atom thenVal)

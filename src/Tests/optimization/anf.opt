@@ -1205,6 +1205,22 @@ Function f:
 return true
 
 ---NAME---
+const_fold_internal_string_eq_equal_literals
+---INPUT---
+def f() : Int64 = if __string_eq("same", "same") then 1 else 2
+---EXPECTED---
+Function f:
+return 1
+
+---NAME---
+const_fold_internal_string_eq_unequal_literals
+---INPUT---
+def f() : Int64 = if __string_eq("same", "different") then 1 else 2
+---EXPECTED---
+Function f:
+return 2
+
+---NAME---
 source_string_eq_self_not_folded
 ---INPUT---
 def f(x: String) : Bool = x == x
