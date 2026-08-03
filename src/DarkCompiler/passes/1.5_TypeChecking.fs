@@ -4859,6 +4859,67 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
             | StringExpr expr -> Some (collectTypeAppSpecs expr))
         |> List.fold Set.union Set.empty
 
+/// Registries derivable directly from a program's top-level declarations.
+type private TopLevelDeclarationSummary = {
+    TypeReg: TypeRegistry
+    AliasReg: AliasRegistry
+    VariantLookup: VariantLookup
+    FuncSigs: Map<string, Type list * Type>
+    FuncParamNames: FuncParamNameRegistry
+    GenericFuncs: Map<string, string list>
+}
+
+/// Build all declaration registries in one traversal while retaining Map.ofList's
+/// existing behavior that a later declaration replaces an earlier duplicate.
+let private summarizeTopLevelDeclarations
+    (topLevels: TopLevel list)
+    : TopLevelDeclarationSummary =
+    let empty : TopLevelDeclarationSummary = {
+        TypeReg = Map.empty
+        AliasReg = Map.empty
+        VariantLookup = Map.empty
+        FuncSigs = Map.empty
+        FuncParamNames = Map.empty
+        GenericFuncs = Map.empty
+    }
+
+    topLevels
+    |> List.fold (fun summary topLevel ->
+        match topLevel with
+        | TypeDef (RecordDef (name, _typeParams, fields)) ->
+            { summary with TypeReg = Map.add name fields summary.TypeReg }
+        | TypeDef (TypeAlias (name, typeParams, targetType)) ->
+            { summary with AliasReg = Map.add name (typeParams, targetType) summary.AliasReg }
+        | TypeDef (SumTypeDef (typeName, typeParams, variants)) ->
+            let variantLookup =
+                variants
+                |> List.indexed
+                |> List.fold (fun lookup (tag, variant) ->
+                    Map.add
+                        variant.Name
+                        (typeName, typeParams, tag, variant.Payload)
+                        lookup) summary.VariantLookup
+            { summary with VariantLookup = variantLookup }
+        | FunctionDef funcDef ->
+            let parameters = NonEmptyList.toList funcDef.Params
+            let genericFuncs =
+                match funcDef.TypeParams with
+                | [] -> summary.GenericFuncs
+                | typeParams -> Map.add funcDef.Name typeParams summary.GenericFuncs
+            {
+                summary with
+                    FuncSigs =
+                        Map.add
+                            funcDef.Name
+                            (List.map snd parameters, funcDef.ReturnType)
+                            summary.FuncSigs
+                    FuncParamNames =
+                        Map.add funcDef.Name (List.map fst parameters) summary.FuncParamNames
+                    GenericFuncs = genericFuncs
+            }
+        | Expression _ ->
+            summary) empty
+
 /// Internal: Type-check a program and return the type checking environment
 /// This is the core implementation used by checkProgram, checkProgramWithEnv, and checkProgramWithBaseEnv
 /// When baseEnv is provided, registries are merged with it (for separate compilation)
@@ -4869,75 +4930,15 @@ let private checkProgramInternal
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
     let (Program topLevels) = program
-
-    // First pass: collect all type definitions (records) from THIS program
-    // Note: typeParams are stored but not fully used yet (future: generic type instantiation)
-    let programTypeReg : TypeRegistry =
-        topLevels
-        |> List.choose (function
-            | TypeDef (RecordDef (name, _typeParams, fields)) -> Some (name, fields)
-            | _ -> None)
-        |> Map.ofList
-
-    // Collect type aliases
-    let aliasReg : AliasRegistry =
-        topLevels
-        |> List.choose (function
-            | TypeDef (TypeAlias (name, typeParams, targetType)) -> Some (name, (typeParams, targetType))
-            | _ -> None)
-        |> Map.ofList
-
-    // Collect sum type definitions and build variant lookup from THIS program
-    // Maps variant name -> (type name, type params, tag index, payload type)
-    // Type params are included for generic type instantiation at constructor call sites
-    let programVariantLookup : VariantLookup =
-        topLevels
-        |> List.choose (function
-            | TypeDef (SumTypeDef (typeName, typeParams, variants)) ->
-                Some (typeName, typeParams, variants)
-            | _ -> None)
-        |> List.collect (fun (typeName, typeParams, variants) ->
-            variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
-        |> Map.ofList
-
-    // Second pass: collect all function signatures from THIS program
-    let funcSigs =
-        topLevels
-        |> List.choose (function
-            | FunctionDef funcDef ->
-                Some (
-                    funcDef.Name,
-                    (funcDef.Params |> NonEmptyList.toList |> List.map snd, funcDef.ReturnType)
-                )
-            | _ -> None)
-        |> Map.ofList
-
-    let programFuncParamNameReg : Map<string, string list> =
-        topLevels
-        |> List.choose (function
-            | FunctionDef funcDef ->
-                Some (funcDef.Name, funcDef.Params |> NonEmptyList.toList |> List.map fst)
-            | _ ->
-                None)
-        |> Map.ofList
+    let declarationSummary = summarizeTopLevelDeclarations topLevels
 
     // Build environment with function signatures from THIS program
     let programFuncEnv =
-        funcSigs
+        declarationSummary.FuncSigs
         |> Map.map (fun _ (paramTypes, returnType) -> TFunction (paramTypes, returnType))
 
-    // Build generic function registry from THIS program - maps function names to type parameters
-    let programGenericFuncMap : Map<string, string list> =
-        topLevels
-        |> List.choose (function
-            | FunctionDef funcDef when not (List.isEmpty funcDef.TypeParams) ->
-                Some (funcDef.Name, funcDef.TypeParams)
-            | _ -> None)
-        |> Map.ofList
-
     let programGenericFuncReg : GenericFuncRegistry = {
-        Functions = programGenericFuncMap
+        Functions = declarationSummary.GenericFuncs
         RequireExplicitTypeArgsForBareCalls = requireExplicitTypeArgsForBareCalls
     }
 
@@ -4949,13 +4950,14 @@ let private checkProgramInternal
 
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
-        TypeReg = resolveAliasesInTypeRegistry aliasReg programTypeReg
-        VariantLookup = programVariantLookup
+        TypeReg =
+            resolveAliasesInTypeRegistry declarationSummary.AliasReg declarationSummary.TypeReg
+        VariantLookup = declarationSummary.VariantLookup
         FuncEnv = programFuncEnv
-        FuncParamNames = programFuncParamNameReg
+        FuncParamNames = declarationSummary.FuncParamNames
         GenericFuncReg = programGenericFuncReg
         ModuleRegistry = moduleRegistry
-        AliasReg = aliasReg
+        AliasReg = declarationSummary.AliasReg
     }
 
     // Merge with base environment if provided (for separate compilation)
@@ -5075,7 +5077,7 @@ let private checkProgramInternal
             | None ->
                 // No main expression - just functions
                 // For now, require a "main" function with signature () -> int
-                match Map.tryFind "main" funcSigs with
+                match Map.tryFind "main" declarationSummary.FuncSigs with
                 | Some ([], TInt64) -> Ok (TInt64, Program topLevelsWithEqHelpers, typeCheckEnv)
                 | Some _ -> Error (GenericError "main function must have signature () -> int")
                 | None -> Error (GenericError "Program must have either a main expression or a main() : int function")))
