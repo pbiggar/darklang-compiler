@@ -455,20 +455,14 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | _ -> false
 
 let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Type =
-    let sumTypeNames =
-        ctx.VariantLookup
-        |> Map.toList
-        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
-        |> Set.ofList
-
     let canonicalBareSum name =
         AST.TSum (name, [])
 
     let rec canonicalize typ =
         match typ with
-        | AST.TRecord (name, []) when Set.contains name sumTypeNames ->
+        | AST.TRecord (name, []) when Map.containsKey name ctx.SumShapeReg ->
             canonicalBareSum name
-        | AST.TSum (name, []) when Set.contains name sumTypeNames ->
+        | AST.TSum (name, []) when Map.containsKey name ctx.SumShapeReg ->
             canonicalBareSum name
         | AST.TRecord (name, typeArgs) ->
             AST.TRecord (name, List.map canonicalize typeArgs)
@@ -491,15 +485,9 @@ let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Typ
     canonicalize typ
 
 let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type =
-    let sumTypeNames =
-        ctx.VariantLookup
-        |> Map.toList
-        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
-        |> Set.ofList
-
     let rec canonicalize typ =
         match typ with
-        | AST.TRecord (name, []) when Set.contains name sumTypeNames ->
+        | AST.TRecord (name, []) when Map.containsKey name ctx.SumShapeReg ->
             AST.TSum (name, [])
         | AST.TRecord (name, typeArgs) ->
             AST.TRecord (name, List.map canonicalize typeArgs)
