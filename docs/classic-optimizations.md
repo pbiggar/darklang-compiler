@@ -374,6 +374,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Common subexpression elimination
 
+### Duplicate IfValue reuse
+
+- Optimization name: Duplicate IfValue reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Small, low-risk extension of ANF CSE for a pure conditional value selection; avoids lowering repeated identical selections into duplicate control flow.
+- Notes: Implemented for repeated `IfValue(condition, thenValue, elseValue)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `cse_reuses_duplicate_if_value` in `src/Tests/optimization/anf.opt`; existing branch-heavy tests and benchmarks provide broader regression coverage but do not isolate this micro-pattern.
+
 ### Duplicate tuple projection reuse
 
 - Optimization name: Duplicate tuple projection reuse

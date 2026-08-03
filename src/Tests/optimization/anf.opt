@@ -1424,6 +1424,19 @@ let TempId 5 = t1 + t1
 return t5
 
 ---NAME---
+cse_reuses_duplicate_if_value
+---INPUT---
+def f(cond: Bool, x: Int64, y: Int64) : Int64 =
+  let a = if cond then x else y in
+  let b = if cond then x else y in
+  a + b
+---EXPECTED---
+Function f:
+let TempId 3 = if t0 then t1 else t2
+let TempId 7 = t3 + t3
+return t7
+
+---NAME---
 cse_reuses_commuted_integer_add
 ---INPUT---
 def f(x: Int64) : Int64 =
