@@ -307,6 +307,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that turns addition of a known negative literal into subtraction of its positive counterpart.
 - Notes: Implemented for `x + -n -> x - n` and `-n + x -> x - n` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`, excluding `Int64.MinValue` where negation cannot produce a positive Int64 literal. Covered by `strength_reduce_add_negative_literal_right` and `strength_reduce_add_negative_literal_left` in `src/Tests/optimization/anf.opt`.
 
+### Integer addition reassociation
+
+- Optimization name: Integer addition reassociation
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Canonical, low-risk reassociation that exposes adjacent Int64 literals to constant folding and makes a single-use intermediate addition dead.
+- Notes: Implemented for adjacent ANF bindings representing `(x + a) + b -> x + (a + b)` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Restricted to Int64 addition because floating-point addition is not safely reassociative. Covered by `reassociate_integer_add_constants` and `reassociation_preserves_float_add` in `src/Tests/optimization/anf.opt`; `licm_skip_loop_with_call` in `src/Tests/optimization/lir.opt` verifies that a longer chain reaches LIR as one addition. No current routine benchmark contains the exact two-literal chain; `benchmarks/problems/edigits` is the identified follow-up benchmark because its repeated Int64 index arithmetic is the closest workload fit.
+
 ### Multiplication by negative one strength reduction
 
 - Optimization name: Multiplication by negative one strength reduction

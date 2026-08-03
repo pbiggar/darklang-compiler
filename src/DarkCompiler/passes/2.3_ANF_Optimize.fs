@@ -6,6 +6,7 @@
 // - Copy propagation: eliminate trivial bindings
 // - Dead code elimination: remove unused bindings
 // - Common subexpression elimination: reuse earlier pure computations
+// - Reassociation: combine constants across adjacent integer additions
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
 //
 // These optimizations run in a loop until no more changes occur.
@@ -794,6 +795,13 @@ let private trySimplifyAdjacentLet (tid: TempId) (cexpr: CExpr) (body: AExpr) : 
              && not (aExprUsesTemp tid thenBranch)
              && not (aExprUsesTemp tid elseBranch) ->
         Some (If (source, elseBranch, thenBranch))
+    | Prim (Add, source, IntLiteral (Int64 a)),
+      Let (addTid, Prim (Add, Var sourceTid, IntLiteral (Int64 b)), addBody)
+        when sourceTid = tid ->
+        // Keep the inner binding for this rewrite; the recursive optimization
+        // removes it only when the reassociated expression was its final use.
+        let combined = IntLiteral (Int64 (a + b))
+        Some (Let (tid, cexpr, Let (addTid, Prim (Add, source, combined), addBody)))
     | UnaryPrim (Not, source), Let (notTid, UnaryPrim (Not, Var sourceTid), notBody)
         when sourceTid = tid ->
         Some (Let (notTid, Atom source, notBody))
