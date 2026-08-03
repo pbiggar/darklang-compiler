@@ -447,75 +447,153 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | FloatToString _ -> false  // Pure conversion (but allocates - maybe should be true?)
     | RuntimeError _ -> true
 
-/// Collect all TempIds used in an atom
-let collectAtomUses (atom: Atom) : Set<TempId> =
+/// Add the TempId used by an atom to an existing liveness set.
+let private addAtomUse (atom: Atom) (uses: Set<TempId>) : Set<TempId> =
     match atom with
-    | Var tid -> Set.singleton tid
-    | _ -> Set.empty
+    | Var tid -> Set.add tid uses
+    | _ -> uses
 
-/// Collect all TempIds used in a CExpr
-let collectCExprUses (cexpr: CExpr) : Set<TempId> =
+let private addAtomUses (atoms: Atom list) (uses: Set<TempId>) : Set<TempId> =
+    List.fold (fun uses atom -> addAtomUse atom uses) uses atoms
+
+let private atomUsesTemp (tid: TempId) (atom: Atom) : bool =
+    match atom with
+    | Var usedTid -> usedTid = tid
+    | _ -> false
+
+let private atomsUseTemp (tid: TempId) (atoms: Atom list) : bool =
+    List.exists (atomUsesTemp tid) atoms
+
+/// Add every TempId used by a CExpr to an existing liveness set.
+let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     match cexpr with
-    | Atom a -> collectAtomUses a
-    | TypedAtom (a, _) -> collectAtomUses a
-    | Prim (_, left, right) -> Set.union (collectAtomUses left) (collectAtomUses right)
-    | UnaryPrim (_, src) -> collectAtomUses src
+    | Atom a -> addAtomUse a uses
+    | TypedAtom (a, _) -> addAtomUse a uses
+    | Prim (_, left, right) -> uses |> addAtomUse left |> addAtomUse right
+    | UnaryPrim (_, src) -> addAtomUse src uses
     | IfValue (cond, thenVal, elseVal) ->
-        Set.unionMany [collectAtomUses cond; collectAtomUses thenVal; collectAtomUses elseVal]
-    | Call (_, args) -> args |> List.map collectAtomUses |> Set.unionMany
-    | BorrowedCall (_, args) -> args |> List.map collectAtomUses |> Set.unionMany
-    | TailCall (_, args) -> args |> List.map collectAtomUses |> Set.unionMany
+        uses |> addAtomUse cond |> addAtomUse thenVal |> addAtomUse elseVal
+    | Call (_, args) -> addAtomUses args uses
+    | BorrowedCall (_, args) -> addAtomUses args uses
+    | TailCall (_, args) -> addAtomUses args uses
     | IndirectCall (func, args) ->
-        Set.unionMany ((collectAtomUses func) :: (args |> List.map collectAtomUses))
+        uses |> addAtomUse func |> addAtomUses args
     | IndirectTailCall (func, args) ->
-        Set.unionMany ((collectAtomUses func) :: (args |> List.map collectAtomUses))
-    | ClosureAlloc (_, captures) -> captures |> List.map collectAtomUses |> Set.unionMany
+        uses |> addAtomUse func |> addAtomUses args
+    | ClosureAlloc (_, captures) -> addAtomUses captures uses
     | ClosureCall (closure, args) ->
-        Set.unionMany ((collectAtomUses closure) :: (args |> List.map collectAtomUses))
+        uses |> addAtomUse closure |> addAtomUses args
     | ClosureTailCall (closure, args) ->
-        Set.unionMany ((collectAtomUses closure) :: (args |> List.map collectAtomUses))
-    | TupleAlloc elems -> elems |> List.map collectAtomUses |> Set.unionMany
-    | TupleGet (tuple, _) -> collectAtomUses tuple
-    | StringConcat (left, right) -> Set.union (collectAtomUses left) (collectAtomUses right)
-    | RefCountInc (atom, _, _, _) -> collectAtomUses atom
-    | RefCountDec (atom, _, _, _) -> collectAtomUses atom
-    | Print (atom, _) -> collectAtomUses atom
-    | FileReadText path -> collectAtomUses path
-    | FileExists path -> collectAtomUses path
-    | FileWriteText (path, content) -> Set.union (collectAtomUses path) (collectAtomUses content)
-    | FileAppendText (path, content) -> Set.union (collectAtomUses path) (collectAtomUses content)
-    | FileDelete path -> collectAtomUses path
-    | FileSetExecutable path -> collectAtomUses path
-    | FileWriteFromPtr (path, ptr, length) -> Set.unionMany [collectAtomUses path; collectAtomUses ptr; collectAtomUses length]
-    | RawAlloc numBytes -> collectAtomUses numBytes
-    | RawFree ptr -> collectAtomUses ptr
-    | RawGet (ptr, byteOffset, _) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
-    | RawGetByte (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
-    | RawWriteWord (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
-    | RawWriteByte (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
-    | RawSlotInit (ptr, byteOffset, value, _) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
-    | StringToRawPtr value -> collectAtomUses value
-    | RawPtrToString ptr -> collectAtomUses ptr
-    | BytesToRawPtr value -> collectAtomUses value
-    | RawPtrToBytes ptr -> collectAtomUses ptr
-    | DictToRawPtr dict -> collectAtomUses dict
-    | RawPtrToDict (ptr, tag, _) -> Set.union (collectAtomUses ptr) (collectAtomUses tag)
-    | ListToRawPtr list -> collectAtomUses list
-    | RawPtrToList (ptr, tag, _) -> Set.union (collectAtomUses ptr) (collectAtomUses tag)
-    | FloatSqrt atom -> collectAtomUses atom
-    | FloatAbs atom -> collectAtomUses atom
-    | FloatNeg atom -> collectAtomUses atom
-    | Int64ToFloat atom -> collectAtomUses atom
-    | FloatToInt64 atom -> collectAtomUses atom
-    | FloatToBits atom -> collectAtomUses atom
-    | RefCountIncString str -> collectAtomUses str
-    | RefCountDecString str -> collectAtomUses str
-    | RefCountIncBytes bytes -> collectAtomUses bytes
-    | RefCountDecBytes bytes -> collectAtomUses bytes
-    | RandomInt64 -> Set.empty  // No atoms
-    | DateNow -> Set.empty      // No atoms
-    | FloatToString atom -> collectAtomUses atom
-    | RuntimeError _ -> Set.empty
+        uses |> addAtomUse closure |> addAtomUses args
+    | TupleAlloc elems -> addAtomUses elems uses
+    | TupleGet (tuple, _) -> addAtomUse tuple uses
+    | StringConcat (left, right) -> uses |> addAtomUse left |> addAtomUse right
+    | RefCountInc (atom, _, _, _) -> addAtomUse atom uses
+    | RefCountDec (atom, _, _, _) -> addAtomUse atom uses
+    | Print (atom, _) -> addAtomUse atom uses
+    | FileReadText path -> addAtomUse path uses
+    | FileExists path -> addAtomUse path uses
+    | FileWriteText (path, content) -> uses |> addAtomUse path |> addAtomUse content
+    | FileAppendText (path, content) -> uses |> addAtomUse path |> addAtomUse content
+    | FileDelete path -> addAtomUse path uses
+    | FileSetExecutable path -> addAtomUse path uses
+    | FileWriteFromPtr (path, ptr, length) ->
+        uses |> addAtomUse path |> addAtomUse ptr |> addAtomUse length
+    | RawAlloc numBytes -> addAtomUse numBytes uses
+    | RawFree ptr -> addAtomUse ptr uses
+    | RawGet (ptr, byteOffset, _) -> uses |> addAtomUse ptr |> addAtomUse byteOffset
+    | RawGetByte (ptr, byteOffset) -> uses |> addAtomUse ptr |> addAtomUse byteOffset
+    | RawWriteWord (ptr, byteOffset, value) ->
+        uses |> addAtomUse ptr |> addAtomUse byteOffset |> addAtomUse value
+    | RawWriteByte (ptr, byteOffset, value) ->
+        uses |> addAtomUse ptr |> addAtomUse byteOffset |> addAtomUse value
+    | RawSlotInit (ptr, byteOffset, value, _) ->
+        uses |> addAtomUse ptr |> addAtomUse byteOffset |> addAtomUse value
+    | StringToRawPtr value -> addAtomUse value uses
+    | RawPtrToString ptr -> addAtomUse ptr uses
+    | BytesToRawPtr value -> addAtomUse value uses
+    | RawPtrToBytes ptr -> addAtomUse ptr uses
+    | DictToRawPtr dict -> addAtomUse dict uses
+    | RawPtrToDict (ptr, tag, _) -> uses |> addAtomUse ptr |> addAtomUse tag
+    | ListToRawPtr list -> addAtomUse list uses
+    | RawPtrToList (ptr, tag, _) -> uses |> addAtomUse ptr |> addAtomUse tag
+    | FloatSqrt atom -> addAtomUse atom uses
+    | FloatAbs atom -> addAtomUse atom uses
+    | FloatNeg atom -> addAtomUse atom uses
+    | Int64ToFloat atom -> addAtomUse atom uses
+    | FloatToInt64 atom -> addAtomUse atom uses
+    | FloatToBits atom -> addAtomUse atom uses
+    | RefCountIncString str -> addAtomUse str uses
+    | RefCountDecString str -> addAtomUse str uses
+    | RefCountIncBytes bytes -> addAtomUse bytes uses
+    | RefCountDecBytes bytes -> addAtomUse bytes uses
+    | RandomInt64 -> uses  // No atoms
+    | DateNow -> uses      // No atoms
+    | FloatToString atom -> addAtomUse atom uses
+    | RuntimeError _ -> uses
+
+/// Test whether a CExpr uses a TempId without constructing a liveness set.
+let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
+    let used = atomUsesTemp tid
+    let anyUsed = atomsUseTemp tid
+
+    match cexpr with
+    | Atom atom
+    | TypedAtom (atom, _)
+    | UnaryPrim (_, atom)
+    | TupleGet (atom, _)
+    | RefCountInc (atom, _, _, _)
+    | RefCountDec (atom, _, _, _)
+    | Print (atom, _)
+    | FileReadText atom
+    | FileExists atom
+    | FileDelete atom
+    | FileSetExecutable atom
+    | RawAlloc atom
+    | RawFree atom
+    | StringToRawPtr atom
+    | RawPtrToString atom
+    | BytesToRawPtr atom
+    | RawPtrToBytes atom
+    | DictToRawPtr atom
+    | ListToRawPtr atom
+    | FloatSqrt atom
+    | FloatAbs atom
+    | FloatNeg atom
+    | Int64ToFloat atom
+    | FloatToInt64 atom
+    | FloatToBits atom
+    | RefCountIncString atom
+    | RefCountDecString atom
+    | RefCountIncBytes atom
+    | RefCountDecBytes atom
+    | FloatToString atom -> used atom
+    | Prim (_, left, right)
+    | StringConcat (left, right)
+    | FileWriteText (left, right)
+    | FileAppendText (left, right)
+    | RawGet (left, right, _)
+    | RawGetByte (left, right)
+    | RawPtrToDict (left, right, _)
+    | RawPtrToList (left, right, _) -> used left || used right
+    | IfValue (first, second, third)
+    | FileWriteFromPtr (first, second, third)
+    | RawWriteWord (first, second, third)
+    | RawWriteByte (first, second, third)
+    | RawSlotInit (first, second, third, _) ->
+        used first || used second || used third
+    | Call (_, atoms)
+    | BorrowedCall (_, atoms)
+    | TailCall (_, atoms)
+    | ClosureAlloc (_, atoms)
+    | TupleAlloc atoms -> anyUsed atoms
+    | IndirectCall (first, rest)
+    | IndirectTailCall (first, rest)
+    | ClosureCall (first, rest)
+    | ClosureTailCall (first, rest) -> used first || anyUsed rest
+    | RandomInt64
+    | DateNow
+    | RuntimeError _ -> false
 
 /// Substitute atom in another atom
 let substAtom (env: Map<TempId, Atom>) (atom: Atom) : Atom =
@@ -693,11 +771,11 @@ let private tryAbsorbedAtom (outer: Atom) (nestedLeft: Atom) (nestedRight: Atom)
 
 let rec private aExprUsesTemp (tid: TempId) (expr: AExpr) : bool =
     match expr with
-    | Return atom -> Set.contains tid (collectAtomUses atom)
+    | Return atom -> atomUsesTemp tid atom
     | Let (_, cexpr, body) ->
-        Set.contains tid (collectCExprUses cexpr) || aExprUsesTemp tid body
+        cexprUsesTemp tid cexpr || aExprUsesTemp tid body
     | If (cond, thenBranch, elseBranch) ->
-        Set.contains tid (collectAtomUses cond)
+        atomUsesTemp tid cond
         || aExprUsesTemp tid thenBranch
         || aExprUsesTemp tid elseBranch
 
@@ -778,7 +856,7 @@ let rec private optimizeAExprWithUses
         {
             Expr = Return atom'
             Changed = atom' <> atom
-            Uses = collectAtomUses atom'
+            Uses = addAtomUse atom' Set.empty
         }
 
     | Let (tid, cexpr, body) ->
@@ -855,8 +933,7 @@ let rec private optimizeAExprWithUses
                 Uses = usesInBodyWithoutTid
             }
         | _ ->
-            let usesInCExpr = collectCExprUses cexpr''
-            let uses = Set.union usesInCExpr usesInBodyWithoutTid
+            let uses = addCExprUses cexpr'' usesInBodyWithoutTid
             {
                 Expr = Let (tid, cexpr'', bodyResult.Expr)
                 Changed = cexprChanged || cseChanged || bodyResult.Changed
@@ -889,7 +966,7 @@ let rec private optimizeAExprWithUses
                 {
                     Expr = Return cond'
                     Changed = true
-                    Uses = collectAtomUses cond'
+                    Uses = addAtomUse cond' Set.empty
                 }
             elif options.EnableConstFolding && thenResult.Expr = elseResult.Expr then
                 {
@@ -898,7 +975,7 @@ let rec private optimizeAExprWithUses
                     Uses = thenResult.Uses
                 }
             else
-                let uses = Set.unionMany [collectAtomUses cond'; thenResult.Uses; elseResult.Uses]
+                let uses = Set.union thenResult.Uses elseResult.Uses |> addAtomUse cond'
                 {
                     Expr = If (cond', thenResult.Expr, elseResult.Expr)
                     Changed = cond' <> cond || thenResult.Changed || elseResult.Changed
