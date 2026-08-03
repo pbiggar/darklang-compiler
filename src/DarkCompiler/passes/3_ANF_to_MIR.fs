@@ -480,6 +480,8 @@ type CFGBuilder = {
     LabelGen: MIR.LabelGen
     RegGen: MIR.RegGen
     TypeById: AST.Type option array
+    // Fresh MIR registers start above this function's source TempIds and must use ExtraTypeMap.
+    SourceTempIdMax: int
     ExtraTypeMap: Map<ANF.TempId, AST.Type>
     TypeReg: Map<string, (string * AST.Type) list>
     ReturnTypeReg: Map<string, AST.Type>  // Function name -> return type
@@ -495,7 +497,7 @@ type CFGBuilder = {
 
 /// Lookup a TempId by raw integer id, checking extra types for newly created regs
 let private tryFindTypeById (builder: CFGBuilder) (id: int) : AST.Type option =
-    if id >= 0 && id < builder.TypeById.Length then
+    if id >= 0 && id <= builder.SourceTempIdMax && id < builder.TypeById.Length then
         match builder.TypeById.[id] with
         | Some t -> Some t
         | None -> Map.tryFind (ANF.TempId id) builder.ExtraTypeMap
@@ -2107,6 +2109,7 @@ and convertExprToOperand
 let convertANFFunction
     (anfFunc: ANF.Function)
     (typeMap: ANF.TypeMap)
+    (typeById: AST.Type option array)
     (typeReg: Map<string, (string * AST.Type) list>)
     (returnTypeReg: Map<string, AST.Type>)
     (enableCoverage: bool)
@@ -2139,7 +2142,6 @@ let convertANFFunction
             getReturnTypeAndMaxTempId floatParamIds typeMap returnTypeReg anfFunc.Body
         let maxId = max paramMax bodyMaxId
         let regGen = MIR.RegGen (maxId + 1)
-        let typeById = buildTypeById maxId typeMap
 
         // Create initial builder
         let initialBuilder = {
@@ -2147,6 +2149,7 @@ let convertANFFunction
             LabelGen = MIR.initialLabelGen
             Blocks = Map.empty
             TypeById = typeById
+            SourceTempIdMax = maxId
             ExtraTypeMap = Map.empty
             TypeReg = typeReg
             ReturnTypeReg = returnTypeReg
@@ -2221,6 +2224,9 @@ let toMIR
     (externalReturnTypes: Map<string, AST.Type>)
     : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
+    // TypeMap spans the whole program, so materialize its dense lookup once and
+    // retain a per-function source bound when sharing it with each CFG builder.
+    let typeById = buildTypeById (maxTempIdInProgram program) typeMap
 
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
@@ -2229,7 +2235,7 @@ let toMIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
             functions
     with
     | Error err -> Error err
@@ -2239,13 +2245,13 @@ let toMIR
     // _start gets its own RegGen based on the main expression's TempIds
     let startMaxId = maxTempIdInAExpr mainExpr
     let startRegGen = MIR.RegGen (startMaxId + 1)
-    let startTypeById = buildTypeById startMaxId typeMap
     let entryLabel = MIR.Label "_start_body"
     let initialBuilder = {
         RegGen = startRegGen
         LabelGen = MIR.initialLabelGen
         Blocks = Map.empty
-        TypeById = startTypeById
+        TypeById = typeById
+        SourceTempIdMax = startMaxId
         ExtraTypeMap = Map.empty
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
@@ -2294,6 +2300,8 @@ let toMIRFunctionsOnly
     (externalReturnTypes: Map<string, AST.Type>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
+    // Avoid rescanning the global TypeMap for every function conversion.
+    let typeById = buildTypeById (maxTempIdInProgram program) typeMap
 
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
@@ -2302,7 +2310,7 @@ let toMIRFunctionsOnly
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
             functions
     with
     | Error err -> Error err
