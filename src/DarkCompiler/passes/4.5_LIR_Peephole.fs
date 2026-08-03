@@ -590,29 +590,27 @@ let removePostAllocationMovesFromFunction (func: Function) : Function =
                     |> removeRedundantFloatingCopyBackMoves })
     { func with CFG = { func.CFG with Blocks = blocks } }
 
-let private regUsedInOperand (target: Reg) (operand: Operand) : bool =
+let private foldOperandRegUse folder state (operand: Operand) =
     match operand with
-    | Reg reg -> sameReg reg target
+    | Reg reg -> folder state reg
     | Imm _
     | FloatImm _
     | StackSlot _
     | StringSymbol _
     | FloatSymbol _
-    | FuncAddr _ -> false
+    | FuncAddr _ -> state
 
-/// Check if a register is read by an instruction.
-let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
-    let usedInOperand = regUsedInOperand target
-    let same = sameReg target
+/// Fold over the integer registers read by an instruction.
+let private foldRegUses folder state (instr: Instr) =
     match instr with
     | Mov (_, src)
     | RefCountIncString src
     | RefCountDecString src
     | RefCountIncBytes src
     | RefCountDecBytes src ->
-        usedInOperand src
+        foldOperandRegUse folder state src
     | Phi (_, sources, _) ->
-        sources |> List.exists (fun (src, _) -> usedInOperand src)
+        sources |> List.fold (fun acc (src, _) -> foldOperandRegUse folder acc src) state
     | Store (_, src)
     | PrintInt64 src
     | PrintUInt64 src
@@ -629,11 +627,11 @@ let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
     | GpToFp (_, src)
     | RawFree src
     | FloatToString (src, _) ->
-        same src
+        folder state src
     | Add (_, left, right)
     | Sub (_, left, right)
     | Cmp (left, right) ->
-        same left || usedInOperand right
+        foldOperandRegUse folder (folder state left) right
     | Mul (_, left, right)
     | Sdiv (_, left, right)
     | Udiv (_, left, right)
@@ -644,17 +642,17 @@ let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
     | Lsr (_, left, right)
     | RawGet (_, left, right)
     | RawGetByte (_, left, right) ->
-        same left || same right
+        folder (folder state left) right
     | RawAlloc (_, numBytes) ->
-        same numBytes
+        folder state numBytes
     | FileWriteFromPtr (_, path, ptr, length) ->
-        usedInOperand path || same ptr || same length
+        foldOperandRegUse folder state path |> fun acc -> folder (folder acc ptr) length
     | Msub (_, mulLeft, mulRight, sub)
     | Madd (_, mulLeft, mulRight, sub)
     | RawWriteWord (mulLeft, mulRight, sub)
     | RawWriteByte (mulLeft, mulRight, sub)
     | RawSlotInit (mulLeft, mulRight, sub, _) ->
-        same mulLeft || same mulRight || same sub
+        folder (folder (folder state mulLeft) mulRight) sub
     | And_imm (_, src, _)
     | Lsl_imm (_, src, _)
     | Lsr_imm (_, src, _)
@@ -669,32 +667,32 @@ let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
     | HeapLoad (_, src, _)
     | RefCountInc (src, _, _, _)
     | RefCountDec (src, _, _, _) ->
-        same src
+        folder state src
     | Call (_, _, args)
     | TailCall (_, args) ->
-        args |> List.exists usedInOperand
+        args |> List.fold (foldOperandRegUse folder) state
     | ArgMoves args
     | TailArgMoves args ->
-        args |> List.exists (fun (_, src) -> usedInOperand src)
+        args |> List.fold (fun acc (_, src) -> foldOperandRegUse folder acc src) state
     | IndirectCall (_, func, args)
     | IndirectTailCall (func, args) ->
-        same func || (args |> List.exists usedInOperand)
+        args |> List.fold (foldOperandRegUse folder) (folder state func)
     | ClosureCall (_, closure, args)
     | ClosureTailCall (closure, args) ->
-        same closure || (args |> List.exists usedInOperand)
+        args |> List.fold (foldOperandRegUse folder) (folder state closure)
     | ClosureAlloc (_, _, captures) ->
-        captures |> List.exists usedInOperand
+        captures |> List.fold (foldOperandRegUse folder) state
     | HeapStore (addr, _, src, _) ->
-        same addr || usedInOperand src
+        foldOperandRegUse folder (folder state addr) src
     | StringConcat (_, left, right)
     | FileWriteText (_, left, right)
     | FileAppendText (_, left, right) ->
-        usedInOperand left || usedInOperand right
+        foldOperandRegUse folder state left |> fun acc -> foldOperandRegUse folder acc right
     | FileReadText (_, path)
     | FileExists (_, path)
     | FileDelete (_, path)
     | FileSetExecutable (_, path) ->
-        usedInOperand path
+        foldOperandRegUse folder state path
     | Cset _
     | SaveRegs _
     | RestoreRegs _
@@ -723,7 +721,32 @@ let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
     | LoadFuncAddr _
     | RandomInt64 _
     | DateNow _
-    | CoverageHit _ -> false
+    | CoverageHit _ -> state
+
+/// Check if a register is read by an instruction.
+let private regUsedInInstr (target: Reg) (instr: Instr) : bool =
+    foldRegUses (fun used reg -> used || sameReg reg target) false instr
+
+/// Record the last read of each temporary whose remaining uses affect a fold.
+/// Restricting the map to candidates avoids both repeated suffix scans and a
+/// full-block liveness map for blocks that contain no relevant peepholes.
+let private lastRelevantRegUses
+    (candidates: Set<Reg>)
+    (instrs: Instr list)
+    : Map<Reg, int> =
+    let rec loop index uses remaining =
+        match remaining with
+        | instr :: rest ->
+            let uses' =
+                foldRegUses (fun acc reg ->
+                    if Set.contains reg candidates then Map.add reg index acc else acc
+                ) uses instr
+            loop (index + 1) uses' rest
+        | [] -> uses
+    loop 0 Map.empty instrs
+
+let private regUsedAfter (lastUses: Map<Reg, int>) (index: int) (reg: Reg) : bool =
+    Map.tryFind reg lastUses |> Option.exists (fun lastUse -> lastUse > index)
 
 /// Check if a register is used in any instruction (for dead code detection)
 let isRegUsedInInstrs (reg: Reg) (instrs: Instr list) : bool =
@@ -747,86 +770,99 @@ let tryMulConstantPattern (n: int64) : (int * bool) option =
     | 65L -> Some (6, true)   // 65 = 64 + 1 = (1 << 6) + 1
     | _ -> None
 
+let private mulByConstantCandidates (instrs: Instr list) : Set<Reg> =
+    let rec loop candidates remaining =
+        match remaining with
+        | Mov (constReg, Imm n) :: Mul (_, mulLeft, mulRight) :: rest
+            when Option.isSome (tryMulConstantPattern n)
+                 && ((sameReg constReg mulRight && not (sameReg constReg mulLeft))
+                     || (sameReg constReg mulLeft && not (sameReg constReg mulRight))) ->
+            loop (Set.add constReg candidates) rest
+        | _ :: rest -> loop candidates rest
+        | [] -> candidates
+    loop Set.empty instrs
+
 /// Try to optimize multiply-by-constant patterns
 /// Pattern: Mov temp, Imm n; Mul dest, x, temp → Lsl_imm temp, x, shift; Add/Sub dest, x, Reg temp
 /// This converts multiplication by constants like 3, 5, 7, 9 to shift+add/sub sequences
 /// which ARM64 can execute in a single ADD_shifted/SUB_shifted instruction
 let tryMulByConstant (instrs: Instr list) : Instr list =
-    let rec loop acc remaining =
-        match remaining with
-        | [] -> List.rev acc
-        | [single] -> List.rev (single :: acc)
-        // Pattern: Mov temp, Imm n; Mul dest, x, temp
-        | Mov (constReg, Imm n) :: Mul (mulDest, mulLeft, mulRight) :: rest
-            when sameReg constReg mulRight && not (sameReg constReg mulLeft) ->
-            match tryMulConstantPattern n with
-            | Some (shift, isAdd) ->
-                // Check that constReg is not used later (dead after the Mul)
-                if not (isRegUsedInInstrs constReg rest) then
-                    // x * n where n = 2^shift ± 1
-                    // Reuse constReg for the shifted value
+    let candidates = mulByConstantCandidates instrs
+    if Set.isEmpty candidates then
+        instrs
+    else
+        let lastUses = lastRelevantRegUses candidates instrs
+        let rec loop index acc remaining =
+            match remaining with
+            | [] -> List.rev acc
+            | [single] -> List.rev (single :: acc)
+            | Mov (constReg, Imm n) :: Mul (mulDest, mulLeft, mulRight) :: rest
+                when sameReg constReg mulRight && not (sameReg constReg mulLeft) ->
+                match tryMulConstantPattern n with
+                | Some (shift, isAdd) when not (regUsedAfter lastUses (index + 1) constReg) ->
                     let shiftInstr = Lsl_imm (constReg, mulLeft, shift)
                     let combineInstr =
                         if isAdd then
-                            // n = 2^shift + 1: x * n = (x << shift) + x
                             Add (mulDest, mulLeft, Reg constReg)
                         else
-                            // n = 2^shift - 1: x * n = (x << shift) - x
                             Sub (mulDest, constReg, Reg mulLeft)
-                    loop (combineInstr :: shiftInstr :: acc) rest
-                else
-                    // constReg is still needed, can't optimize
-                    loop (Mov (constReg, Imm n) :: acc) (Mul (mulDest, mulLeft, mulRight) :: rest)
-            | None ->
-                // Not an optimizable constant
-                loop (Mov (constReg, Imm n) :: acc) (Mul (mulDest, mulLeft, mulRight) :: rest)
-        // Pattern: Mov temp, Imm n; Mul dest, temp, x (commutative)
-        | Mov (constReg, Imm n) :: Mul (mulDest, mulLeft, mulRight) :: rest
-            when sameReg constReg mulLeft && not (sameReg constReg mulRight) ->
-            match tryMulConstantPattern n with
-            | Some (shift, isAdd) ->
-                if not (isRegUsedInInstrs constReg rest) then
+                    loop (index + 2) (combineInstr :: shiftInstr :: acc) rest
+                | _ ->
+                    loop (index + 1) (Mov (constReg, Imm n) :: acc) (Mul (mulDest, mulLeft, mulRight) :: rest)
+            | Mov (constReg, Imm n) :: Mul (mulDest, mulLeft, mulRight) :: rest
+                when sameReg constReg mulLeft && not (sameReg constReg mulRight) ->
+                match tryMulConstantPattern n with
+                | Some (shift, isAdd) when not (regUsedAfter lastUses (index + 1) constReg) ->
                     let shiftInstr = Lsl_imm (constReg, mulRight, shift)
                     let combineInstr =
                         if isAdd then
                             Add (mulDest, mulRight, Reg constReg)
                         else
                             Sub (mulDest, constReg, Reg mulRight)
-                    loop (combineInstr :: shiftInstr :: acc) rest
-                else
-                    loop (Mov (constReg, Imm n) :: acc) (Mul (mulDest, mulLeft, mulRight) :: rest)
-            | None ->
-                loop (Mov (constReg, Imm n) :: acc) (Mul (mulDest, mulLeft, mulRight) :: rest)
-        | instr :: rest ->
-            loop (instr :: acc) rest
-    loop [] instrs
+                    loop (index + 2) (combineInstr :: shiftInstr :: acc) rest
+                | _ ->
+                    loop (index + 1) (Mov (constReg, Imm n) :: acc) (Mul (mulDest, mulLeft, mulRight) :: rest)
+            | instr :: rest -> loop (index + 1) (instr :: acc) rest
+        loop 0 [] instrs
+
+let private mulAddCandidates (instrs: Instr list) : Set<Reg> =
+    let rec loop candidates remaining =
+        match remaining with
+        | Mul (mulDest, _, _) :: Add (_, addLeft, Reg addRight) :: rest
+            when (sameReg mulDest addLeft && not (sameReg mulDest addRight))
+                 || (sameReg mulDest addRight && not (sameReg mulDest addLeft)) ->
+            loop (Set.add mulDest candidates) rest
+        | _ :: rest -> loop candidates rest
+        | [] -> candidates
+    loop Set.empty instrs
 
 /// Try to fuse MUL + ADD into MADD (multiply-add)
 /// Pattern: MUL temp, a, b; ADD dest, temp, Reg c → MADD dest, a, b, c
 /// Or:      MUL temp, a, b; ADD dest, Reg c, temp → MADD dest, a, b, c (commutative)
 let tryFuseMulAdd (instrs: Instr list) : Instr list =
-    let rec loop acc remaining =
-        match remaining with
-        | [] -> List.rev acc
-        | [single] -> List.rev (single :: acc)
-        | Mul (mulDest, mulLeft, mulRight) :: Add (addDest, addLeft, Reg addRight) :: rest
-            when sameReg mulDest addLeft && not (sameReg mulDest addRight) ->
-            // MUL temp, a, b; ADD dest, temp, c → MADD dest, a, b, c
-            // Check that temp is not used later (dead after the ADD)
-            if not (isRegUsedInInstrs mulDest rest) then
-                loop (Madd (addDest, mulLeft, mulRight, addRight) :: acc) rest
-            else
-                loop (Mul (mulDest, mulLeft, mulRight) :: acc) (Add (addDest, addLeft, Reg addRight) :: rest)
-        | Mul (mulDest, mulLeft, mulRight) :: Add (addDest, addLeft, Reg addRight) :: rest
-            when sameReg mulDest addRight && not (sameReg mulDest addLeft) ->
-            // MUL temp, a, b; ADD dest, c, temp → MADD dest, a, b, c (commutative)
-            if not (isRegUsedInInstrs mulDest rest) then
-                loop (Madd (addDest, mulLeft, mulRight, addLeft) :: acc) rest
-            else
-                loop (Mul (mulDest, mulLeft, mulRight) :: acc) (Add (addDest, addLeft, Reg addRight) :: rest)
-        | instr :: rest ->
-            loop (instr :: acc) rest
-    loop [] instrs
+    let candidates = mulAddCandidates instrs
+    if Set.isEmpty candidates then
+        instrs
+    else
+        let lastUses = lastRelevantRegUses candidates instrs
+        let rec loop index acc remaining =
+            match remaining with
+            | [] -> List.rev acc
+            | [single] -> List.rev (single :: acc)
+            | Mul (mulDest, mulLeft, mulRight) :: Add (addDest, addLeft, Reg addRight) :: rest
+                when sameReg mulDest addLeft && not (sameReg mulDest addRight) ->
+                if not (regUsedAfter lastUses (index + 1) mulDest) then
+                    loop (index + 2) (Madd (addDest, mulLeft, mulRight, addRight) :: acc) rest
+                else
+                    loop (index + 1) (Mul (mulDest, mulLeft, mulRight) :: acc) (Add (addDest, addLeft, Reg addRight) :: rest)
+            | Mul (mulDest, mulLeft, mulRight) :: Add (addDest, addLeft, Reg addRight) :: rest
+                when sameReg mulDest addRight && not (sameReg mulDest addLeft) ->
+                if not (regUsedAfter lastUses (index + 1) mulDest) then
+                    loop (index + 2) (Madd (addDest, mulLeft, mulRight, addLeft) :: acc) rest
+                else
+                    loop (index + 1) (Mul (mulDest, mulLeft, mulRight) :: acc) (Add (addDest, addLeft, Reg addRight) :: rest)
+            | instr :: rest -> loop (index + 1) (instr :: acc) rest
+        loop 0 [] instrs
 
 /// Try to fuse Cset + Branch into CondBranch
 /// Pattern: last instruction is Cset dest, cond; terminator is Branch dest, trueL, falseL
