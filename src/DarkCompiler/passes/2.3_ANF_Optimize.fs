@@ -20,6 +20,9 @@ type ConstEnv = Map<TempId, Atom>
 /// Environment mapping TempIds to source types for type-sensitive rewrites.
 type TypeEnv = Map<TempId, AST.Type>
 
+/// Environment mapping locally allocated tuples to ownership-safe element atoms.
+type TupleEnv = Map<TempId, Map<int, Atom>>
+
 /// Optimization toggles for ANF optimization passes
 type OptimizeOptions = {
     EnableConstFolding: bool
@@ -365,6 +368,20 @@ let private typeNeedsTypedAtomDceProtection (context: OptimizeContext) (typ: AST
     |> rcShapeOfTypeWithSums context.TypeReg context.SumShapeReg
     |> rcShapeNeedsOwnedScopeRelease
 
+/// Projection bindings carry borrowing information into RC insertion, so only
+/// bypass them when the selected element cannot own managed memory.
+let private canForwardTupleElement (context: OptimizeContext) (typeEnv: TypeEnv) (atom: Atom) : bool =
+    match atom with
+    | UnitLiteral
+    | IntLiteral _
+    | BoolLiteral _
+    | StringLiteral _
+    | FloatLiteral _
+    | FuncRef _ -> true
+    | Var tid ->
+        Map.tryFind tid typeEnv
+        |> Option.exists (typeNeedsTypedAtomDceProtection context >> not)
+
 /// Check if a CExpr has side effects
 let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     match cexpr with
@@ -567,7 +584,7 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RuntimeError message -> RuntimeError message
 
 /// Optimize a CExpr with constant folding
-let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (cexpr: CExpr) : CExpr * bool =
+let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (tupleEnv: TupleEnv) (cexpr: CExpr) : CExpr * bool =
     // First, substitute known constants
     let cexpr' = substCExpr env cexpr
 
@@ -592,6 +609,10 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                 Some (Atom (StringLiteral (left + right)))
             | StringConcat (left, StringLiteral "") -> Some (Atom left)
             | StringConcat (StringLiteral "", right) -> Some (Atom right)
+            | TupleGet (Var tupleTid, index) ->
+                Map.tryFind tupleTid tupleEnv
+                |> Option.bind (Map.tryFind index)
+                |> Option.map Atom
             | Call ("__string_eq", [Var leftTid; Var rightTid]) when leftTid = rightTid ->
                 Some (Atom (BoolLiteral true))
             | IfValue (BoolLiteral true, thenVal, _) -> Some (Atom thenVal)
@@ -743,6 +764,7 @@ let rec private optimizeAExprWithUses
     (options: OptimizeOptions)
     (env: ConstEnv)
     (typeEnv: TypeEnv)
+    (tupleEnv: TupleEnv)
     (cseEnv: CSEnv)
     (aexpr: AExpr)
     : OptimizeAExprResult =
@@ -757,7 +779,7 @@ let rec private optimizeAExprWithUses
 
     | Let (tid, cexpr, body) ->
         // Optimize the CExpr
-        let (cexpr', cexprChanged) = optimizeCExpr options env typeEnv cexpr
+        let (cexpr', cexprChanged) = optimizeCExpr options env typeEnv tupleEnv cexpr
         let (cexpr'', cseChanged, cseEnv') =
             if options.EnableCSE && isCSEEligible cexpr' then
                 let key = cseKey cexpr'
@@ -781,7 +803,22 @@ let rec private optimizeAExprWithUses
                 (env, false)
 
         // Optimize the body
-        let bodyResult = optimizeAExprWithUses context options env' typeEnv cseEnv' body
+        let tupleEnv' =
+            match cexpr'' with
+            | TupleAlloc elements ->
+                let forwardableElements =
+                    elements
+                    |> List.indexed
+                    |> List.choose (fun (index, element) ->
+                        if canForwardTupleElement context typeEnv element then
+                            Some (index, element)
+                        else
+                            None)
+                    |> Map.ofList
+                Map.add tid forwardableElements tupleEnv
+            | _ -> tupleEnv
+
+        let bodyResult = optimizeAExprWithUses context options env' typeEnv tupleEnv' cseEnv' body
 
         // Dead code elimination: if tid is not used in body and cexpr has no side effects
         let usesInBody = bodyResult.Uses
@@ -797,7 +834,7 @@ let rec private optimizeAExprWithUses
 
         match adjacentSimplification with
         | Some replacement ->
-            let replacementResult = optimizeAExprWithUses context options env typeEnv cseEnv replacement
+            let replacementResult = optimizeAExprWithUses context options env typeEnv tupleEnv cseEnv replacement
             { replacementResult with Changed = true }
         | None when skipBinding ->
             // Copy propagation: skip this binding entirely
@@ -828,22 +865,22 @@ let rec private optimizeAExprWithUses
         // Fold constant conditions
         match cond' with
         | BoolLiteral true when options.EnableConstFolding ->
-            let thenResult = optimizeAExprWithUses context options env typeEnv cseEnv thenBranch
+            let thenResult = optimizeAExprWithUses context options env typeEnv tupleEnv cseEnv thenBranch
             {
                 Expr = thenResult.Expr
                 Changed = true
                 Uses = thenResult.Uses
             }
         | BoolLiteral false when options.EnableConstFolding ->
-            let elseResult = optimizeAExprWithUses context options env typeEnv cseEnv elseBranch
+            let elseResult = optimizeAExprWithUses context options env typeEnv tupleEnv cseEnv elseBranch
             {
                 Expr = elseResult.Expr
                 Changed = true
                 Uses = elseResult.Uses
             }
         | _ ->
-            let thenResult = optimizeAExprWithUses context options env typeEnv cseEnv thenBranch
-            let elseResult = optimizeAExprWithUses context options env typeEnv cseEnv elseBranch
+            let thenResult = optimizeAExprWithUses context options env typeEnv tupleEnv cseEnv thenBranch
+            let elseResult = optimizeAExprWithUses context options env typeEnv tupleEnv cseEnv elseBranch
             if options.EnableConstFolding && thenResult.Expr = Return (BoolLiteral true) && elseResult.Expr = Return (BoolLiteral false) then
                 {
                     Expr = Return cond'
@@ -866,7 +903,7 @@ let rec private optimizeAExprWithUses
 
 /// Optimize an AExpr
 let optimizeAExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (aexpr: AExpr) : AExpr * bool =
-    let result = optimizeAExprWithUses context options env typeEnv Map.empty aexpr
+    let result = optimizeAExprWithUses context options env typeEnv Map.empty Map.empty aexpr
     (result.Expr, result.Changed)
 
 /// Optimize a function

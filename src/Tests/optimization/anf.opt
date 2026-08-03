@@ -1469,6 +1469,28 @@ let TempId 7 = f(t6)
 return t7
 
 ---NAME---
+tuple_get_from_local_tuple_alloc
+---INPUT---
+def f(x: Int64, y: Int64) : Int64 =
+  let tuple = (x, y) in
+  tuple.1
+---EXPECTED---
+Function f:
+return t1
+
+---NAME---
+tuple_get_from_local_tuple_alloc_preserves_owned_projection
+---INPUT---
+def f(value: Bytes) : Bytes =
+  let tuple = (value, 1) in
+  tuple.0
+---EXPECTED---
+Function f:
+let TempId 1 = (t0, 1)
+let TempId 3 = t1.0
+return t3
+
+---NAME---
 cse_reuses_duplicate_float_to_int64
 ---INPUT---
 def f(x: Float) : Int64 =

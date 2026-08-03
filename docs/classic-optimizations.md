@@ -430,6 +430,15 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk extension of ANF CSE for a pure floating-point operation; avoids repeating the same square-root computation before MIR lowering.
 - Notes: Implemented for repeated `FloatSqrt(atom)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_float_sqrt` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+## Aggregate simplification
+
+### Local tuple projection forwarding
+
+- Optimization name: Local tuple projection forwarding
+- Taxonomy category: Aggregate simplification
+- Priority/rationale: Canonical, low-risk scalar replacement step that exposes locally constructed tuple elements directly and lets existing dead-code elimination remove unused tuple allocations.
+- Notes: Implemented for `TupleGet(TupleAlloc(elements), index)` when the selected atom is ownership-safe to forward in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by positive and managed-ownership negative ANF snapshots in `src/Tests/optimization/anf.opt`; `binary_trees` provides broader tuple benchmark coverage but does not isolate this local construction/projection pattern.
+
 ## Dead code elimination
 
 ### Unused ANF binding elimination
