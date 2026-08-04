@@ -100,6 +100,13 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | BitOr, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a ||| b))))
     | BitXor, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a ^^^ b))))
 
+    // UInt64 arithmetic (unchecked - overflow wraps)
+    | Add, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a + b))))
+    | Sub, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a - b))))
+    | Mul, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a * b))))
+    | Div, IntLiteral (UInt64 a), IntLiteral (UInt64 b) when b <> 0UL -> Some (Atom (IntLiteral (UInt64 (a / b))))
+    | Mod, IntLiteral (UInt64 a), IntLiteral (UInt64 b) when b <> 0UL -> Some (Atom (IntLiteral (UInt64 (a % b))))
+
     // UInt64 bitwise operations
     | BitAnd, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a &&& b))))
     | BitOr, IntLiteral (UInt64 a), IntLiteral (UInt64 b) -> Some (Atom (IntLiteral (UInt64 (a ||| b))))

@@ -37,6 +37,41 @@ const_fold_int_mod
 return 1
 
 ---NAME---
+const_fold_uint64_add
+---INPUT---
+18446744073709551615UL + 2UL
+---EXPECTED---
+return 1
+
+---NAME---
+const_fold_uint64_sub
+---INPUT---
+0UL - 1UL
+---EXPECTED---
+return 18446744073709551615
+
+---NAME---
+const_fold_uint64_mul
+---INPUT---
+9223372036854775808UL * 2UL
+---EXPECTED---
+return 0
+
+---NAME---
+const_fold_uint64_div
+---INPUT---
+20UL / 4UL
+---EXPECTED---
+return 5
+
+---NAME---
+const_fold_uint64_mod
+---INPUT---
+10UL % 3UL
+---EXPECTED---
+return 1
+
+---NAME---
 const_fold_float_add
 ---INPUT---
 1.0 + 2.0
