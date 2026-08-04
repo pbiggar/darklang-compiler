@@ -78,8 +78,9 @@ let private encodeMoveWideShift (instructionName: string) (shift: int) : uint32 
     | 48 -> 3u <<< 21
     | _ -> Crash.crash $"{instructionName}: shift must be one of 0, 16, 32, or 48, got {shift}"
 
-/// Encode ARM64 instruction to 32-bit machine code
-let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
+/// Encode one concrete ARM64 instruction to one 32-bit machine-code word.
+/// Symbolic branches and labels are resolved by encodeWithLabels.
+let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
     match instr with
     | ARM64.MOVZ (dest, imm, shift) ->
         // MOVZ encoding: sf=1 opc=10 100101 hw imm16 Rd
@@ -90,7 +91,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let hw = encodeMoveWideShift "MOVZ" shift
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
+        sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd
 
     | ARM64.MOVN (dest, imm, shift) ->
         // MOVN encoding: sf=1 opc=00 100101 hw imm16 Rd
@@ -102,7 +103,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let hw = encodeMoveWideShift "MOVN" shift
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
+        sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd
 
     | ARM64.MOVK (dest, imm, shift) ->
         // MOVK encoding: sf=1 opc=11 100101 hw imm16 Rd
@@ -113,7 +114,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let hw = encodeMoveWideShift "MOVK" shift
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
+        sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd
 
     | ARM64.ADD_imm (dest, src, imm) ->
         // ADD immediate: sf=1 0 0 10001 shift(2) imm12(12) Rn(5) Rd(5)
@@ -123,7 +124,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeUnsigned12Immediate "ADD_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| shift ||| imm12 ||| rn ||| rd]
+        sf ||| op ||| shift ||| imm12 ||| rn ||| rd
 
     | ARM64.ADD_reg (dest, src1, src2) ->
         // ADD register: sf=1 0 0 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
@@ -132,7 +133,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src2) <<< 16
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| rn ||| rd]
+        sf ||| op ||| rm ||| rn ||| rd
 
     | ARM64.ADD_shifted (dest, src1, src2, shiftAmt) ->
         // ADD shifted register: sf=1 0 0 01011 shift=00(LSL) 0 Rm(5) imm6(6) Rn(5) Rd(5)
@@ -143,7 +144,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm6 = (uint32 shiftAmt) <<< 10  // shift amount in bits 15-10
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| imm6 ||| rn ||| rd]
+        sf ||| op ||| rm ||| imm6 ||| rn ||| rd
 
     | ARM64.SUB_imm (dest, src, imm) ->
         // SUB immediate: sf=1 op=1 S=0 10001 shift(2) imm12(12) Rn(5) Rd(5)
@@ -155,7 +156,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeUnsigned12Immediate "SUB_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
     | ARM64.SUB_imm12 (dest, src, imm) ->
         // SUB immediate with shift=12: actual value = imm * 4096
@@ -168,7 +169,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeUnsigned12Immediate "SUB_imm12" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
     | ARM64.SUB_reg (dest, src1, src2) ->
         // SUB register: sf=1 op=1 S=0 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
@@ -181,7 +182,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src2) <<< 16
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd
 
     | ARM64.SUB_shifted (dest, src1, src2, shiftAmt) ->
         // SUB shifted register: sf=1 op=1 S=0 01011 shift=00(LSL) 0 Rm(5) imm6(6) Rn(5) Rd(5)
@@ -194,7 +195,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm6 = (uint32 shiftAmt) <<< 10  // shift amount in bits 15-10
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| s ||| opcode ||| rm ||| imm6 ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| rm ||| imm6 ||| rn ||| rd
 
     | ARM64.SUBS_imm (dest, src, imm) ->
         // SUBS immediate: like SUB but sets condition flags
@@ -207,7 +208,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeUnsigned12Immediate "SUBS_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
     | ARM64.MUL (dest, src1, src2) ->
         // MADD: sf=1 0 0 11011 000 Rm(5) 0 Ra=11111 Rn(5) Rd(5)
@@ -218,7 +219,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let ra = 31u <<< 10  // XZR
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| ra ||| rn ||| rd]
+        sf ||| op ||| rm ||| ra ||| rn ||| rd
 
     | ARM64.SDIV (dest, src1, src2) ->
         // SDIV: sf=1 0 0 11010110 Rm(5) 000011 Rn(5) Rd(5)
@@ -228,7 +229,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let fixedBits = 0b000011u <<< 10
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+        sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
     | ARM64.UDIV (dest, src1, src2) ->
         // UDIV: sf=1 0 0 11010110 Rm(5) 000010 Rn(5) Rd(5)
@@ -238,7 +239,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let fixedBits = 0b000010u <<< 10
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+        sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
     | ARM64.MSUB (dest, src1, src2, src3) ->
         // MSUB: sf=1 0 0 11011 000 Rm(5) 1 Ra(5) Rn(5) Rd(5)
@@ -250,7 +251,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let ra = (encodeReg src3) <<< 10
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| flagBit ||| ra ||| rn ||| rd]
+        sf ||| op ||| rm ||| flagBit ||| ra ||| rn ||| rd
 
     | ARM64.MADD (dest, src1, src2, src3) ->
         // MADD: sf=1 0 0 11011 000 Rm(5) 0 Ra(5) Rn(5) Rd(5)
@@ -262,7 +263,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let ra = (encodeReg src3) <<< 10
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| ra ||| rn ||| rd]
+        sf ||| op ||| rm ||| ra ||| rn ||| rd
 
     | ARM64.MOV_reg (dest, src) ->
         // Special case: MOV Xd, SP cannot use ORR (register 31 = XZR in ORR context)
@@ -275,7 +276,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
             let imm12 = 0u <<< 10  // Zero immediate
             let rn = 31u <<< 5     // SP
             let rd = encodeReg dest
-            [sf ||| op ||| shift ||| imm12 ||| rn ||| rd]
+            sf ||| op ||| shift ||| imm12 ||| rn ||| rd
         else
             // MOV is ORR with XZR: sf=1 01 01010 00 0 Rm(5) 000000 Rn=11111 Rd(5)
             // Bit 31: sf=1, Bit 30: 0, Bit 29: 1 (ORR not AND), Bits 28-21: 01010000
@@ -285,7 +286,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
             let rm = (encodeReg src) <<< 16
             let rn = 31u <<< 5  // XZR
             let rd = encodeReg dest
-            [sf ||| opc ||| op ||| rm ||| rn ||| rd]
+            sf ||| opc ||| op ||| rm ||| rn ||| rd
 
     | ARM64.STRB (src, addr, offset) ->
         // STRB immediate unsigned offset: 00 111 001 00 imm12 Rn Rt
@@ -295,7 +296,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = (uint32 offset &&& 0xFFFu) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg src
-        [size ||| vOpc ||| imm12 ||| rn ||| rt]
+        size ||| vOpc ||| imm12 ||| rn ||| rt
 
     | ARM64.LDRB (dest, baseReg, indexReg) ->
         // LDRB (register offset): 00 111 000 01 1 Rm option S 10 Rn Rt
@@ -309,7 +310,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let fixed2 = 0b10u <<< 10
         let rn = (encodeReg baseReg) <<< 5
         let rt = encodeReg dest
-        [size ||| bits29to21 ||| rm ||| option ||| s ||| fixed2 ||| rn ||| rt]
+        size ||| bits29to21 ||| rm ||| option ||| s ||| fixed2 ||| rn ||| rt
 
     | ARM64.LDRB_imm (dest, baseReg, offset) ->
         // LDRB (unsigned offset): 00 111 001 01 imm12 Rn Rt
@@ -319,7 +320,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = (uint32 offset &&& 0xFFFu) <<< 10
         let rn = (encodeReg baseReg) <<< 5
         let rt = encodeReg dest
-        [size ||| vOpc ||| imm12 ||| rn ||| rt]
+        size ||| vOpc ||| imm12 ||| rn ||| rt
 
     | ARM64.STRB_reg (src, addr) ->
         // STRB (register): store byte to address in register
@@ -329,41 +330,41 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = 0u <<< 10  // offset = 0
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg src
-        [size ||| vOpc ||| imm12 ||| rn ||| rt]
+        size ||| vOpc ||| imm12 ||| rn ||| rt
 
     // Label-based branches - resolved via two-pass encoding (see encodeWithLabels)
-    // These return empty here because they are only used during label resolution
+    // These are only valid after label resolution.
     | ARM64.CBZ (reg, label) ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash $"CBZ label must be resolved before encoding: {reg}, {label}"
 
     | ARM64.CBNZ (reg, label) ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash $"CBNZ label must be resolved before encoding: {reg}, {label}"
 
     | ARM64.B_label label ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash $"B label must be resolved before encoding: {label}"
 
     | ARM64.B_cond_label (cond, label) ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash $"conditional B label must be resolved before encoding: {cond}, {label}"
 
     | ARM64.Label label ->
         // Pseudo-instruction: marks a label position (no machine code generated)
-        []
+        Crash.crash $"label does not encode to a machine-code word: {label}"
 
     | ARM64.ADRP (dest, label) ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash $"ADRP label must be resolved before encoding: {dest}, {label}"
 
     | ARM64.ADR (dest, label) ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash $"ADR label must be resolved before encoding: {dest}, {label}"
 
     | ARM64.ADD_label (dest, src, label) ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash $"ADD label must be resolved before encoding: {dest}, {src}, {label}"
 
     // Offset-based branches (for handcrafted runtime code with known offsets)
     | ARM64.CBZ_offset (reg, offset) ->
@@ -375,7 +376,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Offset is in instructions (4-byte units), sign-extended, stored as imm19
         let imm19 = ((uint32 offset) &&& 0x7FFFFu) <<< 5
         let rt = encodeReg reg
-        [sf ||| op ||| flag ||| imm19 ||| rt]
+        sf ||| op ||| flag ||| imm19 ||| rt
 
     | ARM64.CBNZ_offset (reg, offset) ->
         // CBNZ: sf 011010 1 imm19 Rt
@@ -386,7 +387,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Offset is in instructions (4-byte units), sign-extended, stored as imm19
         let imm19 = ((uint32 offset) &&& 0x7FFFFu) <<< 5
         let rt = encodeReg reg
-        [sf ||| op ||| flag ||| imm19 ||| rt]
+        sf ||| op ||| flag ||| imm19 ||| rt
 
     | ARM64.TBZ (reg, bit, offset) ->
         // TBZ: b5 011011 0 b40 imm14 Rt
@@ -398,7 +399,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let b40 = (uint32 bit &&& 0x1Fu) <<< 19
         let imm14 = ((uint32 offset) &&& 0x3FFFu) <<< 5
         let rt = encodeReg reg
-        [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+        b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt
 
     | ARM64.TBNZ (reg, bit, offset) ->
         // TBNZ: b5 011011 1 b40 imm14 Rt
@@ -410,11 +411,11 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let b40 = (uint32 bit &&& 0x1Fu) <<< 19
         let imm14 = ((uint32 offset) &&& 0x3FFFu) <<< 5
         let rt = encodeReg reg
-        [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+        b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt
 
     | ARM64.TBZ_label _ | ARM64.TBNZ_label _ ->
         // Resolved in encodeWithLabels with computed label offsets
-        []
+        Crash.crash "test-bit branch label must be resolved before encoding"
 
     | ARM64.B offset ->
         // B: 000101 imm26
@@ -422,7 +423,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Offset is in instructions (4-byte units), sign-extended
         let op = 0b000101u <<< 26
         let imm26 = (uint32 offset) &&& 0x3FFFFFFu
-        [op ||| imm26]
+        op ||| imm26
 
     | ARM64.B_cond (cond, offset) ->
         // B.cond: 01010100 imm19 0 cond
@@ -441,7 +442,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
             | ARM64.HI -> 0b1000u  // Higher than (unsigned)
             | ARM64.LS -> 0b1001u  // Lower than or same (unsigned)
             | ARM64.HS -> 0b0010u  // Higher than or same (unsigned)
-        [op ||| imm19 ||| condBits]
+        op ||| imm19 ||| condBits
 
     | ARM64.CMP_imm (src, imm) ->
         // CMP immediate is SUBS XZR, Rn, #imm (SUB with set flags, dest=XZR)
@@ -454,7 +455,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeUnsigned12Immediate "CMP_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = 31u                // XZR (discard result, only flags matter)
-        [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
     | ARM64.CMP_reg (src1, src2) ->
         // CMP register is SUBS XZR, Rn, Rm (SUB with set flags, dest=XZR)
@@ -467,7 +468,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src2) <<< 16
         let rn = (encodeReg src1) <<< 5
         let rd = 31u        // XZR (discard result)
-        [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd
 
     | ARM64.CSET (dest, cond) ->
         // CSET Rd, cond is CSINC Rd, XZR, XZR, invert(cond)
@@ -494,7 +495,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let fixedBits = 0b01u <<< 10  // CSINC vs CSEL
         let rn = 31u <<< 5  // XZR
         let rd = encodeReg dest
-        [sf ||| op ||| s ||| opcode ||| rm ||| condBits ||| fixedBits ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| rm ||| condBits ||| fixedBits ||| rn ||| rd
 
     | ARM64.AND_reg (dest, src1, src2) ->
         // AND register: sf=1 opc=00 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
@@ -505,7 +506,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src2) <<< 16
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
+        sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd
 
     | ARM64.AND_imm (dest, src, imm) ->
         // AND immediate: sf=1 opc=00 100100 N(1) immr(6) imms(6) Rn(5) Rd(5)
@@ -523,7 +524,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = (uint32 (popcount - 1)) <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.ORR_reg (dest, src1, src2) ->
         // ORR register: sf=1 opc=01 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
@@ -534,7 +535,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src2) <<< 16
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
+        sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd
 
     | ARM64.EOR_reg (dest, src1, src2) ->
         // EOR register: sf=1 opc=10 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
@@ -545,7 +546,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src2) <<< 16
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
+        sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd
 
     | ARM64.LSL_reg (dest, src, shift) ->
         // LSLV (variable shift left): sf=1 0 0 11010110 Rm(5) 001000 Rn(5) Rd(5)
@@ -555,7 +556,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let fixedBits = 0b001000u <<< 10  // LSLV opcode
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+        sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
     | ARM64.LSR_reg (dest, src, shift) ->
         // LSRV (variable shift right): sf=1 0 0 11010110 Rm(5) 001001 Rn(5) Rd(5)
@@ -565,7 +566,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let fixedBits = 0b001001u <<< 10  // LSRV opcode
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+        sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
     | ARM64.LSL_imm (dest, src, shift) ->
         // LSL Rd, Rn, #shift is alias for UBFM Rd, Rn, #(64-shift), #(63-shift)
@@ -578,7 +579,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = (uint32 ((63 - shift) &&& 63)) <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.LSR_imm (dest, src, shift) ->
         // LSR Rd, Rn, #shift is alias for UBFM Rd, Rn, #shift, #63
@@ -591,7 +592,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = 63u <<< 10  // imms = 63 for LSR
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.MVN (dest, src) ->
         // MVN is ORN Rd, XZR, Rm (OR NOT with Rn=XZR)
@@ -604,7 +605,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src) <<< 16
         let rn = 31u <<< 5  // XZR
         let rd = encodeReg dest
-        [sf ||| opc ||| op ||| shift ||| n ||| rm ||| rn ||| rd]
+        sf ||| opc ||| op ||| shift ||| n ||| rm ||| rn ||| rd
 
     | ARM64.NEG (dest, src) ->
         // NEG: SUB dest, XZR, src
@@ -617,7 +618,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rm = (encodeReg src) <<< 16
         let rn = 31u <<< 5  // XZR
         let rd = encodeReg dest
-        [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
+        sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd
 
     // Stack operations
     | ARM64.STP (reg1, reg2, addr, offset) ->
@@ -632,7 +633,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
-        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+        opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
     | ARM64.LDP (reg1, reg2, addr, offset) ->
         // LDP (Load Pair) - signed offset addressing
@@ -645,7 +646,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
-        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+        opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
     | ARM64.STP_pre (reg1, reg2, addr, offset) ->
         // STP (Store Pair) - pre-indexed addressing: addr += offset, then store
@@ -658,7 +659,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
-        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+        opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
     | ARM64.LDP_post (reg1, reg2, addr, offset) ->
         // LDP (Load Pair) - post-indexed addressing: load, then addr += offset
@@ -671,7 +672,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
-        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+        opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
     | ARM64.STR (src, addr, offset) ->
         // STR (Store Register) - unsigned offset addressing
@@ -683,7 +684,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeInt16UnsignedScaled12Offset "STR" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg src
-        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+        size ||| fixedBits ||| imm12 ||| rn ||| rt
 
     | ARM64.LDR (dest, addr, offset) ->
         // LDR (Load Register) - unsigned offset addressing
@@ -694,7 +695,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeInt16UnsignedScaled12Offset "LDR" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg dest
-        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+        size ||| fixedBits ||| imm12 ||| rn ||| rt
 
     | ARM64.STUR (src, addr, offset) ->
         // STUR (Store Register Unscaled) - signed offset addressing
@@ -708,7 +709,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm9 = ((uint32 offset) &&& 0x1FFu) <<< 12
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg src
-        [size ||| fixedBits ||| imm9 ||| rn ||| rt]
+        size ||| fixedBits ||| imm9 ||| rn ||| rt
 
     | ARM64.LDUR (dest, addr, offset) ->
         // LDUR (Load Register Unscaled) - signed offset addressing
@@ -720,37 +721,37 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm9 = ((uint32 offset) &&& 0x1FFu) <<< 12
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg dest
-        [size ||| fixedBits ||| imm9 ||| rn ||| rt]
+        size ||| fixedBits ||| imm9 ||| rn ||| rt
 
     | ARM64.BL label ->
         // BL is handled in encodeWithLabels (label-based branch)
         // Resolved via two-pass encoding like other label-based branches
-        []
+        Crash.crash $"BL label must be resolved before encoding: {label}"
 
     | ARM64.BLR reg ->
         // BLR: Branch with Link to Register
         // Encoding: 1101011 0 0 01 11111 0000 0 0 Rn 00000
         // 0xD63F0000 | (Rn << 5)
         let rn = encodeReg reg
-        [0xD63F0000u ||| (rn <<< 5)]
+        0xD63F0000u ||| (rn <<< 5)
 
     | ARM64.BR reg ->
         // BR: Branch to Register (no link, for tail calls)
         // Encoding: 1101011 0 0 00 11111 0000 0 0 Rn 00000
         // 0xD61F0000 | (Rn << 5)
         let rn = encodeReg reg
-        [0xD61F0000u ||| (rn <<< 5)]
+        0xD61F0000u ||| (rn <<< 5)
 
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
         // Default RET uses X30 (link register)
-        [0xD65F03C0u]
+        0xD65F03C0u
 
     | ARM64.SVC imm ->
         // SVC: 11010100 000 imm16 000 01
         // Bits: 11010100000(31-21) imm16(20-5) 00001(4-0)
         let imm16 = uint32 imm
-        [0xD4000001u ||| (imm16 <<< 5)]
+        0xD4000001u ||| (imm16 <<< 5)
 
     // Floating-point instructions
     | ARM64.LDR_fp (dest, addr, offset) ->
@@ -762,7 +763,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeInt16UnsignedScaled12Offset "LDR_fp" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg dest
-        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+        size ||| fixedBits ||| imm12 ||| rn ||| rt
 
     | ARM64.STR_fp (src, addr, offset) ->
         // STR (SIMD&FP) - unsigned offset addressing for double
@@ -773,7 +774,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm12 = encodeInt16UnsignedScaled12Offset "STR_fp" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg src
-        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+        size ||| fixedBits ||| imm12 ||| rn ||| rt
 
     | ARM64.STP_fp (freg1, freg2, addr, offset) ->
         // STP (SIMD&FP) - signed offset addressing for double
@@ -786,7 +787,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt2 = (encodeFReg freg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg freg1
-        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+        opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
     | ARM64.LDP_fp (freg1, freg2, addr, offset) ->
         // LDP (SIMD&FP) - signed offset addressing for double
@@ -799,7 +800,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt2 = (encodeFReg freg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg freg1
-        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+        opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
     | ARM64.FADD (dest, src1, src2) ->
         // FADD (scalar, double): 0001 1110 01 1 Rm 0010 10 Rn Rd
@@ -809,7 +810,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b001010u <<< 10  // FADD
         let rn = (encodeFReg src1) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FSUB (dest, src1, src2) ->
         // FSUB (scalar, double): 0001 1110 01 1 Rm 0011 10 Rn Rd
@@ -818,7 +819,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b001110u <<< 10  // FSUB
         let rn = (encodeFReg src1) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FMUL (dest, src1, src2) ->
         // FMUL (scalar, double): 0001 1110 01 1 Rm 0000 10 Rn Rd
@@ -827,7 +828,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b000010u <<< 10  // FMUL
         let rn = (encodeFReg src1) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FDIV (dest, src1, src2) ->
         // FDIV (scalar, double): 0001 1110 01 1 Rm 0001 10 Rn Rd
@@ -836,7 +837,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b000110u <<< 10  // FDIV
         let rn = (encodeFReg src1) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FNEG (dest, src) ->
         // FNEG (scalar, double): 0x1E614000 for D0, D0
@@ -846,7 +847,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b010000u <<< 10  // FNEG opcode (16)
         let rn = (encodeFReg src) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FABS (dest, src) ->
         // FABS (scalar, double): 0x1E60C000 for D0, D0
@@ -856,7 +857,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b110000u <<< 10  // FABS opcode (48)
         let rn = (encodeFReg src) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FSQRT (dest, src) ->
         // FSQRT (scalar, double): 0x1E61C000 for D0, D0
@@ -866,7 +867,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b110000u <<< 10  // FSQRT opcode (48)
         let rn = (encodeFReg src) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FCMP (src1, src2) ->
         // FCMP (scalar, double): 0001 1110 01 1 Rm 00 1000 Rn 00 000
@@ -876,7 +877,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b001000u <<< 10  // FCMP
         let rn = (encodeFReg src1) <<< 5
         let opc = 0b00000u  // Compare (not with zero)
-        [fixedBits ||| rm ||| opcode ||| rn ||| opc]
+        fixedBits ||| rm ||| opcode ||| rn ||| opc
 
     | ARM64.FMOV_reg (dest, src) ->
         // FMOV (register, double): 0001 1110 01 1 00000 010000 Rn Rd
@@ -885,13 +886,13 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode = 0b010000u <<< 10  // FMOV
         let rn = (encodeFReg src) <<< 5
         let rd = encodeFReg dest
-        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+        fixedBits ||| rm ||| opcode ||| rn ||| rd
 
     | ARM64.FMOV_imm (dest, value) ->
         match ARM64.tryEncodeFmovFloatImmediate value with
         | Some imm8 ->
             // FMOV (scalar immediate, double): base opcode plus modified-immediate byte.
-            [0x1E601000u ||| (imm8 <<< 13) ||| encodeFReg dest]
+            0x1E601000u ||| (imm8 <<< 13) ||| encodeFReg dest
         | None ->
             Crash.crash $"FMOV immediate does not support {value}"
 
@@ -905,7 +906,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode2 = 0b000000u <<< 10
         let rn = (encodeFReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+        sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd
 
     | ARM64.FMOV_from_gp (dest, src) ->
         // FMOV (general to scalar, double): 1001 1110 01 1 00111 000000 Rn Vd
@@ -917,7 +918,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode2 = 0b000000u <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeFReg dest
-        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+        sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd
 
     | ARM64.SCVTF (dest, src) ->
         // SCVTF (scalar, integer to FP, double): 1001 1110 01 1 00010 000000 Rn Rd
@@ -928,7 +929,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode2 = 0b000000u <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeFReg dest
-        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+        sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd
 
     | ARM64.FCVTZS (dest, src) ->
         // FCVTZS (scalar, FP to integer, double): 1001 1110 01 1 11000 000000 Rn Rd
@@ -939,7 +940,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let opcode2 = 0b000000u <<< 10
         let rn = (encodeFReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+        sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd
 
     // Sign/zero extension instructions (for integer overflow truncation)
     // These are encoded using SBFM/UBFM (Signed/Unsigned Bitfield Move)
@@ -954,7 +955,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = 7u <<< 10  // extract bits 0-7 (byte)
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.SXTH (dest, src) ->
         // SXTH: SBFM Xd, Xn, #0, #15 (sign-extend halfword to 64-bit)
@@ -966,7 +967,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = 15u <<< 10  // extract bits 0-15 (halfword)
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.SXTW (dest, src) ->
         // SXTW: SBFM Xd, Xn, #0, #31 (sign-extend word to 64-bit)
@@ -978,7 +979,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = 31u <<< 10  // extract bits 0-31 (word)
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.UXTB (dest, src) ->
         // UXTB: UBFM Xd, Xn, #0, #7 (zero-extend byte to 64-bit)
@@ -991,7 +992,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = 7u <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.UXTH (dest, src) ->
         // UXTH: UBFM Xd, Xn, #0, #15 (zero-extend halfword to 64-bit)
@@ -1003,7 +1004,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = 15u <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
     | ARM64.UXTW (dest, src) ->
         // UXTW: UBFM Xd, Xn, #0, #31 (zero-extend word to 64-bit)
@@ -1015,7 +1016,24 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imms = 31u <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+        sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
+
+/// Compatibility entry point for direct encoder tests. Production emission uses
+/// encodeWord and avoids allocating this singleton list for every instruction.
+let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
+    match instr with
+    | ARM64.CBZ _
+    | ARM64.CBNZ _
+    | ARM64.B_label _
+    | ARM64.B_cond_label _
+    | ARM64.Label _
+    | ARM64.ADRP _
+    | ARM64.ADR _
+    | ARM64.ADD_label _
+    | ARM64.TBZ_label _
+    | ARM64.TBNZ_label _
+    | ARM64.BL _ -> []
+    | _ -> [encodeWord instr]
 
 /// Two-Pass Encoding for Label Resolution
 
@@ -1212,7 +1230,7 @@ let encodeWithLabels
     (stringLabels: Map<string, int>)
     (floatLabels: Map<string, int>)
     (dataLabels: Map<string, int>)
-    : ARM64.MachineCode list =
+    : ARM64.MachineCode =
     match instr with
     // Label-based branches - resolve to offsets
     | ARM64.CBZ (reg, label) ->
@@ -1227,7 +1245,7 @@ let encodeWithLabels
             let flag = 0u <<< 24  // CBZ
             let imm19 = ((uint32 instrOffset) &&& 0x7FFFFu) <<< 5
             let rt = encodeReg reg
-            [sf ||| op ||| flag ||| imm19 ||| rt]
+            sf ||| op ||| flag ||| imm19 ||| rt
         | None ->
             Crash.crash $"CBZ: Label '{label}' not found in labelMap"
 
@@ -1242,7 +1260,7 @@ let encodeWithLabels
             let flag = 1u <<< 24  // CBNZ
             let imm19 = ((uint32 instrOffset) &&& 0x7FFFFu) <<< 5
             let rt = encodeReg reg
-            [sf ||| op ||| flag ||| imm19 ||| rt]
+            sf ||| op ||| flag ||| imm19 ||| rt
         | None ->
             Crash.crash $"CBNZ: Label '{label}' not found in labelMap"
 
@@ -1258,7 +1276,7 @@ let encodeWithLabels
             let b40 = (uint32 bit &&& 0x1Fu) <<< 19
             let imm14 = ((uint32 instrOffset) &&& 0x3FFFu) <<< 5
             let rt = encodeReg reg
-            [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+            b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt
         | None ->
             Crash.crash $"TBZ: Label '{label}' not found in labelMap"
 
@@ -1274,7 +1292,7 @@ let encodeWithLabels
             let b40 = (uint32 bit &&& 0x1Fu) <<< 19
             let imm14 = ((uint32 instrOffset) &&& 0x3FFFu) <<< 5
             let rt = encodeReg reg
-            [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+            b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt
         | None ->
             Crash.crash $"TBNZ: Label '{label}' not found in labelMap"
 
@@ -1286,7 +1304,7 @@ let encodeWithLabels
             // Encode as B with immediate offset
             let op = 0b000101u <<< 26
             let imm26 = (uint32 instrOffset) &&& 0x3FFFFFFu
-            [op ||| imm26]
+            op ||| imm26
         | None ->
             Crash.crash $"B: Label '{label}' not found in labelMap"
 
@@ -1310,7 +1328,7 @@ let encodeWithLabels
                 | ARM64.HI -> 0b1000u
                 | ARM64.LS -> 0b1001u
                 | ARM64.HS -> 0b0010u
-            [op ||| imm19 ||| condBits]
+            op ||| imm19 ||| condBits
         | None ->
             Crash.crash $"B.cond: Label '{label}' not found in labelMap"
 
@@ -1323,13 +1341,12 @@ let encodeWithLabels
             // Bit 31 = 1 (distinguishes BL from B which has bit 31 = 0)
             let op = 0b100101u <<< 26  // BL opcode (bit 31=1, bits 30-26=00101)
             let imm26 = (uint32 instrOffset) &&& 0x3FFFFFFu
-            [op ||| imm26]
+            op ||| imm26
         | None ->
             Crash.crash $"BL: Label '{label}' not found in labelMap"
 
     | ARM64.Label _ ->
-        // Pseudo-instruction: no machine code
-        []
+        Crash.crash "labels do not encode to machine-code words"
 
     | ARM64.ADRP (dest, label) ->
         // ADRP: form PC-relative address to 4KB page
@@ -1349,7 +1366,7 @@ let encodeWithLabels
             let immhi = ((uint32 pageOffset >>> 2) &&& 0x7FFFFu) <<< 5
             let op = 1u <<< 31  // ADRP (bit 31=1)
             let opcode = 0b10000u <<< 24
-            [op ||| immlo ||| opcode ||| immhi ||| rd]
+            op ||| immlo ||| opcode ||| immhi ||| rd
         | None ->
             Crash.crash $"ADRP: Label '{label}' not found in labelMap"
 
@@ -1368,7 +1385,7 @@ let encodeWithLabels
             let immhi = ((uint32 byteOffset >>> 2) &&& 0x7FFFFu) <<< 5
             let op = 0u <<< 31  // ADR (bit 31=0, vs ADRP which has bit 31=1)
             let opcode = 0b10000u <<< 24
-            [op ||| immlo ||| opcode ||| immhi ||| rd]
+            op ||| immlo ||| opcode ||| immhi ||| rd
         | None ->
             Crash.crash $"ADR: Label '{label}' not found in labelMap"
 
@@ -1387,13 +1404,13 @@ let encodeWithLabels
             let imm12 = ((uint32 pageOffset) &&& 0xFFFu) <<< 10
             let rn = encodeReg src <<< 5
             let rd = encodeReg dest
-            [sf ||| op ||| shift ||| imm12 ||| rn ||| rd]
+            sf ||| op ||| shift ||| imm12 ||| rn ||| rd
         | None ->
             Crash.crash $"ADD_label: Label '{label}' not found in labelMap"
 
     // All other instructions: use single-pass encoding
     | _ ->
-        encode instr
+        encodeWord instr
 
 /// Compute the size of code in bytes (for placing string data after code)
 let getCodeSize (instructions: ARM64.Instr list) : int =
@@ -1561,18 +1578,11 @@ let encodeAllWithPools
     let rec encodeLoop instrs offset acc =
         match instrs with
         | [] -> List.rev acc
+        | ARM64.Label _ :: rest ->
+            encodeLoop rest offset acc
         | instr :: rest ->
-            let machineCode = encodeWithLabels instr offset codeLabelMap stringLabels floatLabels dataLabels
-            match machineCode with
-            | [] ->
-                encodeLoop rest offset acc
-            | [code] ->
-                encodeLoop rest (offset + 4) (code :: acc)
-            | _ ->
-                let (nextAcc, wordCount) =
-                    machineCode
-                    |> List.fold (fun (acc', count) code -> (code :: acc', count + 1)) (acc, 0)
-                encodeLoop rest (offset + (wordCount * 4)) nextAcc
+            let code = encodeWithLabels instr offset codeLabelMap stringLabels floatLabels dataLabels
+            encodeLoop rest (offset + 4) (code :: acc)
 
     encodeLoop instructions codeFileOffset []
 
@@ -1619,18 +1629,11 @@ let encodeSymbolicWithPools
     let rec encodeLoop instrs offset acc =
         match instrs with
         | [] -> List.rev acc
+        | ARM64Symbolic.Label _ :: rest ->
+            encodeLoop rest offset acc
         | instr :: rest ->
             let resolvedInstr = resolveSymbolicInstr stringPool floatPool instr
-            let machineCode = encodeWithLabels resolvedInstr offset codeLabelMap stringLabels floatLabels dataLabels
-            match machineCode with
-            | [] ->
-                encodeLoop rest offset acc
-            | [code] ->
-                encodeLoop rest (offset + 4) (code :: acc)
-            | _ ->
-                let (nextAcc, wordCount) =
-                    machineCode
-                    |> List.fold (fun (acc', count) code -> (code :: acc', count + 1)) (acc, 0)
-                encodeLoop rest (offset + (wordCount * 4)) nextAcc
+            let code = encodeWithLabels resolvedInstr offset codeLabelMap stringLabels floatLabels dataLabels
+            encodeLoop rest (offset + 4) (code :: acc)
 
     encodeLoop instructions codeFileOffset []
