@@ -106,6 +106,25 @@ type private ChordalColoringTiming = {
     ExpandMs: float
 }
 
+/// Register facts shared by domain construction, liveness, and interference.
+/// Phi uses remain separate because they are live on predecessor edges rather
+/// than at the instruction's position in its block.
+type private InstrRegisterFacts = {
+    Instr: LIR.Instr
+    IntUses: int list
+    IntDef: int option
+    IntPhiUses: (int * LIR.Label) list
+    FloatUses: int list
+    FloatDef: int option
+    FloatPhiUses: (int * LIR.Label) list
+}
+
+type private ClassifiedBlock = {
+    Block: LIR.BasicBlock
+    InstrFacts: InstrRegisterFacts array
+    TerminatorUses: int list
+}
+
 // ============================================================================
 // Bitset Utilities (used to speed up register allocation)
 // ============================================================================
@@ -687,6 +706,44 @@ let getTerminatorUsedVRegs (term: LIR.Terminator) : int list =
     | LIR.CondBranch _ -> []  // CondBranch uses condition flags, not a register
     | _ -> []
 
+let private classifyInstr (instr: LIR.Instr) : InstrRegisterFacts =
+    let intPhiUses =
+        match instr with
+        | LIR.Phi (_, sources, _) ->
+            sources
+            |> List.choose (fun (source, predecessor) ->
+                match source with
+                | LIR.Reg (LIR.Virtual id) -> Some (id, predecessor)
+                | _ -> None)
+        | _ -> []
+    let floatPhiUses =
+        match instr with
+        | LIR.FPhi (_, sources) ->
+            sources
+            |> List.choose (fun (source, predecessor) ->
+                match source with
+                | LIR.FVirtual id -> Some (id, predecessor)
+                | LIR.FPhysical _ -> None)
+        | _ -> []
+    {
+        Instr = instr
+        IntUses = getUsedVRegs instr
+        IntDef = getDefinedVReg instr
+        IntPhiUses = intPhiUses
+        FloatUses = getUsedFVRegs instr
+        FloatDef = getDefinedFVReg instr
+        FloatPhiUses = floatPhiUses
+    }
+
+let private classifyBlocks (blocks: LIR.BasicBlock array) : ClassifiedBlock array =
+    blocks
+    |> Array.map (fun block ->
+        {
+            Block = block
+            InstrFacts = block.Instrs |> List.map classifyInstr |> List.toArray
+            TerminatorUses = getTerminatorUsedVRegs block.Terminator
+        })
+
 /// Get successor labels for a terminator
 let getSuccessors (term: LIR.Terminator) : LIR.Label list =
     match term with
@@ -721,126 +778,108 @@ let private addPhiUse
 let private collectPhiUsesByPred
     (domain: VRegDomain)
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     : (int * BitSet) list array =
-    let result = Array.init blocks.Length (fun _ -> [])
-    for blockIdx in 0 .. blocks.Length - 1 do
-        let block = blocks.[blockIdx]
+    let result = Array.init classifiedBlocks.Length (fun _ -> [])
+    for blockIdx in 0 .. classifiedBlocks.Length - 1 do
+        let blockFacts = classifiedBlocks.[blockIdx]
         let mutable uses = []
-        for instr in block.Instrs do
-            match instr with
-            | LIR.Phi (_, sources, _) ->
-                for (op, predLabel) in sources do
-                    match op with
-                    | LIR.Reg (LIR.Virtual id) ->
-                        match tryBlockIndex blockIndex predLabel with
-                        | Some predIdx -> uses <- addPhiUse domain predIdx id uses
-                        | None -> ()
-                    | _ -> ()
-            | _ -> ()
+        for facts in blockFacts.InstrFacts do
+            for (id, predLabel) in facts.IntPhiUses do
+                match tryBlockIndex blockIndex predLabel with
+                | Some predIdx -> uses <- addPhiUse domain predIdx id uses
+                | None -> ()
         result.[blockIdx] <- uses
     result
 
 let private collectFPhiUsesByPred
     (domain: VRegDomain)
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     : (int * BitSet) list array =
-    let result = Array.init blocks.Length (fun _ -> [])
-    for blockIdx in 0 .. blocks.Length - 1 do
-        let block = blocks.[blockIdx]
+    let result = Array.init classifiedBlocks.Length (fun _ -> [])
+    for blockIdx in 0 .. classifiedBlocks.Length - 1 do
+        let blockFacts = classifiedBlocks.[blockIdx]
         let mutable uses = []
-        for instr in block.Instrs do
-            match instr with
-            | LIR.FPhi (_, sources) ->
-                for (freg, predLabel) in sources do
-                    match freg with
-                    | LIR.FVirtual id ->
-                        match tryBlockIndex blockIndex predLabel with
-                        | Some predIdx -> uses <- addPhiUse domain predIdx id uses
-                        | None -> ()
-                    | LIR.FPhysical _ -> ()
-            | _ -> ()
+        for facts in blockFacts.InstrFacts do
+            for (id, predLabel) in facts.FloatPhiUses do
+                match tryBlockIndex blockIndex predLabel with
+                | Some predIdx -> uses <- addPhiUse domain predIdx id uses
+                | None -> ()
         result.[blockIdx] <- uses
     result
 
 /// Compute GEN and KILL sets for a basic block
 /// GEN = variables used before being defined
 /// KILL = variables defined
-let computeGenKill (domain: VRegDomain) (block: LIR.BasicBlock) : BitSet * BitSet =
+let private computeGenKillFromFacts
+    (domain: VRegDomain)
+    (blockFacts: ClassifiedBlock)
+    : BitSet * BitSet =
     // Process instructions in forward order
     let gen = bitsetEmpty domain.WordCount
     let kill = bitsetEmpty domain.WordCount
 
-    for instr in block.Instrs do
-        let used = getUsedVRegs instr
-        let defined = getDefinedVReg instr
-
+    for facts in blockFacts.InstrFacts do
         // Add to GEN if used and not already killed (defined earlier in block)
-        for u in used do
+        for u in facts.IntUses do
             if not (bitsetContains domain kill u) then
                 bitsetAddInPlace domain u gen
 
         // Add to KILL if defined
-        match defined with
+        match facts.IntDef with
         | Some d -> bitsetAddInPlace domain d kill
         | None -> ()
 
     // Also add terminator uses to GEN
-    let termUses = getTerminatorUsedVRegs block.Terminator
-    for u in termUses do
+    for u in blockFacts.TerminatorUses do
         if not (bitsetContains domain kill u) then
             bitsetAddInPlace domain u gen
 
     (gen, kill)
 
+let computeGenKill (domain: VRegDomain) (block: LIR.BasicBlock) : BitSet * BitSet =
+    classifyBlocks [| block |]
+    |> Array.item 0
+    |> computeGenKillFromFacts domain
+
 /// Compute liveness using backward dataflow analysis
 /// Handles SSA phi nodes: phi sources are live at predecessor exits, not at phi's block entry
 /// Collect all integer VReg IDs referenced in the CFG (uses, defs, phi sources/dests, terminators)
-let private collectVRegIds (blocks: LIR.BasicBlock array) : int list =
-    blocks
-    |> Array.fold (fun acc block ->
+let private collectVRegIdsFromFacts (classifiedBlocks: ClassifiedBlock array) : int list =
+    classifiedBlocks
+    |> Array.fold (fun acc blockFacts ->
         let acc =
-            getTerminatorUsedVRegs block.Terminator
+            blockFacts.TerminatorUses
             |> List.fold (fun acc id -> id :: acc) acc
-        block.Instrs
-        |> List.fold (fun acc instr ->
-            match instr with
-            | LIR.Phi (dest, sources, _) ->
-                let acc =
-                    match dest with
-                    | LIR.Virtual id -> id :: acc
-                    | LIR.Physical _ -> acc
-                sources
-                |> List.fold (fun acc (src, _) ->
-                    match src with
-                    | LIR.Reg (LIR.Virtual id) -> id :: acc
-                    | _ -> acc) acc
-            | _ ->
-                let acc =
-                    getUsedVRegs instr
-                    |> List.fold (fun acc id -> id :: acc) acc
-                match getDefinedVReg instr with
-                | Some id -> id :: acc
-                | None -> acc) acc
+        blockFacts.InstrFacts
+        |> Array.fold (fun acc facts ->
+            let acc = facts.IntUses |> List.fold (fun acc id -> id :: acc) acc
+            let acc = facts.IntPhiUses |> List.fold (fun acc (id, _) -> id :: acc) acc
+            match facts.IntDef with
+            | Some id -> id :: acc
+            | None -> acc) acc
     ) []
 
+let private collectVRegIds (blocks: LIR.BasicBlock array) : int list =
+    blocks |> classifyBlocks |> collectVRegIdsFromFacts
+
 /// Compute liveness using bitsets for the dataflow fixed point
-let private computeLivenessBitsRaw
+let private computeLivenessBitsFromFacts
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     (extraIds: int list)
     : VRegDomain * BlockLiveness array =
-    let domain = buildVRegDomain (collectVRegIds blocks @ extraIds)
+    let domain = buildVRegDomain (collectVRegIdsFromFacts classifiedBlocks @ extraIds)
     let emptyBits = bitsetEmpty domain.WordCount
 
     let genKillBits =
-        Array.init blocks.Length (fun idx ->
-            computeGenKill domain blocks.[idx])
+        Array.init classifiedBlocks.Length (fun idx ->
+            computeGenKillFromFacts domain classifiedBlocks.[idx])
 
-    let phiUsesBits = collectPhiUsesByPred domain blockIndex blocks
+    let phiUsesBits = collectPhiUsesByPred domain blockIndex classifiedBlocks
 
-    let liveness = Array.init blocks.Length (fun _ -> { LiveIn = emptyBits; LiveOut = emptyBits })
+    let liveness = Array.init classifiedBlocks.Length (fun _ -> { LiveIn = emptyBits; LiveOut = emptyBits })
 
     let phiUsesForEdge (succIdx: int) (predIdx: int) : BitSet =
         match phiUsesBits.[succIdx] |> List.tryFind (fun (idx, _) -> idx = predIdx) with
@@ -850,8 +889,8 @@ let private computeLivenessBitsRaw
     let mutable changed = true
     while changed do
         changed <- false
-        for blockIdx in 0 .. blocks.Length - 1 do
-            let block = blocks.[blockIdx]
+        for blockIdx in 0 .. classifiedBlocks.Length - 1 do
+            let block = classifiedBlocks.[blockIdx].Block
             let (gen, kill) = genKillBits.[blockIdx]
             let oldLiveness = liveness.[blockIdx]
 
@@ -877,6 +916,13 @@ let private computeLivenessBitsRaw
 
     (domain, liveness)
 
+let private computeLivenessBitsRaw
+    (blockIndex: BlockIndex)
+    (blocks: LIR.BasicBlock array)
+    (extraIds: int list)
+    : VRegDomain * BlockLiveness array =
+    computeLivenessBitsFromFacts blockIndex (classifyBlocks blocks) extraIds
+
 /// Compute liveness using bitsets for the dataflow fixed point
 let computeLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiveness array =
     let (blockIndex, blocks) = buildBlockIndex cfg
@@ -886,68 +932,63 @@ let computeLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiveness
 /// Compute float GEN and KILL sets for a basic block
 /// GEN = float variables used before being defined
 /// KILL = float variables defined
-let computeFloatGenKill (domain: VRegDomain) (block: LIR.BasicBlock) : BitSet * BitSet =
+let private computeFloatGenKillFromFacts
+    (domain: VRegDomain)
+    (blockFacts: ClassifiedBlock)
+    : BitSet * BitSet =
     let gen = bitsetEmpty domain.WordCount
     let kill = bitsetEmpty domain.WordCount
 
-    for instr in block.Instrs do
-        let used = getUsedFVRegs instr
-        let defined = getDefinedFVReg instr
-
-        for u in used do
+    for facts in blockFacts.InstrFacts do
+        for u in facts.FloatUses do
             if not (bitsetContains domain kill u) then
                 bitsetAddInPlace domain u gen
 
-        match defined with
+        match facts.FloatDef with
         | Some d -> bitsetAddInPlace domain d kill
         | None -> ()
 
     (gen, kill)
 
+let computeFloatGenKill (domain: VRegDomain) (block: LIR.BasicBlock) : BitSet * BitSet =
+    classifyBlocks [| block |]
+    |> Array.item 0
+    |> computeFloatGenKillFromFacts domain
+
 /// Compute float liveness using backward dataflow analysis
 /// Handles SSA FPhi nodes: phi sources are live at predecessor exits, not at phi's block entry
 /// Collect all float VReg IDs referenced in the CFG (uses, defs, FPhi sources/dests)
-let private collectFVRegIds (blocks: LIR.BasicBlock array) : int list =
-    blocks
-    |> Array.fold (fun acc block ->
-        block.Instrs
-        |> List.fold (fun acc instr ->
-            match instr with
-            | LIR.FPhi (dest, sources) ->
-                let acc =
-                    match dest with
-                    | LIR.FVirtual id -> id :: acc
-                    | LIR.FPhysical _ -> acc
-                sources
-                |> List.fold (fun acc (src, _) ->
-                    match src with
-                    | LIR.FVirtual id -> id :: acc
-                    | LIR.FPhysical _ -> acc) acc
-            | _ ->
-                let acc =
-                    getUsedFVRegs instr
-                    |> List.fold (fun acc id -> id :: acc) acc
-                match getDefinedFVReg instr with
-                | Some id -> id :: acc
-                | None -> acc) acc
+let private collectFVRegIdsFromFacts (classifiedBlocks: ClassifiedBlock array) : int list =
+    classifiedBlocks
+    |> Array.fold (fun acc blockFacts ->
+        blockFacts.InstrFacts
+        |> Array.fold (fun acc facts ->
+            let acc = facts.FloatUses |> List.fold (fun acc id -> id :: acc) acc
+            let acc = facts.FloatPhiUses |> List.fold (fun acc (id, _) -> id :: acc) acc
+            match facts.FloatDef with
+            | Some id -> id :: acc
+            | None -> acc) acc
     ) []
 
+let private collectFVRegIds (blocks: LIR.BasicBlock array) : int list =
+    blocks |> classifyBlocks |> collectFVRegIdsFromFacts
+
 /// Compute float liveness using bitsets for the dataflow fixed point
-let private computeFloatLivenessBitsRaw
+let private computeFloatLivenessBitsFromFacts
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     (extraIds: int list)
     : VRegDomain * BlockLiveness array =
-    let domain = buildVRegDomain (collectFVRegIds blocks @ extraIds)
+    let domain = buildVRegDomain (collectFVRegIdsFromFacts classifiedBlocks @ extraIds)
     let emptyBits = bitsetEmpty domain.WordCount
 
     let genKillBits =
-        Array.init blocks.Length (fun idx ->
-            computeFloatGenKill domain blocks.[idx])
+        Array.init classifiedBlocks.Length (fun idx ->
+            computeFloatGenKillFromFacts domain classifiedBlocks.[idx])
 
-    let fphiUsesBits = collectFPhiUsesByPred domain blockIndex blocks
+    let fphiUsesBits = collectFPhiUsesByPred domain blockIndex classifiedBlocks
 
-    let liveness = Array.init blocks.Length (fun _ -> { LiveIn = emptyBits; LiveOut = emptyBits })
+    let liveness = Array.init classifiedBlocks.Length (fun _ -> { LiveIn = emptyBits; LiveOut = emptyBits })
 
     let fphiUsesForEdge (succIdx: int) (predIdx: int) : BitSet =
         match fphiUsesBits.[succIdx] |> List.tryFind (fun (idx, _) -> idx = predIdx) with
@@ -957,8 +998,8 @@ let private computeFloatLivenessBitsRaw
     let mutable changed = true
     while changed do
         changed <- false
-        for blockIdx in 0 .. blocks.Length - 1 do
-            let block = blocks.[blockIdx]
+        for blockIdx in 0 .. classifiedBlocks.Length - 1 do
+            let block = classifiedBlocks.[blockIdx].Block
             let (gen, kill) = genKillBits.[blockIdx]
             let oldLiveness = liveness.[blockIdx]
 
@@ -982,6 +1023,13 @@ let private computeFloatLivenessBitsRaw
                 liveness.[blockIdx] <- { LiveIn = newLiveIn; LiveOut = newLiveOut }
 
     (domain, liveness)
+
+let private computeFloatLivenessBitsRaw
+    (blockIndex: BlockIndex)
+    (blocks: LIR.BasicBlock array)
+    (extraIds: int list)
+    : VRegDomain * BlockLiveness array =
+    computeFloatLivenessBitsFromFacts blockIndex (classifyBlocks blocks) extraIds
 
 /// Compute float liveness using bitsets for the dataflow fixed point
 let computeFloatLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiveness array =
@@ -1096,7 +1144,7 @@ let private buildInterferenceGraphBitsetFastWithLivenessInternal
     (trackTiming: bool)
     (swOpt: System.Diagnostics.Stopwatch option)
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     (domain: VRegDomain)
     (liveness: BlockLiveness array)
     (entryDefs: BitSet)
@@ -1152,26 +1200,24 @@ let private buildInterferenceGraphBitsetFastWithLivenessInternal
                 if idx <> defIdx then
                     bitsetAddIndexInPlace defIdx adjacency.[idx])
 
-    for blockIdx in 0 .. blocks.Length - 1 do
-        let block = blocks.[blockIdx]
+    for blockIdx in 0 .. classifiedBlocks.Length - 1 do
+        let blockFacts = classifiedBlocks.[blockIdx]
         let blockLiveness = liveness.[blockIdx]
         let mutable live = bitsetClone blockLiveness.LiveOut
 
-        let termUses = getTerminatorUsedVRegs block.Terminator
-        for v in termUses do
+        for v in blockFacts.TerminatorUses do
             bitsetAddInPlace domain v live
 
         timeBlock (fun delta -> liveIterMs <- liveIterMs + delta) (fun () ->
             bitsetIterIndices live markPresentIdx)
 
-        for instr in List.rev block.Instrs do
-            let def = getDefinedVReg instr
-            let uses = getUsedVRegs instr
+        for instrIdx in blockFacts.InstrFacts.Length - 1 .. -1 .. 0 do
+            let facts = blockFacts.InstrFacts.[instrIdx]
 
-            for u in uses do
+            for u in facts.IntUses do
                 markPresentValue u
 
-            match def with
+            match facts.IntDef with
             | Some d ->
                 markPresentValue d
                 match tryIndexOf domain d with
@@ -1180,7 +1226,7 @@ let private buildInterferenceGraphBitsetFastWithLivenessInternal
                 bitsetRemoveInPlace domain d live
             | None -> ()
 
-            for u in uses do
+            for u in facts.IntUses do
                 bitsetAddInPlace domain u live
 
         if blockIdx = blockIndex.EntryIndex then
@@ -1198,23 +1244,23 @@ let private buildInterferenceGraphBitsetFastWithLivenessInternal
 /// Build interference graph from CFG using bitset liveness
 let private buildInterferenceGraphBitsetWithLiveness
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     (domain: VRegDomain)
     (liveness: BlockLiveness array)
     (entryDefs: BitSet)
     : InterferenceGraph =
-    buildInterferenceGraphBitsetFastWithLivenessInternal false None blockIndex blocks domain liveness entryDefs
+    buildInterferenceGraphBitsetFastWithLivenessInternal false None blockIndex classifiedBlocks domain liveness entryDefs
     |> fst
 
 let private buildInterferenceGraphBitsetWithLivenessProfile
     (sw: System.Diagnostics.Stopwatch)
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     (domain: VRegDomain)
     (liveness: BlockLiveness array)
     (entryDefs: BitSet)
     : InterferenceGraph * InterferenceGraphTiming =
-    buildInterferenceGraphBitsetFastWithLivenessInternal true (Some sw) blockIndex blocks domain liveness entryDefs
+    buildInterferenceGraphBitsetFastWithLivenessInternal true (Some sw) blockIndex classifiedBlocks domain liveness entryDefs
 
 /// Build interference graph from CFG using bitset liveness
 let buildInterferenceGraphBitsetFast
@@ -1222,9 +1268,10 @@ let buildInterferenceGraphBitsetFast
     (entryDefs: int list)
     : InterferenceGraph =
     let (blockIndex, blocks) = buildBlockIndex cfg
-    let (domain, liveness) = computeLivenessBitsRaw blockIndex blocks entryDefs
+    let classifiedBlocks = classifyBlocks blocks
+    let (domain, liveness) = computeLivenessBitsFromFacts blockIndex classifiedBlocks entryDefs
     let entryBits = bitsetFromList domain entryDefs
-    buildInterferenceGraphBitsetWithLiveness blockIndex blocks domain liveness entryBits
+    buildInterferenceGraphBitsetWithLiveness blockIndex classifiedBlocks domain liveness entryBits
 
 /// Build interference graph from CFG using bitset liveness
 let buildInterferenceGraphBitset
@@ -1236,7 +1283,7 @@ let buildInterferenceGraphBitset
 /// Build float interference graph from CFG using bitset liveness
 let private buildFloatInterferenceGraphBitsetWithLiveness
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     (domain: VRegDomain)
     (liveness: BlockLiveness array)
     (entryDefs: BitSet)
@@ -1263,20 +1310,19 @@ let private buildFloatInterferenceGraphBitsetWithLiveness
             if idx <> defIdx then
                 bitsetAddIndexInPlace defIdx adjacency.[idx])
 
-    for blockIdx in 0 .. blocks.Length - 1 do
-        let block = blocks.[blockIdx]
+    for blockIdx in 0 .. classifiedBlocks.Length - 1 do
+        let blockFacts = classifiedBlocks.[blockIdx]
         let blockLiveness = liveness.[blockIdx]
         let mutable live = bitsetClone blockLiveness.LiveOut
         bitsetIterIndices live markPresentIdx
 
-        for instr in List.rev block.Instrs do
-            let def = getDefinedFVReg instr
-            let uses = getUsedFVRegs instr
+        for instrIdx in blockFacts.InstrFacts.Length - 1 .. -1 .. 0 do
+            let facts = blockFacts.InstrFacts.[instrIdx]
 
-            for u in uses do
+            for u in facts.FloatUses do
                 markPresentValue u
 
-            match def with
+            match facts.FloatDef with
             | Some d ->
                 markPresentValue d
                 match tryIndexOf domain d with
@@ -1285,7 +1331,7 @@ let private buildFloatInterferenceGraphBitsetWithLiveness
                 bitsetRemoveInPlace domain d live
             | None -> ()
 
-            for u in uses do
+            for u in facts.FloatUses do
                 bitsetAddInPlace domain u live
 
         if blockIdx = blockIndex.EntryIndex then
@@ -1964,12 +2010,18 @@ let floatColoringToAllocation (colorResult: ColoringResult) (registers: LIR.Phys
 /// even if they don't appear in the CFG instructions
 let private chordalFloatAllocationWithLiveness
     (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
     (additionalVRegs: BitSet)
     (domain: VRegDomain)
     (livenessBits: BlockLiveness array)
     : FAllocationResult =
-    let graph = buildFloatInterferenceGraphBitsetWithLiveness blockIndex blocks domain livenessBits additionalVRegs
+    let graph =
+        buildFloatInterferenceGraphBitsetWithLiveness
+            blockIndex
+            classifiedBlocks
+            domain
+            livenessBits
+            additionalVRegs
     // Add additional VRegs (like float params) as isolated vertices if not already in graph
     let graphWithParams : InterferenceGraph =
         { graph with Vertices = bitsetUnion graph.Vertices additionalVRegs }
@@ -1988,9 +2040,11 @@ let private chordalFloatAllocationWithLiveness
 /// even if they don't appear in the CFG instructions
 let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocationResult =
     let (blockIndex, blocks) = buildBlockIndex cfg
-    let (domain, livenessBits) = computeFloatLivenessBitsRaw blockIndex blocks additionalVRegs
+    let classifiedBlocks = classifyBlocks blocks
+    let (domain, livenessBits) =
+        computeFloatLivenessBitsFromFacts blockIndex classifiedBlocks additionalVRegs
     let additionalBits = bitsetFromList domain additionalVRegs
-    chordalFloatAllocationWithLiveness blockIndex blocks additionalBits domain livenessBits
+    chordalFloatAllocationWithLiveness blockIndex classifiedBlocks additionalBits domain livenessBits
 
 /// Apply float allocation to an FReg, converting FVirtual to FPhysical
 let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =
@@ -3657,10 +3711,13 @@ let private allocateRegistersInternal
 
     let (blockIndex, blocks) = buildBlockIndex func.CFG
 
-    // Step 1: Compute liveness (include int params in domain)
-    let ((domain, livenessBits), timings) =
+    // Step 1: Classify instructions once, then compute liveness (include int params in domain)
+    let ((classifiedBlocks, domain, livenessBits), timings) =
         timePhase swOpt "RegAlloc: Liveness" [] (fun () ->
-            computeLivenessBitsRaw blockIndex blocks intParamVRegIds)
+            let classifiedBlocks = classifyBlocks blocks
+            let (domain, livenessBits) =
+                computeLivenessBitsFromFacts blockIndex classifiedBlocks intParamVRegIds
+            (classifiedBlocks, domain, livenessBits))
     let intParamBits = bitsetFromList domain intParamVRegIds
 
     // Step 2: Build interference graph
@@ -3668,11 +3725,22 @@ let private allocateRegistersInternal
         match swOpt with
         | None ->
             timePhase swOpt "RegAlloc: Interference Graph" timings (fun () ->
-                buildInterferenceGraphBitsetWithLiveness blockIndex blocks domain livenessBits intParamBits)
+                buildInterferenceGraphBitsetWithLiveness
+                    blockIndex
+                    classifiedBlocks
+                    domain
+                    livenessBits
+                    intParamBits)
         | Some sw ->
             let start = sw.Elapsed.TotalMilliseconds
             let (graph, igTiming) =
-                buildInterferenceGraphBitsetWithLivenessProfile sw blockIndex blocks domain livenessBits intParamBits
+                buildInterferenceGraphBitsetWithLivenessProfile
+                    sw
+                    blockIndex
+                    classifiedBlocks
+                    domain
+                    livenessBits
+                    intParamBits
             let totalMs = sw.Elapsed.TotalMilliseconds - start
             let timings =
                 timings
@@ -3724,11 +3792,16 @@ let private allocateRegistersInternal
     // Include float param FVirtuals so they get allocated even if not used in CFG
     let ((floatDomain, floatLiveness), timings) =
         timePhase swOpt "RegAlloc: Float Liveness" timings (fun () ->
-            computeFloatLivenessBitsRaw blockIndex blocks floatParamFVirtualIds)
+            computeFloatLivenessBitsFromFacts blockIndex classifiedBlocks floatParamFVirtualIds)
     let floatParamBits = bitsetFromList floatDomain floatParamFVirtualIds
     let (floatAllocation, timings) =
         timePhase swOpt "RegAlloc: Float Allocation" timings (fun () ->
-            chordalFloatAllocationWithLiveness blockIndex blocks floatParamBits floatDomain floatLiveness)
+            chordalFloatAllocationWithLiveness
+                blockIndex
+                classifiedBlocks
+                floatParamBits
+                floatDomain
+                floatLiveness)
 
     let ((intParamCopyInstrs, floatParamCopyInstrs, entryEdgePhiInstrs), timings) =
         timePhase swOpt "RegAlloc: Param Moves" timings (fun () ->
