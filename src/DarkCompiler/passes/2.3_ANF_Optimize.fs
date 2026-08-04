@@ -8,6 +8,7 @@
 // - Common subexpression elimination: reuse earlier pure computations
 // - Branch code motion: hoist identical pure leading branch computations
 // - Reassociation: combine constants across adjacent integer additions
+// - Control-flow simplification: collapse Boolean literal branches
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
 //
 // These optimizations run in a loop until no more changes occur.
@@ -1242,9 +1243,81 @@ let rec optimizeToFixedPoint (context: OptimizeContext) (options: OptimizeOption
         else
             func'
 
+let rec private collectAExprTempIds (expr: AExpr) (tempIds: Set<TempId>) : Set<TempId> =
+    match expr with
+    | Return atom -> addAtomUse atom tempIds
+    | Let (tid, cexpr, body) ->
+        tempIds
+        |> Set.add tid
+        |> addCExprUses cexpr
+        |> collectAExprTempIds body
+    | If (cond, thenBranch, elseBranch) ->
+        tempIds
+        |> addAtomUse cond
+        |> collectAExprTempIds thenBranch
+        |> collectAExprTempIds elseBranch
+
+let private freshVarGenForProgram (Program (functions, mainExpr)) : VarGen =
+    let tempIds =
+        functions
+        |> List.fold
+            (fun tempIds func ->
+                func.TypedParams
+                |> List.fold (fun ids param -> Set.add param.Id ids) tempIds
+                |> collectAExprTempIds func.Body)
+            Set.empty
+        |> collectAExprTempIds mainExpr
+
+    match
+        tempIds
+        |> Set.fold
+            (fun greatest (TempId tempId) ->
+                match greatest with
+                | None -> Some tempId
+                | Some greatestId -> Some (max greatestId tempId))
+            None
+    with
+    | None -> initialVarGen
+    | Some greatestId -> VarGen (greatestId + 1)
+
+let rec private rewriteInvertedBoolLiteralBranches (varGen: VarGen) (expr: AExpr) : AExpr * VarGen =
+    match expr with
+    | Return _ -> (expr, varGen)
+    | Let (tid, cexpr, body) ->
+        let (body', varGen') = rewriteInvertedBoolLiteralBranches varGen body
+        (Let (tid, cexpr, body'), varGen')
+    | If (cond, thenBranch, elseBranch) ->
+        let (thenBranch', varGenAfterThen) = rewriteInvertedBoolLiteralBranches varGen thenBranch
+        let (elseBranch', varGenAfterElse) = rewriteInvertedBoolLiteralBranches varGenAfterThen elseBranch
+
+        match thenBranch', elseBranch' with
+        | Return (BoolLiteral false), Return (BoolLiteral true) ->
+            let (resultId, varGen') = freshVar varGenAfterElse
+            (Let (resultId, UnaryPrim (Not, cond), Return (Var resultId)), varGen')
+        | _ ->
+            (If (cond, thenBranch', elseBranch'), varGenAfterElse)
+
+let private rewriteInvertedBoolLiteralBranchesInProgram (program: Program) : Program =
+    let (Program (functions, mainExpr)) = program
+    let initialFreshVarGen = freshVarGenForProgram program
+    let (functionsReversed, varGenAfterFunctions) =
+        functions
+        |> List.fold
+            (fun (rewritten, varGen) func ->
+                let (body', varGen') = rewriteInvertedBoolLiteralBranches varGen func.Body
+                ({ func with Body = body' } :: rewritten, varGen'))
+            ([], initialFreshVarGen)
+    let (mainExpr', _) = rewriteInvertedBoolLiteralBranches varGenAfterFunctions mainExpr
+    Program (List.rev functionsReversed, mainExpr')
+
 /// Optimize a program with explicit options
 let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
-    let (Program (functions, mainExpr)) = program
+    let program' =
+        if options.EnableConstFolding then
+            rewriteInvertedBoolLiteralBranchesInProgram program
+        else
+            program
+    let (Program (functions, mainExpr)) = program'
 
     // Optimize all functions
     let functions' = functions |> List.map (fun f -> optimizeToFixedPoint context options f 10)

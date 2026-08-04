@@ -967,6 +967,20 @@ let TempId 1 = f(true)
 return t1
 
 ---NAME---
+invert_if_bool_literal_branches
+---INPUT---
+def f(cond: Bool) : Bool = if cond then false else true
+f(true)
+---EXPECTED---
+Function f:
+let TempId 2 = !t0
+return t2
+
+Main:
+let TempId 1 = f(true)
+return t1
+
+---NAME---
 branch_on_single_use_bool_negation
 ---INPUT---
 def f(cond: Bool) : Int64 = if !cond then 1 else 2

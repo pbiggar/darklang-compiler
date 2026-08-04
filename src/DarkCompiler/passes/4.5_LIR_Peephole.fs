@@ -911,6 +911,20 @@ let tryFuseCondBranch (instrs: Instr list) (terminator: Terminator) : (Instr lis
         | _ -> None
     | _ -> None
 
+/// Eliminate a materialized Boolean negation used only by a branch.
+/// MIR lowers `not source` as `negated = 1 - source`; branching on that
+/// normalized Boolean is equivalent to branching on source with swapped edges.
+let tryFuseBooleanNotBranch (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) option =
+    match terminator, List.rev instrs with
+    | Branch (branchReg, trueLabel, falseLabel),
+      Sub (subDest, oneReg, Reg sourceReg) :: Mov (oneDest, Imm 1L) :: remainingReversed
+        when sameReg branchReg subDest
+             && sameReg subDest oneReg
+             && sameReg oneReg oneDest
+             && not (sameReg sourceReg branchReg) ->
+        Some (List.rev remainingReversed, Branch (sourceReg, falseLabel, trueLabel))
+    | _ -> None
+
 /// Check if a value is a power of 2 (exactly one bit set)
 let isPowerOf2 (n: int64) : bool =
     n > 0L && (n &&& (n - 1L)) = 0L
@@ -989,9 +1003,15 @@ let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
     // Apply MUL + SUB → MSUB fusion
     let instrs'' = tryFuseMulSub instrs2
 
+    // Drop a materialized Boolean negation when the branch can swap its edges.
+    let (instrsBeforeCondBranch, terminatorBeforeCondBranch) =
+        match tryFuseBooleanNotBranch instrs'' block.Terminator with
+        | Some (fusedInstrs, fusedTerminator) -> (fusedInstrs, fusedTerminator)
+        | None -> (instrs'', block.Terminator)
+
     // Try to fuse Cset + Branch into CondBranch
     let (instrs''', terminator') =
-        match tryFuseCondBranch instrs'' block.Terminator with
+        match tryFuseCondBranch instrsBeforeCondBranch terminatorBeforeCondBranch with
         | Some (fusedInstrs, fusedTerminator) ->
             // After fusing Cset + Branch → CondBranch, try to fuse CMP #0 + CondBranch → CBZ/CBNZ
             match tryFuseCmpZeroBranch fusedInstrs fusedTerminator with
@@ -1001,11 +1021,11 @@ let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
                 (fusedInstrs, fusedTerminator)
         | None ->
             // Also try CMP #0 + CondBranch fusion on the original terminator
-            match tryFuseCmpZeroBranch instrs'' block.Terminator with
+            match tryFuseCmpZeroBranch instrsBeforeCondBranch terminatorBeforeCondBranch with
             | Some (fusedInstrs, fusedTerminator) ->
                 (fusedInstrs, fusedTerminator)
             | None ->
-                (instrs'', block.Terminator)
+                (instrsBeforeCondBranch, terminatorBeforeCondBranch)
 
     // Try to fuse AND_imm (power-of-2) + BranchZero/Branch → TBZ/TBNZ
     let (finalInstrs, finalTerminator) = applyAndBitBranchFusion instrs''' terminator'

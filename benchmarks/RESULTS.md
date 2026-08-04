@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-05 09:31:24
-**Commit:** `6402fa00` - Hoist floating constants from pure loops
+**Last Updated:** 2026-08-05 21:23:33
+**Commit:** `2cab88e5` - Collapse inverted Boolean literal branches
 
 | Benchmark     |           Dark (7.78x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

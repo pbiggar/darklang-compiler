@@ -199,6 +199,28 @@ let testMulConstantKeepsLiveConstRegister () : TestResult =
     else
         Error $"Expected live constant register to block strength reduction, got: {optimized}"
 
+let testBooleanNotBranchSwapsSuccessors () : TestResult =
+    let condition = Virtual 1
+    let negated = Virtual 2
+    let trueLabel = Label "true"
+    let falseLabel = Label "false"
+    let block : BasicBlock = {
+        Label = Label "entry"
+        Instrs = [
+            Mov (negated, Imm 1L)
+            Sub (negated, negated, Reg condition)
+        ]
+        Terminator = Branch (negated, trueLabel, falseLabel)
+    }
+
+    let optimized = optimizeBlock block |> fst
+    let expectedTerminator = Branch (condition, falseLabel, trueLabel)
+
+    if optimized.Instrs = [] && optimized.Terminator = expectedTerminator then
+        Ok ()
+    else
+        Error $"Expected Boolean negation branch to swap successors, got: {optimized}"
+
 let testOptimizeCFGRejectsMissingSuccessorLabel () : TestResult =
     let entry = Label "entry"
     let missing = Label "missing"
@@ -228,5 +250,6 @@ let tests = [
     ("LIR peephole fuses dead MUL/SUB temporary into MSUB", testMulSubFusionReplacesDeadTemp)
     ("LIR peephole keeps MUL/SUB temporary used by later print", testMulSubFusionKeepsLiveTempForPrint)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
+    ("LIR peephole swaps Boolean negation branch successors", testBooleanNotBranchSwapsSuccessors)
     ("LIR peephole rejects missing successor labels", testOptimizeCFGRejectsMissingSuccessorLabel)
 ]
