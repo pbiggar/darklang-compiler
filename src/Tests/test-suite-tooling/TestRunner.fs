@@ -222,6 +222,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         [| eifUpstreamDarkPath
            ematchUpstreamDarkPath
            eapplyUpstreamDarkPath
+           aliasesUpstreamDarkPath
            einfixUpstreamDarkPath
            eandUpstreamDarkPath
            eorUpstreamDarkPath
@@ -230,7 +231,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            estringUpstreamDarkPath
            eletUpstreamDarkPath
            epipeUpstreamDarkPath
+           derrorUpstreamDarkPath
            dtupleUpstreamDarkPath
+           dateUpstreamDarkPath
+           listUpstreamDarkPath
            uuidUpstreamDarkPath
            charToAsciiCodeUpstreamDarkPath |]
     for path in upstreamDarkPaths do
@@ -411,11 +415,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let upstreamEnablementLineAllowlist : Map<string, Set<int>> =
         Map.ofList
             [
-                ("src/Tests/e2e/upstream/language/apply/eapply.dark", Set.ofList [ 1; 4; 7; 10; 19; 62; 63; 64; 65; 66; 67; 68; 69; 70; 71; 72; 73; 75; 76; 78; 79; 83; 84; 88; 92; 93; 95; 96; 98; 100; 102; 104; 108; 110; 124; 135; 136; 138; 139; 141; 142 ])
-                ("src/Tests/e2e/upstream/language/custom-data/aliases.dark", Set.ofList [ 6; 9; 15; 16; 89; 91; 108 ])
-                ("src/Tests/e2e/upstream/language/flow-control/epipe.dark", Set.ofList [ 3 ])
+                ("src/Tests/e2e/upstream/language/apply/eapply.dark", Set.ofList [ 1; 4; 7; 10; 62; 63; 64; 65; 66; 67; 68; 69; 70; 71; 72; 73; 75; 76; 78; 79; 83; 84; 88; 92; 93; 95; 96; 98; 100; 102; 106; 108; 133; 134; 136; 139 ])
+                ("src/Tests/e2e/upstream/language/custom-data/aliases.dark", Set.ofList [ 6; 9; 15; 16; 19; 89; 91; 108 ])
+                ("src/Tests/e2e/upstream/language/flow-control/epipe.dark", Set.ofList [ 3; 4; 7; 27; 53; 93; 96; 102 ])
+                ("src/Tests/e2e/upstream/language/derror.dark", Set.ofList [ 14; 20 ])
                 ("src/Tests/e2e/upstream/stdlib/date.dark", Set.ofList [ 216 ])
-                ("src/Tests/e2e/upstream/stdlib/list.dark", Set.ofList [ 287 ])
+                ("src/Tests/e2e/upstream/stdlib/list.dark", Set.ofList [ 3; 8; 9; 12; 15; 16; 17; 18; 25; 26; 27; 28; 29; 31; 32; 33; 34; 35; 36; 93; 99; 100; 111; 112; 114; 115; 116; 127; 132; 133; 155; 158; 182; 185; 190; 195; 196; 213; 215; 218; 229; 230; 232; 233; 252; 253; 254; 287; 289; 290; 363; 364; 365 ])
                 ("src/Tests/e2e/upstream/stdlib/uuid.dark", Set.ofList [ 2; 6 ])
             ]
 
