@@ -44,6 +44,8 @@ type CodeGenContext = {
     RecordRegistry: LIR.RecordRegistry
     ClosurePayloadSizes: Map<string, int>
     ClosureCaptureTypes: Map<string, AST.Type list>
+    /// Reuses labels already derived while planning generic list release helpers.
+    PlannedListDecHelperLabels: Map<ANF.RcReleasePlan, string>
     FunctionName: string
     // Function context for tail call epilogue generation
     StackSize: int
@@ -4919,10 +4921,17 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
 
             match kind with
             | LIR.TaggedList ->
+                let releasePlan =
+                    requiredRcMetadataReleasePlan "TaggedList RefCountDec" metadata
                 let helperLabel =
-                    metadata
-                    |> requiredRcMetadataReleasePlan "TaggedList RefCountDec"
-                    |> listDecHelperForReleasePlan
+                    match releasePlan with
+                    | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.GenericHeap, _) as elementRelease)) ->
+                        match Map.tryFind elementRelease ctx.PlannedListDecHelperLabels with
+                        | Some label -> label
+                        | None ->
+                            Crash.crash $"TaggedList RefCountDec planned helper label missing for release plan {releasePlan}"
+                    | _ ->
+                        listDecHelperForReleasePlan releasePlan
                 let listDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -6097,6 +6106,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         RecordRegistry = recordRegistry
         ClosurePayloadSizes = closurePayloadSizes
         ClosureCaptureTypes = closureCaptureTypes
+        PlannedListDecHelperLabels = Map.empty
         FunctionName = ""
         StackSize = 0
         UsedCalleeSaved = []
@@ -6416,6 +6426,14 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         mergePlannedDictDecHelperMaps
             plannedDictDecHelpersFromFunctions
             plannedDictDecHelpersFromClosureCaptures
+
+    let plannedListDecHelperLabels =
+        plannedListDecHelpers
+        |> Map.toList
+        |> List.map (fun (helperLabel, (_, releasePlan)) -> releasePlan, helperLabel)
+        |> Map.ofList
+
+    let ctx = { ctx with PlannedListDecHelperLabels = plannedListDecHelperLabels }
 
     let listDecHelperDependencyLabels (helperLabel: string) : Set<string> =
         match Map.tryFind helperLabel plannedListDecHelpers with

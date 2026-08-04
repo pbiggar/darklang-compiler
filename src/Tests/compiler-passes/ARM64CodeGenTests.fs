@@ -175,6 +175,7 @@ let private convertRawAlloc
         RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
+        PlannedListDecHelperLabels = Map.empty
         FunctionName = "test"
         StackSize = 0
         UsedCalleeSaved = []

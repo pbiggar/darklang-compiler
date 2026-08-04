@@ -25,6 +25,7 @@ let convertTailArgMoves (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64
         RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
+        PlannedListDecHelperLabels = Map.empty
         FunctionName = "test"
         StackSize = 0
         UsedCalleeSaved = []
