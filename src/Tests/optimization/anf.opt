@@ -1608,6 +1608,49 @@ let TempId 1 = t0 - 4
 return t1
 
 ---NAME---
+combine_add_single_use_int64_negation_right
+---INPUT---
+def f(x: Int64, y: Int64) : Int64 = x + (-y)
+---EXPECTED---
+Function f:
+let TempId 3 = t0 - t1
+return t3
+
+---NAME---
+combine_add_single_use_int64_negation_left
+---INPUT---
+def f(x: Int64, y: Int64) : Int64 = (-y) + x
+---EXPECTED---
+Function f:
+let TempId 3 = t0 - t1
+return t3
+
+---NAME---
+preserve_reused_int64_negation_in_add
+---INPUT---
+def f(x: Int64, y: Int64) : (Int64, Int64) =
+  let negated = -y in
+  (x + negated, negated)
+---EXPECTED---
+Function f:
+let TempId 2 = -t1
+let TempId 4 = t0 + t2
+let TempId 5 = (t4, t2)
+return t5
+
+---NAME---
+preserve_int64_negation_used_as_both_add_operands
+---INPUT---
+def f(y: Int64) : Int64 =
+  let negated = -y in
+  negated + negated
+---EXPECTED---
+Function f:
+let TempId 1 = -t0
+let TempId 3 = t1 + t1
+return t3
+
+---NAME---
 reassociate_integer_add_constants
 ---INPUT---
 def f(x: Int64) : Int64 = (x + 2) + 3

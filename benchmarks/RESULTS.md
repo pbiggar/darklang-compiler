@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-05 22:16:55
-**Commit:** `2cae12d9` - Refine benchmark fixer optimization policy
+**Last Updated:** 2026-08-05 22:22:09
+**Commit:** `d6ff1b01` - Combine addition with single-use Int64 negation
 
 | Benchmark     |           Dark (7.78x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

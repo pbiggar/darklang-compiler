@@ -575,6 +575,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical low-risk instruction selection that replaces three dependent instructions with the native ARM64 bit-clear operation on a hot N-Queens bitmask pattern.
 - Notes: Implemented for dead `MOVN #0; EOR; AND` sequences whose `AND` overwrites the inverted temporary and whose all-ones mask is dead before the next control-flow boundary, producing one `BIC`. Focused ARM64 symbolic before/after, temporary-lifetime, and machine encoding tests cover the transformation; the existing `nqueen` routine benchmark exercises `allOnes & (~~~blocked)`.
 
+### Addition with single-use Int64 negation
+
+- Optimization name: Addition with single-use Int64 negation
+- Taxonomy category: Instruction combining
+- Priority/rationale: Small, canonical rewrite that replaces two dependent arithmetic operations with one subtraction while preserving wrapping Int64 semantics.
+- Notes: Implemented for `x + (-y) -> x - y` and `(-y) + x -> x - y` when the negation temporary occurs only once in the addition and has no later use in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Focused ANF snapshots cover both operand orders and preserve negations reused later or as both addition operands in `src/Tests/optimization/anf.opt`. No routine benchmark contains the source pattern; a dedicated repeated `negated_addition` accumulator loop is the identified follow-up microbenchmark if broader source programs begin emitting it.
+
 ### Dead multiply-subtract fusion
 
 - Optimization name: Dead multiply-subtract temporary fusion

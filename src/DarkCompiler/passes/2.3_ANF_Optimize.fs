@@ -9,6 +9,7 @@
 // - Branch code motion: hoist identical pure leading branch computations
 // - Reassociation: combine constants across adjacent integer additions
 // - Control-flow simplification: collapse Boolean literal branches
+// - Instruction combining: fold single-use negation into integer subtraction
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
 //
 // These optimizations run in a loop until no more changes occur.
@@ -971,6 +972,14 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
         // do not: both x < NaN and x >= NaN are false.
         tryComplementIntegerComparison op
         |> Option.map (fun complement -> Let (notTid, Prim (complement, left, right), notBody))
+    | UnaryPrim (Neg, negated), Let (resultTid, Prim (Add, other, Var negatedTid), resultBody)
+    | UnaryPrim (Neg, negated), Let (resultTid, Prim (Add, Var negatedTid, other), resultBody)
+        when negatedTid = tid
+             && not (atomUsesTemp tid other)
+             && not (aExprUsesTemp tid resultBody)
+             && isInt64Atom typeEnv negated
+             && isInt64Atom typeEnv other ->
+        Some (Let (resultTid, Prim (Sub, other, negated), resultBody))
     | Prim (Add, source, IntLiteral (Int64 a)),
       Let (addTid, Prim (Add, Var sourceTid, IntLiteral (Int64 b)), addBody)
         when sourceTid = tid ->
