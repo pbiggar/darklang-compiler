@@ -78,11 +78,11 @@ let private encodeMoveWideShift (instructionName: string) (shift: int) : uint32 
     | 48 -> 3u <<< 21
     | _ -> Crash.crash $"{instructionName}: shift must be one of 0, 16, 32, or 48, got {shift}"
 
-/// Encode one concrete ARM64 instruction to one 32-bit machine-code word.
-/// Symbolic branches and labels are resolved by encodeWithLabels.
-let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
+/// Encode one symbolic ARM64 instruction to one 32-bit machine-code word.
+/// Symbolic branches and labels are resolved by encodeSymbolicWithLabels.
+let private encodeSymbolicWord (instr: ARM64Symbolic.Instr) : ARM64.MachineCode =
     match instr with
-    | ARM64.MOVZ (dest, imm, shift) ->
+    | ARM64Symbolic.MOVZ (dest, imm, shift) ->
         // MOVZ encoding: sf=1 opc=10 100101 hw imm16 Rd
         // Bits: sf(31) opc(30-29) 100101(28-23) hw(22-21) imm16(20-5) Rd(4-0)
         let sf = 1u <<< 31
@@ -93,7 +93,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd
 
-    | ARM64.MOVN (dest, imm, shift) ->
+    | ARM64Symbolic.MOVN (dest, imm, shift) ->
         // MOVN encoding: sf=1 opc=00 100101 hw imm16 Rd
         // Sets Rd = NOT(imm16 << shift), useful for negative constants
         // Bits: sf(31) opc(30-29) 100101(28-23) hw(22-21) imm16(20-5) Rd(4-0)
@@ -105,7 +105,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd
 
-    | ARM64.MOVK (dest, imm, shift) ->
+    | ARM64Symbolic.MOVK (dest, imm, shift) ->
         // MOVK encoding: sf=1 opc=11 100101 hw imm16 Rd
         // Bits: sf(31) opc(30-29) 100101(28-23) hw(22-21) imm16(20-5) Rd(4-0)
         let sf = 1u <<< 31
@@ -116,7 +116,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd
 
-    | ARM64.ADD_imm (dest, src, imm) ->
+    | ARM64Symbolic.ADD_imm (dest, src, imm) ->
         // ADD immediate: sf=1 0 0 10001 shift(2) imm12(12) Rn(5) Rd(5)
         let sf = 1u <<< 31
         let op = 0b10001u <<< 24
@@ -126,7 +126,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| shift ||| imm12 ||| rn ||| rd
 
-    | ARM64.ADD_reg (dest, src1, src2) ->
+    | ARM64Symbolic.ADD_reg (dest, src1, src2) ->
         // ADD register: sf=1 0 0 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
         let sf = 1u <<< 31
         let op = 0b01011u <<< 24
@@ -135,7 +135,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| rn ||| rd
 
-    | ARM64.ADD_shifted (dest, src1, src2, shiftAmt) ->
+    | ARM64Symbolic.ADD_shifted (dest, src1, src2, shiftAmt) ->
         // ADD shifted register: sf=1 0 0 01011 shift=00(LSL) 0 Rm(5) imm6(6) Rn(5) Rd(5)
         // dest = src1 + (src2 << shiftAmt)
         let sf = 1u <<< 31
@@ -146,7 +146,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| imm6 ||| rn ||| rd
 
-    | ARM64.SUB_imm (dest, src, imm) ->
+    | ARM64Symbolic.SUB_imm (dest, src, imm) ->
         // SUB immediate: sf=1 op=1 S=0 10001 shift(2) imm12(12) Rn(5) Rd(5)
         let sf = 1u <<< 31          // 64-bit operation
         let op = 1u <<< 30          // SUB (vs ADD which has op=0)
@@ -158,7 +158,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
-    | ARM64.SUB_imm12 (dest, src, imm) ->
+    | ARM64Symbolic.SUB_imm12 (dest, src, imm) ->
         // SUB immediate with shift=12: actual value = imm * 4096
         // sf=1 op=1 S=0 10001 shift=01(12-bit shift) imm12(12) Rn(5) Rd(5)
         let sf = 1u <<< 31          // 64-bit operation
@@ -171,7 +171,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
-    | ARM64.SUB_reg (dest, src1, src2) ->
+    | ARM64Symbolic.SUB_reg (dest, src1, src2) ->
         // SUB register: sf=1 op=1 S=0 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
         // Bits: sf(31) op(30) S(29) 01011(28-24) shift(23-22) 0(21) Rm(20-16) imm6(15-10) Rn(9-5) Rd(4-0)
         let sf = 1u <<< 31  // 64-bit
@@ -184,7 +184,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd
 
-    | ARM64.SUB_shifted (dest, src1, src2, shiftAmt) ->
+    | ARM64Symbolic.SUB_shifted (dest, src1, src2, shiftAmt) ->
         // SUB shifted register: sf=1 op=1 S=0 01011 shift=00(LSL) 0 Rm(5) imm6(6) Rn(5) Rd(5)
         // dest = src1 - (src2 << shiftAmt)
         let sf = 1u <<< 31  // 64-bit
@@ -197,7 +197,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| rm ||| imm6 ||| rn ||| rd
 
-    | ARM64.SUBS_imm (dest, src, imm) ->
+    | ARM64Symbolic.SUBS_imm (dest, src, imm) ->
         // SUBS immediate: like SUB but sets condition flags
         // sf=1 op=1 S=1 10001 shift=00 imm12(12) Rn(5) Rd(5)
         let sf = 1u <<< 31          // 64-bit operation
@@ -210,7 +210,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
-    | ARM64.MUL (dest, src1, src2) ->
+    | ARM64Symbolic.MUL (dest, src1, src2) ->
         // MADD: sf=1 0 0 11011 000 Rm(5) 0 Ra=11111 Rn(5) Rd(5)
         // Using Ra=XZR(31) for pure multiply
         let sf = 1u <<< 31
@@ -221,7 +221,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| ra ||| rn ||| rd
 
-    | ARM64.SDIV (dest, src1, src2) ->
+    | ARM64Symbolic.SDIV (dest, src1, src2) ->
         // SDIV: sf=1 0 0 11010110 Rm(5) 000011 Rn(5) Rd(5)
         let sf = 1u <<< 31
         let op = 0b11010110u <<< 21
@@ -231,7 +231,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
-    | ARM64.UDIV (dest, src1, src2) ->
+    | ARM64Symbolic.UDIV (dest, src1, src2) ->
         // UDIV: sf=1 0 0 11010110 Rm(5) 000010 Rn(5) Rd(5)
         let sf = 1u <<< 31
         let op = 0b11010110u <<< 21
@@ -241,7 +241,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
-    | ARM64.MSUB (dest, src1, src2, src3) ->
+    | ARM64Symbolic.MSUB (dest, src1, src2, src3) ->
         // MSUB: sf=1 0 0 11011 000 Rm(5) 1 Ra(5) Rn(5) Rd(5)
         // Computes: Rd = Ra - (Rn * Rm)
         let sf = 1u <<< 31
@@ -253,7 +253,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| flagBit ||| ra ||| rn ||| rd
 
-    | ARM64.MADD (dest, src1, src2, src3) ->
+    | ARM64Symbolic.MADD (dest, src1, src2, src3) ->
         // MADD: sf=1 0 0 11011 000 Rm(5) 0 Ra(5) Rn(5) Rd(5)
         // Computes: Rd = Ra + (Rn * Rm)
         let sf = 1u <<< 31
@@ -265,7 +265,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| ra ||| rn ||| rd
 
-    | ARM64.MOV_reg (dest, src) ->
+    | ARM64Symbolic.MOV_reg (dest, src) ->
         // Special case: MOV Xd, SP cannot use ORR (register 31 = XZR in ORR context)
         // Use ADD Xd, SP, #0 instead
         if src = ARM64.SP then
@@ -288,7 +288,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
             let rd = encodeReg dest
             sf ||| opc ||| op ||| rm ||| rn ||| rd
 
-    | ARM64.STRB (src, addr, offset) ->
+    | ARM64Symbolic.STRB (src, addr, offset) ->
         // STRB immediate unsigned offset: 00 111 001 00 imm12 Rn Rt
         // Size=00 (byte), opc=00, bit24=1 for unsigned offset mode
         let size = 0u <<< 30  // Byte operation
@@ -298,7 +298,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg src
         size ||| vOpc ||| imm12 ||| rn ||| rt
 
-    | ARM64.LDRB (dest, baseReg, indexReg) ->
+    | ARM64Symbolic.LDRB (dest, baseReg, indexReg) ->
         // LDRB (register offset): 00 111 000 01 1 Rm option S 10 Rn Rt
         // Size=00 (byte), V=0, opc=01 (load unsigned), register offset mode
         // option=011 (LSL), S=0 (no shift)
@@ -312,7 +312,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg dest
         size ||| bits29to21 ||| rm ||| option ||| s ||| fixed2 ||| rn ||| rt
 
-    | ARM64.LDRB_imm (dest, baseReg, offset) ->
+    | ARM64Symbolic.LDRB_imm (dest, baseReg, offset) ->
         // LDRB (unsigned offset): 00 111 001 01 imm12 Rn Rt
         // Size=00 (byte), V=0, opc=01 (load unsigned), unsigned offset mode
         let size = 0u <<< 30  // Byte operation
@@ -322,7 +322,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg dest
         size ||| vOpc ||| imm12 ||| rn ||| rt
 
-    | ARM64.STRB_reg (src, addr) ->
+    | ARM64Symbolic.STRB_reg (src, addr) ->
         // STRB (register): store byte to address in register
         // Use immediate offset 0: 00 111 001 00 000000000000 Rn Rt
         let size = 0u <<< 30  // Byte operation
@@ -334,40 +334,40 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
 
     // Label-based branches - resolved via two-pass encoding (see encodeWithLabels)
     // These are only valid after label resolution.
-    | ARM64.CBZ (reg, label) ->
+    | ARM64Symbolic.CBZ (reg, label) ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash $"CBZ label must be resolved before encoding: {reg}, {label}"
 
-    | ARM64.CBNZ (reg, label) ->
+    | ARM64Symbolic.CBNZ (reg, label) ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash $"CBNZ label must be resolved before encoding: {reg}, {label}"
 
-    | ARM64.B_label label ->
+    | ARM64Symbolic.B_label label ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash $"B label must be resolved before encoding: {label}"
 
-    | ARM64.B_cond_label (cond, label) ->
+    | ARM64Symbolic.B_cond_label (cond, label) ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash $"conditional B label must be resolved before encoding: {cond}, {label}"
 
-    | ARM64.Label label ->
+    | ARM64Symbolic.Label label ->
         // Pseudo-instruction: marks a label position (no machine code generated)
         Crash.crash $"label does not encode to a machine-code word: {label}"
 
-    | ARM64.ADRP (dest, label) ->
+    | ARM64Symbolic.ADRP (dest, label) ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash $"ADRP label must be resolved before encoding: {dest}, {label}"
 
-    | ARM64.ADR (dest, label) ->
+    | ARM64Symbolic.ADR (dest, label) ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash $"ADR label must be resolved before encoding: {dest}, {label}"
 
-    | ARM64.ADD_label (dest, src, label) ->
+    | ARM64Symbolic.ADD_label (dest, src, label) ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash $"ADD label must be resolved before encoding: {dest}, {src}, {label}"
 
     // Offset-based branches (for handcrafted runtime code with known offsets)
-    | ARM64.CBZ_offset (reg, offset) ->
+    | ARM64Symbolic.CBZ_offset (reg, offset) ->
         // CBZ: sf 011010 0 imm19 Rt
         // Compare and Branch on Zero
         let sf = 1u <<< 31  // 64-bit register
@@ -378,7 +378,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg
         sf ||| op ||| flag ||| imm19 ||| rt
 
-    | ARM64.CBNZ_offset (reg, offset) ->
+    | ARM64Symbolic.CBNZ_offset (reg, offset) ->
         // CBNZ: sf 011010 1 imm19 Rt
         // Compare and Branch on Non-Zero
         let sf = 1u <<< 31  // 64-bit register
@@ -389,7 +389,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg
         sf ||| op ||| flag ||| imm19 ||| rt
 
-    | ARM64.TBZ (reg, bit, offset) ->
+    | ARM64Symbolic.TBZ (reg, bit, offset) ->
         // TBZ: b5 011011 0 b40 imm14 Rt
         // Test bit and Branch if Zero
         // b5 = bit[5], b40 = bit[4:0]
@@ -401,7 +401,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg
         b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt
 
-    | ARM64.TBNZ (reg, bit, offset) ->
+    | ARM64Symbolic.TBNZ (reg, bit, offset) ->
         // TBNZ: b5 011011 1 b40 imm14 Rt
         // Test bit and Branch if Not Zero
         // b5 = bit[5], b40 = bit[4:0]
@@ -413,11 +413,11 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg
         b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt
 
-    | ARM64.TBZ_label _ | ARM64.TBNZ_label _ ->
+    | ARM64Symbolic.TBZ_label _ | ARM64Symbolic.TBNZ_label _ ->
         // Resolved in encodeWithLabels with computed label offsets
         Crash.crash "test-bit branch label must be resolved before encoding"
 
-    | ARM64.B offset ->
+    | ARM64Symbolic.B offset ->
         // B: 000101 imm26
         // Unconditional branch
         // Offset is in instructions (4-byte units), sign-extended
@@ -425,7 +425,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let imm26 = (uint32 offset) &&& 0x3FFFFFFu
         op ||| imm26
 
-    | ARM64.B_cond (cond, offset) ->
+    | ARM64Symbolic.B_cond (cond, offset) ->
         // B.cond: 01010100 imm19 0 cond
         // Conditional branch based on condition flags
         let op = 0b01010100u <<< 24
@@ -444,7 +444,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
             | ARM64.HS -> 0b0010u  // Higher than or same (unsigned)
         op ||| imm19 ||| condBits
 
-    | ARM64.CMP_imm (src, imm) ->
+    | ARM64Symbolic.CMP_imm (src, imm) ->
         // CMP immediate is SUBS XZR, Rn, #imm (SUB with set flags, dest=XZR)
         // Encoding: sf=1 op=1 S=1 10001 shift(2) imm12(12) Rn(5) Rd=11111
         let sf = 1u <<< 31          // 64-bit operation
@@ -457,7 +457,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = 31u                // XZR (discard result, only flags matter)
         sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd
 
-    | ARM64.CMP_reg (src1, src2) ->
+    | ARM64Symbolic.CMP_reg (src1, src2) ->
         // CMP register is SUBS XZR, Rn, Rm (SUB with set flags, dest=XZR)
         // Encoding: sf=1 op=1 S=1 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd=11111
         let sf = 1u <<< 31  // 64-bit
@@ -470,7 +470,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = 31u        // XZR (discard result)
         sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd
 
-    | ARM64.CSET (dest, cond) ->
+    | ARM64Symbolic.CSET (dest, cond) ->
         // CSET Rd, cond is CSINC Rd, XZR, XZR, invert(cond)
         // Encoding: sf=1 op=0 S=0 11010100 Rm=11111 cond(4) 01 Rn=11111 Rd(5)
         let sf = 1u <<< 31
@@ -497,7 +497,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| rm ||| condBits ||| fixedBits ||| rn ||| rd
 
-    | ARM64.AND_reg (dest, src1, src2) ->
+    | ARM64Symbolic.AND_reg (dest, src1, src2) ->
         // AND register: sf=1 opc=00 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit
         let opc = 0u <<< 29  // AND (vs ORR which has opc=01)
@@ -508,7 +508,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd
 
-    | ARM64.BIC_reg (dest, src1, src2) ->
+    | ARM64Symbolic.BIC_reg (dest, src1, src2) ->
         // BIC register is AND (shifted register) with the N bit set to invert Rm.
         let sf = 1u <<< 31
         let opc = 0u <<< 29
@@ -520,7 +520,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| shift ||| invertRm ||| rm ||| rn ||| rd
 
-    | ARM64.AND_imm (dest, src, imm) ->
+    | ARM64Symbolic.AND_imm (dest, src, imm) ->
         // AND immediate: sf=1 opc=00 100100 N(1) immr(6) imms(6) Rn(5) Rd(5)
         // For 64-bit (sf=1, N=1), logical immediate encoding:
         // - immr = rotation amount
@@ -538,7 +538,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.ORR_reg (dest, src1, src2) ->
+    | ARM64Symbolic.ORR_reg (dest, src1, src2) ->
         // ORR register: sf=1 opc=01 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit
         let opc = 1u <<< 29  // ORR
@@ -549,7 +549,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd
 
-    | ARM64.EOR_reg (dest, src1, src2) ->
+    | ARM64Symbolic.EOR_reg (dest, src1, src2) ->
         // EOR register: sf=1 opc=10 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit
         let opc = 2u <<< 29  // EOR (vs AND=00, ORR=01)
@@ -560,7 +560,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd
 
-    | ARM64.LSL_reg (dest, src, shift) ->
+    | ARM64Symbolic.LSL_reg (dest, src, shift) ->
         // LSLV (variable shift left): sf=1 0 0 11010110 Rm(5) 001000 Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit
         let op = 0b11010110u <<< 21
@@ -570,7 +570,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
-    | ARM64.LSR_reg (dest, src, shift) ->
+    | ARM64Symbolic.LSR_reg (dest, src, shift) ->
         // LSRV (variable shift right): sf=1 0 0 11010110 Rm(5) 001001 Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit
         let op = 0b11010110u <<< 21
@@ -580,7 +580,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
-    | ARM64.LSL_imm (dest, src, shift) ->
+    | ARM64Symbolic.LSL_imm (dest, src, shift) ->
         // LSL Rd, Rn, #shift is alias for UBFM Rd, Rn, #(64-shift), #(63-shift)
         // UBFM: sf=1 opc=10 100110 N=1 immr(6) imms(6) Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit
@@ -593,7 +593,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.LSR_imm (dest, src, shift) ->
+    | ARM64Symbolic.LSR_imm (dest, src, shift) ->
         // LSR Rd, Rn, #shift is alias for UBFM Rd, Rn, #shift, #63
         // UBFM: sf=1 opc=10 100110 N=1 immr(6) imms(6) Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit
@@ -606,7 +606,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.MVN (dest, src) ->
+    | ARM64Symbolic.MVN (dest, src) ->
         // MVN is ORN Rd, XZR, Rm (OR NOT with Rn=XZR)
         // Encoding: sf=1 opc=01 01010 shift=00 1 Rm(5) imm6=000000 Rn=11111 Rd(5)
         let sf = 1u <<< 31  // 64-bit
@@ -619,7 +619,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| shift ||| n ||| rm ||| rn ||| rd
 
-    | ARM64.NEG (dest, src) ->
+    | ARM64Symbolic.NEG (dest, src) ->
         // NEG: SUB dest, XZR, src
         // Encoding: sf=1 op=1 S=0 01011 shift=00 0 Rm(src) imm6=000000 Rn=11111(XZR) Rd(dest)
         let sf = 1u <<< 31  // 64-bit
@@ -633,7 +633,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd
 
     // Stack operations
-    | ARM64.STP (reg1, reg2, addr, offset) ->
+    | ARM64Symbolic.STP (reg1, reg2, addr, offset) ->
         // STP (Store Pair) - signed offset addressing
         // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
         // For 64-bit registers: opc=10 (bits 31-30)
@@ -647,7 +647,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg1
         opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
-    | ARM64.LDP (reg1, reg2, addr, offset) ->
+    | ARM64Symbolic.LDP (reg1, reg2, addr, offset) ->
         // LDP (Load Pair) - signed offset addressing
         // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
         // V=0 (integer), mode=10 (signed offset), L=1 (load)
@@ -660,7 +660,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg1
         opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
-    | ARM64.STP_pre (reg1, reg2, addr, offset) ->
+    | ARM64Symbolic.STP_pre (reg1, reg2, addr, offset) ->
         // STP (Store Pair) - pre-indexed addressing: addr += offset, then store
         // Encoding: opc(2) 101 V(1) mode(3) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
         // V=0 (integer), mode=011 (pre-indexed), L=0 (store)
@@ -673,7 +673,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg1
         opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
-    | ARM64.LDP_post (reg1, reg2, addr, offset) ->
+    | ARM64Symbolic.LDP_post (reg1, reg2, addr, offset) ->
         // LDP (Load Pair) - post-indexed addressing: load, then addr += offset
         // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
         // V=0 (integer), mode=01 (post-indexed), L=1 (load)
@@ -686,7 +686,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg reg1
         opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
-    | ARM64.STR (src, addr, offset) ->
+    | ARM64Symbolic.STR (src, addr, offset) ->
         // STR (Store Register) - unsigned offset addressing
         // Encoding: size=11 111 001 00 imm12 Rn Rt
         // For 64-bit: size=11 (bits 31-30)
@@ -698,7 +698,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg src
         size ||| fixedBits ||| imm12 ||| rn ||| rt
 
-    | ARM64.LDR (dest, addr, offset) ->
+    | ARM64Symbolic.LDR (dest, addr, offset) ->
         // LDR (Load Register) - unsigned offset addressing
         // Encoding: size=11 111 001 01 imm12 Rn Rt
         // Same as STR but bit 22 = 1 for load
@@ -709,7 +709,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg dest
         size ||| fixedBits ||| imm12 ||| rn ||| rt
 
-    | ARM64.STUR (src, addr, offset) ->
+    | ARM64Symbolic.STUR (src, addr, offset) ->
         // STUR (Store Register Unscaled) - signed offset addressing
         // Encoding: size=11 111 000 00 0 imm9 00 Rn Rt
         // For 64-bit: size=11 (bits 31-30)
@@ -723,7 +723,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg src
         size ||| fixedBits ||| imm9 ||| rn ||| rt
 
-    | ARM64.LDUR (dest, addr, offset) ->
+    | ARM64Symbolic.LDUR (dest, addr, offset) ->
         // LDUR (Load Register Unscaled) - signed offset addressing
         // Encoding: size=11 111 000 01 0 imm9 00 Rn Rt
         // Same as STUR but bit 22 = 1 for load
@@ -735,38 +735,38 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeReg dest
         size ||| fixedBits ||| imm9 ||| rn ||| rt
 
-    | ARM64.BL label ->
+    | ARM64Symbolic.BL label ->
         // BL is handled in encodeWithLabels (label-based branch)
         // Resolved via two-pass encoding like other label-based branches
         Crash.crash $"BL label must be resolved before encoding: {label}"
 
-    | ARM64.BLR reg ->
+    | ARM64Symbolic.BLR reg ->
         // BLR: Branch with Link to Register
         // Encoding: 1101011 0 0 01 11111 0000 0 0 Rn 00000
         // 0xD63F0000 | (Rn << 5)
         let rn = encodeReg reg
         0xD63F0000u ||| (rn <<< 5)
 
-    | ARM64.BR reg ->
+    | ARM64Symbolic.BR reg ->
         // BR: Branch to Register (no link, for tail calls)
         // Encoding: 1101011 0 0 00 11111 0000 0 0 Rn 00000
         // 0xD61F0000 | (Rn << 5)
         let rn = encodeReg reg
         0xD61F0000u ||| (rn <<< 5)
 
-    | ARM64.RET ->
+    | ARM64Symbolic.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
         // Default RET uses X30 (link register)
         0xD65F03C0u
 
-    | ARM64.SVC imm ->
+    | ARM64Symbolic.SVC imm ->
         // SVC: 11010100 000 imm16 000 01
         // Bits: 11010100000(31-21) imm16(20-5) 00001(4-0)
         let imm16 = uint32 imm
         0xD4000001u ||| (imm16 <<< 5)
 
     // Floating-point instructions
-    | ARM64.LDR_fp (dest, addr, offset) ->
+    | ARM64Symbolic.LDR_fp (dest, addr, offset) ->
         // LDR (SIMD&FP) - unsigned offset addressing for double
         // Encoding: size=11 111 101 01 imm12 Rn Rt
         // size=11 for 64-bit (double), V=1 (FP), opc=01 (load)
@@ -777,7 +777,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeFReg dest
         size ||| fixedBits ||| imm12 ||| rn ||| rt
 
-    | ARM64.STR_fp (src, addr, offset) ->
+    | ARM64Symbolic.STR_fp (src, addr, offset) ->
         // STR (SIMD&FP) - unsigned offset addressing for double
         // Encoding: size=11 111 101 00 imm12 Rn Rt
         // size=11 for 64-bit (double), V=1 (FP), opc=00 (store)
@@ -788,7 +788,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeFReg src
         size ||| fixedBits ||| imm12 ||| rn ||| rt
 
-    | ARM64.STP_fp (freg1, freg2, addr, offset) ->
+    | ARM64Symbolic.STP_fp (freg1, freg2, addr, offset) ->
         // STP (SIMD&FP) - signed offset addressing for double
         // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
         // opc=01 for 64-bit (D registers), V=1 (FP), mode=010 (signed offset), L=0 (store)
@@ -801,7 +801,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeFReg freg1
         opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
-    | ARM64.LDP_fp (freg1, freg2, addr, offset) ->
+    | ARM64Symbolic.LDP_fp (freg1, freg2, addr, offset) ->
         // LDP (SIMD&FP) - signed offset addressing for double
         // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
         // opc=01 for 64-bit (D registers), V=1 (FP), mode=010 (signed offset), L=1 (load)
@@ -814,7 +814,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rt = encodeFReg freg1
         opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt
 
-    | ARM64.FADD (dest, src1, src2) ->
+    | ARM64Symbolic.FADD (dest, src1, src2) ->
         // FADD (scalar, double): 0001 1110 01 1 Rm 0010 10 Rn Rd
         // ftype=01 (double), opcode=0010 (add)
         let fixedBits = 0b00011110011u <<< 21
@@ -824,7 +824,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FSUB (dest, src1, src2) ->
+    | ARM64Symbolic.FSUB (dest, src1, src2) ->
         // FSUB (scalar, double): 0001 1110 01 1 Rm 0011 10 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
         let rm = (encodeFReg src2) <<< 16
@@ -833,7 +833,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FMUL (dest, src1, src2) ->
+    | ARM64Symbolic.FMUL (dest, src1, src2) ->
         // FMUL (scalar, double): 0001 1110 01 1 Rm 0000 10 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
         let rm = (encodeFReg src2) <<< 16
@@ -842,7 +842,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FDIV (dest, src1, src2) ->
+    | ARM64Symbolic.FDIV (dest, src1, src2) ->
         // FDIV (scalar, double): 0001 1110 01 1 Rm 0001 10 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
         let rm = (encodeFReg src2) <<< 16
@@ -851,7 +851,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FNEG (dest, src) ->
+    | ARM64Symbolic.FNEG (dest, src) ->
         // FNEG (scalar, double): 0x1E614000 for D0, D0
         // Encoding: 0001 1110 0110 0001 0100 0000 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
@@ -861,7 +861,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FABS (dest, src) ->
+    | ARM64Symbolic.FABS (dest, src) ->
         // FABS (scalar, double): 0x1E60C000 for D0, D0
         // Encoding: 0001 1110 0110 0000 1100 0000 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
@@ -871,7 +871,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FSQRT (dest, src) ->
+    | ARM64Symbolic.FSQRT (dest, src) ->
         // FSQRT (scalar, double): 0x1E61C000 for D0, D0
         // Encoding: 0001 1110 0110 0001 1100 0000 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
@@ -881,7 +881,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FCMP (src1, src2) ->
+    | ARM64Symbolic.FCMP (src1, src2) ->
         // FCMP (scalar, double): 0001 1110 01 1 Rm 00 1000 Rn 00 000
         // Encoding: 0001 1110 01 1 Rm 00 1000 Rn 00 opc=000
         let fixedBits = 0b00011110011u <<< 21
@@ -891,7 +891,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let opc = 0b00000u  // Compare (not with zero)
         fixedBits ||| rm ||| opcode ||| rn ||| opc
 
-    | ARM64.FMOV_reg (dest, src) ->
+    | ARM64Symbolic.FMOV_reg (dest, src) ->
         // FMOV (register, double): 0001 1110 01 1 00000 010000 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
         let rm = 0u <<< 16  // Unused
@@ -900,7 +900,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
 
-    | ARM64.FMOV_imm (dest, value) ->
+    | ARM64Symbolic.FMOV_imm (dest, value) ->
         match ARM64.tryEncodeFmovFloatImmediate value with
         | Some imm8 ->
             // FMOV (scalar immediate, double): base opcode plus modified-immediate byte.
@@ -908,7 +908,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         | None ->
             Crash.crash $"FMOV immediate does not support {value}"
 
-    | ARM64.FMOV_to_gp (dest, src) ->
+    | ARM64Symbolic.FMOV_to_gp (dest, src) ->
         // FMOV (scalar to GP, double): 1001 1110 01 1 00110 000000 Vn Rd
         // sf=1, ftype=01 (double), rmode=00, opcode=110
         // Move 64-bit FP register to GP register (bit-for-bit)
@@ -920,7 +920,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd
 
-    | ARM64.FMOV_from_gp (dest, src) ->
+    | ARM64Symbolic.FMOV_from_gp (dest, src) ->
         // FMOV (general to scalar, double): 1001 1110 01 1 00111 000000 Rn Vd
         // sf=1, ftype=01 (double), rmode=00, opcode=111
         // Move GP register to 64-bit FP register (bit-for-bit)
@@ -932,7 +932,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd
 
-    | ARM64.SCVTF (dest, src) ->
+    | ARM64Symbolic.SCVTF (dest, src) ->
         // SCVTF (scalar, integer to FP, double): 1001 1110 01 1 00010 000000 Rn Rd
         // sf=1 (64-bit int), ftype=01 (double), rmode=00, opcode=010
         let sf = 1u <<< 31
@@ -943,7 +943,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeFReg dest
         sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd
 
-    | ARM64.FCVTZS (dest, src) ->
+    | ARM64Symbolic.FCVTZS (dest, src) ->
         // FCVTZS (scalar, FP to integer, double): 1001 1110 01 1 11000 000000 Rn Rd
         // sf=1 (64-bit int), ftype=01 (double), rmode=11 (toward zero), opcode=000
         let sf = 1u <<< 31
@@ -956,7 +956,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
 
     // Sign/zero extension instructions (for integer overflow truncation)
     // These are encoded using SBFM/UBFM (Signed/Unsigned Bitfield Move)
-    | ARM64.SXTB (dest, src) ->
+    | ARM64Symbolic.SXTB (dest, src) ->
         // SXTB: SBFM Xd, Xn, #0, #7 (sign-extend byte to 64-bit)
         // Encoding: sf=1 opc=00 100110 N=1 immr=0 imms=7 Rn Rd
         let sf = 1u <<< 31
@@ -969,7 +969,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.SXTH (dest, src) ->
+    | ARM64Symbolic.SXTH (dest, src) ->
         // SXTH: SBFM Xd, Xn, #0, #15 (sign-extend halfword to 64-bit)
         let sf = 1u <<< 31
         let opc = 0u <<< 29  // SBFM
@@ -981,7 +981,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.SXTW (dest, src) ->
+    | ARM64Symbolic.SXTW (dest, src) ->
         // SXTW: SBFM Xd, Xn, #0, #31 (sign-extend word to 64-bit)
         let sf = 1u <<< 31
         let opc = 0u <<< 29  // SBFM
@@ -993,7 +993,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.UXTB (dest, src) ->
+    | ARM64Symbolic.UXTB (dest, src) ->
         // UXTB: UBFM Xd, Xn, #0, #7 (zero-extend byte to 64-bit)
         // Encoding: sf=1 opc=10 100110 N=1 immr=0 imms=7 Rn Rd
         let sf = 1u <<< 31
@@ -1006,7 +1006,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.UXTH (dest, src) ->
+    | ARM64Symbolic.UXTH (dest, src) ->
         // UXTH: UBFM Xd, Xn, #0, #15 (zero-extend halfword to 64-bit)
         let sf = 1u <<< 31
         let opc = 2u <<< 29  // UBFM
@@ -1018,7 +1018,7 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
-    | ARM64.UXTW (dest, src) ->
+    | ARM64Symbolic.UXTW (dest, src) ->
         // UXTW: UBFM Xd, Xn, #0, #31 (zero-extend word to 64-bit)
         let sf = 1u <<< 31
         let opc = 2u <<< 29  // UBFM
@@ -1030,53 +1030,50 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd
 
-/// Compatibility entry point for direct encoder tests. Production emission uses
-/// encodeWord and avoids allocating this singleton list for every instruction.
+/// Compatibility entry point for concrete-instruction encoder tests.
+let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
+    instr |> ARM64Symbolic.ofARM64 |> encodeSymbolicWord
+
+/// Compatibility entry point for direct encoder tests. Production emission
+/// encodes its existing symbolic instructions without converting them.
 let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
-    match instr with
-    | ARM64.CBZ _
-    | ARM64.CBNZ _
-    | ARM64.B_label _
-    | ARM64.B_cond_label _
-    | ARM64.Label _
-    | ARM64.ADRP _
-    | ARM64.ADR _
-    | ARM64.ADD_label _
-    | ARM64.TBZ_label _
-    | ARM64.TBNZ_label _
-    | ARM64.BL _ -> []
-    | _ -> [encodeWord instr]
+    let symbolicInstr = ARM64Symbolic.ofARM64 instr
+    match symbolicInstr with
+    | ARM64Symbolic.CBZ _
+    | ARM64Symbolic.CBNZ _
+    | ARM64Symbolic.B_label _
+    | ARM64Symbolic.B_cond_label _
+    | ARM64Symbolic.Label _
+    | ARM64Symbolic.ADRP _
+    | ARM64Symbolic.ADR _
+    | ARM64Symbolic.ADD_label _
+    | ARM64Symbolic.TBZ_label _
+    | ARM64Symbolic.TBNZ_label _
+    | ARM64Symbolic.BL _ -> []
+    | _ -> [encodeSymbolicWord symbolicInstr]
 
 /// Two-Pass Encoding for Label Resolution
 
-/// Pass 1: Compute byte offset for each label
-/// Returns map from label name to byte offset
-/// Note: Labels mark positions but don't generate code, so we track actual code offset
+/// Pass 1: Compute byte offset for each concrete label.
 let computeLabelPositions (instructions: ARM64.Instr list) : Map<string, int> =
     let rec loop instrs offset labelMap =
         match instrs with
         | [] -> labelMap
-        | instr :: rest ->
-            match instr with
-            | ARM64.Label name ->
-                // Record this label's position, don't increment offset (pseudo-instruction)
-                loop rest offset (Map.add name offset labelMap)
-            | _ ->
-                // All ARM64 instructions are fixed 4 bytes
-                loop rest (offset + 4) labelMap
+        | ARM64.Label name :: rest ->
+            loop rest offset (Map.add name offset labelMap)
+        | _ :: rest ->
+            loop rest (offset + 4) labelMap
     loop instructions 0 Map.empty
 
-/// Pass 1 (symbolic): Compute byte offset for each label
+/// Pass 1: Compute byte offset for each symbolic label.
 let computeSymbolicLabelPositions (instructions: ARM64Symbolic.Instr list) : Map<string, int> =
     let rec loop instrs offset labelMap =
         match instrs with
         | [] -> labelMap
-        | instr :: rest ->
-            match instr with
-            | ARM64Symbolic.Label name ->
-                loop rest offset (Map.add name offset labelMap)
-            | _ ->
-                loop rest (offset + 4) labelMap
+        | ARM64Symbolic.Label name :: rest ->
+            loop rest offset (Map.add name offset labelMap)
+        | _ :: rest ->
+            loop rest (offset + 4) labelMap
     loop instructions 0 Map.empty
 
 /// Compute symbolic code size and label positions in one instruction-list pass.
@@ -1120,107 +1117,6 @@ let private resolveLabelRefWithPools
             | Some idx -> "_float" + string idx
             | None -> Crash.crash $"Float literal label missing from pool: {value}"
 
-let private resolveSymbolicInstr
-    (stringPool: LiteralPool.StringPool)
-    (floatPool: LiteralPool.FloatPool)
-    (instr: ARM64Symbolic.Instr)
-    : ARM64.Instr =
-    match instr with
-    | ARM64Symbolic.MOVZ (dest, imm, shift) -> ARM64.MOVZ (dest, imm, shift)
-    | ARM64Symbolic.MOVN (dest, imm, shift) -> ARM64.MOVN (dest, imm, shift)
-    | ARM64Symbolic.MOVK (dest, imm, shift) -> ARM64.MOVK (dest, imm, shift)
-    | ARM64Symbolic.ADD_imm (dest, src, imm) -> ARM64.ADD_imm (dest, src, imm)
-    | ARM64Symbolic.ADD_reg (dest, src1, src2) -> ARM64.ADD_reg (dest, src1, src2)
-    | ARM64Symbolic.ADD_shifted (dest, src1, src2, shift) -> ARM64.ADD_shifted (dest, src1, src2, shift)
-    | ARM64Symbolic.SUB_imm (dest, src, imm) -> ARM64.SUB_imm (dest, src, imm)
-    | ARM64Symbolic.SUB_imm12 (dest, src, imm) -> ARM64.SUB_imm12 (dest, src, imm)
-    | ARM64Symbolic.SUB_reg (dest, src1, src2) -> ARM64.SUB_reg (dest, src1, src2)
-    | ARM64Symbolic.SUB_shifted (dest, src1, src2, shift) -> ARM64.SUB_shifted (dest, src1, src2, shift)
-    | ARM64Symbolic.SUBS_imm (dest, src, imm) -> ARM64.SUBS_imm (dest, src, imm)
-    | ARM64Symbolic.MUL (dest, src1, src2) -> ARM64.MUL (dest, src1, src2)
-    | ARM64Symbolic.SDIV (dest, src1, src2) -> ARM64.SDIV (dest, src1, src2)
-    | ARM64Symbolic.UDIV (dest, src1, src2) -> ARM64.UDIV (dest, src1, src2)
-    | ARM64Symbolic.MSUB (dest, src1, src2, src3) -> ARM64.MSUB (dest, src1, src2, src3)
-    | ARM64Symbolic.MADD (dest, src1, src2, src3) -> ARM64.MADD (dest, src1, src2, src3)
-    | ARM64Symbolic.CMP_imm (src, imm) -> ARM64.CMP_imm (src, imm)
-    | ARM64Symbolic.CMP_reg (src1, src2) -> ARM64.CMP_reg (src1, src2)
-    | ARM64Symbolic.CSET (dest, cond) -> ARM64.CSET (dest, cond)
-    | ARM64Symbolic.AND_reg (dest, src1, src2) -> ARM64.AND_reg (dest, src1, src2)
-    | ARM64Symbolic.BIC_reg (dest, src1, src2) -> ARM64.BIC_reg (dest, src1, src2)
-    | ARM64Symbolic.AND_imm (dest, src, imm) -> ARM64.AND_imm (dest, src, imm)
-    | ARM64Symbolic.ORR_reg (dest, src1, src2) -> ARM64.ORR_reg (dest, src1, src2)
-    | ARM64Symbolic.EOR_reg (dest, src1, src2) -> ARM64.EOR_reg (dest, src1, src2)
-    | ARM64Symbolic.LSL_reg (dest, src, shift) -> ARM64.LSL_reg (dest, src, shift)
-    | ARM64Symbolic.LSR_reg (dest, src, shift) -> ARM64.LSR_reg (dest, src, shift)
-    | ARM64Symbolic.LSL_imm (dest, src, shift) -> ARM64.LSL_imm (dest, src, shift)
-    | ARM64Symbolic.LSR_imm (dest, src, shift) -> ARM64.LSR_imm (dest, src, shift)
-    | ARM64Symbolic.MVN (dest, src) -> ARM64.MVN (dest, src)
-    | ARM64Symbolic.MOV_reg (dest, src) -> ARM64.MOV_reg (dest, src)
-    | ARM64Symbolic.STRB (src, addr, offset) -> ARM64.STRB (src, addr, offset)
-    | ARM64Symbolic.LDRB (dest, baseAddr, index) -> ARM64.LDRB (dest, baseAddr, index)
-    | ARM64Symbolic.LDRB_imm (dest, baseAddr, offset) -> ARM64.LDRB_imm (dest, baseAddr, offset)
-    | ARM64Symbolic.STRB_reg (src, addr) -> ARM64.STRB_reg (src, addr)
-    | ARM64Symbolic.STP (reg1, reg2, addr, offset) -> ARM64.STP (reg1, reg2, addr, offset)
-    | ARM64Symbolic.STP_pre (reg1, reg2, addr, offset) -> ARM64.STP_pre (reg1, reg2, addr, offset)
-    | ARM64Symbolic.LDP (reg1, reg2, addr, offset) -> ARM64.LDP (reg1, reg2, addr, offset)
-    | ARM64Symbolic.LDP_post (reg1, reg2, addr, offset) -> ARM64.LDP_post (reg1, reg2, addr, offset)
-    | ARM64Symbolic.STR (src, addr, offset) -> ARM64.STR (src, addr, offset)
-    | ARM64Symbolic.LDR (dest, addr, offset) -> ARM64.LDR (dest, addr, offset)
-    | ARM64Symbolic.STUR (src, addr, offset) -> ARM64.STUR (src, addr, offset)
-    | ARM64Symbolic.LDUR (dest, addr, offset) -> ARM64.LDUR (dest, addr, offset)
-    | ARM64Symbolic.BL label -> ARM64.BL label
-    | ARM64Symbolic.BLR reg -> ARM64.BLR reg
-    | ARM64Symbolic.BR reg -> ARM64.BR reg
-    | ARM64Symbolic.CBZ (reg, label) -> ARM64.CBZ (reg, label)
-    | ARM64Symbolic.CBNZ (reg, label) -> ARM64.CBNZ (reg, label)
-    | ARM64Symbolic.B_label label -> ARM64.B_label label
-    | ARM64Symbolic.B_cond_label (cond, label) -> ARM64.B_cond_label (cond, label)
-    | ARM64Symbolic.CBZ_offset (reg, offset) -> ARM64.CBZ_offset (reg, offset)
-    | ARM64Symbolic.CBNZ_offset (reg, offset) -> ARM64.CBNZ_offset (reg, offset)
-    | ARM64Symbolic.TBZ (reg, bit, offset) -> ARM64.TBZ (reg, bit, offset)
-    | ARM64Symbolic.TBNZ (reg, bit, offset) -> ARM64.TBNZ (reg, bit, offset)
-    | ARM64Symbolic.TBZ_label (reg, bit, label) -> ARM64.TBZ_label (reg, bit, label)
-    | ARM64Symbolic.TBNZ_label (reg, bit, label) -> ARM64.TBNZ_label (reg, bit, label)
-    | ARM64Symbolic.B offset -> ARM64.B offset
-    | ARM64Symbolic.B_cond (cond, offset) -> ARM64.B_cond (cond, offset)
-    | ARM64Symbolic.NEG (dest, src) -> ARM64.NEG (dest, src)
-    | ARM64Symbolic.RET -> ARM64.RET
-    | ARM64Symbolic.SVC imm -> ARM64.SVC imm
-    | ARM64Symbolic.Label name -> ARM64.Label name
-    | ARM64Symbolic.ADRP (dest, labelRef) ->
-        let label = resolveLabelRefWithPools stringPool floatPool labelRef
-        ARM64.ADRP (dest, label)
-    | ARM64Symbolic.ADD_label (dest, src, labelRef) ->
-        let label = resolveLabelRefWithPools stringPool floatPool labelRef
-        ARM64.ADD_label (dest, src, label)
-    | ARM64Symbolic.ADR (dest, labelRef) ->
-        let label = resolveLabelRefWithPools stringPool floatPool labelRef
-        ARM64.ADR (dest, label)
-    | ARM64Symbolic.LDR_fp (dest, addr, offset) -> ARM64.LDR_fp (dest, addr, offset)
-    | ARM64Symbolic.STR_fp (src, addr, offset) -> ARM64.STR_fp (src, addr, offset)
-    | ARM64Symbolic.STP_fp (freg1, freg2, addr, offset) -> ARM64.STP_fp (freg1, freg2, addr, offset)
-    | ARM64Symbolic.LDP_fp (freg1, freg2, addr, offset) -> ARM64.LDP_fp (freg1, freg2, addr, offset)
-    | ARM64Symbolic.FADD (dest, src1, src2) -> ARM64.FADD (dest, src1, src2)
-    | ARM64Symbolic.FSUB (dest, src1, src2) -> ARM64.FSUB (dest, src1, src2)
-    | ARM64Symbolic.FMUL (dest, src1, src2) -> ARM64.FMUL (dest, src1, src2)
-    | ARM64Symbolic.FDIV (dest, src1, src2) -> ARM64.FDIV (dest, src1, src2)
-    | ARM64Symbolic.FNEG (dest, src) -> ARM64.FNEG (dest, src)
-    | ARM64Symbolic.FABS (dest, src) -> ARM64.FABS (dest, src)
-    | ARM64Symbolic.FSQRT (dest, src) -> ARM64.FSQRT (dest, src)
-    | ARM64Symbolic.FCMP (src1, src2) -> ARM64.FCMP (src1, src2)
-    | ARM64Symbolic.FMOV_reg (dest, src) -> ARM64.FMOV_reg (dest, src)
-    | ARM64Symbolic.FMOV_imm (dest, value) -> ARM64.FMOV_imm (dest, value)
-    | ARM64Symbolic.FMOV_to_gp (dest, src) -> ARM64.FMOV_to_gp (dest, src)
-    | ARM64Symbolic.FMOV_from_gp (dest, src) -> ARM64.FMOV_from_gp (dest, src)
-    | ARM64Symbolic.SCVTF (dest, src) -> ARM64.SCVTF (dest, src)
-    | ARM64Symbolic.FCVTZS (dest, src) -> ARM64.FCVTZS (dest, src)
-    | ARM64Symbolic.SXTB (dest, src) -> ARM64.SXTB (dest, src)
-    | ARM64Symbolic.SXTH (dest, src) -> ARM64.SXTH (dest, src)
-    | ARM64Symbolic.SXTW (dest, src) -> ARM64.SXTW (dest, src)
-    | ARM64Symbolic.UXTB (dest, src) -> ARM64.UXTB (dest, src)
-    | ARM64Symbolic.UXTH (dest, src) -> ARM64.UXTH (dest, src)
-    | ARM64Symbolic.UXTW (dest, src) -> ARM64.UXTW (dest, src)
-
 let private tryFindDataLabel
     (label: string)
     (stringLabels: Map<string, int>)
@@ -1236,8 +1132,10 @@ let private tryFindDataLabel
 
 /// Encode an instruction with label resolution
 /// currentOffset: byte offset of current instruction
-let encodeWithLabels
-    (instr: ARM64.Instr)
+let private encodeSymbolicWithLabels
+    (instr: ARM64Symbolic.Instr)
+    (stringPool: LiteralPool.StringPool)
+    (floatPool: LiteralPool.FloatPool)
     (currentOffset: int)
     (codeLabels: Map<string, int>)
     (stringLabels: Map<string, int>)
@@ -1246,7 +1144,7 @@ let encodeWithLabels
     : ARM64.MachineCode =
     match instr with
     // Label-based branches - resolve to offsets
-    | ARM64.CBZ (reg, label) ->
+    | ARM64Symbolic.CBZ (reg, label) ->
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             // Compute relative offset in instructions (divide by 4)
@@ -1262,7 +1160,7 @@ let encodeWithLabels
         | None ->
             Crash.crash $"CBZ: Label '{label}' not found in labelMap"
 
-    | ARM64.CBNZ (reg, label) ->
+    | ARM64Symbolic.CBNZ (reg, label) ->
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
@@ -1277,7 +1175,7 @@ let encodeWithLabels
         | None ->
             Crash.crash $"CBNZ: Label '{label}' not found in labelMap"
 
-    | ARM64.TBZ_label (reg, bit, label) ->
+    | ARM64Symbolic.TBZ_label (reg, bit, label) ->
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
@@ -1293,7 +1191,7 @@ let encodeWithLabels
         | None ->
             Crash.crash $"TBZ: Label '{label}' not found in labelMap"
 
-    | ARM64.TBNZ_label (reg, bit, label) ->
+    | ARM64Symbolic.TBNZ_label (reg, bit, label) ->
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
@@ -1309,7 +1207,7 @@ let encodeWithLabels
         | None ->
             Crash.crash $"TBNZ: Label '{label}' not found in labelMap"
 
-    | ARM64.B_label label ->
+    | ARM64Symbolic.B_label label ->
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
@@ -1321,7 +1219,7 @@ let encodeWithLabels
         | None ->
             Crash.crash $"B: Label '{label}' not found in labelMap"
 
-    | ARM64.B_cond_label (cond, label) ->
+    | ARM64Symbolic.B_cond_label (cond, label) ->
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
@@ -1345,7 +1243,7 @@ let encodeWithLabels
         | None ->
             Crash.crash $"B.cond: Label '{label}' not found in labelMap"
 
-    | ARM64.BL label ->
+    | ARM64Symbolic.BL label ->
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
@@ -1358,13 +1256,14 @@ let encodeWithLabels
         | None ->
             Crash.crash $"BL: Label '{label}' not found in labelMap"
 
-    | ARM64.Label _ ->
+    | ARM64Symbolic.Label _ ->
         Crash.crash "labels do not encode to machine-code words"
 
-    | ARM64.ADRP (dest, label) ->
+    | ARM64Symbolic.ADRP (dest, labelRef) ->
         // ADRP: form PC-relative address to 4KB page
         // Encoding: 1 immlo(2) 10000 immhi(19) Rd(5)
         // The label should point to data in .rodata section
+        let label = resolveLabelRefWithPools stringPool floatPool labelRef
         match tryFindDataLabel label stringLabels floatLabels dataLabels with
         | Some targetOffset ->
             // Compute page-relative offset (4KB pages)
@@ -1383,10 +1282,11 @@ let encodeWithLabels
         | None ->
             Crash.crash $"ADRP: Label '{label}' not found in labelMap"
 
-    | ARM64.ADR (dest, label) ->
+    | ARM64Symbolic.ADR (dest, labelRef) ->
         // ADR: form PC-relative address
         // Encoding: 0 immlo(2) 10000 immhi(19) Rd(5)
         // immlo is bits 0-1, immhi is bits 2-20 of the 21-bit signed offset
+        let label = resolveLabelRefWithPools stringPool floatPool labelRef
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             // Compute byte offset from current PC to label
@@ -1402,10 +1302,11 @@ let encodeWithLabels
         | None ->
             Crash.crash $"ADR: Label '{label}' not found in labelMap"
 
-    | ARM64.ADD_label (dest, src, label) ->
+    | ARM64Symbolic.ADD_label (dest, src, labelRef) ->
         // ADD with label offset (page offset portion)
         // Used with ADRP to get full address
         // This adds the lower 12 bits of the address (page offset)
+        let label = resolveLabelRefWithPools stringPool floatPool labelRef
         match tryFindDataLabel label stringLabels floatLabels dataLabels with
         | Some targetOffset ->
             // Get the 12-bit page offset
@@ -1423,15 +1324,35 @@ let encodeWithLabels
 
     // All other instructions: use single-pass encoding
     | _ ->
-        encodeWord instr
+        encodeSymbolicWord instr
 
-/// Compute the size of code in bytes (for placing string data after code)
+/// Compatibility entry point for concrete instruction streams. Production
+/// emission calls encodeSymbolicWithLabels directly.
+let encodeWithLabels
+    (instr: ARM64.Instr)
+    (currentOffset: int)
+    (codeLabels: Map<string, int>)
+    (stringLabels: Map<string, int>)
+    (floatLabels: Map<string, int>)
+    (dataLabels: Map<string, int>)
+    : ARM64.MachineCode =
+    encodeSymbolicWithLabels
+        (ARM64Symbolic.ofARM64 instr)
+        LiteralPool.emptyStringPool
+        LiteralPool.emptyFloatPool
+        currentOffset
+        codeLabels
+        stringLabels
+        floatLabels
+        dataLabels
+
+/// Compute the size of concrete code in bytes.
 let getCodeSize (instructions: ARM64.Instr list) : int =
     instructions
     |> List.sumBy (fun instr ->
         match instr with
-        | ARM64.Label _ -> 0  // Labels don't generate code
-        | _ -> 4)  // All ARM64 instructions are 4 bytes
+        | ARM64.Label _ -> 0
+        | _ -> 4)
 
 /// Compute float label positions given code file offset, code size, and float pool
 /// Returns map from "_floatN" to byte offset (relative to segment/file start)
@@ -1546,59 +1467,6 @@ let computeLeakCounterLabel (codeFileOffset: int) (codeSize: int) (floatPoolSize
     let leakStart = (stringStart + stringPoolSize + 7) &&& (~~~7)
     Map.ofList [(ARM64Symbolic.leakCounterLabelName, leakStart)]
 
-/// Encoding with string and float pool support
-/// Computes label positions and encodes ADRP/ADD_label correctly
-let encodeAllWithPools
-    (instructions: ARM64.Instr list)
-    (stringPool: LiteralPool.StringPool)
-    (floatPool: LiteralPool.FloatPool)
-    (os: Platform.OS)
-    (enableLeakCheck: bool)
-    : ARM64.MachineCode list =
-    let codeFileOffset =
-        computeCodeFileOffset os stringPool floatPool enableLeakCheck
-    // Step 1: Compute code size
-    let codeSize =
-        getCodeSize instructions
-
-    // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
-    let floatLabels =
-        computeFloatLabels codeFileOffset codeSize floatPool
-    let floatPoolSize =
-        getFloatPoolSize floatPool
-
-    // Step 3: Compute string label positions (after headers + code + floats)
-    let stringLabels =
-        computeStringLabels codeFileOffset codeSize floatPoolSize stringPool
-
-    let stringPoolSize =
-        getStringPoolSize stringPool
-    let leakLabels =
-        if enableLeakCheck then
-            computeLeakCounterLabel codeFileOffset codeSize floatPoolSize stringPoolSize
-        else
-            Map.empty
-
-    // Step 4: Compute code label positions (relative to code start, add file offset)
-    let rawCodeLabels =
-        computeLabelPositions instructions
-    let codeLabelMap =
-        rawCodeLabels |> Map.map (fun _ offset -> codeFileOffset + offset)
-
-    let dataLabels = leakLabels
-
-    // Step 5: Encode with label resolution (current offset includes file offset)
-    let rec encodeLoop instrs offset acc =
-        match instrs with
-        | [] -> List.rev acc
-        | ARM64.Label _ :: rest ->
-            encodeLoop rest offset acc
-        | instr :: rest ->
-            let code = encodeWithLabels instr offset codeLabelMap stringLabels floatLabels dataLabels
-            encodeLoop rest (offset + 4) (code :: acc)
-
-    encodeLoop instructions codeFileOffset []
-
 /// Encode symbolic instructions with string and float pool support
 /// Resolves label refs on the fly to avoid allocating a concrete instruction list
 let encodeSymbolicWithPools
@@ -1645,8 +1513,30 @@ let encodeSymbolicWithPools
         | ARM64Symbolic.Label _ :: rest ->
             encodeLoop rest offset acc
         | instr :: rest ->
-            let resolvedInstr = resolveSymbolicInstr stringPool floatPool instr
-            let code = encodeWithLabels resolvedInstr offset codeLabelMap stringLabels floatLabels dataLabels
+            let code =
+                encodeSymbolicWithLabels
+                    instr
+                    stringPool
+                    floatPool
+                    offset
+                    codeLabelMap
+                    stringLabels
+                    floatLabels
+                    dataLabels
             encodeLoop rest (offset + 4) (code :: acc)
 
     encodeLoop instructions codeFileOffset []
+
+/// Compatibility entry point for concrete instruction streams. The compiler's
+/// production path keeps instructions symbolic through encoding.
+let encodeAllWithPools
+    (instructions: ARM64.Instr list)
+    (stringPool: LiteralPool.StringPool)
+    (floatPool: LiteralPool.FloatPool)
+    (os: Platform.OS)
+    (enableLeakCheck: bool)
+    : ARM64.MachineCode list =
+    instructions
+    |> List.map ARM64Symbolic.ofARM64
+    |> fun symbolic ->
+        encodeSymbolicWithPools symbolic stringPool floatPool os enableLeakCheck
