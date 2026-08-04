@@ -192,6 +192,36 @@ let private bitsetContainsIndex (idx: int) (bits: BitSet) : bool =
 let private bitsetUnionInPlace (left: BitSet) (right: BitSet) : unit =
     Bitset.unionInPlace left right
 
+type private BitSetUnionAccumulator =
+    | NoUnionBits
+    | BorrowedUnionBits of BitSet
+    | OwnedUnionBits of BitSet
+
+/// Accumulate unions without allocating for zero or one non-empty input and without
+/// replacing the owned result after the second non-empty input.
+let private bitsetAccumulateUnion
+    (accumulator: BitSetUnionAccumulator)
+    (bits: BitSet)
+    : BitSetUnionAccumulator =
+    if bitsetIsEmpty bits then
+        accumulator
+    else
+        match accumulator with
+        | NoUnionBits -> BorrowedUnionBits bits
+        | BorrowedUnionBits existing -> OwnedUnionBits (bitsetUnion existing bits)
+        | OwnedUnionBits result ->
+            bitsetUnionInPlace result bits
+            accumulator
+
+let private bitsetFinishUnion
+    (emptyBits: BitSet)
+    (accumulator: BitSetUnionAccumulator)
+    : BitSet =
+    match accumulator with
+    | NoUnionBits -> emptyBits
+    | BorrowedUnionBits bits
+    | OwnedUnionBits bits -> bits
+
 let private bitsetIntersects (left: BitSet) (right: BitSet) : bool =
     Bitset.intersects left right
 
@@ -826,17 +856,18 @@ let private computeLivenessBitsRaw
             let oldLiveness = liveness.[blockIdx]
 
             let successors = getSuccessors block.Terminator
-            let newLiveOut =
-                successors
-                |> List.fold (fun acc succLabel ->
-                    match tryBlockIndex blockIndex succLabel with
-                    | Some succIdx ->
-                        let liveInContrib = liveness.[succIdx].LiveIn
-                        let phiContrib = phiUsesForEdge succIdx blockIdx
-                        let succLive = bitsetUnion liveInContrib phiContrib
-                        bitsetUnion acc succLive
-                    | None -> acc
-                ) emptyBits
+            // Keep zero/one inputs borrowed, then update the first combined result in
+            // place so branching phi edges do not allocate a new bitset per union.
+            let mutable liveOutAccumulator = NoUnionBits
+            for succLabel in successors do
+                match tryBlockIndex blockIndex succLabel with
+                | Some succIdx ->
+                    liveOutAccumulator <-
+                        bitsetAccumulateUnion liveOutAccumulator liveness.[succIdx].LiveIn
+                    liveOutAccumulator <-
+                        bitsetAccumulateUnion liveOutAccumulator (phiUsesForEdge succIdx blockIdx)
+                | None -> ()
+            let newLiveOut = bitsetFinishUnion emptyBits liveOutAccumulator
 
             let newLiveIn = bitsetUnion gen (bitsetDiff newLiveOut kill)
 
@@ -932,17 +963,17 @@ let private computeFloatLivenessBitsRaw
             let oldLiveness = liveness.[blockIdx]
 
             let successors = getSuccessors block.Terminator
-            let newLiveOut =
-                successors
-                |> List.fold (fun acc succLabel ->
-                    match tryBlockIndex blockIndex succLabel with
-                    | Some succIdx ->
-                        let liveInContrib = liveness.[succIdx].LiveIn
-                        let fphiContrib = fphiUsesForEdge succIdx blockIdx
-                        let succLive = bitsetUnion liveInContrib fphiContrib
-                        bitsetUnion acc succLive
-                    | None -> acc
-                ) emptyBits
+            // Use the same borrowed/owned accumulator for floating-point phi edges.
+            let mutable liveOutAccumulator = NoUnionBits
+            for succLabel in successors do
+                match tryBlockIndex blockIndex succLabel with
+                | Some succIdx ->
+                    liveOutAccumulator <-
+                        bitsetAccumulateUnion liveOutAccumulator liveness.[succIdx].LiveIn
+                    liveOutAccumulator <-
+                        bitsetAccumulateUnion liveOutAccumulator (fphiUsesForEdge succIdx blockIdx)
+                | None -> ()
+            let newLiveOut = bitsetFinishUnion emptyBits liveOutAccumulator
 
             let newLiveIn = bitsetUnion gen (bitsetDiff newLiveOut kill)
 
