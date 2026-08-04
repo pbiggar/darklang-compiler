@@ -506,19 +506,22 @@ let removeSelfMovesFromFunction (func: Function) : Function =
             { block with Instrs = removeSelfMovesFromInstrs block.Instrs })
     { func with CFG = { func.CFG with Blocks = blocks } }
 
-let private removeFRegAliasesTo (dest: FReg) (aliases: Map<FReg, FReg>) : Map<FReg, FReg> =
-    aliases
-    |> Map.toList
-    |> List.filter (fun (reg, value) -> sameFReg reg dest || not (sameFReg value dest))
-    |> Map.ofList
+type private FloatingValueIdentity =
+    | InitialFRegValue of FReg
+    | WrittenFRegValue of int
 
-let private currentFRegValue (reg: FReg) (aliases: Map<FReg, FReg>) : FReg =
-    Map.tryFind reg aliases |> Option.defaultValue reg
+let private currentFRegValue
+    (reg: FReg)
+    (aliases: Map<FReg, FloatingValueIdentity>)
+    : FloatingValueIdentity =
+    Map.tryFind reg aliases |> Option.defaultValue (InitialFRegValue reg)
 
-let private recordFRegWrite (dest: FReg) (aliases: Map<FReg, FReg>) : Map<FReg, FReg> =
-    aliases
-    |> removeFRegAliasesTo dest
-    |> Map.add dest dest
+let private recordFRegWrite
+    (dest: FReg)
+    (valueIdentity: int)
+    (aliases: Map<FReg, FloatingValueIdentity>)
+    : Map<FReg, FloatingValueIdentity> =
+    Map.add dest (WrittenFRegValue valueIdentity) aliases
 
 let private fRegWriteDest (instr: Instr) : FReg option =
     match instr with
@@ -548,36 +551,27 @@ let private clobbersFRegs (instr: Instr) : bool =
     | _ -> false
 
 let removeRedundantFloatingCopyBackMoves (instrs: Instr list) : Instr list =
-    let rec loop aliases acc remaining =
+    let rec loop aliases nextValueIdentity acc remaining =
         match remaining with
         | [] -> List.rev acc
         | FMov (dest, src) as instr :: rest ->
             let srcValue = currentFRegValue src aliases
             let destValue = currentFRegValue dest aliases
-
-            if sameFReg destValue srcValue then
-                let aliases' =
-                    aliases
-                    |> removeFRegAliasesTo dest
-                    |> Map.add dest srcValue
-                loop aliases' acc rest
-            else
-                let aliases' =
-                    aliases
-                    |> removeFRegAliasesTo dest
-                    |> Map.add dest srcValue
-                loop aliases' (instr :: acc) rest
+            let aliases' = Map.add dest srcValue aliases
+            let acc' = if destValue = srcValue then acc else instr :: acc
+            loop aliases' nextValueIdentity acc' rest
         | instr :: rest ->
-            let aliases' =
+            let (aliases', nextValueIdentity') =
                 if clobbersFRegs instr then
-                    Map.empty
+                    (Map.empty, nextValueIdentity)
                 else
                     match fRegWriteDest instr with
-                    | Some dest -> recordFRegWrite dest aliases
-                    | None -> aliases
-            loop aliases' (instr :: acc) rest
+                    | Some dest ->
+                        (recordFRegWrite dest nextValueIdentity aliases, nextValueIdentity + 1)
+                    | None -> (aliases, nextValueIdentity)
+            loop aliases' nextValueIdentity' (instr :: acc) rest
 
-    loop Map.empty [] instrs
+    loop Map.empty 0 [] instrs
 
 let removePostAllocationMovesFromFunction (func: Function) : Function =
     let blocks =
