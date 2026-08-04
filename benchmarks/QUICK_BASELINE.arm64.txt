@@ -25,3 +25,4 @@ quicksort=941134
 spectral_norm=1608
 sum_to_n=700366
 tak=1622089
+uint64_mod_power_of_two=120108

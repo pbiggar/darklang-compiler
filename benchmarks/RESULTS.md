@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-05 21:23:33
-**Commit:** `2cab88e5` - Collapse inverted Boolean literal branches
+**Last Updated:** 2026-08-05 21:26:29
+**Commit:** `e980aa2f` - Strength reduce UInt64 power-of-two modulo
 
 | Benchmark     |           Dark (7.78x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

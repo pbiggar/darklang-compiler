@@ -448,6 +448,33 @@ let TempId 1 = t0 << 63
 return t1
 
 ---NAME---
+strength_reduce_uint64_mod_power_of_two
+---INPUT---
+def f(x: UInt64) : UInt64 = x % 8UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 & 7
+return t1
+
+---NAME---
+preserve_uint64_mod_zero
+---INPUT---
+def f(x: UInt64) : UInt64 = x % 0UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 % 0
+return t1
+
+---NAME---
+preserve_uint64_mod_non_power_of_two
+---INPUT---
+def f(x: UInt64) : UInt64 = x % 6UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 % 6
+return t1
+
+---NAME---
 identity_uint64_mul_one_right
 ---INPUT---
 def f(x: UInt64) : UInt64 = x * 1UL

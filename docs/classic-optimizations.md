@@ -428,6 +428,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical, low-risk lowering that replaces an expensive unsigned division by a literal power of two with a logical right shift.
 - Notes: Implemented for the full UInt64 power-of-two range in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `strength_reduce_uint64_div_power_of_two` in `src/Tests/optimization/anf.opt`. No current benchmark exercises this source pattern; a future UInt64 bitmap word-index workload using repeated runtime-value division by `64UL` would isolate it without distorting unrelated routine benchmarks.
 
+### UInt64 modulo by power-of-two lowering
+
+- Optimization name: UInt64 modulo by power-of-two lowering
+- Taxonomy category: Strength reduction
+- Priority/rationale: Canonical, low-risk lowering that replaces expensive unsigned remainder by a literal power of two with a bit mask.
+- Notes: Implemented for dynamic `x % 2^kUL -> x & (2^k - 1)UL` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`, while preserving zero and non-power-of-two divisors. Covered by focused before/after and negative snapshots in `src/Tests/optimization/anf.opt`; the isolated `uint64_mod_power_of_two` benchmark reduced ARM64 Cachegrind instructions from 14,000,123 to 12,000,123 (14.3%).
+
 ## Common subexpression elimination
 
 ### Dominator-scoped MIR CSE
