@@ -211,6 +211,41 @@ let testGeneratedCodeEliminatesSelfMoves () : TestResult =
         else
             Ok ()
 
+let testPeepholeFusesBitClearSequence () : TestResult =
+    let before = [
+        ARM64Symbolic.MOVN (ARM64.X9, 0us, 0)
+        ARM64Symbolic.EOR_reg (ARM64.X10, ARM64.X2, ARM64.X9)
+        ARM64Symbolic.AND_reg (ARM64.X10, ARM64.X1, ARM64.X10)
+    ]
+    let liveTemporary = [
+        ARM64Symbolic.MOVN (ARM64.X9, 0us, 0)
+        ARM64Symbolic.EOR_reg (ARM64.X10, ARM64.X2, ARM64.X9)
+        ARM64Symbolic.AND_reg (ARM64.X3, ARM64.X1, ARM64.X10)
+    ]
+    let liveMask =
+        before @ [ARM64Symbolic.ADD_reg (ARM64.X0, ARM64.X9, ARM64.X4)]
+    let expected = [ARM64Symbolic.BIC_reg (ARM64.X10, ARM64.X1, ARM64.X2)]
+    let overwrittenMask =
+        before @ [ARM64Symbolic.MOV_reg (ARM64.X9, ARM64.X4)]
+    let expectedWithOverwrite =
+        expected @ [ARM64Symbolic.MOV_reg (ARM64.X9, ARM64.X4)]
+    let actual = CodeGen.peepholeOptimize before
+
+    if actual <> expected then
+        let rendered =
+            actual
+            |> List.map TestDSL.PassTestRunner.prettyPrintARM64Instr
+            |> String.concat "; "
+        Error $"Expected BIC_reg(X10, X1, X2), got {rendered}"
+    elif CodeGen.peepholeOptimize liveTemporary <> liveTemporary then
+        Error "Bit-clear peephole fused a sequence whose inverted temporary remains live"
+    elif CodeGen.peepholeOptimize liveMask <> liveMask then
+        Error "Bit-clear peephole fused a sequence whose all-ones mask remains live"
+    elif CodeGen.peepholeOptimize overwrittenMask <> expectedWithOverwrite then
+        Error "Bit-clear peephole did not fuse a sequence whose all-ones mask is overwritten"
+    else
+        Ok ()
+
 let testArm64FLoadEncodableConstantsUseImmediate () : TestResult =
     let program =
         makeSimpleProgramWithVariants
@@ -1329,6 +1364,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
 let tests : (string * (unit -> TestResult)) list = [
     ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
+    ("ARM64 peephole fuses bit-clear sequence", testPeepholeFusesBitClearSequence)
     ("ARM64 UInt64 runtime zero branches target digit handlers", testPrintUInt64RuntimeZeroBranches)
     ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)
     ("ARM64 FLoad encodable constants use immediate", testArm64FLoadEncodableConstantsUseImmediate)

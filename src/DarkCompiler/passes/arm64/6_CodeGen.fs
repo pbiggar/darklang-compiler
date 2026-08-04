@@ -5996,6 +5996,149 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
         // All Ret terminators jump to the epilogue label
         Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ heapOverflowTrap @ epilogueLabelInstr @ epilogue)
 
+type private RegisterLifetimeStep =
+    | Unrelated
+    | Overwritten
+    | ReadOrControlFlow
+
+/// Classify one instruction while proving that a register value is dead.
+/// Control flow is a conservative barrier because this local peephole does not
+/// construct a CFG for the final symbolic instruction stream.
+let private registerLifetimeStep
+    (target: ARM64Symbolic.Reg)
+    (instr: ARM64Symbolic.Instr)
+    : RegisterLifetimeStep =
+    let classify (reads: ARM64Symbolic.Reg list) (writes: ARM64Symbolic.Reg list) =
+        if List.contains target reads then ReadOrControlFlow
+        elif List.contains target writes then Overwritten
+        else Unrelated
+
+    match instr with
+    | ARM64Symbolic.MOVZ (dest, _, _)
+    | ARM64Symbolic.MOVN (dest, _, _)
+    | ARM64Symbolic.CSET (dest, _)
+    | ARM64Symbolic.ADRP (dest, _)
+    | ARM64Symbolic.ADR (dest, _)
+    | ARM64Symbolic.FMOV_to_gp (dest, _)
+    | ARM64Symbolic.FCVTZS (dest, _) ->
+        classify [] [dest]
+    | ARM64Symbolic.MOVK (dest, _, _) ->
+        classify [dest] [dest]
+    | ARM64Symbolic.ADD_imm (dest, src, _)
+    | ARM64Symbolic.SUB_imm (dest, src, _)
+    | ARM64Symbolic.SUB_imm12 (dest, src, _)
+    | ARM64Symbolic.SUBS_imm (dest, src, _)
+    | ARM64Symbolic.AND_imm (dest, src, _)
+    | ARM64Symbolic.LSL_imm (dest, src, _)
+    | ARM64Symbolic.LSR_imm (dest, src, _)
+    | ARM64Symbolic.ADD_label (dest, src, _) ->
+        classify [src] [dest]
+    | ARM64Symbolic.MVN (dest, src)
+    | ARM64Symbolic.MOV_reg (dest, src)
+    | ARM64Symbolic.NEG (dest, src)
+    | ARM64Symbolic.SXTB (dest, src)
+    | ARM64Symbolic.SXTH (dest, src)
+    | ARM64Symbolic.SXTW (dest, src)
+    | ARM64Symbolic.UXTB (dest, src)
+    | ARM64Symbolic.UXTH (dest, src)
+    | ARM64Symbolic.UXTW (dest, src) ->
+        classify [src] [dest]
+    | ARM64Symbolic.ADD_reg (dest, src1, src2)
+    | ARM64Symbolic.SUB_reg (dest, src1, src2)
+    | ARM64Symbolic.MUL (dest, src1, src2)
+    | ARM64Symbolic.SDIV (dest, src1, src2)
+    | ARM64Symbolic.UDIV (dest, src1, src2)
+    | ARM64Symbolic.AND_reg (dest, src1, src2)
+    | ARM64Symbolic.BIC_reg (dest, src1, src2)
+    | ARM64Symbolic.ORR_reg (dest, src1, src2)
+    | ARM64Symbolic.EOR_reg (dest, src1, src2)
+    | ARM64Symbolic.LSL_reg (dest, src1, src2)
+    | ARM64Symbolic.LSR_reg (dest, src1, src2) ->
+        classify [src1; src2] [dest]
+    | ARM64Symbolic.ADD_shifted (dest, src1, src2, _)
+    | ARM64Symbolic.SUB_shifted (dest, src1, src2, _) ->
+        classify [src1; src2] [dest]
+    | ARM64Symbolic.MSUB (dest, src1, src2, src3)
+    | ARM64Symbolic.MADD (dest, src1, src2, src3) ->
+        classify [src1; src2; src3] [dest]
+    | ARM64Symbolic.CMP_imm (src, _) ->
+        classify [src] []
+    | ARM64Symbolic.CMP_reg (src1, src2) ->
+        classify [src1; src2] []
+    | ARM64Symbolic.STRB (src, addr, _)
+    | ARM64Symbolic.STR (src, addr, _)
+    | ARM64Symbolic.STUR (src, addr, _) ->
+        classify [src; addr] []
+    | ARM64Symbolic.STRB_reg (src, addr) ->
+        classify [src; addr] []
+    | ARM64Symbolic.LDRB (dest, addr, index) ->
+        classify [addr; index] [dest]
+    | ARM64Symbolic.LDRB_imm (dest, addr, _)
+    | ARM64Symbolic.LDR (dest, addr, _)
+    | ARM64Symbolic.LDUR (dest, addr, _) ->
+        classify [addr] [dest]
+    | ARM64Symbolic.STP (reg1, reg2, addr, _) ->
+        classify [reg1; reg2; addr] []
+    | ARM64Symbolic.STP_pre (reg1, reg2, addr, _) ->
+        classify [reg1; reg2; addr] [addr]
+    | ARM64Symbolic.LDP (reg1, reg2, addr, _) ->
+        classify [addr] [reg1; reg2]
+    | ARM64Symbolic.LDP_post (reg1, reg2, addr, _) ->
+        classify [addr] [reg1; reg2; addr]
+    | ARM64Symbolic.LDR_fp (_, addr, _)
+    | ARM64Symbolic.STR_fp (_, addr, _)
+    | ARM64Symbolic.STP_fp (_, _, addr, _)
+    | ARM64Symbolic.LDP_fp (_, _, addr, _) ->
+        classify [addr] []
+    | ARM64Symbolic.FMOV_from_gp (_, src)
+    | ARM64Symbolic.SCVTF (_, src) ->
+        classify [src] []
+    | ARM64Symbolic.FADD _
+    | ARM64Symbolic.FSUB _
+    | ARM64Symbolic.FMUL _
+    | ARM64Symbolic.FDIV _
+    | ARM64Symbolic.FNEG _
+    | ARM64Symbolic.FABS _
+    | ARM64Symbolic.FSQRT _
+    | ARM64Symbolic.FCMP _
+    | ARM64Symbolic.FMOV_reg _
+    | ARM64Symbolic.FMOV_imm _ ->
+        Unrelated
+    | ARM64Symbolic.BL _
+    | ARM64Symbolic.BLR _
+    | ARM64Symbolic.BR _
+    | ARM64Symbolic.CBZ _
+    | ARM64Symbolic.CBNZ _
+    | ARM64Symbolic.B_label _
+    | ARM64Symbolic.B_cond_label _
+    | ARM64Symbolic.CBZ_offset _
+    | ARM64Symbolic.CBNZ_offset _
+    | ARM64Symbolic.TBZ _
+    | ARM64Symbolic.TBNZ _
+    | ARM64Symbolic.TBZ_label _
+    | ARM64Symbolic.TBNZ_label _
+    | ARM64Symbolic.B _
+    | ARM64Symbolic.B_cond _
+    | ARM64Symbolic.RET
+    | ARM64Symbolic.SVC _
+    | ARM64Symbolic.Label _ ->
+        ReadOrControlFlow
+
+let private overwrittenBeforeReadOrEnd
+    (target: ARM64Symbolic.Reg)
+    (instrs: ARM64Symbolic.Instr list)
+    : bool =
+    let rec check remaining =
+        match remaining with
+        | [] -> true
+        | instr :: rest ->
+            match registerLifetimeStep target instr with
+            | Unrelated -> check rest
+            | Overwritten -> true
+            | ReadOrControlFlow -> false
+
+    check instrs
+
 /// Peephole optimization pass
 /// Patterns:
 /// 1. SUB_imm + CMP #0 → SUBS (fuse subtract and compare)
@@ -6008,6 +6151,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
 /// 8. CMP #0 + B.NE → CBNZ (compare zero and branch not equal)
 /// 9. AND Xn, Xn, Xn → MOV (AND with self is identity)
 /// 10. ORR Xn, Xn, Xn → MOV (OR with self is identity)
+/// 11. MOVN #0 + EOR + AND → BIC (bit clear when the inverted temporary is overwritten)
 let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr list =
     let rec optimize acc remaining =
         match remaining with
@@ -6021,6 +6165,34 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
         // Fuse CMP #0 + B.NE into CBNZ
         | ARM64Symbolic.CMP_imm (reg, 0us) :: ARM64Symbolic.B_cond_label (ARM64.NE, label) :: rest ->
             optimize (ARM64Symbolic.CBNZ (reg, label) :: acc) rest
+        // Fuse x & (y EOR -1) into BIC x, y. Requiring AND to overwrite the
+        // EOR destination proves that the inverted temporary is dead here.
+        | ARM64Symbolic.MOVN (allOnes, 0us, 0)
+          :: ARM64Symbolic.EOR_reg (inverted, value, eorMask)
+          :: ARM64Symbolic.AND_reg (dest, left, andRight)
+          :: rest
+            when eorMask = allOnes
+                 && andRight = inverted
+                 && dest = inverted
+                 && allOnes <> inverted
+                 && allOnes <> left
+                 && allOnes <> value
+                 && inverted <> left
+                 && overwrittenBeforeReadOrEnd allOnes rest ->
+            optimize (ARM64Symbolic.BIC_reg (dest, left, value) :: acc) rest
+        | ARM64Symbolic.MOVN (allOnes, 0us, 0)
+          :: ARM64Symbolic.EOR_reg (inverted, eorMask, value)
+          :: ARM64Symbolic.AND_reg (dest, left, andRight)
+          :: rest
+            when eorMask = allOnes
+                 && andRight = inverted
+                 && dest = inverted
+                 && allOnes <> inverted
+                 && allOnes <> left
+                 && allOnes <> value
+                 && inverted <> left
+                 && overwrittenBeforeReadOrEnd allOnes rest ->
+            optimize (ARM64Symbolic.BIC_reg (dest, left, value) :: acc) rest
         // Remove redundant self-move (integer)
         | ARM64Symbolic.MOV_reg (dest, src) :: rest when dest = src ->
             optimize acc rest

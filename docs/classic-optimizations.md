@@ -524,6 +524,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Instruction combining
 
+### ARM64 bit-clear fusion
+
+- Optimization name: ARM64 bit-clear fusion
+- Taxonomy category: Instruction combining
+- Priority/rationale: Canonical low-risk instruction selection that replaces three dependent instructions with the native ARM64 bit-clear operation on a hot N-Queens bitmask pattern.
+- Notes: Implemented for dead `MOVN #0; EOR; AND` sequences whose `AND` overwrites the inverted temporary and whose all-ones mask is dead before the next control-flow boundary, producing one `BIC`. Focused ARM64 symbolic before/after, temporary-lifetime, and machine encoding tests cover the transformation; the existing `nqueen` routine benchmark exercises `allOnes & (~~~blocked)`.
+
 ### Dead multiply-subtract fusion
 
 - Optimization name: Dead multiply-subtract temporary fusion

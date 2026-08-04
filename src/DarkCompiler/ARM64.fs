@@ -102,6 +102,7 @@ type Instr =
     | CMP_reg of src1:Reg * src2:Reg  // Compare registers (sets condition flags)
     | CSET of dest:Reg * cond:Condition  // Set register to 1 if condition, 0 otherwise
     | AND_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise AND
+    | BIC_reg of dest:Reg * src1:Reg * src2:Reg  // Bit clear: dest = src1 AND NOT src2
     | AND_imm of dest:Reg * src:Reg * imm:uint64  // Bitwise AND with immediate (bitmask)
     | ORR_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise OR
     | EOR_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise XOR (exclusive or)

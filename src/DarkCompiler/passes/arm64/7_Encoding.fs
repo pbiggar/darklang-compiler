@@ -508,6 +508,18 @@ let encodeWord (instr: ARM64.Instr) : ARM64.MachineCode =
         let rd = encodeReg dest
         sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd
 
+    | ARM64.BIC_reg (dest, src1, src2) ->
+        // BIC register is AND (shifted register) with the N bit set to invert Rm.
+        let sf = 1u <<< 31
+        let opc = 0u <<< 29
+        let op = 0b01010u <<< 24
+        let shift = 0u <<< 22
+        let invertRm = 1u <<< 21
+        let rm = (encodeReg src2) <<< 16
+        let rn = (encodeReg src1) <<< 5
+        let rd = encodeReg dest
+        sf ||| opc ||| op ||| shift ||| invertRm ||| rm ||| rn ||| rd
+
     | ARM64.AND_imm (dest, src, imm) ->
         // AND immediate: sf=1 opc=00 100100 N(1) immr(6) imms(6) Rn(5) Rd(5)
         // For 64-bit (sf=1, N=1), logical immediate encoding:
@@ -1134,6 +1146,7 @@ let private resolveSymbolicInstr
     | ARM64Symbolic.CMP_reg (src1, src2) -> ARM64.CMP_reg (src1, src2)
     | ARM64Symbolic.CSET (dest, cond) -> ARM64.CSET (dest, cond)
     | ARM64Symbolic.AND_reg (dest, src1, src2) -> ARM64.AND_reg (dest, src1, src2)
+    | ARM64Symbolic.BIC_reg (dest, src1, src2) -> ARM64.BIC_reg (dest, src1, src2)
     | ARM64Symbolic.AND_imm (dest, src, imm) -> ARM64.AND_imm (dest, src, imm)
     | ARM64Symbolic.ORR_reg (dest, src1, src2) -> ARM64.ORR_reg (dest, src1, src2)
     | ARM64Symbolic.EOR_reg (dest, src1, src2) -> ARM64.EOR_reg (dest, src1, src2)

@@ -216,6 +216,8 @@ let prettyPrintARM64Instr = function
         $"CSET({prettyPrintARM64Reg dest}, {cond})"
     | ARM64Symbolic.AND_reg (dest, src1, src2) ->
         $"AND_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64Symbolic.BIC_reg (dest, src1, src2) ->
+        $"BIC_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64Symbolic.AND_imm (dest, src, imm) ->
         $"AND_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, #{imm})"
     | ARM64Symbolic.ORR_reg (dest, src1, src2) ->

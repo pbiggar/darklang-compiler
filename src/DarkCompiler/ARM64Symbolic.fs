@@ -126,6 +126,7 @@ type Instr =
     | CMP_reg of src1:Reg * src2:Reg
     | CSET of dest:Reg * cond:Condition
     | AND_reg of dest:Reg * src1:Reg * src2:Reg
+    | BIC_reg of dest:Reg * src1:Reg * src2:Reg
     | AND_imm of dest:Reg * src:Reg * imm:uint64
     | ORR_reg of dest:Reg * src1:Reg * src2:Reg
     | EOR_reg of dest:Reg * src1:Reg * src2:Reg
@@ -224,6 +225,7 @@ let ofARM64 (instr: ARM64.Instr) : Instr =
     | ARM64.CMP_reg (src1, src2) -> CMP_reg (src1, src2)
     | ARM64.CSET (dest, cond) -> CSET (dest, cond)
     | ARM64.AND_reg (dest, src1, src2) -> AND_reg (dest, src1, src2)
+    | ARM64.BIC_reg (dest, src1, src2) -> BIC_reg (dest, src1, src2)
     | ARM64.AND_imm (dest, src, imm) -> AND_imm (dest, src, imm)
     | ARM64.ORR_reg (dest, src1, src2) -> ORR_reg (dest, src1, src2)
     | ARM64.EOR_reg (dest, src1, src2) -> EOR_reg (dest, src1, src2)

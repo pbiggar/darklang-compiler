@@ -191,6 +191,12 @@ let testFMOVImmediateEncoding () : TestResult =
 
     check cases
 
+let testBICRegisterEncoding () : TestResult =
+    match encode (BIC_reg (X3, X1, X2)) with
+    | [word] when word = 0x8A220023u -> Ok ()
+    | [word] -> Error $"BIC_reg: expected 0x8A220023, got 0x{word:X8}"
+    | words -> Error $"BIC_reg: expected 1 word, got {List.length words}"
+
 let testInvalidAssertDifferentValueIsRejected () : TestResult =
     let content =
         """---INPUT-ARM64---
@@ -217,6 +223,7 @@ let tests = [
     ("arithmetic immediates reject out-of-range values", testArithmeticImmediatesRejectOutOfRangeValues)
     ("move-wide shifts reject invalid values", testMoveWideShiftsRejectInvalidValues)
     ("FMOV immediate encoding", testFMOVImmediateEncoding)
+    ("BIC register encoding", testBICRegisterEncoding)
     ("invalid ASSERT-DIFFERENT value is rejected", testInvalidAssertDifferentValueIsRejected)
 ]
 
