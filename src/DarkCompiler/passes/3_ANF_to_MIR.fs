@@ -301,159 +301,17 @@ let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<string, AST.Typ
         false
     | _ -> false
 
-/// Collect direct callee names referenced in a CExpr (only direct calls affect return types)
-let calleeNamesInCExpr (cexpr: ANF.CExpr) : Set<string> =
-    match cexpr with
-    | ANF.Call (funcName, _) -> Set.singleton funcName
-    | ANF.BorrowedCall (funcName, _) -> Set.singleton funcName
-    | ANF.TailCall (funcName, _) -> Set.singleton funcName
-    | _ -> Set.empty
-
-/// Collect direct callee names referenced in an AExpr
-let rec calleeNamesInAExpr (expr: ANF.AExpr) : Set<string> =
-    match expr with
-    | ANF.Return _ -> Set.empty
-    | ANF.Let (_, cexpr, rest) ->
-        Set.union (calleeNamesInCExpr cexpr) (calleeNamesInAExpr rest)
-    | ANF.If (_, thenBranch, elseBranch) ->
-        Set.union (calleeNamesInAExpr thenBranch) (calleeNamesInAExpr elseBranch)
-
-let private returnTypeForAtom (context: string) (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (atom: ANF.Atom) : AST.Type =
-    match atom with
-    | ANF.FloatLiteral _ -> AST.TFloat64
-    | ANF.IntLiteral n -> ANF.sizedIntToType n
-    | ANF.BoolLiteral _ -> AST.TBool
-    | ANF.StringLiteral _ -> AST.TString
-    | ANF.UnitLiteral -> AST.TUnit
-    | ANF.Var (ANF.TempId id) ->
-        if Set.contains id floatRegs then
-            AST.TFloat64
-        else
-            match Map.tryFind (ANF.TempId id) typeMap with
-            | Some t -> t
-            | None -> Crash.crash $"{context}: unknown return type for TempId {id}"
-    | ANF.FuncRef _ -> AST.TInt64
-
-/// Analyze return statements in an ANF expression, tracking float temps
-/// Returns the type of the expression's result
-/// returnTypeReg: map from function name to return type (for checking Call results)
-let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (returnTypeReg: Map<string, AST.Type>) (expr: ANF.AExpr) : AST.Type =
-    match expr with
-    | ANF.Return atom ->
-        returnTypeForAtom "getExprReturnType" floatRegs typeMap atom
-    | ANF.Let (ANF.TempId destId, cexpr, rest) ->
-        // Update floatRegs if this binding produces a float
-        let floatRegs' =
-            if cexprProducesFloat floatRegs returnTypeReg cexpr then
-                Set.add destId floatRegs
-            else
-                floatRegs
-        getExprReturnType floatRegs' typeMap returnTypeReg rest
-    | ANF.If (_, thenBranch, _) -> getExprReturnType floatRegs typeMap returnTypeReg thenBranch
-
-/// Compute return type and maximum TempId in a single pass over an expression
-let rec getReturnTypeAndMaxTempId
-    (floatRegs: Set<int>)
-    (typeMap: ANF.TypeMap)
-    (returnTypeReg: Map<string, AST.Type>)
-    (expr: ANF.AExpr)
-    : int * AST.Type =
-    match expr with
-    | ANF.Return atom ->
-        let maxId = maxTempIdInAtom atom
-        let retType = returnTypeForAtom "maxTempAndReturnType" floatRegs typeMap atom
-        (maxId, retType)
-    | ANF.Let (ANF.TempId destId, cexpr, rest) ->
-        let maxInCExpr = maxTempIdInCExpr cexpr
-        let floatRegs' =
-            if cexprProducesFloat floatRegs returnTypeReg cexpr then
-                Set.add destId floatRegs
-            else
-                floatRegs
-        let (maxRest, retType) = getReturnTypeAndMaxTempId floatRegs' typeMap returnTypeReg rest
-        (max destId (max maxInCExpr maxRest), retType)
-    | ANF.If (cond, thenBranch, elseBranch) ->
-        let maxCond = maxTempIdInAtom cond
-        let (maxThen, thenType) = getReturnTypeAndMaxTempId floatRegs typeMap returnTypeReg thenBranch
-        let (maxElse, _elseType) = getReturnTypeAndMaxTempId floatRegs typeMap returnTypeReg elseBranch
-        (max maxCond (max maxThen maxElse), thenType)
-
-/// Compute return type for an ANF function by analyzing return statements
-/// Uses typeReg to determine which parameters are floats
-/// Uses returnTypeReg to check return types of called functions
-let computeReturnTypeWithReg (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) : AST.Type =
-    // Get float parameter IDs for this function (types are now bundled in TypedParams)
-    let floatParamIds =
-        anfFunc.TypedParams
-        |> List.filter (fun tp -> tp.Type = AST.TFloat64)
-        |> List.map (fun tp -> let (ANF.TempId id) = tp.Id in id)
-        |> Set.ofList
-    getExprReturnType floatParamIds typeMap returnTypeReg anfFunc.Body
-
 /// Build a map from function name to return type for all functions
-/// Uses iterative fixpoint algorithm since functions may call each other
+/// ANF functions are already typed, so their declared return types are authoritative.
 /// externalReturnTypes: return types for functions not in `functions` (e.g., specialized functions compiled elsewhere)
 let buildReturnTypeReg
     (functions: ANF.Function list)
-    (typeMap: ANF.TypeMap)
-    (typeReg: Map<string, (string * AST.Type) list>)
     (externalReturnTypes: Map<string, AST.Type>)
     : Map<string, AST.Type> =
-    // Worklist algorithm: only re-evaluate dependents when a return type changes
-    let funcByName = functions |> List.map (fun f -> (f.Name, f)) |> Map.ofList
-    let calleesByFunc =
-        functions
-        |> List.map (fun f -> (f.Name, calleeNamesInAExpr f.Body))
-        |> Map.ofList
-    let callersByFunc =
-        calleesByFunc
-        |> Map.fold (fun acc caller callees ->
-            callees
-            |> Set.fold (fun acc callee ->
-                let existing = Map.tryFind callee acc |> Option.defaultValue []
-                Map.add callee (caller :: existing) acc) acc) Map.empty
-
-    let initialQueue = functions |> List.map (fun f -> f.Name)
-    let initialQueued = Set.ofList initialQueue
-    let maxSteps = 100 * max 1 functions.Length
-
-    let rec loop
-        (queue: string list)
-        (queued: Set<string>)
-        (currentReg: Map<string, AST.Type>)
-        (stepsRemaining: int)
-        : Map<string, AST.Type> =
-        match queue with
-        | [] -> currentReg
-        | _ when stepsRemaining <= 0 ->
-            let remainingFunctions = System.String.Join(", ", queue)
-            Crash.crash
-                $"ANF_to_MIR: return type inference did not converge after {maxSteps} steps; remaining functions: {remainingFunctions}"
-        | funcName :: rest ->
-            let queued' = Set.remove funcName queued
-            match Map.tryFind funcName funcByName with
-            | None ->
-                loop rest queued' currentReg (stepsRemaining - 1)
-            | Some func ->
-                let newType = computeReturnTypeWithReg func typeMap typeReg currentReg
-                let changed =
-                    match Map.tryFind funcName currentReg with
-                    | Some existing when existing = newType -> false
-                    | _ -> true
-                let updatedReg =
-                    if changed then Map.add funcName newType currentReg else currentReg
-                if not changed then
-                    loop rest queued' updatedReg (stepsRemaining - 1)
-                else
-                    let dependents = Map.tryFind funcName callersByFunc |> Option.defaultValue []
-                    let (rest', queued'') =
-                        dependents
-                        |> List.fold (fun (q, s) dep ->
-                            if Set.contains dep s then (q, s)
-                            else (dep :: q, Set.add dep s)) (rest, queued')
-                    loop rest' queued'' updatedReg (stepsRemaining - 1)
-
-    loop initialQueue initialQueued externalReturnTypes maxSteps
+    functions
+    |> List.fold
+        (fun returnTypes anfFunc -> Map.add anfFunc.Name anfFunc.ReturnType returnTypes)
+        externalReturnTypes
 
 /// Return type for monomorphized intrinsics not tracked in the return type registry
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
@@ -2138,8 +1996,7 @@ let convertANFFunction
         // Get parameter types from TypedParams (types are now bundled)
         let paramTypes = anfFunc.TypedParams |> List.map (fun tp -> tp.Type)
 
-        let (bodyMaxId, returnType) =
-            getReturnTypeAndMaxTempId floatParamIds typeMap returnTypeReg anfFunc.Body
+        let bodyMaxId = maxTempIdInAExpr anfFunc.Body
         let maxId = max paramMax bodyMaxId
         let regGen = MIR.RegGen (maxId + 1)
 
@@ -2225,7 +2082,7 @@ let convertANFFunction
         let mirFunc = {
             MIR.Name = anfFunc.Name
             MIR.TypedParams = typedMIRParams
-            MIR.ReturnType = returnType
+            MIR.ReturnType = anfFunc.ReturnType
             MIR.CFG = cfg
             MIR.FloatRegs = finalBuilder.FloatRegs
         }
@@ -2256,7 +2113,7 @@ let toMIR
     let typeById = buildTypeById (maxTempIdInProgram program) typeMap
 
     // Build return type registry for all functions (needed for caller to know return type)
-    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
+    let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
 
     // Phase 2: Convert all functions to MIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
@@ -2331,7 +2188,7 @@ let toMIRFunctionsOnly
     let typeById = buildTypeById (maxTempIdInProgram program) typeMap
 
     // Build return type registry for all functions (needed for caller to know return type)
-    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
+    let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
 
     // Phase 2: Convert all functions to MIR (skip main/_start)
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
