@@ -626,8 +626,21 @@ let substAtom (env: Map<TempId, Atom>) (atom: Atom) : Atom =
     | Var tid -> Map.tryFind tid env |> Option.defaultValue atom
     | _ -> atom
 
+/// Substitute operands in one pass, preserving the original list when no atom
+/// changes and sharing the untouched suffix after the final replacement.
+let rec private substAtoms (env: Map<TempId, Atom>) (atoms: Atom list) : Atom list =
+    match atoms with
+    | [] -> atoms
+    | atom :: rest ->
+        let atom' = substAtom env atom
+        let rest' = substAtoms env rest
+        if atom' = atom && obj.ReferenceEquals (rest', rest) then
+            atoms
+        else
+            atom' :: rest'
+
 /// Substitute atoms in CExpr
-let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
+let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     let s = substAtom env
     match cexpr with
     | Atom a -> Atom (s a)
@@ -635,15 +648,37 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | Prim (op, left, right) -> Prim (op, s left, s right)
     | UnaryPrim (op, src) -> UnaryPrim (op, s src)
     | IfValue (cond, thenVal, elseVal) -> IfValue (s cond, s thenVal, s elseVal)
-    | Call (name, args) -> Call (name, List.map s args)
-    | BorrowedCall (name, args) -> BorrowedCall (name, List.map s args)
-    | TailCall (name, args) -> TailCall (name, List.map s args)
-    | IndirectCall (func, args) -> IndirectCall (s func, List.map s args)
-    | IndirectTailCall (func, args) -> IndirectTailCall (s func, List.map s args)
-    | ClosureAlloc (name, captures) -> ClosureAlloc (name, List.map s captures)
-    | ClosureCall (closure, args) -> ClosureCall (s closure, List.map s args)
-    | ClosureTailCall (closure, args) -> ClosureTailCall (s closure, List.map s args)
-    | TupleAlloc elems -> TupleAlloc (List.map s elems)
+    | Call (name, args) ->
+        let args' = substAtoms env args
+        if obj.ReferenceEquals (args', args) then cexpr else Call (name, args')
+    | BorrowedCall (name, args) ->
+        let args' = substAtoms env args
+        if obj.ReferenceEquals (args', args) then cexpr else BorrowedCall (name, args')
+    | TailCall (name, args) ->
+        let args' = substAtoms env args
+        if obj.ReferenceEquals (args', args) then cexpr else TailCall (name, args')
+    | IndirectCall (func, args) ->
+        let func' = s func
+        let args' = substAtoms env args
+        if func' = func && obj.ReferenceEquals (args', args) then cexpr else IndirectCall (func', args')
+    | IndirectTailCall (func, args) ->
+        let func' = s func
+        let args' = substAtoms env args
+        if func' = func && obj.ReferenceEquals (args', args) then cexpr else IndirectTailCall (func', args')
+    | ClosureAlloc (name, captures) ->
+        let captures' = substAtoms env captures
+        if obj.ReferenceEquals (captures', captures) then cexpr else ClosureAlloc (name, captures')
+    | ClosureCall (closure, args) ->
+        let closure' = s closure
+        let args' = substAtoms env args
+        if closure' = closure && obj.ReferenceEquals (args', args) then cexpr else ClosureCall (closure', args')
+    | ClosureTailCall (closure, args) ->
+        let closure' = s closure
+        let args' = substAtoms env args
+        if closure' = closure && obj.ReferenceEquals (args', args) then cexpr else ClosureTailCall (closure', args')
+    | TupleAlloc elems ->
+        let elems' = substAtoms env elems
+        if obj.ReferenceEquals (elems', elems) then cexpr else TupleAlloc elems'
     | TupleGet (tuple, idx) -> TupleGet (s tuple, idx)
     | StringConcat (left, right) -> StringConcat (s left, s right)
     | RefCountInc (atom, size, kind, sourceType) -> RefCountInc (s atom, size, kind, sourceType)
@@ -686,10 +721,39 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | FloatToString atom -> FloatToString (s atom)
     | RuntimeError message -> RuntimeError message
 
+/// Substitute atoms in a CExpr, preserving the original value when there is no
+/// substitution environment.
+let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
+    if Map.isEmpty env then
+        cexpr
+    else
+        substCExprValue env cexpr
+
+/// Substitute atoms while reporting list-bearing no-op expressions by identity,
+/// avoiding a structural comparison of their operands.
+let private substCExprWithChange (env: Map<TempId, Atom>) (cexpr: CExpr) : struct (CExpr * bool) =
+    if Map.isEmpty env then
+        struct (cexpr, false)
+    else
+        let cexpr' = substCExprValue env cexpr
+        let changed =
+            match cexpr with
+            | Call _
+            | BorrowedCall _
+            | TailCall _
+            | IndirectCall _
+            | IndirectTailCall _
+            | ClosureAlloc _
+            | ClosureCall _
+            | ClosureTailCall _
+            | TupleAlloc _ -> not (obj.ReferenceEquals (cexpr', cexpr))
+            | _ -> cexpr' <> cexpr
+        struct (cexpr', changed)
+
 /// Optimize a CExpr with constant folding
 let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (tupleEnv: TupleEnv) (cexpr: CExpr) : CExpr * bool =
     // First, substitute known constants
-    let cexpr' = substCExpr env cexpr
+    let struct (cexpr', substitutionChanged) = substCExprWithChange env cexpr
 
     let tryConstFold () =
         if options.EnableConstFolding then
@@ -734,10 +798,10 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
             | Prim (op, left, right) ->
                 match tryStrengthReduce typeEnv op left right with
                 | Some reduced -> (reduced, true)
-                | None -> (cexpr', cexpr' <> cexpr)
-            | _ -> (cexpr', cexpr' <> cexpr)
+                | None -> (cexpr', substitutionChanged)
+            | _ -> (cexpr', substitutionChanged)
         else
-            (cexpr', cexpr' <> cexpr)
+            (cexpr', substitutionChanged)
 
 type OptimizeAExprResult = {
     Expr: AExpr
