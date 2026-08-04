@@ -790,7 +790,7 @@ let rec private aExprUsesTemp (tid: TempId) (expr: AExpr) : bool =
         || aExprUsesTemp tid thenBranch
         || aExprUsesTemp tid elseBranch
 
-let private trySimplifyAdjacentLet (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
+let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
     | UnaryPrim (Not, source), If (Var conditionTid, thenBranch, elseBranch)
         when conditionTid = tid
@@ -804,6 +804,20 @@ let private trySimplifyAdjacentLet (tid: TempId) (cexpr: CExpr) (body: AExpr) : 
         // removes it only when the reassociated expression was its final use.
         let combined = IntLiteral (Int64 (a + b))
         Some (Let (tid, cexpr, Let (addTid, Prim (Add, source, combined), addBody)))
+    | Prim (Add, source, cancelled),
+      Let (resultTid, Prim (Sub, Var intermediateTid, outerCancelled), resultBody)
+        when intermediateTid = tid
+             && cancelled = outerCancelled
+             && isInt64Atom typeEnv source
+             && isInt64Atom typeEnv cancelled ->
+        Some (Let (tid, cexpr, Let (resultTid, Atom source, resultBody)))
+    | Prim (Sub, source, cancelled),
+      Let (resultTid, Prim (Add, Var intermediateTid, outerCancelled), resultBody)
+        when intermediateTid = tid
+             && cancelled = outerCancelled
+             && isInt64Atom typeEnv source
+             && isInt64Atom typeEnv cancelled ->
+        Some (Let (tid, cexpr, Let (resultTid, Atom source, resultBody)))
     | UnaryPrim (Not, source), Let (notTid, UnaryPrim (Not, Var sourceTid), notBody)
         when sourceTid = tid ->
         Some (Let (notTid, Atom source, notBody))
@@ -927,7 +941,7 @@ let rec private optimizeAExprWithUses
 
         let adjacentSimplification =
             if options.EnableConstFolding then
-                trySimplifyAdjacentLet tid cexpr'' bodyResult.Expr
+                trySimplifyAdjacentLet typeEnv tid cexpr'' bodyResult.Expr
                 |> Option.orElseWith (fun () -> trySimplifyBoolComplement tid cexpr'' bodyResult.Expr)
             else
                 None

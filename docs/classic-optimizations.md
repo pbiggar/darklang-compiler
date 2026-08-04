@@ -321,6 +321,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical, low-risk reassociation that exposes adjacent Int64 literals to constant folding and makes a single-use intermediate addition dead.
 - Notes: Implemented for adjacent ANF bindings representing `(x + a) + b -> x + (a + b)` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Restricted to Int64 addition because floating-point addition is not safely reassociative. Covered by `reassociate_integer_add_constants` and `reassociation_preserves_float_add` in `src/Tests/optimization/anf.opt`; `licm_skip_loop_with_call` in `src/Tests/optimization/lir.opt` verifies that a longer chain reaches LIR as one addition. No current routine benchmark contains the exact two-literal chain; `benchmarks/problems/edigits` is the identified follow-up benchmark because its repeated Int64 index arithmetic is the closest workload fit.
 
+### Integer add/subtract cancellation
+
+- Optimization name: Integer add/subtract cancellation
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Canonical, low-risk integer simplification that removes paired arithmetic while preserving wrapping Int64 semantics.
+- Notes: Implemented for adjacent ANF bindings representing `(x + y) - y -> x` and `(x - y) + y -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. The rewrite is restricted to typed Int64 operands, retains an intermediate when it has another use, and leaves same-shaped Float expressions unchanged. Covered by focused before/after snapshots in `src/Tests/optimization/anf.opt`; no current routine benchmark isolates the exact pattern, so the optimization tests are the focused exercise for this micro-pattern.
+
 ### Multiplication by negative one strength reduction
 
 - Optimization name: Multiplication by negative one strength reduction
