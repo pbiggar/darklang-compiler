@@ -1343,7 +1343,16 @@ let private insertRCInFunctionInternal
     let (bodyWithRC, varGen', accTypes, typeCache') =
         insertRCWithAnalysis ctxWithParams (Some func.Name) bodyInfo varGen [] paramIncs typesWithParams typeCache
     let (bodyWithOwnedAccumulatorDecs, varGen'', accTypes') =
-        insertOwnedAccumulatorDecsBeforeSelfTailCalls ctxWithParams func.Name ownedParamDecs bodyWithRC varGen' accTypes
+        if List.isEmpty ownedParamDecs then
+            (bodyWithRC, varGen', accTypes)
+        else
+            insertOwnedAccumulatorDecsBeforeSelfTailCalls
+                ctxWithParams
+                func.Name
+                ownedParamDecs
+                bodyWithRC
+                varGen'
+                accTypes
     let (bodyWithClosureMapSourceRetains, varGen''', accTypes'') =
         insertClosureMapSourceRetainsBeforeHelperCalls
             ctxWithParams
