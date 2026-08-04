@@ -113,54 +113,59 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
         | None -> Crash.crash $"SSA: Missing entry label index for {entry}"
     let entryBits = Bitset.singleton wordCount entryIndex
 
-    let requireDomBits (context: string) (doms: Map<Label, Bitset.Bitset>) (label: Label) : Bitset.Bitset =
-        match Map.tryFind label doms with
-        | Some bits -> bits
-        | None -> Crash.crash $"SSA: Missing dominator set for {label} while {context}"
+    let reachablePredecessorIndices =
+        labelIndex.Labels
+        |> Array.map (fun label ->
+            Map.tryFind label preds
+            |> Option.defaultValue []
+            |> List.choose (fun predecessor ->
+                match Map.tryFind predecessor labelIndex.IndexOf with
+                | Some predecessorIdx when Bitset.containsIndex predecessorIdx reachableMask ->
+                    Some predecessorIdx
+                | Some _ -> None
+                | None -> Crash.crash $"SSA: Missing predecessor label index for {predecessor}"))
 
     // Initialize: entry dominates itself, other reachable blocks dominated by all reachable
     // Unreachable blocks are NOT included in the dominator computation
     let initialDoms =
-        reachableLabelIndices
-        |> List.fold (fun m (label, _idx) ->
-            if label = entry then
-                Map.add label entryBits m
+        Array.init labelIndex.Labels.Length (fun idx ->
+            if idx = entryIndex then
+                entryBits
+            else if Bitset.containsIndex idx reachableMask then
+                Bitset.clone reachableMask  // Initially dominated by all reachable
             else
-                Map.add label (Bitset.clone reachableMask) m  // Initially dominated by all reachable
-        ) Map.empty
+                Bitset.empty wordCount)
 
-    // Iterate until fixed point (only for reachable blocks)
-    let rec iterate (doms: Map<Label, Bitset.Bitset>) =
-        let (changed, doms') =
+    // Keep fixed-point state in label-index order so each iteration can update
+    // predecessor and current-block bitsets without rebuilding persistent maps.
+    let rec iterate (doms: Bitset.Bitset array) =
+        let changed =
             reachableLabelIndices
-            |> List.fold (fun (changed, m) (label, labelIdx) ->
-                if label = entry then
-                    (changed, m)
+            |> List.fold (fun changed (_, labelIdx) ->
+                if labelIdx = entryIndex then
+                    changed
                 else
-                    // Only consider reachable predecessors
-                    let predLabels =
-                        Map.tryFind label preds
-                        |> Option.defaultValue []
-                        |> List.filter (fun p -> Set.contains p reachableBlocks)
-                    if List.isEmpty predLabels then
-                        (changed, m)
+                    let predIndices = reachablePredecessorIndices.[labelIdx]
+                    if List.isEmpty predIndices then
+                        changed
                     else
                         // Dom(n) = {n} union (intersection of Dom(p) for all predecessors p)
                         let predDoms =
-                            predLabels
-                            |> List.map (requireDomBits "computing predecessor intersection" m)
+                            predIndices
+                            |> List.map (fun predecessorIdx -> doms.[predecessorIdx])
                         let intersection =
                             match predDoms with
                             | [] -> Bitset.empty wordCount
                             | first :: rest -> Bitset.intersectMany first rest
                         let newDom = Bitset.add labelIdx intersection
-                        let oldDom = requireDomBits "updating fixed-point iteration" m label
+                        let oldDom = doms.[labelIdx]
                         if Bitset.equal newDom oldDom then
-                            (changed, m)
+                            changed
                         else
-                            (true, Map.add label newDom m)
-            ) (false, doms)
-        if changed then iterate doms' else doms'
+                            doms.[labelIdx] <- newDom
+                            true
+            ) false
+        if changed then iterate doms else doms
 
     let allDoms = iterate initialDoms
 
@@ -172,7 +177,7 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
         if label = entry then
             idoms  // Entry has no immediate dominator
         else
-            let doms = requireDomBits "extracting immediate dominators" allDoms label
+            let doms = allDoms.[labelIdx]
             // Remove self from dominators
             let strictDoms = Bitset.diff doms (Bitset.singleton wordCount labelIdx)
             if Bitset.isEmpty strictDoms then
@@ -184,8 +189,7 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
                 let idomIdx =
                     strictIndices
                     |> List.tryFind (fun dIdx ->
-                        let dLabel = labelIndex.Labels.[dIdx]
-                        let dDoms = requireDomBits "checking strict dominators" allDoms dLabel
+                        let dDoms = allDoms.[dIdx]
                         // d is idom if all other strict dominators dominate d
                         // i.e., all other strict dominators are in Dom(d)
                         strictIndices
