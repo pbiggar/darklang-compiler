@@ -1257,47 +1257,96 @@ let makeBinExprKey (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Typ
 let makeUnaryExprKey (op: UnaryOp) (src: Operand) : ExprKey =
     UnaryExpr (op, src)
 
-/// Apply CSE to a CFG
-/// Note: This is a local CSE within each basic block (not global)
+let private isCrossBlockCSEType (opType: AST.Type) : bool =
+    match opType with
+    | AST.TInt64 | AST.TInt32 | AST.TInt16 | AST.TInt8
+    | AST.TUInt64 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
+    | AST.TFloat64 | AST.TBool | AST.TChar -> true
+    | _ -> false
+
+/// Apply CSE to a CFG, carrying available expressions into dominated blocks.
 let applyCSE (cfg: CFG) : CFG * bool =
+    let optimizeBlock (available: Map<ExprKey, VReg>) (block: BasicBlock) : BasicBlock * Map<ExprKey, VReg> * bool =
+        let (instrs', _, exported', changed) =
+            block.Instrs
+            |> List.fold (fun (instrs, exprMap, exported, ch) instr ->
+                match instr with
+                | BinOp (dest, op, left, right, opType) ->
+                    let key = makeBinExprKey op left right opType
+                    match Map.tryFind key exprMap with
+                    | Some prevDest ->
+                        (Mov (dest, Register prevDest, None) :: instrs, exprMap, exported, true)
+                    | None ->
+                        let exported' =
+                            if isCrossBlockCSEType opType then Map.add key dest exported else exported
+                        (instr :: instrs, Map.add key dest exprMap, exported', ch)
+                | UnaryOp (dest, op, src) ->
+                    let key = makeUnaryExprKey op src
+                    match Map.tryFind key exprMap with
+                    | Some prevDest ->
+                        (Mov (dest, Register prevDest, None) :: instrs, exprMap, exported, true)
+                    | None ->
+                        (instr :: instrs, Map.add key dest exprMap, Map.add key dest exported, ch)
+                | RefCountDec _
+                | RefCountDecString _
+                | RefCountDecBytes _
+                | RawFree _ ->
+                    // A previously computed raw address can outlive its managed
+                    // owner if reuse removes the later use that kept it alive.
+                    (instr :: instrs, Map.empty, Map.empty, ch)
+                | Mov _
+                | Phi _ ->
+                    (instr :: instrs, exprMap, exported, ch)
+                | _ ->
+                    // Do not extend a new cross-block live range across calls,
+                    // allocations, memory operations, or other runtime lowering.
+                    // Local CSE remains available through exprMap.
+                    (instr :: instrs, exprMap, Map.empty, ch)
+            ) ([], available, available, false)
+
+        ({ block with Instrs = List.rev instrs' }, exported', changed)
+
+    let idoms = computeDominators cfg (buildPredecessors cfg)
+    let dominatorChildren =
+        idoms
+        |> Map.fold (fun children child parent ->
+            let existing = Map.tryFind parent children |> Option.defaultValue []
+            Map.add parent (child :: existing) children
+        ) Map.empty
+
+    // Each child receives expressions available from its dominators. Availability
+    // is cleared by the barriers above, and the same immutable map is passed to
+    // siblings so expressions never flow between non-dominating paths.
+    let rec optimizeDominatorSubtree
+        (available: Map<ExprKey, VReg>)
+        (label: Label)
+        (blocks: Map<Label, BasicBlock>, changed: bool)
+        : Map<Label, BasicBlock> * bool =
+        match Map.tryFind label cfg.Blocks with
+        | None -> Crash.crash $"MIR CSE: missing dominator-tree block {label}"
+        | Some block ->
+            let (block', available', blockChanged) = optimizeBlock available block
+            let state = (Map.add label block' blocks, changed || blockChanged)
+            let children = Map.tryFind label dominatorChildren |> Option.defaultValue []
+            children
+            |> List.fold (fun childState child ->
+                optimizeDominatorSubtree available' child childState
+            ) state
+
+    let (reachableBlocks, reachableChanged) =
+        optimizeDominatorSubtree Map.empty cfg.Entry (Map.empty, false)
+
+    // Dominators are undefined for unreachable blocks. Retain local CSE there so
+    // this transformation remains complete when invoked independently.
     let (blocks', changed) =
         cfg.Blocks
-        |> Map.fold (fun (acc, ch) label block ->
-            // For each block, track expressions we've seen
-            let (instrs', _, instrChanged) =
-                block.Instrs
-                |> List.fold (fun (acc', exprMap: Map<ExprKey, VReg>, ch') instr ->
-                    match instr with
-                    | BinOp (dest, op, left, right, opType) ->
-                        let key = makeBinExprKey op left right opType
-                        match Map.tryFind key exprMap with
-                        | Some prevDest ->
-                            // Found a previous computation - replace with copy
-                            let copy = Mov (dest, Register prevDest, None)
-                            (copy :: acc', exprMap, true)
-                        | None ->
-                            // New expression - add to map
-                            let exprMap' = Map.add key dest exprMap
-                            (instr :: acc', exprMap', ch')
-                    | UnaryOp (dest, op, src) ->
-                        let key = makeUnaryExprKey op src
-                        match Map.tryFind key exprMap with
-                        | Some prevDest ->
-                            // Found a previous computation - replace with copy
-                            let copy = Mov (dest, Register prevDest, None)
-                            (copy :: acc', exprMap, true)
-                        | None ->
-                            // New expression - add to map
-                            let exprMap' = Map.add key dest exprMap
-                            (instr :: acc', exprMap', ch')
-                    | _ ->
-                        (instr :: acc', exprMap, ch')
-                ) ([], Map.empty, false)
-            let instrs' = List.rev instrs'
-
-            let block' = { block with Instrs = instrs' }
-            (Map.add label block' acc, ch || instrChanged)
-        ) (Map.empty, false)
+        |> Map.fold (fun (blocks, ch) label block ->
+            if Map.containsKey label blocks then
+                (blocks, ch)
+            else
+                let (block', _, blockChanged) = optimizeBlock Map.empty block
+                (Map.add label block' blocks, ch || blockChanged)
+        ) (reachableBlocks, reachableChanged)
 
     ({ cfg with Blocks = blocks' }, changed)
 

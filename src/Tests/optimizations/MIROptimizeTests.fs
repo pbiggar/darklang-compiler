@@ -75,6 +75,228 @@ let testCseAfterCopyPropFixpoint () : TestResult =
                 let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
                 Error $"MIR optimization did not reach fixpoint.\nActual:\n{actual}"
 
+let testCseReusesDominatingExpressions () : TestResult =
+    let entry = Label "entry"
+    let bridge = Label "bridge"
+    let child = Label "child"
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [
+            BinOp (VReg 2, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+            UnaryOp (VReg 3, Neg, Register (VReg 0))
+        ]
+        Terminator = Jump bridge
+    }
+    let bridgeBlock: BasicBlock = {
+        Label = bridge
+        Instrs = []
+        Terminator = Jump child
+    }
+    let childBlock: BasicBlock = {
+        Label = child
+        Instrs = [
+            BinOp (VReg 4, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+            UnaryOp (VReg 5, Neg, Register (VReg 0))
+        ]
+        Terminator = Ret (Register (VReg 4))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, entryBlock)
+                (bridge, bridgeBlock)
+                (child, childBlock)
+            ]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+    let expectedChild = {
+        childBlock with
+            Instrs = [
+                Mov (VReg 4, Register (VReg 2), None)
+                Mov (VReg 5, Register (VReg 3), None)
+            ]
+    }
+
+    match Map.tryFind child optimized.Blocks with
+    | Some actualChild when changed && actualChild = expectedChild -> Ok ()
+    | _ ->
+        let func = {
+            Name = "dominating_cse"
+            TypedParams = [
+                { Reg = VReg 0; Type = AST.TInt64 }
+                { Reg = VReg 1; Type = AST.TInt64 }
+            ]
+            ReturnType = AST.TInt64
+            CFG = optimized
+            FloatRegs = Set.empty
+        }
+        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
+        Error $"Expected binary and unary expressions from the dominating entry block to be reused.\nActual:\n{actual}"
+
+let testCsePreservesExpressionsAcrossSiblingBlocks () : TestResult =
+    let entry = Label "entry"
+    let left = Label "left"
+    let right = Label "right"
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = []
+        Terminator = Branch (Register (VReg 2), left, right)
+    }
+    let leftBlock: BasicBlock = {
+        Label = left
+        Instrs = [
+            BinOp (VReg 3, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+            UnaryOp (VReg 4, Neg, Register (VReg 0))
+        ]
+        Terminator = Ret (Register (VReg 3))
+    }
+    let rightBlock: BasicBlock = {
+        Label = right
+        Instrs = [
+            BinOp (VReg 5, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+            UnaryOp (VReg 6, Neg, Register (VReg 0))
+        ]
+        Terminator = Ret (Register (VReg 5))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, entryBlock)
+                (left, leftBlock)
+                (right, rightBlock)
+            ]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+
+    if not changed && optimized = cfg then
+        Ok ()
+    else
+        let func = {
+            Name = "sibling_cse"
+            TypedParams = [
+                { Reg = VReg 0; Type = AST.TInt64 }
+                { Reg = VReg 1; Type = AST.TInt64 }
+                { Reg = VReg 2; Type = AST.TBool }
+            ]
+            ReturnType = AST.TInt64
+            CFG = optimized
+            FloatRegs = Set.empty
+        }
+        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
+        Error $"Expected duplicate expressions in non-dominating sibling blocks to remain independent.\nActual:\n{actual}"
+
+let testCseDoesNotReuseExpressionsAcrossRefCountDecrement () : TestResult =
+    let entry = Label "entry"
+    let child = Label "child"
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [
+            BinOp (VReg 3, Add, Register (VReg 1), Register (VReg 2), AST.TInt64)
+            RefCountDecString (Register (VReg 0))
+        ]
+        Terminator = Jump child
+    }
+    let childBlock: BasicBlock = {
+        Label = child
+        Instrs = [
+            BinOp (VReg 4, Add, Register (VReg 1), Register (VReg 2), AST.TInt64)
+        ]
+        Terminator = Ret (Register (VReg 4))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, entryBlock); (child, childBlock)]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+
+    if not changed && optimized = cfg then
+        Ok ()
+    else
+        let func = {
+            Name = "refcount_barrier_cse"
+            TypedParams = [
+                { Reg = VReg 0; Type = AST.TString }
+                { Reg = VReg 1; Type = AST.TInt64 }
+                { Reg = VReg 2; Type = AST.TInt64 }
+            ]
+            ReturnType = AST.TInt64
+            CFG = optimized
+            FloatRegs = Set.empty
+        }
+        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
+        Error $"Expected the reference-count decrement to invalidate available expressions.\nActual:\n{actual}"
+
+let testCseDoesNotExtendExpressionsAcrossCalls () : TestResult =
+    let entry = Label "entry"
+    let child = Label "child"
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [
+            BinOp (VReg 2, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+            Call (VReg 3, "observe", [], [], AST.TUnit)
+        ]
+        Terminator = Jump child
+    }
+    let childBlock: BasicBlock = {
+        Label = child
+        Instrs = [
+            BinOp (VReg 4, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+        ]
+        Terminator = Ret (Register (VReg 4))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, entryBlock); (child, childBlock)]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+
+    if not changed && optimized = cfg then
+        Ok ()
+    else
+        let func = {
+            Name = "call_barrier_cse"
+            TypedParams = [
+                { Reg = VReg 0; Type = AST.TInt64 }
+                { Reg = VReg 1; Type = AST.TInt64 }
+            ]
+            ReturnType = AST.TInt64
+            CFG = optimized
+            FloatRegs = Set.empty
+        }
+        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
+        Error $"Expected the call to prevent extension of expression availability.\nActual:\n{actual}"
+
+let testCseDoesNotExportNonScalarBinaryTypes () : TestResult =
+    let entry = Label "entry"
+    let child = Label "child"
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [BinOp (VReg 2, Add, Register (VReg 0), Register (VReg 1), AST.TUnit)]
+        Terminator = Jump child
+    }
+    let childBlock: BasicBlock = {
+        Label = child
+        Instrs = [BinOp (VReg 3, Add, Register (VReg 0), Register (VReg 1), AST.TUnit)]
+        Terminator = Ret (Register (VReg 3))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, entryBlock); (child, childBlock)]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+
+    if not changed && optimized = cfg then
+        Ok ()
+    else
+        Error "Expected a binary expression with the non-scalar TUnit type to remain block-local"
+
 let testDceRemovesSelfReferentialDeadPhi () : TestResult =
     let entry = Label "entry"
     let loop = Label "loop"
@@ -380,6 +602,11 @@ let testSelfComparisonFoldingRequiresSameRegister () : TestResult =
 
 let tests = [
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
+    ("MIR CSE reuses dominating binary and unary expressions", testCseReusesDominatingExpressions)
+    ("MIR CSE preserves binary and unary expressions across siblings", testCsePreservesExpressionsAcrossSiblingBlocks)
+    ("MIR CSE invalidates expressions at reference-count decrements", testCseDoesNotReuseExpressionsAcrossRefCountDecrement)
+    ("MIR CSE does not extend expressions across calls", testCseDoesNotExtendExpressionsAcrossCalls)
+    ("MIR CSE does not export non-scalar binary types", testCseDoesNotExportNonScalarBinaryTypes)
     ("MIR optimize removes dead self-referential phi", testDceRemovesSelfReferentialDeadPhi)
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
     ("MIR empty block removal rewrites phi source to predecessor", testEmptyBlockRemovalRewritesPhiSourceToPredecessor)

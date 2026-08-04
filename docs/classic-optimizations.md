@@ -409,6 +409,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Common subexpression elimination
 
+### Dominator-scoped MIR CSE
+
+- Optimization name: Dominator-scoped MIR common subexpression elimination
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Canonical extension of local MIR CSE that removes repeated pure scalar computations across a basic-block boundary while keeping new live ranges bounded for the current backend.
+- Notes: Implemented for binary expressions with concrete scalar types and unary expressions computed in trailing scalar/copy regions of dominating blocks. Expression availability is passed independently to dominator-tree siblings, cleared by reference-count/free operations, and not exported across calls, allocations, or memory/runtime instructions. Direct MIR before/after tests cover multi-block dominating binary/unary reuse, sibling-path preservation, reference-count and call barriers, and rejection of non-scalar binary types. The routine benchmark profile retained every recorded instruction count (0% measured gain/loss; performance ratio 7.43x); source-level ANF CSE removes the straightforward source patterns, so the direct MIR fixtures provide the isolating transformation coverage, while `fannkuch` covers the non-scalar/call-boundary safety cases.
+
 ### Duplicate IfValue reuse
 
 - Optimization name: Duplicate IfValue reuse
