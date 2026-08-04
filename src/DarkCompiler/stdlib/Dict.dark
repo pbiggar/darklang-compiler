@@ -25,6 +25,10 @@ def Stdlib.Dict.get<k, v>(dict: Dict<k, v>, key: k) : Stdlib.Option.Option<v> =
 def Stdlib.Dict.set<k, v>(dict: Dict<k, v>, key: k, value: v) : Dict<k, v> =
     Stdlib.__HAMT.__setHelper<k, v>(dict, key, __hash<k>(key), value, 0)
 
+// Darklang's explicit overwriting update for its string-keyed dictionaries.
+def Stdlib.Dict.setOverridingDuplicates<v>(dict: Dict<String, v>, key: String, value: v) : Dict<String, v> =
+    Stdlib.Dict.set<String, v>(dict, key, value)
+
 // =============================================================================
 // Dict.remove - remove a key from the dictionary
 // =============================================================================

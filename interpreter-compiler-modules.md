@@ -245,7 +245,7 @@ Dict                         | member                              | ✅   | ✅
 Dict                         | merge                               | ✅   | ❌
 Dict                         | remove                              | ✅   | ❌
 Dict                         | set                                 | ✅   | ❌
-Dict                         | setOverridingDuplicates             | ✅   | ❌
+Dict                         | setOverridingDuplicates             | ✅   | ✅
 Dict                         | singleton                           | ✅   | ❌
 Dict                         | size                                | ✅   | ❌
 Dict                         | toList                              | ✅   | ❌

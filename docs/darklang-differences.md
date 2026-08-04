@@ -98,6 +98,7 @@ Areas where compiler produces WRONG output. These need to be fixed to match Dark
 | Modulo `%` | `semantic:modulo` | Negative divisor handling | Fixed |
 | `Int64.power` | `eval:error_result` | Negative exponent handling | Fixed |
 | `Char.isUppercase` | — | Supported non-ASCII uppercase characters were classified as lowercase | Fixed |
+| `Dict.setOverridingDuplicates` | — | Official overwriting dictionary update was missing | Fixed |
 | Float precision | `eval:float_precision` | High-precision floats have different representation | Needs fix |
 
 ### 2.1 Modulo Operator (`%`)
@@ -128,6 +129,12 @@ the exponent until the generated program crashes.
 
 The compiler now recognizes the non-ASCII uppercase characters supported by its
 case-conversion pairs, including `Ż`, matching the official interpreter.
+
+### 2.4 `Dict.setOverridingDuplicates`
+
+The compiler now exposes the official string-keyed dictionary update function.
+When the key already exists, the returned immutable dictionary contains the new
+value, matching the interpreter.
 
 ## 3. Tooling Differences
 
