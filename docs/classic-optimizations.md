@@ -530,3 +530,12 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Taxonomy category: Instruction combining
 - Priority/rationale: Canonical low-risk fusion that exposes the native ARM64 multiply-subtract instruction and mirrors the existing multiply-add peephole.
 - Notes: Implemented for adjacent integer `Mul temp, left, right; Sub dest, minuend, temp` when `temp` is not subsequently read. Direct LIR tests cover both fusion and live-temporary preservation, `fuse_multiply_subtract` covers source-to-LIR output, and `multiply_subtract` provides focused benchmark coverage. On ARM64, the focused Cachegrind benchmark fell from 8,000,111 to 7,000,111 instructions (12.5%); an earlier x64 comparison was unchanged because that backend expands `Msub`.
+
+## Code motion
+
+### Shared leading conditional binding hoisting
+
+- Optimization name: Shared leading conditional binding hoisting
+- Taxonomy category: Partial redundancy elimination / code motion
+- Priority/rationale: Canonical, bounded cross-branch sharing that reduces duplicated generated code while reusing the existing ANF purity classification.
+- Notes: Implemented for identical side-effect-free leading bindings in both branches when the local condition producer and the remaining branch bodies are also side-effect-free. The shared binding moves before the condition producer so compare/branch combining remains available; branch bodies containing calls or other effects are conservatively excluded to avoid extending live ranges across them. ANF snapshots cover the rewrite and effectful-leading-binding exclusion. The `branch_shared_binding` benchmark reduced the native binary from 600 to 592 bytes (1.3%) while retaining 11,000,158 Cachegrind instructions (0% runtime instruction change).

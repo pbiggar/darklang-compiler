@@ -1805,6 +1805,49 @@ let TempId 2 = f("dark")
 return t2
 
 ---NAME---
+hoist_identical_pure_leading_branch_binding
+---INPUT---
+def f(x: Int64) : Int64 =
+  if x > 0 then
+    let shared = x * 3 in
+    shared + 1
+  else
+    let shared = x * 3 in
+    shared - 1
+---EXPECTED---
+Function f:
+let TempId 2 = t0 * 3
+let TempId 1 = t0 > 0
+if t1 then
+let TempId 4 = t2 + 1
+return t4
+else
+let TempId 7 = t2 - 1
+return t7
+
+---NAME---
+hoist_identical_leading_branch_binding_preserves_effects
+---INPUT---
+def f(x: Int64) : Int64 =
+  if x > 0 then
+    let value = Random.int64() in
+    value + 1
+  else
+    let value = Random.int64() in
+    value - 1
+---EXPECTED---
+Function f:
+let TempId 1 = t0 > 0
+if t1 then
+let TempId 2 = RandomInt64()
+let TempId 4 = t2 + 1
+return t4
+else
+let TempId 5 = RandomInt64()
+let TempId 7 = t5 - 1
+return t7
+
+---NAME---
 const_fold_string_concat
 ---INPUT---
 "dark" ++ "lang"

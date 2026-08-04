@@ -1,0 +1,15 @@
+// Exercises shared pure leading bindings across conditional branches.
+
+def select(value: Int64) : Int64 =
+    if value > 0 then
+        let shared = value * 3 in
+        shared + 1
+    else
+        let shared = value * 3 in
+        shared - 1
+
+def repeat(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else repeat(n - 1, acc + select(n))
+
+repeat(1000000, 0)

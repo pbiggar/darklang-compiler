@@ -6,6 +6,7 @@
 // - Copy propagation: eliminate trivial bindings
 // - Dead code elimination: remove unused bindings
 // - Common subexpression elimination: reuse earlier pure computations
+// - Branch code motion: hoist identical pure leading branch computations
 // - Reassociation: combine constants across adjacent integer additions
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
 //
@@ -797,6 +798,76 @@ let rec private aExprUsesTemp (tid: TempId) (expr: AExpr) : bool =
         || aExprUsesTemp tid thenBranch
         || aExprUsesTemp tid elseBranch
 
+/// Replace uses of one branch-local binding with a shared binding. The bound
+/// TempId is removed from the substitution when crossing a shadowing Let so
+/// this remains correct for hand-built ANF as well as globally fresh output.
+let rec private replaceTempUses (sourceTid: TempId) (replacement: Atom) (expr: AExpr) : AExpr =
+    let substitution = Map.ofList [(sourceTid, replacement)]
+
+    match expr with
+    | Return atom -> Return (substAtom substitution atom)
+    | Let (tid, cexpr, body) ->
+        let cexpr' = substCExpr substitution cexpr
+        let body' =
+            if tid = sourceTid then body
+            else replaceTempUses sourceTid replacement body
+        Let (tid, cexpr', body')
+    | If (cond, thenBranch, elseBranch) ->
+        If (
+            substAtom substitution cond,
+            replaceTempUses sourceTid replacement thenBranch,
+            replaceTempUses sourceTid replacement elseBranch
+        )
+
+let rec private aExprHasSideEffects (context: OptimizeContext) (expr: AExpr) : bool =
+    match expr with
+    | Return _ -> false
+    | Let (_, cexpr, body) ->
+        hasSideEffects context cexpr || aExprHasSideEffects context body
+    | If (_, thenBranch, elseBranch) ->
+        aExprHasSideEffects context thenBranch || aExprHasSideEffects context elseBranch
+
+/// Hoist before the binding that computes a local condition so the shared
+/// expression does not separate a comparison from its branch during lowering.
+let private tryHoistSharedLeadingBranchBinding
+    (context: OptimizeContext)
+    (options: OptimizeOptions)
+    (expr: AExpr)
+    : AExpr option =
+    let sharedIf
+        (cond: Atom)
+        (thenTid: TempId)
+        (thenBody: AExpr)
+        (elseTid: TempId)
+        (elseBody: AExpr)
+        : AExpr =
+        let elseBody' = replaceTempUses elseTid (Var thenTid) elseBody
+        If (cond, thenBody, elseBody')
+
+    if not options.EnableCSE then
+        None
+    else
+        match expr with
+        | Let (
+            condTid,
+            condCExpr,
+            If (
+                Var ifCondTid,
+                Let (thenTid, thenCExpr, thenBody),
+                Let (elseTid, elseCExpr, elseBody)
+            )
+          )
+            when ifCondTid = condTid
+                 && thenCExpr = elseCExpr
+                 && not (hasSideEffects context condCExpr)
+                 && not (hasSideEffects context thenCExpr)
+                 && not (aExprHasSideEffects context thenBody)
+                 && not (aExprHasSideEffects context elseBody)
+                 && not (cexprUsesTemp condTid thenCExpr) ->
+            let conditional = sharedIf (Var condTid) thenTid thenBody elseTid elseBody
+            Some (Let (thenTid, thenCExpr, Let (condTid, condCExpr, conditional)))
+        | _ -> None
+
 let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
     | UnaryPrim (Not, source), If (Var conditionTid, thenBranch, elseBranch)
@@ -897,6 +968,23 @@ let private trySimplifyBoolComplement (tid: TempId) (cexpr: CExpr) (body: AExpr)
 
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
 let rec private optimizeAExprWithUses
+    (context: OptimizeContext)
+    (options: OptimizeOptions)
+    (env: ConstEnv)
+    (typeEnv: TypeEnv)
+    (tupleEnv: TupleEnv)
+    (cseEnv: CSEnv)
+    (aexpr: AExpr)
+    : OptimizeAExprResult =
+    match tryHoistSharedLeadingBranchBinding context options aexpr with
+    | Some replacement ->
+        let replacementResult =
+            optimizeAExprWithUses context options env typeEnv tupleEnv cseEnv replacement
+        { replacementResult with Changed = true }
+    | None ->
+        optimizeAExprWithoutBranchHoisting context options env typeEnv tupleEnv cseEnv aexpr
+
+and private optimizeAExprWithoutBranchHoisting
     (context: OptimizeContext)
     (options: OptimizeOptions)
     (env: ConstEnv)
