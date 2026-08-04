@@ -196,8 +196,6 @@ def initialSystem(): System =
         }
     }
 
-// Reduced from the 500,000-step reference input until immutable record
-// allocation pressure improves enough for full-size Dark benchmarking.
 let system = offsetMomentum(initialSystem()) in
-let finalSystem = advance(system, 0.01, 5000) in
+let finalSystem = advance(system, 0.01, 500000) in
 Stdlib.Float.toInt(energy(finalSystem) * 1000000.0)

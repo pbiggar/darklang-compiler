@@ -137,6 +137,54 @@ let private isDirectReturnOf (tempId: TempId) (expr: AExpr) : bool =
     | Return (Var tid) when tid = tempId -> true
     | _ -> false
 
+let rec private leadingRetainedParams
+    (paramIds: Set<TempId>)
+    (expr: AExpr)
+    : Set<TempId> =
+    match expr with
+    | Let (_, RefCountInc (Var tempId, _, _, _), body) when Set.contains tempId paramIds ->
+        Set.add tempId (leadingRetainedParams paramIds body)
+    | Let (_, RefCountIncString (Var tempId), body) when Set.contains tempId paramIds ->
+        Set.add tempId (leadingRetainedParams paramIds body)
+    | Let (_, RefCountIncBytes (Var tempId), body) when Set.contains tempId paramIds ->
+        Set.add tempId (leadingRetainedParams paramIds body)
+    | _ ->
+        Set.empty
+
+/// Transfer the owned replacement record into the next loop iteration. RC
+/// insertion marks this shape by retaining the initial parameter and releasing
+/// the previous parameter before the call. The post-call release belongs to the
+/// ordinary recursive frame; a loop instead adopts that argument's ownership.
+let private tryTransferOwnedSelfTailArgument
+    (aliasRoots: Map<TempId, TempId>)
+    (ownedParams: Set<TempId>)
+    (releasedTemps: Set<TempId>)
+    (typedParams: TypedParam list)
+    (callTempId: TempId)
+    (tailCall: CExpr)
+    (remainingBody: AExpr)
+    : AExpr option =
+    match tailCall, remainingBody with
+    | TailCall (_, args), Let (_, RefCountDec (Var cleanupTemp, _, _, _), Return (Var returnTemp))
+        when returnTemp = callTempId ->
+        let cleanupRoot = canonicalTempId aliasRoots cleanupTemp
+        let matchingOwnedParams =
+            List.zip typedParams args
+            |> List.choose (fun (param, arg) ->
+                match arg with
+                | Var argTemp
+                    when canonicalTempId aliasRoots argTemp = cleanupRoot
+                         && Set.contains param.Id ownedParams
+                         && Set.contains (canonicalTempId aliasRoots param.Id) releasedTemps ->
+                    Some param.Id
+                | _ ->
+                    None)
+        match matchingOwnedParams with
+        | [_] -> Some (Return (Var callTempId))
+        | _ -> None
+    | _ ->
+        None
+
 /// Check if a CExpr is a call (direct, indirect, or closure)
 let isCallExpr (cexpr: CExpr) : bool =
     match cexpr with
@@ -148,6 +196,9 @@ let isCallExpr (cexpr: CExpr) : bool =
 /// is in tail position (its result is directly returned).
 let rec detectTailCalls
     (currentFuncName: string)
+    (typedParams: TypedParam list)
+    (ownedParams: Set<TempId>)
+    (releasedTemps: Set<TempId>)
     (inTailPosition: bool)
     (aliasRoots: Map<TempId, TempId>)
     (expr: AExpr)
@@ -165,31 +216,63 @@ let rec detectTailCalls
             let tailCall = convertToTailCall cexpr
             let tailArgTemps = tailCallArgTempIds aliasRoots tailCall
             let (movableDecs, remainingBody) = collectMovableDecPrefix aliasRoots tailArgTemps body
-            if isDirectReturnOf tempId remainingBody then
+            let transferredBody =
+                match tailCall with
+                | TailCall (targetFunc, _) when targetFunc = currentFuncName ->
+                    tryTransferOwnedSelfTailArgument
+                        aliasRoots
+                        ownedParams
+                        releasedTemps
+                        typedParams
+                        tempId
+                        tailCall
+                        remainingBody
+                | _ ->
+                    None
+            match transferredBody with
+            | Some bodyAfterTransfer ->
+                wrapBindings movableDecs (Let (tempId, tailCall, bodyAfterTransfer))
+            | None when isDirectReturnOf tempId remainingBody ->
                 wrapBindings movableDecs (Let (tempId, tailCall, remainingBody))
-            else
+            | None ->
                 // Cleanup remains after the call (typically overlap with a tail argument),
                 // so keep a normal call to preserve the post-call unwind work.
                 let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
-                let body' = detectTailCalls currentFuncName inTailPosition aliasRoots' body
+                let body' =
+                    detectTailCalls
+                        currentFuncName typedParams ownedParams releasedTemps inTailPosition aliasRoots' body
                 Let (tempId, cexpr, body')
         else
             // Not a tail call - recurse into body
             // Body is in tail position if current expression is
             let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
-            let body' = detectTailCalls currentFuncName inTailPosition aliasRoots' body
+            let releasedTemps' =
+                match cexpr with
+                | RefCountDec (Var releasedTemp, _, _, _)
+                | RefCountDecString (Var releasedTemp)
+                | RefCountDecBytes (Var releasedTemp) ->
+                    Set.add (canonicalTempId aliasRoots releasedTemp) releasedTemps
+                | _ ->
+                    releasedTemps
+            let body' =
+                detectTailCalls
+                    currentFuncName typedParams ownedParams releasedTemps' inTailPosition aliasRoots' body
             Let (tempId, cexpr, body')
 
     | If (cond, thenBranch, elseBranch) ->
         // If expression: both branches are in tail position if If is
-        let thenBranch' = detectTailCalls currentFuncName inTailPosition aliasRoots thenBranch
-        let elseBranch' = detectTailCalls currentFuncName inTailPosition aliasRoots elseBranch
+        let thenBranch' =
+            detectTailCalls currentFuncName typedParams ownedParams releasedTemps inTailPosition aliasRoots thenBranch
+        let elseBranch' =
+            detectTailCalls currentFuncName typedParams ownedParams releasedTemps inTailPosition aliasRoots elseBranch
         If (cond, thenBranch', elseBranch')
 
 /// Detect tail calls in a function
 let detectTailCallsInFunction (func: Function) : Function =
     // Function body is always in tail position
-    let body' = detectTailCalls func.Name true Map.empty func.Body
+    let paramIds = func.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
+    let ownedParams = leadingRetainedParams paramIds func.Body
+    let body' = detectTailCalls func.Name func.TypedParams ownedParams Set.empty true Map.empty func.Body
     { func with Body = body' }
 
 /// Detect tail calls in a program

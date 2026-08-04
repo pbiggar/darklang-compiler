@@ -590,6 +590,55 @@ let private functionParamReturnTransfersOwnedAccumulator
     | true, 2, AST.TList _ -> true
     | _ -> false
 
+/// Recognize a record parameter used as the sole returned accumulator of a
+/// direct self-recursive loop. The function keeps its own reference to this
+/// parameter so each backedge can release the previous record before adopting
+/// the freshly-owned replacement.
+let private isInternalRecordTailAccumulator
+    (func: Function)
+    (paramIndex: int)
+    (param: TypedParam)
+    : bool =
+    let rec canonicalAlias (aliases: Map<TempId, TempId>) (tempId: TempId) : TempId =
+        match Map.tryFind tempId aliases with
+        | Some sourceId when sourceId <> tempId -> canonicalAlias aliases sourceId
+        | _ -> tempId
+
+    let rec analyze
+        (aliases: Map<TempId, TempId>)
+        (expr: AExpr)
+        : bool * bool =
+        match expr with
+        | Return (Var tempId) ->
+            (canonicalAlias aliases tempId = param.Id, false)
+        | Return _ ->
+            (false, false)
+        | Let (callTemp, Call (targetFunc, args), Return (Var returnTemp))
+            when targetFunc = func.Name && callTemp = returnTemp ->
+            match List.tryItem paramIndex args with
+            | Some (Var replacement) when canonicalAlias aliases replacement <> param.Id ->
+                (true, true)
+            | _ ->
+                (false, false)
+        | Let (tempId, Atom (Var sourceId), body)
+        | Let (tempId, TypedAtom (Var sourceId, _), body) ->
+            analyze (Map.add tempId (canonicalAlias aliases sourceId) aliases) body
+        | Let (_, Call (targetFunc, _), _) when targetFunc = func.Name ->
+            (false, false)
+        | Let (_, _, body) ->
+            analyze aliases body
+        | If (_, thenBranch, elseBranch) ->
+            let (thenValid, thenRecurses) = analyze aliases thenBranch
+            let (elseValid, elseRecurses) = analyze aliases elseBranch
+            (thenValid && elseValid, thenRecurses || elseRecurses)
+
+    match param.Type, func.ReturnType with
+    | AST.TRecord _, returnType when returnType = param.Type ->
+        let (valid, recurses) = analyze Map.empty func.Body
+        valid && recurses
+    | _ ->
+        false
+
 /// Insert RefCountInc for returned parameters at a Return node
 let insertParamIncsAtReturn
     (ctx: TypeContext)
@@ -1319,12 +1368,20 @@ let private insertRCInFunctionInternal
     let ctxWithParams = withTempTypes ctx typesWithParams
 
     let bodyInfo = analyzeReturns Map.empty func.Body
+    let internalOwnedParams =
+        func.TypedParams
+        |> List.mapi (fun index param -> (index, param))
+        |> List.choose (fun (index, param) ->
+            if isInternalRecordTailAccumulator func index param then Some param else None)
+    let internalOwnedParamIds =
+        internalOwnedParams |> List.map (fun param -> param.Id) |> Set.ofList
     let paramIncsRev =
         func.TypedParams
         |> List.mapi (fun index param -> (index, param))
         |> List.fold (fun acc (index, param) ->
             if shapeNeedsBorrowedRetain ctxWithParams param.Type
-               && not (functionParamReturnTransfersOwnedAccumulator ctxWithParams func.Name index param.Type) then
+               && not (functionParamReturnTransfersOwnedAccumulator ctxWithParams func.Name index param.Type)
+               && not (Set.contains param.Id internalOwnedParamIds) then
                 (param.Id, param.Type) :: acc
             else
                 acc
@@ -1334,7 +1391,8 @@ let private insertRCInFunctionInternal
         func.TypedParams
         |> List.mapi (fun index param -> (index, param))
         |> List.choose (fun (index, param) ->
-            if functionParamReturnTransfersOwnedAccumulator ctxWithParams func.Name index param.Type then
+            if functionParamReturnTransfersOwnedAccumulator ctxWithParams func.Name index param.Type
+               || Set.contains param.Id internalOwnedParamIds then
                 Some (param.Id, param.Type, None)
             else
                 None)
@@ -1353,15 +1411,27 @@ let private insertRCInFunctionInternal
                 bodyWithRC
                 varGen'
                 accTypes
-    let (bodyWithClosureMapSourceRetains, varGen''', accTypes'') =
+    let retainInternalParam
+        (param: TypedParam)
+        (body: AExpr, currentVarGen: VarGen, currentTypes: Map<TempId, AST.Type>)
+        : AExpr * VarGen * Map<TempId, AST.Type> =
+        let (dummyId, nextVarGen) = freshVar currentVarGen
+        let retain = retainExprForType ctxWithParams param.Id param.Type
+        (Let (dummyId, retain, body), nextVarGen, Map.add dummyId AST.TUnit currentTypes)
+    let (bodyWithInternalParamRetains, varGen''', accTypes'') =
+        List.foldBack
+            retainInternalParam
+            internalOwnedParams
+            (bodyWithOwnedAccumulatorDecs, varGen'', accTypes')
+    let (bodyWithClosureMapSourceRetains, varGen'''', accTypes''') =
         insertClosureMapSourceRetainsBeforeHelperCalls
             ctxWithParams
             func.Name
-            bodyWithOwnedAccumulatorDecs
-            varGen''
-            accTypes'
+            bodyWithInternalParamRetains
+            varGen'''
+            accTypes''
     let body' = moveDecsBeforeNonSelfTailCalls func.Name bodyWithClosureMapSourceRetains
-    ({ func with Body = body' }, varGen''', accTypes'', typeCache')
+    ({ func with Body = body' }, varGen'''', accTypes''', typeCache')
 
 /// Insert RC operations into a function
 /// Returns (transformed function, varGen, accumulated TempTypes)

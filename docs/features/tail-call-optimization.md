@@ -37,6 +37,9 @@ If a `Let` binds a call result and the body immediately returns that same variab
 The implementation also recognizes refcount cleanup between the call and the
 return, then keeps the optimization only when that cleanup can be moved before
 the tail call without releasing a value still needed as a tail-call argument.
+For a direct self-recursive record accumulator, reference-count insertion can
+instead retain the initial parameter once and transfer each freshly-owned
+replacement across the loop backedge.
 
 **Transformation:**
 ```fsharp
@@ -106,6 +109,12 @@ unreachable. The detection pass therefore moves non-overlapping cleanup before
 the tail call and leaves the call unoptimized when required cleanup overlaps
 with one of the tail-call arguments.
 
+The record-accumulator case is the deliberate exception. When all base paths
+return the same record parameter and recursive paths replace it, the function
+owns one accumulator reference: entry retains the initial borrowed record,
+each backedge releases the previous record, and the replacement's ownership is
+transferred into the loop parameter.
+
 ```dark
 // Can be optimized only if RefCountDec(someValue) does not release a value
 // needed by tailCall's arguments.
@@ -138,7 +147,9 @@ sumFloats(10, 0.0)  // Expected: 10.0
 
 `src/Tests/e2e/tco-refcounting.e2e` separately guards the interaction between
 tail calls and reference-count cleanup, especially cases where self-tailcall
-lowering to loops must not drop `RefCountDec` work.
+lowering to loops must not drop `RefCountDec` work. It includes a 500,000-step
+immutable-record replacement loop that verifies constant stack use and zero
+leaks.
 
 ## Why TCO Matters
 

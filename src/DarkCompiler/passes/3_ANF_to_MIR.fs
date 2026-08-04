@@ -2165,6 +2165,32 @@ let convertANFFunction
         // Create entry label for CFG (internal to function body)
         let entryLabel = MIR.Label $"{anfFunc.Name}_body"
 
+        // Parameter retains at the start of ANF are one-time function setup.
+        // Keep them in the true entry block so self-tailcall backedges enter
+        // after setup rather than retaining the loop accumulator each iteration.
+        let paramIds = anfFunc.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
+        let rec splitLeadingParamRetains
+            (expr: ANF.AExpr)
+            : MIR.Instr list * ANF.AExpr =
+            match expr with
+            | ANF.Let (_, ANF.RefCountInc (ANF.Var tempId, payloadSize, kind, sourceType), body)
+                when Set.contains tempId paramIds ->
+                let (remainingRetains, loopBody) = splitLeadingParamRetains body
+                (MIR.RefCountInc (tempToVReg tempId, payloadSize, rcKindToMIR kind, sourceType)
+                 :: remainingRetains,
+                 loopBody)
+            | ANF.Let (_, ANF.RefCountIncString (ANF.Var tempId), body)
+                when Set.contains tempId paramIds ->
+                let (remainingRetains, loopBody) = splitLeadingParamRetains body
+                (MIR.RefCountIncString (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
+            | ANF.Let (_, ANF.RefCountIncBytes (ANF.Var tempId), body)
+                when Set.contains tempId paramIds ->
+                let (remainingRetains, loopBody) = splitLeadingParamRetains body
+                (MIR.RefCountIncBytes (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
+            | _ ->
+                ([], expr)
+        let (entryRetains, loopBody) = splitLeadingParamRetains anfFunc.Body
+
         // For self-recursive functions, we need a separate entry block that jumps to the body.
         // This allows the body to be a proper loop header with two predecessors:
         // 1. The entry block (first call with initial param values)
@@ -2173,12 +2199,13 @@ let convertANFFunction
         let trueEntryLabel = MIR.Label $"{anfFunc.Name}_entry"
         let entryBlock = {
             MIR.Label = trueEntryLabel
-            MIR.Instrs = []  // Params are implicitly defined here by calling convention
+            // Params are implicitly defined here by the calling convention.
+            MIR.Instrs = entryRetains
             MIR.Terminator = MIR.Jump entryLabel
         }
 
         // Convert function body to CFG
-        match convertExpr anfFunc.Body entryLabel [] initialBuilder with
+        match convertExpr loopBody entryLabel [] initialBuilder with
         | Error err -> Error err
         | Ok (_, finalBuilder) ->
 

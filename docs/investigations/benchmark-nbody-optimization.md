@@ -2,10 +2,16 @@
 
 ## Current Status
 
-`nbody` compiles and runs, but the Dark benchmark is intentionally reduced to
-5,000 simulation steps while the Rust and OCaml references run 500,000 steps.
-The reduced Dark binary for `benchmarks/problems/nbody/dark/main.dark` prints
-the expected scaled energy result `-169020`.
+`nbody` compiles and runs the canonical 500,000 simulation steps used by the
+Rust, OCaml, Node, and Python references. The Dark binary uses the shared
+expected output and prints the scaled energy result `-169096`.
+
+The parity gap was compiler/runtime behavior: reference-count cleanup after the
+source-level self-tail call kept `advance` as ordinary recursion. The compiler
+now recognizes record parameters that are returned self-recursive accumulators,
+retains the initial borrowed parameter once, releases each previous record on
+the backedge, and transfers the freshly-owned replacement into the next loop
+iteration.
 
 The source models the five-body system with immutable `Body` and `System`
 records. Each simulation step applies all ten body pairs, then returns a new
@@ -71,16 +77,24 @@ RefCountInc(X21, 56, generic)
 X26 <- HeapAlloc(40)
 ```
 
-The recursive `advance` loop is not lowered to a direct loop in the final LIR.
-It calls `advanceStep`, then calls `advance` recursively and performs cleanup
-after the recursive call returns:
+The recursive `advance` call is now a direct loop in MIR. One-time ownership
+setup stays in `advance_entry`; each backedge releases the previous `System`,
+updates the parameters, and jumps to `advance_body`:
 
 ```text
-X22 <- Call(advanceStep, [Reg X19, Reg X21])
-...
-X19 <- Call(advance, [Reg X22, Reg X21, Reg X19])
-RefCountDec(X22, 40, generic)
+advance_entry:
+  RefCountInc(v163, size=40, kind=generic)
+  jump advance_body
+advance_L1:
+  v167 <- Call(advanceStep, [v163, v164])
+  RefCountDec(v163, size=40, kind=generic)
+  v163 <- v167
+  jump advance_body
 ```
+
+A targeted canonical Cachegrind run measured Dark at `1,217,501,708`
+instructions, or 5.8x the Rust baseline. This is functional parity, while the
+remaining performance gap reflects the immutable allocation work below.
 
 Rust and OCaml use mutable body storage for the hot simulation loop. They update
 positions and velocities in place, so their inner pair loop does not need to
@@ -122,22 +136,18 @@ specialization would remove two calls per simulation step and expose those final
 body updates to the same scalar-replacement opportunity as the earlier moved
 bodies.
 
-### Preserve Tail Position Through Reference-Count Cleanup
+### Completed: Preserve Tail Position Through Reference-Count Cleanup
 
-`advance` is source-level tail recursion, but the final LIR still emits a
-recursive call followed by cleanup of the previous `System`. That prevents the
-loop from becoming a simple branch and keeps stack growth tied to the iteration
-count.
-
-Tail-call lowering for owned values needs to account for required
-reference-count cleanup before the jump. For `nbody`, performing the cleanup
-before the recursive transfer would turn the 5,000-step reduced loop into a
-constant-stack loop and is a prerequisite for safely restoring the full
+`advance` now preserves required reference-count cleanup while lowering the
+self-call to a constant-stack loop. The initial borrowed `System` is retained
+once at function entry. Each iteration releases the previous accumulator and
+transfers the new record's ownership before jumping to the loop header. This
+removed the stack-depth blocker and allowed the Dark benchmark to use the full
 500,000-step input.
 
 ## Remaining Uncertainties
 
-This investigation did not prove which allocation class dominates runtime once
-tail recursion is fixed. The next useful measurement is an allocation or
-instruction-count profile that separates `applyPair` tuple/body churn,
-`System` reconstruction, and recursive-loop overhead.
+The remaining gap is performance rather than functionality. The next useful
+measurement is an allocation or instruction-count profile that separates
+`applyPair` tuple/body churn and `System` reconstruction now that recursive-loop
+overhead and stack growth have been removed.

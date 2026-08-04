@@ -33,6 +33,7 @@ These benchmarks compile and run reliably.
 | merkletrees   | Tree/Hashing   | Recursive tree hashing                  |
 | mandelbrot    | Numerical      | Complex number iteration, fractal       |
 | matmul        | Numerical      | Generated 100x100 matrix multiplication checksum |
+| nbody         | Numerical      | Canonical 500,000-step five-body simulation |
 | nsieve        | Numerical      | Sieve of Eratosthenes using Dict-backed composites |
 | pisum         | Numerical      | Floating-point reciprocal-square sum    |
 | quicksort     | Sorting        | Functional quicksort over generated list |
@@ -76,7 +77,6 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 
 | Benchmark     | Status            | Limitation                                                     |
 | ------------- | ----------------- | -------------------------------------------------------------- |
-| nbody         | Working (reduced) | Uses 5,000 simulation steps (full: 500,000 steps)              |
 | spectral_norm | Working (reduced) | Computes the full power-iteration algorithm at 3-vector size (full: n=100) |
 
 ---
@@ -95,7 +95,6 @@ remain reduced or blocked as documented above.
 
 | Feature                                  | Benchmarks Blocked                                  |
 | ---------------------------------------- | --------------------------------------------------- |
-| **Allocator capacity / allocation pressure** | nbody (full)                                  |
 | Mutable arrays / efficient indexed numeric vectors | spectral_norm (full n=100)              |
 
 ---
