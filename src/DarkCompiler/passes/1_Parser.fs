@@ -92,496 +92,414 @@ and Token =
     | TIdent of string
     | TEOF
 
-/// Lexer: convert string to list of tokens
-let lex (input: string) : Result<Token list, string> =
-    let rec lexHelper (chars: char list) (acc: Token list) : Result<Token list, string> =
-        match chars with
-        | [] -> Ok (List.rev (TEOF :: acc))
-        | ' ' :: rest | '\t' :: rest | '\n' :: rest | '\r' :: rest ->
-            // Skip whitespace
-            lexHelper rest acc
-        | '+' :: '+' :: rest -> lexHelper rest (TPlusPlus :: acc)
-        | '+' :: rest -> lexHelper rest (TPlus :: acc)
-        | '-' :: '>' :: rest -> lexHelper rest (TArrow :: acc)
-        | '-' :: rest -> lexHelper rest (TMinus :: acc)
-        | '=' :: '>' :: rest -> lexHelper rest (TFatArrow :: acc)
-        | '*' :: rest -> lexHelper rest (TStar :: acc)
-        | '/' :: '/' :: rest ->
-            // Skip line comment: // ... until end of line
-            let rec skipToEndOfLine (cs: char list) : char list =
-                match cs with
-                | [] -> []
-                | '\n' :: remaining -> remaining
-                | '\r' :: '\n' :: remaining -> remaining
-                | '\r' :: remaining -> remaining
-                | _ :: remaining -> skipToEndOfLine remaining
-            lexHelper (skipToEndOfLine rest) acc
-        | '/' :: rest -> lexHelper rest (TSlash :: acc)
-        | '(' :: rest -> lexHelper rest (TLParen :: acc)
-        | ')' :: rest -> lexHelper rest (TRParen :: acc)
-        | '{' :: rest -> lexHelper rest (TLBrace :: acc)
-        | '}' :: rest -> lexHelper rest (TRBrace :: acc)
-        | '[' :: rest -> lexHelper rest (TLBracket :: acc)
-        | ']' :: rest -> lexHelper rest (TRBracket :: acc)
-        | ':' :: rest -> lexHelper rest (TColon :: acc)
-        | ',' :: rest -> lexHelper rest (TComma :: acc)
-        | '.' :: '.' :: '.' :: rest -> lexHelper rest (TDotDotDot :: acc)
-        | '.' :: rest -> lexHelper rest (TDot :: acc)
-        | '=' :: '=' :: rest -> lexHelper rest (TEqEq :: acc)
-        | '=' :: rest -> lexHelper rest (TEquals :: acc)
-        | '!' :: '=' :: rest -> lexHelper rest (TNeq :: acc)
-        | '!' :: rest -> lexHelper rest (TNot :: acc)
-        | '<' :: '<' :: rest -> lexHelper rest (TShl :: acc)
-        | '<' :: '=' :: rest -> lexHelper rest (TLte :: acc)
-        | '<' :: rest -> lexHelper rest (TLt :: acc)
-        | '>' :: '>' :: rest -> lexHelper rest (TShr :: acc)
-        | '>' :: '=' :: rest -> lexHelper rest (TGte :: acc)
-        | '>' :: rest -> lexHelper rest (TGt :: acc)
-        | '&' :: '&' :: rest -> lexHelper rest (TAnd :: acc)
-        | '&' :: rest -> lexHelper rest (TBitAnd :: acc)
-        | '^' :: rest -> lexHelper rest (TBitXor :: acc)
-        | '~' :: '~' :: '~' :: rest -> lexHelper rest (TBitNot :: acc)
-        | '%' :: rest -> lexHelper rest (TPercent :: acc)
-        | '|' :: '|' :: '|' :: rest -> lexHelper rest (TBitOr :: acc)
-        | '|' :: '|' :: rest -> lexHelper rest (TOr :: acc)
-        | '|' :: '>' :: rest -> lexHelper rest (TPipe :: acc)
-        | '|' :: rest -> lexHelper rest (TBar :: acc)
-        | '`' :: '`' :: rest ->
-            // Backtick-escaped identifiers: ``name`` (including keyword-like names).
-            let rec parseBacktickIdent (cs: char list) (chars: char list) : Result<string * char list, string> =
-                match cs with
-                | '`' :: '`' :: remaining ->
-                    let ident = System.String(List.rev chars |> List.toArray)
-                    if ident.Length = 0 then
-                        Error "Backtick identifier cannot be empty"
+/// Lexer: convert string to list of tokens without copying the source into a character list.
+let rec lex (input: string) : Result<Token list, string> =
+    let inputLength = input.Length
+
+    let hasChar (position: int) (offset: int) (expected: char) : bool =
+        let index = position + offset
+        index < inputLength && input[index] = expected
+
+    let substring (startPosition: int) (endPosition: int) : string =
+        input.Substring(startPosition, endPosition - startPosition)
+
+    let rec lexHelper (position: int) (acc: Token list) : Result<Token list, string> =
+        if position >= inputLength then
+            Ok (List.rev (TEOF :: acc))
+        else
+            let current = input[position]
+            match current with
+            | ' ' | '\t' | '\n' | '\r' ->
+                lexHelper (position + 1) acc
+            | '+' when hasChar position 1 '+' -> lexHelper (position + 2) (TPlusPlus :: acc)
+            | '+' -> lexHelper (position + 1) (TPlus :: acc)
+            | '-' when hasChar position 1 '>' -> lexHelper (position + 2) (TArrow :: acc)
+            | '-' -> lexHelper (position + 1) (TMinus :: acc)
+            | '=' when hasChar position 1 '>' -> lexHelper (position + 2) (TFatArrow :: acc)
+            | '*' -> lexHelper (position + 1) (TStar :: acc)
+            | '/' when hasChar position 1 '/' ->
+                let rec skipToEndOfLine (index: int) : int =
+                    if index >= inputLength then
+                        inputLength
                     else
-                        Ok (ident, remaining)
-                | '\n' :: _ | '\r' :: _ ->
-                    Error "Unterminated backtick identifier"
-                | c :: remaining ->
-                    parseBacktickIdent remaining (c :: chars)
-                | [] ->
-                    Error "Unterminated backtick identifier"
+                        match input[index] with
+                        | '\n' -> index + 1
+                        | '\r' when hasChar index 1 '\n' -> index + 2
+                        | '\r' -> index + 1
+                        | _ -> skipToEndOfLine (index + 1)
 
-            parseBacktickIdent rest []
-            |> Result.bind (fun (ident, remaining) ->
-                lexHelper remaining (TIdent ident :: acc))
-        | '`' :: _ ->
-            Error "Backtick identifiers must use double backticks: ``name``"
-        | c :: _ when System.Char.IsLetter(c) || c = '_' ->
-            // Parse identifier or keyword
-            let rec parseIdent (cs: char list) (chars: char list) : string * char list =
-                match cs with
-                | c :: rest when System.Char.IsLetterOrDigit(c) || c = '_' || c = '\'' ->
-                    parseIdent rest (c :: chars)
-                | _ ->
-                    let ident = System.String(List.rev chars |> List.toArray)
-                    (ident, cs)
+                lexHelper (skipToEndOfLine (position + 2)) acc
+            | '/' -> lexHelper (position + 1) (TSlash :: acc)
+            | '(' -> lexHelper (position + 1) (TLParen :: acc)
+            | ')' -> lexHelper (position + 1) (TRParen :: acc)
+            | '{' -> lexHelper (position + 1) (TLBrace :: acc)
+            | '}' -> lexHelper (position + 1) (TRBrace :: acc)
+            | '[' -> lexHelper (position + 1) (TLBracket :: acc)
+            | ']' -> lexHelper (position + 1) (TRBracket :: acc)
+            | ':' -> lexHelper (position + 1) (TColon :: acc)
+            | ',' -> lexHelper (position + 1) (TComma :: acc)
+            | '.' when hasChar position 1 '.' && hasChar position 2 '.' ->
+                lexHelper (position + 3) (TDotDotDot :: acc)
+            | '.' -> lexHelper (position + 1) (TDot :: acc)
+            | '=' when hasChar position 1 '=' -> lexHelper (position + 2) (TEqEq :: acc)
+            | '=' -> lexHelper (position + 1) (TEquals :: acc)
+            | '!' when hasChar position 1 '=' -> lexHelper (position + 2) (TNeq :: acc)
+            | '!' -> lexHelper (position + 1) (TNot :: acc)
+            | '<' when hasChar position 1 '<' -> lexHelper (position + 2) (TShl :: acc)
+            | '<' when hasChar position 1 '=' -> lexHelper (position + 2) (TLte :: acc)
+            | '<' -> lexHelper (position + 1) (TLt :: acc)
+            | '>' when hasChar position 1 '>' -> lexHelper (position + 2) (TShr :: acc)
+            | '>' when hasChar position 1 '=' -> lexHelper (position + 2) (TGte :: acc)
+            | '>' -> lexHelper (position + 1) (TGt :: acc)
+            | '&' when hasChar position 1 '&' -> lexHelper (position + 2) (TAnd :: acc)
+            | '&' -> lexHelper (position + 1) (TBitAnd :: acc)
+            | '^' -> lexHelper (position + 1) (TBitXor :: acc)
+            | '~' when hasChar position 1 '~' && hasChar position 2 '~' ->
+                lexHelper (position + 3) (TBitNot :: acc)
+            | '%' -> lexHelper (position + 1) (TPercent :: acc)
+            | '|' when hasChar position 1 '|' && hasChar position 2 '|' ->
+                lexHelper (position + 3) (TBitOr :: acc)
+            | '|' when hasChar position 1 '|' -> lexHelper (position + 2) (TOr :: acc)
+            | '|' when hasChar position 1 '>' -> lexHelper (position + 2) (TPipe :: acc)
+            | '|' -> lexHelper (position + 1) (TBar :: acc)
+            | '`' when hasChar position 1 '`' ->
+                let identStart = position + 2
 
-            let (ident, remaining) = parseIdent chars []
-            let token =
-                match ident with
-                | "let" -> TLet
-                | "in" -> TIn
-                | "if" -> TIf
-                | "then" -> TThen
-                | "else" -> TElse
-                | "def" -> TDef
-                | "type" -> TType
-                | "of" -> TOf
-                | "match" -> TMatch
-                | "with" -> TWith
-                | "when" -> TWhen
-                | "true" -> TTrue
-                | "false" -> TFalse
-                | "_" -> TUnderscore
-                | _ -> TIdent ident
-            lexHelper remaining (token :: acc)
-        | c :: _ when System.Char.IsDigit(c) ->
-            // Parse number (integer or float)
-            // First collect all digits
-            let rec collectDigits (cs: char list) (acc: char list) : char list * char list =
-                match cs with
-                | d :: rest when System.Char.IsDigit(d) -> collectDigits rest (d :: acc)
-                | _ -> (List.rev acc, cs)
-
-            let (intDigits, afterInt) = collectDigits chars []
-
-            // Check if this is a float (has decimal point or exponent)
-            match afterInt with
-            | '.' :: d :: rest when System.Char.IsDigit(d) ->
-                // Float with decimal point: 3.14
-                let (fracDigits, afterFrac) = collectDigits (d :: rest) []
-                // Check for exponent
-                match afterFrac with
-                | ('e' :: rest' | 'E' :: rest') ->
-                    // Scientific notation: 3.14e10 or 3.14e-10
-                    let (expSign, afterSign) =
-                        match rest' with
-                        | '+' :: r -> (['+'], r)
-                        | '-' :: r -> (['-'], r)
-                        | _ -> ([], rest')
-                    let (expDigits, remaining) = collectDigits afterSign []
-                    if List.isEmpty expDigits then
-                        Error "Expected exponent digits after 'e'"
+                let rec parseBacktickIdent (index: int) : Result<string * int, string> =
+                    if index >= inputLength then
+                        Error "Unterminated backtick identifier"
+                    elif input[index] = '`' && hasChar index 1 '`' then
+                        let ident = substring identStart index
+                        if ident.Length = 0 then
+                            Error "Backtick identifier cannot be empty"
+                        else
+                            Ok (ident, index + 2)
+                    elif input[index] = '\n' || input[index] = '\r' then
+                        Error "Unterminated backtick identifier"
                     else
-                        let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits @ ['e'] @ expSign @ expDigits))
-                        match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
-                        | (true, value) -> lexHelper remaining (TFloat value :: acc)
-                        | (false, _) -> Error $"Invalid float literal: {numStr}"
-                | _ ->
-                    // Float without exponent: 3.14
-                    let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits))
-                    match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
-                    | (true, value) -> lexHelper afterFrac (TFloat value :: acc)
-                    | (false, _) -> Error $"Invalid float literal: {numStr}"
-            | ('e' :: rest | 'E' :: rest) ->
-                // Scientific notation without decimal: 1e10 or 1e-10
-                let (expSign, afterSign) =
-                    match rest with
-                    | '+' :: r -> (['+'], r)
-                    | '-' :: r -> (['-'], r)
-                    | _ -> ([], rest)
-                let (expDigits, remaining) = collectDigits afterSign []
-                if List.isEmpty expDigits then
-                    Error "Expected exponent digits after 'e'"
-                else
-                    let numStr = System.String(Array.ofList (intDigits @ ['e'] @ expSign @ expDigits))
+                        parseBacktickIdent (index + 1)
+
+                parseBacktickIdent identStart
+                |> Result.bind (fun (ident, remaining) ->
+                    lexHelper remaining (TIdent ident :: acc))
+            | '`' ->
+                Error "Backtick identifiers must use double backticks: ``name``"
+            | c when System.Char.IsLetter(c) || c = '_' ->
+                let rec identEnd (index: int) : int =
+                    if index < inputLength then
+                        let c = input[index]
+                        if System.Char.IsLetterOrDigit(c) || c = '_' || c = '\'' then
+                            identEnd (index + 1)
+                        else
+                            index
+                    else
+                        index
+
+                let remaining = identEnd (position + 1)
+                let ident = substring position remaining
+                let token =
+                    match ident with
+                    | "let" -> TLet
+                    | "in" -> TIn
+                    | "if" -> TIf
+                    | "then" -> TThen
+                    | "else" -> TElse
+                    | "def" -> TDef
+                    | "type" -> TType
+                    | "of" -> TOf
+                    | "match" -> TMatch
+                    | "with" -> TWith
+                    | "when" -> TWhen
+                    | "true" -> TTrue
+                    | "false" -> TFalse
+                    | "_" -> TUnderscore
+                    | _ -> TIdent ident
+                lexHelper remaining (token :: acc)
+            | c when System.Char.IsDigit(c) ->
+                let rec collectDigits (index: int) : int =
+                    if index < inputLength && System.Char.IsDigit(input[index]) then
+                        collectDigits (index + 1)
+                    else
+                        index
+
+                let afterInt = collectDigits (position + 1)
+                let intDigits = substring position afterInt
+
+                let parseFloat (numStr: string) (remaining: int) =
                     match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
                     | (true, value) -> lexHelper remaining (TFloat value :: acc)
                     | (false, _) -> Error $"Invalid float literal: {numStr}"
-            | _ ->
-                // Integer with optional type suffix
-                let numStr = System.String(List.toArray intDigits)
 
-                // Check for type suffix: y, uy, s, us, l, ul, L, Q, UL, Z
-                match afterInt with
-                | 'u' :: 'y' :: rest ->
-                    // UInt8 suffix: 1uy
-                    match System.Byte.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TUInt8 value :: acc)
-                    | (false, _) -> Error $"Value {numStr} is out of range for UInt8 (0 to 255)"
-                | 'y' :: rest ->
-                    // Int8 suffix: 1y
-                    match System.SByte.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TInt8 value :: acc)
-                    | (false, _) ->
-                        if numStr = "128" then
-                            lexHelper rest (TInt8 System.SByte.MinValue :: acc)
-                        else
-                            Error $"Value {numStr} is out of range for Int8 (-128 to 127)"
-                | 'u' :: 's' :: rest ->
-                    // UInt16 suffix: 1us
-                    match System.UInt16.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TUInt16 value :: acc)
-                    | (false, _) -> Error $"Value {numStr} is out of range for UInt16 (0 to 65535)"
-                | 's' :: rest ->
-                    // Int16 suffix: 1s
-                    match System.Int16.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TInt16 value :: acc)
-                    | (false, _) ->
-                        if numStr = "32768" then
-                            lexHelper rest (TInt16 System.Int16.MinValue :: acc)
-                        else
-                            Error $"Value {numStr} is out of range for Int16 (-32768 to 32767)"
-                | 'u' :: 'l' :: rest ->
-                    // UInt32 suffix: 1ul
-                    match System.UInt32.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TUInt32 value :: acc)
-                    | (false, _) -> Error $"Value {numStr} is out of range for UInt32 (0 to 4294967295)"
-                | 'l' :: rest ->
-                    // Int32 suffix: 1l
-                    match System.Int32.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TInt32 value :: acc)
-                    | (false, _) ->
-                        if numStr = "2147483648" then
-                            lexHelper rest (TInt32 System.Int32.MinValue :: acc)
-                        else
-                            Error $"Value {numStr} is out of range for Int32 (-2147483648 to 2147483647)"
-                | 'U' :: 'L' :: rest ->
-                    // UInt64 suffix: 1UL
-                    match System.UInt64.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TUInt64 value :: acc)
-                    | (false, _) -> Error $"Value {numStr} is out of range for UInt64"
-                | 'L' :: rest ->
-                    // Int64 explicit suffix: 1L (same as default)
-                    match System.Int64.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TInt64 value :: acc)
-                    | (false, _) ->
-                        if numStr = "9223372036854775808" then
-                            lexHelper rest (TInt64 System.Int64.MinValue :: acc)
-                        else
-                            Error $"Integer literal too large: {numStr}"
-                | 'Q' :: rest ->
-                    // Int128 suffix: 1Q
-                    match System.Int128.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TInt128 value :: acc)
-                    | (false, _) ->
-                        // Keep INT128_MIN absolute-value sentinel behavior consistent with Int64 parsing.
-                        if numStr = "170141183460469231731687303715884105728" then
-                            lexHelper rest (TInt128 System.Int128.MinValue :: acc)
-                        else
-                            Error $"Value {numStr} is out of range for Int128"
-                | 'I' :: rest ->
-                    match System.Numerics.BigInteger.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TBigInt value :: acc)
-                    | (false, _) -> Error $"Invalid Int literal: {numStr}"
-                | 'Z' :: rest ->
-                    // UInt128 suffix: 1Z
-                    match System.UInt128.TryParse(numStr) with
-                    | (true, value) -> lexHelper rest (TUInt128 value :: acc)
-                    | (false, _) -> Error $"Value {numStr} is out of range for UInt128"
-                | _ ->
-                    // No suffix: default Int64
-                    match System.Int64.TryParse(numStr) with
-                    | (true, value) -> lexHelper afterInt (TInt64 value :: acc)
-                    | (false, _) ->
-                        // Check for INT64_MIN special case: "9223372036854775808"
-                        // This value is > INT64_MAX but equals |INT64_MIN|
-                        // It's only valid when preceded by minus: -9223372036854775808
-                        if numStr = "9223372036854775808" then
-                            // Return INT64_MIN directly - this is a special sentinel
-                            // The parser will only accept this when it's negated
-                            lexHelper afterInt (TInt64 System.Int64.MinValue :: acc)
-                        else
-                            Error $"Integer literal too large: {numStr}"
-        | '$' :: '"' :: rest ->
-            // Parse interpolated string: $"Hello {name}!"
-            // Returns TInterpString token with parts list
-
-            // Helper to parse escape sequences (same as regular strings)
-            let parseEscape (cs: char list) : Result<char * char list, string> =
-                match cs with
-                | 'n' :: remaining -> Ok ('\n', remaining)
-                | 't' :: remaining -> Ok ('\t', remaining)
-                | 'r' :: remaining -> Ok ('\r', remaining)
-                | '\\' :: remaining -> Ok ('\\', remaining)
-                | '"' :: remaining -> Ok ('"', remaining)
-                | '\'' :: remaining -> Ok ('\'', remaining)
-                | '0' :: remaining -> Ok ('\000', remaining)
-                | '{' :: remaining -> Ok ('{', remaining)  // Escape { as \{
-                | '}' :: remaining -> Ok ('}', remaining)  // Escape } as \}
-                | 'x' :: h1 :: h2 :: remaining ->
-                    let hexStr = System.String([| h1; h2 |])
-                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                    | (true, value) -> Ok (char value, remaining)
-                    | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
-                | 'u' :: h1 :: h2 :: h3 :: h4 :: remaining ->
-                    let hexStr = System.String([| h1; h2; h3; h4 |])
-                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                    | (true, value) -> Ok (char value, remaining)
-                    | (false, _) -> Error $"Invalid unicode escape sequence: \\u{hexStr}"
-                | c :: _ -> Error $"Unknown escape sequence: \\{c}"
-                | [] -> Error "Unterminated escape sequence"
-
-            // Helper to collect characters until { or closing "
-            let rec collectLiteralPart (cs: char list) (chars: char list) : Result<string * char list, string> =
-                match cs with
-                | [] -> Error "Unterminated interpolated string"
-                | '"' :: remaining ->
-                    let str = System.String(List.rev chars |> List.toArray)
-                    Ok (str, '"' :: remaining)  // Put " back for caller to detect end
-                | '{' :: remaining ->
-                    let str = System.String(List.rev chars |> List.toArray)
-                    Ok (str, '{' :: remaining)  // Put { back for caller to detect expression
-                | '\\' :: escRest ->
-                    match parseEscape escRest with
-                    | Ok (c, remaining) -> collectLiteralPart remaining (c :: chars)
-                    | Error err -> Error err
-                | c :: remaining ->
-                    collectLiteralPart remaining (c :: chars)
-
-            // Helper to collect expression chars until matching }
-            let rec collectExprChars (cs: char list) (depth: int) (chars: char list) : Result<char list * char list, string> =
-                match cs with
-                | [] -> Error "Unterminated interpolated expression"
-                | '}' :: remaining when depth = 0 ->
-                    Ok (List.rev chars, remaining)
-                | '}' :: remaining ->
-                    collectExprChars remaining (depth - 1) ('}' :: chars)
-                | '{' :: remaining ->
-                    collectExprChars remaining (depth + 1) ('{' :: chars)
-                | '"' :: remaining ->
-                    // Skip strings inside the expression
-                    let rec skipString (cs: char list) (acc: char list) =
-                        match cs with
-                        | [] -> Error "Unterminated string in interpolated expression"
-                        | '"' :: rest -> Ok ('"' :: acc, rest)
-                        | '\\' :: c :: rest -> skipString rest (c :: '\\' :: acc)
-                        | c :: rest -> skipString rest (c :: acc)
-                    match skipString remaining ('"' :: chars) with
-                    | Ok (acc', rest') -> collectExprChars rest' depth acc'
-                    | Error err -> Error err
-                | c :: remaining ->
-                    collectExprChars remaining depth (c :: chars)
-
-            // Parse all parts and build InterpPart list
-            let rec parseInterpParts (cs: char list) (parts: InterpPart list) : Result<InterpPart list * char list, string> =
-                match cs with
-                | '"' :: remaining ->
-                    // End of interpolated string
-                    Ok (List.rev parts, remaining)
-                | '{' :: remaining ->
-                    // Expression part - collect chars and lex them
-                    match collectExprChars remaining 0 [] with
-                    | Ok (exprChars, afterExpr) ->
-                        let exprStr = System.String(exprChars |> List.toArray)
-                        // Lex the expression
-                        match lexHelper (exprStr |> Seq.toList) [] with
-                        | Ok tokens ->
-                            let tokens' = tokens |> List.filter (fun t -> t <> TEOF)
-                            parseInterpParts afterExpr (InterpTokens tokens' :: parts)
-                        | Error err -> Error $"Error in interpolated expression: {err}"
-                    | Error err -> Error err
-                | _ ->
-                    // Literal part
-                    match collectLiteralPart cs [] with
-                    | Ok (str, afterLit) ->
-                        if str = "" then
-                            parseInterpParts afterLit parts
-                        else
-                            parseInterpParts afterLit (InterpText str :: parts)
-                    | Error err -> Error err
-
-            match parseInterpParts rest [] with
-            | Ok (parts, remaining) ->
-                lexHelper remaining (TInterpString parts :: acc)
-            | Error err -> Error err
-
-        | '\'' :: rest ->
-            // Parse char literal with escape sequences (single Extended Grapheme Cluster)
-            let rec parseCharContent (cs: char list) (chars: char list) : Result<string * char list, string> =
-                match cs with
-                | [] -> Error "Unterminated char literal"
-                | '\'' :: remaining ->
-                    // End of char literal
-                    let str = System.String(List.rev chars |> List.toArray)
-                    if str.Length = 0 then
-                        Error "Empty char literal"
+                let parseExponent (prefix: string) (exponentPosition: int) =
+                    let (expSign, afterSign) =
+                        if hasChar exponentPosition 0 '+' then ("+", exponentPosition + 1)
+                        elif hasChar exponentPosition 0 '-' then ("-", exponentPosition + 1)
+                        else ("", exponentPosition)
+                    let remaining = collectDigits afterSign
+                    if remaining = afterSign then
+                        Error "Expected exponent digits after 'e'"
                     else
-                        // Validate that it's a single Extended Grapheme Cluster using .NET's StringInfo
-                        let enumerator = System.Globalization.StringInfo.GetTextElementEnumerator(str)
-                        if enumerator.MoveNext() then
-                            if enumerator.MoveNext() then
-                                Error $"Char literal contains more than one grapheme cluster: '{str}'"
-                            else
-                                Ok (str, remaining)
-                        else
-                            Error "Empty char literal"
-                | '\\' :: 'n' :: remaining ->
-                    parseCharContent remaining ('\n' :: chars)
-                | '\\' :: 't' :: remaining ->
-                    parseCharContent remaining ('\t' :: chars)
-                | '\\' :: 'r' :: remaining ->
-                    parseCharContent remaining ('\r' :: chars)
-                | '\\' :: '\\' :: remaining ->
-                    parseCharContent remaining ('\\' :: chars)
-                | '\\' :: '\'' :: remaining ->
-                    parseCharContent remaining ('\'' :: chars)
-                | '\\' :: '0' :: remaining ->
-                    parseCharContent remaining ('\000' :: chars)
-                | '\\' :: 'x' :: h1 :: h2 :: remaining ->
-                    // Hex escape: \xNN
-                    let hexStr = System.String([| h1; h2 |])
-                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                    | (true, value) ->
-                        parseCharContent remaining (char value :: chars)
-                    | (false, _) ->
-                        Error $"Invalid hex escape sequence: \\x{hexStr}"
-                | '\\' :: c :: _ ->
-                    Error $"Unknown escape sequence: \\{c}"
-                | c :: remaining ->
-                    parseCharContent remaining (c :: chars)
+                        let expDigits = substring afterSign remaining
+                        parseFloat (prefix + "e" + expSign + expDigits) remaining
 
-            let parseCharLiteral () : Result<Token list, string> =
-                match parseCharContent rest [] with
-                | Ok (str, remaining) -> lexHelper remaining (TCharLit str :: acc)
+                if hasChar afterInt 0 '.'
+                   && afterInt + 1 < inputLength
+                   && System.Char.IsDigit(input[afterInt + 1]) then
+                    let afterFrac = collectDigits (afterInt + 2)
+                    let fraction = substring (afterInt + 1) afterFrac
+                    let prefix = intDigits + "." + fraction
+                    if hasChar afterFrac 0 'e' || hasChar afterFrac 0 'E' then
+                        parseExponent prefix (afterFrac + 1)
+                    else
+                        parseFloat prefix afterFrac
+                elif hasChar afterInt 0 'e' || hasChar afterInt 0 'E' then
+                    parseExponent intDigits (afterInt + 1)
+                else
+                    let parseIntegerToken token onError remaining =
+                        match token with
+                        | Some value -> lexHelper remaining (value :: acc)
+                        | None -> Error onError
+
+                    if hasChar afterInt 0 'u' && hasChar afterInt 1 'y' then
+                        let (parsed, value) = System.Byte.TryParse(intDigits)
+                        parseIntegerToken (if parsed then Some (TUInt8 value) else None) $"Value {intDigits} is out of range for UInt8 (0 to 255)" (afterInt + 2)
+                    elif hasChar afterInt 0 'y' then
+                        let (parsed, value) = System.SByte.TryParse(intDigits)
+                        if parsed then lexHelper (afterInt + 1) (TInt8 value :: acc)
+                        elif intDigits = "128" then lexHelper (afterInt + 1) (TInt8 System.SByte.MinValue :: acc)
+                        else Error $"Value {intDigits} is out of range for Int8 (-128 to 127)"
+                    elif hasChar afterInt 0 'u' && hasChar afterInt 1 's' then
+                        let (parsed, value) = System.UInt16.TryParse(intDigits)
+                        parseIntegerToken (if parsed then Some (TUInt16 value) else None) $"Value {intDigits} is out of range for UInt16 (0 to 65535)" (afterInt + 2)
+                    elif hasChar afterInt 0 's' then
+                        let (parsed, value) = System.Int16.TryParse(intDigits)
+                        if parsed then lexHelper (afterInt + 1) (TInt16 value :: acc)
+                        elif intDigits = "32768" then lexHelper (afterInt + 1) (TInt16 System.Int16.MinValue :: acc)
+                        else Error $"Value {intDigits} is out of range for Int16 (-32768 to 32767)"
+                    elif hasChar afterInt 0 'u' && hasChar afterInt 1 'l' then
+                        let (parsed, value) = System.UInt32.TryParse(intDigits)
+                        parseIntegerToken (if parsed then Some (TUInt32 value) else None) $"Value {intDigits} is out of range for UInt32 (0 to 4294967295)" (afterInt + 2)
+                    elif hasChar afterInt 0 'l' then
+                        let (parsed, value) = System.Int32.TryParse(intDigits)
+                        if parsed then lexHelper (afterInt + 1) (TInt32 value :: acc)
+                        elif intDigits = "2147483648" then lexHelper (afterInt + 1) (TInt32 System.Int32.MinValue :: acc)
+                        else Error $"Value {intDigits} is out of range for Int32 (-2147483648 to 2147483647)"
+                    elif hasChar afterInt 0 'U' && hasChar afterInt 1 'L' then
+                        let (parsed, value) = System.UInt64.TryParse(intDigits)
+                        parseIntegerToken (if parsed then Some (TUInt64 value) else None) $"Value {intDigits} is out of range for UInt64" (afterInt + 2)
+                    elif hasChar afterInt 0 'L' then
+                        let (parsed, value) = System.Int64.TryParse(intDigits)
+                        if parsed then lexHelper (afterInt + 1) (TInt64 value :: acc)
+                        elif intDigits = "9223372036854775808" then lexHelper (afterInt + 1) (TInt64 System.Int64.MinValue :: acc)
+                        else Error $"Integer literal too large: {intDigits}"
+                    elif hasChar afterInt 0 'Q' then
+                        let (parsed, value) = System.Int128.TryParse(intDigits)
+                        if parsed then lexHelper (afterInt + 1) (TInt128 value :: acc)
+                        elif intDigits = "170141183460469231731687303715884105728" then lexHelper (afterInt + 1) (TInt128 System.Int128.MinValue :: acc)
+                        else Error $"Value {intDigits} is out of range for Int128"
+                    elif hasChar afterInt 0 'I' then
+                        let (parsed, value) = System.Numerics.BigInteger.TryParse(intDigits)
+                        parseIntegerToken (if parsed then Some (TBigInt value) else None) $"Invalid Int literal: {intDigits}" (afterInt + 1)
+                    elif hasChar afterInt 0 'Z' then
+                        let (parsed, value) = System.UInt128.TryParse(intDigits)
+                        parseIntegerToken (if parsed then Some (TUInt128 value) else None) $"Value {intDigits} is out of range for UInt128" (afterInt + 1)
+                    else
+                        let (parsed, value) = System.Int64.TryParse(intDigits)
+                        if parsed then lexHelper afterInt (TInt64 value :: acc)
+                        elif intDigits = "9223372036854775808" then lexHelper afterInt (TInt64 System.Int64.MinValue :: acc)
+                        else Error $"Integer literal too large: {intDigits}"
+            | '$' when hasChar position 1 '"' ->
+                let parseEscape (index: int) : Result<char * int, string> =
+                    if index >= inputLength then
+                        Error "Unterminated escape sequence"
+                    else
+                        match input[index] with
+                        | 'n' -> Ok ('\n', index + 1)
+                        | 't' -> Ok ('\t', index + 1)
+                        | 'r' -> Ok ('\r', index + 1)
+                        | '\\' -> Ok ('\\', index + 1)
+                        | '"' -> Ok ('"', index + 1)
+                        | '\'' -> Ok ('\'', index + 1)
+                        | '0' -> Ok ('\000', index + 1)
+                        | '{' -> Ok ('{', index + 1)
+                        | '}' -> Ok ('}', index + 1)
+                        | 'x' when index + 2 < inputLength ->
+                            let hexStr = substring (index + 1) (index + 3)
+                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                            | (true, value) -> Ok (char value, index + 3)
+                            | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
+                        | 'u' when index + 4 < inputLength ->
+                            let hexStr = substring (index + 1) (index + 5)
+                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                            | (true, value) -> Ok (char value, index + 5)
+                            | (false, _) -> Error $"Invalid unicode escape sequence: \\u{hexStr}"
+                        | c -> Error $"Unknown escape sequence: \\{c}"
+
+                let rec collectLiteralPart (index: int) (chars: char list) : Result<string * int, string> =
+                    if index >= inputLength then
+                        Error "Unterminated interpolated string"
+                    else
+                        match input[index] with
+                        | '"' | '{' -> Ok (System.String(List.rev chars |> List.toArray), index)
+                        | '\\' ->
+                            match parseEscape (index + 1) with
+                            | Ok (c, remaining) -> collectLiteralPart remaining (c :: chars)
+                            | Error err -> Error err
+                        | c -> collectLiteralPart (index + 1) (c :: chars)
+
+                let rec collectExprChars (index: int) (depth: int) (chars: char list) : Result<char list * int, string> =
+                    if index >= inputLength then
+                        Error "Unterminated interpolated expression"
+                    else
+                        match input[index] with
+                        | '}' when depth = 0 -> Ok (List.rev chars, index + 1)
+                        | '}' -> collectExprChars (index + 1) (depth - 1) ('}' :: chars)
+                        | '{' -> collectExprChars (index + 1) (depth + 1) ('{' :: chars)
+                        | '"' ->
+                            let rec skipString (stringIndex: int) (stringChars: char list) =
+                                if stringIndex >= inputLength then
+                                    Error "Unterminated string in interpolated expression"
+                                else
+                                    match input[stringIndex] with
+                                    | '"' -> Ok ('"' :: stringChars, stringIndex + 1)
+                                    | '\\' when stringIndex + 1 < inputLength ->
+                                        skipString (stringIndex + 2) (input[stringIndex + 1] :: '\\' :: stringChars)
+                                    | c -> skipString (stringIndex + 1) (c :: stringChars)
+
+                            match skipString (index + 1) ('"' :: chars) with
+                            | Ok (chars', remaining) -> collectExprChars remaining depth chars'
+                            | Error err -> Error err
+                        | c -> collectExprChars (index + 1) depth (c :: chars)
+
+                let rec parseInterpParts (index: int) (parts: InterpPart list) : Result<InterpPart list * int, string> =
+                    if index >= inputLength then
+                        Error "Unterminated interpolated string"
+                    else
+                        match input[index] with
+                        | '"' -> Ok (List.rev parts, index + 1)
+                        | '{' ->
+                            match collectExprChars (index + 1) 0 [] with
+                            | Ok (exprChars, afterExpr) ->
+                                let exprStr = System.String(exprChars |> List.toArray)
+                                match lex exprStr with
+                                | Ok tokens ->
+                                    let tokens' = tokens |> List.filter (fun t -> t <> TEOF)
+                                    parseInterpParts afterExpr (InterpTokens tokens' :: parts)
+                                | Error err -> Error $"Error in interpolated expression: {err}"
+                            | Error err -> Error err
+                        | _ ->
+                            match collectLiteralPart index [] with
+                            | Ok (str, afterLit) ->
+                                if str = "" then parseInterpParts afterLit parts
+                                else parseInterpParts afterLit (InterpText str :: parts)
+                            | Error err -> Error err
+
+                match parseInterpParts (position + 2) [] with
+                | Ok (parts, remaining) -> lexHelper remaining (TInterpString parts :: acc)
                 | Error err -> Error err
+            | '\'' ->
+                let contentStart = position + 1
 
-            let isApostropheTypeVarContext =
-                match acc with
-                | TLParen :: _  // parenthesized type context: ('a * 'b)
-                | TStar :: _  // tuple-type element separator: 'a * 'b
-                | TLt :: _  // generic/type arg list start: <'a>
-                | TComma :: _  // additional generic/type arg: <'a, 'b>
-                | TColon :: _  // type annotation: x: 'a
-                | TArrow :: _  // function return type: ('a) -> 'b
-                | TOf :: _  // sum payload type: Case of 'a
-                | TEquals :: _ ->  // type alias body: type T = 'a
-                    true
-                | _ ->
-                    false
+                let rec parseCharContent (index: int) (chars: char list) : Result<string * int, string> =
+                    if index >= inputLength then
+                        Error "Unterminated char literal"
+                    else
+                        match input[index] with
+                        | '\'' ->
+                            let str = System.String(List.rev chars |> List.toArray)
+                            if str.Length = 0 then
+                                Error "Empty char literal"
+                            else
+                                let enumerator = System.Globalization.StringInfo.GetTextElementEnumerator(str)
+                                if enumerator.MoveNext() then
+                                    if enumerator.MoveNext() then
+                                        Error $"Char literal contains more than one grapheme cluster: '{str}'"
+                                    else
+                                        Ok (str, index + 1)
+                                else
+                                    Error "Empty char literal"
+                        | '\\' when hasChar index 1 'n' -> parseCharContent (index + 2) ('\n' :: chars)
+                        | '\\' when hasChar index 1 't' -> parseCharContent (index + 2) ('\t' :: chars)
+                        | '\\' when hasChar index 1 'r' -> parseCharContent (index + 2) ('\r' :: chars)
+                        | '\\' when hasChar index 1 '\\' -> parseCharContent (index + 2) ('\\' :: chars)
+                        | '\\' when hasChar index 1 '\'' -> parseCharContent (index + 2) ('\'' :: chars)
+                        | '\\' when hasChar index 1 '0' -> parseCharContent (index + 2) ('\000' :: chars)
+                        | '\\' when hasChar index 1 'x' && index + 3 < inputLength ->
+                            let hexStr = substring (index + 2) (index + 4)
+                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                            | (true, value) -> parseCharContent (index + 4) (char value :: chars)
+                            | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
+                        | '\\' when index + 1 < inputLength -> Error $"Unknown escape sequence: \\{input[index + 1]}"
+                        | c -> parseCharContent (index + 1) (c :: chars)
 
-            let rec parseTypeVarName (cs: char list) (chars: char list) : string * char list =
-                match cs with
-                | c :: remaining when System.Char.IsLetterOrDigit(c) || c = '_' ->
-                    parseTypeVarName remaining (c :: chars)
-                | _ ->
-                    (System.String(List.rev chars |> List.toArray), cs)
+                let parseCharLiteral () : Result<Token list, string> =
+                    match parseCharContent contentStart [] with
+                    | Ok (str, remaining) -> lexHelper remaining (TCharLit str :: acc)
+                    | Error err -> Error err
 
-            match rest with
-            | c :: _ when isApostropheTypeVarContext && (System.Char.IsLetter(c) || c = '_') ->
-                let (typeVarName, afterTypeVar) = parseTypeVarName rest []
-                match afterTypeVar with
-                | '\'' :: _ ->
-                    // Still a char literal if we see a closing quote.
+                let isApostropheTypeVarContext =
+                    match acc with
+                    | TLParen :: _
+                    | TStar :: _
+                    | TLt :: _
+                    | TComma :: _
+                    | TColon :: _
+                    | TArrow :: _
+                    | TOf :: _
+                    | TEquals :: _ -> true
+                    | _ -> false
+
+                let rec typeVarEnd (index: int) : int =
+                    if index < inputLength then
+                        let c = input[index]
+                        if System.Char.IsLetterOrDigit(c) || c = '_' then typeVarEnd (index + 1)
+                        else index
+                    else
+                        index
+
+                if contentStart < inputLength
+                   && isApostropheTypeVarContext
+                   && (System.Char.IsLetter(input[contentStart]) || input[contentStart] = '_') then
+                    let afterTypeVar = typeVarEnd (contentStart + 1)
+                    if hasChar afterTypeVar 0 '\'' then
+                        parseCharLiteral ()
+                    else
+                        lexHelper afterTypeVar (TIdent (substring contentStart afterTypeVar) :: acc)
+                else
                     parseCharLiteral ()
-                | _ ->
-                    lexHelper afterTypeVar (TIdent typeVarName :: acc)
-            | _ ->
-                parseCharLiteral ()
+            | '"' ->
+                let rec parseString (index: int) (chars: char list) : Result<string * int, string> =
+                    if index >= inputLength then
+                        Error "Unterminated string literal"
+                    else
+                        match input[index] with
+                        | '"' -> Ok (System.String(List.rev chars |> List.toArray), index + 1)
+                        | '\\' when hasChar index 1 'n' -> parseString (index + 2) ('\n' :: chars)
+                        | '\\' when hasChar index 1 't' -> parseString (index + 2) ('\t' :: chars)
+                        | '\\' when hasChar index 1 'r' -> parseString (index + 2) ('\r' :: chars)
+                        | '\\' when hasChar index 1 '\\' -> parseString (index + 2) ('\\' :: chars)
+                        | '\\' when hasChar index 1 '"' -> parseString (index + 2) ('"' :: chars)
+                        | '\\' when hasChar index 1 '\'' -> parseString (index + 2) ('\'' :: chars)
+                        | '\\' when hasChar index 1 '0' -> parseString (index + 2) ('\000' :: chars)
+                        | '\\' when hasChar index 1 'x' && index + 3 < inputLength ->
+                            let hexStr = substring (index + 2) (index + 4)
+                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                            | (true, value) -> parseString (index + 4) (char value :: chars)
+                            | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
+                        | '\\' when hasChar index 1 'u' && index + 5 < inputLength ->
+                            let hexStr = substring (index + 2) (index + 6)
+                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                            | (true, value) -> parseString (index + 6) (char value :: chars)
+                            | (false, _) -> Error $"Invalid unicode escape sequence: \\u{hexStr}"
+                        | '\\' when index + 1 < inputLength -> Error $"Unknown escape sequence: \\{input[index + 1]}"
+                        | c -> parseString (index + 1) (c :: chars)
 
-        | '"' :: rest ->
-            // Parse string literal with escape sequences
-            let rec parseString (cs: char list) (chars: char list) : Result<string * char list, string> =
-                match cs with
-                | [] -> Error "Unterminated string literal"
-                | '"' :: remaining ->
-                    // End of string
-                    let str = System.String(List.rev chars |> List.toArray)
-                    Ok (str, remaining)
-                | '\\' :: 'n' :: remaining ->
-                    parseString remaining ('\n' :: chars)
-                | '\\' :: 't' :: remaining ->
-                    parseString remaining ('\t' :: chars)
-                | '\\' :: 'r' :: remaining ->
-                    parseString remaining ('\r' :: chars)
-                | '\\' :: '\\' :: remaining ->
-                    parseString remaining ('\\' :: chars)
-                | '\\' :: '"' :: remaining ->
-                    parseString remaining ('"' :: chars)
-                | '\\' :: '\'' :: remaining ->
-                    parseString remaining ('\'' :: chars)
-                | '\\' :: '0' :: remaining ->
-                    parseString remaining ('\000' :: chars)
-                | '\\' :: 'x' :: h1 :: h2 :: remaining ->
-                    // Hex escape: \xNN
-                    let hexStr = System.String([| h1; h2 |])
-                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                    | (true, value) ->
-                        parseString remaining (char value :: chars)
-                    | (false, _) ->
-                        Error $"Invalid hex escape sequence: \\x{hexStr}"
-                | '\\' :: 'u' :: h1 :: h2 :: h3 :: h4 :: remaining ->
-                    // Unicode escape: \uNNNN
-                    let hexStr = System.String([| h1; h2; h3; h4 |])
-                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                    | (true, value) ->
-                        parseString remaining (char value :: chars)
-                    | (false, _) ->
-                        Error $"Invalid unicode escape sequence: \\u{hexStr}"
-                | '\\' :: c :: _ ->
-                    Error $"Unknown escape sequence: \\{c}"
-                | c :: remaining ->
-                    parseString remaining (c :: chars)
+                match parseString (position + 1) [] with
+                | Ok (str, remaining) -> lexHelper remaining (TStringLit str :: acc)
+                | Error err -> Error err
+            | c -> Error $"Unexpected character: {c}"
 
-            match parseString rest [] with
-            | Ok (str, remaining) -> lexHelper remaining (TStringLit str :: acc)
-            | Error err -> Error err
-        | c :: _ ->
-            Error $"Unexpected character: {c}"
-
-    input |> Seq.toList |> fun cs -> lexHelper cs []
+    lexHelper 0 []
 
 /// Parse function type parameters: type, type, ...) returning list and remaining tokens
 let rec parseFunctionTypeParams (typeParams: Set<string>) (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
