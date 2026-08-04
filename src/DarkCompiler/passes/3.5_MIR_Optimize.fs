@@ -1033,7 +1033,57 @@ let simplifyConstantBranches (cfg: CFG) : CFG * bool =
 
     ({ cfg with Blocks = blocks' }, changed)
 
-/// Remove unreachable blocks and trim phi sources from unreachable predecessors
+type private EstablishedBranchCondition =
+    | EstablishedTrue of VReg
+    | EstablishedFalse of VReg
+
+let private establishedConditionOnEdge
+    (successorLabel: Label)
+    (predecessor: BasicBlock)
+    : EstablishedBranchCondition option =
+    match predecessor.Terminator with
+    | Branch (Register condition, trueLabel, falseLabel)
+        when trueLabel = successorLabel && falseLabel <> successorLabel ->
+        Some (EstablishedTrue condition)
+    | Branch (Register condition, trueLabel, falseLabel)
+        when falseLabel = successorLabel && trueLabel <> successorLabel ->
+        Some (EstablishedFalse condition)
+    | _ -> None
+
+/// Resolve a repeated SSA Boolean branch from the sole edge entering its block.
+let simplifyBranchesKnownFromPredecessor (cfg: CFG) : CFG * bool =
+    let predecessors = buildPredecessors cfg
+
+    let (blocks', changed) =
+        cfg.Blocks
+        |> Map.fold (fun (acc, changedAcc) label block ->
+            let term' =
+                if label = cfg.Entry then
+                    block.Terminator
+                else
+                    match Map.tryFind label predecessors, block.Terminator with
+                    | Some [predecessorLabel], Branch (Register condition, trueLabel, falseLabel) ->
+                        match Map.tryFind predecessorLabel cfg.Blocks with
+                        | Some predecessor ->
+                            match establishedConditionOnEdge label predecessor with
+                            | Some (EstablishedTrue establishedCondition)
+                                when establishedCondition = condition ->
+                                Jump trueLabel
+                            | Some (EstablishedFalse establishedCondition)
+                                when establishedCondition = condition ->
+                                Jump falseLabel
+                            | _ -> block.Terminator
+                        | None ->
+                            Crash.crash $"Missing predecessor block {predecessorLabel} for {label}"
+                    | _ -> block.Terminator
+
+            let changed' = changedAcc || term' <> block.Terminator
+            (Map.add label { block with Terminator = term' } acc, changed')
+        ) (Map.empty, false)
+
+    ({ cfg with Blocks = blocks' }, changed)
+
+/// Remove unreachable blocks and trim phi sources from removed predecessor edges.
 let eliminateUnreachableBlocks (cfg: CFG) : CFG * bool =
     let succs = buildSuccessors cfg
 
@@ -1053,17 +1103,27 @@ let eliminateUnreachableBlocks (cfg: CFG) : CFG * bool =
         cfg.Blocks
         |> Map.filter (fun label _ -> Set.contains label reachable)
 
+    let reachablePredecessors =
+        buildPredecessors { cfg with Blocks = reachableBlocks }
+
     let (blocks', phiChanged) =
         reachableBlocks
         |> Map.fold (fun (acc, ch) label block ->
+            let actualPredecessors =
+                Map.tryFind label reachablePredecessors
+                |> Option.defaultValue []
+                |> Set.ofList
+
             let (instrs', instrChanged) =
                 block.Instrs
                 |> List.fold (fun (acc', ch') instr ->
                     match instr with
                     | Phi (dest, sources, valueType) ->
-                        let sources' = sources |> List.filter (fun (_, srcLabel) -> Set.contains srcLabel reachable)
+                        let sources' =
+                            sources
+                            |> List.filter (fun (_, srcLabel) -> Set.contains srcLabel actualPredecessors)
                         if List.isEmpty sources' then
-                            Crash.crash $"Phi in {label} has no reachable sources after CFG prune"
+                            Crash.crash $"Phi in {label} has no predecessor sources after CFG prune"
                         let instr' = Phi (dest, sources', valueType)
                         (instr' :: acc', ch' || sources' <> sources)
                     | _ ->
@@ -1409,13 +1469,15 @@ let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
     let (cfg7, changed7) =
         if options.EnableCFGSimplify then simplifyConstantBranches cfg6 else (cfg6, false)
     let (cfg8, changed8) =
-        if options.EnableCFGSimplify then eliminateUnreachableBlocks cfg7 else (cfg7, false)
+        if options.EnableCFGSimplify then simplifyBranchesKnownFromPredecessor cfg7 else (cfg7, false)
     let (cfg9, changed9) =
-        if options.EnableCFGSimplify then simplifyRetPhiJoins cfg8 else (cfg8, false)
+        if options.EnableCFGSimplify then eliminateUnreachableBlocks cfg8 else (cfg8, false)
     let (cfg10, changed10) =
-        if options.EnableCFGSimplify then simplifyEmptyBlocks cfg9 else (cfg9, false)
-    let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10
-    (cfg10, changed)
+        if options.EnableCFGSimplify then simplifyRetPhiJoins cfg9 else (cfg9, false)
+    let (cfg11, changed11) =
+        if options.EnableCFGSimplify then simplifyEmptyBlocks cfg10 else (cfg10, false)
+    let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11
+    (cfg11, changed)
 
 /// Run all optimizations until fixed point
 let optimizeCFGWithOptions (options: OptimizeOptions) (cfg: CFG) : CFG =

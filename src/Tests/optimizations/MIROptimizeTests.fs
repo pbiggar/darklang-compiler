@@ -552,6 +552,131 @@ let testSameTargetBranchBecomesJumpAndDropsCondition () : TestResult =
             )
         Error $"Expected same-target branch to become a jump and its dead condition to be removed.\nActual:\n{actual}"
 
+type private EstablishedEdge =
+    | TrueEdge
+    | FalseEdge
+
+let private basicBlock label instrs terminator : BasicBlock = {
+    Label = label
+    Instrs = instrs
+    Terminator = terminator
+}
+
+let private expectRedundantSuccessorBranchEliminated
+    (edge: EstablishedEdge)
+    : TestResult =
+    let entry = Label "entry"
+    let successor = Label "successor"
+    let sibling = Label "sibling"
+    let trueResult = Label "true_result"
+    let falseResult = Label "false_result"
+
+    let (entryTerminator, expectedSuccessorTerminator) =
+        match edge with
+        | TrueEdge ->
+            (Branch (Register (VReg 0), successor, sibling), Jump trueResult)
+        | FalseEdge ->
+            (Branch (Register (VReg 0), sibling, successor), Jump falseResult)
+
+    let before: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, basicBlock entry [] entryTerminator)
+                (successor, basicBlock successor [] (Branch (Register (VReg 0), trueResult, falseResult)))
+                (sibling, basicBlock sibling [] (Ret (Int64Const 2L)))
+                (trueResult, basicBlock trueResult [] (Ret (Int64Const 1L)))
+                (falseResult, basicBlock falseResult [] (Ret (Int64Const 0L)))
+            ]
+    }
+
+    let (after, changed) = simplifyBranchesKnownFromPredecessor before
+    match Map.tryFind successor after.Blocks with
+    | Some block when changed && block.Terminator = expectedSuccessorTerminator -> Ok ()
+    | _ -> Error $"Expected successor terminator {expectedSuccessorTerminator} after simplifying {edge}"
+
+let testTrueEdgeEliminatesRedundantSuccessorBranch () : TestResult =
+    expectRedundantSuccessorBranchEliminated TrueEdge
+
+let testFalseEdgeEliminatesRedundantSuccessorBranch () : TestResult =
+    expectRedundantSuccessorBranchEliminated FalseEdge
+
+let testMultiplePredecessorsKeepRepeatedSuccessorBranch () : TestResult =
+    let entry = Label "entry"
+    let alternate = Label "alternate"
+    let successor = Label "successor"
+    let trueResult = Label "true_result"
+    let falseResult = Label "false_result"
+
+    let cfg: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, basicBlock entry [] (Branch (Register (VReg 0), successor, alternate)))
+                (alternate, basicBlock alternate [] (Jump successor))
+                (successor, basicBlock successor [] (Branch (Register (VReg 0), trueResult, falseResult)))
+                (trueResult, basicBlock trueResult [] (Ret (Int64Const 1L)))
+                (falseResult, basicBlock falseResult [] (Ret (Int64Const 0L)))
+            ]
+    }
+
+    let (optimized, changed) = simplifyBranchesKnownFromPredecessor cfg
+    if not changed && optimized = cfg then
+        Ok ()
+    else
+        let func = {
+            Name = "multiple_predecessor_branch"
+            TypedParams = [{ Reg = VReg 0; Type = AST.TBool }]
+            ReturnType = AST.TInt64
+            CFG = optimized
+            FloatRegs = Set.empty
+        }
+        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
+        Error $"Expected a repeated condition with multiple predecessor edges to remain.\nActual:\n{actual}"
+
+let testRedundantSuccessorBranchTrimsRemovedPhiEdge () : TestResult =
+    let entry = Label "entry"
+    let successor = Label "successor"
+    let sibling = Label "sibling"
+    let kept = Label "kept"
+    let join = Label "join"
+
+    let joinPhi =
+        Phi (
+            VReg 1,
+            [
+                (Int64Const 10L, successor)
+                (Int64Const 20L, sibling)
+                (Int64Const 30L, kept)
+            ],
+            Some AST.TInt64
+        )
+
+    let cfg: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, basicBlock entry [] (Branch (Register (VReg 0), successor, sibling)))
+                (successor, basicBlock successor [] (Branch (Register (VReg 0), kept, join)))
+                (sibling, basicBlock sibling [] (Jump join))
+                (kept, basicBlock kept [] (Jump join))
+                (join, basicBlock join [joinPhi] (Ret (Register (VReg 1))))
+            ]
+    }
+
+    let (simplified, branchChanged) = simplifyBranchesKnownFromPredecessor cfg
+    let (trimmed, phiChanged) = eliminateUnreachableBlocks simplified
+    match Map.tryFind join trimmed.Blocks with
+    | Some joinBlock ->
+        match joinBlock.Instrs with
+        | [Phi (_, sources, _)] ->
+            let sourceLabels = sources |> List.map snd |> Set.ofList
+            let expectedLabels = Set.ofList [sibling; kept]
+            if branchChanged && phiChanged && sourceLabels = expectedLabels then Ok ()
+            else Error $"Expected phi sources {expectedLabels}, got {sourceLabels}"
+        | _ -> Error "Expected the join block to retain one phi instruction"
+    | None -> Error "Expected the reachable join block to remain"
+
 let testSelfComparisonFoldingRequiresConcreteSafeType () : TestResult =
     let sameOperand = Register (VReg 0)
 
@@ -611,6 +736,10 @@ let tests = [
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
     ("MIR empty block removal rewrites phi source to predecessor", testEmptyBlockRemovalRewritesPhiSourceToPredecessor)
     ("MIR same-target branch becomes jump and drops condition", testSameTargetBranchBecomesJumpAndDropsCondition)
+    ("MIR true edge eliminates redundant successor branch", testTrueEdgeEliminatesRedundantSuccessorBranch)
+    ("MIR false edge eliminates redundant successor branch", testFalseEdgeEliminatesRedundantSuccessorBranch)
+    ("MIR multiple predecessors keep repeated successor branch", testMultiplePredecessorsKeepRepeatedSuccessorBranch)
+    ("MIR redundant successor branch trims removed phi edge", testRedundantSuccessorBranchTrimsRemovedPhiEdge)
     ("MIR self-comparison folding requires concrete safe type", testSelfComparisonFoldingRequiresConcreteSafeType)
     ("MIR self-comparison folding requires same register", testSelfComparisonFoldingRequiresSameRegister)
 ]

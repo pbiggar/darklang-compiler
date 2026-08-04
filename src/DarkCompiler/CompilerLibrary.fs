@@ -254,6 +254,8 @@ let private compileMirToLir
             ssaProgram
     let mirOptElapsed = sw.Elapsed.TotalMilliseconds - mirOptStart
     recordPassTiming passTimingRecorder "MIR Optimizations" mirOptElapsed
+    if shouldDumpIR verbosity options.DumpMIR then
+        printMIRProgram "=== MIR (Control Flow Graph) ===" optimizedProgram
     if verbosity >= 2 then
         let t = System.Math.Round(mirOptElapsed, 1)
         println $"        {t}ms"
@@ -340,8 +342,6 @@ let private lowerToAllocatedLir
                 let mirProgram = MIR.Program (mirFuncs, variantRegistry, mirRecordRegistry)
                 let mirElapsed = sw.Elapsed.TotalMilliseconds - mirStart
                 recordPassTiming passTimingRecorder "ANF -> MIR" mirElapsed
-                if shouldDumpIR verbosity options.DumpMIR then
-                    printMIRProgram "=== MIR (Control Flow Graph) ===" mirProgram
                 if verbosity >= 2 then
                     let t = System.Math.Round(mirElapsed, 1)
                     println $"        {t}ms"

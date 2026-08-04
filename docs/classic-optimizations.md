@@ -506,6 +506,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical CFG simplification that makes an unconditional successor explicit and allows dead-code elimination to remove a now-unused condition computation.
 - Notes: Implemented for MIR `Branch (cond, target, target) -> Jump target` in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`. Covered by `testSameTargetBranchBecomesJumpAndDropsCondition` in `src/Tests/optimizations/MIROptimizeTests.fs`, which checks both the terminator rewrite and removal of the dead condition at the optimizer fixpoint. The routine benchmark profile retained every recorded instruction count, so measured improvement/loss is 0%; direct source-level identical branches are already removed in ANF, making synthetic MIR coverage the focused exercise for this CFG shape.
 
+### Redundant successor branch elimination
+
+- Optimization name: Redundant successor branch elimination
+- Taxonomy category: Control-flow simplification
+- Priority/rationale: Small, canonical jump-threading step that removes a branch when the same SSA Boolean condition is already established by the block's sole predecessor edge.
+- Notes: Implemented for both true and false predecessor edges in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`, with exact-register, sole-edge, and non-entry safety gates. Direct CFG tests in `src/Tests/optimizations/MIROptimizeTests.fs` cover both edge polarities and `redundant_successor_branch_elimination` in `src/Tests/optimization/mir.opt` records the source-to-optimized-MIR result; `--dump-mir` now exposes that post-optimization IR. The targeted `successor_branch` benchmark exercises the pattern in a hot loop and records 9,000,109 Dark instructions after optimization. The routine profile retained every recorded instruction count, so measured improvement/loss is 0%; performance ratio remains 8.14x.
+
 ## Common subexpression elimination
 
 ### Commutative ANF CSE

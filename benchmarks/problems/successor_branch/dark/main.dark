@@ -1,0 +1,14 @@
+// Exercises repeated successor conditions in a hot tail-recursive loop.
+
+def choose(condition: Bool) : Int64 =
+    if condition then
+        if condition then 1 else 0
+    else 0
+
+def repeat(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else
+        let condition = (n & 1) == 0 in
+        repeat(n - 1, acc + choose(condition))
+
+repeat(1000000, 0)
