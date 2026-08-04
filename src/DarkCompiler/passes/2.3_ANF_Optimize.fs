@@ -792,6 +792,7 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                 Some (Atom (BoolLiteral true))
             | IfValue (BoolLiteral true, thenVal, _) -> Some (Atom thenVal)
             | IfValue (BoolLiteral false, _, elseVal) -> Some (Atom elseVal)
+            | IfValue (_, thenVal, elseVal) when thenVal = elseVal -> Some (Atom thenVal)
             | _ -> None
         else
             None

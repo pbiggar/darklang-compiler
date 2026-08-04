@@ -1,0 +1,11 @@
+// Exercises elimination of an identical-arm value selection in a hot loop.
+
+def selectSame(value: Int64) : Int64 =
+    let condition = value % 2 == 0 in
+    (if condition then value else value) + 1
+
+def repeat(n: Int64, total: Int64) : Int64 =
+    if n <= 0 then total
+    else repeat(n - 1, total + selectSame(n))
+
+repeat(1000000, 0)

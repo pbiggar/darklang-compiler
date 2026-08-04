@@ -256,7 +256,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Identical if branch simplification
 - Taxonomy category: Algebraic simplification
 - Priority/rationale: Small, low-risk canonical control-flow simplification that removes a conditional when both optimized branches are syntactically identical.
-- Notes: Implemented for ANF `if cond then expr else expr -> expr` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_if_same_branches` in `src/Tests/optimization/anf.opt`; existing branch-heavy tests provide correctness coverage but do not isolate this micro-pattern.
+- Notes: Implemented for both full ANF `if cond then expr else expr -> expr` branches and atom-position `IfValue(cond, value, value) -> value` selections in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `identity_if_same_branches` and `identity_if_value_same_branches_drops_condition` in `src/Tests/optimization/anf.opt`; the latter also verifies dead-code elimination removes the unused condition computation. The durable full-size `benchmarks/problems/redundant_select` workload isolates the atom-position pattern in a hot loop because existing benchmarks do not: targeted measurement reduced Dark instructions from 9,000,151 to 8,000,151 (11.11%) and branches from 2,000,018 to 1,000,018. It is intentionally not enrolled in the quick suite because no x86_64 quick baseline was measured.
 
 ### Boolean literal if branch simplification
 
