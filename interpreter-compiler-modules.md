@@ -252,7 +252,7 @@ Dict                         | toList                              | ✅   | ❌
 Dict                         | values                              | ✅   | ❌
 Float                        | ParseError                          | ✅   | ❌
 Float                        | absoluteValue                       | ✅   | ❌
-Float                        | add                                 | ✅   | ❌
+Float                        | add                                 | ✅   | ✅
 Float                        | ceiling                             | ✅   | ❌
 Float                        | clamp                               | ✅   | ❌
 Float                        | divide                              | ✅   | ❌

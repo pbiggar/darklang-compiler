@@ -4,6 +4,8 @@
 
 // Stdlib.Float - Float operations
 
+def Stdlib.Float.add(a: Float, b: Float) : Float = a + b
+
 def Stdlib.Float.multiply(a: Float, b: Float) : Float = a * b
 
 // Get IEEE 754 bit representation of Float as UInt64 (intrinsic)

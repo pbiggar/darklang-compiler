@@ -1,5 +1,8 @@
 // Stdlib.Float tests
 
+// Float.add - IEEE 754 addition
+Float.add(1.2, 1.3) = 2.5
+
 // sqrt - now with full precision
 Float.sqrt(4.0) = 2.0
 Float.sqrt(9.0) = 3.0
