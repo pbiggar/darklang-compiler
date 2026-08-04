@@ -5,6 +5,7 @@
 # Compiler: 3433aa6 (x64 branch)
 ackermann=3095259
 binary_trees=250899
+bitwise_absorption=90074
 collatz=640614
 edigits=7390968
 factorial=48158

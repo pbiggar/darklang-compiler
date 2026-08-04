@@ -139,6 +139,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that removes redundant bitwise operations in ANF before backend lowering.
 - Notes: Implemented for `x & x -> x` and `x ||| x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Phase 2 sandbox trial. Covered by `identity_bitand_self` and `identity_bitor_self` in `src/Tests/optimization/anf.opt`.
 
+### Bitwise absorption simplification
+
+- Optimization name: Bitwise absorption simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical integer simplification that removes two redundant adjacent ANF bitwise operations from common masking expressions.
+- Notes: Implemented for adjacent ANF forms of `x & (x ||| y) -> x` and `x ||| (x & y) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `identity_bitand_absorption` and `identity_bitor_absorption` in `src/Tests/optimization/anf.opt`; `benchmarks/problems/bitwise_absorption` isolates both patterns in a hot loop and measured 7,000,074 instructions versus 10,000,074 with ANF optimization disabled.
+
 ### Bitwise zero identity simplification
 
 - Optimization name: Bitwise zero identity simplification

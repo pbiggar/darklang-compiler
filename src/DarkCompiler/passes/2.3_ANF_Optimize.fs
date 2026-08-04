@@ -859,6 +859,22 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
         when nestedTid = tid ->
         tryAbsorbedAtom outer nestedLeft nestedRight
         |> Option.map (fun absorbed -> Let (orTid, Atom absorbed, orBody))
+    | Prim (BitOr, nestedLeft, nestedRight), Let (andTid, Prim (BitAnd, outer, Var nestedTid), andBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (andTid, Atom absorbed, andBody))
+    | Prim (BitOr, nestedLeft, nestedRight), Let (andTid, Prim (BitAnd, Var nestedTid, outer), andBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (andTid, Atom absorbed, andBody))
+    | Prim (BitAnd, nestedLeft, nestedRight), Let (orTid, Prim (BitOr, outer, Var nestedTid), orBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (orTid, Atom absorbed, orBody))
+    | Prim (BitAnd, nestedLeft, nestedRight), Let (orTid, Prim (BitOr, Var nestedTid, outer), orBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (orTid, Atom absorbed, orBody))
     | _ -> None
 
 let private trySimplifyBoolComplement (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =

@@ -4,6 +4,7 @@
 # Compiler: 71a6a274
 ackermann=2750785
 binary_trees=240651
+bitwise_absorption=70073
 collatz=463558
 edigits=7140021
 factorial=44403

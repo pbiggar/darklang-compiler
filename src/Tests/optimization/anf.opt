@@ -1036,6 +1036,22 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+identity_bitand_absorption
+---INPUT---
+def f(x: Int64, y: Int64) : Int64 = x & (x ||| y)
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bitor_absorption
+---INPUT---
+def f(x: Int64, y: Int64) : Int64 = x ||| (x & y)
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 identity_bitand_zero_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & 0
