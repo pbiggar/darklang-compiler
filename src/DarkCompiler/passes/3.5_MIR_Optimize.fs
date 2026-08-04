@@ -744,9 +744,16 @@ let resolveCopy (copies: CopyMap) (op: Operand) : Operand =
         | _ -> op'
     resolve Set.empty op
 
+/// Resolve every copy destination once so operand propagation only needs one lookup.
+let resolveCopyMap (copies: CopyMap) : CopyMap =
+    copies
+    |> Map.map (fun dest _ -> resolveCopy copies (Register dest))
+
 /// Apply copy propagation to an operand
 let propagateCopyOperand (copies: CopyMap) (op: Operand) : Operand =
-    resolveCopy copies op
+    match op with
+    | Register vreg -> Map.tryFind vreg copies |> Option.defaultValue op
+    | _ -> op
 
 /// Apply copy propagation to an instruction
 let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
@@ -828,7 +835,7 @@ let propagateCopyTerminator (copies: CopyMap) (term: Terminator) : Terminator =
 
 /// Apply copy propagation to CFG
 let applyCopyPropagation (cfg: CFG) : CFG * bool =
-    let copies = buildCopyMap cfg
+    let copies = buildCopyMap cfg |> resolveCopyMap
 
     if Map.isEmpty copies then
         (cfg, false)
