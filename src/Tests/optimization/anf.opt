@@ -1002,6 +1002,35 @@ let TempId 3 = f(true)
 return t3
 
 ---NAME---
+negated_integer_comparison_uses_complement
+---INPUT---
+def f(left: Int64, right: Int64) : Bool = !(left < right)
+f(1, 2)
+---EXPECTED---
+Function f:
+let TempId 3 = t0 >= t1
+return t3
+
+Main:
+let TempId 4 = f(1, 2)
+return t4
+
+---NAME---
+negated_float_comparison_preserves_nan_semantics
+---INPUT---
+def f(left: Float, right: Float) : Bool = !(left < right)
+f(1.0, 2.0)
+---EXPECTED---
+Function f:
+let TempId 2 = t0 < t1
+let TempId 3 = !t2
+return t3
+
+Main:
+let TempId 4 = f(1, 2)
+return t4
+
+---NAME---
 self_comparison_uint64_eq
 ---INPUT---
 def f(x: UInt64) : Bool = x == x

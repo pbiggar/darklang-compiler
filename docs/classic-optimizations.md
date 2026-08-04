@@ -272,6 +272,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical control-flow simplification that removes a single-use Boolean negation and exposes the original condition directly to later passes.
 - Notes: Implemented for adjacent ANF `let negated = !cond in if negated then a else b -> if cond then b else a`, only when `negated` is absent from both branches. Covered by `branch_on_single_use_bool_negation` and `branch_on_reused_bool_negation_not_rewritten` in `src/Tests/optimization/anf.opt`; existing branch-heavy benchmarks provide regression coverage but do not isolate this micro-pattern.
 
+### Negated integer comparison simplification
+
+- Optimization name: Negated integer comparison simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical instruction combination that removes a single-use Boolean negation after an ordered integer comparison.
+- Notes: Implemented for adjacent ANF integer comparisons followed by Boolean negation, using `== <-> !=`, `< <-> >=`, `> <-> <=`, and their reverse complements in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Floating-point comparisons remain unchanged because complementary ordered relations are not equivalent for NaN operands. Covered by positive Int64 and negative Float snapshots in `src/Tests/optimization/anf.opt`. The routine profile retained every recorded instruction count (0% improvement/loss; performance ratio 7.84x); a focused integer range-classification loop using negated runtime comparisons is the identified follow-up benchmark because current workloads do not isolate this micro-pattern.
+
 ### Bitwise all-ones identity simplification
 
 - Optimization name: Bitwise all-ones identity simplification

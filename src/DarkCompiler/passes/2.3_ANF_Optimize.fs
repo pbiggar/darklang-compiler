@@ -940,6 +940,16 @@ let private tryHoistSharedLeadingBranchBinding
             Some (Let (thenTid, thenCExpr, Let (condTid, condCExpr, conditional)))
         | _ -> None
 
+let private tryComplementIntegerComparison (op: BinOp) : BinOp option =
+    match op with
+    | Eq -> Some Neq
+    | Neq -> Some Eq
+    | Lt -> Some Gte
+    | Gt -> Some Lte
+    | Lte -> Some Gt
+    | Gte -> Some Lt
+    | _ -> None
+
 let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
     | UnaryPrim (Not, source), If (Var conditionTid, thenBranch, elseBranch)
@@ -947,6 +957,15 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
              && not (aExprUsesTemp tid thenBranch)
              && not (aExprUsesTemp tid elseBranch) ->
         Some (If (source, elseBranch, thenBranch))
+    | Prim (op, left, right), Let (notTid, UnaryPrim (Not, Var sourceTid), notBody)
+        when sourceTid = tid
+             && isIntegerAtom typeEnv left
+             && isIntegerAtom typeEnv right
+             && not (aExprUsesTemp tid notBody) ->
+        // Ordered integer comparisons have exact complements. Float relations
+        // do not: both x < NaN and x >= NaN are false.
+        tryComplementIntegerComparison op
+        |> Option.map (fun complement -> Let (notTid, Prim (complement, left, right), notBody))
     | Prim (Add, source, IntLiteral (Int64 a)),
       Let (addTid, Prim (Add, Var sourceTid, IntLiteral (Int64 b)), addBody)
         when sourceTid = tid ->
