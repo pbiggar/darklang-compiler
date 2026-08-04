@@ -4,6 +4,6 @@
   "name": "Benchmark fixer",
   "autonomyLevel": "Guided",
   "enabled": true,
-  "purpose": "Getting benchmark functionality parity",
-  "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve."
+  "purpose": "Achieving benchmark parity with obvious implementations and compiler optimizations",
+  "summary": "Selects one benchmark parity gap, preserves its straightforward implementation and workload, and fixes exposed compiler or runtime performance issues instead of working around them in benchmark code."
 }
