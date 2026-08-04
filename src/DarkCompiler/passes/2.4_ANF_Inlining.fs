@@ -61,6 +61,7 @@ type FunctionInfo = {
 type private FunctionAnalysis = {
     Calls: Set<string>
     Size: int
+    MaxTempId: int
     HasClosures: bool
     HasTailCalls: bool
 }
@@ -68,48 +69,55 @@ type private FunctionAnalysis = {
 let private emptyAnalysis = {
     Calls = Set.empty
     Size = 0
+    MaxTempId = 0
     HasClosures = false
     HasTailCalls = false
 }
 
 let rec private analyzeExpr (expr: AExpr) : FunctionAnalysis =
     match expr with
-    | Let (_, cexpr, body) ->
+    | Let (TempId tempId, cexpr, body) ->
         let bodyAnalysis = analyzeExpr body
+        let letAnalysis =
+            { bodyAnalysis with
+                Size = bodyAnalysis.Size + 1
+                MaxTempId = max tempId bodyAnalysis.MaxTempId }
         match cexpr with
         | Call (name, _)
         | BorrowedCall (name, _) ->
-            { bodyAnalysis with
-                Calls = Set.add name bodyAnalysis.Calls
-                Size = bodyAnalysis.Size + 1 }
+            { letAnalysis with Calls = Set.add name letAnalysis.Calls }
         | TailCall (name, _) ->
-            { bodyAnalysis with
-                Calls = Set.add name bodyAnalysis.Calls
-                Size = bodyAnalysis.Size + 1
+            { letAnalysis with
+                Calls = Set.add name letAnalysis.Calls
                 HasTailCalls = true }
         | ClosureTailCall _ ->
-            { bodyAnalysis with
-                Size = bodyAnalysis.Size + 1
+            { letAnalysis with
                 HasClosures = true
                 HasTailCalls = true }
         | IndirectTailCall _ ->
-            { bodyAnalysis with
-                Size = bodyAnalysis.Size + 1
-                HasTailCalls = true }
+            { letAnalysis with HasTailCalls = true }
         | ClosureAlloc _
         | ClosureCall _ ->
-            { bodyAnalysis with
-                Size = bodyAnalysis.Size + 1
-                HasClosures = true }
-        | _ ->
-            { bodyAnalysis with Size = bodyAnalysis.Size + 1 }
-    | Return _ -> emptyAnalysis
-    | If (_, thenBranch, elseBranch) ->
+            { letAnalysis with HasClosures = true }
+        | _ -> letAnalysis
+    | Return (Var (TempId tempId)) ->
+        { emptyAnalysis with MaxTempId = tempId }
+    | Return _ ->
+        emptyAnalysis
+    | If (condition, thenBranch, elseBranch) ->
         let thenAnalysis = analyzeExpr thenBranch
         let elseAnalysis = analyzeExpr elseBranch
+        let conditionMaxTempId =
+            match condition with
+            | Var (TempId tempId) -> tempId
+            | _ -> 0
         {
             Calls = Set.union thenAnalysis.Calls elseAnalysis.Calls
             Size = thenAnalysis.Size + elseAnalysis.Size
+            MaxTempId =
+                max
+                    conditionMaxTempId
+                    (max thenAnalysis.MaxTempId elseAnalysis.MaxTempId)
             HasClosures = thenAnalysis.HasClosures || elseAnalysis.HasClosures
             HasTailCalls = thenAnalysis.HasTailCalls || elseAnalysis.HasTailCalls
         }
@@ -232,18 +240,37 @@ let private buildFunctionInfo
         IsExternal = false
     }
 
-/// Build function info map for all functions
-let buildFunctionInfoMap (funcs: Function list) : Map<string, FunctionInfo> =
+/// Analyze all functions once, building the inlining map while also finding the
+/// highest TempId needed to initialize the inliner's fresh-variable generator.
+let private buildFunctionInfoMapAndMaxTempId
+    (funcs: Function list)
+    : Map<string, FunctionInfo> * int =
     let analyzedFuncs = funcs |> List.map (fun func -> (func, analyzeExpr func.Body))
     let callGraph =
         analyzedFuncs
         |> List.map (fun (func, analysis) -> (func.Name, analysis.Calls))
         |> Map.ofList
     let recursiveFuncs = findRecursiveFunctions funcs callGraph
-    analyzedFuncs
-    |> List.map (fun (func, analysis) ->
-        (func.Name, buildFunctionInfo recursiveFuncs func analysis))
-    |> Map.ofList
+    let infoMap =
+        analyzedFuncs
+        |> List.map (fun (func, analysis) ->
+            (func.Name, buildFunctionInfo recursiveFuncs func analysis))
+        |> Map.ofList
+    let maxTempId =
+        analyzedFuncs
+        |> List.fold (fun programMaxTempId (func, analysis) ->
+            let functionMaxTempId =
+                func.TypedParams
+                |> List.fold (fun currentMax param ->
+                    let (TempId tempId) = param.Id
+                    max currentMax tempId) analysis.MaxTempId
+            max programMaxTempId functionMaxTempId
+        ) 0
+    (infoMap, maxTempId)
+
+/// Build function info map for all functions
+let buildFunctionInfoMap (funcs: Function list) : Map<string, FunctionInfo> =
+    buildFunctionInfoMapAndMaxTempId funcs |> fst
 
 // ============================================================================
 // Phase 2: TempId Renaming - Avoid variable conflicts when inlining
@@ -508,27 +535,6 @@ let inlineInFunction (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
     let (body', varGen') = inlineInExpr funcs config 0 varGen func.Body
     ({ func with Body = body' }, varGen')
 
-/// Find the maximum TempId used in an expression
-let rec maxTempId (expr: AExpr) : int =
-    match expr with
-    | Let (TempId n, _, body) -> max n (maxTempId body)
-    | Return (Var (TempId n)) -> n
-    | Return _ -> 0
-    | If (Var (TempId n), thenBranch, elseBranch) ->
-        max n (max (maxTempId thenBranch) (maxTempId elseBranch))
-    | If (_, thenBranch, elseBranch) ->
-        max (maxTempId thenBranch) (maxTempId elseBranch)
-
-/// Find the maximum TempId in a function
-let maxTempIdInFunction (func: Function) : int =
-    let paramMax = func.TypedParams |> List.map (fun p -> let (TempId n) = p.Id in n) |> List.fold max 0
-    max paramMax (maxTempId func.Body)
-
-/// Find the maximum TempId in a program
-let maxTempIdInProgram (Program (funcs, main)) : int =
-    let funcMax = funcs |> List.map maxTempIdInFunction |> List.fold max 0
-    max funcMax (maxTempId main)
-
 // ============================================================================
 // Phase 4: Main entry point
 // ============================================================================
@@ -542,10 +548,11 @@ let inlineProgramWithExternalCandidates
     : Program =
     let (Program (funcs, main)) = program
 
-    let localInfoMap = buildFunctionInfoMap funcs
+    let (localInfoMap, localMaxTempId) = buildFunctionInfoMapAndMaxTempId funcs
+    let mainAnalysis = analyzeExpr main
     let calledNames =
         localInfoMap
-        |> Map.fold (fun acc _ info -> Set.union acc info.Calls) (analyzeExpr main).Calls
+        |> Map.fold (fun acc _ info -> Set.union acc info.Calls) mainAnalysis.Calls
 
     let externalCandidatesCalledByProgram =
         externalCandidates
@@ -565,8 +572,8 @@ let inlineProgramWithExternalCandidates
         else
             localInfoMap
 
-    // Find starting VarGen value (must be higher than any existing TempId)
-    let startVarGen = VarGen (maxTempIdInProgram program + 1)
+    // Start above every existing TempId, collected during inlining analysis.
+    let startVarGen = VarGen (max localMaxTempId mainAnalysis.MaxTempId + 1)
 
     // Inline in each function (single pass for now)
     let (funcs', varGen') =
