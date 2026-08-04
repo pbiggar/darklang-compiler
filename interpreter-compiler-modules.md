@@ -692,7 +692,7 @@ Result                       | map5                                | ✅   | ❌
 Result                       | mapError                            | ✅   | ❌
 Result                       | mapWithDefault                      | ✅   | ❌
 Result                       | or                                  | ✅   | ❌
-Result                       | toList                              | ✅   | ❌
+Result                       | toList                              | ✅   | ✅
 Result                       | toOption                            | ✅   | ❌
 Result                       | values                              | ✅   | ❌
 Result                       | withDefault                         | ✅   | ❌

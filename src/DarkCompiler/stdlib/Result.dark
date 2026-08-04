@@ -17,6 +17,12 @@ def Stdlib.Result.isError<t, e>(result: Stdlib.Result.Result<t, e>) : Bool =
     | Ok(_) -> false
     | Error(_) -> true
 
+// Convert Ok to a single-element list and Error to an empty list
+def Stdlib.Result.toList<t, e>(result: Stdlib.Result.Result<t, e>) : List<t> =
+    match result with
+    | Ok(v) -> [v]
+    | Error(_) -> []
+
 // Get the Ok value or return a default
 def Stdlib.Result.withDefault<t, e>(result: Stdlib.Result.Result<t, e>, default: t) : t =
     match result with

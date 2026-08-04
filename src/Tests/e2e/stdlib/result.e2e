@@ -23,6 +23,13 @@ Result.isError(Result.Ok(5)) = false
 Result.isError(Result.Error(99)) = true
 
 // ===================================================================
+// Result.toList - Convert Ok to a singleton list and Error to an empty list
+// ===================================================================
+
+Result.toList<String, String>(Result.Ok("test")) = ["test"]
+Result.toList<String, String>(Result.Error("test")) = []
+
+// ===================================================================
 // Result.withDefault - Returns the value or a default
 // ===================================================================
 
