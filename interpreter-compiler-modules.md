@@ -760,7 +760,7 @@ Tuple2                       | mapBoth                             | ✅   | ❌
 Tuple2                       | mapFirst                            | ✅   | ❌
 Tuple2                       | mapSecond                           | ✅   | ❌
 Tuple2                       | second                              | ✅   | ❌
-Tuple2                       | swap                                | ✅   | ❌
+Tuple2                       | swap                                | ✅   | ✅
 Tuple3                       | create                              | ✅   | ✅
 Tuple3                       | first                               | ✅   | ✅
 Tuple3                       | mapAllThree                         | ✅   | ✅
