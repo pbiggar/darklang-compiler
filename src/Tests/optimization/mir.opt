@@ -57,8 +57,6 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
-  pick_body:
     ret 1
 
 ---NAME---
@@ -69,13 +67,11 @@ def choose(cond: Bool) : Int64 =
 ---EXPECTED---
 Function choose:
   choose_entry:
-    jump choose_body
+    branch v0 ? choose_L3 : choose_L1
   choose_L1:
     ret 3
-  choose_L5:
+  choose_L3:
     ret 1
-  choose_body:
-    branch v0 ? choose_L5 : choose_L1
 
 ---NAME---
 const_branch_elimination_self_eq
@@ -85,8 +81,6 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
-  pick_body:
     ret 1
 
 ---NAME---
@@ -97,8 +91,6 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
-  pick_body:
     ret 2
 
 ---NAME---
@@ -109,8 +101,6 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
-  pick_body:
     ret 2
 
 ---NAME---
@@ -121,8 +111,6 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
-  pick_body:
     ret 2
 
 ---NAME---
@@ -133,8 +121,6 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
-  pick_body:
     ret 1
 
 ---NAME---
@@ -145,8 +131,6 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
-  pick_body:
     ret 1
 
 ---NAME---
@@ -157,14 +141,12 @@ def pick(n: Float) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
+    v10002 <- v0 == v0 : TFloat64
+    branch v10002 ? pick_L0 : pick_L1
   pick_L0:
     ret 1
   pick_L1:
     ret 2
-  pick_body:
-    v10002 <- v0 == v0 : TFloat64
-    branch v10002 ? pick_L0 : pick_L1
 
 ---NAME---
 self_eq_shadowed_vars_not_folded
@@ -176,15 +158,13 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_body
+    v10005 <- v0 + 1 : TInt64
+    v10006 <- v10005 == v0 : TInt64
+    branch v10006 ? pick_L0 : pick_L1
   pick_L0:
     ret 1
   pick_L1:
     ret 2
-  pick_body:
-    v10005 <- v0 + 1 : TInt64
-    v10006 <- v10005 == v0 : TInt64
-    branch v10006 ? pick_L0 : pick_L1
 
 ---NAME---
 self_division_not_folded
@@ -194,8 +174,6 @@ def divideSelf(n: Int64) : Int64 =
 ---EXPECTED---
 Function divideSelf:
   divideSelf_entry:
-    jump divideSelf_body
-  divideSelf_body:
     v10001 <- v0 / v0 : TInt64
     ret v10001
 

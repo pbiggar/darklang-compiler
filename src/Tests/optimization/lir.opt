@@ -78,12 +78,10 @@ def loop(n: Int64, acc: Int64) : Int64 =
 helper:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "helper_body":
+  Label "helper_entry":
     v10049 <- Add(v0, Imm 25)
     X0 <- Mov(Reg v10049)
     Ret
-  Label "helper_entry":
-    Jump(Label "helper_body")
 
 loop:
   StackSize: 0
@@ -119,9 +117,7 @@ def multiplySubtract(minuend: Int64, left: Int64, right: Int64) : Int64 =
 multiplySubtract:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "multiplySubtract_body":
+  Label "multiplySubtract_entry":
     v10005 <- Msub(v1, v2, v0)
     X0 <- Mov(Reg v10005)
     Ret
-  Label "multiplySubtract_entry":
-    Jump(Label "multiplySubtract_body")

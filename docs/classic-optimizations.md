@@ -520,6 +520,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, canonical jump-threading step that removes a branch when the same SSA Boolean condition is already established by the block's sole predecessor edge.
 - Notes: Implemented for both true and false predecessor edges in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`, with exact-register, sole-edge, and non-entry safety gates. Direct CFG tests in `src/Tests/optimizations/MIROptimizeTests.fs` cover both edge polarities and `redundant_successor_branch_elimination` in `src/Tests/optimization/mir.opt` records the source-to-optimized-MIR result; `--dump-mir` now exposes that post-optimization IR. The targeted `successor_branch` benchmark exercises the pattern in a hot loop and records 9,000,109 Dark instructions after optimization. The routine profile retained every recorded instruction count, so measured improvement/loss is 0%; performance ratio remains 8.14x.
 
+### Linear basic-block merging
+
+- Optimization name: Linear basic-block merging
+- Taxonomy category: Control-flow simplification
+- Priority/rationale: Canonical CFG cleanup that removes unconditional jumps and exposes a combined instruction stream to existing block-local optimizations with low implementation risk.
+- Notes: Implemented for MIR blocks that jump to a non-entry successor with exactly one predecessor. Successor phis become typed copies and outgoing phi source labels are rewritten to the retained predecessor label. Direct MIR tests cover the structural before/after form, phi correctness, and newly exposed local CSE; MIR/LIR snapshots cover pipeline effects. The routine performance ratio improved from 7.99x to 7.84x with no benchmark regressions; `leibniz` improved from 1,100,000,144 to 1,000,000,143 instructions (9.09%), `factorial` improved from 4,420,203 to 4,030,203 (8.82%), and `fib` improved from 686,796,263 to 642,005,209 (6.52%).
+
 ## Common subexpression elimination
 
 ### Commutative ANF CSE

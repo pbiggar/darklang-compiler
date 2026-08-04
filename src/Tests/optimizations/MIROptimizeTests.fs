@@ -500,6 +500,130 @@ let testEmptyBlockRemovalRewritesPhiSourceToPredecessor () : TestResult =
     | None ->
         Error "Expected join block to remain after empty block removal"
 
+let testLinearBlockMergePreservesPhiSources () : TestResult =
+    let entry = Label "entry"
+    let body = Label "body"
+    let alternate = Label "alternate"
+    let join = Label "join"
+
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [BinOp (VReg 2, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)]
+        Terminator = Jump body
+    }
+
+    let bodyBlock: BasicBlock = {
+        Label = body
+        Instrs = [
+            Phi (VReg 3, [(Register (VReg 2), entry)], Some AST.TInt64)
+            BinOp (VReg 4, Add, Register (VReg 3), Int64Const 1L, AST.TInt64)
+        ]
+        Terminator = Jump join
+    }
+
+    let alternateBlock: BasicBlock = {
+        Label = alternate
+        Instrs = [Mov (VReg 5, Int64Const 0L, Some AST.TInt64)]
+        Terminator = Jump join
+    }
+
+    let joinBlock: BasicBlock = {
+        Label = join
+        Instrs = [
+            Phi (
+                VReg 6,
+                [(Register (VReg 4), body); (Register (VReg 5), alternate)],
+                Some AST.TInt64
+            )
+        ]
+        Terminator = Ret (Register (VReg 6))
+    }
+
+    let cfg: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, entryBlock)
+                (body, bodyBlock)
+                (alternate, alternateBlock)
+                (join, joinBlock)
+            ]
+    }
+
+    let (optimized, changed) = mergeLinearBlocks cfg
+    let expectedEntry = {
+        entryBlock with
+            Instrs =
+                entryBlock.Instrs
+                @ [
+                    Mov (VReg 3, Register (VReg 2), Some AST.TInt64)
+                    BinOp (VReg 4, Add, Register (VReg 3), Int64Const 1L, AST.TInt64)
+                ]
+            Terminator = Jump join
+    }
+    let expectedJoin = {
+        joinBlock with
+            Instrs = [
+                Phi (
+                    VReg 6,
+                    [(Register (VReg 4), entry); (Register (VReg 5), alternate)],
+                    Some AST.TInt64
+                )
+            ]
+    }
+
+    if changed
+       && not (Map.containsKey body optimized.Blocks)
+       && Map.tryFind entry optimized.Blocks = Some expectedEntry
+       && Map.tryFind join optimized.Blocks = Some expectedJoin then
+        Ok ()
+    else
+        let actual =
+            formatMIR (Program ([{ Name = "linear_phi"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
+        Error $"Expected linear block merge to preserve phi values and source labels.\nActual:\n{actual}"
+
+let testLinearBlockMergeExposesLocalCSE () : TestResult =
+    let entry = Label "entry"
+    let body = Label "body"
+    let firstAdd = BinOp (VReg 2, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [firstAdd]
+        Terminator = Jump body
+    }
+
+    let bodyBlock: BasicBlock = {
+        Label = body
+        Instrs = [
+            BinOp (VReg 3, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+            BinOp (VReg 4, Add, Register (VReg 2), Register (VReg 3), AST.TInt64)
+        ]
+        Terminator = Ret (Register (VReg 4))
+    }
+
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, entryBlock); (body, bodyBlock)]
+    }
+
+    let optimized = optimizeCFG cfg
+    let expectedBlock = {
+        entryBlock with
+            Instrs = [
+                firstAdd
+                BinOp (VReg 4, Add, Register (VReg 2), Register (VReg 2), AST.TInt64)
+            ]
+            Terminator = Ret (Register (VReg 4))
+    }
+
+    if optimized.Blocks = Map.ofList [(entry, expectedBlock)] then
+        Ok ()
+    else
+        let actual =
+            formatMIR (Program ([{ Name = "linear_cse"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
+        Error $"Expected linear block merge to expose duplicate expressions to local CSE.\nActual:\n{actual}"
+
 let testSameTargetBranchBecomesJumpAndDropsCondition () : TestResult =
     let entry = Label "entry"
     let target = Label "target"
@@ -531,7 +655,7 @@ let testSameTargetBranchBecomesJumpAndDropsCondition () : TestResult =
 
     let optimized = optimizeCFG cfg
     match Map.tryFind entry optimized.Blocks with
-    | Some block when block.Instrs = [] && block.Terminator = Jump target -> Ok ()
+    | Some block when block.Instrs = [] && block.Terminator = Ret (Int64Const 1L) && Map.count optimized.Blocks = 1 -> Ok ()
     | _ ->
         let actual =
             formatMIR (
@@ -735,6 +859,8 @@ let tests = [
     ("MIR optimize removes dead self-referential phi", testDceRemovesSelfReferentialDeadPhi)
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
     ("MIR empty block removal rewrites phi source to predecessor", testEmptyBlockRemovalRewritesPhiSourceToPredecessor)
+    ("MIR linear block merge preserves phi sources", testLinearBlockMergePreservesPhiSources)
+    ("MIR linear block merge exposes local CSE", testLinearBlockMergeExposesLocalCSE)
     ("MIR same-target branch becomes jump and drops condition", testSameTargetBranchBecomesJumpAndDropsCondition)
     ("MIR true edge eliminates redundant successor branch", testTrueEdgeEliminatesRedundantSuccessorBranch)
     ("MIR false edge eliminates redundant successor branch", testFalseEdgeEliminatesRedundantSuccessorBranch)

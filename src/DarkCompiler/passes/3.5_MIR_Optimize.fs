@@ -5,7 +5,7 @@
 // - Common subexpression elimination (CSE): reuse identical computations
 // - Copy propagation: eliminate trivial moves and phis
 // - Dead code elimination (DCE): remove unused instructions
-// - CFG simplification: fold constant branches, prune unreachable blocks, and remove empty jumps
+// - CFG simplification: fold branches, prune unreachable blocks, and merge linear blocks
 // - Loop-invariant code motion (LICM): hoist loop-invariant expressions
 //
 // These optimizations leverage SSA form where each variable is defined exactly once.
@@ -856,6 +856,78 @@ let applyCopyPropagation (cfg: CFG) : CFG * bool =
             ) (Map.empty, false)
         ({ cfg with Blocks = blocks' }, changed)
 
+/// Merge a block ending in an unconditional jump with its sole-predecessor
+/// successor. Successor phis become copies, while phi edges leaving the merged
+/// block are relabeled to preserve their predecessor identity.
+let mergeLinearBlocks (cfg: CFG) : CFG * bool =
+    let rec mergeNext (current: CFG) (changed: bool) : CFG * bool =
+        let predecessors = buildPredecessors current
+
+        let candidate =
+            current.Blocks
+            |> Map.toList
+            |> List.tryPick (fun (sourceLabel, sourceBlock) ->
+                match sourceBlock.Terminator with
+                | Jump successorLabel when successorLabel <> sourceLabel && successorLabel <> current.Entry ->
+                    match Map.tryFind successorLabel predecessors, Map.tryFind successorLabel current.Blocks with
+                    | Some [onlyPredecessor], Some successorBlock when onlyPredecessor = sourceLabel ->
+                        let hasValidPhis =
+                            successorBlock.Instrs
+                            |> List.forall (fun instr ->
+                                match instr with
+                                | Phi (_, [(_, phiSource)], _) -> phiSource = sourceLabel
+                                | Phi _ -> false
+                                | _ -> true)
+
+                        if hasValidPhis then
+                            Some (sourceLabel, sourceBlock, successorLabel, successorBlock)
+                        else
+                            None
+                    | _ -> None
+                | _ -> None)
+
+        match candidate with
+        | None -> (current, changed)
+        | Some (sourceLabel, sourceBlock, successorLabel, successorBlock) ->
+            let successorInstrs =
+                successorBlock.Instrs
+                |> List.map (fun instr ->
+                    match instr with
+                    | Phi (dest, [(operand, phiSource)], valueType) when phiSource = sourceLabel ->
+                        Mov (dest, operand, valueType)
+                    | Phi _ ->
+                        Crash.crash $"mergeLinearBlocks: invalid phi in sole-predecessor block {successorLabel}"
+                    | other -> other)
+
+            let mergedBlock = {
+                sourceBlock with
+                    Instrs = sourceBlock.Instrs @ successorInstrs
+                    Terminator = successorBlock.Terminator
+            }
+
+            let blocks =
+                current.Blocks
+                |> Map.remove successorLabel
+                |> Map.add sourceLabel mergedBlock
+                |> Map.map (fun _ block ->
+                    let instrs =
+                        block.Instrs
+                        |> List.map (fun instr ->
+                            match instr with
+                            | Phi (dest, sources, valueType) ->
+                                let sources' =
+                                    sources
+                                    |> List.map (fun (operand, phiSource) ->
+                                        if phiSource = successorLabel then (operand, sourceLabel)
+                                        else (operand, phiSource))
+                                Phi (dest, sources', valueType)
+                            | other -> other)
+                    { block with Instrs = instrs })
+
+            mergeNext { current with Blocks = blocks } true
+
+    mergeNext cfg false
+
 /// CFG Simplification: Remove empty blocks (just a jump)
 let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
     // Find blocks that only contain a Jump
@@ -1476,8 +1548,10 @@ let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
         if options.EnableCFGSimplify then simplifyRetPhiJoins cfg9 else (cfg9, false)
     let (cfg11, changed11) =
         if options.EnableCFGSimplify then simplifyEmptyBlocks cfg10 else (cfg10, false)
-    let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11
-    (cfg11, changed)
+    let (cfg12, changed12) =
+        if options.EnableCFGSimplify then mergeLinearBlocks cfg11 else (cfg11, false)
+    let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12
+    (cfg12, changed)
 
 /// Run all optimizations until fixed point
 let optimizeCFGWithOptions (options: OptimizeOptions) (cfg: CFG) : CFG =
