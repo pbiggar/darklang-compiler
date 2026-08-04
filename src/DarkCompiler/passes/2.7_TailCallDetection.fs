@@ -56,22 +56,12 @@ let convertToTailCall (cexpr: CExpr) : CExpr =
 let private wrapBindings (bindings: (TempId * CExpr) list) (body: AExpr) : AExpr =
     List.foldBack (fun (tempId, cexpr) acc -> Let (tempId, cexpr, acc)) bindings body
 
-let rec private resolveAliasRoot
-    (aliasRoots: Map<TempId, TempId>)
-    (tempId: TempId)
-    (visited: Set<TempId>)
-    : TempId =
-    if Set.contains tempId visited then
-        tempId
-    else
-        match Map.tryFind tempId aliasRoots with
-        | Some next when next <> tempId ->
-            resolveAliasRoot aliasRoots next (Set.add tempId visited)
-        | _ ->
-            tempId
-
 let private canonicalTempId (aliasRoots: Map<TempId, TempId>) (tempId: TempId) : TempId =
-    resolveAliasRoot aliasRoots tempId Set.empty
+    // extendAliasRoots canonicalizes the source before insertion, so every map
+    // value is already a root rather than another link in an alias chain.
+    match Map.tryFind tempId aliasRoots with
+    | Some root -> root
+    | None -> tempId
 
 let private extendAliasRoots
     (aliasRoots: Map<TempId, TempId>)
@@ -94,19 +84,17 @@ let private tailCallArgTempIds
     (aliasRoots: Map<TempId, TempId>)
     (cexpr: CExpr)
     : Set<TempId> =
-    let fromAtom (atom: Atom) : Set<TempId> =
+    let addAtom (temps: Set<TempId>) (atom: Atom) : Set<TempId> =
         match atom with
-        | Var tid -> Set.singleton (canonicalTempId aliasRoots tid)
-        | _ -> Set.empty
+        | Var tid -> Set.add (canonicalTempId aliasRoots tid) temps
+        | _ -> temps
     match cexpr with
     | TailCall (_, args) ->
-        args |> List.fold (fun acc atom -> Set.union acc (fromAtom atom)) Set.empty
+        args |> List.fold addAtom Set.empty
     | IndirectTailCall (func, args) ->
-        (fromAtom func, args)
-        ||> List.fold (fun acc atom -> Set.union acc (fromAtom atom))
+        args |> List.fold addAtom (addAtom Set.empty func)
     | ClosureTailCall (closure, args) ->
-        (fromAtom closure, args)
-        ||> List.fold (fun acc atom -> Set.union acc (fromAtom atom))
+        args |> List.fold addAtom (addAtom Set.empty closure)
     | _ ->
         Set.empty
 
