@@ -34,13 +34,19 @@ def Stdlib.Char.isWhitespace(c: String) : Bool =
         | Some(cp) -> cp == 32 || cp == 9 || cp == 10 || cp == 13
         | None -> false
 
-// Check if character is an ASCII uppercase letter (A-Z)
+// Check if character is uppercase in the supported case-conversion pairs
 def Stdlib.Char.isUppercase(c: String) : Bool =
     if Stdlib.String.isEmpty(c) then false
     else
         let cps = Stdlib.String.toCodepoints(c) in
         match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) -> cp >= 65 && cp <= 90
+        | Some(cp) ->
+            (cp >= 65 && cp <= 90)
+            || cp == 193
+            || cp == 379
+            || cp == 211
+            || cp == 321
+            || cp == 7358
         | None -> false
 
 // Check if character is an ASCII lowercase letter (a-z)
