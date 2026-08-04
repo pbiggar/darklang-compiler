@@ -1588,108 +1588,146 @@ let selectTerminator
 /// Convert MIR label to LIR label
 let convertLabel (MIR.Label lbl) : LIR.Label = LIR.Label lbl
 
-let vregId (MIR.VReg id) : int = id
+let maxVRegId (MIR.VReg id) (currentMax: int) : int =
+    max currentMax id
 
-let vregIdsFromOperand (operand: MIR.Operand) : int list =
+let maxVRegIdFromOperand (operand: MIR.Operand) (currentMax: int) : int =
     match operand with
-    | MIR.Register reg -> [vregId reg]
-    | _ -> []
+    | MIR.Register reg -> maxVRegId reg currentMax
+    | _ -> currentMax
 
-let vregIdsFromInstr (instr: MIR.Instr) : int list =
-    let vregsFromOperands operands = operands |> List.collect vregIdsFromOperand
+let maxVRegIdsFromOperands (operands: MIR.Operand list) (currentMax: int) : int =
+    operands
+    |> List.fold (fun maxId operand -> maxVRegIdFromOperand operand maxId) currentMax
+
+let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
     match instr with
-    | MIR.Mov (dest, src, _) -> vregId dest :: vregIdsFromOperand src
-    | MIR.BinOp (dest, _, left, right, _) -> vregId dest :: (vregIdsFromOperand left @ vregIdsFromOperand right)
-    | MIR.UnaryOp (dest, _, src) -> vregId dest :: vregIdsFromOperand src
-    | MIR.Call (dest, _, args, _, _) -> vregId dest :: vregsFromOperands args
-    | MIR.TailCall (_, args, _, _) -> vregsFromOperands args
-    | MIR.IndirectCall (dest, func, args, _, _) -> vregId dest :: (vregIdsFromOperand func @ vregsFromOperands args)
-    | MIR.IndirectTailCall (func, args, _, _) -> vregIdsFromOperand func @ vregsFromOperands args
-    | MIR.ClosureAlloc (dest, _, captures) -> vregId dest :: vregsFromOperands captures
-    | MIR.ClosureCall (dest, closure, args, _, _) -> vregId dest :: (vregIdsFromOperand closure @ vregsFromOperands args)
-    | MIR.ClosureTailCall (closure, args, _) -> vregIdsFromOperand closure @ vregsFromOperands args
-    | MIR.HeapAlloc (dest, _) -> [vregId dest]
-    | MIR.HeapStore (addr, _, src, _) -> vregId addr :: vregIdsFromOperand src
-    | MIR.HeapLoad (dest, addr, _, _) -> [vregId dest; vregId addr]
-    | MIR.StringConcat (dest, left, right) -> vregId dest :: (vregIdsFromOperand left @ vregIdsFromOperand right)
-    | MIR.RefCountInc (addr, _, _, _) -> [vregId addr]
-    | MIR.RefCountDec (addr, _, _, _) -> [vregId addr]
-    | MIR.Print (src, _) -> vregIdsFromOperand src
-    | MIR.RuntimeError _ -> []
-    | MIR.FileReadText (dest, path) -> vregId dest :: vregIdsFromOperand path
-    | MIR.FileExists (dest, path) -> vregId dest :: vregIdsFromOperand path
-    | MIR.FileWriteText (dest, path, content) -> vregId dest :: (vregIdsFromOperand path @ vregIdsFromOperand content)
-    | MIR.FileAppendText (dest, path, content) -> vregId dest :: (vregIdsFromOperand path @ vregIdsFromOperand content)
-    | MIR.FileDelete (dest, path) -> vregId dest :: vregIdsFromOperand path
-    | MIR.FileSetExecutable (dest, path) -> vregId dest :: vregIdsFromOperand path
+    | MIR.Mov (dest, src, _) ->
+        currentMax |> maxVRegId dest |> maxVRegIdFromOperand src
+    | MIR.BinOp (dest, _, left, right, _) ->
+        currentMax
+        |> maxVRegId dest
+        |> maxVRegIdFromOperand left
+        |> maxVRegIdFromOperand right
+    | MIR.UnaryOp (dest, _, src) ->
+        currentMax |> maxVRegId dest |> maxVRegIdFromOperand src
+    | MIR.Call (dest, _, args, _, _) ->
+        currentMax |> maxVRegId dest |> maxVRegIdsFromOperands args
+    | MIR.TailCall (_, args, _, _) ->
+        currentMax |> maxVRegIdsFromOperands args
+    | MIR.IndirectCall (dest, func, args, _, _) ->
+        currentMax
+        |> maxVRegId dest
+        |> maxVRegIdFromOperand func
+        |> maxVRegIdsFromOperands args
+    | MIR.IndirectTailCall (func, args, _, _) ->
+        currentMax |> maxVRegIdFromOperand func |> maxVRegIdsFromOperands args
+    | MIR.ClosureAlloc (dest, _, captures) ->
+        currentMax |> maxVRegId dest |> maxVRegIdsFromOperands captures
+    | MIR.ClosureCall (dest, closure, args, _, _) ->
+        currentMax
+        |> maxVRegId dest
+        |> maxVRegIdFromOperand closure
+        |> maxVRegIdsFromOperands args
+    | MIR.ClosureTailCall (closure, args, _) ->
+        currentMax |> maxVRegIdFromOperand closure |> maxVRegIdsFromOperands args
+    | MIR.HeapAlloc (dest, _) -> maxVRegId dest currentMax
+    | MIR.HeapStore (addr, _, src, _) ->
+        currentMax |> maxVRegId addr |> maxVRegIdFromOperand src
+    | MIR.HeapLoad (dest, addr, _, _) ->
+        currentMax |> maxVRegId dest |> maxVRegId addr
+    | MIR.StringConcat (dest, left, right) ->
+        currentMax
+        |> maxVRegId dest
+        |> maxVRegIdFromOperand left
+        |> maxVRegIdFromOperand right
+    | MIR.RefCountInc (addr, _, _, _)
+    | MIR.RefCountDec (addr, _, _, _) -> maxVRegId addr currentMax
+    | MIR.Print (src, _) -> maxVRegIdFromOperand src currentMax
+    | MIR.RuntimeError _ -> currentMax
+    | MIR.FileReadText (dest, path)
+    | MIR.FileExists (dest, path)
+    | MIR.FileDelete (dest, path)
+    | MIR.FileSetExecutable (dest, path) ->
+        currentMax |> maxVRegId dest |> maxVRegIdFromOperand path
+    | MIR.FileWriteText (dest, path, content)
+    | MIR.FileAppendText (dest, path, content) ->
+        currentMax
+        |> maxVRegId dest
+        |> maxVRegIdFromOperand path
+        |> maxVRegIdFromOperand content
     | MIR.FileWriteFromPtr (dest, path, ptr, length) ->
-        vregId dest :: (vregIdsFromOperand path @ vregIdsFromOperand ptr @ vregIdsFromOperand length)
-    | MIR.FloatSqrt (dest, src) -> vregId dest :: vregIdsFromOperand src
-    | MIR.FloatAbs (dest, src) -> vregId dest :: vregIdsFromOperand src
-    | MIR.FloatNeg (dest, src) -> vregId dest :: vregIdsFromOperand src
-    | MIR.Int64ToFloat (dest, src) -> vregId dest :: vregIdsFromOperand src
-    | MIR.FloatToInt64 (dest, src) -> vregId dest :: vregIdsFromOperand src
-    | MIR.FloatToBits (dest, src) -> vregId dest :: vregIdsFromOperand src
-    | MIR.RawAlloc (dest, numBytes) -> vregId dest :: vregIdsFromOperand numBytes
-    | MIR.RawFree ptr -> vregIdsFromOperand ptr
-    | MIR.RawGet (dest, ptr, byteOffset, _) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset)
-    | MIR.RawGetByte (dest, ptr, byteOffset) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset)
-    | MIR.StringToRawPtr (dest, value) -> vregId dest :: vregIdsFromOperand value
-    | MIR.RawPtrToString (dest, ptr) -> vregId dest :: vregIdsFromOperand ptr
-    | MIR.BytesToRawPtr (dest, value) -> vregId dest :: vregIdsFromOperand value
-    | MIR.RawPtrToBytes (dest, ptr) -> vregId dest :: vregIdsFromOperand ptr
-    | MIR.DictToRawPtr (dest, dict) -> vregId dest :: vregIdsFromOperand dict
-    | MIR.RawPtrToDict (dest, ptr, tag) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand tag)
-    | MIR.ListToRawPtr (dest, list) -> vregId dest :: vregIdsFromOperand list
-    | MIR.RawPtrToList (dest, ptr, tag) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand tag)
+        currentMax
+        |> maxVRegId dest
+        |> maxVRegIdFromOperand path
+        |> maxVRegIdFromOperand ptr
+        |> maxVRegIdFromOperand length
+    | MIR.FloatSqrt (dest, src)
+    | MIR.FloatAbs (dest, src)
+    | MIR.FloatNeg (dest, src)
+    | MIR.Int64ToFloat (dest, src)
+    | MIR.FloatToInt64 (dest, src)
+    | MIR.FloatToBits (dest, src)
+    | MIR.RawAlloc (dest, src)
+    | MIR.StringToRawPtr (dest, src)
+    | MIR.RawPtrToString (dest, src)
+    | MIR.BytesToRawPtr (dest, src)
+    | MIR.RawPtrToBytes (dest, src)
+    | MIR.DictToRawPtr (dest, src)
+    | MIR.ListToRawPtr (dest, src)
+    | MIR.FloatToString (dest, src) ->
+        currentMax |> maxVRegId dest |> maxVRegIdFromOperand src
+    | MIR.RawFree ptr
+    | MIR.RefCountIncString ptr
+    | MIR.RefCountDecString ptr
+    | MIR.RefCountIncBytes ptr
+    | MIR.RefCountDecBytes ptr -> maxVRegIdFromOperand ptr currentMax
+    | MIR.RawGet (dest, ptr, byteOffset, _)
+    | MIR.RawGetByte (dest, ptr, byteOffset)
+    | MIR.RawPtrToDict (dest, ptr, byteOffset)
+    | MIR.RawPtrToList (dest, ptr, byteOffset) ->
+        currentMax
+        |> maxVRegId dest
+        |> maxVRegIdFromOperand ptr
+        |> maxVRegIdFromOperand byteOffset
     | MIR.RawWriteWord (ptr, byteOffset, value) ->
-        vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset @ vregIdsFromOperand value
-    | MIR.RawWriteByte (ptr, byteOffset, value) ->
-        vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset @ vregIdsFromOperand value
+        currentMax
+        |> maxVRegIdFromOperand ptr
+        |> maxVRegIdFromOperand byteOffset
+        |> maxVRegIdFromOperand value
+    | MIR.RawWriteByte (ptr, byteOffset, value)
     | MIR.RawSlotInit (ptr, byteOffset, value, _) ->
-        vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset @ vregIdsFromOperand value
-    | MIR.RefCountIncString str -> vregIdsFromOperand str
-    | MIR.RefCountDecString str -> vregIdsFromOperand str
-    | MIR.RefCountIncBytes bytes -> vregIdsFromOperand bytes
-    | MIR.RefCountDecBytes bytes -> vregIdsFromOperand bytes
-    | MIR.RandomInt64 dest -> [vregId dest]
-    | MIR.DateNow dest -> [vregId dest]
-    | MIR.FloatToString (dest, value) -> vregId dest :: vregIdsFromOperand value
+        currentMax
+        |> maxVRegIdFromOperand ptr
+        |> maxVRegIdFromOperand byteOffset
+        |> maxVRegIdFromOperand value
+    | MIR.RandomInt64 dest
+    | MIR.DateNow dest -> maxVRegId dest currentMax
     | MIR.Phi (dest, sources, _) ->
-        let sourceRegs = sources |> List.collect (fun (op, _) -> vregIdsFromOperand op)
-        vregId dest :: sourceRegs
-    | MIR.CoverageHit _ -> []
+        sources
+        |> List.fold
+            (fun maxId (operand, _) -> maxVRegIdFromOperand operand maxId)
+            (maxVRegId dest currentMax)
+    | MIR.CoverageHit _ -> currentMax
 
-let vregIdsFromTerminator (terminator: MIR.Terminator) : int list =
+let maxVRegIdFromTerminator (terminator: MIR.Terminator) (currentMax: int) : int =
     match terminator with
-    | MIR.Ret operand -> vregIdsFromOperand operand
-    | MIR.Branch (cond, _, _) -> vregIdsFromOperand cond
-    | MIR.Jump _ -> []
-
-let maxId (values: int list) : int option =
-    values
-    |> List.fold (fun acc value ->
-        match acc with
-        | None -> Some value
-        | Some current -> Some (max current value)) None
+    | MIR.Ret operand
+    | MIR.Branch (operand, _, _) -> maxVRegIdFromOperand operand currentMax
+    | MIR.Jump _ -> currentMax
 
 let initTempState (mirFunc: MIR.Function) : TempState =
-    let paramIds = mirFunc.TypedParams |> List.map (fun tp -> vregId tp.Reg)
-    let blockIds =
-        mirFunc.CFG.Blocks
-        |> Map.toList
-        |> List.collect (fun (_, block) ->
-            let instrIds = block.Instrs |> List.collect vregIdsFromInstr
-            let termIds = vregIdsFromTerminator block.Terminator
-            instrIds @ termIds)
+    let maxParamRegId =
+        mirFunc.TypedParams
+        |> List.fold (fun maxId param -> maxVRegId param.Reg maxId) -1
     let maxRegId =
-        match maxId (paramIds @ blockIds) with
-        | None -> -1
-        | Some value -> value
+        mirFunc.CFG.Blocks
+        |> Map.fold (fun maxId _ block ->
+            block.Instrs
+            |> List.fold (fun blockMax instr -> maxVRegIdFromInstr instr blockMax) maxId
+            |> maxVRegIdFromTerminator block.Terminator) maxParamRegId
     let maxFRegId =
-        match maxId (Set.toList mirFunc.FloatRegs) with
-        | None -> -1
-        | Some value -> value
+        mirFunc.FloatRegs |> Set.fold max -1
     { NextRegId = maxRegId + 1
       NextFRegId = maxFRegId + 1 }
 
