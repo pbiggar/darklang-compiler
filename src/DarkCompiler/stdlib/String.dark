@@ -326,7 +326,7 @@ def Stdlib.String.toUpperCase(s: String) : String =
     Stdlib.String.fromCodepoints(upper)
 
 // Convert string to lowercase.
-def Stdlib.String.toLowerCase(s: String) : String =
+def Stdlib.String.toLowercase(s: String) : String =
     let codepoints = Stdlib.String.toCodepoints(s) in
     let lower = Stdlib.String.__mapLower(codepoints, []) in
     Stdlib.String.fromCodepoints(lower)

@@ -746,8 +746,7 @@ String                       | toBytes                             | ✅   | ❌
 String                       | toCodepoints                        | ❌   | ✅
 String                       | toGraphemes                         | ❌   | ✅
 String                       | toList                              | ✅   | ❌
-String                       | toLowerCase                         | ❌   | ✅
-String                       | toLowercase                         | ✅   | ❌
+String                       | toLowercase                         | ✅   | ✅
 String                       | toOrdinal                           | ✅   | ❌
 String                       | toUpperCase                         | ❌   | ✅
 String                       | toUppercase                         | ✅   | ❌

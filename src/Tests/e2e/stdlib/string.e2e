@@ -106,20 +106,20 @@ String.toUpperCase("hello😄world") = "HELLO😄WORLD"
 String.toUpperCase("😄orange") = "😄ORANGE"
 
 // ===================================================================
-// String.toLowerCase - Convert to lowercase (ASCII)
+// String.toLowercase - Convert to lowercase
 // ===================================================================
 
-String.toLowerCase("HELLO") = "hello"
-String.toLowerCase("hello") = "hello"
-String.toLowerCase("Hello World") = "hello world"
-String.toLowerCase("") = ""
-String.toLowerCase("ABC123") = "abc123"
-String.toLowerCase("MIXEDcase") = "mixedcase"
-String.toLowerCase("AB323CDEF") = "ab323cdef"
+String.toLowercase("HELLO") = "hello"
+String.toLowercase("hello") = "hello"
+String.toLowercase("Hello World") = "hello world"
+String.toLowercase("") = ""
+String.toLowercase("ABC123") = "abc123"
+String.toLowercase("MIXEDcase") = "mixedcase"
+String.toLowercase("AB323CDEF") = "ab323cdef"
 
 // Unicode lowercase - emoji should be unchanged
-String.toLowerCase("HELLO😄WORLD") = "hello😄world"
-String.toLowerCase("😄ORANGE") = "😄orange"
+String.toLowercase("HELLO😄WORLD") = "hello😄world"
+String.toLowercase("😄ORANGE") = "😄orange"
 
 // ===================================================================
 // String.contains - Check if string contains substring

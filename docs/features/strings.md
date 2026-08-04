@@ -40,7 +40,7 @@ Unicode helpers are layered on top of the byte representation:
 
 - `toCodepoints` decodes UTF-8 to `List<Int64>`.
 - `fromCodepoints` allocates a dynamic string and encodes UTF-8 bytes.
-- `codepointLength`, `toUpperCase`, `toLowerCase`, and `reverse` use the
+- `codepointLength`, `toUpperCase`, `toLowercase`, and `reverse` use the
   codepoint conversion helpers.
 - `toGraphemes` and `graphemeLength` use a simplified UAX #29-style segmenter.
   It keeps combining marks, variation selectors, selected emoji modifiers, and
