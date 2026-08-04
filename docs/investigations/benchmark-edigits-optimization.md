@@ -2,17 +2,24 @@
 
 ## Executive Summary
 
-The **edigits** benchmark computes digits of e using Taylor series with fixed-point arithmetic. Dark currently cannot run the full benchmark (1000 digits, 10 iterations) due to stack limitations and performance issues related to using immutable `List<Int64>` data structures backed by FingerTrees, vs Rust/OCaml's mutable arrays.
+The **edigits** benchmark computes digits of e using Taylor series with fixed-point arithmetic. Dark now runs the canonical 1,000-digit computation for ten iterations and produces the shared checksum `2162278`.
 
-**Current Status:** Dark shows `-` (fails to complete) in benchmark results while:
-- Rust: 13.6M instructions (baseline)
-- OCaml: 37.0M instructions (2.72x)
+**Current Status:** Working at canonical settings. The focused 2026-08-04 Cachegrind run measured:
+- Dark: 523,088,517 instructions (38.4x Rust)
+- Rust: 13,613,164 instructions (baseline)
+- OCaml: 36,973,499 instructions (2.72x)
+- Node: 493,137,288 instructions (36.2x)
+- Python: 939,948,865 instructions (69.0x)
 
-**Root Cause:** The benchmark uses `List.getAt` and `List.setAt` which compile to O(log n) FingerTree operations, while Rust/OCaml use O(1) mutable array indexing.
+**Resolved parity gap:** The old Dark benchmark used one `Int64` list element per decimal digit, ran only 50 digits for one iteration, and carried a Dark-specific expected output. Promoting that implementation unchanged to canonical settings completed but cost 55,678,531,639 instructions (4,090x Rust). Packing 15 decimal digits into each overflow-safe `Int64` chunk reduces the working set from 1,010 digit elements to 68 chunks and cuts that canonical instruction count by 99.1% without adding mutable arrays.
+
+**Root-cause classification:** Benchmark implementation plus benchmark settings/expected-output and status-documentation drift. The previously documented stack overflow is not reproducible on current `main`; no compiler/runtime change was required.
+
+The analysis below records the original digit-at-a-time implementation and remains useful for future mutable-array or persistent-list optimization work.
 
 ## Benchmark Algorithm Analysis
 
-### Core Algorithm
+### Historical Core Algorithm
 The benchmark computes e using Taylor series: `e = 1 + 1/1! + 1/2! + 1/3! + ...`
 
 ### Hot Paths
@@ -331,12 +338,14 @@ Stdlib.FingerTree.__TAG_SINGLE:
 With Array type alone: **10-50x improvement** (matching OCaml's 2.72x baseline)
 With all optimizations: **Could approach Rust's performance** (within 2-3x)
 
-## Validation Plan
+## Validation Outcome
 
-1. Implement Array type
-2. Rewrite edigits benchmark to use Array
-3. Run full benchmark (1000 digits, 10 iterations)
-4. Compare instruction counts via valgrind
+1. Promoted Dark to the shared 1,000-digit, ten-iteration settings.
+2. Removed the reduced Dark-only expected-output override so the shared canonical checksum applies.
+3. Reproduced the digit-at-a-time canonical implementation at 55,678,531,639 instructions.
+4. Reworked the benchmark around 15-digit `Int64` chunks and measured 523,088,517 instructions with matching output.
+
+A mutable array type could narrow the remaining 38.4x Rust performance gap, but it is no longer required for benchmark functionality parity.
 
 ## Appendix: Full IR Dumps
 

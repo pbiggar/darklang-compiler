@@ -26,6 +26,7 @@ These benchmarks compile and run reliably.
 | binary_trees  | Memory         | Heap allocation, tree traversal         |
 | primes        | Arithmetic     | Integer ops, conditionals, loops        |
 | collatz       | Iteration      | Collatz sequence steps                  |
+| edigits       | Numerical      | Canonical 1,000-digit, 10-iteration fixed-point computation |
 | leibniz       | Numerical      | Float arithmetic, pi approximation      |
 | nqueen        | Backtracking   | N-Queens via bitwise operations         |
 | fannkuch      | Permutations   | Pancake flipping, permutation generation |
@@ -75,7 +76,6 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 
 | Benchmark     | Status            | Limitation                                                     |
 | ------------- | ----------------- | -------------------------------------------------------------- |
-| edigits       | Stack overflow    | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
 | nbody         | Working (reduced) | Uses 5,000 simulation steps (full: 500,000 steps)              |
 | spectral_norm | Working (reduced) | Computes the full power-iteration algorithm at 3-vector size (full: n=100) |
 
@@ -96,7 +96,6 @@ remain reduced or blocked as documented above.
 | Feature                                  | Benchmarks Blocked                                  |
 | ---------------------------------------- | --------------------------------------------------- |
 | **Allocator capacity / allocation pressure** | nbody (full)                                  |
-| Stack depth / TCO                        | edigits (full)                                      |
 | Mutable arrays / efficient indexed numeric vectors | spectral_norm (full n=100)              |
 
 ---
@@ -107,3 +106,4 @@ remain reduced or blocked as documented above.
 - The mandelbrot "negative float bug" was actually a semantic mismatch - the Dark code was counting escaped points while the Rust reference counts points in the set. Fixed.
 - The pisum Dark benchmark now runs at the full benchmark size (`500` rounds, `n=10000`) and is tracked as working.
 - The nsieve Dark benchmark now runs at the full benchmark size (`n=100000`) and is tracked as working.
+- The edigits Dark benchmark now runs the canonical 1,000-digit computation ten times. It packs 15 decimal digits into each `Int64` chunk to keep immutable indexed updates bounded.
