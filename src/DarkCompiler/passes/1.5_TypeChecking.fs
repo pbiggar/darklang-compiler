@@ -410,8 +410,18 @@ type TypeEnv = Map<string, Type>
 /// Function parameter-name registry - maps function names to ordered parameter names
 type FuncParamNameRegistry = Map<string, string list>
 
-/// Type registry - maps record type names to their field definitions
+/// Type registry - maps record type names to their ordered field definitions.
 type TypeRegistry = Map<string, (string * Type) list>
+
+/// Precomputed record metadata reused across separate type-checking invocations.
+type RecordTypeInfo = {
+    Fields: (string * Type) list
+    FieldTypes: Map<string, Type>
+    TypeParams: string list
+}
+
+/// Indexed view retained in TypeCheckEnv for reuse by separate compilations.
+type IndexedTypeRegistry = Map<string, RecordTypeInfo>
 
 /// Sum type registry - maps sum type names to their variant lists (name, tag, payload)
 type SumTypeRegistry = Map<string, (string * int * Type option) list>
@@ -438,6 +448,7 @@ type Substitution = Map<string, Type>
 /// Collected type checking environment - can be passed to compile user code with stdlib
 type TypeCheckEnv = {
     TypeReg: TypeRegistry
+    IndexedTypeReg: IndexedTypeRegistry
     VariantLookup: VariantLookup
     FuncEnv: TypeEnv
     FuncParamNames: FuncParamNameRegistry
@@ -452,6 +463,7 @@ let mergeTypeCheckEnv (baseEnv: TypeCheckEnv) (overlay: TypeCheckEnv) : TypeChec
     let mergeMap m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     {
         TypeReg = mergeMap baseEnv.TypeReg overlay.TypeReg
+        IndexedTypeReg = mergeMap baseEnv.IndexedTypeReg overlay.IndexedTypeReg
         VariantLookup = mergeMap baseEnv.VariantLookup overlay.VariantLookup
         FuncEnv = mergeMap baseEnv.FuncEnv overlay.FuncEnv
         FuncParamNames = mergeMap baseEnv.FuncParamNames overlay.FuncParamNames
@@ -537,14 +549,26 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
 let inferRecordTypeParamsFromFields (fields: (string * Type) list) : string list =
     fields |> List.fold (fun acc (_, fieldType) -> collectTypeVarsInType fieldType acc) []
 
-/// Build a substitution for generic record fields from concrete type arguments.
-let buildRecordFieldSubstitution (fields: (string * Type) list) (typeArgs: Type list) : Result<Substitution, string> =
-    let typeParams = inferRecordTypeParamsFromFields fields
+let private recordTypeInfo (fields: (string * Type) list) : RecordTypeInfo =
+    {
+        Fields = fields
+        FieldTypes = Map.ofList fields
+        TypeParams = inferRecordTypeParamsFromFields fields
+    }
+
+let private buildRecordFieldSubstitutionFromParams
+    (typeParams: string list)
+    (typeArgs: Type list)
+    : Result<Substitution, string> =
     if List.length typeParams <> List.length typeArgs then
         Error
             $"Record type argument arity mismatch: expected {List.length typeParams}, got {List.length typeArgs}"
     else
         Ok (List.zip typeParams typeArgs |> Map.ofList)
+
+/// Build a substitution for generic record fields from concrete type arguments.
+let buildRecordFieldSubstitution (fields: (string * Type) list) (typeArgs: Type list) : Result<Substitution, string> =
+    buildRecordFieldSubstitutionFromParams (inferRecordTypeParamsFromFields fields) typeArgs
 
 let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : Type =
     match typ with
@@ -577,18 +601,18 @@ let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : T
 
 let private tryResolveGenericRecordAliasFields
     (aliasReg: AliasRegistry)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (typeName: string)
     : (string * (string * Type) list) option =
     match resolveAliasTargetType aliasReg (TRecord (typeName, [])) with
     | TRecord (targetName, targetTypeArgs)
     | TSum (targetName, targetTypeArgs) when targetName <> typeName || not (List.isEmpty targetTypeArgs) ->
         match Map.tryFind targetName typeReg with
-        | Some targetFields ->
-            match buildRecordFieldSubstitution targetFields targetTypeArgs with
+        | Some targetInfo ->
+            match buildRecordFieldSubstitutionFromParams targetInfo.TypeParams targetTypeArgs with
             | Ok subst ->
                 let fields =
-                    targetFields
+                    targetInfo.Fields
                     |> List.map (fun (fieldName, fieldType) -> (fieldName, applySubst subst fieldType))
                 Some (targetName, fields)
             | Error _ ->
@@ -600,13 +624,13 @@ let private tryResolveGenericRecordAliasFields
 
 let private tryResolveRecordLiteralFields
     (aliasReg: AliasRegistry)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (typeName: string)
     : (string * (string * Type) list) option =
     let resolvedTypeName = resolveTypeName aliasReg typeName
     match Map.tryFind resolvedTypeName typeReg with
-    | Some fields ->
-        Some (resolvedTypeName, fields)
+    | Some info ->
+        Some (resolvedTypeName, info.Fields)
     | None ->
         tryResolveGenericRecordAliasFields aliasReg typeReg typeName
 
@@ -778,6 +802,17 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Typ
             typ
 
     canonicalize typ
+
+let private canonicalizeTypeRegistry
+    (variantLookup: VariantLookup)
+    (typeReg: TypeRegistry)
+    : IndexedTypeRegistry =
+    typeReg
+    |> Map.map (fun _ fields ->
+        fields
+        |> List.map (fun (fieldName, fieldType) ->
+            (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+        |> recordTypeInfo)
 
 /// Compare two types for equality, resolving type aliases first
 /// This allows "Vec" and "Point" to be considered equal when Vec aliases Point
@@ -1412,11 +1447,11 @@ let private paramNameForLegacyError
 /// Returns: Result<Type * Expr, TypeError>
 ///   - Type: The type of the expression
 ///   - Expr: The (possibly transformed) expression
-let rec checkExprWithParamNames
+let rec private checkExprWithParamNames
     (funcParamNameReg: Map<string, string list>)
     (expr: Expr)
     (env: TypeEnv)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (genericFuncReg: GenericFuncRegistry)
     (warningSettings: WarningSettings)
@@ -1427,7 +1462,7 @@ let rec checkExprWithParamNames
     let checkExpr
         (innerExpr: Expr)
         (innerEnv: TypeEnv)
-        (innerTypeReg: TypeRegistry)
+        (innerTypeReg: IndexedTypeRegistry)
         (innerVariantLookup: VariantLookup)
         (innerGenericFuncReg: GenericFuncRegistry)
         (innerWarningSettings: WarningSettings)
@@ -3126,37 +3161,30 @@ let rec checkExprWithParamNames
                 match Map.tryFind resolvedTypeName typeReg with
                 | None ->
                     Error (GenericError $"Unknown record type: {typeName}")
-                | Some expectedFields ->
-                    let expectedFields =
-                        expectedFields
-                        |> List.map (fun (fieldName, fieldType) ->
-                            (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+                | Some recordInfo ->
+                    let expectedFields = recordInfo.Fields
 
                     let subst =
-                        match buildRecordFieldSubstitution expectedFields typeArgs with
+                        match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                         | Ok s -> s
                         | Error _ -> Map.empty
 
                     // Check for unknown fields in update
-                    let expectedFieldNames = expectedFields |> List.map fst |> Set.ofList
                     let unknownFields =
                         updates
-                        |> List.filter (fun (fname, _) -> not (Set.contains fname expectedFieldNames))
+                        |> List.filter (fun (fname, _) -> not (Map.containsKey fname recordInfo.FieldTypes))
                         |> List.map fst
 
                     if not (List.isEmpty unknownFields) then
                         let unknownStr = String.concat ", " unknownFields
                         Error (GenericError $"Unknown fields in record update: {unknownStr}")
                     else
-                        // Build a map from field name to expected type
-                        let fieldTypeMap = expectedFields |> Map.ofList
-
                         // Type check each update field
                         let rec checkUpdates remaining accUpdates =
                             match remaining with
                             | [] -> Ok (List.rev accUpdates)
                             | (fname, updateExpr) :: rest ->
-                                match Map.tryFind fname fieldTypeMap with
+                                match Map.tryFind fname recordInfo.FieldTypes with
                                 | Some fieldTypePattern ->
                                     let expectedFieldType = applySubst subst fieldTypePattern
                                     checkExpr updateExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some expectedFieldType)
@@ -3184,17 +3212,12 @@ let rec checkExprWithParamNames
                 match Map.tryFind resolvedTypeName typeReg with
                 | None ->
                     Error (GenericError $"Unknown record type: {typeName}")
-                | Some fields ->
-                    let fields =
-                        fields
-                        |> List.map (fun (fieldName, fieldType) ->
-                            (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
-
-                    match List.tryFind (fun (name, _) -> name = fieldName) fields with
+                | Some recordInfo ->
+                    match Map.tryFind fieldName recordInfo.FieldTypes with
                     | None ->
                         Error (GenericError $"Record type {typeName} has no field '{fieldName}'")
-                    | Some (_, fieldTypePattern) ->
-                        match buildRecordFieldSubstitution fields typeArgs with
+                    | Some fieldTypePattern ->
+                        match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                         | Error msg ->
                             Error (GenericError msg)
                         | Ok subst ->
@@ -3483,15 +3506,15 @@ let rec checkExprWithParamNames
                         // Resolve type alias before looking up in typeReg
                         let resolvedRecordName = resolveTypeName aliasReg recordName
                         match Map.tryFind resolvedRecordName typeReg with
-                        | Some fields ->
+                        | Some recordInfo ->
                             let subst =
-                                match buildRecordFieldSubstitution fields recordTypeArgs with
+                                match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams recordTypeArgs with
                                 | Ok s -> s
                                 | Error _ -> Map.empty
                             fieldPatterns
                             |> List.map (fun (fieldName, pat) ->
-                                match List.tryFind (fun (n, _) -> n = fieldName) fields with
-                                | Some (_, fieldType) ->
+                                match Map.tryFind fieldName recordInfo.FieldTypes with
+                                | Some fieldType ->
                                     let concreteFieldType = applySubst subst fieldType
                                     extractPatternBindings
                                         pat
@@ -4257,7 +4280,7 @@ let private makeSimpleMatchCase (pattern: Pattern) (body: Expr) : MatchCase =
 
 let rec private buildEqHelperExpr
     (aliasReg: AliasRegistry)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (mode: EqHelperExprMode)
     (typ: Type)
@@ -4318,9 +4341,10 @@ let rec private buildEqHelperExpr
         match Map.tryFind recordTypeName typeReg with
         | None ->
             BinOp (Eq, leftExpr, rightExpr)
-        | Some fields ->
+        | Some recordInfo ->
+            let fields = recordInfo.Fields
             let concreteFields =
-                match buildRecordFieldSubstitution fields typeArgs with
+                match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                 | Ok subst ->
                     fields |> List.map (fun (name, fieldType) -> (name, resolveType aliasReg (applySubst subst fieldType)))
                 | Error _ ->
@@ -4400,7 +4424,7 @@ let rec private buildEqHelperExpr
 
 let private collectDirectEqHelperDeps
     (aliasReg: AliasRegistry)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (typ: Type)
     : Type list =
@@ -4417,9 +4441,10 @@ let private collectDirectEqHelperDeps
             match Map.tryFind recordTypeName typeReg with
             | None ->
                 []
-            | Some fields ->
+            | Some recordInfo ->
+                let fields = recordInfo.Fields
                 let concreteFields =
-                    match buildRecordFieldSubstitution fields typeArgs with
+                    match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                     | Ok subst ->
                         fields |> List.map (fun (_, fieldType) -> resolveType aliasReg (applySubst subst fieldType))
                     | Error _ ->
@@ -4451,7 +4476,7 @@ type private EqHelperGenerationState = {
 
 let rec private ensureEqHelperForType
     (aliasReg: AliasRegistry)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (typ: Type)
     (state: EqHelperGenerationState)
@@ -4643,7 +4668,7 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
 
 let private materializeEqHelpersInTopLevels
     (aliasReg: AliasRegistry)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (topLevels: TopLevel list)
     : TopLevel list =
@@ -4700,11 +4725,11 @@ let private materializeEqHelpersInTopLevels
 
 /// Type-check a function definition
 /// Returns the transformed function body (with Call -> TypeApp transformations)
-let checkFunctionDef
+let private checkFunctionDef
     (funcParamNameReg: Map<string, string list>)
     (funcDef: FunctionDef)
     (env: TypeEnv)
-    (typeReg: TypeRegistry)
+    (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (genericFuncReg: GenericFuncRegistry)
     (warningSettings: WarningSettings)
@@ -4948,10 +4973,22 @@ let private checkProgramInternal
         | Some existingEnv -> existingEnv.ModuleRegistry
         | None -> Stdlib.buildModuleRegistry ()
 
+    let programTypeReg =
+        resolveAliasesInTypeRegistry declarationSummary.AliasReg declarationSummary.TypeReg
+
+    let recordVariantLookup =
+        match baseEnv with
+        | Some existingEnv ->
+            Map.fold
+                (fun lookup name variant -> Map.add name variant lookup)
+                existingEnv.VariantLookup
+                declarationSummary.VariantLookup
+        | None -> declarationSummary.VariantLookup
+
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
-        TypeReg =
-            resolveAliasesInTypeRegistry declarationSummary.AliasReg declarationSummary.TypeReg
+        TypeReg = programTypeReg
+        IndexedTypeReg = canonicalizeTypeRegistry recordVariantLookup programTypeReg
         VariantLookup = declarationSummary.VariantLookup
         FuncEnv = programFuncEnv
         FuncParamNames = declarationSummary.FuncParamNames
@@ -4967,8 +5004,8 @@ let private checkProgramInternal
         | None -> programEnv
 
     // Extract the merged registries for use in type checking
-    let typeReg = typeCheckEnv.TypeReg
     let variantLookup = typeCheckEnv.VariantLookup
+    let typeReg = typeCheckEnv.IndexedTypeReg
     let funcEnv = typeCheckEnv.FuncEnv
     let funcParamNameReg = typeCheckEnv.FuncParamNames
     let genericFuncReg = typeCheckEnv.GenericFuncReg
