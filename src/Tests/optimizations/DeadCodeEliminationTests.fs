@@ -12,14 +12,16 @@ let private blockWith instrs =
       LIR.Instrs = instrs
       LIR.Terminator = LIR.Ret }
 
-let private functionWith instrs =
-    { LIR.Name = "user"
+let private namedFunctionWith name instrs =
+    { LIR.Name = name
       LIR.TypedParams = []
       LIR.CFG =
         { LIR.Entry = LIR.Label "entry"
           LIR.Blocks = Map.ofList [ (LIR.Label "entry", blockWith instrs) ] }
       LIR.StackSize = 0
       LIR.UsedCalleeSaved = [] }
+
+let private functionWith instrs = namedFunctionWith "user" instrs
 
 let private expectCalls expected instrs =
     let actual = DeadCodeElimination.getCalledFunctions (functionWith instrs)
@@ -33,8 +35,34 @@ let testArgMovesFunctionAddressIsReachable () : TestResult =
         ["Stdlib.List.map"]
         [ LIR.ArgMoves [ (LIR.X0, LIR.FuncAddr "Stdlib.List.map") ] ]
 
+let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
+    let userFunctions =
+        [ namedFunctionWith
+              "user"
+              [ LIR.Call (LIR.Virtual 0, "stdlib_b", [ LIR.FuncAddr "stdlib_a" ]) ] ]
+    let stdlibFunctions =
+        [ namedFunctionWith "unused" []
+          namedFunctionWith "stdlib_c" []
+          namedFunctionWith "stdlib_a" []
+          namedFunctionWith "stdlib_b" [] ]
+    let callGraph =
+        Map.ofList
+            [ "stdlib_a", Set.empty
+              "stdlib_b", Set.ofList [ "stdlib_c" ]
+              "stdlib_c", Set.empty
+              "unused", Set.empty ]
+    let actual =
+        DeadCodeElimination.filterFunctions callGraph userFunctions stdlibFunctions
+        |> List.map (fun function_ -> function_.Name)
+    let expected = [ "stdlib_c"; "stdlib_a"; "stdlib_b" ]
+    if actual = expected then
+        Ok ()
+    else
+        Error $"Expected reachable functions in order {expected}, got {actual}"
+
 let tests = [
     ("arg moves function address is reachable", testArgMovesFunctionAddressIsReachable)
+    ("filtered functions preserve reachable set and input order", testFilteredFunctionsPreserveReachableSetAndInputOrder)
 ]
 
 let runAll () : TestResult =

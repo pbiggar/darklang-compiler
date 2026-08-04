@@ -5,26 +5,27 @@
 
 module DeadCodeElimination
 
-/// Extract function names from an operand
-let private extractFromOperand (op: LIR.Operand) : string list =
+/// Add a function name referenced by an operand to the current call set.
+let private addCallFromOperand (op: LIR.Operand) (calls: Set<string>) : Set<string> =
     match op with
-    | LIR.FuncAddr name -> [name]
-    | _ -> []
+    | LIR.FuncAddr name -> Set.add name calls
+    | _ -> calls
 
-let private extractFromOperands (ops: LIR.Operand list) : string list =
-    ops |> List.collect extractFromOperand
+let private addCallsFromOperands (ops: LIR.Operand list) (calls: Set<string>) : Set<string> =
+    ops |> List.fold (fun calls op -> addCallFromOperand op calls) calls
 
-/// Extract function names from a single instruction
-let private extractCallsFromInstr (instr: LIR.Instr) : string list =
+/// Add function names referenced by one instruction to the current call set.
+let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<string> =
     match instr with
-    | LIR.Mov (_, src) -> extractFromOperand src
+    | LIR.Mov (_, src) -> addCallFromOperand src calls
     | LIR.Phi (_, sources, _) ->
-        sources |> List.map fst |> extractFromOperands
-    | LIR.Store _ -> []
+        sources
+        |> List.fold (fun calls (source, _) -> addCallFromOperand source calls) calls
+    | LIR.Store _ -> calls
     | LIR.Add (_, _, right)
     | LIR.Sub (_, _, right)
     | LIR.Cmp (_, right) ->
-        extractFromOperand right
+        addCallFromOperand right calls
     | LIR.Mul _
     | LIR.Sdiv _
     | LIR.Udiv _
@@ -46,29 +47,30 @@ let private extractCallsFromInstr (instr: LIR.Instr) : string list =
     | LIR.Uxtb _
     | LIR.Uxth _
     | LIR.Uxtw _ ->
-        []
+        calls
     | LIR.Call (_, funcName, args) ->
-        funcName :: extractFromOperands args
+        calls |> Set.add funcName |> addCallsFromOperands args
     | LIR.TailCall (funcName, args) ->
-        funcName :: extractFromOperands args
+        calls |> Set.add funcName |> addCallsFromOperands args
     | LIR.IndirectCall (_, _, args) ->
-        extractFromOperands args
+        addCallsFromOperands args calls
     | LIR.IndirectTailCall (_, args) ->
         // Function pointer is in a register - we can't statically determine the target
-        extractFromOperands args
+        addCallsFromOperands args calls
     | LIR.ClosureAlloc (_, funcName, captures) ->
-        funcName :: extractFromOperands captures
+        calls |> Set.add funcName |> addCallsFromOperands captures
     | LIR.ClosureCall (_, _, args) ->
-        extractFromOperands args
+        addCallsFromOperands args calls
     | LIR.ClosureTailCall (_, args) ->
         // Closure pointer is in a register - we can't statically determine the target
-        extractFromOperands args
+        addCallsFromOperands args calls
     | LIR.SaveRegs _
     | LIR.RestoreRegs _ ->
-        []
+        calls
     | LIR.ArgMoves moves
     | LIR.TailArgMoves moves ->
-        moves |> List.map snd |> extractFromOperands
+        moves
+        |> List.fold (fun calls (_, source) -> addCallFromOperand source calls) calls
     | LIR.FArgMoves _
     | LIR.PrintInt64 _
     | LIR.PrintUInt64 _
@@ -119,20 +121,20 @@ let private extractCallsFromInstr (instr: LIR.Instr) : string list =
     | LIR.DateNow _
     | LIR.FloatToString _
     | LIR.CoverageHit _ ->
-        []
+        calls
     | LIR.PrintSum (_, variants) ->
         variants
-        |> List.collect (fun (_, _, payloadType) ->
+        |> List.fold (fun calls (_, _, payloadType) ->
             match payloadType with
             | Some (AST.TList elemType) ->
                 match ListDisplay.getDisplayStringFunc elemType with
-                | Some funcName -> [funcName]
-                | None -> []
-            | _ -> [])
-    | LIR.HeapStore (_, _, src, _) -> extractFromOperand src
+                | Some funcName -> Set.add funcName calls
+                | None -> calls
+            | _ -> calls) calls
+    | LIR.HeapStore (_, _, src, _) -> addCallFromOperand src calls
     | LIR.StringConcat (_, left, right) ->
-        extractFromOperand left @ extractFromOperand right
-    | LIR.LoadFuncAddr (_, funcName) -> [funcName]
+        calls |> addCallFromOperand left |> addCallFromOperand right
+    | LIR.LoadFuncAddr (_, funcName) -> Set.add funcName calls
     | LIR.FileReadText (_, path)
     | LIR.FileExists (_, path)
     | LIR.FileDelete (_, path)
@@ -141,18 +143,21 @@ let private extractCallsFromInstr (instr: LIR.Instr) : string list =
     | LIR.RefCountDecString path
     | LIR.RefCountIncBytes path
     | LIR.RefCountDecBytes path ->
-        extractFromOperand path
+        addCallFromOperand path calls
     | LIR.FileWriteText (_, path, content)
     | LIR.FileAppendText (_, path, content) ->
-        extractFromOperand path @ extractFromOperand content
+        calls |> addCallFromOperand path |> addCallFromOperand content
+
+/// Add every function-call edge in one LIR function to an existing call set.
+let private addCalledFunctions (func: LIR.Function) (calls: Set<string>) : Set<string> =
+    func.CFG.Blocks
+    |> Map.fold (fun calls _ block ->
+        block.Instrs
+        |> List.fold (fun calls instr -> addCallsFromInstr instr calls) calls) calls
 
 /// Extract function names called from a LIR function
 let getCalledFunctions (func: LIR.Function) : Set<string> =
-    func.CFG.Blocks
-    |> Map.toSeq
-    |> Seq.collect (fun (_, block) -> block.Instrs)
-    |> Seq.collect extractCallsFromInstr
-    |> Set.ofSeq
+    addCalledFunctions func Set.empty
 
 /// Build call graph from list of functions
 let buildCallGraph (funcs: LIR.Function list) : Map<string, Set<string>> =
@@ -171,8 +176,7 @@ let filterFunctions (callGraph: Map<string, Set<string>>)
     // Get all functions called from user code
     let userCalls =
         userFuncs
-        |> List.collect (fun f -> getCalledFunctions f |> Set.toList)
-        |> Set.ofList
+        |> List.fold (fun calls func -> addCalledFunctions func calls) Set.empty
     // Expand to transitive closure
     let reachable = findReachable callGraph userCalls
     // Filter stdlib to only reachable
