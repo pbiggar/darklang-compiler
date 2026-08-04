@@ -41,6 +41,33 @@ collatzSteps:
     Jump(Label "collatzSteps_body")
 
 ---NAME---
+licm_hoist_loop_float_constant
+---INPUT---
+def sum(n: Int64, acc: Float) : Float =
+    if n == 0 then acc
+    else sum(n - 1, acc + 1.5)
+---EXPECTED---
+sum:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "sum_L1":
+    v10012 <- Sub(v10010, Imm 1)
+    fv10013 <- FAdd(fv10009, fv10017)
+    v10014 <- Mov(Reg v10012)
+    fv10015 <- FMov(fv10013)
+    Jump(Label "sum_body")
+  Label "sum_L2":
+    D0 <- FMov(fv10009)
+    Ret
+  Label "sum_body":
+    fv10009 <- FPhi([(fv1, sum_entry), (fv10015, sum_L1)])
+    v10010 <- Phi([(Reg v0, sum_entry), (Reg v10014, sum_L1)])
+    BranchZero(v10010, Label "sum_L2", Label "sum_L1")
+  Label "sum_entry":
+    fv10017 <- FLoad(float[1.5])
+    Jump(Label "sum_body")
+
+---NAME---
 licm_skip_loop_with_call
 ---INPUT---
 def helper(x: Int64) : Int64 =

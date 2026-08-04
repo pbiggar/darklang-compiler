@@ -234,13 +234,16 @@ let private hasCycle (cfg: CFG) : bool =
                 foundCycle || visitAll rest visited'
     visitAll labels Set.empty
 
-/// Check whether an instruction is a hoistable constant move
-let isHoistableConstMove (instr: Instr) : Reg option =
+/// A virtual destination whose constant definition can move outside a loop.
+type private HoistableConstDest =
+    | IntVirtualDest of int
+    | FloatVirtualDest of int
+
+/// Check whether an instruction is a hoistable constant definition.
+let private isHoistableConstInstr (instr: Instr) : HoistableConstDest option =
     match instr with
-    | Mov (dest, Imm _) ->
-        match dest with
-        | LIR.Virtual _ -> Some dest
-        | _ -> None
+    | Mov (LIR.Virtual id, Imm _) -> Some (IntVirtualDest id)
+    | FLoad (LIR.FVirtual id, _) -> Some (FloatVirtualDest id)
     | _ -> None
 
 /// Check whether an instruction represents a call (affects register saving)
@@ -299,7 +302,7 @@ let isPureLoopInstr (instr: Instr) : bool =
     | FpToGp _ -> true
     | _ -> false
 
-/// Hoist loop-invariant Mov(Imm ...) into simple preheaders
+/// Hoist loop-invariant integer and float constants into simple preheaders.
 let private applyLoopInvariantConstHoist
     (cfg: CFG)
     (domCache: DominatorCache option)
@@ -356,33 +359,33 @@ let private applyLoopInvariantConstHoist
 
             let (hoistedRev, hoistedDests) =
                 blockOrder
-                |> List.fold (fun (moves, dests) label ->
+                |> List.fold (fun (instrs, dests) label ->
                     match Map.tryFind label cfgAcc.Blocks with
-                    | None -> (moves, dests)
+                    | None -> (instrs, dests)
                     | Some block ->
                         block.Instrs
-                        |> List.fold (fun (movesAcc, destsAcc) instr ->
-                            match isHoistableConstMove instr with
+                        |> List.fold (fun (instrsAcc, destsAcc) instr ->
+                            match isHoistableConstInstr instr with
                             | Some dest when not (Set.contains dest destsAcc) ->
-                                (instr :: movesAcc, Set.add dest destsAcc)
-                            | _ -> (movesAcc, destsAcc)
-                        ) (moves, dests)
+                                (instr :: instrsAcc, Set.add dest destsAcc)
+                            | _ -> (instrsAcc, destsAcc)
+                        ) (instrs, dests)
                 ) ([], Set.empty)
 
-            let hoistedMoves = List.rev hoistedRev
-            if List.isEmpty hoistedMoves then
+            let hoistedInstrs = List.rev hoistedRev
+            if List.isEmpty hoistedInstrs then
                 (cfgAcc, changedAcc)
             else
                 let blocks' =
                     cfgAcc.Blocks
                     |> Map.map (fun label block ->
                         if label = preheader then
-                            { block with Instrs = block.Instrs @ hoistedMoves }
+                            { block with Instrs = block.Instrs @ hoistedInstrs }
                         elif Set.contains label loopBlocks then
                             let instrs' =
                                 block.Instrs
                                 |> List.filter (fun instr ->
-                                    match isHoistableConstMove instr with
+                                    match isHoistableConstInstr instr with
                                     | Some dest -> not (Set.contains dest hoistedDests)
                                     | None -> true
                                 )

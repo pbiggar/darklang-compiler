@@ -504,6 +504,15 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Existing optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Covered by existing ANF optimization tests.
 
+## Loop optimization
+
+### Floating-point constant load hoisting
+
+- Optimization name: Floating-point constant load hoisting
+- Taxonomy category: Loop-invariant code motion
+- Priority/rationale: Small, low-risk extension of existing LIR constant hoisting that removes repeated floating-point constant materialization from pure loop bodies.
+- Notes: Implemented for virtual-register `FLoad` instructions in pure natural loops with a unique preheader in `src/DarkCompiler/passes/4.5_LIR_Peephole.fs`. Covered by the `licm_hoist_loop_float_constant` before/after LIR snapshot in `src/Tests/optimization/lir.opt`. Routine benchmarks improved `pisum` from 55,014,671 to 50,015,171 instructions (9.1%) and `mandelbrot` from 21,791,658 to 20,790,992 instructions (4.6%); the aggregate Dark ratio improved from 7.84x to 7.78x versus Rust.
+
 ## Control-flow simplification
 
 ### Same-target branch elimination
