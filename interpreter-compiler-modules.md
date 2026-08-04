@@ -241,7 +241,7 @@ Dict                         | isEmpty                             | ✅   | ❌
 Dict                         | iter                                | ✅   | ❌
 Dict                         | keys                                | ✅   | ❌
 Dict                         | map                                 | ✅   | ❌
-Dict                         | member                              | ✅   | ❌
+Dict                         | member                              | ✅   | ✅
 Dict                         | merge                               | ✅   | ❌
 Dict                         | remove                              | ✅   | ❌
 Dict                         | set                                 | ✅   | ❌

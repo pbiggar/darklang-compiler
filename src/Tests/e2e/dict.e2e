@@ -119,15 +119,15 @@ let d1 = setStr(emptyStr(), "ab", 1) in let d2 = setStr(d1, "abc", 2) in getOrDe
 Stdlib.Dict.isEmpty(emptyInt()) = true
 Stdlib.Dict.isEmpty(setInt(emptyInt(), 1, 100)) = false
 
-// contains tests (int-keyed)
-Stdlib.Dict.contains(emptyInt(), 1) = false
-Stdlib.Dict.contains(setInt(emptyInt(), 1, 100), 1) = true
-Stdlib.Dict.contains(setInt(emptyInt(), 1, 100), 2) = false
+// member tests (int-keyed)
+Stdlib.Dict.member(emptyInt(), 1) = false
+Stdlib.Dict.member(setInt(emptyInt(), 1, 100), 1) = true
+Stdlib.Dict.member(setInt(emptyInt(), 1, 100), 2) = false
 
-// contains tests (string-keyed)
-Stdlib.Dict.contains(emptyStr(), "hello") = false
-Stdlib.Dict.contains(setStr(emptyStr(), "hello", 100), "hello") = true
-Stdlib.Dict.contains(setStr(emptyStr(), "hello", 100), "world") = false
+// member tests (string-keyed)
+Stdlib.Dict.member(emptyStr(), "hello") = false
+Stdlib.Dict.member(setStr(emptyStr(), "hello", 100), "hello") = true
+Stdlib.Dict.member(setStr(emptyStr(), "hello", 100), "world") = false
 
 // size tests
 Stdlib.Dict.size(emptyInt()) = 0
@@ -306,6 +306,6 @@ Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 
 // fromList with list values - use Stdlib.Dict.size with specific type
 let d = Stdlib.Dict.fromList([(1, [10]), (2, [20, 30])]) in Stdlib.Dict.size(d) = 2
 
-// Regression: Dict.contains on an internal HAMT node with a missing chunk must not crash.
+// Regression: Dict.member on an internal HAMT node with a missing chunk must not crash.
 // This exercises the "tag == 1 && hasBit == false" path in __containsHelper.
-let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Bool>(), 1, true), 2, true) in Stdlib.Dict.contains(d, 4) = false
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Bool>(), 1, true), 2, true) in Stdlib.Dict.member(d, 4) = false

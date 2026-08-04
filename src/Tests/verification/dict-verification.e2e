@@ -210,12 +210,12 @@ let d = buildDict(50, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int
 def checkContains(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
     if n <= 0 then count
     else
-        let contained = Stdlib.Dict.contains(d, n) in
+        let contained = Stdlib.Dict.member(d, n) in
         let newCount = if contained then count + 1 else count in
         checkContains(n - 1, d, newCount)
 
 checkContains(100, buildDict(100, emptyDict()), 0) = 100
 
 // Non-inserted keys not contained
-Stdlib.Dict.contains(buildDict(100, emptyDict()), 101) = false
-Stdlib.Dict.contains(buildDict(100, emptyDict()), 999) = false
+Stdlib.Dict.member(buildDict(100, emptyDict()), 101) = false
+Stdlib.Dict.member(buildDict(100, emptyDict()), 999) = false

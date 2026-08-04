@@ -11,7 +11,7 @@ def sieveLoop(i: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, B
     if i > n then composites
     else
         let newComposites =
-            if Stdlib.Dict.contains<Int64, Bool>(composites, i) then composites
+            if Stdlib.Dict.member<Int64, Bool>(composites, i) then composites
             else markMultiples(i + i, i, n, composites)
         in
         sieveLoop(i + 1, n, newComposites)
@@ -20,7 +20,7 @@ def sieveLoop(i: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, B
 def countPrimes(i: Int64, n: Int64, composites: Dict<Int64, Bool>, count: Int64) : Int64 =
     if i > n then count
     else
-        let newCount = if Stdlib.Dict.contains<Int64, Bool>(composites, i) then count else count + 1 in
+        let newCount = if Stdlib.Dict.member<Int64, Bool>(composites, i) then count else count + 1 in
         countPrimes(i + 1, n, composites, newCount)
 
 def nsieve(n: Int64) : Int64 =

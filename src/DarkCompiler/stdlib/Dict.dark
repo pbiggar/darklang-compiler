@@ -43,8 +43,8 @@ def Stdlib.Dict.remove<k, v>(dict: Dict<k, v>, key: k) : Dict<k, v> =
 def Stdlib.Dict.isEmpty<k, v>(dict: Dict<k, v>) : Bool =
     __dict_is_null<k, v>(dict)
 
-// Check if dict contains a key
-def Stdlib.Dict.contains<k, v>(dict: Dict<k, v>, key: k) : Bool =
+// Check if a key is a member of the dictionary
+def Stdlib.Dict.member<k, v>(dict: Dict<k, v>, key: k) : Bool =
     Stdlib.__HAMT.__containsHelper<k, v>(dict, key, __hash<k>(key), 0)
 
 def Stdlib.Dict.size<k, v>(dict: Dict<k, v>) : Int64 =

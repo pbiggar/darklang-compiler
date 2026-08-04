@@ -34,19 +34,19 @@ Option.withDefault(Dict.get(Dict.singleton("hello", 100), "hello"), 0) = 100
 Option.isNone<Int64>(Dict.get(Dict.singleton("hello", 100), "world")) = true
 
 // ===================================================================
-// Dict.contains - Check if key exists
+// Dict.member - Check if key exists
 // ===================================================================
 
-Dict.contains(Dict.singleton("key", 42), "key") = true
-Dict.contains(Dict.singleton("key", 42), "other") = false
-Dict.contains<String, Int64>(Dict.empty<String, Int64>(), "any") = false
+Dict.member(Dict.singleton("key", 42), "key") = true
+Dict.member(Dict.singleton("key", 42), "other") = false
+Dict.member<String, Int64>(Dict.empty<String, Int64>(), "any") = false
 
 // ===================================================================
 // Dict.remove - Remove entries
 // ===================================================================
 
 Dict.isEmpty(Dict.remove(Dict.singleton("key", 42), "key")) = true
-Dict.contains(Dict.remove(Dict.singleton("key", 42), "key"), "key") = false
+Dict.member(Dict.remove(Dict.singleton("key", 42), "key"), "key") = false
 Dict.size(Dict.remove(Dict.set(Dict.set(Dict.empty<String, Int64>(), "a", 1), "b", 2), "a")) = 1
 
 // ===================================================================
