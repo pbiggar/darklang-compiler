@@ -333,6 +333,14 @@ let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) 
         match tryLog2 n with
         | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
         | None -> None
+    | Mul, x, IntLiteral (UInt64 n) when isUInt64Atom typeEnv x ->
+        match tryLog2UInt64 n with
+        | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
+        | None -> None
+    | Mul, IntLiteral (UInt64 n), x when isUInt64Atom typeEnv x ->
+        match tryLog2UInt64 n with
+        | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
+        | None -> None
     | Mod, x, IntLiteral (Int64 n) when n > 0L ->
         // For positive power-of-two divisors, Euclidean remainder equals x & (n - 1)
         match tryLog2 n with

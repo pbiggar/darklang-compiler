@@ -400,12 +400,19 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Existing ANF optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Implemented for `2.0 * x -> x + x` and `x * 2.0 -> x + x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `strength_reduce_float_mul_two_left` and `strength_reduce_float_mul_two_right` in `src/Tests/optimization/anf.opt`.
 
-### Multiplication by power-of-two lowering
+### Int64 multiplication by power-of-two lowering
 
-- Optimization name: Multiplication by power-of-two lowering
+- Optimization name: Int64 multiplication by power-of-two lowering
 - Taxonomy category: Strength reduction
 - Priority/rationale: Existing ANF optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Implemented in `tryStrengthReduce`.
+
+### UInt64 multiplication by power-of-two lowering
+
+- Optimization name: UInt64 multiplication by power-of-two lowering
+- Taxonomy category: Strength reduction
+- Priority/rationale: Canonical, low-risk lowering that replaces unsigned multiplication by a nonzero power-of-two literal with a left shift while preserving modulo-2^64 wrapping semantics.
+- Notes: Implemented for either operand order and the full UInt64 power-of-two range in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `strength_reduce_uint64_mul_power_of_two_right` and `strength_reduce_uint64_mul_power_of_two_left` in `src/Tests/optimization/anf.opt`, including the high-bit literal. No routine benchmark uses UInt64 source arithmetic; a UInt64 byte-packing workload that repeatedly scales dynamic words by `256UL` is the identified follow-up benchmark.
 
 ### UInt64 division by power-of-two lowering
 

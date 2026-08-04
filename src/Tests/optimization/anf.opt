@@ -430,6 +430,24 @@ let TempId 1 = t0 >> 3
 return t1
 
 ---NAME---
+strength_reduce_uint64_mul_power_of_two_right
+---INPUT---
+def f(x: UInt64) : UInt64 = x * 8UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 << 3
+return t1
+
+---NAME---
+strength_reduce_uint64_mul_power_of_two_left
+---INPUT---
+def f(x: UInt64) : UInt64 = 9223372036854775808UL * x
+---EXPECTED---
+Function f:
+let TempId 1 = t0 << 63
+return t1
+
+---NAME---
 identity_uint64_mul_one_right
 ---INPUT---
 def f(x: UInt64) : UInt64 = x * 1UL
