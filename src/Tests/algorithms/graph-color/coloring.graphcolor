@@ -1,0 +1,209 @@
+// Graph coloring, spilling, precoloring, preference, and MCS properties.
+
+---NAME---
+empty graph
+---VERTICES---
+none
+---AVAILABLE-COLORS---
+0
+---EXPECT-CHROMATIC---
+0
+---EXPECT-SPILLS---
+0
+---EXPECT-COLORED---
+0
+
+---NAME---
+single vertex
+---VERTICES---
+0
+---AVAILABLE-COLORS---
+8
+---EXPECT-COLORS---
+0=0
+
+---NAME---
+non-interfering vertices reuse a color
+---VERTICES---
+0 1
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+<= 1
+
+---NAME---
+interfering vertices use different colors
+---VERTICES---
+0 1
+---EDGES---
+0-1
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+2
+---EXPECT-DIFFERENT---
+0-1
+
+---NAME---
+triangle needs three colors
+---VERTICES---
+0 1 2
+---EDGES---
+0-1 0-2 1-2
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+3
+---EXPECT-DIFFERENT---
+0-1 0-2 1-2
+
+---NAME---
+chain needs two colors
+---VERTICES---
+0 1 2 3
+---EDGES---
+0-1 1-2 2-3
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+2
+---EXPECT-DIFFERENT---
+0-1 1-2 2-3
+
+---NAME---
+clique larger than the color budget spills
+---VERTICES---
+0 1 2 3 4 5 6 7 8 9
+---EDGES---
+0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9
+1-2 1-3 1-4 1-5 1-6 1-7 1-8 1-9
+2-3 2-4 2-5 2-6 2-7 2-8 2-9
+3-4 3-5 3-6 3-7 3-8 3-9
+4-5 4-6 4-7 4-8 4-9
+5-6 5-7 5-8 5-9
+6-7 6-8 6-9
+7-8 7-9
+8-9
+---AVAILABLE-COLORS---
+8
+---EXPECT-SPILLS---
+>= 2
+
+---NAME---
+precoloring is respected
+---VERTICES---
+0 1
+---EDGES---
+0-1
+---AVAILABLE-COLORS---
+8
+---PRECOLORED---
+0=3
+---EXPECT-COLORS---
+0=3
+---EXPECT-DIFFERENT---
+0-1
+
+---NAME---
+MCS ordering covers all vertices
+---VERTICES---
+0 1 2 3
+---EDGES---
+0-1 0-2 1-3 2-3
+---AVAILABLE-COLORS---
+8
+---EXPECT-MCS-ORDERING---
+all
+
+---NAME---
+MCS selection profile is linear for isolated vertices
+---VERTICES---
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+---AVAILABLE-COLORS---
+8
+---EXPECT-SELECTION-CHECKS---
+16
+
+---NAME---
+branch join graph stays within three colors
+---VERTICES---
+0 1 2 3
+---EDGES---
+0-1 0-2 1-3 2-3
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+<= 3
+
+---NAME---
+star graph needs two colors
+---VERTICES---
+0 1 2 3 4
+---EDGES---
+0-1 0-2 0-3 0-4
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+2
+---EXPECT-DIFFERENT---
+0-1 0-2 0-3 0-4
+
+---NAME---
+multiple precolored vertices are respected
+---VERTICES---
+0 1 2
+---EDGES---
+0-1 0-2 1-2
+---AVAILABLE-COLORS---
+8
+---PRECOLORED---
+0=0 1=1
+---EXPECT-COLORS---
+0=0 1=1
+---EXPECT-DIFFERENT---
+0-2 1-2
+
+---NAME---
+clique matching the color budget does not spill
+---VERTICES---
+0 1 2 3 4 5 6 7
+---EDGES---
+0-1 0-2 0-3 0-4 0-5 0-6 0-7
+1-2 1-3 1-4 1-5 1-6 1-7
+2-3 2-4 2-5 2-6 2-7
+3-4 3-5 3-6 3-7
+4-5 4-6 4-7
+5-6 5-7
+6-7
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+8
+---EXPECT-SPILLS---
+0
+
+---NAME---
+disconnected components reuse colors
+---VERTICES---
+0 1 2 3
+---EDGES---
+0-1 2-3
+---AVAILABLE-COLORS---
+8
+---EXPECT-CHROMATIC---
+2
+
+---NAME---
+move preference takes priority over phi preference
+---VERTICES---
+0 1 2
+---EDGES---
+1-2
+---AVAILABLE-COLORS---
+2
+---PREFER---
+0-1
+---MOVE-PREFER---
+0-2
+---EXPECT-SAME---
+0-2

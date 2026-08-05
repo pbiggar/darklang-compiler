@@ -286,6 +286,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let lir2arm64TestFiles  = getTestFiles "passes/lir2arm64" "lir2arm64"
     let arm64encTestFiles  = getTestFiles "passes/arm64enc" "arm64enc"
     let x64encTestFiles = getTestFiles "passes/x64enc" "x64enc"
+    let graphColorTestFiles = getTestFiles "algorithms/graph-color" "graphcolor"
+    let parallelMoveTestFiles = getTestFiles "algorithms/parallel-moves" "parallelmoves"
     let formattingRoundtripTestFiles = getTestFiles "formatting-roundtrip" "roundtrip"
     let syntaxTestFiles = getTestFiles "syntax" "syntax"
 
@@ -308,6 +310,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Progress Bar Tests"; Tests = ProgressBarTests.tests }
         { Name = "Syntax DSL Tests"; Tests = SyntaxDSLTests.tests }
         { Name = "Encoding DSL Tests"; Tests = EncodingDSLTests.tests }
+        { Name = "Graph Color DSL Tests"; Tests = GraphColorDSLTests.tests }
+        { Name = "Parallel Move DSL Tests"; Tests = ParallelMoveDSLTests.tests }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
         { Name = "ARM64 Binary Tests"; Tests = ARM64BinaryTests.tests }
         { Name = "ARM64 CodeGen Tests"; Tests = ARM64CodeGenTests.tests }
@@ -316,12 +320,13 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "x64 Resolve Tests"; Tests = X86_64ResolveTests.tests }
         { Name = "x64 CodeGen Tests"; Tests = X86_64CodeGenTests.tests }
         { Name = "Type Checking Tests"; Tests = TypeCheckingTests.tests }
-        { Name = "Parallel Move Tests"; Tests = ParallelMoveTests.tests }
+        { Name = "Parallel Move Fixture Tests"; Tests = TestDSL.ParallelMoveTestRunner.tests parallelMoveTestFiles }
         { Name = "Bitset Tests"; Tests = BitsetTests.tests }
         { Name = "SSA Construction Tests"; Tests = SSAConstructionTests.tests }
         { Name = "SSA Liveness Tests"; Tests = SSALivenessTests.tests }
         { Name = "Phi Resolution Tests"; Tests = PhiResolutionTests.tests }
-        { Name = "Chordal Graph Tests"; Tests = ChordalGraphTests.tests }
+        { Name = "Graph Coloring Fixture Tests"; Tests = TestDSL.GraphColorTestRunner.tests graphColorTestFiles }
+        { Name = "Chordal Graph Integration Tests"; Tests = ChordalGraphTests.tests }
         { Name = "AST to ANF Tests"; Tests = ASTToANFTests.tests }
         { Name = "RefCount Insertion Tests"; Tests = RefCountInsertionTests.tests }
         { Name = "TailCall Detection Tests"; Tests = TailCallDetectionTests.tests }

@@ -19,6 +19,8 @@
     <Compile Include="test-suite-tooling/TestDSL/ARM64EncodingFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/X86_64Parser.fs" />
     <Compile Include="test-suite-tooling/TestDSL/X86_64EncodingFormat.fs" />
+    <Compile Include="test-suite-tooling/TestDSL/GraphColorFormat.fs" />
+    <Compile Include="test-suite-tooling/TestDSL/ParallelMoveFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/E2EFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/TypeCheckingFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/OptimizationFormat.fs" />
@@ -27,6 +29,8 @@
     <Compile Include="test-suite-tooling/Runners/PassTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/ARM64EncodingTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/X86_64EncodingTestRunner.fs" />
+    <Compile Include="test-suite-tooling/Runners/GraphColorTestRunner.fs" />
+    <Compile Include="test-suite-tooling/Runners/ParallelMoveTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/E2ETestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/TypeCheckingTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/OptimizationTestRunner.fs" />
@@ -48,6 +52,8 @@
     <Compile Include="test-suite-tooling-tests/FormattingRoundtripTests.fs" />
     <Compile Include="test-suite-tooling-tests/SyntaxDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/EncodingDSLTests.fs" />
+    <Compile Include="test-suite-tooling-tests/GraphColorDSLTests.fs" />
+    <Compile Include="test-suite-tooling-tests/ParallelMoveDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/E2EFormatTests.fs" />
 
     <!-- Compiler pass tests (shared) -->
@@ -55,7 +61,6 @@
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
     <Compile Include="compiler-passes/ANFToMIRTests.fs" />
     <Compile Include="compiler-passes/TypeCheckingTests.fs" />
-    <Compile Include="compiler-passes/ParallelMoveTests.fs" />
     <Compile Include="compiler-passes/BitsetTests.fs" />
     <Compile Include="compiler-passes/SSAConstructionTests.fs" />
     <Compile Include="compiler-passes/SSALivenessTests.fs" />
@@ -101,6 +106,8 @@
     <None Include="passes/**/*.lir2arm64" />
     <None Include="passes/**/*.arm64enc" />
     <None Include="passes/**/*.x64enc" />
+    <None Include="algorithms/**/*.graphcolor" />
+    <None Include="algorithms/**/*.parallelmoves" />
     <None Include="e2e/**/*.e2e" />
     <None Include="verification/**/*.e2e" />
     <None Include="typecheck/**/*.typecheck" />

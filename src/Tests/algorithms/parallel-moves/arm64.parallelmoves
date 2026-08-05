@@ -1,0 +1,72 @@
+// Exact ARM64 lowering for independent, dependent, cyclic, and non-register moves.
+
+---NAME---
+simple register move
+---INPUT-MOVES---
+X1 <- Reg X2
+---OUTPUT-ARM64---
+MOV_reg(X1, X2)
+
+---NAME---
+dependent move chain preserves sources
+---INPUT-MOVES---
+X1 <- Reg X2
+X2 <- Reg X3
+---OUTPUT-ARM64---
+MOV_reg(X1, X2)
+MOV_reg(X2, X3)
+
+---NAME---
+two-way cycle uses temporary register
+---INPUT-MOVES---
+X1 <- Reg X2
+X2 <- Reg X1
+---OUTPUT-ARM64---
+MOV_reg(X16, X1)
+MOV_reg(X1, X2)
+MOV_reg(X2, X16)
+
+---NAME---
+three-way cycle uses temporary register
+---INPUT-MOVES---
+X1 <- Reg X2
+X2 <- Reg X3
+X3 <- Reg X1
+---OUTPUT-ARM64---
+MOV_reg(X16, X1)
+MOV_reg(X1, X2)
+MOV_reg(X2, X3)
+MOV_reg(X3, X16)
+
+---NAME---
+self move is eliminated
+---INPUT-MOVES---
+X1 <- Reg X1
+---OUTPUT-ARM64---
+none
+
+---NAME---
+independent move precedes cycle resolution
+---INPUT-MOVES---
+X1 <- Reg X2
+X2 <- Reg X1
+X3 <- Reg X4
+---OUTPUT-ARM64---
+MOV_reg(X3, X4)
+MOV_reg(X16, X1)
+MOV_reg(X1, X2)
+MOV_reg(X2, X16)
+
+---NAME---
+immediate source is materialized
+---INPUT-MOVES---
+X1 <- Imm 42
+---OUTPUT-ARM64---
+MOVZ(X1, 42, 0)
+
+---NAME---
+stack source loads through frame pointer
+---INPUT-MOVES---
+X1 <- Stack -8
+---OUTPUT-ARM64---
+LDUR(X1, X29, -8)
