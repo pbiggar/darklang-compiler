@@ -307,6 +307,37 @@ iterate:
 
 This recursion is bounded to 10 iterations in the current benchmark, so it is not the dominant reduced-size cost. It still shows that cleanup after recursive calls can block tail-call lowering when heap-owned intermediates must be decremented after the recursive result returns. Mutable arrays remain the main full-parity blocker, but the reduced implementation also identifies two secondary opportunities: avoid boxing float tuple fields through generic heap objects when their shape is statically known, and make lifetime cleanup compatible with tail-position loop lowering where possible.
 
+### Problem 5: List<Float> Destructuring Correctness
+
+An obvious immutable-vector experiment represents each vector as a `List<Float>`
+and recursively destructures it with `[head, ...tail]`. Before the compiler fix,
+the pattern lowering loaded a FingerTree leaf payload with an untyped `RawGet`.
+That selected a general-purpose destination register even though subsequent
+floating-point arithmetic read the value from a floating-point register. A
+later `TypedAtom` preserved the semantic type but was too late to change the
+physical load.
+
+For example, the direct recursive implementation:
+
+```dark
+def sumFloatList(xs: List<Float>) : Float =
+    match xs with
+    | [] -> 0.0
+    | [head, ...tail] -> head + sumFloatList(tail)
+```
+
+returned `4.5` for `[1.5, 2.25]` instead of `3.75`. Exact singleton and nested
+list patterns could return `0.0` for a stored `1.5` value. List-pattern lowering
+now marks leaf payload loads as `Float` when the element type is `Float`, so LIR
+performs the required raw load followed by `GpToFp` before using the value.
+
+This removes the correctness blocker for a straightforward functional
+spectral-norm implementation. It does not by itself make immutable linked-list
+vectors a full benchmark-parity implementation: repeated indexed access and
+rebuilding output vectors remain compiler/runtime performance targets. The
+current reduced tuple benchmark therefore remains in place until the obvious
+full-size implementation completes the benchmark profile without regression.
+
 ## Identified Optimization Opportunities
 
 ### 1. Add Mutable Array Primitive

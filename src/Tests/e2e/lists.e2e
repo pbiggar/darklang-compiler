@@ -715,6 +715,22 @@ checkGuardFirst120([]) = 400
 // eliminate the let binding and produce incorrect code.
 let xs = [42] in match [1, ...xs] with | [a, b] -> a + b | _ -> 0 = 43
 
+// List<Float> cons destructuring must preserve the floating-point representation
+// for heads extracted from both DEEP and SINGLE FingerTree nodes.
+def sumFloatList(xs: List<Float>) : Float =
+    match xs with
+    | [] -> 0.0
+    | [head, ...tail] -> head + sumFloatList(tail)
+
+Stdlib.Float.toInt(sumFloatList([1.5, 2.25]) * 100.0) = 375
+
+// Exercise the exact-list and nested-pattern lowering paths, which unwrap the
+// same leaf representation independently from list-cons lowering.
+match [1.5] with | [value] -> Stdlib.Float.toInt(value * 100.0) | _ -> 0 = 150
+
+type WrappedFloatList = WrappedFloatList of List<Float>
+match WrappedFloatList([1.5]) with | WrappedFloatList([value]) -> Stdlib.Float.toInt(value * 100.0) = 150
+
 // =====================================================
 // List head type tracking test (kills mutation #167)
 // =====================================================

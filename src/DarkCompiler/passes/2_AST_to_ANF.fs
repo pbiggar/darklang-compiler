@@ -5117,7 +5117,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let (leafPtrVar, vg1) = ANF.freshVar vg
                         let leafPtrExpr = ANF.Prim (ANF.BitAnd, leafTaggedPtr, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                         let (valueVar, vg2) = ANF.freshVar vg1
-                        let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), None)
+                        let valueType = if elemType = AST.TFloat64 then Some AST.TFloat64 else None
+                        let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), valueType)
                         let newBindings = bindings @ [(leafPtrVar, leafPtrExpr); (valueVar, valueExpr)]
                         (ANF.Var valueVar, valueVar, newBindings, vg2)
 
@@ -6346,7 +6347,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let (leafPtrVar, vg1) = ANF.freshVar vg
                         let leafPtrExpr = ANF.Prim (ANF.BitAnd, leafTaggedPtr, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                         let (valueVar, vg2) = ANF.freshVar vg1
-                        let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), None)
+                        let valueType = if elemType = AST.TFloat64 then Some AST.TFloat64 else None
+                        let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), valueType)
                         let newBindings = bindings @ [(leafPtrVar, leafPtrExpr); (valueVar, valueExpr)]
                         (ANF.Var valueVar, valueVar, newBindings, vg2)
 
@@ -6700,7 +6702,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let (leafPtrVar, vg1) = ANF.freshVar vg
                     let leafPtrExpr = ANF.Prim (ANF.BitAnd, leafTaggedPtr, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                     let (valueVar, vg2) = ANF.freshVar vg1
-                    let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), None)
+                    let valueType = if elemType = AST.TFloat64 then Some AST.TFloat64 else None
+                    let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), valueType)
                     let newBindings = bindings @ [(leafPtrVar, leafPtrExpr); (valueVar, valueExpr)]
                     (ANF.Var valueVar, valueVar, newBindings, vg2)
 
