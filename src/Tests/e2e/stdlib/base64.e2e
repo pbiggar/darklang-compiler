@@ -57,8 +57,12 @@ match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1
 match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.get(b, 0) | Error(_) -> -1 = 72
 match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.get(b, 4) | Error(_) -> -1 = 111
 
-// Invalid base64 - wrong length
-Result.isError<Bytes, String>(Base64.decode("ABC")) = true
+// Unpadded final groups
+match Base64.decode("Kw") with | Ok(b) -> Bytes.get(b, 0) | Error(_) -> -1 = 43
+match Base64.decode("ABC") with | Ok(b) -> (Bytes.get(b, 0), Bytes.get(b, 1)) | Error(_) -> (-1, -1) = (0, 16)
+
+// Invalid base64 - a single character cannot encode a byte
+Result.isError<Bytes, String>(Base64.decode("x")) = true
 
 // Invalid base64 - padding is only valid in the final two positions
 Result.isError<Bytes, String>(Base64.decode("=AAA")) = true

@@ -99,6 +99,7 @@ Areas where compiler produces WRONG output. These need to be fixed to match Dark
 | `Int64.power` | `eval:error_result` | Negative exponent handling | Fixed |
 | `Char.isUppercase` | — | Supported non-ASCII uppercase characters were classified as lowercase | Fixed |
 | `Dict.setOverridingDuplicates` | — | Official overwriting dictionary update was missing | Fixed |
+| `Base64.decode` | — | Valid unpadded final groups were rejected | Fixed |
 | Float precision | `eval:float_precision` | High-precision floats have different representation | Needs fix |
 
 ### 2.1 Modulo Operator (`%`)
@@ -135,6 +136,12 @@ case-conversion pairs, including `Ż`, matching the official interpreter.
 The compiler now exposes the official string-keyed dictionary update function.
 When the key already exists, the returned immutable dictionary contains the new
 value, matching the interpreter.
+
+### 2.5 `Base64.decode` Unpadded Final Groups
+
+The compiler now accepts valid final Base64 groups of two or three characters
+without explicit `=` padding, matching the official interpreter. A one-character
+input remains invalid because it cannot encode a complete byte.
 
 ## 3. Tooling Differences
 

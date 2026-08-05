@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-05 22:29:40
-**Commit:** `74a5e957` - Eliminate redundant ANF value selections
+**Last Updated:** 2026-08-05 22:57:49
+**Commit:** `54651557` - Accept unpadded Base64 final groups
 
 | Benchmark     |           Dark (7.78x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

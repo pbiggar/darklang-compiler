@@ -165,12 +165,18 @@ def Stdlib.Base64.__prependReversed(bytes: List<Int64>, acc: List<Int64>) : List
 // Decode base64 string to bytes
 def Stdlib.Base64.decode(s: String) : Stdlib.Result.Result<Bytes, String> =
     let len = Stdlib.String.length(s) in
+    let remainder = len % 4 in
     if len == 0 then
         Ok(Stdlib.Bytes.create(0))
-    else if (len % 4) != 0 then
+    else if remainder == 1 then
         Error("Invalid base64: length not multiple of 4")
     else
-        match Stdlib.Base64.__decodeHelper(s, 0, len, []) with
+        // Base64 permits the final two- or three-character group to omit padding.
+        let padded =
+            if remainder == 2 then s ++ "=="
+            else if remainder == 3 then s ++ "="
+            else s in
+        match Stdlib.Base64.__decodeHelper(padded, 0, Stdlib.String.length(padded), []) with
         | Ok(byteList) -> Ok(Stdlib.Bytes.fromList(byteList))
         | Error(msg) -> Error(msg)
 
