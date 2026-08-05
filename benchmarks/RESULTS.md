@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-06 22:00:34
-**Commit:** `40a2e85c` - Hoist effect-free scalar calls from loops
+**Last Updated:** 2026-08-06 23:27:38
+**Commit:** `3f618ea0` - Track interpreter lambda parameter origins
 
 | Benchmark     |           Dark (2.45x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

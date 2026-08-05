@@ -96,6 +96,12 @@ and Token =
     | TIdent of string
     | TEOF
 
+/// Tracks whether an interpreter lambda parameter type was inferred or written
+/// explicitly until the parser has decided whether to curry the lambda.
+type private ParsedLambdaParamType =
+    | Implicit of Type
+    | Explicit of Type
+
 /// Lexer: convert string to list of tokens
 let lex (input: string) : Result<Token list, string> =
     let rec lexHelper (chars: char list) (acc: Token list) : Result<Token list, string> =
@@ -2082,8 +2088,8 @@ let parse (tokens: Token list) : Result<Program, string> =
             let rec parseFunParameters
                 (toks: Token list)
                 (paramIndex: int)
-                (acc: (string * Type * Pattern option) list)
-                : Result<(string * Type * Pattern option) list * Token list, string> =
+                (acc: (string * ParsedLambdaParamType * Pattern option) list)
+                : Result<(string * ParsedLambdaParamType * Pattern option) list * Token list, string> =
                 match toks with
                 | TArrow :: remaining when not (List.isEmpty acc) ->
                     Ok (List.rev acc, remaining)
@@ -2093,13 +2099,13 @@ let parse (tokens: Token list) : Result<Program, string> =
                     parseFunParameters
                         remaining
                         (paramIndex + 1)
-                        ((syntheticParamName, TVar typeVarName, None) :: acc)
+                        ((syntheticParamName, Implicit (TVar typeVarName), None) :: acc)
                 | TIdent name :: remaining when not (System.Char.IsUpper(name.[0])) ->
                     let typeVarName = implicitLambdaTypeVarName lambdaSeed paramIndex name
                     parseFunParameters
                         remaining
                         (paramIndex + 1)
-                        ((name, TVar typeVarName, None) :: acc)
+                        ((name, Implicit (TVar typeVarName), None) :: acc)
                 | TLParen :: TIdent name :: TColon :: remaining when not (System.Char.IsUpper(name.[0])) ->
                     parseType remaining
                     |> Result.bind (fun (paramType, afterType) ->
@@ -2108,7 +2114,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                             parseFunParameters
                                 remaining'
                                 (paramIndex + 1)
-                                ((name, paramType, None) :: acc)
+                                ((name, Explicit paramType, None) :: acc)
                         | _ -> Error "Expected ')' after typed lambda parameter")
                 | TLParen :: _ ->
                     parsePattern toks
@@ -2120,7 +2126,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                             parseFunParameters
                                 remaining
                                 (paramIndex + 1)
-                                ((name, TVar typeVarName, None) :: acc)
+                                ((name, Implicit (TVar typeVarName), None) :: acc)
                         | _ ->
                             let syntheticParamName = $"lambdaPattern{lambdaSeed}_{paramIndex}"
                             let typeVarName =
@@ -2131,7 +2137,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                             parseFunParameters
                                 remaining
                                 (paramIndex + 1)
-                                ((syntheticParamName, TVar typeVarName, Some pattern) :: acc))
+                                ((syntheticParamName, Implicit (TVar typeVarName), Some pattern) :: acc))
                 | _ -> Error "Expected one or more parameters before '->' in fun expression"
 
             parseFunParameters rest 0 []
@@ -2140,7 +2146,11 @@ let parse (tokens: Token list) : Result<Program, string> =
                 |> Result.map (fun (body, remaining) ->
                     let parameters =
                         parsedParameters
-                        |> List.map (fun (paramName, paramType, _) -> (paramName, paramType))
+                        |> List.map (fun (paramName, parsedParamType, _) ->
+                            let paramType =
+                                match parsedParamType with
+                                | Implicit typ | Explicit typ -> typ
+                            (paramName, paramType))
 
                     let patternBindings =
                         parsedParameters
@@ -2166,15 +2176,12 @@ let parse (tokens: Token list) : Result<Program, string> =
                     // parser/pretty roundtrips. Curry fully-untyped interpreter
                     // lambdas (`fun x y -> ...`) to match upstream behavior for
                     // partial application.
-                    let isImplicitInterpreterParamType (ty: Type) : bool =
-                        match ty with
-                        | TVar typeVarName -> typeVarName.StartsWith "__interp_lambda_"
-                        | _ -> false
-
                     let shouldCurry =
-                        parameters
-                        |> List.map snd
-                        |> List.forall isImplicitInterpreterParamType
+                        parsedParameters
+                        |> List.forall (fun (_, paramType, _) ->
+                            match paramType with
+                            | Implicit _ -> true
+                            | Explicit _ -> false)
 
                     if shouldCurry then
                         let rec buildCurriedLambda

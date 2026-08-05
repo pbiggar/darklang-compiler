@@ -847,6 +847,25 @@ let testPrettyPrintInterpreterSyntaxPreservesImplicitCurriedLambdaRoundtrip () :
             else
                 Error $"Implicit curried lambda AST changed after interpreter pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
 
+let testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried () : TestResult =
+    let source =
+        "fun (x: '__interp_lambda_0_0_x) (y: '__interp_lambda_0_1_y) -> x"
+
+    match InterpreterParser.parseString false source with
+    | Error err ->
+        Error $"Interpreter parser failed for explicitly typed lambda: {err}"
+    | Ok (Program [Expression (Lambda (parameters, Var "x"))]) ->
+        match NonEmptyList.toList parameters with
+        | [ ("x", TVar "__interp_lambda_0_0_x")
+            ("y", TVar "__interp_lambda_0_1_y") ] ->
+            Ok ()
+        | other ->
+            Error $"Unexpected explicitly typed lambda parameters: {other}"
+    | Ok (Program [Expression expr]) ->
+        Error $"Expected one uncurried explicitly typed lambda, got: {expr}"
+    | Ok other ->
+        Error $"Expected single expression program, got: {other}"
+
 let testPrettyPrintInterpreterSyntaxPreservesTupleApplyInsideListRoundtrip () : TestResult =
     let source =
         "(Stdlib.Html.link\n"
@@ -985,6 +1004,7 @@ let tests = [
     ("parse qualified record literal", testInterpreterParserParsesQualifiedRecordLiteral)
     ("parse constructor over-application chain", testInterpreterParserParsesConstructorOverApplicationChain)
     ("pretty-print interpreter preserves implicit curried lambda roundtrip", testPrettyPrintInterpreterSyntaxPreservesImplicitCurriedLambdaRoundtrip)
+    ("explicit prefix-matching lambda type vars remain uncurried", testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried)
     ("pretty-print interpreter preserves tuple-apply-in-list roundtrip", testPrettyPrintInterpreterSyntaxPreservesTupleApplyInsideListRoundtrip)
     ("pretty-print interpreter preserves nested tuple-apply-in-list roundtrip", testPrettyPrintInterpreterSyntaxPreservesNestedTupleApplyInsideListRoundtrip)
     ("pretty-print interpreter preserves uncurried-lambda-apply roundtrip", testPrettyPrintInterpreterSyntaxPreservesUncurriedLambdaApplyRoundtrip)
