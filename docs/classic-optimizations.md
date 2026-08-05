@@ -589,6 +589,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical low-risk fusion that exposes the native ARM64 multiply-subtract instruction and mirrors the existing multiply-add peephole.
 - Notes: Implemented for adjacent integer `Mul temp, left, right; Sub dest, minuend, temp` when `temp` is not subsequently read. Direct LIR tests cover both fusion and live-temporary preservation, `fuse_multiply_subtract` covers source-to-LIR output, and `multiply_subtract` provides focused benchmark coverage. On ARM64, the focused Cachegrind benchmark fell from 8,000,111 to 7,000,111 instructions (12.5%); an earlier x64 comparison was unchanged because that backend expands `Msub`.
 
+### Dead floating arithmetic copy elimination
+
+- Optimization name: Dead floating arithmetic copy elimination
+- Taxonomy category: Instruction combining
+- Priority/rationale: Canonical low-risk result retargeting that removes one floating-point copy from adjacent arithmetic/copy chains without extending the temporary's lifetime.
+- Notes: Implemented for adjacent `FAdd`, `FSub`, `FMul`, or `FDiv` results copied by `FMov` when the arithmetic temporary has no later instruction uses. Direct LIR tests cover all four operations and live-temporary preservation; `retarget_dead_float_arithmetic_move` records the source-to-LIR result. The routine `pisum` benchmark exercises the pattern in its hot loop and fell from 50,015,171 to 45,015,171 instructions (10.0%); all other routine counts were unchanged. The committed aggregate ratio is 7.78x, and applying the measured `pisum` result yields 7.74x pending orchestrator recording.
+
 ## Code motion
 
 ### Shared leading conditional binding hoisting

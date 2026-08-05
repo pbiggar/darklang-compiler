@@ -137,6 +137,44 @@ let testFNegMoveChainFusesWhenTempDies () : TestResult =
     else
         Error $"Expected dead FNeg/FMov chain to fuse, got: {optimized}"
 
+let testFloatingArithmeticMoveChainsFuseWhenTempsDie () : TestResult =
+    let instrs = [
+        FAdd (FVirtual 1, FVirtual 2, FVirtual 3)
+        FMov (FVirtual 4, FVirtual 1)
+        FSub (FVirtual 5, FVirtual 6, FVirtual 7)
+        FMov (FVirtual 8, FVirtual 5)
+        FMul (FVirtual 9, FVirtual 10, FVirtual 11)
+        FMov (FVirtual 12, FVirtual 9)
+        FDiv (FVirtual 13, FVirtual 14, FVirtual 15)
+        FMov (FVirtual 16, FVirtual 13)
+    ]
+
+    let expected = [
+        FAdd (FVirtual 4, FVirtual 2, FVirtual 3)
+        FSub (FVirtual 8, FVirtual 6, FVirtual 7)
+        FMul (FVirtual 12, FVirtual 10, FVirtual 11)
+        FDiv (FVirtual 16, FVirtual 14, FVirtual 15)
+    ]
+
+    let optimized = optimizeInstrs instrs
+    if optimized = expected then
+        Ok ()
+    else
+        Error $"Expected dead floating arithmetic copies to fold, got: {optimized}"
+
+let testFloatingArithmeticMoveChainKeepsLiveTemp () : TestResult =
+    let instrs = [
+        FAdd (FVirtual 1, FVirtual 2, FVirtual 3)
+        FMov (FVirtual 4, FVirtual 1)
+        PrintFloat (FVirtual 1)
+    ]
+
+    let optimized = optimizeInstrs instrs
+    if optimized = instrs then
+        Ok ()
+    else
+        Error $"Expected live floating arithmetic temporary to stay available, got: {optimized}"
+
 let testMulAddFusionKeepsLiveTempForPrint () : TestResult =
     let instrs = [
         Mul (Virtual 1, Virtual 2, Virtual 3)
@@ -246,6 +284,8 @@ let tests = [
     ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
     ("LIR peephole keeps floating copy-back after FPhi writes source", testFloatingCopyBackKeepsMoveAfterFPhiWritesSource)
     ("LIR peephole fuses FNeg followed by dead-temp FMov", testFNegMoveChainFusesWhenTempDies)
+    ("LIR peephole folds dead floating arithmetic copies", testFloatingArithmeticMoveChainsFuseWhenTempsDie)
+    ("LIR peephole keeps live floating arithmetic temporaries", testFloatingArithmeticMoveChainKeepsLiveTemp)
     ("LIR peephole keeps MUL temp used by later print", testMulAddFusionKeepsLiveTempForPrint)
     ("LIR peephole fuses dead MUL/SUB temporary into MSUB", testMulSubFusionReplacesDeadTemp)
     ("LIR peephole keeps MUL/SUB temporary used by later print", testMulSubFusionKeepsLiveTempForPrint)

@@ -5,6 +5,7 @@
 // - Remove self-moves (mov x, x → remove)
 // - Constant multiplication optimizations (mul x, y, 0 → mov x, 0)
 // - Dead move elimination
+// - Retarget dead floating-point results into their copy destinations
 //
 // These optimizations work on individual instructions or small sequences.
 
@@ -456,11 +457,27 @@ let private fRegUsedInInstr (target: FReg) (instr: Instr) : bool =
 let private fRegUsedInInstrs (target: FReg) (instrs: Instr list) : bool =
     instrs |> List.exists (fRegUsedInInstr target)
 
-let private tryFoldFNegIntoMove (instr: Instr) (next: Instr) (rest: Instr list) : Instr option =
+let private tryRetargetFloatingResultIntoMove
+    (instr: Instr)
+    (next: Instr)
+    (rest: Instr list)
+    : Instr option =
     match instr, next with
     | FNeg (temp, src), FMov (dest, moveSrc)
         when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
         Some (FNeg (dest, src))
+    | FAdd (temp, left, right), FMov (dest, moveSrc)
+        when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
+        Some (FAdd (dest, left, right))
+    | FSub (temp, left, right), FMov (dest, moveSrc)
+        when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
+        Some (FSub (dest, left, right))
+    | FMul (temp, left, right), FMov (dest, moveSrc)
+        when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
+        Some (FMul (dest, left, right))
+    | FDiv (temp, left, right), FMov (dest, moveSrc)
+        when sameFReg temp moveSrc && not (fRegUsedInInstrs temp rest) ->
+        Some (FDiv (dest, left, right))
     | _ -> None
 
 /// Optimize a list of instructions (single-pass peephole)
@@ -468,7 +485,7 @@ let optimizeInstrs (instrs: Instr list) : Instr list =
     let rec loop remaining =
         match remaining with
         | instr :: next :: rest ->
-            match tryFoldFNegIntoMove instr next rest with
+            match tryRetargetFloatingResultIntoMove instr next rest with
             | Some folded -> folded :: loop rest
             | None ->
                 match optimizeInstr instr with
@@ -486,7 +503,7 @@ let removeSelfMovesFromInstrs (instrs: Instr list) : Instr list =
     let rec loop remaining =
         match remaining with
         | instr :: next :: rest ->
-            match tryFoldFNegIntoMove instr next rest with
+            match tryRetargetFloatingResultIntoMove instr next rest with
             | Some folded -> folded :: loop rest
             | None ->
                 match instr with

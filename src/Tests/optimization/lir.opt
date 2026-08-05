@@ -2,6 +2,19 @@
 // Tests LIR peephole optimizations and loop-invariant code motion.
 
 ---NAME---
+retarget_dead_float_arithmetic_move
+---INPUT---
+def add(left: Float, right: Float) : Float =
+    left + right
+---EXPECTED---
+add:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "add_entry":
+    D0 <- FAdd(fv0, fv1)
+    Ret
+
+---NAME---
 licm_hoist_loop_constant
 ---INPUT---
 def collatzSteps(n: Int64, steps: Int64) : Int64 =
