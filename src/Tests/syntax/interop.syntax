@@ -1,0 +1,135 @@
+// Focused syntax acceptance, formatting, rejection, and roundtrip regressions.
+
+---NAME---
+format compiler syntax as interpreter syntax
+---PARSE-AS---
+compiler
+---SOURCE---
+let x = 5 in Stdlib.Int64.add(x, 1)
+---FORMAT-AS---
+interpreter
+---EXPECTED---
+let x = 5L in Stdlib.Int64.add x 1L
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+interpreter formatting parenthesizes nested call arguments
+---PARSE-AS---
+compiler
+---SOURCE---
+Builtin.unwrap(Stdlib.List.head(xs))
+---FORMAT-AS---
+interpreter
+---EXPECTED---
+Builtin.unwrap (Stdlib.List.head xs)
+---ROUNDTRIP-AS---
+interpreter
+
+---NAME---
+format interpreter syntax as compiler syntax
+---PARSE-AS---
+interpreter
+---SOURCE---
+let x = 5L in Stdlib.Int64.add x 1L
+---FORMAT-AS---
+compiler
+---EXPECTED---
+let x = 5 in Stdlib.Int64.add(x, 1)
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+constructor application survives both pretty-printers
+---PARSE-AS---
+interpreter
+---SOURCE---
+3L |> Stdlib.Result.Result.Ok
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+compiler formatter escapes keyword field names
+---PARSE-AS---
+interpreter
+---SOURCE---
+type Sample = { ``true``: Bool; ``false``: Bool }
+Sample { ``true`` = true; ``false`` = false }
+---ROUNDTRIP-AS---
+compiler
+
+---NAME---
+compiler formatter escapes literal interpolation braces
+---PARSE-AS---
+compiler
+---SOURCE---
+$"literal \{ brace \}"
+---ROUNDTRIP-AS---
+compiler
+
+---NAME---
+interpreter rejects compiler lambda syntax
+---PARSE-AS---
+interpreter
+---SOURCE---
+let inc = (x: Int64) => x + 1 in inc 4L
+---EXPECT-ERROR---
+does not use '=>'
+
+---NAME---
+implicit curried lambda survives interpreter roundtrip
+---PARSE-AS---
+interpreter
+---SOURCE---
+fun x y -> x
+---ROUNDTRIP-AS---
+interpreter
+
+---NAME---
+tuple applications inside lists survive interpreter roundtrip
+---PARSE-AS---
+interpreter
+---SOURCE---
+(Stdlib.Html.link
+  [ ("rel", Stdlib.Option.Option.Some "stylesheet")
+    ("href", Stdlib.Option.Option.Some "./style.css") ])
+|> nodeToString
+---ROUNDTRIP-AS---
+interpreter
+
+---NAME---
+nested tuple applications inside lists survive interpreter roundtrip
+---PARSE-AS---
+interpreter
+---SOURCE---
+(Stdlib.Html.input
+  [ ("type", Stdlib.Option.Option.Some "text")
+    ("name", Stdlib.Option.Option.Some "name")
+    ("id", Stdlib.Option.Option.Some "name") ])
+|> nodeToString
+---ROUNDTRIP-AS---
+interpreter
+
+---NAME---
+uncurried lambda application survives interpreter roundtrip
+---PARSE-AS---
+interpreter
+---SOURCE---
+let v =
+    Stdlib.String.map "a string" (fun x ->
+      let _ = Builtin.testIncrementSideEffectCounter_v0 false in 'c')
+   (v, Builtin.testSideEffectCount_v0 ())
+---ROUNDTRIP-AS---
+interpreter
+
+---NAME---
+nested function after let binding parses
+---PARSE-AS---
+interpreter
+---SOURCE---
+let limit = 10L
+let sumUpTo (i: Int64) : Int64 =
+  if i > limit then 0L else i + (sumUpTo (i + 1L))
+sumUpTo 1L
+---ROUNDTRIP-AS---
+interpreter

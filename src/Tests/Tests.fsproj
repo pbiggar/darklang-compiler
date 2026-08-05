@@ -17,15 +17,20 @@
     <Compile Include="test-suite-tooling/TestDSL/ARM64Parser.fs" />
     <Compile Include="test-suite-tooling/TestDSL/ARM64SymbolicParser.fs" />
     <Compile Include="test-suite-tooling/TestDSL/ARM64EncodingFormat.fs" />
+    <Compile Include="test-suite-tooling/TestDSL/X86_64Parser.fs" />
+    <Compile Include="test-suite-tooling/TestDSL/X86_64EncodingFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/E2EFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/TypeCheckingFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/OptimizationFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/FormattingRoundtripFormat.fs" />
+    <Compile Include="test-suite-tooling/TestDSL/SyntaxFormat.fs" />
     <Compile Include="test-suite-tooling/Runners/PassTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/ARM64EncodingTestRunner.fs" />
+    <Compile Include="test-suite-tooling/Runners/X86_64EncodingTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/E2ETestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/TypeCheckingTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/OptimizationTestRunner.fs" />
+    <Compile Include="test-suite-tooling/Runners/SyntaxTestRunner.fs" />
     <Compile Include="test-suite-tooling/TestRunnerColors.fs" />
     <Compile Include="test-suite-tooling/ProgressBar.fs" />
     <Compile Include="test-suite-tooling/TestFramework.fs" />
@@ -41,6 +46,8 @@
     <Compile Include="test-suite-tooling-tests/TypeCheckingFormatTests.fs" />
     <Compile Include="test-suite-tooling-tests/ProgressBarTests.fs" />
     <Compile Include="test-suite-tooling-tests/FormattingRoundtripTests.fs" />
+    <Compile Include="test-suite-tooling-tests/SyntaxDSLTests.fs" />
+    <Compile Include="test-suite-tooling-tests/EncodingDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/E2EFormatTests.fs" />
 
     <!-- Compiler pass tests (shared) -->
@@ -68,7 +75,6 @@
     <Compile Include="compiler-passes/ARM64CodeGenTests.fs" />
 
     <!-- x64 backend tests -->
-    <Compile Include="compiler-passes/X86_64EncodingTests.fs" />
     <Compile Include="compiler-passes/X86_64BinaryTests.fs" />
     <Compile Include="compiler-passes/X86_64ResolveTests.fs" />
     <Compile Include="compiler-passes/X86_64CodeGenTests.fs" />
@@ -94,11 +100,13 @@
     <None Include="passes/**/*.anf2mir" />
     <None Include="passes/**/*.lir2arm64" />
     <None Include="passes/**/*.arm64enc" />
+    <None Include="passes/**/*.x64enc" />
     <None Include="e2e/**/*.e2e" />
     <None Include="verification/**/*.e2e" />
     <None Include="typecheck/**/*.typecheck" />
     <None Include="optimization/**/*.opt" />
     <None Include="formatting-roundtrip/**/*.roundtrip" />
+    <None Include="syntax/**/*.syntax" />
   </ItemGroup>
 
 </Project>

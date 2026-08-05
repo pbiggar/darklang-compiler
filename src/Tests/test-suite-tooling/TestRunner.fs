@@ -285,7 +285,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let mir2lirTestFiles  = getTestFiles "passes/mir2lir" "mir2lir"
     let lir2arm64TestFiles  = getTestFiles "passes/lir2arm64" "lir2arm64"
     let arm64encTestFiles  = getTestFiles "passes/arm64enc" "arm64enc"
+    let x64encTestFiles = getTestFiles "passes/x64enc" "x64enc"
     let formattingRoundtripTestFiles = getTestFiles "formatting-roundtrip" "roundtrip"
+    let syntaxTestFiles = getTestFiles "syntax" "syntax"
 
     let unitStdlibSuites = [ "Stdlib Compile Tests"; "Preamble Build Tests" ]
     let buildUnitTests (_stdlib: CompilerLibrary.StdlibResult) : UnitTestSuite array = [|
@@ -304,10 +306,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Optimization Format Tests"; Tests = OptimizationFormatTests.tests }
         { Name = "Type Checking Format Tests"; Tests = TypeCheckingFormatTests.tests }
         { Name = "Progress Bar Tests"; Tests = ProgressBarTests.tests }
+        { Name = "Syntax DSL Tests"; Tests = SyntaxDSLTests.tests }
+        { Name = "Encoding DSL Tests"; Tests = EncodingDSLTests.tests }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
         { Name = "ARM64 Binary Tests"; Tests = ARM64BinaryTests.tests }
         { Name = "ARM64 CodeGen Tests"; Tests = ARM64CodeGenTests.tests }
-        { Name = "x64 Encoding Tests"; Tests = X86_64EncodingTests.tests }
+        { Name = "x64 Encoding Fixture Tests"; Tests = TestDSL.X86_64EncodingTestRunner.tests x64encTestFiles }
         { Name = "x64 Binary Tests"; Tests = X86_64BinaryTests.tests }
         { Name = "x64 Resolve Tests"; Tests = X86_64ResolveTests.tests }
         { Name = "x64 CodeGen Tests"; Tests = X86_64CodeGenTests.tests }
@@ -326,6 +330,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Lambda Lifting Tests"; Tests = LambdaLiftingTests.tests }
         { Name = "Syntax Interop Tests"; Tests = SyntaxInteropTests.tests }
         { Name = "Formatting Roundtrip Tests"; Tests = FormattingRoundtripTests.tests formattingRoundtripTestFiles }
+        { Name = "Syntax Fixture Tests"; Tests = TestDSL.SyntaxTestRunner.tests syntaxTestFiles }
         { Name = "E2E Format Tests"; Tests = E2EFormatTests.tests }
     |]
 

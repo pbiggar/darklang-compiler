@@ -1,0 +1,235 @@
+---NAME---
+MOV between legacy registers
+---INPUT-X64---
+MOV_reg(RAX, RBX)
+---OUTPUT-HEX---
+48 89 D8
+
+---NAME---
+MOV into extended register
+---INPUT-X64---
+MOV_reg(R8, RAX)
+---OUTPUT-HEX---
+49 89 C0
+
+---NAME---
+MOV from extended register
+---INPUT-X64---
+MOV_reg(RAX, R8)
+---OUTPUT-HEX---
+4C 89 C0
+
+---NAME---
+MOV immediate
+---INPUT-X64---
+MOV_imm32(RAX, 42)
+---OUTPUT-HEX---
+48 C7 C0 2A 00 00 00
+
+---NAME---
+load through RSP requires SIB
+---INPUT-X64---
+MOV_load(RAX, RSP, 0)
+---OUTPUT-HEX---
+48 8B 04 24
+
+---NAME---
+store through R12 requires SIB and REX.B
+---INPUT-X64---
+MOV_store(R12, 0, RAX)
+---OUTPUT-HEX---
+49 89 04 24
+
+---NAME---
+LEA through RBP requires zero displacement
+---INPUT-X64---
+LEA(RAX, RBP, 0)
+---OUTPUT-HEX---
+48 8D 45 00
+
+---NAME---
+load through R13 requires zero displacement and REX.B
+---INPUT-X64---
+MOV_load(RAX, R13, 0)
+---OUTPUT-HEX---
+49 8B 45 00
+
+---NAME---
+ADD short immediate
+---INPUT-X64---
+ADD_imm(RSP, 8)
+---OUTPUT-HEX---
+48 83 C4 08
+
+---NAME---
+SUB short immediate
+---INPUT-X64---
+SUB_imm(RSP, 16)
+---OUTPUT-HEX---
+48 83 EC 10
+
+---NAME---
+PUSH legacy register
+---INPUT-X64---
+PUSH(RBP)
+---OUTPUT-HEX---
+55
+
+---NAME---
+POP legacy register
+---INPUT-X64---
+POP(RBP)
+---OUTPUT-HEX---
+5D
+
+---NAME---
+PUSH extended register
+---INPUT-X64---
+PUSH(R12)
+---OUTPUT-HEX---
+41 54
+
+---NAME---
+POP extended register
+---INPUT-X64---
+POP(R12)
+---OUTPUT-HEX---
+41 5C
+
+---NAME---
+RET
+---INPUT-X64---
+RET
+---OUTPUT-HEX---
+C3
+
+---NAME---
+SYSCALL
+---INPUT-X64---
+SYSCALL
+---OUTPUT-HEX---
+0F 05
+
+---NAME---
+CQO
+---INPUT-X64---
+CQO
+---OUTPUT-HEX---
+48 99
+
+---NAME---
+XOR register zeroing
+---INPUT-X64---
+XOR_reg(RAX, RAX)
+---OUTPUT-HEX---
+48 31 C0
+
+---NAME---
+NEG register
+---INPUT-X64---
+NEG(RAX)
+---OUTPUT-HEX---
+48 F7 D8
+
+---NAME---
+ADD registers
+---INPUT-X64---
+ADD_reg(RAX, RBX)
+---OUTPUT-HEX---
+48 01 D8
+
+---NAME---
+CMP immediate
+---INPUT-X64---
+CMP_imm(RDI, 0)
+---OUTPUT-HEX---
+48 83 FF 00
+
+---NAME---
+IMUL registers
+---INPUT-X64---
+IMUL_reg(RAX, RBX)
+---OUTPUT-HEX---
+48 0F AF C3
+
+---NAME---
+SHL immediate
+---INPUT-X64---
+SHL_imm(RAX, 3)
+---OUTPUT-HEX---
+48 C1 E0 03
+
+---NAME---
+store through R13
+---INPUT-X64---
+MOV_store(R13, 0, RAX)
+---OUTPUT-HEX---
+49 89 45 00
+
+---NAME---
+LEA extended destination with disp32
+---INPUT-X64---
+LEA(R8, RBP, 128)
+---OUTPUT-HEX---
+4C 8D 85 80 00 00 00
+
+---NAME---
+byte load with negative displacement
+---INPUT-X64---
+MOV_load_byte(R9, R12, -1)
+---OUTPUT-HEX---
+45 0F B6 4C 24 FF
+
+---NAME---
+MOVSD store from extended FP register
+---INPUT-X64---
+MOVSD_store(RSP, 16, XMM8)
+---OUTPUT-HEX---
+F2 44 0F 11 44 24 10
+
+---NAME---
+forward jump resolution
+---INPUT-X64---
+JMP(skip)
+MOV_reg(RAX, RAX)
+Label(skip)
+RET
+---OUTPUT-HEX---
+E9 03 00 00 00 48 89 C0 C3
+
+---NAME---
+backward jump resolution
+---INPUT-X64---
+Label(loop)
+MOV_imm32(RAX, 1)
+JMP(loop)
+---OUTPUT-HEX---
+48 C7 C0 01 00 00 00 E9 F4 FF FF FF
+
+---NAME---
+forward call resolution
+---INPUT-X64---
+CALL(func)
+RET
+Label(func)
+MOV_imm32(RAX, 42)
+RET
+---OUTPUT-HEX---
+E8 01 00 00 00 C3 48 C7 C0 2A 00 00 00 C3
+
+---NAME---
+undefined label becomes deferred fixup
+---INPUT-X64---
+JMP(nonexistent)
+---EXPECT-FIXUPS---
+nonexistent
+
+---NAME---
+duplicate label is rejected
+---INPUT-X64---
+Label(again)
+MOV_imm32(RAX, 1)
+Label(again)
+RET
+---EXPECT-ERROR---
+Duplicate label: again

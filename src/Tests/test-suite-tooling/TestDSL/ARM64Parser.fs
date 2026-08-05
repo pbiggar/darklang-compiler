@@ -63,7 +63,11 @@ let private parseIntOperand (lineNum: int) (fieldName: string) (text: string) : 
     | _ -> Error $"Line {lineNum}: Invalid {fieldName} '{text}'"
 
 /// Parse a single ARM64 instruction
-let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
+let private parseInstructionWithMode
+    (allowInvalidEncodingValues: bool)
+    (lineNum: int)
+    (line: string)
+    : Result<Instr, string> =
     let line = line.Trim()
 
     // Try RET
@@ -119,7 +123,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg addImmMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok src ->
-                match parseUInt12Operand lineNum "ADD_imm immediate" addImmMatch.Groups.[3].Value with
+                let parseImmediate =
+                    if allowInvalidEncodingValues then parseUInt16Operand else parseUInt12Operand
+                match parseImmediate lineNum "ADD_imm immediate" addImmMatch.Groups.[3].Value with
                 | Error e -> Error e
                 | Ok imm -> Ok (ADD_imm (dest, src, imm))
     else
@@ -147,7 +153,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg subImmMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok src ->
-                match parseUInt12Operand lineNum "SUB_imm immediate" subImmMatch.Groups.[3].Value with
+                let parseImmediate =
+                    if allowInvalidEncodingValues then parseUInt16Operand else parseUInt12Operand
+                match parseImmediate lineNum "SUB_imm immediate" subImmMatch.Groups.[3].Value with
                 | Error e -> Error e
                 | Ok imm -> Ok (SUB_imm (dest, src, imm))
     else
@@ -376,10 +384,20 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
     else
         Error $"Line {lineNum}: Invalid ARM64 instruction format '{line}'"
 
-/// Parse ARM64 program from text
-let parseARM64 (text: string) : Result<Instr list, string> =
+let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
+    parseInstructionWithMode false lineNum line
+
+let private parseARM64WithMode allowInvalidEncodingValues (text: string) : Result<Instr list, string> =
     let lines = stripCommentsAndEmpty text
 
     lines
-    |> List.mapi (fun i line -> parseInstruction (i + 1) line)
+    |> List.mapi (fun i line -> parseInstructionWithMode allowInvalidEncodingValues (i + 1) line)
     |> sequenceResults
+
+/// Parse an ARM64 program, validating numeric constraints represented by the DSL.
+let parseARM64 (text: string) : Result<Instr list, string> =
+    parseARM64WithMode false text
+
+/// Parse an ARM64 encoding input while retaining values the encoder must reject.
+let parseARM64ForEncodingError (text: string) : Result<Instr list, string> =
+    parseARM64WithMode true text

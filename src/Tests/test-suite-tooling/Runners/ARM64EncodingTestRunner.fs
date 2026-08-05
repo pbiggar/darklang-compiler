@@ -40,56 +40,90 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
 
 /// Run ARM64 encoding test
 let runARM64EncodingTest (test: ARM64EncodingTest) : PassTestResult =
+    let encodeInstruction (instr: Instr) : Result<uint32 list, string> =
+        try Ok (encode instr)
+        with ex -> Error ex.Message
+
     // Encode each instruction
     let rec encodeInstructions index instructions =
         match instructions with
         | [] -> Ok []
         | instr :: rest ->
-            let codes = encode instr
-            if codes.Length <> 1 then
-                Error $"Instruction {index}: Expected single machine code word per instruction, got {codes.Length}"
-            else
-                match encodeInstructions (index + 1) rest with
-                | Ok encodedRest -> Ok (codes.[0] :: encodedRest)
-                | Error msg -> Error msg
-
-    match encodeInstructions 0 test.Instructions with
-    | Error msg ->
-        { Success = false
-          Message = msg
-          Expected = None
-          Actual = None }
-    | Ok results ->
-        // Check each encoding matches expected
-        let mismatches =
-            List.zip3 test.Instructions results test.ExpectedHex
-            |> List.mapi (fun i (instr, actual, expected) ->
-                if actual <> expected then
-                    Some (i, instr, expected, actual)
+            match encodeInstruction instr with
+            | Error msg -> Error msg
+            | Ok codes ->
+                if codes.Length <> 1 then
+                    Error $"Instruction {index}: Expected single machine code word per instruction, got {codes.Length}"
                 else
-                    None)
-            |> List.choose id
+                    match encodeInstructions (index + 1) rest with
+                    | Ok encodedRest -> Ok (codes.[0] :: encodedRest)
+                    | Error msg -> Error msg
 
-        // Check if all values are different (if required)
-        let allDifferentCheck =
-            if test.AssertDifferent then
-                hasAllDifferent results
-            else
-                true
+    let rec checkExpectedErrors index instructions (expected: string) =
+        match instructions with
+        | [] -> Ok ()
+        | instr :: rest ->
+            match encodeInstruction instr with
+            | Error msg when msg.Contains expected ->
+                checkExpectedErrors (index + 1) rest expected
+            | Error msg ->
+                Error
+                    $"Instruction {index}: encoding error did not contain expected text\nExpected: {expected}\nActual: {msg}"
+            | Ok _ ->
+                let instrStr = instr |> ARM64Symbolic.ofARM64 |> prettyPrintARM64Instr
+                Error $"Instruction {index} unexpectedly encoded: {instrStr}"
 
-        if mismatches.IsEmpty && allDifferentCheck then
+    match test.Expectation with
+    | EncodingErrorContaining expected ->
+        match checkExpectedErrors 0 test.Instructions expected with
+        | Ok () ->
             { Success = true
               Message = "Test passed"
               Expected = None
               Actual = None }
-        else
-            let msg =
-                if not mismatches.IsEmpty then
-                    formatMismatches mismatches
-                else
-                    "ASSERT-DIFFERENT failed: not all hex values are different"
-
+        | Error msg ->
+            { Success = false
+              Message = msg
+              Expected = Some expected
+              Actual = None }
+    | EncodesTo expectedHex ->
+        match encodeInstructions 0 test.Instructions with
+        | Error msg ->
             { Success = false
               Message = msg
               Expected = None
               Actual = None }
+        | Ok results ->
+            // Check each encoding matches expected
+            let mismatches =
+                List.zip3 test.Instructions results expectedHex
+                |> List.mapi (fun i (instr, actual, expected) ->
+                    if actual <> expected then
+                        Some (i, instr, expected, actual)
+                    else
+                        None)
+                |> List.choose id
+
+            // Check if all values are different (if required)
+            let allDifferentCheck =
+                if test.AssertDifferent then
+                    hasAllDifferent results
+                else
+                    true
+
+            if mismatches.IsEmpty && allDifferentCheck then
+                { Success = true
+                  Message = "Test passed"
+                  Expected = None
+                  Actual = None }
+            else
+                let msg =
+                    if not mismatches.IsEmpty then
+                        formatMismatches mismatches
+                    else
+                        "ASSERT-DIFFERENT failed: not all hex values are different"
+
+                { Success = false
+                  Message = msg
+                  Expected = None
+                  Actual = None }

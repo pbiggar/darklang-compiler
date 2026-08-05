@@ -57,6 +57,8 @@ per-pass details.
 - **Direct binary generation** — the compiler writes Mach-O / ELF files
   itself, so there's full control over layout and no toolchain drift.
 - **TDD** — most features are driven by e2e tests in `src/Tests/e2e/`.
+  Syntax and machine-code regressions can use the concise fixtures in
+  [`docs/testing-dsls.md`](docs/testing-dsls.md).
   See [`AGENTS.md`](AGENTS.md) for the workflow agents/contributors
   should follow.
 

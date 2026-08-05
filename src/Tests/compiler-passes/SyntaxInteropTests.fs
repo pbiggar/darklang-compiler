@@ -542,74 +542,6 @@ let testStdlibRegistryIncludesIntrinsicFloatSqrt () : TestResult =
     | Some _ -> Ok ()
     | None -> Error "Expected Stdlib.Float.sqrt to remain in module registry (intrinsic)"
 
-let testPrettyPrintInterpreterSyntax () : TestResult =
-    let source = "let x = 5 in Stdlib.Int64.add(x, 1)"
-    match Parser.parseString false source with
-    | Error err -> Error $"Compiler parser failed: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram InterpreterSyntax ast
-        let expected = "let x = 5L in Stdlib.Int64.add x 1L"
-        if printed = expected then
-            Ok ()
-        else
-            Error $"Interpreter pretty-printer mismatch. Expected '{expected}', got '{printed}'"
-
-let testPrettyPrintInterpreterSyntaxParenthesizesNestedCallArg () : TestResult =
-    let source = "Builtin.unwrap(Stdlib.List.head(xs))"
-    match Parser.parseString false source with
-    | Error err -> Error $"Compiler parser failed: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram InterpreterSyntax ast
-        let expected = "Builtin.unwrap (Stdlib.List.head xs)"
-        if printed = expected then
-            Ok ()
-        else
-            Error $"Interpreter nested-call argument pretty-print mismatch. Expected '{expected}', got '{printed}'"
-
-let testPrettyPrintCompilerSyntax () : TestResult =
-    let source = "let x = 5L in Stdlib.Int64.add x 1L"
-    match InterpreterParser.parseString false source with
-    | Error err -> Error $"Interpreter parser failed: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram CompilerSyntax ast
-        let expected = "let x = 5 in Stdlib.Int64.add(x, 1)"
-        if printed = expected then
-            Ok ()
-        else
-            Error $"Compiler pretty-printer mismatch. Expected '{expected}', got '{printed}'"
-
-let testPrettyPrintCompilerSyntaxPreservesConstructorApplyRoundtrip () : TestResult =
-    let source = "3L |> Stdlib.Result.Result.Ok"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for constructor-apply compiler roundtrip source: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram CompilerSyntax ast
-        match Parser.parseString false printed with
-        | Error err ->
-            Error $"Compiler parser failed reparsing constructor-apply pretty output: {err}\nPrinted: {printed}"
-        | Ok reparsedAst ->
-            if reparsedAst = ast then
-                Ok ()
-            else
-                Error $"Constructor apply AST changed after compiler pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
-
-let testPrettyPrintInterpreterSyntaxPreservesConstructorApplyRoundtrip () : TestResult =
-    let source = "3L |> Stdlib.Result.Result.Ok"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for constructor-apply interpreter roundtrip source: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram InterpreterSyntax ast
-        match InterpreterParser.parseString false printed with
-        | Error err ->
-            Error $"Interpreter parser failed reparsing constructor-apply interpreter pretty output: {err}\nPrinted: {printed}"
-        | Ok reparsedAst ->
-            if reparsedAst = ast then
-                Ok ()
-            else
-                Error $"Constructor apply AST changed after interpreter pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
-
 let testCompilerParserParsesBacktickIdentifiers () : TestResult =
     let source =
         "type Sample = { ``true``: Bool, ``false``: Bool }\n"
@@ -621,43 +553,6 @@ let testCompilerParserParsesBacktickIdentifiers () : TestResult =
         Ok ()
     | Ok other ->
         Error $"Unexpected AST for compiler backtick identifiers: {other}"
-
-let testPrettyPrintCompilerSyntaxEscapesKeywordFieldNames () : TestResult =
-    let source =
-        "type Sample = { ``true``: Bool; ``false``: Bool }\n"
-        + "Sample { ``true`` = true; ``false`` = false }"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed before compiler pretty-print keyword-escape test: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram CompilerSyntax ast
-        if not (printed.Contains "``true``") || not (printed.Contains "``false``") then
-            Error $"Compiler pretty-printer failed to escape keyword field names: {printed}"
-        else
-            match Parser.parseString false printed with
-            | Error err ->
-                Error $"Compiler parser failed to parse escaped keyword field names: {err}\nPrinted: {printed}"
-            | Ok reparsedAst ->
-                if reparsedAst = ast then
-                    Ok ()
-                else
-                    Error $"Compiler pretty-print escaped keyword field names changed AST.\nPrinted: {printed}\nReparsed: {reparsedAst}"
-
-let testPrettyPrintCompilerSyntaxEscapesLiteralInterpolationBraces () : TestResult =
-    let source = "$\"literal \\{ brace \\}\""
-    match Parser.parseString false source with
-    | Error err ->
-        Error $"Compiler parser failed before interpolation-brace escape test: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram CompilerSyntax ast
-        match Parser.parseString false printed with
-        | Error err ->
-            Error $"Compiler parser failed reparsing escaped interpolation braces: {err}\nPrinted: {printed}"
-        | Ok reparsedAst ->
-            if reparsedAst = ast then
-                Ok ()
-            else
-                Error $"Compiler pretty-print escaped interpolation braces changed AST.\nPrinted: {printed}\nReparsed: {reparsedAst}"
 
 let testInterpreterParserParsesBareIntLiteral () : TestResult =
     let source = "let x = 5 in x"
@@ -704,12 +599,6 @@ let testInterpreterParserParsesNegativeInt8MinLiteral () : TestResult =
         Error $"Unexpected AST for negative Int8 minimum literal parse: {expr}"
     | Ok other ->
         Error $"Expected single expression program for negative Int8 minimum literal parse, got: {other}"
-
-let testInterpreterParserRejectsCompilerLambdaSyntax () : TestResult =
-    let source = "let inc = (x: Int64) => x + 1 in inc 4L"
-    match InterpreterParser.parseString false source with
-    | Ok _ -> Error "Expected interpreter parser to reject compiler lambda syntax '(x: T) => ...'"
-    | Error _ -> Ok ()
 
 let testInterpreterParserParsesCommaSeparatedLists () : TestResult =
     let source = "[1L, 2L, 3L]"
@@ -831,22 +720,6 @@ let testInterpreterParserParsesConstructorOverApplicationChain () : TestResult =
     | Ok other ->
         Error $"Unexpected AST/program shape for constructor over-application chain: {other}"
 
-let testPrettyPrintInterpreterSyntaxPreservesImplicitCurriedLambdaRoundtrip () : TestResult =
-    let source = "fun x y -> x"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for implicit curried lambda roundtrip source: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram InterpreterSyntax ast
-        match InterpreterParser.parseString false printed with
-        | Error err ->
-            Error $"Interpreter parser failed when reparsing pretty-printed implicit curried lambda: {err}\nPrinted: {printed}"
-        | Ok reparsedAst ->
-            if reparsedAst = ast then
-                Ok ()
-            else
-                Error $"Implicit curried lambda AST changed after interpreter pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
-
 let testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried () : TestResult =
     let source =
         "fun (x: '__interp_lambda_0_0_x) (y: '__interp_lambda_0_1_y) -> x"
@@ -865,85 +738,6 @@ let testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried () : TestR
         Error $"Expected one uncurried explicitly typed lambda, got: {expr}"
     | Ok other ->
         Error $"Expected single expression program, got: {other}"
-
-let testPrettyPrintInterpreterSyntaxPreservesTupleApplyInsideListRoundtrip () : TestResult =
-    let source =
-        "(Stdlib.Html.link\n"
-        + "  [ (\"rel\", Stdlib.Option.Option.Some \"stylesheet\")\n"
-        + "    (\"href\", Stdlib.Option.Option.Some \"./style.css\") ])\n"
-        + "|> nodeToString"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for tuple-apply-in-list roundtrip source: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram InterpreterSyntax ast
-        match InterpreterParser.parseString false printed with
-        | Error err ->
-            Error $"Interpreter parser failed reparsing tuple-apply-in-list pretty output: {err}\nPrinted: {printed}"
-        | Ok reparsedAst ->
-            if reparsedAst = ast then
-                Ok ()
-            else
-                Error $"Tuple-apply-in-list AST changed after interpreter pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
-
-let testPrettyPrintInterpreterSyntaxPreservesNestedTupleApplyInsideListRoundtrip () : TestResult =
-    let source =
-        "(Stdlib.Html.input\n"
-        + "  [ (\"type\", Stdlib.Option.Option.Some \"text\")\n"
-        + "    (\"name\", Stdlib.Option.Option.Some \"name\")\n"
-        + "    (\"id\", Stdlib.Option.Option.Some \"name\") ])\n"
-        + "|> nodeToString"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for nested tuple-apply-in-list roundtrip source: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram InterpreterSyntax ast
-        match InterpreterParser.parseString false printed with
-        | Error err ->
-            Error $"Interpreter parser failed reparsing nested tuple-apply-in-list pretty output: {err}\nPrinted: {printed}"
-        | Ok reparsedAst ->
-            if reparsedAst = ast then
-                Ok ()
-            else
-                Error $"Nested tuple-apply-in-list AST changed after interpreter pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
-
-let testPrettyPrintInterpreterSyntaxPreservesUncurriedLambdaApplyRoundtrip () : TestResult =
-    let source =
-        "let v =\n"
-        + "    Stdlib.String.map \"a string\" (fun x ->\n"
-        + "      let _ = Builtin.testIncrementSideEffectCounter_v0 false in 'c')\n"
-        + "   (v, Builtin.testSideEffectCount_v0 ())"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for uncurried-lambda-apply roundtrip source: {err}"
-    | Ok ast ->
-        let printed = ASTPrettyPrinter.formatProgram InterpreterSyntax ast
-        match InterpreterParser.parseString false printed with
-        | Error err ->
-            Error $"Interpreter parser failed reparsing uncurried-lambda-apply pretty output: {err}\nPrinted: {printed}"
-        | Ok reparsedAst ->
-            let normalizeInterpLambdaSeeds (program: AST.Program) : string =
-                let astDebug = sprintf "%A" program
-                System.Text.RegularExpressions.Regex.Replace(astDebug, "__interp_lambda_[0-9]+_", "__interp_lambda_N_")
-
-            if reparsedAst = ast || normalizeInterpLambdaSeeds reparsedAst = normalizeInterpLambdaSeeds ast then
-                Ok ()
-            else
-                Error $"Uncurried lambda-apply AST changed after interpreter pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
-
-let testInterpreterParserParsesNestedFunctionAfterLetBinding () : TestResult =
-    let source =
-        "let limit = 10L\n"
-        + "let sumUpTo (i: Int64) : Int64 =\n"
-        + "  if i > limit then 0L else i + (sumUpTo (i + 1L))\n"
-        + "sumUpTo 1L"
-    match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for nested function after let binding: {err}"
-    | Ok (Program [Expression _]) ->
-        Ok ()
-    | Ok other ->
-        Error $"Unexpected program shape for nested function after let binding: {other}"
 
 let tests = [
     ("compiler library interpreter parse", testCompilerLibraryParseInterpreterSyntax)
@@ -981,19 +775,11 @@ let tests = [
     ("typecheck interpreter record-function-field lambda", testTypeCheckInterpreterRecordFunctionFieldLambda)
     ("stdlib registry excludes non-intrinsic float multiply", testStdlibRegistryExcludesNonIntrinsicFloatMultiply)
     ("stdlib registry includes intrinsic float sqrt", testStdlibRegistryIncludesIntrinsicFloatSqrt)
-    ("pretty-print interpreter syntax", testPrettyPrintInterpreterSyntax)
-    ("pretty-print interpreter nested call arg", testPrettyPrintInterpreterSyntaxParenthesizesNestedCallArg)
-    ("pretty-print interpreter preserves constructor apply roundtrip", testPrettyPrintInterpreterSyntaxPreservesConstructorApplyRoundtrip)
-    ("pretty-print compiler syntax", testPrettyPrintCompilerSyntax)
-    ("pretty-print compiler preserves constructor apply roundtrip", testPrettyPrintCompilerSyntaxPreservesConstructorApplyRoundtrip)
     ("parse compiler backtick identifiers", testCompilerParserParsesBacktickIdentifiers)
-    ("pretty-print compiler escapes keyword field names", testPrettyPrintCompilerSyntaxEscapesKeywordFieldNames)
-    ("pretty-print compiler escapes literal interpolation braces", testPrettyPrintCompilerSyntaxEscapesLiteralInterpolationBraces)
     ("parse bare int literal", testInterpreterParserParsesBareIntLiteral)
     ("parse upstream I-suffixed int literal", testInterpreterParserParsesUpstreamIntSuffixLiteral)
     ("parse oversized upstream I-suffixed int literal", testInterpreterParserParsesOversizedUpstreamIntSuffixLiteral)
     ("parse negative int8 minimum literal", testInterpreterParserParsesNegativeInt8MinLiteral)
-    ("reject compiler lambda syntax", testInterpreterParserRejectsCompilerLambdaSyntax)
     ("parse comma-separated lists", testInterpreterParserParsesCommaSeparatedLists)
     ("parse newline-delimited list elements", testInterpreterParserParsesNewlineDelimitedListElements)
     ("parse backtick identifiers", testInterpreterParserParsesBacktickIdentifiers)
@@ -1003,10 +789,5 @@ let tests = [
     ("parse pipe operator sections", testInterpreterParserParsesPipeOperatorSections)
     ("parse qualified record literal", testInterpreterParserParsesQualifiedRecordLiteral)
     ("parse constructor over-application chain", testInterpreterParserParsesConstructorOverApplicationChain)
-    ("pretty-print interpreter preserves implicit curried lambda roundtrip", testPrettyPrintInterpreterSyntaxPreservesImplicitCurriedLambdaRoundtrip)
     ("explicit prefix-matching lambda type vars remain uncurried", testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried)
-    ("pretty-print interpreter preserves tuple-apply-in-list roundtrip", testPrettyPrintInterpreterSyntaxPreservesTupleApplyInsideListRoundtrip)
-    ("pretty-print interpreter preserves nested tuple-apply-in-list roundtrip", testPrettyPrintInterpreterSyntaxPreservesNestedTupleApplyInsideListRoundtrip)
-    ("pretty-print interpreter preserves uncurried-lambda-apply roundtrip", testPrettyPrintInterpreterSyntaxPreservesUncurriedLambdaApplyRoundtrip)
-    ("parse interpreter nested function after let binding", testInterpreterParserParsesNestedFunctionAfterLetBinding)
 ]

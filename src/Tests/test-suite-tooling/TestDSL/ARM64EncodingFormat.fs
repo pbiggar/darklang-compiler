@@ -21,11 +21,15 @@ open TestDSL.Common
 open TestDSL.ARM64Parser
 open ARM64
 
+type ARM64EncodingExpectation =
+    | EncodesTo of uint32 list
+    | EncodingErrorContaining of string
+
 /// ARM64 encoding test case
 type ARM64EncodingTest = {
     Name: string
     Instructions: Instr list
-    ExpectedHex: uint32 list
+    Expectation: ARM64EncodingExpectation
     AssertDifferent: bool  // If true, all hex values should be different
 }
 
@@ -66,13 +70,31 @@ let parseARM64EncodingTest (content: string) : Result<ARM64EncodingTest, string>
     match getRequiredSection "INPUT-ARM64" testFile with
     | Error e -> Error e
     | Ok inputText ->
-        match parseARM64 inputText with
+        let parser =
+            match getOptionalSection "EXPECT-ERROR" testFile with
+            | Some _ -> parseARM64ForEncodingError
+            | None -> parseARM64
+        match parser inputText with
         | Error e -> Error $"Failed to parse INPUT-ARM64: {e}"
         | Ok instructions ->
-            // Parse OUTPUT-HEX section
-            match getRequiredSection "OUTPUT-HEX" testFile with
-            | Error e -> Error e
-            | Ok outputText ->
+            let outputText = getOptionalSection "OUTPUT-HEX" testFile
+            let expectedError = getOptionalSection "EXPECT-ERROR" testFile
+            match outputText, expectedError with
+            | None, None -> Error "ARM64 encoding test requires OUTPUT-HEX or EXPECT-ERROR"
+            | Some _, Some _ -> Error "ARM64 encoding test cannot combine OUTPUT-HEX and EXPECT-ERROR"
+            | None, Some errorText when String.IsNullOrWhiteSpace errorText ->
+                Error "EXPECT-ERROR cannot be empty"
+            | None, Some errorText ->
+                match getOptionalSection "ASSERT-DIFFERENT" testFile with
+                | Some _ -> Error "ASSERT-DIFFERENT requires OUTPUT-HEX"
+                | None ->
+                    Ok {
+                        Name = name
+                        Instructions = instructions
+                        Expectation = EncodingErrorContaining errorText
+                        AssertDifferent = false
+                    }
+            | Some outputText, None ->
                 let hexLines =
                     outputText.Split('\n')
                     |> Array.map (fun line -> line.Trim())
@@ -101,13 +123,13 @@ let parseARM64EncodingTest (content: string) : Result<ARM64EncodingTest, string>
                             |> Result.map (fun assertDifferent -> {
                                 Name = name
                                 Instructions = instructions
-                                ExpectedHex = hexValues
+                                Expectation = EncodesTo hexValues
                                 AssertDifferent = assertDifferent
                             })
                         | None ->
                             Ok {
                                 Name = name
                                 Instructions = instructions
-                                ExpectedHex = hexValues
+                                Expectation = EncodesTo hexValues
                                 AssertDifferent = false
                             }
