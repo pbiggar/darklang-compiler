@@ -2,26 +2,27 @@
 
 ## Summary
 
-The factorial benchmark computes `factorial(20)` 10,000 times using a `repeat` helper function. The factorial function is a simple recursive multiplication.
+The factorial benchmark requests `factorial(20)` on 10,000 iterations of a
+`repeat` helper. The factorial function is a direct recursive multiplication.
 
 **Performance Results (instruction counts):**
-- Rust: 256,121 instructions (baseline)
-- Dark: 4,420,203 instructions (17.3x slower)
-- OCaml: 7,937,785 instructions (31.0x slower)
+- Rust: 256,121 instructions (cached baseline)
+- Dark before effect-aware LICM: 4,030,203 instructions
+- Dark after effect-aware LICM: 60,603 instructions (0.24x Rust)
 
 **Key insight**: Rust achieves its extreme performance through **complete compile-time evaluation**. LLVM constant-folds `factorial(20)` and `repeat(10000, 0)` at compile time, resulting in a program that simply prints a pre-computed constant. Dark is actually faster than OCaml on this benchmark.
 
-Current Dark evidence at `2d5c4276` still shows one runtime `factorial(20)`
-call on every tail-recursive `repeat` iteration. Register allocation now
-removes the older redundant self-moves in the `repeat` loop, so the remaining
-benchmark gap is not caused by those moves.
+MIR loop-invariant code motion now proves direct callees effect-free across the
+whole program, including self-recursive and mutually recursive call-graph
+components. It hoists a proven effect-free call only when its operands are loop
+invariant and its result is a non-owning scalar. As a result, `factorial(20)` is
+called once in `repeat_entry` and its result is carried through the loop instead
+of being recomputed on all 10,000 iterations.
 
-Current focused Cachegrind evidence at `2d5c4276` confirms the gap is stable:
-Dark still runs at 4,420,203 instructions, or 17.3x the cached Rust baseline.
-The same run reports 1,600,034 data references and 210,025 branches for Dark,
-consistent with repeated unboxed recursive integer work rather than heap
-allocation or cache behavior. The Rust, OCaml, F#, Python, and Node rows in
-that focused run used cached baselines from `benchmarks/BASELINES.md`.
+A focused Cachegrind run measured 60,603 Dark instructions, 10,045 branches,
+and 196 data references. The compiler still computes `factorial(20)` at runtime;
+full constant evaluation remains a separate opportunity that could also remove
+the `repeat` loop and match Rust's precomputed-result strategy.
 
 The local sandbox used for this refresh did not have `rustc`, so the Rust
 assembly evidence below comes from the checked-in
@@ -200,14 +201,14 @@ repeat:
 
 ## Identified Optimization Opportunities
 
-### 1. Hoist Loop-Invariant Pure Calls from Tail-Recursive Loops
+### 1. Hoist Loop-Invariant Effect-Free Calls from Tail-Recursive Loops
 
-**Impact: Large for this benchmark**
+**Impact: Implemented; 4,030,203 to 60,603 Dark instructions**
 
-**Root Cause:**
-`repeat` is compiled as a loop, but the pure call `factorial(20)` remains in
-the loop body even though it does not depend on the loop-carried values. The
-current LIR therefore executes the same factorial computation 10,000 times:
+Before this optimization, `repeat` was compiled as a loop but the effect-free
+call `factorial(20)` remained in its body even though it did not depend on the
+loop-carried values. LIR therefore executed the same factorial computation
+10,000 times:
 
 ```
 repeat:
@@ -231,28 +232,14 @@ back to the loop condition.
 22c: b   0x238
 ```
 
-Because `factorial(20)` is loop-invariant, a purity-aware LICM pass for
-tail-recursive loops could compute it once before entering `repeat` and carry
-the value through the loop. That would not match Rust's full compile-time
-result, but it would remove the dominant repeated computation without needing
-full partial evaluation.
-
-This remains the best factorial-specific runtime opportunity after the current
-register allocator: the post-allocation LIR has no spill slots and no saved
-registers around the `factorial(20)` call, so there is little local calling
-sequence cleanup left in `repeat`.
-
-**Implementation Approach:**
-1. Reuse or introduce purity information for calls in ANF or MIR.
-2. Detect values inside lowered tail-recursive loops that do not depend on
-   loop-carried parameters.
-3. Hoist safe pure calls before the loop entry while preserving call ordering
-   for any effectful operation.
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` or MIR lowering, depending on
-  where tail-recursive loops are easiest to analyze.
-- Add purity metadata only if existing call classification is insufficient.
+The implemented MIR analysis starts with functions whose bodies contain no
+intrinsic effects, then repeatedly removes any function that directly calls a
+callee outside the proven set. This greatest-fixed-point calculation preserves
+effect-free recursive components while rejecting components that reach I/O,
+allocation, reference-count mutation, indirect calls, or unknown external
+functions. LICM uses that summary to move invariant scalar-returning direct
+calls to a loop's existing preheader. Managed return values remain in the loop
+because moving them would require ownership and lifetime changes.
 
 ---
 
@@ -326,17 +313,16 @@ repeat_L1:
 
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
-| Hoist Loop-Invariant Pure Calls | Large for this benchmark | Medium |
+| Hoist Loop-Invariant Pure Calls | Implemented: 4,030,203 to 60,603 Dark instructions | Medium |
 | Compile-Time Constant Folding | 90%+ (match Rust) | High |
 | Inline Small Pure Functions | 10-15% | Medium |
 
-**Note:** Compile-time constant folding would eliminate the entire benchmark computation, matching Rust. Without that optimization, loop-invariant pure-call hoisting is the main remaining factorial-specific runtime opportunity documented here.
+**Note:** Compile-time constant folding could still eliminate the entire benchmark computation, matching Rust's strategy. Loop-invariant effect-free-call hoisting now removes the dominant repeated runtime computation without changing the benchmark source.
 
 ## Recommended Implementation Order
 
-1. **Hoist Loop-Invariant Pure Calls** - Medium complexity, removes the dominant repeated `factorial(20)` work
+1. **Compile-Time Constant Folding** - Major remaining impact, high complexity
 2. **Inline Small Pure Functions** - Medium complexity, smaller improvement
-3. **Compile-Time Constant Folding** - Major impact, high complexity
 
 ## Why Dark Beats OCaml
 
@@ -377,7 +363,7 @@ let TempId 2000 = print(t11, type=TInt64)
 return t11
 ```
 
-### Dark MIR (Control Flow Graph)
+### Dark MIR Before Effect-Aware LICM (Control Flow Graph)
 ```
 Function factorial:
   factorial_entry:
@@ -416,7 +402,7 @@ Function repeat:
     branch v7 ? repeat_L0 : repeat_L1
 ```
 
-### Dark LIR (After Register Allocation)
+### Dark LIR Before Effect-Aware LICM (After Register Allocation)
 ```
 factorial:
   Label "factorial_L0":

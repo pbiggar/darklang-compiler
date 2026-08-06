@@ -94,6 +94,51 @@ let hasSideEffects (instr: Instr) : bool =
     | RuntimeError _ -> true
     | CoverageHit _ -> true  // Must not be eliminated (tracking side effect)
 
+/// Find functions whose reachable call-graph components contain no MIR effects.
+/// Starting from every locally effect-free function and removing callers of
+/// unproven functions computes the greatest fixed point, so mutually recursive
+/// and self-recursive components remain provable without assuming unknown calls
+/// are safe.
+let private analyzeEffectFreeFunctions (functions: Function list) : Set<string> =
+    let directCallee instr =
+        match instr with
+        | Call (_, funcName, _, _, _)
+        | TailCall (funcName, _, _, _) -> Some funcName
+        | _ -> None
+
+    let locallyEffectFree func =
+        func.CFG.Blocks
+        |> Map.forall (fun _ block ->
+            block.Instrs
+            |> List.forall (fun instr ->
+                match directCallee instr with
+                | Some _ -> true
+                | None -> not (hasSideEffects instr)))
+
+    let directCallees func =
+        func.CFG.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) -> block.Instrs)
+        |> List.choose directCallee
+        |> Set.ofList
+
+    let candidates = functions |> List.filter locallyEffectFree
+
+    let rec removeCallersOfUnprovenFunctions provenNames =
+        let next =
+            candidates
+            |> List.filter (fun func ->
+                directCallees func |> Set.forall (fun callee -> Set.contains callee provenNames))
+            |> List.map (fun func -> func.Name)
+            |> Set.ofList
+
+        if next = provenNames then next else removeCallersOfUnprovenFunctions next
+
+    candidates
+    |> List.map (fun func -> func.Name)
+    |> Set.ofList
+    |> removeCallersOfUnprovenFunctions
+
 /// Get the destination VReg of an instruction (if any)
 let getInstrDest (instr: Instr) : VReg option =
     match instr with
@@ -333,11 +378,32 @@ let findNaturalLoops (cfg: CFG) : Map<Label, Set<Label>> =
             if Set.isEmpty loopBlocks then loops else Map.add header loopBlocks loops
         ) Map.empty
 
-/// Check if an instruction is safe to hoist out of a loop
-let isHoistableInstr (instr: Instr) : bool =
+/// Scalar results can move across loop iterations without changing ownership.
+let private isScalarReturnType (returnType: AST.Type) : bool =
+    match returnType with
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TUnit -> true
+    | _ -> false
+
+/// Check if an instruction is safe to hoist out of a loop.
+let private isHoistableInstrWithEffectFreeCalls
+    (effectFreeFunctions: Set<string>)
+    (instr: Instr)
+    : bool =
     match instr with
     | BinOp _ -> true
     | UnaryOp _ -> true
+    | Call (_, funcName, _, _, returnType) ->
+        Set.contains funcName effectFreeFunctions && isScalarReturnType returnType
     | HeapLoad _ -> true
     | FloatSqrt _ -> true
     | FloatAbs _ -> true
@@ -347,8 +413,14 @@ let isHoistableInstr (instr: Instr) : bool =
     | FloatToBits _ -> true
     | _ -> false
 
-/// Apply loop-invariant code motion for loops with a simple preheader
-let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
+let isHoistableInstr (instr: Instr) : bool =
+    isHoistableInstrWithEffectFreeCalls Set.empty instr
+
+/// Apply loop-invariant code motion for loops with a simple preheader.
+let private applyLoopInvariantCodeMotionWithEffectFreeCalls
+    (effectFreeFunctions: Set<string>)
+    (cfg: CFG)
+    : CFG * bool =
     let loops = findNaturalLoops cfg
     let preds = buildPredecessors cfg
     let labelName (Label name) = name
@@ -499,6 +571,8 @@ let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
                     BinOp (dest, op, rewriteOperand left, rewriteOperand right, operandType)
                 | UnaryOp (dest, op, src) ->
                     UnaryOp (dest, op, rewriteOperand src)
+                | Call (dest, funcName, args, argTypes, returnType) ->
+                    Call (dest, funcName, List.map rewriteOperand args, argTypes, returnType)
                 | HeapLoad (dest, addr, offset, vt) ->
                     match rewriteOperand (Register addr) with
                     | Register addr' -> HeapLoad (dest, addr', offset, vt)
@@ -531,7 +605,7 @@ let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
                                             )
                                         if Set.contains dest invs then
                                             (hoists, invs, ch)
-                                        elif isHoistableInstr instr && usesInvariant then
+                                        elif isHoistableInstrWithEffectFreeCalls effectFreeFunctions instr && usesInvariant then
                                             (hoists @ [instr], Set.add dest invs, true)
                                         else
                                             (hoists, invs, ch)
@@ -579,6 +653,9 @@ let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
 
                 ({ cfgAcc with Blocks = blocks' }, true)
     ) (cfg, false)
+
+let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
+    applyLoopInvariantCodeMotionWithEffectFreeCalls Set.empty cfg
 
 /// Build map from SSA destination to the registers used by its defining instruction.
 let private buildDefUseMap (cfg: CFG) : Map<VReg, Set<VReg>> =
@@ -1521,8 +1598,12 @@ let applyConstantFolding (cfg: CFG) : CFG * bool =
 
     ({ cfg with Blocks = blocks' }, changed)
 
-/// Run all optimizations in a single pass (returns whether anything changed)
-let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
+/// Run all optimizations in a single pass (returns whether anything changed).
+let private optimizeCFGOnceWithEffectFreeCalls
+    (effectFreeFunctions: Set<string>)
+    (options: OptimizeOptions)
+    (cfg: CFG)
+    : CFG * bool =
     let (cfg1, changed1) =
         if options.EnableConstFolding then applyConstantFolding cfg else (cfg, false)
     let (cfg2, changed2) =
@@ -1535,7 +1616,10 @@ let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
     let (cfg4, changed4) =
         if options.EnableConstFolding && changed3 then applyConstantFolding cfg3 else (cfg3, false)
     let (cfg5, changed5) =
-        if options.EnableLICM then applyLoopInvariantCodeMotion cfg4 else (cfg4, false)
+        if options.EnableLICM then
+            applyLoopInvariantCodeMotionWithEffectFreeCalls effectFreeFunctions cfg4
+        else
+            (cfg4, false)
     let (cfg6, changed6) =
         if options.EnableDCE then eliminateDeadCode cfg5 else (cfg5, false)
     let (cfg7, changed7) =
@@ -1553,18 +1637,29 @@ let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
     let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12
     (cfg12, changed)
 
+let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
+    optimizeCFGOnceWithEffectFreeCalls Set.empty options cfg
+
 /// Run all optimizations until fixed point
-let optimizeCFGWithOptions (options: OptimizeOptions) (cfg: CFG) : CFG =
+let private optimizeCFGWithEffectFreeCalls
+    (effectFreeFunctions: Set<string>)
+    (options: OptimizeOptions)
+    (cfg: CFG)
+    : CFG =
     let rec loop current remaining =
         if remaining <= 0 then
             current
         else
-            let (next, changed) = optimizeCFGOnce options current
+            let (next, changed) =
+                optimizeCFGOnceWithEffectFreeCalls effectFreeFunctions options current
             if changed then
                 loop next (remaining - 1)
             else
                 next
     loop cfg 10
+
+let optimizeCFGWithOptions (options: OptimizeOptions) (cfg: CFG) : CFG =
+    optimizeCFGWithEffectFreeCalls Set.empty options cfg
 
 let optimizeCFG (cfg: CFG) : CFG =
     optimizeCFGWithOptions defaultOptimizeOptions cfg
@@ -1574,6 +1669,14 @@ let optimizeFunctionWithOptions (options: OptimizeOptions) (func: Function) : Fu
     let cfg' = optimizeCFGWithOptions options func.CFG
     { func with CFG = cfg' }
 
+let private optimizeFunctionWithEffectFreeCalls
+    (effectFreeFunctions: Set<string>)
+    (options: OptimizeOptions)
+    (func: Function)
+    : Function =
+    let cfg' = optimizeCFGWithEffectFreeCalls effectFreeFunctions options func.CFG
+    { func with CFG = cfg' }
+
 let optimizeFunction (func: Function) : Function =
     let cfg' = optimizeCFG func.CFG
     { func with CFG = cfg' }
@@ -1581,7 +1684,11 @@ let optimizeFunction (func: Function) : Function =
 /// Optimize a program
 let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : Program =
     let (Program (functions, variants, records)) = program
-    let functions' = functions |> List.map (optimizeFunctionWithOptions options)
+    let effectFreeFunctions =
+        if options.EnableLICM then analyzeEffectFreeFunctions functions else Set.empty
+    let functions' =
+        functions
+        |> List.map (optimizeFunctionWithEffectFreeCalls effectFreeFunctions options)
     Program (functions', variants, records)
 
 let optimizeProgram (program: Program) : Program =

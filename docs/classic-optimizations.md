@@ -520,6 +520,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Loop optimization
 
+### Effect-free direct-call hoisting
+
+- Optimization name: Effect-free direct-call hoisting
+- Taxonomy category: Loop-invariant code motion
+- Priority/rationale: Whole-program MIR effect analysis lets LICM move expensive invariant scalar computations out of lowered tail-recursive loops while retaining conservative ownership and external-call boundaries.
+- Notes: Implemented with a greatest-fixed-point direct-call analysis in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`, so self-recursive and mutually recursive components are proven together while any component reaching an intrinsic effect, indirect call, or unknown callee is rejected. LICM only hoists direct calls with loop-invariant operands and non-owning scalar results. Positive recursive-factorial and negative effecting-recursion snapshots live in `src/Tests/optimization/mir.opt`. The unchanged canonical factorial benchmark improved from 4,030,203 to 60,603 Dark instructions in a focused Cachegrind run.
+
 ### Floating-point constant load hoisting
 
 - Optimization name: Floating-point constant load hoisting

@@ -2,6 +2,151 @@
 // Tests MIR optimizations such as loop-invariant code motion in SSA form.
 
 ---NAME---
+licm_hoists_recursive_effect_free_scalar_call
+---INPUT---
+def factorial(n: Int64) : Int64 =
+    if n <= 1 then 1
+    else n * factorial(n - 1)
+
+def repeat(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else repeat(n - 1, factorial(20))
+---EXPECTED---
+Function factorial:
+  factorial_entry:
+    v10005 <- v0 <= 1 : TInt64
+    branch v10005 ? factorial_L0 : factorial_L1
+  factorial_L0:
+    ret 1
+  factorial_L1:
+    v10007 <- v0 - 1 : TInt64
+    v10008 <- Call(factorial, [v10007])
+    v10009 <- v0 * v10008 : TInt64
+    ret v10009
+
+Function repeat:
+  repeat_entry:
+    v10018 <- Call(factorial, [20])
+    jump repeat_body
+  repeat_L1:
+    v10017 <- v10015 - 1 : TInt64
+    v10019 <- v10017 : TInt64
+    v10020 <- v10018 : TInt64
+    jump repeat_body
+  repeat_L2:
+    ret v10014
+  repeat_body:
+    v10014 <- Phi([(v6, repeat_entry), (v10020, repeat_L1)]) : TInt64
+    v10015 <- Phi([(v5, repeat_entry), (v10019, repeat_L1)]) : TInt64
+    v10016 <- v10015 <= 0 : TInt64
+    branch v10016 ? repeat_L2 : repeat_L1
+
+---NAME---
+licm_hoists_mutually_recursive_effect_free_scalar_call
+---INPUT---
+def isEven(n: Int64) : Bool =
+    if n <= 0 then true else isOdd(n - 1)
+
+def isOdd(n: Int64) : Bool =
+    if n <= 0 then false else isEven(n - 1)
+
+def loop(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else loop(n - 1, if isEven(20) then acc + 1 else acc)
+---EXPECTED---
+Function isEven:
+  isEven_entry:
+    v10004 <- v0 <= 0 : TInt64
+    branch v10004 ? isEven_L0 : isEven_L1
+  isEven_L0:
+    ret true
+  isEven_L1:
+    v10006 <- v0 - 1 : TInt64
+    TailCall(isOdd, [v10006])
+    ret v3
+
+Function isOdd:
+  isOdd_entry:
+    v10008 <- v4 <= 0 : TInt64
+    branch v10008 ? isOdd_L0 : isOdd_L1
+  isOdd_L0:
+    ret false
+  isOdd_L1:
+    v10010 <- v4 - 1 : TInt64
+    TailCall(isEven, [v10010])
+    ret v7
+
+Function loop:
+  loop_entry:
+    v10022 <- Call(isEven, [20])
+    jump loop_body
+  loop_L1:
+    v10021 <- v10019 - 1 : TInt64
+    v10023 <- v10018 + 1 : TInt64
+    branch v10022 ? loop_L3 : loop_L4
+  loop_L2:
+    ret v10018
+  loop_L3:
+    v10028 <- v10023 : TInt64
+    jump loop_L5
+  loop_L4:
+    v10027 <- v10018 : TInt64
+    jump loop_L5
+  loop_L5:
+    v10024 <- Phi([(v10027, loop_L4), (v10028, loop_L3)])
+    v10025 <- v10021 : TInt64
+    v10026 <- v10024 : TInt64
+    jump loop_body
+  loop_body:
+    v10018 <- Phi([(v9, loop_entry), (v10026, loop_L5)]) : TInt64
+    v10019 <- Phi([(v8, loop_entry), (v10025, loop_L5)]) : TInt64
+    v10020 <- v10019 <= 0 : TInt64
+    branch v10020 ? loop_L2 : loop_L1
+
+---NAME---
+licm_keeps_effecting_recursive_call_in_loop
+---INPUT---
+def readClock(n: Int64) : Int64 =
+    if n <= 0 then Stdlib.Date.now()
+    else readClock(n - 1)
+
+def loop(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else loop(n - 1, readClock(1))
+---EXPECTED---
+Function readClock:
+  readClock_entry:
+    jump readClock_body
+  readClock_L0:
+    v10011 <- DateNow()
+    ret v10011
+  readClock_L1:
+    v10009 <- v10007 - 1 : TInt64
+    v10010 <- v10009 : TInt64
+    jump readClock_body
+  readClock_body:
+    v10007 <- Phi([(v0, readClock_entry), (v10010, readClock_L1)]) : TInt64
+    v10008 <- v10007 <= 0 : TInt64
+    branch v10008 ? readClock_L0 : readClock_L1
+
+Function loop:
+  loop_entry:
+    jump loop_body
+  loop_L1:
+    v10017 <- v10015 - 1 : TInt64
+    v10018 <- Call(readClock, [1])
+    v10019 <- v10017 : TInt64
+    v10020 <- v10018 : TInt64
+    jump loop_body
+  loop_L2:
+    ret v10014
+  loop_body:
+    v10014 <- Phi([(v6, loop_entry), (v10020, loop_L1)]) : TInt64
+    v10015 <- Phi([(v5, loop_entry), (v10019, loop_L1)]) : TInt64
+    v10016 <- v10015 <= 0 : TInt64
+    branch v10016 ? loop_L2 : loop_L1
+
+---NAME---
 licm_keeps_side_effecting_call_in_loop
 ---INPUT---
 def loop(n: Int64, acc: Int64) : Int64 =
