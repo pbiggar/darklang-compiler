@@ -2261,12 +2261,18 @@ let private generateClosureRefCountDecHelper
 let private adjustStackOffset (ctx: FuncCtx) (offset: int) : int =
     offset - (List.length ctx.UsedCalleeSaved * 8)
 
-/// Track whether the last comparison was FCmp (float) for correct condition codes.
-/// UCOMISD sets CF/ZF differently from CMP which sets SF/OF/ZF.
-let mutable private lastCompWasFloat = false
+/// The comparison whose flags condition consumers read within a basic block.
+/// UCOMISD sets CF/ZF differently from CMP, which sets SF/OF/ZF.
+type private ComparisonContext =
+    | IntegerComparison
+    | FloatComparison
 
 /// Translate a single LIR instruction to x86-64 instructions
-let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Instr list, string> =
+let private translateInstr
+    (comparisonContext: ComparisonContext option)
+    (ctx: FuncCtx)
+    (instr: LIR.Instr)
+    : Result<X86_64.Instr list, string> =
     match instr with
 
     | LIR.Mov (dest, src) ->
@@ -2502,7 +2508,6 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                         @ [X86_64.SUB_reg (destReg, scratch)]))))
 
     | LIR.Cmp (left, right) ->
-        lastCompWasFloat <- false
         resolveReg left
         |> Result.bind (fun leftReg ->
             match right with
@@ -2536,39 +2541,43 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             | _ -> Error $"Unsupported Cmp right operand: {right}")
 
     | LIR.Cset (dest, cond) ->
-        resolveReg dest
-        |> Result.map (fun destReg ->
-            if lastCompWasFloat then
-                match cond with
-                | LIR.EQ ->
-                    // Float EQ: ordered AND equal (ZF=1 AND PF=0)
-                    // SETE + SETNP, then AND
-                    [X86_64.SETcc (X86_64.EQ, destReg)
-                     X86_64.MOVZX_byte (destReg, destReg)
-                     X86_64.SETcc (X86_64.NP, scratch)
-                     X86_64.MOVZX_byte (scratch, scratch)
-                     X86_64.AND_reg (destReg, scratch)]
-                | LIR.NE ->
-                    // Float NE: unordered OR not equal (ZF=0 OR PF=1)
-                    // SETNE + SETP, then OR
-                    [X86_64.SETcc (X86_64.NE, destReg)
-                     X86_64.MOVZX_byte (destReg, destReg)
-                     X86_64.SETcc (X86_64.P, scratch)
-                     X86_64.MOVZX_byte (scratch, scratch)
-                     X86_64.OR_reg (destReg, scratch)]
-                | LIR.LT | LIR.ULT -> [X86_64.SETcc (X86_64.B, destReg); X86_64.MOVZX_byte (destReg, destReg)]
-                | LIR.GT | LIR.UGT -> [X86_64.SETcc (X86_64.A, destReg); X86_64.MOVZX_byte (destReg, destReg)]
-                | LIR.LE | LIR.ULE -> [X86_64.SETcc (X86_64.BE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
-                | LIR.GE | LIR.UGE -> [X86_64.SETcc (X86_64.AE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
-            else
-                let x86Cond =
+        match comparisonContext with
+        | None ->
+            Error "x64 codegen: Cset without a preceding comparison in the same block"
+        | Some comparisonContext ->
+            resolveReg dest
+            |> Result.map (fun destReg ->
+                if comparisonContext = FloatComparison then
                     match cond with
-                    | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
-                    | LIR.LT -> X86_64.LT | LIR.GT -> X86_64.GT
-                    | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
-                    | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
-                    | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
-                [X86_64.SETcc (x86Cond, destReg); X86_64.MOVZX_byte (destReg, destReg)])
+                    | LIR.EQ ->
+                        // Float EQ: ordered AND equal (ZF=1 AND PF=0)
+                        // SETE + SETNP, then AND
+                        [X86_64.SETcc (X86_64.EQ, destReg)
+                         X86_64.MOVZX_byte (destReg, destReg)
+                         X86_64.SETcc (X86_64.NP, scratch)
+                         X86_64.MOVZX_byte (scratch, scratch)
+                         X86_64.AND_reg (destReg, scratch)]
+                    | LIR.NE ->
+                        // Float NE: unordered OR not equal (ZF=0 OR PF=1)
+                        // SETNE + SETP, then OR
+                        [X86_64.SETcc (X86_64.NE, destReg)
+                         X86_64.MOVZX_byte (destReg, destReg)
+                         X86_64.SETcc (X86_64.P, scratch)
+                         X86_64.MOVZX_byte (scratch, scratch)
+                         X86_64.OR_reg (destReg, scratch)]
+                    | LIR.LT | LIR.ULT -> [X86_64.SETcc (X86_64.B, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                    | LIR.GT | LIR.UGT -> [X86_64.SETcc (X86_64.A, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                    | LIR.LE | LIR.ULE -> [X86_64.SETcc (X86_64.BE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                    | LIR.GE | LIR.UGE -> [X86_64.SETcc (X86_64.AE, destReg); X86_64.MOVZX_byte (destReg, destReg)]
+                else
+                    let x86Cond =
+                        match cond with
+                        | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
+                        | LIR.LT -> X86_64.LT | LIR.GT -> X86_64.GT
+                        | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
+                        | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
+                        | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
+                    [X86_64.SETcc (x86Cond, destReg); X86_64.MOVZX_byte (destReg, destReg)])
 
     | LIR.And (dest, left, right) ->
         resolveReg dest |> Result.bind (fun d -> resolveReg left |> Result.bind (fun l -> resolveReg right |> Result.map (fun r ->
@@ -3250,7 +3259,6 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
         | _ -> Error "FSqrt with virtual FP register"
 
     | LIR.FCmp (left, right) ->
-        lastCompWasFloat <- true
         match left, right with
         | LIR.FPhysical lp, LIR.FPhysical rp ->
             Ok [X86_64.UCOMISD (lirFRegToX86 lp, lirFRegToX86 rp)]
@@ -4430,7 +4438,11 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
 /// After CALL pushes 8-byte return address, each PUSH adds 8 bytes.
 /// We need total to be 16-byte aligned for System V ABI compliance.
 /// Translate a LIR terminator to x86-64 instructions
-let private translateTerminator (epilogueLabel: string) (term: LIR.Terminator) : Result<X86_64.Instr list, string> =
+let private translateTerminator
+    (comparisonContext: ComparisonContext option)
+    (epilogueLabel: string)
+    (term: LIR.Terminator)
+    : Result<X86_64.Instr list, string> =
     match term with
     | LIR.Ret ->
         // Jump to shared epilogue at end of function
@@ -4450,21 +4462,25 @@ let private translateTerminator (epilogueLabel: string) (term: LIR.Terminator) :
              X86_64.Jcc (X86_64.EQ, zeroLabel)
              X86_64.JMP nonZeroLabel])
     | LIR.CondBranch (cond, LIR.Label trueLabel, LIR.Label falseLabel) ->
-        let x86Cond =
-            if lastCompWasFloat then
-                match cond with
-                | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
-                | LIR.LT | LIR.ULT -> X86_64.B  | LIR.GT | LIR.UGT -> X86_64.A
-                | LIR.LE | LIR.ULE -> X86_64.BE | LIR.GE | LIR.UGE -> X86_64.AE
-            else
-                match cond with
-                | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
-                | LIR.LT -> X86_64.LT | LIR.GT -> X86_64.GT
-                | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
-                | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
-                | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
-        Ok [X86_64.Jcc (x86Cond, trueLabel)
-            X86_64.JMP falseLabel]
+        match comparisonContext with
+        | None ->
+            Error "x64 codegen: CondBranch without a preceding comparison in the same block"
+        | Some comparisonContext ->
+            let x86Cond =
+                if comparisonContext = FloatComparison then
+                    match cond with
+                    | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
+                    | LIR.LT | LIR.ULT -> X86_64.B  | LIR.GT | LIR.UGT -> X86_64.A
+                    | LIR.LE | LIR.ULE -> X86_64.BE | LIR.GE | LIR.UGE -> X86_64.AE
+                else
+                    match cond with
+                    | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
+                    | LIR.LT -> X86_64.LT | LIR.GT -> X86_64.GT
+                    | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
+                    | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
+                    | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
+            Ok [X86_64.Jcc (x86Cond, trueLabel)
+                X86_64.JMP falseLabel]
     | LIR.BranchBitZero (reg, bit, LIR.Label zeroLabel, LIR.Label nonZeroLabel) ->
         resolveReg reg
         |> Result.map (fun regX86 ->
@@ -4488,18 +4504,24 @@ let private translateBlock (ctx: FuncCtx) (epilogueLabel: string) (block: LIR.Ba
     let (LIR.Label labelName) = block.Label
     let labelInstr = [X86_64.Label labelName]
 
-    let rec translateInstrs acc remaining =
+    let rec translateInstrs comparisonContext acc remaining =
         match remaining with
-        | [] -> Ok (List.rev acc |> List.concat)
+        | [] -> Ok (List.rev acc |> List.concat, comparisonContext)
         | instr :: rest ->
-            match translateInstr ctx instr with
+            match translateInstr comparisonContext ctx instr with
             | Error e -> Error e
-            | Ok instrs -> translateInstrs (instrs :: acc) rest
+            | Ok instrs ->
+                let nextComparisonContext =
+                    match instr with
+                    | LIR.Cmp _ -> Some IntegerComparison
+                    | LIR.FCmp _ -> Some FloatComparison
+                    | _ -> comparisonContext
+                translateInstrs nextComparisonContext (instrs :: acc) rest
 
-    match translateInstrs [] block.Instrs with
+    match translateInstrs None [] block.Instrs with
     | Error e -> Error e
-    | Ok bodyInstrs ->
-        translateTerminator epilogueLabel block.Terminator
+    | Ok (bodyInstrs, comparisonContext) ->
+        translateTerminator comparisonContext epilogueLabel block.Terminator
         |> Result.map (fun termInstrs ->
             labelInstr @ bodyInstrs @ termInstrs)
 

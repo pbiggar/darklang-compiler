@@ -361,6 +361,38 @@ let testReportsMissingEntryBlock () : Result<unit, string> =
     | Error e -> Error $"Expected missing entry block error, got '{e}'"
     | Ok _ -> Error "Expected x64 codegen to reject a CFG whose entry block is absent"
 
+/// Test: condition consumers cannot inherit float comparison state from an earlier translation.
+let testRejectsConditionsWithoutBlockComparison () : Result<unit, string> =
+    let translate instrs term =
+        makeSimpleProgram instrs term
+        |> completeFixtureVariants
+        |> fun program -> CodeGen_X86_64.translateProgram program false
+
+    let floatComparison =
+        LIR.FCmp (LIR.FPhysical LIR.D0, LIR.FPhysical LIR.D1)
+
+    match translate [floatComparison] LIR.Ret with
+    | Error e -> Error $"Expected float comparison primer to translate, got '{e}'"
+    | Ok _ ->
+        let target = LIR.Label "_start_target"
+        let cases =
+            [ ("Cset", [LIR.Cset (LIR.Physical LIR.X0, LIR.EQ)], LIR.Ret)
+              ("CondBranch", [], LIR.CondBranch (LIR.EQ, target, target)) ]
+
+        let rec runCases remaining =
+            match remaining with
+            | [] -> Ok ()
+            | (name, instrs, term) :: rest ->
+                match translate instrs term with
+                | Error e when e.Contains "without a preceding comparison in the same block" ->
+                    runCases rest
+                | Error e ->
+                    Error $"Expected {name} comparison-context error, got '{e}'"
+                | Ok _ ->
+                    Error $"Expected x64 codegen to reject {name} without a block-local comparison"
+
+        runCases cases
+
 /// Test: x64 codegen rejects ARM64-only/overflow physical registers instead of aliasing runtime state.
 let testRejectsReservedOverflowPhysicalRegister () : Result<unit, string> =
     let program =
@@ -5428,6 +5460,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
 
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
+    ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
     ("LIR rejects x64 overflow physical registers", testRejectsReservedOverflowPhysicalRegister)
     ("LIR rejects unsupported x64 FileReadText path operands", testRejectsUnsupportedFileReadPathOperand)
     ("LIR MOV + Exit", testMovAndExit)

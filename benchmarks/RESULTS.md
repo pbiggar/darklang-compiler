@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-06 10:11:07
-**Commit:** `472cd2f3` - Deduplicate ANF function reference extraction
+**Last Updated:** 2026-08-06 10:14:31
+**Commit:** `90063c5f` - Scope x64 comparison context to blocks
 
 | Benchmark     |           Dark (7.74x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
