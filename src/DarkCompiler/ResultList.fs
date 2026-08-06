@@ -5,7 +5,7 @@
 module ResultList
 
 /// Map over a list sequentially, returning first error
-let mapResults (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'b list, string> =
+let mapResults (f: 'a -> Result<'b, 'error>) (items: 'a list) : Result<'b list, 'error> =
     let rec loop acc remaining =
         match remaining with
         | [] -> Ok (List.rev acc)
@@ -16,7 +16,7 @@ let mapResults (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'b list, 
     loop [] items
 
 /// Map over a list sequentially and concatenate each successful result list.
-let collectResults (f: 'a -> Result<'b list, string>) (items: 'a list) : Result<'b list, string> =
+let collectResults (f: 'a -> Result<'b list, 'error>) (items: 'a list) : Result<'b list, 'error> =
     let rec prependReversed source target =
         match source with
         | [] -> target
@@ -32,5 +32,5 @@ let collectResults (f: 'a -> Result<'b list, string>) (items: 'a list) : Result<
     loop [] items
 
 /// Sequence a list of results, returning the first error
-let sequenceResults (items: Result<'a, string> list) : Result<'a list, string> =
+let sequenceResults (items: Result<'a, 'error> list) : Result<'a list, 'error> =
     mapResults id items
