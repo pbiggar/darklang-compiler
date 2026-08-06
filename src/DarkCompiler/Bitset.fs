@@ -79,7 +79,7 @@ let intersectMany (first: Bitset) (rest: Bitset list) : Bitset =
 let containsIndex (idx: int) (bits: Bitset) : bool =
     let wordIdx = idx >>> 6
     let bitIdx = idx &&& 63
-    if wordIdx < bits.Length then
+    if idx >= 0 && wordIdx < bits.Length then
         (bits.[wordIdx] &&& (1UL <<< bitIdx)) <> 0UL
     else
         false
