@@ -16,25 +16,24 @@ let private extractFromAtom (atom: ANF.Atom) : string list =
     | ANF.FloatLiteral _
     | ANF.Var _ -> []
 
+/// Extract function names from a list of atoms
+let private extractFromAtoms (atoms: ANF.Atom list) : string list =
+    atoms |> List.collect extractFromAtom
+
 /// Extract function names from a complex expression
 let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     match cexpr with
-    | ANF.Call (funcName, args) ->
-        funcName :: (args |> List.collect extractFromAtom)
-    | ANF.BorrowedCall (funcName, args) ->
-        funcName :: (args |> List.collect extractFromAtom)
+    | ANF.Call (funcName, args)
+    | ANF.BorrowedCall (funcName, args)
     | ANF.TailCall (funcName, args) ->
-        funcName :: (args |> List.collect extractFromAtom)
-    | ANF.IndirectCall (func, args) ->
-        extractFromAtom func @ (args |> List.collect extractFromAtom)
-    | ANF.IndirectTailCall (func, args) ->
-        extractFromAtom func @ (args |> List.collect extractFromAtom)
+        funcName :: extractFromAtoms args
     | ANF.ClosureAlloc (funcName, captures) ->
-        funcName :: (captures |> List.collect extractFromAtom)
-    | ANF.ClosureCall (closure, args) ->
-        extractFromAtom closure @ (args |> List.collect extractFromAtom)
-    | ANF.ClosureTailCall (closure, args) ->
-        extractFromAtom closure @ (args |> List.collect extractFromAtom)
+        funcName :: extractFromAtoms captures
+    | ANF.IndirectCall (func, args)
+    | ANF.IndirectTailCall (func, args)
+    | ANF.ClosureCall (func, args)
+    | ANF.ClosureTailCall (func, args) ->
+        extractFromAtom func @ extractFromAtoms args
     | ANF.Atom atom -> extractFromAtom atom
     | ANF.TypedAtom (atom, _) -> extractFromAtom atom
     | ANF.Prim (_, left, right) ->
@@ -42,7 +41,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.UnaryPrim (_, atom) -> extractFromAtom atom
     | ANF.IfValue (cond, thenVal, elseVal) ->
         extractFromAtom cond @ extractFromAtom thenVal @ extractFromAtom elseVal
-    | ANF.TupleAlloc atoms -> atoms |> List.collect extractFromAtom
+    | ANF.TupleAlloc atoms -> extractFromAtoms atoms
     | ANF.TupleGet (tuple, _) -> extractFromAtom tuple
     | ANF.StringConcat (left, right) ->
         extractFromAtom left @ extractFromAtom right
