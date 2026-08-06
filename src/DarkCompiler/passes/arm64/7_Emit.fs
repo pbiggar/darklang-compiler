@@ -15,7 +15,7 @@ let emitBinary
     (instructions: ARM64Symbolic.Instr list)
     (os: Platform.OS)
     (enableLeakCheck: bool)
-    : Result<EmitResult, string> =
+    : EmitResult =
     let (stringPool, floatPool) = ARM64_Resolve.collectPools instructions
     let machineCode =
         ARM64_Encoding.encodeSymbolicWithPools
@@ -30,4 +30,4 @@ let emitBinary
             Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
         | Platform.Linux ->
             Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
-    Ok { MachineCode = machineCode; Binary = binary }
+    { MachineCode = machineCode; Binary = binary }

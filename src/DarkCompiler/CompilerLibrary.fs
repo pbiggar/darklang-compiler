@@ -643,25 +643,22 @@ let private generateBinary
                 let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
                 if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
                 let emitStart = sw.Elapsed.TotalMilliseconds
-                let emitResult = ARM64_Emit.emitBinary arm64Instructions os options.EnableLeakCheck
-                match emitResult with
-                | Error err -> Error $"ARM64 emit error: {err}"
-                | Ok emit ->
-                    let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
-                    recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(emitElapsed, 1)
-                        println $"        {t}ms"
+                let emit = ARM64_Emit.emitBinary arm64Instructions os options.EnableLeakCheck
+                let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
+                recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
+                if verbosity >= 2 then
+                    let t = System.Math.Round(emitElapsed, 1)
+                    println $"        {t}ms"
 
-                    if dumpMachineCode && verbosity >= 3 then
-                        println "=== Machine Code (hex) ==="
-                        for i in 0 .. 4 .. (emit.MachineCode.Length - 1) do
-                            if i + 3 < emit.MachineCode.Length then
-                                let bytes = sprintf "%02x %02x %02x %02x" emit.MachineCode.[i] emit.MachineCode.[i+1] emit.MachineCode.[i+2] emit.MachineCode.[i+3]
-                                println $"  {i:X4}: {bytes}"
-                        println $"Total: {emit.MachineCode.Length} bytes\n"
+                if dumpMachineCode && verbosity >= 3 then
+                    println "=== Machine Code (hex) ==="
+                    for i in 0 .. 4 .. (emit.MachineCode.Length - 1) do
+                        if i + 3 < emit.MachineCode.Length then
+                            let bytes = sprintf "%02x %02x %02x %02x" emit.MachineCode.[i] emit.MachineCode.[i+1] emit.MachineCode.[i+2] emit.MachineCode.[i+3]
+                            println $"  {i:X4}: {bytes}"
+                    println $"Total: {emit.MachineCode.Length} bytes\n"
 
-                    Ok emit.Binary
+                Ok emit.Binary
 
 
 let private buildBaseFuncNames
