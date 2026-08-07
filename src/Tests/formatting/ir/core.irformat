@@ -1,0 +1,51 @@
+// Exact formatting of compact ANF and LIR inputs.
+
+---NAME---
+LIR instructions and metadata
+---IR---
+lir
+---INPUT---
+v0 <- Mov(Imm 1)
+v1 <- Add(v0, Imm 2)
+Ret
+---EXPECTED---
+_start:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "entry":
+    v0 <- Mov(Imm 1)
+    v1 <- Add(v0, Imm 2)
+    Ret
+
+---NAME---
+LIR escaped string symbol
+---IR---
+lir
+---INPUT---
+v0 <- Mov(str[a \"quote\"\nnext\\slash])
+Ret
+---EXPECTED---
+_start:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "entry":
+    v0 <- Mov(str[a \"quote\"\nnext\\slash])
+    Ret
+
+---NAME---
+ANF UInt64 maximum
+---IR---
+anf
+---INPUT---
+return u64[18446744073709551615]
+---EXPECTED---
+return 18446744073709551615
+
+---NAME---
+ANF escaped string
+---IR---
+anf
+---INPUT---
+return str[a \"quote\"\nnext\\slash]
+---EXPECTED---
+return "a \"quote\"\nnext\\slash"

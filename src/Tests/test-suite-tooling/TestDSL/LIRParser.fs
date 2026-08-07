@@ -80,7 +80,11 @@ let parseRegister (text: string) : Result<Reg, string> =
 /// Parse operand from text like "Imm 42", "Reg X1", "Stack 0"
 let parseOperand (text: string) : Result<Operand, string> =
     let text = text.Trim()
+    let stringMatch = Regex.Match(text, @"^str\[(.*)\]$")
 
+    if stringMatch.Success then
+        parseEscapedText stringMatch.Groups.[1].Value |> Result.map StringSymbol
+    else
     // Try immediate: "Imm 42"
     let immMatch = Regex.Match(text, @"^Imm\s+(-?\d+)$")
     if immMatch.Success then
@@ -104,7 +108,7 @@ let parseOperand (text: string) : Result<Operand, string> =
         | Ok offset -> Ok (StackSlot offset)
         | Error e -> Error e
     else
-        Error $"Invalid operand '{text}' (expected 'Imm N', 'Reg X', or 'Stack N')"
+        Error $"Invalid operand '{text}' (expected 'Imm N', 'Reg X', 'Stack N', or 'str[...]')"
 
 /// Parse a single LIR instruction or terminator
 /// Returns either an Instr or a Terminator

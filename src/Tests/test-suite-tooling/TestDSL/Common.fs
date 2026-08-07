@@ -68,3 +68,26 @@ let stripCommentsAndEmpty (text: string) : string list =
 /// Normalize line endings for comparison
 let normalizeLineEndings (text: string) : string =
     text.Replace("\r\n", "\n").Replace("\r", "\n")
+
+/// Decode the small, explicit escape alphabet used by text-bearing test DSLs.
+let parseEscapedText (text: string) : Result<string, string> =
+    let rec loop index chars =
+        if index >= text.Length then
+            chars |> List.rev |> Array.ofList |> String |> Ok
+        elif text.[index] <> '\\' then
+            loop (index + 1) (text.[index] :: chars)
+        elif index + 1 >= text.Length then
+            Error "Escaped text cannot end with a backslash"
+        else
+            let decoded =
+                match text.[index + 1] with
+                | '\\' -> Ok '\\'
+                | '"' -> Ok '"'
+                | 'n' -> Ok '\n'
+                | 'r' -> Ok '\r'
+                | 't' -> Ok '\t'
+                | value -> Error $"Unsupported escape sequence '\\{value}'"
+
+            decoded |> Result.bind (fun value -> loop (index + 2) (value :: chars))
+
+    loop 0 []

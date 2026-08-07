@@ -25,18 +25,25 @@ let parseTempId (text: string) : Result<TempId, string> =
     else
         Error $"Invalid temp id '{trimmed}' (expected 't0', 't1', etc.)"
 
-/// Parse atom (number or temp variable)
+/// Parse atom (literal or temp variable)
 let parseAtom (text: string) : Result<Atom, string> =
     let text = text.Trim()
+    let uint64Match = Regex.Match(text, @"^u64\[(\d+)\]$")
+    let stringMatch = Regex.Match(text, @"^str\[(.*)\]$")
 
-    // Try temp ID first
-    match parseTempId text with
-    | Ok tid -> Ok (Var tid)
-    | Error _ ->
-        // Try parsing as number (default to Int64)
-        match Int64.TryParse(text) with
-        | true, n -> Ok (IntLiteral (ANF.Int64 n))
-        | false, _ -> Error $"Invalid atom '{text}' (expected number or temp variable)"
+    if uint64Match.Success then
+        match UInt64.TryParse(uint64Match.Groups.[1].Value) with
+        | true, value -> Ok (IntLiteral (ANF.UInt64 value))
+        | false, _ -> Error $"Invalid UInt64 literal '{text}'"
+    elif stringMatch.Success then
+        parseEscapedText stringMatch.Groups.[1].Value |> Result.map StringLiteral
+    else
+        match parseTempId text with
+        | Ok tid -> Ok (Var tid)
+        | Error _ ->
+            match Int64.TryParse(text) with
+            | true, n -> Ok (IntLiteral (ANF.Int64 n))
+            | false, _ -> Error $"Invalid atom '{text}' (expected a literal or temp variable)"
 
 /// Parse binary operator
 let parseOp (text: string) : Result<BinOp, string> =
