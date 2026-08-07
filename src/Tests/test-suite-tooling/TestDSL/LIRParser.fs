@@ -110,14 +110,24 @@ let parseOperand (text: string) : Result<Operand, string> =
     else
         Error $"Invalid operand '{text}' (expected 'Imm N', 'Reg X', 'Stack N', or 'str[...]')"
 
+let private parseRcKind (text: string) : Result<RcKind, string> =
+    match text.Trim().ToLowerInvariant() with
+    | "generic" -> Ok GenericHeap
+    | "list" -> Ok TaggedList
+    | "dict" -> Ok DictHeap
+    | "closure" -> Ok ClosureHeap
+    | value -> Error $"Invalid reference-count kind '{value}' (expected generic, list, dict, or closure)"
+
 /// Parse a single LIR instruction or terminator
 /// Returns either an Instr or a Terminator
 let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<Instr, Terminator>, string> =
     let line = line.Trim()
 
-    // Try Ret: "Ret"
+    // Try terminators and zero-operand instructions.
     if line = "Ret" then
         Ok (Choice2Of2 Ret)
+    elif line = "Exit" then
+        Ok (Choice1Of2 Exit)
     else
 
     // Try PrintInt64: "PrintInt64(X0)" or "PrintInt64(v0)"
@@ -134,6 +144,61 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
         match parseRegister printBoolMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
         | Ok reg -> Ok (Choice1Of2 (PrintBool reg))
+    else
+
+    // Try HeapAlloc: "X2 <- HeapAlloc(16)"
+    let heapAllocMatch = Regex.Match(line, @"^(.+?)\s*<-\s*HeapAlloc\((-?\d+)\)$")
+    if heapAllocMatch.Success then
+        match parseRegister heapAllocMatch.Groups.[1].Value, parseInt32Field "heap allocation size" heapAllocMatch.Groups.[2].Value with
+        | Ok dest, Ok size -> Ok (Choice1Of2 (HeapAlloc (dest, size)))
+        | Error e, _
+        | _, Error e -> Error $"Line {lineNum}: {e}"
+    else
+
+    // Try HeapLoad: "X1 <- HeapLoad(X2, 16)"
+    let heapLoadMatch = Regex.Match(line, @"^(.+?)\s*<-\s*HeapLoad\((.+?),\s*(-?\d+)\)$")
+    if heapLoadMatch.Success then
+        match parseRegister heapLoadMatch.Groups.[1].Value,
+              parseRegister heapLoadMatch.Groups.[2].Value,
+              parseInt32Field "heap load offset" heapLoadMatch.Groups.[3].Value with
+        | Ok dest, Ok addr, Ok offset -> Ok (Choice1Of2 (HeapLoad (dest, addr, offset)))
+        | Error e, _, _
+        | _, Error e, _
+        | _, _, Error e -> Error $"Line {lineNum}: {e}"
+    else
+
+    // Try StringConcat: "X2 <- StringConcat(str[a], str[b])"
+    let stringConcatMatch = Regex.Match(line, @"^(.+?)\s*<-\s*StringConcat\((.+?),\s*(.+)\)$")
+    if stringConcatMatch.Success then
+        match parseRegister stringConcatMatch.Groups.[1].Value,
+              parseOperand stringConcatMatch.Groups.[2].Value,
+              parseOperand stringConcatMatch.Groups.[3].Value with
+        | Ok dest, Ok left, Ok right -> Ok (Choice1Of2 (StringConcat (dest, left, right)))
+        | Error e, _, _
+        | _, Error e, _
+        | _, _, Error e -> Error $"Line {lineNum}: {e}"
+    else
+
+    // Try RefCountInc/RefCountDec: "RefCountDec(X2, 16, generic)"
+    let refCountMatch = Regex.Match(line, @"^(RefCountInc|RefCountDec)\((.+?),\s*(-?\d+),\s*(.+)\)$")
+    if refCountMatch.Success then
+        match parseRegister refCountMatch.Groups.[2].Value,
+              parseInt32Field "reference-count payload size" refCountMatch.Groups.[3].Value,
+              parseRcKind refCountMatch.Groups.[4].Value with
+        | Ok addr, Ok size, Ok kind when refCountMatch.Groups.[1].Value = "RefCountInc" ->
+            Ok (Choice1Of2 (RefCountInc (addr, size, kind, None)))
+        | Ok addr, Ok size, Ok kind -> Ok (Choice1Of2 (RefCountDec (addr, size, kind, None)))
+        | Error e, _, _
+        | _, Error e, _
+        | _, _, Error e -> Error $"Line {lineNum}: {e}"
+    else
+
+    // Try RefCountDecString: "RefCountDecString(Reg X2)"
+    let refCountDecStringMatch = Regex.Match(line, @"^RefCountDecString\((.+)\)$")
+    if refCountDecStringMatch.Success then
+        parseOperand refCountDecStringMatch.Groups.[1].Value
+        |> Result.mapError (fun e -> $"Line {lineNum}: {e}")
+        |> Result.map (fun operand -> Choice1Of2 (RefCountDecString operand))
     else
 
     // Try Mov: "X1 <- Mov(Imm 42)"

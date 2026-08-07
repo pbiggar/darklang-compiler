@@ -196,11 +196,6 @@ let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck
                 try System.IO.File.Delete(tempPath) with _ -> ()
                 result
 
-/// Build and run a LIR program, returning exit code and stdout.
-let private runLIRProgramFull (program: LIR.Program) : Result<int * string, string> =
-    runLIRProgramFullWithOptions program false
-    |> Result.map (fun (exitCode, stdout, _) -> exitCode, stdout)
-
 /// Build and run a LIR program, returning the exit code
 let private runLIRProgram (program: LIR.Program) : Result<int, string> =
     match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
@@ -421,68 +416,6 @@ let testRejectsUnsupportedFileReadPathOperand () : Result<unit, string> =
     | Error e -> Error $"Expected FileReadText path operand error, got '{e}'"
     | Ok _ -> Error "Expected x64 codegen to reject unsupported FileReadText path operand, but translation succeeded"
 
-/// Test: MOV immediate + exit
-let testMovAndExit () : Result<unit, string> =
-    // exit(42): X0 <- 42; X1 <- X0; Exit
-    // On x86_64: X0→RAX, X1→RDI, Exit = mov rax,60; syscall
-    // But Exit expects exit code in RDI already, so: X1 <- 42; Exit
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 42L)]
-                    LIR.Ret  // We'll use Ret but need exit syscall
-
-    // Actually, let's just set RDI to 42 and call exit directly
-    // The LIR.Exit instruction generates the syscall
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 42L)
-                     LIR.Exit]
-                    LIR.Ret
-
-    match runLIRProgram program with
-    | Error e -> Error e
-    | Ok exitCode ->
-        if exitCode = 42 then Ok ()
-        else Error $"Expected exit code 42, got {exitCode}"
-
-/// Test: ADD immediate
-let testAddImm () : Result<unit, string> =
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 40L)
-                     LIR.Add (LIR.Physical LIR.X1, LIR.Physical LIR.X1, LIR.Imm 2L)
-                     LIR.Exit]
-                    LIR.Ret
-    match runLIRProgram program with
-    | Error e -> Error e
-    | Ok exitCode ->
-        if exitCode = 42 then Ok ()
-        else Error $"Expected exit code 42, got {exitCode}"
-
-/// Test: SUB
-let testSub () : Result<unit, string> =
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 50L)
-                     LIR.Sub (LIR.Physical LIR.X1, LIR.Physical LIR.X1, LIR.Imm 8L)
-                     LIR.Exit]
-                    LIR.Ret
-    match runLIRProgram program with
-    | Error e -> Error e
-    | Ok exitCode ->
-        if exitCode = 42 then Ok ()
-        else Error $"Expected exit code 42, got {exitCode}"
-
-/// Test: MUL
-let testMul () : Result<unit, string> =
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 6L)
-                     LIR.Mov (LIR.Physical LIR.X2, LIR.Imm 7L)
-                     LIR.Mul (LIR.Physical LIR.X1, LIR.Physical LIR.X1, LIR.Physical LIR.X2)
-                     LIR.Exit]
-                    LIR.Ret
-    match runLIRProgram program with
-    | Error e -> Error e
-    | Ok exitCode ->
-        if exitCode = 42 then Ok ()
-        else Error $"Expected exit code 42, got {exitCode}"
-
 /// Test: conditional branch
 let testBranch () : Result<unit, string> =
     let entryLabel = LIR.Label "_start_entry"
@@ -540,162 +473,6 @@ let testBranch () : Result<unit, string> =
     | Ok exitCode ->
         if exitCode = 42 then Ok ()
         else Error $"Expected exit code 42, got {exitCode}"
-
-/// Test: PrintInt64 outputs correct string
-let testPrintInt64 () : Result<unit, string> =
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 42L)
-                     LIR.PrintInt64 (LIR.Physical LIR.X0)]
-                    LIR.Ret
-    match runLIRProgramFull program with
-    | Error e -> Error e
-    | Ok (exitCode, stdout) ->
-        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}"
-        elif stdout.Trim() <> "42" then Error $"Expected stdout '42', got '{stdout.Trim()}'"
-        else Ok ()
-
-/// Test: PrintInt64 with negative number
-let testPrintInt64Negative () : Result<unit, string> =
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Imm -123L)
-                     LIR.PrintInt64 (LIR.Physical LIR.X0)]
-                    LIR.Ret
-    match runLIRProgramFull program with
-    | Error e -> Error e
-    | Ok (exitCode, stdout) ->
-        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}"
-        elif stdout.Trim() <> "-123" then Error $"Expected stdout '-123', got '{stdout.Trim()}'"
-        else Ok ()
-
-/// Test: PrintInt64 with zero
-let testPrintInt64Zero () : Result<unit, string> =
-    let program = makeSimpleProgram
-                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 0L)
-                     LIR.PrintInt64 (LIR.Physical LIR.X0)]
-                    LIR.Ret
-    match runLIRProgramFull program with
-    | Error e -> Error e
-    | Ok (exitCode, stdout) ->
-        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}"
-        elif stdout.Trim() <> "0" then Error $"Expected stdout '0', got '{stdout.Trim()}'"
-        else Ok ()
-
-/// Test: HeapAlloc initializes the trailing fixed-block refcount.
-let testHeapAllocInitializesRefcount () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
-                LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X2, 16)
-                LIR.Exit
-            ]
-            LIR.Ret
-
-    match runLIRProgram program with
-    | Error e -> Error e
-    | Ok exitCode ->
-        if exitCode = 1 then Ok ()
-        else Error $"Expected initialized refcount exit code 1, got {exitCode}"
-
-/// Test: fixed-block bump allocation increments x64 leak accounting.
-let testHeapAllocIncrementsLeakCounter () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
-                LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X2, 0)
-            ]
-            LIR.Ret
-
-    match runLIRProgramFullWithOptions program true with
-    | Error e -> Error e
-    | Ok (_, _, stderr) ->
-        if stderr.Trim() = "leaks: 1" then Ok ()
-        else Error $"Expected leak checker to report one x64 fixed-block allocation, got stderr '{stderr.Trim()}'"
-
-/// Test: generic fixed-block RefCountInc increments the trailing refcount.
-let testGenericRefCountInc () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
-                LIR.RefCountInc (LIR.Physical LIR.X2, 16, LIR.GenericHeap, None)
-                LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X2, 16)
-                LIR.Exit
-            ]
-            LIR.Ret
-
-    match runLIRProgram program with
-    | Error e -> Error e
-    | Ok exitCode ->
-        if exitCode = 2 then Ok ()
-        else Error $"Expected RefCountInc to raise refcount exit code to 2, got {exitCode}"
-
-/// Test: generic fixed-block RefCountDec reclaims 16-byte payload blocks.
-let testGenericRefCountDecTuple2 () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
-                LIR.RefCountDec (LIR.Physical LIR.X2, 16, LIR.GenericHeap, None)
-            ]
-            LIR.Ret
-
-    match runLIRProgramFullWithOptions program true with
-    | Error e -> Error e
-    | Ok (_, _, stderr) ->
-        if stderr.Trim() = "" then Ok ()
-        else Error $"Expected tuple2-sized RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
-
-/// Test: generic fixed-block RefCountDec handles other fixed payload sizes.
-let testGenericRefCountDecFixedSizes () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
-                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, None)
-                LIR.HeapAlloc (LIR.Physical LIR.X3, 24)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 24, LIR.GenericHeap, None)
-            ]
-            LIR.Ret
-
-    match runLIRProgramFullWithOptions program true with
-    | Error e -> Error e
-    | Ok (_, _, stderr) ->
-        if stderr.Trim() = "" then Ok ()
-        else Error $"Expected generic fixed-size RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
-
-/// Test: x64 dynamic string RefCountDec balances StringConcat allocation.
-let testDynamicStringRefCountDec () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
-                LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X2))
-            ]
-            LIR.Ret
-
-    match runLIRProgramFullWithOptions program true with
-    | Error e -> Error e
-    | Ok (_, _, stderr) ->
-        if stderr.Trim() = "" then Ok ()
-        else Error $"Expected dynamic string RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
-
-/// Test: x64 materialized string literals use a sentinel refcount and are not released as dynamic buffers.
-let testMaterializedStringLiteralRefCountDecSkipsRelease () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.Mov (LIR.Physical LIR.X2, LIR.StringSymbol "literal")
-                LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X2))
-            ]
-            LIR.Ret
-
-    match runLIRProgramFullWithOptions program true with
-    | Error e -> Error e
-    | Ok (_, _, stderr) ->
-        if stderr.Trim() = "" then Ok ()
-        else Error $"Expected materialized literal RefCountDec to skip leak accounting, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 generic fixed-block RefCountDec releases a dynamic string field.
 let testGenericRefCountDecStringField () : Result<unit, string> =
@@ -5463,21 +5240,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
     ("LIR rejects x64 overflow physical registers", testRejectsReservedOverflowPhysicalRegister)
     ("LIR rejects unsupported x64 FileReadText path operands", testRejectsUnsupportedFileReadPathOperand)
-    ("LIR MOV + Exit", testMovAndExit)
-    ("LIR ADD immediate", testAddImm)
-    ("LIR SUB", testSub)
-    ("LIR MUL", testMul)
     ("LIR conditional branch", testBranch)
-    ("LIR PrintInt64", testPrintInt64)
-    ("LIR PrintInt64 negative", testPrintInt64Negative)
-    ("LIR PrintInt64 zero", testPrintInt64Zero)
-    ("LIR HeapAlloc initializes refcount", testHeapAllocInitializesRefcount)
-    ("LIR HeapAlloc increments leak counter", testHeapAllocIncrementsLeakCounter)
-    ("LIR generic RefCountInc increments refcount", testGenericRefCountInc)
-    ("LIR generic RefCountDec reclaims tuple2", testGenericRefCountDecTuple2)
-    ("LIR generic RefCountDec reclaims fixed sizes", testGenericRefCountDecFixedSizes)
-    ("LIR dynamic string RefCountDec reclaims concat", testDynamicStringRefCountDec)
-    ("LIR materialized string literal RefCountDec skips release", testMaterializedStringLiteralRefCountDecSkipsRelease)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)

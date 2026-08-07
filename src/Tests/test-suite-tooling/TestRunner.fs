@@ -289,6 +289,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let graphColorTestFiles = getTestFiles "algorithms/graph-color" "graphcolor"
     let parallelMoveTestFiles = getTestFiles "algorithms/parallel-moves" "parallelmoves"
     let irFormatSnapshotTestFiles = getTestFiles "formatting/ir" "irformat"
+    let lirExecutionTestFiles = getTestFiles "backend/x64" "lirexec"
     let formattingRoundtripTestFiles = getTestFiles "formatting-roundtrip" "roundtrip"
     let syntaxTestFiles = getTestFiles "syntax" "syntax"
 
@@ -315,6 +316,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Parallel Move DSL Tests"; Tests = ParallelMoveDSLTests.tests }
         { Name = "IR Format Snapshot DSL Tests"; Tests = IRFormatSnapshotDSLTests.tests }
         { Name = "IR Format Snapshot Fixture Tests"; Tests = TestDSL.IRFormatSnapshotTestRunner.tests irFormatSnapshotTestFiles }
+        { Name = "LIR Execution DSL Tests"; Tests = LIRExecutionDSLTests.tests }
+        { Name = "LIR Execution Fixture Tests"; Tests = TestDSL.LIRExecutionTestRunner.tests lirExecutionTestFiles }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
         { Name = "ARM64 Binary Tests"; Tests = ARM64BinaryTests.tests }
         { Name = "ARM64 CodeGen Tests"; Tests = ARM64CodeGenTests.tests }

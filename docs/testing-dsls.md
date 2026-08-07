@@ -1,8 +1,9 @@
 # Focused test DSLs
 
-End-to-end `.e2e` tests remain the default for language behavior. Two focused
-fixture formats cover repetitive parser/pretty-printer and machine-code cases
-without requiring a new F# test function for every input.
+End-to-end `.e2e` tests remain the default for language behavior. Focused
+fixture formats cover repetitive syntax, encoding, algorithm, formatting, and
+small executable-backend cases without requiring a new F# test function for
+every input.
 
 ## Syntax fixtures
 
@@ -57,8 +58,9 @@ one instruction per output word. They also support `EXPECT-ERROR`, which checks
 that every listed instruction is rejected by the encoder with the requested
 diagnostic substring.
 
-Keep direct F# tests for internal helper APIs and tests that build or execute a
-native binary. Run all fixtures and unit tests with `./run-tests --ai`.
+Keep direct F# tests for internal helper APIs and programs that require richer
+binary layout or execution setup. Run all fixtures and unit tests with
+`./run-tests --ai`.
 
 ## Graph-coloring fixtures
 
@@ -114,3 +116,54 @@ MOV_reg(X2, X16)
 Operands can be `Reg Xn`, `Imm N`, or `Stack N`. Use `none` as
 `OUTPUT-ARM64` when all moves should be eliminated. These fixtures exercise the
 shared parallel-move resolver through ARM64 `TailArgMoves` lowering.
+
+## IR-format snapshot fixtures
+
+Place multi-case `.irformat` files under `src/Tests/formatting/ir/`. Select the
+compact input parser with `IR`, then pin the complete pretty-printed result:
+
+```text
+---NAME---
+ANF UInt64 maximum
+---IR---
+anf
+---INPUT---
+return u64[18446744073709551615]
+---EXPECTED---
+return 18446744073709551615
+```
+
+`IR` accepts `anf`, `mir`, or `lir`. Compact string literals use
+`str[...]` with `\\`, `\"`, `\n`, `\r`, and `\t` escapes; ANF also accepts
+`u64[...]`. Use direct F# construction when a formatting assertion depends on
+multi-block CFG ordering or an IR shape the compact parsers intentionally do
+not model.
+
+## Executable LIR fixtures
+
+Place multi-case `.lirexec` files under `src/Tests/backend/x64/`. Each case is
+a compact, single-block LIR program with one or more typed process
+expectations:
+
+```text
+---NAME---
+ADD immediate
+---INPUT-LIR---
+X1 <- Mov(Imm 40)
+X1 <- Add(X1, Imm 2)
+Exit
+Ret
+---EXPECT-EXIT---
+42
+```
+
+Use `EXPECT-EXIT`, `EXPECT-STDOUT`, and `EXPECT-STDERR` independently or
+together. Output comparisons trim surrounding whitespace; an empty
+`EXPECT-STDOUT` or `EXPECT-STDERR` section asserts no output. `LEAK-CHECK` can
+be `true` or `false` and enables the x64 leak report when requested.
+
+The supported LIR subset covers scalar moves/arithmetic, integer printing,
+fixed-block allocation/load/refcount operations, string concatenation, and
+string decrements. Keep direct F# tests for multi-block CFGs, target error
+paths, type/variant/record metadata, and ownership tests whose correctness
+depends on rich nested runtime shapes.

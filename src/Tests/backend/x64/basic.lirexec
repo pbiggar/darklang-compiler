@@ -1,0 +1,148 @@
+// Executable single-block x64 LIR behavior.
+
+---NAME---
+MOV and exit
+---INPUT-LIR---
+X1 <- Mov(Imm 42)
+Exit
+Ret
+---EXPECT-EXIT---
+42
+
+---NAME---
+ADD immediate
+---INPUT-LIR---
+X1 <- Mov(Imm 40)
+X1 <- Add(X1, Imm 2)
+Exit
+Ret
+---EXPECT-EXIT---
+42
+
+---NAME---
+SUB immediate
+---INPUT-LIR---
+X1 <- Mov(Imm 50)
+X1 <- Sub(X1, Imm 8)
+Exit
+Ret
+---EXPECT-EXIT---
+42
+
+---NAME---
+MUL registers
+---INPUT-LIR---
+X1 <- Mov(Imm 6)
+X2 <- Mov(Imm 7)
+X1 <- Mul(X1, Reg X2)
+Exit
+Ret
+---EXPECT-EXIT---
+42
+
+---NAME---
+Print positive Int64
+---INPUT-LIR---
+X0 <- Mov(Imm 42)
+PrintInt64(X0)
+Ret
+---EXPECT-EXIT---
+0
+---EXPECT-STDOUT---
+42
+
+---NAME---
+Print negative Int64
+---INPUT-LIR---
+X0 <- Mov(Imm -123)
+PrintInt64(X0)
+Ret
+---EXPECT-EXIT---
+0
+---EXPECT-STDOUT---
+-123
+
+---NAME---
+Print zero Int64
+---INPUT-LIR---
+X0 <- Mov(Imm 0)
+PrintInt64(X0)
+Ret
+---EXPECT-EXIT---
+0
+---EXPECT-STDOUT---
+0
+
+---NAME---
+Heap allocation initializes refcount
+---INPUT-LIR---
+X2 <- HeapAlloc(16)
+X1 <- HeapLoad(X2, 16)
+Exit
+Ret
+---EXPECT-EXIT---
+1
+
+---NAME---
+Heap allocation increments leak counter
+---INPUT-LIR---
+X2 <- HeapAlloc(16)
+X1 <- HeapLoad(X2, 0)
+Ret
+---LEAK-CHECK---
+true
+---EXPECT-STDERR---
+leaks: 1
+
+---NAME---
+Generic RefCountInc increments refcount
+---INPUT-LIR---
+X2 <- HeapAlloc(16)
+RefCountInc(X2, 16, generic)
+X1 <- HeapLoad(X2, 16)
+Exit
+Ret
+---EXPECT-EXIT---
+2
+
+---NAME---
+Generic RefCountDec reclaims tuple2 block
+---INPUT-LIR---
+X2 <- HeapAlloc(16)
+RefCountDec(X2, 16, generic)
+Ret
+---LEAK-CHECK---
+true
+---EXPECT-STDERR---
+
+---NAME---
+Generic RefCountDec handles fixed sizes
+---INPUT-LIR---
+X2 <- HeapAlloc(8)
+RefCountDec(X2, 8, generic)
+X3 <- HeapAlloc(24)
+RefCountDec(X3, 24, generic)
+Ret
+---LEAK-CHECK---
+true
+---EXPECT-STDERR---
+
+---NAME---
+Dynamic string RefCountDec reclaims concat
+---INPUT-LIR---
+X2 <- StringConcat(str[a], str[b])
+RefCountDecString(Reg X2)
+Ret
+---LEAK-CHECK---
+true
+---EXPECT-STDERR---
+
+---NAME---
+Materialized string literal RefCountDec skips release
+---INPUT-LIR---
+X2 <- Mov(str[literal])
+RefCountDecString(Reg X2)
+Ret
+---LEAK-CHECK---
+true
+---EXPECT-STDERR---

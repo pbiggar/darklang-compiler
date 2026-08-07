@@ -22,6 +22,7 @@
     <Compile Include="test-suite-tooling/TestDSL/GraphColorFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/ParallelMoveFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/IRFormatSnapshotFormat.fs" />
+    <Compile Include="test-suite-tooling/TestDSL/LIRExecutionFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/E2EFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/TypeCheckingFormat.fs" />
     <Compile Include="test-suite-tooling/TestDSL/OptimizationFormat.fs" />
@@ -33,6 +34,7 @@
     <Compile Include="test-suite-tooling/Runners/GraphColorTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/ParallelMoveTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/IRFormatSnapshotTestRunner.fs" />
+    <Compile Include="test-suite-tooling/Runners/LIRExecutionTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/E2ETestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/TypeCheckingTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/OptimizationTestRunner.fs" />
@@ -57,6 +59,7 @@
     <Compile Include="test-suite-tooling-tests/GraphColorDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/ParallelMoveDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/IRFormatSnapshotDSLTests.fs" />
+    <Compile Include="test-suite-tooling-tests/LIRExecutionDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/E2EFormatTests.fs" />
 
     <!-- Compiler pass tests (shared) -->
@@ -112,6 +115,7 @@
     <None Include="algorithms/**/*.graphcolor" />
     <None Include="algorithms/**/*.parallelmoves" />
     <None Include="formatting/**/*.irformat" />
+    <None Include="backend/**/*.lirexec" />
     <None Include="e2e/**/*.e2e" />
     <None Include="verification/**/*.e2e" />
     <None Include="typecheck/**/*.typecheck" />
