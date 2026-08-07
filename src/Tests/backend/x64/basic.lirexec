@@ -1,6 +1,22 @@
 // Executable single-block x64 LIR behavior.
 
 ---NAME---
+Reject overflow physical register
+---INPUT-LIR---
+X24 <- Mov(Imm 1)
+Ret
+---EXPECT-CODEGEN-ERROR---
+X24
+
+---NAME---
+Reject unsupported FileReadText path operand
+---INPUT-LIR---
+X0 <- FileReadText(Imm 0)
+Ret
+---EXPECT-CODEGEN-ERROR---
+FileReadText path
+
+---NAME---
 MOV and exit
 ---INPUT-LIR---
 X1 <- Mov(Imm 42)

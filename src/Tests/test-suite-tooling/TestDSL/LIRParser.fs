@@ -201,6 +201,15 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
         |> Result.map (fun operand -> Choice1Of2 (RefCountDecString operand))
     else
 
+    // Try FileReadText: "X0 <- FileReadText(str[path])"
+    let fileReadTextMatch = Regex.Match(line, @"^(.+?)\s*<-\s*FileReadText\((.+)\)$")
+    if fileReadTextMatch.Success then
+        match parseRegister fileReadTextMatch.Groups.[1].Value, parseOperand fileReadTextMatch.Groups.[2].Value with
+        | Ok dest, Ok path -> Ok (Choice1Of2 (FileReadText (dest, path)))
+        | Error e, _
+        | _, Error e -> Error $"Line {lineNum}: {e}"
+    else
+
     // Try Mov: "X1 <- Mov(Imm 42)"
     let movMatch = Regex.Match(line, @"^(.+?)\s*<-\s*Mov\((.+)\)$")
     if movMatch.Success then

@@ -1,6 +1,6 @@
 // LIRExecutionFormat.fs - Parser for executable single-block LIR fixtures.
 //
-// Keeps process expectations typed while reusing the symbolic LIR parser.
+// Keeps successful process results and expected codegen failures typed.
 
 module TestDSL.LIRExecutionFormat
 
@@ -16,11 +16,15 @@ type ProcessExpectation =
     | ExpectedStdout of string
     | ExpectedStderr of string
 
+type LIRExecutionExpectation =
+    | ExpectedProcessResult of ProcessExpectation list
+    | ExpectedCodegenError of string
+
 type LIRExecutionTest = {
     Name: string
     Program: LIR.Program
     LeakCheck: LeakCheckMode
-    Expectations: ProcessExpectation list
+    Expectation: LIRExecutionExpectation
     SourceFile: string
 }
 
@@ -31,7 +35,8 @@ let private knownSections =
           "LEAK-CHECK"
           "EXPECT-EXIT"
           "EXPECT-STDOUT"
-          "EXPECT-STDERR" ]
+          "EXPECT-STDERR"
+          "EXPECT-CODEGEN-ERROR" ]
 
 let private groupCases sections =
     let rec loop completed current remaining =
@@ -93,23 +98,30 @@ let private parseCase path sections =
         | _, _, Error msg, _
         | _, _, _, Error msg -> Error msg
         | Ok name, Ok source, Ok leakCheck, Ok exitExpectation ->
-            let expectations =
+            let processExpectations =
                 [ exitExpectation
                   outputExpectation "EXPECT-STDOUT" ExpectedStdout values
                   outputExpectation "EXPECT-STDERR" ExpectedStderr values ]
                 |> List.choose id
+            let codegenError = Map.tryFind "EXPECT-CODEGEN-ERROR" values |> Option.map (fun value -> value.Trim())
+            let expectationResult =
+                match codegenError, processExpectations with
+                | Some "", _ -> Error "EXPECT-CODEGEN-ERROR cannot be empty"
+                | Some _, _ :: _ -> Error "EXPECT-CODEGEN-ERROR cannot be combined with process expectations"
+                | Some expected, [] -> Ok (ExpectedCodegenError expected)
+                | None, [] -> Error "LIR-execution case requires at least one expectation"
+                | None, expected -> Ok (ExpectedProcessResult expected)
 
-            if List.isEmpty expectations then
-                Error "LIR-execution case requires at least one process expectation"
-            else
+            expectationResult
+            |> Result.bind (fun expectation ->
                 TestDSL.LIRParser.parseLIR source
                 |> Result.mapError (fun msg -> $"Failed to parse INPUT-LIR: {msg}")
                 |> Result.map (fun program ->
                     { Name = name
                       Program = program
                       LeakCheck = leakCheck
-                      Expectations = expectations
-                      SourceFile = path }))
+                      Expectation = expectation
+                      SourceFile = path })))
 
 let parseLIRExecutionFileContent path content =
     let sections = parseSections (normalizeLineEndings content)

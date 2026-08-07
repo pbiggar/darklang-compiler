@@ -388,34 +388,6 @@ let testRejectsConditionsWithoutBlockComparison () : Result<unit, string> =
 
         runCases cases
 
-/// Test: x64 codegen rejects ARM64-only/overflow physical registers instead of aliasing runtime state.
-let testRejectsReservedOverflowPhysicalRegister () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.Mov (LIR.Physical LIR.X24, LIR.Imm 1L)
-            ]
-            LIR.Ret
-
-    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
-    | Error e when e.Contains "X24" -> Ok ()
-    | Error e -> Error $"Expected X24-specific codegen error, got '{e}'"
-    | Ok _ -> Error "Expected x64 codegen to reject X24, but translation succeeded"
-
-/// Test: x64 file read path operands must be explicit string pointers, not silent null defaults.
-let testRejectsUnsupportedFileReadPathOperand () : Result<unit, string> =
-    let program =
-        makeSimpleProgram
-            [
-                LIR.FileReadText (LIR.Physical LIR.X0, LIR.Imm 0L)
-            ]
-            LIR.Ret
-
-    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
-    | Error e when e.Contains "FileReadText path" -> Ok ()
-    | Error e -> Error $"Expected FileReadText path operand error, got '{e}'"
-    | Ok _ -> Error "Expected x64 codegen to reject unsupported FileReadText path operand, but translation succeeded"
-
 /// Test: conditional branch
 let testBranch () : Result<unit, string> =
     let entryLabel = LIR.Label "_start_entry"
@@ -5238,8 +5210,6 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
-    ("LIR rejects x64 overflow physical registers", testRejectsReservedOverflowPhysicalRegister)
-    ("LIR rejects unsupported x64 FileReadText path operands", testRejectsUnsupportedFileReadPathOperand)
     ("LIR conditional branch", testBranch)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)

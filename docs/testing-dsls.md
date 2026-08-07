@@ -142,8 +142,7 @@ not model.
 ## Executable LIR fixtures
 
 Place multi-case `.lirexec` files under `src/Tests/backend/x64/`. Each case is
-a compact, single-block LIR program with one or more typed process
-expectations:
+a compact, single-block LIR program with a typed expected outcome:
 
 ```text
 ---NAME---
@@ -162,8 +161,13 @@ together. Output comparisons trim surrounding whitespace; an empty
 `EXPECT-STDOUT` or `EXPECT-STDERR` section asserts no output. `LEAK-CHECK` can
 be `true` or `false` and enables the x64 leak report when requested.
 
+Use `EXPECT-CODEGEN-ERROR` instead of process expectations when translation
+should fail, with the expected diagnostic substring as its value. Codegen-error
+and process expectations cannot be combined in one case.
+
 The supported LIR subset covers scalar moves/arithmetic, integer printing,
 fixed-block allocation/load/refcount operations, string concatenation, and
-string decrements. Keep direct F# tests for multi-block CFGs, target error
-paths, type/variant/record metadata, and ownership tests whose correctness
-depends on rich nested runtime shapes.
+string decrements. Keep direct F# tests for multi-block CFGs, condition-state
+isolation across translations, malformed compiler data,
+type/variant/record metadata, and ownership tests whose correctness depends on
+rich nested runtime shapes.
