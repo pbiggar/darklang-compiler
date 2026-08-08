@@ -5,7 +5,7 @@
 The fannkuch benchmark computes the maximum number of "pancake flips" needed to sort any permutation of n elements. The algorithm generates all n! permutations and counts flips for each.
 
 **Key Finding:**
-Dark uses **immutable FingerTree-backed lists** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. Current cachegrind evidence shows this remains the dominant source of the performance difference: Dark executes 15,995,282,805 instructions for `fannkuch`, 1188.9x Rust and 512.9x OCaml.
+Dark uses **immutable SkewList-backed lists** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. Current cachegrind evidence shows this remains the dominant source of the performance difference: Dark executes 6,606,716,903 instructions for `fannkuch`, 491.1x Rust and 211.9x OCaml.
 
 ## Benchmark Source Code
 
@@ -57,20 +57,20 @@ Current local cachegrind evidence from `./benchmarks/run_benchmarks.sh fannkuch`
 |----------|--------------|---------|-----------|----------|
 | Rust | 13,453,488 | baseline | 5,901,371 | 2,031,853 |
 | OCaml | 31,185,180 | 2.3x | 10,530,754 | 5,946,748 |
-| Dark | 15,995,282,805 | 1188.9x | 6,774,179,633 | 1,895,560,437 |
+| Dark | 6,606,716,903 | 491.1x | 3,025,615,009 | 896,553,196 |
 
-The Dark result is not just branch-heavy. The decisive gap is data traffic: the Dark run performs roughly 1148x the Rust data references, matching the list reconstruction and reference-count churn visible in LIR. A correctness smoke check with `./dark -r benchmarks/problems/fannkuch/dark/main.dark` prints `23` and exits 0.
+The Dark result is not just branch-heavy. The decisive gap is data traffic: the Dark run performs roughly 513x the Rust data references, matching the list reconstruction and reference-count churn visible in LIR. A correctness smoke check with `./dark -r benchmarks/problems/fannkuch/dark/main.dark` prints `23` and exits 0.
 
 ### Data Structure Difference (Root Cause)
 
 **Rust/OCaml**: Use mutable arrays with O(1) element access and O(k) in-place reversal.
 
-**Dark**: Uses immutable FingerTree-based lists requiring:
-- `getAt(list, i)`: O(log n) lookup through FingerTree
-- `take(list, k)`: O(log n) split operation plus new tree structure
-- `drop(list, k)`: O(log n) split operation plus new tree structure
-- `reverse(list)`: O(n) indexed reconstruction through `__reverseByIndexHelper_i64`
-- `append(a, b)`: O(log n) concatenation
+**Dark**: Uses immutable SkewList-based lists requiring:
+- `getAt(list, i)`: O(log n) lookup through SkewList
+- `take(list, k)`: O(k) traversal and reconstruction
+- `drop(list, k)`: O(k) traversal
+- `reverse(list)`: O(n) head/tail traversal and prepend reconstruction
+- `append(a, b)`: O(length(a)) reconstruction
 
 ### Hot Loop: `countFlips` Function
 
@@ -91,27 +91,27 @@ The Dark result is not just branch-heavy. The decisive gap is data traffic: the 
 **Dark inner loop** (~50+ instructions per flip, multiple function calls):
 ```
 countFlips_body:
-  ; Call getAt - O(log n) FingerTree lookup
+  ; Call getAt - O(log n) SkewList lookup
   v12764 <- Call(getAt, [Reg v12763, Imm 0])
 
 countFlips_L1:  ; When first != 0
-  ; Call takeHelper - O(log n) split + allocation
+  ; Call takeHelper - O(k) traversal + allocation
   v12768 <- Call(Stdlib.List.__takeHelper_i64, [...])
 
-  ; Call drop - O(log n) split + allocation
+  ; Call drop - O(k) traversal
   v12771 <- Call(Stdlib.List.drop_i64, [...])
 
   ; Call reverse - O(n) traversal + allocation
   v12772 <- Call(Stdlib.List.reverse_i64, [Reg v12768])
 
-  ; Call append - O(log n) concat + allocation
+  ; Call append - O(n) reconstruction + allocation
   v12773 <- Call(Stdlib.List.append_i64, [...])
 
   ; Loop back
   Jump(Label "countFlips_body")
 ```
 
-Current `-vvv --dump-anf --dump-mir --dump-lir` output confirms the same shape after optimization: `reversePrefix` still lowers through `Stdlib.List.__takeHelper_i64`, `Stdlib.List.__reverseByIndexHelper_i64`, and `Stdlib.__FingerTree.concat_i64`, then `countFlips` tail-recurses on the reconstructed list.
+Current `-vvv --dump-anf --dump-mir --dump-lir` output confirms the same high-level shape after optimization: `reversePrefix` still takes, drops, reverses, and concatenates persistent lists, then `countFlips` tail-recurses on the reconstructed list. The skew implementation performs these traversals through head/tail and prepend rather than indexed FingerTree reconstruction.
 
 ### Hot Loop: `rotateLeft` Function
 
@@ -131,16 +131,16 @@ rotateLeft_body:
   v12753 <- Call(Stdlib.List.drop_i64, [...])      ; Drop 1
   v12755 <- Call(Stdlib.List.__takeHelper_i64, ...) ; Take i
   v12758 <- Call(Stdlib.List.drop_i64, [...])      ; Get rest
-  v12759 <- Call(Stdlib.FingerTree.singleton_i64, ...) ; Wrap element
+  v12759 <- Call(Stdlib.__SkewList.singleton_i64, ...) ; Wrap element
   v12761 <- Call(Stdlib.List.append_i64, [...])    ; First append
   TailCall(Stdlib.List.append_i64, [...])          ; Second append
 ```
 
-Current LIR still keeps this as list reconstruction. `rotateLeft` contains `Stdlib.List.__takeHelper_i64` calls for the middle/rest slices and a final FingerTree concatenation path instead of lowering to a bounded shift over contiguous storage.
+Current LIR still keeps this as list reconstruction. `rotateLeft` contains `Stdlib.List.__takeHelper_i64` calls for the middle/rest slices and a final SkewList concatenation path instead of lowering to a bounded shift over contiguous storage.
 
 ### Hot Loop: `nextPerm` Count Updates
 
-The existing investigation focused on prefix reversal and rotation. Current IR shows another per-permutation cost: updating the small `count` list is also a FingerTree rewrite.
+The existing investigation focused on prefix reversal and rotation. Current IR shows another per-permutation cost: updating the small `count` list is also a SkewList rewrite.
 
 ```
 nextPerm:
@@ -152,17 +152,17 @@ nextPerm:
     nextPerm(newPerm, newCount, i + 1, n)
 ```
 
-In LIR, both `setAt` paths call into `Stdlib.__FingerTree.__setAtNode_i64` or `Stdlib.__FingerTree.__setAtDeep_i64`, with repeated `RefCountDec` cleanup along each tree case. Rust and OCaml update `count[i]` in place inside the permutation-generation loop, so this cost is unique to the current Dark representation.
+In LIR, both `setAt` paths rebuild the affected digit spine and tree path through `Stdlib.__SkewList.__digitsSetAt_i64` and `Stdlib.__SkewList.__treeSetAt_i64`, with reference-count cleanup along the path. Rust and OCaml update `count[i]` in place inside the permutation-generation loop, so this cost is unique to the current Dark representation.
 
 ### Memory Allocation Analysis
 
 Each flip in Dark allocates:
-1. FingerTree nodes for `take` result
-2. FingerTree nodes for `drop` result
-3. FingerTree nodes for `reverse` result
-4. FingerTree nodes for `append` result
+1. SkewList nodes for `take` result
+2. SkewList nodes for `drop` result
+3. SkewList nodes for `reverse` result
+4. SkewList nodes for `append` result
 
-For n=9 (standard benchmark), this means **many list allocations per flip and rotation**. Rust is not allocation-free for every permutation in this benchmark because it clones the working `Vec` before counting flips for a non-zero first element; current optimized assembly shows a 72-byte `__rust_alloc` in that path. The important distinction is still that Rust pays for one contiguous copy before the flip-counting loop, then performs each prefix reversal in place, while Dark reconstructs multiple FingerTree lists inside the loop.
+For n=9 (standard benchmark), this means **many list allocations per flip and rotation**. Rust is not allocation-free for every permutation in this benchmark because it clones the working `Vec` before counting flips for a non-zero first element; current optimized assembly shows a 72-byte `__rust_alloc` in that path. The important distinction is still that Rust pays for one contiguous copy before the flip-counting loop, then performs each prefix reversal in place, while Dark reconstructs multiple SkewList lists inside the loop.
 
 ## Identified Optimization Opportunities
 
@@ -171,7 +171,7 @@ For n=9 (standard benchmark), this means **many list allocations per flip and ro
 **Impact: 10-50x performance improvement (estimated)**
 
 **Root Cause:**
-Dark lacks a mutable array type. The immutable FingerTree-based List requires O(log n) operations and allocations for operations that should be O(1) with arrays. This applies to both `perm` and the less-obvious `count` state list.
+Dark lacks a mutable array type. The immutable SkewList-based List requires O(log n) operations and allocations for operations that should be O(1) with arrays. This applies to both `perm` and the less-obvious `count` state list.
 
 **Evidence from Dark IR:**
 ```
@@ -201,36 +201,36 @@ reversePrefix:
 
 ---
 
-### 2. Specialize FingerTree for Small Lists
+### 2. Specialize SkewList for Small Lists
 
 **Impact: 2-5x performance improvement for fannkuch**
 
 **Root Cause:**
-Fannkuch typically operates on lists of 6-9 elements. FingerTree has significant overhead for small lists due to tag checking, indirection, and node traversal.
+Fannkuch typically operates on lists of 6-9 elements. SkewList has significant overhead for small lists due to tag checking, indirection, and node traversal.
 
 **Evidence from Dark IR (tag checking overhead):**
 ```
-Stdlib.FingerTree.getAt_i64:
-  v11890 <- Call(Stdlib.FingerTree.__getTag_i64, [...])
-  v11891 <- Call(Stdlib.FingerTree.__TAG_LEAF, [...])
+Stdlib.SkewList.getAt_i64:
+  v11890 <- Call(Stdlib.SkewList.__getTag_i64, [...])
+  v11891 <- Call(Stdlib.SkewList.__TAG_LEAF, [...])
   Cmp(v11890, Reg v11891)
   Branch(...)  ; Branch to different cases
 ```
 
 For a 6-element list, `getAt(0)` requires:
 1. Check if tree is Empty/Single/Deep
-2. Navigate through FingerTree structure
+2. Navigate through SkewList structure
 3. Check node type (Leaf/Node2/Node3)
 4. Extract value
 
 **Implementation Approach:**
 1. Add "small list" representation (inline array up to 8-16 elements)
-2. Use tag bits to distinguish small lists from FingerTrees
+2. Use tag bits to distinguish small lists from SkewLists
 3. Implement fast paths for small list operations
-4. Automatic promotion to FingerTree when list grows
+4. Automatic promotion to SkewList when list grows
 
 **Files to Modify:**
-- `src/DarkCompiler/stdlib/__FingerTree.dark` - Add small list representation
+- `src/DarkCompiler/stdlib/__SkewList.dark` - Add small list representation
 - `src/DarkCompiler/passes/arm64/6_CodeGen.fs` and `src/DarkCompiler/passes/x64/6_CodeGen.fs` - Add fast paths for small lists when they become compiler-recognized runtime shapes
 
 ---
@@ -271,12 +271,12 @@ countFlips_L1:
 
 ---
 
-### 4. Optimize `getAt(list, 0)` Pattern
+### 4. Replace `getAt(list, 0)` With `head`
 
 **Impact: 10-20% performance improvement**
 
 **Root Cause:**
-`getAt(list, 0)` (getting the first element) is extremely common in fannkuch. This should be O(1) but currently requires full FingerTree traversal.
+`getAt(list, 0)` is already O(1) on the skew representation, but fannkuch still pays for bounds checks and option construction. Direct `head` use can remove that wrapper work in a hot loop.
 
 **Evidence from Dark source:**
 ```dark
@@ -290,9 +290,9 @@ def rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
 ```
 
 **Implementation Approach:**
-1. Add `List.head` function that's O(1) for FingerTrees
-2. Pattern-match on `getAt(list, 0)` and replace with `head(list)`
-3. Implement `head` as direct prefix access in FingerTree
+1. Use the existing O(1) `List.head` operation in source where possible
+2. Pattern-match on `getAt(list, 0)` and replace it with `head(list)` when safe
+3. Inline the direct prefix access for hot monomorphic call sites
 
 **Files to Modify:**
 - `src/DarkCompiler/stdlib/List.dark` - Add `head` function
@@ -339,7 +339,7 @@ nextPerm_L0:
 
 ## Appendix: Data Structure Comparison
 
-| Operation | Dark (FingerTree) | Rust (Vec) | OCaml (Array) |
+| Operation | Dark (SkewList) | Rust (Vec) | OCaml (Array) |
 |-----------|-------------------|------------|---------------|
 | get(i) | O(log n) + alloc check | O(1) | O(1) |
 | reverse prefix k | O(n) + O(k) allocs | O(k) in-place | O(k) in-place |

@@ -1102,7 +1102,7 @@ let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86
      X86_64.Label skipLabel]
 
 // ============================================================================
-// TaggedList RefCountDec Helper (FingerTree recursive DFS)
+// TaggedList RefCountDec Helper (skew-list iterative DFS)
 // ============================================================================
 
 type private ListLeafPayloadRelease =
@@ -1168,12 +1168,12 @@ let private generateListRefCountDecHelperWith
         [// Skip null
          X86_64.TEST_reg (X86_64.R8, X86_64.R8)
          X86_64.Jcc (X86_64.EQ, doneLabel)
-         // Check tag is in [1,5]
+         // Check tag is in [1,3].
          X86_64.MOV_reg (X86_64.R9, X86_64.R8)
          X86_64.AND_imm (X86_64.R9, 7)
          X86_64.TEST_reg (X86_64.R9, X86_64.R9)
          X86_64.Jcc (X86_64.EQ, doneLabel)
-         X86_64.CMP_imm (X86_64.R9, 5)
+         X86_64.CMP_imm (X86_64.R9, 3)
          X86_64.Jcc (X86_64.GT, doneLabel)
          // Bounds check untagged address
          X86_64.MOV_reg (X86_64.R9, X86_64.R8)
@@ -1203,8 +1203,10 @@ let private generateListRefCountDecHelperWith
     let collectSingle = label "collect_single"
     let collectDeep = label "collect_deep"
     let collectNode2 = label "collect_node2"
+    let collectNodeChildren = label "collect_node_children"
     let collectNode3 = label "collect_node3"
     let collectLeaf = label "collect_leaf"
+    let releaseValue = label "release_value"
     let leafPayloadDone = label "leaf_payload_done"
     let afterPrefix = label "after_prefix"
     let afterSuffix = label "after_suffix"
@@ -1274,6 +1276,10 @@ let private generateListRefCountDecHelperWith
             @ [X86_64.POP X86_64.RSI
                X86_64.POP X86_64.RDI]
     [X86_64.Label helperLabel
+     // Preserve callee-saved registers used to keep the current node stable
+     // across payload-release helpers. Pending DFS work is pushed above them.
+     X86_64.PUSH X86_64.R12
+     X86_64.PUSH X86_64.R13
      // RAX = tagged list pointer, init pending count
      X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)  // pending = 0
      X86_64.JMP loopCheck
@@ -1297,15 +1303,11 @@ let private generateListRefCountDecHelperWith
 
      // Resolve payload size from tag
      X86_64.CMP_imm (X86_64.RDX, 1)
-     X86_64.Jcc (X86_64.EQ, size8)       // SINGLE → 8
+     X86_64.Jcc (X86_64.EQ, size32)      // DIGIT → 32
      X86_64.CMP_imm (X86_64.RDX, 2)
-     X86_64.Jcc (X86_64.EQ, size96)      // DEEP → 96
-     X86_64.CMP_imm (X86_64.RDX, 3)
-     X86_64.Jcc (X86_64.EQ, size24)      // NODE2 → 24
-     X86_64.CMP_imm (X86_64.RDX, 4)
-     X86_64.Jcc (X86_64.EQ, size32)      // NODE3 → 32
-     X86_64.CMP_imm (X86_64.RDX, 5)
      X86_64.Jcc (X86_64.EQ, size8)       // LEAF → 8
+     X86_64.CMP_imm (X86_64.RDX, 3)
+     X86_64.Jcc (X86_64.EQ, size24)      // NODE → 24
      X86_64.JMP popOrRet
 
      X86_64.Label size8
@@ -1335,30 +1337,25 @@ let private generateListRefCountDecHelperWith
      X86_64.CMP_imm (X86_64.RDX, 1)
      X86_64.Jcc (X86_64.EQ, collectSingle)
      X86_64.CMP_imm (X86_64.RDX, 2)
-     X86_64.Jcc (X86_64.EQ, collectDeep)
+     X86_64.Jcc (X86_64.EQ, collectLeaf)
      X86_64.CMP_imm (X86_64.RDX, 3)
      X86_64.Jcc (X86_64.EQ, collectNode2)
-     X86_64.CMP_imm (X86_64.RDX, 4)
-     X86_64.Jcc (X86_64.EQ, collectNode3)
-     X86_64.CMP_imm (X86_64.RDX, 5)
-     X86_64.Jcc (X86_64.EQ, collectLeaf)
      X86_64.JMP freeNode]
 
-    // --- SINGLE (tag 1): one child at offset 0 ---
+    // --- DIGIT (tag 1): tree and remaining-spine children at 16 and 24 ---
     @ [X86_64.Label collectSingle
        X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
-       X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)]
-    @ addChild "single_0"
+       X86_64.MOV_load (X86_64.R8, X86_64.RDI, 16)]
+    @ addChild "digit_tree"
+    @ [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 24)]
+    @ addChild "digit_rest"
     @ [X86_64.JMP freeNode]
 
-    // --- NODE2 (tag 3): two children at offsets 0, 8 ---
+    // --- NODE (tag 3): release the value before collecting children. Payload
+    // helpers may use RAX as scratch, so no structural work can be pending yet.
     @ [X86_64.Label collectNode2
        X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
-       X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)]
-    @ addChild "node2_0"
-    @ [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 8)]
-    @ addChild "node2_1"
-    @ [X86_64.JMP freeNode]
+       X86_64.JMP releaseValue]
 
     // --- NODE3 (tag 4): three children at offsets 0, 8, 16 ---
     @ [X86_64.Label collectNode3
@@ -1417,10 +1414,25 @@ let private generateListRefCountDecHelperWith
     @ [X86_64.Label afterSuffix
        X86_64.JMP freeNode]
 
-    // --- LEAF (tag 5): no children ---
+    // --- LEAF (tag 2): value at offset 0 and no children ---
     @ [X86_64.Label collectLeaf
-       X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)]
+       X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+       X86_64.Label releaseValue
+       X86_64.MOV_reg (X86_64.R12, X86_64.RDX)
+       X86_64.MOV_reg (X86_64.R13, X86_64.RDI)]
     @ releaseLeafPayload
+
+    // A leaf is finished after payload release. An internal node still owns
+    // its left and right tree edges.
+    @ [X86_64.MOV_reg (X86_64.RDX, X86_64.R12)
+       X86_64.MOV_reg (X86_64.RDI, X86_64.R13)
+       X86_64.CMP_imm (X86_64.RDX, 3)
+       X86_64.Jcc (X86_64.NE, freeNode)
+       X86_64.Label collectNodeChildren
+       X86_64.MOV_load (X86_64.R8, X86_64.RDI, 8)]
+    @ addChild "node_left"
+    @ [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 16)]
+    @ addChild "node_right"
 
     // --- Free node to free list by payload size class ---
     @ [X86_64.Label freeNode
@@ -1442,6 +1454,8 @@ let private generateListRefCountDecHelperWith
        X86_64.JMP loopCheck
 
        X86_64.Label helperRet
+       X86_64.POP X86_64.R13
+       X86_64.POP X86_64.R12
        X86_64.RET]
 
 let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list =
@@ -1559,7 +1573,6 @@ let private generateListRefCountIncHelper () : X86_64.Instr list =
     let helperRet = label "ret"
     let size24 = label "size_24"
     let size32 = label "size_32"
-    let size96 = label "size_96"
     let haveSize = label "have_size"
 
     [X86_64.Label listRefCountIncHelperLabel
@@ -1571,19 +1584,17 @@ let private generateListRefCountIncHelper () : X86_64.Instr list =
      X86_64.AND_imm (X86_64.RCX, 7)
      X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
      X86_64.Jcc (X86_64.EQ, helperRet)
-     X86_64.CMP_imm (X86_64.RCX, 5)
+     X86_64.CMP_imm (X86_64.RCX, 3)
      X86_64.Jcc (X86_64.GT, helperRet)
      // Untag: RDI = RAX & ~7
      X86_64.MOV_reg (X86_64.RDI, X86_64.RAX)
      X86_64.AND_imm (X86_64.RDI, -8)
      // Resolve payload size from tag
-     X86_64.CMP_imm (X86_64.RCX, 2)
-     X86_64.Jcc (X86_64.EQ, size96)
+     X86_64.CMP_imm (X86_64.RCX, 1)
+     X86_64.Jcc (X86_64.EQ, size32)
      X86_64.CMP_imm (X86_64.RCX, 3)
      X86_64.Jcc (X86_64.EQ, size24)
-     X86_64.CMP_imm (X86_64.RCX, 4)
-     X86_64.Jcc (X86_64.EQ, size32)
-     // Tags 1 (SINGLE) and 5 (LEAF): payload = 8
+     // Tag 2 (LEAF): payload = 8.
      X86_64.MOV_imm32 (X86_64.RDX, 8)
      X86_64.JMP haveSize
      X86_64.Label size24
@@ -1592,8 +1603,6 @@ let private generateListRefCountIncHelper () : X86_64.Instr list =
      X86_64.Label size32
      X86_64.MOV_imm32 (X86_64.RDX, 32)
      X86_64.JMP haveSize
-     X86_64.Label size96
-     X86_64.MOV_imm32 (X86_64.RDX, 96)
      // RDX = payload size, RDI = untagged address
      X86_64.Label haveSize
      X86_64.ADD_reg (X86_64.RDI, X86_64.RDX)       // RDI = &refcount
@@ -3332,7 +3341,7 @@ let private translateInstr
         |> Result.map (fun addrReg ->
             match kind with
             | LIR.TaggedList ->
-                // TaggedList RefCountDec: calls the recursive FingerTree DFS helper.
+                // TaggedList RefCountDec calls the iterative skew-list DFS helper.
                 let helperLabel =
                     metadata
                     |> requiredRcMetadataReleasePlan "TaggedList RefCountDec"

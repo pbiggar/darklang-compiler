@@ -152,17 +152,16 @@ The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 ## Tagged Lists
 
 `generateListRefCountDecHelper` in `passes/x64/6_CodeGen.fs` performs an
-iterative DFS over FingerTree nodes using the process stack as a work stack. It
-handles all five list tags:
+iterative DFS over skew RAL nodes using the process stack as a work stack. It
+handles all three allocated list tags:
 
-- `SINGLE`
-- `DEEP`
-- `NODE2`
-- `NODE3`
-- `LEAF`
+- `DIGIT`, which owns a complete tree and the remaining digit spine
+- `LEAF`, which owns one direct element payload
+- `NODE`, which owns one direct element payload and two child trees
 
-The generic list helper reclaims list nodes with no leaf payload cleanup.
-Direct static leaf helpers remain only for root payload families:
+The generic list helper reclaims structural nodes without element payload
+cleanup. Payload-aware variants release direct payloads in both leaf and
+internal nodes. Direct static payload helpers remain only for root families:
 
 - nested list roots
 - closure roots
@@ -170,11 +169,11 @@ Direct static leaf helpers remain only for root payload families:
 - dict roots whose values are lists
 - direct dynamic string/bytes buffers
 
-Fixed-block and boxed-sum leaf payloads no longer have a static x64
+Fixed-block and boxed-sum element payloads no longer have a static x64
 tuple/record/sum helper matrix. When a list element is represented as
 `GenericHeap`, helper selection creates a stable planned-list helper label from
 the element `RcReleasePlan`, and `generateListRefCountDecHelper` delegates the
-leaf payload cleanup to the shared generic release-plan executor. Planned list
+element payload cleanup to the shared generic release-plan executor. Planned list
 helpers discover recursive list/dict/closure helper dependencies by walking
 their `RcReleasePlan`, not by enumerating helper-label special cases.
 

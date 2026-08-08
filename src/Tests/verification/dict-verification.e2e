@@ -3,8 +3,6 @@
 // These tests are NOT run by default. Run with:
 //   ./run-tests --ai --verification --filter=verification
 // Or use: ./run-verification-tests
-//
-// Note: See run-verification-tests for known bugs (FingerTree deep chain bug)
 
 // ===================================================================
 // Helper Functions

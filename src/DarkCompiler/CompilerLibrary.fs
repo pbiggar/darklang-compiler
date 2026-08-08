@@ -1049,7 +1049,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Base64.dark"
         "stdlib/Crypto.dark"
         "stdlib/Math.dark"
-        "stdlib/__FingerTree.dark"
+        "stdlib/__SkewList.dark"
     ]
     let mergeFile (acc: AST.TopLevel list) (filename: string) : Result<AST.TopLevel list, string> =
         match loadDarkFileAllowInternal filename with

@@ -464,7 +464,7 @@ overlapping allocation and ownership systems:
 
 - fixed-size heap blocks with trailing refcounts for tuples, records, sums, and
   closures
-- tagged FingerTree/list nodes allocated through raw memory
+- tagged SkewList/list nodes allocated through raw memory
 - tagged HAMT/dict nodes allocated through raw memory
 - dynamically sized strings and bytes with length, data, padding, and trailing
   refcount
@@ -747,12 +747,10 @@ Remaining list work is generalized payload release, broad arity coverage,
 backend parity for every helper variant, and replacing ad hoc specializations
 with shape-driven traversal.
 
-During the float-display string work, a non-memory lowering bug was observed:
-`List<Float>` cons patterns using `...tail` lowered the tail operation through
-the `tail_i64` specialization. `Stdlib.List.toDisplayString_f64` avoids that
-path by using `Stdlib.__FingerTree.head<Float>` and
-`Stdlib.__FingerTree.tail<Float>` directly. Future list work should fix this
-typed list-pattern lowering issue rather than copying the workaround.
+The former `List<Float>` cons-pattern specialization bug is covered by the
+current list-pattern lowering. Pattern extraction now uses the skew-list
+head/tail operations with the concrete element type, while the float display
+helper's direct internal calls remain equivalent to that lowering.
 
 ### Fixed Blocks And Closures Have Important ARM64 Coverage
 
@@ -805,7 +803,7 @@ Future memory work should keep these constraints in mind.
 - `TSum` may be an immediate enum value or a boxed payload value.
 - `TFunction` may be a closure heap object or a compile-time function reference.
 - `TDict` is a tagged root whose internal HAMT nodes are raw memory.
-- `TList` is a tagged FingerTree pointer whose payload element shape matters.
+- `TList` is a tagged SkewList pointer whose payload element shape matters.
 - `TRawPtr` is intentionally unmanaged unless wrapped by a managed structure.
 
 This is why `RcShape` should keep replacing source-type-only decisions.
@@ -1513,7 +1511,7 @@ should only be tackled once those managed-shape rules are stable.
 
 Raw memory remains central:
 
-- FingerTree/list nodes use `RawAlloc`, `RawWriteWord`, and typed `RawSlotInit`.
+- SkewList/list nodes use `RawAlloc`, `RawWriteWord`, and typed `RawSlotInit`.
 - HAMT/dict nodes use `RawAlloc`, `RawWriteWord`, and typed `RawSlotInit`.
 - strings and bytes constructors in stdlib use `RawAlloc`.
 - `RawFree` is still a no-op.

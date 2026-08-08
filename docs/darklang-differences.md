@@ -169,7 +169,7 @@ Features in compiler not in interpreter. These are skipped during validation.
 |---------|-------------|-------------|
 | Integer division | `extension:integer_division` | `/` operator works on integers (Darklang requires `Int64.divide`) |
 | Internal functions | `internal:helper_function` | Functions like `__digitToString`, `__findFrom` are implementation helpers |
-| FingerTree/HAMT | `internal:data_structure` | `Stdlib.__FingerTree` and `Stdlib.__HAMT` are internal implementations |
+| SkewList/HAMT | `internal:data_structure` | `Stdlib.__SkewList` and `Stdlib.__HAMT` are internal implementations |
 
 ### 4.3 Integer Division Operator
 

@@ -210,13 +210,13 @@ def Stdlib.Float.toString(f: Float) : String =
         signStr ++ intStr ++ "." ++ strippedFrac
 
 def Stdlib.List.__floatsDisplayItems(list: List<Float>, first: Bool) : String =
-    if Stdlib.__FingerTree.isEmpty<Float>(list) then ""
+    if Stdlib.__SkewList.isEmpty<Float>(list) then ""
     else
-        match Stdlib.__FingerTree.head<Float>(list) with
+        match Stdlib.__SkewList.head<Float>(list) with
         | None -> ""
         | Some(h) ->
             let item = Stdlib.Float.toString(h) in
-            let tail = Stdlib.__FingerTree.tail<Float>(list) in
+            let tail = Stdlib.__SkewList.tail<Float>(list) in
             let rest = Stdlib.List.__floatsDisplayItems(tail, false) in
             if first then item ++ rest else ", " ++ item ++ rest
 

@@ -12,7 +12,7 @@ workarounds.
 
 ## FingerTree Deep Operation Chain Bug
 
-**Status**: Fixed or no longer reproducible through the public language surface
+**Status**: Superseded; FingerTree was replaced by the direct-payload skew RAL
 **Severity**: Previously Medium
 **Discovered**: Investigation of Dict.fromList failures
 **Revalidated**: Public Dict.fromList and List.fold cases with 5 elements now pass

@@ -4,4 +4,4 @@
 
 __raw_alloc(8) = error="Internal identifier not allowed in user code: __raw_alloc"
 Stdlib.__HAMT.__getTag(Dict.empty<Int64, Int64>()) = error="Internal identifier not allowed in user code: Stdlib.__HAMT.__getTag"
-Stdlib.__FingerTree.empty<Int64>() = error="Internal identifier not allowed in user code: Stdlib.__FingerTree.empty"
+Stdlib.__SkewList.empty<Int64>() = error="Internal identifier not allowed in user code: Stdlib.__SkewList.empty"

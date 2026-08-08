@@ -154,7 +154,7 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     // __key_eq<k> : (k, k) -> Bool - compare two keys for equality
     { Name = "__key_eq"; TypeParams = ["k"]; ParamTypes = [TVar "k"; TVar "k"]; ReturnType = TBool }
 
-    // List intrinsics - for Finger Tree implementation
+    // List intrinsics for the direct-payload skew RAL implementation.
     // __list_empty<a> : () -> List<a> - create empty list (null pointer with tag 0)
     { Name = "__list_empty"; TypeParams = ["a"]; ParamTypes = []; ReturnType = TList(TVar "a") }
     // __list_is_null<a> : (List<a>) -> Bool - check if list is empty/null

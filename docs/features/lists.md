@@ -1,7 +1,8 @@
 # Lists
 
-Dark lists are immutable sequences represented as tagged FingerTree nodes, not
-as simple cons cells.
+Dark lists are immutable sequences represented as direct-payload skew-binary
+random-access lists. The representation is persistent and uses reference
+counting for every shared root, structural edge, and managed element payload.
 
 ## Surface Syntax
 
@@ -23,84 +24,64 @@ match xs with
 
 ## Runtime Representation
 
-The empty list is `0`.
+The empty list is `0`. A non-empty root is a short spine of digit nodes. Each
+digit points to one complete skew-binary tree and the remaining digits.
 
-Non-empty lists are tagged pointers. Low pointer bits encode the node kind:
+| Tag | Node | Fields before refcount | Allocation |
+|---|---|---|---|
+| 1 | digit | weight, suffix length, tree, rest | 40 bytes |
+| 2 | leaf | element | 16 bytes |
+| 3 | internal tree | element, left, right | 32 bytes |
 
-| Tag | Node kind | Payload size |
-|---|---|---|
-| 1 | single | 8 bytes |
-| 2 | deep | 96 bytes |
-| 3 | node2 | 24 bytes |
-| 4 | node3 | 32 bytes |
-| 5 | leaf | 8 bytes |
+The low three pointer bits hold the tag. Every node has a trailing refcount.
+Elements are stored directly in both leaves and internal tree nodes, avoiding a
+separate wrapper allocation per internal value. The cached suffix length makes
+`length` constant time.
 
-Each raw node stores its payload followed by a refcount slot. List helper code
-clears the low tag bits to find the raw node address, then uses the tag to find
-the refcount offset and children.
+The skew invariant permits at most two leading trees of the same weight. A
+prepend combines two equal leading trees with the new value as their parent;
+otherwise it adds a weight-one tree. Removing the head either drops a
+weight-one digit or splits one complete tree into two child digits.
 
-The exact FingerTree layout is internal to list lowering and backend helpers.
-The key ownership rule is that nodes own edges to their child nodes and leaves
-own their element payload according to the element representation shape.
+## Complexity
 
-## Lowering
+| Operation | Complexity |
+|---|---|
+| `push`, `head`, `tail`, `length`, `isEmpty` | O(1) worst case |
+| `getAt`, `setAt`, `last` | O(log n) |
+| `map`, `filter`, `reverse`, `append` | O(n) |
+| `pushBack`, `dropLast` | O(n) |
 
-List construction happens in `src/DarkCompiler/passes/2_AST_to_ANF.fs`.
-Lowering allocates FingerTree nodes with `RawAlloc` and writes fields with
-`RawWriteWord` for metadata and `RawSlotInit<T>` for typed payload or child
-slots. The type on `RawSlotInit<T>` is important because it lets backend code
-retain managed edges, especially list and dict roots.
+`map` preserves the forest shape and allocates one output tree node per element
+plus one digit per source digit. Traversal-oriented operations use repeated
+head/tail with O(1) prepend accumulators and reverse once where order requires
+it. Workloads that repeatedly append at the right should instead build in
+reverse with `push`.
 
-## Reference Counting
+## Lowering and Reference Counting
 
-Lists have specialized backend helpers rather than using generic fixed-block
-RC:
+List literals are built directly in
+`src/DarkCompiler/passes/2_AST_to_ANF.fs`; they do not call a sequence of public
+list functions. Metadata uses `RawWriteWord`, while element and child edges use
+typed `RawSlotInit<T>` so the backends retain managed ownership.
 
-- root increments retain the tagged root node
-- decrements traverse list nodes iteratively and free nodes whose refcount
-  reaches zero
-- `RawSlotInit<T>` retains child list and dict edges
-- direct leaf payload helpers release root element payloads
-- generic fixed-block and boxed-sum element payloads use `RcReleasePlan`
-  helpers
-
-Current leaf payload coverage includes:
-
-- primitive payloads, which need no payload release
-- dynamic strings and bytes
-- nested lists
-- dict roots
-- closure roots
-- tuple payloads through `RcReleasePlan` helpers
-- record payloads through `RcReleasePlan` helpers
-- boxed sums carrying dynamic buffers, lists, dicts, closures, tuples, records,
-  and selected nested sums through `RcReleasePlan` helpers
-
-ARM64 and x64 both route generic fixed-block list payload cleanup through
-helpers derived from `RcReleasePlan`. x64 no longer has a static
-tuple/record/boxed-sum helper matrix for list payload cleanup.
-
-## Remaining Work
-
-List memory management should stay on the shape-driven payload release path.
-Remaining gaps are mostly around:
-
-- adding focused tests when new recursive payload families are introduced
-- extending the generic `RcReleasePlan` executor if a new tuple/record/sum
-  shape exposes an unsupported release-plan case
-- keeping ARM64 and x64 helper dependency discovery in parity
-- avoiding new per-shape helper matrices
-
-See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
-for the current task breakdown.
+ARM64 and x64 use specialized iterative list-release helpers. When a node's
+refcount reaches zero, the helper releases its direct element payload according
+to `RcReleasePlan`, schedules its structural children, and returns the raw block
+to the allocator's size-class free list. This covers dynamic strings and bytes,
+nested lists and dicts, closures, tuples, records, and boxed sums without a
+garbage collector.
 
 ## Implementation Files
 
 | File | Purpose |
 |---|---|
-| `src/DarkCompiler/AST.fs` | `TList`, list literals, list patterns |
-| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | list lowering |
+| `src/DarkCompiler/stdlib/__SkewList.dark` | representation and primitive operations |
+| `src/DarkCompiler/stdlib/List.dark` | public list functions |
+| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | literal and pattern lowering |
 | `src/DarkCompiler/passes/2.5_RefCountInsertion.fs` | list lifetime insertion |
-| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 list helpers |
-| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 list helpers |
-| `src/DarkCompiler/stdlib/List.dark` | stdlib list functions |
+| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 ownership helpers |
+| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 ownership helpers |
+
+See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
+for the current memory-management task breakdown.

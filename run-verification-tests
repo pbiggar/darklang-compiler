@@ -1,14 +1,12 @@
 #!/bin/bash
-# Run verification test suites for Dict and FingerTree
+# Run verification test suites for Dict and skew lists
 # These are extensive correctness tests not run by default
 #
 # Usage: ./run-verification-tests [OPTIONS]
 #
 # These tests verify:
 # - Dict: Large-scale insert/retrieve, collision handling, enumeration
-# - FingerTree: Index verification, push/tail operations, concat
-#
-# Note: Some tests may fail due to known bugs (FingerTree deep chain bug)
+# - Skew list: index verification, persistence, push/tail operations, concat
 
 set -e
 

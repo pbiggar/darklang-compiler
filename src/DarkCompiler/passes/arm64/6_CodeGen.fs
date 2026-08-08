@@ -246,7 +246,6 @@ let private generateListRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_list_rc_inc_{name}"
     let size24 = label "size_24"
     let size32 = label "size_32"
-    let size96 = label "size_96"
     let haveSize = label "have_size"
     let helperRet = label "ret"
 
@@ -255,21 +254,19 @@ let private generateListRefCountIncHelper () : ARM64Symbolic.Instr list =
         // X0 = tagged list pointer (or 0)
         ARM64Symbolic.CBZ (ARM64Symbolic.X0, helperRet)
         ARM64Symbolic.AND_imm (ARM64Symbolic.X1, ARM64Symbolic.X0, 7UL)
-        ARM64Symbolic.CBZ (ARM64Symbolic.X1, helperRet)  // Untagged pointer => not a FingerTree node
-        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 5us)
+        ARM64Symbolic.CBZ (ARM64Symbolic.X1, helperRet)  // Untagged pointer => not a skew-list node
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 3us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, helperRet)
         // Clear low tag bits via shifts (AND #~7 is not always encodable as a logical immediate).
         ARM64Symbolic.LSR_imm (ARM64Symbolic.X2, ARM64Symbolic.X0, 3)
         ARM64Symbolic.LSL_imm (ARM64Symbolic.X2, ARM64Symbolic.X2, 3)
 
-        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 2us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size96)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 1us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size32)
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 3us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size24)
-        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 4us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size32)
 
-        // tags 1 and 5 (SINGLE/LEAF)
+        // Tag 2 (LEAF).
         ARM64Symbolic.MOVZ (ARM64Symbolic.X3, 8us, 0)
         ARM64Symbolic.B_label haveSize
 
@@ -280,9 +277,6 @@ let private generateListRefCountIncHelper () : ARM64Symbolic.Instr list =
         ARM64Symbolic.Label size32
         ARM64Symbolic.MOVZ (ARM64Symbolic.X3, 32us, 0)
         ARM64Symbolic.B_label haveSize
-
-        ARM64Symbolic.Label size96
-        ARM64Symbolic.MOVZ (ARM64Symbolic.X3, 96us, 0)
 
         ARM64Symbolic.Label haveSize
         ARM64Symbolic.ADD_reg (ARM64Symbolic.X2, ARM64Symbolic.X2, ARM64Symbolic.X3)
@@ -327,7 +321,7 @@ let private generateListRefCountDecHelperWith
             // Only traverse plausible tagged list pointers inside the managed heap range.
             ARM64Symbolic.AND_imm (ARM64Symbolic.X9, ARM64Symbolic.X8, 7UL)
             ARM64Symbolic.CBZ (ARM64Symbolic.X9, doneLabel)
-            ARM64Symbolic.CMP_imm (ARM64Symbolic.X9, 5us)
+            ARM64Symbolic.CMP_imm (ARM64Symbolic.X9, 3us)
             ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, doneLabel)
             ARM64Symbolic.LSR_imm (ARM64Symbolic.X10, ARM64Symbolic.X8, 3)
             ARM64Symbolic.LSL_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 3)
@@ -351,13 +345,14 @@ let private generateListRefCountDecHelperWith
     let size8 = label "size_8"
     let size24 = label "size_24"
     let size32 = label "size_32"
-    let size96 = label "size_96"
     let haveSize = label "have_size"
     let collectSingle = label "collect_single"
     let collectDeep = label "collect_deep"
     let collectNode2 = label "collect_node2"
+    let collectNodeChildren = label "collect_node_children"
     let collectNode3 = label "collect_node3"
     let collectLeaf = label "collect_leaf"
+    let releaseValue = label "release_value"
     let leafPayloadDone = label "leaf_payload_done"
     let afterPrefix = label "after_prefix"
     let afterSuffix = label "after_suffix"
@@ -760,6 +755,10 @@ let private generateListRefCountDecHelperWith
 
     [
         ARM64Symbolic.Label helperLabel
+        // Preserve callee-saved registers used to keep the current node stable
+        // across payload-release helpers. Pending DFS entries are pushed above.
+        ARM64Symbolic.STP_pre (ARM64Symbolic.X19, ARM64Symbolic.X20, ARM64Symbolic.SP, -32s)
+        ARM64Symbolic.STR (ARM64Symbolic.X21, ARM64Symbolic.SP, 16s)
         // X0 = current tagged list pointer to process, X1 = number of pending stack entries.
         ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 0us, 0)
         ARM64Symbolic.B_label loopCheck
@@ -776,17 +775,13 @@ let private generateListRefCountDecHelperWith
         ARM64Symbolic.CMP_reg (ARM64Symbolic.X3, ARM64Symbolic.X28)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, popOrRet)
 
-        // Resolve payload size from FingerTree node tag.
+        // Resolve payload size from skew-list node tag.
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 1us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size8)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size32)
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size96)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size8)
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size24)
-        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 4us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size32)
-        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 5us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, size8)
         ARM64Symbolic.B_label popOrRet
 
         ARM64Symbolic.Label size8
@@ -798,9 +793,6 @@ let private generateListRefCountDecHelperWith
         ARM64Symbolic.Label size32
         ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 32us, 0)
         ARM64Symbolic.B_label haveSize
-        ARM64Symbolic.Label size96
-        ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 96us, 0)
-
         ARM64Symbolic.Label haveSize
         ARM64Symbolic.ADD_reg (ARM64Symbolic.X5, ARM64Symbolic.X3, ARM64Symbolic.X4)
         ARM64Symbolic.LDR (ARM64Symbolic.X6, ARM64Symbolic.X5, 0s)
@@ -812,34 +804,29 @@ let private generateListRefCountDecHelperWith
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 1us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectSingle)
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectDeep)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectLeaf)
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectNode2)
-        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 4us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectNode3)
-        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 5us)
-        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectLeaf)
         ARM64Symbolic.B_label freeNode
 
+        // DIGIT: tree and remaining-spine children at 16 and 24.
         ARM64Symbolic.Label collectSingle
         ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
+        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 16s)
     ]
-    @ addChild "single_0"
+    @ addChild "digit_tree"
+    @ [
+        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 24s)
+    ]
+    @ addChild "digit_rest"
     @ [
         ARM64Symbolic.B_label freeNode
 
+        // NODE: release the value before collecting structural children because
+        // payload helpers may use X0 as scratch/work state.
         ARM64Symbolic.Label collectNode2
         ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
-    ]
-    @ addChild "node2_0"
-    @ [
-        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 8s)
-    ]
-    @ addChild "node2_1"
-    @ [
-        ARM64Symbolic.B_label freeNode
+        ARM64Symbolic.B_label releaseValue
 
         ARM64Symbolic.Label collectNode3
         ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
@@ -919,8 +906,28 @@ let private generateListRefCountDecHelperWith
 
         ARM64Symbolic.Label collectLeaf
         ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
+        ARM64Symbolic.Label releaseValue
+        ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, ARM64Symbolic.X2)
+        ARM64Symbolic.MOV_reg (ARM64Symbolic.X20, ARM64Symbolic.X3)
+        ARM64Symbolic.MOV_reg (ARM64Symbolic.X21, ARM64Symbolic.X4)
     ]
     @ releaseLeafPayload
+    @ [
+        // Leaves are done after payload release. Internal nodes still own two
+        // complete-tree edges.
+        ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X19)
+        ARM64Symbolic.MOV_reg (ARM64Symbolic.X3, ARM64Symbolic.X20)
+        ARM64Symbolic.MOV_reg (ARM64Symbolic.X4, ARM64Symbolic.X21)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, freeNode)
+        ARM64Symbolic.Label collectNodeChildren
+        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 8s)
+    ]
+    @ addChild "node_left"
+    @ [
+        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 16s)
+    ]
+    @ addChild "node_right"
     @ [
         ARM64Symbolic.Label freeNode
         // Recycle node memory by payload size class.
@@ -941,6 +948,8 @@ let private generateListRefCountDecHelperWith
         ARM64Symbolic.B_label loopCheck
 
         ARM64Symbolic.Label helperRet
+        ARM64Symbolic.LDR (ARM64Symbolic.X21, ARM64Symbolic.SP, 16s)
+        ARM64Symbolic.LDP_post (ARM64Symbolic.X19, ARM64Symbolic.X20, ARM64Symbolic.SP, 32s)
         ARM64Symbolic.RET
     ]
 
@@ -4918,9 +4927,31 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     | _ ->
                         []
 
-                let releaseInstrs =
+                let fieldReleaseInstrs =
                     fixedBlockFieldReleaseInstrs
                     @ releaseSumPayloadInstrs
+
+                // Field-release helpers use X12-X15 as scratch registers. The
+                // allocated source register can itself be one of those registers,
+                // so keep the generic block root on the stack until all owned
+                // fields have been released. Free-list insertion must always use
+                // the untagged generic root, never a managed child loaded from it.
+                let stableFieldReleaseInstrs =
+                    if List.isEmpty fieldReleaseInstrs then
+                        []
+                    else
+                        [
+                            ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us)
+                            ARM64Symbolic.STR (addrReg, ARM64Symbolic.SP, 0s)
+                        ]
+                        @ fieldReleaseInstrs
+                        @ [
+                            ARM64Symbolic.LDR (addrReg, ARM64Symbolic.SP, 0s)
+                            ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us)
+                        ]
+
+                let releaseInstrs =
+                    stableFieldReleaseInstrs
                     @
                     (if payloadSize >= 0 && payloadSize < 256 then
                         [
@@ -5390,7 +5421,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
 
     | LIR.RawAlloc (dest, numBytes) ->
         // Raw allocation: free-list reuse for small aligned size classes, else bump allocation.
-        // This path is used by FingerTree nodes, so reusing freed raw blocks is required to avoid OOM.
+        // This path is used by skew-list nodes, so freed raw blocks must be reused to avoid OOM.
         // numBytes is already in a physical register (from MIR_to_LIR)
         lirRegToARM64Reg dest
         |> Result.bind (fun destReg ->

@@ -33,7 +33,7 @@ You are going to fix EXACTLY ONE difference (syntactic or semantic).
    - `Int64.sub/mul/div/isEven/isOdd` → `stdlib:int64_math`
 
    **Internal features (compiler-only):**
-   - `__FingerTree`, `__HAMT` → `internal:data_structure`
+   - `__SkewList`, `__HAMT` → `internal:data_structure`
    - `__digitToString`, `__findFrom` → `internal:helper_function`
 
    Tests with `syntax:*`, `internal:*`, or `stdlib:*` (missing from interpreter) skip reasons should be skipped - try another test.

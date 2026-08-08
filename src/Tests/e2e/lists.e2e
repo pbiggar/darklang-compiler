@@ -440,7 +440,7 @@ Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6], 3), 0) = 4
 // DEEP node element extraction offset tests (kills mutation #69)
 // =====================================================
 // These tests verify that elements are extracted from the correct offsets
-// in DEEP FingerTree nodes. The mutation would change the offset calculation
+// in the former deep-tree lowering. The mutation changed the offset calculation
 // from `64 + (idx-1)*8` to `64 - (idx-1)*8`, causing wrong element access.
 
 // 4-element list - verify third element (idx=2) is correct using subtraction
@@ -584,7 +584,7 @@ Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70, 80, 90]
 // =====================================================
 // Nested list pattern element extraction test (kills mutation #92)
 // =====================================================
-// Tests that element extraction from DEEP FingerTree nodes correctly
+// Tests that exact nested list patterns extract elements in order.
 // calculates offsets when a list pattern appears inside a constructor payload.
 // The extractElements function in extractAndCompileBody uses idx - 1 to
 // compute suffix slot offsets: 64 + (idx-1)*8 for s0, s1, s2, s3.
@@ -716,7 +716,7 @@ checkGuardFirst120([]) = 400
 let xs = [42] in match [1, ...xs] with | [a, b] -> a + b | _ -> 0 = 43
 
 // List<Float> cons destructuring must preserve the floating-point representation
-// for heads extracted from both DEEP and SINGLE FingerTree nodes.
+// for heads extracted from both singleton and multi-element skew lists.
 def sumFloatList(xs: List<Float>) : Float =
     match xs with
     | [] -> 0.0

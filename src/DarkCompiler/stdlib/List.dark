@@ -3,72 +3,78 @@
 // Split from stdlib.dark for modular stdlib loading.
 
 // Stdlib.List - List operations
-// Lists are now FingerTrees internally for O(1) push/pushBack and O(log n) indexing
+// Lists are direct-payload skew-binary random-access lists internally.
 
 // Check if list is empty - O(1)
 def Stdlib.List.isEmpty<t>(list: List<t>) : Bool =
-    Stdlib.__FingerTree.isEmpty<t>(list)
+    Stdlib.__SkewList.isEmpty<t>(list)
 
 // Get the length of a list - O(1)
 def Stdlib.List.length<t>(list: List<t>) : Int64 =
-    Stdlib.__FingerTree.length<t>(list)
+    Stdlib.__SkewList.length<t>(list)
 
 // Compare two lists for structural equality - O(n)
 def Stdlib.List.equals<a>(left: List<a>, right: List<a>) : Bool =
-    if Stdlib.__FingerTree.isEmpty<a>(left) then
-        Stdlib.__FingerTree.isEmpty<a>(right)
-    else if Stdlib.__FingerTree.isEmpty<a>(right) then
+    if Stdlib.__SkewList.isEmpty<a>(left) then
+        Stdlib.__SkewList.isEmpty<a>(right)
+    else if Stdlib.__SkewList.isEmpty<a>(right) then
         false
     else
-        match Stdlib.__FingerTree.head<a>(left) with
+        match Stdlib.__SkewList.head<a>(left) with
         | None -> false
         | Some(leftHead) ->
-            match Stdlib.__FingerTree.head<a>(right) with
+            match Stdlib.__SkewList.head<a>(right) with
             | None -> false
             | Some(rightHead) ->
                 if leftHead == rightHead then
-                    let leftTail = Stdlib.__FingerTree.tail<a>(left) in
-                    let rightTail = Stdlib.__FingerTree.tail<a>(right) in
+                    let leftTail = Stdlib.__SkewList.tail<a>(left) in
+                    let rightTail = Stdlib.__SkewList.tail<a>(right) in
                     Stdlib.List.equals<a>(leftTail, rightTail)
                 else false
 
 // Create a single-element list - O(1)
 def Stdlib.List.singleton<t>(value: t) : List<t> =
-    Stdlib.__FingerTree.singleton<t>(value)
+    Stdlib.__SkewList.singleton<t>(value)
 
-// Prepend an element to a list - O(1) amortized
+// Prepend an element to a list - O(1) worst case
 def Stdlib.List.push<t>(list: List<t>, value: t) : List<t> =
-    Stdlib.__FingerTree.push<t>(list, value)
+    Stdlib.__SkewList.push<t>(list, value)
 
 // Internal: force concrete monomorphization of push for compiler-generated list literals
 def Stdlib.List.__pushInt64(list: List<Int64>, value: Int64) : List<Int64> =
-    Stdlib.__FingerTree.push<Int64>(list, value)
+    Stdlib.__SkewList.push<Int64>(list, value)
 
 // Apply a function to each element of a list - O(n)
 def Stdlib.List.map<a, b>(list: List<a>, fn: (a) -> b) : List<b> =
-    Stdlib.List.__mapHelper<a, b>(list, fn, Stdlib.__FingerTree.empty<b>())
+    Stdlib.__SkewList.map<a, b>(list, fn)
 
 def Stdlib.List.__mapHelper<a, b>(list: List<a>, fn: (a) -> b, acc: List<b>) : List<b> =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then acc
+    if Stdlib.__SkewList.isEmpty<a>(list) then acc
     else
-        match Stdlib.__FingerTree.head<a>(list) with
+        match Stdlib.__SkewList.head<a>(list) with
         | None -> acc
         | Some(h) ->
-            let newAcc = Stdlib.__FingerTree.pushBack<b>(acc, fn(h)) in
-            Stdlib.List.__mapHelper<a, b>(Stdlib.__FingerTree.tail<a>(list), fn, newAcc)
+            let newAcc = Stdlib.__SkewList.pushBack<b>(acc, fn(h)) in
+            Stdlib.List.__mapHelper<a, b>(Stdlib.__SkewList.tail<a>(list), fn, newAcc)
 
 // Flatten a list of lists into a single list - O(n*m)
 def Stdlib.List.flatten<a>(lists: List<List<a>>) : List<a> =
-    Stdlib.List.__flattenHelper<a>(lists, Stdlib.__FingerTree.empty<a>())
+    Stdlib.List.__flattenHelper<a>(lists, Stdlib.__SkewList.empty<a>())
 
 def Stdlib.List.__flattenHelper<a>(lists: List<List<a>>, acc: List<a>) : List<a> =
-    if Stdlib.__FingerTree.isEmpty<List<a>>(lists) then acc
+    if Stdlib.__SkewList.isEmpty<List<a>>(lists) then Stdlib.__SkewList.reverse<a>(acc)
     else
-        match Stdlib.__FingerTree.head<List<a>>(lists) with
-        | None -> acc
+        match Stdlib.__SkewList.head<List<a>>(lists) with
+        | None -> Stdlib.__SkewList.reverse<a>(acc)
         | Some(h) ->
-            let newAcc = Stdlib.List.append<a>(acc, h) in
-            Stdlib.List.__flattenHelper<a>(Stdlib.__FingerTree.tail<List<a>>(lists), newAcc)
+            let newAcc = Stdlib.List.__flattenOneToReverse<a>(h, acc) in
+            Stdlib.List.__flattenHelper<a>(Stdlib.__SkewList.tail<List<a>>(lists), newAcc)
+
+def Stdlib.List.__flattenOneToReverse<a>(list: List<a>, acc: List<a>) : List<a> =
+    if Stdlib.__SkewList.isEmpty<a>(list) then acc
+    else
+        let next = Stdlib.__SkewList.push<a>(acc, Stdlib.__SkewList.headUnsafe<a>(list)) in
+        Stdlib.List.__flattenOneToReverse<a>(Stdlib.__SkewList.tail<a>(list), next)
 
 // Apply a function that returns a list and flatten the results
 def Stdlib.List.flatMap<a, b>(list: List<a>, fn: (a) -> List<b>) : List<b> =
@@ -76,48 +82,52 @@ def Stdlib.List.flatMap<a, b>(list: List<a>, fn: (a) -> List<b>) : List<b> =
 
 // Keep only elements that satisfy a predicate - O(n)
 def Stdlib.List.filter<a>(list: List<a>, fn: (a) -> Bool) : List<a> =
-    let len = Stdlib.__FingerTree.length<a>(list) in
-    Stdlib.List.__filterByIndexHelper<a>(list, fn, 0, len, Stdlib.__FingerTree.empty<a>())
+    Stdlib.__SkewList.reverse<a>(Stdlib.List.__filterToReverse<a>(list, fn, Stdlib.__SkewList.empty<a>()))
+
+def Stdlib.List.__filterToReverse<a>(list: List<a>, fn: (a) -> Bool, acc: List<a>) : List<a> =
+    if Stdlib.__SkewList.isEmpty<a>(list) then acc
+    else
+        let h = Stdlib.__SkewList.headUnsafe<a>(list) in
+        let next = if fn(h) then Stdlib.__SkewList.push<a>(acc, h) else acc in
+        Stdlib.List.__filterToReverse<a>(Stdlib.__SkewList.tail<a>(list), fn, next)
 
 def Stdlib.List.__filterHelper<a>(list: List<a>, fn: (a) -> Bool, acc: List<a>) : List<a> =
-    let len = Stdlib.__FingerTree.length<a>(list) in
-    let filtered = Stdlib.List.__filterByIndexHelper<a>(list, fn, 0, len, Stdlib.__FingerTree.empty<a>()) in
+    let len = Stdlib.__SkewList.length<a>(list) in
+    let filtered = Stdlib.List.__filterByIndexHelper<a>(list, fn, 0, len, Stdlib.__SkewList.empty<a>()) in
     Stdlib.List.append<a>(acc, filtered)
 
 def Stdlib.List.__filterByIndexHelper<a>(list: List<a>, fn: (a) -> Bool, index: Int64, len: Int64, accRev: List<a>) : List<a> =
     if index >= len then
         Stdlib.List.reverse<a>(accRev)
     else
-        match Stdlib.__FingerTree.getAt<a>(list, index) with
+        match Stdlib.__SkewList.getAt<a>(list, index) with
         | None -> Stdlib.List.reverse<a>(accRev)
         | Some(v) ->
             let nextAccRev = if fn(v) then [v, ...accRev] else accRev in
             Stdlib.List.__filterByIndexHelper<a>(list, fn, index + 1, len, nextAccRev)
 
-// Append an element to the end of a list - O(1) amortized
+// Append an element to the end of a list - O(n)
 def Stdlib.List.pushBack<a>(list: List<a>, value: a) : List<a> =
-    Stdlib.__FingerTree.pushBack<a>(list, value)
+    Stdlib.__SkewList.pushBack<a>(list, value)
 
-// Concatenate two lists - O(log min(n,m))
+// Concatenate two lists - O(length(list1))
 def Stdlib.List.append<a>(list1: List<a>, list2: List<a>) : List<a> =
-    Stdlib.__FingerTree.concat<a>(list1, list2)
+    Stdlib.__SkewList.concat<a>(list1, list2)
 
 // Reverse a list - O(n)
 def Stdlib.List.reverse<a>(list: List<a>) : List<a> =
-    let len = Stdlib.__FingerTree.length<a>(list) in
-    Stdlib.List.__reverseByIndexHelper<a>(list, len - 1, Stdlib.__FingerTree.empty<a>())
+    Stdlib.__SkewList.reverse<a>(list)
 
 def Stdlib.List.__reverseHelper<a>(list: List<a>, acc: List<a>) : List<a> =
-    let len = Stdlib.__FingerTree.length<a>(list) in
-    Stdlib.List.__reverseByIndexHelper<a>(list, len - 1, acc)
+    Stdlib.__SkewList.__reverseInto<a>(list, acc)
 
 def Stdlib.List.__reverseByIndexHelper<a>(list: List<a>, index: Int64, acc: List<a>) : List<a> =
     if index < 0 then acc
     else
-        match Stdlib.__FingerTree.getAt<a>(list, index) with
+        match Stdlib.__SkewList.getAt<a>(list, index) with
         | None -> acc
         | Some(v) ->
-            Stdlib.List.__reverseByIndexHelper<a>(list, index - 1, Stdlib.__FingerTree.pushBack<a>(acc, v))
+            Stdlib.List.__reverseByIndexHelper<a>(list, index - 1, Stdlib.__SkewList.pushBack<a>(acc, v))
 
 def Stdlib.List.sortByComparator<a>(list: List<a>, comparator: (a, a) -> Int32) : Stdlib.Result.Result<List<a>, String> =
     Stdlib.List.__sortByComparatorHelper<a>(list, comparator, [])
@@ -148,148 +158,148 @@ def Stdlib.List.__insertByComparator<a>(value: a, sorted: List<a>, comparator: (
 
 // Fold left (reduce) over a list - O(n)
 def Stdlib.List.fold<a, b>(list: List<a>, init: b, fn: (b, a) -> b) : b =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then init
+    if Stdlib.__SkewList.isEmpty<a>(list) then init
     else
-        match Stdlib.__FingerTree.head<a>(list) with
+        match Stdlib.__SkewList.head<a>(list) with
         | None -> init
         | Some(h) ->
             let newInit = fn(init, h) in
-            Stdlib.List.fold<a, b>(Stdlib.__FingerTree.tail<a>(list), newInit, fn)
+            Stdlib.List.fold<a, b>(Stdlib.__SkewList.tail<a>(list), newInit, fn)
 
 // Get head of list or return None - O(1)
 def Stdlib.List.head<a>(list: List<a>) : Stdlib.Option.Option<a> =
-    Stdlib.__FingerTree.head<a>(list)
+    Stdlib.__SkewList.head<a>(list)
 
 // Internal: get head without option wrapper (caller must ensure non-empty)
 // This forces monomorphization of headUnsafe_i64 for pattern matching
 def Stdlib.List.__headUnsafeInt64(list: List<Int64>) : Int64 =
-    Stdlib.__FingerTree.headUnsafe<Int64>(list)
+    Stdlib.__SkewList.headUnsafe<Int64>(list)
 
 // Internal: get head without option wrapper for Float lists
 def Stdlib.List.__headUnsafeFloat(list: List<Float>) : Float =
-    Stdlib.__FingerTree.headUnsafe<Float>(list)
+    Stdlib.__SkewList.headUnsafe<Float>(list)
 
 // Internal: get element at index (forces monomorphization for pattern matching)
 def Stdlib.List.__getAtInt64(list: List<Int64>, idx: Int64) : Stdlib.Option.Option<Int64> =
-    Stdlib.__FingerTree.getAt<Int64>(list, idx)
+    Stdlib.__SkewList.getAt<Int64>(list, idx)
 
 def Stdlib.List.__getAtFloat(list: List<Float>, idx: Int64) : Stdlib.Option.Option<Float> =
-    Stdlib.__FingerTree.getAt<Float>(list, idx)
+    Stdlib.__SkewList.getAt<Float>(list, idx)
 
-// Get tail of list or return None - O(1) amortized
+// Get tail of list or return None - O(1) worst case
 def Stdlib.List.tail<a>(list: List<a>) : Stdlib.Option.Option<List<a>> =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then None
-    else Some(Stdlib.__FingerTree.tail<a>(list))
+    if Stdlib.__SkewList.isEmpty<a>(list) then None
+    else Some(Stdlib.__SkewList.tail<a>(list))
 
 // Get element at index (0-based) - O(log n)
 def Stdlib.List.getAt<a>(list: List<a>, index: Int64) : Stdlib.Option.Option<a> =
-    Stdlib.__FingerTree.getAt<a>(list, index)
+    Stdlib.__SkewList.getAt<a>(list, index)
 
 // Set element at index (0-based) - O(log n), returns original list if index out of bounds
 def Stdlib.List.setAt<a>(list: List<a>, index: Int64, value: a) : List<a> =
-    Stdlib.__FingerTree.setAt<a>(list, index, value)
+    Stdlib.__SkewList.setAt<a>(list, index, value)
 
 // Find first element satisfying a predicate - O(n)
 def Stdlib.List.findFirst<a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<a> =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then None
+    if Stdlib.__SkewList.isEmpty<a>(list) then None
     else
-        match Stdlib.__FingerTree.head<a>(list) with
+        match Stdlib.__SkewList.head<a>(list) with
         | None -> None
         | Some(h) ->
             if fn(h) then Some(h)
-            else Stdlib.List.findFirst<a>(Stdlib.__FingerTree.tail<a>(list), fn)
+            else Stdlib.List.findFirst<a>(Stdlib.__SkewList.tail<a>(list), fn)
 
 // Take first n elements - O(n)
 def Stdlib.List.take<a>(list: List<a>, n: Int64) : List<a> =
-    Stdlib.List.__takeHelper<a>(list, n, Stdlib.__FingerTree.empty<a>())
+    Stdlib.List.__takeHelper<a>(list, n, Stdlib.__SkewList.empty<a>())
 
 def Stdlib.List.__takeHelper<a>(list: List<a>, n: Int64, acc: List<a>) : List<a> =
-    if n <= 0 then acc
-    else if Stdlib.__FingerTree.isEmpty<a>(list) then acc
+    if n <= 0 then Stdlib.__SkewList.reverse<a>(acc)
+    else if Stdlib.__SkewList.isEmpty<a>(list) then Stdlib.__SkewList.reverse<a>(acc)
     else
-        match Stdlib.__FingerTree.head<a>(list) with
-        | None -> acc
+        match Stdlib.__SkewList.head<a>(list) with
+        | None -> Stdlib.__SkewList.reverse<a>(acc)
         | Some(h) ->
-            let newAcc = Stdlib.__FingerTree.pushBack<a>(acc, h) in
-            Stdlib.List.__takeHelper<a>(Stdlib.__FingerTree.tail<a>(list), n - 1, newAcc)
+            let newAcc = Stdlib.__SkewList.push<a>(acc, h) in
+            Stdlib.List.__takeHelper<a>(Stdlib.__SkewList.tail<a>(list), n - 1, newAcc)
 
 // Drop first n elements - O(n)
 def Stdlib.List.drop<a>(list: List<a>, n: Int64) : List<a> =
     if n <= 0 then list
-    else if Stdlib.__FingerTree.isEmpty<a>(list) then list
-    else Stdlib.List.drop<a>(Stdlib.__FingerTree.tail<a>(list), n - 1)
+    else if Stdlib.__SkewList.isEmpty<a>(list) then list
+    else Stdlib.List.drop<a>(Stdlib.__SkewList.tail<a>(list), n - 1)
 
 // Check if all elements satisfy a predicate - O(n)
 def Stdlib.List.forAll<a>(list: List<a>, fn: (a) -> Bool) : Bool =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then true
+    if Stdlib.__SkewList.isEmpty<a>(list) then true
     else
-        match Stdlib.__FingerTree.head<a>(list) with
+        match Stdlib.__SkewList.head<a>(list) with
         | None -> true
         | Some(h) ->
-            if fn(h) then Stdlib.List.forAll<a>(Stdlib.__FingerTree.tail<a>(list), fn)
+            if fn(h) then Stdlib.List.forAll<a>(Stdlib.__SkewList.tail<a>(list), fn)
             else false
 
 // Check if any element satisfies a predicate - O(n)
 def Stdlib.List.any<a>(list: List<a>, fn: (a) -> Bool) : Bool =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then false
+    if Stdlib.__SkewList.isEmpty<a>(list) then false
     else
-        match Stdlib.__FingerTree.head<a>(list) with
+        match Stdlib.__SkewList.head<a>(list) with
         | None -> false
         | Some(h) ->
             if fn(h) then true
-            else Stdlib.List.any<a>(Stdlib.__FingerTree.tail<a>(list), fn)
+            else Stdlib.List.any<a>(Stdlib.__SkewList.tail<a>(list), fn)
 
-// Get the last element of a list, or None if empty - O(1)
+// Get the last element of a list, or None if empty - O(log n)
 def Stdlib.List.last<a>(list: List<a>) : Stdlib.Option.Option<a> =
-    Stdlib.__FingerTree.last<a>(list)
+    Stdlib.__SkewList.last<a>(list)
 
-// Remove the last element from a list - O(1) amortized
+// Remove the last element from a list - O(n)
 def Stdlib.List.dropLast<a>(list: List<a>) : List<a> =
-    Stdlib.__FingerTree.init<a>(list)
+    Stdlib.__SkewList.init<a>(list)
 
 // Generate a list of integers from start (inclusive) to end (exclusive)
 def Stdlib.List.range(start: Int64, end_: Int64) : List<Int64> =
-    Stdlib.List.__rangeHelper(start, end_, Stdlib.__FingerTree.empty<Int64>())
+    Stdlib.List.__rangeHelper(start, end_, Stdlib.__SkewList.empty<Int64>())
 
 def Stdlib.List.__rangeHelper(current: Int64, end_: Int64, acc: List<Int64>) : List<Int64> =
-    if current >= end_ then acc
-    else Stdlib.List.__rangeHelper(current + 1, end_, Stdlib.__FingerTree.pushBack<Int64>(acc, current))
+    if current >= end_ then Stdlib.__SkewList.reverse<Int64>(acc)
+    else Stdlib.List.__rangeHelper(current + 1, end_, Stdlib.__SkewList.push<Int64>(acc, current))
 
 // Repeat a value n times
 def Stdlib.List.repeat<a>(value: a, count: Int64) : List<a> =
-    Stdlib.List.__repeatHelper<a>(value, count, Stdlib.__FingerTree.empty<a>())
+    Stdlib.List.__repeatHelper<a>(value, count, Stdlib.__SkewList.empty<a>())
 
 def Stdlib.List.__repeatHelper<a>(value: a, count: Int64, acc: List<a>) : List<a> =
     if count <= 0 then acc
-    else Stdlib.List.__repeatHelper<a>(value, count - 1, Stdlib.__FingerTree.pushBack<a>(acc, value))
+    else Stdlib.List.__repeatHelper<a>(value, count - 1, Stdlib.__SkewList.push<a>(acc, value))
 
 // Map with index: apply a function to each element along with its index - O(n)
 def Stdlib.List.indexedMap<a, b>(list: List<a>, fn: (Int64, a) -> b) : List<b> =
-    Stdlib.List.__indexedMapHelper<a, b>(list, fn, 0, Stdlib.__FingerTree.empty<b>())
+    Stdlib.List.__indexedMapHelper<a, b>(list, fn, 0, Stdlib.__SkewList.empty<b>())
 
 def Stdlib.List.__indexedMapHelper<a, b>(list: List<a>, fn: (Int64, a) -> b, index: Int64, acc: List<b>) : List<b> =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then acc
+    if Stdlib.__SkewList.isEmpty<a>(list) then Stdlib.__SkewList.reverse<b>(acc)
     else
-        match Stdlib.__FingerTree.head<a>(list) with
-        | None -> acc
+        match Stdlib.__SkewList.head<a>(list) with
+        | None -> Stdlib.__SkewList.reverse<b>(acc)
         | Some(h) ->
-            let newAcc = Stdlib.__FingerTree.pushBack<b>(acc, fn(index, h)) in
-            Stdlib.List.__indexedMapHelper<a, b>(Stdlib.__FingerTree.tail<a>(list), fn, index + 1, newAcc)
+            let newAcc = Stdlib.__SkewList.push<b>(acc, fn(index, h)) in
+            Stdlib.List.__indexedMapHelper<a, b>(Stdlib.__SkewList.tail<a>(list), fn, index + 1, newAcc)
 
 // Partition a list into two lists based on a predicate
 // Returns (elements where predicate is true, elements where predicate is false)
 def Stdlib.List.partition<a>(list: List<a>, fn: (a) -> Bool) : (List<a>, List<a>) =
-    Stdlib.List.__partitionHelper<a>(list, fn, Stdlib.__FingerTree.empty<a>(), Stdlib.__FingerTree.empty<a>())
+    Stdlib.List.__partitionHelper<a>(list, fn, Stdlib.__SkewList.empty<a>(), Stdlib.__SkewList.empty<a>())
 
 def Stdlib.List.__partitionHelper<a>(list: List<a>, fn: (a) -> Bool, trueAcc: List<a>, falseAcc: List<a>) : (List<a>, List<a>) =
-    if Stdlib.__FingerTree.isEmpty<a>(list) then (trueAcc, falseAcc)
+    if Stdlib.__SkewList.isEmpty<a>(list) then (Stdlib.__SkewList.reverse<a>(trueAcc), Stdlib.__SkewList.reverse<a>(falseAcc))
     else
-        match Stdlib.__FingerTree.head<a>(list) with
-        | None -> (trueAcc, falseAcc)
+        match Stdlib.__SkewList.head<a>(list) with
+        | None -> (Stdlib.__SkewList.reverse<a>(trueAcc), Stdlib.__SkewList.reverse<a>(falseAcc))
         | Some(h) ->
-            let newTrue = if fn(h) then Stdlib.__FingerTree.pushBack<a>(trueAcc, h) else trueAcc in
-            let newFalse = if fn(h) then falseAcc else Stdlib.__FingerTree.pushBack<a>(falseAcc, h) in
-            Stdlib.List.__partitionHelper<a>(Stdlib.__FingerTree.tail<a>(list), fn, newTrue, newFalse)
+            let newTrue = if fn(h) then Stdlib.__SkewList.push<a>(trueAcc, h) else trueAcc in
+            let newFalse = if fn(h) then falseAcc else Stdlib.__SkewList.push<a>(falseAcc, h) in
+            Stdlib.List.__partitionHelper<a>(Stdlib.__SkewList.tail<a>(list), fn, newTrue, newFalse)
 
 // Alias for forAll (darklang naming convention)
 def Stdlib.List.all<a>(list: List<a>, fn: (a) -> Bool) : Bool =
@@ -305,43 +315,43 @@ def Stdlib.List.all<a>(list: List<a>, fn: (a) -> Bool) : Bool =
 
 // Helper to build string list from Int64 list
 def Stdlib.List.__int64sToStrings(list: List<Int64>, acc: List<String>) : List<String> =
-    if Stdlib.__FingerTree.isEmpty<Int64>(list) then acc
+    if Stdlib.__SkewList.isEmpty<Int64>(list) then Stdlib.__SkewList.reverse<String>(acc)
     else
-        match Stdlib.__FingerTree.head<Int64>(list) with
-        | None -> acc
+        match Stdlib.__SkewList.head<Int64>(list) with
+        | None -> Stdlib.__SkewList.reverse<String>(acc)
         | Some(h) ->
             let s = Stdlib.Int64.toString(h) in
-            let newAcc = Stdlib.__FingerTree.pushBack<String>(acc, s) in
-            Stdlib.List.__int64sToStrings(Stdlib.__FingerTree.tail<Int64>(list), newAcc)
+            let newAcc = Stdlib.__SkewList.push<String>(acc, s) in
+            Stdlib.List.__int64sToStrings(Stdlib.__SkewList.tail<Int64>(list), newAcc)
 
 def Stdlib.List.toDisplayString_i64(list: List<Int64>) : String =
-    let strs = Stdlib.List.__int64sToStrings(list, Stdlib.__FingerTree.empty<String>()) in
+    let strs = Stdlib.List.__int64sToStrings(list, Stdlib.__SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
 def Stdlib.List.__i64ListsToStrings(list: List<List<Int64>>, acc: List<String>) : List<String> =
-    if Stdlib.__FingerTree.isEmpty<List<Int64>>(list) then acc
+    if Stdlib.__SkewList.isEmpty<List<Int64>>(list) then Stdlib.__SkewList.reverse<String>(acc)
     else
-        match Stdlib.__FingerTree.head<List<Int64>>(list) with
-        | None -> acc
+        match Stdlib.__SkewList.head<List<Int64>>(list) with
+        | None -> Stdlib.__SkewList.reverse<String>(acc)
         | Some(h) ->
             let s = Stdlib.List.toDisplayString_i64(h) in
-            let newAcc = Stdlib.__FingerTree.pushBack<String>(acc, s) in
-            Stdlib.List.__i64ListsToStrings(Stdlib.__FingerTree.tail<List<Int64>>(list), newAcc)
+            let newAcc = Stdlib.__SkewList.push<String>(acc, s) in
+            Stdlib.List.__i64ListsToStrings(Stdlib.__SkewList.tail<List<Int64>>(list), newAcc)
 
 def Stdlib.List.toDisplayString_list_i64(list: List<List<Int64>>) : String =
-    let strs = Stdlib.List.__i64ListsToStrings(list, Stdlib.__FingerTree.empty<String>()) in
+    let strs = Stdlib.List.__i64ListsToStrings(list, Stdlib.__SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
 // Helper to build string list from String list (with double quotes for display)
 def Stdlib.List.__stringsToStrings(list: List<String>, acc: List<String>) : List<String> =
-    if Stdlib.__FingerTree.isEmpty<String>(list) then acc
+    if Stdlib.__SkewList.isEmpty<String>(list) then Stdlib.__SkewList.reverse<String>(acc)
     else
-        match Stdlib.__FingerTree.head<String>(list) with
-        | None -> acc
+        match Stdlib.__SkewList.head<String>(list) with
+        | None -> Stdlib.__SkewList.reverse<String>(acc)
         | Some(h) ->
             let quoted = "\"" ++ h ++ "\"" in
-            let newAcc = Stdlib.__FingerTree.pushBack<String>(acc, quoted) in
-            Stdlib.List.__stringsToStrings(Stdlib.__FingerTree.tail<String>(list), newAcc)
+            let newAcc = Stdlib.__SkewList.push<String>(acc, quoted) in
+            Stdlib.List.__stringsToStrings(Stdlib.__SkewList.tail<String>(list), newAcc)
 
 def Stdlib.List.__quoteStringForDisplay(s: String) : String =
     "\"" ++ s ++ "\""
@@ -374,15 +384,15 @@ def Stdlib.List.toDisplayString_char(list: List<Char>) : String =
 
 // Helper to build string list from Bool list
 def Stdlib.List.__boolsToStrings(list: List<Bool>, acc: List<String>) : List<String> =
-    if Stdlib.__FingerTree.isEmpty<Bool>(list) then acc
+    if Stdlib.__SkewList.isEmpty<Bool>(list) then Stdlib.__SkewList.reverse<String>(acc)
     else
-        match Stdlib.__FingerTree.head<Bool>(list) with
-        | None -> acc
+        match Stdlib.__SkewList.head<Bool>(list) with
+        | None -> Stdlib.__SkewList.reverse<String>(acc)
         | Some(h) ->
             let s = Stdlib.Bool.toString(h) in
-            let newAcc = Stdlib.__FingerTree.pushBack<String>(acc, s) in
-            Stdlib.List.__boolsToStrings(Stdlib.__FingerTree.tail<Bool>(list), newAcc)
+            let newAcc = Stdlib.__SkewList.push<String>(acc, s) in
+            Stdlib.List.__boolsToStrings(Stdlib.__SkewList.tail<Bool>(list), newAcc)
 
 def Stdlib.List.toDisplayString_bool(list: List<Bool>) : String =
-    let strs = Stdlib.List.__boolsToStrings(list, Stdlib.__FingerTree.empty<String>()) in
+    let strs = Stdlib.List.__boolsToStrings(list, Stdlib.__SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"

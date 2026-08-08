@@ -89,7 +89,7 @@ let fs = Stdlib.List.map<Int64, (Int64) -> Int64>([1, 2], (base: Int64) => (x: I
 type ListPhantomEnum<a> = ListPhantomA | ListPhantomB let a = ListPhantomA in let xs = [a] in 0 = stdout="0\n" stderr="" // list does not retain generic pure enum variables as heap roots
 let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic string payload
 let s = "a" ++ "b" in let xs = [s] in 0 = stdout="0\n" stderr="" // list retains dynamic string variable payload
-let s = dynamicString("a") in let xs = Stdlib.List.pushBack<String>([], s) in __stringRefcount(s) = stdout="2\n" stderr="" // FingerTree raw leaf retains dynamic string payload edge
+let s = dynamicString("a") in let xs = Stdlib.List.pushBack<String>([], s) in __stringRefcount(s) = stdout="2\n" stderr="" // Skew tree node retains its direct dynamic string payload edge
 def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads
 let xs = [Bytes.create(4), Bytes.create(8)] in 0 = stdout="0\n" stderr="" // list releases multiple dynamic bytes payloads
 let b = Bytes.create(4) in let xs = [b] in 0 = stdout="0\n" stderr="" // list retains dynamic bytes variable payload

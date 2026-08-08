@@ -15,7 +15,7 @@ The compiler currently has these managed or partially managed runtime shapes:
 |---|---|---|
 | Fixed blocks | `[payload fields][refcount:8]` | Generic root retain/release; managed field release for many tuple, record, sum, and closure-capture shapes |
 | Boxed sums | fixed block with tag/payload | Root RC; payload release for strings, bytes, lists, dicts, closures, tuples, records, and selected nested sums |
-| Tagged lists | FingerTree nodes allocated through raw memory | Root and node RC helpers; direct root leaf helpers plus planned `RcReleasePlan` helpers for generic fixed-block and boxed-sum payloads |
+| Tagged lists | Direct-payload skew RAL nodes allocated through raw memory | Root and iterative node RC helpers with shape-driven `RcReleasePlan` cleanup for direct generic fixed-block and boxed-sum payloads |
 | Dicts | tagged HAMT root with refcounted raw HAMT nodes | Path-copy structural sharing; `RawSlotInit<T>` edge retains; recursive node/key/value release when node RC reaches zero |
 | Dynamic strings | `[length:8][data][padding][refcount:8]` | Scoped RC, field retain/release, borrowed projection retain, literal sentinel skip |
 | Dynamic bytes | `[length:8][data][padding][refcount:8]` | Scoped RC, constructor/transform coverage, container retains/releases, and initial parity with strings |

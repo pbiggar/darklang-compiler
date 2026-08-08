@@ -1015,7 +1015,7 @@ class Validator:
                 return reason
 
         # === COMPILER-ONLY INTERNAL FEATURES ===
-        if 'Stdlib.FingerTree' in expr or 'Stdlib.__HAMT' in expr:
+        if 'Stdlib.__SkewList' in expr or 'Stdlib.__HAMT' in expr:
             return "internal:data_structure"
         if '.__' in expr:
             return "internal:helper_function"
