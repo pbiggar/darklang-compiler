@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-08 19:31:49
-**Commit:** `14b28153` - Reuse external ANF inlining metadata
+**Last Updated:** 2026-08-08 22:14:30
+**Commit:** `3c4832c6` - Fold Int64 bitwise complements in ANF
 
 | Benchmark     |           Dark (2.43x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

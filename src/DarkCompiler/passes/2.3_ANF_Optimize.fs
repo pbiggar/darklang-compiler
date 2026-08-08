@@ -1072,6 +1072,35 @@ let private trySimplifyBoolComplement (tid: TempId) (cexpr: CExpr) (body: AExpr)
         | _ -> None
     | _ -> None
 
+let private trySimplifyInt64BitwiseComplement
+    (typeEnv: TypeEnv)
+    (tid: TempId)
+    (cexpr: CExpr)
+    (body: AExpr)
+    : AExpr option =
+    let replacementForBitwiseOp op =
+        match op with
+        | BitAnd -> Some (IntLiteral (Int64 0L))
+        | BitOr
+        | BitXor -> Some (IntLiteral (Int64 -1L))
+        | _ -> None
+
+    match cexpr, body with
+    | UnaryPrim (BitNot, source), Let (bitwiseTid, Prim (op, Var sourceTid, Var notTid), bitwiseBody)
+    | UnaryPrim (BitNot, source), Let (bitwiseTid, Prim (op, Var notTid, Var sourceTid), bitwiseBody)
+        when notTid = tid && isInt64Atom typeEnv source ->
+        match source with
+        | Var originalTid when originalTid = sourceTid ->
+            replacementForBitwiseOp op
+            |> Option.map (fun replacement ->
+                let foldedBody = Let (bitwiseTid, Atom replacement, bitwiseBody)
+                if aExprUsesTemp tid bitwiseBody then
+                    Let (tid, cexpr, foldedBody)
+                else
+                    foldedBody)
+        | _ -> None
+    | _ -> None
+
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
 let rec private optimizeAExprWithUses
     (context: OptimizeContext)
@@ -1160,6 +1189,8 @@ and private optimizeAExprWithoutBranchHoisting
             if options.EnableConstFolding then
                 trySimplifyAdjacentLet typeEnv tid cexpr'' bodyResult.Expr
                 |> Option.orElseWith (fun () -> trySimplifyBoolComplement tid cexpr'' bodyResult.Expr)
+                |> Option.orElseWith (fun () ->
+                    trySimplifyInt64BitwiseComplement typeEnv tid cexpr'' bodyResult.Expr)
             else
                 None
 

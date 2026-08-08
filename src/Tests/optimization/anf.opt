@@ -1412,6 +1412,66 @@ Function f:
 return t0
 
 ---NAME---
+bitwise_complement_and_right
+---INPUT---
+def f(x: Int64) : Int64 = x & ~~~x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+bitwise_complement_and_left
+---INPUT---
+def f(x: Int64) : Int64 = ~~~x & x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+bitwise_complement_or_right
+---INPUT---
+def f(x: Int64) : Int64 = x ||| ~~~x
+---EXPECTED---
+Function f:
+return -1
+
+---NAME---
+bitwise_complement_or_left
+---INPUT---
+def f(x: Int64) : Int64 = ~~~x ||| x
+---EXPECTED---
+Function f:
+return -1
+
+---NAME---
+bitwise_complement_xor_right
+---INPUT---
+def f(x: Int64) : Int64 = x ^ ~~~x
+---EXPECTED---
+Function f:
+return -1
+
+---NAME---
+bitwise_complement_xor_left
+---INPUT---
+def f(x: Int64) : Int64 = ~~~x ^ x
+---EXPECTED---
+Function f:
+return -1
+
+---NAME---
+bitwise_complement_preserves_reused_not
+---INPUT---
+def f(x: Int64) : (Int64, Int64) =
+  let complemented = ~~~x in
+  (x & complemented, complemented)
+---EXPECTED---
+Function f:
+let TempId 1 = ~~~t0
+let TempId 4 = (0, t1)
+return t4
+
+---NAME---
 identity_integer_double_negation
 ---INPUT---
 def f(x: Int64) : Int64 = -(-x)

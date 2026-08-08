@@ -223,6 +223,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that removes redundant paired bitwise-not operations in ANF before backend lowering.
 - Notes: Implemented for `~~~(~~~x) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by `identity_bitwise_double_not` in `src/Tests/optimization/anf.opt`.
 
+### Int64 bitwise complement simplification
+
+- Optimization name: Int64 bitwise complement simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical simplification that removes a dynamic bitwise operation and, when dead, its intermediate complement binding.
+- Notes: Implemented for `x & ~~~x -> 0`, `x ||| ~~~x -> -1`, and `x ^ ~~~x -> -1` in either operand order in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. The complement binding is retained when a later expression reuses it. Focused ANF snapshots cover every operand order and the live-reuse case in `src/Tests/optimization/anf.opt`; no existing quick benchmark contains a dynamic source-level instance of these patterns.
+
 ### Integer double negation simplification
 
 - Optimization name: Integer double negation simplification
