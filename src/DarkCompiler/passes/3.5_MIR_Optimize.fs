@@ -198,82 +198,93 @@ let getInstrDest (instr: Instr) : VReg option =
     | RuntimeError _ -> None
     | CoverageHit _ -> None
 
-/// Get all VRegs used by an instruction
-let getInstrUses (instr: Instr) : Set<VReg> =
-    let fromOperand op =
+/// Fold over the VRegs used by an instruction without allocating an intermediate collection.
+let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Instr) : 'State =
+    let fromOperand state op =
         match op with
-        | Register vreg -> Set.singleton vreg
-        | _ -> Set.empty
+        | Register vreg -> folder state vreg
+        | _ -> state
+
+    let fromOperands state operands = List.fold fromOperand state operands
 
     match instr with
-    | Mov (_, src, _) -> fromOperand src
-    | BinOp (_, _, left, right, _) -> Set.union (fromOperand left) (fromOperand right)
-    | UnaryOp (_, _, src) -> fromOperand src
-    | Call (_, _, args, _, _) -> args |> List.map fromOperand |> Set.unionMany
-    | TailCall (_, args, _, _) -> args |> List.map fromOperand |> Set.unionMany
-    | IndirectCall (_, func, args, _, _) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
-    | IndirectTailCall (func, args, _, _) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
-    | ClosureAlloc (_, _, captures) -> captures |> List.map fromOperand |> Set.unionMany
-    | ClosureCall (_, closure, args, _, _) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
-    | ClosureTailCall (closure, args, _) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
-    | HeapAlloc _ -> Set.empty
-    | HeapStore (addr, _, src, _) -> Set.add addr (fromOperand src)
-    | HeapLoad (_, addr, _, _) -> Set.singleton addr
-    | StringConcat (_, left, right) -> Set.union (fromOperand left) (fromOperand right)
-    | RefCountInc (addr, _, _, _) -> Set.singleton addr
-    | RefCountDec (addr, _, _, _) -> Set.singleton addr
-    | Print (src, _) -> fromOperand src
-    | FileReadText (_, path) -> fromOperand path
-    | FileExists (_, path) -> fromOperand path
-    | FileWriteText (_, path, content) -> Set.union (fromOperand path) (fromOperand content)
-    | FileAppendText (_, path, content) -> Set.union (fromOperand path) (fromOperand content)
-    | FileDelete (_, path) -> fromOperand path
-    | FileSetExecutable (_, path) -> fromOperand path
-    | FileWriteFromPtr (_, path, ptr, length) -> Set.unionMany [fromOperand path; fromOperand ptr; fromOperand length]
-    | Phi (_, sources, _) -> sources |> List.map (fun (op, _) -> fromOperand op) |> Set.unionMany
-    | RawAlloc (_, numBytes) -> fromOperand numBytes
-    | RawFree ptr -> fromOperand ptr
-    | RawGet (_, ptr, byteOffset, _) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
-    | RawGetByte (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
-    | StringToRawPtr (_, value) -> fromOperand value
-    | RawPtrToString (_, ptr) -> fromOperand ptr
-    | BytesToRawPtr (_, value) -> fromOperand value
-    | RawPtrToBytes (_, ptr) -> fromOperand ptr
-    | DictToRawPtr (_, dict) -> fromOperand dict
-    | RawPtrToDict (_, ptr, tag) -> Set.union (fromOperand ptr) (fromOperand tag)
-    | ListToRawPtr (_, list) -> fromOperand list
-    | RawPtrToList (_, ptr, tag) -> Set.union (fromOperand ptr) (fromOperand tag)
-    | RawWriteWord (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
-    | RawWriteByte (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
-    | RawSlotInit (ptr, byteOffset, value, _) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
-    | FloatSqrt (_, src) -> fromOperand src
-    | FloatAbs (_, src) -> fromOperand src
-    | FloatNeg (_, src) -> fromOperand src
-    | Int64ToFloat (_, src) -> fromOperand src
-    | FloatToInt64 (_, src) -> fromOperand src
-    | FloatToBits (_, src) -> fromOperand src
-    | RefCountIncString str -> fromOperand str
-    | RefCountDecString str -> fromOperand str
-    | RefCountIncBytes bytes -> fromOperand bytes
-    | RefCountDecBytes bytes -> fromOperand bytes
-    | RandomInt64 _ -> Set.empty  // No operand uses
-    | DateNow _ -> Set.empty      // No operand uses
-    | FloatToString (_, value) -> fromOperand value
-    | RuntimeError _ -> Set.empty
-    | CoverageHit _ -> Set.empty  // No operand uses
+    | Mov (_, src, _) -> fromOperand state src
+    | BinOp (_, _, left, right, _) -> fromOperand (fromOperand state left) right
+    | UnaryOp (_, _, src) -> fromOperand state src
+    | Call (_, _, args, _, _)
+    | TailCall (_, args, _, _)
+    | ClosureAlloc (_, _, args) -> fromOperands state args
+    | IndirectCall (_, func, args, _, _)
+    | IndirectTailCall (func, args, _, _)
+    | ClosureCall (_, func, args, _, _)
+    | ClosureTailCall (func, args, _) -> fromOperands (fromOperand state func) args
+    | HeapAlloc _ -> state
+    | HeapStore (addr, _, src, _) -> fromOperand (folder state addr) src
+    | HeapLoad (_, addr, _, _)
+    | RefCountInc (addr, _, _, _)
+    | RefCountDec (addr, _, _, _) -> folder state addr
+    | StringConcat (_, left, right)
+    | FileWriteText (_, left, right)
+    | FileAppendText (_, left, right)
+    | RawGet (_, left, right, _)
+    | RawGetByte (_, left, right)
+    | RawPtrToDict (_, left, right)
+    | RawPtrToList (_, left, right) -> fromOperand (fromOperand state left) right
+    | Print (src, _)
+    | FileReadText (_, src)
+    | FileExists (_, src)
+    | FileDelete (_, src)
+    | FileSetExecutable (_, src)
+    | RawAlloc (_, src)
+    | RawFree src
+    | StringToRawPtr (_, src)
+    | RawPtrToString (_, src)
+    | BytesToRawPtr (_, src)
+    | RawPtrToBytes (_, src)
+    | DictToRawPtr (_, src)
+    | ListToRawPtr (_, src)
+    | FloatSqrt (_, src)
+    | FloatAbs (_, src)
+    | FloatNeg (_, src)
+    | Int64ToFloat (_, src)
+    | FloatToInt64 (_, src)
+    | FloatToBits (_, src)
+    | RefCountIncString src
+    | RefCountDecString src
+    | RefCountIncBytes src
+    | RefCountDecBytes src
+    | FloatToString (_, src) -> fromOperand state src
+    | FileWriteFromPtr (_, first, second, third)
+    | RawWriteWord (first, second, third)
+    | RawWriteByte (first, second, third)
+    | RawSlotInit (first, second, third, _) ->
+        fromOperand (fromOperand (fromOperand state first) second) third
+    | Phi (_, sources, _) ->
+        sources |> List.fold (fun acc (op, _) -> fromOperand acc op) state
+    | RandomInt64 _
+    | DateNow _
+    | RuntimeError _
+    | CoverageHit _ -> state
+
+/// Get all VRegs used by an instruction.
+let getInstrUses (instr: Instr) : Set<VReg> =
+    foldInstrUses (fun uses vreg -> Set.add vreg uses) Set.empty instr
+
+/// Fold over the VRegs used by a terminator without allocating an intermediate collection.
+let foldTerminatorUses (folder: 'State -> VReg -> 'State) (state: 'State) (term: Terminator) : 'State =
+    let fromOperand state op =
+        match op with
+        | Register vreg -> folder state vreg
+        | _ -> state
+
+    match term with
+    | Ret op -> fromOperand state op
+    | Branch (cond, _, _) -> fromOperand state cond
+    | Jump _ -> state
 
 /// Get VRegs used by terminator
 let getTerminatorUses (term: Terminator) : Set<VReg> =
-    match term with
-    | Ret op ->
-        match op with
-        | Register vreg -> Set.singleton vreg
-        | _ -> Set.empty
-    | Branch (cond, _, _) ->
-        match cond with
-        | Register vreg -> Set.singleton vreg
-        | _ -> Set.empty
-    | Jump _ -> Set.empty
+    foldTerminatorUses (fun uses vreg -> Set.add vreg uses) Set.empty term
 
 /// Get successors from a basic block terminator
 let getSuccessors (block: BasicBlock) : Label list =
@@ -658,13 +669,13 @@ let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
     applyLoopInvariantCodeMotionWithEffectFreeCalls Set.empty cfg
 
 /// Build map from SSA destination to the registers used by its defining instruction.
-let private buildDefUseMap (cfg: CFG) : Map<VReg, Set<VReg>> =
+let private buildDefUseMap (cfg: CFG) : Map<VReg, VReg list> =
     cfg.Blocks
     |> Map.fold (fun defUses _ block ->
         block.Instrs
         |> List.fold (fun acc instr ->
             match getInstrDest instr with
-            | Some dest -> Map.add dest (getInstrUses instr) acc
+            | Some dest -> Map.add dest (foldInstrUses (fun uses vreg -> vreg :: uses) [] instr) acc
             | None -> acc
         ) defUses
     ) Map.empty
@@ -677,12 +688,12 @@ let private collectRootUses (cfg: CFG) : Set<VReg> =
             block.Instrs
             |> List.fold (fun acc instr ->
                 if hasSideEffects instr then
-                    Set.union acc (getInstrUses instr)
+                    foldInstrUses (fun uses vreg -> Set.add vreg uses) acc instr
                 else
                     acc
             ) Set.empty
-        let termUses = getTerminatorUses block.Terminator
-        Set.unionMany [roots; sideEffectUses; termUses]
+        let roots' = Set.union roots sideEffectUses
+        foldTerminatorUses (fun uses vreg -> Set.add vreg uses) roots' block.Terminator
     ) Set.empty
 
 /// Mark live SSA destinations by walking backwards from root uses.
@@ -704,7 +715,7 @@ let private collectLiveDestinations (cfg: CFG) : Set<VReg> =
             | Some uses ->
                 let (rest', queued'') =
                     uses
-                    |> Set.fold (fun (pending, queuedAcc) usedReg ->
+                    |> List.fold (fun (pending, queuedAcc) usedReg ->
                         if Set.contains usedReg queuedAcc || Set.contains usedReg live then
                             (pending, queuedAcc)
                         else
