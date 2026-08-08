@@ -1267,26 +1267,30 @@ let optimizeAExpr (context: OptimizeContext) (options: OptimizeOptions) (env: Co
     let result = optimizeAExprWithUses context options env typeEnv Map.empty Map.empty aexpr
     (result.Expr, result.Changed)
 
-/// Optimize a function
-let optimizeFunction (context: OptimizeContext) (options: OptimizeOptions) (func: Function) : Function * bool =
+/// Optimize a function using the stable type metadata for its parameters.
+let optimizeFunction (context: OptimizeContext) (options: OptimizeOptions) (typeEnv: TypeEnv) (func: Function) : Function * bool =
     // Initialize env with function parameters (they're not constants)
     let env = Map.empty
-    let typeEnv =
-        func.TypedParams
-        |> List.map (fun param -> (param.Id, param.Type))
-        |> Map.ofList
     let (body', changed) = optimizeAExpr context options env typeEnv func.Body
     ({ func with Body = body' }, changed)
 
 /// Optimize until fixed point
-let rec optimizeToFixedPoint (context: OptimizeContext) (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
-    if maxIterations <= 0 then func
-    else
-        let (func', changed) = optimizeFunction context options func
-        if changed then
-            optimizeToFixedPoint context options func' (maxIterations - 1)
+let optimizeToFixedPoint (context: OptimizeContext) (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
+    let typeEnv =
+        func.TypedParams
+        |> List.map (fun param -> (param.Id, param.Type))
+        |> Map.ofList
+
+    let rec optimize (func: Function) (remainingIterations: int) : Function =
+        if remainingIterations <= 0 then func
         else
-            func'
+            let (func', changed) = optimizeFunction context options typeEnv func
+            if changed then
+                optimize func' (remainingIterations - 1)
+            else
+                func'
+
+    optimize func maxIterations
 
 let rec private collectAExprTempIds (expr: AExpr) (tempIds: Set<TempId>) : Set<TempId> =
     match expr with
