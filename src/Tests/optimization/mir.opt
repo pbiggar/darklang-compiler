@@ -348,3 +348,36 @@ Function loop:
     v10021 <- Phi([(v0, loop_entry), (v10029, loop_L1)]) : TInt64
     v10022 <- v10021 < 1 : TInt64
     branch v10022 ? loop_L2 : loop_L1
+
+---NAME---
+derived_induction_affine_shift
+---INPUT---
+def loop(i: Int64, n: Int64, total: Int64) : Int64 =
+    if i >= n then total
+    else
+        let odd = 2 * i + 1 in
+        loop(i + 1, n, total + odd)
+---EXPECTED---
+Function loop:
+  loop_entry:
+    v10035 <- v0 << 1 : TInt64
+    v10036 <- v10035 + 1 : TInt64
+    jump loop_body
+  loop_L1:
+    v10027 <- v10023 + 1 : TInt64
+    v10028 <- v10021 + v10026 : TInt64
+    v10037 <- v10026 + 2 : TInt64
+    v10038 <- v10037 : TInt64
+    v10032 <- v10027 : TInt64
+    v10033 <- v10022 : TInt64
+    v10034 <- v10028 : TInt64
+    jump loop_body
+  loop_L2:
+    ret v10021
+  loop_body:
+    v10021 <- Phi([(v2, loop_entry), (v10034, loop_L1)]) : TInt64
+    v10022 <- Phi([(v1, loop_entry), (v10033, loop_L1)]) : TInt64
+    v10023 <- Phi([(v0, loop_entry), (v10032, loop_L1)]) : TInt64
+    v10026 <- Phi([(v10036, loop_entry), (v10038, loop_L1)]) : TInt64
+    v10024 <- v10023 >= v10022 : TInt64
+    branch v10024 ? loop_L2 : loop_L1

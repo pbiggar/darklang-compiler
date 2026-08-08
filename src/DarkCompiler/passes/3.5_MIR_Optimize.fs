@@ -7,6 +7,7 @@
 // - Dead code elimination (DCE): remove unused instructions
 // - CFG simplification: fold branches, prune unreachable blocks, and merge linear blocks
 // - Loop-invariant code motion (LICM): hoist loop-invariant expressions
+// - Induction-variable strength reduction: carry a canonical affine loop expression
 //
 // These optimizations leverage SSA form where each variable is defined exactly once.
 
@@ -388,6 +389,263 @@ let findNaturalLoops (cfg: CFG) : Map<Label, Set<Label>> =
 
             if Set.isEmpty loopBlocks then loops else Map.add header loopBlocks loops
         ) Map.empty
+
+type private AffineInductionCandidate = {
+    Header: Label
+    Preheader: Label
+    Latch: Label
+    InitialValue: Operand
+    AffineValue: VReg
+    ScaleInstr: Instr
+    AffineInstr: Instr
+}
+
+let private nextRegisterId (cfg: CFG) : int =
+    cfg.Blocks
+    |> Map.fold (fun registers _ block ->
+        let instrRegisters =
+            block.Instrs
+            |> List.fold (fun acc instr ->
+                let acc' = Set.union acc (getInstrUses instr)
+                match getInstrDest instr with
+                | Some dest -> Set.add dest acc'
+                | None -> acc'
+            ) Set.empty
+        Set.unionMany [registers; instrRegisters; getTerminatorUses block.Terminator]
+    ) Set.empty
+    |> Set.fold (fun highest (VReg id) -> max highest id) -1
+    |> fun highest -> highest + 1
+
+let private resolveLatchCopy (instrs: Instr list) (register: VReg) : VReg =
+    let rec resolve visited current =
+        if Set.contains current visited then
+            current
+        else
+            let source =
+                instrs
+                |> List.tryPick (function
+                    | Mov (dest, Register source, _) when dest = current -> Some source
+                    | _ -> None)
+            match source with
+            | Some source -> resolve (Set.add current visited) source
+            | None -> current
+    resolve Set.empty register
+
+let private isIncrementByOne (inductionPhi: VReg) (nextValue: VReg) (instr: Instr) : bool =
+    match instr with
+    | BinOp (dest, Add, Register source, Int64Const 1L, AST.TInt64)
+    | BinOp (dest, Add, Int64Const 1L, Register source, AST.TInt64) ->
+        dest = nextValue && source = inductionPhi
+    | _ -> false
+
+let private registerInstrUsers (cfg: CFG) (value: VReg) : (Label * Instr) list =
+    cfg.Blocks
+    |> Map.toList
+    |> List.collect (fun (label, block) ->
+        block.Instrs
+        |> List.choose (fun instr ->
+            if Set.contains value (getInstrUses instr) then Some (label, instr) else None))
+
+let private terminatorUsesRegister (cfg: CFG) (value: VReg) : bool =
+    cfg.Blocks
+    |> Map.exists (fun _ block -> Set.contains value (getTerminatorUses block.Terminator))
+
+let private tryAffineExpression
+    (cfg: CFG)
+    (latchLabel: Label)
+    (latch: BasicBlock)
+    (inductionPhi: VReg)
+    : (VReg * Instr * Instr) option =
+    let candidates =
+        latch.Instrs
+        |> List.collect (fun scaleInstr ->
+            match scaleInstr with
+            | BinOp (scaledValue, Shl, Register source, Int64Const 1L, AST.TInt64)
+                when source = inductionPhi ->
+                latch.Instrs
+                |> List.choose (fun affineInstr ->
+                    match affineInstr with
+                    | BinOp (affineValue, Add, Register scaledSource, Int64Const 1L, AST.TInt64)
+                    | BinOp (affineValue, Add, Int64Const 1L, Register scaledSource, AST.TInt64)
+                        when scaledSource = scaledValue ->
+                        Some (scaledValue, affineValue, scaleInstr, affineInstr)
+                    | _ -> None)
+            | _ -> [])
+
+    match candidates with
+    | [(scaledValue, affineValue, scaleInstr, affineInstr)] ->
+        let scaledUsers = registerInstrUsers cfg scaledValue
+        let affineUsers = registerInstrUsers cfg affineValue
+        let affineUsesOnlyInLatch =
+            not (List.isEmpty affineUsers)
+            && affineUsers |> List.forall (fun (label, _) -> label = latchLabel)
+
+        if scaledUsers = [(latchLabel, affineInstr)]
+           && affineUsesOnlyInLatch
+           && not (terminatorUsesRegister cfg scaledValue)
+           && not (terminatorUsesRegister cfg affineValue) then
+            Some (affineValue, scaleInstr, affineInstr)
+        else
+            None
+    | _ -> None
+
+let private tryAffineInductionCandidate
+    (cfg: CFG)
+    (header: Label)
+    (loopBlocks: Set<Label>)
+    : AffineInductionCandidate option =
+    let predecessors = buildPredecessors cfg
+    let headerPredecessors = Map.tryFind header predecessors |> Option.defaultValue []
+    let outsidePredecessors =
+        headerPredecessors |> List.filter (fun label -> not (Set.contains label loopBlocks))
+    let insidePredecessors =
+        headerPredecessors |> List.filter (fun label -> Set.contains label loopBlocks)
+
+    match outsidePredecessors, insidePredecessors, Map.tryFind header cfg.Blocks with
+    | [preheader], [latchLabel], Some headerBlock
+        when loopBlocks = Set.ofList [header; latchLabel] ->
+        match Map.tryFind preheader cfg.Blocks, Map.tryFind latchLabel cfg.Blocks with
+        | Some preheaderBlock, Some latch
+            when preheaderBlock.Terminator = Jump header
+                 && latch.Terminator = Jump header ->
+            let candidates =
+                headerBlock.Instrs
+                |> List.choose (fun instr ->
+                    match instr with
+                    | Phi (inductionPhi, sources, Some AST.TInt64) ->
+                        let initialSources =
+                            sources |> List.filter (fun (_, source) -> source = preheader)
+                        let backedgeSources =
+                            sources |> List.filter (fun (_, source) -> source = latchLabel)
+                        match sources, initialSources, backedgeSources with
+                        | [ _; _ ], [(initialValue, _)], [(Register nextValue, _)] ->
+                            let resolvedNext = resolveLatchCopy latch.Instrs nextValue
+                            let advancesByOne =
+                                latch.Instrs |> List.exists (isIncrementByOne inductionPhi resolvedNext)
+                            match advancesByOne, tryAffineExpression cfg latchLabel latch inductionPhi with
+                            | true, Some (affineValue, scaleInstr, affineInstr) ->
+                                Some {
+                                    Header = header
+                                    Preheader = preheader
+                                    Latch = latchLabel
+                                    InitialValue = initialValue
+                                    AffineValue = affineValue
+                                    ScaleInstr = scaleInstr
+                                    AffineInstr = affineInstr
+                                }
+                            | _ -> None
+                        | _ -> None
+                    | _ -> None)
+
+            match candidates with
+            | [candidate] -> Some candidate
+            | _ -> None
+        | _ -> None
+    | _ -> None
+
+let private addPhiAfterPhis (phi: Instr) (instrs: Instr list) : Instr list =
+    let rec insert remaining =
+        match remaining with
+        | (Phi _ as existingPhi) :: rest -> existingPhi :: insert rest
+        | rest -> phi :: rest
+    insert instrs
+
+let private insertAfterLastUse (value: VReg) (inserted: Instr list) (instrs: Instr list) : Instr list =
+    let rec insert remaining =
+        match remaining with
+        | [] -> ([], false)
+        | instr :: rest ->
+            let (rest', alreadyInserted) = insert rest
+            if alreadyInserted then
+                (instr :: rest', true)
+            elif Set.contains value (getInstrUses instr) then
+                (instr :: inserted @ rest', true)
+            else
+                (instr :: rest', false)
+
+    let (instrs', insertedAfterUse) = insert instrs
+    if insertedAfterUse then
+        instrs'
+    else
+        Crash.crash "insertAfterLastUse: affine induction value has no latch use"
+
+(*
+Plan: recognize only the canonical two-block Int64 loop produced for
+`2 * i + 1` with an `i + 1` backedge, initialize the affine value in its unique
+preheader, and carry it through a header phi advanced by two. Reject additional
+affine expressions, extra uses of the scaled temporary, uses outside the latch,
+and non-canonical control flow so the rewrite remains a local SSA substitution.
+*)
+let applyAffineInductionStrengthReduction (cfg: CFG) : CFG * bool =
+    let candidate =
+        findNaturalLoops cfg
+        |> Map.toList
+        |> List.tryPick (fun (header, loopBlocks) ->
+            tryAffineInductionCandidate cfg header loopBlocks)
+
+    match candidate with
+    | None -> (cfg, false)
+    | Some candidate ->
+        let firstFreshRegister = nextRegisterId cfg
+        let initialScaled = VReg firstFreshRegister
+        let initialAffine = VReg (firstFreshRegister + 1)
+        let nextAffine = VReg (firstFreshRegister + 2)
+        let nextAffinePhiSource = VReg (firstFreshRegister + 3)
+        let preheaderInstrs = [
+            BinOp (
+                initialScaled,
+                Shl,
+                candidate.InitialValue,
+                Int64Const 1L,
+                AST.TInt64
+            )
+            BinOp (
+                initialAffine,
+                Add,
+                Register initialScaled,
+                Int64Const 1L,
+                AST.TInt64
+            )
+        ]
+        let derivedPhi =
+            Phi (
+                candidate.AffineValue,
+                [
+                    (Register initialAffine, candidate.Preheader)
+                    (Register nextAffinePhiSource, candidate.Latch)
+                ],
+                Some AST.TInt64
+            )
+        let advanceDerived =
+            BinOp (
+                nextAffine,
+                Add,
+                Register candidate.AffineValue,
+                Int64Const 2L,
+                AST.TInt64
+            )
+        let copyDerivedToPhiSource =
+            Mov (nextAffinePhiSource, Register nextAffine, Some AST.TInt64)
+
+        let blocks =
+            cfg.Blocks
+            |> Map.map (fun label block ->
+                if label = candidate.Preheader then
+                    { block with Instrs = block.Instrs @ preheaderInstrs }
+                elif label = candidate.Header then
+                    { block with Instrs = addPhiAfterPhis derivedPhi block.Instrs }
+                elif label = candidate.Latch then
+                    let instrs =
+                        block.Instrs
+                        |> List.filter (fun instr ->
+                            instr <> candidate.ScaleInstr && instr <> candidate.AffineInstr)
+                        |> insertAfterLastUse
+                            candidate.AffineValue
+                            [advanceDerived; copyDerivedToPhiSource]
+                    { block with Instrs = instrs }
+                else
+                    block)
+        ({ cfg with Blocks = blocks }, true)
 
 /// Scalar results can move across loop iterations without changing ownership.
 let private isScalarReturnType (returnType: AST.Type) : bool =
@@ -1627,26 +1885,28 @@ let private optimizeCFGOnceWithEffectFreeCalls
     let (cfg4, changed4) =
         if options.EnableConstFolding && changed3 then applyConstantFolding cfg3 else (cfg3, false)
     let (cfg5, changed5) =
-        if options.EnableLICM then
-            applyLoopInvariantCodeMotionWithEffectFreeCalls effectFreeFunctions cfg4
-        else
-            (cfg4, false)
+        if options.EnableLICM then applyAffineInductionStrengthReduction cfg4 else (cfg4, false)
     let (cfg6, changed6) =
-        if options.EnableDCE then eliminateDeadCode cfg5 else (cfg5, false)
+        if options.EnableLICM then
+            applyLoopInvariantCodeMotionWithEffectFreeCalls effectFreeFunctions cfg5
+        else
+            (cfg5, false)
     let (cfg7, changed7) =
-        if options.EnableCFGSimplify then simplifyConstantBranches cfg6 else (cfg6, false)
+        if options.EnableDCE then eliminateDeadCode cfg6 else (cfg6, false)
     let (cfg8, changed8) =
-        if options.EnableCFGSimplify then simplifyBranchesKnownFromPredecessor cfg7 else (cfg7, false)
+        if options.EnableCFGSimplify then simplifyConstantBranches cfg7 else (cfg7, false)
     let (cfg9, changed9) =
-        if options.EnableCFGSimplify then eliminateUnreachableBlocks cfg8 else (cfg8, false)
+        if options.EnableCFGSimplify then simplifyBranchesKnownFromPredecessor cfg8 else (cfg8, false)
     let (cfg10, changed10) =
-        if options.EnableCFGSimplify then simplifyRetPhiJoins cfg9 else (cfg9, false)
+        if options.EnableCFGSimplify then eliminateUnreachableBlocks cfg9 else (cfg9, false)
     let (cfg11, changed11) =
-        if options.EnableCFGSimplify then simplifyEmptyBlocks cfg10 else (cfg10, false)
+        if options.EnableCFGSimplify then simplifyRetPhiJoins cfg10 else (cfg10, false)
     let (cfg12, changed12) =
-        if options.EnableCFGSimplify then mergeLinearBlocks cfg11 else (cfg11, false)
-    let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12
-    (cfg12, changed)
+        if options.EnableCFGSimplify then simplifyEmptyBlocks cfg11 else (cfg11, false)
+    let (cfg13, changed13) =
+        if options.EnableCFGSimplify then mergeLinearBlocks cfg12 else (cfg12, false)
+    let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12 || changed13
+    (cfg13, changed)
 
 let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
     optimizeCFGOnceWithEffectFreeCalls Set.empty options cfg
