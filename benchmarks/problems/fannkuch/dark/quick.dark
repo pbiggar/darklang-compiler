@@ -5,21 +5,39 @@ def getAt(list: List<Int64>, index: Int64) : Int64 =
     | Some(v) -> v
     | None -> 0
 
+def prependReversed(source: List<Int64>, suffix: List<Int64>) : List<Int64> =
+    match source with
+    | [] -> suffix
+    | [h, ...t] -> prependReversed(t, [h, ...suffix])
+
+def reversePrefixCollect(source: List<Int64>, remaining: Int64, reversed: List<Int64>) : List<Int64> =
+    if remaining < 0 then Stdlib.List.append<Int64>(reversed, source)
+    else
+        match source with
+        | [] -> reversed
+        | [h, ...t] -> reversePrefixCollect(t, remaining - 1, [h, ...reversed])
+
 def reversePrefix(list: List<Int64>, k: Int64) : List<Int64> =
-    let prefix = Stdlib.List.take<Int64>(list, k + 1) in
-    let suffix = Stdlib.List.drop<Int64>(list, k + 1) in
-    Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(prefix), suffix)
+    reversePrefixCollect(list, k, [])
 
 def countFlips(perm: List<Int64>, flips: Int64) : Int64 =
-    let first = getAt(perm, 0) in
-    if first == 0 then flips
-    else countFlips(reversePrefix(perm, first), flips + 1)
+    match perm with
+    | [] -> flips
+    | [first, ..._] ->
+        if first == 0 then flips
+        else countFlips(reversePrefix(perm, first), flips + 1)
+
+def rotateLeftCollect(source: List<Int64>, remaining: Int64, reversed: List<Int64>, first: Int64) : List<Int64> =
+    if remaining <= 0 then prependReversed(reversed, [first, ...source])
+    else
+        match source with
+        | [] -> prependReversed(reversed, [first])
+        | [h, ...t] -> rotateLeftCollect(t, remaining - 1, [h, ...reversed], first)
 
 def rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
-    let first = getAt(list, 0) in
-    let middle = Stdlib.List.take<Int64>(Stdlib.List.drop<Int64>(list, 1), i) in
-    let rest = Stdlib.List.drop<Int64>(list, i + 1) in
-    Stdlib.List.append<Int64>(Stdlib.List.append<Int64>(middle, Stdlib.List.singleton<Int64>(first)), rest)
+    match list with
+    | [] -> []
+    | [first, ...tail] -> rotateLeftCollect(tail, i, [], first)
 
 def setAt(list: List<Int64>, index: Int64, value: Int64) : List<Int64> =
     Stdlib.List.setAt<Int64>(list, index, value)
@@ -36,8 +54,10 @@ def nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<
             nextPerm(newPerm, newCount, i + 1, n)
 
 def fannkuchLoop(perm: List<Int64>, count: List<Int64>, n: Int64, maxFlips: Int64) : Int64 =
-    let first = getAt(perm, 0) in
-    let flips = if first == 0 then 0 else countFlips(perm, 0) in
+    let flips =
+        match perm with
+        | [] -> 0
+        | [first, ..._] -> if first == 0 then 0 else countFlips(perm, 0) in
     let newMax = if flips > maxFlips then flips else maxFlips in
     let result = nextPerm(perm, count, 1, n) in
     let newPerm = Stdlib.Tuple3.first<List<Int64>, List<Int64>, Bool>(result) in
