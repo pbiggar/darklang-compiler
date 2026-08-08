@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-08 19:26:16
-**Commit:** `5ff05590` - Strength reduce canonical affine loop induction
+**Last Updated:** 2026-08-08 19:31:49
+**Commit:** `14b28153` - Reuse external ANF inlining metadata
 
 | Benchmark     |           Dark (2.43x) |          Rust |         Ocaml (3.69x) |          Python (127x) |          Node (18.2x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

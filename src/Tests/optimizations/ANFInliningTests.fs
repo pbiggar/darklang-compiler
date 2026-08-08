@@ -12,6 +12,11 @@ type TestResult = Result<unit, string>
 let private intAtom (value: int64) : Atom =
     IntLiteral (Int64 value)
 
+let private externalCandidates
+    (functions: Function list)
+    : Map<string, ANF_Inlining.FunctionInfo> =
+    ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig functions
+
 let rec private containsCall (target: string) (expr: AExpr) : bool =
     match expr with
     | Return _ -> false
@@ -141,7 +146,7 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
             ANF_Inlining.defaultConfig
-            [stdlibShiftLeft]
+            (externalCandidates [stdlibShiftLeft])
             (Program ([], main))
     if containsCall "Stdlib.Int64.shiftLeft" inlinedMain then
         Error "Expected external shift wrapper to be inlined, but Call remained in main expression"
@@ -170,7 +175,7 @@ let testExternalInlineCandidateRemovesFloatToIntCall () : TestResult =
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
             ANF_Inlining.defaultConfig
-            [stdlibFloatToInt]
+            (externalCandidates [stdlibFloatToInt])
             (Program ([], main))
     if containsCall "Stdlib.Float.toInt" inlinedMain then
         Error "Expected external float-to-int wrapper to be inlined, but Call remained in main expression"
@@ -199,7 +204,7 @@ let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
             ANF_Inlining.defaultConfig
-            [stdlibAllocate]
+            (externalCandidates [stdlibAllocate])
             (Program ([], main))
     if containsCall "Stdlib.Test.allocate" inlinedMain then
         Ok ()
@@ -232,7 +237,7 @@ let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
             ANF_Inlining.defaultConfig
-            [stdlibAbs]
+            (externalCandidates [stdlibAbs])
             (Program ([], main))
     if containsCall "Stdlib.Int64.abs" inlinedMain then
         Ok ()
@@ -264,7 +269,7 @@ let testExternalInliningHonorsCallerBudget () : TestResult =
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
             ANF_Inlining.defaultConfig
-            [stdlibShiftLeft]
+            (externalCandidates [stdlibShiftLeft])
             (Program ([], main))
     let remainingCalls = countCalls "Stdlib.Int64.shiftLeft" inlinedMain
     if remainingCalls = 9 then

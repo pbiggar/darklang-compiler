@@ -440,7 +440,7 @@ let private buildAnf
     (options: CompilerOptions)
     (sw: Stopwatch)
     (registries: AST_to_ANF.Registries)
-    (externalInlineCandidates: ANF.Function list)
+    (externalInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>)
     (functions: ANF.Function list)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<ANF.Function list * ANF.TypeMap, string> =
@@ -735,7 +735,7 @@ type StdlibResult = {
     /// Stdlib ANF functions indexed by name (for coverage analysis)
     StdlibANFFunctions: Map<string, ANF.Function>
     /// Pre-reference-count stdlib ANF functions available as user inlining candidates
-    StdlibInlineCandidates: Map<string, ANF.Function>
+    StdlibInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>
     /// Call graph at ANF level (for coverage analysis reachability)
     StdlibANFCallGraph: Map<string, Set<string>>
     /// TypeMap from RC insertion (needed for getReachableStdlibFunctions)
@@ -1099,7 +1099,7 @@ let buildStdlibWithTrace
                 let context = buildContext typeCheckEnv genericFuncDefs Map.empty registries returnTypes
                 let (ANF.Program (stdlibFunctions, _)) = anfResult.Program
                 let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
-                match buildAnf 0 stdlibOptions sw registries [] stdlibFunctions passTimingRecorder with
+                match buildAnf 0 stdlibOptions sw registries Map.empty stdlibFunctions passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, typeMap) ->
@@ -1110,9 +1110,7 @@ let buildStdlibWithTrace
                         |> Map.ofList
                     let stdlibInlineCandidates =
                         stdlibFunctions
-                        |> ANF_Inlining.filterExternalCandidates ANF_Inlining.defaultConfig
-                        |> List.map (fun f -> f.Name, f)
-                        |> Map.ofList
+                        |> ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig
                     let stdlibLiftedFuncNames =
                         tcoFunctions
                         |> List.map (fun f -> f.Name)
@@ -1219,7 +1217,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                         let sw = Stopwatch.StartNew()
-                        buildAnf 0 stdlibOptions sw registries [] anfFuncs passTimingRecorder
+                        buildAnf 0 stdlibOptions sw registries Map.empty anfFuncs passTimingRecorder
                         |> Result.bind (fun (anfFunctions, typeMap) ->
                             let tcoFunctions = applyTco 0 stdlibOptions sw anfFunctions passTimingRecorder
                             let newAnfFuncMap =
@@ -1246,9 +1244,7 @@ let buildStdlibSpecializations
                                     Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibANFFunctions newAnfFuncMap
                                 let newInlineCandidateMap =
                                     anfFuncs
-                                    |> ANF_Inlining.filterExternalCandidates ANF_Inlining.defaultConfig
-                                    |> List.map (fun f -> f.Name, f)
-                                    |> Map.ofList
+                                    |> ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig
                                 let mergedStdlibInlineCandidates =
                                     Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibInlineCandidates newInlineCandidateMap
                                 let allAnfFunctions =
@@ -1304,7 +1300,7 @@ type private UserCompilePlan = {
     Stdlib: StdlibResult
     BaseContext: PipelineContext
     Monomorphization: MonomorphizationMode
-    ExternalInlineCandidates: ANF.Function list
+    ExternalInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>
     PrebuiltSymbolicFunctions: LIR.Function list
     SkipFunctionNames: Set<string>
     EmitFunctionEvents: bool
@@ -1590,7 +1586,7 @@ let buildPreambleContext
                         mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
                     let pipelineContext =
                         buildContext preambleTypeCheckEnv mergedGenericDefs Map.empty preambleRegistries preambleReturnTypes
-                    match buildAnf 0 preambleOptions sw preambleRegistries [] preambleUserOnly.UserFunctions passTimingRecorder with
+                    match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions passTimingRecorder with
                     | Error err ->
                         let rcPrefix = "Reference count insertion error: "
                         let msg =
@@ -1684,7 +1680,7 @@ let buildPreambleContextFromAnalysis
             mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
         let pipelineContext =
             buildContext analysis.TypeCheckEnv mergedGenericDefs combinedSpecRegistry preambleRegistries preambleReturnTypes
-        match buildAnf 0 preambleOptions sw preambleRegistries [] preambleUserOnly.UserFunctions passTimingRecorder with
+        match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
             let msg =
@@ -1778,7 +1774,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
         Stdlib = stdlib
         BaseContext = baseContext
         Monomorphization = monomorphization
-        ExternalInlineCandidates = stdlib.StdlibInlineCandidates |> Map.toList |> List.map snd
+        ExternalInlineCandidates = stdlib.StdlibInlineCandidates
         PrebuiltSymbolicFunctions = prebuiltSymbolic
         SkipFunctionNames = skipNames
         EmitFunctionEvents = emitFunctionEvents
@@ -1938,7 +1934,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     FuncParams = userOnly.FuncParams
                     ModuleRegistry = userOnly.ModuleRegistry
                 }
-                match buildAnf 0 coverageOptions sw userRegistries [] (entryFunction :: userOnly.UserFunctions) None with
+                match buildAnf 0 coverageOptions sw userRegistries Map.empty (entryFunction :: userOnly.UserFunctions) None with
                 | Error err -> Error err
                 | Ok (userFunctions, _typeMap) ->
                     match PrintInsertion.insertPrintInEntry "_start" programType userFunctions with

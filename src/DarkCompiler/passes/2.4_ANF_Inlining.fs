@@ -418,14 +418,18 @@ let private shouldUseExternalCandidate (info: FunctionInfo) (config: InliningCon
     && Set.isEmpty info.Calls
     && isSimpleExternalExpr info.Func.Body
 
-let filterExternalCandidates (config: InliningConfig) (functions: Function list) : Function list =
+/// Analyze and qualify external functions once so user-program inlining can
+/// reuse the metadata without traversing stdlib bodies on every compilation.
+let buildExternalCandidateInfoMap
+    (config: InliningConfig)
+    (functions: Function list)
+    : Map<string, FunctionInfo> =
     buildFunctionInfoMap functions
-    |> Map.toList
-    |> List.choose (fun (_name, info) ->
+    |> Map.fold (fun candidates name info ->
         if shouldUseExternalCandidate info config then
-            Some info.Func
+            Map.add name { info with IsExternal = true } candidates
         else
-            None)
+            candidates) Map.empty
 
 /// Substitute Return with a continuation expression
 /// This replaces `Return atom` with a binding and continues with the rest
@@ -543,7 +547,7 @@ let inlineInFunction (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
 /// whose bodies are available but should not be emitted with this program.
 let inlineProgramWithExternalCandidates
     (config: InliningConfig)
-    (externalCandidates: Function list)
+    (externalCandidates: Map<string, FunctionInfo>)
     (program: Program)
     : Program =
     let (Program (funcs, main)) = program
@@ -554,14 +558,12 @@ let inlineProgramWithExternalCandidates
         localInfoMap
         |> Map.fold (fun acc _ info -> Set.union acc info.Calls) mainAnalysis.Calls
 
-    let externalCandidatesCalledByProgram =
-        externalCandidates
-        |> List.filter (fun func -> Set.contains func.Name calledNames)
-
     let externalInfoMap =
-        buildFunctionInfoMap externalCandidatesCalledByProgram
-        |> Map.filter (fun _ info -> shouldUseExternalCandidate info config)
-        |> Map.map (fun _ info -> { info with IsExternal = true })
+        calledNames
+        |> Set.fold (fun calledCandidates name ->
+            match Map.tryFind name externalCandidates with
+            | Some info -> Map.add name info calledCandidates
+            | None -> calledCandidates) Map.empty
     let funcInfoMap =
         Map.fold (fun acc name info -> Map.add name info acc) localInfoMap externalInfoMap
     let externalNames =
@@ -590,7 +592,7 @@ let inlineProgramWithExternalCandidates
 
 /// Inline functions in a program
 let inlineProgram (config: InliningConfig) (program: Program) : Program =
-    inlineProgramWithExternalCandidates config [] program
+    inlineProgramWithExternalCandidates config Map.empty program
 
 /// Inline functions with default configuration
 let inlineProgramDefault (program: Program) : Program =
