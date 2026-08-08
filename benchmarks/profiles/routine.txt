@@ -15,6 +15,7 @@ nqueen
 nsieve
 pisum
 primes
+quicksort
 spectral_norm
 sum_to_n
 tak

@@ -98,7 +98,7 @@ You are going to fix EXACTLY ONE difference (syntactic or semantic).
    - If you discovered something is missing from interpreter, add to Section 5 (Missing from Interpreter)
    - Ensure the skip reason in validate-darklang.py matches a documented category
 
-9. After all tests pass, run the routine Dark benchmark profile (`./benchmarks/run_benchmarks.sh routine`). Benchmarks should complete with no failures. Report the "Performance ratio: X.XX" from the RESULTS.md table header and show the RESULTS.md diff if it changed. Run full-size quicksort explicitly only when that workload is relevant.
+9. After all tests pass, run the full-size routine Dark benchmark profile (`./benchmarks/run_benchmarks.sh routine`). Benchmarks should complete with no failures. Report the "Performance ratio: X.XX" from the RESULTS.md table header and show the RESULTS.md diff if it changed.
 
 10. Write a short report to the developer. Include:
 

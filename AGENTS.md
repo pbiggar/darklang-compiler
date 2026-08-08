@@ -45,7 +45,7 @@ The codebase uses standard F# Result extensively. See `docs/result-patterns.md` 
 
 // The compiled code needs to be fast. DO NOT commit regressions.
 
-Benchmarks are effective. Use `./benchmarks/run_benchmarks.sh --verify routine` for normal validation. The canonical routine profile excludes slow full-size quicksort; run `./benchmarks/run_benchmarks.sh quicksort` explicitly when that workload is relevant.
+Benchmarks are effective. Use `./benchmarks/run_benchmarks.sh --verify routine` for normal validation. The canonical routine profile includes the full-size language benchmarks, including quicksort and spectral norm.
 
 After running the routine profile, always report the performance ratio from the table header in `RESULTS.md` (for example, "Performance ratio: X.XX") in your response.
 

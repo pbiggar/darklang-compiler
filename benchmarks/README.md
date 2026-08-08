@@ -28,7 +28,7 @@ python3 --version
 # Record the canonical routine profile (instruction counts via cachegrind)
 ./benchmarks/run_benchmarks.sh
 
-# Run every benchmark, including slow full-size quicksort, without recording it
+# Run every benchmark, including compiler-focused microbenchmarks, without recording it
 ./benchmarks/run_benchmarks.sh all
 
 # Run a specific benchmark
@@ -57,11 +57,10 @@ Uses **Valgrind Cachegrind** to count instructions. Slower (~50x) but determinis
 
 This is the primary way we are tracking performance.
 
-The `routine` profile is the canonical benchmark set and currently excludes
-full-size quicksort. A completed routine Cachegrind run records its measurements
-in `RESULTS.md` and `HISTORY.md`. Targeted runs and `all` are diagnostic and do
-not update those canonical files. Full-size quicksort remains available through
-`./benchmarks/run_benchmarks.sh quicksort`.
+The `routine` profile is the canonical full-size benchmark set. A completed
+routine Cachegrind run records its measurements in `RESULTS.md` and
+`HISTORY.md`. Targeted runs and `all` are diagnostic and do not update those
+canonical files.
 
 ### Verification Mode (`--verify`)
 

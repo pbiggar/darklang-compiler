@@ -77,7 +77,7 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 
 | Benchmark     | Status            | Limitation                                                     |
 | ------------- | ----------------- | -------------------------------------------------------------- |
-| spectral_norm | Working (reduced) | Computes the full power-iteration algorithm at 3-vector size (full: n=100) |
+| spectral_norm | Working (full size) | Computes ten power iterations over an immutable 100-element skew RAL vector |
 
 ---
 
@@ -95,13 +95,13 @@ remain reduced or blocked as documented above.
 
 | Feature                                  | Benchmarks Blocked                                  |
 | ---------------------------------------- | --------------------------------------------------- |
-| Mutable arrays / efficient indexed numeric vectors | spectral_norm (full n=100)              |
+| Mutable arrays / efficient indexed numeric vectors | None; arrays would still improve numeric benchmark efficiency |
 
 ---
 
 ## Notes
 
-- Closure capture in quicksort predicates now works, and quicksort is enabled in the full benchmark suite.
+- Quicksort and spectral norm both run at full size in the canonical routine profile.
 - The mandelbrot "negative float bug" was actually a semantic mismatch - the Dark code was counting escaped points while the Rust reference counts points in the set. Fixed.
 - The pisum Dark benchmark now runs at the full benchmark size (`500` rounds, `n=10000`) and is tracked as working.
 - The nsieve Dark benchmark now runs at the full benchmark size (`n=100000`) and is tracked as working.
