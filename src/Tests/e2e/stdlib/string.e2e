@@ -311,6 +311,7 @@ String.reverse("0abcde") = "edcba0"
 
 // Unicode reverse tests
 String.reverse("ábc") = "cbá"
+String.reverse("éx") = "xé"
 String.reverse("🎁🧸Ǆʠ123") = "321ʠǄ🧸🎁"
 String.reverse("😄foobar👽") = "👽raboof😄"
 // NOTE: Skin tone modifiers require full UAX #29 grapheme segmentation

@@ -498,10 +498,12 @@ def Stdlib.String.__replaceEmpty(s: String, new: String, idx: Int64, acc: String
         let byte = Stdlib.String.substring(s, idx, idx + 1) in
         Stdlib.String.__replaceEmpty(s, new, idx + 1, acc ++ byte ++ new)
 
-// Reverse a string (byte-based, works for ASCII)
+// Reverse a string by grapheme cluster, preserving codepoint order within each cluster
 def Stdlib.String.reverse(s: String) : String =
     let cps = Stdlib.String.toCodepoints(s) in
-    Stdlib.String.fromCodepoints(Stdlib.List.reverse<Int64>(cps))
+    let graphemes = Stdlib.String.__segmentGraphemes(cps, [], []) in
+    let reversed = Stdlib.List.reverse<List<Int64>>(graphemes) in
+    Stdlib.String.fromCodepoints(Stdlib.List.flatten<Int64>(reversed))
 
 // Check if string equals another (byte comparison)
 def Stdlib.String.equals(s1: String, s2: String) : Bool =

@@ -100,6 +100,7 @@ Areas where compiler produces WRONG output. These need to be fixed to match Dark
 | `Char.isUppercase` | — | Supported non-ASCII uppercase characters were classified as lowercase | Fixed |
 | `Dict.setOverridingDuplicates` | — | Official overwriting dictionary update was missing | Fixed |
 | `Base64.decode` | — | Valid unpadded final groups were rejected | Fixed |
+| `String.reverse` | — | Decomposed grapheme clusters were reversed as individual codepoints | Fixed |
 | Float precision | `eval:float_precision` | High-precision floats have different representation | Needs fix |
 
 ### 2.1 Modulo Operator (`%`)
@@ -142,6 +143,13 @@ value, matching the interpreter.
 The compiler now accepts valid final Base64 groups of two or three characters
 without explicit `=` padding, matching the official interpreter. A one-character
 input remains invalid because it cannot encode a complete byte.
+
+### 2.6 `String.reverse` Grapheme Clusters
+
+The compiler now reverses strings by grapheme cluster rather than by codepoint,
+matching the official interpreter for decomposed text. For example, reversing
+`"éx"` now produces `"xé"`, keeping the combining acute accent attached to
+its base character.
 
 ## 3. Tooling Differences
 
