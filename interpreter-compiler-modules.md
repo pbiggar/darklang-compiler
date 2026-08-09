@@ -658,7 +658,7 @@ Result                       | and                                 | ✅   | ❌
 Result                       | andThen                             | ✅   | ❌
 Result                       | collect                             | ✅   | ❌
 Result                       | combine                             | ✅   | ❌
-Result                       | fromOption                          | ✅   | ❌
+Result                       | fromOption                          | ✅   | ✅
 Result                       | isError                             | ✅   | ❌
 Result                       | isOk                                | ✅   | ❌
 Result                       | join                                | ✅   | ❌

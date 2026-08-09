@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-09 20:25:49
-**Commit:** `819f9d06` - Replace Date with upstream-compatible DateTime
+**Last Updated:** 2026-08-09 20:28:44
+**Commit:** `6c4790ad` - Add Result.fromOption for Darklang compatibility
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

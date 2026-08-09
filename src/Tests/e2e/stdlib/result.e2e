@@ -30,6 +30,13 @@ Result.toList<String, String>(Result.Ok("test")) = ["test"]
 Result.toList<String, String>(Result.Error("test")) = []
 
 // ===================================================================
+// Result.fromOption - Convert Some to Ok and None to Error
+// ===================================================================
+
+Result.fromOption(Option.Some(6), "missing") = Result.Ok(6)
+Result.fromOption<Int64, String>(Option.None, "missing") = Result.Error("missing")
+
+// ===================================================================
 // Result.withDefault - Returns the value or a default
 // ===================================================================
 

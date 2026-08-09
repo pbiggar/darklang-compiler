@@ -23,6 +23,12 @@ def Stdlib.Result.toList<t, e>(result: Stdlib.Result.Result<t, e>) : List<t> =
     | Ok(v) -> [v]
     | Error(_) -> []
 
+// Convert Some to Ok and None to Error with the supplied payload
+def Stdlib.Result.fromOption<t, e>(option: Stdlib.Option.Option<t>, error: e) : Stdlib.Result.Result<t, e> =
+    match option with
+    | Some(value) -> Ok(value)
+    | None -> Error(error)
+
 // Get the Ok value or return a default
 def Stdlib.Result.withDefault<t, e>(result: Stdlib.Result.Result<t, e>, default: t) : t =
     match result with
@@ -46,4 +52,3 @@ def Stdlib.Result.andThen<t, u, e>(result: Stdlib.Result.Result<t, e>, fn: (t) -
     match result with
     | Ok(v) -> fn(v)
     | Error(err) -> Error(err)
-
