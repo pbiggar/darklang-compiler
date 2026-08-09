@@ -39,6 +39,7 @@ let defaultOptions : CodeGenOptions = {
 
 /// Code generation context (passed through to instruction conversion)
 type CodeGenContext = {
+    Target: ARM64.TargetConfig
     Options: CodeGenOptions
     SumShapeRegistry: ANF.RcSumShapeRegistry
     RecordRegistry: LIR.RecordRegistry
@@ -196,22 +197,18 @@ let private loadStringLiteralPointer (destReg: ARM64Symbolic.Reg) (value: string
         ARM64Symbolic.ADD_label (destReg, destReg, labelRef)
     ]
 
-let private generateHeapOverflowTrapBody () : ARM64Symbolic.Instr list =
-    let os =
-        match Platform.detectOS () with
-        | Ok platform -> platform
-        | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-    let syscalls = ARM64.syscallConfigFor os
+let private generateHeapOverflowTrapBody (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     let messageBytes = System.Text.Encoding.UTF8.GetBytes(heapOutOfMemoryMessage) |> Array.toList
-    runtimeInstrs (Runtime.generatePrintCharsToStderr messageBytes)
+    runtimeInstrs (Runtime.generatePrintCharsToStderr target messageBytes)
     @ [
         ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)  // exit code = 1
         ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
         ARM64Symbolic.SVC syscalls.SvcImmediate
     ]
 
-let private generateHeapOverflowTrapBlock (label: string) : ARM64Symbolic.Instr list =
-    ARM64Symbolic.Label label :: generateHeapOverflowTrapBody ()
+let private generateHeapOverflowTrapBlock (target: ARM64.TargetConfig) (label: string) : ARM64Symbolic.Instr list =
+    ARM64Symbolic.Label label :: generateHeapOverflowTrapBody target
 
 let private withHeapBoundsCheck
     (overflowLabel: string)
@@ -2651,8 +2648,8 @@ let generateLeakCounterIncIfResultError (ctx: CodeGenContext) (resultReg: ARM64S
 
 let generateLeakCheckReport (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     if ctx.Options.EnableLeakCheck then
-        let prefix = Runtime.generatePrintCharsToStderr [byte 'l'; byte 'e'; byte 'a'; byte 'k'; byte 's'; byte ':'; byte ' '] |> runtimeInstrs
-        let printCount = Runtime.generatePrintInt64ToStderrNoExit () |> runtimeInstrs
+        let prefix = Runtime.generatePrintCharsToStderr ctx.Target [byte 'l'; byte 'e'; byte 'a'; byte 'k'; byte 's'; byte ':'; byte ' '] |> runtimeInstrs
+        let printCount = Runtime.generatePrintInt64ToStderrNoExit ctx.Target |> runtimeInstrs
         let skipOffset = List.length prefix + 1 + List.length printCount + 1
         let labelRef = dataLabel leakCounterLabel
         [
@@ -3027,25 +3024,21 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
 /// Convert LIR instruction to ARM64 instructions
 let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic.Instr list, string> =
     let generatePrintListInstrs (listReg: ARM64Symbolic.Reg) (elemType: AST.Type) (includeNewline: bool) : ARM64Symbolic.Instr list =
-        let os =
-            match Platform.detectOS () with
-            | Ok platform -> platform
-            | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-        let syscalls = ARM64.syscallConfigFor os
+        let syscalls = ARM64.targetSyscalls ctx.Target
 
         // Generate element print code based on type (uses X0 for value)
         let elemPrintCode =
             match elemType with
-            | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
-            | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
-            | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
+            | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target)
+            | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ctx.Target)
+            | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ctx.Target)
             | AST.TFloat64 ->
                 // Need to move from X0 to D0 for float
-                [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
+                [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ctx.Target)
             | AST.TString | AST.TChar ->
                 // X0 has string address, load len/data and print
                 [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X0, 8us)] @
-                runtimeInstrs (Runtime.generatePrintStringNoNewline ())
+                runtimeInstrs (Runtime.generatePrintStringNoNewline ctx.Target)
             | AST.TTuple elemTypes ->
                 // Print tuple inside list: (elem1, elem2, ...)
                 // Use X21 for tuple ptr (callee-saved), keep X19 for list ptr
@@ -3086,15 +3079,15 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                         let loadElem = [ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X21, int16 (i * 8))]
                         let printElem =
                             match eType with
-                            | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
-                            | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
-                            | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
+                            | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target)
+                            | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ctx.Target)
+                            | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ctx.Target)
                             | AST.TFloat64 ->
-                                [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
+                                [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ctx.Target)
                             | AST.TString | AST.TChar ->
                                 [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X0, 8us)] @
-                                runtimeInstrs (Runtime.generatePrintStringNoNewline ())
-                            | _ -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
+                                runtimeInstrs (Runtime.generatePrintStringNoNewline ctx.Target)
+                            | _ -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target)
                         let comma = if i < List.length elemTypes - 1 then printTupleCommaSpace else []
                         loadElem @ printElem @ comma
                     )
@@ -3116,7 +3109,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 moveTupleToX21 @ printOpenParen @ tupleElemInstrs @ printCloseParen
             | _ ->
                 // For other types (nested lists, etc.), print as integer for now
-                runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
+                runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target)
 
         let elemPrintLen = List.length elemPrintCode
 
@@ -3504,58 +3497,58 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X0 then
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintBoolNoExit ())
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintBoolNoExit ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintBoolNoExit ()))
+                runtimeInstrs (Runtime.generatePrintBoolNoExit ctx.Target))
 
     | LIR.PrintChars chars ->
         // Print literal characters (for tuple/list delimiters like "(", ", ", ")")
-        Ok (runtimeInstrs (Runtime.generatePrintChars chars))
+        Ok (runtimeInstrs (Runtime.generatePrintChars ctx.Target chars))
 
     | LIR.PrintBytes reg ->
         // Print bytes as "<N bytes>\n"
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X19 then
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, regARM64)] @ runtimeInstrs (Runtime.generatePrintBytes ())
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, regARM64)] @ runtimeInstrs (Runtime.generatePrintBytes ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintBytes ()))
+                runtimeInstrs (Runtime.generatePrintBytes ctx.Target))
 
     | LIR.PrintInt64NoNewline reg ->
         // Print integer without newline (for tuple elements)
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X0 then
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintInt64NoNewline ()))
+                runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target))
 
     | LIR.PrintUInt64NoNewline reg ->
         // Print unsigned integer without newline (for tuple elements)
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X0 then
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintUInt64NoNewline ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintUInt64NoNewline ()))
+                runtimeInstrs (Runtime.generatePrintUInt64NoNewline ctx.Target))
 
     | LIR.PrintBoolNoNewline reg ->
         // Print boolean without newline (for tuple elements)
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X0 then
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintBoolNoNewline ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintBoolNoNewline ()))
+                runtimeInstrs (Runtime.generatePrintBoolNoNewline ctx.Target))
 
     | LIR.PrintFloatNoNewline freg ->
         // Print float without newline (for tuple/list elements)
         lirFRegToARM64FReg freg
         |> Result.map (fun fregARM64 ->
             if fregARM64 <> ARM64Symbolic.D0 then
-                [ARM64Symbolic.FMOV_reg (ARM64Symbolic.D0, fregARM64)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
+                [ARM64Symbolic.FMOV_reg (ARM64Symbolic.D0, fregARM64)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintFloatNoNewline ()))
+                runtimeInstrs (Runtime.generatePrintFloatNoNewline ctx.Target))
 
     | LIR.PrintHeapStringNoNewline reg ->
         // Print heap string without newline (for tuple/list elements)
@@ -3563,14 +3556,14 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         |> Result.map (fun regARM64 ->
             // Heap string layout: [len:8 bytes][data:N bytes]
             let loadInstrs = [ARM64Symbolic.LDR (ARM64Symbolic.X10, regARM64, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, regARM64, 8us)]
-            let loadAndPrint = loadInstrs @ runtimeInstrs (Runtime.generatePrintStringNoNewline ())
+            let loadAndPrint = loadInstrs @ runtimeInstrs (Runtime.generatePrintStringNoNewline ctx.Target)
             if regARM64 <> ARM64Symbolic.X9 then
                 loadAndPrint
             else
                 // Need to save the original address first
                 let saveReg = [ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, regARM64)]
                 let loadFromSaved = [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X11, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X11, 8us)]
-                saveReg @ loadFromSaved @ runtimeInstrs (Runtime.generatePrintStringNoNewline ()))
+                saveReg @ loadFromSaved @ runtimeInstrs (Runtime.generatePrintStringNoNewline ctx.Target))
 
     | LIR.PrintList (listPtr, elemType) ->
         // Print list as [elem1, elem2, ...]
@@ -3586,11 +3579,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         // - If all nullary: just the tag value (integer)
         lirRegToARM64Reg sumPtr
         |> Result.map (fun sumReg ->
-            let os =
-                match Platform.detectOS () with
-                | Ok platform -> platform
-                | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-            let syscalls = ARM64.syscallConfigFor os
+            let syscalls = ARM64.targetSyscalls ctx.Target
 
             // Check if any variant has a payload
             let hasAnyPayload = variants |> List.exists (fun (_, _, payload) -> Option.isSome payload)
@@ -3645,14 +3634,14 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                             let loadPayload = [ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X19, 8s)]  // Load payload from offset 8
                             let printPayloadValue =
                                 match pType with
-                                | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
-                                | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
-                                | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
+                                | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target)
+                                | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ctx.Target)
+                                | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ctx.Target)
                                 | AST.TFloat64 ->
-                                    [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
+                                    [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ctx.Target)
                                 | AST.TString | AST.TChar | AST.TInt128 | AST.TUInt128 ->
                                     [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X0, 8us)] @
-                                    runtimeInstrs (Runtime.generatePrintStringNoNewline ())
+                                    runtimeInstrs (Runtime.generatePrintStringNoNewline ctx.Target)
                                 | AST.TList elemType ->
                                     match ListDisplay.getDisplayStringFunc elemType with
                                     | Some funcName ->
@@ -3660,7 +3649,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                                         let saveDisplayString = [ARM64Symbolic.MOV_reg (ARM64Symbolic.X21, ARM64Symbolic.X0)]
                                         let printString =
                                             [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X0, 8us)] @
-                                            runtimeInstrs (Runtime.generatePrintStringNoNewline ())
+                                            runtimeInstrs (Runtime.generatePrintStringNoNewline ctx.Target)
                                         let releaseDisplayString =
                                             match convertInstr ctx (LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X21))) with
                                             | Ok instrs -> instrs
@@ -3716,11 +3705,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         // Record layout: [field0, field1, field2, ...] on heap (each 8 bytes)
         lirRegToARM64Reg recordPtr
         |> Result.map (fun recordReg ->
-            let os =
-                match Platform.detectOS () with
-                | Ok platform -> platform
-                | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-            let syscalls = ARM64.syscallConfigFor os
+            let syscalls = ARM64.targetSyscalls ctx.Target
 
             // Helper: generate code to print a string literal
             let printLiteral (s: string) =
@@ -3754,15 +3739,15 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     let loadField = [ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X19, offset)]
                     let printValue =
                         match fieldType with
-                        | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ())
-                        | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ())
-                        | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ())
+                        | AST.TInt64 -> runtimeInstrs (Runtime.generatePrintInt64NoNewline ctx.Target)
+                        | AST.TUInt64 -> runtimeInstrs (Runtime.generatePrintUInt64NoNewline ctx.Target)
+                        | AST.TBool -> runtimeInstrs (Runtime.generatePrintBoolNoNewline ctx.Target)
                         | AST.TFloat64 ->
-                            [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ())
+                            [ARM64Symbolic.FMOV_from_gp (ARM64Symbolic.D0, ARM64Symbolic.X0)] @ runtimeInstrs (Runtime.generatePrintFloatNoNewline ctx.Target)
                         | AST.TString | AST.TChar | AST.TInt128 | AST.TUInt128 ->
                             // String is a pointer: load length, compute data ptr, print
                             [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X0, 8us)] @
-                            runtimeInstrs (Runtime.generatePrintStringNoNewline ())
+                            runtimeInstrs (Runtime.generatePrintStringNoNewline ctx.Target)
                         | t -> Crash.crash $"Unsupported field type in record: {t}"
                     let separator =
                         if i < List.length fields - 1 then printLiteral ", "
@@ -4215,22 +4200,22 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X0 then
                 // Move to X0 if not already there
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintInt64NoExit ())
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintInt64NoExit ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintInt64NoExit ()))
+                runtimeInstrs (Runtime.generatePrintInt64NoExit ctx.Target))
 
     | LIR.PrintUInt64 reg ->
         // Value to print should be in X0 (no exit)
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X0 then
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintUInt64NoExit ())
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, regARM64)] @ runtimeInstrs (Runtime.generatePrintUInt64NoExit ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintUInt64NoExit ()))
+                runtimeInstrs (Runtime.generatePrintUInt64NoExit ctx.Target))
 
     | LIR.Exit ->
         // Exit program with code 0
-        Ok (runtimeInstrs (Runtime.generateExit ()))
+        Ok (runtimeInstrs (Runtime.generateExit ctx.Target))
 
     | LIR.PrintFloat freg ->
         // Print float value from FP register
@@ -4239,9 +4224,9 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         |> Result.map (fun fregARM64 ->
             if fregARM64 <> ARM64Symbolic.D0 then
                 // Move to D0 if not already there
-                [ARM64Symbolic.FMOV_reg (ARM64Symbolic.D0, fregARM64)] @ runtimeInstrs (Runtime.generatePrintFloat ())
+                [ARM64Symbolic.FMOV_reg (ARM64Symbolic.D0, fregARM64)] @ runtimeInstrs (Runtime.generatePrintFloat ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintFloat ()))
+                runtimeInstrs (Runtime.generatePrintFloat ctx.Target))
 
     | LIR.PrintString value ->
         // To print a string, we need:
@@ -4252,19 +4237,15 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         Ok ([
             ARM64Symbolic.ADRP (ARM64Symbolic.X0, labelRef)  // Load page address of string
             ARM64Symbolic.ADD_label (ARM64Symbolic.X0, ARM64Symbolic.X0, labelRef)  // Add page offset
-        ] @ runtimeInstrs (Runtime.generatePrintString len))
+        ] @ runtimeInstrs (Runtime.generatePrintString ctx.Target len))
 
     | LIR.RuntimeError message ->
-        let os =
-            match Platform.detectOS () with
-            | Ok platform -> platform
-            | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-        let syscalls = ARM64.syscallConfigFor os
+        let syscalls = ARM64.targetSyscalls ctx.Target
         let messageBytes =
             System.Text.Encoding.UTF8.GetBytes(message)
             |> Array.toList
         Ok (
-            runtimeInstrs (Runtime.generatePrintCharsToStderr messageBytes)
+            runtimeInstrs (Runtime.generatePrintCharsToStderr ctx.Target messageBytes)
             @ [
                 ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)  // exit code = 1
                 ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
@@ -5222,7 +5203,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X9, 0s)           // X2 = length
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X9, 8us)      // X1 = data pointer (X9 + 8)
                 ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)                // X0 = stdout fd
-            ] @ runtimeInstrs (Runtime.generateWriteSyscall ()) @ restoreInstrs)
+            ] @ runtimeInstrs (Runtime.generateWriteSyscall ctx.Target) @ restoreInstrs)
 
     | LIR.LoadFuncAddr (dest, funcName) ->
         // Load the address of a function into the destination register using ADR
@@ -5240,20 +5221,20 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 // Already a heap string pointer
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
-                    runtimeInstrs (Runtime.generateFileReadText destReg pathARM64)
+                    runtimeInstrs (Runtime.generateFileReadText ctx.Target destReg pathARM64)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterInc ctx)
             | LIR.StringSymbol value ->
                 Ok (
                     loadStringLiteralPointer ARM64Symbolic.X15 value
-                    @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15)
+                    @ runtimeInstrs (Runtime.generateFileReadText ctx.Target destReg ARM64Symbolic.X15)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterInc ctx)
             | LIR.StackSlot offset ->
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
                     loadInstrs
-                    @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15)
+                    @ runtimeInstrs (Runtime.generateFileReadText ctx.Target destReg ARM64Symbolic.X15)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterInc ctx)
             | _ -> Error "FileReadText requires string operand")
@@ -5269,14 +5250,14 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 // Already a heap string pointer
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
-                    runtimeInstrs (Runtime.generateFileExists destReg pathARM64))
+                    runtimeInstrs (Runtime.generateFileExists ctx.Target destReg pathARM64))
             | LIR.StringSymbol value ->
-                Ok (loadStringLiteralPointer ARM64Symbolic.X15 value @ runtimeInstrs (Runtime.generateFileExists destReg ARM64Symbolic.X15))
+                Ok (loadStringLiteralPointer ARM64Symbolic.X15 value @ runtimeInstrs (Runtime.generateFileExists ctx.Target destReg ARM64Symbolic.X15))
             | LIR.StackSlot offset ->
                 // Load heap string from stack slot
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
-                    loadInstrs @ runtimeInstrs (Runtime.generateFileExists destReg ARM64Symbolic.X15))
+                    loadInstrs @ runtimeInstrs (Runtime.generateFileExists ctx.Target destReg ARM64Symbolic.X15))
             | _ -> Error "FileExists requires string operand")
 
     | LIR.FileWriteText (dest, path, content) ->
@@ -5301,7 +5282,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 |> Result.map (fun (contentInstrs, contentReg) ->
                     pathInstrs
                     @ contentInstrs
-                    @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg false)
+                    @ runtimeInstrs (Runtime.generateFileWriteText ctx.Target destReg pathReg contentReg false)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)))
 
@@ -5327,7 +5308,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 |> Result.map (fun (contentInstrs, contentReg) ->
                     pathInstrs
                     @ contentInstrs
-                    @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg true)
+                    @ runtimeInstrs (Runtime.generateFileWriteText ctx.Target destReg pathReg contentReg true)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)))
 
@@ -5342,13 +5323,13 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 // Already a heap string pointer
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
-                    runtimeInstrs (Runtime.generateFileDelete destReg pathARM64)
+                    runtimeInstrs (Runtime.generateFileDelete ctx.Target destReg pathARM64)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StringSymbol value ->
                 Ok (
                     loadStringLiteralPointer ARM64Symbolic.X15 value
-                    @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15)
+                    @ runtimeInstrs (Runtime.generateFileDelete ctx.Target destReg ARM64Symbolic.X15)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StackSlot offset ->
@@ -5356,7 +5337,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
                     loadInstrs
-                    @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15)
+                    @ runtimeInstrs (Runtime.generateFileDelete ctx.Target destReg ARM64Symbolic.X15)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | _ -> Error "FileDelete requires string operand")
@@ -5372,20 +5353,20 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 // Already a heap string pointer
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
-                    runtimeInstrs (Runtime.generateFileSetExecutable destReg pathARM64)
+                    runtimeInstrs (Runtime.generateFileSetExecutable ctx.Target destReg pathARM64)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StringSymbol value ->
                 Ok (
                     loadStringLiteralPointer ARM64Symbolic.X15 value
-                    @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15)
+                    @ runtimeInstrs (Runtime.generateFileSetExecutable ctx.Target destReg ARM64Symbolic.X15)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StackSlot offset ->
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
                     loadInstrs
-                    @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15)
+                    @ runtimeInstrs (Runtime.generateFileSetExecutable ctx.Target destReg ARM64Symbolic.X15)
                     @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | _ -> Error "FileSetExecutable requires string operand")
@@ -5404,18 +5385,18 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                         // Already a heap string pointer
                         lirRegToARM64Reg pathReg
                         |> Result.map (fun pathARM64 ->
-                            runtimeInstrs (Runtime.generateFileWriteFromPtr destReg pathARM64 ptrARM64 lengthARM64)
+                            runtimeInstrs (Runtime.generateFileWriteFromPtr ctx.Target destReg pathARM64 ptrARM64 lengthARM64)
                             @ generateLeakCounterIncIfResultError ctx destReg)
                     | LIR.StringSymbol value ->
                         Ok (
                             loadStringLiteralPointer ARM64Symbolic.X15 value
-                            @ runtimeInstrs (Runtime.generateFileWriteFromPtr destReg ARM64Symbolic.X15 ptrARM64 lengthARM64)
+                            @ runtimeInstrs (Runtime.generateFileWriteFromPtr ctx.Target destReg ARM64Symbolic.X15 ptrARM64 lengthARM64)
                             @ generateLeakCounterIncIfResultError ctx destReg)
                     | LIR.StackSlot offset ->
                         loadStackSlot ARM64Symbolic.X15 offset
                         |> Result.map (fun loadInstrs ->
                             loadInstrs
-                            @ runtimeInstrs (Runtime.generateFileWriteFromPtr destReg ARM64Symbolic.X15 ptrARM64 lengthARM64)
+                            @ runtimeInstrs (Runtime.generateFileWriteFromPtr ctx.Target destReg ARM64Symbolic.X15 ptrARM64 lengthARM64)
                             @ generateLeakCounterIncIfResultError ctx destReg)
                     | _ -> Error "FileWriteFromPtr requires string path operand")))
 
@@ -5726,13 +5707,13 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         // Generate random 8 bytes as Int64
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
-            runtimeInstrs (Runtime.generateRandomInt64 destReg))
+            runtimeInstrs (Runtime.generateRandomInt64 ctx.Target destReg))
 
     | LIR.DateNow dest ->
         // Generate current Unix epoch seconds as Int64
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
-            runtimeInstrs (Runtime.generateDateNow destReg))
+            runtimeInstrs (Runtime.generateDateNow ctx.Target destReg))
 
     | LIR.FloatToString (dest, value) ->
         // Convert float in FP register to heap string
@@ -5893,13 +5874,10 @@ let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Re
 ///
 /// X27 is the base for free list heads (constant after init)
 /// X28 is the bump pointer for new allocations
-let generateHeapInit () : ARM64Symbolic.Instr list =
+let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
     let freeListSize = 256
-    let os =
-        match Platform.detectOS () with
-        | Ok platform -> platform
-        | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-    let syscalls = ARM64.syscallConfigFor os
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
     let mmapFlags =
         match os with
         | Platform.MacOS -> 0x1002us  // MAP_PRIVATE | MAP_ANON
@@ -5964,7 +5942,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
 
         // Generate heap initialization for _start only
         let heapInit =
-            if func.Name = "_start" then generateHeapInit ()
+            if func.Name = "_start" then generateHeapInit ctx.Target
             else []
 
         // Note: Coverage buffer is in BSS section (zero-initialized by OS)
@@ -6023,7 +6001,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
         // Shared cold path for allocation overflow in this function.
         let heapOverflowTrap =
             if needsHeapOverflowTrap then
-                generateHeapOverflowTrapBlock overflowLabel
+                generateHeapOverflowTrapBlock ctx.Target overflowLabel
             else
                 []
 
@@ -6034,12 +6012,12 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
                 // For _start, flush coverage (if enabled) then exit instead of return
                 let coverageFlush =
                     if ctx.Options.EnableCoverage then
-                        runtimeInstrs (Runtime.generateCoverageFlush ctx.Options.CoverageExprCount)
+                        runtimeInstrs (Runtime.generateCoverageFlush ctx.Target ctx.Options.CoverageExprCount)
                     else []
                 let leakCheckReport = generateLeakCheckReport ctx
                 generateEpilogue func.UsedCalleeSaved func.StackSize
                 |> List.filter (function ARM64Symbolic.RET -> false | _ -> true)  // Remove RET
-                |> fun instrs -> instrs @ coverageFlush @ leakCheckReport @ runtimeInstrs (Runtime.generateExit ())
+                |> fun instrs -> instrs @ coverageFlush @ leakCheckReport @ runtimeInstrs (Runtime.generateExit ctx.Target)
             else
                 generateEpilogue func.UsedCalleeSaved func.StackSize
 
@@ -6299,7 +6277,7 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
     optimize [] instrs
 
 /// Convert LIR program to ARM64 instructions with options
-let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
+let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let closurePayloadSizesFromParams =
         functions
@@ -6327,6 +6305,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     // Create code generation context with options
     // StackSize and UsedCalleeSaved are set per-function in convertFunction
     let ctx = {
+        Target = target
         Options = options
         SumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
         RecordRegistry = recordRegistry
@@ -6950,5 +6929,5 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
-let generateARM64 (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
-    generateARM64WithOptions defaultOptions program
+let generateARM64 (target: ARM64.TargetConfig) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
+    generateARM64WithOptions target defaultOptions program

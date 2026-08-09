@@ -46,6 +46,7 @@ let defaultWarningSettings : AST.WarningSettings = AST.defaultWarningSettings
 
 /// Result of compilation with timing
 type CompileReport = {
+    Target: Platform.Target
     Result: Result<byte array, string>
     CompileTime: TimeSpan
 }
@@ -294,18 +295,15 @@ let private compileMirToLir
 
 /// Allocate registers for a list of symbolic LIR functions.
 let private allocateRegistersForFunctions
-    (archResult: Result<Platform.Arch, string>)
+    (arch: Platform.Arch)
     (functions: LIR.Function list)
-    : Result<LIR.Function list, string> =
-    match archResult with
-    | Error err -> Error $"Architecture detection error: {err}"
-    | Ok arch ->
-        functions
-        |> List.map (RegisterAllocation.allocateRegisters arch)
-        |> Ok
+    : LIR.Function list =
+    functions
+    |> List.map (RegisterAllocation.allocateRegisters arch)
 
 /// Run MIR+LIR passes (including register allocation) from ANF functions
 let private lowerToAllocatedLir
+    (target: Platform.Target)
     (verbosity: int)
     (options: CompilerOptions)
     (sw: Stopwatch)
@@ -350,15 +348,14 @@ let private lowerToAllocatedLir
                     if verbosity >= 1 then println "  [5/7] Register Allocation..."
                     let allocStart = sw.Elapsed.TotalMilliseconds
                     let (LIR.Program (lirFuncs, _, _)) = lirProgram
-                    match allocateRegistersForFunctions (Platform.detectArch ()) lirFuncs with
-                    | Error err -> Error err
-                    | Ok allocatedFuncs ->
-                        let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
-                        recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
-                        if verbosity >= 2 then
-                            let t = System.Math.Round(allocElapsed, 1)
-                            println $"        {t}ms"
-                        Ok allocatedFuncs)
+                    let allocatedFuncs =
+                        allocateRegistersForFunctions (Platform.archFor target) lirFuncs
+                    let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
+                    recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(allocElapsed, 1)
+                        println $"        {t}ms"
+                    Ok allocatedFuncs)
 
     let compileFunctionsWithTiming
         (label: string)
@@ -541,6 +538,7 @@ let private applyTco
 
 /// Run codegen, encoding, and binary generation
 let private generateBinary
+    (target: Platform.Target)
     (verbosity: int)
     (options: CompilerOptions)
     (sw: Stopwatch)
@@ -552,9 +550,8 @@ let private generateBinary
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
-    match Platform.detectArch () with
-    | Error err -> Error $"Architecture detection error: {err}"
-    | Ok Platform.X86_64 ->
+    match target with
+    | Platform.LinuxX86_64 ->
         // x86-64 backend
         if verbosity >= 1 then println codegenLabel
         let codegenStart = sw.Elapsed.TotalMilliseconds
@@ -610,7 +607,7 @@ let private generateBinary
                             println $"        {t}ms"
                         Ok binary
 
-    | Ok Platform.ARM64 ->
+    | Platform.ARM64Backend armTarget ->
         // ARM64 backend (original)
         if verbosity >= 1 then println codegenLabel
         let codegenStart = sw.Elapsed.TotalMilliseconds
@@ -621,7 +618,8 @@ let private generateBinary
             CoverageExprCount = coverageExprCount
             EnableLeakCheck = options.EnableLeakCheck
         }
-        let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+        let arm64Target = ARM64.targetConfigFor armTarget
+        let codegenResult = CodeGen.generateARM64WithOptions arm64Target codegenOptions allocatedProgram
         match codegenResult with
         | Error err -> Error $"Code generation error: {err}"
         | Ok arm64Instructions ->
@@ -637,28 +635,26 @@ let private generateBinary
                     println $"  {i}: {instr}"
                 println ""
 
-            match Platform.detectOS () with
-            | Error err -> Error $"Platform detection error: {err}"
-            | Ok os ->
-                let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
-                let emitStart = sw.Elapsed.TotalMilliseconds
-                let emit = ARM64_Emit.emitBinary arm64Instructions os options.EnableLeakCheck
-                let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
-                recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
-                if verbosity >= 2 then
-                    let t = System.Math.Round(emitElapsed, 1)
-                    println $"        {t}ms"
+            let os = ARM64.targetOS arm64Target
+            let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+            if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
+            let emitStart = sw.Elapsed.TotalMilliseconds
+            let emit = ARM64_Emit.emitBinary arm64Instructions os options.EnableLeakCheck
+            let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
+            recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
+            if verbosity >= 2 then
+                let t = System.Math.Round(emitElapsed, 1)
+                println $"        {t}ms"
 
-                if dumpMachineCode && verbosity >= 3 then
-                    println "=== Machine Code (hex) ==="
-                    for i in 0 .. 4 .. (emit.MachineCode.Length - 1) do
-                        if i + 3 < emit.MachineCode.Length then
-                            let bytes = sprintf "%02x %02x %02x %02x" emit.MachineCode.[i] emit.MachineCode.[i+1] emit.MachineCode.[i+2] emit.MachineCode.[i+3]
-                            println $"  {i:X4}: {bytes}"
-                    println $"Total: {emit.MachineCode.Length} bytes\n"
+            if dumpMachineCode && verbosity >= 3 then
+                println "=== Machine Code (hex) ==="
+                for i in 0 .. 4 .. (emit.MachineCode.Length - 1) do
+                    if i + 3 < emit.MachineCode.Length then
+                        let bytes = sprintf "%02x %02x %02x %02x" emit.MachineCode.[i] emit.MachineCode.[i+1] emit.MachineCode.[i+2] emit.MachineCode.[i+3]
+                        println $"  {i:X4}: {bytes}"
+                println $"Total: {emit.MachineCode.Length} bytes\n"
 
-                Ok emit.Binary
+            Ok emit.Binary
 
 
 let private buildBaseFuncNames
@@ -675,6 +671,7 @@ let private mergeReturnTypes
 
 /// Shared compilation context used across pipeline steps
 type PipelineContext = {
+    Target: Platform.Target
     TypeCheckEnv: TypeChecking.TypeCheckEnv
     GenericFuncDefs: AST_to_ANF.GenericFuncDefs
     SpecRegistry: AST_to_ANF.SpecRegistry
@@ -684,6 +681,7 @@ type PipelineContext = {
 }
 
 let private buildContext
+    (target: Platform.Target)
     (typeCheckEnv: TypeChecking.TypeCheckEnv)
     (genericFuncDefs: AST_to_ANF.GenericFuncDefs)
     (specRegistry: AST_to_ANF.SpecRegistry)
@@ -692,6 +690,7 @@ let private buildContext
     : PipelineContext =
     let baseFuncNames = buildBaseFuncNames registries
     {
+        Target = target
         TypeCheckEnv = typeCheckEnv
         GenericFuncDefs = genericFuncDefs
         SpecRegistry = specRegistry
@@ -1064,6 +1063,7 @@ let private loadStdlib () : Result<AST.Program, string> =
 /// Build stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
 let buildStdlibWithTrace
+    (target: Platform.Target)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<StdlibResult, string> =
     match loadStdlib() with
@@ -1096,7 +1096,7 @@ let buildStdlibWithTrace
                     ModuleRegistry = anfResult.ModuleRegistry
                 }
                 let returnTypes = extractReturnTypes registries.FuncReg
-                let context = buildContext typeCheckEnv genericFuncDefs Map.empty registries returnTypes
+                let context = buildContext target typeCheckEnv genericFuncDefs Map.empty registries returnTypes
                 let (ANF.Program (stdlibFunctions, _)) = anfResult.Program
                 let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                 match buildAnf 0 stdlibOptions sw registries Map.empty stdlibFunctions passTimingRecorder with
@@ -1123,6 +1123,7 @@ let buildStdlibWithTrace
 
                     let externalReturnTypes = returnTypes
                     match lowerToAllocatedLir
+                        target
                         0
                         stdlibOptions
                         sw
@@ -1149,8 +1150,8 @@ let buildStdlibWithTrace
                         }
 
 /// Build stdlib in isolation with default settings
-let buildStdlib () : Result<StdlibResult, string> =
-    buildStdlibWithTrace None
+let buildStdlib (target: Platform.Target) : Result<StdlibResult, string> =
+    buildStdlibWithTrace target None
 
 /// Build stdlib specializations for a spec set and merge them into the stdlib result
 let buildStdlibSpecializations
@@ -1227,6 +1228,7 @@ let buildStdlibSpecializations
                             let externalReturnTypes =
                                 mergeReturnTypes stdlib.Context.ReturnTypes localReturnTypes
                             lowerToAllocatedLir
+                                stdlib.Context.Target
                                 0
                                 stdlibOptions
                                 sw
@@ -1423,6 +1425,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     mergeReturnTypes plan.BaseContext.ReturnTypes userOnly.LocalReturnTypes
                                 let userLirResult =
                                     lowerToAllocatedLir
+                                        plan.BaseContext.Target
                                         plan.Verbosity
                                         plan.Options
                                         sw
@@ -1505,6 +1508,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                                     let binaryResult =
                                         generateBinary
+                                            plan.BaseContext.Target
                                             plan.Verbosity
                                             plan.Options
                                             sw
@@ -1526,7 +1530,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
     | Ok _ when plan.Verbosity >= 1 ->
         println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
     | _ -> ()
-    { Result = result; CompileTime = sw.Elapsed }
+    { Target = plan.BaseContext.Target; Result = result; CompileTime = sw.Elapsed }
 
 /// Build preamble with stdlib as base, returning extended context for test compilation
 /// Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO)
@@ -1585,7 +1589,7 @@ let buildPreambleContext
                     let preambleReturnTypes =
                         mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
                     let pipelineContext =
-                        buildContext preambleTypeCheckEnv mergedGenericDefs Map.empty preambleRegistries preambleReturnTypes
+                        buildContext stdlib.Context.Target preambleTypeCheckEnv mergedGenericDefs Map.empty preambleRegistries preambleReturnTypes
                     match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions passTimingRecorder with
                     | Error err ->
                         let rcPrefix = "Reference count insertion error: "
@@ -1600,6 +1604,7 @@ let buildPreambleContext
                         let tcoFunctions = applyTco 0 preambleOptions sw preambleFunctions passTimingRecorder
                         let preambleExternalReturnTypes = preambleReturnTypes
                         match lowerToAllocatedLir
+                            stdlib.Context.Target
                             0
                             preambleOptions
                             sw
@@ -1679,7 +1684,7 @@ let buildPreambleContextFromAnalysis
         let preambleReturnTypes =
             mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
         let pipelineContext =
-            buildContext analysis.TypeCheckEnv mergedGenericDefs combinedSpecRegistry preambleRegistries preambleReturnTypes
+            buildContext stdlib.Context.Target analysis.TypeCheckEnv mergedGenericDefs combinedSpecRegistry preambleRegistries preambleReturnTypes
         match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
@@ -1694,6 +1699,7 @@ let buildPreambleContextFromAnalysis
             let tcoFunctions = applyTco 0 preambleOptions sw preambleFunctions passTimingRecorder
             let preambleExternalReturnTypes = preambleReturnTypes
             match lowerToAllocatedLir
+                stdlib.Context.Target
                 0
                 preambleOptions
                 sw
@@ -1790,7 +1796,7 @@ let compile (request: CompileRequest) : CompileReport =
     compileUserWithPlan plan
 
 /// Execute compiled binary and capture output
-let execute (verbosity: int) (binary: byte array) : ExecutionOutput =
+let execute (target: Platform.Target) (verbosity: int) (binary: byte array) : ExecutionOutput =
     let sw = Stopwatch.StartNew()
     let finish (exitCode: int) (stdout: string) (stderr: string) : ExecutionOutput =
         sw.Stop()
@@ -1826,32 +1832,27 @@ let execute (verbosity: int) (binary: byte array) : ExecutionOutput =
 
             // Code sign with adhoc signature (required for macOS only)
             let codesignResult =
-                match Platform.detectOS () with
-                | Error err ->
-                    // Platform detection failed
-                    Some $"Platform detection failed: {err}"
-                | Ok os ->
-                    if Platform.requiresCodeSigning os then
-                        if verbosity >= 1 then println "    • Code signing (adhoc)..."
-                        let codesignStart = sw.Elapsed.TotalMilliseconds
-                        let codesignInfo = ProcessStartInfo("codesign")
-                        codesignInfo.Arguments <- $"-s - \"{tempPath}\""
-                        codesignInfo.UseShellExecute <- false
-                        codesignInfo.RedirectStandardOutput <- true
-                        codesignInfo.RedirectStandardError <- true
-                        let codesignProc = Process.Start(codesignInfo)
-                        codesignProc.WaitForExit()
+                if Platform.requiresCodeSigning (Platform.osFor target) then
+                    if verbosity >= 1 then println "    • Code signing (adhoc)..."
+                    let codesignStart = sw.Elapsed.TotalMilliseconds
+                    let codesignInfo = ProcessStartInfo("codesign")
+                    codesignInfo.Arguments <- $"-s - \"{tempPath}\""
+                    codesignInfo.UseShellExecute <- false
+                    codesignInfo.RedirectStandardOutput <- true
+                    codesignInfo.RedirectStandardError <- true
+                    let codesignProc = Process.Start(codesignInfo)
+                    codesignProc.WaitForExit()
 
-                        if codesignProc.ExitCode <> 0 then
-                            let stderr = codesignProc.StandardError.ReadToEnd()
-                            Some $"Code signing failed: {stderr}"
-                        else
-                            let codesignTime = sw.Elapsed.TotalMilliseconds - codesignStart
-                            if verbosity >= 2 then println $"      {System.Math.Round(codesignTime, 1)}ms"
-                            None
+                    if codesignProc.ExitCode <> 0 then
+                        let stderr = codesignProc.StandardError.ReadToEnd()
+                        Some $"Code signing failed: {stderr}"
                     else
-                        if verbosity >= 1 then println "    • Code signing skipped (not required on Linux)"
+                        let codesignTime = sw.Elapsed.TotalMilliseconds - codesignStart
+                        if verbosity >= 2 then println $"      {System.Math.Round(codesignTime, 1)}ms"
                         None
+                else
+                    if verbosity >= 1 then println "    • Code signing skipped (not required on Linux)"
+                    None
 
             match codesignResult with
             | Some errorMsg ->

@@ -7,6 +7,8 @@ module ARM64CodeGenTests
 
 type TestResult = Result<unit, string>
 
+let private target = ARM64.targetConfigFor Platform.LinuxARM64
+
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
     {
         ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ)
@@ -91,8 +93,8 @@ let private uint64ZeroBranchTargetsDigit (instrs: ARM64.Instr list) : bool =
         | _ -> false)
 
 let testPrintUInt64RuntimeZeroBranches () : TestResult =
-    let withNewline = Runtime.generatePrintUInt64NoExit ()
-    let withoutNewline = Runtime.generatePrintUInt64NoNewline ()
+    let withNewline = Runtime.generatePrintUInt64NoExit target
+    let withoutNewline = Runtime.generatePrintUInt64NoNewline target
 
     if not (uint64ZeroBranchTargetsDigit withNewline) then
         Error "ARM64 UInt64 newline printer zero branch does not target the zero digit handler"
@@ -103,7 +105,7 @@ let testPrintUInt64RuntimeZeroBranches () : TestResult =
 
 let testPrintUInt64RuntimePreservesNewline () : TestResult =
     let preservesNewline =
-        Runtime.generatePrintUInt64NoExit ()
+        Runtime.generatePrintUInt64NoExit target
         |> List.windowed 3
         |> List.exists (function
             | [ ARM64.MOVZ (ARM64.X3, 10us, 0)
@@ -160,7 +162,7 @@ let testReportsMissingEntryBlock () : TestResult =
     }
     let program = LIR.Program ([func], Map.empty, Map.empty)
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e when e.Contains "missing entry block" -> Ok ()
     | Error e -> Error $"Expected missing entry block error, got '{e}'"
     | Ok _ -> Error "Expected ARM64 codegen to reject a CFG whose entry block is absent"
@@ -170,6 +172,7 @@ let private convertRawAlloc
     (numBytes: LIR.PhysReg)
     : Result<ARM64Symbolic.Instr list, string> =
     let ctx : CodeGen.CodeGenContext = {
+        Target = target
         Options = CodeGen.defaultOptions
         SumShapeRegistry = Map.empty
         RecordRegistry = Map.empty
@@ -192,7 +195,7 @@ let testGeneratedCodeEliminatesSelfMoves () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -255,7 +258,7 @@ let testArm64FLoadEncodableConstantsUseImmediate () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -338,7 +341,7 @@ let testRawAllocUsesSharedHeapOverflowPath () : TestResult =
             Ok ()
 
 let testRuntimePrintStringLengthUsesFullImmediate () : TestResult =
-    let instrs = Runtime.generatePrintString 65537
+    let instrs = Runtime.generatePrintString target 65537
 
     let hasLowerLengthChunk =
         instrs
@@ -402,7 +405,7 @@ let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
             ]
             variants
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -432,7 +435,7 @@ let testListTuple3BytesListDictListValueUsesTypedDictHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -460,7 +463,7 @@ let private assertListElementUsesTypedDictListHelper (elementType: AST.Type) (ca
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -583,7 +586,7 @@ let testListTuple4NestedRecordMiddleDictListValueUsesTypedDictHelper () : TestRe
             ]
             records
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -652,7 +655,7 @@ let private assertListSumPayloadUsesTypedDictListHelper (payloadType: AST.Type) 
             ]
             variants
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -720,7 +723,7 @@ let testDictDictListValueUsesPlannedDictHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -757,7 +760,7 @@ let private assertDictRefCountDecUsesPlannedDictHelper
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -805,7 +808,7 @@ let testDictStringKeyValuePlannedHelperReleasesCollisionPayloads () : TestResult
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -836,7 +839,7 @@ let testDictListValuePlannedHelperReleasesCollisionPayloads () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -867,7 +870,7 @@ let testDictTupleValuePlannedHelperReleasesCollisionPayloads () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -898,7 +901,7 @@ let testDictStringKeyTupleValuePlannedHelperReleasesCollisionPayloads () : TestR
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -930,7 +933,7 @@ let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -968,7 +971,7 @@ let testPlannedListGenericLeafReleaseReloadsBlockPointer () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -998,7 +1001,7 @@ let testPlannedListNestedGenericReleasePreservesBlockPointer () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1029,7 +1032,7 @@ let testPlannedListTuplePayloadUsesPlannedHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1055,7 +1058,7 @@ let testPlannedListRecordPayloadUsesPlannedHelper () : TestResult =
             ]
             records
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1084,7 +1087,7 @@ let testPlannedListTuple5PayloadUsesPlannedHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1117,7 +1120,7 @@ let testPlannedListRecord5PayloadUsesPlannedHelper () : TestResult =
             ]
             records
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1140,7 +1143,7 @@ let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1189,7 +1192,7 @@ let testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch () :
             ]
             variants
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1237,7 +1240,7 @@ let testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases () : TestResult =
             ]
             variants
 
-    match CodeGen.generateARM64 program with
+    match CodeGen.generateARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1291,7 +1294,7 @@ let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult 
         | other ->
             other
 
-    match CodeGen.generateARM64 main with
+    match CodeGen.generateARM64 target main with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1345,7 +1348,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
         | other ->
             other
 
-    match CodeGen.generateARM64 main with
+    match CodeGen.generateARM64 target main with
     | Error e ->
         Error e
     | Ok instrs ->

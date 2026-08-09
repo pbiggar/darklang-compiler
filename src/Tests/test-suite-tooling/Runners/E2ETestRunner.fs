@@ -987,8 +987,8 @@ let private buildCompilerOptions
         DumpLIR = false
     }
 
-let private tryExecuteBinary (binary: byte array) : Result<CompilerLibrary.ExecutionOutput, string> =
-    try Ok (CompilerLibrary.execute 0 binary)
+let private tryExecuteBinary (target: Platform.Target) (binary: byte array) : Result<CompilerLibrary.ExecutionOutput, string> =
+    try Ok (CompilerLibrary.execute target 0 binary)
     with ex -> Error ex.Message
 
 let private compileAndRun (request: CompilerLibrary.CompileRequest) : E2ERun =
@@ -997,7 +997,7 @@ let private compileAndRun (request: CompilerLibrary.CompileRequest) : E2ERun =
     | Error err ->
         CompileFailed (1, err, compileReport.CompileTime)
     | Ok binary ->
-        match tryExecuteBinary binary with
+        match tryExecuteBinary compileReport.Target binary with
         | Ok execResult ->
             Ran (execResult.ExitCode, execResult.Stdout, execResult.Stderr, compileReport.CompileTime, execResult.RuntimeTime)
         | Error err ->

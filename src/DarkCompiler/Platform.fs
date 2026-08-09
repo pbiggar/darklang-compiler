@@ -22,6 +22,16 @@ type Arch =
     | ARM64
     | X86_64
 
+/// Supported compiler targets. Unsupported OS/architecture pairs cannot be
+/// represented after host detection succeeds.
+type ARM64Target =
+    | MacOSARM64
+    | LinuxARM64
+
+type Target =
+    | ARM64Backend of ARM64Target
+    | LinuxX86_64
+
 /// Get the current operating system
 let detectOS () : Result<OS, string> =
     if RuntimeInformation.IsOSPlatform(OSPlatform.OSX) then Ok MacOS
@@ -34,6 +44,32 @@ let detectArch () : Result<Arch, string> =
     | Architecture.Arm64 -> Ok ARM64
     | Architecture.X64 -> Ok X86_64
     | arch -> Error $"Unsupported architecture: {arch}. Only ARM64 and x86_64 are supported."
+
+/// Validate an OS/architecture pair as one of the compiler's supported targets.
+let targetFor (os: OS) (arch: Arch) : Result<Target, string> =
+    match os, arch with
+    | MacOS, ARM64 -> Ok (ARM64Backend MacOSARM64)
+    | Linux, ARM64 -> Ok (ARM64Backend LinuxARM64)
+    | Linux, X86_64 -> Ok LinuxX86_64
+    | MacOS, X86_64 -> Error "Unsupported target: macOS x86_64"
+
+/// Detect and validate the host target once at compiler initialization.
+let detectHostTarget () : Result<Target, string> =
+    match detectOS (), detectArch () with
+    | Error err, _ -> Error err
+    | _, Error err -> Error err
+    | Ok os, Ok arch -> targetFor os arch
+
+let osFor (target: Target) : OS =
+    match target with
+    | ARM64Backend MacOSARM64 -> MacOS
+    | ARM64Backend LinuxARM64
+    | LinuxX86_64 -> Linux
+
+let archFor (target: Target) : Arch =
+    match target with
+    | ARM64Backend _ -> ARM64
+    | LinuxX86_64 -> X86_64
 
 /// Syscall numbers for a specific (OS, Arch) pair.
 /// On Linux, ARM64 and x86_64 use different numbering schemes.
@@ -99,12 +135,11 @@ let linuxX86_64SyscallNumbers : SyscallNumbers = {
 }
 
 /// Get syscall numbers for the given (OS, Arch) pair.
-let syscallNumbersFor (os: OS) (arch: Arch) : SyscallNumbers =
-    match os, arch with
-    | MacOS, ARM64  -> macOSARM64SyscallNumbers
-    | Linux, ARM64  -> linuxARM64SyscallNumbers
-    | Linux, X86_64 -> linuxX86_64SyscallNumbers
-    | MacOS, X86_64 -> Crash.crash "macOS x86_64 is not supported"
+let syscallNumbersFor (target: Target) : SyscallNumbers =
+    match target with
+    | ARM64Backend MacOSARM64 -> macOSARM64SyscallNumbers
+    | ARM64Backend LinuxARM64 -> linuxARM64SyscallNumbers
+    | LinuxX86_64 -> linuxX86_64SyscallNumbers
 
 /// Check if code signing is required for this platform
 let requiresCodeSigning (os: OS) : bool =

@@ -26,8 +26,9 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 8    | Binary generation       | `passes/{arm64,x64}/8_Binary_Generation_*.fs`               | Bytes → Mach-O or ELF executable              |
 
 Passes 1–5 are shared across targets. Passes 6–8 live under
-`passes/arm64/` or `passes/x64/` and are selected by `Platform.detectArch ()`
-at runtime via `CompilerLibrary.generateBinary`.
+`passes/arm64/` or `passes/x64/`. The host is validated once as a
+`Platform.Target` before stdlib construction, and `CompilerLibrary.generateBinary`
+selects the backend from that explicit target.
 
 ---
 

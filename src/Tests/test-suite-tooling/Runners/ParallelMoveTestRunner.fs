@@ -9,6 +9,7 @@ open TestDSL.ParallelMoveFormat
 open TestDSL.PassTestRunner
 
 let private context : CodeGen.CodeGenContext = {
+    Target = ARM64.targetConfigFor Platform.LinuxARM64
     Options = CodeGen.defaultOptions
     SumShapeRegistry = Map.empty
     RecordRegistry = Map.empty

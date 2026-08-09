@@ -192,10 +192,27 @@ type SyscallConfig = {
 let syscallConfigFor (os: Platform.OS) : SyscallConfig =
     match os with
     | Platform.MacOS ->
-        { Numbers = Platform.syscallNumbersFor Platform.MacOS Platform.ARM64
+        { Numbers = Platform.syscallNumbersFor (Platform.ARM64Backend Platform.MacOSARM64)
           SvcImmediate = 0x80us
           SyscallRegister = X16 }
     | Platform.Linux ->
-        { Numbers = Platform.syscallNumbersFor Platform.Linux Platform.ARM64
+        { Numbers = Platform.syscallNumbersFor (Platform.ARM64Backend Platform.LinuxARM64)
           SvcImmediate = 0us
           SyscallRegister = X8 }
+
+/// Validated platform configuration threaded through ARM64 code generation.
+type TargetConfig = private {
+    OS: Platform.OS
+    Syscalls: SyscallConfig
+}
+
+let targetConfigFor (target: Platform.ARM64Target) : TargetConfig =
+    let os =
+        match target with
+        | Platform.MacOSARM64 -> Platform.MacOS
+        | Platform.LinuxARM64 -> Platform.Linux
+    { OS = os; Syscalls = syscallConfigFor os }
+
+let targetOS (config: TargetConfig) : Platform.OS = config.OS
+
+let targetSyscalls (config: TargetConfig) : SyscallConfig = config.Syscalls

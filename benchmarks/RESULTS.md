@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-09 09:18:50
-**Commit:** `3ca0ea3d` - Fold Float strict self-comparisons in ANF
+**Last Updated:** 2026-08-09 17:40:41
+**Commit:** `336de3e2` - Thread validated targets through compiler backends
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

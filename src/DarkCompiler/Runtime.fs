@@ -6,18 +6,10 @@
 // Current functions:
 // - generatePrintInt64: Convert int64 in X0 to ASCII and print to stdout
 //
-// Platform-specific:
-// - Uses Platform.fs to get correct syscall numbers for the target OS
+// Platform-specific instruction generators receive a validated ARM64 target
+// configuration from code generation.
 
 module Runtime
-
-let private detectRuntimeOS () : Platform.OS =
-    match Platform.detectOS () with
-    | Ok platform -> platform
-    | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-
-let private arm64SyscallsForRuntime () : ARM64.SyscallConfig =
-    detectRuntimeOS () |> ARM64.syscallConfigFor
 
 let private generateLoadUInt64Immediate (dest: ARM64.Reg) (value: uint64) : ARM64.Instr list =
     let chunk shift =
@@ -72,9 +64,9 @@ let private generateLoadNonNegativeIntImmediate (dest: ARM64.Reg) (value: int) :
 /// - X16: Syscall number
 ///
 /// Uses platform-specific syscall numbers from Platform module
-let generatePrintInt64 () : ARM64.Instr list =
+let generatePrintInt64 (target: ARM64.TargetConfig) : ARM64.Instr list =
     // Platform detection for runtime support; unsupported platforms crash explicitly.
-    let syscalls = arm64SyscallsForRuntime ()
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 32 bytes on stack for buffer (plenty for 64-bit number + sign + newline)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -152,8 +144,8 @@ let generatePrintInt64 () : ARM64.Instr list =
 /// - X2: Length
 /// - X3: Temp for storing chars
 /// - X16/X8: Syscall number
-let generatePrintBool () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintBool (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 16 bytes on stack for buffer (16-byte aligned)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -228,8 +220,8 @@ let generatePrintBool () : ARM64.Instr list =
 /// - X1: buffer pointer
 /// - X2: length
 /// - X16/X8: Syscall number (platform-specific)
-let generatePrintString (stringLen: int) : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintString (target: ARM64.TargetConfig) (stringLen: int) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // String layout: [length:8][data:N] - skip length prefix
         // X0 points to string start (length field), data is at X0+8
@@ -283,8 +275,8 @@ let generatePrintString (stringLen: int) : ARM64.Instr list =
 /// - X0-X6: Working integer registers (same as PrintInt64)
 /// - X7: Loop counter for fractional digits
 /// - X16/X8: Syscall number (platform-specific)
-let generatePrintFloat () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintFloat (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 48 bytes on stack for buffer (room for sign, digits, decimal, digits, newline)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
@@ -417,8 +409,8 @@ let generatePrintFloat () : ARM64.Instr list =
     ]
 
 /// Generate ARM64 instructions to exit with code 0
-let generateExit () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generateExit (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // exit code = 0
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
@@ -427,8 +419,8 @@ let generateExit () : ARM64.Instr list =
 
 /// Generate ARM64 instructions to print int64 in X0 to stdout with newline (NO EXIT)
 /// Same as generatePrintInt64 but returns instead of exiting
-let generatePrintInt64NoExit () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintInt64NoExit (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 32 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -490,12 +482,8 @@ let generatePrintInt64NoExit () : ARM64.Instr list =
     ]
 
 /// Generate ARM64 instructions to print uint64 in X0 to stdout with newline (NO EXIT)
-let generatePrintUInt64NoExit () : ARM64.Instr list =
-    let os =
-        match Platform.detectOS () with
-        | Ok platform -> platform
-        | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = ARM64.syscallConfigFor os
+let generatePrintUInt64NoExit (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
         ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31us)
@@ -528,8 +516,8 @@ let generatePrintUInt64NoExit () : ARM64.Instr list =
 
 /// Generate ARM64 instructions to print int64 in X0 to stderr with newline (NO EXIT)
 /// Same as generatePrintInt64NoExit but writes to file descriptor 2
-let generatePrintInt64ToStderrNoExit () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintInt64ToStderrNoExit (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 32 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -592,8 +580,8 @@ let generatePrintInt64ToStderrNoExit () : ARM64.Instr list =
 
 /// Generate ARM64 instructions to print boolean in X0 to stdout with newline (NO EXIT)
 /// Same as generatePrintBool but returns instead of exiting
-let generatePrintBoolNoExit () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintBoolNoExit (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 16 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -648,8 +636,8 @@ let generatePrintBoolNoExit () : ARM64.Instr list =
 
 /// Generate ARM64 instructions to print int64 in X0 to stdout WITHOUT newline
 /// For use in tuple/list element printing
-let generatePrintInt64NoNewline () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintInt64NoNewline (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 32 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -707,12 +695,8 @@ let generatePrintInt64NoNewline () : ARM64.Instr list =
     ]
 
 /// Generate ARM64 instructions to print uint64 in X0 to stdout WITHOUT newline
-let generatePrintUInt64NoNewline () : ARM64.Instr list =
-    let os =
-        match Platform.detectOS () with
-        | Ok platform -> platform
-        | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = ARM64.syscallConfigFor os
+let generatePrintUInt64NoNewline (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
         ARM64.ADD_imm (ARM64.X1, ARM64.SP, 30us)
@@ -742,8 +726,8 @@ let generatePrintUInt64NoNewline () : ARM64.Instr list =
 
 /// Generate ARM64 instructions to print boolean in X0 to stdout WITHOUT newline
 /// For use in tuple/list element printing
-let generatePrintBoolNoNewline () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintBoolNoNewline (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 16 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -795,8 +779,8 @@ let generatePrintBoolNoNewline () : ARM64.Instr list =
 /// Generate ARM64 instructions to print float in D0 to stdout WITHOUT newline
 /// For use in tuple/list element printing
 /// Similar to generatePrintFloat but doesn't add newline or exit
-let generatePrintFloatNoNewline () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintFloatNoNewline (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Allocate 48 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
@@ -906,8 +890,8 @@ let generatePrintFloatNoNewline () : ARM64.Instr list =
 /// Generate ARM64 instructions to print heap string WITHOUT newline
 /// Expects: X9 = data address, X10 = length
 /// For use in tuple/list element printing
-let generatePrintStringNoNewline () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintStringNoNewline (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         // Write string to stdout
         ARM64.MOVZ (ARM64.X0, 1us, 0)        // fd = stdout
@@ -927,9 +911,9 @@ let generatePrintStringNoNewline () : ARM64.Instr list =
 /// 4. Deallocate stack
 ///
 /// No newline is added - caller controls newlines
-let generatePrintChars (chars: byte list) : ARM64.Instr list =
+let generatePrintChars (target: ARM64.TargetConfig) (chars: byte list) : ARM64.Instr list =
     if List.isEmpty chars then [] else
-    let syscalls = arm64SyscallsForRuntime ()
+    let syscalls = ARM64.targetSyscalls target
     let len = List.length chars
     // Stack allocation must be 16-byte aligned
     let stackSize = max 16 ((len + 15) / 16 * 16)
@@ -956,9 +940,9 @@ let generatePrintChars (chars: byte list) : ARM64.Instr list =
     ]
 
 /// Generate ARM64 instructions to print literal characters to stderr
-let generatePrintCharsToStderr (chars: byte list) : ARM64.Instr list =
+let generatePrintCharsToStderr (target: ARM64.TargetConfig) (chars: byte list) : ARM64.Instr list =
     if List.isEmpty chars then [] else
-    let syscalls = arm64SyscallsForRuntime ()
+    let syscalls = ARM64.targetSyscalls target
     let len = List.length chars
     let stackSize = max 16 ((len + 15) / 16 * 16)
     [
@@ -983,8 +967,8 @@ let generatePrintCharsToStderr (chars: byte list) : ARM64.Instr list =
 /// Generate ARM64 instructions to print bytes as "<N bytes>\n"
 /// Expects: X19 = bytes pointer (callee-saved)
 /// Bytes layout: [length:8][data:N][refcount:8]
-let generatePrintBytes () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generatePrintBytes (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     // Print "<"
     [
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -999,7 +983,7 @@ let generatePrintBytes () : ARM64.Instr list =
         // Load length from [X19] into X0
         ARM64.LDR (ARM64.X0, ARM64.X19, 0s)
     ]
-    @ generatePrintInt64NoNewline ()
+    @ generatePrintInt64NoNewline target
     @ [
         // Print " bytes>\n" (8 characters)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -1035,8 +1019,8 @@ let generatePrintBytes () : ARM64.Instr list =
 /// - X2 = length
 ///
 /// Does NOT print newline or exit - caller handles those if needed
-let generateWriteSyscall () : ARM64.Instr list =
-    let syscalls = arm64SyscallsForRuntime ()
+let generateWriteSyscall (target: ARM64.TargetConfig) : ARM64.Instr list =
+    let syscalls = ARM64.targetSyscalls target
     [
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
@@ -1051,9 +1035,9 @@ let generateWriteSyscall () : ARM64.Instr list =
 /// 2. Save the path string to a null-terminated temp buffer on stack
 /// 3. Call access(path, F_OK) or faccessat(AT_FDCWD, path, F_OK, 0)
 /// 4. If syscall returns 0 (success), set dest = 1; else dest = 0
-let generateFileExists (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateFileExists (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     // We need to null-terminate the string for the syscall
     // Stack layout: [saved regs:16][path:256]
@@ -1202,9 +1186,9 @@ let generateFileExists (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
 /// Result memory layout: [tag:8][payload:8][refcount:8] = 24 bytes
 /// - tag 0 = Ok, tag 1 = Error
 /// - payload = pointer to value (0 for Unit, string pointer for Error)
-let generateFileDelete (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateFileDelete (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     match os with
     | Platform.MacOS ->
@@ -1457,9 +1441,9 @@ let generateFileDelete (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
 /// Result memory layout: [tag:8][payload:8][refcount:8] = 24 bytes
 /// - tag 0 = Ok, tag 1 = Error
 /// - payload = pointer to value (0 for Unit, string pointer for Error)
-let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateFileSetExecutable (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     match os with
     | Platform.MacOS ->
@@ -1707,9 +1691,9 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
 /// 5. read() syscall - read file contents
 /// 6. close() syscall
 /// 7. Construct Result with Ok(string) or Error(message)
-let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateFileReadText (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     // For now, implement a simplified version that:
     // - Opens the file
@@ -2115,9 +2099,9 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
 /// Returns Result<Unit, String> in destReg
 /// On success, result contains Ok(()) - tag=0, payload=0
 /// On failure, result contains Error("Error") - tag=1, payload=error string ptr
-let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg: ARM64.Reg) (append: bool) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateFileWriteText (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg: ARM64.Reg) (append: bool) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     // Open flags:
     // Write: O_WRONLY | O_CREAT | O_TRUNC
@@ -2416,9 +2400,9 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
 /// Uses getrandom (Linux) or getentropy (macOS) syscall
 /// Note: This function saves/restores caller-saved registers X1, X2, X8
 /// that may contain live values, since the syscall clobbers them.
-let generateRandomInt64 (destReg: ARM64.Reg) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateRandomInt64 (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     match os with
     | Platform.MacOS ->
@@ -2483,9 +2467,9 @@ let generateRandomInt64 (destReg: ARM64.Reg) : ARM64.Instr list =
 /// destReg: destination register for the timestamp
 /// Uses gettimeofday (macOS) or clock_gettime (Linux) syscall
 /// Note: This function saves/restores caller-saved registers that may contain live values.
-let generateDateNow (destReg: ARM64.Reg) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateDateNow (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     match os with
     | Platform.MacOS ->
@@ -2550,9 +2534,9 @@ let generateDateNow (destReg: ARM64.Reg) : ARM64.Instr list =
 /// ptrReg: register containing raw pointer to bytes
 /// lengthReg: register containing length in bytes
 /// destReg: destination register (result = 1 on success, 0 on failure)
-let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: ARM64.Reg) (lengthReg: ARM64.Reg) : ARM64.Instr list =
-    let os = detectRuntimeOS ()
-    let syscalls = ARM64.syscallConfigFor os
+let generateFileWriteFromPtr (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: ARM64.Reg) (lengthReg: ARM64.Reg) : ARM64.Instr list =
+    let os = ARM64.targetOS target
+    let syscalls = ARM64.targetSyscalls target
 
     // O_WRONLY | O_CREAT | O_TRUNC
     let writeFlags =
@@ -2717,12 +2701,12 @@ let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: 
 ///
 /// Uses ADRP+ADD to get coverage data address from BSS section
 /// Opens file, writes data, closes file (errors are silently ignored)
-let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
+let generateCoverageFlush (target: ARM64.TargetConfig) (coverageExprCount: int) : ARM64.Instr list =
     if coverageExprCount = 0 then
         []
     else
-        let os = detectRuntimeOS ()
-        let syscalls = ARM64.syscallConfigFor os
+        let os = ARM64.targetOS target
+        let syscalls = ARM64.targetSyscalls target
 
         // O_WRONLY | O_CREAT | O_TRUNC
         let writeFlags =

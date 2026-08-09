@@ -295,6 +295,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
 
     let unitStdlibSuites = [ "Stdlib Compile Tests"; "Preamble Build Tests" ]
     let buildUnitTests (_stdlib: CompilerLibrary.StdlibResult) : UnitTestSuite array = [|
+        { Name = "Platform Tests"; Tests = PlatformTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }
         { Name = "ANF to MIR Tests"; Tests = ANFToMIRTests.tests }
@@ -409,8 +410,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
 
     let stdlibPassTimingStart = passTimingTotal ()
     let timer = Stopwatch.StartNew()
+    let target =
+        match Platform.detectHostTarget () with
+        | Ok target -> target
+        | Error err -> Crash.crash $"Host target detection failed: {err}"
     let stdlib =
-        match CompilerLibrary.buildStdlibWithTrace (Some recordPassTiming) with
+        match CompilerLibrary.buildStdlibWithTrace target (Some recordPassTiming) with
         | Ok stdlib -> stdlib
         | Error err -> Crash.crash $"Stdlib did not build with error: {err}"
     let elapsed = timer.Elapsed

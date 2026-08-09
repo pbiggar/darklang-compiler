@@ -63,6 +63,7 @@
     <Compile Include="test-suite-tooling-tests/E2EFormatTests.fs" />
 
     <!-- Compiler pass tests (shared) -->
+    <Compile Include="compiler-passes/PlatformTests.fs" />
     <Compile Include="compiler-passes/IRSymbolTests.fs" />
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
     <Compile Include="compiler-passes/ANFToMIRTests.fs" />

@@ -86,7 +86,9 @@ Why ref counting?
   - `passes/arm64/8_Binary_Generation_MachO.fs` — ARM64 macOS
   - `passes/arm64/8_Binary_Generation_ELF.fs`   — ARM64 Linux
   - `passes/x64/8_Binary_Generation_ELF.fs`     — x86_64 Linux
-- Backend selected at runtime via `Platform.detectArch ()`.
+- The host OS/architecture pair is validated once as a `Platform.Target`
+  before stdlib construction. Register allocation, backend selection, runtime
+  generation, and binary emission receive that target explicitly.
 - Adding a new architecture: add a case to `Platform.Arch`, create
   `passes/<arch>/{6_CodeGen,7_Encoding,7_Resolve,8_Binary_Generation_*}.fs`,
   and wire it into `CompilerLibrary.generateBinary`.
@@ -95,12 +97,12 @@ Why ref counting?
 
 `CompilerLibrary.fs` exposes a narrow surface for tools/tests:
 
-- `buildStdlib` for test harnesses and tooling that prebuild stdlib
+- `buildStdlib` for target-specific stdlib prebuilding in test harnesses and tooling
 - `buildStdlibSpecializations` for suite-level stdlib specializations
 - `buildPreambleContext` for ad-hoc preamble reuse
 - `analyzePreamble` + `buildPreambleContextFromAnalysis` for suite-level preamble specialization
 - `compile` for in-memory compilation via `CompileRequest`
-- `execute` for running compiled binaries with timing
+- `execute` for running compiled binaries with their selected target and timing
 
 ## Compiler Cache
 

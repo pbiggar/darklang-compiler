@@ -382,38 +382,40 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
     let options = buildCompilerOptions cliOpts
     let sourceFile = sourceFileForDiagnostics cliOpts
 
-    match CompilerLibrary.buildStdlib () with
+    match Platform.detectHostTarget () with
     | Error err ->
-        eprintln $"Compilation failed: {err}"
+        eprintln $"Target detection failed: {err}"
         1
-    | Ok stdlib ->
-        let request : CompilerLibrary.CompileRequest = {
-            Context = CompilerLibrary.StdlibOnly stdlib
-            Mode = CompilerLibrary.CompileMode.FullProgram
-            SourceSyntax = cliOpts.SourceSyntax
-            Source = source
-            SourceFile = sourceFile
-            AllowInternal = false
-            Verbosity = verbosityToInt verbosity
-            Options = options
-            PassTimingRecorder = None
-        }
-        let compileReport = CompilerLibrary.compile request
-        match compileReport.Result with
+    | Ok target ->
+        match CompilerLibrary.buildStdlib target with
         | Error err ->
             eprintln $"Compilation failed: {err}"
             1
-        | Ok binary ->
-            // Write to file
-            match Platform.detectOS () with
+        | Ok stdlib ->
+            let request : CompilerLibrary.CompileRequest = {
+                Context = CompilerLibrary.StdlibOnly stdlib
+                Mode = CompilerLibrary.CompileMode.FullProgram
+                SourceSyntax = cliOpts.SourceSyntax
+                Source = source
+                SourceFile = sourceFile
+                AllowInternal = false
+                Verbosity = verbosityToInt verbosity
+                Options = options
+                PassTimingRecorder = None
+            }
+            let compileReport = CompilerLibrary.compile request
+            match compileReport.Result with
             | Error err ->
-                eprintln $"Platform detection failed: {err}"
+                eprintln $"Compilation failed: {err}"
                 1
-            | Ok os ->
+            | Ok binary ->
                 let writeResult =
-                    match os with
-                    | Platform.MacOS -> Binary_Generation_MachO.writeToFile outputPath binary
-                    | Platform.Linux -> Binary_Generation_ELF.writeToFile outputPath binary
+                    match compileReport.Target with
+                    | Platform.ARM64Backend Platform.MacOSARM64 ->
+                        Binary_Generation_MachO.writeToFile outputPath binary
+                    | Platform.ARM64Backend Platform.LinuxARM64
+                    | Platform.LinuxX86_64 ->
+                        Binary_Generation_ELF.writeToFile outputPath binary
                 match writeResult with
                 | Error err ->
                     eprintln $"Failed to write binary: {err}"
@@ -435,33 +437,40 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
     let execResult : CompilerLibrary.ExecutionOutput =
         let sourceFile = sourceFileForDiagnostics cliOpts
 
-        match CompilerLibrary.buildStdlib () with
+        match Platform.detectHostTarget () with
         | Error err ->
             { ExitCode = 1
               Stdout = ""
-              Stderr = err
+              Stderr = $"Target detection failed: {err}"
               RuntimeTime = TimeSpan.Zero }
-        | Ok stdlib ->
-            let request : CompilerLibrary.CompileRequest = {
-                Context = CompilerLibrary.StdlibOnly stdlib
-                Mode = CompilerLibrary.CompileMode.FullProgram
-                SourceSyntax = cliOpts.SourceSyntax
-                Source = source
-                SourceFile = sourceFile
-                AllowInternal = false
-                Verbosity = verbosityToInt verbosity
-                Options = options
-                PassTimingRecorder = None
-            }
-            let compileReport = CompilerLibrary.compile request
-            match compileReport.Result with
+        | Ok target ->
+            match CompilerLibrary.buildStdlib target with
             | Error err ->
                 { ExitCode = 1
                   Stdout = ""
                   Stderr = err
                   RuntimeTime = TimeSpan.Zero }
-            | Ok binary ->
-                CompilerLibrary.execute (verbosityToInt verbosity) binary
+            | Ok stdlib ->
+                let request : CompilerLibrary.CompileRequest = {
+                    Context = CompilerLibrary.StdlibOnly stdlib
+                    Mode = CompilerLibrary.CompileMode.FullProgram
+                    SourceSyntax = cliOpts.SourceSyntax
+                    Source = source
+                    SourceFile = sourceFile
+                    AllowInternal = false
+                    Verbosity = verbosityToInt verbosity
+                    Options = options
+                    PassTimingRecorder = None
+                }
+                let compileReport = CompilerLibrary.compile request
+                match compileReport.Result with
+                | Error err ->
+                    { ExitCode = 1
+                      Stdout = ""
+                      Stderr = err
+                      RuntimeTime = TimeSpan.Zero }
+                | Ok binary ->
+                    CompilerLibrary.execute compileReport.Target (verbosityToInt verbosity) binary
 
     if showNormal then
         if execResult.Stdout <> "" then
