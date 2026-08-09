@@ -132,6 +132,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, canonical boolean simplification with direct fit in MIR SSA constant folding; useful for eliminating provably constant branches.
 - Notes: Implemented in MIR constant folding during the second Phase 1 sandbox trial and extended to integer ordering self-comparisons in the Guided review revision. ANF strength reduction now also folds same-parameter integer comparisons for `==`, `!=`, `<`, `>`, `<=`, and `>=`, including sized unsigned integer parameters. Covered by ANF tests in `src/Tests/optimization/anf.opt` and pipeline optimization snapshots for branch elimination; negative MIR tests cover float equality and source variable shadowing so the fold remains type- and operand-aware.
 
+### Float strict self-comparison simplification
+
+- Optimization name: Float strict self-comparison simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical simplification that removes strict Float comparisons whose operands are the same SSA value and exposes constant branches to fixed-point ANF cleanup.
+- Notes: Implemented for `x < x -> false` and `x > x -> false` when `x` is typed as Float; these identities hold for finite values, infinities, and NaN. Float `==`, `!=`, `<=`, and `>=` remain dynamic because their self-comparison result depends on whether `x` is NaN. Focused ANF snapshots cover both dead-branch eliminations and retention of all four NaN-sensitive relations; existing benchmarks do not isolate this micro-pattern.
+
 ### Bitwise idempotence simplification
 
 - Optimization name: Bitwise idempotence simplification

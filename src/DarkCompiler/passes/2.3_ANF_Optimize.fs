@@ -274,6 +274,15 @@ let private isBoolAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
         | _ -> false
     | _ -> false
 
+let private isFloatAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
+    match atom with
+    | FloatLiteral _ -> true
+    | Var tid ->
+        match Map.tryFind tid typeEnv with
+        | Some AST.TFloat64 -> true
+        | _ -> false
+    | _ -> false
+
 let private isUnsignedIntegerAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
     match atom with
     | IntLiteral (UInt8 _)
@@ -318,6 +327,11 @@ let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) 
     | Eq, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral true))
     | Neq, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
+        Some (Atom (BoolLiteral false))
+    // Strict self-comparisons are false for every IEEE 754 value, including NaN.
+    | Lt, Var leftTid, Var rightTid when leftTid = rightTid && isFloatAtom typeEnv left ->
+        Some (Atom (BoolLiteral false))
+    | Gt, Var leftTid, Var rightTid when leftTid = rightTid && isFloatAtom typeEnv left ->
         Some (Atom (BoolLiteral false))
     | Lt, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral false))

@@ -942,6 +942,50 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+self_comparison_float_lt_eliminates_branch
+---INPUT---
+def f(x: Float) : Int64 = if x < x then 1 else 2
+f(0.0)
+---EXPECTED---
+Function f:
+return 2
+
+Main:
+let TempId 2 = f(0)
+return t2
+
+---NAME---
+self_comparison_float_gt_eliminates_branch
+---INPUT---
+def f(x: Float) : Int64 = if x > x then 1 else 2
+f(0.0)
+---EXPECTED---
+Function f:
+return 2
+
+Main:
+let TempId 2 = f(0)
+return t2
+
+---NAME---
+self_comparison_float_nan_sensitive_relations_remain
+---INPUT---
+def f(x: Float) : (Bool, Bool, Bool, Bool) =
+  (x == x, x != x, x <= x, x >= x)
+f(0.0)
+---EXPECTED---
+Function f:
+let TempId 1 = t0 == t0
+let TempId 3 = !t1
+let TempId 4 = t0 <= t0
+let TempId 6 = (t1, t3, t4, t4)
+return t6
+
+Main:
+let TempId 7 = f(0)
+return t7
+
+---NAME---
 self_comparison_bool_eq
 ---INPUT---
 def f(x: Bool) : Bool = x == x
