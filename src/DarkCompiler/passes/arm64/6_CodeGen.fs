@@ -207,8 +207,11 @@ let private generateHeapOverflowTrapBody (target: ARM64.TargetConfig) : ARM64Sym
         ARM64Symbolic.SVC syscalls.SvcImmediate
     ]
 
-let private generateHeapOverflowTrapBlock (target: ARM64.TargetConfig) (label: string) : ARM64Symbolic.Instr list =
-    ARM64Symbolic.Label label :: generateHeapOverflowTrapBody target
+let private generateHeapOverflowTrapBlock
+    (body: ARM64Symbolic.Instr list)
+    (label: string)
+    : ARM64Symbolic.Instr list =
+    ARM64Symbolic.Label label :: body
 
 let private withHeapBoundsCheck
     (overflowLabel: string)
@@ -5911,7 +5914,11 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
     ]
 
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
-let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Symbolic.Instr list, string> =
+let convertFunction
+    (heapOverflowTrapBody: ARM64Symbolic.Instr list)
+    (ctx: CodeGenContext)
+    (func: LIR.Function)
+    : Result<ARM64Symbolic.Instr list, string> =
     // Generate epilogue label for this function (passed to convertCFG for Ret terminators)
     let epilogueLabel = "_epilogue_" + func.Name
     let overflowLabel = heapOverflowLabelPrefix + func.Name
@@ -6001,7 +6008,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
         // Shared cold path for allocation overflow in this function.
         let heapOverflowTrap =
             if needsHeapOverflowTrap then
-                generateHeapOverflowTrapBlock ctx.Target overflowLabel
+                generateHeapOverflowTrapBlock heapOverflowTrapBody overflowLabel
             else
                 []
 
@@ -6279,6 +6286,7 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
 /// Convert LIR program to ARM64 instructions with options
 let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
+    let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let closurePayloadSizesFromParams =
         functions
         |> List.choose (fun func ->
@@ -6872,7 +6880,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
     let needsClosureRcDecHelper =
         instructionRcHelperRequirements.NeedsClosureRcDecHelper
 
-    ResultList.collectResults (convertFunction ctx) sortedFunctions
+    ResultList.collectResults (convertFunction heapOverflowTrapBody ctx) sortedFunctions
     |> Result.map (fun allFunctionInstrs ->
         let listRcDecHelperLabelsFromDictHelpers =
             neededDictRcDecHelperLabels

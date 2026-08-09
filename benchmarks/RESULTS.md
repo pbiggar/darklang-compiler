@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-09 17:40:41
-**Commit:** `336de3e2` - Thread validated targets through compiler backends
+**Last Updated:** 2026-08-09 18:13:38
+**Commit:** `598b0504` - Share ARM64 heap overflow trap body
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
