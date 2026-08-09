@@ -106,35 +106,35 @@ Function loop:
 ---NAME---
 licm_keeps_effecting_recursive_call_in_loop
 ---INPUT---
-def readClock(n: Int64) : Int64 =
-    if n <= 0 then Stdlib.Date.now()
-    else readClock(n - 1)
+def readRandom(n: Int64) : Int64 =
+    if n <= 0 then Stdlib.Random.int64()
+    else readRandom(n - 1)
 
 def loop(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
-    else loop(n - 1, readClock(1))
+    else loop(n - 1, readRandom(1))
 ---EXPECTED---
-Function readClock:
-  readClock_entry:
-    jump readClock_body
-  readClock_L0:
-    v10011 <- DateNow()
+Function readRandom:
+  readRandom_entry:
+    jump readRandom_body
+  readRandom_L0:
+    v10011 <- RandomInt64()
     ret v10011
-  readClock_L1:
+  readRandom_L1:
     v10009 <- v10007 - 1 : TInt64
     v10010 <- v10009 : TInt64
-    jump readClock_body
-  readClock_body:
-    v10007 <- Phi([(v0, readClock_entry), (v10010, readClock_L1)]) : TInt64
+    jump readRandom_body
+  readRandom_body:
+    v10007 <- Phi([(v0, readRandom_entry), (v10010, readRandom_L1)]) : TInt64
     v10008 <- v10007 <= 0 : TInt64
-    branch v10008 ? readClock_L0 : readClock_L1
+    branch v10008 ? readRandom_L0 : readRandom_L1
 
 Function loop:
   loop_entry:
     jump loop_body
   loop_L1:
     v10017 <- v10015 - 1 : TInt64
-    v10018 <- Call(readClock, [1])
+    v10018 <- Call(readRandom, [1])
     v10019 <- v10017 : TInt64
     v10020 <- v10018 : TInt64
     jump loop_body

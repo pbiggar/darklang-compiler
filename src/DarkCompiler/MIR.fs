@@ -133,8 +133,8 @@ type Instr =
     | RefCountDecBytes of bytes:Operand            // Decrement bytes ref count, free if zero
     // Random intrinsics
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
-    // Date intrinsics
-    | DateNow of dest:VReg                         // Get current Unix epoch seconds as Int64
+    // DateTime intrinsics
+    | DateTimeNow of dest:VReg                 // Get current Unix epoch milliseconds as Int64
     // Float to String conversion
     | FloatToString of dest:VReg * value:Operand   // Convert Float to heap String
     // SSA phi node - merges values from different predecessor blocks

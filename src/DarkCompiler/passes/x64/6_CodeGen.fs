@@ -4018,8 +4018,8 @@ let private translateInstr
                X86_64.MOV_load (destReg, X86_64.RSP, 0)
                X86_64.ADD_imm (X86_64.RSP, 8)])
 
-    | LIR.DateNow dest ->
-        // clock_gettime(CLOCK_REALTIME=0, &ts) → ts.tv_sec * 1000000 + ts.tv_nsec / 1000
+    | LIR.DateTimeNow dest ->
+        // clock_gettime(CLOCK_REALTIME=0, &ts), converted to Unix milliseconds.
         resolveReg dest
         |> Result.map (fun destReg ->
             [X86_64.SUB_imm (X86_64.RSP, 16)]  // timespec: tv_sec(8) + tv_nsec(8)
@@ -4027,7 +4027,14 @@ let private translateInstr
             @ [X86_64.MOV_reg (X86_64.RSI, X86_64.RSP)]
             @ loadImm64 X86_64.RAX (int64 syscalls.Gettimeofday)
             @ [X86_64.SYSCALL
-               X86_64.MOV_load (destReg, X86_64.RSP, 0)  // tv_sec
+               X86_64.MOV_load (scratch, X86_64.RSP, 0)
+               X86_64.IMUL_imm (scratch, scratch, 1000)
+               X86_64.MOV_load (X86_64.RAX, X86_64.RSP, 8)
+               X86_64.CQO]
+            @ loadImm64 X86_64.RDI 1000000L
+            @ [X86_64.IDIV X86_64.RDI
+               X86_64.ADD_reg (scratch, X86_64.RAX)
+               X86_64.MOV_reg (destReg, scratch)
                X86_64.ADD_imm (X86_64.RSP, 16)])
 
     | LIR.Madd (dest, mulLeft, mulRight, add) ->

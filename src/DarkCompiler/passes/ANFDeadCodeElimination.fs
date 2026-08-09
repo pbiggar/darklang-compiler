@@ -91,7 +91,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RefCountIncBytes atom -> extractFromAtom atom
     | ANF.RefCountDecBytes atom -> extractFromAtom atom
     | ANF.RandomInt64 -> []  // No atoms
-    | ANF.DateNow -> []      // No atoms
+    | ANF.DateTimeNow -> []      // No atoms
     | ANF.FloatToString atom -> extractFromAtom atom
     | ANF.RuntimeError _ -> []  // No atoms
 

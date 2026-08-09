@@ -92,14 +92,12 @@ let randomModule : ModuleDef = {
     ]
 }
 
-/// Stdlib.Date module - date/time operations (intrinsics)
-/// now() is special-cased in the compiler to generate syscalls
-/// Other Date functions are defined in Date.dark as pure Dark code
-let dateModule : ModuleDef = {
-    Name = "Stdlib.Date"
+/// Internal clock operation used by the pure Stdlib.DateTime module.
+let dateTimeModule : ModuleDef = {
+    Name = "Stdlib.DateTime"
     Functions = [
-        // now : () -> Int64 - returns current Unix epoch seconds
-        { Name = "now"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+        // The public DateTime value is constructed in DateTime.dark.
+        { Name = "__nowMilliseconds"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
     ]
 }
 
@@ -175,7 +173,7 @@ let allModules : ModuleDef list = [
     pathModule
     platformModule
     randomModule
-    dateModule
+    dateTimeModule
 ]
 
 /// Build the module registry from all modules

@@ -5712,11 +5712,11 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         |> Result.map (fun destReg ->
             runtimeInstrs (Runtime.generateRandomInt64 ctx.Target destReg))
 
-    | LIR.DateNow dest ->
-        // Generate current Unix epoch seconds as Int64
+    | LIR.DateTimeNow dest ->
+        // Generate current Unix epoch milliseconds as Int64.
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
-            runtimeInstrs (Runtime.generateDateNow ctx.Target destReg))
+            runtimeInstrs (Runtime.generateDateTimeNow ctx.Target destReg))
 
     | LIR.FloatToString (dest, value) ->
         // Convert float in FP register to heap string

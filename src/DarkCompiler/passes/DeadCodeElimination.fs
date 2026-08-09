@@ -118,7 +118,7 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.RawWriteByte _
     | LIR.RawSlotInit _
     | LIR.RandomInt64 _
-    | LIR.DateNow _
+    | LIR.DateTimeNow _
     | LIR.FloatToString _
     | LIR.CoverageHit _ ->
         calls

@@ -2463,21 +2463,21 @@ let generateRandomInt64 (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM6
             ARM64.MOV_reg (destReg, ARM64.X0)
         ]
 
-/// Generate ARM64 instructions to get current Unix epoch seconds as Int64
+/// Generate ARM64 instructions to get current Unix epoch milliseconds as Int64.
 /// destReg: destination register for the timestamp
 /// Uses gettimeofday (macOS) or clock_gettime (Linux) syscall
 /// Note: This function saves/restores caller-saved registers that may contain live values.
-let generateDateNow (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM64.Instr list =
+let generateDateTimeNow (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM64.Instr list =
     let os = ARM64.targetOS target
     let syscalls = ARM64.targetSyscalls target
 
     match os with
     | Platform.MacOS ->
         [
-            // Save X1 (caller-saved, may contain live value)
-            // Allocate 32 bytes: 8 for X1, 16 for timeval struct (tv_sec, tv_usec), 8 for alignment
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
-            ARM64.STR (ARM64.X1, ARM64.SP, 24s)  // Save X1 at SP+24
+            // Preserve the scratch registers around the syscall and conversion.
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
+            ARM64.STR (ARM64.X1, ARM64.SP, 40s)
+            ARM64.STR (ARM64.X2, ARM64.SP, 32s)
 
             // Call gettimeofday(tv, NULL)
             // X0 = timeval pointer (SP), X1 = timezone (NULL)
@@ -2486,14 +2486,18 @@ let generateDateNow (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM64.In
             ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Gettimeofday, 0)
             ARM64.SVC syscalls.SvcImmediate
 
-            // Load tv_sec (first 8 bytes of timeval) into X0
+            // milliseconds = tv_sec * 1000 + tv_usec / 1000
             ARM64.LDR (ARM64.X0, ARM64.SP, 0s)
+            ARM64.LDR (ARM64.X1, ARM64.SP, 8s)
+            ARM64.MOVZ (ARM64.X2, 1000us, 0)
+            ARM64.MUL (ARM64.X0, ARM64.X0, ARM64.X2)
+            ARM64.UDIV (ARM64.X1, ARM64.X1, ARM64.X2)
+            ARM64.ADD_reg (ARM64.X0, ARM64.X0, ARM64.X1)
 
-            // Restore X1
-            ARM64.LDR (ARM64.X1, ARM64.SP, 24s)
+            ARM64.LDR (ARM64.X1, ARM64.SP, 40s)
+            ARM64.LDR (ARM64.X2, ARM64.SP, 32s)
 
-            // Cleanup stack
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)
 
             // Move result to destination
             ARM64.MOV_reg (destReg, ARM64.X0)
@@ -2514,8 +2518,15 @@ let generateDateNow (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM64.In
             ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Gettimeofday, 0)
             ARM64.SVC syscalls.SvcImmediate
 
-            // Load tv_sec (first 8 bytes of timespec) into X0
+            // milliseconds = tv_sec * 1000 + tv_nsec / 1_000_000
             ARM64.LDR (ARM64.X0, ARM64.SP, 0s)
+            ARM64.LDR (ARM64.X1, ARM64.SP, 8s)
+            ARM64.MOVZ (ARM64.X2, 1000us, 0)
+            ARM64.MUL (ARM64.X0, ARM64.X0, ARM64.X2)
+            ARM64.MOVZ (ARM64.X2, 0x4240us, 0)
+            ARM64.MOVK (ARM64.X2, 0x000Fus, 16)
+            ARM64.UDIV (ARM64.X1, ARM64.X1, ARM64.X2)
+            ARM64.ADD_reg (ARM64.X0, ARM64.X0, ARM64.X1)
 
             // Restore X1, X2, X8
             ARM64.LDR (ARM64.X1, ARM64.SP, 40s)

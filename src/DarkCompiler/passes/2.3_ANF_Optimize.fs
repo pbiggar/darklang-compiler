@@ -489,7 +489,7 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | RefCountIncBytes _ -> true    // Mutates refcount
     | RefCountDecBytes _ -> true    // Mutates refcount
     | RandomInt64 -> true   // Reads from OS random source
-    | DateNow -> true       // Reads current time (syscall)
+    | DateTimeNow -> true       // Reads current time (syscall)
     | FloatToString _ -> false  // Pure conversion (but allocates - maybe should be true?)
     | RuntimeError _ -> true
 
@@ -574,7 +574,7 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RefCountIncBytes bytes -> addAtomUse bytes uses
     | RefCountDecBytes bytes -> addAtomUse bytes uses
     | RandomInt64 -> uses  // No atoms
-    | DateNow -> uses      // No atoms
+    | DateTimeNow -> uses      // No atoms
     | FloatToString atom -> addAtomUse atom uses
     | RuntimeError _ -> uses
 
@@ -638,7 +638,7 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | ClosureCall (first, rest)
     | ClosureTailCall (first, rest) -> used first || anyUsed rest
     | RandomInt64
-    | DateNow
+    | DateTimeNow
     | RuntimeError _ -> false
 
 /// Substitute atom in another atom
@@ -738,7 +738,7 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RefCountIncBytes bytes -> RefCountIncBytes (s bytes)
     | RefCountDecBytes bytes -> RefCountDecBytes (s bytes)
     | RandomInt64 -> RandomInt64
-    | DateNow -> DateNow
+    | DateTimeNow -> DateTimeNow
     | FloatToString atom -> FloatToString (s atom)
     | RuntimeError message -> RuntimeError message
 

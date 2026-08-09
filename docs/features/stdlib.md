@@ -38,7 +38,7 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.Path` | Path operations |
 | `Stdlib.Platform` | Platform detection |
 | `Stdlib.Random` | Random numbers |
-| `Stdlib.Date` / `Stdlib.DateTime` | Date/time operations |
+| `Stdlib.DateTime` | UTC date/time operations with millisecond precision |
 | `Stdlib.Math` | Math helpers |
 | `Stdlib.Uuid` | UUID helpers |
 

@@ -1041,7 +1041,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Dict.dark"
         "stdlib/__HAMT.dark"
         "stdlib/Uuid.dark"
-        "stdlib/Date.dark"
+        "stdlib/DateTime.dark"
         "stdlib/Bytes.dark"
         "stdlib/Char.dark"
         "stdlib/AWS.dark"

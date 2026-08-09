@@ -364,13 +364,12 @@ let tryRandomIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr opti
         Some ANF.RandomInt64
     | _ -> None
 
-/// Try to convert a function call to a date intrinsic CExpr
-/// Returns Some CExpr if it's a date intrinsic, None otherwise
-let tryDateIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
+/// Try to convert a function call to a DateTime intrinsic CExpr.
+let tryDateTimeIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     let args = normalizeNullaryIntrinsicArgs args
     match funcName, args with
-    | "Stdlib.Date.now", [] ->
-        Some ANF.DateNow
+    | "Stdlib.DateTime.__nowMilliseconds", [] ->
+        Some ANF.DateTimeNow
     | _ -> None
 
 let isBuiltinUnwrapName (funcName: string) : bool =
@@ -4318,10 +4317,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                         Ok (withArgSetups finalExpr, varGen2)
                     | None ->
-                    // Check if it's a date intrinsic
-                    match tryDateIntrinsic funcName argAtoms with
+                    // Check if it's a DateTime intrinsic.
+                    match tryDateTimeIntrinsic funcName argAtoms with
                     | Some intrinsicExpr ->
-                        // Date intrinsic call
+                        // DateTime intrinsic call.
                         let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                         Ok (withArgSetups finalExpr, varGen2)
                     | None ->
@@ -8107,10 +8106,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                                         let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                                         Ok (ANF.Var tempVar, allBindings, varGen2)
                                     | None ->
-                                        // Check if it's a date intrinsic
-                                        match tryDateIntrinsic funcName argAtoms with
+                                        // Check if it's a DateTime intrinsic.
+                                        match tryDateTimeIntrinsic funcName argAtoms with
                                         | Some intrinsicExpr ->
-                                            // Date intrinsic call
+                                            // DateTime intrinsic call.
                                             let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                                             Ok (ANF.Var tempVar, allBindings, varGen2)
                                         | None ->

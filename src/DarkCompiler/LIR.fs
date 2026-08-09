@@ -170,7 +170,7 @@ type Instr =
     | RefCountIncBytes of bytes:Operand
     | RefCountDecBytes of bytes:Operand
     | RandomInt64 of dest:Reg
-    | DateNow of dest:Reg
+    | DateTimeNow of dest:Reg
     | FloatToString of dest:Reg * value:FReg
     | CoverageHit of exprId:int
 

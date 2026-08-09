@@ -309,7 +309,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RefCountIncBytes _ -> defs
         | RefCountDecBytes _ -> defs
         | RandomInt64 dest -> Set.add dest defs
-        | DateNow dest -> Set.add dest defs
+        | DateTimeNow dest -> Set.add dest defs
         | FloatToString (dest, _) -> Set.add dest defs
         | RuntimeError _ -> defs
         | CoverageHit _ -> defs  // No destination register
@@ -426,7 +426,7 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | RefCountIncBytes bytes -> Set.union uses (getOperandUses bytes)
             | RefCountDecBytes bytes -> Set.union uses (getOperandUses bytes)
             | RandomInt64 _ -> uses  // No operand uses
-            | DateNow _ -> uses      // No operand uses
+            | DateTimeNow _ -> uses      // No operand uses
             | FloatToString (_, value) -> Set.union uses (getOperandUses value)
             | RuntimeError _ -> uses
             | CoverageHit _ -> uses  // No operand uses
@@ -967,9 +967,9 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (RandomInt64 newDest, state')
 
-    | DateNow dest ->
+    | DateTimeNow dest ->
         let (_, newDest, state') = newVersion state dest
-        (DateNow newDest, state')
+        (DateTimeNow newDest, state')
 
     | FloatToString (dest, value) ->
         let value' = renameOperand state value

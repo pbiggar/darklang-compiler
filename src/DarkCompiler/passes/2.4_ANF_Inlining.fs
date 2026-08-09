@@ -341,7 +341,7 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | RefCountIncBytes a -> RefCountIncBytes (r a)
     | RefCountDecBytes a -> RefCountDecBytes (r a)
     | RandomInt64 -> RandomInt64
-    | DateNow -> DateNow
+    | DateTimeNow -> DateTimeNow
     | FloatToString a -> FloatToString (r a)
     | RuntimeError message -> RuntimeError message
 

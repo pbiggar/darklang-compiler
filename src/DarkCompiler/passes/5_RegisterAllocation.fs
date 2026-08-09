@@ -567,7 +567,7 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         operandToVReg bytes |> Option.toList
     | LIR.RandomInt64 _ ->
         []  // No operands to read
-    | LIR.DateNow _ ->
+    | LIR.DateTimeNow _ ->
         []  // No operands to read
     | LIR.FloatToString _ ->
         []  // Float value is in FP register, tracked by getUsedFVRegs
@@ -634,7 +634,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RefCountIncBytes _ -> None
     | LIR.RefCountDecBytes _ -> None
     | LIR.RandomInt64 dest -> regToVReg dest
-    | LIR.DateNow dest -> regToVReg dest
+    | LIR.DateTimeNow dest -> regToVReg dest
     | LIR.FloatToString (dest, _) -> regToVReg dest
     // Phi defines its destination at block entry
     | LIR.Phi (dest, _, _) -> regToVReg dest
@@ -3147,9 +3147,9 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | _ -> []
         [randomInstr] @ storeInstrs
 
-    | LIR.DateNow dest ->
+    | LIR.DateTimeNow dest ->
         let (destReg, destAlloc) = applyToReg mapping dest
-        let dateInstr = LIR.DateNow destReg
+        let dateInstr = LIR.DateTimeNow destReg
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]

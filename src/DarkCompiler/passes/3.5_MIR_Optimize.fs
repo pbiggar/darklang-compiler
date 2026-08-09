@@ -90,7 +90,7 @@ let hasSideEffects (instr: Instr) : bool =
     | RefCountIncBytes _ -> true    // Mutates refcount
     | RefCountDecBytes _ -> true    // Mutates refcount
     | RandomInt64 _ -> true  // Syscall
-    | DateNow _ -> true      // Syscall
+    | DateTimeNow _ -> true      // Syscall
     | FloatToString _ -> false  // Pure conversion (allocates but no visible side effect)
     | RuntimeError _ -> true
     | CoverageHit _ -> true  // Must not be eliminated (tracking side effect)
@@ -194,7 +194,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | RefCountIncBytes _ -> None
     | RefCountDecBytes _ -> None
     | RandomInt64 dest -> Some dest
-    | DateNow dest -> Some dest
+    | DateTimeNow dest -> Some dest
     | FloatToString (dest, _) -> Some dest
     | RuntimeError _ -> None
     | CoverageHit _ -> None
@@ -263,7 +263,7 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | Phi (_, sources, _) ->
         sources |> List.fold (fun acc (op, _) -> fromOperand acc op) state
     | RandomInt64 _
-    | DateNow _
+    | DateTimeNow _
     | RuntimeError _
     | CoverageHit _ -> state
 
@@ -1166,7 +1166,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RefCountIncBytes bytes -> RefCountIncBytes (p bytes)
     | RefCountDecBytes bytes -> RefCountDecBytes (p bytes)
     | RandomInt64 dest -> RandomInt64 dest
-    | DateNow dest -> DateNow dest
+    | DateTimeNow dest -> DateTimeNow dest
     | FloatToString (dest, value) -> FloatToString (dest, p value)
     | RuntimeError message -> RuntimeError message
     | CoverageHit exprId -> CoverageHit exprId

@@ -182,8 +182,8 @@ let private prettyPrintANFCExpr = function
         $"RefCountDecBytes({prettyPrintANFAtom bytes})"
     | ANF.RandomInt64 ->
         "RandomInt64()"
-    | ANF.DateNow ->
-        "DateNow()"
+    | ANF.DateTimeNow ->
+        "DateTimeNow()"
     | ANF.TailCall (funcName, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
         $"TailCall({funcName}, [{argStr}])"
@@ -389,8 +389,8 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"RefCountDecBytes({prettyPrintMIROperand bytes})"
     | MIR.RandomInt64 dest ->
         $"{prettyPrintMIRVReg dest} <- RandomInt64()"
-    | MIR.DateNow dest ->
-        $"{prettyPrintMIRVReg dest} <- DateNow()"
+    | MIR.DateTimeNow dest ->
+        $"{prettyPrintMIRVReg dest} <- DateTimeNow()"
     | MIR.FloatToString (dest, value) ->
         $"{prettyPrintMIRVReg dest} <- FloatToString({prettyPrintMIROperand value})"
     | MIR.Phi (dest, sources, valueType) ->
@@ -711,8 +711,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountDecBytes({prettyPrintLIROperand bytes})"
     | LIR.RandomInt64 dest ->
         $"{prettyPrintLIRReg dest} <- RandomInt64()"
-    | LIR.DateNow dest ->
-        $"{prettyPrintLIRReg dest} <- DateNow()"
+    | LIR.DateTimeNow dest ->
+        $"{prettyPrintLIRReg dest} <- DateTimeNow()"
     | LIR.FloatToString (dest, value) ->
         $"{prettyPrintLIRReg dest} <- FloatToString({prettyPrintLIRFReg value})"
     | LIR.CoverageHit exprId ->

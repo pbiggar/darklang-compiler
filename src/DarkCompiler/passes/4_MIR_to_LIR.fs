@@ -1484,9 +1484,9 @@ let selectInstr
         let lirDest = vregToLIRReg dest
         Ok ([LIR.RandomInt64 lirDest], state)
 
-    | MIR.DateNow dest ->
+    | MIR.DateTimeNow dest ->
         let lirDest = vregToLIRReg dest
-        Ok ([LIR.DateNow lirDest], state)
+        Ok ([LIR.DateTimeNow lirDest], state)
 
     | MIR.FloatToString (dest, value) ->
         let lirDest = vregToLIRReg dest
@@ -1702,7 +1702,7 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
         |> maxVRegIdFromOperand byteOffset
         |> maxVRegIdFromOperand value
     | MIR.RandomInt64 dest
-    | MIR.DateNow dest -> maxVRegId dest currentMax
+    | MIR.DateTimeNow dest -> maxVRegId dest currentMax
     | MIR.Phi (dest, sources, _) ->
         sources
         |> List.fold

@@ -734,7 +734,7 @@ let private foldRegUses folder state (instr: Instr) =
     | HeapAlloc _
     | LoadFuncAddr _
     | RandomInt64 _
-    | DateNow _
+    | DateTimeNow _
     | CoverageHit _ -> state
 
 /// Check if a register is read by an instruction.
