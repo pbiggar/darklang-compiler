@@ -4891,6 +4891,59 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.PVar _ -> true
                 | _ -> false
 
+            // Constructor coverage is usable only when the payload pattern cannot
+            // reject a value; literal and nested patterns therefore remain partial.
+            let constructorPatternCoverage (pattern: AST.Pattern) : int option =
+                match scrutType, pattern with
+                | AST.TSum (typeName, _), AST.PConstructor (constructorName, payloadPattern) ->
+                    match tryFindVariant typeName constructorName variantLookup, payloadPattern with
+                    | Some (variantTypeName, _, tag, None), None when variantTypeName = typeName ->
+                        Some tag
+                    | Some (variantTypeName, _, tag, Some _), Some innerPattern
+                        when variantTypeName = typeName && patternAlwaysMatches innerPattern ->
+                        Some tag
+                    | _ ->
+                        None
+                | _ ->
+                    None
+
+            let constructorMatchIsExhaustive (matchCases: AST.MatchCase list) : bool =
+                let coveredConstructors =
+                    matchCases
+                    |> List.fold (fun coveredOpt mc ->
+                        match coveredOpt, mc.Guard with
+                        | Some covered, None ->
+                            mc.Patterns
+                            |> AST.NonEmptyList.toList
+                            |> List.fold (fun caseCoveredOpt pattern ->
+                                match caseCoveredOpt, constructorPatternCoverage pattern with
+                                | Some caseCovered, Some tag ->
+                                    Some (Set.add tag caseCovered)
+                                | _ ->
+                                    None)
+                                (Some covered)
+                        | _ ->
+                            None)
+                        (Some Set.empty)
+
+                match scrutType, coveredConstructors with
+                | AST.TSum (typeName, _), Some coveredConstructors ->
+                    // The lookup intentionally contains both qualified and bare
+                    // aliases. Tags are the canonical per-type constructor identity,
+                    // so collecting them also avoids counting those aliases twice.
+                    let allConstructorsForType =
+                        variantLookup
+                        |> Map.fold (fun constructors _ (variantTypeName, _, tag, _) ->
+                            if variantTypeName = typeName then
+                                Set.add tag constructors
+                            else
+                                constructors)
+                            Set.empty
+                    not (Set.isEmpty allConstructorsForType)
+                    && coveredConstructors = allConstructorsForType
+                | _ ->
+                    false
+
             // Extract pattern bindings and compile body with extended environment
             // scrutType is the type of the scrutinee, used to determine correct types for pattern variables
             let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
@@ -7487,6 +7540,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let pattern = AST.NonEmptyList.head mc.Patterns
                     let body = mc.Body
                     let (fallbackExpr, vg1) = makeNoMatchingCaseFallback vg
+                    let finalCaseIsKnownExhaustive =
+                        Option.isNone mc.Guard
+                        && Option.isSome (constructorPatternCoverage pattern)
+                        && constructorMatchIsExhaustive cases
                     let compileBodyWithGuard (vgBody: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                         match mc.Guard, pattern with
                         | None, AST.PList (_ :: _ as listPatterns) ->
@@ -7509,6 +7566,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                     if canSkipPreComparison then
                         compileBodyWithGuard vg1
+                    elif finalCaseIsKnownExhaustive then
+                        extractAndCompileBody pattern body scrutineeAtom' scrutType env vg1
                     else
                         buildPatternGroupComparison (AST.NonEmptyList.toList mc.Patterns) scrutineeAtom' vg1
                         |> Result.bind (fun cmpOpt ->

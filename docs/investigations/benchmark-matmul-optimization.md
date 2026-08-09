@@ -54,17 +54,9 @@ v12124 <- Call(dot3, [Reg v12054, Reg v12102, Imm 0, Imm 1])
 ```
 
 The latest post-register-allocation LIR also shows that the compiler inlines
-the first `matGet` shape into `dot3`, but leaves generic option-match failure
-arms in the generated control flow even though the source match covers both
-`Some` and `None`:
-
-```text
-Label "dot3_L1":
-  RuntimeError("Non-exhaustive match: No matching case found for value <unknown> in match expression")
-...
-Label "dot3_L10":
-  RuntimeError("Non-exhaustive match: No matching case found for value <unknown> in match expression")
-```
+the first `matGet` shape into `dot3`. Exhaustive `Some`/`None` option matches
+no longer keep generic non-exhaustive-match fallback blocks in the generated
+control flow.
 
 Rust and OCaml allocate and multiply 100x100 matrices with indexed array/vector
 access. Dark's current source uses nested immutable lists and calls
@@ -103,19 +95,10 @@ the option value on the critical path for every matrix element access. If
 `getAt`/match boundary, list-heavy benchmarks should benefit even when they do
 not become array-backed.
 
-### Remove Dead Match-Failure Blocks After Exhaustiveness
-
-The current `matGet` and partially inlined `dot3` LIR still contain
-`RuntimeError("Non-exhaustive match...")` blocks for option matches that are
-exhaustive in the source program. Removing these unreachable arms after
-type-checking or before code generation would reduce generated code size and
-branch structure for small pattern-heavy benchmarks. This is probably secondary
-to array support and list-access specialization for total instruction count,
-but it is a concrete code-generation cleanup visible in the current matmul IR.
-
 ## Remaining Uncertainties
 
-This investigation has not yet compared a current full-size Dark instruction
-count against the reference implementations. The next useful benchmark evidence
-is a current full-size local measurement that can separate language/runtime
-overhead from differences in data structure and source shape.
+The exhaustive-match cleanup reduces the current full-size Dark result from
+1,659,791,965 to 1,657,791,965 instructions, or from 97.9x to 97.8x the cached
+Rust result. Most of the remaining gap is therefore still attributable to the
+nested immutable-list representation and generic indexed access described
+above, rather than dead option-match failure control flow.
