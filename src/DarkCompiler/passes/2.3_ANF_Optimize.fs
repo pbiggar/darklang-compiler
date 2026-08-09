@@ -8,6 +8,7 @@
 // - Common subexpression elimination: reuse earlier pure computations
 // - Branch code motion: hoist identical pure leading branch computations
 // - Reassociation: combine constants across adjacent Int64 additions and multiplications
+// - Algebraic cancellation: remove paired Int64 additions and subtractions
 // - Control-flow simplification: collapse Boolean literal branches
 // - Instruction combining: fold single-use negation into integer subtraction
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
@@ -1017,8 +1018,22 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
              && isInt64Atom typeEnv source
              && isInt64Atom typeEnv cancelled ->
         Some (Let (tid, cexpr, Let (resultTid, Atom source, resultBody)))
+    | Prim (Add, source, remaining),
+      Let (resultTid, Prim (Sub, Var intermediateTid, outerCancelled), resultBody)
+        when intermediateTid = tid
+             && source = outerCancelled
+             && isInt64Atom typeEnv source
+             && isInt64Atom typeEnv remaining ->
+        Some (Let (tid, cexpr, Let (resultTid, Atom remaining, resultBody)))
     | Prim (Sub, source, cancelled),
       Let (resultTid, Prim (Add, Var intermediateTid, outerCancelled), resultBody)
+        when intermediateTid = tid
+             && cancelled = outerCancelled
+             && isInt64Atom typeEnv source
+             && isInt64Atom typeEnv cancelled ->
+        Some (Let (tid, cexpr, Let (resultTid, Atom source, resultBody)))
+    | Prim (Sub, source, cancelled),
+      Let (resultTid, Prim (Add, outerCancelled, Var intermediateTid), resultBody)
         when intermediateTid = tid
              && cancelled = outerCancelled
              && isInt64Atom typeEnv source

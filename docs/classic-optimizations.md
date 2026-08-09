@@ -368,7 +368,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Integer add/subtract cancellation
 - Taxonomy category: Algebraic simplification
 - Priority/rationale: Canonical, low-risk integer simplification that removes paired arithmetic while preserving wrapping Int64 semantics.
-- Notes: Implemented for adjacent ANF bindings representing `(x + y) - y -> x` and `(x - y) + y -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. The rewrite is restricted to typed Int64 operands, retains an intermediate when it has another use, and leaves same-shaped Float expressions unchanged. Covered by focused before/after snapshots in `src/Tests/optimization/anf.opt`; no current routine benchmark isolates the exact pattern, so the optimization tests are the focused exercise for this micro-pattern.
+- Notes: Implemented for adjacent ANF bindings representing `(x + y) - y -> x`, `(x + y) - x -> y`, `(x - y) + y -> x`, and `y + (x - y) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. The rewrite is restricted to typed Int64 operands, retains an intermediate when it has another use, and leaves same-shaped Float expressions unchanged. Covered by focused before/after snapshots in `src/Tests/optimization/anf.opt`; no current routine benchmark isolates the exact pattern, so the optimization tests are the focused exercise for this micro-pattern.
 
 ### Multiplication by negative one strength reduction
 

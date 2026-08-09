@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-09 18:34:24
-**Commit:** `2e9c7d2c` - Reassociate adjacent Int64 constant multiplications
+**Last Updated:** 2026-08-09 20:19:54
+**Commit:** `8d8b4987` - Complete commuted Int64 cancellation
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

@@ -1839,9 +1839,25 @@ Function f:
 return t0
 
 ---NAME---
+commuted_int64_cancellation_subtract_left_addend
+---INPUT---
+def f(x: Int64, y: Int64) : Int64 = (x + y) - x
+---EXPECTED---
+Function f:
+return t1
+
+---NAME---
 cancel_integer_subtract_then_add
 ---INPUT---
 def f(x: Int64, y: Int64) : Int64 = (x - y) + y
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+commuted_int64_cancellation_add_difference_left
+---INPUT---
+def f(x: Int64, y: Int64) : Int64 = y + (x - y)
 ---EXPECTED---
 Function f:
 return t0
@@ -1857,6 +1873,19 @@ def f(x: Int64, y: Int64) : (Int64, Int64) =
 Function f:
 let TempId 2 = t0 + t1
 let TempId 6 = (t2, t0)
+return t6
+
+---NAME---
+commuted_int64_cancellation_preserves_live_intermediate
+---INPUT---
+def f(x: Int64, y: Int64) : (Int64, Int64) =
+  let sum = x + y in
+  let cancelled = sum - x in
+  (sum, cancelled)
+---EXPECTED---
+Function f:
+let TempId 2 = t0 + t1
+let TempId 6 = (t2, t1)
 return t6
 
 ---NAME---
@@ -1890,6 +1919,16 @@ def f(x: Float, y: Float) : Float = (x - y) + y
 Function f:
 let TempId 2 = t0 - t1
 let TempId 3 = t2 + t1
+return t3
+
+---NAME---
+commuted_int64_cancellation_preserves_float
+---INPUT---
+def f(x: Float, y: Float) : Float = (x + y) - x
+---EXPECTED---
+Function f:
+let TempId 2 = t0 + t1
+let TempId 3 = t2 - t0
 return t3
 
 ---NAME---
