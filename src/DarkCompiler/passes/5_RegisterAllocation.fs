@@ -861,9 +861,6 @@ let private collectVRegIdsFromFacts (classifiedBlocks: ClassifiedBlock array) : 
             | None -> acc) acc
     ) []
 
-let private collectVRegIds (blocks: LIR.BasicBlock array) : int list =
-    blocks |> classifyBlocks |> collectVRegIdsFromFacts
-
 /// Compute liveness using bitsets for the dataflow fixed point
 let private computeLivenessBitsFromFacts
     (blockIndex: BlockIndex)
@@ -3414,7 +3411,7 @@ let resolvePhiNodes
     (allocation: AllocationResult)
     (floatAllocation: FAllocationResult)
     : LIR.BasicBlock array =
-    let neededDomain = buildVRegDomain (collectVRegIds blocks)
+    let neededDomain = allocation.Domain
     let n = neededDomain.Ids.Length
     let wordCount = neededDomain.WordCount
 

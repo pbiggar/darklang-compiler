@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-08 23:49:13
-**Commit:** `ee2b7a10` - Tailor fannkuch traversal for skew lists
+**Last Updated:** 2026-08-09 08:41:06
+**Commit:** `306fe60b` - Reuse allocation domain during phi resolution
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
