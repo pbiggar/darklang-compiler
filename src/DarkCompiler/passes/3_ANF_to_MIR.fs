@@ -45,8 +45,12 @@ let private mkRecordField (name: string) (typ: AST.Type) : MIR.RecordField =
 let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.VariantRegistry =
     variantLookup
     |> Map.toList
-    |> List.map (fun (variantName, (typeName, typeParams, tagIndex, payloadType)) ->
-        (typeName, typeParams, (variantName, tagIndex, payloadType)))
+    |> List.choose (fun (variantName, (typeName, typeParams, tagIndex, payloadType)) ->
+        // VariantLookup also contains fully-qualified aliases for resolving
+        // constructors with colliding short names. Only the short-name entry
+        // belongs in runtime variant metadata.
+        if variantName.StartsWith($"{typeName}.") then None
+        else Some (typeName, typeParams, (variantName, tagIndex, payloadType)))
     |> List.groupBy (fun (typeName, _, _) -> typeName)
     |> List.map (fun (typeName, entries) ->
         match entries with

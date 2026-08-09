@@ -63,6 +63,7 @@ let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegist
     | AST.TInt32
     | AST.TInt64
     | AST.TInt128
+    | AST.TInt
     | AST.TUInt8
     | AST.TUInt16
     | AST.TUInt32

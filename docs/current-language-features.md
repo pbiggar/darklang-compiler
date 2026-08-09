@@ -4,7 +4,7 @@ This document lists the language features currently supported by the Dark compil
 
 ## Types
 
-- Integers: Int8/Int16/Int32/Int64/Int128 and UInt8/UInt16/UInt32/UInt64/UInt128, Bool booleans, Float floating-point numbers, String strings, Unit `()`
+- Integers: arbitrary-precision signed `Int`, Int8/Int16/Int32/Int64/Int128, and UInt8/UInt16/UInt32/UInt64/UInt128; Bool booleans, Float floating-point numbers, String strings, Unit `()`
 - Tuples of any arity: `(Int64, Bool)`, `(Int64, Int64, Int64)`
 - Records with named fields: `type Point = { x: Int64, y: Int64 }`
 - Sum types (ADTs) with optional payloads: `type Option<T> = Some of T | None`
@@ -19,9 +19,9 @@ This document lists the language features currently supported by the Dark compil
 
 ## Expressions
 
-- Integer, float, boolean, string, and unit literals (with string escape sequences); unsuffixed integer literals are Int64
+- Integer, float, boolean, string, and unit literals (with string escape sequences); unsuffixed integer literals are Int64 and an `I` suffix produces an arbitrary-precision `Int`
 - Arithmetic and remainder: `+`, `-`, `*`, `/`, `%`
-- Bitwise integer operators: `&`, `|||`, `^`, `~~~`, `<<`, `>>`
+- Bitwise integer operators: `&`, `|||`, `^`, `~~~`, `<<`, `>>` (`^` is exponentiation for `Int`, matching Dark)
 - Comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=`
 - Logical operators: `&&`, `||`, `!`
 - Parentheses for grouping

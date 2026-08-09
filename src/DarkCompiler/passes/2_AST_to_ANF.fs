@@ -22,6 +22,17 @@ open Output
 /// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
 type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
 
+let private tryFindVariant
+    (constructorTypeName: string)
+    (variantName: string)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * AST.Type option) option =
+    if constructorTypeName = "" then
+        Map.tryFind variantName variantLookup
+    else
+        Map.tryFind $"{constructorTypeName}.{variantName}" variantLookup
+        |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
+
 let private int128ToCanonicalString (value: System.Int128) : string =
     value.ToString(System.Globalization.CultureInfo.InvariantCulture)
 
@@ -33,6 +44,7 @@ let rec typeToString (ty: AST.Type) : string =
     match ty with
     | AST.TInt64 -> "i64"
     | AST.TInt128 -> "i128"
+    | AST.TInt -> "int"
     | AST.TInt32 -> "i32"
     | AST.TInt16 -> "i16"
     | AST.TInt8 -> "i8"
@@ -119,6 +131,7 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
         | "i32" -> Some AST.TInt32
         | "i64" -> Some AST.TInt64
         | "i128" -> Some AST.TInt128
+        | "int" -> Some AST.TInt
         | "u8" -> Some AST.TUInt8
         | "u16" -> Some AST.TUInt16
         | "u32" -> Some AST.TUInt32
@@ -314,6 +327,19 @@ let tryRawMemoryIntrinsic
         Some (ANF.StringToRawPtr strAtom)
     | "__rawptr_to_string", [ptrAtom] ->
         Some (ANF.RawPtrToString ptrAtom)
+    | "__int_to_string", [valueAtom]
+    | "__string_to_int", [valueAtom]
+    | "__int128_to_int", [valueAtom]
+    | "__uint128_to_int", [valueAtom]
+    | "__int_to_int128", [valueAtom]
+    | "__int_to_uint128", [valueAtom]
+    | "__int64_to_int8", [valueAtom]
+    | "__int64_to_int16", [valueAtom]
+    | "__int64_to_int32", [valueAtom]
+    | "__int64_to_uint8", [valueAtom]
+    | "__int64_to_uint16", [valueAtom]
+    | "__int64_to_uint32", [valueAtom] ->
+        Some (ANF.Atom valueAtom)
     | "__bytes_to_rawptr", [bytesAtom] ->
         Some (ANF.BytesToRawPtr bytesAtom)
     | "__rawptr_to_bytes", [ptrAtom] ->
@@ -440,6 +466,8 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcS
 
     variantLookup
     |> Map.toList
+    |> List.filter (fun (variantName, (typeName, _, _, _)) ->
+        not (variantName.StartsWith($"{typeName}.")))
     |> List.fold addVariant Map.empty
     |> Map.map toSumShapeInfo
 
@@ -473,7 +501,7 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST
             AST.TList (canonicalize elemType)
         | AST.TDict (keyType, valueType) ->
             AST.TDict (canonicalize keyType, canonicalize valueType)
-        | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128
+        | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
         | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar
         | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
@@ -521,6 +549,7 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
     | AST.TInt32
     | AST.TInt64
     | AST.TInt128
+    | AST.TInt
     | AST.TUInt8
     | AST.TUInt16
     | AST.TUInt32
@@ -630,6 +659,7 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TInt32 -> "i32"
     | AST.TInt64 -> "i64"
     | AST.TInt128 -> "i128"
+    | AST.TInt -> "int"
     | AST.TUInt8 -> "u8"
     | AST.TUInt16 -> "u16"
     | AST.TUInt32 -> "u32"
@@ -759,6 +789,7 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TRecord (name, List.map (applySubstToType subst) typeArgs)
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TInt128
+    | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TUInt128
     | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
@@ -787,6 +818,7 @@ let rec collectTypeVarsInType (typ: AST.Type) (acc: string list) : string list =
         collectTypeVarsInType valueType withKey
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TInt128
+    | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TUInt128
     | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
@@ -1801,7 +1833,7 @@ let rec simpleInferType
     let isIntType (typ: AST.Type) : bool =
         match typ with
         | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
-        | AST.TInt128
+        | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
         | AST.TUInt128 -> true
         | _ -> false
@@ -1874,6 +1906,7 @@ let rec simpleInferType
     match expr with
     | AST.Int64Literal _ -> Some AST.TInt64
     | AST.Int128Literal _ -> Some AST.TInt128
+    | AST.BigIntLiteral _ -> Some AST.TInt
     | AST.Int8Literal _ -> Some AST.TInt8
     | AST.Int16Literal _ -> Some AST.TInt16
     | AST.Int32Literal _ -> Some AST.TInt32
@@ -2531,7 +2564,10 @@ let rec liftLambdasInProgram
             | _ -> None)
         |> List.collect (fun (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
+            |> List.mapi (fun idx variant ->
+                let info = (typeName, typeParams, idx, variant.Payload)
+                [(variant.Name, info); ($"{typeName}.{variant.Name}", info)])
+            |> List.concat)
         |> Map.ofList
 
     let mergeMapsLocal m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
@@ -2802,6 +2838,27 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
     | AST.Or -> ANF.Or
     | AST.StringConcat -> ANF.Add  // Never reached - StringConcat handled as CExpr
 
+/// Arbitrary-precision Int values use canonical decimal-string storage. Route
+/// operations through the pure Int stdlib implementation instead of native
+/// machine-word primitives.
+let private intFunctionForBinOp (op: AST.BinOp) : string option =
+    match op with
+    | AST.Add -> Some "Stdlib.Int.add"
+    | AST.Sub -> Some "Stdlib.Int.subtract"
+    | AST.Mul -> Some "Stdlib.Int.multiply"
+    | AST.Div -> Some "Stdlib.Int.divide"
+    | AST.Mod -> Some "Stdlib.Int.mod_v0"
+    | AST.Shl -> Some "Stdlib.Int.shiftLeft"
+    | AST.Shr -> Some "Stdlib.Int.shiftRight"
+    | AST.BitAnd -> Some "Stdlib.Int.bitwiseAnd"
+    | AST.BitOr -> Some "Stdlib.Int.bitwiseOr"
+    | AST.BitXor -> Some "Stdlib.Int.power"
+    | AST.Lt -> Some "Stdlib.Int.lessThan"
+    | AST.Gt -> Some "Stdlib.Int.greaterThan"
+    | AST.Lte -> Some "Stdlib.Int.lessThanOrEqualTo"
+    | AST.Gte -> Some "Stdlib.Int.greaterThanOrEqualTo"
+    | AST.Eq | AST.Neq | AST.And | AST.Or | AST.StringConcat -> None
+
 /// Convert AST.UnaryOp to ANF.UnaryOp
 let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
     match op with
@@ -3011,7 +3068,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
     | AST.UnitLiteral -> Ok AST.TUnit
     | AST.Int64Literal _ -> Ok AST.TInt64
     | AST.Int128Literal _ -> Ok AST.TInt128
-    | AST.BigIntLiteral _ -> Ok (AST.TSum ("Stdlib.Int.Int", []))
+    | AST.BigIntLiteral _ -> Ok AST.TInt
     | AST.Int8Literal _ -> Ok AST.TInt8
     | AST.Int16Literal _ -> Ok AST.TInt16
     | AST.Int32Literal _ -> Ok AST.TInt32
@@ -3130,8 +3187,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 Ok (List.item index elemTypes)
             | AST.TTuple _ -> Error $"Tuple index {index} out of bounds"
             | _ -> Error "Cannot access index on non-tuple type")
-    | AST.Constructor (_, variantName, payload) ->
-        match Map.tryFind variantName variantLookup with
+    | AST.Constructor (constructorTypeName, variantName, payload) ->
+        match tryFindVariant constructorTypeName variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
         | Some (typeName, typeParams, _, payloadPattern) ->
@@ -3240,6 +3297,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             |> Result.bind (fun operandType ->
                 match operandType with
                 | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TInt
                 | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
                 | AST.TFloat64 -> Ok operandType
                 | _ -> Error $"Arithmetic operator requires numeric operands, got {operandType}")
@@ -3248,6 +3306,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             |> Result.bind (fun operandType ->
                 match operandType with
                 | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TInt
                 | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> Ok operandType
                 | _ -> Error $"Bitwise operator requires integer operands, got {operandType}")
         | AST.Eq | AST.Neq -> Ok AST.TBool
@@ -3256,6 +3315,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             |> Result.bind (fun operandType ->
                 match operandType with
                 | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TInt
                 | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
                 | AST.TFloat64 -> Ok AST.TBool
                 | _ -> Error $"Comparison operator requires numeric operands, got {operandType}")
@@ -3268,6 +3328,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             | AST.Neg ->
                 match innerType with
                 | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TInt
                 | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
                 | AST.TFloat64 -> Ok innerType
                 | _ -> Error $"Negation requires numeric operand, got {innerType}"
@@ -3277,7 +3338,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 | _ -> Error $"Logical not requires Bool operand, got {innerType}"
             | AST.BitNot ->
                 match innerType with
-                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 -> Ok innerType
+                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt -> Ok innerType
                 | _ -> Error $"Bitwise not requires integer operand, got {innerType}")
     | AST.Match (scrutinee, cases) ->
         // Infer from first case body, but first extend environment with pattern variables
@@ -3941,6 +4002,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | _ ->
                     let zeroExpr = AST.Int64Literal 0L
                     toANF (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
+            | AST.TInt ->
+                toANF
+                    (AST.BinOp (AST.Sub, AST.BigIntLiteral System.Numerics.BigInteger.Zero, innerExpr))
+                    varGen env typeReg variantLookup funcReg moduleRegistry
             | AST.TInt32 ->
                 let zeroExpr = AST.Int32Literal 0l
                 toANF (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
@@ -3979,17 +4044,19 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             (exprWithBindings, varGen2))
 
     | AST.UnaryOp (AST.BitNot, innerExpr) ->
-        // Bitwise NOT: convert operand to atom and apply BitNot
-        toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
-            // Create unary op and bind to fresh variable
-            let (tempVar, varGen2) = ANF.freshVar varGen1
-            let cexpr = ANF.UnaryPrim (ANF.BitNot, innerAtom)
-
-            // Build the expression: innerBindings + let tempVar = op
-            let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
-            let exprWithBindings = wrapBindings innerBindings finalExpr
-
-            (exprWithBindings, varGen2))
+        let typeEnv = typeEnvFromVarEnv env
+        inferType innerExpr typeEnv typeReg variantLookup funcReg moduleRegistry
+        |> Result.bind (fun innerType ->
+            toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry
+            |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+                let (tempVar, varGen2) = ANF.freshVar varGen1
+                let cexpr =
+                    if innerType = AST.TInt then
+                        ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
+                    else
+                        ANF.UnaryPrim (ANF.BitNot, innerAtom)
+                let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
+                (wrapBindings innerBindings finalExpr, varGen2)))
 
     | AST.BinOp (op, left, right) ->
         toANFBoundAtom left varGen env typeReg variantLookup funcReg moduleRegistry
@@ -4017,6 +4084,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             Ok (wrapBindings finalBindings (ANF.Return finalAtom), varGen4)
                         | Ok AST.TString
                         | Ok AST.TChar
+                        | Ok AST.TInt
                         | Ok AST.TInt128
                         | Ok AST.TUInt128 ->
                             // String/char/128-bit equality - call __string_eq.
@@ -4048,7 +4116,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | AST.Lt | AST.Gt | AST.Lte | AST.Gte
                     | AST.And | AST.Or ->
                         let (tempVar, varGen3) = ANF.freshVar varGen2
-                        let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
+                        let cexpr =
+                            match inferType left typeEnv typeReg variantLookup funcReg moduleRegistry,
+                                  intFunctionForBinOp op with
+                            | Ok AST.TInt, Some funcName -> ANF.Call (funcName, [leftAtom; rightAtom])
+                            | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                         Ok (ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar)), varGen3)
 
                 buildCoreExpr ()
@@ -4462,8 +4534,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             | _ ->
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
-    | AST.Constructor (_, variantName, payload) ->
-        match Map.tryFind variantName variantLookup with
+    | AST.Constructor (constructorTypeName, variantName, payload) ->
+        match tryFindVariant constructorTypeName variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
         | Some (typeName, _, tag, _) ->
@@ -7885,6 +7957,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 | _ ->
                     let zeroExpr = AST.Int64Literal 0L
                     toAtom (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
+            | AST.TInt ->
+                toAtom
+                    (AST.BinOp (AST.Sub, AST.BigIntLiteral System.Numerics.BigInteger.Zero, innerExpr))
+                    varGen env typeReg variantLookup funcReg moduleRegistry
             | AST.TInt32 ->
                 let zeroExpr = AST.Int32Literal 0l
                 toAtom (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
@@ -7921,15 +7997,18 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             (ANF.Var tempVar, allBindings, varGen2))
 
     | AST.UnaryOp (AST.BitNot, innerExpr) ->
-        // Bitwise NOT: convert operand to atom, create binding
-        toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
-            // Create the operation
-            let (tempVar, varGen2) = ANF.freshVar varGen1
-            let cexpr = ANF.UnaryPrim (ANF.BitNot, innerAtom)
-
-            // Return the temp variable as atom, plus all bindings
-            let allBindings = innerBindings @ [(tempVar, cexpr)]
-            (ANF.Var tempVar, allBindings, varGen2))
+        let typeEnv = typeEnvFromVarEnv env
+        inferType innerExpr typeEnv typeReg variantLookup funcReg moduleRegistry
+        |> Result.bind (fun innerType ->
+            toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry
+            |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+                let (tempVar, varGen2) = ANF.freshVar varGen1
+                let cexpr =
+                    if innerType = AST.TInt then
+                        ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
+                    else
+                        ANF.UnaryPrim (ANF.BitNot, innerAtom)
+                (ANF.Var tempVar, innerBindings @ [(tempVar, cexpr)], varGen2)))
 
     | AST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding
@@ -7956,6 +8035,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                         Ok (finalAtom, allBindings, varGen4)
                     | Ok AST.TString
                     | Ok AST.TChar
+                    | Ok AST.TInt
                     | Ok AST.TInt128
                     | Ok AST.TUInt128 ->
                         // String/char/128-bit equality - call __string_eq.
@@ -7989,7 +8069,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 | AST.Lt | AST.Gt | AST.Lte | AST.Gte
                 | AST.And | AST.Or ->
                     let (tempVar, varGen3) = ANF.freshVar varGen2
-                    let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
+                    let cexpr =
+                        match inferType left typeEnv typeReg variantLookup funcReg moduleRegistry,
+                              intFunctionForBinOp op with
+                        | Ok AST.TInt, Some funcName -> ANF.Call (funcName, [leftAtom; rightAtom])
+                        | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                     let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
                     Ok (ANF.Var tempVar, allBindings, varGen3)))
 
@@ -8221,8 +8305,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             | _ ->
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
-    | AST.Constructor (_, variantName, payload) ->
-        match Map.tryFind variantName variantLookup with
+    | AST.Constructor (constructorTypeName, variantName, payload) ->
+        match tryFindVariant constructorTypeName variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
         | Some (typeName, _, tag, _) ->
@@ -8851,7 +8935,10 @@ let buildRegistries
             | _ -> None)
         |> List.collect (fun (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
+            |> List.mapi (fun idx variant ->
+                let info = (typeName, typeParams, idx, variant.Payload)
+                [(variant.Name, info); ($"{typeName}.{variant.Name}", info)])
+            |> List.concat)
         |> Map.ofList
 
     let typeReg =

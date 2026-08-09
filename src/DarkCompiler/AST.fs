@@ -28,6 +28,7 @@ type Type =
     | TInt32
     | TInt64
     | TInt128
+    | TInt       // Arbitrary-precision signed integer
     // Unsigned integers
     | TUInt8
     | TUInt16

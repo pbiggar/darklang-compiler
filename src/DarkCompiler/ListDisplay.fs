@@ -8,6 +8,7 @@ module ListDisplay
 let getDisplayStringFunc (elemType: AST.Type) : string option =
     match elemType with
     | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
+    | AST.TInt -> Some "Stdlib.List.toDisplayString_int"
     | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
     | AST.TString -> Some "Stdlib.List.toDisplayString_str"
     | AST.TChar -> Some "Stdlib.List.toDisplayString_char"

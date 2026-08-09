@@ -357,7 +357,8 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
         TaggedListShape (rcShapeOfType typeReg elemType)
     | AST.TDict (keyType, valueType) ->
         DictRoot (rcShapeOfType typeReg keyType, rcShapeOfType typeReg valueType)
-    | AST.TString ->
+    | AST.TString
+    | AST.TInt ->
         DynamicString
     | AST.TBytes ->
         DynamicBytes
@@ -388,6 +389,7 @@ let private collectTypeVarsInOrder (typ: AST.Type) : string list =
         | AST.TInt32
         | AST.TInt64
         | AST.TInt128
+        | AST.TInt
         | AST.TUInt8
         | AST.TUInt16
         | AST.TUInt32
@@ -430,6 +432,7 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
     | AST.TInt32
     | AST.TInt64
     | AST.TInt128
+    | AST.TInt
     | AST.TUInt8
     | AST.TUInt16
     | AST.TUInt32
@@ -506,7 +509,8 @@ let rec rcShapeOfTypeWithSums
         DictRoot (classify keyType, classify valueType)
     | AST.TFunction _ ->
         ClosureShape []
-    | AST.TString ->
+    | AST.TString
+    | AST.TInt ->
         DynamicString
     | AST.TBytes ->
         DynamicBytes

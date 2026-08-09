@@ -645,6 +645,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "Int32" :: rest -> Ok (AST.TInt32, rest)
     | TIdent "Int64" :: rest -> Ok (AST.TInt64, rest)
     | TIdent "Int128" :: rest -> Ok (AST.TInt128, rest)
+    | TIdent "Int" :: rest -> Ok (AST.TInt, rest)
     | TIdent "UInt8" :: rest -> Ok (AST.TUInt8, rest)
     | TIdent "UInt16" :: rest -> Ok (AST.TUInt16, rest)
     | TIdent "UInt32" :: rest -> Ok (AST.TUInt32, rest)

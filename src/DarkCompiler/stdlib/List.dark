@@ -402,6 +402,19 @@ def Stdlib.List.toDisplayString_i64(list: List<Int64>) : String =
     let strs = Stdlib.List.__int64sToStrings(list, Stdlib.__SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
+def Stdlib.List.__intsToStrings(list: List<Int>, acc: List<String>) : List<String> =
+    if Stdlib.__SkewList.isEmpty<Int>(list) then Stdlib.__SkewList.reverse<String>(acc)
+    else
+        match Stdlib.__SkewList.head<Int>(list) with
+        | None -> Stdlib.__SkewList.reverse<String>(acc)
+        | Some(h) ->
+            let next = Stdlib.__SkewList.push<String>(acc, Stdlib.Int.toString(h)) in
+            Stdlib.List.__intsToStrings(Stdlib.__SkewList.tail<Int>(list), next)
+
+def Stdlib.List.toDisplayString_int(list: List<Int>) : String =
+    let strs = Stdlib.List.__intsToStrings(list, Stdlib.__SkewList.empty<String>()) in
+    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+
 def Stdlib.List.__i64ListsToStrings(list: List<List<Int64>>, acc: List<String>) : List<String> =
     if Stdlib.__SkewList.isEmpty<List<Int64>>(list) then Stdlib.__SkewList.reverse<String>(acc)
     else

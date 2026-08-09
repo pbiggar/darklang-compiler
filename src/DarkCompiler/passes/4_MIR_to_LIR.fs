@@ -1054,7 +1054,7 @@ let selectInstr
                      LIR.PrintFloat (LIR.FPhysical LIR.D0)]
             | _ ->
                 Error "Internal error: unexpected operand type for float print"
-        | AST.TString | AST.TChar | AST.TInt128 | AST.TUInt128 ->
+        | AST.TString | AST.TChar | AST.TInt | AST.TInt128 | AST.TUInt128 ->
             // String/Char printing uses PrintString for pool strings, PrintHeapString for heap strings.
             // Char is stored as a string at runtime (single EGC).
             // Int128/UInt128 are lowered as canonical decimal strings.

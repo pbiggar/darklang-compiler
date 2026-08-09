@@ -1,11 +1,9 @@
-// Arbitrary-precision `Int` — the small/big representation split.
+// Arbitrary-precision `Int` compatibility tests.
 //
-// `Int` is stored as a small (Int64-backed) value when it fits, and only
-// promotes to a big representation on overflow. Values are NORMALIZED: any
-// result that fits Int64 always uses the small representation. These tests
-// exercise the boundary, promotion, demotion, normalization, and finite/infinite
-// ordering — the properties that break if normalization is wrong. Literals use
-// the F# `I` suffix because these testfiles are parsed by the F# parser.
+// Values are normalized to canonical decimal storage. These tests exercise the
+// former finite/infinite boundary as a behavioral boundary: operations and
+// conversions must remain exact on both sides regardless of representation.
+// Literals use Dark's `I` suffix.
 
 // --- boundary: largest small value vs first big value ---
 9223372036854775807I + 0I = 9223372036854775807I // Int64.MAX stays small
@@ -74,6 +72,7 @@ Stdlib.Int.toUInt128 (2I ^ 200I) = Stdlib.Option.Option.None
 // --- fromFloat: truncates toward zero; NaN/Infinity have no Int, so OutOfRange ---
 Stdlib.Int.fromFloat 3.9 = 3I
 Stdlib.Int.fromFloat -3.9 = -3I
+Stdlib.Int.fromFloat 1.0e20 = 100000000000000000000I
 Stdlib.Int.fromFloat (0.0 / 0.0) =
   error="Encountered out-of-range value for type of Int"
 Stdlib.Int.fromFloat (1.0 / 0.0) =
@@ -115,3 +114,29 @@ Stdlib.Int.shiftLeft 1I (2I ^ 40I) =
   error="Encountered out-of-range value for type of Int"
 Stdlib.Int.shiftRight 1I (2I ^ 40I) =
   error="Encountered out-of-range value for type of Int"
+
+// --- bitwise operations use infinite two's-complement semantics ---
+Stdlib.Int.bitwiseAnd 12I 10I = 8I
+Stdlib.Int.bitwiseOr 12I 10I = 14I
+Stdlib.Int.bitwiseXor 12I 10I = 6I
+Stdlib.Int.bitwiseNot 12I = -13I
+Stdlib.Int.bitwiseAnd ((2I ^ 100I) + 3I) 7I = 3I
+Stdlib.Int.bitwiseAnd -5I 3I = 3I
+Stdlib.Int.bitwiseOr -5I 3I = -5I
+Stdlib.Int.bitwiseXor -5I 3I = -8I
+Stdlib.Int.shiftRight -5I 1I = -3I
+(12I & 10I) = 8I
+(12I ||| 10I) = 14I
+~~~12I = -13I
+(1I << 100I) = 1267650600228229401496703205376I
+(-5I >> 1I) = -3I
+let value = 2I ^ 100I in -value = -1267650600228229401496703205376I
+
+// --- remaining upstream numeric conversions ---
+Stdlib.Int.toUInt64 18446744073709551615I =
+  Stdlib.Option.Option.Some 18446744073709551615UL
+Stdlib.Int.toUInt64 18446744073709551616I = Stdlib.Option.Option.None
+Stdlib.Int.toFloat 5I = 5.0
+Stdlib.Int.sqrt 81I = 9.0
+[1I, 1267650600228229401496703205376I] =
+  stdout="[1, 1267650600228229401496703205376]\n" stderr=""

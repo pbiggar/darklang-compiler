@@ -127,6 +127,19 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__string_to_rawptr"; TypeParams = []; ParamTypes = [TString]; ReturnType = TRawPtr }
     // __rawptr_to_string : (RawPtr) -> String - reinterpret initialized raw allocation as String
     { Name = "__rawptr_to_string"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TString }
+    // Int uses the same canonical decimal dynamic-buffer representation as String.
+    { Name = "__int_to_string"; TypeParams = []; ParamTypes = [TInt]; ReturnType = TString }
+    { Name = "__string_to_int"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt }
+    { Name = "__int128_to_int"; TypeParams = []; ParamTypes = [TInt128]; ReturnType = TInt }
+    { Name = "__uint128_to_int"; TypeParams = []; ParamTypes = [TUInt128]; ReturnType = TInt }
+    { Name = "__int_to_int128"; TypeParams = []; ParamTypes = [TInt]; ReturnType = TInt128 }
+    { Name = "__int_to_uint128"; TypeParams = []; ParamTypes = [TInt]; ReturnType = TUInt128 }
+    { Name = "__int64_to_int8"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TInt8 }
+    { Name = "__int64_to_int16"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TInt16 }
+    { Name = "__int64_to_int32"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TInt32 }
+    { Name = "__int64_to_uint8"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TUInt8 }
+    { Name = "__int64_to_uint16"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TUInt16 }
+    { Name = "__int64_to_uint32"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TUInt32 }
 
     // Bytes intrinsics - for byte array operations
     // __bytes_to_rawptr : (Bytes) -> RawPtr - borrow bytes backing pointer

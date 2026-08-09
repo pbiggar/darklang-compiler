@@ -61,6 +61,7 @@ let rec typeToString (t: Type) : string =
     | TInt32 -> "Int32"
     | TInt64 -> "Int64"
     | TInt128 -> "Int128"
+    | TInt -> "Int"
     | TUInt8 -> "UInt8"
     | TUInt16 -> "UInt16"
     | TUInt32 -> "UInt32"
@@ -400,7 +401,7 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
     | TTuple elems -> TTuple (List.map (applyTypeVarRenaming subst) elems)
     | TSum (name, args) -> TSum (name, List.map (applyTypeVarRenaming subst) args)
     | TRecord (name, args) -> TRecord (name, List.map (applyTypeVarRenaming subst) args)
-    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr -> t
 
@@ -429,6 +430,17 @@ type SumTypeRegistry = Map<string, (string * int * Type option) list>
 /// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
 /// Type params are the generic type parameters of the containing sum type
 type VariantLookup = Map<string, (string * string list * int * Type option)>
+
+let private tryFindVariant
+    (constructorTypeName: string)
+    (variantName: string)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * Type option) option =
+    if constructorTypeName = "" then
+        Map.tryFind variantName variantLookup
+    else
+        Map.tryFind $"{constructorTypeName}.{variantName}" variantLookup
+        |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
 
 /// Generic function registry and call-site policy controls.
 /// `Functions` contains entries only for functions that have type parameters.
@@ -509,7 +521,7 @@ let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (ty
         TSum (name, List.map (applySubstWithSeen seen subst) typeArgs)
     | TDict (keyType, valueType) ->
         TDict (applySubstWithSeen seen subst keyType, applySubstWithSeen seen subst valueType)
-    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
         typ  // Concrete types are unchanged
@@ -539,7 +551,7 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
     | TDict (keyType, valueType) ->
         let withKey = collectTypeVarsInType keyType acc
         collectTypeVarsInType valueType withKey
-    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
         acc
@@ -594,7 +606,7 @@ let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : T
         TList (resolveAliasTargetType aliasReg elemType)
     | TDict (keyType, valueType) ->
         TDict (resolveAliasTargetType aliasReg keyType, resolveAliasTargetType aliasReg valueType)
-    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
         typ
@@ -762,7 +774,7 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
         TList (resolveType aliasReg elemType)
     | TDict (keyType, valueType) ->
         TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
-    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
         typ  // Primitive types and type variables are unchanged
@@ -796,7 +808,7 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Typ
             TList (canonicalize elemType)
         | TDict (keyType, valueType) ->
             TDict (canonicalize keyType, canonicalize valueType)
-        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
         | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
             typ
@@ -1145,6 +1157,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     | TInt32 -> matchConcrete TInt32 actual
     | TInt64 -> matchConcrete TInt64 actual
     | TInt128 -> matchConcrete TInt128 actual
+    | TInt -> matchConcrete TInt actual
     | TUInt8 -> matchConcrete TUInt8 actual
     | TUInt16 -> matchConcrete TUInt16 actual
     | TUInt32 -> matchConcrete TUInt32 actual
@@ -1512,7 +1525,9 @@ let rec private checkExprWithParamNames
             | _ -> Error (TypeMismatch (other, TInt128, "integer literal"))
 
     | BigIntLiteral _ ->
-        Ok (TSum ("Stdlib.Int.Int", []), expr)
+        match expectedType with
+        | Some TInt | None -> Ok (TInt, expr)
+        | Some other -> Error (TypeMismatch (other, TInt, "Int literal"))
 
     | Int8Literal _ ->
         match expectedType with
@@ -1643,7 +1658,7 @@ let rec private checkExprWithParamNames
 
             let tryAsNumericType (typ: Type) : Type option =
                 match resolveType aliasReg typ with
-                | TInt8 | TInt16 | TInt32 | TInt64
+                | TInt8 | TInt16 | TInt32 | TInt64 | TInt
                 | TUInt8 | TUInt16 | TUInt32 | TUInt64
                 | TFloat64 as numeric ->
                     Some numeric
@@ -1791,6 +1806,7 @@ let rec private checkExprWithParamNames
                             | Some comparableType ->
                                 match comparableType with
                                 | TInt8 | TInt16 | TInt32 | TInt64
+                                | TInt
                                 | TUInt8 | TUInt16 | TUInt32 | TUInt64
                                 | TFloat64 ->
                                     match expectedType with
@@ -1865,7 +1881,7 @@ let rec private checkExprWithParamNames
 
             let isIntegerType (typ: Type) =
                 match typ with
-                | TInt8 | TInt16 | TInt32 | TInt64
+                | TInt8 | TInt16 | TInt32 | TInt64 | TInt
                 | TUInt8 | TUInt16 | TUInt32 | TUInt64 -> true
                 | _ -> false
 
@@ -1916,7 +1932,7 @@ let rec private checkExprWithParamNames
             checkExpr inner env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
             |> Result.bind (fun (innerType, inner') ->
                 match innerType with
-                | TInt8 | TInt16 | TInt32 | TInt64
+                | TInt8 | TInt16 | TInt32 | TInt64 | TInt
                 | TUInt8 | TUInt16 | TUInt32 | TUInt64
                 | TFloat64 ->
                     match expectedType with
@@ -1941,7 +1957,7 @@ let rec private checkExprWithParamNames
             // Bitwise NOT works on integer types and preserves the operand type
             let isIntegerType (typ: Type) =
                 match typ with
-                | TInt8 | TInt16 | TInt32 | TInt64
+                | TInt8 | TInt16 | TInt32 | TInt64 | TInt
                 | TUInt8 | TUInt16 | TUInt32 | TUInt64 -> true
                 | _ -> false
 
@@ -3231,7 +3247,7 @@ let rec private checkExprWithParamNames
 
     | Constructor (constrTypeName, variantName, payload) ->
         // Look up the variant to find its type and expected payload
-        match Map.tryFind variantName variantLookup with
+        match tryFindVariant constrTypeName variantName variantLookup with
         | None ->
             Error (GenericError $"Unknown constructor: {variantName}")
         | Some (typeName, typeParams, _tag, expectedPayload) ->
@@ -4920,10 +4936,10 @@ let private summarizeTopLevelDeclarations
                 variants
                 |> List.indexed
                 |> List.fold (fun lookup (tag, variant) ->
-                    Map.add
-                        variant.Name
-                        (typeName, typeParams, tag, variant.Payload)
-                        lookup) summary.VariantLookup
+                    let info = (typeName, typeParams, tag, variant.Payload)
+                    lookup
+                    |> Map.add variant.Name info
+                    |> Map.add $"{typeName}.{variant.Name}" info) summary.VariantLookup
             { summary with VariantLookup = variantLookup }
         | FunctionDef funcDef ->
             let parameters = NonEmptyList.toList funcDef.Params
@@ -4960,7 +4976,11 @@ let private checkProgramInternal
     // Build environment with function signatures from THIS program
     let programFuncEnv =
         declarationSummary.FuncSigs
-        |> Map.map (fun _ (paramTypes, returnType) -> TFunction (paramTypes, returnType))
+        |> Map.map (fun _ (paramTypes, returnType) ->
+            TFunction (
+                List.map (canonicalizeBareSumTypeRefs declarationSummary.VariantLookup) paramTypes,
+                canonicalizeBareSumTypeRefs declarationSummary.VariantLookup returnType
+            ))
 
     let programGenericFuncReg : GenericFuncRegistry = {
         Functions = declarationSummary.GenericFuncs

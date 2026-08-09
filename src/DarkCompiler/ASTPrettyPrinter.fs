@@ -109,6 +109,7 @@ let rec private formatType (typ: Type) : string =
     | TInt32 -> "Int32"
     | TInt64 -> "Int64"
     | TInt128 -> "Int128"
+    | TInt -> "Int"
     | TUInt8 -> "UInt8"
     | TUInt16 -> "UInt16"
     | TUInt32 -> "UInt32"

@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-10 21:45:19
-**Commit:** `a7c225e6` - Factor shared Int64 multiply-adds
+**Last Updated:** 2026-08-10 22:09:35
+**Commit:** `9e1ff288` - Add arbitrary-precision Int support
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
