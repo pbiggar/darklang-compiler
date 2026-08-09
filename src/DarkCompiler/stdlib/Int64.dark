@@ -6,6 +6,13 @@
 
 def Stdlib.Int64.add(a: Int64, b: Int64) : Int64 = a + b
 
+// Interpreter public names for the existing arithmetic operations.
+def Stdlib.Int64.subtract(a: Int64, b: Int64) : Int64 = a - b
+
+def Stdlib.Int64.multiply(a: Int64, b: Int64) : Int64 = a * b
+
+def Stdlib.Int64.divide(a: Int64, b: Int64) : Int64 = a / b
+
 def Stdlib.Int64.sub(a: Int64, b: Int64) : Int64 = a - b
 
 def Stdlib.Int64.mul(a: Int64, b: Int64) : Int64 = a * b

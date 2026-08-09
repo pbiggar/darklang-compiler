@@ -46,3 +46,73 @@ def Stdlib.Option.toList<t>(opt: Stdlib.Option.Option<t>) : List<t> =
     match opt with
     | Some(v) -> [v]
     | None -> []
+
+// Combinators ported from darklang/dark packages/darklang/stdlib/option.dark.
+def Stdlib.Option.map2<a, b, c>(option1: Stdlib.Option.Option<a>, option2: Stdlib.Option.Option<b>, fn: (a, b) -> c) : Stdlib.Option.Option<c> =
+    match (option1, option2) with
+    | (Some(v1), Some(v2)) -> Some(fn(v1, v2))
+    | _ -> None
+
+def Stdlib.Option.map3<a, b, c, d>(option1: Stdlib.Option.Option<a>, option2: Stdlib.Option.Option<b>, option3: Stdlib.Option.Option<c>, fn: (a, b, c) -> d) : Stdlib.Option.Option<d> =
+    match (option1, option2, option3) with
+    | (Some(v1), Some(v2), Some(v3)) -> Some(fn(v1, v2, v3))
+    | _ -> None
+
+def Stdlib.Option.map4<a, b, c, d, e>(option1: Stdlib.Option.Option<a>, option2: Stdlib.Option.Option<b>, option3: Stdlib.Option.Option<c>, option4: Stdlib.Option.Option<d>, fn: (a, b, c, d) -> e) : Stdlib.Option.Option<e> =
+    match (option1, option2, option3, option4) with
+    | (Some(v1), Some(v2), Some(v3), Some(v4)) -> Some(fn(v1, v2, v3, v4))
+    | _ -> None
+
+def Stdlib.Option.map5<a, b, c, d, e, f>(option1: Stdlib.Option.Option<a>, option2: Stdlib.Option.Option<b>, option3: Stdlib.Option.Option<c>, option4: Stdlib.Option.Option<d>, option5: Stdlib.Option.Option<e>, fn: (a, b, c, d, e) -> f) : Stdlib.Option.Option<f> =
+    match (option1, option2, option3, option4, option5) with
+    | (Some(v1), Some(v2), Some(v3), Some(v4), Some(v5)) -> Some(fn(v1, v2, v3, v4, v5))
+    | _ -> None
+
+def Stdlib.Option.mapWithDefault<a, b>(option: Stdlib.Option.Option<a>, default_: b, fn: (a) -> b) : b =
+    match option with
+    | Some(value) -> fn(value)
+    | None -> default_
+
+def Stdlib.Option.andThen2<a, b, c>(option1: Stdlib.Option.Option<a>, option2: Stdlib.Option.Option<b>, fn: (a, b) -> Stdlib.Option.Option<c>) : Stdlib.Option.Option<c> =
+    match (option1, option2) with
+    | (Some(v1), Some(v2)) -> fn(v1, v2)
+    | _ -> None
+
+def Stdlib.Option.andThen3<a, b, c, d>(option1: Stdlib.Option.Option<a>, option2: Stdlib.Option.Option<b>, option3: Stdlib.Option.Option<c>, fn: (a, b, c) -> Stdlib.Option.Option<d>) : Stdlib.Option.Option<d> =
+    match (option1, option2, option3) with
+    | (Some(v1), Some(v2), Some(v3)) -> fn(v1, v2, v3)
+    | _ -> None
+
+def Stdlib.Option.andThen4<a, b, c, d, e>(option1: Stdlib.Option.Option<a>, option2: Stdlib.Option.Option<b>, option3: Stdlib.Option.Option<c>, option4: Stdlib.Option.Option<d>, fn: (a, b, c, d) -> Stdlib.Option.Option<e>) : Stdlib.Option.Option<e> =
+    match (option1, option2, option3, option4) with
+    | (Some(v1), Some(v2), Some(v3), Some(v4)) -> fn(v1, v2, v3, v4)
+    | _ -> None
+
+def Stdlib.Option.toResult<a, e>(option: Stdlib.Option.Option<a>, error: e) : Stdlib.Result.Result<a, e> =
+    match option with
+    | Some(value) -> Ok(value)
+    | None -> Error(error)
+
+def Stdlib.Option.join<a>(option: Stdlib.Option.Option<Stdlib.Option.Option<a>>) : Stdlib.Option.Option<a> =
+    match option with
+    | Some(value) -> value
+    | None -> None
+
+def Stdlib.Option.combine<a>(options: List<Stdlib.Option.Option<a>>) : Stdlib.Option.Option<List<a>> =
+    match options with
+    | [] -> Some([])
+    | [option, ...rest] ->
+        match option with
+        | None -> None
+        | Some(value) ->
+            match Stdlib.Option.combine<a>(rest) with
+            | None -> None
+            | Some(values) -> Some([value, ...values])
+
+def Stdlib.Option.values<a>(options: List<Stdlib.Option.Option<a>>) : List<a> =
+    match options with
+    | [] -> []
+    | [option, ...rest] ->
+        match option with
+        | Some(value) -> [value, ...Stdlib.Option.values<a>(rest)]
+        | None -> Stdlib.Option.values<a>(rest)

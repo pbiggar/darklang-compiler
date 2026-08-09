@@ -305,6 +305,80 @@ def Stdlib.List.__partitionHelper<a>(list: List<a>, fn: (a) -> Bool, trueAcc: Li
 def Stdlib.List.all<a>(list: List<a>, fn: (a) -> Bool) : Bool =
     Stdlib.List.forAll<a>(list, fn)
 
+// Collection helpers ported from darklang/dark packages/darklang/stdlib/list.dark.
+def Stdlib.List.findFirstIndex<a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<Int64> =
+    Stdlib.List.__findFirstIndexHelper<a>(list, fn, 0)
+
+def Stdlib.List.__findFirstIndexHelper<a>(list: List<a>, fn: (a) -> Bool, index: Int64) : Stdlib.Option.Option<Int64> =
+    match list with
+    | [] -> None
+    | [head, ...tail] -> if fn(head) then Some(index) else Stdlib.List.__findFirstIndexHelper<a>(tail, fn, index + 1)
+
+def Stdlib.List.member<a>(list: List<a>, value: a) : Bool =
+    match list with
+    | [] -> false
+    | [head, ...tail] -> if head == value then true else Stdlib.List.member<a>(tail, value)
+
+def Stdlib.List.interpose<a>(list: List<a>, separator: a) : List<a> =
+    match list with
+    | [] -> []
+    | [single] -> [single]
+    | [head, ...tail] -> [head, separator, ...Stdlib.List.interpose<a>(tail, separator)]
+
+def Stdlib.List.interleave<a>(listA: List<a>, listB: List<a>) : List<a> =
+    match listA with
+    | [] -> listB
+    | [headA, ...tailA] ->
+        match listB with
+        | [] -> listA
+        | [headB, ...tailB] -> [headA, headB, ...Stdlib.List.interleave<a>(tailA, tailB)]
+
+def Stdlib.List.filterMap<a, b>(list: List<a>, fn: (a) -> Stdlib.Option.Option<b>) : List<b> =
+    match list with
+    | [] -> []
+    | [head, ...tail] ->
+        match fn(head) with
+        | Some(value) -> [value, ...Stdlib.List.filterMap<a, b>(tail, fn)]
+        | None -> Stdlib.List.filterMap<a, b>(tail, fn)
+
+def Stdlib.List.dropWhile<a>(list: List<a>, fn: (a) -> Bool) : List<a> =
+    match list with
+    | [] -> []
+    | [head, ...tail] -> if fn(head) then Stdlib.List.dropWhile<a>(tail, fn) else list
+
+def Stdlib.List.takeWhile<a>(list: List<a>, fn: (a) -> Bool) : List<a> =
+    match list with
+    | [] -> []
+    | [head, ...tail] -> if fn(head) then [head, ...Stdlib.List.takeWhile<a>(tail, fn)] else []
+
+def Stdlib.List.map2shortest<a, b, c>(listA: List<a>, listB: List<b>, fn: (a, b) -> c) : List<c> =
+    match (listA, listB) with
+    | ([], _) -> []
+    | (_, []) -> []
+    | ([headA, ...tailA], [headB, ...tailB]) -> [fn(headA, headB), ...Stdlib.List.map2shortest<a, b, c>(tailA, tailB, fn)]
+
+def Stdlib.List.map2<a, b, c>(listA: List<a>, listB: List<b>, fn: (a, b) -> c) : Stdlib.Option.Option<List<c>> =
+    if Stdlib.List.length<a>(listA) != Stdlib.List.length<b>(listB) then None
+    else Some(Stdlib.List.map2shortest<a, b, c>(listA, listB, fn))
+
+def Stdlib.List.zipShortest<a, b>(listA: List<a>, listB: List<b>) : List<(a, b)> =
+    match (listA, listB) with
+    | ([], _) -> []
+    | (_, []) -> []
+    | ([headA, ...tailA], [headB, ...tailB]) -> [(headA, headB), ...Stdlib.List.zipShortest<a, b>(tailA, tailB)]
+
+def Stdlib.List.unzip<a, b>(pairs: List<(a, b)>) : (List<a>, List<b>) =
+    match pairs with
+    | [] -> ([], [])
+    | [(first, second), ...tail] ->
+        match Stdlib.List.unzip<a, b>(tail) with
+        | (firsts, seconds) -> ([first, ...firsts], [second, ...seconds])
+
+def Stdlib.List.splitLast<a>(list: List<a>) : Stdlib.Option.Option<(List<a>, a)> =
+    match Stdlib.List.reverse<a>(list) with
+    | [] -> None
+    | [last, ...reversedInit] -> Some((Stdlib.List.reverse<a>(reversedInit), last))
+
 // Convert list to display string representation: "[elem1, elem2, ...]"
 // Note: Generic version disabled due to function reference bug
 // def Stdlib.List.toDisplayString<a>(list: List<a>, elemToString: (a) -> String) : String =

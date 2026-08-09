@@ -8,6 +8,34 @@ def Stdlib.Float.add(a: Float, b: Float) : Float = a + b
 
 def Stdlib.Float.multiply(a: Float, b: Float) : Float = a * b
 
+// Arithmetic helpers ported from darklang/dark packages/darklang/stdlib/float.dark.
+def Stdlib.Float.absoluteValue(a: Float) : Float =
+    if a < 0.0 then a * -1.0 else a
+
+def Stdlib.Float.subtract(a: Float, b: Float) : Float = a - b
+
+def Stdlib.Float.divide(a: Float, b: Float) : Float = a / b
+
+def Stdlib.Float.greaterThan(a: Float, b: Float) : Bool = a > b
+
+def Stdlib.Float.greaterThanOrEqualTo(a: Float, b: Float) : Bool = a >= b
+
+def Stdlib.Float.lessThan(a: Float, b: Float) : Bool = a < b
+
+def Stdlib.Float.lessThanOrEqualTo(a: Float, b: Float) : Bool = a <= b
+
+def Stdlib.Float.min(a: Float, b: Float) : Float = if a < b then a else b
+
+def Stdlib.Float.max(a: Float, b: Float) : Float = if a > b then a else b
+
+def Stdlib.Float.sum(values: List<Float>) : Float =
+    Stdlib.Float.__sum(values, 0.0)
+
+def Stdlib.Float.__sum(values: List<Float>, total: Float) : Float =
+    match values with
+    | [] -> total
+    | [head, ...tail] -> Stdlib.Float.__sum(tail, total + head)
+
 // Get IEEE 754 bit representation of Float as UInt64 (intrinsic)
 def Stdlib.Float.toBits(f: Float) : UInt64 = 0UL
 

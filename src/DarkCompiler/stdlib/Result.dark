@@ -52,3 +52,74 @@ def Stdlib.Result.andThen<t, u, e>(result: Stdlib.Result.Result<t, e>, fn: (t) -
     match result with
     | Ok(v) -> fn(v)
     | Error(err) -> Error(err)
+
+// Combinators ported from darklang/dark packages/darklang/stdlib/result.dark.
+def Stdlib.Result.map2<a, b, c, e>(result1: Stdlib.Result.Result<a, e>, result2: Stdlib.Result.Result<b, e>, fn: (a, b) -> c) : Stdlib.Result.Result<c, e> =
+    match (result1, result2) with
+    | (Ok(v1), Ok(v2)) -> Ok(fn(v1, v2))
+    | (Error(error), _) -> Error(error)
+    | (_, Error(error)) -> Error(error)
+
+def Stdlib.Result.map3<a, b, c, d, e>(result1: Stdlib.Result.Result<a, e>, result2: Stdlib.Result.Result<b, e>, result3: Stdlib.Result.Result<c, e>, fn: (a, b, c) -> d) : Stdlib.Result.Result<d, e> =
+    match (result1, result2, result3) with
+    | (Ok(v1), Ok(v2), Ok(v3)) -> Ok(fn(v1, v2, v3))
+    | (Error(error), _, _) -> Error(error)
+    | (_, Error(error), _) -> Error(error)
+    | (_, _, Error(error)) -> Error(error)
+
+def Stdlib.Result.map4<a, b, c, d, f, e>(result1: Stdlib.Result.Result<a, e>, result2: Stdlib.Result.Result<b, e>, result3: Stdlib.Result.Result<c, e>, result4: Stdlib.Result.Result<d, e>, fn: (a, b, c, d) -> f) : Stdlib.Result.Result<f, e> =
+    match (result1, result2, result3, result4) with
+    | (Ok(v1), Ok(v2), Ok(v3), Ok(v4)) -> Ok(fn(v1, v2, v3, v4))
+    | (Error(error), _, _, _) -> Error(error)
+    | (_, Error(error), _, _) -> Error(error)
+    | (_, _, Error(error), _) -> Error(error)
+    | (_, _, _, Error(error)) -> Error(error)
+
+def Stdlib.Result.map5<a, b, c, d, f, g, e>(result1: Stdlib.Result.Result<a, e>, result2: Stdlib.Result.Result<b, e>, result3: Stdlib.Result.Result<c, e>, result4: Stdlib.Result.Result<d, e>, result5: Stdlib.Result.Result<f, e>, fn: (a, b, c, d, f) -> g) : Stdlib.Result.Result<g, e> =
+    match (result1, result2, result3, result4, result5) with
+    | (Ok(v1), Ok(v2), Ok(v3), Ok(v4), Ok(v5)) -> Ok(fn(v1, v2, v3, v4, v5))
+    | (Error(error), _, _, _, _) -> Error(error)
+    | (_, Error(error), _, _, _) -> Error(error)
+    | (_, _, Error(error), _, _) -> Error(error)
+    | (_, _, _, Error(error), _) -> Error(error)
+    | (_, _, _, _, Error(error)) -> Error(error)
+
+def Stdlib.Result.mapWithDefault<t, e, u>(result: Stdlib.Result.Result<t, e>, default_: u, fn: (t) -> u) : u =
+    match result with
+    | Ok(value) -> fn(value)
+    | Error(_) -> default_
+
+def Stdlib.Result.toOption<t, e>(result: Stdlib.Result.Result<t, e>) : Stdlib.Option.Option<t> =
+    match result with
+    | Ok(value) -> Some(value)
+    | Error(_) -> None
+
+def Stdlib.Result.collect<t, e>(results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.Result<List<t>, e> =
+    match results with
+    | [] -> Ok([])
+    | [result, ...rest] ->
+        match result with
+        | Error(error) -> Error(error)
+        | Ok(value) ->
+            match Stdlib.Result.collect<t, e>(rest) with
+            | Error(error) -> Error(error)
+            | Ok(values) -> Ok([value, ...values])
+
+def Stdlib.Result.join<t, e>(result: Stdlib.Result.Result<Stdlib.Result.Result<t, e>, e>) : Stdlib.Result.Result<t, e> =
+    match result with
+    | Ok(value) -> value
+    | Error(error) -> Error(error)
+
+def Stdlib.Result.combine<t, e>(results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.Result<List<t>, e> =
+    Stdlib.Result.collect<t, e>(results)
+
+def Stdlib.Result.values<t, e>(results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.Result<List<t>, e> =
+    match results with
+    | [] -> Ok([])
+    | [result, ...rest] ->
+        match Stdlib.Result.values<t, e>(rest) with
+        | Error(error) -> Error(error)
+        | Ok(values) ->
+            match result with
+            | Ok(value) -> Ok([value, ...values])
+            | Error(_) -> Ok(values)

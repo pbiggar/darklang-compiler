@@ -48,6 +48,16 @@ def Stdlib.Math.round(x: Float) : Int64 =
     else if lower % 2 == 0 then lower
     else upper
 
+// Angle-unit helpers ported from darklang/dark packages/darklang/stdlib/math.dark.
+def Stdlib.Math.degrees(angleInDegrees: Float) : Float =
+    (angleInDegrees * Stdlib.Math.pi()) / 180.0
+
+def Stdlib.Math.turns(angleInTurns: Float) : Float =
+    Stdlib.Math.tau() * angleInTurns
+
+def Stdlib.Math.radians(angleInRadians: Float) : Float =
+    angleInRadians
+
 // NOTE: The following functions still require compiler/runtime support:
 // - Math.pow (needs float multiplication)
 // - Trigonometric functions (sin, cos, tan) require intrinsics
