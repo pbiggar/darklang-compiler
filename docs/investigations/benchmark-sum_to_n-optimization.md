@@ -2,27 +2,24 @@
 
 ## Overview
 
-This investigation analyzes why the Dark compiler performs worse than Rust on the
-`sum_to_n` benchmark, which computes the sum 1+2+...+10000 repeatedly
-100 times.
+This investigation analyzes the generated work for the `sum_to_n` benchmark,
+which computes the sum 1+2+...+10000 repeatedly 100 times.
 
 ### Benchmark Results
 
-Current local evidence gathered on 2026-07-15:
+Current routine-profile evidence:
 
 | Compiler | Instructions | Relative |
 |----------|--------------|----------|
 | Rust     | 256,081      | 1.0x     |
-| Dark     | 7,002,526    | 27.3x    |
-| OCaml    | 9,423,431    | 36.8x    |
+| Dark     | 70,747       | 0.28x    |
+| OCaml    | 9,421,844    | 36.8x    |
 
 **Key Finding**: Rust's extreme speed is due to complete constant folding. It
 computes the result (`50005000`) at compile time and stores it as an immediate
 constant in the binary.
 
-Rust was not installed in the local sandbox used for this refresh, so the Rust
-row remains the current `benchmarks/RESULTS.md` baseline. Dark and OCaml were
-rebuilt locally and measured with Cachegrind.
+These instruction counts are the current `benchmarks/RESULTS.md` baselines.
 
 ## Source Code
 
@@ -96,17 +93,6 @@ let TempId 11 = TailCall(repeat, [t9, t10])
 return t11
 ```
 
-Current MIR still calls `sumTo(10000, 0)` inside the `repeat` loop:
-
-```text
-repeat_L1:
-    v9 <- v6 - 1 : TInt64
-    v10 <- Call(sumTo, [10000, 0])
-    v6 <- v9 : TInt64
-    v7 <- v10 : TInt64
-    jump repeat_body
-```
-
 Current register-allocated LIR for the hot `sumTo` loop:
 
 ```text
@@ -136,20 +122,6 @@ loop is a compact subtract/add/move loop plus compare/branch:
 1d4: b 0x1b4
 ```
 
-The outer `repeat` loop still reloads the constant arguments and calls
-`sumTo` on every iteration:
-
-```asm
-20c: sub x19, x19, #0x1
-210: mov x0, #0x2710
-214: mov x1, #0x0
-218: bl 0x190
-21c: mov x20, x0
-22c: cmp x19, #0x0
-230: b.le 0x224
-234: b 0x20c
-```
-
 ## Identified Optimization Opportunities
 
 ### 1. Constant Folding for Pure Functions (High Impact)
@@ -166,8 +138,8 @@ return t12
 
 **Rust Comparison**: LLVM evaluates the entire computation at compile time.
 
-**Impact Estimate**: Up to the current 27.3x Rust-relative gap for this
-benchmark if compile-time evaluation eliminates the full computation.
+**Impact Estimate**: Eliminate the remaining runtime computation by evaluating
+the full constant expression at compile time.
 
 **Implementation Approach**:
 1. Add purity analysis to mark functions as pure (no side effects)
@@ -178,31 +150,6 @@ benchmark if compile-time evaluation eliminates the full computation.
 **Files to Modify**:
 - `src/DarkCompiler/passes/2.3_ANF_Optimization.fs` - Add constant folding
 - `src/DarkCompiler/passes/2_AST_to_ANF.fs` - Track purity annotations
-
-### 2. Loop-Invariant Code Motion for sumTo Call (Medium Impact)
-
-**Issue**: In `repeat`, the call `sumTo(10000, 0)` always returns the same value but is called 100 times.
-
-**Evidence**: From the MIR:
-```
-repeat_L1:
-    v9 <- v6 - 1 : TInt64
-    v10 <- Call(sumTo, [10000, 0])  ; Same call every iteration!
-    v6 <- v9 : TInt64
-    v7 <- v10 : TFunction ...
-    jump repeat_body
-```
-
-**Impact Estimate**: Up to ~100x for the repeated inner work in this specific
-pattern by reducing 100 identical `sumTo` calls to 1.
-
-**Implementation Approach**:
-1. Detect pure function calls with constant arguments inside loops
-2. Hoist such calls outside the loop
-3. Replace loop body references with the hoisted value
-
-**Files to Modify**:
-- `src/DarkCompiler/passes/3.5_MIR_Optimizations.fs` - Add LICM pass
 
 ## Instruction Count Comparison
 
@@ -233,14 +180,10 @@ pattern by reducing 100 identical `sumTo` calls to 1.
 
 | Optimization | Impact | Effort | Priority |
 |--------------|--------|--------|----------|
-| Constant folding for pure functions | High (up to 27.3x) | Medium | P1 |
-| Loop-invariant code motion | High (~100x for repeated inner work) | Medium | P1 |
+| Constant folding for pure functions | High (eliminate runtime computation) | Medium | P1 |
 
 ## Conclusion
 
-The primary performance gap between Dark and Rust on this benchmark is due to Rust's aggressive constant folding. While implementing full interprocedural constant folding is complex, significant gains can be achieved through:
-
-1. **Loop-invariant code motion** - Hoist `sumTo(10000, 0)` outside the repeat loop
-2. **Compile-time evaluation** - Evaluate pure functions with constant args at compile time
-
-These two optimizations together would reduce Dark's runtime from computing 1,000,000 additions to computing just 10,000, matching the fundamental work that needs to be done at runtime if full constant folding isn't available.
+Rust's generated code still performs less runtime work because it evaluates the
+whole computation at compile time. Compile-time evaluation of effect-free
+functions with constant arguments is the remaining opportunity for Dark.
