@@ -356,6 +356,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical, low-risk reassociation that exposes adjacent Int64 literals to constant folding and makes a single-use intermediate addition dead.
 - Notes: Implemented for adjacent ANF bindings representing `(x + a) + b -> x + (a + b)` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Restricted to Int64 addition because floating-point addition is not safely reassociative. Covered by `reassociate_integer_add_constants` and `reassociation_preserves_float_add` in `src/Tests/optimization/anf.opt`; `licm_skip_loop_with_call` in `src/Tests/optimization/lir.opt` verifies that a longer chain reaches LIR as one addition. No current routine benchmark contains the exact two-literal chain; `benchmarks/problems/edigits` is the identified follow-up benchmark because its repeated Int64 index arithmetic is the closest workload fit.
 
+### Int64 multiplication reassociation
+
+- Optimization name: Int64 multiplication reassociation
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Canonical, low-risk reassociation that combines adjacent Int64 literals with wrapping multiplication and removes a multiply when the intermediate has no other use.
+- Notes: Implemented for adjacent ANF bindings representing `(x * a) * b -> x * (a * b)` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Restricted to Int64 multiplication because Float reassociation can change rounding, overflow, and underflow behavior; recursive liveness cleanup retains the inner binding when it has another use. Focused ANF snapshots cover ordinary and overflowing literal products, live-intermediate preservation, and unchanged Float expressions. No canonical workload contains the exact pattern; a temporary untracked diagnostic loop measured the rewrite without adding a benchmark to the repository.
+
 ### Integer add/subtract cancellation
 
 - Optimization name: Integer add/subtract cancellation

@@ -7,7 +7,7 @@
 // - Dead code elimination: remove unused bindings
 // - Common subexpression elimination: reuse earlier pure computations
 // - Branch code motion: hoist identical pure leading branch computations
-// - Reassociation: combine constants across adjacent integer additions
+// - Reassociation: combine constants across adjacent Int64 additions and multiplications
 // - Control-flow simplification: collapse Boolean literal branches
 // - Instruction combining: fold single-use negation into integer subtraction
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
@@ -1002,6 +1002,14 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
         // removes it only when the reassociated expression was its final use.
         let combined = IntLiteral (Int64 (a + b))
         Some (Let (tid, cexpr, Let (addTid, Prim (Add, source, combined), addBody)))
+    | Prim (Mul, source, IntLiteral (Int64 a)),
+      Let (multiplyTid, Prim (Mul, Var sourceTid, IntLiteral (Int64 b)), multiplyBody)
+        when sourceTid = tid ->
+        // Int64 multiplication is associative modulo 2^64. Keeping the inner
+        // binding here lets the recursive liveness pass remove it only when
+        // the reassociated expression was its final use.
+        let combined = IntLiteral (Int64 (a * b))
+        Some (Let (tid, cexpr, Let (multiplyTid, Prim (Mul, source, combined), multiplyBody)))
     | Prim (Add, source, cancelled),
       Let (resultTid, Prim (Sub, Var intermediateTid, outerCancelled), resultBody)
         when intermediateTid = tid

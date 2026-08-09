@@ -48,12 +48,14 @@ For the selected optimization:
 5. Run relevant benchmarks.
 6. Run the routine benchmark profile before the proposed change report is complete.
 7. Report the measured benchmark improvement or loss from the routine benchmark run, including the performance ratio from `benchmarks/RESULTS.md`.
-8. Add or identify a benchmark when existing benchmarks do not exercise the optimized pattern.
+8. Add or identify a benchmark when existing benchmarks do not exercise the optimized pattern. Treat any benchmark created by this agent as temporary diagnostic evidence: keep it untracked and do not commit it.
 9. Update `docs/classic-optimizations.md` for the selected optimization.
-10. Commit the implementation, tests, and backlog update together as one coherent reviewable unit in the isolated workspace used for implementation work.
+10. Commit the implementation, tests, and backlog update together as one coherent reviewable unit in the isolated workspace used for implementation work. Exclude agent-created benchmark files from the commit.
 
 ## Scope Boundaries
 
 Implementing multiple optimizations in one iteration is a non-goal unless the human explicitly asks for batching.
+
+Never commit a benchmark created by this agent. Use temporary or untracked benchmark inputs for focused measurements, report the evidence, and remove the inputs before handoff.
 
 Do not merge, cherry-pick, push, or apply proposed implementation commits to the main project branch without explicit human approval. Follow shared orchestrator review workflow for isolated workspaces, reviewable commits, validation evidence, residual risk, and unresolved questions.

@@ -1790,6 +1790,47 @@ let TempId 2 = t1 + 3
 return t2
 
 ---NAME---
+reassociate_int64_multiply_constants
+---INPUT---
+def f(x: Int64) : Int64 = (x * 3) * 5
+---EXPECTED---
+Function f:
+let TempId 2 = t0 * 15
+return t2
+
+---NAME---
+reassociate_int64_multiply_constants_with_wrapping
+---INPUT---
+def f(x: Int64) : Int64 = (x * 4000000000) * 4000000000
+---EXPECTED---
+Function f:
+let TempId 2 = t0 * -2446744073709551616
+return t2
+
+---NAME---
+int64_multiply_reassociation_preserves_live_intermediate
+---INPUT---
+def f(x: Int64) : (Int64, Int64) =
+  let scaled = x * 3 in
+  (scaled * 5, scaled)
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 3
+let TempId 3 = t0 * 15
+let TempId 4 = (t3, t1)
+return t4
+
+---NAME---
+int64_multiply_reassociation_preserves_float
+---INPUT---
+def f(x: Float) : Float = (x * 3.0) * 5.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 3
+let TempId 2 = t1 * 5
+return t2
+
+---NAME---
 cancel_integer_add_then_subtract
 ---INPUT---
 def f(x: Int64, y: Int64) : Int64 = (x + y) - y

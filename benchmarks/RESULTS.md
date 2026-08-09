@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-09 18:13:38
-**Commit:** `598b0504` - Share ARM64 heap overflow trap body
+**Last Updated:** 2026-08-09 18:34:24
+**Commit:** `2e9c7d2c` - Reassociate adjacent Int64 constant multiplications
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
