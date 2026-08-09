@@ -614,7 +614,7 @@ Math                         | atan2                               | ✅   | ❌
 Math                         | ceiling                             | ❌   | ✅
 Math                         | cos                                 | ✅   | ❌
 Math                         | cosh                                | ✅   | ❌
-Math                         | degrees                             | ✅   | ❌
+Math                         | degrees                             | ✅   | ✅
 Math                         | e                                   | ❌   | ✅
 Math                         | floor                               | ❌   | ✅
 Math                         | pi                                  | ✅   | ✅

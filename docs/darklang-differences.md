@@ -101,6 +101,7 @@ Areas where compiler produces WRONG output. These need to be fixed to match Dark
 | `Dict.setOverridingDuplicates` | — | Official overwriting dictionary update was missing | Fixed |
 | `Base64.decode` | — | Valid unpadded final groups were rejected | Fixed |
 | `String.reverse` | — | Decomposed grapheme clusters were reversed as individual codepoints | Fixed |
+| `Math.degrees` | — | Official degree values could not be converted to radians | Fixed |
 | Float precision | `eval:float_precision` | High-precision floats have different representation | Needs fix |
 
 ### 2.1 Modulo Operator (`%`)
