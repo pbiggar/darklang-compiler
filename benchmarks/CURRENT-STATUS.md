@@ -102,6 +102,9 @@ remain reduced or blocked as documented above.
 ## Notes
 
 - Quicksort and spectral norm both run at full size in the canonical routine profile.
+- Binary trees now constructs `Tree<Int64>` values with recursive `Leaf` and
+  `Node` variants, traverses them, and releases the complete graph on every
+  iteration; the former arithmetic-only node recurrence is gone.
 - The mandelbrot "negative float bug" was actually a semantic mismatch - the Dark code was counting escaped points while the Rust reference counts points in the set. Fixed.
 - The pisum Dark benchmark now runs at the full benchmark size (`500` rounds, `n=10000`) and is tracked as working.
 - The nsieve Dark benchmark now runs at the full benchmark size (`n=100000`) and is tracked as working.

@@ -1,187 +1,80 @@
-# Binary Trees Benchmark Optimization Investigation
+# Binary Trees Benchmark Investigation
 
 ## Current Status
 
-As of commit `3312b4d5`, `binary_trees` runs correctly and reports
-`6553500`. The current cachegrind run records Dark at `154,007,725`
-instructions, compared with OCaml at `82,339,690` and Rust at
-`1,842,791,955`.
+Dark now performs the canonical allocation workload: each of 100 iterations
+constructs a complete recursive tree of depth 15, traverses all 65,535 nodes,
+and releases the complete tree before the next iteration. The result remains
+`6553500`.
 
-Dark remains about `1.87x` OCaml's instruction count, but it is much faster
-than the Rust reference because the Rust benchmark builds and traverses heap
-tree nodes while the Dark and OCaml programs recursively count complete-tree
-nodes.
+The old executable path called `countTree(depth)` directly. Although a
+tuple-returning `makeTree` function existed in the file, it collapsed each
+child to integer fields and was never called by `stressTest`. The measured Dark
+program therefore ran only the node-count recurrence and did not exercise tree
+allocation, traversal, or reclamation like the Rust and Python references.
 
-| Language | Instructions | Relative to Rust |
-| -------- | ------------ | ---------------- |
-| OCaml | 82,339,690 | 0.04x |
-| Dark | 154,007,725 | 0.08x |
-| Rust | 1,842,791,955 | baseline |
+## Canonical Source Shape
 
-## Source Shape
-
-The runtime path uses `countTree` and `stressTest`; the `makeTree` tuple
-allocator remains present in the source and early IR, but is not called by
-`_start`.
+The benchmark uses the direct recursive algebraic data type and separates
+construction from traversal:
 
 ```dark
-def countTree(depth: Int64) : Int64 =
-    if depth <= 0 then 1
-    else 1 + countTree(depth - 1) + countTree(depth - 1)
+type Tree<a> = Leaf of a | Node of (Tree<a>, Tree<a>)
 
-def stressTest(depth: Int64, iterations: Int64, acc: Int64) : Int64 =
-    if iterations <= 0 then acc
-    else
-        let count = countTree(depth) in
-        stressTest(depth, iterations - 1, acc + count)
+def makeTree(depth: Int64) : Tree<Int64> =
+    if depth <= 0 then Leaf(1)
+    else Node((makeTree(depth - 1), makeTree(depth - 1)))
 
-stressTest(15, 100, 0)
+def countTree(tree: Tree<Int64>) : Int64 =
+    match tree with
+    | Leaf(_) -> 1
+    | Node((left, right)) -> 1 + countTree(left) + countTree(right)
 ```
 
-## Current IR Evidence
+`stressTest` binds `tree = makeTree(depth)` and passes that value to
+`countTree` on every iteration. This is the obvious implementation of the
+intended algorithm; it does not encode the tree as an integer recurrence,
+closure, precomputed count, or compiler-specific alternate structure.
 
-The ANF optimizer still leaves the two `depth - 1` expressions visible in
-`countTree`:
+## Compiler Ownership Defect
 
-```text
-Function countTree:
-let TempId 22 = t20 - 1
-let TempId 23 = countTree(t22)
-let TempId 24 = 1 + t23
-let TempId 25 = t20 - 1
-let TempId 26 = countTree(t25)
-let TempId 27 = t24 + t26
-return t27
-```
+Reference-count shape construction previously expanded sum payload types as an
+unbounded tree. Classifying `Tree<Int64>` expanded `Node`'s tuple payload, then
+both child `Tree<Int64>` types, then their `Node` payloads, and so on until the
+compiler process overflowed its stack.
 
-This is not currently a hot-code issue after MIR/LIR optimization. The LIR
-before register allocation already reuses a single lowered value for both
-recursive calls:
+The finite ownership representation now records a typed `RecursiveSumRef` when
+classification reaches a sum already on the current expansion path. Its
+release plan becomes `RecursiveRelease(Tree<Int64>)`. This is an explicit
+typed back-edge rather than a sentinel or a guessed shallow payload.
 
-```text
-Label "countTree_L1":
-  v10030 <- Sub(v20, Imm 1)
-  ArgMoves(X0 <- Reg v10030)
-  v10031 <- Call(countTree, [Reg v10030])
-  ...
-  ArgMoves(X0 <- Reg v10030)
-  v10034 <- Call(countTree, [Reg v10030])
-```
-
-After register allocation, `countTree` keeps the decremented depth in `X19`
-across both calls:
-
-```text
-Label "countTree_L1":
-  X19 <- Sub(X19, Imm 1)
-  ArgMoves(X0 <- Reg X19)
-  X20 <- Call(countTree, [Reg X19])
-  ...
-  ArgMoves(X0 <- Reg X19)
-  X19 <- Call(countTree, [Reg X19])
-```
-
-The previous investigation's tail-call phi concern is also resolved in current
-LIR. `stressTest` now lowers to a compact loop without redundant self-overwrite
-moves:
-
-```text
-Label "stressTest_L1":
-  ArgMoves(X0 <- Reg X19)
-  X22 <- Call(countTree, [Reg X19])
-  X20 <- Sub(X20, Imm 1)
-  X21 <- Add(X21, Reg X22)
-  Jump(Label "stressTest_body")
-
-Label "stressTest_body":
-  Cmp(X20, Imm 0)
-  CondBranch(LE, Label "stressTest_L2", Label "stressTest_L1")
-
-Label "stressTest_entry":
-  X19 <- Mov(Reg X0)
-  X20 <- Mov(Reg X1)
-  X21 <- Mov(Reg X2)
-  Jump(Label "stressTest_body")
-```
-
-The previous entry-shuffle issue is likewise resolved at the LIR level:
-`countTree_entry` contains only `X19 <- Mov(Reg X0)` before jumping to the body,
-not the older `x0 -> temp -> x0 -> worker` sequence.
-
-## Current Assembly Evidence
-
-Disassembling the generated ARM64 ELF confirms that the remaining hot cost is
-not tuple allocation or tail-loop lowering in the executed path. `_start` calls
-`stressTest` directly, and the `makeTree` function is emitted but never called
-from the benchmark entry path.
-
-The hot `countTree` function has a compact recursive body, but every call still
-pays a non-leaf function frame and callee-saved register traffic:
-
-```asm
-3dc: stp x29, x30, [sp, #-16]!
-3e4: sub sp, sp, #0x20
-3e8: stp x19, x20, [sp]
-3ec: str x21, [sp, #16]
-...
-408: sub x19, x19, #0x1
-410: bl 0x3dc
-414: mov x20, x0
-418: mov x21, #0x1
-41c: add x20, x21, x20
-420: mov x0, x19
-424: bl 0x3dc
-428: mov x19, x0
-42c: add x19, x20, x19
-...
-444: ldp x19, x20, [sp]
-448: ldr x21, [sp, #16]
-450: ldp x29, x30, [sp], #16
-454: ret
-```
-
-This reinforces the current prioritization: for this benchmark, the next useful
-optimization work is around self-recursive integer calling conventions,
-callee-saved register pressure, or recursive frame minimization. Common
-subexpression elimination for `depth - 1` and loop phi cleanup no longer appear
-to be limiting factors in the generated machine code.
-
-## Remaining Optimization Opportunities
-
-### 1. Hot Recursive Calling Convention Pressure
-
-**Status:** Open.
-
-`countTree` uses callee-saved registers `X19`, `X20`, and `X21` for a tiny
-recursive function. The generated LIR is clean, but every recursive call still
-has to preserve enough state to combine the two child counts. The OCaml native
-code for the same function uses stack slots around the two recursive calls and
-has roughly half Dark's dynamic instruction count for the full benchmark.
-
-This points to register-allocation and calling-convention overhead in recursive
-integer functions as the highest-value remaining area, not phi resolution or
-entry argument shuffling.
-
-**Evidence to inspect next:**
-
-- whether allocating the hot temporary/result values to caller-saved registers
-  reduces save/restore traffic,
-- whether recursive self-calls could use a specialized internal convention.
-
-**Likely files:**
-
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs`
-- `src/DarkCompiler/passes/arm64/6_CodeGen.fs`
+ARM64 and x64 code generation collect those back-edges and emit one recursive
+decrement helper per concrete sum type. A normal root release still decrements
+and reclaims the sum and its tuple payload. When it reaches a child back-edge,
+it calls the shared helper, which repeats the same tag-sensitive plan for that
+child. Thus the finite compiler data structure describes an arbitrarily deep
+runtime tree without unrolling code by tree depth or leaking descendants.
 
 ## Validation Notes
 
-Evidence gathered in this pass:
+The language regression constructs and counts trees from depth zero through
+four. A compiler-pass test separately checks that `Tree<Int64>` produces one
+typed recursive release back-edge. The quick depth-10/five-iteration program
+prints `10235` with leak checking enabled and no stderr, and the full
+depth-15/100-iteration program prints `6553500` with leak checking enabled and
+no stderr.
 
-- `./dark -vvv --dump-anf --dump-mir --dump-lir benchmarks/problems/binary_trees/dark/main.dark -o /tmp/binary_trees_dark`
-- `/tmp/binary_trees_dark` produced `6553500`
-- `objdump -D -b binary -m aarch64 /tmp/binary_trees_dark`
-- `./benchmarks/run_benchmarks.sh binary_trees`
-- `ocamlopt -O3 -o /tmp/binary_trees_ocaml benchmarks/problems/binary_trees/ocaml/main.ml`
+The quick workload now executes 1,078,843 instructions, up from 45,173 for
+the arithmetic-only program. That increase is the intended cost of allocating,
+traversing, and releasing five depth-10 trees rather than skipping the benchmark
+algorithm. DCB records canonical routine results only after rebasing the exact
+integration commit.
 
-Rust comparison used the cached benchmark baseline because `rustc` was not
-installed in this sandbox.
+## Remaining Optimization Opportunities
+
+Recursive sums whose cycle crosses list, dict, closure, or dynamic-buffer
+payloads still need equivalent ARM64 recursive-helper lowering before those
+more complex shapes can use this path. Binary trees contains only generic sum
+and tuple roots with immediate leaves, so its ownership plan is fully covered.
+The benchmark now exposes real allocation, recursive traversal, reference-count
+traffic, and destructor-call costs for later general compiler optimization.

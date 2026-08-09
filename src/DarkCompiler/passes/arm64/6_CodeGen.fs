@@ -99,6 +99,15 @@ let private stableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
         fnvOffset
     |> fun hash -> hash.ToString("x16")
 
+let private recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
+    let hash =
+        $"{sourceType}"
+        |> Seq.fold (fun hash ch ->
+            (hash ^^^ (uint64 (int ch))) * 1099511628211UL)
+            14695981039346656037UL
+        |> fun value -> value.ToString("x16")
+    $"__dark_recursive_sum_rc_dec_{hash}"
+
 let private plannedListDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
 
@@ -167,6 +176,8 @@ let private slotInitRootRetainTarget
                 match valueType with
                 | AST.TSum _ -> Some (SlotInitGenericRootRetain payloadSize)
                 | _ -> None
+            | ANF.RecursiveSumRef _ ->
+                Some (SlotInitGenericRootRetain 16)
             | ANF.Immediate
             | ANF.StaticString
             | ANF.RawUnmanaged ->
@@ -429,6 +440,8 @@ let private generateListRefCountDecHelperWith
                 listRefCountDecBytesHelperLabel
             | ANF.DynamicBufferRelease _ ->
                 listRefCountDecHelperLabel
+            | ANF.RecursiveRelease sourceType ->
+                recursiveSumRefCountDecHelperLabel sourceType
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
                 listRefCountDecListHelperLabel
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
@@ -1131,6 +1144,127 @@ let private requiredRcMetadataReleasePlan (context: string) (metadata: ANF.RcMet
     | Some releasePlan -> releasePlan
     | None -> Crash.crash $"{context}: missing RC release plan metadata"
 
+let private generateRecursiveSumRefCountDecHelper
+    (ctx: CodeGenContext)
+    (sourceType: AST.Type)
+    : ARM64Symbolic.Instr list =
+    let helperLabel = recursiveSumRefCountDecHelperLabel sourceType
+    let label suffix = $"{helperLabel}_{suffix}"
+    let releasePlan =
+        ANF.rcReleasePlanOfTypeWithSums ctx.RecordRegistry ctx.SumShapeRegistry sourceType
+
+    let rec releaseFromX0 (path: string) (plan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
+        match plan with
+        | ANF.NoReleasePlan ->
+            []
+        | ANF.RecursiveRelease recursiveType ->
+            [ARM64Symbolic.BL (recursiveSumRefCountDecHelperLabel recursiveType)]
+        | ANF.RootRelease (payloadSize, ANF.GenericHeap, payloadPlan) ->
+            let doneLabel = label $"{path}_done"
+            let payloadReleases = releasePayload path payloadPlan
+            let freeRoot =
+                if payloadSize >= 0 && payloadSize < 256 then
+                    [
+                        ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.SP, 0s)
+                        ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X27, int16 payloadSize)
+                        ARM64Symbolic.STR (ARM64Symbolic.X2, ARM64Symbolic.X0, 0s)
+                        ARM64Symbolic.STR (ARM64Symbolic.X0, ARM64Symbolic.X27, int16 payloadSize)
+                    ]
+                else
+                    []
+            [
+                ARM64Symbolic.CBZ (ARM64Symbolic.X0, doneLabel)
+                ARM64Symbolic.LDR (ARM64Symbolic.X1, ARM64Symbolic.X0, int16 payloadSize)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X1, ARM64Symbolic.X0, int16 payloadSize)
+                ARM64Symbolic.CBNZ (ARM64Symbolic.X1, doneLabel)
+                ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X30, ARM64Symbolic.SP, -16s)
+            ]
+            @ payloadReleases
+            @ freeRoot
+            @ (if ctx.Options.EnableLeakCheck then
+                let labelRef = dataLabel leakCounterLabel
+                [
+                    ARM64Symbolic.ADRP (ARM64Symbolic.X17, labelRef)
+                    ARM64Symbolic.ADD_label (ARM64Symbolic.X17, ARM64Symbolic.X17, labelRef)
+                    ARM64Symbolic.LDR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X16, ARM64Symbolic.X16, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+                ]
+               else
+                [])
+            @ [
+                ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.Label doneLabel
+            ]
+        | unsupported ->
+            Crash.crash $"ARM64 recursive sum RC helper does not support nested release plan {unsupported}"
+
+    and releaseField (path: string) (index: int) (ANF.FieldRelease (offset, plan)) : ARM64Symbolic.Instr list =
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.SP, 0s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X0, int16 offset)
+        ]
+        @ releaseFromX0 $"{path}_field_{index}" plan
+
+    and releaseFields (path: string) (fields: ANF.RcFieldRelease list) : ARM64Symbolic.Instr list =
+        fields
+        |> List.mapi (releaseField path)
+        |> List.concat
+
+    and releasePayload (path: string) (payload: ANF.RcPayloadReleasePlan) : ARM64Symbolic.Instr list =
+        match payload with
+        | ANF.NoPayloadRelease ->
+            []
+        | ANF.FixedBlockPayloadRelease (_, fields)
+        | ANF.ClosurePayloadRelease fields ->
+            releaseFields path fields
+        | ANF.BoxedSumPayloadRelease (_, _, variants) ->
+            let doneLabel = label $"{path}_variant_done"
+            let cases =
+                variants
+                |> List.mapi (fun index variant ->
+                    let nextLabel = label $"{path}_variant_{index}_next"
+                    [
+                        ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.SP, 0s)
+                        ARM64Symbolic.LDR (ARM64Symbolic.X1, ARM64Symbolic.X0, 0s)
+                        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, uint16 variant.Tag)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, nextLabel)
+                    ]
+                    @ releaseFields $"{path}_variant_{index}" variant.FieldReleases
+                    @ [
+                        ARM64Symbolic.B_label doneLabel
+                        ARM64Symbolic.Label nextLabel
+                    ])
+                |> List.concat
+            cases @ [ARM64Symbolic.Label doneLabel]
+        | unsupported ->
+            Crash.crash $"ARM64 recursive sum RC helper does not support payload release plan {unsupported}"
+
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.GenericHeap, _) ->
+        [ARM64Symbolic.Label helperLabel]
+        @ releaseFromX0 "root" releasePlan
+        @ [ARM64Symbolic.RET]
+    | _ ->
+        Crash.crash $"ARM64 recursive sum RC helper requires a generic root release plan, got {releasePlan}"
+
+let private recursiveReleaseTypesInFunctions (functions: LIR.Function list) : Set<AST.Type> =
+    functions
+    |> List.collect (fun func ->
+        func.CFG.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) -> block.Instrs))
+    |> List.fold (fun recursiveTypes instr ->
+        match instr with
+        | LIR.RefCountDec (_, _, _, Some metadata) ->
+            metadata.ReleasePlan
+            |> Option.map ANF.recursiveReleaseTypes
+            |> Option.defaultValue Set.empty
+            |> Set.union recursiveTypes
+        | _ ->
+            recursiveTypes) Set.empty
+
 let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_closure_rc_dec_{name}"
     let ready = label "payload_ready"
@@ -1607,6 +1741,8 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
             listRefCountDecBytesHelperLabel
         | ANF.DynamicBufferRelease _ ->
             listRefCountDecHelperLabel
+        | ANF.RecursiveRelease sourceType ->
+            recursiveSumRefCountDecHelperLabel sourceType
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
             listRefCountDecListHelperLabel
         | ANF.RootRelease (_, ANF.DictHeap, _) when releasePlanIsDictWithListValue elementRelease ->
@@ -2597,6 +2733,8 @@ let private generatePlannedDictRefCountDecHelper
                 false, false, None, false, Some (16, valueRelease), false, false, false
             | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
                 false, false, None, false, Some (payloadSize, valueRelease), false, false, false
+            | other ->
+                unsupported "value" other
 
         generateDictRefCountDecHelper
             helperLabel
@@ -4778,6 +4916,11 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
                     | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
                         releaseFixedBlockFieldWithPlan baseReg fieldOffset childPayloadSize fieldReleasePlan
+                    | ANF.RecursiveRelease sourceType ->
+                        releaseListFieldFromHelper
+                            baseReg
+                            fieldOffset
+                            (recursiveSumRefCountDecHelperLabel sourceType)
                     | _ ->
                         []
 
@@ -6934,7 +7077,11 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper || plannedDictHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])
-        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers) |> peepholeOptimize)
+        let recursiveSumRcHelpers =
+            recursiveReleaseTypesInFunctions functions
+            |> Set.toList
+            |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
+        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers @ recursiveSumRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
 let generateARM64 (target: ARM64.TargetConfig) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =

@@ -67,18 +67,25 @@ ackermann(3, 3) = 61
 
 
 // ===================================================================
-// Binary Trees (binary_trees) - count nodes in complete binary tree
+// Binary Trees (binary_trees) - construct and traverse a complete binary tree
 // ===================================================================
 
-def countTree(depth: Int64) : Int64 =
-    if depth <= 0 then 1
-    else 1 + countTree(depth - 1) + countTree(depth - 1)
+type BenchmarkTree<a> = BenchmarkLeaf of a | BenchmarkNode of (BenchmarkTree<a>, BenchmarkTree<a>)
 
-countTree(0) = 1
-countTree(1) = 3
-countTree(2) = 7
-countTree(3) = 15
-countTree(4) = 31
+def makeBenchmarkTree(depth: Int64) : BenchmarkTree<Int64> =
+    if depth <= 0 then BenchmarkLeaf(1)
+    else BenchmarkNode((makeBenchmarkTree(depth - 1), makeBenchmarkTree(depth - 1)))
+
+def countBenchmarkTree(tree: BenchmarkTree<Int64>) : Int64 =
+    match tree with
+    | BenchmarkLeaf(_) -> 1
+    | BenchmarkNode((left, right)) -> 1 + countBenchmarkTree(left) + countBenchmarkTree(right)
+
+countBenchmarkTree(makeBenchmarkTree(0)) = 1
+countBenchmarkTree(makeBenchmarkTree(1)) = 3
+countBenchmarkTree(makeBenchmarkTree(2)) = 7
+countBenchmarkTree(makeBenchmarkTree(3)) = 15
+countBenchmarkTree(makeBenchmarkTree(4)) = 31
 
 
 // ===================================================================

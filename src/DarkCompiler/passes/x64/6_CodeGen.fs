@@ -710,6 +710,8 @@ let private slotInitRootRetainTarget
                 match valueType with
                 | AST.TSum _ -> Some (SlotInitGenericRootRetain payloadSize)
                 | _ -> None
+            | ANF.RecursiveSumRef _ ->
+                Some (SlotInitGenericRootRetain 16)
             | ANF.Immediate
             | ANF.StaticString
             | ANF.RawUnmanaged ->
@@ -774,6 +776,15 @@ let private stableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
         (hash ^^^ (uint64 (int ch))) * fnvPrime)
         fnvOffset
     |> fun hash -> hash.ToString("x16")
+
+let private recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
+    let hash =
+        $"{sourceType}"
+        |> Seq.fold (fun hash ch ->
+            (hash ^^^ (uint64 (int ch))) * 1099511628211UL)
+            14695981039346656037UL
+        |> fun value -> value.ToString("x16")
+    $"__dark_recursive_sum_rc_dec_{hash}"
 
 let private plannedListDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
@@ -864,6 +875,8 @@ let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : s
             listRefCountDecHelperLabel
         | ANF.DynamicBufferRelease _ ->
             listRefCountDecDynamicBufferHelperLabel
+        | ANF.RecursiveRelease sourceType ->
+            recursiveSumRefCountDecHelperLabel sourceType
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
             listRefCountDecListHelperLabel
         | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
@@ -993,6 +1006,11 @@ let rec private genFieldReleases (ctx: FuncCtx) (fieldReleases: ANF.RcFieldRelea
             | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
             | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
                 genFixedBlockFieldRelease ctx fieldOffset childPayloadSize fieldReleasePlan
+            | ANF.RecursiveRelease sourceType ->
+                [X86_64.PUSH X86_64.RDX
+                 X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
+                 X86_64.CALL (recursiveSumRefCountDecHelperLabel sourceType)
+                 X86_64.POP X86_64.RDX]
             | _ ->
                 [])
 
@@ -1085,6 +1103,45 @@ and private genRefCountDecGenericWithPlan
 
 and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (metadata: ANF.RcMetadata option) : X86_64.Instr list =
     genRefCountDecGenericWithPlan ctx addrReg payloadSize (rcMetadataReleasePlan metadata)
+
+let private generateRecursiveSumRefCountDecHelper
+    (enableLeakCheck: bool)
+    (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
+    (sourceType: AST.Type)
+    : X86_64.Instr list =
+    let releasePlan =
+        ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry sourceType
+    let helperCtx : FuncCtx = {
+        StackSize = 0
+        UsedCalleeSaved = []
+        EnableLeakCheck = enableLeakCheck
+        RecordRegistry = recordRegistry
+        SumShapeRegistry = sumShapeRegistry
+    }
+    match releasePlan with
+    | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
+        [X86_64.Label (recursiveSumRefCountDecHelperLabel sourceType)]
+        @ genRefCountDecGenericWithPlan helperCtx X86_64.RAX payloadSize (Some releasePlan)
+        @ [X86_64.RET]
+    | _ ->
+        Crash.crash $"x64 recursive sum RC helper requires a generic root release plan, got {releasePlan}"
+
+let private recursiveReleaseTypesInFunctions (functions: LIR.Function list) : Set<AST.Type> =
+    functions
+    |> List.collect (fun func ->
+        func.CFG.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) -> block.Instrs))
+    |> List.fold (fun recursiveTypes instr ->
+        match instr with
+        | LIR.RefCountDec (_, _, _, Some metadata) ->
+            metadata.ReleasePlan
+            |> Option.map ANF.recursiveReleaseTypes
+            |> Option.defaultValue Set.empty
+            |> Set.union recursiveTypes
+        | _ ->
+            recursiveTypes) Set.empty
 
 /// Generic RefCountInc: increment refcount at [addr + payloadSize].
 let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86_64.Instr list =
@@ -2021,6 +2078,8 @@ let private generatePlannedDictRefCountDecHelper
                 false, false, None, true, None
             | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
                 false, false, None, false, Some (payloadSize, valueRelease)
+            | other ->
+                unsupported "value" other
 
         generateDictRefCountDecHelper
             helperLabel
@@ -4703,7 +4762,8 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         | ANF.RootRelease (_, _, ANF.NoPayloadRelease) ->
             Set.empty
         | ANF.NoReleasePlan
-        | ANF.DynamicBufferRelease _ ->
+        | ANF.DynamicBufferRelease _
+        | ANF.RecursiveRelease _ ->
             Set.empty
 
     let rec plannedListDecHelpersInReleasePlan
@@ -4741,7 +4801,8 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         | ANF.RootRelease (_, _, ANF.NoPayloadRelease) ->
             Map.empty
         | ANF.NoReleasePlan
-        | ANF.DynamicBufferRelease _ ->
+        | ANF.DynamicBufferRelease _
+        | ANF.RecursiveRelease _ ->
             Map.empty
 
     let listDecHelperLabelsInType sourceType =
@@ -4789,7 +4850,8 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         | ANF.RootRelease (_, _, ANF.NoPayloadRelease) ->
             Map.empty
         | ANF.NoReleasePlan
-        | ANF.DynamicBufferRelease _ ->
+        | ANF.DynamicBufferRelease _
+        | ANF.RecursiveRelease _ ->
             Map.empty
 
     let plannedDictDecHelpersInType sourceType =
@@ -4822,7 +4884,8 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         | ANF.RootRelease (_, _, ANF.NoPayloadRelease) ->
             Set.empty
         | ANF.NoReleasePlan
-        | ANF.DynamicBufferRelease _ ->
+        | ANF.DynamicBufferRelease _
+        | ANF.RecursiveRelease _ ->
             Set.empty
 
     let dictDecHelperLabelsInType sourceType =
@@ -5146,6 +5209,10 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
             (closurePayloadSizesFromAllocs functions)
             (closurePayloadSizesFromParams functions)
+    let recursiveSumRcDecHelpers =
+        recursiveReleaseTypesInFunctions functions
+        |> Set.toList
+        |> List.collect (generateRecursiveSumRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry)
     translateFuncs [] functions
     |> Result.map (fun allInstrs ->
         let listIncHelper =
@@ -5225,4 +5292,4 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         let closureIncHelper =
             if needsClosureRcIncHelper then generateClosureRefCountIncHelper closurePayloadSizes
             else []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ recursiveSumRcDecHelpers @ genOomHandler ())

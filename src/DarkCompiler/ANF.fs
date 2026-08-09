@@ -133,6 +133,7 @@ type RcShape =
     | Immediate
     | FixedBlock of payloadSize:int * fieldShapes:RcShape list
     | BoxedSum of payloadSize:int * fieldShapes:(int * RcShape) list * variants:RcBoxedSumVariantShape list
+    | RecursiveSumRef of sourceType:AST.Type
     | TaggedListShape of elementShape:RcShape
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
@@ -174,6 +175,7 @@ type RcStorageClass =
 type RcReleasePlan =
     | NoReleasePlan
     | DynamicBufferRelease of operation:RcOperation
+    | RecursiveRelease of sourceType:AST.Type
     | RootRelease of payloadSize:int * kind:RcKind * payload:RcPayloadReleasePlan
 and RcPayloadReleasePlan =
     | NoPayloadRelease
@@ -449,90 +451,95 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
         typ
 
 /// Classify a source type using record metadata and optional named-sum metadata.
-let rec rcShapeOfTypeWithSums
+let rcShapeOfTypeWithSums
     (typeReg: Map<string, (string * AST.Type) list>)
     (sumReg: RcSumShapeRegistry)
     (t: AST.Type)
     : RcShape =
-    let classify = rcShapeOfTypeWithSums typeReg sumReg
-
-    match t with
-    | AST.TTuple elemTypes ->
-        FixedBlock (List.length elemTypes * 8, elemTypes |> List.map classify)
-    | AST.TRecord (name, typeArgs) ->
-        match Map.tryFind name typeReg with
-        | Some fields ->
-            let typeParams =
-                fields
-                |> List.collect (fun (_, fieldType) -> collectTypeVarsInOrder fieldType)
-                |> List.distinct
-            let subst = rcShapeTypeSubstitution typeParams typeArgs
-            let fieldShapes =
-                fields
-                |> List.map (fun (_, fieldType) ->
-                    fieldType |> applyRcShapeTypeSubstitution subst |> classify)
-            FixedBlock (List.length fields * 8, fieldShapes)
-        | None ->
-            Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
-    | AST.TSum (name, typeArgs) ->
-        match Map.tryFind name sumReg with
-        | Some sumInfo ->
-            let subst = rcShapeTypeSubstitution sumInfo.TypeParams typeArgs
-
-            let variantShapes =
-                sumInfo.Payloads
-                |> List.map (fun maybePayload ->
-                    match maybePayload with
-                    | tag, Some payload ->
-                        let payloadShape = payload |> applyRcShapeTypeSubstitution subst |> classify
-                        { Tag = tag; FieldShapes = [(8, payloadShape)] }
-                    | tag, None ->
-                        { Tag = tag; FieldShapes = [] })
-
-            let hasPayloadVariant =
-                sumInfo.Payloads
-                |> List.exists (fun (_, payload) -> Option.isSome payload)
-
-            if hasPayloadVariant then
+    let rec classify (expandingSums: Set<string>) (t: AST.Type) : RcShape =
+        match t with
+        | AST.TTuple elemTypes ->
+            FixedBlock (List.length elemTypes * 8, elemTypes |> List.map (classify expandingSums))
+        | AST.TRecord (name, typeArgs) ->
+            match Map.tryFind name typeReg with
+            | Some fields ->
+                let typeParams =
+                    fields
+                    |> List.collect (fun (_, fieldType) -> collectTypeVarsInOrder fieldType)
+                    |> List.distinct
+                let subst = rcShapeTypeSubstitution typeParams typeArgs
                 let fieldShapes =
-                    variantShapes
-                    |> List.collect (fun variant -> variant.FieldShapes)
-
-                BoxedSum (16, fieldShapes, variantShapes)
+                    fields
+                    |> List.map (fun (_, fieldType) ->
+                        fieldType |> applyRcShapeTypeSubstitution subst |> classify expandingSums)
+                FixedBlock (List.length fields * 8, fieldShapes)
+            | None ->
+                Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
+        | AST.TSum (name, typeArgs) ->
+            if Set.contains name expandingSums then
+                RecursiveSumRef (AST.TSum (name, typeArgs))
             else
-                Immediate
-        | None ->
-            Crash.crash $"rcShapeOfTypeWithSums: Sum type '{name}' not found in sumReg"
-    | AST.TList elemType ->
-        TaggedListShape (classify elemType)
-    | AST.TDict (keyType, valueType) ->
-        DictRoot (classify keyType, classify valueType)
-    | AST.TFunction _ ->
-        ClosureShape []
-    | AST.TString
-    | AST.TInt ->
-        DynamicString
-    | AST.TBytes ->
-        DynamicBytes
-    | AST.TRawPtr ->
-        RawUnmanaged
-    | AST.TInt8
-    | AST.TInt16
-    | AST.TInt32
-    | AST.TInt64
-    | AST.TInt128
-    | AST.TUInt8
-    | AST.TUInt16
-    | AST.TUInt32
-    | AST.TUInt64
-    | AST.TUInt128
-    | AST.TBool
-    | AST.TFloat64
-    | AST.TChar
-    | AST.TUnit
-    | AST.TRuntimeError
-    | AST.TVar _ ->
-        Immediate
+                match Map.tryFind name sumReg with
+                | Some sumInfo ->
+                    let subst = rcShapeTypeSubstitution sumInfo.TypeParams typeArgs
+                    let expandingSums = Set.add name expandingSums
+
+                    let variantShapes =
+                        sumInfo.Payloads
+                        |> List.map (fun maybePayload ->
+                            match maybePayload with
+                            | tag, Some payload ->
+                                let payloadShape = payload |> applyRcShapeTypeSubstitution subst |> classify expandingSums
+                                { Tag = tag; FieldShapes = [(8, payloadShape)] }
+                            | tag, None ->
+                                { Tag = tag; FieldShapes = [] })
+
+                    let hasPayloadVariant =
+                        sumInfo.Payloads
+                        |> List.exists (fun (_, payload) -> Option.isSome payload)
+
+                    if hasPayloadVariant then
+                        let fieldShapes =
+                            variantShapes
+                            |> List.collect (fun variant -> variant.FieldShapes)
+
+                        BoxedSum (16, fieldShapes, variantShapes)
+                    else
+                        Immediate
+                | None ->
+                    Crash.crash $"rcShapeOfTypeWithSums: Sum type '{name}' not found in sumReg"
+        | AST.TList elemType ->
+            TaggedListShape (classify expandingSums elemType)
+        | AST.TDict (keyType, valueType) ->
+            DictRoot (classify expandingSums keyType, classify expandingSums valueType)
+        | AST.TFunction _ ->
+            ClosureShape []
+        | AST.TString
+        | AST.TInt ->
+            DynamicString
+        | AST.TBytes ->
+            DynamicBytes
+        | AST.TRawPtr ->
+            RawUnmanaged
+        | AST.TInt8
+        | AST.TInt16
+        | AST.TInt32
+        | AST.TInt64
+        | AST.TInt128
+        | AST.TUInt8
+        | AST.TUInt16
+        | AST.TUInt32
+        | AST.TUInt64
+        | AST.TUInt128
+        | AST.TBool
+        | AST.TFloat64
+        | AST.TChar
+        | AST.TUnit
+        | AST.TRuntimeError
+        | AST.TVar _ ->
+            Immediate
+
+    classify Set.empty t
 
 /// True when a runtime shape can own managed memory that must be released when
 /// an owning binding leaves scope.
@@ -546,6 +553,7 @@ let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
     | DynamicBytes
     | FixedBlock _
     | BoxedSum _
+    | RecursiveSumRef _
     | TaggedListShape _
     | DictRoot _
     | ClosureShape _ ->
@@ -557,6 +565,7 @@ let rcShapeIsRootManaged (shape: RcShape) : bool =
     match shape with
     | FixedBlock _
     | BoxedSum _
+    | RecursiveSumRef _
     | TaggedListShape _
     | DictRoot _
     | ClosureShape _ ->
@@ -578,6 +587,8 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
     | BoxedSum (_, fieldShapes, _) ->
         fieldShapes
         |> List.exists (fun (_, fieldShape) -> rcShapeNeedsOwnedScopeRelease fieldShape)
+    | RecursiveSumRef _ ->
+        true
     | TaggedListShape elementShape ->
         rcShapeNeedsOwnedScopeRelease elementShape
     | DictRoot (keyShape, valueShape) ->
@@ -597,7 +608,8 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
 let rcShapeRootKind (shape: RcShape) : RcKind option =
     match shape with
     | FixedBlock _
-    | BoxedSum _ ->
+    | BoxedSum _
+    | RecursiveSumRef _ ->
         Some GenericHeap
     | TaggedListShape _ ->
         Some TaggedList
@@ -618,6 +630,8 @@ let rcShapePayloadSize (shape: RcShape) : int option =
     | FixedBlock (payloadSize, _)
     | BoxedSum (payloadSize, _, _) ->
         Some payloadSize
+    | RecursiveSumRef _ ->
+        Some 16
     | TaggedListShape _ ->
         Some 24
     | DictRoot _ ->
@@ -738,6 +752,8 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
             DictPayloadRelease (rcShapeReleasePlan keyShape, rcShapeReleasePlan valueShape)
         | ClosureShape captureShapes ->
             ClosurePayloadRelease (fieldReleasePlans captureShapes)
+        | RecursiveSumRef _ ->
+            NoPayloadRelease
         | Immediate
         | DynamicString
         | DynamicBytes
@@ -746,12 +762,14 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
             NoPayloadRelease
 
     match rcShapeStorageClass shape with
+    | ManagedRcRoot (payloadSize, kind) ->
+        match shape with
+        | RecursiveSumRef sourceType -> RecursiveRelease sourceType
+        | _ -> RootRelease (payloadSize, kind, rootPayloadPlan shape)
     | UnmanagedStorage ->
         NoReleasePlan
     | ManagedDynamicBuffer operation ->
         DynamicBufferRelease operation
-    | ManagedRcRoot (payloadSize, kind) ->
-        RootRelease (payloadSize, kind, rootPayloadPlan shape)
 
 /// Release plan for a source type using the current representation registry.
 let rec rcReleasePlanOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcReleasePlan =
@@ -764,6 +782,29 @@ let rec rcReleasePlanOfTypeWithSums
     (t: AST.Type)
     : RcReleasePlan =
     t |> rcShapeOfTypeWithSums typeReg sumReg |> rcShapeReleasePlan
+
+/// Collect the concrete recursive sum roots referenced by a finite release plan.
+let rec recursiveReleaseTypes (releasePlan: RcReleasePlan) : Set<AST.Type> =
+    let fromFields fieldReleases =
+        fieldReleases
+        |> List.map (fun (FieldRelease (_, fieldPlan)) -> recursiveReleaseTypes fieldPlan)
+        |> List.fold Set.union Set.empty
+
+    match releasePlan with
+    | RecursiveRelease sourceType ->
+        Set.singleton sourceType
+    | RootRelease (_, _, FixedBlockPayloadRelease (_, fieldReleases))
+    | RootRelease (_, _, BoxedSumPayloadRelease (_, fieldReleases, _))
+    | RootRelease (_, _, ClosurePayloadRelease fieldReleases) ->
+        fromFields fieldReleases
+    | RootRelease (_, _, TaggedListPayloadRelease elementRelease) ->
+        recursiveReleaseTypes elementRelease
+    | RootRelease (_, _, DictPayloadRelease (keyRelease, valueRelease)) ->
+        Set.union (recursiveReleaseTypes keyRelease) (recursiveReleaseTypes valueRelease)
+    | RootRelease (_, _, NoPayloadRelease)
+    | DynamicBufferRelease _
+    | NoReleasePlan ->
+        Set.empty
 
 // ============================================================================
 // Coverage Types

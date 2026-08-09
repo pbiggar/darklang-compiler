@@ -519,6 +519,26 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
     | Some (typ, expected) ->
         Error $"Expected sum-aware release plan for {typ} to be {expected}, got {rcReleasePlanOfTypeWithSums typeReg sumReg typ}"
 
+let testRecursiveSumReleasePlanUsesTypedBackEdge () : TestResult =
+    let treeType = AST.TSum ("Tree", [AST.TInt64])
+    let sumReg : RcSumShapeRegistry =
+        Map.ofList [
+            ("Tree",
+             { TypeParams = ["a"]
+               Payloads =
+                   [
+                       0, Some (AST.TVar "a")
+                       1, Some (AST.TTuple [AST.TSum ("Tree", [AST.TVar "a"]); AST.TSum ("Tree", [AST.TVar "a"])])
+                   ] })
+        ]
+
+    let plan = rcReleasePlanOfTypeWithSums Map.empty sumReg treeType
+    let recursiveTypes = recursiveReleaseTypes plan
+    if recursiveTypes = Set.singleton treeType then
+        Ok ()
+    else
+        Error $"Expected recursive Tree release plan to contain one typed back-edge, got {plan}"
+
 let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
     let samples = [
         (AST.TSum ("Color", []), NoReleasePlan)
@@ -1631,6 +1651,7 @@ let tests = [
     ("RcReleasePlan of type uses record metadata", testRcReleasePlanOfTypeUsesRecordMetadata)
     ("RcReleasePlan of type uses sum payload metadata", testRcReleasePlanOfTypeUsesSumPayloadMetadata)
     ("RcReleasePlan of type with sums uses variant metadata", testRcReleasePlanOfTypeWithSumsUsesVariantMetadata)
+    ("recursive sum release plan uses typed back-edge", testRecursiveSumReleasePlanUsesTypedBackEdge)
     ("RcReleasePlan of type classifies remaining root kinds", testRcReleasePlanOfTypeClassifiesRemainingRootKinds)
     ("RcShape requires record metadata", testRcShapeRequiresRecordMetadata)
     ("RcShape with sums requires sum metadata", testRcShapeWithSumsRequiresSumMetadata)
