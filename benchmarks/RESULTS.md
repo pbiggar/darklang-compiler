@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-10 23:40:03
-**Commit:** `c63f9646` - Omit exhaustive constructor match fallbacks
+**Last Updated:** 2026-08-11 07:02:25
+**Commit:** `c1f24a25` - Centralize AST literal escaping
 
 | Benchmark     |           Dark (3.38x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

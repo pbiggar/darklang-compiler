@@ -10,42 +10,24 @@ type Syntax =
     | CompilerSyntax
     | InterpreterSyntax
 
-let private escapeStringContent (input: string) : string =
-    input
-    |> String.collect (fun c ->
-        match c with
-        | '\\' -> "\\\\"
-        | '"' -> "\\\""
-        | '\n' -> "\\n"
-        | '\r' -> "\\r"
-        | '\t' -> "\\t"
-        | '\000' -> "\\0"
-        | _ -> string c)
+type private LiteralEscapeContext =
+    | StringContent
+    | InterpolatedStringText
+    | CharContent
 
-let private escapeInterpolatedStringText (input: string) : string =
+let private escapeLiteralContent (context: LiteralEscapeContext) (input: string) : string =
     input
     |> String.collect (fun c ->
-        match c with
-        | '\\' -> "\\\\"
-        | '"' -> "\\\""
-        | '\n' -> "\\n"
-        | '\r' -> "\\r"
-        | '\t' -> "\\t"
-        | '\000' -> "\\0"
-        | '{' -> "\\{"
-        | '}' -> "\\}"
-        | _ -> string c)
-
-let private escapeCharContent (input: string) : string =
-    input
-    |> String.collect (fun c ->
-        match c with
-        | '\\' -> "\\\\"
-        | '\'' -> "\\'"
-        | '\n' -> "\\n"
-        | '\r' -> "\\r"
-        | '\t' -> "\\t"
-        | '\000' -> "\\0"
+        match c, context with
+        | '\\', _ -> "\\\\"
+        | '"', (StringContent | InterpolatedStringText) -> "\\\""
+        | '\'', CharContent -> "\\'"
+        | '\n', _ -> "\\n"
+        | '\r', _ -> "\\r"
+        | '\t', _ -> "\\t"
+        | '\000', _ -> "\\0"
+        | '{', InterpolatedStringText -> "\\{"
+        | '}', InterpolatedStringText -> "\\}"
         | _ -> string c)
 
 let private formatFloatLiteral (value: float) : string =
@@ -391,8 +373,8 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         | CompilerSyntax -> $"{n}Z"
         | InterpreterSyntax -> $"{n}Z"
     | PBool b -> if b then "true" else "false"
-    | PString s -> $"\"{escapeStringContent s}\""
-    | PChar c -> $"'{escapeCharContent c}'"
+    | PString s -> $"\"{escapeLiteralContent StringContent s}\""
+    | PChar c -> $"'{escapeLiteralContent CharContent c}'"
     | PFloat f -> formatFloatLiteral f
     | PTuple patterns ->
         let parts = patterns |> List.map (formatPattern syntax) |> String.concat ", "
@@ -516,14 +498,14 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         | CompilerSyntax -> $"{n}Z"
         | InterpreterSyntax -> $"{n}Z"
     | BoolLiteral b -> if b then "true" else "false"
-    | StringLiteral s -> $"\"{escapeStringContent s}\""
-    | CharLiteral c -> $"'{escapeCharContent c}'"
+    | StringLiteral s -> $"\"{escapeLiteralContent StringContent s}\""
+    | CharLiteral c -> $"'{escapeLiteralContent CharContent c}'"
     | FloatLiteral f -> formatFloatLiteral f
     | InterpolatedString parts ->
         let partsText =
             parts
             |> List.map (function
-                | StringText t -> escapeInterpolatedStringText t
+                | StringText t -> escapeLiteralContent InterpolatedStringText t
                 | StringExpr e -> $"{{{formatExpr syntax e}}}")
             |> String.concat ""
         $"$\"{partsText}\""
