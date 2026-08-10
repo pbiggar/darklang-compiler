@@ -1831,6 +1831,65 @@ let TempId 2 = t1 * 5
 return t2
 
 ---NAME---
+factor_shared_int64_mul_add_product_left
+---INPUT---
+def f(x: Int64) : Int64 = (x * 3) + x
+---EXPECTED---
+Function f:
+let TempId 2 = t0 << 2
+return t2
+
+---NAME---
+factor_shared_int64_mul_add_addend_left
+---INPUT---
+def f(x: Int64) : Int64 = x + (x * 3)
+---EXPECTED---
+Function f:
+let TempId 2 = t0 << 2
+return t2
+
+---NAME---
+factor_shared_int64_mul_add_commuted_product_left
+---INPUT---
+def f(x: Int64) : Int64 = (3 * x) + x
+---EXPECTED---
+Function f:
+let TempId 2 = t0 << 2
+return t2
+
+---NAME---
+factor_shared_int64_mul_add_commuted_addend_left
+---INPUT---
+def f(x: Int64) : Int64 = x + (3 * x)
+---EXPECTED---
+Function f:
+let TempId 2 = t0 << 2
+return t2
+
+---NAME---
+preserve_shared_mul_add_live_product
+---INPUT---
+def f(x: Int64) : (Int64, Int64) =
+  let product = x * 3 in
+  (product + x, product)
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 3
+let TempId 3 = t0 << 2
+let TempId 4 = (t3, t1)
+return t4
+
+---NAME---
+preserve_shared_mul_add_float
+---INPUT---
+def f(x: Float) : Float = (x * 3.0) + x
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 3
+let TempId 2 = t1 + t0
+return t2
+
+---NAME---
 cancel_integer_add_then_subtract
 ---INPUT---
 def f(x: Int64, y: Int64) : Int64 = (x + y) - y

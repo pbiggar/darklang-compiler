@@ -370,6 +370,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical, low-risk integer simplification that removes paired arithmetic while preserving wrapping Int64 semantics.
 - Notes: Implemented for adjacent ANF bindings representing `(x + y) - y -> x`, `(x + y) - x -> y`, `(x - y) + y -> x`, and `y + (x - y) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. The rewrite is restricted to typed Int64 operands, retains an intermediate when it has another use, and leaves same-shaped Float expressions unchanged. Covered by focused before/after snapshots in `src/Tests/optimization/anf.opt`; no current routine benchmark isolates the exact pattern, so the optimization tests are the focused exercise for this micro-pattern.
 
+### Int64 shared-factor combining
+
+- Optimization name: Int64 shared-factor combining
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Canonical, low-risk factoring that removes an adjacent Int64 addition and can expose multiplication by a power of two to existing strength reduction.
+- Notes: Implemented for adjacent ANF forms of `(x * c) + x` and `x + (c * x)` in either multiplication operand order. Coefficient addition uses wrapping Int64 semantics, recursive liveness cleanup retains a reused product, and Float expressions remain unchanged. Focused snapshots in `src/Tests/optimization/anf.opt` cover all four operand arrangements, power-of-two shift reduction, live-product preservation, and the Float safety boundary; existing quick workloads do not isolate the pattern.
+
 ### Multiplication by negative one strength reduction
 
 - Optimization name: Multiplication by negative one strength reduction

@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-09 22:21:48
-**Commit:** `0da65fb8` - Import portable Dark stdlib functions with upstream coverage
+**Last Updated:** 2026-08-10 21:45:19
+**Commit:** `a7c225e6` - Factor shared Int64 multiply-adds
 
 | Benchmark     |           Dark (2.52x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

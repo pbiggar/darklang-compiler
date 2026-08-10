@@ -9,6 +9,7 @@
 // - Branch code motion: hoist identical pure leading branch computations
 // - Reassociation: combine constants across adjacent Int64 additions and multiplications
 // - Algebraic cancellation: remove paired Int64 additions and subtractions
+// - Algebraic factoring: combine an Int64 product with its shared operand
 // - Control-flow simplification: collapse Boolean literal branches
 // - Instruction combining: fold single-use negation into integer subtraction
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
@@ -1011,6 +1012,21 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
         // the reassociated expression was its final use.
         let combined = IntLiteral (Int64 (a * b))
         Some (Let (tid, cexpr, Let (multiplyTid, Prim (Mul, source, combined), multiplyBody)))
+    | Prim (Mul, source, IntLiteral (Int64 coefficient)),
+      Let (resultTid, Prim (Add, Var productTid, outerSource), resultBody)
+    | Prim (Mul, source, IntLiteral (Int64 coefficient)),
+      Let (resultTid, Prim (Add, outerSource, Var productTid), resultBody)
+    | Prim (Mul, IntLiteral (Int64 coefficient), source),
+      Let (resultTid, Prim (Add, Var productTid, outerSource), resultBody)
+    | Prim (Mul, IntLiteral (Int64 coefficient), source),
+      Let (resultTid, Prim (Add, outerSource, Var productTid), resultBody)
+        when productTid = tid
+             && source = outerSource
+             && isInt64Atom typeEnv source ->
+        // Int64 arithmetic wraps modulo 2^64, so c*x + x = (c+1)*x.
+        // Retain the product until recursive liveness cleanup proves it dead.
+        let combined = IntLiteral (Int64 (coefficient + 1L))
+        Some (Let (tid, cexpr, Let (resultTid, Prim (Mul, source, combined), resultBody)))
     | Prim (Add, source, cancelled),
       Let (resultTid, Prim (Sub, Var intermediateTid, outerCancelled), resultBody)
         when intermediateTid = tid
