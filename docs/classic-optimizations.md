@@ -157,8 +157,8 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 - Optimization name: Bitwise zero identity simplification
 - Taxonomy category: Algebraic simplification
-- Priority/rationale: Small, low-risk canonical integer simplification that removes redundant bitwise operations in ANF before backend lowering.
-- Notes: Implemented for `x & 0 -> 0`, `0 & x -> 0`, `x ||| 0 -> x`, `0 ||| x -> x`, `x ^ 0 -> x`, and `0 ^ x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by corresponding bitwise zero identity tests in `src/Tests/optimization/anf.opt`.
+- Priority/rationale: Small, low-risk canonical signed and unsigned integer simplification that removes redundant bitwise operations in ANF before backend lowering.
+- Notes: Implemented for Int64 and UInt64 `x & 0 -> 0`, `0 & x -> 0`, `x ||| 0 -> x`, `0 ||| x -> x`, `x ^ 0 -> x`, and `0 ^ x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. The corresponding before/after snapshots in `src/Tests/optimization/anf.opt` cover all six UInt64 operand/operator arrangements and retain representative nonzero UInt64 AND, OR, and XOR expressions. Current quick workloads do not contain the dynamic UInt64-with-zero pattern; a tight UInt64 mask/flag loop alternating all six forms is the identified focused benchmark if this idiom becomes common in source programs.
 
 ### Bitwise XOR self simplification
 

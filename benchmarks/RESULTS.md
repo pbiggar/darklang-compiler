@@ -2,8 +2,8 @@
 
 Latest routine-profile compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-08-11 07:02:25
-**Commit:** `c1f24a25` - Centralize AST literal escaping
+**Last Updated:** 2026-08-11 07:04:27
+**Commit:** `3b36a8d8` - Simplify UInt64 bitwise zero identities
 
 | Benchmark     |           Dark (3.38x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

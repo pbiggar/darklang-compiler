@@ -1248,6 +1248,81 @@ Function f:
 return t0
 
 ---NAME---
+identity_uint64_bitand_zero_right
+---INPUT---
+def f(x: UInt64) : UInt64 = x & 0UL
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+identity_uint64_bitand_zero_left
+---INPUT---
+def f(x: UInt64) : UInt64 = 0UL & x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+identity_uint64_bitor_zero_right
+---INPUT---
+def f(x: UInt64) : UInt64 = x ||| 0UL
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_uint64_bitor_zero_left
+---INPUT---
+def f(x: UInt64) : UInt64 = 0UL ||| x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_uint64_bitxor_zero_right
+---INPUT---
+def f(x: UInt64) : UInt64 = x ^ 0UL
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_uint64_bitxor_zero_left
+---INPUT---
+def f(x: UInt64) : UInt64 = 0UL ^ x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+preserve_uint64_bitand_nonzero
+---INPUT---
+def f(x: UInt64) : UInt64 = x & 1UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 & 1
+return t1
+
+---NAME---
+preserve_uint64_bitor_nonzero
+---INPUT---
+def f(x: UInt64) : UInt64 = x ||| 1UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 | 1
+return t1
+
+---NAME---
+preserve_uint64_bitxor_nonzero
+---INPUT---
+def f(x: UInt64) : UInt64 = x ^ 1UL
+---EXPECTED---
+Function f:
+let TempId 1 = t0 ^ 1
+return t1
+
+---NAME---
 identity_bitxor_self
 ---INPUT---
 def f(x: Int64) : Int64 = x ^ x
