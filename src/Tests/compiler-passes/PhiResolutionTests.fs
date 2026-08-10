@@ -7,6 +7,8 @@
 // - Phi with swap (cycle that needs temp register)
 // - Phi where source is immediate
 // - Phi where some predecessors share the same source value
+// - Floating-point loop phi coalescing through a direct feeder move
+// - Floating-point phi coalescing that preserves an existing return-register allocation
 
 module PhiResolutionTests
 
@@ -23,6 +25,9 @@ let vr (n: int) = LIR.Virtual n
 
 /// Create a VReg operand
 let vreg (n: int) = Reg (LIR.Virtual n)
+
+/// Create a floating-point virtual register
+let fvr (n: int) = LIR.FVirtual n
 
 /// Create a physical register
 let phys (r: PhysReg) = LIR.Physical r
@@ -67,6 +72,13 @@ let countMoves (block: BasicBlock) : int =
     block.Instrs |> List.filter (fun instr ->
         match instr with
         | Mov _ -> true
+        | _ -> false) |> List.length
+
+/// Count floating-point moves in a block
+let countFloatMoves (block: BasicBlock) : int =
+    block.Instrs |> List.filter (fun instr ->
+        match instr with
+        | FMov _ -> true
         | _ -> false) |> List.length
 
 /// Empty float allocation for tests that don't use float phis
@@ -447,6 +459,111 @@ let testLoopPhiCoalesced () : TestResult =
         else
             Error "Backedge should not need moves when phi is coalesced")
 
+/// Test: A non-interfering float loop-phi destination and backedge source
+/// should share a physical register, so phi resolution emits no FMov.
+let testFloatLoopPhiCoalesced () : TestResult =
+    let labelEntry = makeLabel "float_loop_entry"
+    let labelLoop = makeLabel "float_loop_body"
+    let labelBack = makeLabel "float_loop_back"
+    let labelExit = makeLabel "float_loop_exit"
+
+    let blockEntry =
+        makeJumpBlock
+            labelEntry
+            [Mov (vr 5, Imm 0L); FLoad (fvr 3, 0.0); FLoad (fvr 4, 1.0)]
+            labelLoop
+    let phiInstr = FPhi (fvr 0, [(fvr 3, labelEntry); (fvr 2, labelBack)])
+    let blockLoop =
+        makeBranchBlock
+            labelLoop
+            [phiInstr
+             FLoad (fvr 7, 2.0)
+             FAdd (fvr 8, fvr 0, fvr 7)
+             PrintFloatNoNewline (fvr 8)
+             Cmp (vr 5, Imm 10L)
+             Cset (vr 6, EQ)]
+            (vr 6)
+            labelExit
+            labelBack
+    let blockBack =
+        makeJumpBlock labelBack [FAdd (fvr 1, fvr 0, fvr 4); FMov (fvr 2, fvr 1)] labelLoop
+    let blockExit = makeRetBlock labelExit [PrintFloat (fvr 0)]
+
+    let cfg = makeCFG labelEntry [blockEntry; blockLoop; blockBack; blockExit]
+    let func : LIR.Function = {
+        Name = "float_phi_coalesce_loop"
+        TypedParams = []
+        CFG = cfg
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+
+    let floatAllocation = RegisterAllocation.chordalFloatAllocation cfg []
+    let phiDest = RegisterAllocation.applyFloatAllocationToFReg floatAllocation (fvr 0)
+    let arithmeticResult = RegisterAllocation.applyFloatAllocationToFReg floatAllocation (fvr 1)
+    let backedgeSource = RegisterAllocation.applyFloatAllocationToFReg floatAllocation (fvr 2)
+    if phiDest <> backedgeSource then
+        Error "Non-interfering FPhi destination and backedge source should share a register"
+    else if arithmeticResult <> backedgeSource then
+        Error "A direct FMov feeding an FPhi source should join the coalesced register chain"
+    else
+        let allocated = RegisterAllocation.allocateRegisters Platform.ARM64 func
+        withBlock labelBack allocated.CFG (fun backBlock ->
+            if countFloatMoves backBlock = 0 then
+                Ok ()
+            else
+                Error "Float backedge should not need FMov when FPhi is coalesced")
+
+/// Test: A loop-carried float already allocated to the ABI return register
+/// should not be displaced merely to coalesce its invariant backedge source.
+let testFloatLoopPhiPreservesReturnRegister () : TestResult =
+    let labelEntry = makeLabel "float_return_entry"
+    let labelLoop = makeLabel "float_return_body"
+    let labelBack = makeLabel "float_return_back"
+    let labelExit = makeLabel "float_return_exit"
+
+    let blockEntry =
+        makeJumpBlock
+            labelEntry
+            [SaveRegs ([], [])
+             FLoad (fvr 40, 0.0)
+             FArgMoves [(LIR.D0, fvr 40)]
+             Call (vr 32, "float_return_source", [])
+             FMov (LIR.FPhysical LIR.D8, LIR.FPhysical LIR.D0)
+             RestoreRegs ([], [])
+             FMov (fvr 32, LIR.FPhysical LIR.D8)]
+            labelLoop
+    let blockLoop =
+        makeBranchBlock
+            labelLoop
+            [FPhi (fvr 27, [(fvr 13, labelEntry); (fvr 38, labelBack)])
+             Cmp (vr 5, Imm 10L)
+             Cset (vr 6, EQ)]
+            (vr 6)
+            labelExit
+            labelBack
+    let blockBack = makeJumpBlock labelBack [FMov (fvr 38, fvr 32)] labelLoop
+    let blockExit = makeRetBlock labelExit [FMov (LIR.FPhysical LIR.D0, fvr 27)]
+
+    let cfg = makeCFG labelEntry [blockEntry; blockLoop; blockBack; blockExit]
+    let func : LIR.Function = {
+        Name = "float_phi_preserve_return"
+        TypedParams =
+            [{ Reg = vr 11; Type = AST.TInt64 }
+             { Reg = vr 12; Type = AST.TInt64 }
+             { Reg = vr 13; Type = AST.TFloat64 }]
+        CFG = cfg
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+
+    let allocated = RegisterAllocation.allocateRegisters Platform.ARM64 func
+    withBlock labelExit allocated.CFG (fun exitBlock ->
+        if countFloatMoves exitBlock = 0 then
+            Ok ()
+        else
+            Error "FPhi coalescing should not add a move into the ABI float return register")
+
 let tests = [
     ("simple phi resolution", testSimplePhiResolution)
     ("multiple phis parallel", testMultiplePhisParallel)
@@ -455,6 +572,8 @@ let tests = [
     ("loop phi", testLoopPhi)
     ("dead phi pruned", testDeadPhiPruned)
     ("loop phi coalesced", testLoopPhiCoalesced)
+    ("float loop phi coalesced", testFloatLoopPhiCoalesced)
+    ("float loop phi preserves return register", testFloatLoopPhiPreservesReturnRegister)
 ]
 
 /// Run all phi resolution tests

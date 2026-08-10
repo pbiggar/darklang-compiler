@@ -1384,6 +1384,52 @@ let collectPhiPairs (blocks: LIR.BasicBlock array) : (int * int) list =
             | _ -> acc) acc) []
     |> dedupePairs
 
+/// Collect float phi-related coalescing pairs from CFG blocks.
+/// Returns undirected pairs of non-identical virtual float registers that flow
+/// into the same FPhi destination.
+let collectFPhiPairs (blocks: LIR.BasicBlock array) : (int * int) list =
+    blocks
+    |> Array.fold (fun acc block ->
+        block.Instrs
+        |> List.fold (fun acc instr ->
+            match instr with
+            | LIR.FPhi (LIR.FVirtual destId, sources) ->
+                sources
+                |> List.fold (fun acc (src, _) ->
+                    match src with
+                    | LIR.FVirtual srcId when srcId <> destId ->
+                        (destId, srcId) :: acc
+                    | _ -> acc) acc
+            | _ -> acc) acc) []
+    |> dedupePairs
+
+/// Collect virtual float moves that define FPhi sources. Coalescing the whole
+/// incoming copy chain avoids trading a resolved phi move for its feeder move.
+let collectFPhiSourceMovePairs (blocks: LIR.BasicBlock array) : (int * int) list =
+    let phiSources =
+        blocks
+        |> Array.fold (fun acc block ->
+            block.Instrs
+            |> List.fold (fun acc instr ->
+                match instr with
+                | LIR.FPhi (_, sources) ->
+                    sources
+                    |> List.fold (fun acc (src, _) ->
+                        match src with
+                        | LIR.FVirtual srcId -> Set.add srcId acc
+                        | LIR.FPhysical _ -> acc) acc
+                | _ -> acc) acc) Set.empty
+    blocks
+    |> Array.fold (fun acc block ->
+        block.Instrs
+        |> List.fold (fun acc instr ->
+            match instr with
+            | LIR.FMov (LIR.FVirtual destId, LIR.FVirtual srcId)
+                when Set.contains destId phiSources ->
+                (destId, srcId) :: acc
+            | _ -> acc) acc) []
+    |> dedupePairs
+
 /// Collect phi coalescing preferences from CFG.
 /// Returns undirected pairs (vregId, vregId) representing preferred coalescing.
 let collectPhiPreferences (blocks: LIR.BasicBlock array) : (int * int) list =
@@ -2007,8 +2053,10 @@ let floatColoringToAllocation (colorResult: ColoringResult) (registers: LIR.Phys
 /// even if they don't appear in the CFG instructions
 let private chordalFloatAllocationWithLiveness
     (blockIndex: BlockIndex)
+    (blocks: LIR.BasicBlock array)
     (classifiedBlocks: ClassifiedBlock array)
     (additionalVRegs: BitSet)
+    (paramPrecolors: (int * int) list)
     (domain: VRegDomain)
     (livenessBits: BlockLiveness array)
     : FAllocationResult =
@@ -2028,8 +2076,25 @@ let private chordalFloatAllocationWithLiveness
           Allocations = Array.create domain.Ids.Length None
           UsedCalleeSavedF = [] }
     else
-        // No preferences for floats for now (could add FPhi coalescing later)
-        let colorResult = chordalGraphColor graphWithParams [] (List.length allocatableFloatRegs) [] []
+        let phiPairs = collectFPhiPairs blocks
+        let movePairs = dedupePairs ((collectFPhiSourceMovePairs blocks) @ phiPairs)
+        let phiIds =
+            phiPairs
+            |> List.fold (fun acc (destId, sourceId) ->
+                acc |> Set.add destId |> Set.add sourceId) Set.empty
+        // Preserve the ABI register of parameters participating in an FPhi.
+        // Otherwise hard coalescing can displace an already zero-copy return
+        // value merely to remove an invariant backedge move.
+        let phiParamPrecolors =
+            paramPrecolors
+            |> List.filter (fun (vregId, _) -> Set.contains vregId phiIds)
+        let colorResult =
+            chordalGraphColor
+                graphWithParams
+                phiParamPrecolors
+                (List.length allocatableFloatRegs)
+                phiPairs
+                movePairs
         floatColoringToAllocation colorResult allocatableFloatRegs
 
 /// Run chordal graph coloring for float register allocation
@@ -2041,7 +2106,7 @@ let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocat
     let (domain, livenessBits) =
         computeFloatLivenessBitsFromFacts blockIndex classifiedBlocks additionalVRegs
     let additionalBits = bitsetFromList domain additionalVRegs
-    chordalFloatAllocationWithLiveness blockIndex classifiedBlocks additionalBits domain livenessBits
+    chordalFloatAllocationWithLiveness blockIndex blocks classifiedBlocks additionalBits [] domain livenessBits
 
 /// Apply float allocation to an FReg, converting FVirtual to FPhysical
 let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =
@@ -3705,6 +3770,12 @@ let private allocateRegistersInternal
             match reg with
             | LIR.Virtual id -> Some id
             | LIR.Physical _ -> None)
+    let floatParamPrecolors =
+        floatParams
+        |> List.choose (fun (reg, paramIdx) ->
+            match reg with
+            | LIR.Virtual id -> Some (id, paramIdx)
+            | LIR.Physical _ -> None)
 
     let (blockIndex, blocks) = buildBlockIndex func.CFG
 
@@ -3795,8 +3866,10 @@ let private allocateRegistersInternal
         timePhase swOpt "RegAlloc: Float Allocation" timings (fun () ->
             chordalFloatAllocationWithLiveness
                 blockIndex
+                blocks
                 classifiedBlocks
                 floatParamBits
+                floatParamPrecolors
                 floatDomain
                 floatLiveness)
 

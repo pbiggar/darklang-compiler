@@ -2,12 +2,11 @@
 
 ## Executive Summary
 
-The Dark compiler currently executes **1.74x as many instructions as the cached
-Rust baseline** and **0.93x as many instructions as the cached OCaml baseline**
-for the mandelbrot benchmark. The primary remaining causes relative to Rust are:
-
-1. **Remaining tail-call phi copy traffic in the iterate loop** (estimated 5-10% improvement potential)
-2. **Missing fused multiply-add (FMA) instructions** (estimated 10-15% improvement potential)
+At the original investigation baseline, the Dark compiler executed **1.74x as
+many instructions as cached Rust** and **0.93x as many instructions as cached
+OCaml** for mandelbrot. The primary remaining optimization target is **missing
+fused multiply-add (FMA) instructions** (estimated 10-15% improvement
+potential).
 
 ## Benchmark Results
 
@@ -29,45 +28,42 @@ The `iterate` function is the innermost loop, called ~2 million times (200 * 200
 **Current LIR after Register Allocation (iterate_L4 - the hot continue path):**
 ```
 Label "iterate_L4":
-    D0 <- FSub(D0, D1)
-    D1 <- FAdd(D0, D5)
-    D0 <- FAdd(D3, D3)               ; strength-reduced 2.0 * zr
-    D0 <- FMul(D0, D2)
-    D0 <- FAdd(D0, D4)
+    D4 <- FSub(D4, D5)
+    D4 <- FAdd(D4, D0)
+    D2 <- FAdd(D2, D2)               ; strength-reduced 2.0 * zr
+    D2 <- FMul(D2, D3)
+    D3 <- FAdd(D2, D1)
     X1 <- Add(X1, Imm 1)
-    D3 <- FMov(D5)
     D2 <- FMov(D4)
-    D3 <- FMov(D1)
-    D2 <- FMov(D0)
     Jump(Label "iterate_body")
 ```
 
-**Instruction count in iterate hot path:** 12 LIR instructions after register allocation
-**Redundant instructions:** tail-call phi copy traffic remains after direct self-moves and floating copy-back moves have been eliminated
-**Effective useful instructions:** ~10 arithmetic/control instructions plus remaining avoidable copies depending on the phi-copy sequence
+**Instruction count in iterate_L4:** 8 LIR instructions after register allocation
+**Remaining copy:** the next real component moves to its loop-carried register because its old value remains live during the iteration
 
 **Current emitted assembly for the hot continue path:**
 ```asm
-4001dc: fmul  d0, d3, d3
-4001e0: fmul  d1, d2, d2
-4001e4: fadd  d6, d0, d1
-4001e8: fmov  d7, #4.0
-4001ec: fcmp  d6, d7
-4001f0: b.gt  0x400220
-4001f4: fsub  d0, d0, d1
-4001f8: fadd  d1, d0, d5
-4001fc: fadd  d0, d3, d3
-400200: fmul  d0, d0, d2
-400204: fadd  d0, d0, d4
-400208: add   x1, x1, #0x1
-40020c: fmov  d3, d5
-400210: fmov  d2, d4
-400214: fmov  d3, d1
-400218: fmov  d2, d0
-40021c: b     0x400228
+fmul  d4, d2, d2
+fmul  d5, d3, d3
+fadd  d6, d4, d5
+fcmp  d6, d7
+b.gt  iterate_L5
+fsub  d4, d4, d5
+fadd  d4, d4, d0
+fadd  d2, d2, d2
+fmul  d2, d2, d3
+fadd  d3, d2, d1
+add   x1, x1, #0x1
+fmov  d2, d4
+b     iterate_body
 ```
 
-The earlier direct `D1 <- FMov(D1)` and `D0 <- FMov(D0)` LIR instructions are no longer present. A post-allocation cleanup now also removes the floating copy-back moves that used to re-copy `d3` into `d5` and `d2` into `d4`. The remaining sequential phi-resolution copy chain still produces `fmov` traffic to move invariant `cr`/`ci` values and newly computed `zr`/`zi` values into the loop-body registers.
+The invariant `cr` and `ci` values stay in stable registers across the backedge,
+and the next imaginary component is computed directly into its loop-carried
+register. The remaining `fmov` transfers the next real component after the old
+real component's last use. Preserving the ABI registers for float parameters
+that participate in these phis also removes the four entry copies that formerly
+moved `cr`, `ci`, `zr`, and `zi` out of `D0`-`D3`.
 
 The current LIR still presents the escape threshold as `D7 <- FLoad(float[4])`,
 but ARM64 code generation lowers that constant to `fmov d7, #4.0` in the final
@@ -117,29 +113,7 @@ Rust aggressively inlines and optimizes:
 
 ## Optimization Opportunities
 
-### 1. Phi Copy Coalescing / Dead Store Elimination (Medium Impact: ~5-10%)
-
-**Problem:** The register allocator generates redundant moves when resolving phi nodes. Direct floating-point self-moves and local floating copy-back moves have been eliminated, but invariant argument shuffles remain in the hot path.
-
-**Current evidence (LIR after RegAlloc, iterate_L4):**
-```
-D3 <- FMov(D5)
-D2 <- FMov(D4)
-D3 <- FMov(D1)
-D2 <- FMov(D0)
-```
-
-**Root Cause:** Phi resolution in `iterate_L4` generates moves for variables that will flow to `iterate_body`, but the register allocator still does not coalesce the floating-point copy chain effectively. The emitted assembly shows the remaining cost is copy traffic around invariant `cr`/`ci` values and the next `zr`/`zi` values.
-
-**Implementation Approach:**
-1. Improve phi node parallel copy sequencing so invariant tail-call arguments can stay in their assigned registers.
-2. Consider loop-aware coalescing for tail-call phi mappings that repeatedly move the same invariant values.
-
-**Files to modify:**
-- `src/DarkCompiler/RegAlloc.fs` - Add move coalescing
-- `src/DarkCompiler/passes/4.5_LIR_Peephole.fs` - Extend post-allocation cleanup only if more local copy redundancies are found
-
-### 2. Fused Multiply-Add Instructions (Medium Impact: ~10-15%)
+### Fused Multiply-Add Instructions (Medium Impact: ~10-15%)
 
 **Problem:** Dark generates separate FMUL+FADD sequences where FMADD would be faster and more accurate.
 
@@ -180,9 +154,8 @@ t2 = t1 + c   (or t1 - c)
 
 | Optimization | Estimated Impact | Complexity |
 |-------------|------------------|------------|
-| Phi copy coalescing | 5-10% | Medium |
 | FMA instructions | 10-15% | Medium |
-| **Remaining potential** | **~15-25%** | |
+| **Remaining potential** | **~10-15%** | |
 
 ## Completed Optimization Notes
 

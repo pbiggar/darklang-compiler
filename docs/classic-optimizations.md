@@ -638,6 +638,15 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical low-risk result retargeting that removes one floating-point copy from adjacent arithmetic/copy chains without extending the temporary's lifetime.
 - Notes: Implemented for adjacent `FAdd`, `FSub`, `FMul`, or `FDiv` results copied by `FMov` when the arithmetic temporary has no later instruction uses. Direct LIR tests cover all four operations and live-temporary preservation; `retarget_dead_float_arithmetic_move` records the source-to-LIR result. The routine `pisum` benchmark exercises the pattern in its hot loop and fell from 50,015,171 to 45,015,171 instructions (10.0%); all other routine counts were unchanged. The committed aggregate ratio is 7.78x, and applying the measured `pisum` result yields 7.74x pending orchestrator recording.
 
+## Register allocation
+
+### Floating-point phi coalescing
+
+- Optimization name: Floating-point phi coalescing
+- Taxonomy category: Register coalescing
+- Priority/rationale: Canonical copy elimination that assigns non-interfering FPhi destinations, incoming sources, and direct source-copy chains to one physical floating-point register before phi resolution.
+- Notes: Implemented in `src/DarkCompiler/passes/5_RegisterAllocation.fs` by feeding FPhi pairs and only the `FMov` pairs that define FPhi sources into the existing interference-checked coalescer. Float parameters participating in those phis retain their ABI register colors so coalescing cannot trade a loop copy for a return copy. Focused allocation/IR regressions in `src/Tests/compiler-passes/PhiResolutionTests.fs` verify equal physical assignments, no coalesced backedge `FMov`, and preservation of an existing `D0` return assignment. The ARM64 quick benchmark improved `mandelbrot` from 1,300,758 to 1,107,797 instructions (14.8%); `fasta`, `leibniz`, `pisum`, and `spectral_norm` also improved, with no quick-workload regressions.
+
 ## Code motion
 
 ### Shared leading conditional binding hoisting
