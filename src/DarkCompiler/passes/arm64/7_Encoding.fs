@@ -1097,49 +1097,51 @@ let getSymbolicCodeSize (instructions: ARM64Symbolic.Instr list) : int =
         | ARM64Symbolic.Label _ -> 0
         | _ -> 4)
 
-let private resolveLabelRefWithPools
-    (stringPool: LiteralPool.StringPool)
-    (floatPool: LiteralPool.FloatPool)
-    (labelRef: ARM64Symbolic.LabelRef)
-    : string =
-    match labelRef with
-    | ARM64Symbolic.CodeLabel name -> name
-    | ARM64Symbolic.DataLabel dataRef ->
-        match dataRef with
-        | ARM64Symbolic.Named name -> name
-        | ARM64Symbolic.StringLiteral value ->
-            match Map.tryFind value stringPool.StringToId with
-            | Some idx -> "str_" + string idx
-            | None -> Crash.crash $"String literal label missing from pool: {value}"
-        | ARM64Symbolic.FloatLiteral value ->
-            let bits = System.BitConverter.DoubleToInt64Bits value
-            match Map.tryFind bits floatPool.FloatBitsToId with
-            | Some idx -> "_float" + string idx
-            | None -> Crash.crash $"Float literal label missing from pool: {value}"
+type private DataOffsets =
+    | LiteralOffsets of strings: Map<string, int> * floats: Map<int64, int>
+    | LabelOffsets of strings: Map<string, int> * floats: Map<string, int>
 
-let private tryFindDataLabel
-    (label: string)
-    (stringLabels: Map<string, int>)
-    (floatLabels: Map<string, int>)
-    (dataLabels: Map<string, int>)
+let private tryFindDataOffset
+    (labelRef: ARM64Symbolic.LabelRef)
+    (offsets: DataOffsets)
+    (namedOffsets: Map<string, int>)
     : int option =
-    if label.StartsWith("str_") then
-        Map.tryFind label stringLabels
-    elif label.StartsWith("_float") then
-        Map.tryFind label floatLabels
-    else
-        Map.tryFind label dataLabels
+    match labelRef with
+    | ARM64Symbolic.DataLabel (ARM64Symbolic.StringLiteral value) ->
+        match offsets with
+        | LiteralOffsets (stringOffsets, _) -> Map.tryFind value stringOffsets
+        | LabelOffsets _ -> None
+    | ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral value) ->
+        match offsets with
+        | LiteralOffsets (_, floatOffsets) ->
+            value
+            |> System.BitConverter.DoubleToInt64Bits
+            |> fun bits -> Map.tryFind bits floatOffsets
+        | LabelOffsets _ -> None
+    | ARM64Symbolic.DataLabel (ARM64Symbolic.Named name) ->
+        Map.tryFind name namedOffsets
+    | ARM64Symbolic.CodeLabel name ->
+        match offsets with
+        | LiteralOffsets _ -> Map.tryFind name namedOffsets
+        | LabelOffsets (stringOffsets, floatOffsets) ->
+            if name.StartsWith("str_") then Map.tryFind name stringOffsets
+            elif name.StartsWith("_float") then Map.tryFind name floatOffsets
+            else Map.tryFind name namedOffsets
+
+let private labelRefDescription (labelRef: ARM64Symbolic.LabelRef) : string =
+    match labelRef with
+    | ARM64Symbolic.CodeLabel name
+    | ARM64Symbolic.DataLabel (ARM64Symbolic.Named name) -> name
+    | ARM64Symbolic.DataLabel (ARM64Symbolic.StringLiteral value) -> value
+    | ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral value) -> string value
 
 /// Encode an instruction with label resolution
 /// currentOffset: byte offset of current instruction
 let private encodeSymbolicWithLabels
     (instr: ARM64Symbolic.Instr)
-    (stringPool: LiteralPool.StringPool)
-    (floatPool: LiteralPool.FloatPool)
     (currentOffset: int)
     (codeLabels: Map<string, int>)
-    (stringLabels: Map<string, int>)
-    (floatLabels: Map<string, int>)
+    (dataOffsets: DataOffsets)
     (dataLabels: Map<string, int>)
     : ARM64.MachineCode =
     match instr with
@@ -1263,8 +1265,7 @@ let private encodeSymbolicWithLabels
         // ADRP: form PC-relative address to 4KB page
         // Encoding: 1 immlo(2) 10000 immhi(19) Rd(5)
         // The label should point to data in .rodata section
-        let label = resolveLabelRefWithPools stringPool floatPool labelRef
-        match tryFindDataLabel label stringLabels floatLabels dataLabels with
+        match tryFindDataOffset labelRef dataOffsets dataLabels with
         | Some targetOffset ->
             // Compute page-relative offset (4KB pages)
             // ADRP uses the page containing PC, so we compute:
@@ -1280,13 +1281,13 @@ let private encodeSymbolicWithLabels
             let opcode = 0b10000u <<< 24
             op ||| immlo ||| opcode ||| immhi ||| rd
         | None ->
-            Crash.crash $"ADRP: Label '{label}' not found in labelMap"
+            Crash.crash $"ADRP: Label '{labelRefDescription labelRef}' not found in labelMap"
 
     | ARM64Symbolic.ADR (dest, labelRef) ->
         // ADR: form PC-relative address
         // Encoding: 0 immlo(2) 10000 immhi(19) Rd(5)
         // immlo is bits 0-1, immhi is bits 2-20 of the 21-bit signed offset
-        let label = resolveLabelRefWithPools stringPool floatPool labelRef
+        let label = labelRefDescription labelRef
         match Map.tryFind label codeLabels with
         | Some targetOffset ->
             // Compute byte offset from current PC to label
@@ -1306,8 +1307,7 @@ let private encodeSymbolicWithLabels
         // ADD with label offset (page offset portion)
         // Used with ADRP to get full address
         // This adds the lower 12 bits of the address (page offset)
-        let label = resolveLabelRefWithPools stringPool floatPool labelRef
-        match tryFindDataLabel label stringLabels floatLabels dataLabels with
+        match tryFindDataOffset labelRef dataOffsets dataLabels with
         | Some targetOffset ->
             // Get the 12-bit page offset
             let pageOffset = targetOffset &&& 0xFFF
@@ -1320,7 +1320,7 @@ let private encodeSymbolicWithLabels
             let rd = encodeReg dest
             sf ||| op ||| shift ||| imm12 ||| rn ||| rd
         | None ->
-            Crash.crash $"ADD_label: Label '{label}' not found in labelMap"
+            Crash.crash $"ADD_label: Label '{labelRefDescription labelRef}' not found in labelMap"
 
     // All other instructions: use single-pass encoding
     | _ ->
@@ -1338,12 +1338,9 @@ let encodeWithLabels
     : ARM64.MachineCode =
     encodeSymbolicWithLabels
         (ARM64Symbolic.ofARM64 instr)
-        LiteralPool.emptyStringPool
-        LiteralPool.emptyFloatPool
         currentOffset
         codeLabels
-        stringLabels
-        floatLabels
+        (LabelOffsets (stringLabels, floatLabels))
         dataLabels
 
 /// Compute the size of concrete code in bytes.
@@ -1354,10 +1351,10 @@ let getCodeSize (instructions: ARM64.Instr list) : int =
         | ARM64.Label _ -> 0
         | _ -> 4)
 
-/// Compute float label positions given code file offset, code size, and float pool
-/// Returns map from "_floatN" to byte offset (relative to segment/file start)
+/// Compute float literal positions given code file offset, code size, and float pool.
+/// Keys use exact IEEE-754 bits so positive and negative zero remain distinct.
 /// Floats are stored as 8-byte IEEE 754 doubles, aligned to 8 bytes
-let computeFloatLabels (codeFileOffset: int) (codeSize: int) (floatPool: LiteralPool.FloatPool) : Map<string, int> =
+let private computeFloatLiteralOffsets (codeFileOffset: int) (codeSize: int) (floatPool: LiteralPool.FloatPool) : Map<int64, int> =
     if floatPool.Floats.IsEmpty then
         Map.empty
     else
@@ -1373,21 +1370,20 @@ let computeFloatLabels (codeFileOffset: int) (codeSize: int) (floatPool: Literal
         let alignedStart = (startOffset + 7) &&& (~~~7)
 
         sortedFloats
-        |> List.fold (fun (offset, labelMap) (idx, _floatVal) ->
-            let label = "_float" + string idx
-            let newMap = Map.add label offset labelMap
+        |> List.fold (fun (offset, offsetMap) (_idx, floatValue) ->
+            let bits = System.BitConverter.DoubleToInt64Bits floatValue
+            let newMap = Map.add bits offset offsetMap
             (offset + 8, newMap))  // Each double is 8 bytes
             (alignedStart, Map.empty)
         |> snd
 
-/// Compute string label positions given code file offset, code size, and string pool
-/// Returns map from "_strN" to byte offset (relative to segment/file start)
+/// Compute string literal positions given code file offset, code size, and string pool.
 /// codeFileOffset: where code starts in the file/segment
 /// Compute the size of the float pool in bytes
 let getFloatPoolSize (floatPool: LiteralPool.FloatPool) : int =
     floatPool.Floats.Count * 8  // Each double is 8 bytes
 
-let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: int) (stringPool: LiteralPool.StringPool) : Map<string, int> =
+let private computeStringLiteralOffsets (codeFileOffset: int) (codeSize: int) (floatPoolSize: int) (stringPool: LiteralPool.StringPool) : Map<string, int> =
     if stringPool.Strings.IsEmpty then
         Map.empty
     else
@@ -1405,9 +1401,8 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: in
 
         // Each string has format: [length:8][data:N][padding:P][refcount:8]
         sortedStrings
-        |> List.fold (fun (offset, labelMap) (idx, (_str, len)) ->
-            let label = "str_" + string idx  // Match label format in CodeGen
-            let newMap = Map.add label offset labelMap
+        |> List.fold (fun (offset, offsetMap) (_idx, (str, len)) ->
+            let newMap = Map.add str offset offsetMap
             let alignedLen = ((len + 7) / 8) * 8
             (offset + 8 + alignedLen + 8, newMap))
             (startOffset, Map.empty)
@@ -1483,14 +1478,14 @@ let encodeSymbolicWithPools
         computeSymbolicLayout instructions
 
     // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
-    let floatLabels =
-        computeFloatLabels codeFileOffset codeSize floatPool
+    let floatOffsets =
+        computeFloatLiteralOffsets codeFileOffset codeSize floatPool
     let floatPoolSize =
         getFloatPoolSize floatPool
 
     // Step 3: Compute string label positions (after headers + code + floats)
-    let stringLabels =
-        computeStringLabels codeFileOffset codeSize floatPoolSize stringPool
+    let stringOffsets =
+        computeStringLiteralOffsets codeFileOffset codeSize floatPoolSize stringPool
 
     let stringPoolSize =
         getStringPoolSize stringPool
@@ -1505,6 +1500,7 @@ let encodeSymbolicWithPools
         rawCodeLabels |> Map.map (fun _ offset -> codeFileOffset + offset)
 
     let dataLabels = leakLabels
+    let dataOffsets = LiteralOffsets (stringOffsets, floatOffsets)
 
     // Step 5: Encode with label resolution (current offset includes file offset)
     let rec encodeLoop instrs offset acc =
@@ -1516,12 +1512,9 @@ let encodeSymbolicWithPools
             let code =
                 encodeSymbolicWithLabels
                     instr
-                    stringPool
-                    floatPool
                     offset
                     codeLabelMap
-                    stringLabels
-                    floatLabels
+                    dataOffsets
                     dataLabels
             encodeLoop rest (offset + 4) (code :: acc)
 
