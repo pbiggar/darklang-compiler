@@ -2032,7 +2032,6 @@ let rec private checkExprWithParamNames
                 | None -> Ok (varType, Var resolvedName)
             | None ->
                 // Check if it's a module function (e.g., Stdlib.Int64.add)
-                let moduleRegistry = Stdlib.buildModuleRegistry ()
                 match Stdlib.tryGetFunctionWithFallback moduleRegistry name with
                 | Some (moduleFunc, resolvedName) ->
                     let funcType = Stdlib.getFunctionType moduleFunc
@@ -2452,7 +2451,6 @@ let rec private checkExprWithParamNames
                 Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
             | None ->
                 // Check if it's a module function (e.g., Stdlib.Int64.add, __raw_get)
-                let moduleRegistry = Stdlib.buildModuleRegistry ()
                 match Stdlib.tryGetFunctionWithFallback moduleRegistry funcName with
                 | Some (moduleFunc, resolvedFuncName) ->
                     (
@@ -2814,7 +2812,6 @@ let rec private checkExprWithParamNames
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
             // Check if it's a generic module function (e.g., __raw_get<v>)
-            let moduleRegistry = Stdlib.buildModuleRegistry ()
             match Stdlib.tryGetFunctionWithFallback moduleRegistry funcName with
             | Some (moduleFunc, resolvedFuncName) when not (List.isEmpty moduleFunc.TypeParams) ->
                 let typeParams = moduleFunc.TypeParams

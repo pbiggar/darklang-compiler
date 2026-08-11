@@ -2,8 +2,8 @@
 
 Latest routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Last Updated:** 2026-08-11 15:47:53
-**Commit:** `25f8031c` - Refresh quick baseline after main compiler changes
+**Last Updated:** 2026-08-11 21:03:42
+**Commit:** `94173df3` - Reuse the type-checker module registry
 
 | Benchmark     |           Dark (2.77x) |          Rust |
 |---------------|------------------------|---------------|
