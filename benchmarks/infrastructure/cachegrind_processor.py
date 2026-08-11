@@ -3,8 +3,8 @@
 Process cachegrind benchmark results and generate summary reports.
 Usage: python3 cachegrind_processor.py <results_dir> [--use-baseline]
 
-When --use-baseline is passed, reads Rust/Python/Node baselines from BASELINES.md
-instead of requiring them in the results directory.
+When --use-baseline is passed, reads the audited Rust baseline from BASELINES.md
+instead of requiring it in the results directory.
 """
 
 import json
@@ -115,16 +115,14 @@ def generate_summary(results: dict, output_dir: Path):
         # Sort by instruction count
         sorted_results = sorted(benchmark_results, key=lambda x: x.get("instructions", 0))
 
-        # Find baseline (Rust, or first if no Rust)
+        # Only an audited Rust row is a comparison baseline. Reduced and
+        # Dark-only diagnostics intentionally have no relative ratio.
         baseline = None
         for r in sorted_results:
             if r.get("language", "").lower() == "rust":
                 baseline = r
                 break
-        if baseline is None:
-            baseline = sorted_results[0]
-
-        baseline_instrs = baseline.get("instructions", 1)
+        baseline_instrs = baseline.get("instructions", 1) if baseline else None
 
         headers = [
             "Language",
@@ -147,14 +145,18 @@ def generate_summary(results: dict, output_dir: Path):
             branches = r.get("branches", 0)
             mispreds = r.get("branch_mispredicts", 0)
 
-            ratio = instrs / baseline_instrs if baseline_instrs > 0 else 0
+            ratio = (
+                instrs / baseline_instrs
+                if baseline_instrs is not None and baseline_instrs > 0
+                else None
+            )
             mispred_rate = (mispreds / branches * 100) if branches > 0 else 0
 
             rows.append(
                 [
                     lang,
                     format_number(instrs),
-                    format_ratio(ratio),
+                    format_ratio(ratio) if ratio is not None else "-",
                     format_number(data_refs),
                     format_number(d1_misses),
                     format_number(ll_misses),
@@ -192,14 +194,29 @@ def generate_summary(results: dict, output_dir: Path):
         print(line)
 
 
-def merge_with_baselines(results: dict, baselines: dict) -> dict:
+def load_parity_statuses(benchmarks_dir: Path) -> dict[str, str]:
+    """Load audited comparison status for filtering cached baselines."""
+    contract = json.loads((benchmarks_dir / "PARITY.json").read_text())
+    return {
+        benchmark: entry.get("status", "invalid")
+        for benchmark, entry in contract.get("benchmarks", {}).items()
+    }
+
+
+def merge_with_baselines(
+    results: dict, baselines: dict, parity_statuses: dict[str, str]
+) -> dict:
     """Merge fresh Dark results with cached Rust/Python/Node baselines."""
     merged = {}
     for benchmark, dark_results in results.items():
         merged[benchmark] = list(dark_results)  # Copy Dark results
-        if benchmark in baselines:
-            # Add Rust/Python/Node from baselines
-            merged[benchmark].extend(baselines[benchmark])
+        if benchmark in baselines and parity_statuses.get(benchmark) == "comparable":
+            # Only Rust is covered by the source-parity contract.
+            merged[benchmark].extend(
+                entry
+                for entry in baselines[benchmark]
+                if entry.get("language", "").lower() == "rust"
+            )
     return merged
 
 
@@ -223,13 +240,15 @@ def main():
         print("No cachegrind results found.")
         sys.exit(0)
 
-    # If using baseline, merge with cached Rust/Python/Node from BASELINES.md
+    # If using baseline, merge with the audited Rust row from BASELINES.md.
     if use_baseline:
         baselines_path = benchmarks_dir / "BASELINES.md"
         baselines = parse_baselines_file(baselines_path)
         if baselines:
             print(f"  Using cached baselines from BASELINES.md")
-            results = merge_with_baselines(results, baselines)
+            results = merge_with_baselines(
+                results, baselines, load_parity_statuses(benchmarks_dir)
+            )
 
     generate_summary(results, results_dir)
     # Note: history_updater.py now handles updating RESULTS.md, BASELINES.md, and HISTORY.md

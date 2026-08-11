@@ -3,7 +3,6 @@ binary_trees
 collatz
 edigits
 factorial
-fannkuch
 fasta
 fib
 leibniz
@@ -12,7 +11,6 @@ matmul
 merkletrees
 nbody
 nqueen
-nsieve
 pisum
 primes
 quicksort

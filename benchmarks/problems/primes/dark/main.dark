@@ -3,11 +3,6 @@
 //
 // Counts primes up to N using trial division.
 
-def isqrt(n: Int64, guess: Int64) : Int64 =
-    if guess * guess > n then guess - 1
-    else if (guess + 1) * (guess + 1) > n then guess
-    else isqrt(n, guess + 1)
-
 def isDivisible(n: Int64, d: Int64, limit: Int64) : Bool =
     if d > limit then false
     else if n % d == 0 then true
@@ -18,7 +13,7 @@ def isPrime(n: Int64) : Bool =
     else if n == 2 then true
     else if n % 2 == 0 then false
     else
-        let limit = isqrt(n, 1) in
+        let limit = Stdlib.Float.toInt(Stdlib.Float.sqrt(Stdlib.Int64.toFloat(n))) in
         if isDivisible(n, 3, limit) then false else true
 
 def countPrimes(n: Int64, count: Int64) : Int64 =

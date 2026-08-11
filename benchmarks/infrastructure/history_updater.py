@@ -7,11 +7,10 @@ Manages three files:
 - BASELINES.md: Detailed baseline metrics for reference languages (no Dark)
 - HISTORY.md: Append-only log of all Dark benchmark runs
 
-Usage: python3 history_updater.py <results_dir> --profile <profile> [--refresh-baseline]
+Usage: python3 history_updater.py <results_dir> --profile <profile> [--machine <id>] [--refresh-baseline]
 """
 
 import json
-import os
 import re
 import sys
 from datetime import datetime
@@ -199,12 +198,11 @@ def update_results_file(
             if instrs > 0 and lang != "dark":
                 existing[benchmark][lang] = instrs
 
-    # Languages (rust is baseline, no speedup for it)
-    # Note: F# removed - .NET doesn't work with valgrind/cachegrind
-    # Note: Go removed - runtime crashes under valgrind
-    # Note: Bun removed - JIT code not properly instrumented by valgrind
-    languages = ["dark", "rust", "ocaml", "python", "node"]
-    langs_with_speedup = ["dark", "ocaml", "python", "node"]  # Rust is baseline
+    # Only the human-audited Dark/Rust pairs are canonical comparisons. Other
+    # language implementations remain useful diagnostics but are not covered by
+    # PARITY.json and must not silently contribute stale-workload ratios.
+    languages = ["dark", "rust"]
+    langs_with_speedup = ["dark"]  # Rust is baseline
 
     # Calculate speedups for each benchmark
     speedups = {}  # {benchmark: {lang: ratio}}
@@ -252,7 +250,7 @@ def update_results_file(
     lines = [
         "# Benchmark Results",
         "",
-        "Latest routine-profile compiler performance vs other languages (instruction counts).",
+        "Latest routine-profile Dark performance vs audited Rust references (instruction counts).",
         "",
         f"**Last Updated:** {metadata['timestamp']}",
         f"**Commit:** `{metadata['commit_hash']}`" + (f" - {metadata['commit_message']}" if metadata['commit_message'] else ""),
@@ -291,7 +289,7 @@ def update_results_file(
 # ============================================================================
 
 def load_baselines_file(benchmarks_dir: Path) -> dict:
-    """Load existing baselines from BASELINES.md.
+    """Load audited Rust baselines from BASELINES.md.
 
     Returns: {benchmark: [{language, instructions, data_refs, ...}]}
     """
@@ -301,6 +299,12 @@ def load_baselines_file(benchmarks_dir: Path) -> dict:
 
     baselines = {}
     content = baselines_path.read_text()
+    parity_data = json.loads((benchmarks_dir / "PARITY.json").read_text())
+    comparable = {
+        benchmark
+        for benchmark, entry in parity_data.get("benchmarks", {}).items()
+        if entry.get("status") == "comparable"
+    }
 
     in_table = False
     for line in content.split("\n"):
@@ -314,8 +318,8 @@ def load_baselines_file(benchmarks_dir: Path) -> dict:
             if len(cols) >= 9:
                 benchmark = cols[1]
                 lang = cols[2].lower()
-                if lang == "dark":
-                    continue  # Skip Dark in baselines
+                if benchmark not in comparable or lang != "rust":
+                    continue
                 try:
                     entry = {
                         "language": lang,
@@ -338,7 +342,7 @@ def load_baselines_file(benchmarks_dir: Path) -> dict:
 
 
 def update_baselines_file(benchmarks_dir: Path, json_results: dict):
-    """Update BASELINES.md with new baseline results (all languages except Dark)."""
+    """Update BASELINES.md with audited Rust reference results."""
     baselines_path = benchmarks_dir / BASELINES_FILE
 
     # Load existing baselines
@@ -350,8 +354,8 @@ def update_baselines_file(benchmarks_dir: Path, json_results: dict):
             existing[benchmark] = []
         for r in benchmark_results:
             lang = r.get("language", "").lower()
-            if lang == "dark":
-                continue  # Skip Dark in baselines
+            if lang != "rust":
+                continue
             # Replace existing entry for this language
             existing[benchmark] = [b for b in existing[benchmark] if b["language"] != lang]
             existing[benchmark].append({
@@ -368,7 +372,7 @@ def update_baselines_file(benchmarks_dir: Path, json_results: dict):
     lines = [
         "# Benchmark Baselines",
         "",
-        "Reference metrics for all languages except Dark.",
+        "Reference metrics for the human-audited Rust benchmark pairs.",
         "",
         "| Benchmark     | Language | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |",
         "|---------------|----------|------------------|------------------|-------------|-------------|-----------------|---------|",
@@ -401,9 +405,60 @@ HISTORY_HEADER = """# Benchmark History
 
 Dark compiler performance over time (append-only log).
 
-| Date       | Commit   | Benchmark     | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |
-|------------|----------|---------------|------------------|------------------|-------------|-------------|-----------------|---------|
+| Date       | Machine | Commit   | Benchmark     | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |
+|------------|---------|----------|---------------|------------------|------------------|-------------|-------------|-----------------|---------|
 """
+
+
+def history_row_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.split("|")[1:-1]]
+
+
+def history_row_identity(line: str) -> tuple[str, str, str] | None:
+    if not re.match(r"^\| \d{4}-\d{2}-\d{2} \|", line):
+        return None
+    cells = history_row_cells(line)
+    if len(cells) == 9:
+        return (cells[0], cells[1], cells[2])
+    if len(cells) == 10:
+        return (cells[0], cells[2], cells[3])
+    return None
+
+
+def normalize_history_row(line: str) -> str:
+    """Add an empty machine cell to legacy rows that predate machine tracking."""
+    cells = history_row_cells(line)
+    if history_row_identity(line) is not None and len(cells) == 9:
+        cells.insert(1, "")
+        return "| " + " | ".join(cells) + " |"
+    return line
+
+
+def registered_machine_ids(history_path: Path) -> set[str]:
+    if not history_path.exists():
+        return set()
+    lines = history_path.read_text().splitlines()
+    registry_start = next(
+        (index for index, line in enumerate(lines) if line.strip() == "## Machine Registry"),
+        None,
+    )
+    if registry_start is None:
+        return set()
+    registry_end = next(
+        (
+            index
+            for index, line in enumerate(lines[registry_start + 1 :], registry_start + 1)
+            if line.startswith("## ")
+        ),
+        len(lines),
+    )
+    return {
+        cells[0]
+        for line in lines[registry_start + 1 : registry_end]
+        if line.startswith("|")
+        and (cells := history_row_cells(line))
+        and cells[0] not in {"Machine", "---------"}
+    }
 
 
 def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
@@ -432,7 +487,7 @@ def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
             mispred_rate = (mispreds / branch_count * 100) if branch_count > 0 else 0
 
             new_rows.append(
-                f"| {metadata['date']} | {metadata['commit_hash']} | {benchmark:<13} | {instrs:>16} | {data_refs:>16} | {d1_misses:>11} | {ll_misses:>11} | {branches:>15} | {mispred_rate:>6.1f}% |"
+                f"| {metadata['date']} | {metadata['machine']} | {metadata['commit_hash']} | {benchmark:<13} | {instrs:>16} | {data_refs:>16} | {d1_misses:>11} | {ll_misses:>11} | {branches:>15} | {mispred_rate:>6.1f}% |"
             )
 
     if not new_rows:
@@ -468,9 +523,19 @@ def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
                     if line.startswith("|---"):
                         break
 
-            header = "\n".join(pre_log_lines + log_lines[:header_end])
+            table_header = "\n".join(HISTORY_HEADER.rstrip().splitlines()[-2:])
+            header = "\n".join(pre_log_lines).rstrip() + "\n\n## Log\n\n" + table_header
             existing_row_lines = misplaced_rows + log_lines[header_end:]
-            existing_rows = "\n".join(line for line in existing_row_lines if line not in new_rows)
+            new_identities = {
+                identity
+                for line in new_rows
+                if (identity := history_row_identity(line)) is not None
+            }
+            existing_rows = "\n".join(
+                normalize_history_row(line)
+                for line in existing_row_lines
+                if history_row_identity(line) not in new_identities
+            )
     else:
         header = HISTORY_HEADER.rstrip()
         existing_rows = ""
@@ -492,12 +557,32 @@ def main():
     if len(sys.argv) < 4 or sys.argv[2] != "--profile":
         print(
             "Usage: python3 history_updater.py <results_dir> "
-            "--profile <profile> [--refresh-baseline]"
+            "--profile <profile> [--machine <id>] [--refresh-baseline]"
         )
         sys.exit(1)
 
     results_dir = Path(sys.argv[1])
-    refresh_baseline = "--refresh-baseline" in sys.argv or os.environ.get("REFRESH_BASELINE") == "true"
+    optional_args = sys.argv[4:]
+    if optional_args == []:
+        machine = None
+        refresh_baseline = False
+    elif optional_args == ["--refresh-baseline"]:
+        machine = None
+        refresh_baseline = True
+    elif (
+        len(optional_args) in {2, 3}
+        and optional_args[0] == "--machine"
+        and optional_args[1]
+        and optional_args[2:] in ([], ["--refresh-baseline"])
+    ):
+        machine = optional_args[1]
+        refresh_baseline = optional_args[2:] == ["--refresh-baseline"]
+    else:
+        print(
+            "Usage: python3 history_updater.py <results_dir> "
+            "--profile <profile> [--machine <id>] [--refresh-baseline]"
+        )
+        sys.exit(1)
 
     if not results_dir.exists():
         print(f"Error: Results directory not found: {results_dir}")
@@ -505,6 +590,16 @@ def main():
 
     # Determine benchmarks directory (parent of results/)
     benchmarks_dir = results_dir.parent.parent
+    registered_machines = registered_machine_ids(benchmarks_dir / HISTORY_FILE)
+    if (
+        machine is not None
+        and registered_machines
+        and machine not in registered_machines
+    ):
+        print(
+            f"Error: machine ID {machine!r} is not registered in {HISTORY_FILE}"
+        )
+        sys.exit(1)
     try:
         profile = load_profile(benchmarks_dir, sys.argv[3])
     except ValueError as error:
@@ -528,8 +623,13 @@ def main():
         sys.exit(1)
 
     metadata = get_run_metadata(results_dir)
+    metadata["machine"] = "" if machine is None else machine
 
-    # Load existing baselines
+    # Persist refreshed reference rows before generating RESULTS.md so the
+    # current run, rather than the previously cached Rust values, is rendered.
+    if refresh_baseline:
+        update_baselines_file(benchmarks_dir, json_results)
+
     baselines = load_baselines_file(benchmarks_dir)
 
     # Always update RESULTS.md with latest Dark + cached baselines
@@ -537,11 +637,6 @@ def main():
 
     # Always append Dark results to HISTORY.md
     append_to_history(benchmarks_dir, json_results, metadata)
-
-    # Only update BASELINES.md when refreshing baselines
-    if refresh_baseline:
-        update_baselines_file(benchmarks_dir, json_results)
-
 
 if __name__ == "__main__":
     main()

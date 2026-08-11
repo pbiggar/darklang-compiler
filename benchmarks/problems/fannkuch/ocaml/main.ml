@@ -3,7 +3,7 @@
 
 let fannkuch n =
   let perm = Array.init n (fun i -> i) in
-  let count = Array.init n (fun i -> i) in
+  let count = Array.init n (fun i -> i + 1) in
   let max_flips = ref 0 in
 
   let running = ref true in
@@ -40,7 +40,7 @@ let fannkuch n =
       if count.(!i) > 0 then
         found := true
       else begin
-        count.(!i) <- !i;
+        count.(!i) <- !i + 1;
         incr i
       end
     done;

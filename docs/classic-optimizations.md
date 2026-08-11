@@ -151,7 +151,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Bitwise absorption simplification
 - Taxonomy category: Algebraic simplification
 - Priority/rationale: Small, low-risk canonical integer simplification that removes two redundant adjacent ANF bitwise operations from common masking expressions.
-- Notes: Implemented for adjacent ANF forms of `x & (x ||| y) -> x` and `x ||| (x & y) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `identity_bitand_absorption` and `identity_bitor_absorption` in `src/Tests/optimization/anf.opt`; `benchmarks/problems/bitwise_absorption` isolates both patterns in a hot loop and measured 7,000,074 instructions versus 10,000,074 with ANF optimization disabled.
+- Notes: Implemented for adjacent ANF forms of `x & (x ||| y) -> x` and `x ||| (x & y) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `identity_bitand_absorption` and `identity_bitor_absorption` in `src/Tests/optimization/anf.opt`.
 
 ### Bitwise zero identity simplification
 
@@ -270,7 +270,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Identical if branch simplification
 - Taxonomy category: Algebraic simplification
 - Priority/rationale: Small, low-risk canonical control-flow simplification that removes a conditional when both optimized branches are syntactically identical.
-- Notes: Implemented for both full ANF `if cond then expr else expr -> expr` branches and atom-position `IfValue(cond, value, value) -> value` selections in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `identity_if_same_branches` and `identity_if_value_same_branches_drops_condition` in `src/Tests/optimization/anf.opt`; the latter also verifies dead-code elimination removes the unused condition computation. The durable full-size `benchmarks/problems/redundant_select` workload isolates the atom-position pattern in a hot loop because existing benchmarks do not: targeted measurement reduced Dark instructions from 9,000,151 to 8,000,151 (11.11%) and branches from 2,000,018 to 1,000,018. It is intentionally not enrolled in the quick suite because no x86_64 quick baseline was measured.
+- Notes: Implemented for both full ANF `if cond then expr else expr -> expr` branches and atom-position `IfValue(cond, value, value) -> value` selections in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `identity_if_same_branches` and `identity_if_value_same_branches_drops_condition` in `src/Tests/optimization/anf.opt`; the latter also verifies dead-code elimination removes the unused condition computation.
 
 ### Boolean literal if branch simplification
 
@@ -461,7 +461,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: UInt64 modulo by power-of-two lowering
 - Taxonomy category: Strength reduction
 - Priority/rationale: Canonical, low-risk lowering that replaces expensive unsigned remainder by a literal power of two with a bit mask.
-- Notes: Implemented for dynamic `x % 2^kUL -> x & (2^k - 1)UL` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`, while preserving zero and non-power-of-two divisors. Covered by focused before/after and negative snapshots in `src/Tests/optimization/anf.opt`; the isolated `uint64_mod_power_of_two` benchmark reduced ARM64 Cachegrind instructions from 14,000,123 to 12,000,123 (14.3%).
+- Notes: Implemented for dynamic `x % 2^kUL -> x & (2^k - 1)UL` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`, while preserving zero and non-power-of-two divisors. Covered by focused before/after and negative snapshots in `src/Tests/optimization/anf.opt`.
 
 ## Common subexpression elimination
 
@@ -583,7 +583,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Redundant successor branch elimination
 - Taxonomy category: Control-flow simplification
 - Priority/rationale: Small, canonical jump-threading step that removes a branch when the same SSA Boolean condition is already established by the block's sole predecessor edge.
-- Notes: Implemented for both true and false predecessor edges in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`, with exact-register, sole-edge, and non-entry safety gates. Direct CFG tests in `src/Tests/optimizations/MIROptimizeTests.fs` cover both edge polarities and `redundant_successor_branch_elimination` in `src/Tests/optimization/mir.opt` records the source-to-optimized-MIR result; `--dump-mir` now exposes that post-optimization IR. The targeted `successor_branch` benchmark exercises the pattern in a hot loop and records 9,000,109 Dark instructions after optimization. The routine profile retained every recorded instruction count, so measured improvement/loss is 0%; performance ratio remains 8.14x.
+- Notes: Implemented for both true and false predecessor edges in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`, with exact-register, sole-edge, and non-entry safety gates. Direct CFG tests in `src/Tests/optimizations/MIROptimizeTests.fs` cover both edge polarities and `redundant_successor_branch_elimination` in `src/Tests/optimization/mir.opt` records the source-to-optimized-MIR result; `--dump-mir` exposes that post-optimization IR.
 
 ### Linear basic-block merging
 
@@ -629,7 +629,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Dead multiply-subtract temporary fusion
 - Taxonomy category: Instruction combining
 - Priority/rationale: Canonical low-risk fusion that exposes the native ARM64 multiply-subtract instruction and mirrors the existing multiply-add peephole.
-- Notes: Implemented for adjacent integer `Mul temp, left, right; Sub dest, minuend, temp` when `temp` is not subsequently read. Direct LIR tests cover both fusion and live-temporary preservation, `fuse_multiply_subtract` covers source-to-LIR output, and `multiply_subtract` provides focused benchmark coverage. On ARM64, the focused Cachegrind benchmark fell from 8,000,111 to 7,000,111 instructions (12.5%); an earlier x64 comparison was unchanged because that backend expands `Msub`.
+- Notes: Implemented for adjacent integer `Mul temp, left, right; Sub dest, minuend, temp` when `temp` is not subsequently read. Direct LIR tests cover both fusion and live-temporary preservation, and `fuse_multiply_subtract` covers source-to-LIR output.
 
 ### Dead floating arithmetic copy elimination
 
@@ -645,4 +645,4 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Shared leading conditional binding hoisting
 - Taxonomy category: Partial redundancy elimination / code motion
 - Priority/rationale: Canonical, bounded cross-branch sharing that reduces duplicated generated code while reusing the existing ANF purity classification.
-- Notes: Implemented for identical side-effect-free leading bindings in both branches when the local condition producer and the remaining branch bodies are also side-effect-free. The shared binding moves before the condition producer so compare/branch combining remains available; branch bodies containing calls or other effects are conservatively excluded to avoid extending live ranges across them. ANF snapshots cover the rewrite and effectful-leading-binding exclusion. The `branch_shared_binding` benchmark reduced the native binary from 600 to 592 bytes (1.3%) while retaining 11,000,158 Cachegrind instructions (0% runtime instruction change).
+- Notes: Implemented for identical side-effect-free leading bindings in both branches when the local condition producer and the remaining branch bodies are also side-effect-free. The shared binding moves before the condition producer so compare/branch combining remains available; branch bodies containing calls or other effects are conservatively excluded to avoid extending live ranges across them. ANF snapshots cover the rewrite and effectful-leading-binding exclusion.

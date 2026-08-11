@@ -1,13 +1,14 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify] [--refresh-baseline[=lang1,lang2]] [--jobs[=N]] [routine|benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify] [--refresh-baseline[=rust]] [--machine=ID] [--jobs[=N]] [routine|benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
 #   --verify                 Verify the routine profile against RESULTS.md without updating tracked files
 #   --refresh-baseline       Re-run all baseline languages (default: use cached values)
-#   --refresh-baseline=LANGS Re-run specific languages only (comma-separated: rust,go,python,node,ocaml)
+#   --refresh-baseline=rust  Re-run the audited Rust reference baselines
+#   --machine=ID             Optional machine registry ID for recorded history
 #   --jobs, --jobs=N         Run up to N benchmarks in parallel (default: 1)
 #   --list                   Print the benchmarks that would run and exit
 
@@ -24,7 +25,7 @@ show_help() {
 
 # Parse options
 USE_CACHEGRIND=true
-export REFRESH_BASELINE=false
+REFRESH_BASELINE=false
 BENCHMARK="routine"
 BUILD_FAILURES=()
 RUN_FAILURES=()
@@ -34,6 +35,7 @@ VERIFY_RESULTS=false
 JOB_COUNT=""
 SKIP_BENCHMARKS=()
 PROFILE=""
+MACHINE_ID=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -50,11 +52,27 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --refresh-baseline)
-            export REFRESH_BASELINE="all"
+            REFRESH_BASELINE="all"
             shift
             ;;
         --refresh-baseline=*)
-            export REFRESH_BASELINE="${1#*=}"
+            REFRESH_BASELINE="${1#*=}"
+            shift
+            ;;
+        --machine)
+            if [ -z "${2:-}" ]; then
+                pretty_fail "--machine requires a value"
+                exit 1
+            fi
+            MACHINE_ID="$2"
+            shift 2
+            ;;
+        --machine=*)
+            MACHINE_ID="${1#*=}"
+            if [ -z "$MACHINE_ID" ]; then
+                pretty_fail "--machine requires a value"
+                exit 1
+            fi
             shift
             ;;
         --jobs)
@@ -90,6 +108,11 @@ if [ "$VERIFY_RESULTS" = true ] && [ "$REFRESH_BASELINE" != "false" ]; then
     exit 1
 fi
 
+if [ "$REFRESH_BASELINE" != "false" ] && [ "$REFRESH_BASELINE" != "all" ] && [ "$REFRESH_BASELINE" != "rust" ]; then
+    pretty_fail "Only audited Rust baselines can be refreshed"
+    exit 1
+fi
+
 if [ "$VERIFY_RESULTS" = true ] && [ "$BENCHMARK" != "routine" ]; then
     pretty_fail "--verify requires the routine benchmark profile"
     exit 1
@@ -110,6 +133,16 @@ elif [ "$BENCHMARK" = "all" ]; then
     BENCHMARKS=$(ls -d "$SCRIPT_DIR/problems"/*/ 2>/dev/null | xargs -n1 basename)
 else
     BENCHMARKS="$BENCHMARK"
+fi
+
+if [ -n "$PROFILE" ]; then
+    if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" check-profile "$PROFILE"; then
+        exit 1
+    fi
+else
+    if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" check; then
+        exit 1
+    fi
 fi
 
 should_skip() {
@@ -149,11 +182,7 @@ git -C "$PROJECT_ROOT" rev-parse HEAD > "$OUTPUT_DIR/compiler_version.txt"
 git -C "$PROJECT_ROOT" log -1 --format="%s" >> "$OUTPUT_DIR/compiler_version.txt"
 
 if [ -z "$JOB_COUNT" ]; then
-    if [ -n "${BENCHMARK_JOBS:-}" ]; then
-        JOB_COUNT="$BENCHMARK_JOBS"
-    else
-        JOB_COUNT=1
-    fi
+    JOB_COUNT=1
 fi
 
 case "$JOB_COUNT" in
@@ -168,22 +197,24 @@ if [ "$JOB_COUNT" -lt 1 ]; then
     exit 1
 fi
 
+pretty_info "Building current Dark compiler..."
+if ! dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --verbosity quiet; then
+    pretty_fail "Dark compiler build failed"
+    exit 1
+fi
+
 STATUS_DIR="$OUTPUT_DIR/status"
 mkdir -p "$STATUS_DIR"
 
 if [ "$USE_CACHEGRIND" = true ]; then
     if [ "$REFRESH_BASELINE" = "false" ]; then
-        export RUN_BASELINES=false
         pretty_section "Mode: Cachegrind (instruction counts) - Dark only (use --refresh-baseline for baselines)"
     elif [ "$REFRESH_BASELINE" = "all" ]; then
-        export RUN_BASELINES=true
         pretty_section "Mode: Cachegrind (instruction counts) - refreshing all baselines"
     else
-        export RUN_BASELINES=true
         pretty_section "Mode: Cachegrind (instruction counts) - refreshing: $REFRESH_BASELINE"
     fi
 else
-    export RUN_BASELINES=true
     pretty_section "Mode: Hyperfine (timing)"
 fi
 pretty_info "Benchmarks to run: $BENCHMARKS"
@@ -198,24 +229,34 @@ JOB_PIDS=()
 run_benchmark_job() {
     local bench="$1"
     local status_file="$STATUS_DIR/${bench}.status"
+    local parity_status
+    if ! parity_status=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" status "$bench"); then
+        echo "BUILD_FAIL" >> "$status_file"
+        pretty_warn "Parity status unavailable for $bench"
+        return
+    fi
     : > "$status_file"
 
     pretty_header "Benchmark: $bench"
 
     # Build all implementations
-    if ! "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench"; then
+    local build_args=()
+    if [ "$USE_CACHEGRIND" = true ] && [ "$REFRESH_BASELINE" = "false" ]; then
+        build_args+=(--skip-baselines)
+    fi
+    if ! "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench" "${build_args[@]}"; then
         echo "BUILD_FAIL" >> "$status_file"
         pretty_warn "Build failed for $bench (continuing)"
     fi
 
     # Run benchmark
     if [ "$USE_CACHEGRIND" = true ]; then
-        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR"; then
+        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$REFRESH_BASELINE"; then
             echo "RUN_FAIL" >> "$status_file"
             pretty_warn "Cachegrind failed for $bench (continuing)"
         fi
     else
-        if ! "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR"; then
+        if ! "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status"; then
             echo "RUN_FAIL" >> "$status_file"
             pretty_warn "Hyperfine failed for $bench (continuing)"
         fi
@@ -306,7 +347,15 @@ pretty_info "Processing results..."
             fi
         elif [ "$PROFILE" = "routine" ]; then
             # Only a complete routine run updates the canonical results and history.
-            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE"; then
+            HISTORY_REFRESH_ARGS=()
+            if [ "$REFRESH_BASELINE" != "false" ]; then
+                HISTORY_REFRESH_ARGS+=(--refresh-baseline)
+            fi
+            HISTORY_MACHINE_ARGS=()
+            if [ -n "$MACHINE_ID" ]; then
+                HISTORY_MACHINE_ARGS+=(--machine "$MACHINE_ID")
+            fi
+            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE" "${HISTORY_MACHINE_ARGS[@]}" "${HISTORY_REFRESH_ARGS[@]}"; then
                 PROCESS_FAILURES+=("history_updater")
                 pretty_warn "history_updater failed (continuing)"
             fi

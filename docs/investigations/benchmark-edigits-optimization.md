@@ -1,5 +1,9 @@
 # Edigits Benchmark Optimization Investigation
 
+> The original Rust reference remains unchanged. Dark now directly translates
+> its one-decimal-digit fixed-point representation and workload. The packed
+> Dark measurements below are historical and are not current benchmark results.
+
 ## Executive Summary
 
 The **edigits** benchmark computes digits of e using Taylor series with fixed-point arithmetic. Dark now runs the canonical 1,000-digit computation for ten iterations and produces the shared checksum `2162278`.

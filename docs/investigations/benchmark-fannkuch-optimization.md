@@ -1,5 +1,12 @@
 # Fannkuch Benchmark Optimization Investigation
 
+> Historical note: the measurements below used a permutation counter initialized
+> with `0..n-1`, which skipped permutations and incorrectly returned `23` for
+> `n=9`. The audited implementation initializes counts with `1..n` and returns
+> the correct `30`. Rust retains `n=9`; Dark runs the complete `n=8` traversal
+> because correct `n=9` exhausts its fixed heap, so full fannkuch is no longer a
+> canonical comparison. Both quick variants correctly use `n=4` and return `4`.
+
 ## Summary
 
 The fannkuch benchmark computes the maximum number of "pancake flips" needed to sort any permutation of n elements. The algorithm generates all n! permutations and counts flips for each.

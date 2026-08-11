@@ -1,10 +1,9 @@
 #!/bin/bash
 # Run cachegrind benchmark for a given problem
-# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir>
+# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh]
 #
-# By default, only runs Dark and uses cached baselines from BASELINES.md.
-# Set REFRESH_BASELINE=all to re-run all languages.
-# Set REFRESH_BASELINE=rust,go,python to re-run specific languages.
+# By default, only runs Dark and uses the cached Rust row from BASELINES.md.
+# Pass `rust` or `all` as baseline_refresh to re-run the Rust reference.
 
 set -e
 
@@ -12,6 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 BENCHMARK=$1
 OUTPUT_DIR=$2
+PARITY_STATUS=${3:-comparable}
+REFRESH_BASELINE=${4:-false}
 source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
@@ -42,6 +43,9 @@ fi
 # Helper to check if a language should run
 should_run_lang() {
     local lang="$1"
+    if [ "$lang" != "rust" ]; then
+        return 1
+    fi
     if [ -z "$REFRESH_BASELINE" ] || [ "$REFRESH_BASELINE" = "false" ]; then
         return 1
     fi
@@ -179,11 +183,15 @@ FIRST=true
 # Dark always runs; compiled languages (rust, ocaml) run if selected
 # Note: Go crashes under valgrind due to runtime stack management
 IMPLS="dark"
-for lang in rust ocaml; do
-    if should_run_lang "$lang"; then
-        IMPLS="$IMPLS $lang"
-    fi
-done
+if [ "$PARITY_STATUS" = "comparable" ]; then
+    for lang in rust; do
+        if should_run_lang "$lang"; then
+            IMPLS="$IMPLS $lang"
+        fi
+    done
+elif [ "$REFRESH_BASELINE" != "false" ]; then
+    pretty_warn "$BENCHMARK is $PARITY_STATUS; reference-language comparisons skipped"
+fi
 
 # Run cachegrind for each implementation
 for impl in $IMPLS; do
@@ -246,9 +254,9 @@ done
 
 # Handle Python separately (run via interpreter) - only if selected
 # Python timeout: 5 minutes (300 seconds) - some benchmarks are too slow
-PYTHON_TIMEOUT=${PYTHON_TIMEOUT:-300}
+PYTHON_TIMEOUT=300
 
-if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
+if [ "$PARITY_STATUS" = "comparable" ] && should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
     if command -v python3 &> /dev/null; then
         verify_output "python" python3 "$PROBLEM_DIR/python/main.py"
         pretty_info "Running cachegrind on python (timeout: ${PYTHON_TIMEOUT}s)..."

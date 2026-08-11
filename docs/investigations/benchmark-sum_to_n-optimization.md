@@ -1,5 +1,9 @@
 # Benchmark Investigation: sum_to_n
 
+> The original Rust reference remains unchanged, including its invariant
+> `sum_to(10000)` workload. Dark mirrors that source-level optimization
+> opportunity, so the constant-folding comparison below remains relevant.
+
 ## Overview
 
 This investigation analyzes the generated work for the `sum_to_n` benchmark,

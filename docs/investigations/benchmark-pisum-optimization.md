@@ -1,5 +1,9 @@
 # Pisum Benchmark Optimization Investigation
 
+> The original Rust reference remains unchanged. Dark now matches its 500-round,
+> last-result workload and squares the integer index before converting it to
+> float. Historical measurements below remain useful compiler evidence.
+
 ## Summary
 
 The pisum benchmark computes the partial sum of `1 / k^2` for `k = 1..10000`, repeats that full sum 500 times, and prints the final floating-point result scaled to an integer.

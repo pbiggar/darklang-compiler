@@ -2,8 +2,9 @@
 # Quick benchmark check for regression detection
 # Usage: ./benchmarks/quick_check.sh [--fast] [--save-baseline] [--build] [--quiet]
 #
-# Runs reduced-size benchmarks under cachegrind to detect instruction count regressions.
-# Deterministic instruction counts allow precise regression detection.
+# Builds matching Dark and Rust reduced workloads, validates both outputs, and
+# runs both under Cachegrind. Dark counts are checked for compiler regressions;
+# Rust counts provide a same-conditions comparison for audited comparable pairs.
 #
 # Options:
 #   --fast             Run only 5 key benchmarks (~5s instead of ~20s)
@@ -50,12 +51,17 @@ REGRESSION_THRESHOLD=0  # Any increase is a regression (deterministic counts)
 # Key benchmarks for fast mode (diverse coverage: recursion, loops, floats, lists, bitops)
 FAST_BENCHMARKS="fib ackermann mandelbrot quicksort nqueen"
 
-clean_cachegrind_files() {
+GENERATED_RUST_BINARIES=()
+
+clean_generated_files() {
     rm -f "$PROJECT_ROOT"/cachegrind.out.*
+    if [ "${#GENERATED_RUST_BINARIES[@]}" -gt 0 ]; then
+        rm -f -- "${GENERATED_RUST_BINARIES[@]}"
+    fi
 }
 
-trap clean_cachegrind_files EXIT
-clean_cachegrind_files
+trap clean_generated_files EXIT
+rm -f "$PROJECT_ROOT"/cachegrind.out.*
 
 # Parse options
 while [[ $# -gt 0 ]]; do
@@ -95,6 +101,26 @@ if ! command -v valgrind &> /dev/null; then
     exit 1
 fi
 
+if ! command -v rustc &> /dev/null; then
+    pretty_fail "rustc is not installed"
+    exit 1
+fi
+
+if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" check; then
+    pretty_fail "Benchmark parity contract failed"
+    exit 1
+fi
+
+if ! dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --verbosity quiet; then
+    pretty_fail "Dark compiler build failed"
+    exit 1
+fi
+COMPILER_DLL="$PROJECT_ROOT/bin/DarkCompiler/Debug/net10.0/DarkCompiler.dll"
+if [ ! -f "$COMPILER_DLL" ]; then
+    pretty_fail "Dark compiler output is missing: $COMPILER_DLL"
+    exit 1
+fi
+
 if [ "$QUIET_MODE" != true ]; then
     if [ "$FAST_MODE" = true ]; then
         pretty_section "Quick benchmark check (fast mode - 5 benchmarks)"
@@ -122,23 +148,38 @@ fi
 
 # Load baseline if exists
 declare -A BASELINE
+HAS_BASELINE=false
 if [ -f "$BASELINE_FILE" ] && [ "$SAVE_BASELINE" = false ]; then
+    HAS_BASELINE=true
     while IFS='=' read -r name count; do
+        if [[ "$name" = \#* ]]; then
+            continue
+        fi
         BASELINE["$name"]="$count"
     done < "$BASELINE_FILE"
 fi
 
 # Track results
 declare -A RESULTS
+declare -A RUST_RESULTS
 FAILURES=()
 BUILD_FAILURES=()
 TOTAL_INSTRUCTIONS=0
+TOTAL_RUST_INSTRUCTIONS=0
 START_TIME=$(date +%s)
 
 for bench in $BENCHMARKS; do
     PROBLEM_DIR="$SCRIPT_DIR/problems/$bench"
     QUICK_DARK="$PROBLEM_DIR/dark/quick.dark"
     QUICK_BIN="$PROBLEM_DIR/dark/quick"
+    QUICK_RUST="$PROBLEM_DIR/rust/quick.rs"
+    QUICK_RUST_BIN="$PROBLEM_DIR/rust/quick"
+    GENERATED_RUST_BINARIES+=("$QUICK_RUST_BIN")
+    QUICK_EXPECTED="$PROBLEM_DIR/quick_expected_output.txt"
+    if ! QUICK_PARITY_STATUS=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" status "$bench" quick); then
+        FAILURES+=("$bench: quick parity status unavailable")
+        continue
+    fi
 
     # Build only if needed (source newer than binary, or --build flag)
     NEEDS_BUILD=false
@@ -148,7 +189,7 @@ for bench in $BENCHMARKS; do
         NEEDS_BUILD=true
     elif [ "$QUICK_DARK" -nt "$QUICK_BIN" ]; then
         NEEDS_BUILD=true
-    elif [ "$PROJECT_ROOT/dark" -nt "$QUICK_BIN" ]; then
+    elif [ "$COMPILER_DLL" -nt "$QUICK_BIN" ]; then
         NEEDS_BUILD=true
     fi
 
@@ -160,7 +201,48 @@ for bench in $BENCHMARKS; do
             fi
             continue
         fi
-        chmod +x "$QUICK_BIN"
+    fi
+
+    RUST_NEEDS_BUILD=false
+    if [ "$FORCE_BUILD" = true ]; then
+        RUST_NEEDS_BUILD=true
+    elif [ ! -x "$QUICK_RUST_BIN" ]; then
+        RUST_NEEDS_BUILD=true
+    elif [ "$QUICK_RUST" -nt "$QUICK_RUST_BIN" ]; then
+        RUST_NEEDS_BUILD=true
+    fi
+
+    if [ "$RUST_NEEDS_BUILD" = true ]; then
+        if ! rustc -C opt-level=3 "$QUICK_RUST" -o "$QUICK_RUST_BIN" 2>/dev/null; then
+            BUILD_FAILURES+=("$bench/rust")
+            if [ "$QUIET_MODE" != true ]; then
+                pretty_warn "$bench: Rust quick build failed"
+            fi
+            continue
+        fi
+    fi
+
+    if [ ! -f "$QUICK_EXPECTED" ]; then
+        FAILURES+=("$bench: missing quick_expected_output.txt")
+        continue
+    fi
+
+    EXPECTED_OUTPUT=$(cat "$QUICK_EXPECTED")
+    if ! DARK_OUTPUT=$("$QUICK_BIN"); then
+        FAILURES+=("$bench: Dark quick execution failed")
+        continue
+    fi
+    if ! RUST_OUTPUT=$("$QUICK_RUST_BIN"); then
+        FAILURES+=("$bench: Rust quick execution failed")
+        continue
+    fi
+    if [ "$DARK_OUTPUT" != "$EXPECTED_OUTPUT" ]; then
+        FAILURES+=("$bench: Dark output mismatch (expected '$EXPECTED_OUTPUT', got '$DARK_OUTPUT')")
+        continue
+    fi
+    if [ "$RUST_OUTPUT" != "$EXPECTED_OUTPUT" ]; then
+        FAILURES+=("$bench: Rust output mismatch (expected '$EXPECTED_OUTPUT', got '$RUST_OUTPUT')")
+        continue
     fi
 
     # Run under cachegrind
@@ -177,6 +259,18 @@ for bench in $BENCHMARKS; do
 
     RESULTS["$bench"]="$I_REFS"
     TOTAL_INSTRUCTIONS=$((TOTAL_INSTRUCTIONS + I_REFS))
+
+    RUST_CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=no --branch-sim=no "$QUICK_RUST_BIN" 2>&1)
+    RUST_I_REFS=$(echo "$RUST_CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
+    if [ -z "$RUST_I_REFS" ]; then
+        FAILURES+=("$bench: Rust cachegrind failed")
+        if [ "$QUIET_MODE" != true ]; then
+            pretty_warn "$bench: Rust cachegrind failed"
+        fi
+        continue
+    fi
+    RUST_RESULTS["$bench"]="$RUST_I_REFS"
+    TOTAL_RUST_INSTRUCTIONS=$((TOTAL_RUST_INSTRUCTIONS + RUST_I_REFS))
 
     # Compare against baseline
     if [ -n "${BASELINE[$bench]}" ]; then
@@ -196,11 +290,18 @@ for bench in $BENCHMARKS; do
                 pretty_ok "$bench: $I_REFS (unchanged)"
             fi
         fi
-    elif [ "$SAVE_BASELINE" = false ]; then
+    elif [ "$SAVE_BASELINE" = false ] && [ "$HAS_BASELINE" = true ]; then
         FAILURES+=("$bench: missing baseline in $BASELINE_FILE")
         if [ "$QUIET_MODE" != true ]; then
             pretty_fail "$bench: $I_REFS (missing baseline)"
         fi
+    fi
+
+    if [ "$QUIET_MODE" != true ] && [ "$QUICK_PARITY_STATUS" = "comparable" ]; then
+        RATIO=$(awk -v dark="$I_REFS" -v rust="$RUST_I_REFS" 'BEGIN { printf "%.2f", dark / rust }')
+        pretty_info "$bench Rust: $RUST_I_REFS instructions (Dark/Rust: ${RATIO}x)"
+    elif [ "$QUIET_MODE" != true ]; then
+        pretty_info "$bench Rust: $RUST_I_REFS instructions (diagnostic only: $QUICK_PARITY_STATUS)"
     fi
 done
 
@@ -210,7 +311,12 @@ ELAPSED=$((END_TIME - START_TIME))
 if [ "$QUIET_MODE" != true ]; then
     echo ""
     pretty_info "Total instructions: $TOTAL_INSTRUCTIONS"
+    pretty_info "Total Rust instructions: $TOTAL_RUST_INSTRUCTIONS"
     pretty_info "Elapsed time: ${ELAPSED}s"
+fi
+
+if [ "$HAS_BASELINE" = false ] && [ "$SAVE_BASELINE" = false ] && [ "$QUIET_MODE" != true ]; then
+    pretty_warn "No $ARCH regression baseline is available; output and Rust/Dark comparisons were still checked"
 fi
 
 # Save baseline if requested

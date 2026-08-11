@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build all implementations for a given benchmark
-# Usage: ./build_all.sh <benchmark_name>
+# Usage: ./build_all.sh <benchmark_name> [--skip-baselines]
 
 set -e
 
@@ -8,6 +8,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$BENCHMARKS_DIR")"
 BENCHMARK=$1
+BUILD_BASELINES=true
+if [ "${2:-}" = "--skip-baselines" ]; then
+    BUILD_BASELINES=false
+elif [ -n "${2:-}" ]; then
+    echo "Usage: $0 <benchmark_name> [--skip-baselines]"
+    exit 1
+fi
 source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ]; then
@@ -32,9 +39,8 @@ if [ -f "$PROBLEM_DIR/dark/main.dark" ]; then
     pretty_ok "Dark build complete"
 fi
 
-RUN_BASELINES=${RUN_BASELINES:-true}
-if [ "$RUN_BASELINES" != "true" ]; then
-    pretty_info "Baseline builds skipped (set RUN_BASELINES=true or --refresh-baseline)"
+if [ "$BUILD_BASELINES" != "true" ]; then
+    pretty_info "Baseline builds skipped (use --refresh-baseline from the benchmark runner)"
     pretty_ok "Build complete."
     exit 0
 fi

@@ -1,5 +1,10 @@
 # Factorial Benchmark Optimization Investigation
 
+> The original Rust reference remains unchanged, including its invariant
+> `factorial(20)` workload. Dark mirrors that source-level optimization
+> opportunity, so constant folding and loop-invariant-code-motion wins are
+> legitimate results rather than benchmark mismatches.
+
 ## Summary
 
 The factorial benchmark requests `factorial(20)` on 10,000 iterations of a

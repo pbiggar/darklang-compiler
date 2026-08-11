@@ -58,7 +58,7 @@ def nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<
         if ci > 1 then
             (newPerm, setAt(count, i, ci - 1), false)
         else
-            let newCount = setAt(count, i, i) in
+            let newCount = setAt(count, i, i + 1) in
             nextPerm(newPerm, newCount, i + 1, n)
 
 // Main loop: process all permutations
@@ -81,8 +81,9 @@ def createRange(n: Int64) : List<Int64> =
 
 def fannkuch(n: Int64) : Int64 =
     let perm = createRange(n) in
-    let count = createRange(n) in
+    let count = Stdlib.List.range(1, n + 1) in
     fannkuchLoop(perm, count, n, 0)
 
-// Standard benchmark size (output: 23)
-fannkuch(9)
+// Dark's fixed heap cannot complete the correct n=9 permutation traversal.
+// Run the complete n=8 traversal and keep this full pair explicitly reduced.
+fannkuch(8)

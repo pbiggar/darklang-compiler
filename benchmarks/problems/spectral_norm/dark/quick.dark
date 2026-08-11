@@ -1,36 +1,52 @@
-// Spectral Norm Benchmark - Quick check version
-// Uses one power-iteration round at the same reduced 3-vector size.
+// Spectral Norm Benchmark - Quick check version.
 
 def matA(i: Int64, j: Int64) : Float =
     let ij = i + j in
     let div = ij * (ij + 1) / 2 + i + 1 in
     1.0 / Stdlib.Int64.toFloat(div)
 
-def get3(v: (Float, Float, Float), i: Int64) : Float =
-    if i == 0 then v.0
-    else if i == 1 then v.1
-    else v.2
+// All callers prove the index is within the fixed vector length.
+def getAt(v: List<Float>, i: Int64) : Float =
+    match Stdlib.List.getAt<Float>(v, i) with
+    | Some(value) -> value
+    | None -> 0.0
 
-def avRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+def avRow(i: Int64, j: Int64, n: Int64, v: List<Float>, acc: Float) : Float =
     if j >= n then acc
-    else avRow(i, j + 1, n, v, acc + matA(i, j) * get3(v, j))
+    else avRow(i, j + 1, n, v, acc + matA(i, j) * getAt(v, j))
 
-def atvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+def atvRow(i: Int64, j: Int64, n: Int64, v: List<Float>, acc: Float) : Float =
     if j >= n then acc
-    else atvRow(i, j + 1, n, v, acc + matA(j, i) * get3(v, j))
+    else atvRow(i, j + 1, n, v, acc + matA(j, i) * getAt(v, j))
 
-def av3(v: (Float, Float, Float)) : (Float, Float, Float) =
-    (avRow(0, 0, 3, v, 0.0), avRow(1, 0, 3, v, 0.0), avRow(2, 0, 3, v, 0.0))
+def avRows(i: Int64, n: Int64, v: List<Float>, out: List<Float>) : List<Float> =
+    if i >= n then out
+    else avRows(i + 1, n, v, Stdlib.List.setAt<Float>(out, i, avRow(i, 0, n, v, 0.0)))
 
-def atv3(v: (Float, Float, Float)) : (Float, Float, Float) =
-    (atvRow(0, 0, 3, v, 0.0), atvRow(1, 0, 3, v, 0.0), atvRow(2, 0, 3, v, 0.0))
+def atvRows(i: Int64, n: Int64, v: List<Float>, out: List<Float>) : List<Float> =
+    if i >= n then out
+    else atvRows(i + 1, n, v, Stdlib.List.setAt<Float>(out, i, atvRow(i, 0, n, v, 0.0)))
 
-def atav3(v: (Float, Float, Float)) : (Float, Float, Float) =
-    atv3(av3(v))
+def atav(n: Int64, v: List<Float>) : List<Float> =
+    let zeroes = Stdlib.List.repeat<Float>(0.0, n) in
+    atvRows(0, n, avRows(0, n, v, zeroes), zeroes)
 
-def dot3(a: (Float, Float, Float), b: (Float, Float, Float)) : Float =
-    a.0 * b.0 + a.1 * b.1 + a.2 * b.2
+def iterate(iterations: Int64, n: Int64, u: List<Float>, v: List<Float>) : (List<Float>, List<Float>) =
+    if iterations <= 0 then (u, v)
+    else
+        let nextV = atav(n, u) in
+        let nextU = atav(n, nextV) in
+        iterate(iterations - 1, n, nextU, nextV)
 
-let v = atav3((1.0, 1.0, 1.0)) in
-let u = atav3(v) in
-Stdlib.Float.toInt(Stdlib.Float.sqrt(dot3(u, v) / dot3(v, v)) * 1000000000.0)
+def dot(i: Int64, n: Int64, a: List<Float>, b: List<Float>, acc: Float) : Float =
+    if i >= n then acc
+    else dot(i + 1, n, a, b, acc + getAt(a, i) * getAt(b, i))
+
+def spectralNorm(n: Int64) : Float =
+    let result = iterate(1, n, Stdlib.List.repeat<Float>(1.0, n), Stdlib.List.repeat<Float>(0.0, n)) in
+    let u = result.0 in
+    let v = result.1 in
+    Stdlib.Float.sqrt(dot(0, n, u, v, 0.0) / dot(0, n, v, v, 0.0))
+
+// Reduced from n=100 and ten power iterations to n=10 and one iteration.
+Stdlib.Float.toInt(spectralNorm(10) * 1000000000.0)

@@ -1,91 +1,67 @@
 // Edigits Benchmark - Computing digits of e
-// Uses series expansion: e = sum(1/n!) for n=0 to infinity
-// Computes checksum of first N digits
+// Direct translation of the Rust fixed-point algorithm. Each List element
+// stores one decimal digit, matching Rust's Vec<u8> representation logically.
 
-// Store 15 decimal digits per Int64 chunk. For n <= 50, carry * chunkBase
-// remains safely within Int64 while cutting persistent-list traversal by 15x.
-def chunkBase() : Int64 = 1000000000000000
-
-def chunkWidth() : Int64 = 15
-
-def leadingOne() : Int64 = 100000000000000
-
-// Divide each chunk by n, propagating carry left-to-right.
-def divideByN(chunks: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int64) : List<Int64> =
-    if idx >= len then chunks
+// Divide the fixed-point digit vector by n, propagating carry left-to-right.
+def divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int64) : List<Int64> =
+    if idx >= len then digits
     else
-        match Stdlib.List.getAt<Int64>(chunks, idx) with
-        | None -> chunks
-        | Some(chunk) ->
-            let current = carry * chunkBase() + chunk in
-            let newChunk = current / n in
+        match Stdlib.List.getAt<Int64>(digits, idx) with
+        | None -> digits
+        | Some(digit) ->
+            let current = carry * 10 + digit in
+            let newDigit = current / n in
             let newCarry = current % n in
-            let updated = Stdlib.List.setAt<Int64>(chunks, idx, newChunk) in
+            let updated = Stdlib.List.setAt<Int64>(digits, idx, newDigit) in
             divideByN(updated, n, newCarry, idx + 1, len)
 
-// Add chunks right-to-left so carries flow toward the most-significant chunk.
+// Add the current factorial term right-to-left, matching Rust's reverse loop.
 def addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : List<Int64> =
     if idx < 0 then e
     else
         match Stdlib.List.getAt<Int64>(e, idx) with
         | None -> e
-        | Some(eChunk) ->
+        | Some(eDigit) ->
             match Stdlib.List.getAt<Int64>(term, idx) with
             | None -> e
-            | Some(termChunk) ->
-                let total = eChunk + termChunk + carry in
-                let newChunk = total % chunkBase() in
-                let newCarry = total / chunkBase() in
-                let updated = Stdlib.List.setAt<Int64>(e, idx, newChunk) in
+            | Some(termDigit) ->
+                let total = eDigit + termDigit + carry in
+                let newDigit = total % 10 in
+                let newCarry = total / 10 in
+                let updated = Stdlib.List.setAt<Int64>(e, idx, newDigit) in
                 addWithCarry(updated, term, newCarry, idx - 1)
 
-// Add one factorial term to e: e += term, then term /= n
-def addFactorialTerm(e: List<Int64>, term: List<Int64>, n: Int64, maxN: Int64, len: Int64) : List<Int64> =
-    if n > maxN then e
+def addFactorialTerms(e: List<Int64>, term: List<Int64>, n: Int64, len: Int64) : List<Int64> =
+    if n > 50 then e
     else
         let newTerm = divideByN(term, n, 0, 0, len) in
         let newE = addWithCarry(e, newTerm, 0, len - 1) in
-        addFactorialTerm(newE, newTerm, n + 1, maxN, len)
+        addFactorialTerms(newE, newTerm, n + 1, len)
 
-def initChunks(n: Int64) : List<Int64> =
-    [leadingOne(), ...Stdlib.List.repeat<Int64>(0, n - 1)]
+def initDigits(len: Int64) : List<Int64> =
+    [1, ...Stdlib.List.repeat<Int64>(0, len - 1)]
 
-// Compute digits of e
 def computeEDigits(numDigits: Int64) : List<Int64> =
-    let precision = numDigits + 10 in
-    let chunkCount = (precision + chunkWidth() - 1) / chunkWidth() in
-    let e = initChunks(chunkCount) in
-    let term = initChunks(chunkCount) in
-    addFactorialTerm(e, term, 1, 50, chunkCount)
+    // Rust uses indices 0..=precision, hence numDigits + 11 elements.
+    let len = numDigits + 11 in
+    let e = initDigits(len) in
+    let term = initDigits(len) in
+    addFactorialTerms(e, term, 1, len)
 
-// Compute checksum: sum(digit * (index + 1)) mod 1000000007
-def checksumChunk(chunk: Int64, divisor: Int64, idx: Int64, acc: Int64, numDigits: Int64) : (Int64, Int64) =
-    if divisor <= 0 || idx >= numDigits then (idx, acc)
+def computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int64) : Int64 =
+    if idx >= numDigits then acc
     else
-        let digit = (chunk / divisor) % 10 in
-        let newAcc = (acc + digit * (idx + 1)) % 1000000007 in
-        checksumChunk(chunk, divisor / 10, idx + 1, newAcc, numDigits)
-
-def computeChecksum(chunks: List<Int64>, chunkIdx: Int64, digitIdx: Int64, acc: Int64, numDigits: Int64) : Int64 =
-    if digitIdx >= numDigits then acc
-    else
-        match Stdlib.List.getAt<Int64>(chunks, chunkIdx) with
+        match Stdlib.List.getAt<Int64>(digits, idx) with
         | None -> acc
-        | Some(chunk) ->
-            let chunkResult = checksumChunk(chunk, leadingOne(), digitIdx, acc, numDigits) in
-            computeChecksum(chunks, chunkIdx + 1, chunkResult.0, chunkResult.1, numDigits)
+        | Some(digit) ->
+            let newAcc = (acc + digit * (idx + 1)) % 1000000007 in
+            computeChecksum(digits, idx + 1, newAcc, numDigits)
 
-// Run multiple iterations
-def runIterations(n: Int64, numDigits: Int64) : Int64 =
-    if n <= 0 then 0
+def runIterations(remaining: Int64, numDigits: Int64) : Int64 =
+    if remaining <= 0 then 0
     else
         let digits = computeEDigits(numDigits) in
-        let checksum = computeChecksum(digits, 0, 0, 0, numDigits) in
-        if n == 1 then checksum
-        else runIterations(n - 1, numDigits)
+        let checksum = computeChecksum(digits, 0, 0, numDigits) in
+        if remaining == 1 then checksum else runIterations(remaining - 1, numDigits)
 
-// Match the canonical benchmark size used by the reference implementations.
-let numDigits = 1000 in
-let iterations = 10 in
-let result = runIterations(iterations, numDigits) in
-Stdlib.Int64.toString(result)
+Stdlib.Int64.toString(runIterations(10, 1000))

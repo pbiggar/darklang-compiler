@@ -3,9 +3,8 @@
 
 fn fannkuch(n: usize) -> i32 {
     let mut perm: Vec<usize> = (0..n).collect();
-    let mut count: Vec<usize> = (0..n).collect();
+    let mut count: Vec<usize> = (1..=n).collect();
     let mut max_flips = 0;
-    let mut nperm = 0;
 
     loop {
         // Count flips for current permutation
@@ -36,13 +35,12 @@ fn fannkuch(n: usize) -> i32 {
             if count[i] > 0 {
                 break;
             }
-            count[i] = i;
+            count[i] = i + 1;
             i += 1;
         }
         if i >= n {
             break;
         }
-        nperm += 1;
     }
 
     max_flips

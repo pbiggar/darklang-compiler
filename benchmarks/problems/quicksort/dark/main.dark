@@ -1,34 +1,24 @@
 // Quicksort Benchmark - Dark implementation
 // Sorts a list and returns a checksum
 
-// Partition once, building each bucket with the skew list's O(1) prepend.
-def partition3(arr: List<Int64>, pivot: Int64, less: List<Int64>, equal: List<Int64>, greater: List<Int64>) : (List<Int64>, List<Int64>, List<Int64>) =
-    match arr with
-    | [] -> (less, equal, greater)
-    | [h, ...t] ->
-        if h < pivot then partition3(t, pivot, [h, ...less], equal, greater)
-        else if h == pivot then partition3(t, pivot, less, [h, ...equal], greater)
-        else partition3(t, pivot, less, equal, [h, ...greater])
-
-// Prepend a bucket to an existing suffix. Equal buckets need no reversal.
-def prependAll(source: List<Int64>, suffix: List<Int64>) : List<Int64> =
-    match source with
-    | [] -> suffix
-    | [h, ...t] -> [h, ...prependAll(t, suffix)]
-
-// Continuation-style output avoids repeatedly copying the sorted left side.
-def quicksortInto(arr: List<Int64>, suffix: List<Int64>) : List<Int64> =
-    match arr with
-    | [] -> suffix
-    | [only] -> [only, ...suffix]
-    | [pivot, ..._] ->
-        let (less, equal, greater) = partition3(arr, pivot, [], [], []) in
-        let sortedGreater = quicksortInto(greater, suffix) in
-        let equalAndGreater = prependAll(equal, sortedGreater) in
-        quicksortInto(less, equalAndGreater)
+// The Rust reference chooses the middle element and traverses the input once
+// for each of its three partitions. Keep the same source-level work here.
+def getAtOrDefault(list: List<Int64>, index: Int64, default_: Int64) : Int64 =
+    match Stdlib.List.getAt<Int64>(list, index) with
+    | Some(v) -> v
+    | None -> default_
 
 def quicksort(arr: List<Int64>) : List<Int64> =
-    quicksortInto(arr, [])
+    let len = Stdlib.List.length<Int64>(arr) in
+    if len <= 1 then arr
+    else
+        let pivot = getAtOrDefault(arr, len / 2, 0) in
+        let left = Stdlib.List.filter<Int64>(arr, (x: Int64) => x < pivot) in
+        let middle = Stdlib.List.filter<Int64>(arr, (x: Int64) => x == pivot) in
+        let right = Stdlib.List.filter<Int64>(arr, (x: Int64) => x > pivot) in
+        Stdlib.List.append<Int64>(
+            Stdlib.List.append<Int64>(quicksort(left), middle),
+            quicksort(right))
 
 // Generate pseudo-random list using LCG
 def generateListHelper(n: Int64, x: Int64, acc: List<Int64>) : List<Int64> =

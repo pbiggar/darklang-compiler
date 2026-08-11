@@ -27,10 +27,7 @@ def nsieve(n: Int64) : Int64 =
     let composites = sieveLoop(2, n, Stdlib.Dict.empty<Int64, Bool>()) in
     countPrimes(2, n, composites, 0)
 
-// Run with n=100000 (9592 primes), matching the reference implementations.
-def runBenchmark(iterations: Int64, result: Int64) : Int64 =
-    if iterations <= 0 then result
-    else runBenchmark(iterations - 1, nsieve(100000))
-
-// Single run
+// Diagnostic only: one full-size run. The original Rust reference runs 100
+// times; Dark's bump allocator cannot reclaim the persistent Dict between runs,
+// so this implementation is non-comparable and excluded from canonical ratios.
 nsieve(100000)

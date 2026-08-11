@@ -1,5 +1,5 @@
 // Nsieve Benchmark - Quick check version
-// Already small - same as main
+// Reduced from n=100000 to n=100; both versions perform one sieve.
 
 def markMultiples(j: Int64, step: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
     if j > n then composites
@@ -24,5 +24,4 @@ def nsieve(n: Int64) : Int64 =
     let composites = sieveLoop(2, n, Stdlib.Dict.empty<Int64, Bool>()) in
     countPrimes(2, n, composites, 0)
 
-// Reduced: 100 instead of 1000
 nsieve(100)
