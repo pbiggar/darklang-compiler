@@ -5,8 +5,8 @@
 // Empty list should not default to Int64 element type
 List.length(if true then [] else [true]) = 0
 
-// Top-level char lists should print through the string-list display helper
-['a', 'b'] = stdout="[a, b]\n"
+// Top-level char lists use the recursive interpreter value renderer.
+['a', 'b'] = stdout="['a', 'b']\n"
 
 // Empty list is Nil (represented as 0)
 match [] with | [] -> 1 | _ -> 0 = 1
@@ -802,6 +802,5 @@ testListInBranch169(true) = 55
 // from #169 to exercise the TFunction->TList case in convertExprToOperand.
 def makeList170(n: Int64) : List<Int64> = [77 + n, 154, 231] def testBranch170(flag: Bool) : Int64 = if flag then let f = makeList170 in match f(0) with | [h, ...t] -> h | [] -> 0 else 999 testBranch170(true) = 77
 
-// Unsupported list result display should fail at compile time instead of
-// falling through to a generic runtime list print path.
-[(1, 2)] = error="Unsupported list result display element type: (Int64, Int64)"
+// Compound list elements use the same recursive value renderer.
+[(1, 2)] = stdout="[(1, 2)]\n"

@@ -71,5 +71,5 @@ module Shadowing =
      | Ok(Ok x) -> let x = 9L in x + 2L))) = [ 11L; 11L; 11L; 11L ]
 
 module Errors =
-  (let (a, _) = 1L in a) = error="Undefined variable: a"
-  (let (a, _) = (1L, 2L, 3L) in a) = error="Undefined variable: a"
+  (let (a, _) = 1L in a) = error="Could not deconstruct value 1 into pattern ([variable], _)"
+  (let (a, _) = (1L, 2L, 3L) in a) = error="Could not deconstruct value (1, 2, 3) into pattern ([variable], _)"

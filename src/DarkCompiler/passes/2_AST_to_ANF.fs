@@ -942,14 +942,18 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
     match expr with
     | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ | AST.RuntimeError _ ->
         expr  // No types to substitute in literals, variables, function references, and closures
+    | AST.BoundaryRender (renderer, value) ->
+        AST.BoundaryRender (renderer, applySubstToExpr subst value)
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
     | AST.UnaryOp (op, inner) ->
         AST.UnaryOp (op, applySubstToExpr subst inner)
     | AST.Let (name, value, body) ->
         AST.Let (name, applySubstToExpr subst value, applySubstToExpr subst body)
+    | AST.LetPattern (pattern, value, body) ->
+        AST.LetPattern (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (applySubstToExpr subst cond, applySubstToExpr subst thenBranch, applySubstToExpr subst elseBranch)
     | AST.Call (funcName, args) ->
@@ -1066,15 +1070,18 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
 /// Collect all TypeApp call sites from an expression
 let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     match expr with
+    | AST.BoundaryRender (_, value) -> collectTypeApps value
     | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ | AST.RuntimeError _ ->
         Set.empty
     | AST.BinOp (_, left, right) ->
         Set.union (collectTypeApps left) (collectTypeApps right)
     | AST.UnaryOp (_, inner) ->
         collectTypeApps inner
     | AST.Let (_, value, body) ->
+        Set.union (collectTypeApps value) (collectTypeApps body)
+    | AST.LetPattern (_, value, body) ->
         Set.union (collectTypeApps value) (collectTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeApps cond) (Set.union (collectTypeApps thenBranch) (collectTypeApps elseBranch))
@@ -1179,14 +1186,18 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
     match expr with
     | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ | AST.RuntimeError _ ->
         expr
+    | AST.BoundaryRender (renderer, value) ->
+        AST.BoundaryRender (renderer, replaceTypeApps value)
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, replaceTypeApps left, replaceTypeApps right)
     | AST.UnaryOp (op, inner) ->
         AST.UnaryOp (op, replaceTypeApps inner)
     | AST.Let (name, value, body) ->
         AST.Let (name, replaceTypeApps value, replaceTypeApps body)
+    | AST.LetPattern (pattern, value, body) ->
+        AST.LetPattern (pattern, replaceTypeApps value, replaceTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (replaceTypeApps cond, replaceTypeApps thenBranch, replaceTypeApps elseBranch)
     | AST.Call (funcName, args) ->
@@ -1287,7 +1298,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
         | AST.FloatLiteral _
         | AST.Var _
         | AST.FuncRef _
-        | AST.Closure _ -> Ok expr'
+        | AST.Closure _
+        | AST.RuntimeError _ -> Ok expr'
+        | AST.BoundaryRender (renderer, value) ->
+            replace value |> Result.map (fun value' -> AST.BoundaryRender (renderer, value'))
         | AST.BinOp (op, left, right) ->
             replace left
             |> Result.bind (fun left' ->
@@ -1299,6 +1313,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
             replace value
             |> Result.bind (fun value' ->
                 replace body |> Result.map (fun body' -> AST.Let (name, value', body')))
+        | AST.LetPattern (pattern, value, body) ->
+            replace value
+            |> Result.bind (fun value' ->
+                replace body |> Result.map (fun body' -> AST.LetPattern (pattern, value', body')))
         | AST.If (cond, thenBranch, elseBranch) ->
             replace cond
             |> Result.bind (fun cond' ->
@@ -1468,9 +1486,13 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: AST.Progr
             true
         | AST.Var name ->
             Set.contains name knownFuncNames && not (Set.contains name bound)
+        | AST.BoundaryRender (_, value) ->
+            exprNeedsLambdaLowering bound value
         | AST.Let (name, value, body) ->
             exprNeedsLambdaLowering bound value
             || exprNeedsLambdaLowering (Set.add name bound) body
+        | AST.LetPattern (_, value, body) ->
+            exprNeedsLambdaLowering bound value || exprNeedsLambdaLowering bound body
         | AST.If (cond, thenBranch, elseBranch) ->
             exprNeedsLambdaLowering bound cond
             || exprNeedsLambdaLowering bound thenBranch
@@ -1545,14 +1567,17 @@ type LambdaEnv = Map<string, AST.Expr>
 /// Check if a variable occurs in an expression (for dead code elimination)
 let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     match expr with
+    | AST.BoundaryRender (_, value) -> varOccursInExpr name value
     | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ -> false
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.RuntimeError _ -> false
     | AST.Var n -> n = name
     | AST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
     | AST.UnaryOp (_, inner) -> varOccursInExpr name inner
     | AST.Let (n, value, body) ->
         varOccursInExpr name value || (n <> name && varOccursInExpr name body)
+    | AST.LetPattern (_, value, body) ->
+        varOccursInExpr name value || varOccursInExpr name body
     | AST.If (cond, thenBranch, elseBranch) ->
         varOccursInExpr name cond || varOccursInExpr name thenBranch || varOccursInExpr name elseBranch
     | AST.Call (funcName, args) ->
@@ -1598,8 +1623,10 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
     match expr with
     | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.RuntimeError _ ->
         expr
+    | AST.BoundaryRender (renderer, value) ->
+        AST.BoundaryRender (renderer, inlineLambdas value lambdaEnv)
     | AST.Var _ -> expr  // Variable references stay as-is (not at call position)
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, inlineLambdas left lambdaEnv, inlineLambdas right lambdaEnv)
@@ -1618,6 +1645,8 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         match value' with
         | AST.Lambda _ when not (varOccursInExpr name body') -> body'
         | _ -> AST.Let (name, value', body')
+    | AST.LetPattern (pattern, value, body) ->
+        AST.LetPattern (pattern, inlineLambdas value lambdaEnv, inlineLambdas body lambdaEnv)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (inlineLambdas cond lambdaEnv, inlineLambdas thenBranch lambdaEnv, inlineLambdas elseBranch lambdaEnv)
     | AST.Call (funcName, args) ->
@@ -1756,9 +1785,10 @@ let private freshLiftedName (state: LiftState) (prefix: string) : string * LiftS
 /// Collect free variables in an expression (variables not bound by let or lambda parameters)
 let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     match expr with
+    | AST.BoundaryRender (_, value) -> freeVars value bound
     | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ -> Set.empty
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.RuntimeError _ -> Set.empty
     | AST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
     | AST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
     | AST.UnaryOp (_, inner) -> freeVars inner bound
@@ -1766,6 +1796,8 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         let valueVars = freeVars value bound
         let bodyVars = freeVars body (Set.add name bound)
         Set.union valueVars bodyVars
+    | AST.LetPattern (_, value, body) ->
+        Set.union (freeVars value bound) (freeVars body bound)
     | AST.If (cond, thenBr, elseBr) ->
         Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
     | AST.Call (funcName, args) ->
@@ -2140,8 +2172,11 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     match expr with
     | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ | AST.RuntimeError _ ->
         Ok (expr, state)
+    | AST.BoundaryRender (renderer, value) ->
+        liftLambdasInExpr value state
+        |> Result.map (fun (value', state') -> (AST.BoundaryRender (renderer, value'), state'))
     | AST.BinOp (op, left, right) ->
         liftLambdasInExpr left state
         |> Result.bind (fun (left', state1) ->
@@ -2163,6 +2198,11 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                 // Restore TypeEnv (remove the let binding)
                 let state2' = { state2 with TypeEnv = Map.remove name state2.TypeEnv }
                 (AST.Let (name, value', body'), state2')))
+    | AST.LetPattern (pattern, value, body) ->
+        liftLambdasInExpr value state
+        |> Result.bind (fun (value', state1) ->
+            liftLambdasInExpr body state1
+            |> Result.map (fun (body', state2) -> (AST.LetPattern (pattern, value', body'), state2)))
     | AST.If (cond, thenBr, elseBr) ->
         liftLambdasInExpr cond state
         |> Result.bind (fun (cond', state1) ->
@@ -2694,6 +2734,7 @@ let rec liftLambdasInProgram
 /// Collect function names that are used as values (not in Call position)
 and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AST.Type) list>) : string list =
     match expr with
+    | AST.BoundaryRender (_, value) -> collectFuncRefsInExpr value knownFuncs
     | AST.Var name when Map.containsKey name knownFuncs -> [name]
     | AST.Call (_, args) ->
         // Check if any arg is a reference to a known function
@@ -2709,6 +2750,8 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
             | AST.Var name when Map.containsKey name knownFuncs -> [name]
             | _ -> collectFuncRefsInExpr value knownFuncs
         valueRefs @ collectFuncRefsInExpr body knownFuncs
+    | AST.LetPattern (_, value, body) ->
+        collectFuncRefsInExpr value knownFuncs @ collectFuncRefsInExpr body knownFuncs
     | AST.If (c, t, e) ->
         collectFuncRefsInExpr c knownFuncs @ collectFuncRefsInExpr t knownFuncs @ collectFuncRefsInExpr e knownFuncs
     | AST.BinOp (_, l, r) ->
@@ -2750,6 +2793,8 @@ and replaceFuncRefsWithWrappers (wrapperMap: Map<string, string>) (topLevel: AST
 /// Replace function references with wrapper references in an expression
 and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr =
     match expr with
+    | AST.BoundaryRender (renderer, value) ->
+        AST.BoundaryRender (renderer, replaceInExpr wrapperMap value)
     | AST.Var name when Map.containsKey name wrapperMap ->
         // This is a function reference used as a value - replace with closure to wrapper
         match Map.tryFind name wrapperMap with
@@ -2763,6 +2808,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
         AST.Call (name, args |> AST.NonEmptyList.map (replaceInExpr wrapperMap))
     | AST.Let (n, v, b) ->
         AST.Let (n, replaceInExpr wrapperMap v, replaceInExpr wrapperMap b)
+    | AST.LetPattern (pattern, value, body) ->
+        AST.LetPattern (pattern, replaceInExpr wrapperMap value, replaceInExpr wrapperMap body)
     | AST.If (c, t, e) ->
         AST.If (replaceInExpr wrapperMap c, replaceInExpr wrapperMap t, replaceInExpr wrapperMap e)
     | AST.BinOp (op, l, r) ->
@@ -3065,6 +3112,9 @@ let rec generateStructuralEquality
 /// Used for type-directed field lookup in record access
 let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.Type, string> =
     match expr with
+    | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
+    | AST.BoundaryRender _ -> Ok AST.TString
+    | AST.RuntimeError _ -> Ok AST.TRuntimeError
     | AST.UnitLiteral -> Ok AST.TUnit
     | AST.Int64Literal _ -> Ok AST.TInt64
     | AST.Int128Literal _ -> Ok AST.TInt128
@@ -3574,8 +3624,9 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 Error $"Internal error: Builtin.unwrap expects 1 argument, got {List.length argList}"
         elif isBuiltinTestRuntimeErrorName funcName then
             match argList with
-            // testRuntimeError behaves like bottom, but ANF-level inference must stay concrete.
-            | [_] -> Ok AST.TUnit
+            // Runtime errors are bottom-like: branch and match inference select
+            // the type of the reachable value-producing alternatives.
+            | [_] -> Ok AST.TRuntimeError
             | _ ->
                 Error $"Internal error: Builtin.testRuntimeError expects 1 argument, got {List.length argList}"
         else
@@ -3810,6 +3861,22 @@ let private buildSkewListLiteral
 /// funcReg maps function names to their return types
 let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
+    | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
+    | AST.BoundaryRender (renderer, value) ->
+        toANF value varGen env typeReg variantLookup funcReg moduleRegistry
+        |> Result.map (fun (valueExpr, varGen1) ->
+            let (renderedVar, varGen2) = ANF.freshVar varGen1
+            let renderedExpr =
+                bindReturns valueExpr (fun valueAtom ->
+                    ANF.Let (
+                        renderedVar,
+                        ANF.Call (renderer, [valueAtom]),
+                        ANF.Return (ANF.Var renderedVar)
+                    ))
+            (renderedExpr, varGen2))
+    | AST.RuntimeError message ->
+        let (runtimeErrorVar, varGen1) = ANF.freshVar varGen
+        Ok (ANF.Let (runtimeErrorVar, ANF.RuntimeError message, ANF.Return ANF.UnitLiteral), varGen1)
     | AST.UnitLiteral ->
         // Unit literal becomes return of unit value (represented as 0)
         Ok (ANF.Return (ANF.UnitLiteral), varGen)
@@ -4462,8 +4529,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             (exprWithBindings, varGen2))
 
     | AST.RecordLiteral (typeName, fields) ->
-        // Records are compiled like tuples - allocate heap space and store fields
-        // Get field order from type registry (or use order from literal if anonymous)
+        // Evaluate fields in source order, then place their already-computed atoms
+        // into the record's declaration-order layout.
         let fieldOrder =
             if typeName = "" then
                 fields |> List.map fst  // Use literal order for anonymous records
@@ -4472,18 +4539,36 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | Some typeFields -> typeFields |> List.map fst
                 | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
 
-        // Reorder field values according to type definition order
-        let fieldMap = Map.ofList fields
-        let orderedValues =
-            fieldOrder
-            |> List.choose (fun fname -> Map.tryFind fname fieldMap)
+        let rec convertFields remaining vg acc =
+            match remaining with
+            | [] -> Ok (List.rev acc, vg)
+            | (fieldName, fieldExpr) :: rest ->
+                toANFBoundAtom fieldExpr vg env typeReg variantLookup funcReg moduleRegistry
+                |> Result.bind (fun (setupExpr, fieldAtom, vg') ->
+                    convertFields rest vg' ((fieldName, setupExpr, fieldAtom) :: acc))
 
-        // Convert to TupleLiteral and reuse tuple handling
-        toANF (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup funcReg moduleRegistry
+        convertFields fields varGen []
+        |> Result.map (fun (convertedFields, varGen1) ->
+            let atomByName =
+                convertedFields
+                |> List.map (fun (fieldName, _, atom) -> (fieldName, atom))
+                |> Map.ofList
+            let orderedAtoms =
+                fieldOrder
+                |> List.map (fun fieldName ->
+                    match Map.tryFind fieldName atomByName with
+                    | Some atom -> atom
+                    | None -> Crash.crash $"Record literal '{typeName}' is missing field '{fieldName}' after type checking")
+            let (resultVar, varGen2) = ANF.freshVar varGen1
+            let allocation =
+                ANF.Let (resultVar, ANF.TupleAlloc orderedAtoms, ANF.Return (ANF.Var resultVar))
+            let withSourceOrderEvaluation =
+                convertedFields
+                |> List.map (fun (_, setupExpr, _) -> setupExpr)
+                |> List.foldBack (fun setupExpr body -> bindReturns setupExpr (fun _ -> body)) <| allocation
+            (withSourceOrderEvaluation, varGen2))
 
     | AST.RecordUpdate (recordExpr, updates) ->
-        // Record update: { record with field1 = val1, field2 = val2 }
-        // Desugar to creating a new record with updated fields
         let typeEnv = typeEnvFromVarEnv env
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
@@ -4491,17 +4576,49 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             | AST.TRecord (typeName, _) ->
                 match Map.tryFind typeName typeReg with
                 | Some typeFields ->
-                    // Build a map of updates
-                    let updateMap = Map.ofList updates
-                    // For each field in the type, use update value or access from original record
-                    let newFields =
-                        typeFields
-                        |> List.map (fun (fname, _) ->
-                            match Map.tryFind fname updateMap with
-                            | Some updateExpr -> (fname, updateExpr)
-                            | None -> (fname, AST.RecordAccess (recordExpr, fname)))
-                    // Create a new record literal with the combined fields
-                    toANF (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg moduleRegistry
+                    toANFBoundAtom recordExpr varGen env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.bind (fun (recordSetup, recordAtom, varGen1) ->
+                        let rec convertUpdates remaining vg acc =
+                            match remaining with
+                            | [] -> Ok (List.rev acc, vg)
+                            | (fieldName, updateExpr) :: rest ->
+                                toANFBoundAtom updateExpr vg env typeReg variantLookup funcReg moduleRegistry
+                                |> Result.bind (fun (setupExpr, updateAtom, vg') ->
+                                    convertUpdates rest vg' ((fieldName, setupExpr, updateAtom) :: acc))
+
+                        convertUpdates updates varGen1 []
+                        |> Result.map (fun (convertedUpdates, varGen2) ->
+                            let updatesByName =
+                                convertedUpdates
+                                |> List.map (fun (fieldName, _, atom) -> (fieldName, atom))
+                                |> Map.ofList
+
+                            let (fieldAtoms, projectionBindings, varGen3) =
+                                typeFields
+                                |> List.mapi (fun index (fieldName, _) -> (index, fieldName))
+                                |> List.fold (fun (atoms, bindings, vg) (index, fieldName) ->
+                                    match Map.tryFind fieldName updatesByName with
+                                    | Some atom -> (atom :: atoms, bindings, vg)
+                                    | None ->
+                                        let (fieldVar, vg') = ANF.freshVar vg
+                                        (ANF.Var fieldVar :: atoms,
+                                         (fieldVar, ANF.TupleGet (recordAtom, index)) :: bindings,
+                                         vg')) ([], [], varGen2)
+
+                            let (resultVar, varGen4) = ANF.freshVar varGen3
+                            let allocation =
+                                ANF.Let (
+                                    resultVar,
+                                    ANF.TupleAlloc (List.rev fieldAtoms),
+                                    ANF.Return (ANF.Var resultVar)
+                                )
+                            let withProjections = wrapBindings (List.rev projectionBindings) allocation
+                            let withUpdates =
+                                convertedUpdates
+                                |> List.map (fun (_, setupExpr, _) -> setupExpr)
+                                |> List.foldBack (fun setupExpr body -> bindReturns setupExpr (fun _ -> body)) <| withProjections
+                            let withRecord = bindReturns recordSetup (fun _ -> withUpdates)
+                            (withRecord, varGen4)))
                 | None ->
                     Error $"Unknown record type: {typeName}"
             | _ ->
@@ -7852,6 +7969,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
+    | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
+    | AST.BoundaryRender _ ->
+        Error "BoundaryRender must be lowered through toANF"
+    | AST.RuntimeError _ ->
+        Error "Compiler-generated RuntimeError must be lowered through toANF"
     | AST.UnitLiteral ->
         Ok (ANF.UnitLiteral, [], varGen)
 
@@ -8301,25 +8423,46 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             (ANF.Var tempVar, allBindings, varGen2))
 
     | AST.RecordLiteral (typeName, fields) ->
-        // Records are compiled like tuples
+        // Evaluate field expressions in source order, independently of the
+        // declaration-order tuple layout used for the record value.
         let fieldOrder =
             if typeName = "" then
                 fields |> List.map fst
             else
                 match Map.tryFind typeName typeReg with
                 | Some typeFields -> typeFields |> List.map fst
-                | None -> fields |> List.map fst
+                | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
 
-        let fieldMap = Map.ofList fields
-        let orderedValues =
-            fieldOrder
-            |> List.choose (fun fname -> Map.tryFind fname fieldMap)
+        let rec convertFields remaining vg acc =
+            match remaining with
+            | [] -> Ok (List.rev acc, vg)
+            | (fieldName, fieldExpr) :: rest ->
+                toAtom fieldExpr vg env typeReg variantLookup funcReg moduleRegistry
+                |> Result.bind (fun (fieldAtom, fieldBindings, vg') ->
+                    convertFields rest vg' ((fieldName, fieldAtom, fieldBindings) :: acc))
 
-        // Reuse tuple handling
-        toAtom (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup funcReg moduleRegistry
+        convertFields fields varGen []
+        |> Result.map (fun (convertedFields, varGen1) ->
+            let atomByName =
+                convertedFields
+                |> List.map (fun (fieldName, atom, _) -> (fieldName, atom))
+                |> Map.ofList
+            let orderedAtoms =
+                fieldOrder
+                |> List.map (fun fieldName ->
+                    match Map.tryFind fieldName atomByName with
+                    | Some atom -> atom
+                    | None -> Crash.crash $"Record literal '{typeName}' is missing field '{fieldName}' after type checking")
+            let sourceBindings =
+                convertedFields |> List.collect (fun (_, _, bindings) -> bindings)
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            (ANF.Var tempVar,
+             sourceBindings @ [(tempVar, ANF.TupleAlloc orderedAtoms)],
+             varGen2))
 
     | AST.RecordUpdate (recordExpr, updates) ->
-        // Desugar to RecordLiteral: build new record with updated fields
+        // Evaluate the record once, then updates in source order, before
+        // projecting untouched fields and allocating the layout tuple.
         let typeEnv = typeEnvFromVarEnv env
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
@@ -8327,14 +8470,42 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             | AST.TRecord (typeName, _) ->
                 match Map.tryFind typeName typeReg with
                 | Some typeFields ->
-                    let updateMap = Map.ofList updates
-                    let newFields =
-                        typeFields
-                        |> List.map (fun (fname, _) ->
-                            match Map.tryFind fname updateMap with
-                            | Some updateExpr -> (fname, updateExpr)
-                            | None -> (fname, AST.RecordAccess (recordExpr, fname)))
-                    toAtom (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg moduleRegistry
+                    toAtom recordExpr varGen env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.bind (fun (recordAtom, recordBindings, varGen1) ->
+                        let rec convertUpdates remaining vg acc =
+                            match remaining with
+                            | [] -> Ok (List.rev acc, vg)
+                            | (fieldName, updateExpr) :: rest ->
+                                toAtom updateExpr vg env typeReg variantLookup funcReg moduleRegistry
+                                |> Result.bind (fun (updateAtom, updateBindings, vg') ->
+                                    convertUpdates rest vg' ((fieldName, updateAtom, updateBindings) :: acc))
+
+                        convertUpdates updates varGen1 []
+                        |> Result.map (fun (convertedUpdates, varGen2) ->
+                            let updateAtoms =
+                                convertedUpdates
+                                |> List.map (fun (fieldName, atom, _) -> (fieldName, atom))
+                                |> Map.ofList
+                            let updateBindings =
+                                convertedUpdates |> List.collect (fun (_, _, bindings) -> bindings)
+                            let (fieldAtoms, projectionBindings, varGen3) =
+                                typeFields
+                                |> List.mapi (fun index (fieldName, _) -> (index, fieldName))
+                                |> List.fold (fun (atoms, bindings, vg) (index, fieldName) ->
+                                    match Map.tryFind fieldName updateAtoms with
+                                    | Some atom -> (atom :: atoms, bindings, vg)
+                                    | None ->
+                                        let (fieldVar, vg') = ANF.freshVar vg
+                                        (ANF.Var fieldVar :: atoms,
+                                         bindings @ [(fieldVar, ANF.TupleGet (recordAtom, index))],
+                                         vg')) ([], [], varGen2)
+                            let (resultVar, varGen4) = ANF.freshVar varGen3
+                            (ANF.Var resultVar,
+                             recordBindings
+                             @ updateBindings
+                             @ projectionBindings
+                             @ [(resultVar, ANF.TupleAlloc (List.rev fieldAtoms))],
+                             varGen4)))
                 | None -> Error $"Unknown record type: {typeName}"
             | _ -> Error "Cannot use record update syntax on non-record type")
 

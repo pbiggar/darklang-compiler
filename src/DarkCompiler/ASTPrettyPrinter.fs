@@ -454,6 +454,14 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             formatAppArg currentArg :: formatInterpreterAppArgs restArgs
 
     match expr with
+    | BoundaryRender (_, value) -> formatExpr syntax value
+    | RuntimeError message ->
+        let escaped = escapeLiteralContent StringContent message
+        match syntax with
+        | CompilerSyntax -> $"Builtin.testRuntimeError(\"{escaped}\")"
+        | InterpreterSyntax -> $"Builtin.testRuntimeError \"{escaped}\""
+    | LetPattern (pattern, value, body) ->
+        $"let {formatPattern syntax pattern} = {formatExpr syntax value} in {formatExpr syntax body}"
     | UnitLiteral -> "()"
     | Int64Literal n ->
         match syntax with

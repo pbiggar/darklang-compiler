@@ -311,6 +311,12 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         Set.union fromFuncName fromArgs
 
     match expr with
+    | LetPattern (_, value, body) ->
+        Set.union
+            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars value)
+            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars body)
+    | BoundaryRender (_, value) ->
+        collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars value
     | UnitLiteral
     | Int64Literal _
     | Int128Literal _
@@ -326,7 +332,8 @@ let rec private collectExprReferencedPreambleFuncsWithBound
     | BoolLiteral _
     | StringLiteral _
     | CharLiteral _
-    | FloatLiteral _ ->
+    | FloatLiteral _
+    | RuntimeError _ ->
         Set.empty
     | InterpolatedString parts ->
         parts

@@ -154,6 +154,7 @@ and Expr =
     | BinOp of BinOp * Expr * Expr
     | UnaryOp of UnaryOp * Expr
     | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
+    | LetPattern of pattern:Pattern * value:Expr * body:Expr  // Let deconstruction before type checking
     | Var of string  // Variable reference
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
     | Call of funcName:string * args:NonEmptyList<Expr>  // Function call: funcName(arg1, arg2, ...)
@@ -171,6 +172,8 @@ and Expr =
     | Apply of func:Expr * args:NonEmptyList<Expr>                    // Apply function expr: f(x) where f is expression
     | FuncRef of funcName:string                             // Reference to a function (for passing as value)
     | Closure of funcName:string * captures:Expr list        // Closure: function + captured values
+    | RuntimeError of message:string                         // Compiler-generated interpreter runtime error
+    | BoundaryRender of renderer:string * value:Expr        // Compiler-generated eval-result rendering
 
 /// Match case with optional guard clause and pattern grouping
 /// Syntax: | pat1 | pat2 when guard -> body

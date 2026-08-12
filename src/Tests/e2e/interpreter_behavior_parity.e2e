@@ -1,0 +1,54 @@
+// Interpreter behavior parity regressions.
+//
+// Every expected behavior in this file was compared at compiler revision
+// f9e6c5fd120a82a048afdeebb15c155bdc306491 against darklang/dark revision
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+// Record expressions are evaluated once in written order, independently of layout.
+type OrderedLiteral = { a: Int64, b: Int64 }
+def orderedLiteralFailureB(): Int64 = Builtin.testRuntimeError("record literal b")
+def orderedLiteralFailureA(): Int64 = Builtin.testRuntimeError("record literal a")
+OrderedLiteral { b = orderedLiteralFailureB(), a = orderedLiteralFailureA() } = error="record literal b"
+
+type OrderedUpdate = { a: Int64, b: Int64, c: Int64 }
+def orderedUpdateBase(): OrderedUpdate = OrderedUpdate { a = 1, b = 2, c = 3 }
+def orderedUpdateFailureC(): Int64 = Builtin.testRuntimeError("record update c")
+def orderedUpdateFailureA(): Int64 = Builtin.testRuntimeError("record update a")
+{ orderedUpdateBase() with c = orderedUpdateFailureC(), a = orderedUpdateFailureA() } = error="record update c"
+
+// Function equality uses source identity, including inside compound values.
+let sameLambda = (x: Int64) => x in sameLambda == sameLambda = stdout="true\n"
+((x: Int64) => x) == ((x: Int64) => x) = stdout="false\n"
+[(x: Int64) => x] == [(x: Int64) => x] = stdout="false\n"
+let sameCompoundLambda = (x: Int64) => x in (sameCompoundLambda, [sameCompoundLambda]) == (sameCompoundLambda, [sameCompoundLambda]) = stdout="true\n"
+def parityAdd(left: Int64, right: Int64): Int64 = left + right
+parityAdd(1L) == parityAdd(1L) = stdout="true\n"
+parityAdd(1L) == parityAdd(2L) = stdout="false\n"
+
+// Shared numeric operators report both actual operand types.
+5L + true = error="Cannot perform numeric operation on Int64 and Bool"
+
+// Interpolation errors retain the value and conversion guidance.
+(let parityFloat = 1.0 in $"test {parityFloat}") = error="Expected String in string interpolation, got a Float (1.0) instead. Try wrapping it with `Stdlib.Float.toString`."
+(let parityInt64 = 1L in $"test {parityInt64}") = error="Expected String in string interpolation, got an Int64 (1) instead. Try wrapping it with `Stdlib.Int64.toString`."
+
+// Failed let deconstruction is exercised against this same revision pair by
+// upstream/language/basic/elet.dark, preserving the upstream source probes.
+
+// Result rendering is quoted and recursive.
+"hello" = stdout="\"hello\"\n"
+'x' = stdout="'x'\n"
+("outer", ('x', ["inner"])) = stdout="(\"outer\", ('x', [\"inner\"]))\n"
+[(1, "one"), (2, "two")] = stdout="[(1, \"one\"), (2, \"two\")]\n"
+def emptyParityStrings(): List<String> = [] emptyParityStrings() = stdout="List<String> []\n"
+
+type RenderRecord<'value> = { z: List<'value>, a: String }
+RenderRecord<Int64> { z = [1, 2], a = "record" } = stdout="RenderRecord<Int64> { a: \"record\", z: [1, 2] }\n"
+
+type RenderEnum<'value> = RenderEmpty | RenderValue of ('value, String)
+RenderValue((7, "seven")) = stdout="RenderEnum<Int64>.RenderValue((7, \"seven\"))\n"
+
+def renderedNamedFunction(x: Int64): Int64 = x
+renderedNamedFunction = stdout="renderedNamedFunction\n"
+parityAdd(1L) = stdout="parityAdd\n"
+((x: Int64) => x) = stdout="(lambda)\n"

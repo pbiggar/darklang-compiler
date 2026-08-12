@@ -40,6 +40,10 @@ let testUInt128Literal () : TestResult =
 let rec countMatches (expr: Expr) : int =
     let childMatches =
         match expr with
+        | LetPattern (_, value, body) ->
+            [value; body]
+        | BoundaryRender (_, value) ->
+            [value]
         | UnitLiteral
         | Int64Literal _
         | Int128Literal _
@@ -57,7 +61,8 @@ let rec countMatches (expr: Expr) : int =
         | CharLiteral _
         | FloatLiteral _
         | Var _
-        | FuncRef _ ->
+        | FuncRef _
+        | RuntimeError _ ->
             []
         | InterpolatedString parts ->
             parts

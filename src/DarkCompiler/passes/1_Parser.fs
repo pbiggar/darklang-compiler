@@ -1443,10 +1443,9 @@ let parse (tokens: Token list) : Result<Program, string> =
                         | TIn :: rest'' ->
                             parseExpr rest''
                             |> Result.map (fun (body, remaining'') ->
-                                // If pattern is just PVar, use Let; otherwise desugar to Match
                                 match pattern with
                                 | PVar name -> (Let (name, value, body), remaining'')
-                                | _ -> (Match (value, [{ Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }]), remaining''))
+                                | _ -> (LetPattern (pattern, value, body), remaining''))
                         | _ -> Error "Expected 'in' after let binding value")
                 | _ -> Error "Expected '=' after let binding pattern")
         | TIf :: rest ->
@@ -2223,6 +2222,10 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
 
 let rec private validateExpr (expr: Expr) : Result<unit, string> =
     match expr with
+    | BoundaryRender (_, value) -> validateExpr value
+    | RuntimeError _ -> Ok ()
+    | LetPattern (_, value, body) ->
+        validateExpr value |> Result.bind (fun () -> validateExpr body)
     | Let (name, value, body) ->
         validateNoInternalIdentifier name
         |> Result.bind (fun () -> validateExpr value)

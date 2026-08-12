@@ -1670,7 +1670,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                 let buildLetExpression (value: Expr) (body: Expr) (remaining'': Token list) =
                     match pattern with
                     | PVar name -> (Let (name, value, body), remaining'')
-                    | _ -> (Match (value, [{ Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }]), remaining'')
+                    | _ -> (LetPattern (pattern, value, body), remaining'')
                 match remaining with
                 | TEquals :: rest' ->
                     let tryParseWithoutInFallback () : Result<Expr * Token list, string> =
@@ -2743,6 +2743,10 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
 
 let rec private validateExpr (expr: Expr) : Result<unit, string> =
     match expr with
+    | BoundaryRender (_, value) -> validateExpr value
+    | RuntimeError _ -> Ok ()
+    | LetPattern (_, value, body) ->
+        validateExpr value |> Result.bind (fun () -> validateExpr body)
     | Let (name, value, body) ->
         validateNoInternalIdentifier name
         |> Result.bind (fun () -> validateExpr value)

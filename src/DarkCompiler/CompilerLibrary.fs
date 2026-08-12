@@ -1357,6 +1357,14 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                 match typeCheckResult with
                 | Error typeErr -> Error (TypeChecking.typeErrorToString typeErr)
                 | Ok (programType, typedUserAst, _userEnv) ->
+                    let renderedUserAst =
+                        ValueRendering.rewriteProgram
+                            plan.BaseContext.Registries.TypeReg
+                            plan.BaseContext.Registries.VariantLookup
+                            plan.BaseContext.Registries.FuncReg
+                            programType
+                            typedUserAst
+                    let boundaryProgramType = AST.TString
                     if plan.Verbosity >= 3 then
                         println $"Program type: {TypeChecking.typeToString programType}"
                         println ""
@@ -1367,7 +1375,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         convertTypedProgramToUserOnlyWithMode
                             plan.BaseContext
                             plan.Monomorphization
-                            typedUserAst
+                            renderedUserAst
                     let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                     recordPassTiming plan.PassTimingRecorder "AST -> ANF" anfTime
                     if plan.Verbosity >= 2 then
@@ -1387,7 +1395,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 println $"    - {f.Name}"
 
                         let entryFunction =
-                            AST_to_ANF.synthesizeEntryFunction "_start" programType userOnly.MainExpr
+                            AST_to_ANF.synthesizeEntryFunction "_start" boundaryProgramType userOnly.MainExpr
                         let userRegistries : AST_to_ANF.Registries = {
                             TypeReg = userOnly.TypeReg
                             VariantLookup = userOnly.VariantLookup
@@ -1409,7 +1417,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         | Ok (anfFunctions, typeMap) ->
                             if plan.Verbosity >= 1 then println "  [2.6/7] Print Insertion..."
                             let printStart = sw.Elapsed.TotalMilliseconds
-                            match PrintInsertion.insertPrintInEntry "_start" programType anfFunctions with
+                            match PrintInsertion.insertPrintInEntry "_start" boundaryProgramType anfFunctions with
                             | Error err -> Error $"Print insertion error: {err}"
                             | Ok printedFunctions ->
                                 let printElapsed = sw.Elapsed.TotalMilliseconds - printStart
@@ -1921,14 +1929,22 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
         match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv userAst with
         | Error typeErr -> Error (TypeChecking.typeErrorToString typeErr)
         | Ok (programType, typedUserAst, _) ->
+            let renderedUserAst =
+                ValueRendering.rewriteProgram
+                    stdlib.Context.Registries.TypeReg
+                    stdlib.Context.Registries.VariantLookup
+                    stdlib.Context.Registries.FuncReg
+                    programType
+                    typedUserAst
+            let boundaryProgramType = AST.TString
             // Convert to ANF
-            match convertTypedProgramToUserOnly stdlib.Context typedUserAst with
+            match convertTypedProgramToUserOnly stdlib.Context renderedUserAst with
             | Error err -> Error $"ANF conversion error: {err}"
             | Ok userOnly ->
                 let coverageOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                 let sw = Stopwatch.StartNew()
                 let entryFunction =
-                    AST_to_ANF.synthesizeEntryFunction "_start" programType userOnly.MainExpr
+                    AST_to_ANF.synthesizeEntryFunction "_start" boundaryProgramType userOnly.MainExpr
                 let userRegistries : AST_to_ANF.Registries = {
                     TypeReg = userOnly.TypeReg
                     VariantLookup = userOnly.VariantLookup
@@ -1939,7 +1955,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                 match buildAnf 0 coverageOptions sw userRegistries Map.empty (entryFunction :: userOnly.UserFunctions) None with
                 | Error err -> Error err
                 | Ok (userFunctions, _typeMap) ->
-                    match PrintInsertion.insertPrintInEntry "_start" programType userFunctions with
+                    match PrintInsertion.insertPrintInEntry "_start" boundaryProgramType userFunctions with
                     | Error err -> Error $"Print insertion error: {err}"
                     | Ok printedFunctions ->
                         let tcoFunctions = applyTco 0 coverageOptions sw printedFunctions None

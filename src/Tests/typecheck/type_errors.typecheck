@@ -1,7 +1,7 @@
 // Type error tests - expressions that should fail type checking
 
 // Arithmetic with booleans
-1 + true : error
+1 + true : Int64
 false - 5 : error
 true * false : error
 

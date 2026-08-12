@@ -150,13 +150,89 @@ let private ifConditionTypeMismatchMessage (expr: Expr) (actualType: Type) : str
 
 let private describeInterpolationActual (expr: Expr) (actualType: Type) : string =
     match expr with
-    | FloatLiteral f -> $"a Float ({f})"
+    | FloatLiteral f ->
+        let formatted = string f
+        let value =
+            if formatted.Contains(".") || formatted.Contains("e") || formatted.Contains("E") then formatted
+            else $"{formatted}.0"
+        $"a Float ({value})"
     | Int64Literal i -> $"an Int64 ({i})"
     | _ -> withIndefiniteArticle (typeToString actualType)
 
 let private interpolationTypeMismatchMessage (expr: Expr) (actualType: Type) : string =
     let actual = describeInterpolationActual expr actualType
-    $"Expected String in string interpolation, got {actual} instead"
+    let conversionModule =
+        match actualType with
+        | TInt8 -> Some "Int8"
+        | TUInt8 -> Some "UInt8"
+        | TInt16 -> Some "Int16"
+        | TUInt16 -> Some "UInt16"
+        | TInt32 -> Some "Int32"
+        | TUInt32 -> Some "UInt32"
+        | TInt64 -> Some "Int64"
+        | TUInt64 -> Some "UInt64"
+        | TInt128 -> Some "Int128"
+        | TUInt128 -> Some "UInt128"
+        | TInt -> Some "Int"
+        | TFloat64 -> Some "Float"
+        | TBool -> Some "Bool"
+        | TChar -> Some "Char"
+        | TRecord ("DateTime", []) -> Some "DateTime"
+        | _ -> None
+    let hint =
+        conversionModule
+        |> Option.map (fun moduleName -> $". Try wrapping it with `Stdlib.{moduleName}.toString`.")
+        |> Option.defaultValue ""
+    $"Expected String in string interpolation, got {actual} instead{hint}"
+
+/// Retain a let-bound literal in interpolation diagnostics. This substitution
+/// is deliberately limited to interpolation parts and respects lexical shadowing.
+let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (expr: Expr) : Expr =
+    let recurse = substituteInterpolationLiteral name literal
+    match expr with
+    | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
+    | InterpolatedString parts ->
+        parts
+        |> List.map (function
+            | StringText text -> StringText text
+            | StringExpr (Var varName) when varName = name -> StringExpr literal
+            | StringExpr inner -> StringExpr (recurse inner))
+        |> InterpolatedString
+    | Let (boundName, value, body) ->
+        let body' = if boundName = name then body else recurse body
+        Let (boundName, recurse value, body')
+    | LetPattern (pattern, value, body) ->
+        LetPattern (pattern, recurse value, recurse body)
+    | Lambda (parameters, body) when
+        parameters |> NonEmptyList.toList |> List.exists (fun (parameterName, _) -> parameterName = name) ->
+        Lambda (parameters, body)
+    | BinOp (op, left, right) -> BinOp (op, recurse left, recurse right)
+    | UnaryOp (op, inner) -> UnaryOp (op, recurse inner)
+    | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
+    | Call (functionName, callArgs) -> Call (functionName, NonEmptyList.map recurse callArgs)
+    | TypeApp (functionName, typeArgs, callArgs) -> TypeApp (functionName, typeArgs, NonEmptyList.map recurse callArgs)
+    | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
+    | TupleAccess (tuple, index) -> TupleAccess (recurse tuple, index)
+    | RecordLiteral (typeName, fields) -> RecordLiteral (typeName, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | RecordUpdate (record, updates) -> RecordUpdate (recurse record, updates |> List.map (fun (field, value) -> (field, recurse value)))
+    | RecordAccess (record, field) -> RecordAccess (recurse record, field)
+    | Constructor (typeName, variantName, payload) -> Constructor (typeName, variantName, Option.map recurse payload)
+    | Match (scrutinee, cases) ->
+        Match (
+            recurse scrutinee,
+            cases
+            |> List.map (fun matchCase ->
+                { matchCase with Guard = Option.map recurse matchCase.Guard; Body = recurse matchCase.Body })
+        )
+    | ListLiteral elements -> ListLiteral (List.map recurse elements)
+    | ListCons (heads, tail) -> ListCons (List.map recurse heads, recurse tail)
+    | Lambda (parameters, body) -> Lambda (parameters, recurse body)
+    | Apply (func, callArgs) -> Apply (recurse func, NonEmptyList.map recurse callArgs)
+    | Closure (functionName, captures) -> Closure (functionName, List.map recurse captures)
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
+    | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> expr
 
 let private isBuiltinUnwrapName (funcName: string) : bool =
     funcName = "Builtin.unwrap" || funcName = "Stdlib.Builtin.unwrap"
@@ -257,7 +333,7 @@ let rec private tryExtractKnownTestRuntimeErrorMessage
     | _ ->
         None
 
-let private tryFormatLiteralValue (expr: Expr) : string option =
+let rec private tryFormatLiteralValue (expr: Expr) : string option =
     match expr with
     | UnitLiteral -> Some "()"
     | Int64Literal i -> Some (string i)
@@ -270,12 +346,34 @@ let private tryFormatLiteralValue (expr: Expr) : string option =
     | UInt32Literal i -> Some (string i)
     | UInt64Literal i -> Some (string i)
     | UInt128Literal i -> Some (string i)
+    | BigIntLiteral i -> Some (string i)
     | BoolLiteral true -> Some "true"
     | BoolLiteral false -> Some "false"
     | StringLiteral s -> Some $"\"{s}\""
     | CharLiteral c -> Some $"'{c}'"
     | FloatLiteral f -> Some (string f)
+    | TupleLiteral elements ->
+        elements
+        |> List.fold (fun acc element ->
+            match acc, tryFormatLiteralValue element with
+            | Some rendered, Some item -> Some (rendered @ [item])
+            | _ -> None) (Some [])
+        |> Option.map (fun items ->
+            let joined = String.concat ", " items
+            $"({joined})")
     | _ -> None
+
+let rec private formatDeconstructionPattern (pattern: Pattern) : string =
+    match pattern with
+    | PVar _ -> "[variable]"
+    | PWildcard -> "_"
+    | PUnit -> "()"
+    | PTuple patterns ->
+        patterns
+        |> List.map formatDeconstructionPattern
+        |> String.concat ", "
+        |> fun text -> $"({text})"
+    | _ -> "[pattern]"
 
 let private formatFloatLiteralForPatternMismatch (f: float) : string =
     let formatted = string f
@@ -677,11 +775,15 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
     match expr with
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ -> expr
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> expr
+    | BoundaryRender (renderer, value) -> BoundaryRender (renderer, applySubstToExpr subst value)
     | BinOp (op, left, right) ->
         BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
     | UnaryOp (op, inner) ->
         UnaryOp (op, applySubstToExpr subst inner)
+    | LetPattern (pattern, value, body) ->
+        LetPattern (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
+
     | Let (name, value, body) ->
         Let (name, applySubstToExpr subst value, applySubstToExpr subst body)
     | If (cond, thenBr, elseBr) ->
@@ -901,8 +1003,12 @@ let private sumTypeHasPayload (variantLookup: VariantLookup) (sumTypeName: strin
         variantTypeName = sumTypeName && payloadTypeOpt.IsSome)
 
 /// Only tuple/record and payload-carrying sums need generated helpers.
-let private needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: Type) : bool =
+let rec private needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: Type) : bool =
     match typ with
+    | TFunction _ ->
+        true
+    | TList elemType ->
+        needsEqHelperForResolvedType variantLookup elemType
     | TTuple _
     | TRecord _ ->
         true
@@ -958,28 +1064,14 @@ let private buildEqExprForType
     let resolvedType = resolveType aliasReg typ
     match resolvedType with
     | TFunction _ ->
-        // Preserve side effects/runtime errors by evaluating both sides.
-        Let ("__dark_eq_fn_pair", TupleLiteral [leftExpr; rightExpr], BoolLiteral true)
+        makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
     | TString ->
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TList elemType ->
         let resolvedElemType = resolveType aliasReg elemType
         match resolvedElemType with
-        | TFunction _ ->
-            // Function-value equality is normalized to true, so list equality on
-            // function elements reduces to length equality.
-            let pairVar = "__dark_eq_list_pair"
-            let leftListExpr = TupleAccess (Var pairVar, 0)
-            let rightListExpr = TupleAccess (Var pairVar, 1)
-            Let (
-                pairVar,
-                TupleLiteral [leftExpr; rightExpr],
-                BinOp (
-                    Eq,
-                    TypeApp ("Stdlib.List.length", [resolvedElemType], NonEmptyList.singleton leftListExpr),
-                    TypeApp ("Stdlib.List.length", [resolvedElemType], NonEmptyList.singleton rightListExpr)
-                )
-            )
+        | _ when needsEqHelperForResolvedType variantLookup resolvedElemType ->
+            makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
         | _ ->
             TypeApp ("Stdlib.List.equals", [resolvedElemType], NonEmptyList.fromList [leftExpr; rightExpr])
     | _ when needsEqHelperForResolvedType variantLookup resolvedType ->
@@ -999,9 +1091,10 @@ let private buildEqExprForType
 /// bound: Set of names that are currently in scope (not free)
 let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
     match expr with
+    | BoundaryRender (_, value) -> collectFreeVars value bound
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | RuntimeError _ ->
         Set.empty
     | Var name ->
         if Set.contains name bound || isBuiltinTestNanName name then
@@ -1016,6 +1109,8 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         let valueFree = collectFreeVars value bound
         let bodyFree = collectFreeVars body (Set.add name bound)
         Set.union valueFree bodyFree
+    | LetPattern (_, value, body) ->
+        Set.union (collectFreeVars value bound) (collectFreeVars body bound)
     | If (cond, thenBranch, elseBranch) ->
         let condFree = collectFreeVars cond bound
         let thenFree = collectFreeVars thenBranch bound
@@ -1500,6 +1595,10 @@ let rec private checkExprWithParamNames
         |> Option.map (canonicalizeBareSumTypeRefs variantLookup)
 
     match expr with
+    | BoundaryRender (renderer, value) ->
+        checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+        |> Result.map (fun (_, value') -> (TString, BoundaryRender (renderer, value')))
+    | RuntimeError message -> Ok (TRuntimeError, RuntimeError message)
     | UnitLiteral ->
         // Unit literal is always TUnit
         match expectedType with
@@ -1674,33 +1773,22 @@ let rec private checkExprWithParamNames
                 |> Result.bind (fun (leftType, left') ->
                     match tryAsNumericType leftType with
                     | Some leftNumericType ->
-                        // Right operand must be same type
-                        checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some leftNumericType)
-                        |> Result.mapError (fun err ->
-                            match op, leftNumericType, err with
-                            | Add, TInt64, TypeMismatch (_, actualType, _) when not (isRuntimeErrorType actualType) ->
-                                GenericError
-                                    (formatLegacyParamTypeError
-                                        "Builtin.int64Add"
-                                        2
-                                        "b"
-                                        TInt64
-                                        actualType
-                                        right)
-                            | Mul, TInt64, TypeMismatch (_, actualType, _) when not (isRuntimeErrorType actualType) ->
-                                GenericError
-                                    (formatLegacyParamTypeError
-                                        "Builtin.int64Multiply"
-                                        2
-                                        "b"
-                                        TInt64
-                                        actualType
-                                        right)
-                            | _ ->
-                                err)
+                        // Runtime Dark operators inspect both operand values before
+                        // deciding whether their numeric representations agree.
+                        checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
                         |> Result.bind (fun (rightType, right') ->
                             if rightType <> leftNumericType then
-                                Error (TypeMismatch (leftNumericType, rightType, $"right operand of {opName}"))
+                                let errorMessage =
+                                    $"Cannot perform numeric operation on {typeToString leftType} and {typeToString rightType}"
+                                let evaluatedOperands = "__dark_numeric_operands"
+                                Ok (
+                                    leftNumericType,
+                                    Let (
+                                        evaluatedOperands,
+                                        TupleLiteral [left'; right'],
+                                        RuntimeError errorMessage
+                                    )
+                                )
                             else
                                 match expectedType with
                                 | Some expected when expected <> leftNumericType ->
@@ -1752,20 +1840,7 @@ let rec private checkExprWithParamNames
                 | _ -> Crash.crash $"Non-comparison operator reached comparison type-checking path: {op}"
 
             let lambdaLiteralFastPath : Result<Type * Expr, TypeError> option =
-                match (op, left, right) with
-                | Eq, Lambda (leftParams, _), Lambda (rightParams, _)
-                | Neq, Lambda (leftParams, _), Lambda (rightParams, _) ->
-                    if NonEmptyList.length leftParams <> NonEmptyList.length rightParams then
-                        None
-                    else
-                        let comparisonResult = if op = Eq then true else false
-                        match expectedType with
-                        | Some TBool | None ->
-                            Some (Ok (TBool, BoolLiteral comparisonResult))
-                        | Some other ->
-                            Some (Error (TypeMismatch (other, TBool, $"result of {opName}")))
-                | _ ->
-                    None
+                None
 
             match lambdaLiteralFastPath with
             | Some result ->
@@ -1785,7 +1860,98 @@ let rec private checkExprWithParamNames
                             | None ->
                                 Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
                             | Some comparableType ->
-                                let eqExpr = buildEqExprForType aliasReg variantLookup comparableType left' right'
+                                let tryNamedPartialState (candidate: Expr) : (string * (Type * Expr) list) option =
+                                    match candidate with
+                                    | Lambda (parameters, body) ->
+                                        let parameterList = NonEmptyList.toList parameters
+                                        let generatedPartial =
+                                            parameterList
+                                            |> List.forall (fun (name, _) -> name.StartsWith "__partial_")
+
+                                        let callDetails =
+                                            match body with
+                                            | Call (name, args) -> Some (name, [], NonEmptyList.toList args)
+                                            | TypeApp (name, typeArgs, args) -> Some (name, typeArgs, NonEmptyList.toList args)
+                                            | _ -> None
+
+                                        match generatedPartial, callDetails with
+                                        | true, Some (name, typeArgs, callArgs) ->
+                                            let remainingCount = List.length parameterList
+                                            let appliedCount = List.length callArgs - remainingCount
+                                            let trailingArgs =
+                                                if appliedCount >= 0 then List.skip appliedCount callArgs else []
+                                            let trailingAreParameters =
+                                                appliedCount > 0
+                                                && List.length trailingArgs = remainingCount
+                                                && List.forall2
+                                                    (fun arg (parameterName, _) -> arg = Var parameterName)
+                                                    trailingArgs
+                                                    parameterList
+
+                                            let concreteFunctionType =
+                                                match Map.tryFind name env with
+                                                | Some functionType when List.isEmpty typeArgs -> Some functionType
+                                                | Some functionType ->
+                                                    match Map.tryFind name genericFuncReg.Functions with
+                                                    | Some typeParams when List.length typeParams = List.length typeArgs ->
+                                                        let subst = List.zip typeParams typeArgs |> Map.ofList
+                                                        Some (applySubst subst functionType)
+                                                    | _ -> None
+                                                | None -> None
+
+                                            match trailingAreParameters, concreteFunctionType with
+                                            | true, Some (TFunction (parameterTypes, _)) when appliedCount <= List.length parameterTypes ->
+                                                let identity =
+                                                    if List.isEmpty typeArgs then name
+                                                    else
+                                                        let typeArgText = typeArgs |> List.map typeToString |> String.concat ", "
+                                                        $"{name}<{typeArgText}>"
+                                                Some (
+                                                    identity,
+                                                    List.zip
+                                                        (List.take appliedCount parameterTypes)
+                                                        (List.take appliedCount callArgs)
+                                                )
+                                            | _ -> None
+                                        | _ -> None
+                                    | _ -> None
+
+                                let buildNamedPartialEquality
+                                    (leftIdentity: string, leftState: (Type * Expr) list)
+                                    (rightIdentity: string, rightState: (Type * Expr) list)
+                                    : Expr =
+                                    let leftBindings =
+                                        leftState
+                                        |> List.mapi (fun index (typ, value) -> ($"__dark_partial_left_{index}", typ, value))
+                                    let rightBindings =
+                                        rightState
+                                        |> List.mapi (fun index (typ, value) -> ($"__dark_partial_right_{index}", typ, value))
+                                    let stateComparisons =
+                                        if leftIdentity = rightIdentity && List.length leftBindings = List.length rightBindings then
+                                            List.map2
+                                                (fun (leftName, typ, _) (rightName, _, _) ->
+                                                    buildEqExprForType
+                                                        aliasReg
+                                                        variantLookup
+                                                        typ
+                                                        (Var leftName)
+                                                        (Var rightName))
+                                                leftBindings
+                                                rightBindings
+                                        else
+                                            [BoolLiteral false]
+                                    let comparison = chainAndExpr stateComparisons
+                                    (leftBindings @ rightBindings)
+                                    |> List.foldBack
+                                        (fun (name, _, value) body -> Let (name, value, body))
+                                        <| comparison
+
+                                let eqExpr =
+                                    match resolveType aliasReg comparableType, tryNamedPartialState left', tryNamedPartialState right' with
+                                    | TFunction _, Some leftPartial, Some rightPartial ->
+                                        buildNamedPartialEquality leftPartial rightPartial
+                                    | _ ->
+                                        buildEqExprForType aliasReg variantLookup comparableType left' right'
                                 let comparisonExpr =
                                     if op = Neq then
                                         UnaryOp (Not, eqExpr)
@@ -1971,6 +2137,41 @@ let rec private checkExprWithParamNames
                         Error (TypeMismatch (expected, innerType, "result of ~~~"))
                     | _ -> Ok (innerType, UnaryOp (op, inner')))
 
+    | LetPattern (pattern, value, body) ->
+        checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+        |> Result.bind (fun (_, value') ->
+            let definitelyDoesNotMatch =
+                match pattern, value' with
+                | PUnit, UnitLiteral -> false
+                | PUnit, _ -> Option.isSome (tryFormatLiteralValue value')
+                | PTuple patterns, TupleLiteral values -> List.length patterns <> List.length values
+                | PTuple _, _ -> Option.isSome (tryFormatLiteralValue value')
+                | _ -> false
+
+            if definitelyDoesNotMatch then
+                let renderedValue =
+                    tryFormatLiteralValue value'
+                    |> Option.defaultWith (fun () -> Crash.crash "Known let-pattern mismatch lost its literal value")
+                let message =
+                    $"Could not deconstruct value {renderedValue} into pattern {formatDeconstructionPattern pattern}"
+                Ok (TRuntimeError, Let ("__", value', RuntimeError message))
+            else
+                let matchCase = {
+                    Patterns = NonEmptyList.singleton pattern
+                    Guard = None
+                    Body = body
+                }
+                checkExpr
+                    (Match (value', [matchCase]))
+                    env
+                    typeReg
+                    variantLookup
+                    genericFuncReg
+                    warningSettings
+                    moduleRegistry
+                    aliasReg
+                    expectedType)
+
     | Let (name, value, body) ->
         // Let binding: check value, extend environment, check body
         let valueExpectedType =
@@ -1982,7 +2183,11 @@ let rec private checkExprWithParamNames
         |> Result.bind (fun (valueType, value') ->
             let valueType = canonicalizeBareSumTypeRefs variantLookup valueType
             let env' = Map.add name valueType env
-            checkExpr body env' typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType
+            let bodyForChecking =
+                match value' with
+                | FloatLiteral _ | Int64Literal _ -> substituteInterpolationLiteral name value' body
+                | _ -> body
+            checkExpr bodyForChecking env' typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType
             |> Result.map (fun (bodyType, body') -> (bodyType, Let (name, value', body'))))
 
     | Var name ->
@@ -3087,17 +3292,20 @@ let rec private checkExprWithParamNames
                         let extraStr = String.concat ", " extraFields
                         Error (GenericError $"Unknown fields in record literal: {extraStr}")
                     else
-                        // Type check each field, infer generic bindings, and collect transformed fields.
+                        // Type check each field in source order. Record layout order is
+                        // applied during lowering, after every initializer has run.
+                        let expectedFieldTypes = Map.ofList expectedFields
+
                         let rec checkFieldsInOrder
-                            (remaining: (string * Type) list)
+                            (remaining: (string * Expr) list)
                             (accFields: (string * Expr) list)
                             (accBindings: (string * Type) list)
                             : Result<(string * Expr) list * (string * Type) list, TypeError> =
                             match remaining with
                             | [] -> Ok (List.rev accFields, accBindings)
-                            | (fname, expectedFieldType) :: rest ->
-                                match Map.tryFind fname fieldMap with
-                                | Some fieldExpr ->
+                            | (fname, fieldExpr) :: rest ->
+                                match Map.tryFind fname expectedFieldTypes with
+                                | Some expectedFieldType ->
                                     match
                                         checkExpr
                                             fieldExpr
@@ -3140,9 +3348,9 @@ let rec private checkExprWithParamNames
                                                         actualType
                                                         fieldExpr))
                                 | None ->
-                                    checkFieldsInOrder rest accFields accBindings // Already checked for missing fields
+                                    Crash.crash $"Record field '{fname}' disappeared after validation"
 
-                        checkFieldsInOrder expectedFields [] []
+                        checkFieldsInOrder fields [] []
                         |> Result.bind (fun (fields', rawBindings) ->
                             match consolidateBindings rawBindings with
                             | Error msg ->
@@ -4306,30 +4514,55 @@ let rec private buildEqHelperExpr
     | UseHelperCall, helperType when needsEqHelperForResolvedType variantLookup helperType ->
         Call (eqHelperName helperType, NonEmptyList.fromList [leftExpr; rightExpr])
 
-    | _, TFunction _ ->
-        // Preserve side effects/runtime errors by evaluating both sides.
-        Let ("__dark_eq_helper_fn_pair", TupleLiteral [leftExpr; rightExpr], BoolLiteral true)
+    | ExpandCurrent, TFunction _ ->
+        // Every function value is a closure whose first slot is the stable code
+        // identity. Lambda lifting gives each source lambda its own code identity;
+        // named function references reuse their resolved wrapper identity.
+        let leftVar = "__dark_eq_helper_fn_left"
+        let rightVar = "__dark_eq_helper_fn_right"
+        Let (
+            leftVar,
+            leftExpr,
+            Let (
+                rightVar,
+                rightExpr,
+                BinOp (Eq, TupleAccess (Var leftVar, 0), TupleAccess (Var rightVar, 0))
+            )
+        )
+
+    | ExpandCurrent, TList elemType ->
+        let resolvedElemType = resolveType aliasReg elemType
+        let leftHead = "__dark_eq_helper_list_left_head"
+        let leftTail = "__dark_eq_helper_list_left_tail"
+        let rightHead = "__dark_eq_helper_list_right_head"
+        let rightTail = "__dark_eq_helper_list_right_tail"
+        let headsEqual =
+            buildEqHelperExpr
+                aliasReg
+                typeReg
+                variantLookup
+                UseHelperCall
+                resolvedElemType
+                (Var leftHead)
+                (Var rightHead)
+        let tailsEqual =
+            Call (
+                eqHelperName resolvedType,
+                NonEmptyList.fromList [Var leftTail; Var rightTail]
+            )
+        let bothEmpty =
+            makeSimpleMatchCase (PTuple [PList []; PList []]) (BoolLiteral true)
+        let bothNonEmpty =
+            makeSimpleMatchCase
+                (PTuple [
+                    PListCons ([PVar leftHead], PVar leftTail)
+                    PListCons ([PVar rightHead], PVar rightTail)
+                ])
+                (BinOp (And, headsEqual, tailsEqual))
+        Match (TupleLiteral [leftExpr; rightExpr], [bothEmpty; bothNonEmpty; makeSimpleMatchCase PWildcard (BoolLiteral false)])
 
     | _, TList elemType ->
-        let resolvedElemType = resolveType aliasReg elemType
-        match resolvedElemType with
-        | TFunction _ ->
-            // Function-value equality is normalized to true, so list equality on
-            // function elements reduces to length equality.
-            let pairVar = "__dark_eq_helper_list_pair"
-            let leftListExpr = TupleAccess (Var pairVar, 0)
-            let rightListExpr = TupleAccess (Var pairVar, 1)
-            Let (
-                pairVar,
-                TupleLiteral [leftExpr; rightExpr],
-                BinOp (
-                    Eq,
-                    TypeApp ("Stdlib.List.length", [resolvedElemType], NonEmptyList.singleton leftListExpr),
-                    TypeApp ("Stdlib.List.length", [resolvedElemType], NonEmptyList.singleton rightListExpr)
-                )
-            )
-        | _ ->
-            TypeApp ("Stdlib.List.equals", [resolvedElemType], NonEmptyList.fromList [leftExpr; rightExpr])
+        TypeApp ("Stdlib.List.equals", [resolveType aliasReg elemType], NonEmptyList.fromList [leftExpr; rightExpr])
 
     | _, TString ->
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
@@ -4448,6 +4681,8 @@ let private collectDirectEqHelperDeps
     let resolvedType = resolveType aliasReg typ
     let deps =
         match resolvedType with
+        | TList elemType ->
+            [elemType] |> List.choose addIfHelperType
         | TTuple elemTypes ->
             elemTypes |> List.choose addIfHelperType
         | TRecord (recordTypeName, typeArgs) ->
@@ -4543,15 +4778,18 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         |> List.fold Set.union Set.empty
 
     match expr with
+    | BoundaryRender (_, value) -> collectEqHelperTypesFromExpr aliasReg value
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ ->
         Set.empty
     | BinOp (_, left, right) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg left) (collectEqHelperTypesFromExpr aliasReg right)
     | UnaryOp (_, inner) ->
         collectEqHelperTypesFromExpr aliasReg inner
     | Let (_, value, body) ->
+        Set.union (collectEqHelperTypesFromExpr aliasReg value) (collectEqHelperTypesFromExpr aliasReg body)
+    | LetPattern (_, value, body) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg value) (collectEqHelperTypesFromExpr aliasReg body)
     | If (cond, thenBranch, elseBranch) ->
         Set.union
@@ -4618,9 +4856,10 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
     let recurse = materializeEqHelperCallsInExpr aliasReg
 
     match expr with
+    | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ ->
         expr
     | BinOp (op, left, right) ->
         BinOp (op, recurse left, recurse right)
@@ -4628,6 +4867,8 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         UnaryOp (op, recurse inner)
     | Let (name, value, body) ->
         Let (name, recurse value, recurse body)
+    | LetPattern (pattern, value, body) ->
+        LetPattern (pattern, recurse value, recurse body)
     | If (cond, thenBranch, elseBranch) ->
         If (recurse cond, recurse thenBranch, recurse elseBranch)
     | Call (funcName, args) ->
@@ -4835,15 +5076,18 @@ let private specializeFunctionForTypeCheck
 
 let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
     match expr with
+    | BoundaryRender (_, value) -> collectTypeAppSpecs value
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | Closure _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | Closure _ | RuntimeError _ ->
         Set.empty
     | BinOp (_, left, right) ->
         Set.union (collectTypeAppSpecs left) (collectTypeAppSpecs right)
     | UnaryOp (_, inner) ->
         collectTypeAppSpecs inner
     | Let (_, value, body) ->
+        Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
+    | LetPattern (_, value, body) ->
         Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
     | If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeAppSpecs cond) (Set.union (collectTypeAppSpecs thenBranch) (collectTypeAppSpecs elseBranch))
