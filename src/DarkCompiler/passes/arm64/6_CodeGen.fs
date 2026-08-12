@@ -131,7 +131,6 @@ type private RcReleasePlanSummary = {
 }
 
 /// Reference-count runtime helpers required by the program's LIR instructions.
-/// Keeping these requirements together lets code generation discover them in one pass.
 type private RcHelperRequirements = {
     ListDecHelperLabels: Set<string>
     PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
@@ -142,6 +141,21 @@ type private RcHelperRequirements = {
     NeedsClosureRcIncHelper: bool
     NeedsClosureRcDecHelper: bool
     ReleasePlanSummaries: Map<bool * ANF.RcReleasePlan, RcReleasePlanSummary>
+}
+
+type private Arm64ProgramFacts = {
+    ClosurePayloadSizesFromParams: Map<string, int>
+    ClosurePayloadSizesFromAllocs: Map<string, int>
+    ClosureCaptureTypes: Map<string, AST.Type list>
+    RecursiveReleaseTypes: Set<AST.Type>
+}
+
+/// ARM64-only facts derived from the program before instruction selection.
+/// The struct wrapper keeps the joint fold from allocating another record per instruction.
+[<Struct>]
+type private Arm64ProgramMetadata = {
+    Facts: Arm64ProgramFacts
+    RcHelperRequirements: RcHelperRequirements
 }
 
 let private slotInitRootRetainTarget
@@ -1065,20 +1079,6 @@ let private generateNeededListRefCountDecHelpers
 
     staticHelpers @ plannedHelpers
 
-let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
-    functions
-    |> List.collect (fun func ->
-        func.CFG.Blocks
-        |> Map.toList
-        |> List.collect (fun (_, block) ->
-            block.Instrs
-            |> List.choose (function
-                | LIR.ClosureAlloc (_, funcName, captures) ->
-                    Some (funcName, (List.length captures + 1) * 8)
-                | _ ->
-                    None)))
-    |> Map.ofList
-
 let private generateClosurePayloadSizeResolver
     (ctx: CodeGenContext)
     (label: string -> string)
@@ -1248,22 +1248,6 @@ let private generateRecursiveSumRefCountDecHelper
         @ [ARM64Symbolic.RET]
     | _ ->
         Crash.crash $"ARM64 recursive sum RC helper requires a generic root release plan, got {releasePlan}"
-
-let private recursiveReleaseTypesInFunctions (functions: LIR.Function list) : Set<AST.Type> =
-    functions
-    |> List.collect (fun func ->
-        func.CFG.Blocks
-        |> Map.toList
-        |> List.collect (fun (_, block) -> block.Instrs))
-    |> List.fold (fun recursiveTypes instr ->
-        match instr with
-        | LIR.RefCountDec (_, _, _, Some metadata) ->
-            metadata.ReleasePlan
-            |> Option.map ANF.recursiveReleaseTypes
-            |> Option.defaultValue Set.empty
-            |> Set.union recursiveTypes
-        | _ ->
-            recursiveTypes) Set.empty
 
 let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_closure_rc_dec_{name}"
@@ -6430,44 +6414,7 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
 let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
-    let closurePayloadSizesFromParams =
-        functions
-        |> List.choose (fun func ->
-            match func.TypedParams with
-            | { Type = AST.TTuple fields } :: _ ->
-                Some (func.Name, List.length fields * 8)
-            | _ -> None)
-        |> Map.ofList
-    let closurePayloadSizes =
-        Map.fold
-            (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
-            closurePayloadSizesFromParams
-            (closurePayloadSizesFromAllocs functions)
-    let closureCaptureTypes =
-        functions
-        |> List.choose (fun func ->
-            match func.TypedParams with
-            | { Type = AST.TTuple (_funcPtrType :: captures) } :: _ ->
-                Some (func.Name, captures)
-            | _ ->
-                None)
-        |> Map.ofList
-
-    // Create code generation context with options
-    // StackSize and UsedCalleeSaved are set per-function in convertFunction
-    let ctx = {
-        Target = target
-        Options = options
-        SumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
-        RecordRegistry = recordRegistry
-        ClosurePayloadSizes = closurePayloadSizes
-        ClosureCaptureTypes = closureCaptureTypes
-        PlannedListDecHelperLabels = Map.empty
-        FunctionName = ""
-        StackSize = 0
-        UsedCalleeSaved = []
-        HeapOverflowLabel = ""
-    }
+    let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
 
     // Ensure _start is first (entry point)
     let sortedFunctions =
@@ -6692,6 +6639,16 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         ReleasePlanSummaries = Map.empty
     }
 
+    let emptyProgramMetadata = {
+        Facts = {
+            ClosurePayloadSizesFromParams = Map.empty
+            ClosurePayloadSizesFromAllocs = Map.empty
+            ClosureCaptureTypes = Map.empty
+            RecursiveReleaseTypes = Set.empty
+        }
+        RcHelperRequirements = emptyRcHelperRequirements
+    }
+
     let releasePlanSummary
         (includeStaticRootDependencies: bool)
         (releasePlan: ANF.RcReleasePlan)
@@ -6789,7 +6746,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) ->
             { requirements with NeedsClosureRcIncHelper = true }
         | LIR.RawSlotInit (_, _, _, valueType) ->
-            match slotInitRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
+            match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
             | Some SlotInitListRootRetain ->
                 { requirements with NeedsListRcIncHelper = true }
             | Some SlotInitDictRootRetain ->
@@ -6803,54 +6760,151 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         | _ ->
             requirements
 
-    let instructionRcHelperRequirements =
-        sortedFunctions
-        |> List.fold
-            (fun functionRequirements func ->
-                func.CFG.Blocks
-                |> Map.fold
-                    (fun blockRequirements _ block ->
-                        block.Instrs
-                        |> List.fold collectRcHelperRequirementsFromInstr blockRequirements)
-                    functionRequirements)
-            emptyRcHelperRequirements
+    let collectInstructionMetadata (metadata: Arm64ProgramMetadata) instr : Arm64ProgramMetadata =
+        match instr with
+        | LIR.ClosureAlloc (_, funcName, captures) ->
+            {
+                metadata with
+                    Facts = {
+                        metadata.Facts with
+                            ClosurePayloadSizesFromAllocs =
+                                Map.add
+                                    funcName
+                                    ((List.length captures + 1) * 8)
+                                    metadata.Facts.ClosurePayloadSizesFromAllocs
+                    }
+            }
+        | LIR.RefCountDec (_, _, _, rcMetadata) ->
+            {
+                metadata with
+                    RcHelperRequirements =
+                        collectRcHelperRequirementsFromInstr metadata.RcHelperRequirements instr
+                    Facts = {
+                        metadata.Facts with
+                            RecursiveReleaseTypes =
+                                rcMetadata
+                                |> rcMetadataReleasePlan
+                                |> Option.map ANF.recursiveReleaseTypes
+                                |> Option.defaultValue Set.empty
+                                |> Set.union metadata.Facts.RecursiveReleaseTypes
+                    }
+            }
+        | LIR.RefCountInc (_, _, LIR.TaggedList, _)
+        | LIR.RefCountInc (_, _, LIR.DictHeap, _)
+        | LIR.RefCountInc (_, _, LIR.ClosureHeap, _)
+        | LIR.RawSlotInit _ ->
+            {
+                metadata with
+                    RcHelperRequirements =
+                        collectRcHelperRequirementsFromInstr metadata.RcHelperRequirements instr
+            }
+        | _ ->
+            metadata
 
-    let closureCaptureRequirements =
-        closureCaptureTypes
+    let collectFunctionMetadata
+        (metadata: Arm64ProgramMetadata)
+        (func: LIR.Function)
+        : Arm64ProgramMetadata =
+        let withClosureParams =
+            match func.TypedParams with
+            | { Type = AST.TTuple fields } :: _ ->
+                let withPayloadSize = {
+                    metadata with
+                        Facts = {
+                            metadata.Facts with
+                                ClosurePayloadSizesFromParams =
+                                    Map.add
+                                        func.Name
+                                        (List.length fields * 8)
+                                        metadata.Facts.ClosurePayloadSizesFromParams
+                        }
+                }
+                match fields with
+                | _funcPtrType :: captures ->
+                    {
+                        withPayloadSize with
+                            Facts = {
+                                withPayloadSize.Facts with
+                                    ClosureCaptureTypes =
+                                        Map.add
+                                            func.Name
+                                            captures
+                                            withPayloadSize.Facts.ClosureCaptureTypes
+                            }
+                    }
+                | [] ->
+                    withPayloadSize
+            | _ ->
+                metadata
+
+        func.CFG.Blocks
         |> Map.fold
-            (fun functionRequirements _ captureTypes ->
-                captureTypes
-                |> List.fold
-                    (fun requirements captureType ->
-                        match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType with
-                        | None -> requirements
-                        | Some releasePlan ->
-                            let summary, requirements =
-                                releasePlanSummary true releasePlan requirements
-                            let withPlanRequirements = addReleasePlanRequirements summary requirements
-                            {
-                                withPlanRequirements with
-                                    ListDecHelperLabels =
-                                        Set.union
-                                            withPlanRequirements.ListDecHelperLabels
-                                            summary.ListDecHelperLabels
-                                    DictDecHelperLabels =
-                                        Set.union
-                                            withPlanRequirements.DictDecHelperLabels
-                                            summary.DictDecHelperLabels
-                            })
-                    functionRequirements)
-            emptyRcHelperRequirements
+            (fun blockMetadata _ block ->
+                block.Instrs
+                |> List.fold collectInstructionMetadata blockMetadata)
+            withClosureParams
 
-    let plannedListDecHelpers =
-        mergePlannedListDecHelperMaps
-            instructionRcHelperRequirements.PlannedListDecHelpers
-            closureCaptureRequirements.PlannedListDecHelpers
+    // Retain source function order for metadata. The replaced Map.ofList scans
+    // used last-writer-wins precedence; sortedFunctions is emission order only.
+    let instructionMetadata =
+        functions
+        |> List.fold collectFunctionMetadata emptyProgramMetadata
 
-    let plannedDictDecHelpers =
-        mergePlannedDictDecHelperMaps
-            instructionRcHelperRequirements.PlannedDictDecHelpers
-            closureCaptureRequirements.PlannedDictDecHelpers
+    let programMetadata =
+        let rcHelperRequirements =
+            instructionMetadata.Facts.ClosureCaptureTypes
+            |> Map.fold
+                (fun requirements _ captureTypes ->
+                    captureTypes
+                    |> List.fold
+                        (fun requirements captureType ->
+                            match tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType with
+                            | None -> requirements
+                            | Some releasePlan ->
+                                let summary, requirements =
+                                    releasePlanSummary true releasePlan requirements
+                                let withPlanRequirements = addReleasePlanRequirements summary requirements
+                                {
+                                    withPlanRequirements with
+                                        ListDecHelperLabels =
+                                            Set.union
+                                                withPlanRequirements.ListDecHelperLabels
+                                                summary.ListDecHelperLabels
+                                        DictDecHelperLabels =
+                                            Set.union
+                                                withPlanRequirements.DictDecHelperLabels
+                                                summary.DictDecHelperLabels
+                                })
+                        requirements)
+                instructionMetadata.RcHelperRequirements
+        { instructionMetadata with RcHelperRequirements = rcHelperRequirements }
+
+    let rcHelperRequirements = programMetadata.RcHelperRequirements
+
+    let closurePayloadSizes =
+        Map.fold
+            (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
+            programMetadata.Facts.ClosurePayloadSizesFromParams
+            programMetadata.Facts.ClosurePayloadSizesFromAllocs
+
+    // StackSize and UsedCalleeSaved are set per-function in convertFunction.
+    let ctx = {
+        Target = target
+        Options = options
+        SumShapeRegistry = sumShapeRegistry
+        RecordRegistry = recordRegistry
+        ClosurePayloadSizes = closurePayloadSizes
+        ClosureCaptureTypes = programMetadata.Facts.ClosureCaptureTypes
+        PlannedListDecHelperLabels = Map.empty
+        FunctionName = ""
+        StackSize = 0
+        UsedCalleeSaved = []
+        HeapOverflowLabel = ""
+    }
+
+    let plannedListDecHelpers = rcHelperRequirements.PlannedListDecHelpers
+
+    let plannedDictDecHelpers = rcHelperRequirements.PlannedDictDecHelpers
 
     let plannedListDecHelperLabels =
         plannedListDecHelpers
@@ -6884,9 +6938,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
 
     let neededListRcDecHelperLabels =
         let calledLabels =
-            Set.union
-                instructionRcHelperRequirements.ListDecHelperLabels
-                closureCaptureRequirements.ListDecHelperLabels
+            rcHelperRequirements.ListDecHelperLabels
 
         if Set.isEmpty calledLabels then
             Set.empty
@@ -6933,10 +6985,10 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
             && directSpecNeed spec)
 
     let needsListRcIncHelper =
-        instructionRcHelperRequirements.NeedsListRcIncHelper
+        rcHelperRequirements.NeedsListRcIncHelper
 
     let needsDictRcIncHelper =
-        instructionRcHelperRequirements.NeedsDictRcIncHelper
+        rcHelperRequirements.NeedsDictRcIncHelper
 
     let dictDecHelperDependencyLabels (helperLabel: string) : Set<string> =
         match Map.tryFind helperLabel plannedDictDecHelpers with
@@ -6986,8 +7038,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
             |> unionLabelSets
 
         let directLabels =
-            instructionRcHelperRequirements.DictDecHelperLabels
-            |> Set.union closureCaptureRequirements.DictDecHelperLabels
+            rcHelperRequirements.DictDecHelperLabels
             |> Set.union listHelperDictLabels
 
         directLabels
@@ -7018,10 +7069,10 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         Set.contains dictRefCountDecSumStringValueHelperLabel neededDictRcDecHelperLabels
 
     let needsClosureRcIncHelper =
-        instructionRcHelperRequirements.NeedsClosureRcIncHelper
+        rcHelperRequirements.NeedsClosureRcIncHelper
 
     let needsClosureRcDecHelper =
-        instructionRcHelperRequirements.NeedsClosureRcDecHelper
+        rcHelperRequirements.NeedsClosureRcDecHelper
 
     ResultList.collectResults (convertFunction heapOverflowTrapBody ctx) sortedFunctions
     |> Result.map (fun allFunctionInstrs ->
@@ -7078,7 +7129,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper || plannedDictHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])
         let recursiveSumRcHelpers =
-            recursiveReleaseTypesInFunctions functions
+            programMetadata.Facts.RecursiveReleaseTypes
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers @ recursiveSumRcHelpers) |> peepholeOptimize)
