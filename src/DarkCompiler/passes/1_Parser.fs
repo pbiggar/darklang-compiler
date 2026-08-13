@@ -1794,13 +1794,13 @@ let parse (tokens: Token list) : Result<Program, string> =
                 |> Result.bind (fun (payloadExpr, remaining) ->
                     match remaining with
                     | TRParen :: rest' ->
-                        Ok (Constructor (typeName, variantName, Some payloadExpr), rest')
+                        Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, Some payloadExpr), rest')
                     | _ -> Error "Expected ')' after constructor payload")
             | _ when isConstructor ->
                 // Qualified constructor without payload: Stdlib.Color.Red
                 let typeName = fullName.Substring(0, lastDotIdx)
                 let variantName = lastSegment
-                Ok (Constructor (typeName, variantName, None), afterQualified)
+                Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, None), afterQualified)
             | TLt :: typeArgsStart ->
                 // Qualified generic function call: Stdlib.List.length<t>(args)
                 let looksLikeTypeArgs tokens =
@@ -1919,7 +1919,7 @@ let parse (tokens: Token list) : Result<Program, string> =
             |> Result.bind (fun (payloadExpr, remaining) ->
                 match remaining with
                 | TRParen :: rest' ->
-                    Ok (Constructor ("", name, Some payloadExpr), rest')
+                    Ok (Constructor (UnresolvedConstructor None, name, Some payloadExpr), rest')
                 | _ -> Error "Expected ')' after constructor payload")
         | TIdent typeName :: TLt :: typeArgsStart when System.Char.IsUpper(typeName.[0]) ->
             match parseTypeArgs typeArgsStart [] with
@@ -1928,13 +1928,13 @@ let parse (tokens: Token list) : Result<Program, string> =
             | Ok _ ->
                 Error $"Expected record literal after type arguments for '{typeName}'"
             | Error _ ->
-                Ok (Constructor ("", typeName, None), TLt :: typeArgsStart)
+                Ok (Constructor (UnresolvedConstructor None, typeName, None), TLt :: typeArgsStart)
         | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
             // Record literal with type name: Point { x = 1, y = 2 }
             parseRecordLiteralFieldsWithTypeName typeName rest []
         | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
             // Constructor without payload (enum variant)
-            Ok (Constructor ("", name, None), rest)
+            Ok (Constructor (UnresolvedConstructor None, name, None), rest)
         | TIdent name :: rest ->
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)

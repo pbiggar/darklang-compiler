@@ -28,6 +28,7 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TRuntimeError
     | AST.TFunction _
     | AST.TTuple _
+    | AST.TEnumFields _
     | AST.TRecord _
     | AST.TSum _
     | AST.TList _

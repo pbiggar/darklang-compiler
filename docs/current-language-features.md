@@ -7,7 +7,7 @@ This document lists the language features currently supported by the Dark compil
 - Integers: arbitrary-precision signed `Int`, Int8/Int16/Int32/Int64/Int128, and UInt8/UInt16/UInt32/UInt64/UInt128; Bool booleans, Float floating-point numbers, String strings, Unit `()`
 - Tuples of any arity: `(Int64, Bool)`, `(Int64, Int64, Int64)`
 - Records with named fields: `type Point = { x: Int64, y: Int64 }`
-- Sum types (ADTs) with optional payloads: `type Option<T> = Some of T | None`
+- Interpreter-compatible sum types (ADTs): `type Option<'a> = | None | Some of 'a`
 - Lists as linked lists: `List<T>` with literals `[1, 2, 3]`
 - Dict types: `Dict<K, V>`
 - Type aliases: `type Id = Int64`, `type Pair<T> = (T, T)`
@@ -31,7 +31,7 @@ This document lists the language features currently supported by the Dark compil
 - Record construction and field access: `Point { x = 1, y = 2 }` and `p.x`
 - Record update: `{ p with x = 100 }`
 - List literals and cons: `[]`, `[1, 2, 3]`, `[1, ...rest]`
-- ADT constructors: `Some(42)`, `None`
+- ADT constructors: `Option.Some 42L`, `Option.None`
 - Function application and pipe operator: `f(x)` and `x |> f`
 - Structural equality and inequality for tuples, records, and ADTs
 
@@ -72,13 +72,12 @@ def factorial(n: Int64) : Int64 =
 
 def main() : Int64 = factorial(5)
 
-// Pattern matching on ADT
-type Option<T> = None | Some of T
+// Pattern matching on an ADT (interpreter syntax)
+type Option<'a> = | None | Some of 'a
 
-def main() : Int64 =
-  match Some(42) with
-  | Some(x) -> x * 2
-  | None -> 0
+match Option.Some 42L with
+| Some x -> x * 2L
+| None -> 0L
 
 // List processing (exact-length matching)
 def main() : Int64 =

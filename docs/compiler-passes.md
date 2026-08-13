@@ -72,6 +72,8 @@ Output: Let("x", BinOp(Add, IntLiteral(1), IntLiteral(2)),
 - **Type validation**: Ensure expressions have consistent types
 - **Error reporting**: Clear messages with source locations
 - **Free variable collection**: For closure analysis
+- **Nominal declaration validation**: Predeclare recursive ADT identities and reject duplicate/empty declarations, invalid generic parameters, and duplicate cases
+- **Constructor resolution**: Resolve unqualified or type-qualified constructor references to a declaring module/type identity and reject ambiguity
 
 ### Key Algorithms
 - **Top-down checking**: Push expected types down, validate bottom-up
@@ -104,6 +106,7 @@ Error:  Type mismatch: expected Int64, got String in binary operator
 ### Key Algorithms
 - **Fresh variable generation**: VarGen creates unique temporaries
 - **Let-binding normalization**: Every complex subexpression bound to temp
+- **ADT construction**: Evaluate constructor fields once in source order, then emit one canonical-tag construction operation
 
 ### Example Transformation
 ```

@@ -128,10 +128,10 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
     let eqExpr =
         Let (
             "a",
-            Constructor ("ChoiceTc", "ChoiceLeftTc", Some (Int64Literal 1L)),
+            Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", Some (Int64Literal 1L)),
             Let (
                 "b",
-                Constructor ("ChoiceTc", "ChoiceLeftTc", Some (Int64Literal 1L)),
+                Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", Some (Int64Literal 1L)),
                 BinOp (Eq, Var "a", Var "b")
             )
         )
@@ -239,6 +239,90 @@ let testComplexExpression () : TestResult =
             Int64Literal 2L)
     expectType expr TInt64
 
+let private expectDeclarationError (program: Program) (expectedMessage: string) : TestResult =
+    match checkInterpreterProgram program with
+    | Error (GenericError actual) when actual = expectedMessage -> Ok ()
+    | Error err -> Error $"Expected '{expectedMessage}', got: {typeErrorToString err}"
+    | Ok _ -> Error $"Expected declaration error: {expectedMessage}"
+
+let testDuplicateNominalTypeDeclarationRejected () : TestResult =
+    Program [
+        TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "A"; Payload = None }]))
+        TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "B"; Payload = None }]))
+        Expression UnitLiteral
+    ]
+    |> fun program -> expectDeclarationError program "Duplicate type declaration: DuplicateNominalTc"
+
+let testDuplicateConstructorDeclarationRejected () : TestResult =
+    Program [
+        TypeDef (
+            SumTypeDef (
+                "DuplicateCaseTc",
+                [],
+                [{ Name = "SameCaseTc"; Payload = None }; { Name = "SameCaseTc"; Payload = Some TInt64 }]
+            )
+        )
+        Expression UnitLiteral
+    ]
+    |> fun program -> expectDeclarationError program "Duplicate constructor declaration: DuplicateCaseTc.SameCaseTc"
+
+let testDuplicateAndUndeclaredTypeParametersRejected () : TestResult =
+    let duplicateProgram = Program [
+        TypeDef (SumTypeDef ("DuplicateParamTc", ["a"; "a"], [{ Name = "ParamCaseTc"; Payload = Some (TVar "a") }]))
+        Expression UnitLiteral
+    ]
+    let undeclaredProgram = Program [
+        TypeDef (SumTypeDef ("UndeclaredParamTc", ["a"], [{ Name = "ParamCaseTc"; Payload = Some (TVar "b") }]))
+        Expression UnitLiteral
+    ]
+    expectDeclarationError duplicateProgram "Duplicate type parameter: a in DuplicateParamTc"
+    |> Result.bind (fun () ->
+        expectDeclarationError undeclaredProgram "Undeclared type parameter: 'b in UndeclaredParamTc")
+
+let testEmptyNominalDeclarationsRejected () : TestResult =
+    let emptySum = Program [TypeDef (SumTypeDef ("EmptySumTc", [], [])); Expression UnitLiteral]
+    let emptyRecord = Program [TypeDef (RecordDef ("EmptyRecordTc", [], [])); Expression UnitLiteral]
+    expectDeclarationError emptySum "Enum declaration must contain at least one case: EmptySumTc"
+    |> Result.bind (fun () ->
+        expectDeclarationError emptyRecord "Record declaration must contain at least one field: EmptyRecordTc")
+
+let testInvalidDeclarationTypeReferencesRejected () : TestResult =
+    let unknownType = Program [
+        TypeDef (
+            SumTypeDef (
+                "UnknownPayloadTc",
+                [],
+                [{ Name = "UnknownPayloadCaseTc"; Payload = Some (TRecord ("MissingTypeTc", [])) }]
+            )
+        )
+        Expression UnitLiteral
+    ]
+    let wrongArity = Program [
+        TypeDef (SumTypeDef ("GenericTargetTc", ["a"], [{ Name = "GenericTargetCaseTc"; Payload = None }]))
+        TypeDef (
+            SumTypeDef (
+                "WrongArityTc",
+                [],
+                [{ Name = "WrongArityCaseTc"; Payload = Some (TSum ("GenericTargetTc", [])) }]
+            )
+        )
+        Expression UnitLiteral
+    ]
+    expectDeclarationError unknownType "Unknown type reference: MissingTypeTc in UnknownPayloadTc"
+    |> Result.bind (fun () ->
+        expectDeclarationError wrongArity "Type argument arity mismatch: GenericTargetTc expects 1, got 0 in WrongArityTc")
+
+let testConstructorIdentityCollisionRejected () : TestResult =
+    Program [
+        TypeDef (SumTypeDef ("CollisionType151Tc", [], [{ Name = "CollisionCaseTc"; Payload = None }]))
+        TypeDef (SumTypeDef ("CollisionType155Tc", [], [{ Name = "CollisionCaseTc"; Payload = None }]))
+        Expression UnitLiteral
+    ]
+    |> fun program ->
+        expectDeclarationError
+            program
+            "Constructor identity collision 1236: CollisionType151Tc.CollisionCaseTc, CollisionType155Tc.CollisionCaseTc"
+
 let tests = [
     ("Integer literal", testInt64Literal)
     ("Int128 literal", testInt128Literal)
@@ -252,6 +336,12 @@ let tests = [
     ("Negation", testNegation)
     ("Nested operations", testNestedOperations)
     ("Complex expression", testComplexExpression)
+    ("Duplicate nominal type declaration rejected", testDuplicateNominalTypeDeclarationRejected)
+    ("Duplicate constructor declaration rejected", testDuplicateConstructorDeclarationRejected)
+    ("Duplicate and undeclared type parameters rejected", testDuplicateAndUndeclaredTypeParametersRejected)
+    ("Empty nominal declarations rejected", testEmptyNominalDeclarationsRejected)
+    ("Invalid declaration type references rejected", testInvalidDeclarationTypeReferencesRejected)
+    ("Constructor identity collision rejected", testConstructorIdentityCollisionRejected)
 ]
 
 /// Run all type checking unit tests

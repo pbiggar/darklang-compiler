@@ -962,6 +962,19 @@ let private checkProgramWithBaseEnvForSyntax
     | CompilerSyntax ->
         TypeChecking.checkProgramWithBaseEnvAndSettings baseEnv false warningSettings program
 
+let private checkSyntheticPreambleWithBaseEnvForSyntax
+    (sourceSyntax: SourceSyntax)
+    (warningSettings: AST.WarningSettings)
+    (baseEnv: TypeChecking.TypeCheckEnv)
+    (program: AST.Program)
+    : Result<AST.Type * AST.Program * TypeChecking.TypeCheckEnv, TypeChecking.TypeError> =
+    let requireExplicitTypeArgs = sourceSyntax = InterpreterSyntax
+    TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
+        baseEnv
+        requireExplicitTypeArgs
+        warningSettings
+        program
+
 /// Parse and typecheck a preamble, returning typed AST + preamble typecheck env
 let analyzePreamble
     (sourceSyntax: SourceSyntax)
@@ -979,7 +992,7 @@ let analyzePreamble
      | InterpreterSyntax -> InterpreterParser.parseString allowInternal preambleSource)
     |> Result.mapError (fun err -> $"Preamble parse error: {err}")
     |> Result.bind (fun preambleAst ->
-        checkProgramWithBaseEnvForSyntax
+        checkSyntheticPreambleWithBaseEnvForSyntax
             sourceSyntax
             defaultWarningSettings
             stdlib.Context.TypeCheckEnv
@@ -1495,6 +1508,13 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 userRegistries.VariantLookup
                                         combinedVariantLookup
                                         |> Map.toList
+                                        |> List.choose (fun (lookupName, info) ->
+                                            let (typeName, _, _, _) = info
+                                            let prefix = $"{typeName}."
+                                            if lookupName.StartsWith(prefix) then
+                                                Some (lookupName.Substring(prefix.Length), info)
+                                            else
+                                                None)
                                         |> List.groupBy (fun (_, (typeName, _, _, _)) -> typeName)
                                         |> List.map (fun (typeName, variants) ->
                                             let typeParams =

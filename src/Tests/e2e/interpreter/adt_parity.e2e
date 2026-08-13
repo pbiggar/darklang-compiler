@@ -1,0 +1,53 @@
+// Interpreter ADT parity matrix.
+//
+// Every behavior in this file is pinned to compiler evidence revision
+// b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899 and darklang/dark revision
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. The implementation started at
+// compiler HEAD 0a919617e2390be93506ef367225fe23bfbbf00a.
+
+// Nullary and one-field construction use the interpreter declaration grammar.
+type ParityNullary = | ParityNone | ParitySome of Int64
+ParityNullary.ParityNone = stdout="ParityNullary.ParityNone\n" stderr=""
+
+type ParityPayload<'a> = | ParityNoPayload | ParityPayload of 'a
+ParityPayload.ParityPayload 7L = stdout="ParityPayload<Int64>.ParityPayload(7)\n" stderr=""
+(ParityPayload.ParityPayload 7L, ParityPayload.ParityPayload "seven") = stdout="(ParityPayload<Int64>.ParityPayload(7), ParityPayload<String>.ParityPayload(\"seven\"))\n" stderr=""
+
+type ParityGenericNullary<'a> = | ParityGenericNone | ParityGenericSome of 'a
+let parityGenericNone () : ParityGenericNullary<Int64> = ParityGenericNullary.ParityGenericNone
+parityGenericNone () = stdout="ParityGenericNullary<Int64>.ParityGenericNone\n" stderr=""
+
+// Multiple fields are not a single tuple field.
+type ParityFields<'a> = | ParityFields of first: 'a * label: String
+ParityFields.ParityFields(7L, "seven") = stdout="ParityFields<Int64>.ParityFields(7, \"seven\")\n" stderr=""
+
+// A parenthesized tuple remains one field.
+type ParityTuple<'a> = | ParityTuple of ('a * String)
+ParityTuple.ParityTuple((7L, "seven")) = stdout="ParityTuple<Int64>.ParityTuple((7, \"seven\"))\n" stderr=""
+
+// Recursive field references bind to the predeclared nominal type.
+type ParityTree<'a> = | ParityLeaf of 'a | ParityNode of ParityTree<'a> * ParityTree<'a>
+ParityTree.ParityNode(ParityTree.ParityLeaf 1L, ParityTree.ParityLeaf 2L) = stdout="ParityTree<Int64>.ParityNode(ParityTree<Int64>.ParityLeaf(1), ParityTree<Int64>.ParityLeaf(2))\n" stderr=""
+
+// Constructor arguments are evaluated once, from left to right.
+type ParityOrder = | ParityOrder of first: Int64 * second: Int64
+ParityOrder.ParityOrder(Builtin.testRuntimeError "first", Builtin.testRuntimeError "second") = error="first"
+
+// Exact field arity is checked before construction.
+type ParityArityFew = | ParityArityFew of Int64 * String
+ParityArityFew.ParityArityFew(1L) = error="Expected 2 fields in ParityArityFew.`ParityArityFew`, but got 1"
+
+type ParityArityMany = | ParityArityMany of Int64 * String
+ParityArityMany.ParityArityMany(1L, "one", true) = error="Expected 2 fields in ParityArityMany.`ParityArityMany`, but got 3"
+
+// A case name is ambiguous when more than one visible type declares it.
+type ParityAmbiguousLeft = | SharedParityCase
+type ParityAmbiguousRight = | SharedParityCase
+SharedParityCase = error="Ambiguous constructor reference 'SharedParityCase': constructor ParityAmbiguousLeft.SharedParityCase, constructor ParityAmbiguousRight.SharedParityCase"
+
+// Qualification selects the declaring nominal type despite a case collision.
+type ParityQualifiedLeft = | QualifiedParityCase
+type ParityQualifiedRight = | QualifiedParityCase
+ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedRight.QualifiedParityCase = stdout="false\n" stderr=""
+let parityLeft = ParityQualifiedLeft.QualifiedParityCase in let parityRight = ParityQualifiedRight.QualifiedParityCase in parityLeft == parityRight = stdout="false\n" stderr=""
+ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedLeft.QualifiedParityCase = stdout="true\n" stderr=""

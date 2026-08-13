@@ -8,6 +8,13 @@
 //
 // Platform-specific instruction generators receive a validated ARM64 target
 // configuration from code generation.
+//
+// User ADTs reach runtime helpers in a shared native layout established before
+// code generation: an immediate case tag for pure enums, or `[tag; payload]`
+// for boxed sums. Same-named cases from different types receive canonical
+// declaring-module/type identities in AST.fs; unique cases retain compact
+// ordinal tags. Option and Result retain their established 0/1 intrinsic ABI
+// while the type checker preserves their distinct nominal types.
 
 module Runtime
 

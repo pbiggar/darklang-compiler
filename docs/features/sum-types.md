@@ -1,175 +1,166 @@
-# Sum Types (ADTs)
+# Algebraic Data Types and Constructors
 
-This document describes how the Dark compiler handles algebraic data types
-(sum types / discriminated unions).
+This document records the compiler's user-defined enum behavior and the
+interpreter evidence used as its parity baseline.
 
-## Overview
+## Evidence revisions
 
-Sum types allow defining types with multiple variants, each optionally
-carrying a payload. They are the foundation for Option, Result, and
-user-defined types.
+The parity comparison is pinned to:
 
-## Syntax
+- compiler evidence revision `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`
+- darklang/dark interpreter revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
+- implementation base `0a919617e2390be93506ef367225fe23bfbbf00a`
 
-### Definition
-```dark
-type Color = Red | Green | Blue
+The historical DCB1 report at `8a402797` was used only to identify candidates.
+Every behavior retained below was checked again in the pinned sources. The
+same-source compiler matrix is `src/Tests/e2e/interpreter/adt_parity.e2e`;
+declaration failures that occur while an E2E preamble is built are covered by
+focused parser/type-checker tests instead.
 
-type Option<t> = Some of t | None
+Interpreter evidence is in `backend/src/LibParser/GRAMMAR.md`, enum declaration
+types in `backend/src/LibExecution/ProgramTypes.fs`, runtime `DEnum` in
+`backend/src/LibExecution/RuntimeTypes.fs`, construction in
+`backend/src/LibExecution/TypeChecker.fs`, and equality in
+`backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs` at the pinned revision.
+The pinned checkout and its tracked tests were source-audited directly. An
+exact-revision interpreter execution was also attempted, but that checkout
+could not restore because its generated `.paket/Paket.Restore.targets` was
+absent and the repository's devcontainer launcher was unavailable. Compiler
+expectations therefore encode the pinned interpreter source behavior; they are
+not presented as results from a different installed interpreter revision.
 
-type Result<t, e> = Ok of t | Error of e
-```
+## Public syntax
 
-### Construction
-```dark
-let c = Red
-let opt = Some(42)
-let res = Ok("success")
-```
-
-### Pattern Matching
-```dark
-match opt with
-| Some(x) -> x
-| None -> 0
-```
-
-## Runtime Representation
-
-Sum types use a tag-based representation:
-
-### Variants Without Payload
-```
-Red    → 0  (just the tag value)
-Green  → 1
-Blue   → 2
-```
-
-### Variants With Payload
-```
-Some(42) → [tag=0, payload=42]  (heap-allocated tuple)
-None     → 1                     (just the tag value)
-```
-
-Memory layout for variants with payloads:
-```
-Offset 0:  Tag (8 bytes)
-Offset 8:  Payload (8+ bytes depending on type)
-Offset N:  Refcount (8 bytes)
-```
-
-## Tag Assignment
-
-Tags are assigned in definition order starting from 0:
+Interpreter syntax is the public parity surface:
 
 ```dark
-type Traffic = Red | Yellow | Green
-// Red = 0, Yellow = 1, Green = 2
+type Color = | Red | Green | Blue
+
+type Option<'a> = | None | Some of 'a
+
+type Pair<'a, 'b> = | Pair of first: 'a * second: 'b
+
+type OneTuple<'a, 'b> = | OneTuple of ('a * 'b)
 ```
 
-The variant lookup maps names to tags:
-```fsharp
-type VariantLookup = Map<string, (typeName * typeParams * tagIndex * payloadType)>
-```
-
-## Compilation
-
-### Constructor Compilation
-
-In `2_AST_to_ANF.fs`, `AST.Constructor` compiles to:
-
-**Without payload:**
-```fsharp
-| AST.Constructor (_, variantName, None) ->
-    // Just return the tag value
-    Let (tempId, Atom (IntLiteral tag), ...)
-```
-
-**With payload:**
-```fsharp
-| AST.Constructor (_, variantName, Some payload) ->
-    // Allocate tuple: [tag, payload]
-    Let (tupleId, TupleAlloc [IntLiteral tag, payloadAtom], ...)
-```
-
-### Pattern Matching Compilation
-
-Matching on sum types:
-1. Load tag from value (or use value directly if no payload)
-2. Compare tag against variant's tag number
-3. If match, extract payload and bind variables
-4. Otherwise, try next pattern
-
-## Polymorphic Sum Types
-
-Generic sum types like `Option<t>` are monomorphized:
+The leading `|` and apostrophes on generic parameters are required. Fields in
+`Pair of A * B` are two constructor arguments. Parentheses in
+`OneTuple of (A * B)` preserve one tuple argument. Construction supports bare
+and declaring-type-qualified references:
 
 ```dark
-let x: Option<Int64> = Some(42)
-let y: Option<String> = Some("hi")
+Red
+Color.Red
+Option.Some 42L
+Pair.Pair(1L, "one")
+OneTuple.OneTuple((1L, "one"))
 ```
 
-Creates specialized types `Option_i64` and `Option_String` with
-concrete payload types.
+The interpreter parser rejects compiler-dialect declarations such as
+`type Option<a> = Some of a | None`, qualified declaration names, and `=>`
+lambdas. Compiler syntax remains an explicitly separate input dialect for the
+existing compiler stdlib and legacy `.e2e` corpus; it is not accepted by
+`--syntax=interpreter` and is not an interpreter parity claim.
 
-## Built-in Sum Types
+## Declaration and resolution model
 
-### Option
-```dark
-type Stdlib.Option.Option<t> = Some of t | None
+`AST.TEnumFields` preserves the difference between several enum fields and one
+tuple field. `AST.ConstructorReference` represents an unqualified reference,
+a source-qualified reference, or a resolved declaring module and type without
+an empty-string sentinel. Type checking predeclares all type names, validates
+type and case duplicates, generic parameters, empty declarations, and field
+duplicates, then resolves each constructor to its nominal declaring type.
+
+Case names may repeat in different types. An unqualified reference is rejected
+when more than one visible nominal type owns the case; qualification selects a
+unique declaration. A qualified lookup never falls back to an unrelated short
+name.
+
+The current compiler does not yet parse interpreter `module` declarations.
+Consequently, module-local lexical opening and same-name collision probes that
+require source modules remain an intentional, documented divergence. Fully
+qualified constructors from the prebuilt stdlib do preserve their module path
+and nominal type. Adding source modules is an independent language boundary,
+not part of ADT resolution.
+
+## Typing and evaluation
+
+Each payload use independently unifies the declaration's generic parameters
+with its actual fields. Recursive payload references resolve against the
+predeclared nominal type. Nullary cases are values. Payload cases require the
+exact declared field count; no application form silently bundles, drops, or
+invents fields.
+
+Payload expressions are evaluated exactly once from left to right. ANF lowering
+uses the same continuation-based atom binding as calls and tuple expressions,
+then emits one constructor allocation. Arity and resolution errors occur before
+runtime payload evaluation, matching the interpreter boundary.
+
+## Native identity and layout
+
+Cases whose display name occurs in more than one nominal declaration receive a
+deterministic tag derived from the complete canonical `declaring-type.case`
+identity. Unique case names retain compact declaration-order tags. Declaration
+validation rejects the unlikely event that two colliding-name canonical
+identities map to the same bounded native tag. This adaptive encoding preserves
+compact matches while ensuring that same-named constructors from different
+nominal types cannot collapse to one runtime identity.
+
+`Stdlib.Option.Option` and `Stdlib.Result.Result` intentionally retain their
+existing 0/1 native ABI because file, string, and other runtime intrinsics
+construct those values directly. This is an internal compiler divergence from
+the general encoding, not an observable nominal-equality divergence: their
+declaring types remain distinct in type checking, rendering, and equality.
+
+- A type whose cases are all nullary uses its case tag as an immediate.
+- If any case has a payload, all values of that type use a two-word fixed block:
+  case tag at offset 0 and payload (or zero for a nullary case) at offset 8.
+- Multiple enum fields use one payload tuple block, preserving the public field
+  count and order while retaining the existing backend and reference-counting
+  layout.
+
+Qualified entries, rather than collision-prone short aliases, build MIR/LIR
+runtime metadata. Both ARM64 and x64 therefore consume the same resolved
+nominal identity. Recursive managed payloads continue through the existing sum
+shape and reference-counting plans.
+
+## Rendering and equality
+
+Values render in interpreter form, including concrete generic arguments:
+
+```text
+Color.Red
+Option<Int64>.Some(42)
+Pair<Int64, String>.Pair(1, "one")
 ```
-Used for values that may or may not exist.
 
-### Result
-```dark
-type Stdlib.Result.Result<t, e> = Ok of t | Error of e
-```
-Used for computations that may fail.
+Multiple fields render comma-separated; a single tuple field retains nested
+parentheses. Recursive values render recursively.
 
-## Code Generation
+Equality first respects nominal declaring type and constructor identity, then
+recursively compares payload fields. Equal-looking cases from different types
+are unequal. Comparing distinct nominal enum types is permitted, evaluates both
+operands once, and produces `false` for `==` (`true` for `!=`).
 
-In `src/DarkCompiler/passes/arm64/6_CodeGen.fs` and
-`src/DarkCompiler/passes/x64/6_CodeGen.fs`:
+## Implementation map
 
-**Checking tags:**
-```assembly
-LDR X1, [X0]        ; Load tag from tuple
-CMP X1, #0          ; Compare to expected tag
-B.NE else_label     ; Branch if not equal
-```
+| File | Responsibility |
+|---|---|
+| `src/DarkCompiler/passes/1_InterpreterParser.fs` | Interpreter declaration grammar, field shape, constructor reference syntax |
+| `src/DarkCompiler/AST.fs` | Enum field shape, unresolved/resolved references, canonical runtime identity |
+| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
+| `src/DarkCompiler/passes/1.6_ValueRendering.fs` | Public enum rendering |
+| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | Resolved construction and once-only ordered payload evaluation |
+| `src/DarkCompiler/Runtime.fs` | Shared native runtime support used by generated rendering and equality paths |
+| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 consumption of shared sum metadata |
+| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 consumption of shared sum metadata |
 
-**Extracting payloads:**
-```assembly
-LDR X1, [X0, #8]    ; Load payload from offset 8
-```
+## Test matrix
 
-## Reference Counting
-
-Sum type values with payloads are heap-allocated and reference-counted:
-
-- payload constructors allocate a boxed fixed block with a trailing refcount
-- owned boxed sums are released at scope exit unless returned
-- variants without payloads are immediate tag integers and do not allocate
-- destructors release covered managed payload shapes recursively, including
-  dynamic strings and bytes, lists, dict roots, closures, tuples, records, and
-  selected nested sums
-- borrowed payload projections returned from a function are retained before the
-  parent sum is cleaned up
-
-`RcShape` still conservatively classifies sums in some paths. Pure enum
-classification and broader recursive payload planning remain part of the
-remaining refcounting work.
-
-## Implementation Files
-
-| File | Purpose |
-|------|---------|
-| `src/DarkCompiler/AST.fs` | `TSum`, `Constructor`, and `PConstructor` definitions |
-| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | Sum type registry, variant lookup, constructor typing, and pattern typing |
-| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | Constructor lowering and match compilation |
-| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 runtime representation for printing and reference-counting |
-| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 runtime representation for printing and reference-counting |
-
-## Tests
-
-See `src/Tests/e2e/adt.e2e` for sum type tests.
+The parity E2E matrix covers nullary and payload cases, generic instantiation,
+recursive types, multiple fields versus a tuple field, qualification,
+same-case collisions across nominal types, exact arity, left-to-right payload
+failure, rendering, and nominal equality. Compiler-pass tests cover duplicate
+types, parameters, constructors and fields, undeclared parameters, empty
+declarations, unknown type references, generic reference arity, removed
+compiler-only interpreter syntax, and resolved-reference AST shape.

@@ -94,6 +94,7 @@ and Token =
     | TBitXor      // ^ (bitwise xor)
     | TBitNot      // ~~~ (bitwise not)
     | TIdent of string
+    | TTypeVar of string // apostrophe-prefixed type variable; apostrophe is syntax, not part of identity
     | TEOF
 
 /// Tracks whether an interpreter lambda parameter type was inferred or written
@@ -564,7 +565,7 @@ let lex (input: string) : Result<Token list, string> =
                     // Still a char literal if we see a closing quote.
                     parseCharLiteral ()
                 | _ ->
-                    lexHelper afterTypeVar (TIdent typeVarName :: acc)
+                    lexHelper afterTypeVar (TTypeVar typeVarName :: acc)
             | _ ->
                 parseCharLiteral ()
 
@@ -660,9 +661,11 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "RawPtr" :: rest -> Ok (AST.TRawPtr, rest)  // Internal raw pointer type
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
         Ok (TVar typeName, rest)
+    | TTypeVar typeName :: rest ->
+        Ok (TVar typeName, rest)
     | TIdent typeName :: rest when System.Char.IsLower(typeName.[0]) || typeName.[0] = '_' ->
-        // Interpreter syntax allows apostrophe-prefixed type variables in type annotations
-        // without requiring explicit generic binders on function/type definitions.
+        // The interpreter permits bare lowercase type-variable references;
+        // declaration binders themselves still require apostrophes.
         Ok (TVar typeName, rest)
     | TIdent "List" :: TLt :: rest ->
         // List type: List<ElementType>
@@ -779,14 +782,14 @@ let parseType (tokens: Token list) : Result<Type * Token list, string> =
 /// Parse type parameters: <t, u, v> (names only, for function definitions)
 let rec parseTypeParams (tokens: Token list) (acc: string list) : Result<string list * Token list, string> =
     match tokens with
-    | TIdent name :: TGt :: rest when System.Char.IsLower(name.[0]) ->
+    | TTypeVar name :: TGt :: rest ->
         // Last type parameter
         Ok (List.rev (name :: acc), rest)
-    | TIdent name :: TComma :: rest when System.Char.IsLower(name.[0]) ->
+    | TTypeVar name :: TComma :: rest ->
         // More type parameters to come
         parseTypeParams rest (name :: acc)
-    | TIdent name :: _ when not (System.Char.IsLower(name.[0])) ->
-        Error $"Type parameter must start with lowercase letter: {name}"
+    | TIdent name :: _ ->
+        Error $"Interpreter type parameters require an apostrophe: '{name}"
     | TGt :: rest when List.isEmpty acc ->
         // Empty type parameters: <>
         Ok ([], rest)
@@ -906,7 +909,16 @@ let private parseVariantPayloadType (tokens: Token list) : Result<Type * Token l
             List.rev acc
 
     let normalizedTokens = stripLabels true tokens []
+    let isParenthesizedField =
+        match normalizedTokens with
+        | TLParen :: _ -> true
+        | _ -> false
+
     parseType normalizedTokens
+    |> Result.map (fun (payloadType, remaining) ->
+        match isParenthesizedField, payloadType with
+        | false, TTuple fields -> (TEnumFields fields, remaining)
+        | _ -> (payloadType, remaining))
 
 let private parseVariantPayloadTypeWithContext
     (typeParamSet: Set<string>)
@@ -924,7 +936,16 @@ let private parseVariantPayloadTypeWithContext
             List.rev acc
 
     let normalizedTokens = stripLabels true tokens []
+    let isParenthesizedField =
+        match normalizedTokens with
+        | TLParen :: _ -> true
+        | _ -> false
+
     parseTypeWithContext typeParamSet normalizedTokens
+    |> Result.map (fun (payloadType, remaining) ->
+        match isParenthesizedField, payloadType with
+        | false, TTuple fields -> (TEnumFields fields, remaining)
+        | _ -> (payloadType, remaining))
 
 let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
     match tokens with
@@ -997,8 +1018,8 @@ let rec parseQualifiedTypeName (firstName: string) (tokens: Token list) : string
 let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
     match tokens with
     | TType :: TIdent firstName :: rest when System.Char.IsUpper(firstName.[0]) ->
-        // Parse potentially qualified type name
-        let (typeName, afterName) = parseQualifiedTypeName firstName rest
+        let typeName = firstName
+        let afterName = rest
         // Check for type parameters: <t, e>
         let parseBody typeParams afterTypeParams =
             match afterTypeParams with
@@ -1008,27 +1029,6 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 parseRecordFieldsWithContext typeParamSet bodyRest []
                 |> Result.map (fun (fields, remaining) ->
                     (RecordDef (typeName, typeParams, fields), remaining))
-            | TEquals :: TIdent variantName :: TOf :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
-                // Sum type with first variant having payload: type Name = Variant of Type | ...
-                let typeParamSet = Set.ofList typeParams
-                parseVariantPayloadTypeWithContext typeParamSet bodyRest
-                |> Result.bind (fun (payloadType, afterType) ->
-                    let firstVariant = { Name = variantName; Payload = Some payloadType }
-                    match afterType with
-                    | TBar :: rest' ->
-                        // More variants
-                        parseVariantsWithContext typeParams rest' [firstVariant]
-                        |> Result.map (fun (variants, remaining) ->
-                            (SumTypeDef (typeName, typeParams, variants), remaining))
-                    | _ ->
-                        // Single variant sum type
-                        Ok (SumTypeDef (typeName, typeParams, [firstVariant]), afterType))
-            | TEquals :: TIdent variantName :: TBar :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
-                // Sum type with multiple variants: type Name = Variant1 | Variant2 | ...
-                let firstVariant = { Name = variantName; Payload = None }
-                parseVariantsWithContext typeParams bodyRest [firstVariant]
-                |> Result.map (fun (variants, remaining) ->
-                    (SumTypeDef (typeName, typeParams, variants), remaining))
             | TEquals :: TBar :: bodyRest ->
                 // Sum type where the first variant starts on the next line:
                 // type Name =
@@ -1038,55 +1038,14 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 |> Result.map (fun (variants, remaining) ->
                     (SumTypeDef (typeName, typeParams, variants), remaining))
             | TEquals :: rest' ->
-                // Could be a type alias or a single-variant sum type
-                // Try to parse as a type first
-                match rest' with
-                | TBar :: variantRest ->
-                    parseVariantsWithContext typeParams variantRest []
-                    |> Result.map (fun (variants, remaining) ->
-                        (SumTypeDef (typeName, typeParams, variants), remaining))
-                | _ ->
-                    let typeParamSet = Set.ofList typeParams
-                    match parseTypeWithContext typeParamSet rest' with
-                    | Ok (targetType, remaining) ->
-                        // Decide: type alias or single-variant sum type?
-                        // Rules:
-                        // 1. Primitive types (Int64, String, etc.) → TYPE ALIAS
-                        // 2. Generic types (List<T>, Result<T,E>) → TYPE ALIAS
-                        // 3. Tuple types ((T, U)) → TYPE ALIAS
-                        // 4. Function types ((T) -> U) → TYPE ALIAS
-                        // 5. Simple name (TRecord):
-                        //    - Same name as type being defined → SUM TYPE (recursive variant)
-                        //    - End of input → SUM TYPE (backwards compat for single-variant enums)
-                        //    - Otherwise → TYPE ALIAS (reference to existing type)
-                        match targetType with
-                        | TRecord (potentialVariant, _) when potentialVariant = typeName ->
-                            // Same name as type being defined - this is a recursive variant definition
-                            // e.g., type Unit2 = Unit2 defines a sum type with variant Unit2
-                            let variant = { Name = potentialVariant; Payload = None }
-                            Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
-                        | TRecord (potentialVariant, _) when
-                            // Not a primitive type and at end of input - treat as sum type for backwards compat
-                            potentialVariant <> "Int64" && potentialVariant <> "Int32" && potentialVariant <> "Int16" && potentialVariant <> "Int8" &&
-                            potentialVariant <> "UInt64" && potentialVariant <> "UInt32" && potentialVariant <> "UInt16" && potentialVariant <> "UInt8" &&
-                            potentialVariant <> "Bool" && potentialVariant <> "String" && potentialVariant <> "Float" &&
-                            (match remaining with [] -> true | _ -> false) ->
-                            let variant = { Name = potentialVariant; Payload = None }
-                            Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
-                        | _ ->
-                            // Type alias for:
-                            // - Primitive types (parsed as TInt64, TString, etc. directly by parseType)
-                            // - Generic types (TSum with type args, TList)
-                            // - Tuple types (TTuple)
-                            // - Function types (TFunction)
-                            // - User types with remaining tokens (assumed to be alias to existing type)
-                            Ok (TypeAlias (typeName, typeParams, targetType), remaining)
-                    | Error _ ->
-                        Error "Expected type expression after '=' in type alias or variant name"
+                let typeParamSet = Set.ofList typeParams
+                parseTypeWithContext typeParamSet rest'
+                |> Result.map (fun (targetType, remaining) ->
+                    (TypeAlias (typeName, typeParams, targetType), remaining))
             | _ -> Error "Expected '=' after type name in type definition"
         match afterName with
         | TLt :: rest' ->
-            // Generic type: type Name<t, e> = ...
+            // Generic type: type Name<'t, 'e> = ...
             parseTypeParams rest' []
             |> Result.bind (fun (typeParams, afterParams) ->
                 parseBody typeParams afterParams)
@@ -1574,6 +1533,10 @@ let parse (tokens: Token list) : Result<Program, string> =
             | [UnitLiteral] -> TypeApp (funcName, typeArgs, NonEmptyList.singleton argExpr)
             | _ -> TypeApp (funcName, typeArgs, NonEmptyList.snoc args argExpr)
         | Constructor (typeName, variantName, None) -> Constructor (typeName, variantName, Some argExpr)
+        | Constructor (typeName, variantName, Some (TupleLiteral existingFields)) ->
+            Constructor (typeName, variantName, Some (TupleLiteral (existingFields @ [argExpr])))
+        | Constructor (typeName, variantName, Some existingField) ->
+            Constructor (typeName, variantName, Some (TupleLiteral [existingField; argExpr]))
         | Apply (funcExpr, existingArgs) ->
             match funcExpr with
             // Preserve uncurried lambda applications as a single Apply node
@@ -2214,7 +2177,8 @@ let parse (tokens: Token list) : Result<Program, string> =
             | _ when isConstructor ->
                 let typeName = fullName.Substring(0, lastDotIdx)
                 let variantName = lastSegment
-                if canStartApplicationArg afterQualified
+                if (match afterQualified with | TLParen :: _ -> false | _ -> true)
+                   && canStartApplicationArg afterQualified
                    && not (isRecordFieldBoundary afterQualified) then
                     // Qualified constructor with interpreter-style payload:
                     // Stdlib.Option.Option.Some 5L
@@ -2222,10 +2186,10 @@ let parse (tokens: Token list) : Result<Program, string> =
                     |> Result.bind (fun (payloadBase, afterPayloadBase) ->
                         parsePostfix payloadBase afterPayloadBase
                         |> Result.map (fun (payloadExpr, remaining) ->
-                            (Constructor (typeName, variantName, Some payloadExpr), remaining)))
+                            (Constructor (UnresolvedConstructor (Some typeName), variantName, Some payloadExpr), remaining)))
                 else
                     // Qualified constructor without payload: Stdlib.Color.Red
-                    Ok (Constructor (typeName, variantName, None), afterQualified)
+                    Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, None), afterQualified)
             | TLParen :: TRParen :: rest ->
                 // Qualified zero-arg call: Stdlib.Module.fn()
                 Ok (Call (fullName, NonEmptyList.singleton UnitLiteral), rest)
@@ -2276,20 +2240,22 @@ let parse (tokens: Token list) : Result<Program, string> =
             | Ok _ ->
                 Error $"Expected record literal after type arguments for '{typeName}'"
             | Error _ ->
-                Ok (Constructor ("", typeName, None), TLt :: typeArgsStart)
+                Ok (Constructor (UnresolvedConstructor None, typeName, None), TLt :: typeArgsStart)
         | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
             // Record literal with type name: Point { x = 1, y = 2 }
             parseRecordLiteralFieldsWithTypeName typeName rest []
         | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
             // Constructor, optionally with interpreter-style payload: Some 5L
-            if canStartApplicationArg rest && not (isRecordFieldBoundary rest) then
+            if (match rest with | TLParen :: _ -> false | _ -> true)
+               && canStartApplicationArg rest
+               && not (isRecordFieldBoundary rest) then
                 parsePrimaryBase rest
                 |> Result.bind (fun (payloadBaseExpr, afterPayloadBase) ->
                     parsePostfix payloadBaseExpr afterPayloadBase
                     |> Result.map (fun (payloadExpr, remaining) ->
-                        (Constructor ("", name, Some payloadExpr), remaining)))
+                        (Constructor (UnresolvedConstructor None, name, Some payloadExpr), remaining)))
             else
-                Ok (Constructor ("", name, None), rest)
+                Ok (Constructor (UnresolvedConstructor None, name, None), rest)
         | TIdent name :: rest ->
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)
@@ -2585,8 +2551,8 @@ let parse (tokens: Token list) : Result<Program, string> =
                                 match NonEmptyList.toList args with
                                 | [singleArg] ->
                                     Constructor (typeName, variantName, Some singleArg)
-                                | _ ->
-                                    Apply (expr, args)
+                                | fields ->
+                                    Constructor (typeName, variantName, Some (TupleLiteral fields))
                             | _ ->
                                 Apply (expr, args)
                         parsePostfix appliedExpr remaining)

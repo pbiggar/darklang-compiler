@@ -682,7 +682,11 @@ let private analyzePreambleWithReducedFunctionSet
         let reducedProgram =
             Program (reducedTopLevels @ [Expression (Int64Literal 0L)])
 
-        typeCheckProgramForSourceSyntax spec.SourceSyntax stdlib.Context.TypeCheckEnv reducedProgram
+        TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
+            stdlib.Context.TypeCheckEnv
+            (spec.SourceSyntax = CompilerLibrary.InterpreterSyntax)
+            CompilerLibrary.defaultWarningSettings
+            reducedProgram
         |> Result.mapError TypeChecking.typeErrorToString
         |> Result.map (fun (_programType, typedPreambleAst, preambleTypeCheckEnv) ->
             let preambleGenericDefs = AST_to_ANF.extractGenericFuncDefs typedPreambleAst

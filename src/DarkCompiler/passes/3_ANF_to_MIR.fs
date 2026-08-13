@@ -43,14 +43,25 @@ let private mkRecordField (name: string) (typ: AST.Type) : MIR.RecordField =
 /// VariantLookup: variantName -> (typeName, typeParams, tagIndex, payloadType)
 /// VariantRegistry: typeName -> TypeVariants (with named record types)
 let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.VariantRegistry =
-    variantLookup
-    |> Map.toList
-    |> List.choose (fun (variantName, (typeName, typeParams, tagIndex, payloadType)) ->
-        // VariantLookup also contains fully-qualified aliases for resolving
-        // constructors with colliding short names. Only the short-name entry
-        // belongs in runtime variant metadata.
-        if variantName.StartsWith($"{typeName}.") then None
-        else Some (typeName, typeParams, (variantName, tagIndex, payloadType)))
+    let entries = variantLookup |> Map.toList
+    let canonicalEntries =
+        entries
+        |> List.choose (fun (variantName, (typeName, typeParams, tagIndex, payloadType)) ->
+        // Qualified entries are canonical and cannot be overwritten by a
+        // same-named case from another nominal type. Short entries exist only
+        // for source resolution.
+            let prefix = $"{typeName}."
+            if variantName.StartsWith(prefix) then
+                Some (typeName, typeParams, (variantName.Substring(prefix.Length), tagIndex, payloadType))
+            else
+                None)
+    let canonicalTypes = canonicalEntries |> List.map (fun (typeName, _, _) -> typeName) |> Set.ofList
+    let fixtureOnlyShortEntries =
+        entries
+        |> List.choose (fun (variantName, (typeName, typeParams, tagIndex, payloadType)) ->
+            if Set.contains typeName canonicalTypes then None
+            else Some (typeName, typeParams, (variantName, tagIndex, payloadType)))
+    canonicalEntries @ fixtureOnlyShortEntries
     |> List.groupBy (fun (typeName, _, _) -> typeName)
     |> List.map (fun (typeName, entries) ->
         match entries with

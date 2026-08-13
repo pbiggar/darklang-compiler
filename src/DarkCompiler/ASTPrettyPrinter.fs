@@ -111,6 +111,8 @@ let rec private formatType (typ: Type) : string =
     | TTuple elemTypes ->
         let elemText = elemTypes |> List.map formatType |> String.concat ", "
         $"({elemText})"
+    | TEnumFields fieldTypes ->
+        fieldTypes |> List.map formatType |> String.concat " * "
     | TRecord (name, []) -> formatIdentifierPath name
     | TRecord (name, typeArgs) ->
         let argsText = typeArgs |> List.map formatType |> String.concat ", "
@@ -644,12 +646,12 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             | _ ->
                 parenthesizeIfNeeded recordExpr recordBaseText
         $"{recordText}.{formatIdentifierSegment fieldName}"
-    | Constructor (typeName, variantName, payload) ->
+    | Constructor (constructorReference, variantName, payload) ->
         let fullName =
             let formattedVariantName = formatIdentifierSegment variantName
-            if typeName = "" then
-                formattedVariantName
-            else
+            match constructorReferenceTypeName constructorReference with
+            | None -> formattedVariantName
+            | Some typeName ->
                 $"{formatIdentifierPath typeName}.{formattedVariantName}"
         match payload with
         | None -> fullName
@@ -765,7 +767,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             match funcExpr, argsList with
             // Preserve Apply-vs-Constructor distinction for interpreter parser
             // by printing constructor application in pipe form.
-            | Constructor (_, _, None), [singleArg] ->
+            | Constructor _, [singleArg] ->
                 $"{formatExpr syntax singleArg} |> {formatExpr syntax funcExpr}"
             | TupleLiteral _, _ ->
                 let funcText = formatExpr syntax funcExpr
@@ -825,7 +827,10 @@ let private formatFunctionDef (syntax: Syntax) (funcDef: FunctionDef) : string =
         let typeParamsText =
             if List.isEmpty funcDef.TypeParams then ""
             else
-                let joined = String.concat ", " funcDef.TypeParams
+                let joined =
+                    funcDef.TypeParams
+                    |> List.map (fun name -> $"'{name}")
+                    |> String.concat ", "
                 $"<{joined}>"
         let paramsText =
             funcDef.Params
@@ -839,11 +844,17 @@ let private formatFunctionDef (syntax: Syntax) (funcDef: FunctionDef) : string =
                     |> String.concat ", ")
         $"let {formatIdentifierSegment funcDef.Name}{typeParamsText}({paramsText}) : {formatType funcDef.ReturnType} = {formatExpr syntax funcDef.Body}"
 
-let private formatTypeDef (typeDef: TypeDef) : string =
+let private formatTypeDef (syntax: Syntax) (typeDef: TypeDef) : string =
     let formatTypeParams (typeParams: string list) : string =
         if List.isEmpty typeParams then ""
         else
-            let joined = String.concat ", " typeParams
+            let joined =
+                typeParams
+                |> List.map (fun name ->
+                    match syntax with
+                    | CompilerSyntax -> name
+                    | InterpreterSyntax -> $"'{name}")
+                |> String.concat ", "
             $"<{joined}>"
 
     match typeDef with
@@ -863,14 +874,15 @@ let private formatTypeDef (typeDef: TypeDef) : string =
                 | Some payloadType ->
                     $"{formatIdentifierSegment variant.Name} of {formatType payloadType}")
             |> String.concat " | "
-        $"type {formatIdentifierSegment name}{formatTypeParams typeParams} = {variantsText}"
+        let leadingBar = if syntax = InterpreterSyntax then "| " else ""
+        $"type {formatIdentifierSegment name}{formatTypeParams typeParams} = {leadingBar}{variantsText}"
     | TypeAlias (name, typeParams, targetType) ->
         $"type {formatIdentifierSegment name}{formatTypeParams typeParams} = {formatType targetType}"
 
 let private formatTopLevel (syntax: Syntax) (topLevel: TopLevel) : string =
     match topLevel with
     | FunctionDef funcDef -> formatFunctionDef syntax funcDef
-    | TypeDef typeDef -> formatTypeDef typeDef
+    | TypeDef typeDef -> formatTypeDef syntax typeDef
     | Expression expr -> formatExpr syntax expr
 
 let formatProgram (syntax: Syntax) (Program items: Program) : string =

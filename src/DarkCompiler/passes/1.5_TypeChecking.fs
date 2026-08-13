@@ -81,6 +81,8 @@ let rec typeToString (t: Type) : string =
     | TTuple elemTypes ->
         let elemsStr = elemTypes |> List.map typeToString |> String.concat ", "
         $"({elemsStr})"
+    | TEnumFields fieldTypes ->
+        fieldTypes |> List.map typeToString |> String.concat " * "
     | TRecord (name, []) -> name
     | TRecord (name, typeArgs) ->
         let argsStr = typeArgs |> List.map typeToString |> String.concat ", "
@@ -501,6 +503,7 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
     | TFunction (paramTypes, retType) ->
         TFunction (List.map (applyTypeVarRenaming subst) paramTypes, applyTypeVarRenaming subst retType)
     | TTuple elems -> TTuple (List.map (applyTypeVarRenaming subst) elems)
+    | TEnumFields fields -> TEnumFields (List.map (applyTypeVarRenaming subst) fields)
     | TSum (name, args) -> TSum (name, List.map (applyTypeVarRenaming subst) args)
     | TRecord (name, args) -> TRecord (name, List.map (applyTypeVarRenaming subst) args)
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
@@ -534,15 +537,25 @@ type SumTypeRegistry = Map<string, (string * int * Type option) list>
 type VariantLookup = Map<string, (string * string list * int * Type option)>
 
 let private tryFindVariant
-    (constructorTypeName: string)
+    (constructorReference: ConstructorReference)
     (variantName: string)
     (variantLookup: VariantLookup)
     : (string * string list * int * Type option) option =
-    if constructorTypeName = "" then
-        Map.tryFind variantName variantLookup
-    else
+    match constructorReferenceTypeName constructorReference with
+    | None -> Map.tryFind variantName variantLookup
+    | Some constructorTypeName ->
         Map.tryFind $"{constructorTypeName}.{variantName}" variantLookup
-        |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
+
+let private unqualifiedVariantOwnerCount
+    (variantName: string)
+    (variantLookup: VariantLookup)
+    : int =
+    variantLookup
+    |> Map.toList
+    |> List.choose (fun (lookupName, (typeName, _, _, _)) ->
+        if lookupName = $"{typeName}.{variantName}" then Some typeName else None)
+    |> List.distinct
+    |> List.length
 
 /// Generic function registry and call-site policy controls.
 /// `Functions` contains entries only for functions that have type parameters.
@@ -617,6 +630,8 @@ let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (ty
         TFunction (List.map (applySubstWithSeen seen subst) paramTypes, applySubstWithSeen seen subst returnType)
     | TTuple elemTypes ->
         TTuple (List.map (applySubstWithSeen seen subst) elemTypes)
+    | TEnumFields fieldTypes ->
+        TEnumFields (List.map (applySubstWithSeen seen subst) fieldTypes)
     | TRecord (name, typeArgs) ->
         TRecord (name, List.map (applySubstWithSeen seen subst) typeArgs)
     | TList elemType ->
@@ -646,6 +661,8 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
         collectTypeVarsInType returnType withParams
     | TTuple elemTypes ->
         elemTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
+    | TEnumFields fieldTypes ->
+        fieldTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | TRecord (_, typeArgs) ->
         typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | TSum (_, typeArgs) ->
@@ -706,6 +723,8 @@ let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : T
         TFunction (List.map (resolveAliasTargetType aliasReg) paramTypes, resolveAliasTargetType aliasReg returnType)
     | TTuple elemTypes ->
         TTuple (List.map (resolveAliasTargetType aliasReg) elemTypes)
+    | TEnumFields fieldTypes ->
+        TEnumFields (List.map (resolveAliasTargetType aliasReg) fieldTypes)
     | TList elemType ->
         TList (resolveAliasTargetType aliasReg elemType)
     | TDict (keyType, valueType) ->
@@ -880,6 +899,8 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
         TFunction (List.map (resolveType aliasReg) paramTypes, resolveType aliasReg returnType)
     | TTuple elemTypes ->
         TTuple (List.map (resolveType aliasReg) elemTypes)
+    | TEnumFields fieldTypes ->
+        TEnumFields (List.map (resolveType aliasReg) fieldTypes)
     | TList elemType ->
         TList (resolveType aliasReg elemType)
     | TDict (keyType, valueType) ->
@@ -914,6 +935,8 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Typ
             TFunction (List.map canonicalize paramTypes, canonicalize returnType)
         | TTuple elemTypes ->
             TTuple (List.map canonicalize elemTypes)
+        | TEnumFields fieldTypes ->
+            TEnumFields (List.map canonicalize fieldTypes)
         | TList elemType ->
             TList (canonicalize elemType)
         | TDict (keyType, valueType) ->
@@ -1353,6 +1376,19 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
                     | _, Error e -> Error e) (Ok [])
         | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Tuple type
         | _ -> Error $"Expected tuple, got {typeToString actual}"
+    | TEnumFields patternFields ->
+        match actual with
+        | TTuple actualFields when List.length patternFields = List.length actualFields ->
+            List.zip patternFields actualFields
+            |> List.map (fun (patternField, actualField) -> matchTypes patternField actualField)
+            |> List.fold (fun acc result ->
+                match acc, result with
+                | Ok bindings, Ok more -> Ok (bindings @ more)
+                | Error err, _ -> Error err
+                | _, Error err -> Error err) (Ok [])
+        | TTuple actualFields ->
+            Error $"Enum field arity mismatch: expected {List.length patternFields}, got {List.length actualFields}"
+        | _ -> Error $"Expected {List.length patternFields} enum fields, got {typeToString actual}"
     | TDict (patternKey, patternValue) ->
         match actual with
         | TDict (actualKey, actualValue) ->
@@ -1835,8 +1871,40 @@ let rec private checkExprWithParamNames
                     match op with
                     | Eq | Neq ->
                     // Equality works on any type - both operands must be same type
-                        checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some leftType)
+                        let rightWithExpected =
+                            checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some leftType)
+                        let rightResult =
+                            match resolveType aliasReg leftType, rightWithExpected with
+                            | TSum _, Error (TypeMismatch _) ->
+                                // A distinct nominal enum is a valid equality
+                                // operand. Retry without forcing the left type;
+                                // same-type generic calls keep the contextual
+                                // inference from the successful first check.
+                                checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                            | _ -> rightWithExpected
+
+                        rightResult
                         |> Result.bind (fun (rightType, right') ->
+                            let distinctNominalResult =
+                                match resolveType aliasReg leftType, resolveType aliasReg rightType with
+                                | TSum (leftName, _), TSum (rightName, _) when leftName <> rightName ->
+                                    let evaluatedOperands = "__dark_nominal_equality_operands"
+                                    let result = BoolLiteral (op = Neq)
+                                    Some (
+                                        Ok (
+                                            TBool,
+                                            Let (
+                                                evaluatedOperands,
+                                                TupleLiteral [left'; right'],
+                                                result
+                                            )
+                                        )
+                                    )
+                                | _ -> None
+
+                            match distinctNominalResult with
+                            | Some result -> result
+                            | None ->
                             // In generic contexts, one side can still contain type variables
                             // while the other side has become concrete.
                             match reconcileTypes (Some aliasReg) leftType rightType with
@@ -3403,12 +3471,52 @@ let rec private checkExprWithParamNames
             | other ->
                 Error (GenericError $"Cannot access .{fieldName} on non-record type {typeToString other}"))
 
-    | Constructor (constrTypeName, variantName, payload) ->
+    | Constructor (constructorReference, variantName, payload) ->
         // Look up the variant to find its type and expected payload
-        match tryFindVariant constrTypeName variantName variantLookup with
+        if genericFuncReg.RequireExplicitTypeArgsForBareCalls
+           && constructorReference = UnresolvedConstructor None
+           && unqualifiedVariantOwnerCount variantName variantLookup > 1 then
+            Error (GenericError $"Ambiguous constructor: {variantName}")
+        else
+        let resolvedVariant =
+            match tryFindVariant constructorReference variantName variantLookup with
+            | Some found -> Some found
+            | None when not genericFuncReg.RequireExplicitTypeArgsForBareCalls ->
+                Map.tryFind variantName variantLookup
+            | None -> None
+        match resolvedVariant with
         | None ->
             Error (GenericError $"Unknown constructor: {variantName}")
         | Some (typeName, typeParams, _tag, expectedPayload) ->
+            let resolvedReference = resolvedConstructorReference typeName
+            let resolvedExpr payload = Constructor (resolvedReference, variantName, payload)
+            let payloadArityError =
+                match expectedPayload, payload with
+                | Some (TEnumFields expectedFields), Some (TupleLiteral actualFields)
+                    when List.length expectedFields <> List.length actualFields ->
+                    Some (
+                        GenericError
+                            $"Expected {List.length expectedFields} fields in {typeName}.`{variantName}`, but got {List.length actualFields}"
+                    )
+                | Some (TEnumFields expectedFields), Some actualPayload
+                    when (match actualPayload with | TupleLiteral _ -> false | _ -> true)
+                         && List.length expectedFields <> 1 ->
+                    Some (
+                        GenericError
+                            $"Expected {List.length expectedFields} fields in {typeName}.`{variantName}`, but got 1"
+                    )
+                | _ -> None
+
+            let normalizedExpectedPayload =
+                expectedPayload
+                |> Option.map (function
+                    | TEnumFields fieldTypes -> TTuple fieldTypes
+                    | payloadType -> payloadType)
+
+            (match payloadArityError with
+             | Some error -> Error error
+             | None -> Ok (normalizedExpectedPayload, payload))
+            |> Result.bind (fun (expectedPayload, payload) ->
             match expectedPayload, payload with
             | None, None ->
                 // Variant without payload, no payload provided - OK
@@ -3418,7 +3526,7 @@ let rec private checkExprWithParamNames
                     match expectedType with
                     | Some expected when expected <> sumType ->
                         Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                    | _ -> Ok (sumType, expr)
+                    | _ -> Ok (sumType, resolvedExpr None)
                 else
                     // Generic type with nullary constructor (e.g., None in Option<t>)
                     // Try to get type arguments from expectedType
@@ -3426,7 +3534,7 @@ let rec private checkExprWithParamNames
                     | Some (TSum (expectedName, args)) when expectedName = typeName && List.length args = List.length typeParams ->
                         // Use type args from expected type
                         let sumType = TSum (typeName, args)
-                        Ok (sumType, expr)
+                        Ok (sumType, resolvedExpr None)
                     | Some expected ->
                         // Expected type doesn't match - error
                         let sumTypeWithVars = TSum (typeName, typeParams |> List.map TVar)
@@ -3435,7 +3543,7 @@ let rec private checkExprWithParamNames
                         // No expected type - return type with unresolved type variables
                         // This allows type inference to resolve them later from context
                         let sumType = TSum (typeName, typeParams |> List.map TVar)
-                        Ok (sumType, expr)
+                        Ok (sumType, resolvedExpr None)
             | None, Some _ ->
                 // Variant doesn't take payload but one was provided
                 Error (GenericError $"Constructor {variantName} does not take a payload")
@@ -3463,8 +3571,8 @@ let rec private checkExprWithParamNames
                                 // Use reconcileTypes to allow type variables to unify with concrete types
                                 match reconcileTypes (Some aliasReg) expected sumType with
                                 | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                                | Some reconciledType -> Ok (reconciledType, Constructor (constrTypeName, variantName, Some payloadExpr'))
-                            | None -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
+                                | Some reconciledType -> Ok (reconciledType, resolvedExpr (Some payloadExpr'))
+                            | None -> Ok (sumType, resolvedExpr (Some payloadExpr')))
                 else
                     // Generic type - infer type variables from payload
                     // First, check the payload expression without expected type
@@ -3508,8 +3616,8 @@ let rec private checkExprWithParamNames
                                     // Use reconcileTypes to allow type variables to unify with concrete types
                                     match reconcileTypes (Some aliasReg) expected sumType with
                                     | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                                    | Some reconciledType -> Ok (reconciledType, Constructor (constrTypeName, variantName, Some payloadExpr'))
-                                | None -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
+                                    | Some reconciledType -> Ok (reconciledType, resolvedExpr (Some payloadExpr'))
+                                | None -> Ok (sumType, resolvedExpr (Some payloadExpr'))))
 
     | Match (scrutinee, cases) ->
         let scrutineeExpectedType =
@@ -5265,6 +5373,7 @@ let private resolveProgramNames
             ResultList.traverse recurse parameterTypes
             |> Result.bind (fun parameters' -> recurse returnType |> Result.map (fun ret -> TFunction (parameters', ret)))
         | TTuple elementTypes -> ResultList.traverse recurse elementTypes |> Result.map TTuple
+        | TEnumFields fieldTypes -> ResultList.traverse recurse fieldTypes |> Result.map TEnumFields
         | TList elementType -> recurse elementType |> Result.map TList
         | TDict (keyType, valueType) ->
             recurse keyType
@@ -5324,8 +5433,11 @@ let private resolveProgramNames
                 ResultList.traverse resolveTypeRefs typeArgs
                 |> Result.bind (fun types' -> resolveArgs args |> Result.map (fun args' -> TypeApp (resolvedName, types', args'))))
         | FuncRef name -> resolveName NameResolution.ResolutionContext.Callable localNames name |> Result.map FuncRef
-        | Constructor (typeName, variantName, payload) ->
-            let spelling = if typeName = "" then variantName else $"{typeName}.{variantName}"
+        | Constructor (constructorReference, variantName, payload) ->
+            let spelling =
+                match constructorReferenceTypeName constructorReference with
+                | None -> variantName
+                | Some typeName -> $"{typeName}.{variantName}"
             resolveName NameResolution.ResolutionContext.Constructor localNames spelling
             |> Result.bind (fun resolvedName ->
                 let segments = resolvedName.Split('.') |> Array.toList
@@ -5335,7 +5447,8 @@ let private resolveProgramNames
                     payload
                     |> Option.map recurse
                     |> ResultList.sequenceOption
-                    |> Result.map (fun payload' -> Constructor (resolvedTypeName, caseName, payload'))
+                    |> Result.map (fun payload' ->
+                        Constructor (resolvedConstructorReference resolvedTypeName, caseName, payload'))
                 | [] -> Error (GenericError "Resolved constructor name contained no segments"))
         | Let (name, value, body) ->
             recurse value
@@ -5435,8 +5548,192 @@ let private resolveProgramNames
     let (Program topLevels) = program
     ResultList.traverse resolveTopLevel topLevels |> Result.map Program
 
-/// Build all declaration registries in one traversal while retaining Map.ofList's
-/// existing behavior that a later declaration replaces an earlier duplicate.
+let private typeDefName (typeDef: TypeDef) : string =
+    match typeDef with
+    | RecordDef (name, _, _)
+    | SumTypeDef (name, _, _)
+    | TypeAlias (name, _, _) -> name
+
+let private typeDefTypeParams (typeDef: TypeDef) : string list =
+    match typeDef with
+    | RecordDef (_, typeParams, _)
+    | SumTypeDef (_, typeParams, _)
+    | TypeAlias (_, typeParams, _) -> typeParams
+
+/// Validate the nominal declaration namespace before building lookup maps.
+/// Every type name is visible during this pure validation phase, which permits
+/// recursive references without allowing later declarations to overwrite an
+/// earlier identity.
+let private validateTopLevelTypeDeclarations
+    (baseEnv: TypeCheckEnv option)
+    (topLevels: TopLevel list)
+    : Result<unit, TypeError> =
+    let typeDefs =
+        topLevels
+        |> List.choose (function
+            | TypeDef typeDef -> Some typeDef
+            | _ -> None)
+
+    let baseTypeArities =
+        match baseEnv with
+        | None -> Map.empty
+        | Some env ->
+            let recordArities =
+                env.IndexedTypeReg
+                |> Map.map (fun _ info -> List.length info.TypeParams)
+            let aliasArities =
+                env.AliasReg
+                |> Map.map (fun _ (typeParams, _) -> List.length typeParams)
+            let namedArities =
+                Map.fold (fun acc name arity -> Map.add name arity acc) recordArities aliasArities
+            env.VariantLookup
+            |> Map.fold (fun acc _ (typeName, typeParams, _, _) ->
+                Map.add typeName (List.length typeParams) acc) namedArities
+
+    let typeArities =
+        typeDefs
+        |> List.fold (fun arities typeDef ->
+            Map.add (typeDefName typeDef) (List.length (typeDefTypeParams typeDef)) arities) baseTypeArities
+
+    let rec validateTypeReference (owner: string) (typ: Type) : Result<unit, TypeError> =
+        let validateAll types =
+            types
+            |> List.fold (fun result item ->
+                result |> Result.bind (fun () -> validateTypeReference owner item)) (Ok ())
+
+        match typ with
+        | TRecord (name, typeArgs)
+        | TSum (name, typeArgs) ->
+            match Map.tryFind name typeArities with
+            | None -> Error (GenericError $"Unknown type reference: {name} in {owner}")
+            | Some expectedArity when expectedArity <> List.length typeArgs ->
+                Error (
+                    GenericError
+                        $"Type argument arity mismatch: {name} expects {expectedArity}, got {List.length typeArgs} in {owner}"
+                )
+            | Some _ -> validateAll typeArgs
+        | TFunction (parameters, result) -> validateAll (parameters @ [result])
+        | TTuple types
+        | TEnumFields types -> validateAll types
+        | TList element -> validateTypeReference owner element
+        | TDict (key, value) -> validateAll [key; value]
+        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+        | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+        | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr -> Ok ()
+
+    let duplicateTypeName =
+        typeDefs
+        |> List.map typeDefName
+        |> List.countBy id
+        |> List.tryPick (fun (name, count) -> if count > 1 then Some name else None)
+
+    match duplicateTypeName with
+    | Some name ->
+        Error (GenericError $"Duplicate type declaration: {name}")
+    | None ->
+        let collidingCaseNames = collidingConstructorCaseNames typeDefs
+        let constructorIdentityCollision =
+            typeDefs
+            |> List.collect (function
+                | SumTypeDef (typeName, _, variants) ->
+                    variants
+                    |> List.filter (fun variant -> Set.contains variant.Name collidingCaseNames)
+                    |> List.map (fun variant ->
+                        (constructorRuntimeIdentity typeName variant.Name, $"{typeName}.{variant.Name}"))
+                | _ -> [])
+            |> List.groupBy fst
+            |> List.tryPick (fun (identity, entries) ->
+                match entries |> List.map snd |> List.distinct with
+                | _ :: _ :: _ as names -> Some (identity, names)
+                | _ -> None)
+
+        match constructorIdentityCollision with
+        | Some (identity, names) ->
+            let joinedNames = String.concat ", " names
+            Error (
+                GenericError
+                    $"Constructor identity collision {identity}: {joinedNames}"
+            )
+        | None ->
+        let rec validate remaining =
+            match remaining with
+            | [] -> Ok ()
+            | typeDef :: rest ->
+                let typeName = typeDefName typeDef
+                let duplicateTypeParam =
+                    typeDefTypeParams typeDef
+                    |> List.countBy id
+                    |> List.tryPick (fun (name, count) -> if count > 1 then Some name else None)
+
+                match duplicateTypeParam with
+                | Some param ->
+                    Error (GenericError $"Duplicate type parameter: {param} in {typeName}")
+                | None ->
+                    let declaredTypeParams = typeDefTypeParams typeDef |> Set.ofList
+                    let referencedTypeParams =
+                        match typeDef with
+                        | RecordDef (_, _, fields) ->
+                            fields
+                            |> List.fold (fun acc (_, fieldType) -> collectTypeVarsInType fieldType acc) []
+                        | SumTypeDef (_, _, variants) ->
+                            variants
+                            |> List.fold (fun acc variant ->
+                                match variant.Payload with
+                                | Some payloadType -> collectTypeVarsInType payloadType acc
+                                | None -> acc) []
+                        | TypeAlias (_, _, targetType) ->
+                            collectTypeVarsInType targetType []
+                    let undeclaredTypeParam =
+                        referencedTypeParams
+                        |> List.tryFind (fun name -> not (Set.contains name declaredTypeParams))
+
+                    match undeclaredTypeParam with
+                    | Some param ->
+                        Error (GenericError $"Undeclared type parameter: '{param} in {typeName}")
+                    | None ->
+                    let referencedTypes =
+                        match typeDef with
+                        | RecordDef (_, _, fields) -> List.map snd fields
+                        | SumTypeDef (_, _, variants) -> variants |> List.choose (fun variant -> variant.Payload)
+                        | TypeAlias (_, _, targetType) -> [targetType]
+                    let referenceResult =
+                        referencedTypes
+                        |> List.fold (fun result referencedType ->
+                            result
+                            |> Result.bind (fun () -> validateTypeReference typeName referencedType)) (Ok ())
+                    let declarationResult =
+                        match typeDef with
+                        | RecordDef (_, _, []) ->
+                            Error (GenericError $"Record declaration must contain at least one field: {typeName}")
+                        | RecordDef (_, _, fields) ->
+                            fields
+                            |> List.map fst
+                            |> List.countBy id
+                            |> List.tryPick (fun (name, count) -> if count > 1 then Some name else None)
+                            |> function
+                                | Some fieldName ->
+                                    Error (GenericError $"Duplicate record field declaration: {typeName}.{fieldName}")
+                                | None -> Ok ()
+                        | SumTypeDef (_, _, []) ->
+                            Error (GenericError $"Enum declaration must contain at least one case: {typeName}")
+                        | SumTypeDef (_, _, variants) ->
+                            variants
+                            |> List.map (fun variant -> variant.Name)
+                            |> List.countBy id
+                            |> List.tryPick (fun (name, count) -> if count > 1 then Some name else None)
+                            |> function
+                                | Some caseName ->
+                                    Error (GenericError $"Duplicate constructor declaration: {typeName}.{caseName}")
+                                | None -> Ok ()
+                        | TypeAlias _ -> Ok ()
+                    referenceResult
+                    |> Result.bind (fun () -> declarationResult)
+                    |> Result.bind (fun () -> validate rest)
+
+        validate typeDefs
+
+/// Build all declaration registries after validation and name resolution have
+/// established unique nominal type and constructor identities.
 let private summarizeTopLevelDeclarations
     (topLevels: TopLevel list)
     : TopLevelDeclarationSummary =
@@ -5449,6 +5746,11 @@ let private summarizeTopLevelDeclarations
         GenericFuncs = Map.empty
     }
 
+    let typeDefs =
+        topLevels
+        |> List.choose (function | TypeDef typeDef -> Some typeDef | _ -> None)
+    let collidingCaseNames = collidingConstructorCaseNames typeDefs
+
     topLevels
     |> List.fold (fun summary topLevel ->
         match topLevel with
@@ -5460,7 +5762,12 @@ let private summarizeTopLevelDeclarations
             let variantLookup =
                 variants
                 |> List.indexed
-                |> List.fold (fun lookup (tag, variant) ->
+                |> List.fold (fun lookup (ordinal, variant) ->
+                    let tag =
+                        if Set.contains variant.Name collidingCaseNames then
+                            constructorRuntimeIdentity typeName variant.Name
+                        else
+                            ordinal
                     let info = (typeName, typeParams, tag, variant.Payload)
                     lookup
                     |> Map.add variant.Name info
@@ -5671,10 +5978,18 @@ let private checkResolvedProgramInternal
 let private checkProgramInternal
     (baseEnv: TypeCheckEnv option)
     (requireExplicitTypeArgsForBareCalls: bool)
+    (validateDeclarations: bool)
     (warningSettings: WarningSettings)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
     let (Program topLevels) = program
+    let declarationValidation =
+        if validateDeclarations then
+            validateTopLevelTypeDeclarations baseEnv topLevels
+        else
+            // Only synthetic test preambles skip this: they concatenate
+            // declarations that do not coexist in an original source unit.
+            Ok ()
     let moduleRegistry =
         match baseEnv with
         | Some existingEnv -> existingEnv.ModuleRegistry
@@ -5686,26 +6001,35 @@ let private checkProgramInternal
         | Some existingEnv -> NameResolution.merge existingEnv.ResolutionEnv localResolutionEnv
         | None -> localResolutionEnv
 
-    resolveProgramNames resolutionEnv program
+    declarationValidation
+    |> Result.bind (fun () ->
+        resolveProgramNames resolutionEnv program)
     |> Result.bind (checkResolvedProgramInternal baseEnv requireExplicitTypeArgsForBareCalls warningSettings)
 
 /// Type-check a program
 /// Returns the type of the main expression and the transformed program
 /// The transformed program has Call nodes converted to TypeApp where type inference was applied
 let checkProgram (program: Program) : Result<Type * Program, TypeError> =
-    checkProgramInternal None false AST.defaultWarningSettings program
+    checkProgramInternal None false true AST.defaultWarningSettings program
+    |> Result.map (fun (typ, prog, _env) -> (typ, prog))
+
+/// Type-check the public interpreter syntax policy without a base environment.
+/// Used by focused declaration tests and tools that already parsed an isolated
+/// interpreter program.
+let checkInterpreterProgram (program: Program) : Result<Type * Program, TypeError> =
+    checkProgramInternal None true true AST.defaultWarningSettings program
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
 
 /// Type-check a program and return the type checking environment
 /// Use this when you need to reuse the environment (e.g., for stdlib caching)
 let checkProgramWithEnv (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal None false AST.defaultWarningSettings program
+    checkProgramInternal None false true AST.defaultWarningSettings program
 
 /// Type-check a program with a pre-populated base environment (for separate compilation)
 /// The program's definitions are merged with the base environment, allowing lookups
 /// of types/functions from both the base (e.g., stdlib) and the program (e.g., user code)
 let checkProgramWithBaseEnv (baseEnv: TypeCheckEnv) (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal (Some baseEnv) false AST.defaultWarningSettings program
+    checkProgramInternal (Some baseEnv) false true AST.defaultWarningSettings program
 
 /// Type-check a program with a pre-populated base environment, generic-call policy override,
 /// and warning compatibility settings from the compiler driver.
@@ -5715,4 +6039,16 @@ let checkProgramWithBaseEnvAndSettings
     (warningSettings: WarningSettings)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls warningSettings program
+    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls true warningSettings program
+
+/// Analyze a synthetic preamble assembled from otherwise independent tests.
+/// Such preambles can repeat declarations that never coexist in a source
+/// program, so declaration-namespace validation belongs to each original
+/// source rather than this harness artifact.
+let checkSyntheticPreambleWithBaseEnvAndSettings
+    (baseEnv: TypeCheckEnv)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: Program)
+    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls false warningSettings program

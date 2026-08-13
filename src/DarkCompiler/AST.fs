@@ -45,12 +45,35 @@ type Type =
     | TRuntimeError                 // Bottom-like type for guaranteed runtime-failing expressions
     | TFunction of Type list * Type  // parameter types * return type
     | TTuple of Type list             // tuple type: (Int, Bool, String)
+    /// Ordered fields of an enum case. Unlike TTuple, these are separate
+    /// constructor arguments (`Case of A * B`), not one tuple argument
+    /// (`Case of (A * B)`). This syntax-only shape is lowered as a tuple block.
+    | TEnumFields of Type list
     | TRecord of string * Type list   // record type by name with type args: Point<T>, Pair<A, B>, etc.
     | TSum of string * Type list      // sum type by name with type args: Result<Int64, String>
     | TList of Type                    // List<T> - polymorphic list type
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
     | TRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
     | TDict of keyType:Type * valueType:Type  // Dict<K, V> - HAMT dictionary (K=Int64 for now)
+
+/// A source constructor reference before or after nominal resolution.
+/// `None` is the genuinely unqualified form; no empty-name sentinel is used.
+type ConstructorReference =
+    | UnresolvedConstructor of declaringType:string option
+    | ResolvedConstructor of declaringModule:string list * declaringType:string
+
+let constructorReferenceTypeName (reference: ConstructorReference) : string option =
+    match reference with
+    | UnresolvedConstructor declaringType -> declaringType
+    | ResolvedConstructor (declaringModule, declaringType) ->
+        Some (String.concat "." (declaringModule @ [declaringType]))
+
+let resolvedConstructorReference (canonicalTypeName: string) : ConstructorReference =
+    match canonicalTypeName.Split('.') |> Array.toList |> List.rev with
+    | declaringType :: reversedModule ->
+        ResolvedConstructor (List.rev reversedModule, declaringType)
+    | [] ->
+        Crash.crash "Cannot resolve a constructor against an empty declaring type name"
 
 /// Binary operators
 type BinOp =
@@ -101,6 +124,22 @@ module NonEmptyList =
     let fromList = function
         | [] -> Crash.crash "NonEmptyList.fromList: empty list"
         | h :: t -> { Head = h; Tail = t }
+
+/// Canonical native identity for an enum case whose display name is shared by
+/// multiple nominal declarations. The native backends encode case tags as
+/// immediates, so declarations validate collisions in this bounded space.
+let constructorRuntimeIdentity (declaringType: string) (caseName: string) : int =
+    match declaringType, caseName with
+    // Runtime I/O and string intrinsics construct these two foundational
+    // stdlib types directly. Their ABI tags predate user-defined ADTs.
+    | "Stdlib.Option.Option", "Some"
+    | "Stdlib.Result.Result", "Ok" -> 0
+    | "Stdlib.Option.Option", "None"
+    | "Stdlib.Result.Result", "Error" -> 1
+    | _ ->
+        $"{declaringType}.{caseName}"
+        |> Seq.fold (fun hash character -> (hash ^^^ uint32 character) * 16777619u) 2166136261u
+        |> fun hash -> 2 + int (hash % 4094u)
 
 /// Pattern matching patterns
 type Pattern =
@@ -165,7 +204,7 @@ and Expr =
     | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
     | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
-    | Constructor of typeName:string * variantName:string * payload:Expr option  // Red, Some(42)
+    | Constructor of reference:ConstructorReference * variantName:string * payload:Expr option
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]
     | ListCons of head:Expr list * tail:Expr                 // [a, b, ...rest]
@@ -204,6 +243,20 @@ type TypeDef =
     | RecordDef of name:string * typeParams:string list * fields:(string * Type) list  // type Point<T> = { x: T, y: T }
     | SumTypeDef of name:string * typeParams:string list * variants:Variant list       // type Result<T, E> = Ok of T | Error of E
     | TypeAlias of name:string * typeParams:string list * targetType:Type              // type Id = String
+
+/// Case names that require a nominal native tag because they occur in more
+/// than one declaring type in the same compilation unit.
+let collidingConstructorCaseNames (typeDefs: TypeDef list) : Set<string> =
+    typeDefs
+    |> List.collect (function
+        | SumTypeDef (typeName, _, variants) ->
+            variants |> List.map (fun variant -> (variant.Name, typeName))
+        | _ -> [])
+    |> List.groupBy fst
+    |> List.choose (fun (caseName, entries) ->
+        let ownerCount = entries |> List.map snd |> List.distinct |> List.length
+        if ownerCount > 1 then Some caseName else None)
+    |> Set.ofList
 
 /// Top-level program elements
 type TopLevel =

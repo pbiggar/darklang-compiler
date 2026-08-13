@@ -318,7 +318,7 @@ let testInterpreterParserParsesNamedVariantPayloads () : TestResult =
 
         let hasExpectedExpression =
             match expr with
-            | Constructor ("Inner", "B", Some (Constructor ("Stdlib.Result.Result", "Ok", Some (Constructor ("Inner", "A", Some (Int64Literal 5L)))))) ->
+            | Constructor (UnresolvedConstructor (Some "Inner"), "B", Some (Constructor (UnresolvedConstructor (Some "Stdlib.Result.Result"), "Ok", Some (Constructor (UnresolvedConstructor (Some "Inner"), "A", Some (Int64Literal 5L)))))) ->
                 true
             | _ ->
                 false
@@ -341,12 +341,12 @@ let testInterpreterParserParsesNamedTupleVariantPayloads () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on named tuple variant payloads: {err}"
-    | Ok (Program [TypeDef (SumTypeDef ("EnumOfMixedCases", [], variants)); Expression (Constructor ("EnumOfMixedCases", "W", None))]) ->
+    | Ok (Program [TypeDef (SumTypeDef ("EnumOfMixedCases", [], variants)); Expression (Constructor (UnresolvedConstructor (Some "EnumOfMixedCases"), "W", None))]) ->
         match variants with
         | [ { Name = "W"; Payload = None }
             { Name = "X"; Payload = Some AST.TString }
             { Name = "Y"; Payload = Some AST.TInt64 }
-            { Name = "Z"; Payload = Some (AST.TTuple [AST.TString; AST.TInt64]) } ] ->
+            { Name = "Z"; Payload = Some (AST.TEnumFields [AST.TString; AST.TInt64]) } ] ->
             Ok ()
         | _ ->
             Error $"Unexpected variants parsed for named tuple variant payloads: {variants}"
@@ -780,6 +780,24 @@ let testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried () : TestR
     | Ok other ->
         Error $"Expected single expression program, got: {other}"
 
+let testInterpreterParserRejectsCompilerOnlyAdtForms () : TestResult =
+    let rejectedSources = [
+        "type NoLeadingBar = NoLeadingBarCase\nNoLeadingBarCase"
+        "type BareGeneric<a> = | BareGenericCase of a\nBareGeneric.BareGenericCase 1L"
+        "type Qualified.Declaration = | QualifiedCase\nQualified.Declaration.QualifiedCase"
+    ]
+    let rec verify sources =
+        match sources with
+        | [] -> Ok ()
+        | source :: rest ->
+            match InterpreterParser.parseString false source with
+            | Error _ -> verify rest
+            | Ok parsed ->
+                match TypeChecking.checkInterpreterProgram parsed with
+                | Error _ -> verify rest
+                | Ok _ -> Error $"Expected compiler-only ADT syntax to be rejected, got: {parsed}"
+    verify rejectedSources
+
 let tests = [
     ("compiler library interpreter parse", testCompilerLibraryParseInterpreterSyntax)
     ("parse interpreter lambda/application", testParseInterpreterLambdaApplication)
@@ -833,4 +851,5 @@ let tests = [
     ("parse qualified record literal", testInterpreterParserParsesQualifiedRecordLiteral)
     ("parse constructor over-application chain", testInterpreterParserParsesConstructorOverApplicationChain)
     ("explicit prefix-matching lambda type vars remain uncurried", testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried)
+    ("reject compiler-only ADT forms in interpreter syntax", testInterpreterParserRejectsCompilerOnlyAdtForms)
 ]

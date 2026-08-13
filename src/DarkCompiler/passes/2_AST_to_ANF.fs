@@ -23,15 +23,14 @@ open Output
 type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
 
 let private tryFindVariant
-    (constructorTypeName: string)
+    (constructorReference: AST.ConstructorReference)
     (variantName: string)
     (variantLookup: VariantLookup)
     : (string * string list * int * AST.Type option) option =
-    if constructorTypeName = "" then
-        Map.tryFind variantName variantLookup
-    else
+    match AST.constructorReferenceTypeName constructorReference with
+    | None -> Map.tryFind variantName variantLookup
+    | Some constructorTypeName ->
         Map.tryFind $"{constructorTypeName}.{variantName}" variantLookup
-        |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
 
 let private int128ToCanonicalString (value: System.Int128) : string =
     value.ToString(System.Globalization.CultureInfo.InvariantCulture)
@@ -69,6 +68,7 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TFunction (paramTypes, retType) ->
         "(" + (paramTypes |> List.map typeToString |> String.concat ",") + ")->" + typeToString retType
     | AST.TTuple types -> "(" + (types |> List.map typeToString |> String.concat "*") + ")"
+    | AST.TEnumFields fields -> fields |> List.map typeToString |> String.concat "*"
 
 /// Convert a literal pattern into an ANF sized integer
 let patternLiteralToSizedInt (pattern: AST.Pattern) : ANF.SizedInt option =
@@ -487,6 +487,8 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST
             AST.TFunction (List.map canonicalize paramTypes, canonicalize returnType)
         | AST.TTuple elemTypes ->
             AST.TTuple (List.map canonicalize elemTypes)
+        | AST.TEnumFields fieldTypes ->
+            AST.TEnumFields (List.map canonicalize fieldTypes)
         | AST.TList elemType ->
             AST.TList (canonicalize elemType)
         | AST.TDict (keyType, valueType) ->
@@ -524,6 +526,8 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
         AST.TSum (name, List.map (resolveAliasTypeForRegistry aliasReg) typeArgs)
     | AST.TTuple elemTypes ->
         AST.TTuple (List.map (resolveAliasTypeForRegistry aliasReg) elemTypes)
+    | AST.TEnumFields fieldTypes ->
+        AST.TEnumFields (List.map (resolveAliasTypeForRegistry aliasReg) fieldTypes)
     | AST.TList elemType ->
         AST.TList (resolveAliasTypeForRegistry aliasReg elemType)
     | AST.TDict (keyType, valueType) ->
@@ -669,6 +673,9 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TTuple elemTypes ->
         let elemsStr = elemTypes |> List.map typeToMangledName |> String.concat "_"
         $"tup_{elemsStr}"
+    | AST.TEnumFields fieldTypes ->
+        let fieldsStr = fieldTypes |> List.map typeToMangledName |> String.concat "_"
+        $"enumfields_{fieldsStr}"
     | AST.TRecord (name, []) -> name
     | AST.TRecord (name, typeArgs) ->
         let argsStr = typeArgs |> List.map typeToMangledName |> String.concat "_"
@@ -689,6 +696,7 @@ let rec containsTypeVar (t: AST.Type) : bool =
     | AST.TFunction (paramTypes, retType) ->
         List.exists containsTypeVar paramTypes || containsTypeVar retType
     | AST.TTuple elemTypes -> List.exists containsTypeVar elemTypes
+    | AST.TEnumFields fieldTypes -> List.exists containsTypeVar fieldTypes
     | AST.TRecord (_, typeArgs) -> List.exists containsTypeVar typeArgs
     | AST.TSum (_, typeArgs) -> List.exists containsTypeVar typeArgs
     | AST.TList elemType -> containsTypeVar elemType
@@ -769,6 +777,8 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TFunction (List.map (applySubstToType subst) paramTypes, applySubstToType subst returnType)
     | AST.TTuple elemTypes ->
         AST.TTuple (List.map (applySubstToType subst) elemTypes)
+    | AST.TEnumFields fieldTypes ->
+        AST.TEnumFields (List.map (applySubstToType subst) fieldTypes)
     | AST.TList elemType ->
         AST.TList (applySubstToType subst elemType)
     | AST.TDict (keyType, valueType) ->
@@ -797,6 +807,8 @@ let rec collectTypeVarsInType (typ: AST.Type) (acc: string list) : string list =
         collectTypeVarsInType returnType withParams
     | AST.TTuple elemTypes ->
         elemTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
+    | AST.TEnumFields fieldTypes ->
+        fieldTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | AST.TRecord (_, typeArgs) ->
         typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | AST.TSum (_, typeArgs) ->
@@ -2049,9 +2061,9 @@ let rec simpleInferType
                     | None -> fieldTypePattern)
             | None -> None
         | _ -> None
-    | AST.Constructor (typeName, variantName, payload) ->
+    | AST.Constructor (constructorReference, variantName, payload) ->
         // Sum type constructor has the sum type; infer generic args from payload when possible.
-        match Map.tryFind variantName variantLookup with
+        match tryFindVariant constructorReference variantName variantLookup with
         | Some (sumTypeName, typeParams, _, payloadPattern) ->
             let defaultTypeArgs = typeParams |> List.map AST.TVar
             match payloadPattern, payload with
@@ -2076,10 +2088,8 @@ let rec simpleInferType
             | _ ->
                 Some (AST.TSum (sumTypeName, defaultTypeArgs))
         | None ->
-            if typeName = "" then
-                None
-            else
-                Some (AST.TSum (typeName, []))
+            AST.constructorReferenceTypeName constructorReference
+            |> Option.map (fun typeName -> AST.TSum (typeName, []))
     | AST.BinOp (op, left, right) ->
         let leftType = simpleInferType left typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let rightType = simpleInferType right typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
@@ -2613,6 +2623,10 @@ let rec liftLambdasInProgram
         |> fun reg -> expandTypeRegWithAliases reg aliasReg
 
     let variantLookup : VariantLookup =
+        let localTypeDefs =
+            topLevels
+            |> List.choose (function | AST.TypeDef typeDef -> Some typeDef | _ -> None)
+        let collidingCaseNames = AST.collidingConstructorCaseNames localTypeDefs
         topLevels
         |> List.choose (function
             | AST.TypeDef (AST.SumTypeDef (typeName, typeParams, variants)) ->
@@ -2620,8 +2634,13 @@ let rec liftLambdasInProgram
             | _ -> None)
         |> List.collect (fun (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun idx variant ->
-                let info = (typeName, typeParams, idx, variant.Payload)
+            |> List.mapi (fun ordinal variant ->
+                let tag =
+                    if Set.contains variant.Name collidingCaseNames then
+                        AST.constructorRuntimeIdentity typeName variant.Name
+                    else
+                        ordinal
+                let info = (typeName, typeParams, tag, variant.Payload)
                 [(variant.Name, info); ($"{typeName}.{variant.Name}", info)])
             |> List.concat)
         |> Map.ofList
@@ -4684,15 +4703,15 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 Ok (finalExpr, varGen1)
             | Some payloadExpr ->
                 // Variant with payload: allocate [tag, payload] on heap
-                toAtom payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
-                |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
+                toANFBoundAtom payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
+                |> Result.map (fun (payloadSetupExpr, payloadAtom, varGen1) ->
                     let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
                     // Create TupleAlloc [tag, payload] and bind to fresh variable
                     let (resultVar, varGen2) = ANF.freshVar varGen1
                     let tupleExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
                     let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
-                    let exprWithBindings = wrapBindings payloadBindings finalExpr
-                    (exprWithBindings, varGen2))
+                    let exprWithPayloadEvaluation = bindReturns payloadSetupExpr (fun _ -> finalExpr)
+                    (exprWithPayloadEvaluation, varGen2))
 
     | AST.ListLiteral elements ->
         // Compile list literal as SkewList
@@ -5018,7 +5037,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let constructorPatternCoverage (pattern: AST.Pattern) : int option =
                 match scrutType, pattern with
                 | AST.TSum (typeName, _), AST.PConstructor (constructorName, payloadPattern) ->
-                    match tryFindVariant typeName constructorName variantLookup, payloadPattern with
+                    match tryFindVariant (AST.resolvedConstructorReference typeName) constructorName variantLookup, payloadPattern with
                     | Some (variantTypeName, _, tag, None), None when variantTypeName = typeName ->
                         Some tag
                     | Some (variantTypeName, _, tag, Some _), Some innerPattern
@@ -7618,12 +7637,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.UnitLiteral -> Some "()"
                 | AST.StringLiteral s -> Some $"\"{escapeForRuntimeError s}\""
                 | AST.CharLiteral c -> Some $"'{escapeForRuntimeError c}'"
-                | AST.Constructor (typeName, variantName, payload) ->
+                | AST.Constructor (constructorReference, variantName, payload) ->
                     let fullName =
-                        if typeName = "" then
-                            variantName
-                        else
-                            $"{typeName}.{variantName}"
+                        match AST.constructorReferenceTypeName constructorReference with
+                        | None -> variantName
+                        | Some typeName -> $"{typeName}.{variantName}"
                     match payload with
                     | None -> Some fullName
                     | Some payloadExpr ->
@@ -9118,6 +9136,7 @@ let buildRegistries
         |> Map.ofList
 
     let variantLookup : VariantLookup =
+        let collidingCaseNames = AST.collidingConstructorCaseNames typeDefs
         typeDefs
         |> List.choose (function
             | AST.SumTypeDef (typeName, typeParams, variants) ->
@@ -9125,8 +9144,13 @@ let buildRegistries
             | _ -> None)
         |> List.collect (fun (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun idx variant ->
-                let info = (typeName, typeParams, idx, variant.Payload)
+            |> List.mapi (fun ordinal variant ->
+                let tag =
+                    if Set.contains variant.Name collidingCaseNames then
+                        AST.constructorRuntimeIdentity typeName variant.Name
+                    else
+                        ordinal
+                let info = (typeName, typeParams, tag, variant.Payload)
                 [(variant.Name, info); ($"{typeName}.{variant.Name}", info)])
             |> List.concat)
         |> Map.ofList

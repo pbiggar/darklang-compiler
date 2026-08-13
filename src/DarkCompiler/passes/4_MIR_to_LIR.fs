@@ -1067,6 +1067,9 @@ let selectInstr
                 finishPrint [LIR.PrintHeapString lirReg]
             | other ->
                 Error $"Print: Unexpected operand type for string: {other}"
+        | AST.TEnumFields _ ->
+            Crash.crash "TEnumFields is declaration metadata and cannot be printed as a standalone value"
+
         | AST.TTuple elemTypes ->
             // Tuple printing: (elem1, elem2, ...)
             // Use X19 (callee-saved) to hold tuple address throughout printing
