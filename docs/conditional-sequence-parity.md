@@ -7,9 +7,10 @@ DCB1 report at commit `8a402797`; that report was used only as an inventory.
 ## Evidence revisions
 
 - Approved compiler evidence revision: `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`.
-- Compiler implementation revision compared below:
-  `80e5df182c434ad330290c82cdf48b9d5b9c99c8` (based on
-  `28792f068d7cba9ceb9de24b6b959e7109eb15c7`).
+- Compiler implementation revision: `50ccf016ee8faeb37640840d81bad99d932574f1`,
+  rebased onto `6cf18024e08406246c81c1399913c996651105b7`.
+- Post-rebase name-resolution repair revision:
+  `aee595658b4a6dbf926f5c870dc6c0232d08695e`.
 - Darklang interpreter revision compared in every row:
   `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
 
