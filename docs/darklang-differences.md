@@ -152,7 +152,19 @@ matching the official interpreter for decomposed text. For example, reversing
 `"éx"` now produces `"xé"`, keeping the combining acute accent attached to
 its base character.
 
-## 3. Tooling Differences
+## 3. Intentional Semantic Divergences
+
+### 3.1 Conditional and sequence type timing
+
+Conditional selection and statement execution order match the interpreter, as
+documented in the [conditional and sequence parity matrix](conditional-sequence-parity.md).
+Two intentional static-compiler differences remain: the compiler rejects
+heterogeneous conditional arms during type checking, and rejects a non-Unit
+non-final sequence expression during type checking. The pinned interpreter
+accepts both source shapes and applies only its dynamic condition/statement
+checks while evaluating the selected path.
+
+## 4. Tooling Differences
 
 Acceptable differences due to compilation vs interpretation model.
 These tests check error conditions or output that can't be validated with the interpreter.
@@ -168,7 +180,7 @@ These tests check error conditions or output that can't be validated with the in
 
 ---
 
-## 4. Compiler-Only Features
+## 5. Compiler-Only Features
 
 Features in compiler not in interpreter. These are skipped during validation.
 
@@ -180,7 +192,7 @@ Features in compiler not in interpreter. These are skipped during validation.
 | Internal functions | `internal:helper_function` | Functions like `__digitToString`, `__findFrom` are implementation helpers |
 | SkewList/HAMT | `internal:data_structure` | `Stdlib.__SkewList` and `Stdlib.__HAMT` are internal implementations |
 
-### 4.3 Integer Division Operator
+### 5.3 Integer Division Operator
 
 **Skip reason:** `extension:integer_division`
 
@@ -199,7 +211,7 @@ Stdlib.Int64.divide 10L 3L  → 3
 
 ---
 
-## 5. Missing from Interpreter
+## 6. Missing from Interpreter
 
 Features implemented in this compiler that should be added to the Darklang interpreter.
 

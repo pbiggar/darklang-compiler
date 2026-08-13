@@ -47,6 +47,7 @@ selects the backend from that explicit target.
 - **Lexical analysis**: Convert character stream to tokens
 - **Syntactic analysis**: Build AST using recursive descent parsing
 - **Operator precedence**: Handle binary operators with Pratt parsing
+- **Control-flow syntax**: Represent `elif` as nested conditionals and `;` statement blocks as explicit `Sequence` nodes
 
 ### Key Algorithms
 - **Recursive descent**: Each grammar production is a function
@@ -76,6 +77,7 @@ Output: Let("x", BinOp(Add, IntLiteral(1), IntLiteral(2)),
 - **Top-down checking**: Push expected types down, validate bottom-up
 - **Result-based errors**: No exceptions, explicit error propagation
 - **Environment threading**: Track variable types through expressions
+- **Control-flow checking**: Require Boolean conditions, unify conditional arms, and use a sequence's Unit head and final-result type
 
 ### Example Error
 ```
