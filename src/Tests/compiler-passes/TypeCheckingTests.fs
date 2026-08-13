@@ -77,6 +77,8 @@ let rec countMatches (expr: Expr) : int =
             [value; body]
         | If (cond, thenBranch, elseBranch) ->
             [cond; thenBranch; elseBranch]
+        | Sequence (first, next) ->
+            [first; next]
         | Call (_, args)
         | TypeApp (_, _, args) ->
             NonEmptyList.toList args

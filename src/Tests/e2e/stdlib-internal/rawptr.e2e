@@ -14,6 +14,10 @@ let p = __raw_alloc(8) in let _ = __raw_slot_init<(List<String>, Int64)>(p, 0, (
 // If lowered via IfValue in atom position, dead branch side effects must remain lazy.
 let p = __raw_alloc(8) in let _ = __raw_write_word(p, 0, 1) in let _ = if true then 0 else let _ = __raw_write_word(p, 0, 99) in 0 in __raw_get<Int64>(p, 0) = 1
 
+// Conditional conditions run exactly once, and statement sequences run left-to-right.
+let p = __raw_alloc(8) in let _ = __raw_write_word(p, 0, 0) in let _ = if (__raw_write_word(p, 0, __raw_get<Int64>(p, 0) + 1); true) then () else () in __raw_get<Int64>(p, 0) = 1
+let p = __raw_alloc(8) in (__raw_write_word(p, 0, 1); __raw_write_word(p, 0, 2); __raw_get<Int64>(p, 0)) = 2
+
 // Allocator should fail gracefully (exit=1) instead of SIGSEGV when bump allocation exceeds heap.
 let p1 = __raw_alloc(600000000) in let p2 = __raw_alloc(8) in let _ = __raw_write_word(p2, 0, 1) in 0 = exit=1 stderr="Out of heap memory"
 

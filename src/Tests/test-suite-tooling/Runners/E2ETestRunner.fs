@@ -372,6 +372,10 @@ let rec private collectExprReferencedPreambleFuncsWithBound
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars thenExpr
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars elseExpr
         ]
+    | Sequence (firstExpr, nextExpr) ->
+        Set.union
+            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars firstExpr)
+            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars nextExpr)
     | Call (funcName, args) ->
         collectCallLike funcName args
     | TypeApp (funcName, _typeArgs, args) ->

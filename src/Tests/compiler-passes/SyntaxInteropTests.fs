@@ -488,10 +488,51 @@ let testParseInterpreterParenthesizedSequenceWithTrailingLet () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on parenthesized sequence with trailing let: {err}"
-    | Ok (Program [Expression _]) ->
+    | Ok (Program [Expression (Sequence (_, Let _))]) ->
         Ok ()
+    | Ok (Program [Expression expr]) ->
+        Error $"Expected an explicit sequence ending in a let-expression, got: {expr}"
     | Ok other ->
         Error $"Expected single expression program for parenthesized sequence with trailing let, got: {other}"
+
+let testConditionalSequenceSameSourceShape () : TestResult =
+    let source = "if false then (() ; 1) elif true then (() ; 2) else (() ; 3)"
+    let expected =
+        If (
+            BoolLiteral false,
+            Sequence (UnitLiteral, Int64Literal 1L),
+            If (
+                BoolLiteral true,
+                Sequence (UnitLiteral, Int64Literal 2L),
+                Sequence (UnitLiteral, Int64Literal 3L)
+            )
+        )
+
+    match Parser.parseString false source, InterpreterParser.parseString false source with
+    | Ok (Program [Expression compilerExpr]), Ok (Program [Expression interpreterExpr])
+        when compilerExpr = expected && interpreterExpr = expected ->
+        Ok ()
+    | compilerResult, interpreterResult ->
+        Error $"Conditional/sequence AST mismatch: compiler={compilerResult}; interpreter={interpreterResult}"
+
+let testConditionalSyntaxErrorsMatch () : TestResult =
+    let cases =
+        [
+            ("if true 1 else 2", "Expected 'then' after if condition")
+            ("if false then 1 elif true 2 else 3", "Expected 'then' after elif condition")
+        ]
+
+    cases
+    |> List.fold (fun result (source, expectedError) ->
+        result
+        |> Result.bind (fun () ->
+            match Parser.parseString false source, InterpreterParser.parseString false source with
+            | Error compilerError, Error interpreterError
+                when compilerError = expectedError && interpreterError = expectedError ->
+                Ok ()
+            | compilerResult, interpreterResult ->
+                Error
+                    $"Conditional parse-error mismatch for '{source}': compiler={compilerResult}; interpreter={interpreterResult}")) (Ok ())
 
 let testInterpreterParserDoesNotTreatTupleBodyAsCallableAcrossTopLevelBoundary () : TestResult =
     let source =
@@ -771,6 +812,8 @@ let tests = [
     ("parse interpreter newline-delimited let body after applied call value", testParseInterpreterNewlineDelimitedLetBodyAfterAppliedCallValue)
     ("parse interpreter local let function body", testParseInterpreterLocalLetFunctionBody)
     ("parse interpreter parenthesized sequence with trailing let", testParseInterpreterParenthesizedSequenceWithTrailingLet)
+    ("parse conditional sequence to same syntax shape", testConditionalSequenceSameSourceShape)
+    ("conditional syntax errors match", testConditionalSyntaxErrorsMatch)
     ("parse interpreter tuple-body top-level boundary", testInterpreterParserDoesNotTreatTupleBodyAsCallableAcrossTopLevelBoundary)
     ("typecheck interpreter record-function-field lambda", testTypeCheckInterpreterRecordFunctionFieldLambda)
     ("stdlib registry excludes non-intrinsic float multiply", testStdlibRegistryExcludesNonIntrinsicFloatMultiply)

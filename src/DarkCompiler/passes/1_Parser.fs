@@ -53,10 +53,12 @@ and Token =
     | TIf          // if
     | TThen        // then
     | TElse        // else
+    | TElif        // elif
     | TDef         // def (function definition)
     | TType        // type (type definition)
     | TColon       // : (type annotation)
     | TComma       // , (parameter separator)
+    | TSemicolon   // ; (statement separator)
     | TDot         // . (tuple/record access)
     | TLBrace      // { (record literal)
     | TRBrace      // } (record literal)
@@ -138,6 +140,7 @@ let rec lex (input: string) : Result<Token list, string> =
             | ']' -> lexHelper (position + 1) (TRBracket :: acc)
             | ':' -> lexHelper (position + 1) (TColon :: acc)
             | ',' -> lexHelper (position + 1) (TComma :: acc)
+            | ';' -> lexHelper (position + 1) (TSemicolon :: acc)
             | '.' when hasChar position 1 '.' && hasChar position 2 '.' ->
                 lexHelper (position + 3) (TDotDotDot :: acc)
             | '.' -> lexHelper (position + 1) (TDot :: acc)
@@ -204,6 +207,7 @@ let rec lex (input: string) : Result<Token list, string> =
                     | "if" -> TIf
                     | "then" -> TThen
                     | "else" -> TElse
+                    | "elif" -> TElif
                     | "def" -> TDef
                     | "type" -> TType
                     | "of" -> TOf
@@ -1449,21 +1453,36 @@ let parse (tokens: Token list) : Result<Program, string> =
                         | _ -> Error "Expected 'in' after let binding value")
                 | _ -> Error "Expected '=' after let binding pattern")
         | TIf :: rest ->
-            // Parse: if cond then thenBranch [else elseBranch]
+            // Parse: if cond then thenBranch [elif cond then branch ...] [else elseBranch]
             // When else is omitted, synthesize unit: if cond then expr  ==>  if cond then expr else ()
+            let rec parseElseOrElif (tokens: Token list) : Result<Expr * Token list, string> =
+                match tokens with
+                | TElse :: elseTokens ->
+                    parseExpr elseTokens
+                | TElif :: elifTokens ->
+                    parseExpr elifTokens
+                    |> Result.bind (fun (elifCond, afterElifCond) ->
+                        match afterElifCond with
+                        | TThen :: elifThenTokens ->
+                            parseExpr elifThenTokens
+                            |> Result.bind (fun (elifThenBranch, afterElifThen) ->
+                                parseElseOrElif afterElifThen
+                                |> Result.map (fun (elifElseBranch, afterElifElse) ->
+                                    (If (elifCond, elifThenBranch, elifElseBranch), afterElifElse)))
+                        | _ ->
+                            Error "Expected 'then' after elif condition")
+                | _ ->
+                    Ok (UnitLiteral, tokens)
+
             parseExpr rest
             |> Result.bind (fun (cond, remaining) ->
                 match remaining with
                 | TThen :: rest' ->
                     parseExpr rest'
                     |> Result.bind (fun (thenBranch, remaining') ->
-                        match remaining' with
-                        | TElse :: rest'' ->
-                            parseExpr rest''
-                            |> Result.map (fun (elseBranch, remaining'') ->
-                                (If (cond, thenBranch, elseBranch), remaining''))
-                        | _ ->
-                            Ok (If (cond, thenBranch, UnitLiteral), remaining'))
+                        parseElseOrElif remaining'
+                        |> Result.map (fun (elseBranch, remaining'') ->
+                            (If (cond, thenBranch, elseBranch), remaining'')))
                 | _ -> Error "Expected 'then' after if condition")
         | TMatch :: rest ->
             // Parse: match scrutinee with | p1 -> e1 | p2 -> e2
@@ -1960,7 +1979,24 @@ let parse (tokens: Token list) : Result<Program, string> =
                         | TComma :: rest' ->
                             // Tuple literal: (expr, expr, ...)
                             parseTupleElements rest' [firstExpr]
-                        | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
+                        | TSemicolon :: rest' ->
+                            let rec parseSequenceTail
+                                (previousExpr: Expr)
+                                (sequenceTokens: Token list)
+                                : Result<Expr * Token list, string> =
+                                parseExpr sequenceTokens
+                                |> Result.bind (fun (nextExpr, afterNext) ->
+                                    match afterNext with
+                                    | TSemicolon :: afterSemicolon ->
+                                        parseSequenceTail nextExpr afterSemicolon
+                                        |> Result.map (fun (tail, remaining') ->
+                                            (Sequence (previousExpr, tail), remaining'))
+                                    | TRParen :: remaining' ->
+                                        Ok (Sequence (previousExpr, nextExpr), remaining')
+                                    | _ ->
+                                        Error "Expected ';' or ')' after sequence expression")
+                            parseSequenceTail firstExpr rest'
+                        | _ -> Error "Expected ')', ',', or ';' in tuple/parenthesized expression")
         | TLBrace :: rest ->
             // Distinguish between:
             // - anonymous record literal: { field = value, ... }
@@ -2256,6 +2292,8 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         validateExpr cond
         |> Result.bind (fun () -> validateExpr thenBranch)
         |> Result.bind (fun () -> validateExpr elseBranch)
+    | Sequence (first, next) ->
+        validateExpr first |> Result.bind (fun () -> validateExpr next)
     | TupleLiteral elems ->
         elems |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | TupleAccess (tupleExpr, _) -> validateExpr tupleExpr

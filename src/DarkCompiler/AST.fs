@@ -157,6 +157,7 @@ and Expr =
     | LetPattern of pattern:Pattern * value:Expr * body:Expr  // Let deconstruction before type checking
     | Var of string  // Variable reference
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
+    | Sequence of first:Expr * next:Expr  // Statement sequence: first must produce Unit; next supplies the value
     | Call of funcName:string * args:NonEmptyList<Expr>  // Function call: funcName(arg1, arg2, ...)
     | TypeApp of funcName:string * typeArgs:Type list * args:NonEmptyList<Expr>  // Generic call: funcName<T, U>(args)
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)

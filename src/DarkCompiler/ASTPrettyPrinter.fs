@@ -566,6 +566,8 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
     | Var name -> formatIdentifierPath name
     | If (cond, thenBranch, elseBranch) ->
         $"if {formatExpr syntax cond} then {formatExpr syntax thenBranch} else {formatExpr syntax elseBranch}"
+    | Sequence (first, next) ->
+        $"({formatExpr syntax first}; {formatExpr syntax next})"
     | Call (funcName, args) ->
         let argsList = NonEmptyList.toList args
         let formattedName = formatIdentifierPath funcName

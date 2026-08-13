@@ -1,0 +1,24 @@
+// Conditional and sequential evaluation parity
+
+// Canonical conditional syntax, nesting, and branch selection
+if false then 1 elif true then 2 else 3 = 2
+if true then (if false then 1 else 2) else 3 = 2
+
+// Conditions are Boolean and the compiler statically unifies branch types
+if 5 then "yes" else "no" = error="Encountered a condition that must be a Bool, but got an Int64 (5)"
+if true then "yes" else 0 = error="Type mismatch: if branches must have same type: expected String, got Int64"
+if false then [] else [1] = [1]
+if true then (if false then [] else [1]) else [2] = [1]
+if false then () = ()
+
+// Untaken branches remain lazy, including primitive work in atom position
+(if true then 5 else 1 / 0) + 1 = 6
+if false then Builtin.testRuntimeError("skipped") else 7 = 7
+if true then Builtin.testRuntimeError("selected") else 7 = exit=1 stderr="Uncaught exception: selected"
+
+// A parenthesized statement sequence evaluates strictly to its final expression
+(() ; 42) = 42
+(() ; (() ; "done")) = "done"
+if true then (() ; 7) else (() ; 9) = 7
+(1 ; "done") = error="Type mismatch in integer literal: expected Unit, got Int64"
+(Builtin.testRuntimeError("first"); Builtin.testRuntimeError("second")) = exit=1 stderr="Uncaught exception: first"

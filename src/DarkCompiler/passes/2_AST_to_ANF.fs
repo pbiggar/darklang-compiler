@@ -946,6 +946,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.LetPattern (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (applySubstToExpr subst cond, applySubstToExpr subst thenBranch, applySubstToExpr subst elseBranch)
+    | AST.Sequence (first, next) ->
+        AST.Sequence (applySubstToExpr subst first, applySubstToExpr subst next)
     | AST.Call (funcName, args) ->
         AST.Call (funcName, AST.NonEmptyList.map (applySubstToExpr subst) args)
     | AST.TypeApp (funcName, typeArgs, args) ->
@@ -1075,6 +1077,8 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         Set.union (collectTypeApps value) (collectTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeApps cond) (Set.union (collectTypeApps thenBranch) (collectTypeApps elseBranch))
+    | AST.Sequence (first, next) ->
+        Set.union (collectTypeApps first) (collectTypeApps next)
     | AST.Call (_, args) ->
         args |> exprArgsToList |> List.map collectTypeApps |> List.fold Set.union Set.empty
     | AST.TypeApp (funcName, typeArgs, args) ->
@@ -1190,6 +1194,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.LetPattern (pattern, replaceTypeApps value, replaceTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (replaceTypeApps cond, replaceTypeApps thenBranch, replaceTypeApps elseBranch)
+    | AST.Sequence (first, next) ->
+        AST.Sequence (replaceTypeApps first, replaceTypeApps next)
     | AST.Call (funcName, args) ->
         AST.Call (funcName, AST.NonEmptyList.map replaceTypeApps args)
     | AST.TypeApp (funcName, typeArgs, args) ->
@@ -1314,6 +1320,11 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                 |> Result.bind (fun thenBranch' ->
                     replace elseBranch
                     |> Result.map (fun elseBranch' -> AST.If (cond', thenBranch', elseBranch'))))
+        | AST.Sequence (first, next) ->
+            replace first
+            |> Result.bind (fun first' ->
+                replace next
+                |> Result.map (fun next' -> AST.Sequence (first', next')))
         | AST.Call (funcName, args) ->
             mapResult replace (exprArgsToList args)
             |> Result.map (fun args' -> AST.Call (funcName, exprArgsFromList args'))
@@ -1487,6 +1498,8 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: AST.Progr
             exprNeedsLambdaLowering bound cond
             || exprNeedsLambdaLowering bound thenBranch
             || exprNeedsLambdaLowering bound elseBranch
+        | AST.Sequence (first, next) ->
+            exprNeedsLambdaLowering bound first || exprNeedsLambdaLowering bound next
         | AST.BinOp (_, left, right) ->
             exprNeedsLambdaLowering bound left
             || exprNeedsLambdaLowering bound right
@@ -1570,6 +1583,8 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
         varOccursInExpr name value || varOccursInExpr name body
     | AST.If (cond, thenBranch, elseBranch) ->
         varOccursInExpr name cond || varOccursInExpr name thenBranch || varOccursInExpr name elseBranch
+    | AST.Sequence (first, next) ->
+        varOccursInExpr name first || varOccursInExpr name next
     | AST.Call (funcName, args) ->
         // funcName could be a lambda variable reference (parser can't distinguish)
         funcName = name || (args |> exprArgsToList |> List.exists (varOccursInExpr name))
@@ -1639,6 +1654,8 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         AST.LetPattern (pattern, inlineLambdas value lambdaEnv, inlineLambdas body lambdaEnv)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (inlineLambdas cond lambdaEnv, inlineLambdas thenBranch lambdaEnv, inlineLambdas elseBranch lambdaEnv)
+    | AST.Sequence (first, next) ->
+        AST.Sequence (inlineLambdas first lambdaEnv, inlineLambdas next lambdaEnv)
     | AST.Call (funcName, args) ->
         let args' = AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args
         // Check if funcName is actually a lambda variable (parser can't distinguish)
@@ -1790,6 +1807,8 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         Set.union (freeVars value bound) (freeVars body bound)
     | AST.If (cond, thenBr, elseBr) ->
         Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
+    | AST.Sequence (first, next) ->
+        Set.union (freeVars first bound) (freeVars next bound)
     | AST.Call (funcName, args) ->
         // Check if funcName is a local variable (not in bound) - if so, it's a free variable
         // Top-level function names will be filtered out later since they won't be in TypeEnv
@@ -2110,6 +2129,8 @@ let rec simpleInferType
               simpleInferType elseExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some thenType, Some elseType when thenType = elseType -> Some thenType
         | _ -> None
+    | AST.Sequence (_, next) ->
+        simpleInferType next typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
     | AST.Match (scrutinee, cases) ->
         let scrutineeType = simpleInferType scrutinee typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let caseTypes =
@@ -2200,6 +2221,11 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
             |> Result.bind (fun (thenBr', state2) ->
                 liftLambdasInExpr elseBr state2
                 |> Result.map (fun (elseBr', state3) -> (AST.If (cond', thenBr', elseBr'), state3))))
+    | AST.Sequence (first, next) ->
+        liftLambdasInExpr first state
+        |> Result.bind (fun (first', state1) ->
+            liftLambdasInExpr next state1
+            |> Result.map (fun (next', state2) -> (AST.Sequence (first', next'), state2)))
     | AST.Call (funcName, args) ->
         // Process args, lifting any lambdas
         liftLambdasInArgs args state
@@ -2744,6 +2770,8 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
         collectFuncRefsInExpr value knownFuncs @ collectFuncRefsInExpr body knownFuncs
     | AST.If (c, t, e) ->
         collectFuncRefsInExpr c knownFuncs @ collectFuncRefsInExpr t knownFuncs @ collectFuncRefsInExpr e knownFuncs
+    | AST.Sequence (first, next) ->
+        collectFuncRefsInExpr first knownFuncs @ collectFuncRefsInExpr next knownFuncs
     | AST.BinOp (_, l, r) ->
         collectFuncRefsInExpr l knownFuncs @ collectFuncRefsInExpr r knownFuncs
     | AST.UnaryOp (_, e) -> collectFuncRefsInExpr e knownFuncs
@@ -2802,6 +2830,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
         AST.LetPattern (pattern, replaceInExpr wrapperMap value, replaceInExpr wrapperMap body)
     | AST.If (c, t, e) ->
         AST.If (replaceInExpr wrapperMap c, replaceInExpr wrapperMap t, replaceInExpr wrapperMap e)
+    | AST.Sequence (first, next) ->
+        AST.Sequence (replaceInExpr wrapperMap first, replaceInExpr wrapperMap next)
     | AST.BinOp (op, l, r) ->
         AST.BinOp (op, replaceInExpr wrapperMap l, replaceInExpr wrapperMap r)
     | AST.UnaryOp (op, e) ->
@@ -3323,6 +3353,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                     | Error _, Error _ ->
                         Error
                             $"If branches have incompatible types: then={typeToString thenType}, else={typeToString elseType}"))
+    | AST.Sequence (_, next) ->
+        inferType next typeEnv typeReg variantLookup funcReg moduleRegistry
     | AST.BinOp (op, left, right) ->
         let ensureSameType () =
             inferType left typeEnv typeReg variantLookup funcReg moduleRegistry
@@ -4189,6 +4221,15 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             | ANF.Let (id, cexpr, rest) -> ANF.Let (id, cexpr, transformReturns rest)
                             | ANF.If (c, t, e) -> ANF.If (c, transformReturns t, transformReturns e)
                         (transformReturns condExpr, varGen4))))
+
+    | AST.Sequence (first, next) ->
+        // Preserve source order and let the final expression carry the value.
+        // bindReturns also prevents the tail from running after a failing head.
+        toANF first varGen env typeReg variantLookup funcReg moduleRegistry
+        |> Result.bind (fun (firstExpr, varGen1) ->
+            toANF next varGen1 env typeReg variantLookup funcReg moduleRegistry
+            |> Result.map (fun (nextExpr, varGen2) ->
+                (bindReturns firstExpr (fun _ -> nextExpr), varGen2)))
 
     | AST.Call (funcName, args) when isBuiltinUnwrapName funcName ->
         let argList = exprArgsToList args
@@ -8197,34 +8238,12 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     Ok (ANF.Var tempVar, allBindings, varGen3)))
 
     | AST.If (condExpr, thenExpr, elseExpr) ->
-        // If expression in atom position: use IfValue only when branch bindings are
-        // safe to evaluate eagerly. Otherwise, force callers to use full toANF
-        // lowering so non-selected branches remain lazy.
-        let isEagerIfBindingSafe (_: ANF.TempId, cexpr: ANF.CExpr) : bool =
-            match cexpr with
-            | ANF.Atom _
-            | ANF.TypedAtom _
-            | ANF.Prim _
-            | ANF.UnaryPrim _
-            | ANF.IfValue _
-            | ANF.TupleGet _
-            | ANF.RawGet _
-            | ANF.RawGetByte _
-            | ANF.FloatSqrt _
-            | ANF.FloatAbs _
-            | ANF.FloatNeg _
-            | ANF.Int64ToFloat _
-            | ANF.FloatToInt64 _
-            | ANF.FloatToBits _ -> true
-            | _ -> false
-
+        // IfValue selects atoms, but any bindings execute before it. Branches
+        // with bindings must use full control-flow lowering to remain lazy.
         toAtom condExpr varGen env typeReg variantLookup funcReg moduleRegistry |> Result.bind (fun (condAtom, condBindings, varGen1) ->
             toAtom thenExpr varGen1 env typeReg variantLookup funcReg moduleRegistry |> Result.bind (fun (thenAtom, thenBindings, varGen2) ->
                 toAtom elseExpr varGen2 env typeReg variantLookup funcReg moduleRegistry |> Result.bind (fun (elseAtom, elseBindings, varGen3) ->
-                    let thenBindingsSafe = List.forall isEagerIfBindingSafe thenBindings
-                    let elseBindingsSafe = List.forall isEagerIfBindingSafe elseBindings
-
-                    if thenBindingsSafe && elseBindingsSafe then
+                    if List.isEmpty thenBindings && List.isEmpty elseBindings then
                         // Create a temporary for the result
                         let (tempVar, varGen4) = ANF.freshVar varGen3
                         // Create an IfValue CExpr
@@ -8234,6 +8253,9 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                         Ok (ANF.Var tempVar, allBindings, varGen4)
                     else
                         Error "If expression requires lazy branch lowering")))
+
+    | AST.Sequence _ ->
+        Error "Sequence expression requires ordered lowering"
 
     | AST.Call (funcName, args) ->
         if isBuiltinUnwrapName funcName then

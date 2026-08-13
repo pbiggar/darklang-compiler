@@ -212,6 +212,7 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
     | BinOp (op, left, right) -> BinOp (op, recurse left, recurse right)
     | UnaryOp (op, inner) -> UnaryOp (op, recurse inner)
     | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
+    | Sequence (first, next) -> Sequence (recurse first, recurse next)
     | Call (functionName, callArgs) -> Call (functionName, NonEmptyList.map recurse callArgs)
     | TypeApp (functionName, typeArgs, callArgs) -> TypeApp (functionName, typeArgs, NonEmptyList.map recurse callArgs)
     | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
@@ -793,6 +794,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         Let (name, applySubstToExpr subst value, applySubstToExpr subst body)
     | If (cond, thenBr, elseBr) ->
         If (applySubstToExpr subst cond, applySubstToExpr subst thenBr, applySubstToExpr subst elseBr)
+    | Sequence (first, next) ->
+        Sequence (applySubstToExpr subst first, applySubstToExpr subst next)
     | Call (funcName, args) ->
         Call (funcName, NonEmptyList.map (applySubstToExpr subst) args)
     | TypeApp (funcName, typeArgs, args) ->
@@ -1121,6 +1124,8 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         let thenFree = collectFreeVars thenBranch bound
         let elseFree = collectFreeVars elseBranch bound
         Set.union condFree (Set.union thenFree elseFree)
+    | Sequence (first, next) ->
+        Set.union (collectFreeVars first bound) (collectFreeVars next bound)
     | Call (_, args) ->
         args
         |> NonEmptyList.toList
@@ -2286,6 +2291,16 @@ let rec private checkExprWithParamNames
                                 | Some reconciledExpected -> Ok (reconciledExpected, If (normalizedCond, then', else'))
                                 | None -> Error (TypeMismatch (expected, reconciledType, "if expression"))
                             | _ -> Ok (reconciledType, If (normalizedCond, then', else'))))))
+
+    | Sequence (first, next) ->
+        // The interpreter checks this at the statement boundary. The compiler
+        // enforces the same Unit contract statically and uses only the final
+        // expression to determine the sequence's result type.
+        checkExpr first env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some TUnit)
+        |> Result.bind (fun (_, first') ->
+            checkExpr next env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType
+            |> Result.map (fun (nextType, next') ->
+                (nextType, Sequence (first', next'))))
 
     | Call (funcName, args) ->
         // The resolution boundary has already attached the canonical callable
@@ -4735,6 +4750,10 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
             (Set.union
                 (collectEqHelperTypesFromExpr aliasReg thenBranch)
                 (collectEqHelperTypesFromExpr aliasReg elseBranch))
+    | Sequence (first, next) ->
+        Set.union
+            (collectEqHelperTypesFromExpr aliasReg first)
+            (collectEqHelperTypesFromExpr aliasReg next)
     | Call (_, args) ->
         collectFromExprs (NonEmptyList.toList args)
     | TypeApp (_, _, args) as typeAppExpr ->
@@ -4809,6 +4828,8 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         LetPattern (pattern, recurse value, recurse body)
     | If (cond, thenBranch, elseBranch) ->
         If (recurse cond, recurse thenBranch, recurse elseBranch)
+    | Sequence (first, next) ->
+        Sequence (recurse first, recurse next)
     | Call (funcName, args) ->
         Call (funcName, NonEmptyList.map recurse args)
     | TypeApp (funcName, typeArgs, args) as typeAppExpr ->
@@ -5029,6 +5050,8 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
     | If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeAppSpecs cond) (Set.union (collectTypeAppSpecs thenBranch) (collectTypeAppSpecs elseBranch))
+    | Sequence (first, next) ->
+        Set.union (collectTypeAppSpecs first) (collectTypeAppSpecs next)
     | Call (_, args) ->
         args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
     | TypeApp (funcName, typeArgs, args) ->

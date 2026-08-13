@@ -2368,6 +2368,23 @@ let parse (tokens: Token list) : Result<Program, string> =
                     | TComma :: rest' ->
                         // Tuple literal: (expr, expr, ...)
                         parseTupleElements rest' [firstExpr]
+                    | TSemicolon :: rest' ->
+                        let rec parseSequenceTail
+                            (previousExpr: Expr)
+                            (sequenceTokens: Token list)
+                            : Result<Expr * Token list, string> =
+                            parseExpr sequenceTokens
+                            |> Result.bind (fun (nextExpr, afterNext) ->
+                                match afterNext with
+                                | TSemicolon :: afterSemicolon ->
+                                    parseSequenceTail nextExpr afterSemicolon
+                                    |> Result.map (fun (tail, remaining') ->
+                                        (Sequence (previousExpr, tail), remaining'))
+                                | TRParen :: remaining' ->
+                                    Ok (Sequence (previousExpr, nextExpr), remaining')
+                                | _ ->
+                                    Error "Expected ';' or ')' after sequence expression")
+                        parseSequenceTail firstExpr rest'
                     | TLet :: _ ->
                         // Upstream interpreter syntax can contain parenthesized
                         // expression sequences where a trailing `let` introduces the
@@ -2384,21 +2401,12 @@ let parse (tokens: Token list) : Result<Program, string> =
                             match remaining' with
                             | TRParen :: rest' ->
                                 Ok (
-                                    Match (
-                                        firstExpr,
-                                        [
-                                            {
-                                                Patterns = NonEmptyList.singleton PWildcard
-                                                Guard = None
-                                                Body = nextExpr
-                                            }
-                                        ]
-                                    ),
+                                    Sequence (firstExpr, nextExpr),
                                     rest'
                                 )
                             | _ ->
                                 Error "Expected ')' after parenthesized let-sequence expression")
-                    | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
+                    | _ -> Error "Expected ')', ',', or ';' in tuple/parenthesized expression")
         | TLBrace :: rest ->
             // Distinguish between:
             // - anonymous record literal: { field = value, ... }
@@ -2777,6 +2785,8 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         validateExpr cond
         |> Result.bind (fun () -> validateExpr thenBranch)
         |> Result.bind (fun () -> validateExpr elseBranch)
+    | Sequence (first, next) ->
+        validateExpr first |> Result.bind (fun () -> validateExpr next)
     | TupleLiteral elems ->
         elems |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | TupleAccess (tupleExpr, _) -> validateExpr tupleExpr
