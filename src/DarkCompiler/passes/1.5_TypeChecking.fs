@@ -5386,6 +5386,9 @@ let private resolveProgramNames
         | UnaryOp (op, inner) -> recurse inner |> Result.map (fun inner' -> UnaryOp (op, inner'))
         | If (condition, thenBranch, elseBranch) ->
             recurse condition |> Result.bind (fun c -> recurse thenBranch |> Result.bind (fun t -> recurse elseBranch |> Result.map (fun e -> If (c, t, e))))
+        | Sequence (first, next) ->
+            recurse first
+            |> Result.bind (fun first' -> recurse next |> Result.map (fun next' -> Sequence (first', next')))
         | InterpolatedString parts ->
             parts
             |> ResultList.traverse (function StringText text -> Ok (StringText text) | StringExpr e -> recurse e |> Result.map StringExpr)

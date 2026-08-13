@@ -1,5 +1,8 @@
 // Conditional and sequential evaluation parity
 
+def paritySequenceHead(): Unit = ()
+def paritySequenceTail(): Int64 = 43
+
 // Canonical conditional syntax, nesting, and branch selection
 if false then 1 elif true then 2 else 3 = 2
 if true then (if false then 1 else 2) else 3 = 2
@@ -18,6 +21,7 @@ if true then Builtin.testRuntimeError("selected") else 7 = exit=1 stderr="Uncaug
 
 // A parenthesized statement sequence evaluates strictly to its final expression
 (() ; 42) = 42
+(paritySequenceHead(); paritySequenceTail()) = 43
 (() ; (() ; "done")) = "done"
 if true then (() ; 7) else (() ; 9) = 7
 (1 ; "done") = error="Type mismatch in integer literal: expected Unit, got Int64"
