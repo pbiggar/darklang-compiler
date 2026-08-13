@@ -4,67 +4,67 @@
 // Tests for Option module functions
 
 // ===================================================================
-// Option.isSome - Returns true if the option is Some
+// Stdlib.Option.isSome - Returns true if the option is Some
 // ===================================================================
 
-Option.isSome(Option.Some(5)) = true
+Stdlib.Option.isSome(Stdlib.Option.Option.Some(5)) = true
 // Unresolved type variable is preserved during monomorphization
-Option.isSome(Option.None) = false
+Stdlib.Option.isSome(Stdlib.Option.Option.None) = false
 
 // ===================================================================
-// Option.isNone - Returns true if the option is None
+// Stdlib.Option.isNone - Returns true if the option is None
 // ===================================================================
 
-Option.isNone(Option.Some(5)) = false
+Stdlib.Option.isNone(Stdlib.Option.Option.Some(5)) = false
 // Unresolved type variable is preserved during monomorphization
-Option.isNone(Option.None) = true
+Stdlib.Option.isNone(Stdlib.Option.Option.None) = true
 
 // ===================================================================
-// Option.withDefault - Returns the value or a default
+// Stdlib.Option.withDefault - Returns the value or a default
 // ===================================================================
 
-Option.withDefault(Option.Some(5), 0) = 5
-Option.withDefault(Option.None, 42) = 42
+Stdlib.Option.withDefault(Stdlib.Option.Option.Some(5), 0) = 5
+Stdlib.Option.withDefault(Stdlib.Option.Option.None, 42) = 42
 
 // ===================================================================
-// Option.map - Apply a function to the value if Some
+// Stdlib.Option.map - Apply a function to the value if Some
 // ===================================================================
 
-Option.withDefault(Option.map(Option.Some(5), (x: Int64) => x + 1), 0) = 6
-Option.isNone(Option.map(Option.None, (x: Int64) => x + 1)) = true
+Stdlib.Option.withDefault(Stdlib.Option.map(Stdlib.Option.Option.Some(5), (x: Int64) => x + 1), 0) = 6
+Stdlib.Option.isNone(Stdlib.Option.map(Stdlib.Option.Option.None, (x: Int64) => x + 1)) = true
 
 // ===================================================================
-// Option.andThen - Chain Option computations
+// Stdlib.Option.andThen - Chain Option computations
 // ===================================================================
 
-Option.withDefault(Option.andThen(Option.Some(5), (x: Int64) => Option.Some(x * 2)), 0) = 10
-Option.isNone(Option.andThen(Option.None, (x: Int64) => Option.Some(x * 2))) = true
+Stdlib.Option.withDefault(Stdlib.Option.andThen(Stdlib.Option.Option.Some(5), (x: Int64) => Stdlib.Option.Option.Some(x * 2)), 0) = 10
+Stdlib.Option.isNone(Stdlib.Option.andThen(Stdlib.Option.Option.None, (x: Int64) => Stdlib.Option.Option.Some(x * 2))) = true
 // NOTE: Needs type params because the lambda returns None which doesn't constrain the output type
-Option.isNone(Option.andThen<Int64, Int64>(Option.Some(5), (x: Int64) => Option.None)) = true
+Stdlib.Option.isNone(Stdlib.Option.andThen<Int64, Int64>(Stdlib.Option.Option.Some(5), (x: Int64) => Stdlib.Option.Option.None)) = true
 
 // ===================================================================
-// Option.or - Return the first Some, or fall back to the second option
+// Stdlib.Option.or - Return the first Some, or fall back to the second option
 // ===================================================================
 
-Option.or(Option.Some(6), Option.Some(5)) = Option.Some(6)
-Option.or(Option.Some(6), Option.None) = Option.Some(6)
-Option.or(Option.None, Option.Some(5)) = Option.Some(5)
-Option.or(Option.None, Option.None) = Option.None
+Stdlib.Option.or(Stdlib.Option.Option.Some(6), Stdlib.Option.Option.Some(5)) = Stdlib.Option.Option.Some(6)
+Stdlib.Option.or(Stdlib.Option.Option.Some(6), Stdlib.Option.Option.None) = Stdlib.Option.Option.Some(6)
+Stdlib.Option.or(Stdlib.Option.Option.None, Stdlib.Option.Option.Some(5)) = Stdlib.Option.Option.Some(5)
+Stdlib.Option.or(Stdlib.Option.Option.None, Stdlib.Option.Option.None) = Stdlib.Option.Option.None
 
 // ===================================================================
-// Option.toList - Convert to a list
+// Stdlib.Option.toList - Convert to a list
 // ===================================================================
 
-List.length(Option.toList(Option.Some(42))) = 1
-List.isEmpty(Option.toList(Option.None)) = true
+Stdlib.List.length(Stdlib.Option.toList(Stdlib.Option.Option.Some(42))) = 1
+Stdlib.List.isEmpty(Stdlib.Option.toList(Stdlib.Option.Option.None)) = true
 
 // ===================================================================
 // Pipe operator with Option functions
 // ===================================================================
 
-Option.Some(42) |> Option.isSome() = true
-Option.None |> Option.isNone() = true
-Option.Some(10) |> Option.map((x: Int64) => x * 2) |> Option.withDefault(0) = 20
+Stdlib.Option.Option.Some(42) |> Stdlib.Option.isSome() = true
+Stdlib.Option.Option.None |> Stdlib.Option.isNone() = true
+Stdlib.Option.Option.Some(10) |> Stdlib.Option.map((x: Int64) => x * 2) |> Stdlib.Option.withDefault(0) = 20
 
 // ===================================================================
 // Unresolved type variable resolved later by context
@@ -72,55 +72,55 @@ Option.Some(10) |> Option.map((x: Int64) => x * 2) |> Option.withDefault(0) = 20
 // ===================================================================
 
 // Int64
-let x = Option.None in Option.withDefault(x, 42) = 42
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42) = 42
 
 // String
-let x = Option.None in Option.withDefault(x, "hello") = "hello"
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, "hello") = "hello"
 
 // Bool
-let x = Option.None in Option.withDefault(x, true) = true
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, true) = true
 
 // Float64
-let x = Option.None in Option.withDefault(x, 3.14) = 3.14
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 3.14) = 3.14
 
 // Char
-let x = Option.None in Option.withDefault(x, 'a') = 'a'
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 'a') = 'a'
 
 // Unit
-let x = Option.None in Option.withDefault(x, ()) = ()
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, ()) = ()
 
 // Int8
-let x = Option.None in Option.withDefault(x, 42y) = 42y
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42y) = 42y
 
 // Int16
-let x = Option.None in Option.withDefault(x, 42s) = 42s
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42s) = 42s
 
 // Int32
-let x = Option.None in Option.withDefault(x, 42l) = 42l
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42l) = 42l
 
 // UInt8
-let x = Option.None in Option.withDefault(x, 42uy) = 42uy
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42uy) = 42uy
 
 // UInt16
-let x = Option.None in Option.withDefault(x, 42us) = 42us
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42us) = 42us
 
 // UInt32
-let x = Option.None in Option.withDefault(x, 42ul) = 42ul
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42ul) = 42ul
 
 // UInt64
-let x = Option.None in Option.withDefault(x, 42UL) = 42UL
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, 42UL) = 42UL
 
 // Tuple
-let x = Option.None in Option.withDefault(x, (1, 2)) = (1, 2)
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, (1, 2)) = (1, 2)
 
 // Tuple3
-let x = Option.None in Option.withDefault(x, (1, 2, 3)) = (1, 2, 3)
+let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, (1, 2, 3)) = (1, 2, 3)
 
 // List
-let x = Option.None in List.length(Option.withDefault(x, [1, 2, 3])) = 3
+let x = Stdlib.Option.Option.None in Stdlib.List.length(Stdlib.Option.withDefault(x, [1, 2, 3])) = 3
 
 // Nested Option (Option<Option<Int64>>)
-let x = Option.None in Option.isSome(Option.withDefault(x, Option.Some(42))) = true
+let x = Stdlib.Option.Option.None in Stdlib.Option.isSome(Stdlib.Option.withDefault(x, Stdlib.Option.Option.Some(42))) = true
 
 // Result
-let x = Option.None in Result.isOk(Option.withDefault(x, Result.Ok(42))) = true
+let x = Stdlib.Option.Option.None in Stdlib.Result.isOk(Stdlib.Option.withDefault(x, Stdlib.Result.Result.Ok(42))) = true

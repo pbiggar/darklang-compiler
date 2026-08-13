@@ -1,5 +1,9 @@
 # Architecture
 
+Name resolution is a semantic boundary between parsing and ordinary type
+checking. See [Name resolution parity](name-resolution.md) for the identity
+model, context precedence, diagnostics, and pinned interpreter evidence.
+
 ## Design Philosophy
 
 - The compiler is designed to eventually be rewritten in Darklang itself

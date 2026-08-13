@@ -1,3 +1,3 @@
 (let x = 5L in x) = 5L
 
-myvar = error="Undefined variable: myvar"
+myvar = error="Unresolved value name: myvar"

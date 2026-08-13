@@ -1,4 +1,4 @@
-// Float.dark - Stdlib.Float definitions
+// Stdlib.Float.dark - Stdlib.Float definitions
 //
 // Split from stdlib.dark for modular stdlib loading.
 
@@ -217,7 +217,7 @@ def Stdlib.Float.__isNegative(f: Float) : Bool =
 
 // Convert Float to String with up to 12 significant digits
 def Stdlib.Float.toString(f: Float) : String =
-    // Use Float.abs which is an intrinsic (no if-else)
+    // Use Stdlib.Float.abs which is an intrinsic (no if-else)
     let absF = Stdlib.Float.abs(f) in
     let intPart = Stdlib.Float.toInt(absF) in
     let intStr = Stdlib.Int64.toString(intPart) in

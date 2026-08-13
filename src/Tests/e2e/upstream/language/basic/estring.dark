@@ -8,5 +8,5 @@ $"""test {"1"}""" = "test 1"
  let age = "30"
  $"Name: {name}, Age: {age} years old.") = "Name: John, Age: 30 years old."
 
-(let two = 2L in "test 1" == $"test {one}") = error="There is no variable named: one"
+(let two = 2L in "test 1" == $"test {one}") = error="Unresolved value name: one"
 (let one = 1L in $"test {Stdlib.Int64.toString one}") = "test 1"

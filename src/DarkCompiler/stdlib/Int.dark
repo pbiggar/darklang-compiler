@@ -1,4 +1,4 @@
-// Int.dark - arbitrary-precision signed integer operations.
+// Stdlib.Int.dark - arbitrary-precision signed integer operations.
 //
 // Int values are canonical decimal dynamic buffers. Keeping the representation
 // identical to String lets the implementation stay target-independent while

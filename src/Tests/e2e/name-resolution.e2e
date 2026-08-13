@@ -1,0 +1,29 @@
+// Canonical name-resolution boundary and interpreter-derived precedence.
+
+// Qualified package/module spellings resolve exactly.
+Stdlib.Float.sqrt(4.0) = 2.0
+
+// The compiler no longer inserts an implicit Stdlib qualifier.
+Float.sqrt(4.0) = error="Unresolved callable name: Float.sqrt"
+
+// Lexical callable values shadow a same-spelled top-level function.
+def shadowed(x: Int64): Int64 = x + 10 let shadowed = (x: Int64) => x + 20 in shadowed(1) = 21
+
+// Equal-precedence duplicate declarations are deterministic ambiguities.
+def duplicated(x: Int64): Int64 = x + 1 def duplicated(x: Int64): Int64 = x + 2 duplicated(1) = error="Ambiguous callable reference 'duplicated': function duplicated"
+
+// Constructors from distinct user types do not acquire an order-dependent winner.
+type FirstChoice = SharedChoice | FirstOnly
+type SecondChoice = SharedChoice | SecondOnly
+SharedChoice = error="Ambiguous constructor reference 'SharedChoice': constructor FirstChoice.SharedChoice, constructor SecondChoice.SharedChoice"
+
+// Explicit qualification selects the constructor identity uniquely.
+type QualifiedFirst = QualifiedShared | QualifiedFirstOnly
+type QualifiedSecond = QualifiedShared | QualifiedSecondOnly
+QualifiedFirst.QualifiedShared == QualifiedFirst.QualifiedShared = true
+
+// Missing names retain their reference category in the diagnostic.
+doesNotExist(1) = error="Unresolved callable name: doesNotExist"
+
+// A function identity in value position is never coerced into a call.
+def nullaryIdentity(): Int64 = 1 def needsInt64(): Int64 = nullaryIdentity needsInt64() = error="Type mismatch in variable nullaryIdentity: expected Int64, got (Unit) -> Int64"

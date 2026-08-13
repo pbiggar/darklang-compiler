@@ -2,9 +2,9 @@
 // Minimal E2E coverage for interpreter-supported Fun module behavior.
 
 // ===================================================================
-// Fun.identity - Returns its argument unchanged
+// Stdlib.Fun.identity - Returns its argument unchanged
 // ===================================================================
 
-Fun.identity(42) = 42
-Fun.identity(true) = true
-Fun.identity("dark") = "dark"
+Stdlib.Fun.identity(42) = 42
+Stdlib.Fun.identity(true) = true
+Stdlib.Fun.identity("dark") = "dark"

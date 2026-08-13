@@ -737,10 +737,10 @@ module GuardClause =
 
   (match -5L with
    | x when y > 0L -> true
-   | _ -> false) = error="There is no variable named: y"
+   | _ -> false) = error="Unresolved value name: y"
   (match 5L with
    | 5L -> false
-   | x when y > 0L -> true) = error="There is no variable named: y"
+   | x when y > 0L -> true) = error="Unresolved value name: y"
 
   (match 5L with
    | x when (x + 1L) == 6L -> true
@@ -755,7 +755,7 @@ module GuardClause =
   (match 5L with
    | 2L when x > 2L -> false
    | 3L -> true) =
-    error="There is no variable named: x"
+    error="Unresolved value name: x"
 
   (match Stdlib.Result.Result.Error 5L with
    | Ok x when x > 2L -> false

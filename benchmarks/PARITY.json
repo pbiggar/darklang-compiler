@@ -162,12 +162,12 @@
     },
     "nqueen": {
       "status": "comparable",
-      "dark_sha256": "bf6472d3e3d478073b7c17c49c1b92bb47d64d8bf18d733eaf33cccae12823c7",
+      "dark_sha256": "1adde87b58aae5ff17ffdabaed999c2c96f231613a683cc3a899ed68e4ce87ea",
       "rust_sha256": "9fa59000340e85826838ce656df60d85a622e7ff91073c078ee60673f370e5de",
       "expected_sha256": "eae643511b97dc0b433fa0f027cbb9b17008754b3701c98ef5bc02dc697ae2c3",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "e0273e1a02384d30b303388971eeec83260950ca13a64685a462f1c09b90051d",
+        "dark_sha256": "ff44506a93862214c06a36464d2f0a1b2ec8a0fec71c44df2d06fe0df7ecd649",
         "rust_sha256": "2c6bd5595e8ccf0cdd02e07d58bf0f85ab2274ffe350511506df812d32d1f6c5",
         "expected_sha256": "e76a6aa700839b90bfaa40900a8b74ec5cc9d9b3eecf5bf8d780b6376b8f63c2"
       }

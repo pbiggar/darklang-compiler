@@ -5,13 +5,13 @@ def nqueenSolve(allOnes: Int64, cols: Int64, diag1: Int64, diag2: Int64, avail: 
     else
         let pos = avail & (0 - avail) in
         let newAvail = avail - pos in
-        let newCols = Int64.bitwiseOr(cols, pos) in
+        let newCols = Stdlib.Int64.bitwiseOr(cols, pos) in
         let subCount =
             if newCols == allOnes then 1
             else
-                let newDiag1 = (Int64.bitwiseOr(diag1, pos)) << 1 in
-                let newDiag2 = (Int64.bitwiseOr(diag2, pos)) >> 1 in
-                let blocked = Int64.bitwiseOr(Int64.bitwiseOr(newCols, newDiag1), newDiag2) in
+                let newDiag1 = (Stdlib.Int64.bitwiseOr(diag1, pos)) << 1 in
+                let newDiag2 = (Stdlib.Int64.bitwiseOr(diag2, pos)) >> 1 in
+                let blocked = Stdlib.Int64.bitwiseOr(Stdlib.Int64.bitwiseOr(newCols, newDiag1), newDiag2) in
                 let nextRowAvail = allOnes & (~~~blocked) in
                 nqueenSolve(allOnes, newCols, newDiag1, newDiag2, nextRowAvail, 0) in
         nqueenSolve(allOnes, cols, diag1, diag2, newAvail, count + subCount)

@@ -4,55 +4,55 @@
 // Tests for Bool module functions
 
 // ===================================================================
-// Bool.not - Returns the inverse of a boolean
+// Stdlib.Bool.not - Returns the inverse of a boolean
 // ===================================================================
 
-Bool.not(true) = false
-Bool.not(false) = true
+Stdlib.Bool.not(true) = false
+Stdlib.Bool.not(false) = true
 
 // With variable
-let b = true in Bool.not(b) = false
-let b = false in Bool.not(b) = true
+let b = true in Stdlib.Bool.not(b) = false
+let b = false in Stdlib.Bool.not(b) = true
 
 // Double not
-Bool.not(Bool.not(true)) = true
-Bool.not(Bool.not(false)) = false
+Stdlib.Bool.not(Stdlib.Bool.not(true)) = true
+Stdlib.Bool.not(Stdlib.Bool.not(false)) = false
 
 // ===================================================================
-// Bool.and - Returns true if both a and b are true
+// Stdlib.Bool.and - Returns true if both a and b are true
 // ===================================================================
 
-Bool.and(true, true) = true
-Bool.and(true, false) = false
-Bool.and(false, true) = false
-Bool.and(false, false) = false
+Stdlib.Bool.and(true, true) = true
+Stdlib.Bool.and(true, false) = false
+Stdlib.Bool.and(false, true) = false
+Stdlib.Bool.and(false, false) = false
 
 // With expressions
-Bool.and(8 >= 5, 6 <= 8) = true
-Bool.and(1 > 5, 2 < 8) = false
+Stdlib.Bool.and(8 >= 5, 6 <= 8) = true
+Stdlib.Bool.and(1 > 5, 2 < 8) = false
 
 // ===================================================================
-// Bool.or - Returns true if either a or b is true
+// Stdlib.Bool.or - Returns true if either a or b is true
 // ===================================================================
 
-Bool.or(true, true) = true
-Bool.or(true, false) = true
-Bool.or(false, true) = true
-Bool.or(false, false) = false
+Stdlib.Bool.or(true, true) = true
+Stdlib.Bool.or(true, false) = true
+Stdlib.Bool.or(false, true) = true
+Stdlib.Bool.or(false, false) = false
 
 // ===================================================================
-// Bool.xor - Returns true if exactly one of a and b is true
+// Stdlib.Bool.xor - Returns true if exactly one of a and b is true
 // ===================================================================
 
-Bool.xor(true, true) = false
-Bool.xor(true, false) = true
-Bool.xor(false, true) = true
-Bool.xor(false, false) = false
+Stdlib.Bool.xor(true, true) = false
+Stdlib.Bool.xor(true, false) = true
+Stdlib.Bool.xor(false, true) = true
+Stdlib.Bool.xor(false, false) = false
 
 // ===================================================================
-// Bool.toString - Convert bool to string
+// Stdlib.Bool.toString - Convert bool to string
 // Already tested in strings.e2e, but including here for completeness
 // ===================================================================
 
-Bool.toString(true) = "true"
-Bool.toString(false) = "false"
+Stdlib.Bool.toString(true) = "true"
+Stdlib.Bool.toString(false) = "false"

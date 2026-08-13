@@ -1,4 +1,4 @@
-// Internal stdlib helper tests: Int32.__digitToString
+// Internal stdlib helper tests: Stdlib.Int32.__digitToString
 //
 // Internal identifiers are only allowed in stdlib-internal test files.
 

@@ -3,11 +3,11 @@
 // Tests for UUID v4 generation
 
 // ===================================================================
-// Uuid.generate - Generate UUID v4 string
+// Stdlib.Uuid.generate - Generate UUID v4 string
 // ===================================================================
 
 // UUID length is 36 characters (8-4-4-4-12 with hyphens)
-String.length(Uuid.generate()) = 36
+Stdlib.String.length(Stdlib.Uuid.generate()) = 36
 
 // Multiple calls return different UUIDs (probabilistic)
-(Uuid.generate() != Uuid.generate()) = true
+(Stdlib.Uuid.generate() != Stdlib.Uuid.generate()) = true

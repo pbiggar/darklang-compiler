@@ -85,7 +85,7 @@ definedPolyFn<String>(X.B "str") = definedPolyFn (X.B "str")
 
 
 module InvalidFnCalls =
-  (functionWhichDoesntExist 6L) = error="There is no variable named: functionWhichDoesntExist"
+  (functionWhichDoesntExist 6L) = error="Unresolved callable name: functionWhichDoesntExist"
 
 
   // errors around type args

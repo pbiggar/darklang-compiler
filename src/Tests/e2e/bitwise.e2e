@@ -180,10 +180,10 @@
 (255 & ~~~255) = 0
 
 // Property: x OR ~~~x = -1 (all bits set)
-Int64.bitwiseOr(0, ~~~0) = -1
-Int64.bitwiseOr(1, ~~~1) = -1
-Int64.bitwiseOr(42, ~~~42) = -1
-Int64.bitwiseOr(255, ~~~255) = -1
+Stdlib.Int64.bitwiseOr(0, ~~~0) = -1
+Stdlib.Int64.bitwiseOr(1, ~~~1) = -1
+Stdlib.Int64.bitwiseOr(42, ~~~42) = -1
+Stdlib.Int64.bitwiseOr(255, ~~~255) = -1
 
 // Combined with shifts
 ~~~(1 << 0) = -2// Clear bit 0 (inverted)
@@ -196,7 +196,7 @@ Int64.bitwiseOr(255, ~~~255) = -1
 
 // De Morgan's Law: ~~~(a & b) = (~~~a) | (~~~b)
 ~~~(12 & 10) = -9// ~~~8 = -9
-Int64.bitwiseOr(~~~12, ~~~10) = -9
+Stdlib.Int64.bitwiseOr(~~~12, ~~~10) = -9
 
 // Constant folding verification (in variables)
 let x = 42 in ~~~x = -43
@@ -279,28 +279,28 @@ let avail = 20 in let pos = avail & (0 - avail) in pos = 4// 20 = 0b10100, lowes
 // ===================================================================
 
 // Stdlib.Int64.bitwiseAnd
-Int64.bitwiseAnd(12, 10) = 8
-Int64.bitwiseAnd(255, 15) = 15
-Int64.bitwiseAnd(0, 255) = 0
+Stdlib.Int64.bitwiseAnd(12, 10) = 8
+Stdlib.Int64.bitwiseAnd(255, 15) = 15
+Stdlib.Int64.bitwiseAnd(0, 255) = 0
 
 // Stdlib.Int64.bitwiseXor
-Int64.bitwiseXor(12, 10) = 6
-Int64.bitwiseXor(42, 42) = 0
-Int64.bitwiseXor(170, 85) = 255
+Stdlib.Int64.bitwiseXor(12, 10) = 6
+Stdlib.Int64.bitwiseXor(42, 42) = 0
+Stdlib.Int64.bitwiseXor(170, 85) = 255
 
 // Stdlib.Int64.shiftLeft
-Int64.shiftLeft(1, 4) = 16
-Int64.shiftLeft(1, 10) = 1024
-Int64.shiftLeft(5, 3) = 40
+Stdlib.Int64.shiftLeft(1, 4) = 16
+Stdlib.Int64.shiftLeft(1, 10) = 1024
+Stdlib.Int64.shiftLeft(5, 3) = 40
 
 // Stdlib.Int64.shiftRight
-Int64.shiftRight(16, 4) = 1
-Int64.shiftRight(1024, 10) = 1
-Int64.shiftRight(256, 4) = 16
+Stdlib.Int64.shiftRight(16, 4) = 1
+Stdlib.Int64.shiftRight(1024, 10) = 1
+Stdlib.Int64.shiftRight(256, 4) = 16
 
 // Stdlib.Int64.bitwiseNot
-Int64.bitwiseNot(0) = -1
-Int64.bitwiseNot(1) = -2
-Int64.bitwiseNot(-1) = 0
-Int64.bitwiseNot(255) = -256
-Int64.bitwiseNot(42) = -43
+Stdlib.Int64.bitwiseNot(0) = -1
+Stdlib.Int64.bitwiseNot(1) = -2
+Stdlib.Int64.bitwiseNot(-1) = 0
+Stdlib.Int64.bitwiseNot(255) = -256
+Stdlib.Int64.bitwiseNot(42) = -43

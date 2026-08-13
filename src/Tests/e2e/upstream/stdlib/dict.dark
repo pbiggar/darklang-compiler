@@ -4,7 +4,7 @@ module Empty =
 
 module ConstructionErrors =
   Dict { a = 1; a = 2 } = error="Cannot add two dictionary entries with the same key `a`"
-  Dict { a = 1; b = "two" } = error="Cannot add a String (\"two\") to a dict of Int32. Failed at key `b`."
+  Dict { a = 1; b = "two" } = error="Cannot add a String (\"two\") to a dict of Stdlib.Int32. Failed at key `b`."
 module FilterMap =
   Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = (Dict { })
 
@@ -48,7 +48,7 @@ module FromListOverwritingDuplicates =
 
   Stdlib.Dict.fromListOverwritingDuplicates_v0 [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   // CLEANUP improve the error message to:
-  //   In Dict.fromListOverwritingDuplicates's 1st argument (`entries`), the nested value `entries[1]` should be a (String, 'b). However, an Int64 (2) was passed instead.
+  //   In Stdlib.Dict.fromListOverwritingDuplicates's 1st argument (`entries`), the nested value `entries[1]` should be a (String, 'b). However, an Int64 (2) was passed instead.
   Stdlib.Dict.fromListOverwritingDuplicates_v0 [ (1L, 2L) ] = error="Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(String * Int64)>, but got List<(Int64 * Int64)> ([(1, 2)])"
   Stdlib.Dict.fromListOverwritingDuplicates_v0 [ 1L ] = error="Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(String * _)>, but got List<Int64> ([1])"
 module FromList =
@@ -65,7 +65,7 @@ module FromList =
 
   Stdlib.Dict.fromList_v0 [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   // CLEANUP improve the error message to
-  //  "In Dict.fromList's 1st argument (`entries`), the nested value `entries[0][0]` should be a String. However, an Int64 (1) was passed instead.\n\nExpected: String\nActual: an Int64: 1"
+  //  "In Stdlib.Dict.fromList's 1st argument (`entries`), the nested value `entries[0][0]` should be a Stdlib.String. However, an Int64 (1) was passed instead.\n\nExpected: String\nActual: an Int64: 1"
   Stdlib.Dict.fromList_v0 [ (1L, 1L) ] = error="Darklang.Stdlib.Dict.fromList's 1st parameter `entries` expects List<(String * Int64)>, but got List<(Int64 * Int64)> ([(1, 1)])"
 module Get =
   Stdlib.Dict.get (Dict { key1 = "val1" }) "key1" = Stdlib.Option.Option.Some "val1"
@@ -124,7 +124,7 @@ module Set =
 
   Stdlib.Dict.set_v0 (Dict { key1 = "val1before" }) "key1" "val1after" = error="Cannot add two dictionary entries with the same key `key1`"
   Stdlib.Dict.set_v0 (Dict { key1 = "val1"; key2 = "val2" }) "key2" "newVal2" = error="Cannot add two dictionary entries with the same key `key2`"
-  Dict { key1 = "val1"; key2 = 2L } = error="Cannot add an Int64 (2) to a dict of String. Failed at key `key2`."
+  Dict { key1 = "val1"; key2 = 2L } = error="Cannot add an Int64 (2) to a dict of Stdlib.String. Failed at key `key2`."
   Stdlib.Dict.set_v0 (Dict { key1 = "val1" }) "key2" 2L = error="Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (2)"
   Stdlib.Dict.set_v0 (Dict { }) "key1" "val1" =
     (Dict { key1 = "val1" })

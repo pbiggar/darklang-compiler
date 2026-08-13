@@ -19,7 +19,7 @@ Stdlib.List.append_v0 [] [] = []
 
 
 // CLEANUP the following tests should fail on having mixed types
-[1; 2.3] = error="Cannot add a Float (2.3) to a list of Int32. Failed at index 1."
+[1; 2.3] = error="Cannot add a Float (2.3) to a list of Stdlib.Int32. Failed at index 1."
 [(1,10); 10; (3,30)] = error="Cannot add an Int32 (10) to a list of (Int32 * Int32). Failed at index 1."
 [(1,10); (2,20); (3,30,40)] = error="Cannot add an (Int32 * Int32 * Int32) ((3, 30, 40)) to a list of (Int32 * Int32). Failed at index 2."
 Stdlib.List.all_v0 [] (fun item -> item < 3L) = true
@@ -310,7 +310,7 @@ Stdlib.List.uniqueBy_v0 [ 1L; 2L; 3L; 4L ] (fun x -> x) = [ 1L; 2L; 3L; 4L ]
 Stdlib.List.uniqueBy_v0 [ 1L; 1L; 1L; 1L ] (fun x -> x) = [ 1L ]
 Stdlib.List.uniqueBy_v0 [ 7L; 42L; 7L; 2L; 10L ] (fun x -> x) = [ 2L; 7L; 10L; 42L ]
 Stdlib.List.uniqueBy_v0 [] (fun x -> x) = []
-Stdlib.List.uniqueBy_v0 [ 6L; 2.0 ] (fun x -> x) = error="Cannot add a Float (2.0) to a list of Int64. Failed at index 1."
+Stdlib.List.uniqueBy_v0 [ 6L; 2.0 ] (fun x -> x) = error="Cannot add a Float (2.0) to a list of Stdlib.Int64. Failed at index 1."
 Stdlib.List.unique_v0 [ 1L; 2L; 3L; 4L ] = [ 1L; 2L; 3L; 4L ]
 Stdlib.List.unique_v0 [ 1L; 1L; 1L; 1L ] = [ 1L ]
 Stdlib.List.unique_v0 [ 7L; 42L; 7L; 2L; 10L ] = [ 2L; 7L; 10L; 42L ]

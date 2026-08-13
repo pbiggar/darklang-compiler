@@ -3,7 +3,7 @@
 
 // TODO: try decoding values with incorrect padding
 
-// Base64.decode
+// Stdlib.Base64.decode
 Stdlib.Base64.decode "" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "")
 Stdlib.Base64.decode "garbage text" = Stdlib.Result.Result.Error "Not a valid base64 string"
 Stdlib.Base64.decode "Kw" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "+")
@@ -47,7 +47,7 @@ Stdlib.Base64.decode "AA" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromList [ 0uy ]
 Stdlib.Base64.decode "_w" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromList [ 255uy ])
 
 
-// Base64.encode
+// Stdlib.Base64.encode
 Stdlib.Base64.encode (Stdlib.Blob.fromString "abcdef") = "YWJjZGVm"
 Stdlib.Base64.encode (Stdlib.Blob.fromString "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = "WsykzZTNp8yRzJPDpM2WzK3MiMyHbM2uzJLNq8enzJfNmsyab8yZzJTNrsyHzZDMhw=="
 Stdlib.Base64.encode (Stdlib.Blob.fromString "اختبار النص") = "2KfYrtiq2KjYp9ixINin2YTZhti1"

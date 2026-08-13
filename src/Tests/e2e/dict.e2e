@@ -44,7 +44,7 @@ let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = set
 let d1 = setInt(emptyInt(), 0, 1000) in let d2 = setInt(d1, 64, 2000) in getOrDefault(d2, 0, -1) = 1000
 let d1 = setInt(emptyInt(), 0, 1000) in let d2 = setInt(d1, 64, 2000) in getOrDefault(d2, 64, -1) = 2000
 
-// ========== Dict.remove tests ==========
+// ========== Stdlib.Dict.remove tests ==========
 
 // Remove from single-entry dict
 let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in isNoneInt(getInt(d2, 1)) = true
@@ -162,7 +162,7 @@ let d = setStr(setStr(emptyStr(), "a", 10), "b", 20) in Stdlib.List.length(Stdli
 Stdlib.List.length(Stdlib.Dict.values(emptyStr())) = 0
 Stdlib.List.length(Stdlib.Dict.values(setStr(emptyStr(), "a", 100))) = 1
 
-// ========== Dict.entries tests ==========
+// ========== Stdlib.Dict.entries tests ==========
 
 // entries on empty dict
 Stdlib.List.length(Stdlib.Dict.entries(emptyInt())) = 0
@@ -173,7 +173,7 @@ Stdlib.List.length(Stdlib.Dict.entries(setInt(emptyInt(), 1, 100))) = 1
 // entries on two-entry dict
 let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Dict.entries(d)) = 2
 
-// ========== Dict.fold tests ==========
+// ========== Stdlib.Dict.fold tests ==========
 
 // fold to sum values
 let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 30
@@ -184,7 +184,7 @@ let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc:
 // fold on empty dict
 Stdlib.Dict.fold(emptyInt(), 100, (acc: Int64, k: Int64, v: Int64) => acc + v) = 100
 
-// ========== Dict.map tests ==========
+// ========== Stdlib.Dict.map tests ==========
 
 // map to double values
 let d = setInt(emptyInt(), 1, 10) in let d2 = Stdlib.Dict.map(d, (k: Int64, v: Int64) => v * 2) in getOrDefault(d2, 1, -1) = 20
@@ -195,7 +195,7 @@ let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict
 // map on empty dict
 Stdlib.Dict.isEmpty(Stdlib.Dict.map(emptyInt(), (k: Int64, v: Int64) => v * 2)) = true
 
-// ========== Dict.filter tests ==========
+// ========== Stdlib.Dict.filter tests ==========
 
 // filter to keep values > 15
 let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict.filter(d, (k: Int64, v: Int64) => v > 15)) = 1
@@ -209,7 +209,7 @@ let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict
 // filter to keep none
 Stdlib.Dict.isEmpty(Stdlib.Dict.filter(setInt(emptyInt(), 1, 10), (k: Int64, v: Int64) => false)) = true
 
-// ========== Dict.merge tests ==========
+// ========== Stdlib.Dict.merge tests ==========
 
 // merge empty dicts
 Stdlib.Dict.isEmpty(Stdlib.Dict.merge(emptyInt(), emptyInt())) = true
@@ -223,7 +223,7 @@ let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(emptyInt(), 1, 999) in ge
 // merge disjoint dicts
 let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(emptyInt(), 2, 20) in Stdlib.Dict.size(Stdlib.Dict.merge(d1, d2)) = 2
 
-// ========== Dict.fromList tests ==========
+// ========== Stdlib.Dict.fromList tests ==========
 
 // fromList empty
 Stdlib.Dict.isEmpty(Stdlib.Dict.fromList([])) = true
@@ -231,8 +231,8 @@ Stdlib.Dict.isEmpty(Stdlib.Dict.fromList([])) = true
 // fromList single
 Stdlib.Dict.size(Stdlib.Dict.fromList([(1, 100)])) = 1
 
-// Mutation #130: Test that Dict.fromList with non-empty list is not optimized to Dict.empty
-// This catches the bug where && becomes || in the Dict.fromList empty-list optimization condition
+// Mutation #130: Test that Stdlib.Dict.fromList with non-empty list is not optimized to Stdlib.Dict.empty
+// This catches the bug where && becomes || in the Stdlib.Dict.fromList empty-list optimization condition
 Stdlib.Dict.getOrDefault(Stdlib.Dict.fromList([(42, 999)]), 42, -1) = 999
 
 // fromList multiple
@@ -241,7 +241,7 @@ Stdlib.Dict.size(Stdlib.Dict.fromList([(1, 10), (2, 20), (3, 30)])) = 3
 // fromList get value
 getOrDefault(Stdlib.Dict.fromList([(1, 42), (2, 99)]), 1, -1) = 42
 
-// ========== Dict.getOrDefault tests ==========
+// ========== Stdlib.Dict.getOrDefault tests ==========
 
 // getOrDefault on existing key
 Stdlib.Dict.getOrDefault(setInt(emptyInt(), 1, 42), 1, -1) = 42
@@ -284,7 +284,7 @@ isNoneInt(getBool(setBool(emptyBool(), true, 42), false)) = true
 
 // ========== Dict with String values ==========
 // Regression: Dict value loads use RawGet + TypedAtom. The compiler must preserve
-// the typed alias instead of defaulting unknown RawGet temps to Int64.
+// the typed alias instead of defaulting unknown RawGet temps to Stdlib.Int64.
 let s = (let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, String>(), 1, "hello") in Stdlib.Dict.getOrDefault(d, 1, "missing")) in s ++ "!" = "hello!"
 
 // ========== Dict with List values ==========
@@ -295,10 +295,10 @@ def setListDict(d: Dict<Int64, List<Int64>>, k: Int64, v: List<Int64>): Dict<Int
 def getListDict(d: Dict<Int64, List<Int64>>, k: Int64): Stdlib.Option.Option<List<Int64>> = Stdlib.Dict.get(d, k)
 
 // Set and get list value
-List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), [])) = 3
+Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), [])) = 3
 
 // Multiple list entries
-let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), [])) = 3
+let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), [])) = 3
 
 // Empty list as value
 Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 42, []), 42), [-1]) = []
@@ -306,6 +306,6 @@ Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 
 // fromList with list values - use Stdlib.Dict.size with specific type
 let d = Stdlib.Dict.fromList([(1, [10]), (2, [20, 30])]) in Stdlib.Dict.size(d) = 2
 
-// Regression: Dict.member on an internal HAMT node with a missing chunk must not crash.
+// Regression: Stdlib.Dict.member on an internal HAMT node with a missing chunk must not crash.
 // This exercises the "tag == 1 && hasBit == false" path in __containsHelper.
 let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Bool>(), 1, true), 2, true) in Stdlib.Dict.member(d, 4) = false

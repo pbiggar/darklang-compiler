@@ -204,35 +204,9 @@ let buildModuleRegistry () : ModuleRegistry =
     (moduleFuncs @ rawMemFuncs)
     |> Map.ofList
 
-/// Get a function, trying with Stdlib prefix if not found
-/// This allows writing Option.isSome instead of Stdlib.Option.isSome
-/// Returns both the function and the resolved name (which may differ from the input)
-let tryGetFunctionWithFallback (registry: ModuleRegistry) (qualifiedName: string) : (ModuleFunc * string) option =
-    let tryLookupName (name: string) : (ModuleFunc * string) option =
-        match Map.tryFind name registry with
-        | Some f ->
-            Some (f, name)
-        | None ->
-            // Legacy compatibility: many upstream tests still reference *_v0 names.
-            if name.EndsWith("_v0") then
-                let canonicalName = name.Substring(0, name.Length - 3)
-                match Map.tryFind canonicalName registry with
-                | Some f ->
-                    Some (f, canonicalName)
-                | None ->
-                    None
-            else
-                None
-
-    match tryLookupName qualifiedName with
-    | Some resolved ->
-        Some resolved
-    | None ->
-        // Try with Stdlib prefix if name has at least one dot (Module.func)
-        if qualifiedName.Contains(".") && not (qualifiedName.StartsWith("Stdlib.")) then
-            tryLookupName ("Stdlib." + qualifiedName)
-        else
-            None
+/// Get a function by the exact identity attached during type checking.
+let tryGetFunction (registry: ModuleRegistry) (qualifiedName: string) : (ModuleFunc * string) option =
+    Map.tryFind qualifiedName registry |> Option.map (fun func -> (func, qualifiedName))
 
 /// Get the type of a module function as an AST.Type
 let getFunctionType (func: ModuleFunc) : Type =

@@ -195,7 +195,7 @@ Stdlib.Int64.multiply_v0 8L 8L = 64L
 Stdlib.Int64.multiply_v0 5145L 5145L = 26471025L
 
 // 1L * 1.0 = error=
-//   "int64Multiply's 2nd argument (`b`) should be an Int64. However, a Float (1.0) was passed instead.
+//   "int64Multiply's 2nd argument (`b`) should be an Stdlib.Int64. However, a Float (1.0) was passed instead.
 
 // Expected: (b: Int64)
 // Actual: a Float: 1.0"

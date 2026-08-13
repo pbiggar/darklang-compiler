@@ -70,7 +70,7 @@ let result = "foo" ++ "bar" in result = "foobar"
 "a" ++ "b" ++ "c" ++ "d" = "abcd"
 
 // =============================================================================
-// Int64.toString Tests
+// Stdlib.Int64.toString Tests
 // =============================================================================
 
 // Single digit conversion
@@ -101,7 +101,7 @@ Stdlib.Int64.toString(2147483647) = "2147483647"
 "Answer is " ++ Stdlib.Int64.toString(42) ++ "!" = "Answer is 42!"
 
 // =============================================================================
-// Bool.toString Tests
+// Stdlib.Bool.toString Tests
 // =============================================================================
 
 Stdlib.Bool.toString(true) = "true"
@@ -207,18 +207,18 @@ Stdlib.String.endsWith("", "a") = false
 // =============================================================================
 
 // Basic indexOf
-Stdlib.String.indexOf("hello world", "hello") = Option.Some(0)
-Stdlib.String.indexOf("hello world", "world") = Option.Some(6)
-Stdlib.String.indexOf("hello world", "o") = Option.Some(4)
-Stdlib.String.indexOf("hello world", "o w") = Option.Some(4)
+Stdlib.String.indexOf("hello world", "hello") = Stdlib.Option.Option.Some(0)
+Stdlib.String.indexOf("hello world", "world") = Stdlib.Option.Option.Some(6)
+Stdlib.String.indexOf("hello world", "o") = Stdlib.Option.Option.Some(4)
+Stdlib.String.indexOf("hello world", "o w") = Stdlib.Option.Option.Some(4)
 
 // Not found
-Stdlib.String.indexOf("hello world", "xyz") = Option.None
-Stdlib.String.indexOf("abc", "d") = Option.None
+Stdlib.String.indexOf("hello world", "xyz") = Stdlib.Option.Option.None
+Stdlib.String.indexOf("abc", "d") = Stdlib.Option.Option.None
 
 // Empty string search
-Stdlib.String.indexOf("hello", "") = Option.Some(0)
-Stdlib.String.indexOf("", "") = Option.Some(0)
+Stdlib.String.indexOf("hello", "") = Stdlib.Option.Option.Some(0)
+Stdlib.String.indexOf("", "") = Stdlib.Option.Option.Some(0)
 
 // =============================================================================
 // Stdlib.String.contains Tests

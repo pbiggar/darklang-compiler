@@ -1,4 +1,4 @@
-// Int64.dark - Stdlib.Int64 definitions
+// Stdlib.Int64.dark - Stdlib.Int64 definitions
 //
 // Split from stdlib.dark for modular stdlib loading.
 
@@ -91,7 +91,7 @@ def Stdlib.Int64.__digitToString(n: Int64) : String =
     | 7 -> "7"
     | 8 -> "8"
     | 9 -> "9"
-    | _ -> Builtin.testRuntimeError("Int64.__digitToString expected a digit from 0 to 9")
+    | _ -> Builtin.testRuntimeError("Stdlib.Int64.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
 def Stdlib.Int64.toString(n: Int64) : String =

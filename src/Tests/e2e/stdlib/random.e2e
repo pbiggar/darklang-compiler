@@ -3,11 +3,11 @@
 // Tests for Random module functions
 
 // ===================================================================
-// Random.int64 - Get 8 random bytes as Int64
+// Stdlib.Random.int64 - Get 8 random bytes as Int64
 // ===================================================================
 
-// Random.int64 returns an Int64 (type check via addition succeeds if it's an Int64)
-(let x = Random.int64() in Int64.add(x, 0) == x) = true
+// Stdlib.Random.int64 returns an Int64 (type check via addition succeeds if it's an Int64)
+(let x = Stdlib.Random.int64() in Stdlib.Int64.add(x, 0) == x) = true
 
 // Multiple calls both return Int64 values without relying on probabilistic uniqueness
-(let x = Random.int64() in let y = Random.int64() in Int64.add(x, 0) == x && Int64.add(y, 0) == y) = true
+(let x = Stdlib.Random.int64() in let y = Stdlib.Random.int64() in Stdlib.Int64.add(x, 0) == x && Stdlib.Int64.add(y, 0) == y) = true

@@ -1,60 +1,60 @@
 // Stdlib.Float tests
 
-// Float.add - IEEE 754 addition
-Float.add(1.2, 1.3) = 2.5
+// Stdlib.Float.add - IEEE 754 addition
+Stdlib.Float.add(1.2, 1.3) = 2.5
 
 // sqrt - now with full precision
-Float.sqrt(4.0) = 2.0
-Float.sqrt(9.0) = 3.0
-Float.sqrt(2.0) = 1.4142135623730951
-Float.sqrt(0.0) = 0.0
-Float.sqrt(1.0) = 1.0
-Float.sqrt(100.0) = 10.0
+Stdlib.Float.sqrt(4.0) = 2.0
+Stdlib.Float.sqrt(9.0) = 3.0
+Stdlib.Float.sqrt(2.0) = 1.4142135623730951
+Stdlib.Float.sqrt(0.0) = 0.0
+Stdlib.Float.sqrt(1.0) = 1.0
+Stdlib.Float.sqrt(100.0) = 10.0
 
 // abs - now with full precision
-Float.abs(5.5) = 5.5
-Float.abs(-5.5) = 5.5
-Float.abs(0.0) = 0.0
-Float.abs(-0.0) = 0.0
-Float.abs(-123.456) = 123.456
+Stdlib.Float.abs(5.5) = 5.5
+Stdlib.Float.abs(-5.5) = 5.5
+Stdlib.Float.abs(0.0) = 0.0
+Stdlib.Float.abs(-0.0) = 0.0
+Stdlib.Float.abs(-123.456) = 123.456
 
 // negate
-Float.negate(3.14) = -3.14
-Float.negate(-3.14) = 3.14
-// Float.negate(0.0) correctly displays as -0.0 (IEEE 754 signed zero)
-Float.negate(0.0) = -0.0
+Stdlib.Float.negate(3.14) = -3.14
+Stdlib.Float.negate(-3.14) = 3.14
+// Stdlib.Float.negate(0.0) correctly displays as -0.0 (IEEE 754 signed zero)
+Stdlib.Float.negate(0.0) = -0.0
 
 // toInt (truncates toward zero)
-Float.toInt(3.7) = 3
-Float.toInt(3.2) = 3
-Float.toInt(-3.7) = -3
-Float.toInt(-3.2) = -3
-Float.toInt(0.0) = 0
-Float.toInt(100.99) = 100
+Stdlib.Float.toInt(3.7) = 3
+Stdlib.Float.toInt(3.2) = 3
+Stdlib.Float.toInt(-3.7) = -3
+Stdlib.Float.toInt(-3.2) = -3
+Stdlib.Float.toInt(0.0) = 0
+Stdlib.Float.toInt(100.99) = 100
 
-// Int64.toFloat
-Int64.toFloat(42) = 42.0
-Int64.toFloat(0) = 0.0
-Int64.toFloat(-100) = -100.0
+// Stdlib.Int64.toFloat
+Stdlib.Int64.toFloat(42) = 42.0
+Stdlib.Int64.toFloat(0) = 0.0
+Stdlib.Int64.toFloat(-100) = -100.0
 
 // Combined operations
-Float.sqrt(Float.abs(-16.0)) = 4.0
-Float.abs(Float.negate(5.0)) = 5.0
-Float.toInt(Float.sqrt(100.0)) = 10
-Int64.toFloat(Float.toInt(9.99)) = 9.0
+Stdlib.Float.sqrt(Stdlib.Float.abs(-16.0)) = 4.0
+Stdlib.Float.abs(Stdlib.Float.negate(5.0)) = 5.0
+Stdlib.Float.toInt(Stdlib.Float.sqrt(100.0)) = 10
+Stdlib.Int64.toFloat(Stdlib.Float.toInt(9.99)) = 9.0
 
 // Float comparisons (already work, but good to test with new functions)
-Float.sqrt(4.0) > 1.0 = true
-Float.sqrt(4.0) == 2.0 = true
-Float.abs(-5.0) > 4.0 = true
+Stdlib.Float.sqrt(4.0) > 1.0 = true
+Stdlib.Float.sqrt(4.0) == 2.0 = true
+Stdlib.Float.abs(-5.0) > 4.0 = true
 
-// Float.toBits - IEEE 754 bit representation
+// Stdlib.Float.toBits - IEEE 754 bit representation
 // Note: UInt64 values with high bit set are printed as signed (compiler limitation)
-Float.toBits(1.0) = 4607182418800017408UL
-Float.toBits(-1.0) = 13830554455654793216UL
-Float.toBits(0.0) = 0UL
+Stdlib.Float.toBits(1.0) = 4607182418800017408UL
+Stdlib.Float.toBits(-1.0) = 13830554455654793216UL
+Stdlib.Float.toBits(0.0) = 0UL
 
-// Float.toString - special cases
+// Stdlib.Float.toString - special cases
 // -0.0 correctly displays as "-0.0" (IEEE 754 signed zero)
-Float.toString(0.0) = "0.0"
-Float.toString(-0.0) = "-0.0"
+Stdlib.Float.toString(0.0) = "0.0"
+Stdlib.Float.toString(-0.0) = "-0.0"

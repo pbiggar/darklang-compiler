@@ -1,4 +1,4 @@
-// Math.dark - Stdlib.Math definitions
+// Stdlib.Math.dark - Stdlib.Math definitions
 //
 // Split from stdlib.dark for modular stdlib loading.
 
@@ -18,31 +18,31 @@ def Stdlib.Math.e() : Float = 2.718281828459045
 
 // Absolute value of a float
 def Stdlib.Math.abs(x: Float) : Float =
-    Float.abs(x)
+    Stdlib.Float.abs(x)
 
-// Square root (delegating to existing Float.sqrt)
+// Square root (delegating to existing Stdlib.Float.sqrt)
 def Stdlib.Math.sqrt(x: Float) : Float =
-    Float.sqrt(x)
+    Stdlib.Float.sqrt(x)
 
 // Convert float to integer, truncating toward zero
 def Stdlib.Math.truncate(x: Float) : Int64 =
-    Float.toInt(x)
+    Stdlib.Float.toInt(x)
 
 // Floor: largest integer less than or equal to x
 def Stdlib.Math.floor(x: Float) : Int64 =
-    let truncated = Float.toInt(x) in
-    if x < Int64.toFloat(truncated) then truncated - 1 else truncated
+    let truncated = Stdlib.Float.toInt(x) in
+    if x < Stdlib.Int64.toFloat(truncated) then truncated - 1 else truncated
 
 // Ceiling: smallest integer greater than or equal to x
 def Stdlib.Math.ceiling(x: Float) : Int64 =
-    let truncated = Float.toInt(x) in
-    if x > Int64.toFloat(truncated) then truncated + 1 else truncated
+    let truncated = Stdlib.Float.toInt(x) in
+    if x > Stdlib.Int64.toFloat(truncated) then truncated + 1 else truncated
 
 // Round to nearest integer, with half values rounded to the nearest even integer
 def Stdlib.Math.round(x: Float) : Int64 =
     let lower = Stdlib.Math.floor(x) in
     let upper = Stdlib.Math.ceiling(x) in
-    let distanceFromLower = x - Int64.toFloat(lower) in
+    let distanceFromLower = x - Stdlib.Int64.toFloat(lower) in
     if distanceFromLower < 0.5 then lower
     else if distanceFromLower > 0.5 then upper
     else if lower % 2 == 0 then lower
@@ -59,7 +59,7 @@ def Stdlib.Math.radians(angleInRadians: Float) : Float =
     angleInRadians
 
 // NOTE: The following functions still require compiler/runtime support:
-// - Math.pow (needs float multiplication)
+// - Stdlib.Math.pow (needs float multiplication)
 // - Trigonometric functions (sin, cos, tan) require intrinsics
 
 

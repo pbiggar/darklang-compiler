@@ -330,7 +330,7 @@ sumSpilled(10) = 1495
 // ===================================================================
 
 // Mutation #230 targets the expireOldIntervals function in linearScan:
-//   active |> List.partition (fun (interval, _) -> interval.End < currentStart)
+//   active |> Stdlib.List.partition (fun (interval, _) -> interval.End < currentStart)
 // The linearScan function is dead code (never called), so this mutation
 // cannot be killed through E2E tests. The mutation would change < to >,
 // which would invert the logic: intervals would be "expired" when still
@@ -476,7 +476,7 @@ let srcA = 100 in let srcB = 200 in let srcC = 300 in let srcD = 400 in let srcE
 // ===================================================================
 
 // Mutation #246 targets the active list filter in linearScan (line 1372):
-//   active <- (interval, reg) :: (active |> List.filter (fun (x, _) -> x.VRegId <> i.VRegId))
+//   active <- (interval, reg) :: (active |> Stdlib.List.filter (fun (x, _) -> x.VRegId <> i.VRegId))
 // This code removes the spilled interval from the active list when evicting
 // an active interval to free a register for the current interval.
 //
@@ -555,7 +555,7 @@ def mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 2
 
 // Mutation #256 targets the offset return value in generateCalleeSavedSaves:
 //   let instr = ARM64.STR (lirPhysRegToARM64Reg single, ARM64.SP, int16 offset)
-//   (List.rev (instr :: acc), offset + 8)
+//   (Stdlib.List.rev (instr :: acc), offset + 8)
 // The mutation changes "offset + 8" to "offset - 8".
 //
 // However, this mutation is EQUIVALENT because:

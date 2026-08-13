@@ -6,211 +6,211 @@
 18446744073709551615UL = stdout="18446744073709551615\n"
 
 // ===================================================================
-// UInt64.add - Add two integers
+// Stdlib.UInt64.add - Add two integers
 // ===================================================================
 
-UInt64.add(10UL, 9UL) = 19UL
-UInt64.add(0UL, 0UL) = 0UL
-UInt64.add(5UL, 5UL) = 10UL
-UInt64.add(100UL, 200UL) = 300UL
+Stdlib.UInt64.add(10UL, 9UL) = 19UL
+Stdlib.UInt64.add(0UL, 0UL) = 0UL
+Stdlib.UInt64.add(5UL, 5UL) = 10UL
+Stdlib.UInt64.add(100UL, 200UL) = 300UL
 
 // ===================================================================
-// UInt64.sub - Subtract two integers
+// Stdlib.UInt64.sub - Subtract two integers
 // ===================================================================
 
-UInt64.sub(10UL, 9UL) = 1UL
-UInt64.sub(10UL, 0UL) = 10UL
-UInt64.sub(100UL, 50UL) = 50UL
-UInt64.sub(5UL, 0UL) = 5UL
+Stdlib.UInt64.sub(10UL, 9UL) = 1UL
+Stdlib.UInt64.sub(10UL, 0UL) = 10UL
+Stdlib.UInt64.sub(100UL, 50UL) = 50UL
+Stdlib.UInt64.sub(5UL, 0UL) = 5UL
 
 // ===================================================================
-// UInt64.mul - Multiply two integers
+// Stdlib.UInt64.mul - Multiply two integers
 // ===================================================================
 
-UInt64.mul(8UL, 8UL) = 64UL
-UInt64.mul(0UL, 100UL) = 0UL
-UInt64.mul(5UL, 5UL) = 25UL
-UInt64.mul(100UL, 100UL) = 10000UL
+Stdlib.UInt64.mul(8UL, 8UL) = 64UL
+Stdlib.UInt64.mul(0UL, 100UL) = 0UL
+Stdlib.UInt64.mul(5UL, 5UL) = 25UL
+Stdlib.UInt64.mul(100UL, 100UL) = 10000UL
 
 // ===================================================================
-// UInt64.div - Divide two integers
+// Stdlib.UInt64.div - Divide two integers
 // ===================================================================
 
-UInt64.div(10UL, 5UL) = 2UL
-UInt64.div(10UL, 3UL) = 3UL
-UInt64.div(100UL, 10UL) = 10UL
-UInt64.div(10UL, 2UL) = 5UL
+Stdlib.UInt64.div(10UL, 5UL) = 2UL
+Stdlib.UInt64.div(10UL, 3UL) = 3UL
+Stdlib.UInt64.div(100UL, 10UL) = 10UL
+Stdlib.UInt64.div(10UL, 2UL) = 5UL
 
 // ===================================================================
-// UInt64.mod - Modulo operation
+// Stdlib.UInt64.mod - Modulo operation
 // ===================================================================
 
-UInt64.mod(15UL, 6UL) = 3UL
-UInt64.mod(10UL, 3UL) = 1UL
-UInt64.mod(100UL, 7UL) = 2UL
-UInt64.mod(20UL, 3UL) = 2UL
+Stdlib.UInt64.mod(15UL, 6UL) = 3UL
+Stdlib.UInt64.mod(10UL, 3UL) = 1UL
+Stdlib.UInt64.mod(100UL, 7UL) = 2UL
+Stdlib.UInt64.mod(20UL, 3UL) = 2UL
 
 // ===================================================================
-// UInt64.max - Maximum of two integers
+// Stdlib.UInt64.max - Maximum of two integers
 // ===================================================================
 
-UInt64.max(5UL, 6UL) = 6UL
-UInt64.max(6UL, 5UL) = 6UL
-UInt64.max(10UL, 20UL) = 20UL
-UInt64.max(0UL, 0UL) = 0UL
+Stdlib.UInt64.max(5UL, 6UL) = 6UL
+Stdlib.UInt64.max(6UL, 5UL) = 6UL
+Stdlib.UInt64.max(10UL, 20UL) = 20UL
+Stdlib.UInt64.max(0UL, 0UL) = 0UL
 
 // ===================================================================
-// UInt64.min - Minimum of two integers
+// Stdlib.UInt64.min - Minimum of two integers
 // ===================================================================
 
-UInt64.min(5UL, 6UL) = 5UL
-UInt64.min(6UL, 5UL) = 5UL
-UInt64.min(10UL, 20UL) = 10UL
-UInt64.min(0UL, 0UL) = 0UL
+Stdlib.UInt64.min(5UL, 6UL) = 5UL
+Stdlib.UInt64.min(6UL, 5UL) = 5UL
+Stdlib.UInt64.min(10UL, 20UL) = 10UL
+Stdlib.UInt64.min(0UL, 0UL) = 0UL
 
 // ===================================================================
-// UInt64.absoluteValue - Absolute value
+// Stdlib.UInt64.absoluteValue - Absolute value
 // ===================================================================
 
-UInt64.absoluteValue(5UL) = 5UL
-UInt64.absoluteValue(0UL) = 0UL
-UInt64.absoluteValue(100UL) = 100UL
-UInt64.absoluteValue(1UL) = 1UL
+Stdlib.UInt64.absoluteValue(5UL) = 5UL
+Stdlib.UInt64.absoluteValue(0UL) = 0UL
+Stdlib.UInt64.absoluteValue(100UL) = 100UL
+Stdlib.UInt64.absoluteValue(1UL) = 1UL
 
 // ===================================================================
-// UInt64.negate - Negate an integer
+// Stdlib.UInt64.negate - Negate an integer
 // ===================================================================
 
-UInt64.negate(0UL) = 0UL
-UInt64.negate(1UL) = 18446744073709551615UL
-UInt64.negate(5UL) = 18446744073709551611UL
-UInt64.negate(100UL) = 18446744073709551516UL
+Stdlib.UInt64.negate(0UL) = 0UL
+Stdlib.UInt64.negate(1UL) = 18446744073709551615UL
+Stdlib.UInt64.negate(5UL) = 18446744073709551611UL
+Stdlib.UInt64.negate(100UL) = 18446744073709551516UL
 
 // ===================================================================
-// UInt64.power - Raise to a power
+// Stdlib.UInt64.power - Raise to a power
 // ===================================================================
 
-UInt64.power(8UL, 5UL) = 32768UL
-UInt64.power(2UL, 10UL) = 1024UL
-UInt64.power(0UL, 0UL) = 1UL
-UInt64.power(5UL, 0UL) = 1UL
-UInt64.power(5UL, 1UL) = 5UL
-UInt64.power(2UL, 8UL) = 256UL
+Stdlib.UInt64.power(8UL, 5UL) = 32768UL
+Stdlib.UInt64.power(2UL, 10UL) = 1024UL
+Stdlib.UInt64.power(0UL, 0UL) = 1UL
+Stdlib.UInt64.power(5UL, 0UL) = 1UL
+Stdlib.UInt64.power(5UL, 1UL) = 5UL
+Stdlib.UInt64.power(2UL, 8UL) = 256UL
 
 // ===================================================================
 // UInt64 bitwise operations
 // ===================================================================
 
-UInt64.bitwiseAnd(12UL, 10UL) = 8UL
-UInt64.bitwiseOr(12UL, 10UL) = 14UL
-UInt64.bitwiseXor(12UL, 10UL) = 6UL
-UInt64.bitwiseNot(0UL) = 18446744073709551615UL
-UInt64.shiftLeft(1UL, 4UL) = 16UL
-UInt64.shiftRight(16UL, 4UL) = 1UL
-UInt64.popcount(0UL) = 0UL
-UInt64.popcount(18446744073709551615UL) = 64UL
-UInt64.popcount(1085102592571150095UL) = 32UL
+Stdlib.UInt64.bitwiseAnd(12UL, 10UL) = 8UL
+Stdlib.UInt64.bitwiseOr(12UL, 10UL) = 14UL
+Stdlib.UInt64.bitwiseXor(12UL, 10UL) = 6UL
+Stdlib.UInt64.bitwiseNot(0UL) = 18446744073709551615UL
+Stdlib.UInt64.shiftLeft(1UL, 4UL) = 16UL
+Stdlib.UInt64.shiftRight(16UL, 4UL) = 1UL
+Stdlib.UInt64.popcount(0UL) = 0UL
+Stdlib.UInt64.popcount(18446744073709551615UL) = 64UL
+Stdlib.UInt64.popcount(1085102592571150095UL) = 32UL
 
 // ===================================================================
-// UInt64.clamp - Clamp value between limits
+// Stdlib.UInt64.clamp - Clamp value between limits
 // ===================================================================
 
-UInt64.clamp(5UL, 0UL, 5UL) = 5UL
-UInt64.clamp(3UL, 0UL, 2UL) = 2UL
-UInt64.clamp(1UL, 0UL, 5UL) = 1UL
-UInt64.clamp(10UL, 5UL, 15UL) = 10UL
-UInt64.clamp(2UL, 5UL, 10UL) = 5UL
+Stdlib.UInt64.clamp(5UL, 0UL, 5UL) = 5UL
+Stdlib.UInt64.clamp(3UL, 0UL, 2UL) = 2UL
+Stdlib.UInt64.clamp(1UL, 0UL, 5UL) = 1UL
+Stdlib.UInt64.clamp(10UL, 5UL, 15UL) = 10UL
+Stdlib.UInt64.clamp(2UL, 5UL, 10UL) = 5UL
 
 // ===================================================================
-// UInt64.greaterThan - Greater than comparison
+// Stdlib.UInt64.greaterThan - Greater than comparison
 // ===================================================================
 
-UInt64.greaterThan(20UL, 1UL) = true
-UInt64.greaterThan(1UL, 20UL) = false
-UInt64.greaterThan(5UL, 5UL) = false
+Stdlib.UInt64.greaterThan(20UL, 1UL) = true
+Stdlib.UInt64.greaterThan(1UL, 20UL) = false
+Stdlib.UInt64.greaterThan(5UL, 5UL) = false
 
 // ===================================================================
-// UInt64.greaterThanOrEqualTo - Greater than or equal comparison
+// Stdlib.UInt64.greaterThanOrEqualTo - Greater than or equal comparison
 // ===================================================================
 
-UInt64.greaterThanOrEqualTo(6UL, 1UL) = true
-UInt64.greaterThanOrEqualTo(1UL, 6UL) = false
-UInt64.greaterThanOrEqualTo(5UL, 5UL) = true
+Stdlib.UInt64.greaterThanOrEqualTo(6UL, 1UL) = true
+Stdlib.UInt64.greaterThanOrEqualTo(1UL, 6UL) = false
+Stdlib.UInt64.greaterThanOrEqualTo(5UL, 5UL) = true
 
 // ===================================================================
-// UInt64.lessThan - Less than comparison
+// Stdlib.UInt64.lessThan - Less than comparison
 // ===================================================================
 
-UInt64.lessThan(6UL, 8UL) = true
-UInt64.lessThan(8UL, 6UL) = false
-UInt64.lessThan(5UL, 5UL) = false
-UInt64.lessThan(18446744073709551615UL, 10UL) = false
+Stdlib.UInt64.lessThan(6UL, 8UL) = true
+Stdlib.UInt64.lessThan(8UL, 6UL) = false
+Stdlib.UInt64.lessThan(5UL, 5UL) = false
+Stdlib.UInt64.lessThan(18446744073709551615UL, 10UL) = false
 
 // ===================================================================
-// UInt64.lessThanOrEqualTo - Less than or equal comparison
+// Stdlib.UInt64.lessThanOrEqualTo - Less than or equal comparison
 // ===================================================================
 
-UInt64.lessThanOrEqualTo(6UL, 8UL) = true
-UInt64.lessThanOrEqualTo(8UL, 6UL) = false
-UInt64.lessThanOrEqualTo(5UL, 5UL) = true
-UInt64.lessThanOrEqualTo(18446744073709551615UL, 10UL) = false
+Stdlib.UInt64.lessThanOrEqualTo(6UL, 8UL) = true
+Stdlib.UInt64.lessThanOrEqualTo(8UL, 6UL) = false
+Stdlib.UInt64.lessThanOrEqualTo(5UL, 5UL) = true
+Stdlib.UInt64.lessThanOrEqualTo(18446744073709551615UL, 10UL) = false
 
 // ===================================================================
-// UInt64.toString - Convert integer to string
+// Stdlib.UInt64.toString - Convert integer to string
 // ===================================================================
 
-UInt64.toString(0UL) = "0"
-UInt64.toString(42UL) = "42"
-UInt64.toString(5UL) = "5"
-UInt64.toString(1234567890UL) = "1234567890"
-UInt64.toString(18446744073709551615UL) = "18446744073709551615"
+Stdlib.UInt64.toString(0UL) = "0"
+Stdlib.UInt64.toString(42UL) = "42"
+Stdlib.UInt64.toString(5UL) = "5"
+Stdlib.UInt64.toString(1234567890UL) = "1234567890"
+Stdlib.UInt64.toString(18446744073709551615UL) = "18446744073709551615"
 
 // ===================================================================
-// UInt64.isEven - Check if integer is even
+// Stdlib.UInt64.isEven - Check if integer is even
 // ===================================================================
 
-UInt64.isEven(0UL) = true
-UInt64.isEven(2UL) = true
-UInt64.isEven(4UL) = true
-UInt64.isEven(6UL) = true
-UInt64.isEven(1UL) = false
-UInt64.isEven(3UL) = false
-UInt64.isEven(5UL) = false
+Stdlib.UInt64.isEven(0UL) = true
+Stdlib.UInt64.isEven(2UL) = true
+Stdlib.UInt64.isEven(4UL) = true
+Stdlib.UInt64.isEven(6UL) = true
+Stdlib.UInt64.isEven(1UL) = false
+Stdlib.UInt64.isEven(3UL) = false
+Stdlib.UInt64.isEven(5UL) = false
 
 // ===================================================================
-// UInt64.isOdd - Check if integer is odd
+// Stdlib.UInt64.isOdd - Check if integer is odd
 // ===================================================================
 
-UInt64.isOdd(1UL) = true
-UInt64.isOdd(3UL) = true
-UInt64.isOdd(5UL) = true
-UInt64.isOdd(0UL) = false
-UInt64.isOdd(2UL) = false
-UInt64.isOdd(4UL) = false
-UInt64.isOdd(6UL) = false
+Stdlib.UInt64.isOdd(1UL) = true
+Stdlib.UInt64.isOdd(3UL) = true
+Stdlib.UInt64.isOdd(5UL) = true
+Stdlib.UInt64.isOdd(0UL) = false
+Stdlib.UInt64.isOdd(2UL) = false
+Stdlib.UInt64.isOdd(4UL) = false
+Stdlib.UInt64.isOdd(6UL) = false
 
 // ===================================================================
-// UInt64.sum - Sum all integers in a list
+// Stdlib.UInt64.sum - Sum all integers in a list
 // ===================================================================
 
-UInt64.sum([1UL, 2UL, 3UL, 4UL, 5UL]) = 15UL
-UInt64.sum([]) = 0UL
-UInt64.sum([100UL]) = 100UL
-UInt64.sum([1UL, 1UL, 2UL, 2UL]) = 6UL
-UInt64.sum([10UL, 20UL, 30UL]) = 60UL
+Stdlib.UInt64.sum([1UL, 2UL, 3UL, 4UL, 5UL]) = 15UL
+Stdlib.UInt64.sum([]) = 0UL
+Stdlib.UInt64.sum([100UL]) = 100UL
+Stdlib.UInt64.sum([1UL, 1UL, 2UL, 2UL]) = 6UL
+Stdlib.UInt64.sum([10UL, 20UL, 30UL]) = 60UL
 
 // ===================================================================
 // NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// UInt64.sqrt - not implemented
-// UInt64.sqrt(4) = 2.0
+// Stdlib.UInt64.sqrt - not implemented
+// Stdlib.UInt64.sqrt(4) = 2.0
 
-// UInt64.toFloat - not implemented
-// UInt64.toFloat(2) = 2.0
+// Stdlib.UInt64.toFloat - not implemented
+// Stdlib.UInt64.toFloat(2) = 2.0
 
-// UInt64.parse - needs Result type (blocked by type checker bug)
-// UInt64.parse("1") = Result.Ok(1)
+// Stdlib.UInt64.parse - needs Result type (blocked by type checker bug)
+// Stdlib.UInt64.parse("1") = Stdlib.Result.Result.Ok(1)
 
-// UInt64.remainder - needs Result type (blocked by type checker bug)
-// UInt64.remainder(15, 6) = Result.Ok(3)
+// Stdlib.UInt64.remainder - needs Result type (blocked by type checker bug)
+// Stdlib.UInt64.remainder(15, 6) = Stdlib.Result.Result.Ok(3)

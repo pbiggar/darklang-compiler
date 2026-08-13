@@ -241,7 +241,7 @@ def Stdlib.__HAMT.__mapCollisionRest<k, v, w>(oldPtr: RawPtr, newPtr: RawPtr, co
         Stdlib.__HAMT.__mapCollisionRest<k, v, w>(oldPtr, Stdlib.__HAMT.__clearTag<k, w>(newNode), count, i + 1, f)
 
 // =============================================================================
-// Dict.empty - returns an empty dictionary
+// Stdlib.Dict.empty - returns an empty dictionary
 // =============================================================================
 // Empty is represented as 0 (NULL with tag 0)
 def Stdlib.__HAMT.__getHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64, level: Int64) : Stdlib.Option.Option<v> =
@@ -699,7 +699,7 @@ def Stdlib.__HAMT.__filterChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64,
         Stdlib.__HAMT.__filterChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1, newAcc, f)
 
 // =============================================================================
-// Dict.merge - Combine two dictionaries
+// Stdlib.Dict.merge - Combine two dictionaries
 // =============================================================================
 // Second dictionary's values win on key conflicts
 
@@ -728,7 +728,7 @@ def Stdlib.__HAMT.__mergeChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64, 
         Stdlib.__HAMT.__mergeChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1, newTarget)
 
 // =============================================================================
-// Dict.fromList - Construct dictionary from list of pairs
+// Stdlib.Dict.fromList - Construct dictionary from list of pairs
 // =============================================================================
 
 def Stdlib.__HAMT.__fromListHelper<k, v>(pairs: List<(k, v)>, acc: Dict<k, v>) : Dict<k, v> =
@@ -740,5 +740,5 @@ def Stdlib.__HAMT.__fromListHelper<k, v>(pairs: List<(k, v)>, acc: Dict<k, v>) :
         Stdlib.__HAMT.__fromListHelper<k, v>(rest, Stdlib.Dict.set<k, v>(acc, key, value))
 
 // =============================================================================
-// Dict.getOrDefault - Get value with fallback
+// Stdlib.Dict.getOrDefault - Get value with fallback
 // =============================================================================

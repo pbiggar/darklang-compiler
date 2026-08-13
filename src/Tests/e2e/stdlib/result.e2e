@@ -7,81 +7,81 @@
 //       always needed.
 
 // ===================================================================
-// Result.isOk - Returns true if the result is Ok
+// Stdlib.Result.isOk - Returns true if the result is Ok
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Result.isOk(Result.Ok(5)) = true
-Result.isOk(Result.Error(99)) = false
+Stdlib.Result.isOk(Stdlib.Result.Result.Ok(5)) = true
+Stdlib.Result.isOk(Stdlib.Result.Result.Error(99)) = false
 
 // ===================================================================
-// Result.isError - Returns true if the result is Error
+// Stdlib.Result.isError - Returns true if the result is Error
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Result.isError(Result.Ok(5)) = false
-Result.isError(Result.Error(99)) = true
+Stdlib.Result.isError(Stdlib.Result.Result.Ok(5)) = false
+Stdlib.Result.isError(Stdlib.Result.Result.Error(99)) = true
 
 // ===================================================================
-// Result.toList - Convert Ok to a singleton list and Error to an empty list
+// Stdlib.Result.toList - Convert Ok to a singleton list and Error to an empty list
 // ===================================================================
 
-Result.toList<String, String>(Result.Ok("test")) = ["test"]
-Result.toList<String, String>(Result.Error("test")) = []
+Stdlib.Result.toList<String, String>(Stdlib.Result.Result.Ok("test")) = ["test"]
+Stdlib.Result.toList<String, String>(Stdlib.Result.Result.Error("test")) = []
 
 // ===================================================================
-// Result.fromOption - Convert Some to Ok and None to Error
+// Stdlib.Result.fromOption - Convert Some to Ok and None to Error
 // ===================================================================
 
-Result.fromOption(Option.Some(6), "missing") = Result.Ok(6)
-Result.fromOption<Int64, String>(Option.None, "missing") = Result.Error("missing")
+Stdlib.Result.fromOption(Stdlib.Option.Option.Some(6), "missing") = Stdlib.Result.Result.Ok(6)
+Stdlib.Result.fromOption<Int64, String>(Stdlib.Option.Option.None, "missing") = Stdlib.Result.Result.Error("missing")
 
 // ===================================================================
-// Result.withDefault - Returns the value or a default
+// Stdlib.Result.withDefault - Returns the value or a default
 // ===================================================================
 
 // Type inference from default value and constructor works
-Result.withDefault(Result.Ok(5), 0) = 5
-Result.withDefault(Result.Error(99), 42) = 42
+Stdlib.Result.withDefault(Stdlib.Result.Result.Ok(5), 0) = 5
+Stdlib.Result.withDefault(Stdlib.Result.Result.Error(99), 42) = 42
 
 // ===================================================================
-// Result.map - Apply a function to the Ok value
+// Stdlib.Result.map - Apply a function to the Ok value
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Result.withDefault(Result.map(Result.Ok(5), (x: Int64) => x + 1), 0) = 6
-Result.isError(Result.map(Result.Error(99), (x: Int64) => x + 1)) = true
+Stdlib.Result.withDefault(Stdlib.Result.map(Stdlib.Result.Result.Ok(5), (x: Int64) => x + 1), 0) = 6
+Stdlib.Result.isError(Stdlib.Result.map(Stdlib.Result.Result.Error(99), (x: Int64) => x + 1)) = true
 
 // ===================================================================
-// Result.mapError - Apply a function to the Error value
+// Stdlib.Result.mapError - Apply a function to the Error value
 // NOTE: Blocked by type checker - constructor doesn't pick up return type annotation
 // When changing error type from e to f, the Error constructor gets the wrong type
 // ===================================================================
 
-// Result.mapError(Result.Error(99), (e: Int64) => e + 1)
+// Stdlib.Result.mapError(Stdlib.Result.Result.Error(99), (e: Int64) => e + 1)
 
 // ===================================================================
-// Result.andThen - Chain Result computations
+// Stdlib.Result.andThen - Chain Result computations
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Result.withDefault(Result.andThen(Result.Ok(5), (x: Int64) => Result.Ok(x * 2)), 0) = 10
-Result.isError(Result.andThen(Result.Error(99), (x: Int64) => Result.Ok(x * 2))) = true
+Stdlib.Result.withDefault(Stdlib.Result.andThen(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Ok(x * 2)), 0) = 10
+Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Error(99), (x: Int64) => Stdlib.Result.Result.Ok(x * 2))) = true
 // When lambda returns Error, unresolved ok type is preserved
-Result.isError(Result.andThen(Result.Ok(5), (x: Int64) => Result.Error(99))) = true
+Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Error(99))) = true
 
 // ===================================================================
 // Pipe operator with Result functions
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Result.Ok(42) |> Result.isOk() = true
-Result.Error(99) |> Result.isError() = true
-Result.Ok(10) |> Result.map((x: Int64) => x * 2) |> Result.withDefault(0) = 20
+Stdlib.Result.Result.Ok(42) |> Stdlib.Result.isOk() = true
+Stdlib.Result.Result.Error(99) |> Stdlib.Result.isError() = true
+Stdlib.Result.Result.Ok(10) |> Stdlib.Result.map((x: Int64) => x * 2) |> Stdlib.Result.withDefault(0) = 20
 
 // ===================================================================
 // Unresolved type variable resolved later by context
 // ===================================================================
 
 // Type is inferred from withDefault's second argument
-let x = Result.Error(99) in Result.withDefault(x, 42) = 42
+let x = Stdlib.Result.Result.Error(99) in Stdlib.Result.withDefault(x, 42) = 42

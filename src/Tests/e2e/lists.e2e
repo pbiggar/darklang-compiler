@@ -3,7 +3,7 @@
 // === Empty List ===
 
 // Empty list should not default to Int64 element type
-List.length(if true then [] else [true]) = 0
+Stdlib.List.length(if true then [] else [true]) = 0
 
 // Top-level char lists use the recursive interpreter value renderer.
 ['a', 'b'] = stdout="['a', 'b']\n"
@@ -705,7 +705,7 @@ checkGuardFirst120([]) = 400
 // =====================================================
 // Tests that varOccursInExpr correctly uses || (not &&) when checking
 // if a variable occurs in a ListCons expression. The check is:
-//   List.exists (varOccursInExpr name) headElements || varOccursInExpr name tail
+//   Stdlib.List.exists (varOccursInExpr name) headElements || varOccursInExpr name tail
 // If || were changed to &&, a variable appearing only in the tail would be
 // incorrectly considered as not occurring, causing dead code elimination
 // to remove the let binding.

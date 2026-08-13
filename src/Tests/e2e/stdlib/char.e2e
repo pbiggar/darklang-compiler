@@ -2,175 +2,175 @@
 // Tests for Char module functions
 
 // ===================================================================
-// Char.isDigit - Check if character is digit (0-9)
+// Stdlib.Char.isDigit - Check if character is digit (0-9)
 // ===================================================================
 
-Char.isDigit("0") = true
-Char.isDigit("5") = true
-Char.isDigit("9") = true
-Char.isDigit("a") = false
-Char.isDigit("A") = false
-Char.isDigit(" ") = false
-Char.isDigit("") = false
+Stdlib.Char.isDigit("0") = true
+Stdlib.Char.isDigit("5") = true
+Stdlib.Char.isDigit("9") = true
+Stdlib.Char.isDigit("a") = false
+Stdlib.Char.isDigit("A") = false
+Stdlib.Char.isDigit(" ") = false
+Stdlib.Char.isDigit("") = false
 
 // ===================================================================
-// Char.isLetter - Check if character is letter (a-z, A-Z)
+// Stdlib.Char.isLetter - Check if character is letter (a-z, A-Z)
 // ===================================================================
 
-Char.isLetter("a") = true
-Char.isLetter("z") = true
-Char.isLetter("A") = true
-Char.isLetter("Z") = true
-Char.isLetter("0") = false
-Char.isLetter(" ") = false
-Char.isLetter("") = false
+Stdlib.Char.isLetter("a") = true
+Stdlib.Char.isLetter("z") = true
+Stdlib.Char.isLetter("A") = true
+Stdlib.Char.isLetter("Z") = true
+Stdlib.Char.isLetter("0") = false
+Stdlib.Char.isLetter(" ") = false
+Stdlib.Char.isLetter("") = false
 
 // ===================================================================
-// Char.isWhitespace - Check if character is whitespace
+// Stdlib.Char.isWhitespace - Check if character is whitespace
 // ===================================================================
 
-Char.isWhitespace(" ") = true
-Char.isWhitespace("\t") = true
-Char.isWhitespace("\n") = true
-Char.isWhitespace("a") = false
-Char.isWhitespace("0") = false
-Char.isWhitespace("") = false
+Stdlib.Char.isWhitespace(" ") = true
+Stdlib.Char.isWhitespace("\t") = true
+Stdlib.Char.isWhitespace("\n") = true
+Stdlib.Char.isWhitespace("a") = false
+Stdlib.Char.isWhitespace("0") = false
+Stdlib.Char.isWhitespace("") = false
 
 // ===================================================================
-// Char.isUppercase - Check if character is uppercase (A-Z)
+// Stdlib.Char.isUppercase - Check if character is uppercase (A-Z)
 // ===================================================================
 
-Char.isUppercase("A") = true
-Char.isUppercase("Z") = true
-Char.isUppercase("a") = false
-Char.isUppercase("z") = false
-Char.isUppercase("0") = false
-Char.isUppercase("") = false
+Stdlib.Char.isUppercase("A") = true
+Stdlib.Char.isUppercase("Z") = true
+Stdlib.Char.isUppercase("a") = false
+Stdlib.Char.isUppercase("z") = false
+Stdlib.Char.isUppercase("0") = false
+Stdlib.Char.isUppercase("") = false
 
 // ===================================================================
-// Char.isLowercase - Check if character is lowercase (a-z)
+// Stdlib.Char.isLowercase - Check if character is lowercase (a-z)
 // ===================================================================
 
-Char.isLowercase("a") = true
-Char.isLowercase("z") = true
-Char.isLowercase("A") = false
-Char.isLowercase("Z") = false
-Char.isLowercase("0") = false
-Char.isLowercase("") = false
+Stdlib.Char.isLowercase("a") = true
+Stdlib.Char.isLowercase("z") = true
+Stdlib.Char.isLowercase("A") = false
+Stdlib.Char.isLowercase("Z") = false
+Stdlib.Char.isLowercase("0") = false
+Stdlib.Char.isLowercase("") = false
 
 // ===================================================================
-// Char.isAlphanumeric - Check if character is alphanumeric
+// Stdlib.Char.isAlphanumeric - Check if character is alphanumeric
 // ===================================================================
 
-Char.isAlphanumeric("a") = true
-Char.isAlphanumeric("Z") = true
-Char.isAlphanumeric("5") = true
-Char.isAlphanumeric(" ") = false
-Char.isAlphanumeric("!") = false
-Char.isAlphanumeric("") = false
+Stdlib.Char.isAlphanumeric("a") = true
+Stdlib.Char.isAlphanumeric("Z") = true
+Stdlib.Char.isAlphanumeric("5") = true
+Stdlib.Char.isAlphanumeric(" ") = false
+Stdlib.Char.isAlphanumeric("!") = false
+Stdlib.Char.isAlphanumeric("") = false
 
 // ===================================================================
 // Char ASCII classification
 // ===================================================================
 
-Char.isASCII("a") = true
-Char.isASCII("A") = true
-Char.isASCII("3") = true
-Char.isASCII(" ") = true
-Char.isASCII("\t") = true
-Char.isASCII("á") = false
-Char.isASCII("ჾ") = false
-Char.isASCII("Ż") = false
-Char.isASCII("😂") = false
-Char.isASCII("") = false
+Stdlib.Char.isASCII("a") = true
+Stdlib.Char.isASCII("A") = true
+Stdlib.Char.isASCII("3") = true
+Stdlib.Char.isASCII(" ") = true
+Stdlib.Char.isASCII("\t") = true
+Stdlib.Char.isASCII("á") = false
+Stdlib.Char.isASCII("ჾ") = false
+Stdlib.Char.isASCII("Ż") = false
+Stdlib.Char.isASCII("😂") = false
+Stdlib.Char.isASCII("") = false
 
-Char.isASCIILetter("a") = true
-Char.isASCIILetter("A") = true
-Char.isASCIILetter("z") = true
-Char.isASCIILetter("Z") = true
-Char.isASCIILetter("á") = false
-Char.isASCIILetter("3") = false
-Char.isASCIILetter(",") = false
-Char.isASCIILetter(" ") = false
-Char.isASCIILetter("") = false
+Stdlib.Char.isASCIILetter("a") = true
+Stdlib.Char.isASCIILetter("A") = true
+Stdlib.Char.isASCIILetter("z") = true
+Stdlib.Char.isASCIILetter("Z") = true
+Stdlib.Char.isASCIILetter("á") = false
+Stdlib.Char.isASCIILetter("3") = false
+Stdlib.Char.isASCIILetter(",") = false
+Stdlib.Char.isASCIILetter(" ") = false
+Stdlib.Char.isASCIILetter("") = false
 
 // ===================================================================
 // Char ordering by codepoint
 // ===================================================================
 
-Char.isLessThan("a", "b") = true
-Char.isLessThan("a", "A") = false
-Char.isLessThan("a", "á") = true
-Char.isLessThan("a", " ") = false
-Char.isLessThan("2", "1") = false
+Stdlib.Char.isLessThan("a", "b") = true
+Stdlib.Char.isLessThan("a", "A") = false
+Stdlib.Char.isLessThan("a", "á") = true
+Stdlib.Char.isLessThan("a", " ") = false
+Stdlib.Char.isLessThan("2", "1") = false
 
-Char.isLessThanOrEqualTo("a", "a") = true
-Char.isLessThanOrEqualTo("a", "b") = true
-Char.isLessThanOrEqualTo("b", "a") = false
+Stdlib.Char.isLessThanOrEqualTo("a", "a") = true
+Stdlib.Char.isLessThanOrEqualTo("a", "b") = true
+Stdlib.Char.isLessThanOrEqualTo("b", "a") = false
 
-Char.isGreaterThan("a", "b") = false
-Char.isGreaterThan("a", "A") = true
-Char.isGreaterThan("a", "á") = false
-Char.isGreaterThan("a", " ") = true
-Char.isGreaterThan("2", "1") = true
+Stdlib.Char.isGreaterThan("a", "b") = false
+Stdlib.Char.isGreaterThan("a", "A") = true
+Stdlib.Char.isGreaterThan("a", "á") = false
+Stdlib.Char.isGreaterThan("a", " ") = true
+Stdlib.Char.isGreaterThan("2", "1") = true
 
-Char.isGreaterThanOrEqualTo("a", "a") = true
-Char.isGreaterThanOrEqualTo("b", "a") = true
-Char.isGreaterThanOrEqualTo("a", "b") = false
-
-// ===================================================================
-// Char.toUppercase - Convert to uppercase
-// ===================================================================
-
-Char.toUppercase("a") = "A"
-Char.toUppercase("z") = "Z"
-Char.toUppercase("A") = "A"
-Char.toUppercase("5") = "5"
-Char.toUppercase("") = ""
-Char.toUppercase("á") = "Á"
-Char.toUppercase("ż") = "Ż"
-Char.toUppercase("ó") = "Ó"
-Char.toUppercase("ł") = "Ł"
-Char.toUppercase("ჾ") = "Ჾ"
+Stdlib.Char.isGreaterThanOrEqualTo("a", "a") = true
+Stdlib.Char.isGreaterThanOrEqualTo("b", "a") = true
+Stdlib.Char.isGreaterThanOrEqualTo("a", "b") = false
 
 // ===================================================================
-// Char.toLowercase - Convert to lowercase
+// Stdlib.Char.toUppercase - Convert to uppercase
 // ===================================================================
 
-Char.toLowercase("A") = "a"
-Char.toLowercase("Z") = "z"
-Char.toLowercase("a") = "a"
-Char.toLowercase("5") = "5"
-Char.toLowercase("") = ""
-Char.toLowercase("Á") = "á"
-Char.toLowercase("Ż") = "ż"
-Char.toLowercase("Ó") = "ó"
-Char.toLowercase("Ł") = "ł"
-Char.toLowercase("Ჾ") = "ჾ"
+Stdlib.Char.toUppercase("a") = "A"
+Stdlib.Char.toUppercase("z") = "Z"
+Stdlib.Char.toUppercase("A") = "A"
+Stdlib.Char.toUppercase("5") = "5"
+Stdlib.Char.toUppercase("") = ""
+Stdlib.Char.toUppercase("á") = "Á"
+Stdlib.Char.toUppercase("ż") = "Ż"
+Stdlib.Char.toUppercase("ó") = "Ó"
+Stdlib.Char.toUppercase("ł") = "Ł"
+Stdlib.Char.toUppercase("ჾ") = "Ჾ"
 
 // ===================================================================
-// Char.toCode - Get codepoint value
+// Stdlib.Char.toLowercase - Convert to lowercase
 // ===================================================================
 
-Char.toCode("A") = 65
-Char.toCode("a") = 97
-Char.toCode("0") = 48
-Char.toCode(" ") = 32
-Char.toCode("") = 0
+Stdlib.Char.toLowercase("A") = "a"
+Stdlib.Char.toLowercase("Z") = "z"
+Stdlib.Char.toLowercase("a") = "a"
+Stdlib.Char.toLowercase("5") = "5"
+Stdlib.Char.toLowercase("") = ""
+Stdlib.Char.toLowercase("Á") = "á"
+Stdlib.Char.toLowercase("Ż") = "ż"
+Stdlib.Char.toLowercase("Ó") = "ó"
+Stdlib.Char.toLowercase("Ł") = "ł"
+Stdlib.Char.toLowercase("Ჾ") = "ჾ"
 
 // ===================================================================
-// Char.fromCode - Create character from codepoint
+// Stdlib.Char.toCode - Get codepoint value
 // ===================================================================
 
-Char.fromCode(65) = "A"
-Char.fromCode(97) = "a"
-Char.fromCode(48) = "0"
-Char.fromCode(32) = " "
+Stdlib.Char.toCode("A") = 65
+Stdlib.Char.toCode("a") = 97
+Stdlib.Char.toCode("0") = 48
+Stdlib.Char.toCode(" ") = 32
+Stdlib.Char.toCode("") = 0
 
 // ===================================================================
-// Char.toString - Identity conversion
+// Stdlib.Char.fromCode - Create character from codepoint
 // ===================================================================
 
-Char.toString("A") = "A"
-Char.toString("á") = "á"
-Char.toString("😂") = "😂"
+Stdlib.Char.fromCode(65) = "A"
+Stdlib.Char.fromCode(97) = "a"
+Stdlib.Char.fromCode(48) = "0"
+Stdlib.Char.fromCode(32) = " "
+
+// ===================================================================
+// Stdlib.Char.toString - Identity conversion
+// ===================================================================
+
+Stdlib.Char.toString("A") = "A"
+Stdlib.Char.toString("á") = "á"
+Stdlib.Char.toString("😂") = "😂"

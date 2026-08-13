@@ -2,75 +2,75 @@
 // Tests for Math module functions
 
 // ===================================================================
-// Math.pi - Pi constant
+// Stdlib.Math.pi - Pi constant
 // ===================================================================
 
 // Pi should be approximately 3.14159..., with an integer part of 3
-Math.truncate(Math.pi()) = 3
+Stdlib.Math.truncate(Stdlib.Math.pi()) = 3
 
 // ===================================================================
-// Math.tau - Circle constant equal to exactly twice pi
+// Stdlib.Math.tau - Circle constant equal to exactly twice pi
 // ===================================================================
 
-Math.tau() = 2.0 * Math.pi()
+Stdlib.Math.tau() = 2.0 * Stdlib.Math.pi()
 
 // ===================================================================
-// Math.e - Euler's number constant
+// Stdlib.Math.e - Euler's number constant
 // ===================================================================
 
 // e should be approximately 2.71828...
-Math.truncate(Math.e()) = 2
+Stdlib.Math.truncate(Stdlib.Math.e()) = 2
 
 // ===================================================================
-// Math.abs - Absolute value of float
+// Stdlib.Math.abs - Absolute value of float
 // ===================================================================
 
-Math.truncate(Math.abs(5.0)) = 5
-Math.truncate(Math.abs(-5.0)) = 5
+Stdlib.Math.truncate(Stdlib.Math.abs(5.0)) = 5
+Stdlib.Math.truncate(Stdlib.Math.abs(-5.0)) = 5
 
 // ===================================================================
-// Math.sqrt - Square root
+// Stdlib.Math.sqrt - Square root
 // ===================================================================
 
-Math.truncate(Math.sqrt(4.0)) = 2
-Math.truncate(Math.sqrt(9.0)) = 3
-Math.truncate(Math.sqrt(16.0)) = 4
+Stdlib.Math.truncate(Stdlib.Math.sqrt(4.0)) = 2
+Stdlib.Math.truncate(Stdlib.Math.sqrt(9.0)) = 3
+Stdlib.Math.truncate(Stdlib.Math.sqrt(16.0)) = 4
 
 // ===================================================================
-// Math.truncate - Truncate toward zero
+// Stdlib.Math.truncate - Truncate toward zero
 // ===================================================================
 
-Math.truncate(3.7) = 3
-Math.truncate(-3.7) = -3
-Math.truncate(0.0) = 0
+Stdlib.Math.truncate(3.7) = 3
+Stdlib.Math.truncate(-3.7) = -3
+Stdlib.Math.truncate(0.0) = 0
 
 // ===================================================================
-// Math.floor - Floor function
+// Stdlib.Math.floor - Floor function
 // ===================================================================
 
-Math.floor(3.7) = 3
-Math.floor(3.0) = 3
-Math.floor(-3.7) = -4
-Math.floor(-3.0) = -3
+Stdlib.Math.floor(3.7) = 3
+Stdlib.Math.floor(3.0) = 3
+Stdlib.Math.floor(-3.7) = -4
+Stdlib.Math.floor(-3.0) = -3
 
 // ===================================================================
-// Math.ceiling - Ceiling function
+// Stdlib.Math.ceiling - Ceiling function
 // ===================================================================
 
-Math.ceiling(3.7) = 4
-Math.ceiling(3.0) = 3
-Math.ceiling(-3.7) = -3
-Math.ceiling(-3.0) = -3
+Stdlib.Math.ceiling(3.7) = 4
+Stdlib.Math.ceiling(3.0) = 3
+Stdlib.Math.ceiling(-3.7) = -3
+Stdlib.Math.ceiling(-3.0) = -3
 
 // ===================================================================
-// Math.round - Round to nearest, ties to even
+// Stdlib.Math.round - Round to nearest, ties to even
 // ===================================================================
 
-Math.round(2.5) = 2
-Math.round(3.5) = 4
-Math.round(3.4) = 3
-Math.round(3.0) = 3
-Math.round(-2.5) = -2
-Math.round(-3.5) = -4
-Math.round(-3.4) = -3
-Math.round(-3.0) = -3
+Stdlib.Math.round(2.5) = 2
+Stdlib.Math.round(3.5) = 4
+Stdlib.Math.round(3.4) = 3
+Stdlib.Math.round(3.0) = 3
+Stdlib.Math.round(-2.5) = -2
+Stdlib.Math.round(-3.5) = -4
+Stdlib.Math.round(-3.4) = -3
+Stdlib.Math.round(-3.0) = -3

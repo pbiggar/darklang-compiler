@@ -1,2 +1,2 @@
 // Darklang's explicit overwriting update replaces an existing string-keyed value.
-let dict = Dict.singleton("key", "before") in let updated = Dict.setOverridingDuplicates(dict, "key", "after") in let found = Dict.get(updated, "key") in Option.withDefault(found, "missing") = "after"
+let dict = Stdlib.Dict.singleton("key", "before") in let updated = Stdlib.Dict.setOverridingDuplicates(dict, "key", "after") in let found = Stdlib.Dict.get(updated, "key") in Stdlib.Option.withDefault(found, "missing") = "after"

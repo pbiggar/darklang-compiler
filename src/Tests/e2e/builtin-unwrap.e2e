@@ -1,9 +1,9 @@
 // Builtin.unwrap - unwrap Option/Result success payloads
 
-Option.Some(42) |> Builtin.unwrap = 42
-Result.Ok(true) |> Builtin.unwrap = true
-Option.None |> Builtin.unwrap = exit=1 stderr="Cannot unwrap None" stdout=""
-Result.Error(5) |> Builtin.unwrap = exit=1 stderr="Cannot unwrap Error: 5" stdout=""
-if true then 5 else Option.None |> Builtin.unwrap = 5
+Stdlib.Option.Option.Some(42) |> Builtin.unwrap = 42
+Stdlib.Result.Result.Ok(true) |> Builtin.unwrap = true
+Stdlib.Option.Option.None |> Builtin.unwrap = exit=1 stderr="Cannot unwrap None" stdout=""
+Stdlib.Result.Result.Error(5) |> Builtin.unwrap = exit=1 stderr="Cannot unwrap Error: 5" stdout=""
+if true then 5 else Stdlib.Option.Option.None |> Builtin.unwrap = 5
 true |> Builtin.unwrap = error="Can only unwrap Options and Results"
 Builtin.unwrap(1, 2) = error="Function Builtin.unwrap expects 1 arguments, got 2"

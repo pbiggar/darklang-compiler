@@ -374,8 +374,8 @@ match 42 with | 0 | [_] -> 1 | _ -> 99 = 99
 // Regression: default TInt64 element typing let an impossible branch segfault at runtime.
 match (1, 2) with | (x, 0) | ([x], _) -> x | _ -> 99 = 99
 
-// Tuple arity-mismatch alternatives in a grouped pattern must not default bindings to Int64.
-// The impossible `(x, _, _)` alternative should contribute no type bindings, so `x` stays String.
+// Tuple arity-mismatch alternatives in a grouped pattern must not default bindings to Stdlib.Int64.
+// The impossible `(x, _, _)` alternative should contribute no type bindings, so `x` stays Stdlib.String.
 (match ("a" ++ "b", 1) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = true
 
 // Record-pattern alternatives that cannot match the scrutinee type must fall through, even with guards.
@@ -433,10 +433,10 @@ match [1, 2, 3] with | [1, ...rest] -> 42 | _ -> 0 = 42
 
 // List cons should preserve string element typing even when scrutinee type comes from an if-expression
 // with an unreachable runtime-error branch.
-match (if false then Option.None |> Builtin.unwrap else ["a", "b"]) with | [h, ...t] -> if h == "a" then 1 else 0 | _ -> 0 = 1
+match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | [h, ...t] -> if h == "a" then 1 else 0 | _ -> 0 = 1
 
 // Guarded list cons should preserve string element typing from inferred scrutinee types.
-match (if false then Option.None |> Builtin.unwrap else ["a", "b"]) with | [h, ...t] when h == "a" -> 1 | _ -> 0 = 1
+match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | [h, ...t] when h == "a" -> 1 | _ -> 0 = 1
 
 // Literal pattern in list cons - no match
 match [2, 2, 3] with | [1, ...rest] -> 42 | _ -> 0 = 0
@@ -454,9 +454,9 @@ let x = match false with | true -> [] | false -> [[1.5, 2.5], [3.0]] in match x 
 
 // Nested record pattern in a tuple should not silently bind Int64 when the tuple element is not a record.
 // Regression: this used to default to TInt64 and then execute as if the pattern were valid.
-type Person = { name: String } match (Person { name = "ok" }, 0) with | (y, Unknown { name = x }) -> x | _ -> 1 = error="Record pattern used on non-record type"
+type Person = { name: String } match (Person { name = "ok" }, 0) with | (y, Unknown { name = x }) -> x | _ -> 1 = error="Unresolved type name: Unknown"
 
-// Tuple arity mismatch inside constructor payload list pattern must not default missing tuple slots to Int64.
+// Tuple arity mismatch inside constructor payload list pattern must not default missing tuple slots to Stdlib.Int64.
 // Regression: this previously matched and evaluated the branch body instead of surfacing the tuple arity issue.
 type TupleListBox = TupleListBox of List<(Int64, Int64)> match TupleListBox([(1, 2)]) with | TupleListBox([(a, b, c)]) -> 1 | _ -> 2 = error="Tuple pattern expects 3 elements but got 2"
 
@@ -561,7 +561,7 @@ def singleListConsWithAcc(a: List<Int64>, acc: List<Int64>) : List<Int64> =
 Stdlib.List.length<Int64>(singleListConsWithAcc([1, 2, 3], [])) = 3
 
 // Workaround for tuple+cons+list-accumulator: use nested matches instead of tuple pattern
-// This is the pattern used in Crypto.__xorByteLists
+// This is the pattern used in Stdlib.Crypto.__xorByteLists
 def nestedMatchListCons(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
     match a with
     | [] -> acc

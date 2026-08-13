@@ -1,4 +1,4 @@
-// Dict.dark - Stdlib.Dict definitions
+// Stdlib.Dict.dark - Stdlib.Dict definitions
 //
 // Public dictionary API built on the internal HAMT implementation.
 
@@ -8,7 +8,7 @@
 def Stdlib.Dict.empty<k, v>() : Dict<k, v> = __empty_dict<k, v>()
 
 // =============================================================================
-// Dict.get - lookup a key in the dictionary
+// Stdlib.Dict.get - lookup a key in the dictionary
 // =============================================================================
 // Returns Some(value) if found, None if not found
 
@@ -17,7 +17,7 @@ def Stdlib.Dict.get<k, v>(dict: Dict<k, v>, key: k) : Stdlib.Option.Option<v> =
     Stdlib.__HAMT.__getHelper<k, v>(dict, key, __hash<k>(key), 0)
 
 // =============================================================================
-// Dict.set - insert or update a key-value pair
+// Stdlib.Dict.set - insert or update a key-value pair
 // =============================================================================
 // Returns a new dictionary with the key-value pair added/updated
 
@@ -30,7 +30,7 @@ def Stdlib.Dict.setOverridingDuplicates<v>(dict: Dict<String, v>, key: String, v
     Stdlib.Dict.set<String, v>(dict, key, value)
 
 // =============================================================================
-// Dict.remove - remove a key from the dictionary
+// Stdlib.Dict.remove - remove a key from the dictionary
 // =============================================================================
 // Returns a new dictionary without the key (or unchanged if key not present)
 

@@ -51,6 +51,7 @@ type TypeError =
     | UndefinedCallTarget of name:string
     | MissingTypeAnnotation of context:string
     | InvalidOperation of op:string * types:Type list
+    | ResolutionFailure of NameResolution.ResolutionError
     | GenericError of string
 
 /// Pretty-print a type for error messages
@@ -109,6 +110,8 @@ let typeErrorToString (err: TypeError) : string =
     | InvalidOperation (op, types) ->
         let typesStr = types |> List.map typeToString |> String.concat ", "
         $"Invalid operation '{op}' on types: {typesStr}"
+    | ResolutionFailure error ->
+        NameResolution.errorToString error
     | GenericError msg ->
         msg
 
@@ -235,13 +238,13 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> expr
 
 let private isBuiltinUnwrapName (funcName: string) : bool =
-    funcName = "Builtin.unwrap" || funcName = "Stdlib.Builtin.unwrap"
+    funcName = "Builtin.unwrap"
 
 let private isBuiltinTestRuntimeErrorName (funcName: string) : bool =
-    funcName = "Builtin.testRuntimeError" || funcName = "Stdlib.Builtin.testRuntimeError"
+    funcName = "Builtin.testRuntimeError"
 
 let private isBuiltinTestNanName (name: string) : bool =
-    name = "Builtin.testNan" || name = "Stdlib.Builtin.testNan"
+    name = "Builtin.testNan"
 
 let private isRuntimeErrorType (typ: Type) : bool =
     match typ with
@@ -565,6 +568,7 @@ type TypeCheckEnv = {
     GenericFuncReg: GenericFuncRegistry
     ModuleRegistry: ModuleRegistry
     AliasReg: AliasRegistry
+    ResolutionEnv: NameResolution.ResolutionEnvironment
 }
 
 /// Merge two TypeCheckEnv, with overlay taking precedence on conflicts
@@ -585,6 +589,7 @@ let mergeTypeCheckEnv (baseEnv: TypeCheckEnv) (overlay: TypeCheckEnv) : TypeChec
         }
         ModuleRegistry = baseEnv.ModuleRegistry  // Module registry is constant, use base
         AliasReg = mergeMap baseEnv.AliasReg overlay.AliasReg
+        ResolutionEnv = NameResolution.merge baseEnv.ResolutionEnv overlay.ResolutionEnv
     }
 
 /// Resolve a type name through the alias registry
@@ -1489,36 +1494,9 @@ let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: T
                     | None -> Ok (args @ [TVar paramName])))
                 (Ok []))
 
-/// Try to look up a function name in a map, with fallback to Stdlib prefix
-/// Returns the value and the resolved name (which may differ from input)
-let tryLookupWithFallback (name: string) (m: Map<string, 'a>) : ('a * string) option =
-    let withStdlibPrefix (candidate: string) : string option =
-        if candidate.Contains(".") && not (candidate.StartsWith("Stdlib.")) then
-            Some ("Stdlib." + candidate)
-        else
-            None
-
-    let withoutV0Suffix (candidate: string) : string option =
-        if candidate.EndsWith("_v0") then
-            Some (candidate.Substring(0, candidate.Length - 3))
-        else
-            None
-
-    let candidates =
-        [
-            Some name
-            withoutV0Suffix name
-            withStdlibPrefix name
-            (withStdlibPrefix name |> Option.bind withoutV0Suffix)
-        ]
-        |> List.choose id
-        |> List.distinct
-
-    candidates
-    |> List.tryPick (fun candidate ->
-        match Map.tryFind candidate m with
-        | Some v -> Some (v, candidate)
-        | None -> None)
+/// Look up a name already resolved and canonicalized by the semantic boundary.
+let tryLookupResolved (name: string) (m: Map<string, 'a>) : ('a * string) option =
+    Map.tryFind name m |> Option.map (fun value -> (value, name))
 
 let private paramNameForLegacyError
     (funcParamNameReg: Map<string, string list>)
@@ -1537,7 +1515,7 @@ let private paramNameForLegacyError
         if zeroBasedParamIndex < 0 then
             None
         else
-            tryLookupWithFallback funcName funcParamNameReg
+            tryLookupResolved funcName funcParamNameReg
             |> Option.bind (fun (paramNames, _resolvedName) -> tryGetAtIndex zeroBasedParamIndex paramNames)
 
     match resolvedParamName with
@@ -2201,66 +2179,26 @@ let rec private checkExprWithParamNames
             | None -> Ok (TFloat64, builtinExpr)
         else
             // Variable reference: look up in environment
-            match tryLookupWithFallback name env with
+            match tryLookupResolved name env with
             | Some (varType, resolvedName) ->
                 let varType = canonicalizeBareSumTypeRefs variantLookup varType
 
                 match expectedType with
                 | Some expected ->
-                    // Legacy upstream compatibility: a nullary function used in a
-                    // value position should evaluate to its return value.
-                    let nullaryAutoCallResult =
-                        match varType with
-                        | TFunction ([TUnit], returnType)
-                        | TFunction ([], returnType) ->
-                            match reconcileTypes (Some aliasReg) expected returnType with
-                            | Some reconciledType ->
-                                let autoCallExpr =
-                                    if resolvedName.Contains(".") then
-                                        Call (resolvedName, NonEmptyList.singleton UnitLiteral)
-                                    else
-                                        Apply (Var resolvedName, NonEmptyList.singleton UnitLiteral)
-                                Some (Ok (reconciledType, autoCallExpr))
-                            | None ->
-                                None
-                        | _ ->
-                            None
-
-                    match nullaryAutoCallResult with
-                    | Some result ->
-                        result
-                    | None ->
-                        // Use reconcileTypes to handle type variables and type aliases
-                        match reconcileTypes (Some aliasReg) expected varType with
-                        | Some reconciledType -> Ok (reconciledType, Var resolvedName)
-                        | None -> Error (TypeMismatch (expected, varType, $"variable {name}"))
+                    match reconcileTypes (Some aliasReg) expected varType with
+                    | Some reconciledType -> Ok (reconciledType, Var resolvedName)
+                    | None -> Error (TypeMismatch (expected, varType, $"variable {name}"))
                 | None -> Ok (varType, Var resolvedName)
             | None ->
                 // Check if it's a module function (e.g., Stdlib.Int64.add)
-                match Stdlib.tryGetFunctionWithFallback moduleRegistry name with
+                match Stdlib.tryGetFunction moduleRegistry name with
                 | Some (moduleFunc, resolvedName) ->
                     let funcType = Stdlib.getFunctionType moduleFunc
                     match expectedType with
                     | Some expected ->
-                        let nullaryAutoCallResult =
-                            match funcType with
-                            | TFunction ([TUnit], returnType)
-                            | TFunction ([], returnType) ->
-                                match reconcileTypes (Some aliasReg) expected returnType with
-                                | Some reconciledType ->
-                                    Some (Ok (reconciledType, Call (resolvedName, NonEmptyList.singleton UnitLiteral)))
-                                | None ->
-                                    None
-                            | _ ->
-                                None
-
-                        match nullaryAutoCallResult with
-                        | Some result ->
-                            result
-                        | None ->
-                            match reconcileTypes (Some aliasReg) expected funcType with
-                            | Some reconciledType -> Ok (reconciledType, Var resolvedName)
-                            | None -> Error (TypeMismatch (expected, funcType, $"variable {name}"))
+                        match reconcileTypes (Some aliasReg) expected funcType with
+                        | Some reconciledType -> Ok (reconciledType, Var resolvedName)
+                        | None -> Error (TypeMismatch (expected, funcType, $"variable {name}"))
                     | None -> Ok (funcType, Var resolvedName)
                 | None ->
                     Error (UndefinedVariable name)
@@ -2350,8 +2288,8 @@ let rec private checkExprWithParamNames
                             | _ -> Ok (reconciledType, If (normalizedCond, then', else'))))))
 
     | Call (funcName, args) ->
-        // Function call: look up function signature, check arguments match
-        // Use fallback to resolve short names like Option.isSome to Stdlib.Option.isSome
+        // The resolution boundary has already attached the canonical callable
+        // identity. Type checking only validates that identity's signature.
         let args = NonEmptyList.toList args
         if isBuiltinUnwrapName funcName then
             match args with
@@ -2405,11 +2343,11 @@ let rec private checkExprWithParamNames
             | _ ->
                 Error (GenericError $"Function {funcName} expects 1 arguments, got {List.length args}")
         else
-            match tryLookupWithFallback funcName env with
+            match tryLookupResolved funcName env with
             | Some (TFunction (origParamTypes, origReturnType), resolvedFuncName) ->
                 (
             // Check if this is a generic function.
-            match tryLookupWithFallback resolvedFuncName genericFuncReg.Functions with
+            match tryLookupResolved resolvedFuncName genericFuncReg.Functions with
             | Some (origTypeParams, _) when
                 genericFuncReg.RequireExplicitTypeArgsForBareCalls
                 && Option.isNone expectedType
@@ -2656,7 +2594,7 @@ let rec private checkExprWithParamNames
                 Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
             | None ->
                 // Check if it's a module function (e.g., Stdlib.Int64.add, __raw_get)
-                match Stdlib.tryGetFunctionWithFallback moduleRegistry funcName with
+                match Stdlib.tryGetFunction moduleRegistry funcName with
                 | Some (moduleFunc, resolvedFuncName) ->
                     (
                 // Freshen type params to avoid name clashes with caller's scope
@@ -2856,12 +2794,12 @@ let rec private checkExprWithParamNames
 
     | TypeApp (funcName, typeArgs, args) ->
         // Generic function call with explicit type arguments: func<Type1, Type2>(args)
-        // 1. Look up function signature with fallback to Stdlib prefix
+        // 1. Look up the canonical function identity
         let args = NonEmptyList.toList args
-        match tryLookupWithFallback funcName env with
+        match tryLookupResolved funcName env with
         | Some (TFunction (paramTypes, returnType), resolvedFuncName) ->
             // 2. Look up type parameters
-            match tryLookupWithFallback resolvedFuncName genericFuncReg.Functions with
+            match tryLookupResolved resolvedFuncName genericFuncReg.Functions with
             | Some (typeParams, _) ->
                 let expectedTypeArgCount = List.length typeParams
                 let actualTypeArgCount = List.length typeArgs
@@ -3017,7 +2955,7 @@ let rec private checkExprWithParamNames
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
             // Check if it's a generic module function (e.g., __raw_get<v>)
-            match Stdlib.tryGetFunctionWithFallback moduleRegistry funcName with
+            match Stdlib.tryGetFunction moduleRegistry funcName with
             | Some (moduleFunc, resolvedFuncName) when not (List.isEmpty moduleFunc.TypeParams) ->
                 let typeParams = moduleFunc.TypeParams
                 let paramTypes = moduleFunc.ParamTypes
@@ -5151,6 +5089,326 @@ type private TopLevelDeclarationSummary = {
     GenericFuncs: Map<string, string list>
 }
 
+let private splitDeclaredName (name: string) : NameResolution.NamespaceIdentity * string =
+    match NameResolution.tryQualifiedName name with
+    | None -> (NameResolution.RootNamespace, name)
+    | Some qualifiedName ->
+        match NameResolution.qualifiedNameSegments qualifiedName |> List.rev with
+        | terminal :: reversedNamespace ->
+            match List.rev reversedNamespace |> NonEmptyList.tryFromList with
+            | Some path -> (NameResolution.ModuleNamespace path, terminal)
+            | None -> (NameResolution.RootNamespace, terminal)
+        | [] -> Crash.crash "Qualified name contained no segments"
+
+let private requiredCandidate visibleName identity provenance : NameResolution.Candidate =
+    match NameResolution.candidate visibleName identity provenance with
+    | Some candidate -> candidate
+    | None -> Crash.crash $"Invalid compiler declaration name entered resolution inventory: {visibleName}"
+
+let private declarationResolutionEnvironment
+    (topLevels: TopLevel list)
+    (moduleRegistry: ModuleRegistry)
+    (includeIntrinsicCatalog: bool)
+    : NameResolution.ResolutionEnvironment =
+    let sourceFunctionNames =
+        topLevels
+        |> List.choose (function FunctionDef funcDef -> Some funcDef.Name | _ -> None)
+        |> Set.ofList
+    let registeredFunctionNames =
+        Set.union sourceFunctionNames (moduleRegistry |> Map.keys |> Set.ofSeq)
+    let visibleFunctionNames (qualifiedName: string) =
+        let versionedName = $"{qualifiedName}_v0"
+        if qualifiedName.EndsWith("_v0") || Set.contains versionedName registeredFunctionNames then
+            [qualifiedName]
+        else
+            [qualifiedName; versionedName]
+    let sourceCandidates =
+        topLevels
+        |> List.indexed
+        |> List.collect (fun (declarationIndex, topLevel) ->
+            let declarationId name = $"source:{declarationIndex}:{name}"
+            match topLevel with
+            | FunctionDef funcDef ->
+                let (namespaceIdentity, terminal) = splitDeclaredName funcDef.Name
+                let identity =
+                    NameResolution.ModuleFunction (
+                        namespaceIdentity,
+                        terminal,
+                        declarationId funcDef.Name
+                    )
+                visibleFunctionNames funcDef.Name
+                |> List.map (fun visibleName ->
+                    requiredCandidate
+                        visibleName
+                        identity
+                        (NameResolution.SourceDeclaration funcDef.Name))
+            | TypeDef typeDef ->
+                let (typeName, variants) =
+                    match typeDef with
+                    | RecordDef (name, _, _) -> (name, [])
+                    | TypeAlias (name, _, _) -> (name, [])
+                    | SumTypeDef (name, _, variants) -> (name, variants)
+                let typeCandidate =
+                    requiredCandidate
+                        typeName
+                        (NameResolution.UserType typeName)
+                        (NameResolution.SourceDeclaration typeName)
+                let constructorCandidates =
+                    variants
+                    |> List.collect (fun variant ->
+                        let identity =
+                            NameResolution.ConstructorSymbol (typeName, variant.Name)
+                        [ requiredCandidate
+                            variant.Name
+                            identity
+                            (NameResolution.SourceDeclaration $"{typeName}.{variant.Name}")
+                          requiredCandidate
+                            $"{typeName}.{variant.Name}"
+                            identity
+                            (NameResolution.SourceDeclaration $"{typeName}.{variant.Name}") ])
+                typeCandidate :: constructorCandidates
+            | Expression _ -> [])
+
+    let intrinsicCandidates =
+        moduleRegistry
+        |> Map.toList
+        |> List.filter (fun (qualifiedName, _) ->
+            includeIntrinsicCatalog && not (Set.contains qualifiedName sourceFunctionNames))
+        |> List.collect (fun (qualifiedName, _) ->
+            let (namespaceIdentity, terminal) = splitDeclaredName qualifiedName
+            let identity =
+                NameResolution.ModuleFunction (
+                    namespaceIdentity,
+                    terminal,
+                    $"intrinsic:{qualifiedName}"
+                )
+            visibleFunctionNames qualifiedName
+            |> List.map (fun visibleName ->
+                requiredCandidate
+                    visibleName
+                    identity
+                    (NameResolution.CompilerExtension qualifiedName)))
+
+    let builtinCandidates =
+        [ requiredCandidate
+            "Builtin.unwrap"
+            (NameResolution.BuiltinFunction ("unwrap", 0))
+            (NameResolution.BuiltinRegistration "Builtin.unwrap")
+          requiredCandidate
+            "Builtin.testRuntimeError"
+            (NameResolution.BuiltinFunction ("testRuntimeError", 0))
+            (NameResolution.BuiltinRegistration "Builtin.testRuntimeError")
+          requiredCandidate
+            "Builtin.testNan"
+            (NameResolution.BuiltinValue ("testNan", 0))
+            (NameResolution.BuiltinRegistration "Builtin.testNan")
+          requiredCandidate
+            "Builtin.testNan_v0"
+            (NameResolution.BuiltinValue ("testNan", 0))
+            (NameResolution.BuiltinRegistration "Builtin.testNan") ]
+
+    NameResolution.empty
+    |> NameResolution.addCandidates (sourceCandidates @ intrinsicCandidates @ builtinCandidates)
+
+let private resolveProgramNames
+    (resolutionEnv: NameResolution.ResolutionEnvironment)
+    (program: Program)
+    : Result<Program, TypeError> =
+    let resolveName context localNames spelling =
+        let environment =
+            localNames
+            |> Set.toList
+            |> List.fold (fun env localName ->
+                requiredCandidate
+                    localName
+                    (NameResolution.LocalValue localName)
+                    (NameResolution.LexicalBinding localName)
+                |> fun candidate -> NameResolution.addCandidate candidate env) resolutionEnv
+        NameResolution.resolve context spelling environment
+        |> Result.map (fun resolution -> NameResolution.canonicalSpelling resolution.Identity)
+        |> Result.mapError ResolutionFailure
+
+    let rec resolveTypeRefs typ =
+        let recurse = resolveTypeRefs
+        let resolveNamed makeType name typeArgs =
+            resolveName NameResolution.ResolutionContext.Type Set.empty name
+            |> Result.bind (fun resolvedName ->
+                ResultList.traverse recurse typeArgs
+                |> Result.map (makeType resolvedName))
+        match typ with
+        | TRecord (name, typeArgs) -> resolveNamed (fun n args -> TRecord (n, args)) name typeArgs
+        | TSum (name, typeArgs) -> resolveNamed (fun n args -> TSum (n, args)) name typeArgs
+        | TFunction (parameterTypes, returnType) ->
+            ResultList.traverse recurse parameterTypes
+            |> Result.bind (fun parameters' -> recurse returnType |> Result.map (fun ret -> TFunction (parameters', ret)))
+        | TTuple elementTypes -> ResultList.traverse recurse elementTypes |> Result.map TTuple
+        | TList elementType -> recurse elementType |> Result.map TList
+        | TDict (keyType, valueType) ->
+            recurse keyType
+            |> Result.bind (fun key' -> recurse valueType |> Result.map (fun value' -> TDict (key', value')))
+        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+        | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+        | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr -> Ok typ
+
+    let rec patternBoundNames pattern =
+        match pattern with
+        | PVar name -> Set.singleton name
+        | PConstructor (_, payload) -> payload |> Option.map patternBoundNames |> Option.defaultValue Set.empty
+        | PRecord (_, fields) -> fields |> List.map (snd >> patternBoundNames) |> Set.unionMany
+        | PTuple patterns | PList patterns -> patterns |> List.map patternBoundNames |> Set.unionMany
+        | PListCons (heads, tail) -> Set.union (heads |> List.map patternBoundNames |> Set.unionMany) (patternBoundNames tail)
+        | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _ | PInt16Literal _
+        | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _ | PUInt32Literal _ | PUInt64Literal _
+        | PUInt128Literal _ | PBool _ | PString _ | PChar _ | PFloat _ -> Set.empty
+
+    let rec resolvePattern localNames pattern =
+        let recurse = resolvePattern localNames
+        match pattern with
+        | PConstructor (name, payload) ->
+            // Pattern constructor identity is selected against the scrutinee's
+            // sum type by the pattern checker; equal case names in other types
+            // are therefore not an ambiguity at this syntax-only traversal.
+            payload
+            |> Option.map recurse
+            |> ResultList.sequenceOption
+            |> Result.map (fun payload' -> PConstructor (name, payload'))
+        | PRecord (typeName, fields) ->
+            resolveName NameResolution.ResolutionContext.Type localNames typeName
+            |> Result.bind (fun resolvedTypeName ->
+                fields
+                |> ResultList.traverse (fun (field, fieldPattern) -> recurse fieldPattern |> Result.map (fun p -> (field, p)))
+                |> Result.map (fun fields' -> PRecord (resolvedTypeName, fields')))
+        | PTuple patterns -> ResultList.traverse recurse patterns |> Result.map PTuple
+        | PList patterns -> ResultList.traverse recurse patterns |> Result.map PList
+        | PListCons (heads, tail) ->
+            ResultList.traverse recurse heads
+            |> Result.bind (fun heads' -> recurse tail |> Result.map (fun tail' -> PListCons (heads', tail')))
+        | _ -> Ok pattern
+
+    let rec resolveExpr localNames expr =
+        let recurse = resolveExpr localNames
+        let resolveArgs args = ResultList.traverse recurse (NonEmptyList.toList args) |> Result.map NonEmptyList.fromList
+        match expr with
+        | Var name ->
+            resolveName NameResolution.ResolutionContext.Value localNames name
+            |> Result.map Var
+        | Call (name, args) ->
+            resolveName NameResolution.ResolutionContext.Callable localNames name
+            |> Result.bind (fun resolvedName -> resolveArgs args |> Result.map (fun args' -> Call (resolvedName, args')))
+        | TypeApp (name, typeArgs, args) ->
+            resolveName NameResolution.ResolutionContext.Callable localNames name
+            |> Result.bind (fun resolvedName ->
+                ResultList.traverse resolveTypeRefs typeArgs
+                |> Result.bind (fun types' -> resolveArgs args |> Result.map (fun args' -> TypeApp (resolvedName, types', args'))))
+        | FuncRef name -> resolveName NameResolution.ResolutionContext.Callable localNames name |> Result.map FuncRef
+        | Constructor (typeName, variantName, payload) ->
+            let spelling = if typeName = "" then variantName else $"{typeName}.{variantName}"
+            resolveName NameResolution.ResolutionContext.Constructor localNames spelling
+            |> Result.bind (fun resolvedName ->
+                let segments = resolvedName.Split('.') |> Array.toList
+                match List.rev segments with
+                | caseName :: reversedTypeName ->
+                    let resolvedTypeName = reversedTypeName |> List.rev |> String.concat "."
+                    payload
+                    |> Option.map recurse
+                    |> ResultList.sequenceOption
+                    |> Result.map (fun payload' -> Constructor (resolvedTypeName, caseName, payload'))
+                | [] -> Error (GenericError "Resolved constructor name contained no segments"))
+        | Let (name, value, body) ->
+            recurse value
+            |> Result.bind (fun value' -> resolveExpr (Set.add name localNames) body |> Result.map (fun body' -> Let (name, value', body')))
+        | LetPattern (pattern, value, body) ->
+            resolvePattern localNames pattern
+            |> Result.bind (fun pattern' ->
+                recurse value
+                |> Result.bind (fun value' ->
+                    resolveExpr (Set.union localNames (patternBoundNames pattern)) body
+                    |> Result.map (fun body' -> LetPattern (pattern', value', body'))))
+        | Lambda (parameters, body) ->
+            parameters
+            |> NonEmptyList.toList
+            |> ResultList.traverse (fun (name, typ) -> resolveTypeRefs typ |> Result.map (fun typ' -> (name, typ')))
+            |> Result.bind (fun parameters' ->
+                let parameterNames = parameters' |> List.map fst |> Set.ofList
+                resolveExpr (Set.union localNames parameterNames) body
+                |> Result.map (fun body' -> Lambda (NonEmptyList.fromList parameters', body')))
+        | Match (scrutinee, cases) ->
+            recurse scrutinee
+            |> Result.bind (fun scrutinee' ->
+                cases
+                |> ResultList.traverse (fun matchCase ->
+                    let patterns = NonEmptyList.toList matchCase.Patterns
+                    ResultList.traverse (resolvePattern localNames) patterns
+                    |> Result.bind (fun patterns' ->
+                        let bindings = patterns |> List.map patternBoundNames |> Set.unionMany
+                        let caseLocals = Set.union localNames bindings
+                        matchCase.Guard
+                        |> Option.map (resolveExpr caseLocals)
+                        |> ResultList.sequenceOption
+                        |> Result.bind (fun guard' ->
+                            resolveExpr caseLocals matchCase.Body
+                            |> Result.map (fun body' ->
+                                { Patterns = NonEmptyList.fromList patterns'; Guard = guard'; Body = body' }))))
+                |> Result.map (fun cases' -> Match (scrutinee', cases')))
+        | RecordLiteral (typeName, fields) ->
+            let resolvedTypeNameResult =
+                if typeName = "" then Ok "" else resolveName NameResolution.ResolutionContext.Type localNames typeName
+            resolvedTypeNameResult
+            |> Result.bind (fun resolvedTypeName ->
+                fields
+                |> ResultList.traverse (fun (field, value) -> recurse value |> Result.map (fun value' -> (field, value')))
+                |> Result.map (fun fields' -> RecordLiteral (resolvedTypeName, fields')))
+        | BoundaryRender (renderer, value) -> recurse value |> Result.map (fun value' -> BoundaryRender (renderer, value'))
+        | BinOp (op, left, right) -> recurse left |> Result.bind (fun l -> recurse right |> Result.map (fun r -> BinOp (op, l, r)))
+        | UnaryOp (op, inner) -> recurse inner |> Result.map (fun inner' -> UnaryOp (op, inner'))
+        | If (condition, thenBranch, elseBranch) ->
+            recurse condition |> Result.bind (fun c -> recurse thenBranch |> Result.bind (fun t -> recurse elseBranch |> Result.map (fun e -> If (c, t, e))))
+        | InterpolatedString parts ->
+            parts
+            |> ResultList.traverse (function StringText text -> Ok (StringText text) | StringExpr e -> recurse e |> Result.map StringExpr)
+            |> Result.map InterpolatedString
+        | TupleLiteral elements -> ResultList.traverse recurse elements |> Result.map TupleLiteral
+        | TupleAccess (tuple, index) -> recurse tuple |> Result.map (fun tuple' -> TupleAccess (tuple', index))
+        | RecordUpdate (record, updates) ->
+            recurse record
+            |> Result.bind (fun record' -> updates |> ResultList.traverse (fun (field, value) -> recurse value |> Result.map (fun value' -> (field, value'))) |> Result.map (fun updates' -> RecordUpdate (record', updates')))
+        | RecordAccess (record, fieldName) -> recurse record |> Result.map (fun record' -> RecordAccess (record', fieldName))
+        | ListLiteral elements -> ResultList.traverse recurse elements |> Result.map ListLiteral
+        | ListCons (heads, tail) -> ResultList.traverse recurse heads |> Result.bind (fun heads' -> recurse tail |> Result.map (fun tail' -> ListCons (heads', tail')))
+        | Apply (func, args) -> recurse func |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> Apply (func', args')))
+        | Closure (name, captures) ->
+            resolveName NameResolution.ResolutionContext.Callable localNames name
+            |> Result.bind (fun resolvedName -> ResultList.traverse recurse captures |> Result.map (fun captures' -> Closure (resolvedName, captures')))
+        | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+        | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+        | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | RuntimeError _ -> Ok expr
+
+    let resolveTypeDef typeDef =
+        match typeDef with
+        | RecordDef (name, typeParams, fields) ->
+            fields |> ResultList.traverse (fun (field, typ) -> resolveTypeRefs typ |> Result.map (fun typ' -> (field, typ'))) |> Result.map (fun fields' -> RecordDef (name, typeParams, fields'))
+        | SumTypeDef (name, typeParams, variants) ->
+            variants |> ResultList.traverse (fun variant -> variant.Payload |> Option.map resolveTypeRefs |> ResultList.sequenceOption |> Result.map (fun payload -> { variant with Payload = payload })) |> Result.map (fun variants' -> SumTypeDef (name, typeParams, variants'))
+        | TypeAlias (name, typeParams, targetType) -> resolveTypeRefs targetType |> Result.map (fun target' -> TypeAlias (name, typeParams, target'))
+
+    let resolveTopLevel topLevel =
+        match topLevel with
+        | FunctionDef funcDef ->
+            let parameters = NonEmptyList.toList funcDef.Params
+            parameters
+            |> ResultList.traverse (fun (name, typ) -> resolveTypeRefs typ |> Result.map (fun typ' -> (name, typ')))
+            |> Result.bind (fun parameters' ->
+                resolveTypeRefs funcDef.ReturnType
+                |> Result.bind (fun returnType' ->
+                    let locals = parameters' |> List.map fst |> Set.ofList
+                    resolveExpr locals funcDef.Body
+                    |> Result.map (fun body' -> FunctionDef { funcDef with Params = NonEmptyList.fromList parameters'; ReturnType = returnType'; Body = body' })))
+        | TypeDef typeDef -> resolveTypeDef typeDef |> Result.map TypeDef
+        | Expression expr -> resolveExpr Set.empty expr |> Result.map Expression
+
+    let (Program topLevels) = program
+    ResultList.traverse resolveTopLevel topLevels |> Result.map Program
+
 /// Build all declaration registries in one traversal while retaining Map.ofList's
 /// existing behavior that a later declaration replaces an earlier duplicate.
 let private summarizeTopLevelDeclarations
@@ -5205,7 +5463,7 @@ let private summarizeTopLevelDeclarations
 /// Internal: Type-check a program and return the type checking environment
 /// This is the core implementation used by checkProgram, checkProgramWithEnv, and checkProgramWithBaseEnv
 /// When baseEnv is provided, registries are merged with it (for separate compilation)
-let private checkProgramInternal
+let private checkResolvedProgramInternal
     (baseEnv: TypeCheckEnv option)
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
@@ -5234,6 +5492,9 @@ let private checkProgramInternal
         | Some existingEnv -> existingEnv.ModuleRegistry
         | None -> Stdlib.buildModuleRegistry ()
 
+    let programResolutionEnv =
+        declarationResolutionEnvironment topLevels moduleRegistry (Option.isNone baseEnv)
+
     let programTypeReg =
         resolveAliasesInTypeRegistry declarationSummary.AliasReg declarationSummary.TypeReg
 
@@ -5256,6 +5517,7 @@ let private checkProgramInternal
         GenericFuncReg = programGenericFuncReg
         ModuleRegistry = moduleRegistry
         AliasReg = declarationSummary.AliasReg
+        ResolutionEnv = programResolutionEnv
     }
 
     // Merge with base environment if provided (for separate compilation)
@@ -5379,6 +5641,27 @@ let private checkProgramInternal
                 | Some ([], TInt64) -> Ok (TInt64, Program topLevelsWithEqHelpers, typeCheckEnv)
                 | Some _ -> Error (GenericError "main function must have signature () -> int")
                 | None -> Error (GenericError "Program must have either a main expression or a main() : int function")))
+
+let private checkProgramInternal
+    (baseEnv: TypeCheckEnv option)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: Program)
+    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    let (Program topLevels) = program
+    let moduleRegistry =
+        match baseEnv with
+        | Some existingEnv -> existingEnv.ModuleRegistry
+        | None -> Stdlib.buildModuleRegistry ()
+    let localResolutionEnv =
+        declarationResolutionEnvironment topLevels moduleRegistry (Option.isNone baseEnv)
+    let resolutionEnv =
+        match baseEnv with
+        | Some existingEnv -> NameResolution.merge existingEnv.ResolutionEnv localResolutionEnv
+        | None -> localResolutionEnv
+
+    resolveProgramNames resolutionEnv program
+    |> Result.bind (checkResolvedProgramInternal baseEnv requireExplicitTypeArgsForBareCalls warningSettings)
 
 /// Type-check a program
 /// Returns the type of the main expression and the transformed program

@@ -6,9 +6,9 @@
 // Literals use Dark's `I` suffix.
 
 // --- boundary: largest small value vs first big value ---
-9223372036854775807I + 0I = 9223372036854775807I // Int64.MAX stays small
-9223372036854775807I + 1I = 9223372036854775808I // promotes past Int64.MAX
--9223372036854775808I - 1I = -9223372036854775809I // promotes past Int64.MIN
+9223372036854775807I + 0I = 9223372036854775807I // Stdlib.Int64.MAX stays small
+9223372036854775807I + 1I = 9223372036854775808I // promotes past Stdlib.Int64.MAX
+-9223372036854775808I - 1I = -9223372036854775809I // promotes past Stdlib.Int64.MIN
 
 // --- demotion: a big-arithmetic result that fits Int64 collapses to small ---
 9223372036854775808I - 1I = 9223372036854775807I
@@ -40,7 +40,7 @@ Stdlib.Int.parse "not a number" = Stdlib.Result.Result.Error Stdlib.Int.ParseErr
 Stdlib.Int.parse "" = Stdlib.Result.Result.Error Stdlib.Int.ParseError.BadFormat
 Stdlib.Int.parse "5.0" = Stdlib.Result.Result.Error Stdlib.Int.ParseError.BadFormat
 Stdlib.Int.parse "5_000" = Stdlib.Result.Result.Error Stdlib.Int.ParseError.BadFormat
-// arbitrary precision: a value past Int64.MinValue still parses
+// arbitrary precision: a value past Stdlib.Int64.MinValue still parses
 Stdlib.Int.parse "-9223372036854775809" = Stdlib.Result.Result.Ok -9223372036854775809I
 Stdlib.Int.fromInt64 5L = 5I
 

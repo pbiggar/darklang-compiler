@@ -1,4 +1,4 @@
-// DateTime.dark - UTC DateTime values and operations
+// Stdlib.DateTime.dark - UTC DateTime values and operations
 //
 // DateTime uses Unix epoch milliseconds internally, which is precise enough for
 // the upstream API while keeping arithmetic and comparison cheap in native code.

@@ -4,194 +4,194 @@
 // Tests for UInt8 module functions
 
 // ===================================================================
-// UInt8.add - Add two integers
+// Stdlib.UInt8.add - Add two integers
 // ===================================================================
 
-UInt8.add(10uy, 9uy) = 19uy
-UInt8.add(0uy, 0uy) = 0uy
-UInt8.add(5uy, 5uy) = 10uy
-UInt8.add(100uy, 20uy) = 120uy
+Stdlib.UInt8.add(10uy, 9uy) = 19uy
+Stdlib.UInt8.add(0uy, 0uy) = 0uy
+Stdlib.UInt8.add(5uy, 5uy) = 10uy
+Stdlib.UInt8.add(100uy, 20uy) = 120uy
 
 // ===================================================================
-// UInt8.sub - Subtract two integers
+// Stdlib.UInt8.sub - Subtract two integers
 // ===================================================================
 
-UInt8.sub(10uy, 9uy) = 1uy
-UInt8.sub(10uy, 0uy) = 10uy
-UInt8.sub(100uy, 50uy) = 50uy
-UInt8.sub(5uy, 0uy) = 5uy
+Stdlib.UInt8.sub(10uy, 9uy) = 1uy
+Stdlib.UInt8.sub(10uy, 0uy) = 10uy
+Stdlib.UInt8.sub(100uy, 50uy) = 50uy
+Stdlib.UInt8.sub(5uy, 0uy) = 5uy
 
 // ===================================================================
-// UInt8.mul - Multiply two integers
+// Stdlib.UInt8.mul - Multiply two integers
 // ===================================================================
 
-UInt8.mul(8uy, 8uy) = 64uy
-UInt8.mul(0uy, 100uy) = 0uy
-UInt8.mul(5uy, 5uy) = 25uy
-UInt8.mul(10uy, 10uy) = 100uy
+Stdlib.UInt8.mul(8uy, 8uy) = 64uy
+Stdlib.UInt8.mul(0uy, 100uy) = 0uy
+Stdlib.UInt8.mul(5uy, 5uy) = 25uy
+Stdlib.UInt8.mul(10uy, 10uy) = 100uy
 
 // ===================================================================
-// UInt8.div - Divide two integers
+// Stdlib.UInt8.div - Divide two integers
 // ===================================================================
 
-UInt8.div(10uy, 5uy) = 2uy
-UInt8.div(10uy, 3uy) = 3uy
-UInt8.div(100uy, 10uy) = 10uy
-UInt8.div(10uy, 2uy) = 5uy
+Stdlib.UInt8.div(10uy, 5uy) = 2uy
+Stdlib.UInt8.div(10uy, 3uy) = 3uy
+Stdlib.UInt8.div(100uy, 10uy) = 10uy
+Stdlib.UInt8.div(10uy, 2uy) = 5uy
 
 // ===================================================================
-// UInt8.mod - Modulo operation
+// Stdlib.UInt8.mod - Modulo operation
 // ===================================================================
 
-UInt8.mod(15uy, 6uy) = 3uy
-UInt8.mod(10uy, 3uy) = 1uy
-UInt8.mod(100uy, 7uy) = 2uy
-UInt8.mod(20uy, 3uy) = 2uy
+Stdlib.UInt8.mod(15uy, 6uy) = 3uy
+Stdlib.UInt8.mod(10uy, 3uy) = 1uy
+Stdlib.UInt8.mod(100uy, 7uy) = 2uy
+Stdlib.UInt8.mod(20uy, 3uy) = 2uy
 
 // ===================================================================
-// UInt8.max - Maximum of two integers
+// Stdlib.UInt8.max - Maximum of two integers
 // ===================================================================
 
-UInt8.max(5uy, 6uy) = 6uy
-UInt8.max(6uy, 5uy) = 6uy
-UInt8.max(10uy, 20uy) = 20uy
-UInt8.max(0uy, 0uy) = 0uy
+Stdlib.UInt8.max(5uy, 6uy) = 6uy
+Stdlib.UInt8.max(6uy, 5uy) = 6uy
+Stdlib.UInt8.max(10uy, 20uy) = 20uy
+Stdlib.UInt8.max(0uy, 0uy) = 0uy
 
 // ===================================================================
-// UInt8.min - Minimum of two integers
+// Stdlib.UInt8.min - Minimum of two integers
 // ===================================================================
 
-UInt8.min(5uy, 6uy) = 5uy
-UInt8.min(6uy, 5uy) = 5uy
-UInt8.min(10uy, 20uy) = 10uy
-UInt8.min(0uy, 0uy) = 0uy
+Stdlib.UInt8.min(5uy, 6uy) = 5uy
+Stdlib.UInt8.min(6uy, 5uy) = 5uy
+Stdlib.UInt8.min(10uy, 20uy) = 10uy
+Stdlib.UInt8.min(0uy, 0uy) = 0uy
 
 // ===================================================================
-// UInt8.absoluteValue - Absolute value
+// Stdlib.UInt8.absoluteValue - Absolute value
 // ===================================================================
 
-UInt8.absoluteValue(5uy) = 5uy
-UInt8.absoluteValue(0uy) = 0uy
-UInt8.absoluteValue(100uy) = 100uy
-UInt8.absoluteValue(1uy) = 1uy
+Stdlib.UInt8.absoluteValue(5uy) = 5uy
+Stdlib.UInt8.absoluteValue(0uy) = 0uy
+Stdlib.UInt8.absoluteValue(100uy) = 100uy
+Stdlib.UInt8.absoluteValue(1uy) = 1uy
 
 // ===================================================================
-// UInt8.negate - Negate an integer
+// Stdlib.UInt8.negate - Negate an integer
 // ===================================================================
 
-UInt8.negate(0uy) = 0uy
-UInt8.negate(1uy) = 255uy
-UInt8.negate(5uy) = 251uy
-UInt8.negate(100uy) = 156uy
+Stdlib.UInt8.negate(0uy) = 0uy
+Stdlib.UInt8.negate(1uy) = 255uy
+Stdlib.UInt8.negate(5uy) = 251uy
+Stdlib.UInt8.negate(100uy) = 156uy
 
 // ===================================================================
-// UInt8.power - Raise to a power
+// Stdlib.UInt8.power - Raise to a power
 // ===================================================================
 
-UInt8.power(3uy, 4uy) = 81uy
-UInt8.power(2uy, 6uy) = 64uy
-UInt8.power(0uy, 0uy) = 1uy
-UInt8.power(5uy, 0uy) = 1uy
-UInt8.power(5uy, 1uy) = 5uy
-UInt8.power(2uy, 5uy) = 32uy
+Stdlib.UInt8.power(3uy, 4uy) = 81uy
+Stdlib.UInt8.power(2uy, 6uy) = 64uy
+Stdlib.UInt8.power(0uy, 0uy) = 1uy
+Stdlib.UInt8.power(5uy, 0uy) = 1uy
+Stdlib.UInt8.power(5uy, 1uy) = 5uy
+Stdlib.UInt8.power(2uy, 5uy) = 32uy
 
 // ===================================================================
-// UInt8.clamp - Clamp value between limits
+// Stdlib.UInt8.clamp - Clamp value between limits
 // ===================================================================
 
-UInt8.clamp(5uy, 0uy, 5uy) = 5uy
-UInt8.clamp(3uy, 0uy, 2uy) = 2uy
-UInt8.clamp(1uy, 0uy, 5uy) = 1uy
-UInt8.clamp(10uy, 5uy, 15uy) = 10uy
-UInt8.clamp(2uy, 5uy, 10uy) = 5uy
+Stdlib.UInt8.clamp(5uy, 0uy, 5uy) = 5uy
+Stdlib.UInt8.clamp(3uy, 0uy, 2uy) = 2uy
+Stdlib.UInt8.clamp(1uy, 0uy, 5uy) = 1uy
+Stdlib.UInt8.clamp(10uy, 5uy, 15uy) = 10uy
+Stdlib.UInt8.clamp(2uy, 5uy, 10uy) = 5uy
 
 // ===================================================================
-// UInt8.greaterThan - Greater than comparison
+// Stdlib.UInt8.greaterThan - Greater than comparison
 // ===================================================================
 
-UInt8.greaterThan(20uy, 1uy) = true
-UInt8.greaterThan(1uy, 20uy) = false
-UInt8.greaterThan(5uy, 5uy) = false
+Stdlib.UInt8.greaterThan(20uy, 1uy) = true
+Stdlib.UInt8.greaterThan(1uy, 20uy) = false
+Stdlib.UInt8.greaterThan(5uy, 5uy) = false
 
 // ===================================================================
-// UInt8.greaterThanOrEqualTo - Greater than or equal comparison
+// Stdlib.UInt8.greaterThanOrEqualTo - Greater than or equal comparison
 // ===================================================================
 
-UInt8.greaterThanOrEqualTo(6uy, 1uy) = true
-UInt8.greaterThanOrEqualTo(1uy, 6uy) = false
-UInt8.greaterThanOrEqualTo(5uy, 5uy) = true
+Stdlib.UInt8.greaterThanOrEqualTo(6uy, 1uy) = true
+Stdlib.UInt8.greaterThanOrEqualTo(1uy, 6uy) = false
+Stdlib.UInt8.greaterThanOrEqualTo(5uy, 5uy) = true
 
 // ===================================================================
-// UInt8.lessThan - Less than comparison
+// Stdlib.UInt8.lessThan - Less than comparison
 // ===================================================================
 
-UInt8.lessThan(6uy, 8uy) = true
-UInt8.lessThan(8uy, 6uy) = false
-UInt8.lessThan(5uy, 5uy) = false
+Stdlib.UInt8.lessThan(6uy, 8uy) = true
+Stdlib.UInt8.lessThan(8uy, 6uy) = false
+Stdlib.UInt8.lessThan(5uy, 5uy) = false
 
 // ===================================================================
-// UInt8.lessThanOrEqualTo - Less than or equal comparison
+// Stdlib.UInt8.lessThanOrEqualTo - Less than or equal comparison
 // ===================================================================
 
-UInt8.lessThanOrEqualTo(6uy, 8uy) = true
-UInt8.lessThanOrEqualTo(8uy, 6uy) = false
-UInt8.lessThanOrEqualTo(5uy, 5uy) = true
+Stdlib.UInt8.lessThanOrEqualTo(6uy, 8uy) = true
+Stdlib.UInt8.lessThanOrEqualTo(8uy, 6uy) = false
+Stdlib.UInt8.lessThanOrEqualTo(5uy, 5uy) = true
 
 // ===================================================================
-// UInt8.toString - Convert integer to string
+// Stdlib.UInt8.toString - Convert integer to string
 // ===================================================================
 
-UInt8.toString(0uy) = "0"
-UInt8.toString(42uy) = "42"
-UInt8.toString(5uy) = "5"
-UInt8.toString(120uy) = "120"
+Stdlib.UInt8.toString(0uy) = "0"
+Stdlib.UInt8.toString(42uy) = "42"
+Stdlib.UInt8.toString(5uy) = "5"
+Stdlib.UInt8.toString(120uy) = "120"
 
 // ===================================================================
-// UInt8.isEven - Check if integer is even
+// Stdlib.UInt8.isEven - Check if integer is even
 // ===================================================================
 
-UInt8.isEven(0uy) = true
-UInt8.isEven(2uy) = true
-UInt8.isEven(4uy) = true
-UInt8.isEven(6uy) = true
-UInt8.isEven(1uy) = false
-UInt8.isEven(3uy) = false
-UInt8.isEven(5uy) = false
+Stdlib.UInt8.isEven(0uy) = true
+Stdlib.UInt8.isEven(2uy) = true
+Stdlib.UInt8.isEven(4uy) = true
+Stdlib.UInt8.isEven(6uy) = true
+Stdlib.UInt8.isEven(1uy) = false
+Stdlib.UInt8.isEven(3uy) = false
+Stdlib.UInt8.isEven(5uy) = false
 
 // ===================================================================
-// UInt8.isOdd - Check if integer is odd
+// Stdlib.UInt8.isOdd - Check if integer is odd
 // ===================================================================
 
-UInt8.isOdd(1uy) = true
-UInt8.isOdd(3uy) = true
-UInt8.isOdd(5uy) = true
-UInt8.isOdd(0uy) = false
-UInt8.isOdd(2uy) = false
-UInt8.isOdd(4uy) = false
-UInt8.isOdd(6uy) = false
+Stdlib.UInt8.isOdd(1uy) = true
+Stdlib.UInt8.isOdd(3uy) = true
+Stdlib.UInt8.isOdd(5uy) = true
+Stdlib.UInt8.isOdd(0uy) = false
+Stdlib.UInt8.isOdd(2uy) = false
+Stdlib.UInt8.isOdd(4uy) = false
+Stdlib.UInt8.isOdd(6uy) = false
 
 // ===================================================================
-// UInt8.sum - Sum all integers in a list
+// Stdlib.UInt8.sum - Sum all integers in a list
 // ===================================================================
 
-UInt8.sum([1uy, 2uy, 3uy, 4uy, 5uy]) = 15uy
-UInt8.sum([]) = 0uy
-UInt8.sum([100uy]) = 100uy
-UInt8.sum([1uy, 1uy, 2uy, 2uy]) = 6uy
-UInt8.sum([10uy, 20uy, 30uy]) = 60uy
+Stdlib.UInt8.sum([1uy, 2uy, 3uy, 4uy, 5uy]) = 15uy
+Stdlib.UInt8.sum([]) = 0uy
+Stdlib.UInt8.sum([100uy]) = 100uy
+Stdlib.UInt8.sum([1uy, 1uy, 2uy, 2uy]) = 6uy
+Stdlib.UInt8.sum([10uy, 20uy, 30uy]) = 60uy
 
 // ===================================================================
 // NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// UInt8.sqrt - not implemented
-// UInt8.sqrt(4) = 2.0
+// Stdlib.UInt8.sqrt - not implemented
+// Stdlib.UInt8.sqrt(4) = 2.0
 
-// UInt8.toFloat - not implemented
-// UInt8.toFloat(2) = 2.0
+// Stdlib.UInt8.toFloat - not implemented
+// Stdlib.UInt8.toFloat(2) = 2.0
 
-// UInt8.parse - needs Result type (blocked by type checker bug)
-// UInt8.parse("1") = Result.Ok(1)
+// Stdlib.UInt8.parse - needs Result type (blocked by type checker bug)
+// Stdlib.UInt8.parse("1") = Stdlib.Result.Result.Ok(1)
 
-// UInt8.remainder - needs Result type (blocked by type checker bug)
-// UInt8.remainder(15, 6) = Result.Ok(3)
+// Stdlib.UInt8.remainder - needs Result type (blocked by type checker bug)
+// Stdlib.UInt8.remainder(15, 6) = Stdlib.Result.Result.Ok(3)

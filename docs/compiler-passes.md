@@ -1,5 +1,11 @@
 # Compiler Passes
 
+Before expression typing, pass 1.5 builds a canonical immutable symbol
+inventory and resolves value, callable, constructor, pattern, and type names.
+The checked AST contains canonical identity spellings; pass 2 performs exact
+identity lookup and never inserts namespaces or retries suffixes. The complete
+rule table is in [Name resolution parity](name-resolution.md).
+
 The Dark compiler transforms source code through a series of passes, each with a specific responsibility. This document explains each pass in detail.
 
 ## Pipeline Overview

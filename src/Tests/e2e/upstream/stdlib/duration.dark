@@ -8,7 +8,7 @@ Stdlib.Duration.parse "1h" = Stdlib.Result.Result.Ok 3600I
 Stdlib.Duration.parse "2d" = Stdlib.Result.Result.Ok 172800I
 Stdlib.Duration.parse "0s" = Stdlib.Result.Result.Ok 0I
 
-// --- arbitrary precision: a value past Int64 range now parses (Int64.parse
+// --- arbitrary precision: a value past Int64 range now parses (Stdlib.Int64.parse
 // would have rejected it as out-of-range) ---
 Stdlib.Duration.parse "9223372036854775808s" =
   Stdlib.Result.Result.Ok 9223372036854775808I

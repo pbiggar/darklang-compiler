@@ -123,14 +123,14 @@ return -3.5
 ---NAME---
 const_fold_float_abs
 ---INPUT---
-let x = -3.5 in Float.abs(x)
+let x = -3.5 in Stdlib.Float.abs(x)
 ---EXPECTED---
 return 3.5
 
 ---NAME---
 const_fold_float_sqrt
 ---INPUT---
-let x = 9.0 in Float.sqrt(x)
+let x = 9.0 in Stdlib.Float.sqrt(x)
 ---EXPECTED---
 return 3
 
@@ -151,7 +151,7 @@ return 42
 ---NAME---
 const_fold_float_to_bits
 ---INPUT---
-let x = 1.0 in Float.toBits(x)
+let x = 1.0 in Stdlib.Float.toBits(x)
 ---EXPECTED---
 return 4607182418800017408
 
@@ -1516,7 +1516,7 @@ return t2
 ---NAME---
 stdlib_string_equals_self_not_folded
 ---INPUT---
-def f(x: String) : Bool = String.equals(x, x)
+def f(x: String) : Bool = Stdlib.String.equals(x, x)
 ---EXPECTED---
 Function f:
 let TempId 1 = Stdlib.String.equals(t0, t0)
@@ -1609,7 +1609,7 @@ return t0
 ---NAME---
 identity_float_abs_idempotent
 ---INPUT---
-def f(x: Float) : Float = Float.abs(Float.abs(x))
+def f(x: Float) : Float = Stdlib.Float.abs(Stdlib.Float.abs(x))
 ---EXPECTED---
 Function f:
 let TempId 2 = FloatAbs(t0)
@@ -1618,7 +1618,7 @@ return t2
 ---NAME---
 identity_float_abs_negation
 ---INPUT---
-def f(x: Float) : Float = Float.abs(-x)
+def f(x: Float) : Float = Stdlib.Float.abs(-x)
 ---EXPECTED---
 Function f:
 let TempId 2 = FloatAbs(t0)
@@ -2193,8 +2193,8 @@ return t6
 cse_reuses_duplicate_int64_to_float
 ---INPUT---
 def f(x: Int64) : Float =
-  let a = Int64.toFloat(x) in
-  let b = Int64.toFloat(x) in
+  let a = Stdlib.Int64.toFloat(x) in
+  let b = Stdlib.Int64.toFloat(x) in
   a + b
 ---EXPECTED---
 Function f:
@@ -2206,8 +2206,8 @@ return t5
 cse_reuses_duplicate_float_to_bits
 ---INPUT---
 def f(x: Float) : (UInt64, UInt64) =
-  let a = Float.toBits(x) in
-  let b = Float.toBits(x) in
+  let a = Stdlib.Float.toBits(x) in
+  let b = Stdlib.Float.toBits(x) in
   (a, b)
 f(1.5)
 ---EXPECTED---
@@ -2224,8 +2224,8 @@ return t6
 cse_reuses_duplicate_float_abs
 ---INPUT---
 def f(x: Float) : Float =
-  let a = Float.abs(x) in
-  let b = Float.abs(x) in
+  let a = Stdlib.Float.abs(x) in
+  let b = Stdlib.Float.abs(x) in
   a + b
 f(-3.5)
 ---EXPECTED---
@@ -2242,8 +2242,8 @@ return t6
 cse_reuses_duplicate_float_sqrt
 ---INPUT---
 def f(x: Float) : Float =
-  let y = Float.sqrt(x) in
-  let z = Float.sqrt(x) in
+  let y = Stdlib.Float.sqrt(x) in
+  let z = Stdlib.Float.sqrt(x) in
   y + z
 f(9.0)
 ---EXPECTED---
@@ -2295,10 +2295,10 @@ hoist_identical_leading_branch_binding_preserves_effects
 ---INPUT---
 def f(x: Int64) : Int64 =
   if x > 0 then
-    let value = Random.int64() in
+    let value = Stdlib.Random.int64() in
     value + 1
   else
-    let value = Random.int64() in
+    let value = Stdlib.Random.int64() in
     value - 1
 ---EXPECTED---
 Function f:

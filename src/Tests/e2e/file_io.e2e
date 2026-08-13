@@ -80,7 +80,7 @@ let _ = Stdlib.File.writeText("/tmp/dark_test_empty.txt", "") in Stdlib.File.exi
 let path = "/tmp/dark_test_if_lazy_write.txt" in let _ = Stdlib.File.writeText(path, "good") in let _ = if true then 0 else let _ = Stdlib.File.writeText(path, "bad") in 0 in match Stdlib.File.readText(path) with | Ok(s) -> s | Error(_) -> "error" = "good"
 
 // Regression: if-toAtom lowering must not eagerly execute branch calls when the branch is dead.
-let path = "/tmp/dark_test_if_dead_branch_call.txt" in let _ = Stdlib.File.writeText(path, "good") in let _ = if false then Stdlib.File.writeText(path, "bad") else Result.Ok(()) in match Stdlib.File.readText(path) with | Ok(s) -> s | Error(_) -> "error" = "good"
+let path = "/tmp/dark_test_if_dead_branch_call.txt" in let _ = Stdlib.File.writeText(path, "good") in let _ = if false then Stdlib.File.writeText(path, "bad") else Stdlib.Result.Result.Ok(()) in match Stdlib.File.readText(path) with | Ok(s) -> s | Error(_) -> "error" = "good"
 
 
 // ===================================================================
@@ -105,19 +105,19 @@ match Stdlib.File.appendText("/nonexistent/directory/file.txt", "test") with | O
 // Path Operations
 // ===================================================================
 
-// Path.combine joins paths with /
-Path.combine("foo", "bar") = "foo/bar"
-Path.combine("/usr", "bin") = "/usr/bin"
-Path.combine("", "file.txt") = "/file.txt"
-Path.combine("/", "tmp") = "/tmp"
-Path.combine("/tmp", "test.txt") = "/tmp/test.txt"
-Path.combine("/tmp/", "test.txt") = "/tmp/test.txt"
+// Stdlib.Path.combine joins paths with /
+Stdlib.Path.combine("foo", "bar") = "foo/bar"
+Stdlib.Path.combine("/usr", "bin") = "/usr/bin"
+Stdlib.Path.combine("", "file.txt") = "/file.txt"
+Stdlib.Path.combine("/", "tmp") = "/tmp"
+Stdlib.Path.combine("/tmp", "test.txt") = "/tmp/test.txt"
+Stdlib.Path.combine("/tmp/", "test.txt") = "/tmp/test.txt"
 
-// Path.tempDir returns /tmp
-Path.tempDir() = "/tmp"
+// Stdlib.Path.tempDir returns /tmp
+Stdlib.Path.tempDir() = "/tmp"
 
 // Combine with tempDir
-Path.combine(Path.tempDir(), "myfile.txt") = "/tmp/myfile.txt"
+Stdlib.Path.combine(Stdlib.Path.tempDir(), "myfile.txt") = "/tmp/myfile.txt"
 
 
 // ===================================================================
@@ -128,4 +128,4 @@ Path.combine(Path.tempDir(), "myfile.txt") = "/tmp/myfile.txt"
 // These calls are constant-folded at compile time based on the compiler host.
 // Exactly one supported platform predicate should be true
 
-Platform.isMacOS() != Platform.isLinux() = true
+Stdlib.Platform.isMacOS() != Stdlib.Platform.isLinux() = true

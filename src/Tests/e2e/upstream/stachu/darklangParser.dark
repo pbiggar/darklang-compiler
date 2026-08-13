@@ -38,12 +38,12 @@ module QualifiedNames =
 
 module Enums =
   // Simple enum
-  Stachu.DarklangParser.parse "Option.Some" = Stachu.Parser.ParseResult.Success(Stachu.DarklangParser.Expr.EEnum(Stachu.DarklangParser.QualifiedName { modules = []; name = "Option" }, "Some", []), "")
+  Stachu.DarklangParser.parse "Stdlib.Option.Option.Some" = Stachu.Parser.ParseResult.Success(Stachu.DarklangParser.Expr.EEnum(Stachu.DarklangParser.QualifiedName { modules = []; name = "Option" }, "Some", []), "")
 
-  Stachu.DarklangParser.parse "Option.None" = Stachu.Parser.ParseResult.Success(Stachu.DarklangParser.Expr.EEnum(Stachu.DarklangParser.QualifiedName { modules = []; name = "Option" }, "None", []), "")
+  Stachu.DarklangParser.parse "Stdlib.Option.Option.None" = Stachu.Parser.ParseResult.Success(Stachu.DarklangParser.Expr.EEnum(Stachu.DarklangParser.QualifiedName { modules = []; name = "Option" }, "None", []), "")
 
   // Enum with argument
-  Stachu.DarklangParser.parse "Option.Some(42L)" = Stachu.Parser.ParseResult.Success(Stachu.DarklangParser.Expr.EEnum(Stachu.DarklangParser.QualifiedName { modules = []; name = "Option" }, "Some", [Stachu.DarklangParser.Expr.EInt64 42L]), "")
+  Stachu.DarklangParser.parse "Stdlib.Option.Option.Some(42L)" = Stachu.Parser.ParseResult.Success(Stachu.DarklangParser.Expr.EEnum(Stachu.DarklangParser.QualifiedName { modules = []; name = "Option" }, "Some", [Stachu.DarklangParser.Expr.EInt64 42L]), "")
 
 
 module Lists =

@@ -1,4 +1,4 @@
-// Crypto.dark - Stdlib.Crypto definitions
+// Stdlib.Crypto.dark - Stdlib.Crypto definitions
 //
 // Cryptographic hash functions: MD5, SHA-1, SHA-256, SHA-384, and HMAC variants
 // All implemented in pure Darklang without external dependencies.
@@ -153,7 +153,7 @@ def Stdlib.Crypto.debugMd5Padded(data: Bytes) : Bytes =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let padding = Stdlib.Crypto.__md5BuildPadding(dataLen) in
-    // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+    // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
     let paddedList = Stdlib.List.append<Int64>(dataList, padding) in
     Stdlib.Bytes.fromList(paddedList)
 
@@ -689,7 +689,7 @@ def Stdlib.Crypto.md5(data: Bytes) : Bytes =
     // Build padded message
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let padding = Stdlib.Crypto.__md5BuildPadding(dataLen) in
-    // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+    // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
     let paddedList = Stdlib.List.append<Int64>(dataList, padding) in
     let padded = Stdlib.Bytes.fromList(paddedList) in
     let paddedLen = Stdlib.Bytes.length(padded) in
@@ -812,7 +812,7 @@ def Stdlib.Crypto.sha1(data: Bytes) : Bytes =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let padding = Stdlib.Crypto.__sha256BuildPadding(dataLen) in
-    // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+    // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
     let paddedList = Stdlib.List.append<Int64>(dataList, padding) in
     let padded = Stdlib.Bytes.fromList(paddedList) in
     let paddedLen = Stdlib.Bytes.length(padded) in
@@ -957,7 +957,7 @@ def Stdlib.Crypto.sha256(data: Bytes) : Bytes =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let padding = Stdlib.Crypto.__sha256BuildPadding(dataLen) in
-    // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+    // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
     let paddedList = Stdlib.List.append<Int64>(dataList, padding) in
     let padded = Stdlib.Bytes.fromList(paddedList) in
     let paddedLen = Stdlib.Bytes.length(padded) in
@@ -1147,7 +1147,7 @@ def Stdlib.Crypto.sha384(data: Bytes) : Bytes =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let padding = Stdlib.Crypto.__sha384BuildPadding(dataLen) in
-    // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+    // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
     let paddedList = Stdlib.List.append<Int64>(dataList, padding) in
     let padded = Stdlib.Bytes.fromList(paddedList) in
     let paddedLen = Stdlib.Bytes.length(padded) in
@@ -1178,13 +1178,13 @@ def Stdlib.Crypto.__hmacPrepareKey(key: Bytes, blockSize: Int64, hashFn: (Bytes)
         let hashedKey = hashFn(key) in
         let hashedKeyList = Stdlib.Crypto.__copyDataToList(hashedKey, 0, Stdlib.Bytes.length(hashedKey), []) in
         let padding = Stdlib.Crypto.__zeros(blockSize - Stdlib.Bytes.length(hashedKey), []) in
-        // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+        // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
         Stdlib.List.append<Int64>(hashedKeyList, padding)
     else if keyLen < blockSize then
         // Pad with zeros
         let keyList = Stdlib.Crypto.__copyDataToList(key, 0, keyLen, []) in
         let padding = Stdlib.Crypto.__zeros(blockSize - keyLen, []) in
-        // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+        // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
         Stdlib.List.append<Int64>(keyList, padding)
     else
         Stdlib.Crypto.__copyDataToList(key, 0, keyLen, [])
@@ -1203,12 +1203,12 @@ def Stdlib.Crypto.__hmac(key: Bytes, data: Bytes, blockSize: Int64, hashFn: (Byt
     let keyXorOpad = Stdlib.Crypto.__xorByteLists(keyPadded, opad, []) in
     // Inner hash: H((K XOR ipad) || message)
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, Stdlib.Bytes.length(data), []) in
-    // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+    // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
     let innerInput = Stdlib.Bytes.fromList(Stdlib.List.append<Int64>(keyXorIpad, dataList)) in
     let innerHash = hashFn(innerInput) in
     // Outer hash: H((K XOR opad) || inner_hash)
     let innerHashList = Stdlib.Crypto.__copyDataToList(innerHash, 0, Stdlib.Bytes.length(innerHash), []) in
-    // Use List.append instead of List.flatten to avoid compiler bug with list-of-lists
+    // Use Stdlib.List.append instead of Stdlib.List.flatten to avoid compiler bug with list-of-lists
     let outerInput = Stdlib.Bytes.fromList(Stdlib.List.append<Int64>(keyXorOpad, innerHashList)) in
     hashFn(outerInput)
 

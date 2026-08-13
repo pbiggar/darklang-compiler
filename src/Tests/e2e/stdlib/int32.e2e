@@ -4,196 +4,196 @@
 // Tests for Int32 module functions
 
 // ===================================================================
-// Int32.add - Add two integers
+// Stdlib.Int32.add - Add two integers
 // ===================================================================
 
-Int32.add(10l, 9l) = 19l
-Int32.add(0l, 0l) = 0l
-Int32.add(-5l, 5l) = 0l
-Int32.add(100l, 200l) = 300l
+Stdlib.Int32.add(10l, 9l) = 19l
+Stdlib.Int32.add(0l, 0l) = 0l
+Stdlib.Int32.add(-5l, 5l) = 0l
+Stdlib.Int32.add(100l, 200l) = 300l
 
 // ===================================================================
-// Int32.sub - Subtract two integers
+// Stdlib.Int32.sub - Subtract two integers
 // ===================================================================
 
-Int32.sub(10l, 9l) = 1l
-Int32.sub(0l, 0l) = 0l
-Int32.sub(100l, 50l) = 50l
-Int32.sub(5l, 10l) = -5l
+Stdlib.Int32.sub(10l, 9l) = 1l
+Stdlib.Int32.sub(0l, 0l) = 0l
+Stdlib.Int32.sub(100l, 50l) = 50l
+Stdlib.Int32.sub(5l, 10l) = -5l
 
 // ===================================================================
-// Int32.mul - Multiply two integers
+// Stdlib.Int32.mul - Multiply two integers
 // ===================================================================
 
-Int32.mul(8l, 8l) = 64l
-Int32.mul(0l, 100l) = 0l
-Int32.mul(-5l, 5l) = -25l
-Int32.mul(100l, 100l) = 10000l
+Stdlib.Int32.mul(8l, 8l) = 64l
+Stdlib.Int32.mul(0l, 100l) = 0l
+Stdlib.Int32.mul(-5l, 5l) = -25l
+Stdlib.Int32.mul(100l, 100l) = 10000l
 
 // ===================================================================
-// Int32.div - Divide two integers
+// Stdlib.Int32.div - Divide two integers
 // ===================================================================
 
-Int32.div(10l, 5l) = 2l
-Int32.div(10l, 3l) = 3l
-Int32.div(100l, 10l) = 10l
-Int32.div(-10l, 2l) = -5l
+Stdlib.Int32.div(10l, 5l) = 2l
+Stdlib.Int32.div(10l, 3l) = 3l
+Stdlib.Int32.div(100l, 10l) = 10l
+Stdlib.Int32.div(-10l, 2l) = -5l
 
 // ===================================================================
-// Int32.mod - Modulo operation
+// Stdlib.Int32.mod - Modulo operation
 // ===================================================================
 
-Int32.mod(15l, 6l) = 3l
-Int32.mod(10l, 3l) = 1l
-Int32.mod(100l, 7l) = 2l
-Int32.mod(-10l, 3l) = 2l
+Stdlib.Int32.mod(15l, 6l) = 3l
+Stdlib.Int32.mod(10l, 3l) = 1l
+Stdlib.Int32.mod(100l, 7l) = 2l
+Stdlib.Int32.mod(-10l, 3l) = 2l
 
 // ===================================================================
-// Int32.max - Maximum of two integers
+// Stdlib.Int32.max - Maximum of two integers
 // ===================================================================
 
-Int32.max(5l, 6l) = 6l
-Int32.max(6l, 5l) = 6l
-Int32.max(-5l, -10l) = -5l
-Int32.max(0l, 0l) = 0l
+Stdlib.Int32.max(5l, 6l) = 6l
+Stdlib.Int32.max(6l, 5l) = 6l
+Stdlib.Int32.max(-5l, -10l) = -5l
+Stdlib.Int32.max(0l, 0l) = 0l
 
 // ===================================================================
-// Int32.min - Minimum of two integers
+// Stdlib.Int32.min - Minimum of two integers
 // ===================================================================
 
-Int32.min(5l, 6l) = 5l
-Int32.min(6l, 5l) = 5l
-Int32.min(-5l, -10l) = -10l
-Int32.min(0l, 0l) = 0l
+Stdlib.Int32.min(5l, 6l) = 5l
+Stdlib.Int32.min(6l, 5l) = 5l
+Stdlib.Int32.min(-5l, -10l) = -10l
+Stdlib.Int32.min(0l, 0l) = 0l
 
 // ===================================================================
-// Int32.absoluteValue - Absolute value
+// Stdlib.Int32.absoluteValue - Absolute value
 // ===================================================================
 
-Int32.absoluteValue(-5l) = 5l
-Int32.absoluteValue(5l) = 5l
-Int32.absoluteValue(0l) = 0l
-Int32.absoluteValue(-100l) = 100l
+Stdlib.Int32.absoluteValue(-5l) = 5l
+Stdlib.Int32.absoluteValue(5l) = 5l
+Stdlib.Int32.absoluteValue(0l) = 0l
+Stdlib.Int32.absoluteValue(-100l) = 100l
 
 // ===================================================================
-// Int32.negate - Negate an integer
+// Stdlib.Int32.negate - Negate an integer
 // ===================================================================
 
-Int32.negate(-5l) = 5l
-Int32.negate(5l) = -5l
-Int32.negate(0l) = 0l
-Int32.negate(100l) = -100l
+Stdlib.Int32.negate(-5l) = 5l
+Stdlib.Int32.negate(5l) = -5l
+Stdlib.Int32.negate(0l) = 0l
+Stdlib.Int32.negate(100l) = -100l
 
 // ===================================================================
-// Int32.power - Raise to a power
+// Stdlib.Int32.power - Raise to a power
 // ===================================================================
 
-Int32.power(8l, 5l) = 32768l
-Int32.power(2l, 10l) = 1024l
-Int32.power(0l, 0l) = 1l
-Int32.power(5l, 0l) = 1l
-Int32.power(5l, 1l) = 5l
-Int32.power(2l, 8l) = 256l
-Int32.power(2l, -3l) = error="Uncaught exception: Cannot raise integer to a negative exponent"
+Stdlib.Int32.power(8l, 5l) = 32768l
+Stdlib.Int32.power(2l, 10l) = 1024l
+Stdlib.Int32.power(0l, 0l) = 1l
+Stdlib.Int32.power(5l, 0l) = 1l
+Stdlib.Int32.power(5l, 1l) = 5l
+Stdlib.Int32.power(2l, 8l) = 256l
+Stdlib.Int32.power(2l, -3l) = error="Uncaught exception: Cannot raise integer to a negative exponent"
 
 // ===================================================================
-// Int32.clamp - Clamp value between limits
+// Stdlib.Int32.clamp - Clamp value between limits
 // ===================================================================
 
-Int32.clamp(-5l, -2l, 5l) = -2l
-Int32.clamp(3l, 0l, 2l) = 2l
-Int32.clamp(1l, 0l, 5l) = 1l
-Int32.clamp(10l, 5l, 15l) = 10l
-Int32.clamp(0l, 5l, 10l) = 5l
+Stdlib.Int32.clamp(-5l, -2l, 5l) = -2l
+Stdlib.Int32.clamp(3l, 0l, 2l) = 2l
+Stdlib.Int32.clamp(1l, 0l, 5l) = 1l
+Stdlib.Int32.clamp(10l, 5l, 15l) = 10l
+Stdlib.Int32.clamp(0l, 5l, 10l) = 5l
 
 // ===================================================================
-// Int32.greaterThan - Greater than comparison
+// Stdlib.Int32.greaterThan - Greater than comparison
 // ===================================================================
 
-Int32.greaterThan(20l, 1l) = true
-Int32.greaterThan(1l, 20l) = false
-Int32.greaterThan(5l, 5l) = false
+Stdlib.Int32.greaterThan(20l, 1l) = true
+Stdlib.Int32.greaterThan(1l, 20l) = false
+Stdlib.Int32.greaterThan(5l, 5l) = false
 
 // ===================================================================
-// Int32.greaterThanOrEqualTo - Greater than or equal comparison
+// Stdlib.Int32.greaterThanOrEqualTo - Greater than or equal comparison
 // ===================================================================
 
-Int32.greaterThanOrEqualTo(6l, 1l) = true
-Int32.greaterThanOrEqualTo(1l, 6l) = false
-Int32.greaterThanOrEqualTo(5l, 5l) = true
+Stdlib.Int32.greaterThanOrEqualTo(6l, 1l) = true
+Stdlib.Int32.greaterThanOrEqualTo(1l, 6l) = false
+Stdlib.Int32.greaterThanOrEqualTo(5l, 5l) = true
 
 // ===================================================================
-// Int32.lessThan - Less than comparison
+// Stdlib.Int32.lessThan - Less than comparison
 // ===================================================================
 
-Int32.lessThan(6l, 8l) = true
-Int32.lessThan(8l, 6l) = false
-Int32.lessThan(5l, 5l) = false
+Stdlib.Int32.lessThan(6l, 8l) = true
+Stdlib.Int32.lessThan(8l, 6l) = false
+Stdlib.Int32.lessThan(5l, 5l) = false
 
 // ===================================================================
-// Int32.lessThanOrEqualTo - Less than or equal comparison
+// Stdlib.Int32.lessThanOrEqualTo - Less than or equal comparison
 // ===================================================================
 
-Int32.lessThanOrEqualTo(6l, 8l) = true
-Int32.lessThanOrEqualTo(8l, 6l) = false
-Int32.lessThanOrEqualTo(5l, 5l) = true
+Stdlib.Int32.lessThanOrEqualTo(6l, 8l) = true
+Stdlib.Int32.lessThanOrEqualTo(8l, 6l) = false
+Stdlib.Int32.lessThanOrEqualTo(5l, 5l) = true
 
 // ===================================================================
-// Int32.toString - Convert integer to string
+// Stdlib.Int32.toString - Convert integer to string
 // ===================================================================
 
-Int32.toString(0l) = "0"
-Int32.toString(42l) = "42"
-Int32.toString(-5l) = "-5"
-Int32.toString(-2147483648l) = "-2147483648"
-Int32.toString(1234567890l) = "1234567890"
+Stdlib.Int32.toString(0l) = "0"
+Stdlib.Int32.toString(42l) = "42"
+Stdlib.Int32.toString(-5l) = "-5"
+Stdlib.Int32.toString(-2147483648l) = "-2147483648"
+Stdlib.Int32.toString(1234567890l) = "1234567890"
 
 // ===================================================================
-// Int32.isEven - Check if integer is even
+// Stdlib.Int32.isEven - Check if integer is even
 // ===================================================================
 
-Int32.isEven(0l) = true
-Int32.isEven(2l) = true
-Int32.isEven(4l) = true
-Int32.isEven(-2l) = true
-Int32.isEven(1l) = false
-Int32.isEven(3l) = false
-Int32.isEven(-1l) = false
+Stdlib.Int32.isEven(0l) = true
+Stdlib.Int32.isEven(2l) = true
+Stdlib.Int32.isEven(4l) = true
+Stdlib.Int32.isEven(-2l) = true
+Stdlib.Int32.isEven(1l) = false
+Stdlib.Int32.isEven(3l) = false
+Stdlib.Int32.isEven(-1l) = false
 
 // ===================================================================
-// Int32.isOdd - Check if integer is odd
+// Stdlib.Int32.isOdd - Check if integer is odd
 // ===================================================================
 
-Int32.isOdd(1l) = true
-Int32.isOdd(3l) = true
-Int32.isOdd(-1l) = true
-Int32.isOdd(0l) = false
-Int32.isOdd(2l) = false
-Int32.isOdd(4l) = false
-Int32.isOdd(-2l) = false
+Stdlib.Int32.isOdd(1l) = true
+Stdlib.Int32.isOdd(3l) = true
+Stdlib.Int32.isOdd(-1l) = true
+Stdlib.Int32.isOdd(0l) = false
+Stdlib.Int32.isOdd(2l) = false
+Stdlib.Int32.isOdd(4l) = false
+Stdlib.Int32.isOdd(-2l) = false
 
 // ===================================================================
-// Int32.sum - Sum all integers in a list
+// Stdlib.Int32.sum - Sum all integers in a list
 // ===================================================================
 
-Int32.sum([1l, 2l, 3l, 4l, 5l]) = 15l
-Int32.sum([]) = 0l
-Int32.sum([100l]) = 100l
-Int32.sum([1l, -1l, 2l, -2l]) = 0l
-Int32.sum([10l, 20l, 30l]) = 60l
+Stdlib.Int32.sum([1l, 2l, 3l, 4l, 5l]) = 15l
+Stdlib.Int32.sum([]) = 0l
+Stdlib.Int32.sum([100l]) = 100l
+Stdlib.Int32.sum([1l, -1l, 2l, -2l]) = 0l
+Stdlib.Int32.sum([10l, 20l, 30l]) = 60l
 
 // ===================================================================
 // NOTE: Candidate functions not covered in this module
 // ===================================================================
 
-// Int32.sqrt - not implemented
-// Int32.sqrt(4) = 2.0
+// Stdlib.Int32.sqrt - not implemented
+// Stdlib.Int32.sqrt(4) = 2.0
 
-// Int32.toFloat - not implemented
-// Int32.toFloat(2) = 2.0
+// Stdlib.Int32.toFloat - not implemented
+// Stdlib.Int32.toFloat(2) = 2.0
 
-// Int32.parse - needs Result type (blocked by type checker bug)
-// Int32.parse("1") = Result.Ok(1)
+// Stdlib.Int32.parse - needs Result type (blocked by type checker bug)
+// Stdlib.Int32.parse("1") = Stdlib.Result.Result.Ok(1)
 
-// Int32.remainder - needs Result type (blocked by type checker bug)
-// Int32.remainder(15, 6) = Result.Ok(3)
+// Stdlib.Int32.remainder - needs Result type (blocked by type checker bug)
+// Stdlib.Int32.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
