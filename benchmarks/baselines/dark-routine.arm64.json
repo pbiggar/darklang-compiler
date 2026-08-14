@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "b6e9cc373aa5cca7e4f415318f69b0734d654e76514956970854c83d0a599617",
-  "generated_at": "2026-08-14T22:05:41+00:00",
+  "generated_at": "2026-08-14T22:42:01+00:00",
   "compiler": {
-    "commit": "e0f5d5fb78bd8c4a3c7c5eef2c8a82a334d78b7f",
-    "subject": "Record rebased List parity benchmarks"
+    "commit": "16f2956e9f9a8af95f66ec060d6a37c3db391b8c",
+    "subject": "Unroll bounded recursive scalar loops"
   },
   "benchmarks": [
     {
@@ -53,7 +53,7 @@
     },
     {
       "name": "merkletrees",
-      "instructions": 684843737
+      "instructions": 416150237
     },
     {
       "name": "nbody",
