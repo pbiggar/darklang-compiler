@@ -257,6 +257,9 @@ Stdlib.__HAMT.__getOrDefault(setInt(emptyInt(), 1, 42), 1, -1) = 42
 // getOrDefault on missing key
 Stdlib.__HAMT.__getOrDefault(emptyInt(), 1, -1) = -1
 
+// The direct-default traversal preserves generic key equality and fallback behavior.
+let d = Stdlib.__HAMT.__setOverwriting(Stdlib.__HAMT.__empty<String, String>(), "key", "stor" ++ "ed") in Stdlib.__HAMT.__getOrDefaultHelper<String, String>(d, "key", __hash<String>("key"), 0, "fall" ++ "back") ++ Stdlib.__HAMT.__getOrDefaultHelper<String, String>(d, "missing", __hash<String>("missing"), 0, "fall" ++ "back") = "storedfallback"
+
 // ========== Larger dictionary tests ==========
 
 // Helper to build a dict with 10 entries

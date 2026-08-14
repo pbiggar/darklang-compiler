@@ -2,8 +2,8 @@
 
 Latest routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Last Updated:** 2026-08-14 04:32:54
-**Commit:** `98c666db` - Align bindings with interpreter semantics
+**Last Updated:** 2026-08-14 14:19:19
+**Commit:** `2cc404d0` - dcb2: record trial result for Resolve Mandelbrot FMA legality
 
 | Benchmark     |           Dark (2.75x) |          Rust |
 |---------------|------------------------|---------------|
@@ -16,7 +16,7 @@ Latest routine-profile Dark performance vs audited Rust references (instruction 
 | fib           |    642,006,229 (2.49x) |   257,598,132 |
 | leibniz       |    900,001,513 (1.12x) |   800,257,637 |
 | mandelbrot    |     17,701,931 (1.30x) |    13,595,721 |
-| matmul        |   2,106,152,079 (132x) |    15,983,852 |
+| matmul        |   2,043,852,076 (128x) |    15,983,852 |
 | merkletrees   |    724,164,728 (5.80x) |   124,776,610 |
 | nbody         |  1,239,502,637 (5.00x) |   247,760,534 |
 | nqueen        |    295,286,940 (2.11x) |   139,988,273 |

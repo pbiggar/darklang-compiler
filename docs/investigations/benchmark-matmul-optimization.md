@@ -1,104 +1,41 @@
 # Benchmark Investigation: matmul
 
-## Current Status
+## Current workload
 
-`matmul` now compiles and runs at the full 100x100 benchmark size. The Dark
-implementation generates the same input matrices as the reference
-implementations and computes the weighted checksum directly, without
-materializing the product matrix.
+`matmul` uses the canonical immutable `Dict<Int64, Int64>` matrix
+representation. It generates two 100x100 input matrices, materializes the
+complete product in a third Dict, and then computes the weighted checksum in a
+separate pass. The Dark binary prints the reference checksum `222793267`.
 
-The full-size Dark binary for `benchmarks/problems/matmul/dark/main.dark`
-prints the expected checksum `222793267`.
+The hot loop performs roughly two million successful calls to
+`Stdlib.__HAMT.__getOrDefault`. Previously that entry point called the
+Option-returning HAMT traversal and immediately matched the result. Generated
+post-register-allocation LIR showed a 16-byte `HeapAlloc` on every terminal
+path of `__getHelper`, followed by an Option-tag branch in `__getOrDefault`.
 
-## Current Evidence
+## Direct-default lookup
 
-The Dark implementation computes each matrix element through `dot3`, and each
-`dot3` call performs six `matGet` calls:
+`__getOrDefault` now calls a dedicated HAMT traversal that returns either the
+stored value or the supplied fallback directly. It uses the same generic
+`__key_eq` comparison and collision search as `__getHelper`, and the internal
+node recursion remains a tail call. The Option-returning lookup is unchanged
+for callers that need to distinguish absence.
 
-```dark
-matGet(a, i, 0) * matGet(b, 0, j) +
-matGet(a, i, 1) * matGet(b, 1, j) +
-matGet(a, i, 2) * matGet(b, 2, j)
-```
+Post-register-allocation LIR for the direct-default helper has no Option
+`HeapAlloc(16)` operations and no caller-side Option-tag branch. Focused E2E
+coverage pins existing and missing generic string keys, while the refcounting
+suite covers stored and fallback managed values.
 
-Current ANF shows that `matGet` remains a nested list lookup followed by option
-matching:
+## Measurements
 
-```text
-Function matGet:
-let TempId 585 = Stdlib.List.getAt_list_i64(t582, t583)
-...
-let TempId 593 = Stdlib.List.getAt_i64(t592, t584)
-```
+The trial was pinned to compiler revision `2cc404d0`. A reduced 3x3 sample fell
+from 40,704 to 38,757 instructions, a 4.78% reduction. Full matmul fell from
+2,106,152,079 to 2,043,852,076 instructions, a 2.96% reduction; data references
+fell from 262,066,410 to 225,916,410 and branches from 316,732,492 to
+308,692,491.
 
-Current ANF also shows each `dot3` body keeps the six `matGet` calls rather
-than specializing the known 3x3 access pattern:
-
-```text
-Function dot3:
-let TempId 609 = matGet(t605, t607, 0)
-let TempId 610 = matGet(t606, 0, t608)
-let TempId 612 = matGet(t605, t607, 1)
-let TempId 613 = matGet(t606, 1, t608)
-let TempId 616 = matGet(t605, t607, 2)
-let TempId 617 = matGet(t606, 2, t608)
-```
-
-Current LIR confirms that top-level constant calls start to specialize after the
-first `dot3` result is expanded, but later matrix elements still call `dot3`:
-
-```text
-v12113 <- Call(matGet, [Reg v12102, Imm 0, Imm 0])
-...
-v12124 <- Call(dot3, [Reg v12054, Reg v12102, Imm 0, Imm 1])
-```
-
-The latest post-register-allocation LIR also shows that the compiler inlines
-the first `matGet` shape into `dot3`. Exhaustive `Some`/`None` option matches
-no longer keep generic non-exhaustive-match fallback blocks in the generated
-control flow.
-
-Rust and OCaml allocate and multiply 100x100 matrices with indexed array/vector
-access. Dark's current source uses nested immutable lists and calls
-`Stdlib.List.getAt` for each access.
-
-## Durable Optimization Opportunities
-
-### Add an Array Type for Matrix Benchmarks
-
-The highest-impact gap remains the lack of an array-backed Dark benchmark shape.
-Rust uses `Vec<Vec<i64>>`, OCaml uses `Array.make_matrix`, and both perform
-indexed loads and stores inside loops. Dark currently has no equivalent
-contiguous matrix representation for this benchmark.
-
-An `Array<T>` representation with indexed load/store operations would let the
-Dark benchmark express the same 100x100 algorithm as the reference
-implementations and would remove the nested `Stdlib.List.getAt` traversal from
-the hot path.
-
-### Specialize Known Small List Access
-
-For the current 3x3 fallback benchmark, the matrix literals and all `dot3`
-indices are statically known. Current ANF and LIR still preserve generic
-`matGet` and `Stdlib.List.getAt` calls for many accesses.
-
-A small-list specialization pass could replace known accesses into literal
-lists with direct values or direct field loads. This would specifically improve
-the current fallback benchmark while the larger array-backed version is not yet
-available.
-
-### Unbox Option Results for List Access
-
-`matGet` immediately matches on the result of `Stdlib.List.getAt`. That keeps
-the option value on the critical path for every matrix element access. If
-`Option<Int64>` can be represented without heap allocation across the
-`getAt`/match boundary, list-heavy benchmarks should benefit even when they do
-not become array-backed.
-
-## Remaining Uncertainties
-
-The exhaustive-match cleanup reduces the current full-size Dark result from
-1,659,791,965 to 1,657,791,965 instructions, or from 97.9x to 97.8x the cached
-Rust result. Most of the remaining gap is therefore still attributable to the
-nested immutable-list representation and generic indexed access described
-above, rather than dead option-match failure control flow.
+The issue's 2,124,300,694 starting count is historical. Intervening unrelated
+changes had already reduced the pinned baseline to 2,106,152,079 before this
+trial. The other 18 routine benchmark instruction counts were unchanged, and
+the rounded aggregate ratio in `RESULTS.md` remains 2.75x. Matmul's individual
+ratio improves from 132x to 128x the audited Rust reference.

@@ -55,9 +55,7 @@ def Stdlib.__HAMT.__merge<k, v>(left: Dict<k, v>, right: Dict<k, v>) : Dict<k, v
     Stdlib.__HAMT.__mergeHelper<k, v>(right, left)
 
 def Stdlib.__HAMT.__getOrDefault<k, v>(dict: Dict<k, v>, key: k, fallback: v) : v =
-    match Stdlib.__HAMT.__get<k, v>(dict, key) with
-    | None -> fallback
-    | Some(value) -> value
+    Stdlib.__HAMT.__getOrDefaultHelper<k, v>(dict, key, __hash<k>(key), 0, fallback)
 
 def Stdlib.__HAMT.__hashChunk(hash: Int64, level: Int64) : Int64 =
     (hash >> (level * 6)) & 63
@@ -327,6 +325,35 @@ def Stdlib.__HAMT.__getHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64, le
         else
             // Unknown tag
             None
+
+def Stdlib.__HAMT.__getOrDefaultHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64, level: Int64, fallback: v) : v =
+    if __dict_is_null<k, v>(node) then
+        fallback
+    else
+        let tag = Stdlib.__HAMT.__getTag<k, v>(node) in
+        let ptr = Stdlib.__HAMT.__clearTag<k, v>(node) in
+        if tag == 2 then
+            let storedKey = __raw_get<k>(ptr, 0) in
+            if __key_eq<k>(storedKey, key) then
+                __raw_get<v>(ptr, 8)
+            else
+                fallback
+        else if tag == 1 then
+            let chunk = Stdlib.__HAMT.__hashChunk(keyHash, level) in
+            let bitmap = __raw_get<Int64>(ptr, 0) in
+            if Stdlib.__HAMT.__hasBit(bitmap, chunk) then
+                let idx = Stdlib.__HAMT.__childIndex(bitmap, chunk) in
+                let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
+                Stdlib.__HAMT.__getOrDefaultHelper<k, v>(child, key, keyHash, level + 1, fallback)
+            else
+                fallback
+        else if tag == 3 then
+            let count = Stdlib.__HAMT.__collisionCount<k, v>(ptr) in
+            let idx = Stdlib.__HAMT.__findInCollision<k, v>(ptr, key, count, 0) in
+            if idx >= 0 then Stdlib.__HAMT.__getCollisionValue<k, v>(ptr, idx)
+            else fallback
+        else
+            fallback
 
 def Stdlib.__HAMT.__setHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64, value: v, level: Int64) : Dict<k, v> =
     if __dict_is_null<k, v>(node) then
