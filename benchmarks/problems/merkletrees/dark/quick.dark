@@ -1,18 +1,18 @@
 // Merkle Trees Benchmark - Quick check version
 
-def hashLoop(h: Int64, data: Int64, i: Int64) : Int64 =
+let hashLoop(h: Int64, data: Int64, i: Int64) : Int64 =
     if i >= 8 then h
     else
         let h1 = (h ^ (data & 255)) * 1099511628211 in
         hashLoop(h1, data, i + 1)
 
-def hashVal(data: Int64) : Int64 =
+let hashVal(data: Int64) : Int64 =
     hashLoop(-3750763034362895579, data, 0)
 
-def hashPair(left: Int64, right: Int64) : Int64 =
+let hashPair(left: Int64, right: Int64) : Int64 =
     hashVal(left + right * 31)
 
-def buildTree(depth: Int64, leafStart: Int64) : Int64 =
+let buildTree(depth: Int64, leafStart: Int64) : Int64 =
     if depth == 0 then hashVal(leafStart)
     else
         let leftSize = 1 << (depth - 1) in
@@ -20,10 +20,10 @@ def buildTree(depth: Int64, leafStart: Int64) : Int64 =
         let right = buildTree(depth - 1, leafStart + leftSize) in
         hashPair(left, right)
 
-def verifyTree(depth: Int64, leafStart: Int64, expectedRoot: Int64) : Bool =
+let verifyTree(depth: Int64, leafStart: Int64, expectedRoot: Int64) : Bool =
     buildTree(depth, leafStart) == expectedRoot
 
-def benchmark(depth: Int64, iterations: Int64, i: Int64, checksum: Int64) : Int64 =
+let benchmark(depth: Int64, iterations: Int64, i: Int64, checksum: Int64) : Int64 =
     if i >= iterations then checksum
     else
         let root = buildTree(depth, i) in

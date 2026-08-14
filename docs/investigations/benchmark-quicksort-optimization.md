@@ -30,7 +30,7 @@ The current implementation is tailored to skew lists:
 - `prependAll` places the equal bucket without copying the sorted left side
 
 ```dark
-def quicksortInto(arr: List<Int64>, suffix: List<Int64>) : List<Int64> =
+let quicksortInto(arr: List<Int64>, suffix: List<Int64>) : List<Int64> =
     match arr with
     | [] -> suffix
     | [only] -> [only, ...suffix]

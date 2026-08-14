@@ -252,7 +252,7 @@ let flag = true in let n = 42 in (fun x -> if flag then n + x else 0)(8) = 50
 // regardless of whether they are inlined or not.
 
 // Function that takes a closure and calls it with a computed value
-def applyWithOffset(f: (Int64) -> Int64, base: Int64): Int64 = let y = base + 1 in f(y)
+let applyWithOffset(f: (Int64) -> Int64, base: Int64): Int64 = let y = base + 1 in f(y)
 
 // Basic closure test with applyWithOffset
 let addTen = fun x -> x + 10 in applyWithOffset(addTen, 4) = 15
@@ -272,12 +272,12 @@ let addFive = fun x -> x + 5 in let addTwenty = fun x -> x + 20 in applyWithOffs
 // correctness requirement. Closures work correctly when inlined.
 
 // Closure in then-branch only (single-line to avoid preamble build issue)
-def ifWithClosureInThen(flag: Bool, val: Int64): Int64 = if flag then let f = fun n -> n + val in f(10) else val * 2 ifWithClosureInThen(true, 5) = 15
-def ifWithClosureInThen(flag: Bool, val: Int64): Int64 = if flag then let f = fun n -> n + val in f(10) else val * 2 ifWithClosureInThen(false, 5) = 10
+let ifWithClosureInThen(flag: Bool, ``val``: Int64): Int64 = if flag then let f = fun n -> n + ``val`` in f(10) else ``val`` * 2 ifWithClosureInThen(true, 5) = 15
+let ifWithClosureInThen(flag: Bool, ``val``: Int64): Int64 = if flag then let f = fun n -> n + ``val`` in f(10) else ``val`` * 2 ifWithClosureInThen(false, 5) = 10
 
 // Closure in else-branch only
-def ifWithClosureInElse(flag: Bool, val: Int64): Int64 = if flag then val * 3 else let g = fun n -> n * val in g(4) ifWithClosureInElse(true, 7) = 21
-def ifWithClosureInElse(flag: Bool, val: Int64): Int64 = if flag then val * 3 else let g = fun n -> n * val in g(4) ifWithClosureInElse(false, 7) = 28
+let ifWithClosureInElse(flag: Bool, ``val``: Int64): Int64 = if flag then ``val`` * 3 else let g = fun n -> n * ``val`` in g(4) ifWithClosureInElse(true, 7) = 21
+let ifWithClosureInElse(flag: Bool, ``val``: Int64): Int64 = if flag then ``val`` * 3 else let g = fun n -> n * ``val`` in g(4) ifWithClosureInElse(false, 7) = 28
 
 // =====================================================
 // Lambda Lifting Counter Increment (Mutation #49)
@@ -289,7 +289,7 @@ def ifWithClosureInElse(flag: Bool, val: Int64): Int64 = if flag then val * 3 el
 
 // Combine lambda in expression position with lambda as function argument
 // The interleaving of different lambda lifting paths should use unique names
-def applyLambda(f: (Int64) -> Int64, x: Int64): Int64 = f(x)
+let applyLambda(f: (Int64) -> Int64, x: Int64): Int64 = f(x)
 let exprLambda1 = fun x -> x + 1 in let argResult = applyLambda(fun y -> y * 2, 10) in let exprLambda2 = fun z -> z + 3 in exprLambda1(5) + argResult + exprLambda2(2) = 31
 
 // =====================================================
@@ -300,11 +300,11 @@ let exprLambda1 = fun x -> x + 1 in let argResult = applyLambda(fun y -> y * 2, 
 // would get the same name, causing name collisions.
 
 // Two lambdas as consecutive function arguments - each should get unique name
-def applyTwo(f: (Int64) -> Int64, g: (Int64) -> Int64, x: Int64): Int64 = f(x) + g(x)
+let applyTwo(f: (Int64) -> Int64, g: (Int64) -> Int64, x: Int64): Int64 = f(x) + g(x)
 applyTwo(fun a -> a + 1, fun b -> b * 2, 10) = 31
 
 // Three lambdas as arguments - tests counter incrementing through multiple args
-def applyThree(f: (Int64) -> Int64, g: (Int64) -> Int64, h: (Int64) -> Int64, x: Int64): Int64 = f(x) + g(x) + h(x)
+let applyThree(f: (Int64) -> Int64, g: (Int64) -> Int64, h: (Int64) -> Int64, x: Int64): Int64 = f(x) + g(x) + h(x)
 applyThree(fun a -> a + 1, fun b -> b * 2, fun c -> c - 5, 10) = 36
 
 // =====================================================
@@ -323,7 +323,7 @@ applyThree(fun a -> a + 1, fun b -> b * 2, fun c -> c - 5, 10) = 36
 // Function variable partially applied inside lambda
 // Here 'f' is bound as a variable with type (Int64, Int64) -> Int64
 // The lambda fun x -> f(x) partially applies f, returning (Int64) -> Int64
-def partialAdd(a: Int64, b: Int64): Int64 = a + b let makeAdder = fun x -> partialAdd(x) in let addFive = makeAdder(5) in addFive(3) = 8
+let partialAdd(a: Int64, b: Int64): Int64 = a + b let makeAdder = fun x -> partialAdd(x) in let addFive = makeAdder(5) in addFive(3) = 8
 
 // =====================================================
 // Apply Partial Application in Lambda Body (Mutation #113)
@@ -342,7 +342,7 @@ def partialAdd(a: Int64, b: Int64): Int64 = a + b let makeAdder = fun x -> parti
 // We create a 3-parameter lambda and partially apply it inside another lambda.
 // The outer lambda captures the 3-param function and calls it with just one arg,
 // returning a partially applied function.
-def partialAddThree(a: Int64, b: Int64, c: Int64): Int64 = a + b + c let makePartial = fun x -> partialAddThree(x) in let partial = makePartial(10) in partial(20, 12) = 42
+let partialAddThree(a: Int64, b: Int64, c: Int64): Int64 = a + b + c let makePartial = fun x -> partialAddThree(x) in let partial = makePartial(10) in partial(20, 12) = 42
 
 // =====================================================
 // Lambda in Nested Let Body (Mutation #122)
@@ -358,7 +358,7 @@ def partialAddThree(a: Int64, b: Int64, c: Int64): Int64 = a + b + c let makePar
 // would incorrectly report that f doesn't occur, and f would be dropped.
 
 // Helper function that takes a function and applies it
-def applyWith122(fn: (Int64) -> Int64, x: Int64): Int64 = fn(x)
+let applyWith122(fn: (Int64) -> Int64, x: Int64): Int64 = fn(x)
 
 // The key structure: let f = lambda in let y = <not using f> in <use f in body>
 // With mutation, the check skips body because y <> f is false under mutated condition
@@ -474,18 +474,18 @@ let sum5 = fun a b c d e -> a + b + c + d + e in sum5(1.0, 2.0, 3.0, 4.0, 5.0) =
 // in tail position from within a function.
 
 // Helper function that tail-calls a closure with float arguments
-def tailCallClosure2F(f: (Float, Float) -> Float, a: Float, b: Float): Float = f(a, b)
+let tailCallClosure2F(f: (Float, Float) -> Float, a: Float, b: Float): Float = f(a, b)
 
 // Two float literal args passed via closure tail call
 let addFloats = fun x y -> x + y in tailCallClosure2F(addFloats, 3.5, 2.5) = 6.0
 
 // Three float args via closure tail call
-def tailCallClosure3F(f: (Float, Float, Float) -> Float, a: Float, b: Float, c: Float): Float = f(a, b, c)
+let tailCallClosure3F(f: (Float, Float, Float) -> Float, a: Float, b: Float, c: Float): Float = f(a, b, c)
 let sum3 = fun x y z -> x + y + z in tailCallClosure3F(sum3, 1.0, 2.0, 3.0) = 6.0
 
 // Closure with capture AND multiple float args in tail call
 let offset = 10.0 in let addWithOffset = fun a b -> a + b + offset in tailCallClosure2F(addWithOffset, 1.5, 2.5) = 14.0
 
 // Five float args via closure tail call - many temp registers needed
-def tailCallClosure5F(f: (Float, Float, Float, Float, Float) -> Float, a: Float, b: Float, c: Float, d: Float, e: Float): Float = f(a, b, c, d, e)
+let tailCallClosure5F(f: (Float, Float, Float, Float, Float) -> Float, a: Float, b: Float, c: Float, d: Float, e: Float): Float = f(a, b, c, d, e)
 let sum5f = fun a b c d e -> a + b + c + d + e in tailCallClosure5F(sum5f, 1.0, 2.0, 3.0, 4.0, 5.0) = 15.0

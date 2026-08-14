@@ -2,26 +2,28 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.Bytes
+
 // Stdlib.Bytes - Byte array operations
 // =============================================================================
 // Memory layout: [length:8 bytes][data:N bytes][padding to 8][refcount:8 bytes]
 // Same layout as String for consistency
 
-def Stdlib.Bytes.__alignedDataSize(size: Int64) : Int64 =
+let __alignedDataSize(size: Int64) : Int64 =
     ((size + 7) / 8) * 8
 
 // Get the length of a byte array
-def Stdlib.Bytes.length(b: Blob) : Int64 =
+let length(b: Blob) : Int64 =
     __raw_get<Int64>(__blob_to_rawptr(b), 0)
 
 // Get the byte at a given index (0-based)
 // Returns the byte as an Int64 (0-255)
-def Stdlib.Bytes.get(b: Blob, index: Int64) : Int64 =
+let get(b: Blob, index: Int64) : Int64 =
     __raw_get_byte(__blob_to_rawptr(b), index + 8)
 
 // Create a new byte array with a byte set at the given index
 // Returns a new Blob (immutable update)
-def Stdlib.Bytes.set(b: Blob, index: Int64, value: Int64) : Blob =
+let set(b: Blob, index: Int64, value: Int64) : Blob =
     let len = Stdlib.Bytes.length(b) in
     if index < 0 || index >= len then
         b  // Out of bounds, return unchanged
@@ -43,7 +45,7 @@ def Stdlib.Bytes.set(b: Blob, index: Int64, value: Int64) : Blob =
         __rawptr_to_blob(ptr)
 
 // Internal: Copy loop with 2 pointers sharing same offset
-def Stdlib.Bytes.__copyLoop(src: RawPtr, dest: RawPtr, offset: Int64, remaining: Int64) : Unit =
+let __copyLoop(src: RawPtr, dest: RawPtr, offset: Int64, remaining: Int64) : Unit =
     if remaining <= 0 then
         ()
     else
@@ -51,14 +53,14 @@ def Stdlib.Bytes.__copyLoop(src: RawPtr, dest: RawPtr, offset: Int64, remaining:
         let _ = __raw_write_byte(dest, offset, byte) in
         Stdlib.Bytes.__copyLoop(src, dest, offset + 1, remaining - 1)
 
-def Stdlib.Bytes.__zeroLoop(ptr: RawPtr, offset: Int64, remaining: Int64) : Unit =
+let __zeroLoop(ptr: RawPtr, offset: Int64, remaining: Int64) : Unit =
     if remaining <= 0 then ()
     else
         let _ = __raw_write_byte(ptr, offset, 0) in
         Stdlib.Bytes.__zeroLoop(ptr, offset + 1, remaining - 1)
 
 // Create a deterministically zero-filled Blob of the requested size.
-def Stdlib.Bytes.create(size: Int64) : Blob =
+let create(size: Int64) : Blob =
     if size <= 0 then
         // Create empty bytes
         let ptr = __raw_alloc(16) in
@@ -79,7 +81,7 @@ def Stdlib.Bytes.create(size: Int64) : Blob =
         __rawptr_to_blob(ptr)
 
 // Create bytes from a list of Int64 values (each 0-255)
-def Stdlib.Bytes.fromList(list: List<Int64>) : Blob =
+let fromList(list: List<Int64>) : Blob =
     let len = Stdlib.List.length<Int64>(list) in
     if len == 0 then
         Stdlib.Bytes.create(0)
@@ -95,7 +97,7 @@ def Stdlib.Bytes.fromList(list: List<Int64>) : Blob =
         __rawptr_to_blob(ptr)
 
 // Helper: write list of bytes starting at offset
-def Stdlib.Bytes.__writeListHelper(ptr: RawPtr, list: List<Int64>, offset: Int64) : Int64 =
+let __writeListHelper(ptr: RawPtr, list: List<Int64>, offset: Int64) : Int64 =
     match list with
     | [] -> offset
     | [b, ...rest] ->
@@ -104,7 +106,7 @@ def Stdlib.Bytes.__writeListHelper(ptr: RawPtr, list: List<Int64>, offset: Int64
 
 // Convert bytes to a list of Int64 values (each 0-255)
 // Build list by iterating through bytes
-def Stdlib.Bytes.toList(b: Blob) : List<Int64> =
+let toList(b: Blob) : List<Int64> =
     let len = Stdlib.Bytes.length(b) in
     if len == 0 then
         []
@@ -112,7 +114,7 @@ def Stdlib.Bytes.toList(b: Blob) : List<Int64> =
         // Build list in reverse then reverse at end
         Stdlib.Bytes.__toListHelper(b, len - 1, [])
 
-def Stdlib.Bytes.__toListHelper(b: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
+let __toListHelper(b: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
     if index < 0 then
         acc
     else
@@ -120,15 +122,15 @@ def Stdlib.Bytes.__toListHelper(b: Blob, index: Int64, acc: List<Int64>) : List<
         Stdlib.Bytes.__toListHelper(b, index - 1, [byte, ...acc])
 
 // Convert nibble (0-15) to uppercase hex digit.
-def Stdlib.Bytes.__hexDigit(n: Int64) : String =
+let __hexDigit(n: Int64) : String =
     Stdlib.String.slice("0123456789ABCDEF", n, n + 1)
 
-def Stdlib.Bytes.__byteToHex(b: Int64) : String =
+let __byteToHex(b: Int64) : String =
     let hi = b / 16 in
     let lo = b % 16 in
     Stdlib.Bytes.__hexDigit(hi) ++ Stdlib.Bytes.__hexDigit(lo)
 
-def Stdlib.Bytes.__hexEncodeHelper(b: Blob, index: Int64, len: Int64, acc: String) : String =
+let __hexEncodeHelper(b: Blob, index: Int64, len: Int64, acc: String) : String =
     if index >= len then
         acc
     else
@@ -136,7 +138,7 @@ def Stdlib.Bytes.__hexEncodeHelper(b: Blob, index: Int64, len: Int64, acc: Strin
         Stdlib.Bytes.__hexEncodeHelper(b, index + 1, len, acc ++ Stdlib.Bytes.__byteToHex(byte))
 
 // Convert bytes to an uppercase hexadecimal string.
-def Stdlib.Bytes.hexEncode(b: Blob) : String =
+let hexEncode(b: Blob) : String =
     Stdlib.Bytes.__hexEncodeHelper(b, 0, Stdlib.Bytes.length(b), "")
 
 // =============================================================================

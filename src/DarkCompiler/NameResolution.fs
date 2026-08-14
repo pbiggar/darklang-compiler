@@ -72,11 +72,14 @@ type ResolutionError =
         orderedCandidates:SymbolIdentity list
 
 let tryQualifiedName (spelling: string) : QualifiedName option =
-    let segments = spelling.Split('.') |> Array.toList
-    if List.isEmpty segments || List.exists (fun segment -> segment = "") segments then
-        None
-    else
-        segments |> NonEmptyList.tryFromList |> Option.map QualifiedName
+    NameSyntax.tryParseLegacySpelling spelling
+    |> Option.bind (fun parsed ->
+        let segments =
+            parsed
+            |> NameSyntax.segments
+            |> List.map NameSyntax.identifierText
+        if List.isEmpty segments || List.exists (fun segment -> segment = "") segments then None
+        else segments |> NonEmptyList.tryFromList |> Option.map QualifiedName)
 
 let qualifiedNameFromSegments (segments: NonEmptyList<string>) : QualifiedName =
     QualifiedName segments

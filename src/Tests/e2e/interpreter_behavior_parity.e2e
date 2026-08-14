@@ -6,14 +6,14 @@
 
 // Record expressions are evaluated once in written order, independently of layout.
 type OrderedLiteral = { a: Int64, b: Int64 }
-def orderedLiteralFailureB(): Int64 = Builtin.testRuntimeError("record literal b")
-def orderedLiteralFailureA(): Int64 = Builtin.testRuntimeError("record literal a")
+let orderedLiteralFailureB(): Int64 = Builtin.testRuntimeError("record literal b")
+let orderedLiteralFailureA(): Int64 = Builtin.testRuntimeError("record literal a")
 OrderedLiteral { b = orderedLiteralFailureB(), a = orderedLiteralFailureA() } = error="record literal b"
 
 type OrderedUpdate = { a: Int64, b: Int64, c: Int64 }
-def orderedUpdateBase(): OrderedUpdate = OrderedUpdate { a = 1, b = 2, c = 3 }
-def orderedUpdateFailureC(): Int64 = Builtin.testRuntimeError("record update c")
-def orderedUpdateFailureA(): Int64 = Builtin.testRuntimeError("record update a")
+let orderedUpdateBase(): OrderedUpdate = OrderedUpdate { a = 1, b = 2, c = 3 }
+let orderedUpdateFailureC(): Int64 = Builtin.testRuntimeError("record update c")
+let orderedUpdateFailureA(): Int64 = Builtin.testRuntimeError("record update a")
 { orderedUpdateBase() with c = orderedUpdateFailureC(), a = orderedUpdateFailureA() } = error="record update c"
 
 // Function equality uses source identity, including inside compound values.
@@ -21,7 +21,7 @@ let sameLambda = fun x -> x in sameLambda == sameLambda = stdout="true\n"
 (fun x -> x) == (fun x -> x) = stdout="false\n"
 [fun x -> x] == [fun x -> x] = stdout="false\n"
 let sameCompoundLambda = fun x -> x in (sameCompoundLambda, [sameCompoundLambda]) == (sameCompoundLambda, [sameCompoundLambda]) = stdout="true\n"
-def parityAdd(left: Int64, right: Int64): Int64 = left + right
+let parityAdd(left: Int64, right: Int64): Int64 = left + right
 parityAdd(1L) == parityAdd(1L) = stdout="true\n"
 parityAdd(1L) == parityAdd(2L) = stdout="false\n"
 
@@ -40,7 +40,7 @@ parityAdd(1L) == parityAdd(2L) = stdout="false\n"
 'x' = stdout="'x'\n"
 ("outer", ('x', ["inner"])) = stdout="(\"outer\", ('x', [\"inner\"]))\n"
 [(1, "one"), (2, "two")] = stdout="[(1, \"one\"), (2, \"two\")]\n"
-def emptyParityStrings(): List<String> = [] emptyParityStrings() = stdout="List<String> []\n"
+let emptyParityStrings(): List<String> = [] emptyParityStrings() = stdout="List<String> []\n"
 
 type RenderRecord<'value> = { z: List<'value>, a: String }
 RenderRecord<Int64> { z = [1, 2], a = "record" } = stdout="RenderRecord<Int64> { a: \"record\", z: [1, 2] }\n"
@@ -48,7 +48,7 @@ RenderRecord<Int64> { z = [1, 2], a = "record" } = stdout="RenderRecord<Int64> {
 type RenderEnum<'value> = RenderEmpty | RenderValue of ('value, String)
 RenderValue((7, "seven")) = stdout="RenderEnum<Int64>.RenderValue((7, \"seven\"))\n"
 
-def renderedNamedFunction(x: Int64): Int64 = x
+let renderedNamedFunction(x: Int64): Int64 = x
 renderedNamedFunction = stdout="renderedNamedFunction\n"
 parityAdd(1L) = stdout="parityAdd\n"
 (fun x -> x) = stdout="(lambda)\n"

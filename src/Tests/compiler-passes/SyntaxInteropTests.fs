@@ -422,7 +422,7 @@ let testInterpreterParserParsesCurriedTopLevelLetFunctionDef () : TestResult =
         Error $"Unexpected AST for interpreter curried top-level let function definition: {other}"
 
 let testCompilerParserParsesCurriedFunctionDef () : TestResult =
-    let source = "def addCurried(x: Int64)(y: Int64) : Int64 = x + y"
+    let source = "let addCurried(x: Int64)(y: Int64) : Int64 = x + y"
     match Parser.parseString false source with
     | Error err ->
         Error $"Compiler parser failed on curried function definition: {err}"
@@ -801,6 +801,60 @@ let testInterpreterParserRejectsCompilerOnlyAdtForms () : TestResult =
                 | Ok _ -> Error $"Expected compiler-only ADT syntax to be rejected, got: {parsed}"
     verify rejectedSources
 
+let testQualifiedNameSegmentsPreserveQuotedDots () : TestResult =
+    match NameSyntax.tryParseLegacySpelling "A.``b.c``" with
+    | None -> Error "Expected the qualified name to parse"
+    | Some name ->
+        let segments =
+            name
+            |> NameSyntax.segments
+            |> List.map NameSyntax.identifierText
+        if segments = ["A"; "b.c"] then Ok ()
+        else Error $"Expected two lossless segments, got: {segments}"
+
+let testQualificationStopsAtLowercaseField () : TestResult =
+    match Parser.parseString false "A.value.field" with
+    | Ok (Program [Expression (RecordAccess (Var "A.value", "field"))]) -> Ok ()
+    | Error error -> Error $"Qualified-field probe failed to parse: {error}"
+    | Ok other -> Error $"Unexpected qualified-field AST: {other}"
+
+let testBlankIdentifierHasExplicitTypedShape () : TestResult =
+    match
+        NameSyntax.classify "___",
+        NameSyntax.classify "",
+        NameSyntax.tryParseLegacySpelling "A..B",
+        NameSyntax.tryParseLegacySpelling "A.````"
+    with
+    | NameSyntax.IdentifierToken NameSyntax.BlankIdentifier,
+      NameSyntax.IdentifierToken NameSyntax.BlankIdentifier,
+      None,
+      Some quotedBlank ->
+        match NameSyntax.segments quotedBlank with
+        | [NameSyntax.OrdinaryIdentifier "A"; NameSyntax.BlankIdentifier] -> Ok ()
+        | other -> Error $"Unexpected quoted blank qualified shape: {other}"
+    | other -> Error $"Expected typed blanks and malformed empty-segment rejection, got: {other}"
+
+let testModuleBlockNormalizesAtExplicitBoundary () : TestResult =
+    let source = "module Outer =\n  module Inner =\n    let value(x: Int64) : Int64 = x"
+    match InterpreterParser.parseSourceString false source, Parser.parseString false source with
+    | Ok (NameSyntax.SourceModule (outer, NameSyntax.SourceModule (inner, _))),
+      Ok (Program [FunctionDef definition])
+        when NameSyntax.formatQualifiedName outer = "Outer"
+             && NameSyntax.formatQualifiedName inner = "Inner"
+             && definition.Name = "Outer.Inner.value" -> Ok ()
+    | Error error, _ | _, Error error -> Error $"Module block failed to parse: {error}"
+    | other -> Error $"Unexpected parsed/normalized module shapes: {other}"
+
+let testTopLevelValueHasParsedShapeBeforeAotBoundary () : TestResult =
+    let source = "val answer = 42"
+    match Parser.parseSourceString false source, Parser.parseString false source with
+    | Ok (NameSyntax.SourceDeclarations declarations), Error error ->
+        match NonEmptyList.toList declarations with
+        | [NameSyntax.SourceValue (NameSyntax.OrdinaryIdentifier "answer", Int64Literal 42L)]
+            when error.Contains "native execution is not supported" -> Ok ()
+        | other -> Error $"Unexpected parsed value declaration: {other}"
+    | other -> Error $"Unexpected value parse/normalization results: {other}"
+
 let tests = [
     ("compiler library interpreter parse", testCompilerLibraryParseInterpreterSyntax)
     ("parse interpreter lambda/application", testParseInterpreterLambdaApplication)
@@ -855,4 +909,9 @@ let tests = [
     ("parse constructor over-application chain", testInterpreterParserParsesConstructorOverApplicationChain)
     ("typed lambda parameters are rejected", testInterpreterParserRejectsTypedLambdaParameters)
     ("reject compiler-only ADT forms in interpreter syntax", testInterpreterParserRejectsCompilerOnlyAdtForms)
+    ("quoted dots remain one qualified segment", testQualifiedNameSegmentsPreserveQuotedDots)
+    ("qualification stops at lowercase field", testQualificationStopsAtLowercaseField)
+    ("blank identifiers use an explicit typed shape", testBlankIdentifierHasExplicitTypedShape)
+    ("module blocks normalize at explicit boundary", testModuleBlockNormalizesAtExplicitBoundary)
+    ("top-level values reach the explicit AOT boundary", testTopLevelValueHasParsedShapeBeforeAotBoundary)
 ]

@@ -10,7 +10,7 @@ This document lists the language features currently supported by the Dark compil
 - Interpreter-compatible sum types (ADTs): `type Option<'a> = | None | Some of 'a`
 - Lists as linked lists: `List<T>` with literals `[1, 2, 3]`
 - String-keyed Dict types: `Dict<V>`, with `Dict { key = value }` literals
-- Type aliases: `type Id = Int64`, `type Pair<T> = (T, T)`
+- Type aliases: `type Id = Int64`, `type Pair<'T> = (T, T)`
 - Generic type parameters and type application
 - Function types with arrow syntax: `Int64 -> Int64`
 - Type-directed record field lookup (no ambiguity when record types share field names)
@@ -66,11 +66,11 @@ This document lists the language features currently supported by the Dark compil
 
 ```dark
 // Factorial
-def factorial(n: Int64) : Int64 =
+let factorial(n: Int64) : Int64 =
   if n <= 1 then 1
   else n * factorial(n - 1)
 
-def main() : Int64 = factorial(5)
+let main() : Int64 = factorial(5)
 
 // Pattern matching on an ADT (interpreter syntax)
 type Option<'a> = | None | Some of 'a
@@ -80,7 +80,7 @@ match Option.Some 42L with
 | None -> 0L
 
 // List processing (exact-length matching)
-def main() : Int64 =
+let main() : Int64 =
   match [1, 2, 3] with
   | [a, b, c] -> a + b + c  // matches exactly 3 elements
   | _ -> 0

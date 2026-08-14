@@ -4,7 +4,7 @@
 ---NAME---
 retarget_dead_float_arithmetic_move
 ---INPUT---
-def add(left: Float, right: Float) : Float =
+let add(left: Float, right: Float) : Float =
     left + right
 ---EXPECTED---
 add:
@@ -17,7 +17,7 @@ add:
 ---NAME---
 licm_hoist_loop_constant
 ---INPUT---
-def collatzSteps(n: Int64, steps: Int64) : Int64 =
+let collatzSteps(n: Int64, steps: Int64) : Int64 =
     if n == 1 then steps
     else if n % 2 == 0 then collatzSteps(n / 2, steps + 1)
     else collatzSteps(3 * n + 1, steps + 1)
@@ -56,7 +56,7 @@ collatzSteps:
 ---NAME---
 licm_hoist_loop_float_constant
 ---INPUT---
-def sum(n: Int64, acc: Float) : Float =
+let sum(n: Int64, acc: Float) : Float =
     if n == 0 then acc
     else sum(n - 1, acc + 1.5)
 ---EXPECTED---
@@ -83,7 +83,7 @@ sum:
 ---NAME---
 licm_skip_loop_with_call
 ---INPUT---
-def helper(x: Int64) : Int64 =
+let helper(x: Int64) : Int64 =
     let a0 = x + 1 in
     let a1 = a0 + 1 in
     let a2 = a1 + 1 in
@@ -111,7 +111,7 @@ def helper(x: Int64) : Int64 =
     let a24 = a23 + 1 in
     a24
 
-def loop(n: Int64, acc: Int64) : Int64 =
+let loop(n: Int64, acc: Int64) : Int64 =
     if n == 0 then acc
     else loop(n - 1, helper(3 * acc))
 ---EXPECTED---
@@ -151,7 +151,7 @@ loop:
 ---NAME---
 fuse_multiply_subtract
 ---INPUT---
-def multiplySubtract(minuend: Int64, left: Int64, right: Int64) : Int64 =
+let multiplySubtract(minuend: Int64, left: Int64, right: Int64) : Int64 =
     minuend - (left * right)
 ---EXPECTED---
 multiplySubtract:
@@ -169,13 +169,13 @@ type ExhaustiveChoice = First | Second of Int64 | Third
 
 type PartialChoice = FirstPartial | SecondPartial of Int64 | ThirdPartial
 
-def choose(value: ExhaustiveChoice) : Int64 =
+let choose(value: ExhaustiveChoice) : Int64 =
     match value with
     | First -> 1
     | Second(n) -> n
     | Third -> 3
 
-def choosePartial(value: PartialChoice) : Int64 =
+let choosePartial(value: PartialChoice) : Int64 =
     match value with
     | FirstPartial -> 1
     | SecondPartial(n) -> n

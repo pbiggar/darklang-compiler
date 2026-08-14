@@ -83,7 +83,7 @@ let verified = verifyTree(depth, i, root) in
 
 Where `verifyTree` is:
 ```dark
-def verifyTree(depth, leafStart, expectedRoot) =
+let verifyTree(depth, leafStart, expectedRoot) =
     buildTree(depth, leafStart) == expectedRoot
 ```
 

@@ -1,7 +1,7 @@
 // Conditional and sequential evaluation parity
 
-def paritySequenceHead(): Unit = ()
-def paritySequenceTail(): Int64 = 43
+let paritySequenceHead(): Unit = ()
+let paritySequenceTail(): Int64 = 43
 
 // Canonical conditional syntax, nesting, and branch selection
 if false then 1 elif true then 2 else 3 = 2

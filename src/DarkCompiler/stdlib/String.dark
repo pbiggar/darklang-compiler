@@ -2,46 +2,48 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.String
+
 // Stdlib.String - String operations
 
 // Newline constant (nullary function)
-def Stdlib.String.newline() : String = "\n"
+let newline() : String = "\n"
 
-def Stdlib.String.__alignedDataSize(size: Int64) : Int64 =
+let __alignedDataSize(size: Int64) : Int64 =
     ((size + 7) / 8) * 8
 
 // Append two strings
-def Stdlib.String.append(s1: String, s2: String) : String = s1 ++ s2
+let append(s1: String, s2: String) : String = s1 ++ s2
 
 // Prepend first string to second
-def Stdlib.String.prepend(s2: String, s1: String) : String = s1 ++ s2
+let prepend(s2: String, s1: String) : String = s1 ++ s2
 
 // Get the length of a string in bytes
 // String format: [len:8 bytes][data:N bytes]
-def Stdlib.String.length(s: String) : Int64 =
+let length(s: String) : Int64 =
     __raw_get<Int64>(__string_to_rawptr(s), 0)
 
 // Check if string is empty
-def Stdlib.String.isEmpty(s: String) : Bool =
+let isEmpty(s: String) : Bool =
     Stdlib.String.length(s) == 0
 
 // Get the byte value at a given index (0-based)
 // Returns the byte as an Int64 (0-255)
 // String data starts at offset 8 (after the length field)
-def Stdlib.String.getByteAt(s: String, index: Int64) : Int64 =
+let getByteAt(s: String, index: Int64) : Int64 =
     __raw_get_byte(__string_to_rawptr(s), index + 8)
 
 // Check if a byte is an ASCII lowercase letter (a-z)
-def Stdlib.String.__isLowercase(byte: Int64) : Bool =
+let __isLowercase(byte: Int64) : Bool =
     byte >= 97 && byte <= 122
 
 // Check if a byte is an ASCII uppercase letter (A-Z)
-def Stdlib.String.__isUppercase(byte: Int64) : Bool =
+let __isUppercase(byte: Int64) : Bool =
     byte >= 65 && byte <= 90
 
 // Internal: Compare n bytes starting at positions in two strings
 // Returns true if all bytes match
-def Stdlib.String.__compareBytes(s1: String, start1: Int64, s2: String, start2: Int64, count: Int64) : Bool =
+let __compareBytes(s1: String, start1: Int64, s2: String, start2: Int64, count: Int64) : Bool =
     if count <= 0 then
         true
     else
@@ -53,7 +55,7 @@ def Stdlib.String.__compareBytes(s1: String, start1: Int64, s2: String, start2: 
             Stdlib.String.__compareBytes(s1, start1 + 1, s2, start2 + 1, count - 1)
 
 // Check if string starts with prefix
-def Stdlib.String.startsWith(s: String, prefix: String) : Bool =
+let startsWith(s: String, prefix: String) : Bool =
     let sLen = Stdlib.String.length(s) in
     let prefixLen = Stdlib.String.length(prefix) in
     if prefixLen > sLen then
@@ -62,7 +64,7 @@ def Stdlib.String.startsWith(s: String, prefix: String) : Bool =
         Stdlib.String.__compareBytes(s, 0, prefix, 0, prefixLen)
 
 // Check if string ends with suffix
-def Stdlib.String.endsWith(s: String, suffix: String) : Bool =
+let endsWith(s: String, suffix: String) : Bool =
     let sLen = Stdlib.String.length(s) in
     let suffixLen = Stdlib.String.length(suffix) in
     if suffixLen > sLen then
@@ -71,7 +73,7 @@ def Stdlib.String.endsWith(s: String, suffix: String) : Bool =
         Stdlib.String.__compareBytes(s, sLen - suffixLen, suffix, 0, suffixLen)
 
 // Internal: Find substring starting at offset, returns None if not found
-def Stdlib.String.__findFrom(s: String, search: String, offset: Int64) : Stdlib.Option.Option<Int64> =
+let __findFrom(s: String, search: String, offset: Int64) : Stdlib.Option.Option<Int64> =
     let sLen = Stdlib.String.length(s) in
     let searchLen = Stdlib.String.length(search) in
     if searchLen == 0 then
@@ -84,15 +86,15 @@ def Stdlib.String.__findFrom(s: String, search: String, offset: Int64) : Stdlib.
         Stdlib.String.__findFrom(s, search, offset + 1)
 
 // Find position of first occurrence of search string, returns None if not found
-def Stdlib.String.indexOf(s: String, search: String) : Stdlib.Option.Option<Int64> =
+let indexOf(s: String, search: String) : Stdlib.Option.Option<Int64> =
     Stdlib.String.__findFrom(s, search, 0)
 
 // Check if string contains substring
-def Stdlib.String.contains(s: String, search: String) : Bool =
+let contains(s: String, search: String) : Bool =
     Stdlib.Option.isSome<Int64>(Stdlib.String.indexOf(s, search))
 
 // Internal: Copy n bytes from source string to destination raw pointer
-def Stdlib.String.__copyBytesToPtr(src: String, srcStart: Int64, dest: RawPtr, destStart: Int64, count: Int64) : Unit =
+let __copyBytesToPtr(src: String, srcStart: Int64, dest: RawPtr, destStart: Int64, count: Int64) : Unit =
     if count <= 0 then
         ()
     else
@@ -102,7 +104,7 @@ def Stdlib.String.__copyBytesToPtr(src: String, srcStart: Int64, dest: RawPtr, d
 
 // Extract substring from start byte index to end byte index (exclusive)
 // String format: [length:8 bytes][data:N bytes][padding to 8][refcount:8 bytes]
-def Stdlib.String.slice(s: String, start: Int64, end_: Int64) : String =
+let slice(s: String, start: Int64, end_: Int64) : String =
     let sLen = Stdlib.String.length(s) in
     // Clamp start to valid range
     let actualStart = if start < 0 then 0 else if start > sLen then sLen else start in
@@ -127,15 +129,15 @@ def Stdlib.String.slice(s: String, start: Int64, end_: Int64) : String =
         __rawptr_to_string(ptr)
 
 // Get substring from start byte index to end byte index (excluding end) - same as slice
-def Stdlib.String.substring(s: String, start: Int64, end_: Int64) : String =
+let substring(s: String, start: Int64, end_: Int64) : String =
     Stdlib.String.slice(s, start, end_)
 
 // Get first n bytes
-def Stdlib.String.take(s: String, n: Int64) : String =
+let take(s: String, n: Int64) : String =
     Stdlib.String.slice(s, 0, n)
 
 // Drop first n bytes
-def Stdlib.String.drop(s: String, n: Int64) : String =
+let drop(s: String, n: Int64) : String =
     let sLen = Stdlib.String.length(s) in
     Stdlib.String.slice(s, n, sLen)
 
@@ -150,7 +152,7 @@ def Stdlib.String.drop(s: String, n: Int64) : String =
 //   - 2 bytes: 110xxxxx 10xxxxxx (128-2047)
 //   - 3 bytes: 1110xxxx 10xxxxxx 10xxxxxx (2048-65535)
 //   - 4 bytes: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx (65536-1114111)
-def Stdlib.String.__decodeUtf8At(s: String, byteIndex: Int64) : (Int64, Int64) =
+let __decodeUtf8At(s: String, byteIndex: Int64) : (Int64, Int64) =
     let b0 = Stdlib.String.getByteAt(s, byteIndex) in
     if b0 < 128 then
         // 1-byte (ASCII): 0xxxxxxx
@@ -175,11 +177,11 @@ def Stdlib.String.__decodeUtf8At(s: String, byteIndex: Int64) : (Int64, Int64) =
         (cp, 4)
 
 // Convert a string to a list of Unicode codepoints
-def Stdlib.String.toCodepoints(s: String) : List<Int64> =
+let toCodepoints(s: String) : List<Int64> =
     Stdlib.String.__toCodepointsHelper(s, 0, Stdlib.String.length(s), [])
 
 // Helper: recursively decode codepoints
-def Stdlib.String.__toCodepointsHelper(s: String, byteIndex: Int64, byteLen: Int64, acc: List<Int64>) : List<Int64> =
+let __toCodepointsHelper(s: String, byteIndex: Int64, byteLen: Int64, acc: List<Int64>) : List<Int64> =
     if byteIndex >= byteLen then
         Stdlib.List.reverse<Int64>(acc)
     else
@@ -189,7 +191,7 @@ def Stdlib.String.__toCodepointsHelper(s: String, byteIndex: Int64, byteLen: Int
         Stdlib.String.__toCodepointsHelper(s, byteIndex + consumed, byteLen, [cp, ...acc])
 
 // Get the number of codepoints in a string (not bytes)
-def Stdlib.String.codepointLength(s: String) : Int64 =
+let codepointLength(s: String) : Int64 =
     Stdlib.List.length<Int64>(Stdlib.String.toCodepoints(s))
 
 // =============================================================================
@@ -197,18 +199,18 @@ def Stdlib.String.codepointLength(s: String) : Int64 =
 // =============================================================================
 
 // Calculate UTF-8 byte length for a single codepoint
-def Stdlib.String.__utf8ByteLen(cp: Int64) : Int64 =
+let __utf8ByteLen(cp: Int64) : Int64 =
     if cp < 128 then 1
     else if cp < 2048 then 2
     else if cp < 65536 then 3
     else 4
 
 // Calculate total UTF-8 byte length for a list of codepoints
-def Stdlib.String.__totalUtf8Len(cps: List<Int64>) : Int64 =
+let __totalUtf8Len(cps: List<Int64>) : Int64 =
     Stdlib.List.fold<Int64, Int64>(cps, 0, fun acc cp -> acc + Stdlib.String.__utf8ByteLen(cp))
 
 // Encode a single codepoint to UTF-8 bytes at given offset, return new offset
-def Stdlib.String.__encodeUtf8At(ptr: RawPtr, offset: Int64, cp: Int64) : Int64 =
+let __encodeUtf8At(ptr: RawPtr, offset: Int64, cp: Int64) : Int64 =
     if cp < 128 then
         // 1-byte: 0xxxxxxx
         let _ = __raw_write_byte(ptr, offset, cp) in
@@ -242,7 +244,7 @@ def Stdlib.String.__encodeUtf8At(ptr: RawPtr, offset: Int64, cp: Int64) : Int64 
         offset + 4
 
 // Encode all codepoints starting at offset
-def Stdlib.String.__encodeCodepointsAt(ptr: RawPtr, offset: Int64, cps: List<Int64>) : Int64 =
+let __encodeCodepointsAt(ptr: RawPtr, offset: Int64, cps: List<Int64>) : Int64 =
     match cps with
     | [] -> offset
     | [cp, ...rest] ->
@@ -251,7 +253,7 @@ def Stdlib.String.__encodeCodepointsAt(ptr: RawPtr, offset: Int64, cps: List<Int
 
 // Build a string from a list of Unicode codepoints
 // String format: [length:8 bytes][data:N bytes][padding to 8][refcount:8 bytes]
-def Stdlib.String.fromCodepoints(cps: List<Int64>) : String =
+let fromCodepoints(cps: List<Int64>) : String =
     let byteLen = Stdlib.String.__totalUtf8Len(cps) in
     if byteLen == 0 then
         ""
@@ -274,14 +276,14 @@ def Stdlib.String.fromCodepoints(cps: List<Int64>) : String =
 // =============================================================================
 
 // Map ASCII lowercase to uppercase (a-z -> A-Z)
-def Stdlib.String.__asciiToUpper(cp: Int64) : Int64 =
+let __asciiToUpper(cp: Int64) : Int64 =
     if cp >= 97 && cp <= 122 then cp - 32 else cp
 
 // Map ASCII uppercase to lowercase (A-Z -> a-z)
-def Stdlib.String.__asciiToLower(cp: Int64) : Int64 =
+let __asciiToLower(cp: Int64) : Int64 =
     if cp >= 65 && cp <= 90 then cp + 32 else cp
 
-def Stdlib.String.__upperMapping(cp: Int64) : List<Int64> =
+let __upperMapping(cp: Int64) : List<Int64> =
     if cp >= 97 && cp <= 122 then
         [cp - 32]
     else if cp == 223 then
@@ -289,22 +291,22 @@ def Stdlib.String.__upperMapping(cp: Int64) : List<Int64> =
     else if cp < 128 then
         [cp]
     else
-        match Stdlib.__HAMT.__get<Int64, List<Int64>>(Unicode.Data.__upperCase(), cp) with
+        match Stdlib.Internal.HAMT.__get<Int64, List<Int64>>(Unicode.Data.__upperCase(), cp) with
         | Some(mapped) -> mapped
         | None -> [cp]
 
-def Stdlib.String.__lowerMapping(cp: Int64) : List<Int64> =
+let __lowerMapping(cp: Int64) : List<Int64> =
     if cp >= 65 && cp <= 90 then
         [cp + 32]
     else if cp < 128 then
         [cp]
     else
-        match Stdlib.__HAMT.__get<Int64, List<Int64>>(Unicode.Data.__lowerCase(), cp) with
+        match Stdlib.Internal.HAMT.__get<Int64, List<Int64>>(Unicode.Data.__lowerCase(), cp) with
         | Some(mapped) -> mapped
         | None -> [cp]
 
 // Helper: map codepoints to uppercase, allowing one-to-many Unicode mappings.
-def Stdlib.String.__mapUpper(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
+let __mapUpper(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
     match cps with
     | [] -> Stdlib.List.reverse<Int64>(acc)
     | [cp, ...rest] ->
@@ -312,7 +314,7 @@ def Stdlib.String.__mapUpper(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
         Stdlib.String.__mapUpper(rest, Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(upper), acc))
 
 // Helper: map codepoints to lowercase, allowing one-to-many Unicode mappings.
-def Stdlib.String.__mapLower(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
+let __mapLower(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
     match cps with
     | [] -> Stdlib.List.reverse<Int64>(acc)
     | [cp, ...rest] ->
@@ -320,13 +322,13 @@ def Stdlib.String.__mapLower(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
         Stdlib.String.__mapLower(rest, Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(lower), acc))
 
 // Convert string to uppercase.
-def Stdlib.String.toUpperCase(s: String) : String =
+let toUpperCase(s: String) : String =
     let codepoints = Stdlib.String.toCodepoints(s) in
     let upper = Stdlib.String.__mapUpper(codepoints, []) in
     Stdlib.String.fromCodepoints(upper)
 
 // Convert string to lowercase.
-def Stdlib.String.toLowercase(s: String) : String =
+let toLowercase(s: String) : String =
     let codepoints = Stdlib.String.toCodepoints(s) in
     let lower = Stdlib.String.__mapLower(codepoints, []) in
     Stdlib.String.fromCodepoints(lower)
@@ -340,7 +342,7 @@ def Stdlib.String.toLowercase(s: String) : String =
 // - Extend: combining marks, variation selectors, skin tone modifiers
 
 // Check if codepoint is a combining/extending character
-def Stdlib.String.__isExtend(cp: Int64) : Bool =
+let __isExtend(cp: Int64) : Bool =
     // Combining Diacritical Marks (0300-036F)
     (cp >= 768 && cp <= 879) ||
     // Variation Selectors (FE00-FE0F)
@@ -355,11 +357,11 @@ def Stdlib.String.__isExtend(cp: Int64) : Bool =
     (cp >= 127988 && cp <= 127988)
 
 // Check if codepoint is ZWJ (Zero Width Joiner)
-def Stdlib.String.__isZWJ(cp: Int64) : Bool = cp == 8205
+let __isZWJ(cp: Int64) : Bool = cp == 8205
 
 // Segment codepoints into grapheme clusters
 // Returns list of codepoint lists (each inner list is one grapheme)
-def Stdlib.String.__segmentGraphemes(cps: List<Int64>, current: List<Int64>, result: List<List<Int64>>) : List<List<Int64>> =
+let __segmentGraphemes(cps: List<Int64>, current: List<Int64>, result: List<List<Int64>>) : List<List<Int64>> =
     match cps with
     | [] ->
         // End of input - add current grapheme if non-empty
@@ -388,17 +390,17 @@ def Stdlib.String.__segmentGraphemes(cps: List<Int64>, current: List<Int64>, res
             Stdlib.String.__segmentGraphemes(rest, [cp], [Stdlib.List.reverse<Int64>(current), ...result])
 
 // Convert a list of codepoints to a string
-def Stdlib.String.__codepointsToString(cps: List<Int64>) : String =
+let __codepointsToString(cps: List<Int64>) : String =
     Stdlib.String.fromCodepoints(cps)
 
 // Convert string to list of grapheme clusters (each as a string)
-def Stdlib.String.toGraphemes(s: String) : List<String> =
+let toGraphemes(s: String) : List<String> =
     let cps = Stdlib.String.toCodepoints(s) in
     let segments = Stdlib.String.__segmentGraphemes(cps, [], []) in
     Stdlib.List.map<List<Int64>, String>(segments, Stdlib.String.__codepointsToString)
 
 // Get number of grapheme clusters in a string
-def Stdlib.String.graphemeLength(s: String) : Int64 =
+let graphemeLength(s: String) : Int64 =
     Stdlib.List.length<String>(Stdlib.String.toGraphemes(s))
 
 // =============================================================================
@@ -406,28 +408,28 @@ def Stdlib.String.graphemeLength(s: String) : Int64 =
 // =============================================================================
 
 // Repeat a string n times
-def Stdlib.String.repeat(s: String, n: Int64) : String =
+let repeat(s: String, n: Int64) : String =
     if n <= 0 then ""
     else if n == 1 then s
     else s ++ Stdlib.String.repeat(s, n - 1)
 
 // Join a list of strings with a separator
-def Stdlib.String.join(strs: List<String>, sep: String) : String =
+let join(strs: List<String>, sep: String) : String =
     match strs with
     | [] -> ""
     | [only] -> only ++ ""
     | [first, ...rest] -> first ++ sep ++ Stdlib.String.join(rest, sep)
 
 // Check if byte is ASCII whitespace (space, tab, newline, carriage return)
-def Stdlib.String.__isWhitespace(b: Int64) : Bool =
+let __isWhitespace(b: Int64) : Bool =
     b == 32 || b == 9 || b == 10 || b == 13
 
 // Trim leading whitespace
-def Stdlib.String.trimStart(s: String) : String =
+let trimStart(s: String) : String =
     let len = Stdlib.String.length(s) in
     Stdlib.String.__trimStartHelper(s, 0, len)
 
-def Stdlib.String.__trimStartHelper(s: String, i: Int64, len: Int64) : String =
+let __trimStartHelper(s: String, i: Int64, len: Int64) : String =
     if i >= len then ""
     else if Stdlib.String.__isWhitespace(Stdlib.String.getByteAt(s, i)) then
         Stdlib.String.__trimStartHelper(s, i + 1, len)
@@ -435,11 +437,11 @@ def Stdlib.String.__trimStartHelper(s: String, i: Int64, len: Int64) : String =
         Stdlib.String.drop(s, i)
 
 // Trim trailing whitespace
-def Stdlib.String.trimEnd(s: String) : String =
+let trimEnd(s: String) : String =
     let len = Stdlib.String.length(s) in
     Stdlib.String.__trimEndHelper(s, len - 1)
 
-def Stdlib.String.__trimEndHelper(s: String, i: Int64) : String =
+let __trimEndHelper(s: String, i: Int64) : String =
     if i < 0 then ""
     else if Stdlib.String.__isWhitespace(Stdlib.String.getByteAt(s, i)) then
         Stdlib.String.__trimEndHelper(s, i - 1)
@@ -447,26 +449,26 @@ def Stdlib.String.__trimEndHelper(s: String, i: Int64) : String =
         Stdlib.String.take(s, i + 1)
 
 // Trim both leading and trailing whitespace
-def Stdlib.String.trim(s: String) : String =
+let trim(s: String) : String =
     Stdlib.String.trimEnd(Stdlib.String.trimStart(s))
 
 // Split string by delimiter (simple byte-based)
 // Empty delimiter splits into individual bytes
-def Stdlib.String.split(s: String, delim: String) : List<String> =
+let split(s: String, delim: String) : List<String> =
     if Stdlib.String.isEmpty(delim) then
         // Empty delimiter: split into individual bytes
         Stdlib.String.__splitIntoBytes(s, 0, [])
     else
         Stdlib.String.__splitHelper(s, delim, 0, [])
 
-def Stdlib.String.__splitIntoBytes(s: String, idx: Int64, acc: List<String>) : List<String> =
+let __splitIntoBytes(s: String, idx: Int64, acc: List<String>) : List<String> =
     if idx >= Stdlib.String.length(s) then
         acc
     else
         let byte = Stdlib.String.substring(s, idx, idx + 1) in
         Stdlib.String.__splitIntoBytes(s, idx + 1, Stdlib.List.pushBack<String>(acc, byte))
 
-def Stdlib.String.__splitHelper(s: String, delim: String, start: Int64, acc: List<String>) : List<String> =
+let __splitHelper(s: String, delim: String, start: Int64, acc: List<String>) : List<String> =
     let sLen = Stdlib.String.length(s) in
     let delimLen = Stdlib.String.length(delim) in
     if start > sLen then
@@ -483,7 +485,7 @@ def Stdlib.String.__splitHelper(s: String, delim: String, start: Int64, acc: Lis
 
 // Replace all occurrences of old with new
 // Empty old string inserts new at every position (including boundaries)
-def Stdlib.String.replace(s: String, old: String, new: String) : String =
+let replace(s: String, old: String, new: String) : String =
     if Stdlib.String.isEmpty(old) then
         // Insert new at every position: before each char and after last
         Stdlib.String.__replaceEmpty(s, new, 0, new)
@@ -491,7 +493,7 @@ def Stdlib.String.replace(s: String, old: String, new: String) : String =
         let parts = Stdlib.String.split(s, old) in
         Stdlib.String.join(parts, new)
 
-def Stdlib.String.__replaceEmpty(s: String, new: String, idx: Int64, acc: String) : String =
+let __replaceEmpty(s: String, new: String, idx: Int64, acc: String) : String =
     if idx >= Stdlib.String.length(s) then
         acc
     else
@@ -499,43 +501,43 @@ def Stdlib.String.__replaceEmpty(s: String, new: String, idx: Int64, acc: String
         Stdlib.String.__replaceEmpty(s, new, idx + 1, acc ++ byte ++ new)
 
 // Reverse a string by grapheme cluster, preserving codepoint order within each cluster
-def Stdlib.String.reverse(s: String) : String =
+let reverse(s: String) : String =
     let cps = Stdlib.String.toCodepoints(s) in
     let graphemes = Stdlib.String.__segmentGraphemes(cps, [], []) in
     let reversed = Stdlib.List.reverse<List<Int64>>(graphemes) in
     Stdlib.String.fromCodepoints(Stdlib.List.flatten<Int64>(reversed))
 
 // Check if string equals another (byte comparison)
-def Stdlib.String.equals(s1: String, s2: String) : Bool =
+let equals(s1: String, s2: String) : Bool =
     let len1 = Stdlib.String.length(s1) in
     let len2 = Stdlib.String.length(s2) in
     if len1 != len2 then false
     else Stdlib.String.__compareBytes(s1, 0, s2, 0, len1)
 
 // Get first n bytes (alias for take)
-def Stdlib.String.first(s: String, n: Int64) : String =
+let first(s: String, n: Int64) : String =
     Stdlib.String.take(s, n)
 
 // Get last n bytes
-def Stdlib.String.last(s: String, n: Int64) : String =
+let last(s: String, n: Int64) : String =
     let len = Stdlib.String.length(s) in
     if n <= 0 then ""
     else if n >= len then s
     else Stdlib.String.drop(s, len - n)
 
 // Drop first n bytes (alias for drop)
-def Stdlib.String.dropFirst(s: String, n: Int64) : String =
+let dropFirst(s: String, n: Int64) : String =
     Stdlib.String.drop(s, n)
 
 // Drop last n bytes
-def Stdlib.String.dropLast(s: String, n: Int64) : String =
+let dropLast(s: String, n: Int64) : String =
     let len = Stdlib.String.length(s) in
     if n <= 0 then s
     else if n >= len then ""
     else Stdlib.String.take(s, len - n)
 
 // Get first Unicode codepoint as Option
-def Stdlib.String.head(s: String) : Stdlib.Option.Option<String> =
+let head(s: String) : Stdlib.Option.Option<String> =
     let cps = Stdlib.String.toCodepoints(s) in
     match cps with
     | [] -> None
@@ -543,7 +545,7 @@ def Stdlib.String.head(s: String) : Stdlib.Option.Option<String> =
 
 // Pad string on the left to reach target length
 // Uses byte-based length for simplicity
-def Stdlib.String.padStart(s: String, targetLen: Int64, padChar: String) : String =
+let padStart(s: String, targetLen: Int64, padChar: String) : String =
     let len = Stdlib.String.length(s) in
     let padLen = Stdlib.String.length(padChar) in
     if len >= targetLen then s
@@ -557,7 +559,7 @@ def Stdlib.String.padStart(s: String, targetLen: Int64, padChar: String) : Strin
         fullPad ++ partialPad ++ s
 
 // Pad string on the right to reach target length
-def Stdlib.String.padEnd(s: String, targetLen: Int64, padChar: String) : String =
+let padEnd(s: String, targetLen: Int64, padChar: String) : String =
     let len = Stdlib.String.length(s) in
     let padLen = Stdlib.String.length(padChar) in
     if len >= targetLen then s

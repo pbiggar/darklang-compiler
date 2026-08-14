@@ -97,7 +97,7 @@ both native architectures.
 
 `src/DarkCompiler/stdlib/__HAMT.dark` remains a generic persistent Hash Array
 Mapped Trie. Compiler-owned consumers such as Unicode tables use private
-`Stdlib.__HAMT.__*` helpers for Int64 and other key types. User code cannot name
+`Stdlib.Internal.HAMT.__*` helpers for Int64 and other key types. User code cannot name
 these helpers.
 
 The private representation has four root tags:

@@ -2,10 +2,12 @@
 //
 // Provides no-op/internal test helpers that old upstream programs still call.
 
+module Builtin
+
 // Legacy harness helper; current runtime does not track exception counts.
-def Builtin.testSetExpectedExceptionCount(_count: Int64) : Unit =
+let testSetExpectedExceptionCount(_count: Int64) : Unit =
     ()
 
 // Legacy DarkInternal helper used by upstream tests.
-def Builtin.darkInternalInfraSchedulingRuleList() : Unit =
+let darkInternalInfraSchedulingRuleList() : Unit =
     Builtin.testRuntimeError("Unknown error")

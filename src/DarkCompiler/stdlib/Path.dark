@@ -2,10 +2,12 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.Path
+
 // Stdlib.Path - Path operations
 
 // Combine two path segments
-def Stdlib.Path.combine(a: String, b: String) : String =
+let combine(a: String, b: String) : String =
     if a == "/" then
         "/" ++ b
     else if Stdlib.String.endsWith(a, "/") then
@@ -16,4 +18,4 @@ def Stdlib.Path.combine(a: String, b: String) : String =
 // Get system temp directory (constant-folded at compile time)
 // This is an intrinsic that returns "/tmp" on both macOS and Linux
 // Note: The actual implementation is in the compiler, this is just type info
-def Stdlib.Path.tempDir() : String = "/tmp"
+let tempDir() : String = "/tmp"

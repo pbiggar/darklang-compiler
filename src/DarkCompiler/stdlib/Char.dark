@@ -2,13 +2,15 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.Char
+
 // Stdlib.Char - Character operations
 // =============================================================================
 // Note: In Dark, characters are represented as single-character strings.
 // These functions operate on the first codepoint of a string.
 
 // Check if character is an ASCII digit (0-9)
-def Stdlib.Char.isDigit(c: String) : Bool =
+let isDigit(c: String) : Bool =
     if Stdlib.String.isEmpty(c) then false
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -17,7 +19,7 @@ def Stdlib.Char.isDigit(c: String) : Bool =
         | None -> false
 
 // Check if character is an ASCII letter (a-z, A-Z)
-def Stdlib.Char.isLetter(c: String) : Bool =
+let isLetter(c: String) : Bool =
     if Stdlib.String.isEmpty(c) then false
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -26,7 +28,7 @@ def Stdlib.Char.isLetter(c: String) : Bool =
         | None -> false
 
 // Check if character is ASCII whitespace (space, tab, newline, carriage return)
-def Stdlib.Char.isWhitespace(c: String) : Bool =
+let isWhitespace(c: String) : Bool =
     if Stdlib.String.isEmpty(c) then false
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -35,7 +37,7 @@ def Stdlib.Char.isWhitespace(c: String) : Bool =
         | None -> false
 
 // Check if character is uppercase in the supported case-conversion pairs
-def Stdlib.Char.isUppercase(c: String) : Bool =
+let isUppercase(c: String) : Bool =
     if Stdlib.String.isEmpty(c) then false
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -50,7 +52,7 @@ def Stdlib.Char.isUppercase(c: String) : Bool =
         | None -> false
 
 // Check if character is an ASCII lowercase letter (a-z)
-def Stdlib.Char.isLowercase(c: String) : Bool =
+let isLowercase(c: String) : Bool =
     if Stdlib.String.isEmpty(c) then false
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -59,11 +61,11 @@ def Stdlib.Char.isLowercase(c: String) : Bool =
         | None -> false
 
 // Check if character is alphanumeric (a-z, A-Z, 0-9)
-def Stdlib.Char.isAlphanumeric(c: String) : Bool =
+let isAlphanumeric(c: String) : Bool =
     Stdlib.Char.isLetter(c) || Stdlib.Char.isDigit(c)
 
 // Check if character is in the ASCII codepoint range
-def Stdlib.Char.isASCII(c: String) : Bool =
+let isASCII(c: String) : Bool =
     if Stdlib.String.isEmpty(c) then false
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -72,28 +74,28 @@ def Stdlib.Char.isASCII(c: String) : Bool =
         | None -> false
 
 // Check if character is an ASCII letter (a-z, A-Z)
-def Stdlib.Char.isASCIILetter(c: String) : Bool =
+let isASCIILetter(c: String) : Bool =
     if Stdlib.Char.isASCII(c) then Stdlib.Char.isLetter(c)
     else false
 
 // Compare characters by first codepoint
-def Stdlib.Char.isLessThan(left: String, right: String) : Bool =
+let isLessThan(left: String, right: String) : Bool =
     Stdlib.Char.toCode(left) < Stdlib.Char.toCode(right)
 
 // Compare characters by first codepoint
-def Stdlib.Char.isLessThanOrEqualTo(left: String, right: String) : Bool =
+let isLessThanOrEqualTo(left: String, right: String) : Bool =
     Stdlib.Char.toCode(left) <= Stdlib.Char.toCode(right)
 
 // Compare characters by first codepoint
-def Stdlib.Char.isGreaterThan(left: String, right: String) : Bool =
+let isGreaterThan(left: String, right: String) : Bool =
     Stdlib.Char.toCode(left) > Stdlib.Char.toCode(right)
 
 // Compare characters by first codepoint
-def Stdlib.Char.isGreaterThanOrEqualTo(left: String, right: String) : Bool =
+let isGreaterThanOrEqualTo(left: String, right: String) : Bool =
     Stdlib.Char.toCode(left) >= Stdlib.Char.toCode(right)
 
 // Convert ASCII character to uppercase
-def Stdlib.Char.toUppercase(c: String) : String =
+let toUppercase(c: String) : String =
     if Stdlib.String.isEmpty(c) then ""
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -116,7 +118,7 @@ def Stdlib.Char.toUppercase(c: String) : String =
         | None -> ""
 
 // Convert ASCII character to lowercase
-def Stdlib.Char.toLowercase(c: String) : String =
+let toLowercase(c: String) : String =
     if Stdlib.String.isEmpty(c) then ""
     else
         let cps = Stdlib.String.toCodepoints(c) in
@@ -139,14 +141,14 @@ def Stdlib.Char.toLowercase(c: String) : String =
         | None -> ""
 
 // Get the Unicode codepoint value of the first character
-def Stdlib.Char.toCode(c: String) : Int64 =
+let toCode(c: String) : Int64 =
     let cps = Stdlib.String.toCodepoints(c) in
     match Stdlib.List.head<Int64>(cps) with
     | Some(cp) -> cp
     | None -> 0
 
 // Get the ASCII code of the first character when representable in 0..255
-def Stdlib.Char.toAsciiCode(c: String) : Stdlib.Option.Option<Int64> =
+let toAsciiCode(c: String) : Stdlib.Option.Option<Int64> =
     let cps = Stdlib.String.toCodepoints(c) in
     match Stdlib.List.head<Int64>(cps) with
     | Some(cp) ->
@@ -157,11 +159,11 @@ def Stdlib.Char.toAsciiCode(c: String) : Stdlib.Option.Option<Int64> =
     | None -> None
 
 // Create a single character string from a codepoint
-def Stdlib.Char.fromCode(code: Int64) : String =
+let fromCode(code: Int64) : String =
     Stdlib.String.fromCodepoints([code])
 
 // Convert a Char value to String (identity at runtime representation level)
-def Stdlib.Char.toString(c: String) : String =
+let toString(c: String) : String =
     c
 
 // =============================================================================

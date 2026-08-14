@@ -8,7 +8,7 @@ complete product in a third Dict, and then computes the weighted checksum in a
 separate pass. The Dark binary prints the reference checksum `222793267`.
 
 The hot loop performs roughly two million successful calls to
-`Stdlib.__HAMT.__getOrDefault`. Previously that entry point called the
+`Stdlib.Internal.HAMT.__getOrDefault`. Previously that entry point called the
 Option-returning HAMT traversal and immediately matched the result. Generated
 post-register-allocation LIR showed a 16-byte `HeapAlloc` on every terminal
 path of `__getHelper`, followed by an Option-tag branch in `__getOrDefault`.

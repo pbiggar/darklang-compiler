@@ -32,12 +32,12 @@ The Dark benchmark computes primality by checking small guards, recursively
 computing an integer square-root limit, and recursively testing divisibility:
 
 ```dark
-def isqrt(n: Int64, guess: Int64) : Int64 =
+let isqrt(n: Int64, guess: Int64) : Int64 =
     if guess * guess > n then guess - 1
     else if (guess + 1) * (guess + 1) > n then guess
     else isqrt(n, guess + 1)
 
-def isDivisible(n: Int64, d: Int64, limit: Int64) : Bool =
+let isDivisible(n: Int64, d: Int64, limit: Int64) : Bool =
     if d > limit then false
     else if n % d == 0 then true
     else isDivisible(n, d + 1, limit)

@@ -69,10 +69,16 @@ Defined in modular `src/DarkCompiler/stdlib/*.dark` files and compiled like
 user code:
 
 ```dark
-def Stdlib.Int64.max(a: Int64, b: Int64) : Int64 =
-    if a > b then a else b
+module Stdlib.Int64
 
-def Stdlib.List.map<a, b>(list: List<a>, fn: (a) -> b) : List<b> =
+let max(a: Int64, b: Int64) : Int64 =
+    if a > b then a else b
+```
+
+```dark
+module Stdlib.List
+
+let map<'a, 'b>(list: List<a>, fn: (a) -> b) : List<b> =
     match list with
     | [] -> []
     | [h, ...t] -> [fn(h), ...Stdlib.List.map<a, b>(t, fn)]
@@ -81,24 +87,24 @@ def Stdlib.List.map<a, b>(list: List<a>, fn: (a) -> b) : List<b> =
 ## Stdlib.Int64
 
 ```dark
-def add(a: Int64, b: Int64) : Int64 = a + b
-def sub(a: Int64, b: Int64) : Int64 = a - b
-def mul(a: Int64, b: Int64) : Int64 = a * b
-def div(a: Int64, b: Int64) : Int64 = a / b
-def mod(a: Int64, b: Int64) : Int64 = a % b
-def max(a: Int64, b: Int64) : Int64
-def min(a: Int64, b: Int64) : Int64
-def absoluteValue(a: Int64) : Int64
-def negate(a: Int64) : Int64
-def power(base: Int64, exponent: Int64) : Int64
-def clamp(value: Int64, limitA: Int64, limitB: Int64) : Int64
-def toString(n: Int64) : String
-def popcount(x: Int64) : Int64  // Count set bits
+let add(a: Int64, b: Int64) : Int64 = a + b
+let sub(a: Int64, b: Int64) : Int64 = a - b
+let mul(a: Int64, b: Int64) : Int64 = a * b
+let div(a: Int64, b: Int64) : Int64 = a / b
+let mod(a: Int64, b: Int64) : Int64 = a % b
+let max(a: Int64, b: Int64) : Int64
+let min(a: Int64, b: Int64) : Int64
+let absoluteValue(a: Int64) : Int64
+let negate(a: Int64) : Int64
+let power(base: Int64, exponent: Int64) : Int64
+let clamp(value: Int64, limitA: Int64, limitB: Int64) : Int64
+let toString(n: Int64) : String
+let popcount(x: Int64) : Int64  // Count set bits
 // Bitwise
-def bitwiseAnd(a: Int64, b: Int64) : Int64
-def bitwiseXor(a: Int64, b: Int64) : Int64
-def shiftLeft(a: Int64, shift: Int64) : Int64
-def shiftRight(a: Int64, shift: Int64) : Int64
+let bitwiseAnd(a: Int64, b: Int64) : Int64
+let bitwiseXor(a: Int64, b: Int64) : Int64
+let shiftLeft(a: Int64, shift: Int64) : Int64
+let shiftRight(a: Int64, shift: Int64) : Int64
 ```
 
 ## Stdlib.Int8/Int16/Int32/UInt8/UInt16/UInt32/UInt64
@@ -108,48 +114,52 @@ These modules mirror the `Stdlib.Int64` API for their respective widths.
 ## Stdlib.Bool
 
 ```dark
-def not(b: Bool) : Bool
-def and(a: Bool, b: Bool) : Bool
-def or(a: Bool, b: Bool) : Bool
-def xor(a: Bool, b: Bool) : Bool
-def toString(b: Bool) : String
+let not(b: Bool) : Bool
+let and(a: Bool, b: Bool) : Bool
+let or(a: Bool, b: Bool) : Bool
+let xor(a: Bool, b: Bool) : Bool
+let toString(b: Bool) : String
 ```
 
 ## Stdlib.Option
 
 ```dark
-type Stdlib.Option.Option<t> = Some of t | None
+module Stdlib.Option
 
-def isSome<t>(opt: Option<t>) : Bool
-def isNone<t>(opt: Option<t>) : Bool
-def withDefault<t>(opt: Option<t>, default: t) : t
-def map<t, u>(opt: Option<t>, fn: (t) -> u) : Option<u>
-def andThen<t, u>(opt: Option<t>, fn: (t) -> Option<u>) : Option<u>
-def toList<t>(opt: Option<t>) : List<t>
+type Option<'t> = | Some of t | None
+
+let isSome<'t>(opt: Option<t>) : Bool
+let isNone<'t>(opt: Option<t>) : Bool
+let withDefault<'t>(opt: Option<t>, default: t) : t
+let map<'t, 'u>(opt: Option<t>, fn: (t) -> u) : Option<u>
+let andThen<'t, 'u>(opt: Option<t>, fn: (t) -> Option<u>) : Option<u>
+let toList<'t>(opt: Option<t>) : List<t>
 ```
 
 ## Stdlib.Result
 
 ```dark
-type Stdlib.Result.Result<t, e> = Ok of t | Error of e
+module Stdlib.Result
 
-def isOk<t, e>(result: Result<t, e>) : Bool
-def isError<t, e>(result: Result<t, e>) : Bool
-def withDefault<t, e>(result: Result<t, e>, default: t) : t
-def map<t, u, e>(result: Result<t, e>, fn: (t) -> u) : Result<u, e>
-def mapError<t, e, f>(fn: (e) -> f, result: Result<t, e>) : Result<t, f>
-def andThen<t, u, e>(result: Result<t, e>, fn: (t) -> Result<u, e>) : Result<u, e>
+type Result<'t, 'e> = | Ok of t | Error of e
+
+let isOk<'t, 'e>(result: Result<t, e>) : Bool
+let isError<'t, 'e>(result: Result<t, e>) : Bool
+let withDefault<'t, 'e>(result: Result<t, e>, default: t) : t
+let map<'t, 'u, 'e>(result: Result<t, e>, fn: (t) -> u) : Result<u, e>
+let mapError<'t, 'e, 'f>(fn: (e) -> f, result: Result<t, e>) : Result<t, f>
+let andThen<'t, 'u, 'e>(result: Result<t, e>, fn: (t) -> Result<u, e>) : Result<u, e>
 ```
 
 ## Stdlib.File (Intrinsic)
 
 ```dark
-def readText(path: String) : Result<String, String>
-def writeText(path: String, content: String) : Result<Unit, String>
-def appendText(path: String, content: String) : Result<Unit, String>
-def delete(path: String) : Result<Unit, String>
-def exists(path: String) : Bool
-def setExecutable(path: String) : Result<Unit, String>
+let readText(path: String) : Result<String, String>
+let writeText(path: String, content: String) : Result<Unit, String>
+let appendText(path: String, content: String) : Result<Unit, String>
+let delete(path: String) : Result<Unit, String>
+let exists(path: String) : Bool
+let setExecutable(path: String) : Result<Unit, String>
 ```
 
 These generate syscall sequences (open, read/write, close).
@@ -157,8 +167,8 @@ These generate syscall sequences (open, read/write, close).
 ## Stdlib.Platform (Intrinsic)
 
 ```dark
-def isMacOS() : Bool
-def isLinux() : Bool
+let isMacOS() : Bool
+let isLinux() : Bool
 ```
 
 Constant-folded at compile time based on target platform.
@@ -166,7 +176,7 @@ Constant-folded at compile time based on target platform.
 ## Stdlib.Random (Intrinsic)
 
 ```dark
-def int64() : Int64  // 8 random bytes
+let int64() : Int64  // 8 random bytes
 ```
 
 Uses platform-specific random source:

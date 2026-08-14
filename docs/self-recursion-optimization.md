@@ -5,7 +5,7 @@
 Self-recursive tail calls are optimized to loops, eliminating function call overhead entirely. This converts:
 
 ```dark
-def sumTo(n: Int64, acc: Int64): Int64 =
+let sumTo(n: Int64, acc: Int64): Int64 =
     if n <= 0 then acc else sumTo(n - 1, acc + n)
 ```
 

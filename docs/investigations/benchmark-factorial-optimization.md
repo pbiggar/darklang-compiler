@@ -38,11 +38,11 @@ compiler output.
 
 ### Dark (`benchmarks/problems/factorial/dark/main.dark`)
 ```dark
-def factorial(n: Int64) : Int64 =
+let factorial(n: Int64) : Int64 =
     if n <= 1 then 1
     else n * factorial(n - 1)
 
-def repeat(n: Int64, acc: Int64) : Int64 =
+let repeat(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else repeat(n - 1, factorial(20))
 

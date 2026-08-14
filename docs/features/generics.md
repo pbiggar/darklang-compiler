@@ -13,8 +13,8 @@ The Dark compiler uses **monomorphization** - generics are fully expanded at com
 Generic functions declare type parameters in angle brackets:
 
 ```dark
-def identity<T>(x: T) : T = x
-def swap<A, B>(pair: (A, B)) : (B, A) = (pair.1, pair.0)
+let identity<'T>(x: T) : T = x
+let swap<'A, 'B>(pair: (A, B)) : (B, A) = (pair.1, pair.0)
 ```
 
 ### 2. Type Application (Call Sites)
@@ -56,8 +56,8 @@ Specialized function names encode their type arguments:
 Specialization is iterative because a specialized function body may contain new TypeApps:
 
 ```dark
-def wrap<T>(x: T) : List<T> = [x]
-def doubleWrap<T>(x: T) : List<List<T>> = wrap<List<T>>(wrap<T>(x))
+let wrap<'T>(x: T) : List<T> = [x]
+let doubleWrap<'T>(x: T) : List<List<T>> = wrap<List<T>>(wrap<T>(x))
 
 // Calling doubleWrap<Int64> requires:
 // 1. doubleWrap_i64 (from initial call)

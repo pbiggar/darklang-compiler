@@ -2,60 +2,62 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.UInt16
+
 // Stdlib.UInt16 - Integer operations
 
-def Stdlib.UInt16.add(a: UInt16, b: UInt16) : UInt16 = a + b
+let add(a: UInt16, b: UInt16) : UInt16 = a + b
 
-def Stdlib.UInt16.subtract(a: UInt16, b: UInt16) : UInt16 = a - b
+let subtract(a: UInt16, b: UInt16) : UInt16 = a - b
 
-def Stdlib.UInt16.multiply(a: UInt16, b: UInt16) : UInt16 = a * b
+let multiply(a: UInt16, b: UInt16) : UInt16 = a * b
 
-def Stdlib.UInt16.divide(a: UInt16, b: UInt16) : UInt16 = a / b
+let divide(a: UInt16, b: UInt16) : UInt16 = a / b
 
-def Stdlib.UInt16.max(a: UInt16, b: UInt16) : UInt16 = if a > b then a else b
+let max(a: UInt16, b: UInt16) : UInt16 = if a > b then a else b
 
-def Stdlib.UInt16.min(a: UInt16, b: UInt16) : UInt16 = if a < b then a else b
+let min(a: UInt16, b: UInt16) : UInt16 = if a < b then a else b
 
-def Stdlib.UInt16.mod(a: UInt16, b: UInt16) : UInt16 = a % b
+let mod(a: UInt16, b: UInt16) : UInt16 = a % b
 
-def Stdlib.UInt16.absoluteValue(a: UInt16) : UInt16 = a
+let absoluteValue(a: UInt16) : UInt16 = a
 
-def Stdlib.UInt16.negate(a: UInt16) : UInt16 = 0us - a
+let negate(a: UInt16) : UInt16 = 0us - a
 
-def Stdlib.UInt16.power(base: UInt16, exponent: UInt16) : UInt16 =
+let power(base: UInt16, exponent: UInt16) : UInt16 =
     if exponent == 0us then 1us
     else if exponent == 1us then base
     else base * Stdlib.UInt16.power(base, exponent - 1us)
 
-def Stdlib.UInt16.clamp(value: UInt16, limitA: UInt16, limitB: UInt16) : UInt16 =
+let clamp(value: UInt16, limitA: UInt16, limitB: UInt16) : UInt16 =
     let lower = Stdlib.UInt16.min(limitA, limitB) in
     let upper = Stdlib.UInt16.max(limitA, limitB) in
     Stdlib.UInt16.max(lower, Stdlib.UInt16.min(upper, value))
 
-def Stdlib.UInt16.greaterThan(a: UInt16, b: UInt16) : Bool = a > b
+let greaterThan(a: UInt16, b: UInt16) : Bool = a > b
 
-def Stdlib.UInt16.greaterThanOrEqualTo(a: UInt16, b: UInt16) : Bool = a >= b
+let greaterThanOrEqualTo(a: UInt16, b: UInt16) : Bool = a >= b
 
-def Stdlib.UInt16.lessThan(a: UInt16, b: UInt16) : Bool = a < b
+let lessThan(a: UInt16, b: UInt16) : Bool = a < b
 
-def Stdlib.UInt16.lessThanOrEqualTo(a: UInt16, b: UInt16) : Bool = a <= b
+let lessThanOrEqualTo(a: UInt16, b: UInt16) : Bool = a <= b
 
 // Bitwise operations
-def Stdlib.UInt16.bitwiseAnd(a: UInt16, b: UInt16) : UInt16 = a & b
+let bitwiseAnd(a: UInt16, b: UInt16) : UInt16 = a & b
 
-def Stdlib.UInt16.bitwiseOr(a: UInt16, b: UInt16) : UInt16 = a ||| b
+let bitwiseOr(a: UInt16, b: UInt16) : UInt16 = a ||| b
 
-def Stdlib.UInt16.bitwiseXor(a: UInt16, b: UInt16) : UInt16 = a ^ b
+let bitwiseXor(a: UInt16, b: UInt16) : UInt16 = a ^ b
 
-def Stdlib.UInt16.shiftLeft(a: UInt16, shift: UInt16) : UInt16 = a << shift
+let shiftLeft(a: UInt16, shift: UInt16) : UInt16 = a << shift
 
-def Stdlib.UInt16.shiftRight(a: UInt16, shift: UInt16) : UInt16 = a >> shift
+let shiftRight(a: UInt16, shift: UInt16) : UInt16 = a >> shift
 
-def Stdlib.UInt16.bitwiseNot(a: UInt16) : UInt16 = a ^ 65535us
+let bitwiseNot(a: UInt16) : UInt16 = a ^ 65535us
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-def Stdlib.UInt16.popcount(x: UInt16) : UInt16 =
+let popcount(x: UInt16) : UInt16 =
     let mask1 = 21845us in
     let mask2 = 13107us in
     let mask3 = 3855us in
@@ -67,7 +69,7 @@ def Stdlib.UInt16.popcount(x: UInt16) : UInt16 =
     x & mask4
 
 // Convert a single digit (0-9) to its string representation
-def Stdlib.UInt16.__digitToString(n: UInt16) : String =
+let __digitToString(n: UInt16) : String =
     match n with
     | 0us -> "0"
     | 1us -> "1"
@@ -82,18 +84,18 @@ def Stdlib.UInt16.__digitToString(n: UInt16) : String =
     | _ -> "?"
 
 // Convert an integer to its string representation
-def Stdlib.UInt16.toString(n: UInt16) : String =
+let toString(n: UInt16) : String =
     if n < 10us then Stdlib.UInt16.__digitToString(n)
     else Stdlib.UInt16.toString(n / 10us) ++ Stdlib.UInt16.__digitToString(n % 10us)
 
 // Check if integer is even
-def Stdlib.UInt16.isEven(n: UInt16) : Bool =
+let isEven(n: UInt16) : Bool =
     (n % 2us) == 0us
 
 // Check if integer is odd
-def Stdlib.UInt16.isOdd(n: UInt16) : Bool =
+let isOdd(n: UInt16) : Bool =
     (n % 2us) != 0us
 
 // Sum all integers in a list
-def Stdlib.UInt16.sum(list: List<UInt16>) : UInt16 =
+let sum(list: List<UInt16>) : UInt16 =
     Stdlib.List.fold<UInt16, UInt16>(list, 0us, fun acc x -> acc + x)

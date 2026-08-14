@@ -1,0 +1,263 @@
+// NameSyntax.fs - Shared lexical and structural contract for source names.
+//
+// This module is the single parser-facing authority for identifier characters,
+// reserved words, blank names, quoted identifiers, and qualified segments.
+
+module NameSyntax
+
+open AST
+
+[<StructuralEquality; StructuralComparison>]
+type Identifier =
+    | OrdinaryIdentifier of string
+    | BlankIdentifier
+
+[<StructuralEquality; StructuralComparison>]
+type QualifiedName = private QualifiedName of NonEmptyList<Identifier>
+
+[<RequireQualifiedAccess>]
+type Keyword =
+    | Let
+    | Val
+    | In
+    | If
+    | Elif
+    | Then
+    | Else
+    | Type
+    | Of
+    | Match
+    | With
+    | Fun
+    | When
+    | True
+    | False
+    | Underscore
+
+type IdentifierToken =
+    | IdentifierToken of Identifier
+    | KeywordToken of Keyword
+
+/// Parser output before compiler-specific top-level normalization. Names retain
+/// their lexical role here; the legacy AST string boundary is crossed only by
+/// `normalizeSource`.
+type SourceDeclaration =
+    | SourceFunction of Identifier * FunctionDef
+    | SourceType of Identifier * TypeDef
+    | SourceValue of Identifier * Expr
+    | SourceExpression of Expr
+
+type ParsedSource =
+    | SourceDeclarations of NonEmptyList<SourceDeclaration>
+    | SourceModule of QualifiedName * ParsedSource
+
+let isStartCharacter (character: char) : bool =
+    System.Char.IsLetter character || character = '_'
+
+let isContinueCharacter (character: char) : bool =
+    System.Char.IsLetterOrDigit character || character = '_' || character = '\''
+
+let identifierText (identifier: Identifier) : string =
+    match identifier with
+    | OrdinaryIdentifier text -> text
+    | BlankIdentifier -> ""
+
+let identifierFromText (text: string) : Identifier =
+    if text = "" || text = "___" then BlankIdentifier else OrdinaryIdentifier text
+
+let classify (text: string) : IdentifierToken =
+    match text with
+    | "let" -> KeywordToken Keyword.Let
+    | "val" -> KeywordToken Keyword.Val
+    | "in" -> KeywordToken Keyword.In
+    | "if" -> KeywordToken Keyword.If
+    | "elif" -> KeywordToken Keyword.Elif
+    | "then" -> KeywordToken Keyword.Then
+    | "else" -> KeywordToken Keyword.Else
+    | "type" -> KeywordToken Keyword.Type
+    | "of" -> KeywordToken Keyword.Of
+    | "match" -> KeywordToken Keyword.Match
+    | "with" -> KeywordToken Keyword.With
+    | "fun" -> KeywordToken Keyword.Fun
+    | "when" -> KeywordToken Keyword.When
+    | "true" -> KeywordToken Keyword.True
+    | "false" -> KeywordToken Keyword.False
+    | "_" -> KeywordToken Keyword.Underscore
+    | "___" -> IdentifierToken BlankIdentifier
+    | ordinary -> IdentifierToken (identifierFromText ordinary)
+
+let reservedWords : Set<string> =
+    set [ "let"; "val"; "in"; "if"; "elif"; "then"; "else"; "type"; "of"
+          "match"; "with"; "fun"; "when"; "true"; "false"; "_" ]
+
+let isBareIdentifier (identifier: Identifier) : bool =
+    match identifier with
+    | BlankIdentifier -> false
+    | OrdinaryIdentifier text ->
+        text.Length > 0
+        && isStartCharacter text[0]
+        && (text |> Seq.forall isContinueCharacter)
+        && not (Set.contains text reservedWords)
+
+let formatIdentifier (identifier: Identifier) : string =
+    match identifier with
+    | BlankIdentifier -> "___"
+    | OrdinaryIdentifier text when isBareIdentifier identifier -> text
+    | OrdinaryIdentifier text -> $"``{text}``"
+
+let singleton (identifier: Identifier) : QualifiedName =
+    QualifiedName (NonEmptyList.singleton identifier)
+
+let fromNonEmptySegments (value: NonEmptyList<Identifier>) : QualifiedName = QualifiedName value
+
+let append (identifier: Identifier) (QualifiedName segments) : QualifiedName =
+    QualifiedName (NonEmptyList.snoc segments identifier)
+
+let concat (QualifiedName first) (QualifiedName second) : QualifiedName =
+    QualifiedName (NonEmptyList.appendList first (NonEmptyList.toList second))
+
+let segments (QualifiedName value) : Identifier list = NonEmptyList.toList value
+
+let trySplitLast (name: QualifiedName) : (QualifiedName * Identifier) option =
+    match segments name |> List.rev with
+    | last :: reversedPrefix ->
+        reversedPrefix
+        |> List.rev
+        |> NonEmptyList.tryFromList
+        |> Option.map (fun prefix -> (fromNonEmptySegments prefix, last))
+    | [] -> None
+
+let formatQualifiedName (name: QualifiedName) : string =
+    name |> segments |> List.map formatIdentifier |> String.concat "."
+
+/// The legacy compiler AST still consumes a string at the parse/resolution
+/// boundary. Keep quoted segment delimiters in that string so embedded dots are
+/// lossless; NameResolution parses this representation back into segments.
+let toLegacySpelling (name: QualifiedName) : string = formatQualifiedName name
+
+let tryParseLegacySpelling (spelling: string) : QualifiedName option =
+    let length = spelling.Length
+    let rec parseQuoted index chars =
+        if index + 1 >= length then None
+        elif spelling[index] = '`' && spelling[index + 1] = '`' then
+            Some (System.String(List.rev chars |> List.toArray), index + 2)
+        else
+            parseQuoted (index + 1) (spelling[index] :: chars)
+    let rec parseBare index chars =
+        if index >= length || spelling[index] = '.' then
+            match chars with
+            | [] -> None
+            | _ -> Some (System.String(List.rev chars |> List.toArray), index)
+        else
+            parseBare (index + 1) (spelling[index] :: chars)
+    let rec loop index acc =
+        if index >= length then
+            match List.rev acc |> NonEmptyList.tryFromList with
+            | Some parsed -> Some (QualifiedName parsed)
+            | None -> None
+        else
+            let parsedSegment =
+                if index + 1 < length && spelling[index] = '`' && spelling[index + 1] = '`' then
+                    parseQuoted (index + 2) []
+                else
+                    parseBare index []
+            match parsedSegment with
+            | None -> None
+            | Some (text, nextIndex) ->
+                let identifier = identifierFromText text
+                if nextIndex = length then loop nextIndex (identifier :: acc)
+                elif spelling[nextIndex] = '.' && nextIndex + 1 < length then
+                    loop (nextIndex + 1) (identifier :: acc)
+                else
+                    None
+    loop 0 []
+
+let scanOrdinary (input: string) (startIndex: int) : Identifier * int =
+    let rec findEnd index =
+        if index < input.Length && isContinueCharacter input[index] then findEnd (index + 1)
+        else index
+    let endIndex = findEnd (startIndex + 1)
+    (identifierFromText (input.Substring(startIndex, endIndex - startIndex)), endIndex)
+
+let scanQuoted (input: string) (startIndex: int) : Result<Identifier * int, string> =
+    let rec findClose index =
+        if index >= input.Length || input[index] = '\n' || input[index] = '\r' then
+            Error "Unterminated backtick identifier"
+        elif index + 1 < input.Length && input[index] = '`' && input[index + 1] = '`' then
+            let text = input.Substring(startIndex + 2, index - startIndex - 2)
+            Ok (identifierFromText text, index + 2)
+        else
+            findClose (index + 1)
+    findClose (startIndex + 2)
+
+let tryExtractModuleHeader (source: string) : (QualifiedName * string) option =
+    let lines = source.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n') |> Array.toList
+    let rec findHeader (prefix: string list) (remaining: string list) =
+        match remaining with
+        | [] -> None
+        | line :: rest ->
+            let trimmed = line.Trim()
+            if trimmed = "" || trimmed.StartsWith("//") then
+                findHeader (line :: prefix) rest
+            elif trimmed.StartsWith("module ") then
+                let isBlock = trimmed.EndsWith("=")
+                let moduleText = trimmed.Substring("module ".Length).Trim()
+                let spelling =
+                    if isBlock then moduleText.Substring(0, moduleText.Length - 1).Trim()
+                    else moduleText
+                let body =
+                    if isBlock then
+                        let significantLines = rest |> List.filter (fun bodyLine -> bodyLine.Trim() <> "")
+                        let indentation (sourceLine: string) =
+                            sourceLine.Length - sourceLine.TrimStart().Length
+                        match significantLines |> List.map indentation |> List.sort with
+                        | bodyIndent :: _ when bodyIndent > indentation line ->
+                            rest
+                            |> List.map (fun bodyLine ->
+                                if bodyLine.Trim() = "" then ""
+                                elif bodyLine.Length >= bodyIndent then bodyLine.Substring bodyIndent
+                                else bodyLine)
+                            |> String.concat "\n"
+                        | _ -> ""
+                    else
+                        String.concat "\n" (List.rev prefix @ rest)
+                tryParseLegacySpelling spelling |> Option.map (fun name -> (name, body))
+            else
+                None
+    findHeader [] lines
+
+let wrapModules (modules: QualifiedName list) (source: ParsedSource) : ParsedSource =
+    List.foldBack (fun moduleName body -> SourceModule (moduleName, body)) modules source
+
+let normalizeSource (source: ParsedSource) : Result<Program, string> =
+    let nameAtPrefix prefix identifier =
+        match prefix with
+        | None -> identifierText identifier
+        | Some moduleName -> moduleName |> append identifier |> toLegacySpelling
+    let normalizeTypeName prefix identifier typeDef =
+        let normalizedName = nameAtPrefix prefix identifier
+        match typeDef with
+        | RecordDef (_, typeParams, fields) -> RecordDef (normalizedName, typeParams, fields)
+        | SumTypeDef (_, typeParams, variants) -> SumTypeDef (normalizedName, typeParams, variants)
+        | TypeAlias (_, typeParams, targetType) -> TypeAlias (normalizedName, typeParams, targetType)
+    let rec normalize prefix parsed =
+        match parsed with
+        | SourceModule (moduleName, body) ->
+            let fullModule = prefix |> Option.map (fun outer -> concat outer moduleName) |> Option.defaultValue moduleName
+            normalize (Some fullModule) body
+        | SourceDeclarations declarations ->
+            let rec declarationsToProgram acc remaining =
+                match remaining with
+                | [] -> Ok (Program (List.rev acc))
+                | SourceFunction (identifier, definition) :: rest ->
+                    let normalized = { definition with Name = nameAtPrefix prefix identifier }
+                    declarationsToProgram (FunctionDef normalized :: acc) rest
+                | SourceType (identifier, definition) :: rest ->
+                    let normalized = normalizeTypeName prefix identifier definition
+                    declarationsToProgram (TypeDef normalized :: acc) rest
+                | SourceExpression expression :: rest ->
+                    declarationsToProgram (Expression expression :: acc) rest
+                | SourceValue _ :: _ ->
+                    Error "Top-level value declarations are parsed but native execution is not supported"
+            declarations |> NonEmptyList.toList |> declarationsToProgram []
+    normalize None source

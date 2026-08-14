@@ -50,7 +50,7 @@ let c = Circle { radius = 3.14, x = 0, y = 0 } in c.radius = 3.14
 let c = Circle { radius = 2.5, x = 10, y = 20 } in c.x = 10
 
 // Generic record printing substitutes concrete field types
-type GenericDisplayBox<t> = { value: t } GenericDisplayBox { value = "hi" } = stdout="GenericDisplayBox<String> { value: \"hi\" }\n" stderr=""
+type GenericDisplayBox<'t> = { value: t } GenericDisplayBox { value = "hi" } = stdout="GenericDisplayBox<String> { value: \"hi\" }\n" stderr=""
 
 // Record with all float fields
 type Vec2f = { x: Float, y: Float }
@@ -142,4 +142,4 @@ let v = Vec3 { x = 10, y = 20, z = 30 } in { v with z = 5 }.x + { v with z = 5 }
 
 // Record update where variable only appears in the update part
 type Point = { x: Int64, y: Int64 }
-let val = 100 in { Point { x = 1, y = 2 } with x = val }.x = 100
+let ``val`` = 100 in { Point { x = 1, y = 2 } with x = ``val`` }.x = 100

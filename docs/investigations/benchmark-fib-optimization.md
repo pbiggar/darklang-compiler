@@ -13,7 +13,7 @@ The fib benchmark computes the 35th Fibonacci number using naive recursive imple
 
 ### Dark (`benchmarks/problems/fib/dark/main.dark`)
 ```dark
-def fib(n: Int64) : Int64 =
+let fib(n: Int64) : Int64 =
     if n <= 1 then n
     else fib(n - 1) + fib(n - 2)
 

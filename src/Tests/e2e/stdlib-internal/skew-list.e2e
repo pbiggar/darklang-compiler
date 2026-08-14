@@ -1,29 +1,29 @@
 // Direct-payload skew-binary random-access list representation tests.
 
-def skewBuildFront(next: Int64, limit: Int64, list: List<Int64>) : List<Int64> =
+let skewBuildFront(next: Int64, limit: Int64, list: List<Int64>) : List<Int64> =
     if next > limit then list
-    else skewBuildFront(next + 1, limit, Stdlib.__SkewList.push<Int64>(list, next))
+    else skewBuildFront(next + 1, limit, Stdlib.Internal.SkewList.push<Int64>(list, next))
 
 // The internal representation exposes the required public-list fundamentals.
-Stdlib.__SkewList.isEmpty<Int64>(Stdlib.__SkewList.empty<Int64>()) = true
-Stdlib.__SkewList.length<Int64>(Stdlib.__SkewList.singleton<Int64>(42)) = 1
+Stdlib.Internal.SkewList.isEmpty<Int64>(Stdlib.Internal.SkewList.empty<Int64>()) = true
+Stdlib.Internal.SkewList.length<Int64>(Stdlib.Internal.SkewList.singleton<Int64>(42)) = 1
 
 // Eight pushes exercise both skew carries and a multi-digit spine.
-let xs = skewBuildFront(1, 8, Stdlib.__SkewList.empty<Int64>()) in let h = Stdlib.__SkewList.headUnsafe<Int64>(xs) in let middle = Stdlib.Option.withDefault<Int64>(Stdlib.__SkewList.getAt<Int64>(xs, 4), -1) in let last = Stdlib.Option.withDefault<Int64>(Stdlib.__SkewList.getAt<Int64>(xs, 7), -1) in h * 100 + middle * 10 + last = 841
+let xs = skewBuildFront(1, 8, Stdlib.Internal.SkewList.empty<Int64>()) in let h = Stdlib.Internal.SkewList.headUnsafe<Int64>(xs) in let middle = Stdlib.Option.withDefault<Int64>(Stdlib.Internal.SkewList.getAt<Int64>(xs, 4), -1) in let last = Stdlib.Option.withDefault<Int64>(Stdlib.Internal.SkewList.getAt<Int64>(xs, 7), -1) in h * 100 + middle * 10 + last = 841
 
 // Splitting the leading complete tree leaves the historical version intact.
-let original = skewBuildFront(1, 15, Stdlib.__SkewList.empty<Int64>()) in let once = Stdlib.__SkewList.tail<Int64>(original) in let twice = Stdlib.__SkewList.tail<Int64>(once) in let oldHead = Stdlib.__SkewList.headUnsafe<Int64>(original) in let onceHead = Stdlib.__SkewList.headUnsafe<Int64>(once) in let twiceHead = Stdlib.__SkewList.headUnsafe<Int64>(twice) in oldHead * 100 + onceHead * 10 + twiceHead = 1653
+let original = skewBuildFront(1, 15, Stdlib.Internal.SkewList.empty<Int64>()) in let once = Stdlib.Internal.SkewList.tail<Int64>(original) in let twice = Stdlib.Internal.SkewList.tail<Int64>(once) in let oldHead = Stdlib.Internal.SkewList.headUnsafe<Int64>(original) in let onceHead = Stdlib.Internal.SkewList.headUnsafe<Int64>(once) in let twiceHead = Stdlib.Internal.SkewList.headUnsafe<Int64>(twice) in oldHead * 100 + onceHead * 10 + twiceHead = 1653
 
 // Path-copying indexed update preserves both the old tree and adjacent values.
-let original = skewBuildFront(1, 31, Stdlib.__SkewList.empty<Int64>()) in let changed = Stdlib.__SkewList.setAt<Int64>(original, 16, 999) in let oldValue = Stdlib.Option.withDefault<Int64>(Stdlib.__SkewList.getAt<Int64>(original, 16), -1) in let newValue = Stdlib.Option.withDefault<Int64>(Stdlib.__SkewList.getAt<Int64>(changed, 16), -1) in let neighbor = Stdlib.Option.withDefault<Int64>(Stdlib.__SkewList.getAt<Int64>(changed, 17), -1) in oldValue * 100000 + newValue * 100 + neighbor = 1599914
+let original = skewBuildFront(1, 31, Stdlib.Internal.SkewList.empty<Int64>()) in let changed = Stdlib.Internal.SkewList.setAt<Int64>(original, 16, 999) in let oldValue = Stdlib.Option.withDefault<Int64>(Stdlib.Internal.SkewList.getAt<Int64>(original, 16), -1) in let newValue = Stdlib.Option.withDefault<Int64>(Stdlib.Internal.SkewList.getAt<Int64>(changed, 16), -1) in let neighbor = Stdlib.Option.withDefault<Int64>(Stdlib.Internal.SkewList.getAt<Int64>(changed, 17), -1) in oldValue * 100000 + newValue * 100 + neighbor = 1599914
 
 // Managed payloads retained by shared paths are released without leaks.
-def skewDynamicString(value: String) : String = value ++ "!"
-let first = skewDynamicString("first") in let second = skewDynamicString("second") in let original = Stdlib.__SkewList.push<String>(Stdlib.__SkewList.push<String>(Stdlib.__SkewList.empty<String>(), second), first) in let changed = Stdlib.__SkewList.setAt<String>(original, 1, skewDynamicString("replacement")) in Stdlib.String.length(Stdlib.__SkewList.headUnsafe<String>(changed)) = stdout="6\n" stderr=""
+let skewDynamicString(value: String) : String = value ++ "!"
+let first = skewDynamicString("first") in let second = skewDynamicString("second") in let original = Stdlib.Internal.SkewList.push<String>(Stdlib.Internal.SkewList.push<String>(Stdlib.Internal.SkewList.empty<String>(), second), first) in let changed = Stdlib.Internal.SkewList.setAt<String>(original, 1, skewDynamicString("replacement")) in Stdlib.String.length(Stdlib.Internal.SkewList.headUnsafe<String>(changed)) = stdout="6\n" stderr=""
 
 // Recursive indexed updates exercise the inlined bounds-check path used by
 // numeric workloads such as edigits.
-def skewSetDescending(list: List<Int64>, index: Int64) : List<Int64> =
+let skewSetDescending(list: List<Int64>, index: Int64) : List<Int64> =
     if index < 0 then list
     else skewSetDescending(Stdlib.List.setAt<Int64>(list, index, 9), index - 1)
 

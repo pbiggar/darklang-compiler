@@ -1,0 +1,6 @@
+// Twitter.dark - Legacy Twitter URL encoding compatibility helper.
+
+module Twitter
+
+let urlencode_v0(input: String) : String =
+    AWS.__urlencode(input, false)

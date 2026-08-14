@@ -74,7 +74,7 @@ type VariantLookup = Map<string, (string * string list * int * Type option)>
 
 ### Function Definitions
 ```dark
-def add(a: Int64, b: Int64) : Int64 = a + b
+let add(a: Int64, b: Int64) : Int64 = a + b
 ```
 1. Add parameters to type environment
 2. Check body expression
@@ -133,7 +133,7 @@ This is handled by generating lambda wrappers with fresh parameter names.
 Generic functions use type parameters:
 
 ```dark
-def identity<T>(x: T) : T = x
+let identity<'T>(x: T) : T = x
 ```
 
 At call sites, type arguments can be explicit or inferred from argument types,

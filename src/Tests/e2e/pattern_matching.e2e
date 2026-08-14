@@ -466,14 +466,14 @@ match [Some(5), Some(6)] with | [None, _] -> 1 | [Some((x, _)), _] -> 2 | _ -> 3
 
 // Generic constructor payload tuple destructuring must preserve unresolved tuple element bindings.
 // Regression: lowering dropped tuple bindings for `TVar` payloads and failed with `Undefined variable: x`.
-def genericPayloadTupleBinding(v: Stdlib.Option.Option<(String, Int64)>) : String = match v with | Some((x, _)) -> x | _ -> "" genericPayloadTupleBinding(Some(("a" ++ "", 1))) = "a"
+let genericPayloadTupleBinding(v: Stdlib.Option.Option<(String, Int64)>) : String = match v with | Some((x, _)) -> x | _ -> "" genericPayloadTupleBinding(Some(("a" ++ "", 1))) = "a"
 
 // Generic top-level list patterns should allow unresolved scrutinee TVars.
 // Regression: type checking rejected list-pattern bindings on TVar scrutinees before lowering.
-def genericTopLevelListMatch<t>(v: t) : Float = match v with | [a, b] -> 4.0 | _ -> 0.0 genericTopLevelListMatch([1.5, 2.5]) = 4.0
+let genericTopLevelListMatch<'t>(v: t) : Float = match v with | [a, b] -> 4.0 | _ -> 0.0 genericTopLevelListMatch([1.5, 2.5]) = 4.0
 
 // Generic tuple/list-cons patterns should preserve unresolved element bindings.
-def genericTupleListConsBinding<t>(v: t) : String = match v with | ([x, ..._], _) -> x | _ -> "" genericTupleListConsBinding((["a" ++ ""], 1)) = "a"
+let genericTupleListConsBinding<'t>(v: t) : String = match v with | ([x, ..._], _) -> x | _ -> "" genericTupleListConsBinding((["a" ++ ""], 1)) = "a"
 
 // Single literal pattern
 match [13] with | [13] -> 1 | _ -> 0 = 1
@@ -544,7 +544,7 @@ let a = [1, 2] in let b = [3, 4] in match (a, b) with | ([], _) -> 0 | (_, []) -
 // These tests verify tuple patterns containing list cons patterns work correctly.
 
 // Int64 accumulator - works
-def recursiveTupleConsHelper(a: List<Int64>, b: List<Int64>, acc: Int64) : Int64 =
+let recursiveTupleConsHelper(a: List<Int64>, b: List<Int64>, acc: Int64) : Int64 =
     match (a, b) with
     | ([], _) -> acc
     | (_, []) -> acc
@@ -553,7 +553,7 @@ def recursiveTupleConsHelper(a: List<Int64>, b: List<Int64>, acc: Int64) : Int64
 recursiveTupleConsHelper([1, 2, 3], [4, 5, 6], 0L) = 21
 
 // Single list pattern with list cons in body - works
-def singleListConsWithAcc(a: List<Int64>, acc: List<Int64>) : List<Int64> =
+let singleListConsWithAcc(a: List<Int64>, acc: List<Int64>) : List<Int64> =
     match a with
     | [] -> acc
     | [x, ...xs] -> singleListConsWithAcc(xs, [x, ...acc])
@@ -562,7 +562,7 @@ Stdlib.List.length<Int64>(singleListConsWithAcc([1, 2, 3], [])) = 3
 
 // Workaround for tuple+cons+list-accumulator: use nested matches instead of tuple pattern
 // This is the pattern used in Stdlib.Crypto.__xorByteLists
-def nestedMatchListCons(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
+let nestedMatchListCons(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
     match a with
     | [] -> acc
     | [x, ...xs] ->
@@ -573,7 +573,7 @@ def nestedMatchListCons(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List
 Stdlib.List.length<Int64>(nestedMatchListCons([1, 2, 3], [4, 5, 6], [])) = 3
 
 // Tuple+cons pattern with list accumulator body - now fixed with TypedAtom wrapper
-def tupleConsListAccum(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
+let tupleConsListAccum(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
     match (a, b) with
     | ([], _) -> acc
     | (_, []) -> acc

@@ -2,4 +2,6 @@
 //
 // Generic function helpers.
 
-def Stdlib.Fun.identity<t>(value: t) : t = value
+module Stdlib.Fun
+
+let identity<'t>(value: t) : t = value

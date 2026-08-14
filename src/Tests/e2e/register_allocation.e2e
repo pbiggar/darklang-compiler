@@ -116,7 +116,7 @@ let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in le
 // ===================================================================
 
 // Float argument must survive a call that can clobber float regs
-def floatAcrossCall(r: Float) : Float = let list = [1, 2, 3] in let _ = Stdlib.List.length<Int64>(list) in r + 1.0
+let floatAcrossCall(r: Float) : Float = let list = [1, 2, 3] in let _ = Stdlib.List.length<Int64>(list) in r + 1.0
 floatAcrossCall(2.0) = 3.0
 
 
@@ -159,7 +159,7 @@ let v1 = 1 in let v2 = 2 in let v3 = 3 in let v4 = 4 in let v5 = 5 in let v6 = 6
 // ===================================================================
 
 // Modulo lowering inserts a check block, which must not break phi predecessor labels.
-def modLoop(a: Int64, b: Int64) : Int64 =
+let modLoop(a: Int64, b: Int64) : Int64 =
     if b == 0 then a
     else modLoop(b, a % b)
 
@@ -321,7 +321,7 @@ let m1 = 1 in let m2 = 2 in let m3 = 3 in let m4 = 4 in let m5 = 5 in let m6 = 6
 
 // Test with recursive function that requires spilling across many frames
 // A wrong stack size calculation would quickly overflow the stack
-def sumSpilled(n: Int64) : Int64 = if n <= 0 then 0 else let a = n in let b = n + 1 in let c = n + 2 in let d = n + 3 in let e = n + 4 in let f = n + 5 in let g = n + 6 in let h = n + 7 in let i = n + 8 in let j = n + 9 in let k = n + 10 in let l = n + 11 in let m = n + 12 in let sum = a + b + c + d + e + f + g + h + i + j + k + l + m in sum + sumSpilled(n - 1)
+let sumSpilled(n: Int64) : Int64 = if n <= 0 then 0 else let a = n in let b = n + 1 in let c = n + 2 in let d = n + 3 in let e = n + 4 in let f = n + 5 in let g = n + 6 in let h = n + 7 in let i = n + 8 in let j = n + 9 in let k = n + 10 in let l = n + 11 in let m = n + 12 in let sum = a + b + c + d + e + f + g + h + i + j + k + l + m in sum + sumSpilled(n - 1)
 sumSpilled(10) = 1495
 
 
@@ -542,11 +542,11 @@ let sp1 = 1 in let sp2 = 2 in let sp3 = 3 in let sp4 = 4 in let sp5 = 5 in let s
 let intLive1 = 10 in let intLive2 = 20 in let intLive3 = 30 in let _ = Stdlib.List.length<Int64>([1, 2, 3]) in intLive1 + intLive2 + intLive3 = 60
 
 // Float liveness across function calls - exercises float instruction liveness
-def floatLiveTest(x: Float) : Float = let f1 = 1.0 in let f2 = 2.0 in let f3 = 3.0 in let _ = Stdlib.List.length<Int64>([1, 2]) in x + f1 + f2 + f3
+let floatLiveTest(x: Float) : Float = let f1 = 1.0 in let f2 = 2.0 in let f3 = 3.0 in let _ = Stdlib.List.length<Int64>([1, 2]) in x + f1 + f2 + f3
 floatLiveTest(10.0) = 16.0
 
 // Mixed int and float liveness across the same call site
-def mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 200 in let mixFloat = mixedHelper(5.0) in Stdlib.Float.toInt(mixFloat) + mixInt1 + mixInt2 = 306
+let mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 200 in let mixFloat = mixedHelper(5.0) in Stdlib.Float.toInt(mixFloat) + mixInt1 + mixInt2 = 306
 
 
 // ===================================================================
@@ -573,12 +573,12 @@ def mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 2
 
 // Function with high register pressure that needs callee-saved registers
 // Forces the use of callee-saved registers X19-X27 for values across calls
-def calleeSavedTest(n: Int64) : Int64 = let a = n + 1 in let b = n + 2 in let c = n + 3 in let d = n + 4 in let e = n + 5 in let f = n + 6 in let g = n + 7 in let h = n + 8 in let i = n + 9 in let j = n + 10 in let k = n + 11 in let l = n + 12 in let m = n + 13 in let _ = Stdlib.List.length<Int64>([1, 2]) in a + b + c + d + e + f + g + h + i + j + k + l + m
+let calleeSavedTest(n: Int64) : Int64 = let a = n + 1 in let b = n + 2 in let c = n + 3 in let d = n + 4 in let e = n + 5 in let f = n + 6 in let g = n + 7 in let h = n + 8 in let i = n + 9 in let j = n + 10 in let k = n + 11 in let l = n + 12 in let m = n + 13 in let _ = Stdlib.List.length<Int64>([1, 2]) in a + b + c + d + e + f + g + h + i + j + k + l + m
 calleeSavedTest(0) = 91
 
 // Recursive function with many live variables across recursive call
 // This exercises the callee-saved save/restore for values preserved across calls
-def recursiveCalleeSaved(n: Int64) : Int64 = if n <= 0 then 0 else let v1 = n in let v2 = n + 1 in let v3 = n + 2 in let v4 = n + 3 in let v5 = n + 4 in let v6 = n + 5 in let v7 = n + 6 in let v8 = n + 7 in let v9 = n + 8 in let v10 = n + 9 in let v11 = n + 10 in let v12 = n + 11 in let v13 = n + 12 in let rest = recursiveCalleeSaved(n - 1) in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + rest
+let recursiveCalleeSaved(n: Int64) : Int64 = if n <= 0 then 0 else let v1 = n in let v2 = n + 1 in let v3 = n + 2 in let v4 = n + 3 in let v5 = n + 4 in let v6 = n + 5 in let v7 = n + 6 in let v8 = n + 7 in let v9 = n + 8 in let v10 = n + 9 in let v11 = n + 10 in let v12 = n + 11 in let v13 = n + 12 in let rest = recursiveCalleeSaved(n - 1) in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + rest
 recursiveCalleeSaved(5) = 585
 
 
@@ -600,14 +600,14 @@ recursiveCalleeSaved(5) = 585
 // that survives a function call, while its pair partner is NOT live.
 
 // Helper function that returns its argument (forces a function call)
-def identity263(x: Int64) : Int64 = x
+let identity263(x: Int64) : Int64 = x
 
 // Test case: Single value survives across call
 // The value 42 is computed, then a function call happens, then the value is used.
 // This should trigger SaveRegs with just one register to save.
 // If the second register of a pair (e.g., X2) is the one holding 42 but X1 is not live,
 // the mutation would corrupt the save/restore.
-def singleValueAcrossCall263(n: Int64) : Int64 =
+let singleValueAcrossCall263(n: Int64) : Int64 =
     let value = n + 100 in
     let _ = identity263(0) in
     value
@@ -616,7 +616,7 @@ singleValueAcrossCall263(42) = 142
 
 // Test with two values where one is used before call, one after
 // This creates asymmetric liveness to hit the (false, true) branch
-def asymmetricLiveness263(a: Int64, b: Int64) : Int64 =
+let asymmetricLiveness263(a: Int64, b: Int64) : Int64 =
     let first = a + 1 in
     let second = b + 1 in
     let _ = identity263(first) in
@@ -627,7 +627,7 @@ asymmetricLiveness263(10, 20) = 21
 // Test with specific odd count of values to maximize chance of hitting (false, true)
 // 3 values live across call - could result in X1+X2 pair saving, then X3 alone
 // OR X1 alone with X2+X3 not paired, etc.
-def threeValuesAcrossCall263(x: Int64) : Int64 =
+let threeValuesAcrossCall263(x: Int64) : Int64 =
     let a = x + 1 in
     let b = x + 2 in
     let c = x + 3 in
@@ -637,7 +637,7 @@ def threeValuesAcrossCall263(x: Int64) : Int64 =
 threeValuesAcrossCall263(10) = 36
 
 // Test with 5 values - odd count increases chance of unpaired second register
-def fiveValuesAcrossCall263(x: Int64) : Int64 =
+let fiveValuesAcrossCall263(x: Int64) : Int64 =
     let v1 = x + 1 in
     let v2 = x + 2 in
     let v3 = x + 3 in
@@ -649,7 +649,7 @@ def fiveValuesAcrossCall263(x: Int64) : Int64 =
 fiveValuesAcrossCall263(10) = 65
 
 // Chain of calls to stress test SaveRegs/RestoreRegs with various register sets
-def chainCalls263(n: Int64) : Int64 =
+let chainCalls263(n: Int64) : Int64 =
     let a = n + 10 in
     let _ = identity263(0) in
     let b = a + 20 in
@@ -679,12 +679,12 @@ chainCalls263(5) = 65
 // that survives a function call, while its pair partner is NOT live.
 
 // Helper function for float across call tests
-def identityFloat265(x: Float) : Float = x
-def identityInt265(x: Int64) : Int64 = x
+let identityFloat265(x: Float) : Float = x
+let identityInt265(x: Int64) : Int64 = x
 
 // Test with single float value surviving a call
 // This puts a float in D0 (or another register), and should test save/restore
-def singleFloatAcrossCall265(f: Float) : Float =
+let singleFloatAcrossCall265(f: Float) : Float =
     let value = f + 100.0 in
     let _ = identityInt265(0) in
     value
@@ -693,7 +693,7 @@ singleFloatAcrossCall265(42.0) = 142.0
 
 // Test with 3 float values - odd count increases chance of unpaired register
 // If 3 floats are live: D0+D1 paired, D2 alone (triggers the mutation)
-def threeFloatsAcrossCall265(x: Float) : Float =
+let threeFloatsAcrossCall265(x: Float) : Float =
     let a = x + 1.0 in
     let b = x + 2.0 in
     let c = x + 3.0 in
@@ -703,7 +703,7 @@ def threeFloatsAcrossCall265(x: Float) : Float =
 threeFloatsAcrossCall265(10.0) = 36.0
 
 // Test with 5 float values - more chance of hitting unpaired second register in pair
-def fiveFloatsAcrossCall265(x: Float) : Float =
+let fiveFloatsAcrossCall265(x: Float) : Float =
     let v1 = x + 1.0 in
     let v2 = x + 2.0 in
     let v3 = x + 3.0 in
@@ -716,7 +716,7 @@ fiveFloatsAcrossCall265(10.0) = 65.0
 
 // Asymmetric float liveness - one float used before call, one after
 // This creates asymmetric liveness that can hit (true, false) branch
-def asymmetricFloatLiveness265(a: Float, b: Float) : Float =
+let asymmetricFloatLiveness265(a: Float, b: Float) : Float =
     let first = a + 1.0 in
     let second = b + 1.0 in
     let _ = identityFloat265(first) in
@@ -725,7 +725,7 @@ def asymmetricFloatLiveness265(a: Float, b: Float) : Float =
 asymmetricFloatLiveness265(10.0, 20.0) = 21.0
 
 // Chain of calls with floats to stress test SaveRegs/RestoreRegs
-def chainFloatCalls265(n: Float) : Float =
+let chainFloatCalls265(n: Float) : Float =
     let a = n + 10.0 in
     let _ = identityInt265(0) in
     let b = a + 20.0 in
@@ -737,7 +737,7 @@ def chainFloatCalls265(n: Float) : Float =
 chainFloatCalls265(5.0) = 65.0
 
 // 7 float values - maximizes chance of having D6 live without D7
-def sevenFloatsAcrossCall265(x: Float) : Float =
+let sevenFloatsAcrossCall265(x: Float) : Float =
     let v1 = x + 1.0 in
     let v2 = x + 2.0 in
     let v3 = x + 3.0 in

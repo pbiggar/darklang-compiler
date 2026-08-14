@@ -749,7 +749,7 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     let nodeType = AST.TList AST.TInt64
     let funcReg : AST_to_ANF.FunctionRegistry =
         Map.ofList [
-            ("Stdlib.__SkewList.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
+            ("Stdlib.Internal.SkewList.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
         ]
 
     let ctx : TypeContext = {
@@ -767,7 +767,7 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     let childTemp = TempId 2
 
     let func : Function = {
-        Name = "Stdlib.__SkewList.__node2GetChild_i64"
+        Name = "Stdlib.Internal.SkewList.__node2GetChild_i64"
         TypedParams = [
             { Id = nodeParam; Type = nodeType }
             { Id = indexParam; Type = AST.TInt64 }
@@ -837,7 +837,7 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
     let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
     let helperName = "Stdlib.List.__mapHelper"
     let specializedHelperName = "Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
-    let pushBackName = "Stdlib.__SkewList.pushBack_fn_i64_to_i64"
+    let pushBackName = "Stdlib.Internal.SkewList.pushBack_fn_i64_to_i64"
     let funcReg : AST_to_ANF.FunctionRegistry =
         Map.ofList [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
@@ -1298,7 +1298,7 @@ let testClosurePushBackRetainsImmediateClosureCallResult () : TestResult =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let makerType = AST.TFunction ([AST.TInt64], closureType)
     let listType = AST.TList closureType
-    let pushBackName = "Stdlib.__SkewList.pushBack_fn_i64_to_i64"
+    let pushBackName = "Stdlib.Internal.SkewList.pushBack_fn_i64_to_i64"
     let funcReg : AST_to_ANF.FunctionRegistry =
         Map.ofList [
             ("makeClosure", makerType)
@@ -1356,8 +1356,8 @@ let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
     let funcReg : AST_to_ANF.FunctionRegistry =
         Map.ofList [
             ("consumer", AST.TFunction ([nodeType; AST.TInt64], AST.TInt64))
-            ("Stdlib.__SkewList.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
-            ("Stdlib.__SkewList.__nodeMeasure_i64", AST.TFunction ([nodeType], AST.TInt64))
+            ("Stdlib.Internal.SkewList.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
+            ("Stdlib.Internal.SkewList.__nodeMeasure_i64", AST.TFunction ([nodeType], AST.TInt64))
         ]
 
     let ctx : TypeContext = {
@@ -1386,10 +1386,10 @@ let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
         Body =
             Let (
                 childTemp,
-                BorrowedCall ("Stdlib.__SkewList.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
+                BorrowedCall ("Stdlib.Internal.SkewList.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
                 Let (
                     measureTemp,
-                    Call ("Stdlib.__SkewList.__nodeMeasure_i64", [Var childTemp]),
+                    Call ("Stdlib.Internal.SkewList.__nodeMeasure_i64", [Var childTemp]),
                     Return (Var measureTemp)
                 )
             )

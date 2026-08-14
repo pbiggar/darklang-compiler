@@ -224,7 +224,9 @@ Add to the appropriate module file under `src/DarkCompiler/stdlib/`, such as
 `src/DarkCompiler/stdlib/Int64.dark`:
 
 ```dark
-def Stdlib.Int64.abs(n: Int64) : Int64 =
+module Stdlib.Int64
+
+let abs(n: Int64) : Int64 =
     if n < 0 then 0 - n else n
 ```
 
@@ -262,7 +264,7 @@ The compiler handles field access, pattern matching, and construction automatica
 ### Sum Type (Algebraic Data Type)
 
 ```dark
-type Option<T> = Some of T | None
+type Option<'T> = Some of T | None
 ```
 
 The compiler generates:

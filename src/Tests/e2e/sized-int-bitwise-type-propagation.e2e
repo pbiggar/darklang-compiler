@@ -1,7 +1,7 @@
 // Regression test: bitwise ops on sized integers must preserve sized result types.
 // If backend type propagation defaults to Int64, overflow behavior changes.
 
-def wrapAfterMask(a: Int8) : Int8 =
+let wrapAfterMask(a: Int8) : Int8 =
     let masked = a & 3y in
     masked + 127y
 

@@ -25,7 +25,7 @@ with current evidence pointing to:
 The Takeuchi function (tak) is a classic benchmark testing recursion and function call overhead:
 
 ```dark
-def tak(x: Int64, y: Int64, z: Int64) : Int64 =
+let tak(x: Int64, y: Int64, z: Int64) : Int64 =
     if x <= y then z
     else tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y))
 ```

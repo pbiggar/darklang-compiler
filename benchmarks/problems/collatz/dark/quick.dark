@@ -1,11 +1,11 @@
 // Collatz Benchmark - Quick check version
 
-def collatzSteps(n: Int64, steps: Int64) : Int64 =
+let collatzSteps(n: Int64, steps: Int64) : Int64 =
     if n == 1 then steps
     else if n % 2 == 0 then collatzSteps(n / 2, steps + 1)
     else collatzSteps(3 * n + 1, steps + 1)
 
-def sumCollatzRange(i: Int64, limit: Int64, total: Int64) : Int64 =
+let sumCollatzRange(i: Int64, limit: Int64, total: Int64) : Int64 =
     if i > limit then total
     else sumCollatzRange(i + 1, limit, total + collatzSteps(i, 0))
 

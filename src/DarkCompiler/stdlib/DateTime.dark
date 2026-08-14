@@ -3,37 +3,37 @@
 // DateTime uses Unix epoch milliseconds internally, which is precise enough for
 // the upstream API while keeping arithmetic and comparison cheap in native code.
 
-type DateTime = Int64
+module Stdlib.DateTime
 
-def Stdlib.DateTime.__millisecondsPerSecond() : Int64 = 1000
-def Stdlib.DateTime.__millisecondsPerMinute() : Int64 = 60000
-def Stdlib.DateTime.__millisecondsPerHour() : Int64 = 3600000
-def Stdlib.DateTime.__millisecondsPerDay() : Int64 = 86400000
+let __millisecondsPerSecond() : Int64 = 1000
+let __millisecondsPerMinute() : Int64 = 60000
+let __millisecondsPerHour() : Int64 = 3600000
+let __millisecondsPerDay() : Int64 = 86400000
 
 // These are the bounds of the four-digit ISO-8601 years accepted upstream.
-def Stdlib.DateTime.__minimumMilliseconds() : Int64 = -62135596800000
-def Stdlib.DateTime.__maximumMilliseconds() : Int64 = 253402300799999
-def Stdlib.DateTime.__maximumDeltaMilliseconds() : Int64 = 315537897599999
+let __minimumMilliseconds() : Int64 = -62135596800000
+let __maximumMilliseconds() : Int64 = 253402300799999
+let __maximumDeltaMilliseconds() : Int64 = 315537897599999
 
 // Integer division in Dark truncates toward zero. DateTime component extraction
 // needs Euclidean division so that the day containing -1ms is still 1969-12-31.
-def Stdlib.DateTime.__floorDiv(value: Int64, divisor: Int64) : Int64 =
+let __floorDiv(value: Int64, divisor: Int64) : Int64 =
     let quotient = value / divisor in
     if value < 0 && value % divisor != 0 then quotient - 1 else quotient
 
-def Stdlib.DateTime.__floorMod(value: Int64, divisor: Int64) : Int64 =
+let __floorMod(value: Int64, divisor: Int64) : Int64 =
     let remainder = value % divisor in
     if remainder < 0 then remainder + divisor else remainder
 
-def Stdlib.DateTime.__isLeapYear(year: Int64) : Bool =
+let __isLeapYear(year: Int64) : Bool =
     if year % 4 != 0 then false
     else if year % 100 != 0 then true
     else year % 400 == 0
 
-def Stdlib.DateTime.__daysInYear(year: Int64) : Int64 =
+let __daysInYear(year: Int64) : Int64 =
     if Stdlib.DateTime.__isLeapYear(year) then 366 else 365
 
-def Stdlib.DateTime.__daysInMonth(month: Int64, year: Int64) : Int64 =
+let __daysInMonth(month: Int64, year: Int64) : Int64 =
     match month with
     | 1 -> 31
     | 2 -> if Stdlib.DateTime.__isLeapYear(year) then 29 else 28
@@ -49,7 +49,7 @@ def Stdlib.DateTime.__daysInMonth(month: Int64, year: Int64) : Int64 =
     | 12 -> 31
     | _ -> Builtin.testRuntimeError("DateTime month must be between 1 and 12")
 
-def Stdlib.DateTime.__daysBeforeYearFrom(year: Int64, cursor: Int64, days: Int64) : Int64 =
+let __daysBeforeYearFrom(year: Int64, cursor: Int64, days: Int64) : Int64 =
     if cursor == year then days
     else if cursor < year then
         Stdlib.DateTime.__daysBeforeYearFrom(
@@ -63,10 +63,10 @@ def Stdlib.DateTime.__daysBeforeYearFrom(year: Int64, cursor: Int64, days: Int64
             previousYear,
             days - Stdlib.DateTime.__daysInYear(previousYear))
 
-def Stdlib.DateTime.__daysBeforeYear(year: Int64) : Int64 =
+let __daysBeforeYear(year: Int64) : Int64 =
     Stdlib.DateTime.__daysBeforeYearFrom(year, 1970, 0)
 
-def Stdlib.DateTime.__yearFromDays(days: Int64, year: Int64) : Int64 =
+let __yearFromDays(days: Int64, year: Int64) : Int64 =
     if days >= 0 then
         let daysInYear = Stdlib.DateTime.__daysInYear(year) in
         if days < daysInYear then year
@@ -77,7 +77,7 @@ def Stdlib.DateTime.__yearFromDays(days: Int64, year: Int64) : Int64 =
         if days >= 0 - daysInPreviousYear then previousYear
         else Stdlib.DateTime.__yearFromDays(days + daysInPreviousYear, previousYear)
 
-def Stdlib.DateTime.__daysBeforeMonthFrom(month: Int64, year: Int64, cursor: Int64, days: Int64) : Int64 =
+let __daysBeforeMonthFrom(month: Int64, year: Int64, cursor: Int64, days: Int64) : Int64 =
     if cursor >= month then days
     else
         Stdlib.DateTime.__daysBeforeMonthFrom(
@@ -86,31 +86,31 @@ def Stdlib.DateTime.__daysBeforeMonthFrom(month: Int64, year: Int64, cursor: Int
             cursor + 1,
             days + Stdlib.DateTime.__daysInMonth(cursor, year))
 
-def Stdlib.DateTime.__daysBeforeMonth(month: Int64, year: Int64) : Int64 =
+let __daysBeforeMonth(month: Int64, year: Int64) : Int64 =
     Stdlib.DateTime.__daysBeforeMonthFrom(month, year, 1, 0)
 
-def Stdlib.DateTime.__monthFromDayOfYear(dayOfYear: Int64, month: Int64, year: Int64) : Int64 =
+let __monthFromDayOfYear(dayOfYear: Int64, month: Int64, year: Int64) : Int64 =
     let daysInMonth = Stdlib.DateTime.__daysInMonth(month, year) in
     if dayOfYear < daysInMonth then month
     else Stdlib.DateTime.__monthFromDayOfYear(dayOfYear - daysInMonth, month + 1, year)
 
-def Stdlib.DateTime.__milliseconds(d: DateTime) : Int64 =
+let __milliseconds(d: DateTime) : Int64 =
     d
 
-def Stdlib.DateTime.__fromValidMilliseconds(milliseconds: Int64) : DateTime =
+let __fromValidMilliseconds(milliseconds: Int64) : DateTime =
     milliseconds
 
-def Stdlib.DateTime.fromMilliseconds(milliseconds: Int64) : DateTime =
+let fromMilliseconds(milliseconds: Int64) : DateTime =
     if milliseconds < Stdlib.DateTime.__minimumMilliseconds() ||
        milliseconds > Stdlib.DateTime.__maximumMilliseconds() then
         Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
     else
         Stdlib.DateTime.__fromValidMilliseconds(milliseconds)
 
-def Stdlib.DateTime.toMilliseconds(date: DateTime) : Int64 =
+let toMilliseconds(date: DateTime) : Int64 =
     Stdlib.DateTime.__milliseconds(date)
 
-def Stdlib.DateTime.fromSeconds_v0(seconds: Int64) : DateTime =
+let fromSeconds_v0(seconds: Int64) : DateTime =
     let minimumSeconds = Stdlib.DateTime.__minimumMilliseconds() / 1000 in
     let maximumSeconds = Stdlib.DateTime.__maximumMilliseconds() / 1000 in
     if seconds < minimumSeconds || seconds > maximumSeconds then
@@ -118,16 +118,16 @@ def Stdlib.DateTime.fromSeconds_v0(seconds: Int64) : DateTime =
     else
         Stdlib.DateTime.__fromValidMilliseconds(seconds * 1000)
 
-def Stdlib.DateTime.fromSeconds(seconds: Int64) : DateTime =
+let fromSeconds(seconds: Int64) : DateTime =
     Stdlib.DateTime.fromSeconds_v0(seconds)
 
-def Stdlib.DateTime.toSeconds_v0(date: DateTime) : Int64 =
+let toSeconds_v0(date: DateTime) : Int64 =
     Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__milliseconds(date), 1000)
 
-def Stdlib.DateTime.toSeconds(date: DateTime) : Int64 =
+let toSeconds(date: DateTime) : Int64 =
     Stdlib.DateTime.toSeconds_v0(date)
 
-def Stdlib.DateTime.__addMilliseconds(date: DateTime, milliseconds: Int64) : DateTime =
+let __addMilliseconds(date: DateTime, milliseconds: Int64) : DateTime =
     if milliseconds < 0 - Stdlib.DateTime.__maximumDeltaMilliseconds() ||
        milliseconds > Stdlib.DateTime.__maximumDeltaMilliseconds() then
         Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
@@ -135,46 +135,46 @@ def Stdlib.DateTime.__addMilliseconds(date: DateTime, milliseconds: Int64) : Dat
         let result = Stdlib.DateTime.__milliseconds(date) + milliseconds in
         Stdlib.DateTime.fromMilliseconds(result)
 
-def Stdlib.DateTime.addMilliseconds(date: DateTime, milliseconds: Int64) : DateTime =
+let addMilliseconds(date: DateTime, milliseconds: Int64) : DateTime =
     Stdlib.DateTime.__addMilliseconds(date, milliseconds)
 
-def Stdlib.DateTime.subtractMilliseconds(date: DateTime, milliseconds: Int64) : DateTime =
+let subtractMilliseconds(date: DateTime, milliseconds: Int64) : DateTime =
     if milliseconds < 0 - Stdlib.DateTime.__maximumDeltaMilliseconds() ||
        milliseconds > Stdlib.DateTime.__maximumDeltaMilliseconds() then
         Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
     else
         Stdlib.DateTime.fromMilliseconds(Stdlib.DateTime.__milliseconds(date) - milliseconds)
 
-def Stdlib.DateTime.addSeconds_v0(date: DateTime, seconds: Int64) : DateTime =
+let addSeconds_v0(date: DateTime, seconds: Int64) : DateTime =
     let maximumDeltaSeconds = Stdlib.DateTime.__maximumDeltaMilliseconds() / 1000 in
     if seconds < 0 - maximumDeltaSeconds || seconds > maximumDeltaSeconds then
         Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
     else
         Stdlib.DateTime.__addMilliseconds(date, seconds * 1000)
 
-def Stdlib.DateTime.addSeconds(date: DateTime, seconds: Int64) : DateTime =
+let addSeconds(date: DateTime, seconds: Int64) : DateTime =
     Stdlib.DateTime.addSeconds_v0(date, seconds)
 
-def Stdlib.DateTime.subtractSeconds(date: DateTime, seconds: Int64) : DateTime =
+let subtractSeconds(date: DateTime, seconds: Int64) : DateTime =
     let maximumDeltaSeconds = Stdlib.DateTime.__maximumDeltaMilliseconds() / 1000 in
     if seconds < 0 - maximumDeltaSeconds || seconds > maximumDeltaSeconds then
         Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
     else
         Stdlib.DateTime.subtractMilliseconds(date, seconds * 1000)
 
-def Stdlib.DateTime.lessThan(left: DateTime, right: DateTime) : Bool =
+let lessThan(left: DateTime, right: DateTime) : Bool =
     Stdlib.DateTime.__milliseconds(left) < Stdlib.DateTime.__milliseconds(right)
 
-def Stdlib.DateTime.lessThanOrEqualTo(left: DateTime, right: DateTime) : Bool =
+let lessThanOrEqualTo(left: DateTime, right: DateTime) : Bool =
     Stdlib.DateTime.__milliseconds(left) <= Stdlib.DateTime.__milliseconds(right)
 
-def Stdlib.DateTime.greaterThan(left: DateTime, right: DateTime) : Bool =
+let greaterThan(left: DateTime, right: DateTime) : Bool =
     Stdlib.DateTime.__milliseconds(left) > Stdlib.DateTime.__milliseconds(right)
 
-def Stdlib.DateTime.greaterThanOrEqualTo(left: DateTime, right: DateTime) : Bool =
+let greaterThanOrEqualTo(left: DateTime, right: DateTime) : Bool =
     Stdlib.DateTime.__milliseconds(left) >= Stdlib.DateTime.__milliseconds(right)
 
-def Stdlib.DateTime.__roundMillisecondsToSeconds(milliseconds: Int64) : Int64 =
+let __roundMillisecondsToSeconds(milliseconds: Int64) : Int64 =
     let seconds = milliseconds / 1000 in
     let remainder = milliseconds % 1000 in
     let absoluteRemainder = if remainder < 0 then 0 - remainder else remainder in
@@ -185,95 +185,95 @@ def Stdlib.DateTime.__roundMillisecondsToSeconds(milliseconds: Int64) : Int64 =
     else if milliseconds < 0 then seconds - 1
     else seconds + 1
 
-def Stdlib.DateTime.subtract(endDate: DateTime, startDate: DateTime) : Int64 =
+let subtract(endDate: DateTime, startDate: DateTime) : Int64 =
     Stdlib.DateTime.__roundMillisecondsToSeconds(
         Stdlib.DateTime.__milliseconds(endDate) - Stdlib.DateTime.__milliseconds(startDate))
 
-def Stdlib.DateTime.subtractMs(endDate: DateTime, startDate: DateTime) : Int64 =
+let subtractMs(endDate: DateTime, startDate: DateTime) : Int64 =
     Stdlib.DateTime.__milliseconds(endDate) - Stdlib.DateTime.__milliseconds(startDate)
 
-def Stdlib.DateTime.__daysSinceEpoch(date: DateTime) : Int64 =
+let __daysSinceEpoch(date: DateTime) : Int64 =
     Stdlib.DateTime.__floorDiv(
         Stdlib.DateTime.__milliseconds(date),
         Stdlib.DateTime.__millisecondsPerDay())
 
-def Stdlib.DateTime.year_v0(date: DateTime) : Int64 =
+let year_v0(date: DateTime) : Int64 =
     Stdlib.DateTime.__yearFromDays(Stdlib.DateTime.__daysSinceEpoch(date), 1970)
 
-def Stdlib.DateTime.year(date: DateTime) : Int64 = Stdlib.DateTime.year_v0(date)
+let year(date: DateTime) : Int64 = Stdlib.DateTime.year_v0(date)
 
-def Stdlib.DateTime.month_v0(date: DateTime) : Int64 =
+let month_v0(date: DateTime) : Int64 =
     let days = Stdlib.DateTime.__daysSinceEpoch(date) in
     let year = Stdlib.DateTime.year_v0(date) in
     let dayOfYear = days - Stdlib.DateTime.__daysBeforeYear(year) in
     Stdlib.DateTime.__monthFromDayOfYear(dayOfYear, 1, year)
 
-def Stdlib.DateTime.month(date: DateTime) : Int64 = Stdlib.DateTime.month_v0(date)
+let month(date: DateTime) : Int64 = Stdlib.DateTime.month_v0(date)
 
-def Stdlib.DateTime.day_v0(date: DateTime) : Int64 =
+let day_v0(date: DateTime) : Int64 =
     let days = Stdlib.DateTime.__daysSinceEpoch(date) in
     let year = Stdlib.DateTime.year_v0(date) in
     let month = Stdlib.DateTime.month_v0(date) in
     let dayOfYear = days - Stdlib.DateTime.__daysBeforeYear(year) in
     dayOfYear - Stdlib.DateTime.__daysBeforeMonth(month, year) + 1
 
-def Stdlib.DateTime.day(date: DateTime) : Int64 = Stdlib.DateTime.day_v0(date)
+let day(date: DateTime) : Int64 = Stdlib.DateTime.day_v0(date)
 
-def Stdlib.DateTime.weekday_v0(date: DateTime) : Int64 =
+let weekday_v0(date: DateTime) : Int64 =
     Stdlib.DateTime.__floorMod(Stdlib.DateTime.__daysSinceEpoch(date) + 3, 7) + 1
 
-def Stdlib.DateTime.weekday(date: DateTime) : Int64 = Stdlib.DateTime.weekday_v0(date)
+let weekday(date: DateTime) : Int64 = Stdlib.DateTime.weekday_v0(date)
 
-def Stdlib.DateTime.__millisecondsWithinDay(date: DateTime) : Int64 =
+let __millisecondsWithinDay(date: DateTime) : Int64 =
     Stdlib.DateTime.__floorMod(
         Stdlib.DateTime.__milliseconds(date),
         Stdlib.DateTime.__millisecondsPerDay())
 
-def Stdlib.DateTime.hour(date: DateTime) : Int64 =
+let hour(date: DateTime) : Int64 =
     Stdlib.DateTime.__millisecondsWithinDay(date) / Stdlib.DateTime.__millisecondsPerHour()
 
-def Stdlib.DateTime.minute(date: DateTime) : Int64 =
+let minute(date: DateTime) : Int64 =
     (Stdlib.DateTime.__millisecondsWithinDay(date) / Stdlib.DateTime.__millisecondsPerMinute()) % 60
 
-def Stdlib.DateTime.second(date: DateTime) : Int64 =
+let second(date: DateTime) : Int64 =
     (Stdlib.DateTime.__millisecondsWithinDay(date) / Stdlib.DateTime.__millisecondsPerSecond()) % 60
 
-def Stdlib.DateTime.millisecond(date: DateTime) : Int64 =
+let millisecond(date: DateTime) : Int64 =
     Stdlib.DateTime.__millisecondsWithinDay(date) % 1000
 
-def Stdlib.DateTime.atStartOfDay_v0(date: DateTime) : DateTime =
+let atStartOfDay_v0(date: DateTime) : DateTime =
     Stdlib.DateTime.__fromValidMilliseconds(
         Stdlib.DateTime.__daysSinceEpoch(date) * Stdlib.DateTime.__millisecondsPerDay())
 
-def Stdlib.DateTime.atStartOfDay(date: DateTime) : DateTime =
+let atStartOfDay(date: DateTime) : DateTime =
     Stdlib.DateTime.atStartOfDay_v0(date)
 
-def Stdlib.DateTime.now() : DateTime =
+let now() : DateTime =
     Stdlib.DateTime.__fromValidMilliseconds(Stdlib.DateTime.__nowMilliseconds())
 
-def Stdlib.DateTime.now_v0() : DateTime = Stdlib.DateTime.now()
+let now_v0() : DateTime = Stdlib.DateTime.now()
 
-def Stdlib.DateTime.today_v0() : DateTime =
+let today_v0() : DateTime =
     Stdlib.DateTime.atStartOfDay_v0(Stdlib.DateTime.now())
 
-def Stdlib.DateTime.today() : DateTime = Stdlib.DateTime.today_v0()
+let today() : DateTime = Stdlib.DateTime.today_v0()
 
-def Stdlib.DateTime.__padZero2(value: Int64) : String =
+let __padZero2(value: Int64) : String =
     if value < 10 then "0" ++ Stdlib.Int64.toString(value)
     else Stdlib.Int64.toString(value)
 
-def Stdlib.DateTime.__padZero3(value: Int64) : String =
+let __padZero3(value: Int64) : String =
     if value < 10 then "00" ++ Stdlib.Int64.toString(value)
     else if value < 100 then "0" ++ Stdlib.Int64.toString(value)
     else Stdlib.Int64.toString(value)
 
-def Stdlib.DateTime.__padZero4(value: Int64) : String =
+let __padZero4(value: Int64) : String =
     if value < 10 then "000" ++ Stdlib.Int64.toString(value)
     else if value < 100 then "00" ++ Stdlib.Int64.toString(value)
     else if value < 1000 then "0" ++ Stdlib.Int64.toString(value)
     else Stdlib.Int64.toString(value)
 
-def Stdlib.DateTime.toString_v0(date: DateTime) : String =
+let toString_v0(date: DateTime) : String =
     let dateAndTime =
         Stdlib.DateTime.__padZero4(Stdlib.DateTime.year_v0(date)) ++ "-" ++
         Stdlib.DateTime.__padZero2(Stdlib.DateTime.month_v0(date)) ++ "-" ++
@@ -285,43 +285,43 @@ def Stdlib.DateTime.toString_v0(date: DateTime) : String =
     if millisecond == 0 then dateAndTime ++ "Z"
     else dateAndTime ++ "." ++ Stdlib.DateTime.__padZero3(millisecond) ++ "Z"
 
-def Stdlib.DateTime.toString(date: DateTime) : String = Stdlib.DateTime.toString_v0(date)
+let toString(date: DateTime) : String = Stdlib.DateTime.toString_v0(date)
 
-def Stdlib.DateTime.toStringISO8601BasicDate_v0(date: DateTime) : String =
+let toStringISO8601BasicDate_v0(date: DateTime) : String =
     Stdlib.DateTime.__padZero4(Stdlib.DateTime.year_v0(date)) ++
     Stdlib.DateTime.__padZero2(Stdlib.DateTime.month_v0(date)) ++
     Stdlib.DateTime.__padZero2(Stdlib.DateTime.day_v0(date))
 
-def Stdlib.DateTime.toStringISO8601BasicDate(date: DateTime) : String =
+let toStringISO8601BasicDate(date: DateTime) : String =
     Stdlib.DateTime.toStringISO8601BasicDate_v0(date)
 
-def Stdlib.DateTime.toStringISO8601BasicDateTime_v0(date: DateTime) : String =
+let toStringISO8601BasicDateTime_v0(date: DateTime) : String =
     Stdlib.DateTime.toStringISO8601BasicDate_v0(date) ++ "T" ++
     Stdlib.DateTime.__padZero2(Stdlib.DateTime.hour(date)) ++
     Stdlib.DateTime.__padZero2(Stdlib.DateTime.minute(date)) ++
     Stdlib.DateTime.__padZero2(Stdlib.DateTime.second(date)) ++ "Z"
 
-def Stdlib.DateTime.toStringISO8601BasicDateTime(date: DateTime) : String =
+let toStringISO8601BasicDateTime(date: DateTime) : String =
     Stdlib.DateTime.toStringISO8601BasicDateTime_v0(date)
 
-def Stdlib.DateTime.__digitAt(value: String, index: Int64) : Stdlib.Result.Result<Int64, String> =
+let __digitAt(value: String, index: Int64) : Stdlib.Result.Result<Int64, String> =
     if index >= Stdlib.String.length(value) then Error("Invalid date format")
     else
         let byte = Stdlib.String.getByteAt(value, index) in
         if byte >= 48 && byte <= 57 then Ok(byte - 48)
         else Error("Invalid date format")
 
-def Stdlib.DateTime.__parseDigits(value: String, index: Int64, remaining: Int64, total: Int64) : Stdlib.Result.Result<(Int64, Int64), String> =
+let __parseDigits(value: String, index: Int64, remaining: Int64, total: Int64) : Stdlib.Result.Result<(Int64, Int64), String> =
     if remaining == 0 then Ok((total, index))
     else
         match Stdlib.DateTime.__digitAt(value, index) with
         | Error(message) -> Error(message)
         | Ok(digit) -> Stdlib.DateTime.__parseDigits(value, index + 1, remaining - 1, total * 10 + digit)
 
-def Stdlib.DateTime.__hasByte(value: String, index: Int64, expected: Int64) : Bool =
+let __hasByte(value: String, index: Int64, expected: Int64) : Bool =
     index < Stdlib.String.length(value) && Stdlib.String.getByteAt(value, index) == expected
 
-def Stdlib.DateTime.__toMilliseconds(year: Int64, month: Int64, day: Int64, hour: Int64, minute: Int64, second: Int64, millisecond: Int64) : Int64 =
+let __toMilliseconds(year: Int64, month: Int64, day: Int64, hour: Int64, minute: Int64, second: Int64, millisecond: Int64) : Int64 =
     let days =
         Stdlib.DateTime.__daysBeforeYear(year) +
         Stdlib.DateTime.__daysBeforeMonth(month, year) +
@@ -332,7 +332,7 @@ def Stdlib.DateTime.__toMilliseconds(year: Int64, month: Int64, day: Int64, hour
     second * Stdlib.DateTime.__millisecondsPerSecond() +
     millisecond
 
-def Stdlib.DateTime.__parseParts(value: String, hasMilliseconds: Bool) : Stdlib.Result.Result<DateTime, String> =
+let __parseParts(value: String, hasMilliseconds: Bool) : Stdlib.Result.Result<DateTime, String> =
     match Stdlib.DateTime.__parseDigits(value, 0, 4, 0) with
     | Error(message) -> Error(message)
     | Ok(yearPart) ->
@@ -389,7 +389,7 @@ def Stdlib.DateTime.__parseParts(value: String, hasMilliseconds: Bool) : Stdlib.
                                             year, month, day, hour, minute, second, millisecond)))
                                 else Error("Invalid date format")
 
-def Stdlib.DateTime.parse(value: String) : Stdlib.Result.Result<DateTime, String> =
+let parse(value: String) : Stdlib.Result.Result<DateTime, String> =
     let length = Stdlib.String.length(value) in
     if length == 20 then Stdlib.DateTime.__parseParts(value, false)
     else if length == 24 then Stdlib.DateTime.__parseParts(value, true)

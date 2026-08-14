@@ -1505,7 +1505,7 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
 // =============================================================================
 // When a generic function is called without explicit type arguments, we infer
 // the type arguments from the actual argument types. For example:
-//   def identity<T>(x: T) : T = x
+//   let identity<'T>(x: T) : T = x
 //   identity(42)  // Infers T=int from argument type
 
 /// Match a pattern type against an actual type, extracting type variable bindings.

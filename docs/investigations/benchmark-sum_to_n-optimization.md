@@ -28,11 +28,11 @@ These instruction counts are the current `benchmarks/RESULTS.md` baselines.
 ## Source Code
 
 ```dark
-def sumTo(n: Int64, acc: Int64) : Int64 =
+let sumTo(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else sumTo(n - 1, acc + n)
 
-def repeat(n: Int64, acc: Int64) : Int64 =
+let repeat(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else repeat(n - 1, sumTo(10000, 0))
 

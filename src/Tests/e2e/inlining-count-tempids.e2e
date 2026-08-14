@@ -13,7 +13,7 @@
 // Tests that Let bindings in both branches are counted correctly
 
 // Simple case: one Let in each branch
-def ifWithLets(flag: Bool) : Int64 =
+let ifWithLets(flag: Bool) : Int64 =
   if flag then
     let x = 10 in x
   else
@@ -22,7 +22,7 @@ ifWithLets(true) = 10
 ifWithLets(false) = 20
 
 // Multiple Lets in each branch (should sum both counts)
-def ifWithMultipleLets(flag: Bool) : Int64 =
+let ifWithMultipleLets(flag: Bool) : Int64 =
   if flag then
     let a = 1 in
     let b = 2 in
@@ -40,7 +40,7 @@ ifWithMultipleLets(false) = 30
 // ===================================================================
 // Tests counting in nested If structures
 
-def nestedIf(outer: Bool, inner: Bool) : Int64 =
+let nestedIf(outer: Bool, inner: Bool) : Int64 =
   if outer then
     if inner then
       let a = 1 in
@@ -65,7 +65,7 @@ nestedIf(false, false) = 9
 
 // Function with 10 Lets in then-branch and 10 in else-branch
 // Total should be 20, right at the threshold
-def largeIfFunction(flag: Bool) : Int64 =
+let largeIfFunction(flag: Bool) : Int64 =
   if flag then
     let a1 = 1 in
     let a2 = 2 in
@@ -98,7 +98,7 @@ largeIfFunction(false) = 550
 // then-branch: 15 Lets, else-branch: 5 Lets
 // With +: 20 (at threshold)
 // With -: 10 (well below threshold, would be inlined)
-def asymmetricIfFunction(flag: Bool) : Int64 =
+let asymmetricIfFunction(flag: Bool) : Int64 =
   if flag then
     let a1 = 1 in
     let a2 = 2 in
@@ -132,13 +132,13 @@ asymmetricIfFunction(false) = 1500
 // ===================================================================
 // Tests that inlining decisions cascade correctly
 
-def helperWithIf(x: Int64) : Int64 =
+let helperWithIf(x: Int64) : Int64 =
   if x > 0 then
     let pos = x * 2 in pos
   else
     let neg = x * -1 in neg
 
-def callerOfHelper(n: Int64) : Int64 =
+let callerOfHelper(n: Int64) : Int64 =
   let a = helperWithIf(n) in
   let b = helperWithIf(-n) in
   a + b
@@ -151,7 +151,7 @@ callerOfHelper(-3) = 9
 // ===================================================================
 // Multiple levels of nesting with Let bindings at each level
 
-def complexNested(a: Bool, b: Bool, c: Bool) : Int64 =
+let complexNested(a: Bool, b: Bool, c: Bool) : Int64 =
   if a then
     let x1 = 100 in
     if b then
@@ -185,11 +185,11 @@ complexNested(false, false, false) = 240
 // function call that gets inlined.
 
 // Small helper function that will be inlined (size 1, well under MaxFunctionSize=20)
-def addTwo(x: Int64) : Int64 = x + 2
+let addTwo(x: Int64) : Int64 = x + 2
 
 // If expression where only the then-branch has a call that gets inlined
 // The else-branch is a simple expression with no function calls
-def ifWithInlineInThenOnly(flag: Bool, n: Int64) : Int64 =
+let ifWithInlineInThenOnly(flag: Bool, n: Int64) : Int64 =
   if flag then
     let result = addTwo(n) in  // This call will be inlined
     result
@@ -201,7 +201,7 @@ ifWithInlineInThenOnly(false, 10) = 30
 
 // If expression where only the else-branch has a call that gets inlined
 // The then-branch is a simple expression with no function calls
-def ifWithInlineInElseOnly(flag: Bool, n: Int64) : Int64 =
+let ifWithInlineInElseOnly(flag: Bool, n: Int64) : Int64 =
   if flag then
     n * 4                      // No call to inline
   else
@@ -213,7 +213,7 @@ ifWithInlineInElseOnly(false, 5) = 7
 
 // Nested If where inner If has inlining only in one branch
 // This tests inlining through nested structures
-def nestedIfWithPartialInline(outer: Bool, inner: Bool, n: Int64) : Int64 =
+let nestedIfWithPartialInline(outer: Bool, inner: Bool, n: Int64) : Int64 =
   if outer then
     if inner then
       addTwo(n)    // Inlined
@@ -234,16 +234,16 @@ nestedIfWithPartialInline(false, false, 10) = 50
 // inlining opportunities and others do not.
 
 // Small helper that will be inlined (size 1)
-def tiny(x: Int64) : Int64 = x + 1
+let tiny(x: Int64) : Int64 = x + 1
 
 // Function that calls tiny - the call will be inlined
-def callerWithInline(n: Int64) : Int64 =
+let callerWithInline(n: Int64) : Int64 =
   let a = tiny(n) in
   let b = tiny(a) in
   b
 
 // Function with no inlining opportunities (no calls to inline-able functions)
-def noInline(n: Int64) : Int64 =
+let noInline(n: Int64) : Int64 =
   let x = n * 2 in
   let y = x + 3 in
   y
@@ -253,17 +253,17 @@ callerWithInline(5) = 7
 noInline(10) = 23
 
 // Multiple functions with varying inlining behavior
-def helper1(x: Int64) : Int64 = x * 3
-def helper2(x: Int64) : Int64 = x - 1
+let helper1(x: Int64) : Int64 = x * 3
+let helper2(x: Int64) : Int64 = x - 1
 
 // This function has inlining (calls helper1 and helper2)
-def mixedCaller(n: Int64) : Int64 =
+let mixedCaller(n: Int64) : Int64 =
   let a = helper1(n) in
   let b = helper2(a) in
   b
 
 // This function has no inlining opportunities
-def pureComputation(n: Int64) : Int64 =
+let pureComputation(n: Int64) : Int64 =
   let squared = n * n in
   let cubed = squared * n in
   cubed - squared

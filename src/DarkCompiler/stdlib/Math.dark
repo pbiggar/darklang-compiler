@@ -2,44 +2,46 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.Math
+
 // Stdlib.Math - Mathematical operations
 // =============================================================================
 
 // Pi constant (approximation to 15 decimal places)
 // 3.141592653589793
-def Stdlib.Math.pi() : Float = 3.141592653589793
+let pi() : Float = 3.141592653589793
 
 // Tau constant, exactly twice pi
-def Stdlib.Math.tau() : Float = 2.0 * Stdlib.Math.pi()
+let tau() : Float = 2.0 * Stdlib.Math.pi()
 
 // Euler's number e (approximation to 15 decimal places)
 // 2.718281828459045
-def Stdlib.Math.e() : Float = 2.718281828459045
+let e() : Float = 2.718281828459045
 
 // Absolute value of a float
-def Stdlib.Math.abs(x: Float) : Float =
+let abs(x: Float) : Float =
     Stdlib.Float.abs(x)
 
 // Square root (delegating to existing Stdlib.Float.sqrt)
-def Stdlib.Math.sqrt(x: Float) : Float =
+let sqrt(x: Float) : Float =
     Stdlib.Float.sqrt(x)
 
 // Convert float to integer, truncating toward zero
-def Stdlib.Math.truncate(x: Float) : Int64 =
+let truncate(x: Float) : Int64 =
     Stdlib.Float.toInt(x)
 
 // Floor: largest integer less than or equal to x
-def Stdlib.Math.floor(x: Float) : Int64 =
+let floor(x: Float) : Int64 =
     let truncated = Stdlib.Float.toInt(x) in
     if x < Stdlib.Int64.toFloat(truncated) then truncated - 1 else truncated
 
 // Ceiling: smallest integer greater than or equal to x
-def Stdlib.Math.ceiling(x: Float) : Int64 =
+let ceiling(x: Float) : Int64 =
     let truncated = Stdlib.Float.toInt(x) in
     if x > Stdlib.Int64.toFloat(truncated) then truncated + 1 else truncated
 
 // Round to nearest integer, with half values rounded to the nearest even integer
-def Stdlib.Math.round(x: Float) : Int64 =
+let round(x: Float) : Int64 =
     let lower = Stdlib.Math.floor(x) in
     let upper = Stdlib.Math.ceiling(x) in
     let distanceFromLower = x - Stdlib.Int64.toFloat(lower) in
@@ -49,13 +51,13 @@ def Stdlib.Math.round(x: Float) : Int64 =
     else upper
 
 // Angle-unit helpers ported from darklang/dark packages/darklang/stdlib/math.dark.
-def Stdlib.Math.degrees(angleInDegrees: Float) : Float =
+let degrees(angleInDegrees: Float) : Float =
     (angleInDegrees * Stdlib.Math.pi()) / 180.0
 
-def Stdlib.Math.turns(angleInTurns: Float) : Float =
+let turns(angleInTurns: Float) : Float =
     Stdlib.Math.tau() * angleInTurns
 
-def Stdlib.Math.radians(angleInRadians: Float) : Float =
+let radians(angleInRadians: Float) : Float =
     angleInRadians
 
 // NOTE: The following functions still require compiler/runtime support:

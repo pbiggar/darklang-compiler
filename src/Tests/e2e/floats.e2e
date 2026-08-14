@@ -52,76 +52,76 @@ let a = 1.0 + 2.0 in let b = 3.0 - 1.0 in a * b = 6.0
 
 // Float parameter in binary operation
 // Bug: c + c was returning 0.00 instead of 6.00 (return type inference failed)
-def doubleFloat(c: Float) : Float = c + c doubleFloat(3.0) = 6.0
+let doubleFloat(c: Float) : Float = c + c doubleFloat(3.0) = 6.0
 
 // Float parameter returned directly (should work - baseline)
-def identityFloat(c: Float) : Float = c identityFloat(3.0) = 3.0
+let identityFloat(c: Float) : Float = c identityFloat(3.0) = 3.0
 
 // Float parameter with literal addition
-def addFour(c: Float) : Float = c + 4.0 addFour(3.0) = 7.0
+let addFour(c: Float) : Float = c + 4.0 addFour(3.0) = 7.0
 
 // Float parameter with let binding and operation
-def useLocalFloat(c: Float) : Float = let x = 4.0 in c + x useLocalFloat(3.0) = 7.0
+let useLocalFloat(c: Float) : Float = let x = 4.0 in c + x useLocalFloat(3.0) = 7.0
 
 // Two float parameters
-def addFloats(a: Float, b: Float) : Float = a + b addFloats(1.5, 2.5) = 4.0
+let addFloats(a: Float, b: Float) : Float = a + b addFloats(1.5, 2.5) = 4.0
 
 // Two float parameters - division
-def divFloats(a: Float, b: Float) : Float = a / b divFloats(1.0, 3.0) = 0.333333333333
+let divFloats(a: Float, b: Float) : Float = a / b divFloats(1.0, 3.0) = 0.333333333333
 
 // Two float parameters - subtraction
-def subFloats(a: Float, b: Float) : Float = a - b subFloats(5.0, 3.0) = 2.0
+let subFloats(a: Float, b: Float) : Float = a - b subFloats(5.0, 3.0) = 2.0
 
 // Two float parameters - multiplication
-def mulFloats(a: Float, b: Float) : Float = a * b mulFloats(2.0, 3.0) = 6.0
+let mulFloats(a: Float, b: Float) : Float = a * b mulFloats(2.0, 3.0) = 6.0
 
 // Three float parameters
-def sum3Floats(a: Float, b: Float, c: Float) : Float = a + b + c sum3Floats(1.0, 2.0, 3.0) = 6.0
+let sum3Floats(a: Float, b: Float, c: Float) : Float = a + b + c sum3Floats(1.0, 2.0, 3.0) = 6.0
 
 // Float list pattern matching should preserve element types
 let l = [1.5, 2.5] in match l with | [x, y] -> x + y | _ -> 0.0 = 4.0
 
 // Four float parameters (tests D12-D15 temp allocation)
-def sum4Floats(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d sum4Floats(1.0, 2.0, 3.0, 4.0) = 10.0
+let sum4Floats(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d sum4Floats(1.0, 2.0, 3.0, 4.0) = 10.0
 
 // Mixed float and int parameters
-def mixedParams(sign: Float, i: Int64) : Float = let divisor = Stdlib.Int64.toFloat(2 * i + 1) in sign / divisor mixedParams(1.0, 1) = 0.333333333333
+let mixedParams(sign: Float, i: Int64) : Float = let divisor = Stdlib.Int64.toFloat(2 * i + 1) in sign / divisor mixedParams(1.0, 1) = 0.333333333333
 
 // Float param with stdlib call
-def floatWithStdlib(c: Float) : Int64 = Stdlib.Float.toInt(c) floatWithStdlib(3.7) = 3
+let floatWithStdlib(c: Float) : Int64 = Stdlib.Float.toInt(c) floatWithStdlib(3.7) = 3
 
 // Float param with multiple operations
-def floatChainedOps(x: Float) : Float = (x + 1.0) * 2.0 floatChainedOps(2.0) = 6.0
+let floatChainedOps(x: Float) : Float = (x + 1.0) * 2.0 floatChainedOps(2.0) = 6.0
 
 // =====================================================
 // Float comparisons in functions
 // =====================================================
 
 // Float comparison returning bool
-def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(1.0) = true
-def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(-1.0) = false
+let isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(1.0) = true
+let isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(-1.0) = false
 
 // Float equality
-def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 1.0) = true
-def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 2.0) = false
+let floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 1.0) = true
+let floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 2.0) = false
 
 // Float less than
-def floatLt(a: Float, b: Float) : Bool = a < b floatLt(1.0, 2.0) = true
-def floatLt(a: Float, b: Float) : Bool = a < b floatLt(2.0, 1.0) = false
+let floatLt(a: Float, b: Float) : Bool = a < b floatLt(1.0, 2.0) = true
+let floatLt(a: Float, b: Float) : Bool = a < b floatLt(2.0, 1.0) = false
 
 // Float greater than or equal
-def floatGte(a: Float, b: Float) : Bool = a >= b floatGte(2.0, 2.0) = true
-def floatGte(a: Float, b: Float) : Bool = a >= b floatGte(1.0, 2.0) = false
+let floatGte(a: Float, b: Float) : Bool = a >= b floatGte(2.0, 2.0) = true
+let floatGte(a: Float, b: Float) : Bool = a >= b floatGte(1.0, 2.0) = false
 
 // Float in if-then-else with parameters
-def floatIfThen(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfThen(1, 1, 5.0) = 5.0
-def floatIfElse(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfElse(0, 1, 5.0) = 0.0
+let floatIfThen(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfThen(1, 1, 5.0) = 5.0
+let floatIfElse(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfElse(0, 1, 5.0) = 0.0
 
 // Recursive function with float accumulator
-def floatSumLoop(i: Int64, n: Int64, acc: Float) : Float = if i >= n then acc else floatSumLoop(i + 1, n, acc + 1.0) floatSumLoop(0, 5, 0.0) = 5.0
+let floatSumLoop(i: Int64, n: Int64, acc: Float) : Float = if i >= n then acc else floatSumLoop(i + 1, n, acc + 1.0) floatSumLoop(0, 5, 0.0) = 5.0
 
 // Leibniz pi approximation (uses float in recursive control flow)
-def leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float = if i >= n then sum * 4.0 else let term = sign / Stdlib.Int64.toFloat(2 * i + 1) in leibnizLoop(i + 1, n, sum + term, Stdlib.Float.negate(sign)) def leibnizPi(n: Int64) : Float = leibnizLoop(0, n, 0.0, 1.0) leibnizPi(10) = 3.04183961892
+let leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float = if i >= n then sum * 4.0 else let term = sign / Stdlib.Int64.toFloat(2 * i + 1) in leibnizLoop(i + 1, n, sum + term, Stdlib.Float.negate(sign)) let leibnizPi(n: Int64) : Float = leibnizLoop(0, n, 0.0, 1.0) leibnizPi(10) = 3.04183961892
 
 // =====================================================
 // Return type inference via temporary variables
@@ -131,13 +131,13 @@ def leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float = if i >= n
 // =====================================================
 
 // Float computed from two int-to-float conversions stored in a temp
-def floatViaTemp(a: Int64, b: Int64) : Float = let x = Stdlib.Int64.toFloat(a) in let y = Stdlib.Int64.toFloat(b) in let result = x + y in result floatViaTemp(3, 4) = 7.0
+let floatViaTemp(a: Int64, b: Int64) : Float = let x = Stdlib.Int64.toFloat(a) in let y = Stdlib.Int64.toFloat(b) in let result = x + y in result floatViaTemp(3, 4) = 7.0
 
 // Float computed through nested let-bindings
-def nestedFloatLets(n: Int64) : Float = let a = Stdlib.Int64.toFloat(n) in let b = a * 2.0 in let c = b + 1.0 in c nestedFloatLets(5) = 11.0
+let nestedFloatLets(n: Int64) : Float = let a = Stdlib.Int64.toFloat(n) in let b = a * 2.0 in let c = b + 1.0 in c nestedFloatLets(5) = 11.0
 
 // Float returned from deeply nested computation
-def deepNestedFloat(x: Int64) : Float = let f1 = Stdlib.Int64.toFloat(x) in let f2 = f1 + f1 in let f3 = f2 * f2 in let f4 = f3 / 2.0 in f4 deepNestedFloat(3) = 18.0
+let deepNestedFloat(x: Int64) : Float = let f1 = Stdlib.Int64.toFloat(x) in let f2 = f1 + f1 in let f3 = f2 * f2 in let f4 = f3 / 2.0 in f4 deepNestedFloat(3) = 18.0
 
 // =====================================================
 // Nested if-then-else with float results
@@ -179,10 +179,10 @@ let r = (if true then (if true then 3.0 else 4.0) else 5.0) in r * 2.0 = 6.0
 // This test exercises the code path to ensure float literals are handled.
 
 // Five float literal arguments - each needs its own temp register for loading
-def sum5Floats(a: Float, b: Float, c: Float, d: Float, e: Float) : Float = a + b + c + d + e sum5Floats(1.0, 2.0, 3.0, 4.0, 5.0) = 15.0
+let sum5Floats(a: Float, b: Float, c: Float, d: Float, e: Float) : Float = a + b + c + d + e sum5Floats(1.0, 2.0, 3.0, 4.0, 5.0) = 15.0
 
 // Float literals with different values to verify each is loaded correctly
-def weightedSum(a: Float, b: Float, c: Float) : Float = a * 1.0 + b * 2.0 + c * 3.0 weightedSum(10.0, 20.0, 30.0) = 140.0
+let weightedSum(a: Float, b: Float, c: Float) : Float = a * 1.0 + b * 2.0 + c * 3.0 weightedSum(10.0, 20.0, 30.0) = 140.0
 
 // =====================================================
 // MIR Float Intermediate Register Mapping (Mutation #195)
@@ -194,16 +194,16 @@ def weightedSum(a: Float, b: Float, c: Float) : Float = a * 1.0 + b * 2.0 + c * 
 
 // Complex float computation with many intermediates
 // Each intermediate gets a unique VReg >= 10000, exercising the mapping formula
-def manyFloatIntermediates(a: Float, b: Float) : Float = let t1 = a + b in let t2 = a - b in let t3 = a * b in let t4 = t1 + t2 in let t5 = t3 + t4 in let t6 = t5 * 2.0 in let t7 = t6 + t1 in t7
+let manyFloatIntermediates(a: Float, b: Float) : Float = let t1 = a + b in let t2 = a - b in let t3 = a * b in let t4 = t1 + t2 in let t5 = t3 + t4 in let t6 = t5 * 2.0 in let t7 = t6 + t1 in t7
 manyFloatIntermediates(3.0, 2.0) = 29.0
 
 // Float phi nodes with intermediates - tests register allocation across control flow
-def floatPhiWithIntermediates(x: Float, cond: Bool) : Float = let a = x + 1.0 in let b = x * 2.0 in if cond then a + b + x else a - b + x
+let floatPhiWithIntermediates(x: Float, cond: Bool) : Float = let a = x + 1.0 in let b = x * 2.0 in if cond then a + b + x else a - b + x
 floatPhiWithIntermediates(5.0, true) = 21.0
 floatPhiWithIntermediates(5.0, false) = 1.0
 
 // Deeply nested float operations - many MIR intermediates in sequence
-def deepFloatChain(x: Float) : Float = let a = x + 1.0 in let b = a * 2.0 in let c = b + 3.0 in let d = c * 4.0 in let e = d + 5.0 in let f = e * 6.0 in let g = f + 7.0 in let h = g * 8.0 in h
+let deepFloatChain(x: Float) : Float = let a = x + 1.0 in let b = a * 2.0 in let c = b + 3.0 in let d = c * 4.0 in let e = d + 5.0 in let f = e * 6.0 in let g = f + 7.0 in let h = g * 8.0 in h
 deepFloatChain(1.0) = 1640.0
 
 // =====================================================
@@ -219,34 +219,34 @@ deepFloatChain(1.0) = 1640.0
 
 // Multiple float params passed to nested function calls
 // Tests that float argument registers (D2-D9) are correctly mapped
-def floatParamChain(a: Float, b: Float, c: Float, d: Float) : Float = let sum = a + b + c + d in let avg = sum / 4.0 in avg * 2.0
+let floatParamChain(a: Float, b: Float, c: Float, d: Float) : Float = let sum = a + b + c + d in let avg = sum / 4.0 in avg * 2.0
 floatParamChain(2.0, 4.0, 6.0, 8.0) = 10.0
 
 // Float phi nodes with many parameters - tests parallel move resolution
 // When both branches modify different float values, phi resolution must
 // correctly map VRegs to physical registers
-def floatPhiManyParams(a: Float, b: Float, c: Float, cond: Bool) : Float = if cond then a + b + c else a * b * c
+let floatPhiManyParams(a: Float, b: Float, c: Float, cond: Bool) : Float = if cond then a + b + c else a * b * c
 floatPhiManyParams(2.0, 3.0, 4.0, true) = 9.0
 floatPhiManyParams(2.0, 3.0, 4.0, false) = 24.0
 
 // Nested conditionals with float values - creates complex phi node patterns
-def nestedFloatPhi(x: Float, y: Float, c1: Bool, c2: Bool) : Float = if c1 then (if c2 then x + y else x - y) else (if c2 then x * y else x / y)
+let nestedFloatPhi(x: Float, y: Float, c1: Bool, c2: Bool) : Float = if c1 then (if c2 then x + y else x - y) else (if c2 then x * y else x / y)
 nestedFloatPhi(10.0, 2.0, true, true) = 12.0
 nestedFloatPhi(10.0, 2.0, true, false) = 8.0
 nestedFloatPhi(10.0, 2.0, false, true) = 20.0
 nestedFloatPhi(10.0, 2.0, false, false) = 5.0
 
 // Six float parameters - exercises more of the D2-D9 register range for params
-def sum6Floats(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) : Float = a + b + c + d + e + f
+let sum6Floats(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) : Float = a + b + c + d + e + f
 sum6Floats(1.0, 2.0, 3.0, 4.0, 5.0, 6.0) = 21.0
 
 // Eight float parameters - uses full D2-D9 range
-def product8Floats(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float, h: Float) : Float = a * b * c * d * e * f * g * h
+let product8Floats(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float, h: Float) : Float = a * b * c * d * e * f * g * h
 product8Floats(1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 2.0) = 16.0
 
 // Nested function calls with float params - tests that float registers are preserved
-def innerFloat(a: Float, b: Float) : Float = a * b + a
-def outerFloat(x: Float, y: Float, z: Float) : Float = innerFloat(x, y) + innerFloat(y, z)
+let innerFloat(a: Float, b: Float) : Float = a * b + a
+let outerFloat(x: Float, y: Float, z: Float) : Float = innerFloat(x, y) + innerFloat(y, z)
 outerFloat(2.0, 3.0, 4.0) = 23.0
 
 // =====================================================
@@ -260,20 +260,20 @@ outerFloat(2.0, 3.0, 4.0) = 23.0
 // Multiple float params modified in branches - creates phi nodes for each param
 // Each param (a, b, c, d) has id 0-3, mapped to D2-D5 via formula 2 + id
 // With mutation (2 - id), they'd map to D2, D1, D0, D-1 (invalid!)
-def floatPhiMultipleParams(a: Float, b: Float, c: Float, d: Float, cond: Bool) : Float = if cond then a + b + c + d else (a * 2.0) + (b * 2.0) + (c * 2.0) + (d * 2.0)
+let floatPhiMultipleParams(a: Float, b: Float, c: Float, d: Float, cond: Bool) : Float = if cond then a + b + c + d else (a * 2.0) + (b * 2.0) + (c * 2.0) + (d * 2.0)
 floatPhiMultipleParams(1.0, 2.0, 3.0, 4.0, true) = 10.0
 floatPhiMultipleParams(1.0, 2.0, 3.0, 4.0, false) = 20.0
 
 // Float phi with sequential params - ensures params 1,2,3 are used (not just param 0)
 // The formula 2 + id distinguishes between params; 2 - id would map param 2 to D0
-def floatPhiSequentialParams(w: Float, x: Float, y: Float, z: Float, pick: Int64) : Float = if pick == 1 then w else if pick == 2 then x else if pick == 3 then y else z
+let floatPhiSequentialParams(w: Float, x: Float, y: Float, z: Float, pick: Int64) : Float = if pick == 1 then w else if pick == 2 then x else if pick == 3 then y else z
 floatPhiSequentialParams(10.0, 20.0, 30.0, 40.0, 1) = 10.0
 floatPhiSequentialParams(10.0, 20.0, 30.0, 40.0, 2) = 20.0
 floatPhiSequentialParams(10.0, 20.0, 30.0, 40.0, 3) = 30.0
 floatPhiSequentialParams(10.0, 20.0, 30.0, 40.0, 4) = 40.0
 
 // Complex phi with float params used in all branches - stresses register allocation
-def floatPhiAllBranches(a: Float, b: Float, c: Float, selector: Int64) : Float = if selector == 0 then a + b + c else if selector == 1 then a * b + c else if selector == 2 then a + b * c else a * b * c
+let floatPhiAllBranches(a: Float, b: Float, c: Float, selector: Int64) : Float = if selector == 0 then a + b + c else if selector == 1 then a * b + c else if selector == 2 then a + b * c else a * b * c
 floatPhiAllBranches(2.0, 3.0, 4.0, 0) = 9.0
 floatPhiAllBranches(2.0, 3.0, 4.0, 1) = 10.0
 floatPhiAllBranches(2.0, 3.0, 4.0, 2) = 14.0
@@ -290,18 +290,18 @@ floatPhiAllBranches(2.0, 3.0, 4.0, 3) = 24.0
 
 // Float phi with many intermediates that stress the fallback mapping
 // Creates intermediates with different VReg IDs, each needing proper register mapping
-def floatPhiManyIntermediates(a: Float, b: Float, c: Float, cond: Bool) : Float = let i1 = a + b in let i2 = b + c in let i3 = a + c in let i4 = i1 + i2 in let i5 = i2 + i3 in let i6 = i3 + i1 in if cond then i4 + i5 + i6 else i4 * i5 * i6
+let floatPhiManyIntermediates(a: Float, b: Float, c: Float, cond: Bool) : Float = let i1 = a + b in let i2 = b + c in let i3 = a + c in let i4 = i1 + i2 in let i5 = i2 + i3 in let i6 = i3 + i1 in if cond then i4 + i5 + i6 else i4 * i5 * i6
 floatPhiManyIntermediates(1.0, 2.0, 3.0, true) = 24.0
 floatPhiManyIntermediates(1.0, 2.0, 3.0, false) = 504.0
 
 // Deep intermediate chain across phi boundary
 // Creates many sequential intermediates that must be correctly mapped in phi resolution
-def floatDeepPhiChain(x: Float, cond: Bool) : Float = let t0 = x * 1.1 in let t1 = t0 * 1.1 in let t2 = t1 * 1.1 in let t3 = t2 * 1.1 in let t4 = t3 * 1.1 in let t5 = t4 * 1.1 in let t6 = t5 * 1.1 in let t7 = t6 * 1.1 in if cond then t7 else t0
+let floatDeepPhiChain(x: Float, cond: Bool) : Float = let t0 = x * 1.1 in let t1 = t0 * 1.1 in let t2 = t1 * 1.1 in let t3 = t2 * 1.1 in let t4 = t3 * 1.1 in let t5 = t4 * 1.1 in let t6 = t5 * 1.1 in let t7 = t6 * 1.1 in if cond then t7 else t0
 floatDeepPhiChain(10.0, true) = floatDeepPhiChain(10.0, true)
 floatDeepPhiChain(10.0, false) = 11.0
 
 // Multiple branches with float intermediates - exercises parallel move resolution with fallback
-def floatMultiBranchIntermediates(a: Float, b: Float, selector: Int64) : Float = let sum = a + b in let diff = a - b in let prod = a * b in let quot = a / b in if selector == 1 then sum else if selector == 2 then diff else if selector == 3 then prod else quot
+let floatMultiBranchIntermediates(a: Float, b: Float, selector: Int64) : Float = let sum = a + b in let diff = a - b in let prod = a * b in let quot = a / b in if selector == 1 then sum else if selector == 2 then diff else if selector == 3 then prod else quot
 floatMultiBranchIntermediates(10.0, 2.0, 1) = 12.0
 floatMultiBranchIntermediates(10.0, 2.0, 2) = 8.0
 floatMultiBranchIntermediates(10.0, 2.0, 3) = 20.0
@@ -320,16 +320,16 @@ floatMultiBranchIntermediates(10.0, 2.0, 4) = 5.0
 // Many float variables live at the same point - exercises pairwise edge generation
 // With 5 live floats, the loop iterates over all 10 pairs (5 choose 2)
 // If interference edges are missing, some floats may share registers incorrectly
-def floatInterference5(a: Float, b: Float, c: Float, d: Float, e: Float) : Float = let sum = a + b + c + d + e in sum
+let floatInterference5(a: Float, b: Float, c: Float, d: Float, e: Float) : Float = let sum = a + b + c + d + e in sum
 floatInterference5(1.0, 2.0, 3.0, 4.0, 5.0) = 15.0
 
 // 6 live floats with distinct values - more pairs to generate (15 edges)
-def floatInterference6(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) : Float = a + b + c + d + e + f
+let floatInterference6(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) : Float = a + b + c + d + e + f
 floatInterference6(1.5, 2.5, 3.5, 4.5, 5.5, 6.5) = 24.0
 
 // Float variables all live across a conditional - tests interference at terminator
 // All 4 floats must interfere because they're all live at the branch point
-def floatInterferenceAtBranch(w: Float, x: Float, y: Float, z: Float, cond: Bool) : Float = if cond then w + x + y + z else w * x * y * z
+let floatInterferenceAtBranch(w: Float, x: Float, y: Float, z: Float, cond: Bool) : Float = if cond then w + x + y + z else w * x * y * z
 floatInterferenceAtBranch(2.0, 3.0, 4.0, 5.0, true) = 14.0
 floatInterferenceAtBranch(2.0, 3.0, 4.0, 5.0, false) = 120.0
 
@@ -346,17 +346,17 @@ let f1 = 1.1 in let f2 = 2.2 in let f3 = 3.3 in let f4 = 4.4 in let f5 = 5.5 in 
 // Multiple floats live-out from a block with conditional successor
 // All floats a,b,c,d must be in the LiveOut set of the entry block
 // because they're used in successor blocks
-def floatLiveOut4(a: Float, b: Float, c: Float, d: Float, cond: Bool) : Float = if cond then a + b else c + d
+let floatLiveOut4(a: Float, b: Float, c: Float, d: Float, cond: Bool) : Float = if cond then a + b else c + d
 floatLiveOut4(1.0, 2.0, 10.0, 20.0, true) = 3.0
 floatLiveOut4(1.0, 2.0, 10.0, 20.0, false) = 30.0
 
 // 5 floats live-out - forces the loop to iterate over multiple pairs
-def floatLiveOut5(a: Float, b: Float, c: Float, d: Float, e: Float, cond: Bool) : Float = if cond then a + b + c else d + e
+let floatLiveOut5(a: Float, b: Float, c: Float, d: Float, e: Float, cond: Bool) : Float = if cond then a + b + c else d + e
 floatLiveOut5(1.0, 2.0, 3.0, 100.0, 200.0, true) = 6.0
 floatLiveOut5(1.0, 2.0, 3.0, 100.0, 200.0, false) = 300.0
 
 // Multiple blocks with float LiveOut - tests interference at multiple block exits
-def floatMultiBlockLiveOut(a: Float, b: Float, c: Float, cond1: Bool, cond2: Bool) : Float = if cond1 then (if cond2 then a + b else a + c) else (if cond2 then b + c else a + b + c)
+let floatMultiBlockLiveOut(a: Float, b: Float, c: Float, cond1: Bool, cond2: Bool) : Float = if cond1 then (if cond2 then a + b else a + c) else (if cond2 then b + c else a + b + c)
 floatMultiBlockLiveOut(1.0, 2.0, 3.0, true, true) = 3.0
 floatMultiBlockLiveOut(1.0, 2.0, 3.0, true, false) = 4.0
 floatMultiBlockLiveOut(1.0, 2.0, 3.0, false, true) = 5.0
@@ -381,19 +381,19 @@ floatMultiBlockLiveOut(1.0, 2.0, 3.0, false, false) = 6.0
 
 // 4 float intermediates all computed before final combination
 // During reverse processing: at the final + instruction, all 4 intermediates are live
-def floatInstrLive4(x: Float) : Float = let a = x * 1.1 in let b = x * 2.2 in let c = x * 3.3 in let d = x * 4.4 in a + b + c + d
+let floatInstrLive4(x: Float) : Float = let a = x * 1.1 in let b = x * 2.2 in let c = x * 3.3 in let d = x * 4.4 in a + b + c + d
 floatInstrLive4(10.0) = 110.0
 
 // 5 float intermediates - exercises more pairs in the interference loop
-def floatInstrLive5(x: Float) : Float = let a = x + 1.0 in let b = x + 2.0 in let c = x + 3.0 in let d = x + 4.0 in let e = x + 5.0 in a + b + c + d + e
+let floatInstrLive5(x: Float) : Float = let a = x + 1.0 in let b = x + 2.0 in let c = x + 3.0 in let d = x + 4.0 in let e = x + 5.0 in a + b + c + d + e
 floatInstrLive5(10.0) = 65.0
 
 // 6 float intermediates with distinct operations to ensure different values
-def floatInstrLive6(x: Float) : Float = let v1 = x * 1.0 in let v2 = x * 2.0 in let v3 = x * 3.0 in let v4 = x * 4.0 in let v5 = x * 5.0 in let v6 = x * 6.0 in v1 + v2 + v3 + v4 + v5 + v6
+let floatInstrLive6(x: Float) : Float = let v1 = x * 1.0 in let v2 = x * 2.0 in let v3 = x * 3.0 in let v4 = x * 4.0 in let v5 = x * 5.0 in let v6 = x * 6.0 in v1 + v2 + v3 + v4 + v5 + v6
 floatInstrLive6(5.0) = 105.0
 
 // Float intermediates combined in a tree pattern - multiple live at each combine point
-def floatInstrLiveTree(a: Float, b: Float, c: Float, d: Float) : Float = let ab = a + b in let cd = c + d in let abcd = ab + cd in abcd * 2.0
+let floatInstrLiveTree(a: Float, b: Float, c: Float, d: Float) : Float = let ab = a + b in let cd = c + d in let abcd = ab + cd in abcd * 2.0
 floatInstrLiveTree(1.0, 2.0, 3.0, 4.0) = 20.0
 
 // =====================================================
@@ -411,17 +411,17 @@ floatInstrLiveTree(1.0, 2.0, 3.0, 4.0) = 20.0
 
 // 9 float let bindings - exercises VRegs in the 8+ range (beyond direct param mapping)
 // Each binding gets a distinct VReg, with binding 9 getting VReg 8 (after params 0-7)
-def float9Bindings(x: Float) : Float = let f1 = x * 1.0 in let f2 = x * 2.0 in let f3 = x * 3.0 in let f4 = x * 4.0 in let f5 = x * 5.0 in let f6 = x * 6.0 in let f7 = x * 7.0 in let f8 = x * 8.0 in let f9 = x * 9.0 in f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9
+let float9Bindings(x: Float) : Float = let f1 = x * 1.0 in let f2 = x * 2.0 in let f3 = x * 3.0 in let f4 = x * 4.0 in let f5 = x * 5.0 in let f6 = x * 6.0 in let f7 = x * 7.0 in let f8 = x * 8.0 in let f9 = x * 9.0 in f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9
 float9Bindings(1.0) = 45.0
 
 // 10 float bindings with phi node - tests VReg mapping across control flow
 // The conditional creates phi nodes that exercise register mapping for higher VRegs
-def float10BindingsWithPhi(x: Float, cond: Bool) : Float = let a = x * 1.0 in let b = x * 2.0 in let c = x * 3.0 in let d = x * 4.0 in let e = x * 5.0 in let f = x * 6.0 in let g = x * 7.0 in let h = x * 8.0 in let i = x * 9.0 in let j = x * 10.0 in if cond then a + b + c + d + e else f + g + h + i + j
+let float10BindingsWithPhi(x: Float, cond: Bool) : Float = let a = x * 1.0 in let b = x * 2.0 in let c = x * 3.0 in let d = x * 4.0 in let e = x * 5.0 in let f = x * 6.0 in let g = x * 7.0 in let h = x * 8.0 in let i = x * 9.0 in let j = x * 10.0 in if cond then a + b + c + d + e else f + g + h + i + j
 float10BindingsWithPhi(2.0, true) = 30.0
 float10BindingsWithPhi(2.0, false) = 80.0
 
 // 12 float bindings - pushes into higher VReg numbers that exercise the modulo mapping
-def float12Bindings(x: Float) : Float = let v1 = x + 1.0 in let v2 = x + 2.0 in let v3 = x + 3.0 in let v4 = x + 4.0 in let v5 = x + 5.0 in let v6 = x + 6.0 in let v7 = x + 7.0 in let v8 = x + 8.0 in let v9 = x + 9.0 in let v10 = x + 10.0 in let v11 = x + 11.0 in let v12 = x + 12.0 in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12
+let float12Bindings(x: Float) : Float = let v1 = x + 1.0 in let v2 = x + 2.0 in let v3 = x + 3.0 in let v4 = x + 4.0 in let v5 = x + 5.0 in let v6 = x + 6.0 in let v7 = x + 7.0 in let v8 = x + 8.0 in let v9 = x + 9.0 in let v10 = x + 10.0 in let v11 = x + 11.0 in let v12 = x + 12.0 in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12
 float12Bindings(0.0) = 78.0
 
 // =====================================================
@@ -439,12 +439,12 @@ float12Bindings(0.0) = 78.0
 
 // 15 float bindings with simple phi - exercises extensive float allocation
 // Creates many VRegs that must be tracked through control flow
-def float15PhiSimple(x: Float, cond: Bool) : Float = let a = x * 1.0 in let b = x * 2.0 in let c = x * 3.0 in let d = x * 4.0 in let e = x * 5.0 in let f = x * 6.0 in let g = x * 7.0 in let h = x * 8.0 in let i = x * 9.0 in let j = x * 10.0 in let k = x * 11.0 in let l = x * 12.0 in let m = x * 13.0 in let n = x * 14.0 in let o = x * 15.0 in if cond then a + b + c + d + e + f + g + h else i + j + k + l + m + n + o
+let float15PhiSimple(x: Float, cond: Bool) : Float = let a = x * 1.0 in let b = x * 2.0 in let c = x * 3.0 in let d = x * 4.0 in let e = x * 5.0 in let f = x * 6.0 in let g = x * 7.0 in let h = x * 8.0 in let i = x * 9.0 in let j = x * 10.0 in let k = x * 11.0 in let l = x * 12.0 in let m = x * 13.0 in let n = x * 14.0 in let o = x * 15.0 in if cond then a + b + c + d + e + f + g + h else i + j + k + l + m + n + o
 float15PhiSimple(1.0, true) = 36.0
 float15PhiSimple(1.0, false) = 84.0
 
 // Many float bindings - exercises extensive float allocation across phi boundaries
-def float15BindingsWithPhi(x: Float, sel: Int64) : Float = let a = x * 1.0 in let b = x * 2.0 in let c = x * 3.0 in let d = x * 4.0 in let e = x * 5.0 in let f = x * 6.0 in let g = x * 7.0 in let h = x * 8.0 in let i = x * 9.0 in let j = x * 10.0 in let k = x * 11.0 in let l = x * 12.0 in let m = x * 13.0 in let n = x * 14.0 in let o = x * 15.0 in if sel == 1 then a + b + c else if sel == 2 then d + e + f else if sel == 3 then g + h + i else if sel == 4 then j + k + l else m + n + o
+let float15BindingsWithPhi(x: Float, sel: Int64) : Float = let a = x * 1.0 in let b = x * 2.0 in let c = x * 3.0 in let d = x * 4.0 in let e = x * 5.0 in let f = x * 6.0 in let g = x * 7.0 in let h = x * 8.0 in let i = x * 9.0 in let j = x * 10.0 in let k = x * 11.0 in let l = x * 12.0 in let m = x * 13.0 in let n = x * 14.0 in let o = x * 15.0 in if sel == 1 then a + b + c else if sel == 2 then d + e + f else if sel == 3 then g + h + i else if sel == 4 then j + k + l else m + n + o
 float15BindingsWithPhi(1.0, 1) = 6.0
 float15BindingsWithPhi(1.0, 2) = 15.0
 float15BindingsWithPhi(1.0, 3) = 24.0
@@ -452,7 +452,7 @@ float15BindingsWithPhi(1.0, 4) = 33.0
 float15BindingsWithPhi(1.0, 5) = 42.0
 
 // Many float intermediates with sequential computation - stresses VReg allocation
-def floatManySequentialIntermediates(x: Float, cond: Bool) : Float = let t1 = x * 1.1 in let t2 = t1 * 1.1 in let t3 = t2 * 1.1 in let t4 = t3 * 1.1 in let t5 = t4 * 1.1 in let t6 = t5 * 1.1 in let t7 = t6 * 1.1 in let t8 = t7 * 1.1 in let t9 = t8 * 1.1 in let t10 = t9 * 1.1 in if cond then t10 else t5
+let floatManySequentialIntermediates(x: Float, cond: Bool) : Float = let t1 = x * 1.1 in let t2 = t1 * 1.1 in let t3 = t2 * 1.1 in let t4 = t3 * 1.1 in let t5 = t4 * 1.1 in let t6 = t5 * 1.1 in let t7 = t6 * 1.1 in let t8 = t7 * 1.1 in let t9 = t8 * 1.1 in let t10 = t9 * 1.1 in if cond then t10 else t5
 floatManySequentialIntermediates(10.0, true) = floatManySequentialIntermediates(10.0, true)
 floatManySequentialIntermediates(10.0, false) = floatManySequentialIntermediates(10.0, false)
 
@@ -471,12 +471,12 @@ floatManySequentialIntermediates(10.0, false) = floatManySequentialIntermediates
 
 // Deeply nested float computation chain - creates many MIR intermediates
 // Each operation generates a temporary VReg for its result
-def floatDeepChain(x: Float) : Float = let a = x * 2.0 in let b = a + 1.0 in let c = b * 3.0 in let d = c - 2.0 in let e = d / 4.0 in let f = e * 5.0 in let g = f + 6.0 in let h = g - 7.0 in let i = h / 8.0 in let j = i * 9.0 in let k = j + 10.0 in let l = k - 11.0 in let m = l * 12.0 in let n = m / 13.0 in let o = n + 14.0 in let p = o * 15.0 in p
+let floatDeepChain(x: Float) : Float = let a = x * 2.0 in let b = a + 1.0 in let c = b * 3.0 in let d = c - 2.0 in let e = d / 4.0 in let f = e * 5.0 in let g = f + 6.0 in let h = g - 7.0 in let i = h / 8.0 in let j = i * 9.0 in let k = j + 10.0 in let l = k - 11.0 in let m = l * 12.0 in let n = m / 13.0 in let o = n + 14.0 in let p = o * 15.0 in p
 floatDeepChain(1.0) = 316.875
 
 // Complex phi with many float intermediates from different branches
 // Tests register mapping consistency across phi resolution for MIR temps
-def floatComplexPhi(x: Float, sel: Int64) : Float = let base = x * 10.0 in if sel == 1 then let a = base + 1.0 in let b = a * 1.1 in let c = b + 2.0 in c else if sel == 2 then let d = base - 1.0 in let e = d * 0.9 in let f = e - 2.0 in f else if sel == 3 then let g = base * 2.0 in let h = g / 1.5 in let i = h + 5.0 in i else let j = base / 2.0 in let k = j * 3.0 in let l = k - 1.0 in l
+let floatComplexPhi(x: Float, sel: Int64) : Float = let base = x * 10.0 in if sel == 1 then let a = base + 1.0 in let b = a * 1.1 in let c = b + 2.0 in c else if sel == 2 then let d = base - 1.0 in let e = d * 0.9 in let f = e - 2.0 in f else if sel == 3 then let g = base * 2.0 in let h = g / 1.5 in let i = h + 5.0 in i else let j = base / 2.0 in let k = j * 3.0 in let l = k - 1.0 in l
 floatComplexPhi(1.0, 1) = floatComplexPhi(1.0, 1)
 floatComplexPhi(1.0, 2) = floatComplexPhi(1.0, 2)
 floatComplexPhi(1.0, 3) = floatComplexPhi(1.0, 3)
@@ -484,12 +484,12 @@ floatComplexPhi(1.0, 4) = 14.0
 
 // Multiple computation chains that must be resolved at phi nodes
 // Each chain creates distinct MIR VRegs that are combined via phi
-def floatMultiChainPhi(x: Float, cond: Bool) : Float = let a1 = x * 1.0 in let a2 = a1 + 0.1 in let a3 = a2 * 1.1 in let a4 = a3 + 0.2 in let b1 = x * 2.0 in let b2 = b1 - 0.1 in let b3 = b2 * 0.9 in let b4 = b3 - 0.2 in let c1 = x * 3.0 in let c2 = c1 + 0.3 in let c3 = c2 / 1.1 in let c4 = c3 - 0.1 in if cond then a4 + b4 else b4 + c4
+let floatMultiChainPhi(x: Float, cond: Bool) : Float = let a1 = x * 1.0 in let a2 = a1 + 0.1 in let a3 = a2 * 1.1 in let a4 = a3 + 0.2 in let b1 = x * 2.0 in let b2 = b1 - 0.1 in let b3 = b2 * 0.9 in let b4 = b3 - 0.2 in let c1 = x * 3.0 in let c2 = c1 + 0.3 in let c3 = c2 / 1.1 in let c4 = c3 - 0.1 in if cond then a4 + b4 else b4 + c4
 floatMultiChainPhi(10.0, true) = floatMultiChainPhi(10.0, true)
 Stdlib.Float.toInt(floatMultiChainPhi(10.0, false) * 100000000000.0) = 4515545454545
 
 // Nested conditionals with float computations - deep phi nesting
-def floatNestedCondPhi(x: Float, a: Bool, b: Bool) : Float = let v = x * 5.0 in if a then let p = v + 1.0 in let q = p * 1.1 in if b then let r = q + 2.0 in r else let s = q - 2.0 in s else let t = v - 1.0 in let u = t * 0.9 in if b then let w = u + 3.0 in w else let z = u - 3.0 in z
+let floatNestedCondPhi(x: Float, a: Bool, b: Bool) : Float = let v = x * 5.0 in if a then let p = v + 1.0 in let q = p * 1.1 in if b then let r = q + 2.0 in r else let s = q - 2.0 in s else let t = v - 1.0 in let u = t * 0.9 in if b then let w = u + 3.0 in w else let z = u - 3.0 in z
 Stdlib.Float.toInt(floatNestedCondPhi(2.0, true, true) * 10.0) = 141
 Stdlib.Float.toInt(floatNestedCondPhi(2.0, true, false) * 10.0) = 101
 Stdlib.Float.toInt(floatNestedCondPhi(2.0, false, true) * 100000000000.0) = 1110000000000
@@ -512,13 +512,13 @@ Stdlib.Float.toInt(floatNestedCondPhi(2.0, false, false) * 100000000000.0) = 509
 
 // Create many intermediates that cycle through VReg numbers 10000+
 // Each intermediate maps to a specific temp register; mutation would break this
-def floatMirIntermediateMapping(x: Float) : Float = let i0 = x + 0.0 in let i1 = i0 + 1.0 in let i2 = i1 + 2.0 in let i3 = i2 + 3.0 in let i4 = i3 + 4.0 in let i5 = i4 + 5.0 in let i6 = i5 + 6.0 in let i7 = i6 + 7.0 in let i8 = i7 + 8.0 in let i9 = i8 + 9.0 in let i10 = i9 + 10.0 in let i11 = i10 + 11.0 in let i12 = i11 + 12.0 in let i13 = i12 + 13.0 in i13
+let floatMirIntermediateMapping(x: Float) : Float = let i0 = x + 0.0 in let i1 = i0 + 1.0 in let i2 = i1 + 2.0 in let i3 = i2 + 3.0 in let i4 = i3 + 4.0 in let i5 = i4 + 5.0 in let i6 = i5 + 6.0 in let i7 = i6 + 7.0 in let i8 = i7 + 8.0 in let i9 = i8 + 9.0 in let i10 = i9 + 10.0 in let i11 = i10 + 11.0 in let i12 = i11 + 12.0 in let i13 = i12 + 13.0 in i13
 floatMirIntermediateMapping(100.0) = 191.0
 
 // MIR intermediates with phi resolution - tests parallel move with MIR temps
 // Creates intermediates that must be correctly mapped for phi moves
 // Note: variable 'f' renamed to 'ff' to avoid conflict with function name in nested scope
-def floatMirPhiMapping(x: Float, sel: Int64) : Float = let a = x * 1.1 in let b = a * 1.2 in let c = b * 1.3 in let d = c * 1.4 in let e = d * 1.5 in let g = e * 1.6 in let h = g * 1.7 in let ii = h * 1.8 in let j = ii * 1.9 in let k = j * 2.0 in let l = k * 2.1 in let m = l * 2.2 in let n = m * 2.3 in let o = n * 2.4 in if sel == 1 then a + b else if sel == 2 then c + d else if sel == 3 then e + g else if sel == 4 then h + ii else if sel == 5 then j + k else if sel == 6 then l + m else n + o
+let floatMirPhiMapping(x: Float, sel: Int64) : Float = let a = x * 1.1 in let b = a * 1.2 in let c = b * 1.3 in let d = c * 1.4 in let e = d * 1.5 in let g = e * 1.6 in let h = g * 1.7 in let ii = h * 1.8 in let j = ii * 1.9 in let k = j * 2.0 in let l = k * 2.1 in let m = l * 2.2 in let n = m * 2.3 in let o = n * 2.4 in if sel == 1 then a + b else if sel == 2 then c + d else if sel == 3 then e + g else if sel == 4 then h + ii else if sel == 5 then j + k else if sel == 6 then l + m else n + o
 Stdlib.Float.toInt(floatMirPhiMapping(1.0, 1) * 100000000000.0) = 242000000000
 floatMirPhiMapping(1.0, 2) = 4.1184
 floatMirPhiMapping(1.0, 3) = 9.36936
@@ -529,7 +529,7 @@ Stdlib.Float.toInt(floatMirPhiMapping(1.0, 7) * 100000000000.0) = 24222017447147
 
 // Test with parallel computation chains creating many MIR intermediates
 // Forces many VRegs to be allocated and resolved at phi nodes
-def floatMirParallelChains(x: Float, y: Float, cond: Bool) : Float = let ax = x * 1.1 in let bx = ax + 0.1 in let cx = bx * 1.2 in let dx = cx + 0.2 in let ex = dx * 1.3 in let fx = ex + 0.3 in let gx = fx * 1.4 in let ay = y * 2.1 in let by = ay - 0.1 in let cy = by * 2.2 in let dy = cy - 0.2 in let ey = dy * 2.3 in let fy = ey - 0.3 in let gy = fy * 2.4 in if cond then gx + gy else gx * gy
+let floatMirParallelChains(x: Float, y: Float, cond: Bool) : Float = let ax = x * 1.1 in let bx = ax + 0.1 in let cx = bx * 1.2 in let dx = cx + 0.2 in let ex = dx * 1.3 in let fx = ex + 0.3 in let gx = fx * 1.4 in let ay = y * 2.1 in let by = ay - 0.1 in let cy = by * 2.2 in let dy = cy - 0.2 in let ey = dy * 2.3 in let fy = ey - 0.3 in let gy = fy * 2.4 in if cond then gx + gy else gx * gy
 floatMirParallelChains(1.0, 1.0, true) = 25.8688
 Stdlib.Float.toInt(floatMirParallelChains(1.0, 1.0, false) * 100000000000.0) = 7648542719999
 
@@ -552,19 +552,19 @@ Stdlib.Float.toInt(floatMirParallelChains(1.0, 1.0, false) * 100000000000.0) = 7
 // 9 float local bindings followed by a conditional - VRegs 8+ are used in phi
 // The 9th binding gets VReg 8, the 10th gets VReg 9, etc.
 // These must be correctly mapped for phi resolution at the control flow merge
-def floatAnfVRegBoundary(cond: Bool) : Float = let f0 = 1.0 in let f1 = 2.0 in let f2 = 3.0 in let f3 = 4.0 in let f4 = 5.0 in let f5 = 6.0 in let f6 = 7.0 in let f7 = 8.0 in let f8 = 9.0 in let f9 = 10.0 in if cond then f0 + f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9 else f9 + f8 + f7 + f6 + f5 + f4 + f3 + f2 + f1 + f0
+let floatAnfVRegBoundary(cond: Bool) : Float = let f0 = 1.0 in let f1 = 2.0 in let f2 = 3.0 in let f3 = 4.0 in let f4 = 5.0 in let f5 = 6.0 in let f6 = 7.0 in let f7 = 8.0 in let f8 = 9.0 in let f9 = 10.0 in if cond then f0 + f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9 else f9 + f8 + f7 + f6 + f5 + f4 + f3 + f2 + f1 + f0
 floatAnfVRegBoundary(true) = 55.0
 floatAnfVRegBoundary(false) = 55.0
 
 // 12 float bindings with different branch results to detect register mapping errors
 // If VRegs 8+ are incorrectly mapped, the sum in one branch would be wrong
-def floatAnfVReg12Bindings(cond: Bool) : Float = let a = 1.1 in let b = 2.2 in let c = 3.3 in let d = 4.4 in let e = 5.5 in let f = 6.6 in let g = 7.7 in let h = 8.8 in let i = 9.9 in let j = 10.1 in let k = 11.11 in let l = 12.12 in if cond then a + b + c + d + e + f else g + h + i + j + k + l
+let floatAnfVReg12Bindings(cond: Bool) : Float = let a = 1.1 in let b = 2.2 in let c = 3.3 in let d = 4.4 in let e = 5.5 in let f = 6.6 in let g = 7.7 in let h = 8.8 in let i = 9.9 in let j = 10.1 in let k = 11.11 in let l = 12.12 in if cond then a + b + c + d + e + f else g + h + i + j + k + l
 floatAnfVReg12Bindings(true) = 23.1
 Stdlib.Float.toInt(floatAnfVReg12Bindings(false) * 100000000000.0) = 5973000000000
 
 // More than 13 bindings to exercise the modulo wraparound in the register pool
 // The pool has 13 registers, so binding 14+ wraps around
-def floatAnfVReg15Bindings(selector: Int64) : Float = let v0 = 1.0 in let v1 = 2.0 in let v2 = 3.0 in let v3 = 4.0 in let v4 = 5.0 in let v5 = 6.0 in let v6 = 7.0 in let v7 = 8.0 in let v8 = 9.0 in let v9 = 10.0 in let v10 = 11.0 in let v11 = 12.0 in let v12 = 13.0 in let v13 = 14.0 in let v14 = 15.0 in if selector == 1 then v0 + v8 + v14 else if selector == 2 then v1 + v9 + v13 else v7 + v12 + v14
+let floatAnfVReg15Bindings(selector: Int64) : Float = let v0 = 1.0 in let v1 = 2.0 in let v2 = 3.0 in let v3 = 4.0 in let v4 = 5.0 in let v5 = 6.0 in let v6 = 7.0 in let v7 = 8.0 in let v8 = 9.0 in let v9 = 10.0 in let v10 = 11.0 in let v11 = 12.0 in let v12 = 13.0 in let v13 = 14.0 in let v14 = 15.0 in if selector == 1 then v0 + v8 + v14 else if selector == 2 then v1 + v9 + v13 else v7 + v12 + v14
 floatAnfVReg15Bindings(1) = 25.0
 floatAnfVReg15Bindings(2) = 26.0
 floatAnfVReg15Bindings(3) = 36.0
@@ -585,18 +585,18 @@ floatAnfVReg15Bindings(3) = 36.0
 // 7 float parameters with phi resolution - exercises VRegs 0-6
 // Each parameter must be correctly mapped for the result to be correct
 // Note: ARM64 calling convention limits to 8 total params
-def floatParam7Phi(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float, cond: Bool) : Float = if cond then a + b + c + d else e + f + g
+let floatParam7Phi(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float, cond: Bool) : Float = if cond then a + b + c + d else e + f + g
 floatParam7Phi(1.0, 2.0, 3.0, 4.0, 10.0, 20.0, 30.0, true) = 10.0
 floatParam7Phi(1.0, 2.0, 3.0, 4.0, 10.0, 20.0, 30.0, false) = 60.0
 
 // Test that uses all 7 params in different combinations
 // If VRegs 0-6 are incorrectly mapped, the sums would be wrong
-def floatParam7All(p0: Float, p1: Float, p2: Float, p3: Float, p4: Float, p5: Float, p6: Float) : Float = (p0 + p1) + (p2 + p3) + (p4 + p5) + p6
+let floatParam7All(p0: Float, p1: Float, p2: Float, p3: Float, p4: Float, p5: Float, p6: Float) : Float = (p0 + p1) + (p2 + p3) + (p4 + p5) + p6
 floatParam7All(1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0) = 127.0
 
 // 6 params with nested conditionals - creates multiple phi resolution points
 // Uses 6 float params + 2 bool params = 8 total (at ARM64 limit)
-def floatParam6NestedPhi(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, c1: Bool, c2: Bool) : Float = if c1 then (if c2 then a + b else c + d) else (if c2 then e + f else a + f)
+let floatParam6NestedPhi(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, c1: Bool, c2: Bool) : Float = if c1 then (if c2 then a + b else c + d) else (if c2 then e + f else a + f)
 floatParam6NestedPhi(1.0, 2.0, 10.0, 20.0, 100.0, 200.0, true, true) = 3.0
 floatParam6NestedPhi(1.0, 2.0, 10.0, 20.0, 100.0, 200.0, true, false) = 30.0
 floatParam6NestedPhi(1.0, 2.0, 10.0, 20.0, 100.0, 200.0, false, true) = 300.0
@@ -622,32 +622,32 @@ floatParam6NestedPhi(1.0, 2.0, 10.0, 20.0, 100.0, 200.0, false, false) = 201.0
 
 // Second float param only - tests VReg 1 mapping in isolation
 // If VReg 1 uses wrong register, the result would be corrupted
-def floatParam1Only(unused: Float, b: Float) : Float = b * 2.0
+let floatParam1Only(unused: Float, b: Float) : Float = b * 2.0
 floatParam1Only(0.0, 7.5) = 15.0
 
 // Second param in phi - VReg 1 must be correctly mapped for phi resolution
-def floatParam1Phi(unused: Float, b: Float, cond: Bool) : Float = if cond then b + 1.0 else b - 1.0
+let floatParam1Phi(unused: Float, b: Float, cond: Bool) : Float = if cond then b + 1.0 else b - 1.0
 floatParam1Phi(0.0, 10.0, true) = 11.0
 floatParam1Phi(0.0, 10.0, false) = 9.0
 
 // Third and fourth params (VRegs 2-3) in phi - tests VRegs > 1
-def floatParam23Phi(unused: Float, also_unused: Float, c: Float, d: Float, cond: Bool) : Float = if cond then c * 2.0 else d * 3.0
+let floatParam23Phi(unused: Float, also_unused: Float, c: Float, d: Float, cond: Bool) : Float = if cond then c * 2.0 else d * 3.0
 floatParam23Phi(0.0, 0.0, 5.0, 7.0, true) = 10.0
 floatParam23Phi(0.0, 0.0, 5.0, 7.0, false) = 21.0
 
 // Param 1 used across multiple branches - complex phi with second param
-def floatParam1MultiBranch(unused: Float, b: Float, selector: Int64) : Float = if selector == 1 then b + 10.0 else if selector == 2 then b * 10.0 else b - 10.0
+let floatParam1MultiBranch(unused: Float, b: Float, selector: Int64) : Float = if selector == 1 then b + 10.0 else if selector == 2 then b * 10.0 else b - 10.0
 floatParam1MultiBranch(0.0, 5.0, 1) = 15.0
 floatParam1MultiBranch(0.0, 5.0, 2) = 50.0
 floatParam1MultiBranch(0.0, 5.0, 3) = -5.0
 
 // All params 1-6 (VRegs 1-6) used in computation - bypasses param 0
 // If >= becomes <=, only param 0 would work; all others would get wrong registers
-def floatParams1to6(unused: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float) : Float = b + c + d + e + f + g
+let floatParams1to6(unused: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float) : Float = b + c + d + e + f + g
 floatParams1to6(0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0) = 63.0
 
 // Params 1-6 with nested phi - stresses VReg 1-6 mapping under phi resolution
-def floatParams1to6Phi(skip: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float, cond: Bool) : Float = if cond then b + c + d else e + f + g
+let floatParams1to6Phi(skip: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float, cond: Bool) : Float = if cond then b + c + d else e + f + g
 floatParams1to6Phi(999.0, 1.0, 2.0, 3.0, 100.0, 200.0, 300.0, true) = 6.0
 floatParams1to6Phi(999.0, 1.0, 2.0, 3.0, 100.0, 200.0, 300.0, false) = 600.0
 
@@ -674,13 +674,13 @@ floatParams1to6Phi(999.0, 1.0, 2.0, 3.0, 100.0, 200.0, 300.0, false) = 600.0
 // 18 float bindings with overlapping lifetimes creating register pressure
 // VRegs 8-17 (10 VRegs beyond params) participate in phi resolution
 // With mutation, VReg 8 would map to D10 instead of D0, corrupting the value
-def floatHighPressurePhi(cond: Bool) : Float = let f0 = 1.0 in let f1 = 2.0 in let f2 = 3.0 in let f3 = 4.0 in let f4 = 5.0 in let f5 = 6.0 in let f6 = 7.0 in let f7 = 8.0 in let f8 = 9.0 in let f9 = 10.0 in let f10 = 11.0 in let f11 = 12.0 in let f12 = 13.0 in let f13 = 14.0 in let f14 = 15.0 in let f15 = 16.0 in let f16 = 17.0 in let f17 = 18.0 in if cond then f0 + f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 else f9 + f10 + f11 + f12 + f13 + f14 + f15 + f16 + f17
+let floatHighPressurePhi(cond: Bool) : Float = let f0 = 1.0 in let f1 = 2.0 in let f2 = 3.0 in let f3 = 4.0 in let f4 = 5.0 in let f5 = 6.0 in let f6 = 7.0 in let f7 = 8.0 in let f8 = 9.0 in let f9 = 10.0 in let f10 = 11.0 in let f11 = 12.0 in let f12 = 13.0 in let f13 = 14.0 in let f14 = 15.0 in let f15 = 16.0 in let f16 = 17.0 in let f17 = 18.0 in if cond then f0 + f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 else f9 + f10 + f11 + f12 + f13 + f14 + f15 + f16 + f17
 floatHighPressurePhi(true) = 45.0
 floatHighPressurePhi(false) = 126.0
 
 // 20 float bindings with distinct values - exercises more VRegs in fallback
 // If VRegs 8+ use wrong mapping (2 + id instead of tempRegs), sums would differ
-def floatHighPressure20(cond: Bool) : Float = let v0 = 1.1 in let v1 = 2.2 in let v2 = 3.3 in let v3 = 4.4 in let v4 = 5.5 in let v5 = 6.6 in let v6 = 7.7 in let v7 = 8.8 in let v8 = 9.9 in let v9 = 10.1 in let v10 = 11.11 in let v11 = 12.12 in let v12 = 13.13 in let v13 = 14.14 in let v14 = 15.15 in let v15 = 16.16 in let v16 = 17.17 in let v17 = 18.18 in let v18 = 19.19 in let v19 = 20.2 in if cond then v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 else v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18 + v19
+let floatHighPressure20(cond: Bool) : Float = let v0 = 1.1 in let v1 = 2.2 in let v2 = 3.3 in let v3 = 4.4 in let v4 = 5.5 in let v5 = 6.6 in let v6 = 7.7 in let v7 = 8.8 in let v8 = 9.9 in let v9 = 10.1 in let v10 = 11.11 in let v11 = 12.12 in let v12 = 13.13 in let v13 = 14.14 in let v14 = 15.15 in let v15 = 16.16 in let v16 = 17.17 in let v17 = 18.18 in let v18 = 19.19 in let v19 = 20.2 in if cond then v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 else v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18 + v19
 floatHighPressure20(true) = 59.6
 Stdlib.Float.toInt(floatHighPressure20(false) * 100000000000.0) = 15654999999999
 
@@ -701,7 +701,7 @@ Stdlib.Float.toInt(floatHighPressure20(false) * 100000000000.0) = 15654999999999
 // Creates A -> B -> C -> D chain where float x must be live throughout
 // Liveness propagates backward through the conditional chain
 // With && mutation, if only LiveOut changes in some iteration, propagation stops early
-def floatLivenessChain(x: Float, a: Float, b: Float, c: Float) : Float = if a > 0.0 then (if b > 0.0 then (if c > 0.0 then x + 1.0 else x + 2.0) else x + 3.0) else x + 4.0
+let floatLivenessChain(x: Float, a: Float, b: Float, c: Float) : Float = if a > 0.0 then (if b > 0.0 then (if c > 0.0 then x + 1.0 else x + 2.0) else x + 3.0) else x + 4.0
 floatLivenessChain(10.0, 1.0, 1.0, 1.0) = 11.0
 floatLivenessChain(10.0, 1.0, 1.0, 0.0) = 12.0
 floatLivenessChain(10.0, 1.0, 0.0, 0.0) = 13.0
@@ -709,19 +709,19 @@ floatLivenessChain(10.0, 0.0, 0.0, 0.0) = 14.0
 
 // Multiple floats with different live ranges - tests liveness propagation for each
 // Float f1 is used only at deepest level, f2 at intermediate, f3 at all levels
-def floatMultiLivenessChain(f1: Float, f2: Float, f3: Float, a: Float, b: Float) : Float = if a > 0.0 then (if b > 0.0 then f1 + f2 + f3 else f2 + f3) else f3
+let floatMultiLivenessChain(f1: Float, f2: Float, f3: Float, a: Float, b: Float) : Float = if a > 0.0 then (if b > 0.0 then f1 + f2 + f3 else f2 + f3) else f3
 floatMultiLivenessChain(100.0, 10.0, 1.0, 1.0, 1.0) = 111.0
 floatMultiLivenessChain(100.0, 10.0, 1.0, 1.0, 0.0) = 11.0
 floatMultiLivenessChain(100.0, 10.0, 1.0, 0.0, 0.0) = 1.0
 
 // Recursive function with float accumulator - liveness must propagate through call graph
 // The float 'extra' is carried through but only used in the terminal case
-def floatRecLiveness(n: Int64, acc: Float, extra: Float) : Float = if n <= 0 then acc + extra else floatRecLiveness(n - 1, acc + 1.0, extra)
+let floatRecLiveness(n: Int64, acc: Float, extra: Float) : Float = if n <= 0 then acc + extra else floatRecLiveness(n - 1, acc + 1.0, extra)
 floatRecLiveness(5, 0.0, 100.0) = 105.0
 
 // Float liveness across multiple basic blocks with phi nodes
 // The floats must remain live across all conditional branches
-def floatLiveAcrossBlocks(x: Float, y: Float, selector: Int64) : Float = if selector == 1 then x + y else if selector == 2 then x * y else if selector == 3 then x - y else x / y
+let floatLiveAcrossBlocks(x: Float, y: Float, selector: Int64) : Float = if selector == 1 then x + y else if selector == 2 then x * y else if selector == 3 then x - y else x / y
 floatLiveAcrossBlocks(10.0, 2.0, 1) = 12.0
 floatLiveAcrossBlocks(10.0, 2.0, 2) = 20.0
 floatLiveAcrossBlocks(10.0, 2.0, 3) = 8.0

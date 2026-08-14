@@ -49,12 +49,13 @@ and Token =
     | TLParen
     | TRParen
     | TLet
+    | TVal
     | TIn
     | TIf          // if
     | TThen        // then
     | TElse        // else
     | TElif        // elif
-    | TDef         // def (function definition)
+    | TFunctionDeclaration         // private marker for a public `let` declaration
     | TType        // type (type definition)
     | TColon       // : (type annotation)
     | TComma       // , (parameter separator)
@@ -76,6 +77,7 @@ and Token =
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
     | TLt          // <
+    | TSpacedLt    // < preceded by whitespace; comparison, never generic syntax
     | TGt          // >
     | TLte         // <=
     | TGte         // >=
@@ -92,6 +94,7 @@ and Token =
     | TBitXor      // ^ (bitwise xor)
     | TBitNot      // ~~~ (bitwise not)
     | TIdent of string
+    | TTypeVar of string // apostrophe-prefixed declaration type parameter
     | TEOF
 
 /// Lexer: convert string to list of tokens without copying the source into a character list.
@@ -112,7 +115,19 @@ let rec lex (input: string) : Result<Token list, string> =
             let current = input[position]
             match current with
             | ' ' | '\t' | '\n' | '\r' ->
-                lexHelper (position + 1) acc
+                let rec skipWhitespace index =
+                    if index < inputLength && System.Char.IsWhiteSpace input[index] then
+                        skipWhitespace (index + 1)
+                    else
+                        index
+                let next = skipWhitespace (position + 1)
+                if next < inputLength
+                   && input[next] = '<'
+                   && not (hasChar next 1 '<')
+                   && not (hasChar next 1 '=') then
+                    lexHelper (next + 1) (TSpacedLt :: acc)
+                else
+                    lexHelper next acc
             | '+' when hasChar position 1 '+' -> lexHelper (position + 2) (TPlusPlus :: acc)
             | '+' -> lexHelper (position + 1) (TPlus :: acc)
             | '-' when hasChar position 1 '>' -> lexHelper (position + 2) (TArrow :: acc)
@@ -167,59 +182,32 @@ let rec lex (input: string) : Result<Token list, string> =
             | '|' when hasChar position 1 '>' -> lexHelper (position + 2) (TPipe :: acc)
             | '|' -> lexHelper (position + 1) (TBar :: acc)
             | '`' when hasChar position 1 '`' ->
-                let identStart = position + 2
-
-                let rec parseBacktickIdent (index: int) : Result<string * int, string> =
-                    if index >= inputLength then
-                        Error "Unterminated backtick identifier"
-                    elif input[index] = '`' && hasChar index 1 '`' then
-                        let ident = substring identStart index
-                        if ident.Length = 0 then
-                            Error "Backtick identifier cannot be empty"
-                        else
-                            Ok (ident, index + 2)
-                    elif input[index] = '\n' || input[index] = '\r' then
-                        Error "Unterminated backtick identifier"
-                    else
-                        parseBacktickIdent (index + 1)
-
-                parseBacktickIdent identStart
-                |> Result.bind (fun (ident, remaining) ->
-                    lexHelper remaining (TIdent ident :: acc))
+                NameSyntax.scanQuoted input position
+                |> Result.bind (fun (identifier, remaining) ->
+                    lexHelper remaining (TIdent (NameSyntax.identifierText identifier) :: acc))
             | '`' ->
                 Error "Backtick identifiers must use double backticks: ``name``"
-            | c when System.Char.IsLetter(c) || c = '_' ->
-                let rec identEnd (index: int) : int =
-                    if index < inputLength then
-                        let c = input[index]
-                        if System.Char.IsLetterOrDigit(c) || c = '_' || c = '\'' then
-                            identEnd (index + 1)
-                        else
-                            index
-                    else
-                        index
-
-                let remaining = identEnd (position + 1)
-                let ident = substring position remaining
+            | c when NameSyntax.isStartCharacter c ->
+                let (identifier, remaining) = NameSyntax.scanOrdinary input position
                 let token =
-                    match ident with
-                    | "let" -> TLet
-                    | "in" -> TIn
-                    | "if" -> TIf
-                    | "then" -> TThen
-                    | "else" -> TElse
-                    | "elif" -> TElif
-                    | "def" -> TDef
-                    | "type" -> TType
-                    | "of" -> TOf
-                    | "match" -> TMatch
-                    | "with" -> TWith
-                    | "fun" -> TFun
-                    | "when" -> TWhen
-                    | "true" -> TTrue
-                    | "false" -> TFalse
-                    | "_" -> TUnderscore
-                    | _ -> TIdent ident
+                    match NameSyntax.classify (NameSyntax.identifierText identifier) with
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Let -> TLet
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Val -> TVal
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.In -> TIn
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.If -> TIf
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Elif -> TElif
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Then -> TThen
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Else -> TElse
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Type -> TType
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Of -> TOf
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Match -> TMatch
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.With -> TWith
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Fun -> TFun
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.When -> TWhen
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.True -> TTrue
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.False -> TFalse
+                    | NameSyntax.KeywordToken NameSyntax.Keyword.Underscore -> TUnderscore
+                    | NameSyntax.IdentifierToken parsed -> TIdent (NameSyntax.identifierText parsed)
                 lexHelper remaining (token :: acc)
             | c when System.Char.IsDigit(c) ->
                 let rec collectDigits (index: int) : int =
@@ -231,9 +219,22 @@ let rec lex (input: string) : Result<Token list, string> =
                 let afterInt = collectDigits (position + 1)
                 let intDigits = substring position afterInt
 
+                let rec malformedNumberEnd index =
+                    if index < inputLength && NameSyntax.isContinueCharacter input[index] then
+                        malformedNumberEnd (index + 1)
+                    else
+                        index
+
+                let emitNumber (remaining: int) (token: Token) =
+                    if remaining < inputLength && NameSyntax.isContinueCharacter input[remaining] then
+                        let errorEnd = malformedNumberEnd remaining
+                        Error $"invalid number literal: {substring position errorEnd}"
+                    else
+                        lexHelper remaining (token :: acc)
+
                 let parseFloat (numStr: string) (remaining: int) =
                     match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
-                    | (true, value) -> lexHelper remaining (TFloat value :: acc)
+                    | (true, value) -> emitNumber remaining (TFloat value)
                     | (false, _) -> Error $"Invalid float literal: {numStr}"
 
                 let parseExponent (prefix: string) (exponentPosition: int) =
@@ -263,7 +264,7 @@ let rec lex (input: string) : Result<Token list, string> =
                 else
                     let parseIntegerToken token onError remaining =
                         match token with
-                        | Some value -> lexHelper remaining (value :: acc)
+                        | Some value -> emitNumber remaining value
                         | None -> Error onError
 
                     if hasChar afterInt 0 'u' && hasChar afterInt 1 'y' then
@@ -271,37 +272,37 @@ let rec lex (input: string) : Result<Token list, string> =
                         parseIntegerToken (if parsed then Some (TUInt8 value) else None) $"Value {intDigits} is out of range for UInt8 (0 to 255)" (afterInt + 2)
                     elif hasChar afterInt 0 'y' then
                         let (parsed, value) = System.SByte.TryParse(intDigits)
-                        if parsed then lexHelper (afterInt + 1) (TInt8 value :: acc)
-                        elif intDigits = "128" then lexHelper (afterInt + 1) (TInt8 System.SByte.MinValue :: acc)
+                        if parsed then emitNumber (afterInt + 1) (TInt8 value)
+                        elif intDigits = "128" then emitNumber (afterInt + 1) (TInt8 System.SByte.MinValue)
                         else Error $"Value {intDigits} is out of range for Int8 (-128 to 127)"
                     elif hasChar afterInt 0 'u' && hasChar afterInt 1 's' then
                         let (parsed, value) = System.UInt16.TryParse(intDigits)
                         parseIntegerToken (if parsed then Some (TUInt16 value) else None) $"Value {intDigits} is out of range for UInt16 (0 to 65535)" (afterInt + 2)
                     elif hasChar afterInt 0 's' then
                         let (parsed, value) = System.Int16.TryParse(intDigits)
-                        if parsed then lexHelper (afterInt + 1) (TInt16 value :: acc)
-                        elif intDigits = "32768" then lexHelper (afterInt + 1) (TInt16 System.Int16.MinValue :: acc)
+                        if parsed then emitNumber (afterInt + 1) (TInt16 value)
+                        elif intDigits = "32768" then emitNumber (afterInt + 1) (TInt16 System.Int16.MinValue)
                         else Error $"Value {intDigits} is out of range for Int16 (-32768 to 32767)"
                     elif hasChar afterInt 0 'u' && hasChar afterInt 1 'l' then
                         let (parsed, value) = System.UInt32.TryParse(intDigits)
                         parseIntegerToken (if parsed then Some (TUInt32 value) else None) $"Value {intDigits} is out of range for UInt32 (0 to 4294967295)" (afterInt + 2)
                     elif hasChar afterInt 0 'l' then
                         let (parsed, value) = System.Int32.TryParse(intDigits)
-                        if parsed then lexHelper (afterInt + 1) (TInt32 value :: acc)
-                        elif intDigits = "2147483648" then lexHelper (afterInt + 1) (TInt32 System.Int32.MinValue :: acc)
+                        if parsed then emitNumber (afterInt + 1) (TInt32 value)
+                        elif intDigits = "2147483648" then emitNumber (afterInt + 1) (TInt32 System.Int32.MinValue)
                         else Error $"Value {intDigits} is out of range for Int32 (-2147483648 to 2147483647)"
                     elif hasChar afterInt 0 'U' && hasChar afterInt 1 'L' then
                         let (parsed, value) = System.UInt64.TryParse(intDigits)
                         parseIntegerToken (if parsed then Some (TUInt64 value) else None) $"Value {intDigits} is out of range for UInt64" (afterInt + 2)
                     elif hasChar afterInt 0 'L' then
                         let (parsed, value) = System.Int64.TryParse(intDigits)
-                        if parsed then lexHelper (afterInt + 1) (TInt64 value :: acc)
-                        elif intDigits = "9223372036854775808" then lexHelper (afterInt + 1) (TInt64 System.Int64.MinValue :: acc)
+                        if parsed then emitNumber (afterInt + 1) (TInt64 value)
+                        elif intDigits = "9223372036854775808" then emitNumber (afterInt + 1) (TInt64 System.Int64.MinValue)
                         else Error $"Integer literal too large: {intDigits}"
                     elif hasChar afterInt 0 'Q' then
                         let (parsed, value) = System.Int128.TryParse(intDigits)
-                        if parsed then lexHelper (afterInt + 1) (TInt128 value :: acc)
-                        elif intDigits = "170141183460469231731687303715884105728" then lexHelper (afterInt + 1) (TInt128 System.Int128.MinValue :: acc)
+                        if parsed then emitNumber (afterInt + 1) (TInt128 value)
+                        elif intDigits = "170141183460469231731687303715884105728" then emitNumber (afterInt + 1) (TInt128 System.Int128.MinValue)
                         else Error $"Value {intDigits} is out of range for Int128"
                     elif hasChar afterInt 0 'I' then
                         let (parsed, value) = System.Numerics.BigInteger.TryParse(intDigits)
@@ -311,8 +312,8 @@ let rec lex (input: string) : Result<Token list, string> =
                         parseIntegerToken (if parsed then Some (TUInt128 value) else None) $"Value {intDigits} is out of range for UInt128" (afterInt + 1)
                     else
                         let (parsed, value) = System.Int64.TryParse(intDigits)
-                        if parsed then lexHelper afterInt (TInt64 value :: acc)
-                        elif intDigits = "9223372036854775808" then lexHelper afterInt (TInt64 System.Int64.MinValue :: acc)
+                        if parsed then emitNumber afterInt (TInt64 value)
+                        elif intDigits = "9223372036854775808" then emitNumber afterInt (TInt64 System.Int64.MinValue)
                         else Error $"Integer literal too large: {intDigits}"
             | '$' when hasChar position 1 '"' ->
                 let parseEscape (index: int) : Result<char * int, string> =
@@ -447,6 +448,7 @@ let rec lex (input: string) : Result<Token list, string> =
                     | TLParen :: _
                     | TStar :: _
                     | TLt :: _
+                    | TSpacedLt :: _
                     | TComma :: _
                     | TColon :: _
                     | TArrow :: _
@@ -469,7 +471,7 @@ let rec lex (input: string) : Result<Token list, string> =
                     if hasChar afterTypeVar 0 '\'' then
                         parseCharLiteral ()
                     else
-                        lexHelper afterTypeVar (TIdent (substring contentStart afterTypeVar) :: acc)
+                        lexHelper afterTypeVar (TTypeVar (substring contentStart afterTypeVar) :: acc)
                 else
                     parseCharLiteral ()
             | '"' ->
@@ -544,7 +546,9 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "RawPtr" :: rest -> Ok (AST.TRawPtr, rest)  // Internal raw pointer type
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
         Ok (TVar typeName, rest)
-    | TIdent typeName :: rest when System.Char.IsLower(typeName.[0]) || typeName.StartsWith "_" ->
+    | TTypeVar typeName :: rest ->
+        Ok (TVar typeName, rest)
+    | TIdent typeName :: rest when typeName.Length > 0 && System.Char.IsLower(typeName.[0]) || typeName.StartsWith "_" ->
         // Allow type variables in annotations even when not explicitly listed in a type parameter context.
         // This keeps parser/pretty roundtrips stable for synthesized lambda type variables.
         Ok (TVar typeName, rest)
@@ -576,15 +580,25 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             | TShr :: remaining ->
                 Ok (TDict (AST.TString, firstTypeArg), TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected ',' or '>' after Dict type argument")
-    | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
+    | TIdent typeName :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
         // Could be a simple type or a qualified type like Stdlib.Option.Option
         // First parse the full qualified name
-        let rec parseQualTypeName (name: string) (toks: Token list) : string * Token list =
+        let rec parseQualTypeName
+            (name: NameSyntax.QualifiedName)
+            (currentSegment: NameSyntax.Identifier)
+            (toks: Token list)
+            : NameSyntax.QualifiedName * Token list =
+            let currentText = NameSyntax.identifierText currentSegment
             match toks with
-            | TDot :: TIdent nextName :: remaining when System.Char.IsUpper(nextName.[0]) ->
-                parseQualTypeName (name + "." + nextName) remaining
+            | TDot :: TIdent nextName :: remaining when
+                currentText.Length > 0 && System.Char.IsUpper currentText[0] ->
+                let nextSegment = NameSyntax.identifierFromText nextName
+                parseQualTypeName (NameSyntax.append nextSegment name) nextSegment remaining
             | _ -> (name, toks)
-        let (fullTypeName, afterTypeName) = parseQualTypeName typeName rest
+        let firstSegment = NameSyntax.identifierFromText typeName
+        let (qualifiedTypeName, afterTypeName) =
+            parseQualTypeName (NameSyntax.singleton firstSegment) firstSegment rest
+        let fullTypeName = NameSyntax.toLegacySpelling qualifiedTypeName
         // Check for type arguments <...>
         match afterTypeName with
         | TLt :: typeArgsStart ->
@@ -635,18 +649,18 @@ let parseType (tokens: Token list) : Result<Type * Token list, string> =
 /// Parse type parameters: <t, u, v> (names only, for function definitions)
 let rec parseTypeParams (tokens: Token list) (acc: string list) : Result<string list * Token list, string> =
     match tokens with
-    | TIdent name :: TGt :: rest when System.Char.IsLower(name.[0]) ->
+    | TTypeVar name :: TGt :: rest ->
         // Last type parameter
         Ok (List.rev (name :: acc), rest)
-    | TIdent name :: TComma :: rest when System.Char.IsLower(name.[0]) ->
+    | TTypeVar name :: TComma :: rest ->
         // More type parameters to come
         parseTypeParams rest (name :: acc)
-    | TIdent name :: _ when not (System.Char.IsLower(name.[0])) ->
-        Error $"Type parameter must start with lowercase letter: {name}"
+    | TIdent name :: _ ->
+        Error $"Declaration type parameters must be apostrophe-prefixed: '{name}"
     | TGt :: rest when List.isEmpty acc ->
         // Empty type parameters: <>
         Ok ([], rest)
-    | _ -> Error "Expected type parameter name (lowercase identifier)"
+    | _ -> Error "Expected apostrophe-prefixed type parameter name"
 
 /// Parse type for type arguments context (allows lowercase as type variables)
 /// This is used when parsing call sites like func<t>(args) where t is a type variable
@@ -707,18 +721,30 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
             | TShr :: remaining ->
                 withPossibleArrow (TDict (AST.TString, firstTypeArg)) (TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected ',' or '>' after Dict type argument")
-    | TIdent typeName :: rest when System.Char.IsLower(typeName.[0]) ->
+    | TIdent typeName :: rest when typeName.Length > 0 && System.Char.IsLower(typeName.[0]) ->
         // Lowercase identifier is a type variable in type argument context
         withPossibleArrow (TVar typeName) rest
-    | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
+    | TTypeVar typeName :: rest ->
+        withPossibleArrow (TVar typeName) rest
+    | TIdent typeName :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
         // Could be a simple type or a qualified type like Stdlib.Option.Option
         // First parse the full qualified name
-        let rec parseQualTypeName (name: string) (toks: Token list) : string * Token list =
+        let rec parseQualTypeName
+            (name: NameSyntax.QualifiedName)
+            (currentSegment: NameSyntax.Identifier)
+            (toks: Token list)
+            : NameSyntax.QualifiedName * Token list =
+            let currentText = NameSyntax.identifierText currentSegment
             match toks with
-            | TDot :: TIdent nextName :: remaining when System.Char.IsUpper(nextName.[0]) ->
-                parseQualTypeName (name + "." + nextName) remaining
+            | TDot :: TIdent nextName :: remaining when
+                currentText.Length > 0 && System.Char.IsUpper currentText[0] ->
+                let nextSegment = NameSyntax.identifierFromText nextName
+                parseQualTypeName (NameSyntax.append nextSegment name) nextSegment remaining
             | _ -> (name, toks)
-        let (fullTypeName, afterTypeName) = parseQualTypeName typeName rest
+        let firstSegment = NameSyntax.identifierFromText typeName
+        let (qualifiedTypeName, afterTypeName) =
+            parseQualTypeName (NameSyntax.singleton firstSegment) firstSegment rest
+        let fullTypeName = NameSyntax.toLegacySpelling qualifiedTypeName
         // Check for type arguments <...>
         match afterTypeName with
         | TLt :: typeArgsStart ->
@@ -882,7 +908,7 @@ let private parseVariantPayloadTypeWithContext
 
 let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
     match tokens with
-    | TIdent variantName :: TOf :: rest when System.Char.IsUpper(variantName.[0]) ->
+    | TIdent variantName :: TOf :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Variant with payload: Variant of Type
         parseVariantPayloadType rest
         |> Result.bind (fun (payloadType, afterType) ->
@@ -894,7 +920,7 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
             | _ ->
                 // End of variants
                 Ok (List.rev (variant :: acc), afterType))
-    | TIdent variantName :: rest when System.Char.IsUpper(variantName.[0]) ->
+    | TIdent variantName :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Simple enum variant (no payload)
         let variant = { Name = variantName; Payload = None }
         match rest with
@@ -911,7 +937,7 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
 let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
     let typeParamSet = Set.ofList typeParams
     match tokens with
-    | TIdent variantName :: TOf :: rest when System.Char.IsUpper(variantName.[0]) ->
+    | TIdent variantName :: TOf :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Variant with payload: Variant of Type
         parseVariantPayloadTypeWithContext typeParamSet rest
         |> Result.bind (fun (payloadType, afterType) ->
@@ -923,7 +949,7 @@ let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) 
             | _ ->
                 // End of variants
                 Ok (List.rev (variant :: acc), afterType))
-    | TIdent variantName :: rest when System.Char.IsUpper(variantName.[0]) ->
+    | TIdent variantName :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Simple enum variant (no payload)
         let variant = { Name = variantName; Payload = None }
         match rest with
@@ -935,24 +961,12 @@ let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) 
             Ok (List.rev (variant :: acc), rest)
     | _ -> Error "Expected variant name (must start with uppercase letter)"
 
-/// Parse a qualified type name: Name or Stdlib.Result.Result
-let rec parseQualifiedTypeName (firstName: string) (tokens: Token list) : string * Token list =
-    match tokens with
-    | TDot :: TIdent nextName :: rest when System.Char.IsUpper(nextName.[0]) ->
-        let (fullName, remaining) = parseQualifiedTypeName nextName rest
-        (firstName + "." + fullName, remaining)
-    | _ ->
-        (firstName, tokens)
-
 /// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2 of Type | ...
 /// Also supports type aliases: type Id = String, type MyList = List<Int64>
-/// Supports qualified type names: type Stdlib.Result.Result = Ok of T | Error of E
-/// Supports generic types: type Result<t, e> = Ok of t | Error of e
+/// Supports generic types: type Result<'t, 'e> = | Ok of t | Error of e
 let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
     match tokens with
-    | TType :: TIdent firstName :: rest when System.Char.IsUpper(firstName.[0]) ->
-        // Parse potentially qualified type name
-        let (typeName, afterName) = parseQualifiedTypeName firstName rest
+    | TType :: TIdent typeName :: afterName ->
         // Check for type parameters: <t, e>
         let parseBody typeParams afterTypeParams =
             match afterTypeParams with
@@ -962,7 +976,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 parseRecordFieldsWithContext typeParamSet bodyRest []
                 |> Result.map (fun (fields, remaining) ->
                     (RecordDef (typeName, typeParams, fields), remaining))
-            | TEquals :: TIdent variantName :: TOf :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
+            | TEquals :: TIdent variantName :: TOf :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
                 // Sum type with first variant having payload: type Name = Variant of Type | ...
                 let typeParamSet = Set.ofList typeParams
                 parseVariantPayloadTypeWithContext typeParamSet bodyRest
@@ -977,7 +991,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                     | _ ->
                         // Single variant sum type
                         Ok (SumTypeDef (typeName, typeParams, [firstVariant]), afterType))
-            | TEquals :: TIdent variantName :: TBar :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
+            | TEquals :: TIdent variantName :: TBar :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
                 // Sum type with multiple variants: type Name = Variant1 | Variant2 | ...
                 let firstVariant = { Name = variantName; Payload = None }
                 parseVariantsWithContext typeParams bodyRest [firstVariant]
@@ -1026,25 +1040,14 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
             | _ -> Error "Expected '=' after type name in type definition"
         match afterName with
         | TLt :: rest' ->
-            // Generic type: type Name<t, e> = ...
+            // Generic type: type Name<'t, 'e> = ...
             parseTypeParams rest' []
             |> Result.bind (fun (typeParams, afterParams) ->
                 parseBody typeParams afterParams)
         | _ ->
             // Non-generic type
             parseBody [] afterName
-    | TType :: TIdent name :: _ when not (System.Char.IsUpper(name.[0])) ->
-        Error $"Type name must start with uppercase letter: {name}"
     | _ -> Error "Expected type definition: type Name = { fields } or type Name = Variant1 | Variant2"
-
-/// Parse a qualified function name: name or Stdlib.Int64.add
-let rec parseQualifiedFuncName (firstName: string) (tokens: Token list) : string * Token list =
-    match tokens with
-    | TDot :: TIdent nextName :: rest ->
-        let (fullName, remaining) = parseQualifiedFuncName nextName rest
-        (firstName + "." + fullName, remaining)
-    | _ ->
-        (firstName, tokens)
 
 let private generatedUnitParam (index: int) : string * Type =
     ($"$unit{index}", TUnit)
@@ -1052,9 +1055,8 @@ let private generatedUnitParam (index: int) : string * Type =
 let private ensureParamGroupNonEmpty (paramIndex: int) (parameters: (string * Type) list) : (string * Type) list =
     if List.isEmpty parameters then [generatedUnitParam paramIndex] else parameters
 
-/// Parse a function definition: def name<T, U>(params) : type = body
-/// Type parameters are optional: def name(params) : type = body is also valid
-/// Qualified names supported: def Stdlib.Int64.add(params) : type = body
+/// Parse a public function declaration after its `let` token has been normalized
+/// to the private TFunctionDeclaration parser marker. Declaration names are unqualified.
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
     let rec parseAdditionalParamGroups
         (parseGroup: Token list -> Result<(string * Type) list * Token list, string>)
@@ -1076,12 +1078,12 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
             Ok (accParams, remaining)
 
     match tokens with
-    | TDef :: TIdent firstName :: rest ->
-        // Parse potentially qualified function name (e.g., Stdlib.Int64.add)
-        let (name, afterName) = parseQualifiedFuncName firstName rest
+    | TFunctionDeclaration :: TIdent firstName :: rest ->
+        let name = firstName
+        let afterName = rest
         match afterName with
         | TLt :: rest' ->
-            // Generic function: def name<T, U>(...)
+            // Generic function declaration
             parseTypeParams rest' []
             |> Result.bind (fun (typeParams, afterTypeParams) ->
                 // Check for duplicate type parameters
@@ -1127,7 +1129,7 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                             | _ -> Error "Expected ':' after function parameters"))
                 | _ -> Error "Expected '(' after type parameters")
         | TLParen :: rest' ->
-            // Non-generic function: def name(...)
+            // Non-generic function declaration
             let paramsResult =
                 match rest' with
                 | TRParen :: _ -> Ok ([], rest')
@@ -1162,7 +1164,7 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                             | _ -> Error "Expected '=' after function return type")
                     | _ -> Error "Expected ':' after function parameters"))
         | _ -> Error $"Expected '<' or '(' after function name '{name}'"
-    | _ -> Error "Expected function definition (def name(params) : type = body)"
+    | _ -> Error "Expected function declaration (let name(params) : type = body)"
 
 /// Parse a pattern for pattern matching
 let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string> =
@@ -1232,7 +1234,7 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
     | TLBracket :: rest ->
         // List pattern: [a, b, c] or []
         parseListPattern rest []
-    | TIdent name :: TLParen :: rest when System.Char.IsUpper(name.[0]) ->
+    | TIdent name :: TLParen :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
         // Constructor with payload pattern: Some(x)
         parsePattern rest
         |> Result.bind (fun (payloadPattern, remaining) ->
@@ -1240,10 +1242,10 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
             | TRParen :: rest' ->
                 Ok (PConstructor (name, Some payloadPattern), rest')
             | _ -> Error "Expected ')' after constructor pattern payload")
-    | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
+    | TIdent typeName :: TLBrace :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
         // Record pattern with type name: Point { x = a, y = b }
         parseRecordPatternWithTypeName typeName rest []
-    | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
+    | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
         // Constructor pattern without payload: Red, None
         Ok (PConstructor (name, None), rest)
     | TIdent name :: rest ->
@@ -1323,7 +1325,7 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
 let rec parseLetPattern (tokens: Token list) : Result<LetPattern * Token list, string> =
     match tokens with
     | TUnderscore :: rest -> Ok (LPWildcard, rest)
-    | TIdent name :: rest when not (System.Char.IsUpper(name.[0])) ->
+    | TIdent name :: rest when name.Length = 0 || not (System.Char.IsUpper(name.[0])) ->
         Ok (LPVariable name, rest)
     | TLParen :: TRParen :: rest -> Ok (LPUnit, rest)
     | TLParen :: rest ->
@@ -1390,7 +1392,7 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
         | _ -> Error "Expected 'when' or '->' after pattern")
 
 /// Parser: convert tokens to AST
-let parse (tokens: Token list) : Result<Program, string> =
+let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
     // Recursive descent parser with operator precedence
     // Precedence (low to high): or < and < comparison < +/- < */ < unary
 
@@ -1612,7 +1614,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                 parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Neq, left, right), remaining'))
-            | TLt :: rest ->
+            | (TLt | TSpacedLt) :: rest ->
                 parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Lt, left, right), remaining'))
@@ -1723,17 +1725,18 @@ let parse (tokens: Token list) : Result<Program, string> =
         |> Result.bind (fun (expr, remaining) ->
             parsePostfix expr remaining)
 
-    // Parse a qualified identifier chain: Stdlib.Int64.add
-    // Returns the full qualified name and remaining tokens
-    and parseQualifiedIdent (firstName: string) (toks: Token list) : string * Token list =
+    and parseQualifiedIdent
+        (qualifiedName: NameSyntax.QualifiedName)
+        (currentSegment: NameSyntax.Identifier)
+        (toks: Token list)
+        : NameSyntax.QualifiedName * Token list =
+        let currentText = NameSyntax.identifierText currentSegment
         match toks with
-        | TDot :: TIdent nextName :: rest ->
-            // Continue the chain: firstName.nextName...
-            let (fullName, remaining) = parseQualifiedIdent nextName rest
-            (firstName + "." + fullName, remaining)
-        | _ ->
-            // End of chain
-            (firstName, toks)
+        | TDot :: TIdent nextName :: rest when
+            currentText.Length > 0 && System.Char.IsUpper currentText[0] ->
+            let nextSegment = NameSyntax.identifierFromText nextName
+            parseQualifiedIdent (NameSyntax.append nextSegment qualifiedName) nextSegment rest
+        | _ -> (qualifiedName, toks)
 
     and parsePrimaryBase (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
@@ -1774,14 +1777,23 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
         // Qualified identifier: Stdlib.Int64.add, Module.func, or Stdlib.Result.Result.Ok
-        | TIdent name :: TDot :: TIdent nextName :: rest when System.Char.IsUpper(name.[0]) ->
-            // Parse the full qualified name
-            let (qualifiedTail, afterQualified) = parseQualifiedIdent nextName rest
-            let fullName = name + "." + qualifiedTail
-            // Check if the last segment is uppercase (constructor) or lowercase (function)
-            let lastDotIdx = fullName.LastIndexOf('.')
-            let lastSegment = if lastDotIdx >= 0 then fullName.Substring(lastDotIdx + 1) else fullName
-            let isConstructor = System.Char.IsUpper(lastSegment.[0])
+        | TIdent name :: TDot :: TIdent nextName :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
+            let firstSegment = NameSyntax.identifierFromText name
+            let nextSegment = NameSyntax.identifierFromText nextName
+            let initialName = NameSyntax.singleton firstSegment |> NameSyntax.append nextSegment
+            let (qualifiedName, afterQualified) = parseQualifiedIdent initialName nextSegment rest
+            let qualifiedSegments = NameSyntax.segments qualifiedName
+            let fullName = NameSyntax.toLegacySpelling qualifiedName
+            let lastSegment = qualifiedSegments |> List.last |> NameSyntax.identifierText
+            let typeName =
+                qualifiedSegments
+                |> List.rev
+                |> List.tail
+                |> List.rev
+                |> NonEmptyList.fromList
+                |> NameSyntax.fromNonEmptySegments
+                |> NameSyntax.toLegacySpelling
+            let isConstructor = lastSegment.Length > 0 && System.Char.IsUpper(lastSegment.[0])
             // Check what follows - function call, constructor, or variable reference
             match afterQualified with
             | TLBrace :: recordFieldsStart when isConstructor ->
@@ -1790,7 +1802,6 @@ let parse (tokens: Token list) : Result<Program, string> =
             | TLParen :: argsStart when isConstructor ->
                 // Qualified constructor with payload: Stdlib.Result.Result.Ok(5)
                 // Split into type name and variant name
-                let typeName = fullName.Substring(0, lastDotIdx)
                 let variantName = lastSegment
                 parseExpr argsStart
                 |> Result.bind (fun (payloadExpr, remaining) ->
@@ -1800,7 +1811,6 @@ let parse (tokens: Token list) : Result<Program, string> =
                     | _ -> Error "Expected ')' after constructor payload")
             | _ when isConstructor ->
                 // Qualified constructor without payload: Stdlib.Color.Red
-                let typeName = fullName.Substring(0, lastDotIdx)
                 let variantName = lastSegment
                 Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, None), afterQualified)
             | TLt :: typeArgsStart ->
@@ -1840,7 +1850,7 @@ let parse (tokens: Token list) : Result<Program, string> =
             | _ ->
                 // Qualified variable reference (function as value)
                 Ok (Var fullName, afterQualified)
-        | TIdent name :: TLt :: rest when not (System.Char.IsUpper(name.[0])) ->
+        | TIdent name :: TLt :: rest when name.Length = 0 || not (System.Char.IsUpper(name.[0])) ->
             // Could be generic function call: name<type, ...>(args)
             // Or could be comparison: name < expr
             // Disambiguate by looking for pattern: ident (> | ,ident)* > (
@@ -1912,12 +1922,12 @@ let parse (tokens: Token list) : Result<Program, string> =
             else
                 // Not a type application, treat name as variable and let comparison parsing handle <
                 Ok (Var name, TLt :: rest)
-        | TIdent name :: TLParen :: rest when not (System.Char.IsUpper(name.[0])) ->
+        | TIdent name :: TLParen :: rest when name.Length = 0 || not (System.Char.IsUpper(name.[0])) ->
             // Function call: name(args) - only for lowercase names
             parseCallArgs rest []
             |> Result.map (fun (args, remaining) ->
                 (Call (name, args), remaining))
-        | TIdent name :: TLParen :: rest when System.Char.IsUpper(name.[0]) ->
+        | TIdent name :: TLParen :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor with payload: Constructor(payload)
             parseExpr rest
             |> Result.bind (fun (payloadExpr, remaining) ->
@@ -1925,7 +1935,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | TRParen :: rest' ->
                     Ok (Constructor (UnresolvedConstructor None, name, Some payloadExpr), rest')
                 | _ -> Error "Expected ')' after constructor payload")
-        | TIdent typeName :: TLt :: typeArgsStart when System.Char.IsUpper(typeName.[0]) ->
+        | TIdent typeName :: TLt :: typeArgsStart when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             match parseTypeArgs typeArgsStart [] with
             | Ok (_, TLBrace :: recordFieldsStart) ->
                 parseRecordLiteralFieldsWithTypeName typeName recordFieldsStart []
@@ -1935,10 +1945,10 @@ let parse (tokens: Token list) : Result<Program, string> =
                 Ok (Constructor (UnresolvedConstructor None, typeName, None), TLt :: typeArgsStart)
         | TIdent "Dict" :: TLBrace :: rest ->
             parseDictLiteralFields rest []
-        | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
+        | TIdent typeName :: TLBrace :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             // Record literal with type name: Point { x = 1, y = 2 }
             parseRecordLiteralFieldsWithTypeName typeName rest []
-        | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
+        | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor without payload (enum variant)
             Ok (Constructor (UnresolvedConstructor None, name, None), rest)
         | TIdent name :: rest ->
@@ -2204,26 +2214,46 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | _ -> Error "Expected ',' or ')' after function argument")
 
     // Parse top-level elements (functions or expressions)
-    let rec parseTopLevels (toks: Token list) (acc: TopLevel list) : Result<Program, string> =
+    let rec parseTopLevels
+        (toks: Token list)
+        (acc: NameSyntax.SourceDeclaration list)
+        : Result<NameSyntax.ParsedSource, string> =
         match toks with
         | TEOF :: [] ->
             // End of input
             if List.isEmpty acc then
                 Error "Empty program"
             else
-                Ok (Program (List.rev acc))
+                Ok (NameSyntax.SourceDeclarations (NonEmptyList.fromList (List.rev acc)))
 
-        | TDef :: _ ->
-            // Parse function definition
-            parseFunctionDef toks parseExpr
+        | TFunctionDeclaration :: _ ->
+            Error "Legacy 'def' declarations are not supported; use 'let'"
+
+        | TLet :: TIdent firstName :: TLParen :: rest ->
+            parseFunctionDef (TFunctionDeclaration :: TIdent firstName :: TLParen :: rest) parseExpr
             |> Result.bind (fun (funcDef, remaining) ->
-                parseTopLevels remaining (FunctionDef funcDef :: acc))
+                parseTopLevels remaining (NameSyntax.SourceFunction (NameSyntax.identifierFromText firstName, funcDef) :: acc))
+
+        | TLet :: TIdent firstName :: TLt :: rest ->
+            parseFunctionDef (TFunctionDeclaration :: TIdent firstName :: TLt :: rest) parseExpr
+            |> Result.bind (fun (funcDef, remaining) ->
+                parseTopLevels remaining (NameSyntax.SourceFunction (NameSyntax.identifierFromText firstName, funcDef) :: acc))
+
+        | TVal :: TIdent name :: TEquals :: rest ->
+            parseExpr rest
+            |> Result.bind (fun (value, remaining) ->
+                parseTopLevels remaining (NameSyntax.SourceValue (NameSyntax.identifierFromText name, value) :: acc))
+
+        | TVal :: _ -> Error "Expected top-level value declaration: val name = expression"
 
         | TType :: _ ->
             // Parse type definition
             parseTypeDef toks
             |> Result.bind (fun (typeDef, remaining) ->
-                parseTopLevels remaining (TypeDef typeDef :: acc))
+                let typeName =
+                    match typeDef with
+                    | RecordDef (name, _, _) | SumTypeDef (name, _, _) | TypeAlias (name, _, _) -> name
+                parseTopLevels remaining (NameSyntax.SourceType (NameSyntax.identifierFromText typeName, typeDef) :: acc))
 
         | _ ->
             // Parse expression
@@ -2232,7 +2262,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                 match remaining with
                 | TEOF :: [] ->
                     // Single expression program
-                    Ok (Program (List.rev (Expression expr :: acc)))
+                    Ok (NameSyntax.SourceDeclarations (NonEmptyList.fromList (List.rev (NameSyntax.SourceExpression expr :: acc))))
                 | _ ->
                     // More top-level definitions after expression not allowed for now
                     Error "Unexpected tokens after expression (only function definitions can be followed by more definitions)")
@@ -2241,7 +2271,9 @@ let parse (tokens: Token list) : Result<Program, string> =
 
 let private isInternalIdentifier (name: string) : bool =
     let isAllUnderscores = name |> Seq.forall (fun c -> c = '_')
-    (name.StartsWith("__") && not isAllUnderscores) || name.Contains(".__")
+    (name.StartsWith("__") && not isAllUnderscores)
+    || name.Contains(".__")
+    || name.Contains(".Internal.")
 
 let private validateNoInternalIdentifier (name: string) : Result<unit, string> =
     if isInternalIdentifier name then
@@ -2427,11 +2459,22 @@ let private validatePublicDictTypeArity (tokens: Token list) : Result<unit, stri
     validate tokens
 
 /// Parse a string directly to AST
-let parseString (allowInternal: bool) (input: string) : Result<Program, string> =
-    lex input
+let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.ParsedSource, string> =
+    let rec extractModules source modules =
+        match NameSyntax.tryExtractModuleHeader source with
+        | Some (moduleName, body) -> extractModules body (moduleName :: modules)
+        | None -> (List.rev modules, source)
+    let (sourceModules, sourceBody) = extractModules input []
+    lex sourceBody
     |> Result.bind (fun tokens ->
         if allowInternal then parse tokens
         else validatePublicDictTypeArity tokens |> Result.bind (fun () -> parse tokens))
+    |> Result.map (NameSyntax.wrapModules sourceModules)
+
+/// Parse and cross the explicit source-tree to compiler-AST boundary.
+let parseString (allowInternal: bool) (input: string) : Result<Program, string> =
+    parseSourceString allowInternal input
+    |> Result.bind NameSyntax.normalizeSource
     |> Result.bind (fun program ->
         if allowInternal then Ok program
         else validateNoInternalIdentifiers program)

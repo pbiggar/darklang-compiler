@@ -27,14 +27,14 @@ The current gap is concentrated in `innerSum`. Dark does compile the recursive l
 Dark source:
 
 ```dark
-def innerSum(k: Int64, n: Int64, acc: Float) : Float =
+let innerSum(k: Int64, n: Int64, acc: Float) : Float =
     if k > n then
         acc
     else
         let kf = Stdlib.Int64.toFloat(k) in
         innerSum(k + 1, n, acc + 1.0 / (kf * kf))
 
-def pisum(rounds: Int64, n: Int64, lastResult: Float) : Float =
+let pisum(rounds: Int64, n: Int64, lastResult: Float) : Float =
     if rounds <= 0 then
         lastResult
     else

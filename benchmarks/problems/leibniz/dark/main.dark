@@ -1,13 +1,13 @@
 // Leibniz Pi Benchmark
 // Computes pi using Leibniz formula: pi/4 = 1 - 1/3 + 1/5 - 1/7 + ...
 
-def leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float =
+let leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float =
     if i >= n then sum * 4.0
     else
         let term = sign / Stdlib.Int64.toFloat(2 * i + 1) in
         leibnizLoop(i + 1, n, sum + term, Stdlib.Float.negate(sign))
 
-def leibnizPi(n: Int64) : Float =
+let leibnizPi(n: Int64) : Float =
     leibnizLoop(0, n, 0.0, 1.0)
 
 // Use 100 million iterations for timing

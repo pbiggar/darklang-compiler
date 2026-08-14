@@ -18,7 +18,7 @@ Dark remains slower than Rust and OCaml on this benchmark, but several older not
 ### Dark (`benchmarks/problems/ackermann/dark/main.dark`)
 
 ```dark
-def ackermann(m: Int64, n: Int64) : Int64 =
+let ackermann(m: Int64, n: Int64) : Int64 =
     if m == 0 then n + 1
     else if n == 0 then ackermann(m - 1, 1)
     else ackermann(m - 1, ackermann(m, n - 1))

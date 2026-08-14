@@ -113,15 +113,15 @@ match StrErr("failed") with | StrOk(s) -> s | StrErr(e) -> e = "failed"
 
 // Test that Int64 is recognized as a primitive type, not a variant name
 type IntAlias = Int64
-def useInt64(x: Int64): Int64 = x + 1
+let useInt64(x: Int64): Int64 = x + 1
 useInt64(41) = 42
 
 // Test that String is recognized as a primitive type, not a variant name
 type StrAlias = String
-def useString(s: String): String = s
+let useString(s: String): String = s
 useString("hello") = "hello"
 
 // Test that Bool is recognized as a primitive type, not a variant name
 type BoolAlias = Bool
-def useBool(b: Bool): Int64 = if b then 1 else 0
+let useBool(b: Bool): Int64 = if b then 1 else 0
 useBool(true) = 1

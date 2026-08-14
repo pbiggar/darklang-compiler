@@ -1,6 +1,6 @@
 // Mandelbrot Benchmark - Quick check version
 
-def iterate(cr: Float, ci: Float, zr: Float, zi: Float, iter: Int64, maxIter: Int64) : Int64 =
+let iterate(cr: Float, ci: Float, zr: Float, zi: Float, iter: Int64, maxIter: Int64) : Int64 =
     if iter >= maxIter then
         1
     else
@@ -13,7 +13,7 @@ def iterate(cr: Float, ci: Float, zr: Float, zi: Float, iter: Int64, maxIter: In
             let newZi = 2.0 * zr * zi + ci in
             iterate(cr, ci, newZr, newZi, iter + 1, maxIter)
 
-def countRow(y: Int64, startX: Int64, endX: Int64, size: Int64, maxIter: Int64, count: Int64) : Int64 =
+let countRow(y: Int64, startX: Int64, endX: Int64, size: Int64, maxIter: Int64, count: Int64) : Int64 =
     if startX >= endX then
         count
     else
@@ -25,7 +25,7 @@ def countRow(y: Int64, startX: Int64, endX: Int64, size: Int64, maxIter: Int64, 
         let inSet = iterate(cr, ci, 0.0, 0.0, 0, maxIter) in
         countRow(y, startX + 1, endX, size, maxIter, count + inSet)
 
-def countAll(startY: Int64, endY: Int64, size: Int64, maxIter: Int64, count: Int64) : Int64 =
+let countAll(startY: Int64, endY: Int64, size: Int64, maxIter: Int64, count: Int64) : Int64 =
     if startY >= endY then
         count
     else

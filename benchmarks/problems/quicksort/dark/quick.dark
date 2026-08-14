@@ -3,12 +3,12 @@
 
 // The Rust reference chooses the middle element and traverses the input once
 // for each of its three partitions. Keep the same source-level work here.
-def getAtOrDefault(list: List<Int64>, index: Int64, default_: Int64) : Int64 =
+let getAtOrDefault(list: List<Int64>, index: Int64, default_: Int64) : Int64 =
     match Stdlib.List.getAt<Int64>(list, index) with
     | Some(v) -> v
     | None -> default_
 
-def quicksort(arr: List<Int64>) : List<Int64> =
+let quicksort(arr: List<Int64>) : List<Int64> =
     let len = Stdlib.List.length<Int64>(arr) in
     if len <= 1 then arr
     else
@@ -21,25 +21,25 @@ def quicksort(arr: List<Int64>) : List<Int64> =
             quicksort(right))
 
 // Generate pseudo-random list using LCG
-def generateListHelper(n: Int64, x: Int64, acc: List<Int64>) : List<Int64> =
+let generateListHelper(n: Int64, x: Int64, acc: List<Int64>) : List<Int64> =
     if n <= 0 then Stdlib.List.reverse<Int64>(acc)
     else
         let nextX = (x * 1103515245 + 12345) % 2147483648 in
         let value = nextX % 10000 in
         generateListHelper(n - 1, nextX, [value, ...acc])
 
-def generateList(n: Int64, seed: Int64) : List<Int64> =
+let generateList(n: Int64, seed: Int64) : List<Int64> =
     generateListHelper(n, seed, [])
 
 // Compute checksum with index weighting
-def checksumHelper(arr: List<Int64>, index: Int64, acc: Int64) : Int64 =
+let checksumHelper(arr: List<Int64>, index: Int64, acc: Int64) : Int64 =
     match arr with
     | [] -> acc
     | [h, ...t] ->
         let newAcc = (acc + (h * (index + 1)) % 1000000007) % 1000000007 in
         checksumHelper(t, index + 1, newAcc)
 
-def checksum(arr: List<Int64>) : Int64 =
+let checksum(arr: List<Int64>) : Int64 =
     checksumHelper(arr, 0, 0)
 
 // Reduced from 5,000 generated values to 20.

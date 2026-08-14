@@ -83,14 +83,16 @@ name`, and `Ambiguous <context> reference`.
 - The compiler's native `File`, `Path`, `Platform`, `Random`, raw-memory, and
   related intrinsic catalog remains a compiler-only extension. Each entry is an
   explicit `CompilerExtension` candidate under its full registered spelling.
-- The compiler parser still flattens interpreter `module` blocks and does not
-  load content-addressed packages. Imported compilation environments model the
-  same precedence boundary, but package hashes and dependency traversal remain
-  an intentional, documented program-model divergence.
+- Both parser modes accept module headers and blocks, then flatten their typed
+  paths at the explicit parser-to-AST normalization boundary. The compiler does
+  not load content-addressed packages. Imported compilation environments model
+  the same precedence boundary, but package hashes and dependency traversal
+  remain an intentional, documented program-model divergence.
 - The compiler AST has no top-level value declaration. Value identities remain
   explicit in the resolver for lexical, inherited package, and registered
-  builtin candidates, while source constants such as `Stdlib.Math.pi` are
-  compiler nullary functions and must be called with `()`.
+  builtin candidates. The parser recognizes `val` and reports the unsupported
+  AOT initialization boundary explicitly; source constants such as
+  `Stdlib.Math.pi` are compiler nullary functions and must be called with `()`.
 - Repeated flattened type declarations with the same canonical type identity
   are identity-deduplicated. This preserves existing module-adapter behavior;
   distinct type identities and distinct constructor owners remain ambiguous.

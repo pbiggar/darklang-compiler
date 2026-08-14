@@ -78,7 +78,7 @@ Tests added to `src/Tests/e2e/strings.e2e`:
 ### Original Reproduction
 
 ```dark
-def test(n: Int64) : List<(Int64, Int64)> =
+let test(n: Int64) : List<(Int64, Int64)> =
     let pair = (5, 6) in
     [pair]
 

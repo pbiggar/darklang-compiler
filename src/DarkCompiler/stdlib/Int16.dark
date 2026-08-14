@@ -2,61 +2,63 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.Int16
+
 // Stdlib.Int16 - Integer operations
 
-def Stdlib.Int16.add(a: Int16, b: Int16) : Int16 = a + b
+let add(a: Int16, b: Int16) : Int16 = a + b
 
-def Stdlib.Int16.subtract(a: Int16, b: Int16) : Int16 = a - b
+let subtract(a: Int16, b: Int16) : Int16 = a - b
 
-def Stdlib.Int16.multiply(a: Int16, b: Int16) : Int16 = a * b
+let multiply(a: Int16, b: Int16) : Int16 = a * b
 
-def Stdlib.Int16.divide(a: Int16, b: Int16) : Int16 = a / b
+let divide(a: Int16, b: Int16) : Int16 = a / b
 
-def Stdlib.Int16.max(a: Int16, b: Int16) : Int16 = if a > b then a else b
+let max(a: Int16, b: Int16) : Int16 = if a > b then a else b
 
-def Stdlib.Int16.min(a: Int16, b: Int16) : Int16 = if a < b then a else b
+let min(a: Int16, b: Int16) : Int16 = if a < b then a else b
 
-def Stdlib.Int16.mod(a: Int16, b: Int16) : Int16 = a % b
+let mod(a: Int16, b: Int16) : Int16 = a % b
 
-def Stdlib.Int16.absoluteValue(a: Int16) : Int16 = if a < 0s then 0s - a else a
+let absoluteValue(a: Int16) : Int16 = if a < 0s then 0s - a else a
 
-def Stdlib.Int16.negate(a: Int16) : Int16 = 0s - a
+let negate(a: Int16) : Int16 = 0s - a
 
-def Stdlib.Int16.power(base: Int16, exponent: Int16) : Int16 =
+let power(base: Int16, exponent: Int16) : Int16 =
     if exponent < 0s then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
     else if exponent == 0s then 1s
     else if exponent == 1s then base
     else base * Stdlib.Int16.power(base, exponent - 1s)
 
-def Stdlib.Int16.clamp(value: Int16, limitA: Int16, limitB: Int16) : Int16 =
+let clamp(value: Int16, limitA: Int16, limitB: Int16) : Int16 =
     let lower = Stdlib.Int16.min(limitA, limitB) in
     let upper = Stdlib.Int16.max(limitA, limitB) in
     Stdlib.Int16.max(lower, Stdlib.Int16.min(upper, value))
 
-def Stdlib.Int16.greaterThan(a: Int16, b: Int16) : Bool = a > b
+let greaterThan(a: Int16, b: Int16) : Bool = a > b
 
-def Stdlib.Int16.greaterThanOrEqualTo(a: Int16, b: Int16) : Bool = a >= b
+let greaterThanOrEqualTo(a: Int16, b: Int16) : Bool = a >= b
 
-def Stdlib.Int16.lessThan(a: Int16, b: Int16) : Bool = a < b
+let lessThan(a: Int16, b: Int16) : Bool = a < b
 
-def Stdlib.Int16.lessThanOrEqualTo(a: Int16, b: Int16) : Bool = a <= b
+let lessThanOrEqualTo(a: Int16, b: Int16) : Bool = a <= b
 
 // Bitwise operations
-def Stdlib.Int16.bitwiseAnd(a: Int16, b: Int16) : Int16 = a & b
+let bitwiseAnd(a: Int16, b: Int16) : Int16 = a & b
 
-def Stdlib.Int16.bitwiseOr(a: Int16, b: Int16) : Int16 = a ||| b
+let bitwiseOr(a: Int16, b: Int16) : Int16 = a ||| b
 
-def Stdlib.Int16.bitwiseXor(a: Int16, b: Int16) : Int16 = a ^ b
+let bitwiseXor(a: Int16, b: Int16) : Int16 = a ^ b
 
-def Stdlib.Int16.shiftLeft(a: Int16, shift: Int16) : Int16 = a << shift
+let shiftLeft(a: Int16, shift: Int16) : Int16 = a << shift
 
-def Stdlib.Int16.shiftRight(a: Int16, shift: Int16) : Int16 = a >> shift
+let shiftRight(a: Int16, shift: Int16) : Int16 = a >> shift
 
-def Stdlib.Int16.bitwiseNot(a: Int16) : Int16 = ~~~a
+let bitwiseNot(a: Int16) : Int16 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-def Stdlib.Int16.popcount(x: Int16) : Int16 =
+let popcount(x: Int16) : Int16 =
     let mask1 = 21845s in
     let mask2 = 13107s in
     let mask3 = 3855s in
@@ -68,7 +70,7 @@ def Stdlib.Int16.popcount(x: Int16) : Int16 =
     x & mask4
 
 // Convert a single digit (0-9) to its string representation
-def Stdlib.Int16.__digitToString(n: Int16) : String =
+let __digitToString(n: Int16) : String =
     match n with
     | 0s -> "0"
     | 1s -> "1"
@@ -83,7 +85,7 @@ def Stdlib.Int16.__digitToString(n: Int16) : String =
     | _ -> "?"
 
 // Convert an integer to its string representation
-def Stdlib.Int16.toString(n: Int16) : String =
+let toString(n: Int16) : String =
     if n < 0s then
         if n < -9s then
             let quotient = n / 10s in
@@ -93,13 +95,13 @@ def Stdlib.Int16.toString(n: Int16) : String =
     else Stdlib.Int16.toString(n / 10s) ++ Stdlib.Int16.__digitToString(n % 10s)
 
 // Check if integer is even
-def Stdlib.Int16.isEven(n: Int16) : Bool =
+let isEven(n: Int16) : Bool =
     (n % 2s) == 0s
 
 // Check if integer is odd
-def Stdlib.Int16.isOdd(n: Int16) : Bool =
+let isOdd(n: Int16) : Bool =
     (n % 2s) != 0s
 
 // Sum all integers in a list
-def Stdlib.Int16.sum(list: List<Int16>) : Int16 =
+let sum(list: List<Int16>) : Int16 =
     Stdlib.List.fold<Int16, Int16>(list, 0s, fun acc x -> acc + x)

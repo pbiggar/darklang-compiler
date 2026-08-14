@@ -93,7 +93,7 @@ let rec private findCallArgs (funcName: string) (expr: ANF.AExpr) : ANF.Atom lis
         None
 
 let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
-    let funcName = "Stdlib.__SkewList.__TAG_SINGLE"
+    let funcName = "Stdlib.Internal.SkewList.__TAG_SINGLE"
     let expr = AST.Call (funcName, AST.NonEmptyList.singleton AST.UnitLiteral)
     let env : VarEnv = Map.empty
     let funcReg : FunctionRegistry =

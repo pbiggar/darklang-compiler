@@ -2,12 +2,14 @@
 //
 // Provides legacy urlencode_v0 functions used by upstream tests.
 
+module AWS
+
 // Check whether a byte is a hexadecimal digit.
-def AWS.__isHexDigitByte(b: Int64) : Bool =
+let __isHexDigitByte(b: Int64) : Bool =
     (b >= 48 && b <= 57) || (b >= 65 && b <= 70) || (b >= 97 && b <= 102)
 
 // Check whether a byte is URL-unreserved.
-def AWS.__isUnreservedByte(b: Int64) : Bool =
+let __isUnreservedByte(b: Int64) : Bool =
     (b >= 65 && b <= 90)
     || (b >= 97 && b <= 122)
     || (b >= 48 && b <= 57)
@@ -17,17 +19,17 @@ def AWS.__isUnreservedByte(b: Int64) : Bool =
     || b == 126
 
 // Convert nibble (0-15) to uppercase hex digit.
-def AWS.__hexDigit(n: Int64) : String =
+let __hexDigit(n: Int64) : String =
     Stdlib.String.slice("0123456789ABCDEF", n, n + 1)
 
 // Convert a byte (0-255) into two uppercase hex digits.
-def AWS.__byteToHex(b: Int64) : String =
+let __byteToHex(b: Int64) : String =
     let hi = b / 16 in
     let lo = b % 16 in
     AWS.__hexDigit(hi) ++ AWS.__hexDigit(lo)
 
 // Drop malformed '%' bytes, but preserve valid %HH sequences unchanged.
-def AWS.__sanitizePercentSequences(input: String, idx: Int64, len: Int64, acc: String) : String =
+let __sanitizePercentSequences(input: String, idx: Int64, len: Int64, acc: String) : String =
     if idx >= len then
         acc
     else
@@ -57,7 +59,7 @@ def AWS.__sanitizePercentSequences(input: String, idx: Int64, len: Int64, acc: S
 
 // Percent-encode UTF-8 bytes.
 // keepSlash = true matches historical AWS behavior where '/' is preserved.
-def AWS.__urlencodeBytes(input: String, idx: Int64, len: Int64, keepSlash: Bool, acc: String) : String =
+let __urlencodeBytes(input: String, idx: Int64, len: Int64, keepSlash: Bool, acc: String) : String =
     if idx >= len then
         acc
     else
@@ -98,16 +100,12 @@ def AWS.__urlencodeBytes(input: String, idx: Int64, len: Int64, keepSlash: Bool,
                 acc ++ "%" ++ AWS.__byteToHex(b0)
             )
 
-def AWS.__urlencode(input: String, keepSlash: Bool) : String =
+let __urlencode(input: String, keepSlash: Bool) : String =
     let sanitized =
         AWS.__sanitizePercentSequences(input, 0, Stdlib.String.length(input), "")
     in
     AWS.__urlencodeBytes(sanitized, 0, Stdlib.String.length(sanitized), keepSlash, "")
 
 // Legacy helper used by upstream tests.
-def AWS.urlencode_v0(input: String) : String =
+let urlencode_v0(input: String) : String =
     AWS.__urlencode(input, true)
-
-// Legacy helper used by upstream tests.
-def Twitter.urlencode_v0(input: String) : String =
-    AWS.__urlencode(input, false)

@@ -210,7 +210,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | BorrowedCall (funcName, args) ->
         // Return type from function registry (with special-case inference for stdlib list/tuple helpers)
         match funcName, args with
-        | name, [listAtom; _] when name.StartsWith("Stdlib.List.getAt") || name.StartsWith("Stdlib.__SkewList.getAt") ->
+        | name, [listAtom; _] when name.StartsWith("Stdlib.List.getAt") || name.StartsWith("Stdlib.Internal.SkewList.getAt") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
@@ -218,7 +218,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | Some (AST.TList elemType) ->
                     Some (AST.TSum ("Stdlib.Option.Option", [elemType]))
                 | _ -> None
-        | name, [listAtom] when name.StartsWith("Stdlib.List.head") || name.StartsWith("Stdlib.__SkewList.head") ->
+        | name, [listAtom] when name.StartsWith("Stdlib.List.head") || name.StartsWith("Stdlib.Internal.SkewList.head") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
@@ -226,7 +226,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | Some (AST.TList elemType) ->
                     Some (AST.TSum ("Stdlib.Option.Option", [elemType]))
                 | _ -> None
-        | name, [listAtom] when name.StartsWith("Stdlib.List.tail") || name.StartsWith("Stdlib.__SkewList.tail") ->
+        | name, [listAtom] when name.StartsWith("Stdlib.List.tail") || name.StartsWith("Stdlib.Internal.SkewList.tail") ->
             match inferAtomType ctx listAtom with
             | Some (AST.TList elemType) when name.StartsWith("Stdlib.List.tail") ->
                 Some (AST.TSum ("Stdlib.Option.Option", [AST.TList elemType]))
@@ -1145,8 +1145,8 @@ let rec insertRCWithAnalysis
             let bodyReturned = returnedSet bodyInfo
             let consumedByImmediateI64Push =
                 let isI64Push (funcName: string) : bool =
-                    funcName = "Stdlib.__SkewList.push_i64"
-                    || funcName = "Stdlib.__SkewList.pushBack_i64"
+                    funcName = "Stdlib.Internal.SkewList.push_i64"
+                    || funcName = "Stdlib.Internal.SkewList.pushBack_i64"
                 let consumesSecondArg (args: Atom list) : bool =
                     match args with
                     | _listAtom :: Var valueTemp :: _ -> valueTemp = tempId

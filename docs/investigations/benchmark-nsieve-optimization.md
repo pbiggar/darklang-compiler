@@ -22,7 +22,7 @@ Evidence refreshed on commit `f88e41ff`:
 - The same result table reports Rust at `234,163,043` instructions and OCaml at
   `559,365,264` instructions.
 - `./dark --dump-mir benchmarks/problems/nsieve/dark/main.dark` shows
-  `markMultiples` still calls `Stdlib.__HAMT.__setHelper_i64_bool` and then
+  `markMultiples` still calls `Stdlib.Internal.HAMT.__setHelper_i64_bool` and then
   calls itself before decrementing the new Dict.
 - `./dark --dump-lir benchmarks/problems/nsieve/dark/main.dark` shows the same
   post-call reference-count decrement in backend IR, so the self-call is not
@@ -34,7 +34,7 @@ Relevant MIR shape:
 Function markMultiples:
   markMultiples_L1:
     v334 <- v329 + v330 : TInt64
-    v461 <- Call(Stdlib.__HAMT.__setHelper_i64_bool, [v332, v329, v460, true, 0])
+    v461 <- Call(Stdlib.Internal.HAMT.__setHelper_i64_bool, [v332, v329, v460, true, 0])
     v335 <- v461 : TDict (TInt64, TBool)
     v336 <- Call(markMultiples, [v334, v330, v331, v335])
     RefCountDec(v461, size=8, kind=dict)
@@ -46,7 +46,7 @@ Relevant LIR shape:
 ```text
 markMultiples_L1:
   X23 <- Add(X19, Reg X21)
-  X19 <- Call(Stdlib.__HAMT.__setHelper_i64_bool, ...)
+  X19 <- Call(Stdlib.Internal.HAMT.__setHelper_i64_bool, ...)
   X20 <- Call(markMultiples, [Reg X23, Reg X21, Reg X22, Reg X19])
   RefCountDec(X19, 8, dict)
   X0 <- Mov(Reg X20)
@@ -65,7 +65,7 @@ nsieve(100000)
 Dark:
 
 ```dark
-def markMultiples(j: Int64, step: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
+let markMultiples(j: Int64, step: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
     if j > n then composites
     else markMultiples(j + step, step, n, Stdlib.Dict.set<Int64, Bool>(composites, j, true))
 ```
@@ -101,7 +101,7 @@ the same data structure as the baselines.
 
 Source-level `markMultiples` is tail-recursive, but current MIR and LIR are not
 tail-call shaped after reference-count insertion. The new Dict returned by
-`Stdlib.__HAMT.__setHelper_i64_bool` is decremented after the recursive
+`Stdlib.Internal.HAMT.__setHelper_i64_bool` is decremented after the recursive
 `markMultiples` call returns.
 
 That post-call cleanup means larger runs still have a stack-depth risk even
@@ -111,10 +111,10 @@ address the larger data-structure mismatch by itself.
 
 ### 3. HAMT Path Copying and Allocation Still Dominate the Dark Representation
 
-The current `Stdlib.__HAMT.__setHelper_i64_bool` path allocates leaf/internal
+The current `Stdlib.Internal.HAMT.__setHelper_i64_bool` path allocates leaf/internal
 nodes and copies children when updating the persistent Dict. The LIR contains
 `RawAlloc` in leaf allocation, collision handling, leaf expansion, and internal
-copy helpers such as `Stdlib.__HAMT.__copyInternalWithUpdate_i64_bool`.
+copy helpers such as `Stdlib.Internal.HAMT.__copyInternalWithUpdate_i64_bool`.
 
 Improving Dict path copying could help Dict-heavy programs generally, but it
 would still leave `nsieve` using a sparse persistent structure for dense mutable

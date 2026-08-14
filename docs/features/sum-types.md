@@ -56,11 +56,10 @@ Pair.Pair(1L, "one")
 OneTuple.OneTuple((1L, "one"))
 ```
 
-The interpreter parser rejects compiler-dialect declarations such as
-`type Option<a> = Some of a | None` and qualified declaration names. Compiler
-declaration syntax remains an explicitly separate input dialect for the
-existing compiler stdlib and legacy `.e2e` corpus; it is not accepted by
-`--syntax=interpreter` and is not an interpreter parity claim.
+Both parser modes reject the removed compiler declaration dialect: omitted
+leading bars, qualified declaration names, bare declaration type parameters,
+and `def` declarations. Public declarations use the interpreter spellings
+shown above.
 
 ## Declaration and resolution model
 
@@ -76,12 +75,10 @@ when more than one visible nominal type owns the case; qualification selects a
 unique declaration. A qualified lookup never falls back to an unrelated short
 name.
 
-The current compiler does not yet parse interpreter `module` declarations.
-Consequently, module-local lexical opening and same-name collision probes that
-require source modules remain an intentional, documented divergence. Fully
-qualified constructors from the prebuilt stdlib do preserve their module path
-and nominal type. Adding source modules is an independent language boundary,
-not part of ADT resolution.
+Both parser modes accept interpreter module headers and nested module blocks.
+At the explicit parser-to-AST boundary, source module paths are flattened into
+canonical function and type identities. Module-local opening, package loading,
+and same-name collision behavior remain post-parse resolution boundaries.
 
 ## Typing and evaluation
 

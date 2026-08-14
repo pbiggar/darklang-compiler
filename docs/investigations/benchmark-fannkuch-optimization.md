@@ -18,12 +18,12 @@ Dark uses **immutable SkewList-backed lists** for representing permutations, whi
 
 ### Dark (`benchmarks/problems/fannkuch/dark/main.dark`)
 ```dark
-def reversePrefix(list: List<Int64>, k: Int64) : List<Int64> =
+let reversePrefix(list: List<Int64>, k: Int64) : List<Int64> =
     let prefix = Stdlib.List.take<Int64>(list, k + 1) in
     let suffix = Stdlib.List.drop<Int64>(list, k + 1) in
     Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(prefix), suffix)
 
-def countFlips(perm: List<Int64>, flips: Int64) : Int64 =
+let countFlips(perm: List<Int64>, flips: Int64) : Int64 =
     let first = getAt(perm, 0) in
     if first == 0 then flips
     else countFlips(reversePrefix(perm, first), flips + 1)
@@ -138,7 +138,7 @@ rotateLeft_body:
   v12753 <- Call(Stdlib.List.drop_i64, [...])      ; Drop 1
   v12755 <- Call(Stdlib.List.__takeHelper_i64, ...) ; Take i
   v12758 <- Call(Stdlib.List.drop_i64, [...])      ; Get rest
-  v12759 <- Call(Stdlib.__SkewList.singleton_i64, ...) ; Wrap element
+  v12759 <- Call(Stdlib.Internal.SkewList.singleton_i64, ...) ; Wrap element
   v12761 <- Call(Stdlib.List.append_i64, [...])    ; First append
   TailCall(Stdlib.List.append_i64, [...])          ; Second append
 ```
@@ -159,7 +159,7 @@ nextPerm:
     nextPerm(newPerm, newCount, i + 1, n)
 ```
 
-In LIR, both `setAt` paths rebuild the affected digit spine and tree path through `Stdlib.__SkewList.__digitsSetAt_i64` and `Stdlib.__SkewList.__treeSetAt_i64`, with reference-count cleanup along the path. Rust and OCaml update `count[i]` in place inside the permutation-generation loop, so this cost is unique to the current Dark representation.
+In LIR, both `setAt` paths rebuild the affected digit spine and tree path through `Stdlib.Internal.SkewList.__digitsSetAt_i64` and `Stdlib.Internal.SkewList.__treeSetAt_i64`, with reference-count cleanup along the path. Rust and OCaml update `count[i]` in place inside the permutation-generation loop, so this cost is unique to the current Dark representation.
 
 ### Memory Allocation Analysis
 
@@ -217,9 +217,9 @@ Fannkuch typically operates on lists of 6-9 elements. SkewList has significant o
 
 **Evidence from Dark IR (tag checking overhead):**
 ```
-Stdlib.SkewList.getAt_i64:
-  v11890 <- Call(Stdlib.SkewList.__getTag_i64, [...])
-  v11891 <- Call(Stdlib.SkewList.__TAG_LEAF, [...])
+Stdlib.Internal.SkewList.getAt_i64:
+  v11890 <- Call(Stdlib.Internal.SkewList.__getTag_i64, [...])
+  v11891 <- Call(Stdlib.Internal.SkewList.__TAG_LEAF, [...])
   Cmp(v11890, Reg v11891)
   Branch(...)  ; Branch to different cases
 ```
@@ -287,11 +287,11 @@ countFlips_L1:
 
 **Evidence from Dark source:**
 ```dark
-def countFlips(perm: List<Int64>, flips: Int64) : Int64 =
+let countFlips(perm: List<Int64>, flips: Int64) : Int64 =
     let first = getAt(perm, 0) in  // Called every iteration
     ...
 
-def rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
+let rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
     let first = getAt(list, 0) in  // Called every rotation
     ...
 ```

@@ -1,0 +1,197 @@
+// Identifier, keyword, capitalization, qualification, and boundary parity.
+
+---NAME---
+def rec private and internal are ordinary identifiers
+---PARSE-AS---
+compiler
+---SOURCE---
+let def(rec: Int64, private: Int64, internal: Int64) : Int64 = rec
+def(1, 2, 3)
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+quoted reserved identifiers roundtrip
+---PARSE-AS---
+compiler
+---SOURCE---
+let ``let``(``val``: Int64, ``elif``: Int64, ``fun``: Int64) : Int64 = ``val``
+``let``(1, 2, 3)
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+identifier apostrophe suffix roundtrips bare
+---PARSE-AS---
+compiler
+---SOURCE---
+let next'(value': Int64) : Int64 = value'
+next'(1)
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+empty quoted identifier is the blank name
+---PARSE-AS---
+compiler
+---SOURCE---
+let ```` = 1 in 2
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+blank spelling roundtrips canonically
+---PARSE-AS---
+compiler
+---SOURCE---
+let ___ = 1 in 2
+---FORMAT-AS---
+interpreter
+---EXPECTED---
+let ___ = 1L in 2L
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+quoted dot remains one qualified segment
+---PARSE-AS---
+compiler
+---SOURCE---
+A.``b.c``
+---FORMAT-AS---
+interpreter
+---EXPECTED---
+A.``b.c``
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+qualification stops before lowercase field access
+---PARSE-AS---
+compiler
+---SOURCE---
+A.value.field
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+keyword prefixes stay identifiers
+---PARSE-AS---
+compiler
+---SOURCE---
+let lettuce = 1 in lettuce
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+glued integer and identifier reject as one literal
+---PARSE-AS---
+compiler
+---SOURCE---
+123abc
+---EXPECT-ERROR---
+invalid number literal: 123abc
+
+---NAME---
+glued float and identifier reject as one literal
+---PARSE-AS---
+interpreter
+---SOURCE---
+1.5abc
+---EXPECT-ERROR---
+invalid number literal: 1.5abc
+
+---NAME---
+public function declaration uses let and apostrophe parameters
+---PARSE-AS---
+compiler
+---SOURCE---
+let identity<'a>(value: 'a) : 'a = value
+identity<Int64>(1)
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+legacy def declaration is removed
+---PARSE-AS---
+compiler
+---SOURCE---
+def old(value: Int64) : Int64 = value
+---EXPECT-ERROR---
+Unexpected tokens after expression
+
+---NAME---
+qualified declaration name is removed
+---PARSE-AS---
+compiler
+---SOURCE---
+let A.f(value: Int64) : Int64 = value
+---EXPECT-ERROR---
+Expected a let binding pattern
+
+---NAME---
+bare declaration type parameter is removed
+---PARSE-AS---
+compiler
+---SOURCE---
+let identity<a>(value: a) : a = value
+---EXPECT-ERROR---
+apostrophe-prefixed
+
+---NAME---
+module is contextual outside declaration position
+---PARSE-AS---
+compiler
+---SOURCE---
+let module = 1 in module
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+all reserved spellings work when quoted
+---PARSE-AS---
+compiler
+---SOURCE---
+let names(``let``: Int64, ``val``: Int64, ``in``: Int64, ``if``: Int64, ``elif``: Int64, ``then``: Int64, ``else``: Int64, ``type``: Int64, ``of``: Int64, ``match``: Int64, ``with``: Int64, ``fun``: Int64, ``when``: Int64, ``true``: Int64, ``false``: Int64, ``_``: Int64) : Int64 = ``let``
+names(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+spaced declaration generic is not adjacent
+---PARSE-AS---
+compiler
+---SOURCE---
+let identity <'a>(value: a) : a = value
+---EXPECT-ERROR---
+Expected '=' after let binding pattern
+
+---NAME---
+module header normalizes public declarations
+---PARSE-AS---
+compiler
+---SOURCE---
+module Example
+let identity<'a>(value: a) : a = value
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+nested module blocks normalize public declarations
+---PARSE-AS---
+interpreter
+---SOURCE---
+module Outer =
+  module Inner =
+    let identity<'a>(value: a) : a = value
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+top level val reaches the unsupported execution boundary
+---PARSE-AS---
+compiler
+---SOURCE---
+val answer = 42
+---EXPECT-ERROR---
+Top-level value declarations are parsed but native execution is not supported

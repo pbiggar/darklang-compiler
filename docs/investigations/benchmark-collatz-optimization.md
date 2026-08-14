@@ -41,7 +41,7 @@ parity-branch opportunity.
 The Dark benchmark is tail-recursive:
 
 ```dark
-def collatzSteps(n: Int64, steps: Int64) : Int64 =
+let collatzSteps(n: Int64, steps: Int64) : Int64 =
     if n == 1 then steps
     else if n % 2 == 0 then collatzSteps(n / 2, steps + 1)
     else collatzSteps(3 * n + 1, steps + 1)

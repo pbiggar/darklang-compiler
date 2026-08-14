@@ -66,7 +66,8 @@ You are going to fix EXACTLY ONE difference (syntactic or semantic).
    - Add `L` suffix to integer literals (e.g., `5` -> `5L`)
    - Convert `Module.func(arg1, arg2)` to `Stdlib.Module.func arg1 arg2`
    - Convert list separators from `,` to `;` (e.g., `[1, 2]` -> `[1L; 2L]`)
-   - Convert `def foo(a, b) = body` to `let foo = fun a -> fun b -> body`
+   - Convert a function declaration to interpreter `let`/`fun` syntax when the
+     probe must be an expression rather than a source declaration
 
 5. Compare results. Determine one of:
 

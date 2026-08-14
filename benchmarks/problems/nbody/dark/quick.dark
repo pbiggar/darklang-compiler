@@ -19,11 +19,11 @@ type System = {
     neptune: Body
 }
 
-def solarMass(): Float = 4.0 * 3.141592653589793 * 3.141592653589793
+let solarMass(): Float = 4.0 * 3.141592653589793 * 3.141592653589793
 
-def daysPerYear(): Float = 365.24
+let daysPerYear(): Float = 365.24
 
-def applyPair(left: Body, right: Body, dt: Float) : (Body, Body) =
+let applyPair(left: Body, right: Body, dt: Float) : (Body, Body) =
     let dx = left.x - right.x in
     let dy = left.y - right.y in
     let dz = left.z - right.z in
@@ -43,7 +43,7 @@ def applyPair(left: Body, right: Body, dt: Float) : (Body, Body) =
     } in
     (left2, right2)
 
-def moveBody(body: Body, dt: Float) : Body =
+let moveBody(body: Body, dt: Float) : Body =
     {
         body with
         x = body.x + dt * body.vx,
@@ -51,7 +51,7 @@ def moveBody(body: Body, dt: Float) : Body =
         z = body.z + dt * body.vz
     }
 
-def advanceStep(system: System, dt: Float) : System =
+let advanceStep(system: System, dt: Float) : System =
     let p01 = applyPair(system.sun, system.jupiter, dt) in
     let sun01 = p01.0 in
     let jupiter01 = p01.1 in
@@ -90,23 +90,23 @@ def advanceStep(system: System, dt: Float) : System =
         neptune = moveBody(neptune34, dt)
     }
 
-def advance(system: System, dt: Float, n: Int64) : System =
+let advance(system: System, dt: Float, n: Int64) : System =
     if n <= 0 then
         system
     else
         advance(advanceStep(system, dt), dt, n - 1)
 
-def kinetic(body: Body) : Float =
+let kinetic(body: Body) : Float =
     0.5 * body.mass * (body.vx * body.vx + body.vy * body.vy + body.vz * body.vz)
 
-def potential(left: Body, right: Body) : Float =
+let potential(left: Body, right: Body) : Float =
     let dx = left.x - right.x in
     let dy = left.y - right.y in
     let dz = left.z - right.z in
     let dist = Stdlib.Float.sqrt(dx * dx + dy * dy + dz * dz) in
     (left.mass * right.mass) / dist
 
-def energy(system: System) : Float =
+let energy(system: System) : Float =
     kinetic(system.sun) +
     kinetic(system.jupiter) +
     kinetic(system.saturn) +
@@ -123,7 +123,7 @@ def energy(system: System) : Float =
     potential(system.saturn, system.neptune) -
     potential(system.uranus, system.neptune)
 
-def offsetMomentum(system: System) : System =
+let offsetMomentum(system: System) : System =
     let px =
         0.0 -
         system.sun.vx * system.sun.mass -
@@ -155,7 +155,7 @@ def offsetMomentum(system: System) : System =
         }
     }
 
-def initialSystem(): System =
+let initialSystem(): System =
     System {
         sun = Body { x = 0.0, y = 0.0, z = 0.0, vx = 0.0, vy = 0.0, vz = 0.0, mass = solarMass() },
         jupiter = Body {

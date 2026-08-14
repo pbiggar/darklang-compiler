@@ -12,7 +12,7 @@ type Unit2 = Unit2 match Unit2 with | Unit2 -> 42 = 42
 // remaining = [], but TEOF is always in remaining, making that code unreachable.
 // However, primitive types are handled earlier by parseTypeBase, so UInt64 becomes
 // TUInt64, not TRecord("UInt64", []), bypassing those guards entirely.
-def testU64(x: UInt64): UInt64 = x + 1UL
+let testU64(x: UInt64): UInt64 = x + 1UL
 testU64(41UL) = 42UL
 
 // Verify that Bool as a type alias target works correctly
@@ -21,7 +21,7 @@ testU64(41UL) = 42UL
 // Note: Like UInt64 above, Bool is parsed as TBool by parseTypeBase,
 // not TRecord("Bool", []), so the parseTypeDef primitive guard is unreachable.
 type BoolAlias2 = Bool
-def useBoolAlias(b: Bool): Int64 = if b then 1 else 0
+let useBoolAlias(b: Bool): Int64 = if b then 1 else 0
 useBoolAlias(true) = 1
 useBoolAlias(false) = 0
 
@@ -34,10 +34,10 @@ useBoolAlias(false) = 0
 // type aliases with matching arity to NOT be resolved (substitution skipped).
 
 // Define a generic type alias for List<t> - this is a parameterized type alias
-type MyList118<t> = List<t>
+type MyList118<'t> = List<t>
 
 // Use the alias with a concrete type argument
 // If the mutation is applied, the alias won't resolve because substitution is skipped
 // when typeParams.Length = args.Length (should be <>, mutation makes it =)
-def sumMyList(xs: MyList118<Int64>): Int64 = match xs with | [] -> 0 | [x, ...rest] -> x + sumMyList(rest)
+let sumMyList(xs: MyList118<Int64>): Int64 = match xs with | [] -> 0 | [x, ...rest] -> x + sumMyList(rest)
 sumMyList([10, 20, 12]) = 42

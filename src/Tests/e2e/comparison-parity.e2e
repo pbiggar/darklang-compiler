@@ -39,7 +39,7 @@ ComparisonBox([(1, "one"), (2, "two")]) == ComparisonBox([(1, "one"), (2, "two")
 ComparisonBox([(1, "one"), (2, "two")]) != ComparisonBox([(1, "one"), (3, "three")]) = true
 
 // A typed comparison plan survives substitution and specialization.
-def comparisonGenericEquals<a>(left: a, right: a): Bool = left == right
+let comparisonGenericEquals<'a>(left: a, right: a): Bool = left == right
 comparisonGenericEquals<List<Int64>>([1, 2, 3], [1, 2, 3]) = true
 comparisonGenericEquals<List<(Int64, String)>>([(1, "one")], [(1, "one")]) = true
 comparisonGenericEquals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
@@ -50,22 +50,22 @@ comparisonGenericEquals<Dict<List<Int64>>>(Dict { a = [1, 2]; b = [3] }, Dict { 
 Dict { a = 1 } != Dict { a = 2 } = true
 
 // Lambda identity is its source expression and deliberately ignores captures.
-def comparisonMakeLambda(captured: Int64): (Int64) -> Int64 =
+let comparisonMakeLambda(captured: Int64): (Int64) -> Int64 =
   fun value -> value + captured
 comparisonMakeLambda(1) == comparisonMakeLambda(2) = true
 [comparisonMakeLambda(1)] == [comparisonMakeLambda(2)] = true
 (fun value -> value) == (fun value -> value) = false
 
 // Named functions include resolved identity, specialization, and applied args.
-def comparisonAdd(left: Int64, right: Int64): Int64 = left + right
-def comparisonSub(left: Int64, right: Int64): Int64 = left - right
+let comparisonAdd(left: Int64, right: Int64): Int64 = left + right
+let comparisonSub(left: Int64, right: Int64): Int64 = left - right
 (fun value -> comparisonAdd(1L, value)) != (fun value -> comparisonAdd(1L, value)) = true
 [comparisonAdd] == [comparisonAdd] = true
 [comparisonAdd] != [comparisonSub] = true
 [comparisonAdd(1L)] == [comparisonAdd(1L)] = true
 [comparisonAdd(1L)] != [comparisonAdd(2L)] = true
 [comparisonAdd(1L)] != [comparisonSub(1L)] = true
-def comparisonFirst<a>(left: a, right: a): a = left
+let comparisonFirst<'a>(left: a, right: a): a = left
 [comparisonFirst<Int64>(1L)] == [comparisonFirst<Int64>(1L)] = true
 (let left = [comparisonAdd(1L)] in let right = [comparisonAdd(1L)] in comparisonGenericEquals<List<(Int64) -> Int64>>(left, right)) = true
 

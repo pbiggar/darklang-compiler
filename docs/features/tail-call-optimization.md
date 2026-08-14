@@ -14,11 +14,11 @@ A call is in **tail position** if its result is directly returned without furthe
 
 ```dark
 // Tail call - result of sumTo is directly returned
-def sumTo(n: Int64, acc: Int64) : Int64 =
+let sumTo(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc else sumTo(n - 1, acc + n)
 
 // NOT a tail call - result is multiplied before returning
-def factorial(n: Int64) : Int64 =
+let factorial(n: Int64) : Int64 =
     if n <= 1 then 1 else n * factorial(n - 1)
 ```
 
@@ -135,12 +135,12 @@ around tail calls.
 
 ```dark
 // Simple tail recursion
-def sumTo(n: Int64, acc: Int64) : Int64 =
+let sumTo(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc else sumTo(n - 1, acc + n)
 sumTo(10, 0)  // Expected: 55
 
 // Float parameter self-recursion
-def sumFloats(n: Int64, acc: Float) : Float =
+let sumFloats(n: Int64, acc: Float) : Float =
     if n <= 0 then acc else sumFloats(n - 1, acc + 1.0)
 sumFloats(10, 0.0)  // Expected: 10.0
 ```

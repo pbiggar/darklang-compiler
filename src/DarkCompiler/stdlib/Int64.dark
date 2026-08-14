@@ -2,68 +2,70 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.Int64
+
 // Stdlib.Int64 - Integer operations
 
-def Stdlib.Int64.add(a: Int64, b: Int64) : Int64 = a + b
+let add(a: Int64, b: Int64) : Int64 = a + b
 
 // Interpreter public names for the existing arithmetic operations.
-def Stdlib.Int64.subtract(a: Int64, b: Int64) : Int64 = a - b
+let subtract(a: Int64, b: Int64) : Int64 = a - b
 
-def Stdlib.Int64.multiply(a: Int64, b: Int64) : Int64 = a * b
+let multiply(a: Int64, b: Int64) : Int64 = a * b
 
-def Stdlib.Int64.divide(a: Int64, b: Int64) : Int64 = a / b
+let divide(a: Int64, b: Int64) : Int64 = a / b
 
-def Stdlib.Int64.sub(a: Int64, b: Int64) : Int64 = a - b
+let sub(a: Int64, b: Int64) : Int64 = a - b
 
-def Stdlib.Int64.mul(a: Int64, b: Int64) : Int64 = a * b
+let mul(a: Int64, b: Int64) : Int64 = a * b
 
-def Stdlib.Int64.div(a: Int64, b: Int64) : Int64 = a / b
+let div(a: Int64, b: Int64) : Int64 = a / b
 
-def Stdlib.Int64.max(a: Int64, b: Int64) : Int64 = if a > b then a else b
+let max(a: Int64, b: Int64) : Int64 = if a > b then a else b
 
-def Stdlib.Int64.min(a: Int64, b: Int64) : Int64 = if a < b then a else b
+let min(a: Int64, b: Int64) : Int64 = if a < b then a else b
 
-def Stdlib.Int64.mod(a: Int64, b: Int64) : Int64 = a % b
+let mod(a: Int64, b: Int64) : Int64 = a % b
 
-def Stdlib.Int64.absoluteValue(a: Int64) : Int64 = if a < 0 then 0 - a else a
+let absoluteValue(a: Int64) : Int64 = if a < 0 then 0 - a else a
 
-def Stdlib.Int64.negate(a: Int64) : Int64 = 0 - a
+let negate(a: Int64) : Int64 = 0 - a
 
-def Stdlib.Int64.power(base: Int64, exponent: Int64) : Int64 =
+let power(base: Int64, exponent: Int64) : Int64 =
     if exponent < 0 then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
     else if exponent == 0 then 1
     else if exponent == 1 then base
     else base * Stdlib.Int64.power(base, exponent - 1)
 
-def Stdlib.Int64.clamp(value: Int64, limitA: Int64, limitB: Int64) : Int64 =
+let clamp(value: Int64, limitA: Int64, limitB: Int64) : Int64 =
     let lower = Stdlib.Int64.min(limitA, limitB) in
     let upper = Stdlib.Int64.max(limitA, limitB) in
     Stdlib.Int64.max(lower, Stdlib.Int64.min(upper, value))
 
-def Stdlib.Int64.greaterThan(a: Int64, b: Int64) : Bool = a > b
+let greaterThan(a: Int64, b: Int64) : Bool = a > b
 
-def Stdlib.Int64.greaterThanOrEqualTo(a: Int64, b: Int64) : Bool = a >= b
+let greaterThanOrEqualTo(a: Int64, b: Int64) : Bool = a >= b
 
-def Stdlib.Int64.lessThan(a: Int64, b: Int64) : Bool = a < b
+let lessThan(a: Int64, b: Int64) : Bool = a < b
 
-def Stdlib.Int64.lessThanOrEqualTo(a: Int64, b: Int64) : Bool = a <= b
+let lessThanOrEqualTo(a: Int64, b: Int64) : Bool = a <= b
 
 // Bitwise operations
-def Stdlib.Int64.bitwiseAnd(a: Int64, b: Int64) : Int64 = a & b
+let bitwiseAnd(a: Int64, b: Int64) : Int64 = a & b
 
-def Stdlib.Int64.bitwiseOr(a: Int64, b: Int64) : Int64 = a ||| b
+let bitwiseOr(a: Int64, b: Int64) : Int64 = a ||| b
 
-def Stdlib.Int64.bitwiseXor(a: Int64, b: Int64) : Int64 = a ^ b
+let bitwiseXor(a: Int64, b: Int64) : Int64 = a ^ b
 
-def Stdlib.Int64.shiftLeft(a: Int64, shift: Int64) : Int64 = a << shift
+let shiftLeft(a: Int64, shift: Int64) : Int64 = a << shift
 
-def Stdlib.Int64.shiftRight(a: Int64, shift: Int64) : Int64 = a >> shift
+let shiftRight(a: Int64, shift: Int64) : Int64 = a >> shift
 
-def Stdlib.Int64.bitwiseNot(a: Int64) : Int64 = ~~~a
+let bitwiseNot(a: Int64) : Int64 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (Brian Kernighan / SWAR)
-def Stdlib.Int64.popcount(x: Int64) : Int64 =
+let popcount(x: Int64) : Int64 =
     // Constants (in decimal):
     // 0x5555555555555555 = 6148914691236517205
     // 0x3333333333333333 = 3689348814741910323
@@ -79,7 +81,7 @@ def Stdlib.Int64.popcount(x: Int64) : Int64 =
     (x * mult) >> 56
 
 // Convert a single digit (0-9) to its string representation
-def Stdlib.Int64.__digitToString(n: Int64) : String =
+let __digitToString(n: Int64) : String =
     match n with
     | 0 -> "0"
     | 1 -> "1"
@@ -94,7 +96,7 @@ def Stdlib.Int64.__digitToString(n: Int64) : String =
     | _ -> Builtin.testRuntimeError("Stdlib.Int64.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
-def Stdlib.Int64.toString(n: Int64) : String =
+let toString(n: Int64) : String =
     if n < 0 then
         if n < -9 then
             let quotient = n / 10 in
@@ -104,13 +106,13 @@ def Stdlib.Int64.toString(n: Int64) : String =
     else Stdlib.Int64.toString(n / 10) ++ Stdlib.Int64.__digitToString(n % 10)
 
 // Check if integer is even
-def Stdlib.Int64.isEven(n: Int64) : Bool =
+let isEven(n: Int64) : Bool =
     (n % 2) == 0
 
 // Check if integer is odd
-def Stdlib.Int64.isOdd(n: Int64) : Bool =
+let isOdd(n: Int64) : Bool =
     (n % 2) != 0
 
 // Sum all integers in a list
-def Stdlib.Int64.sum(list: List<Int64>) : Int64 =
+let sum(list: List<Int64>) : Int64 =
     Stdlib.List.fold<Int64, Int64>(list, 0, fun acc x -> acc + x)

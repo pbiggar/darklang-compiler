@@ -1,18 +1,18 @@
 // Fasta Benchmark - Quick check version
 
-def getAlu(aluBytes: List<Int64>, i: Int64) : Int64 =
+let getAlu(aluBytes: List<Int64>, i: Int64) : Int64 =
     match Stdlib.List.getAt<Int64>(aluBytes, i % 287) with
     | Some(v) -> v
     | None -> 0
 
-def makeRepeatFasta(aluBytes: List<Int64>, n: Int64, i: Int64, checksum: Int64) : Int64 =
+let makeRepeatFasta(aluBytes: List<Int64>, n: Int64, i: Int64, checksum: Int64) : Int64 =
     if i >= n then checksum
     else
         let c = getAlu(aluBytes, i) in
         let newChecksum = (checksum + c * (i + 1)) % 1000000007 in
         makeRepeatFasta(aluBytes, n, i + 1, newChecksum)
 
-def makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> =
+let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> =
     match Stdlib.List.head<(Int64, Float)>(table) with
     | None -> []
     | Some(item) ->
@@ -25,7 +25,7 @@ def makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, F
             let restCum = makeCumulative(rest, newRunning) in
             Stdlib.List.push<(Int64, Float)>(restCum, (c, newRunning))
 
-def selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 =
+let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 =
     match Stdlib.List.getAt(table, idx) with
     | None -> 0
     | Some(item) ->
@@ -36,7 +36,7 @@ def selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 =
             if idx + 1 >= Stdlib.List.length(table) then c
             else selectRandom(table, r, idx + 1)
 
-def makeRandomFasta(n: Int64, table: List<(Int64, Float)>, seed: Int64, i: Int64, checksum: Int64) : (Int64, Int64) =
+let makeRandomFasta(n: Int64, table: List<(Int64, Float)>, seed: Int64, i: Int64, checksum: Int64) : (Int64, Int64) =
     if i >= n then (checksum, seed)
     else
         let newSeed = (seed * 3877 + 29573) % 139968 in

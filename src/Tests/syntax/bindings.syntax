@@ -81,7 +81,7 @@ compiler
 ---SOURCE---
 let Some(x) = value in x
 ---EXPECT-ERROR---
-Expected a let binding pattern
+Expected parameter
 
 ---NAME---
 interpreter rejects constructor let pattern

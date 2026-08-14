@@ -1,27 +1,27 @@
 // Nsieve Benchmark - Quick check version
 // Reduced from n=100000 to n=100; both versions perform one sieve.
 
-def markMultiples(j: Int64, step: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
+let markMultiples(j: Int64, step: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
     if j > n then composites
-    else markMultiples(j + step, step, n, Stdlib.__HAMT.__setOverwriting<Int64, Bool>(composites, j, true))
+    else markMultiples(j + step, step, n, Stdlib.Internal.HAMT.__setOverwriting<Int64, Bool>(composites, j, true))
 
-def sieveLoop(i: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
+let sieveLoop(i: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
     if i > n then composites
     else
         let newComposites =
-            if Stdlib.__HAMT.__contains<Int64, Bool>(composites, i) then composites
+            if Stdlib.Internal.HAMT.__contains<Int64, Bool>(composites, i) then composites
             else markMultiples(i + i, i, n, composites)
         in
         sieveLoop(i + 1, n, newComposites)
 
-def countPrimes(i: Int64, n: Int64, composites: Dict<Int64, Bool>, count: Int64) : Int64 =
+let countPrimes(i: Int64, n: Int64, composites: Dict<Int64, Bool>, count: Int64) : Int64 =
     if i > n then count
     else
-        let newCount = if Stdlib.__HAMT.__contains<Int64, Bool>(composites, i) then count else count + 1 in
+        let newCount = if Stdlib.Internal.HAMT.__contains<Int64, Bool>(composites, i) then count else count + 1 in
         countPrimes(i + 1, n, composites, newCount)
 
-def nsieve(n: Int64) : Int64 =
-    let composites = sieveLoop(2, n, Stdlib.__HAMT.__empty<Int64, Bool>()) in
+let nsieve(n: Int64) : Int64 =
+    let composites = sieveLoop(2, n, Stdlib.Internal.HAMT.__empty<Int64, Bool>()) in
     countPrimes(2, n, composites, 0)
 
 nsieve(100)

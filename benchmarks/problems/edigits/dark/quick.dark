@@ -3,7 +3,7 @@
 // stores one decimal digit, matching Rust's Vec<u8> representation logically.
 
 // Divide the fixed-point digit vector by n, propagating carry left-to-right.
-def divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int64) : List<Int64> =
+let divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int64) : List<Int64> =
     if idx >= len then digits
     else
         match Stdlib.List.getAt<Int64>(digits, idx) with
@@ -16,7 +16,7 @@ def divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int6
             divideByN(updated, n, newCarry, idx + 1, len)
 
 // Add the current factorial term right-to-left, matching Rust's reverse loop.
-def addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : List<Int64> =
+let addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : List<Int64> =
     if idx < 0 then e
     else
         match Stdlib.List.getAt<Int64>(e, idx) with
@@ -31,24 +31,24 @@ def addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : 
                 let updated = Stdlib.List.setAt<Int64>(e, idx, newDigit) in
                 addWithCarry(updated, term, newCarry, idx - 1)
 
-def addFactorialTerms(e: List<Int64>, term: List<Int64>, n: Int64, len: Int64) : List<Int64> =
+let addFactorialTerms(e: List<Int64>, term: List<Int64>, n: Int64, len: Int64) : List<Int64> =
     if n > 50 then e
     else
         let newTerm = divideByN(term, n, 0, 0, len) in
         let newE = addWithCarry(e, newTerm, 0, len - 1) in
         addFactorialTerms(newE, newTerm, n + 1, len)
 
-def initDigits(len: Int64) : List<Int64> =
+let initDigits(len: Int64) : List<Int64> =
     [1, ...Stdlib.List.repeat<Int64>(0, len - 1)]
 
-def computeEDigits(numDigits: Int64) : List<Int64> =
+let computeEDigits(numDigits: Int64) : List<Int64> =
     // Rust uses indices 0..=precision, hence numDigits + 11 elements.
     let len = numDigits + 11 in
     let e = initDigits(len) in
     let term = initDigits(len) in
     addFactorialTerms(e, term, 1, len)
 
-def computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int64) : Int64 =
+let computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int64) : Int64 =
     if idx >= numDigits then acc
     else
         match Stdlib.List.getAt<Int64>(digits, idx) with
@@ -57,7 +57,7 @@ def computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int6
             let newAcc = (acc + digit * (idx + 1)) % 1000000007 in
             computeChecksum(digits, idx + 1, newAcc, numDigits)
 
-def runIterations(remaining: Int64, numDigits: Int64) : Int64 =
+let runIterations(remaining: Int64, numDigits: Int64) : Int64 =
     if remaining <= 0 then 0
     else
         let digits = computeEDigits(numDigits) in

@@ -2,28 +2,28 @@
 
 // Simple tail recursion (accumulator pattern)
 // This pattern should be detected and optimized
-def sumTo(n: Int64, acc: Int64) : Int64 =
+let sumTo(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else sumTo(n - 1, acc + n)
 
 sumTo(10, 0) = 55
 
 // Large N that would overflow stack without TCO
-def countDown(n: Int64) : Int64 =
+let countDown(n: Int64) : Int64 =
     if n <= 0 then 0 else countDown(n - 1)
 
 countDown(100000) = 0
 
 // Non-tail recursive - should NOT be optimized
 // (the multiply happens after the recursive call)
-def factorial(n: Int64) : Int64 =
+let factorial(n: Int64) : Int64 =
     if n <= 1 then 1
     else n * factorial(n - 1)
 
 factorial(10) = 3628800
 
 // Tail recursive with multiple arguments
-def gcd(a: Int64, b: Int64) : Int64 =
+let gcd(a: Int64, b: Int64) : Int64 =
     if b == 0 then a
     else gcd(b, a % b)
 
@@ -35,13 +35,13 @@ gcd(48, 18) = 6
 
 // Bug 1: Float argument swap (cycle bug in FArgMoves)
 // FArgMoves doesn't handle register cycles - D0 <- D1, D1 <- D0 clobbers D0
-def swapFloat(a: Float, b: Float, n: Int64) : Float =
+let swapFloat(a: Float, b: Float, n: Int64) : Float =
     if n <= 0 then a
     else swapFloat(b, a, n - 1)
 
 swapFloat(1.0, 2.0, 1) = 2.0
 
-def swapFloat2(a: Float, b: Float, n: Int64) : Float =
+let swapFloat2(a: Float, b: Float, n: Int64) : Float =
     if n <= 0 then a
     else swapFloat2(b, a, n - 1)
 
@@ -49,13 +49,13 @@ swapFloat2(1.0, 2.0, 2) = 1.0
 
 // Bug 2: Integer argument swap (TailArgMoves cycle)
 // Tests X0 <- X1, X1 <- X0 cycle handling
-def swapInt(a: Int64, b: Int64, n: Int64) : Int64 =
+let swapInt(a: Int64, b: Int64, n: Int64) : Int64 =
     if n <= 0 then a
     else swapInt(b, a, n - 1)
 
 swapInt(1, 2, 1) = 2
 
-def swapInt2(a: Int64, b: Int64, n: Int64) : Int64 =
+let swapInt2(a: Int64, b: Int64, n: Int64) : Int64 =
     if n <= 0 then a
     else swapInt2(b, a, n - 1)
 
@@ -63,13 +63,13 @@ swapInt2(1, 2, 2) = 1
 
 // Bug 3: Three-way integer rotation
 // Tests X0 <- X1, X1 <- X2, X2 <- X0 cycle handling
-def rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 =
+let rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 =
     if n <= 0 then a
     else rotate3(b, c, a, n - 1)
 
 rotate3(1, 2, 3, 1) = 2
 
-def rotate3b(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 =
+let rotate3b(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 =
     if n <= 0 then a
     else rotate3b(b, c, a, n - 1)
 
@@ -77,27 +77,27 @@ rotate3b(1, 2, 3, 3) = 1
 
 // Bug 4: Three-way float rotation
 // Tests D0 <- D1, D1 <- D2, D2 <- D0 - FArgMoves has no cycle handling
-def rotate3Float(a: Float, b: Float, c: Float, n: Int64) : Float =
+let rotate3Float(a: Float, b: Float, c: Float, n: Int64) : Float =
     if n <= 0 then a
     else rotate3Float(b, c, a, n - 1)
 
 rotate3Float(1.0, 2.0, 3.0, 1) = 2.0
 
-def rotate3Floatb(a: Float, b: Float, c: Float, n: Int64) : Float =
+let rotate3Floatb(a: Float, b: Float, c: Float, n: Int64) : Float =
     if n <= 0 then a
     else rotate3Floatb(b, c, a, n - 1)
 
 rotate3Floatb(1.0, 2.0, 3.0, 3) = 1.0
 
 // Bug 5: Five-argument tail recursion (similar to Stdlib.String.__compareBytes)
-def compare5(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
+let compare5(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
     else if a != b then false
     else compare5(a, i + 1, b, j + 1, count - 1)
 
 compare5(42, 0, 42, 0, 3) = true
 
-def compare5b(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
+let compare5b(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
     else if a != b then false
     else compare5b(a, i + 1, b, j + 1, count - 1)
@@ -105,14 +105,14 @@ def compare5b(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
 compare5b(42, 0, 99, 0, 3) = false
 
 // Bug 6: Many arguments (tests register spilling in tail calls)
-def sum6(a: Int64, b: Int64, c: Int64, d: Int64, e: Int64, f: Int64, n: Int64) : Int64 =
+let sum6(a: Int64, b: Int64, c: Int64, d: Int64, e: Int64, f: Int64, n: Int64) : Int64 =
     if n <= 0 then a + b + c + d + e + f
     else sum6(a, b, c, d, e, f, n - 1)
 
 sum6(1, 2, 3, 4, 5, 6, 1) = 21
 
 // Bug 7: Tail call after let binding (like Stdlib.String.__compareBytes)
-def callThenTail(x: Int64, n: Int64) : Int64 =
+let callThenTail(x: Int64, n: Int64) : Int64 =
     if n <= 0 then x
     else let y = x + 1 in callThenTail(y, n - 1)
 
@@ -120,7 +120,7 @@ callThenTail(0, 5) = 5
 
 // Bug 8: Tail call with String parameters (reference-counted types)
 // Similar to Stdlib.String.__compareBytes which fails with TCO
-def strCompare(s1: String, s2: String, n: Int64) : Bool =
+let strCompare(s1: String, s2: String, n: Int64) : Bool =
     if n <= 0 then true
     else if Stdlib.String.length(s1) != Stdlib.String.length(s2) then false
     else strCompare(s1, s2, n - 1)
@@ -128,21 +128,21 @@ def strCompare(s1: String, s2: String, n: Int64) : Bool =
 strCompare("hello", "hello", 3) = true
 
 // Bug 9: Nested function calls before tail call
-def nestedCalls(a: Int64, b: Int64, n: Int64) : Int64 =
+let nestedCalls(a: Int64, b: Int64, n: Int64) : Int64 =
     if n <= 0 then a + b
     else let x = a + 1 in let y = b + 1 in nestedCalls(x, y, n - 1)
 
 nestedCalls(0, 0, 5) = 10
 
 // Bug 10: Generic tail-recursive function (like stdlib Dict/String)
-def genericTail<t>(x: t, n: Int64) : t =
+let genericTail<'t>(x: t, n: Int64) : t =
     if n <= 0 then x
     else genericTail<t>(x, n - 1)
 
 genericTail(42, 5) = 42
 
 // Bug 11: Generic tail recursion with two type params
-def genericTail2<k, v>(kv: k, vv: v, n: Int64) : k =
+let genericTail2<'k, 'v>(kv: k, vv: v, n: Int64) : k =
     if n <= 0 then kv
     else genericTail2<k, v>(kv, vv, n - 1)
 
@@ -150,7 +150,7 @@ genericTail2(99, "test", 3) = 99
 
 // Bug 12: Compare with function calls before tail call (like __compareBytes)
 // This is the exact pattern that fails in stdlib String operations
-def compareBytesLike(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+let compareBytesLike(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
     else
         let b1 = Stdlib.String.getByteAt(s1, i) in
@@ -160,7 +160,7 @@ def compareBytesLike(s1: String, i: Int64, s2: String, j: Int64, count: Int64) :
 
 compareBytesLike("hello", 0, "hello", 0, 5) = true
 
-def compareBytesLikeFail(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+let compareBytesLikeFail(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
     else
         let b1 = Stdlib.String.getByteAt(s1, i) in
@@ -172,7 +172,7 @@ compareBytesLikeFail("hello", 0, "world", 0, 5) = false
 
 // Bug 13: Cross-function tail call (A tail-calls B, B tail-calls itself)
 // This mimics startsWith calling __compareBytes
-def myCompare(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+let myCompare(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
     else
         let b1 = Stdlib.String.getByteAt(s1, i) in
@@ -180,7 +180,7 @@ def myCompare(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
         if b1 != b2 then false
         else myCompare(s1, i + 1, s2, j + 1, count - 1)
 
-def myStartsWith2(s: String, prefix: String) : Bool =
+let myStartsWith2(s: String, prefix: String) : Bool =
     let sLen = Stdlib.String.length(s) in
     let prefixLen = Stdlib.String.length(prefix) in
     if prefixLen > sLen then false
@@ -188,7 +188,7 @@ def myStartsWith2(s: String, prefix: String) : Bool =
 
 myStartsWith2("hello world", "hello") = true
 
-def myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+let myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
     else
         let b1 = Stdlib.String.getByteAt(s1, i) in
@@ -196,7 +196,7 @@ def myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool 
         if b1 != b2 then false
         else myCompare2(s1, i + 1, s2, j + 1, count - 1)
 
-def myStartsWith2Fail(s: String, prefix: String) : Bool =
+let myStartsWith2Fail(s: String, prefix: String) : Bool =
     let sLen = Stdlib.String.length(s) in
     let prefixLen = Stdlib.String.length(prefix) in
     if prefixLen > sLen then false
@@ -213,14 +213,14 @@ myStartsWith2Fail("hello world", "world") = false
 
 // Float accumulator with integer counter
 // Tests FPhi for the acc parameter
-def sumFloats(n: Int64, acc: Float) : Float =
+let sumFloats(n: Int64, acc: Float) : Float =
     if n <= 0 then acc
     else sumFloats(n - 1, acc + 1.0)
 
 sumFloats(10, 0.0) = 10.0
 
 // Larger iteration count to verify loop works correctly
-def sumFloats100(n: Int64, acc: Float) : Float =
+let sumFloats100(n: Int64, acc: Float) : Float =
     if n <= 0 then acc
     else sumFloats100(n - 1, acc + 1.0)
 
@@ -228,33 +228,33 @@ sumFloats100(100, 0.0) = 100.0
 
 // All float parameters (2 floats + int counter)
 // Tests FPhi for both x and y parameters
-def floatLoop(x: Float, y: Float, n: Int64) : Float =
+let floatLoop(x: Float, y: Float, n: Int64) : Float =
     if n <= 0 then x + y
     else floatLoop(y, x, n - 1)
 
 floatLoop(1.0, 2.0, 0) = 3.0
 
-def floatLoop1(x: Float, y: Float, n: Int64) : Float =
+let floatLoop1(x: Float, y: Float, n: Int64) : Float =
     if n <= 0 then x + y
     else floatLoop1(y, x, n - 1)
 
 floatLoop1(1.0, 2.0, 1) = 3.0
 
-def floatLoop2(x: Float, y: Float, n: Int64) : Float =
+let floatLoop2(x: Float, y: Float, n: Int64) : Float =
     if n <= 0 then x + y
     else floatLoop2(y, x, n - 1)
 
 floatLoop2(1.0, 2.0, 2) = 3.0
 
 // Float with arithmetic in loop
-def floatArithmetic(x: Float, acc: Float, n: Int64) : Float =
+let floatArithmetic(x: Float, acc: Float, n: Int64) : Float =
     if n <= 0 then acc
     else floatArithmetic(x, acc + x, n - 1)
 
 floatArithmetic(2.5, 0.0, 4) = 10.0
 
 // Mixed: two floats, one being accumulated
-def floatAccum(a: Float, b: Float, n: Int64) : Float =
+let floatAccum(a: Float, b: Float, n: Int64) : Float =
     if n <= 0 then a
     else floatAccum(a + b, b, n - 1)
 
@@ -270,11 +270,11 @@ floatAccum(0.0, 1.5, 4) = 6.0
 // each other's values.
 
 // Tail call passes two float literals - each needs its own temp register
-def tailMultiFloatLit(n: Int64) : Float =
+let tailMultiFloatLit(n: Int64) : Float =
     if n <= 0 then 0.0
     else tailMultiFloatLitHelper(10.0, 20.0, n)
 
-def tailMultiFloatLitHelper(a: Float, b: Float, n: Int64) : Float =
+let tailMultiFloatLitHelper(a: Float, b: Float, n: Int64) : Float =
     if n <= 1 then a + b
     else tailMultiFloatLitHelper(a, b, n - 1)
 
@@ -282,14 +282,14 @@ tailMultiFloatLit(3) = 30.0
 
 // Direct tail recursion with multiple float literals in the recursive call
 // This is the key test: the tail call itself passes literals 1.0 and 2.0
-def tailRecurWithFloatLiterals(a: Float, b: Float, n: Int64) : Float =
+let tailRecurWithFloatLiterals(a: Float, b: Float, n: Int64) : Float =
     if n <= 0 then a + b
     else tailRecurWithFloatLiterals(1.0, 2.0, n - 1)
 
 tailRecurWithFloatLiterals(100.0, 200.0, 1) = 3.0
 
 // Three float literals in tail call - ensures counter increments for each
-def tailWith3FloatLits(a: Float, b: Float, c: Float, n: Int64) : Float =
+let tailWith3FloatLits(a: Float, b: Float, c: Float, n: Int64) : Float =
     if n <= 0 then a + b + c
     else tailWith3FloatLits(5.0, 10.0, 15.0, n - 1)
 

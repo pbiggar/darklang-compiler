@@ -19,13 +19,13 @@ The benchmark uses the direct recursive algebraic data type and separates
 construction from traversal:
 
 ```dark
-type Tree<a> = Leaf of a | Node of (Tree<a>, Tree<a>)
+type Tree<'a> = Leaf of a | Node of (Tree<a>, Tree<a>)
 
-def makeTree(depth: Int64) : Tree<Int64> =
+let makeTree(depth: Int64) : Tree<Int64> =
     if depth <= 0 then Leaf(1)
     else Node((makeTree(depth - 1), makeTree(depth - 1)))
 
-def countTree(tree: Tree<Int64>) : Int64 =
+let countTree(tree: Tree<Int64>) : Int64 =
     match tree with
     | Leaf(_) -> 1
     | Node((left, right)) -> 1 + countTree(left) + countTree(right)

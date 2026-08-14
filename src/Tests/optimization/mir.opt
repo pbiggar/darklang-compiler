@@ -4,11 +4,11 @@
 ---NAME---
 licm_hoists_recursive_effect_free_scalar_call
 ---INPUT---
-def factorial(n: Int64) : Int64 =
+let factorial(n: Int64) : Int64 =
     if n <= 1 then 1
     else n * factorial(n - 1)
 
-def repeat(n: Int64, acc: Int64) : Int64 =
+let repeat(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else repeat(n - 1, factorial(20))
 ---EXPECTED---
@@ -44,13 +44,13 @@ Function repeat:
 ---NAME---
 licm_hoists_mutually_recursive_effect_free_scalar_call
 ---INPUT---
-def isEven(n: Int64) : Bool =
+let isEven(n: Int64) : Bool =
     if n <= 0 then true else isOdd(n - 1)
 
-def isOdd(n: Int64) : Bool =
+let isOdd(n: Int64) : Bool =
     if n <= 0 then false else isEven(n - 1)
 
-def loop(n: Int64, acc: Int64) : Int64 =
+let loop(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else loop(n - 1, if isEven(20) then acc + 1 else acc)
 ---EXPECTED---
@@ -103,11 +103,11 @@ Function loop:
 ---NAME---
 licm_keeps_effecting_recursive_call_in_loop
 ---INPUT---
-def readRandom(n: Int64) : Int64 =
+let readRandom(n: Int64) : Int64 =
     if n <= 0 then Stdlib.Random.int64()
     else readRandom(n - 1)
 
-def loop(n: Int64, acc: Int64) : Int64 =
+let loop(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else loop(n - 1, readRandom(1))
 ---EXPECTED---
@@ -146,7 +146,7 @@ Function loop:
 ---NAME---
 licm_keeps_side_effecting_call_in_loop
 ---INPUT---
-def loop(n: Int64, acc: Int64) : Int64 =
+let loop(n: Int64, acc: Int64) : Int64 =
     if n < 1 then acc
     else
         let h = __hash<String>("hello") in
@@ -173,7 +173,7 @@ Function loop:
 ---NAME---
 licm_skip_constant_move
 ---INPUT---
-def loop(n: Int64) : Int64 =
+let loop(n: Int64) : Int64 =
     if n < 1 then 0
     else loop(1)
 ---EXPECTED---
@@ -193,7 +193,7 @@ Function loop:
 ---NAME---
 const_branch_elimination_bitand
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     let masked = n & 0 in
     if masked == 0 then 1 else 2
 ---EXPECTED---
@@ -204,7 +204,7 @@ Function pick:
 ---NAME---
 redundant_successor_branch_elimination
 ---INPUT---
-def choose(cond: Bool) : Int64 =
+let choose(cond: Bool) : Int64 =
     if cond then (if cond then 1 else 2) else 3
 ---EXPECTED---
 Function choose:
@@ -218,7 +218,7 @@ Function choose:
 ---NAME---
 const_branch_elimination_self_eq
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     if n == n then 1 else 2
 ---EXPECTED---
 Function pick:
@@ -228,7 +228,7 @@ Function pick:
 ---NAME---
 const_branch_elimination_self_neq
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     if n != n then 1 else 2
 ---EXPECTED---
 Function pick:
@@ -238,7 +238,7 @@ Function pick:
 ---NAME---
 const_branch_elimination_self_lt
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     if n < n then 1 else 2
 ---EXPECTED---
 Function pick:
@@ -248,7 +248,7 @@ Function pick:
 ---NAME---
 const_branch_elimination_self_gt
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     if n > n then 1 else 2
 ---EXPECTED---
 Function pick:
@@ -258,7 +258,7 @@ Function pick:
 ---NAME---
 const_branch_elimination_self_lte
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     if n <= n then 1 else 2
 ---EXPECTED---
 Function pick:
@@ -268,7 +268,7 @@ Function pick:
 ---NAME---
 const_branch_elimination_self_gte
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     if n >= n then 1 else 2
 ---EXPECTED---
 Function pick:
@@ -278,7 +278,7 @@ Function pick:
 ---NAME---
 self_eq_float_not_folded
 ---INPUT---
-def pick(n: Float) : Int64 =
+let pick(n: Float) : Int64 =
     if n == n then 1 else 2
 ---EXPECTED---
 Function pick:
@@ -293,7 +293,7 @@ Function pick:
 ---NAME---
 self_eq_shadowed_vars_not_folded
 ---INPUT---
-def pick(n: Int64) : Int64 =
+let pick(n: Int64) : Int64 =
     let x = n in
     let x = n + 1 in
     if x == n then 1 else 2
@@ -311,7 +311,7 @@ Function pick:
 ---NAME---
 self_division_not_folded
 ---INPUT---
-def divideSelf(n: Int64) : Int64 =
+let divideSelf(n: Int64) : Int64 =
     n / n
 ---EXPECTED---
 Function divideSelf:
@@ -322,7 +322,7 @@ Function divideSelf:
 ---NAME---
 licm_hoist_tuple_load
 ---INPUT---
-def loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
+let loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
     if n < 1 then acc
     else
         let v = t.0 in
@@ -349,7 +349,7 @@ Function loop:
 ---NAME---
 derived_induction_affine_shift
 ---INPUT---
-def loop(i: Int64, n: Int64, total: Int64) : Int64 =
+let loop(i: Int64, n: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
         let odd = 2 * i + 1 in

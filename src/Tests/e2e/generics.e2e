@@ -5,174 +5,174 @@
 // =====================================================
 
 // Generic identity function with int
-def identity<t>(x: t) : t = x identity(42) = 42
+let identity<'t>(x: t) : t = x identity(42) = 42
 
 // Identity with bool
-def id<t>(x: t) : t = x id(true) = true
+let id<'t>(x: t) : t = x id(true) = true
 
 // Identity with different int value
-def ident<t>(x: t) : t = x ident(100) = 100
+let ident<'t>(x: t) : t = x ident(100) = 100
 
 // =====================================================
 // Multiple Instantiations
 // =====================================================
 
 // Using identity with different types in same expression
-def myid<t>(x: t) : t = x myid(40) + myid(2) = 42
+let myid<'t>(x: t) : t = x myid(40) + myid(2) = 42
 
 // =====================================================
 // Generic Functions with Expressions
 // =====================================================
 
 // Generic function that uses its parameter
-def return_it<t>(value: t) : t = value return_it(42) = 42
+let return_it<'t>(value: t) : t = value return_it(42) = 42
 
-def ret<t>(v: t) : t = v ret(false) = false
+let ret<'t>(v: t) : t = v ret(false) = false
 
 // =====================================================
 // Generic with Operations on Result
 // =====================================================
 
 // Use generic result in arithmetic
-def i<t>(x: t) : t = x i(6) * i(7) = 42
+let i<'t>(x: t) : t = x i(6) * i(7) = 42
 
-def j<t>(x: t) : t = x j(10) + 32 = 42
+let j<'t>(x: t) : t = x j(10) + 32 = 42
 
 // =====================================================
 // Generic with Let Bindings
 // =====================================================
 
 // Use generic in let binding
-def k<t>(x: t) : t = x let x = k(21) in x * 2 = 42
+let k<'t>(x: t) : t = x let x = k(21) in x * 2 = 42
 
-def l<t>(x: t) : t = x let a = l(10) in let b = l(32) in a + b = 42
+let l<'t>(x: t) : t = x let a = l(10) in let b = l(32) in a + b = 42
 
 // =====================================================
 // Type Inference at Call Sites
 // =====================================================
 
 // Basic inference - int inferred from argument
-def inf_id<t>(x: t) : t = x inf_id(42) = 42
+let inf_id<'t>(x: t) : t = x inf_id(42) = 42
 
 // Bool inference
-def inf_bool<t>(x: t) : t = x inf_bool(true) = true
+let inf_bool<'t>(x: t) : t = x inf_bool(true) = true
 
 // Inference with different int value
-def inf_int2<t>(x: t) : t = x inf_int2(100) = 100
+let inf_int2<'t>(x: t) : t = x inf_int2(100) = 100
 
 // Multiple calls with inference in expression
-def inf_mult<t>(x: t) : t = x inf_mult(40) + inf_mult(2) = 42
+let inf_mult<'t>(x: t) : t = x inf_mult(40) + inf_mult(2) = 42
 
 // Inference with operations on result
-def inf_op<t>(x: t) : t = x inf_op(6) * inf_op(7) = 42
+let inf_op<'t>(x: t) : t = x inf_op(6) * inf_op(7) = 42
 
 // Inference with let binding
-def inf_let<t>(x: t) : t = x let y = inf_let(21) in y * 2 = 42
+let inf_let<'t>(x: t) : t = x let y = inf_let(21) in y * 2 = 42
 
 // Mixed explicit and inferred - explicit still works
-def mixed<t>(x: t) : t = x mixed(20) + mixed(22) = 42
+let mixed<'t>(x: t) : t = x mixed(20) + mixed(22) = 42
 
 // Inference with bool in conditional
-def inf_cond<t>(x: t) : t = x if inf_cond(true) then 42 else 0 = 42
+let inf_cond<'t>(x: t) : t = x if inf_cond(true) then 42 else 0 = 42
 
 // =====================================================
 // Multiple Type Parameters
 // =====================================================
 
 // Two type parameters - return first
-def first<a, b>(a: a, b: b) : a = a first(42, true) = 42
+let first<'a, 'b>(a: a, b: b) : a = a first(42, true) = 42
 
 // Two type parameters - return second
-def second<a, b>(a: a, b: b) : b = b second(42, true) = true
+let second<'a, 'b>(a: a, b: b) : b = b second(42, true) = true
 
 // Three type parameters
-def pick1<a, b, c>(a: a, b: b, c: c) : a = a pick1(42, false, 99) = 42
+let pick1<'a, 'b, 'c>(a: a, b: b, c: c) : a = a pick1(42, false, 99) = 42
 
-def pick2<a, b, c>(a: a, b: b, c: c) : b = b pick2(99, true, 99) = true
+let pick2<'a, 'b, 'c>(a: a, b: b, c: c) : b = b pick2(99, true, 99) = true
 
-def pick3<a, b, c>(a: a, b: b, c: c) : c = c pick3(99, false, 42) = 42
+let pick3<'a, 'b, 'c>(a: a, b: b, c: c) : c = c pick3(99, false, 42) = 42
 
 // Type inference with multiple type parameters
-def fst<a, b>(a: a, b: b) : a = a fst(10, true) = 10
+let fst<'a, 'b>(a: a, b: b) : a = a fst(10, true) = 10
 
-def snd<a, b>(a: a, b: b) : b = b snd(10, false) = false
+let snd<'a, 'b>(a: a, b: b) : b = b snd(10, false) = false
 
 // Inference with three parameters
-def get1<a, b, c>(a: a, b: b, c: c) : a = a get1(42, true, false) = 42
+let get1<'a, 'b, 'c>(a: a, b: b, c: c) : a = a get1(42, true, false) = 42
 
-def get2<a, b, c>(a: a, b: b, c: c) : b = b get2(99, true, false) = true
+let get2<'a, 'b, 'c>(a: a, b: b, c: c) : b = b get2(99, true, false) = true
 
-def get3<a, b, c>(a: a, b: b, c: c) : c = c get3(99, true, false) = false
+let get3<'a, 'b, 'c>(a: a, b: b, c: c) : c = c get3(99, true, false) = false
 
 // Multiple params with same type
-def both_int<a, b>(a: a, b: b) : a = a both_int(42, 99) = 42
+let both_int<'a, 'b>(a: a, b: b) : a = a both_int(42, 99) = 42
 
 // Use result in expression
 // Sum payloads with multiple type parameters should preserve float results
-type Result2<t, e> = Ok2 of t | Err2 of e
-def doubleOk(r: Result2<Float, Int64>) : Float = match r with | Ok2(v) -> v + v | Err2(_) -> 0.0
+type Result2<'t, 'e> = Ok2 of t | Err2 of e
+let doubleOk(r: Result2<Float, Int64>) : Float = match r with | Ok2(v) -> v + v | Err2(_) -> 0.0
 doubleOk(Ok2(2.5)) = 5.0
 
-def fst2<a, b>(a: a, b: b) : a = a fst2(40, true) + 2 = 42
+let fst2<'a, 'b>(a: a, b: b) : a = a fst2(40, true) + 2 = 42
 
 // Multiple params in let binding
-def getfst<a, b>(a: a, b: b) : a = a let x = getfst(21, false) in x * 2 = 42
+let getfst<'a, 'b>(a: a, b: b) : a = a let x = getfst(21, false) in x * 2 = 42
 
 // Missing type argument inference (unused type parameter)
-def phantom<a, b>(x: a) : a = x phantom(1) = 1
+let phantom<'a, 'b>(x: a) : a = x phantom(1) = 1
 
 // =====================================================
 // Generic Type Unification in If Expressions
 // =====================================================
 
 // If with generic Option - Some on then, None on else
-type Option1<t> = None1 | Some1 of t match (if true then Some1(42) else None1) with | Some1(x) -> x | None1 -> 0 = 42
+type Option1<'t> = None1 | Some1 of t match (if true then Some1(42) else None1) with | Some1(x) -> x | None1 -> 0 = 42
 
 // If with generic Option - None on then, Some on else
-type Option2<t> = None2 | Some2 of t match (if false then None2 else Some2(99)) with | Some2(x) -> x | None2 -> 0 = 99
+type Option2<'t> = None2 | Some2 of t match (if false then None2 else Some2(99)) with | Some2(x) -> x | None2 -> 0 = 99
 
 // If with generic Option - variable holding None
-type Option3<t> = None3 | Some3 of t let n = None3 in match (if true then Some3(55) else n) with | Some3(x) -> x | None3 -> 0 = 55
+type Option3<'t> = None3 | Some3 of t let n = None3 in match (if true then Some3(55) else n) with | Some3(x) -> x | None3 -> 0 = 55
 
 // If with generic Result type
 // NOTE: Using Int64 for error type. String fails in the test suite
 // but works in manual execution. Needs investigation.
-type Result1<t, e> = Ok1 of t | Err1 of e match (if true then Ok1(42) else Err1(99)) with | Ok1(x) -> x | Err1(_) -> 0 = 42
+type Result1<'t, 'e> = Ok1 of t | Err1 of e match (if true then Ok1(42) else Err1(99)) with | Ok1(x) -> x | Err1(_) -> 0 = 42
 
 // Nested if with generic types
-type Option4<t> = None4 | Some4 of t match (if true then (if false then None4 else Some4(42)) else None4) with | Some4(x) -> x | None4 -> 0 = 42
+type Option4<'t> = None4 | Some4 of t match (if true then (if false then None4 else Some4(42)) else None4) with | Some4(x) -> x | None4 -> 0 = 42
 
 // =====================================================
 // Lambda Capturing Generic Function Results (Explicit TypeApp)
 // =====================================================
 
 // Lambda captures result of explicit TypeApp - tests TypeApp return type instantiation (c4d-zts)
-def gen_capture_explicit<t>(x: t) : t = x let captured = gen_capture_explicit<Int64>(42) in (fun y -> captured + y)(10) = 52
+let gen_capture_explicit<'t>(x: t) : t = x let captured = gen_capture_explicit<Int64>(42) in (fun y -> captured + y)(10) = 52
 
 // Lambda captures TypeApp result used in stored closure
-def gen_store_explicit<t>(x: t) : t = x let val = gen_store_explicit<Int64>(100) in let f = fun x -> val + x in f(5) = 105
+let gen_store_explicit<'t>(x: t) : t = x let ``val`` = gen_store_explicit<Int64>(100) in let f = fun x -> ``val`` + x in f(5) = 105
 
 // Multiple type params with explicit TypeApp - capture first result
-def gen_fst_explicit<a, b>(x: a, y: b) : a = x let r = gen_fst_explicit<Int64, Bool>(20, true) in (fun z -> r + z)(22) = 42
+let gen_fst_explicit<'a, 'b>(x: a, y: b) : a = x let r = gen_fst_explicit<Int64, Bool>(20, true) in (fun z -> r + z)(22) = 42
 
 // Capture Bool result from explicit TypeApp - exposes TVar default bug (c4d-zts)
-def gen_bool<t>(x: t) : t = x let flag = gen_bool<Bool>(true) in (fun y -> if flag then y else 0)(42) = 42
+let gen_bool<'t>(x: t) : t = x let flag = gen_bool<Bool>(true) in (fun y -> if flag then y else 0)(42) = 42
 
 // Capture String result from explicit TypeApp - exposes TVar default bug (c4d-zts)
-def gen_string<t>(x: t) : t = x let s = gen_string<String>("hello") in (fun x -> if s == "hello" then x else 0)(42) = 42
+let gen_string<'t>(x: t) : t = x let s = gen_string<String>("hello") in (fun x -> if s == "hello" then x else 0)(42) = 42
 
 // TypeApp call inside lambda with captured outer value (c4d-zts)
-def gen_inner<t>(x: t) : t = x let outer = 10 in (fun x -> gen_inner<Int64>(outer) + x)(32) = 42
+let gen_inner<'t>(x: t) : t = x let outer = 10 in (fun x -> gen_inner<Int64>(outer) + x)(32) = 42
 
 // =====================================================
 // Tuple Types as Type Arguments (3+ elements)
 // =====================================================
 
 // 3-element tuple type as generic type argument - tests parseTypeArgType tuple validation
-def tuple3_id<t>(x: t) : t = x tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).0 + tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).1 + tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).2 = 6
+let tuple3_id<'t>(x: t) : t = x tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).0 + tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).1 + tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).2 = 6
 
 // Match scrutinee from explicit TypeApp preserves payload type (string equality)
-def gen_match_string<t>(x: t) : t = x
+let gen_match_string<'t>(x: t) : t = x
 match gen_match_string<String>("hello") with | s -> if s == ("he" ++ "llo") then 1 else 0 = 1
 
 // =====================================================
@@ -186,7 +186,7 @@ match gen_match_string<String>("hello") with | s -> if s == ("he" ++ "llo") then
 // code path to ensure correct behavior.
 
 // Generic Option-like type with single type parameter
-type GenOpt<t> = GenNone | GenSome of t
+type GenOpt<'t> = GenNone | GenSome of t
 
 // Match on GenSome with Int64 payload - tests type substitution in pattern binding
 match GenSome(42) with | GenSome(x) -> x + 8 | GenNone -> 0 = 50
@@ -195,7 +195,7 @@ match GenSome(42) with | GenSome(x) -> x + 8 | GenNone -> 0 = 50
 match GenSome(10) with | GenSome(x) -> x * x + x | GenNone -> 0 = 110
 
 // Generic Result-like type with two type parameters
-type GenRes<t, e> = GenOk of t | GenErr of e
+type GenRes<'t, 'e> = GenOk of t | GenErr of e
 
 // Match with multiple type params - verify type substitution for both params
 match GenOk(7) with | GenOk(x) -> x * 6 | GenErr(e) -> 0 = 42
@@ -222,26 +222,26 @@ match GenSome(GenOk(21)) with | GenSome(inner) -> match inner with | GenOk(v) ->
 
 // Generic function with explicit type application that exercises binding consolidation
 // The identity function is specialized with explicit type, then used with concrete value
-def genId218<t>(x: t) : t = x
+let genId218<'t>(x: t) : t = x
 genId218<Int64>(42) + 8 = 50
 
 // Generic wrapper that exercises type bindings with List
-def wrapList218<t>(x: t) : List<t> = [x]
+let wrapList218<'t>(x: t) : List<t> = [x]
 match wrapList218(42) with | [v] -> v | _ -> 0 = 42
 
 // Type inference with generic Option - binding TVar to concrete type via pattern match
-type Opt218<t> = None218 | Some218 of t
-def unwrapOpt218<t>(opt: Opt218<t>, default: t) : t = match opt with | Some218(v) -> v | None218 -> default
+type Opt218<'t> = None218 | Some218 of t
+let unwrapOpt218<'t>(opt: Opt218<t>, default: t) : t = match opt with | Some218(v) -> v | None218 -> default
 unwrapOpt218(Some218(42), 0) = 42
 
 // Two type parameters with different concrete types
-def pair218<a, b>(x: a, y: b) : (a, b) = (x, y)
+let pair218<'a, 'b>(x: a, y: b) : (a, b) = (x, y)
 let p = pair218(42, true) in p.0 = 42
 
 // Type inference where TVar is bound from multiple sources (argument and return)
-def returnFirst218<a, b>(x: a, y: b) : a = x
+let returnFirst218<'a, 'b>(x: a, y: b) : a = x
 returnFirst218(50, "ignored") - 8 = 42
 
 // Generic function body must satisfy declared return type for all type params.
 // This should fail because `x` has type `t`, but return type is unrelated `u`.
-def badReturn<t, u>(x: t): u = x badReturn<Int64, String>(42) = error="Type mismatch in function badReturn body"
+let badReturn<'t, 'u>(x: t): u = x badReturn<Int64, String>(42) = error="Type mismatch in function badReturn body"

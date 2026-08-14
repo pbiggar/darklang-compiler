@@ -14,7 +14,7 @@
 // These tests verify correct bit extraction at various positions.
 
 // Test bit 0 extraction (power-of-2 mask = 1)
-def testBit0(x: Int64) : Int64 =
+let testBit0(x: Int64) : Int64 =
   if (x & 1) == 0 then 0 else 1
 testBit0(0) = 0
 testBit0(1) = 1
@@ -24,7 +24,7 @@ testBit0(254) = 0
 testBit0(255) = 1
 
 // Test bit 1 extraction (power-of-2 mask = 2)
-def testBit1(x: Int64) : Int64 =
+let testBit1(x: Int64) : Int64 =
   if (x & 2) == 0 then 0 else 1
 testBit1(0) = 0
 testBit1(1) = 0
@@ -36,7 +36,7 @@ testBit1(6) = 1
 testBit1(7) = 1
 
 // Test bit 2 extraction (power-of-2 mask = 4)
-def testBit2(x: Int64) : Int64 =
+let testBit2(x: Int64) : Int64 =
   if (x & 4) == 0 then 0 else 1
 testBit2(0) = 0
 testBit2(3) = 0
@@ -46,7 +46,7 @@ testBit2(8) = 0
 testBit2(12) = 1
 
 // Test bit 3 extraction (power-of-2 mask = 8)
-def testBit3(x: Int64) : Int64 =
+let testBit3(x: Int64) : Int64 =
   if (x & 8) == 0 then 0 else 1
 testBit3(0) = 0
 testBit3(7) = 0
@@ -56,7 +56,7 @@ testBit3(16) = 0
 testBit3(24) = 1
 
 // Test bit 4 extraction (power-of-2 mask = 16)
-def testBit4(x: Int64) : Int64 =
+let testBit4(x: Int64) : Int64 =
   if (x & 16) == 0 then 0 else 1
 testBit4(0) = 0
 testBit4(15) = 0
@@ -66,7 +66,7 @@ testBit4(32) = 0
 testBit4(48) = 1
 
 // Test higher bit positions
-def testBit7(x: Int64) : Int64 =
+let testBit7(x: Int64) : Int64 =
   if (x & 128) == 0 then 0 else 1
 testBit7(0) = 0
 testBit7(127) = 0
@@ -75,7 +75,7 @@ testBit7(255) = 1
 testBit7(256) = 0
 
 // Test bit 8 (mask = 256)
-def testBit8(x: Int64) : Int64 =
+let testBit8(x: Int64) : Int64 =
   if (x & 256) == 0 then 0 else 1
 testBit8(0) = 0
 testBit8(255) = 0
@@ -90,7 +90,7 @@ testBit8(512) = 0
 // bit position calculation multiple times.
 
 // Extract multiple bits and combine them
-def extractBits(x: Int64) : Int64 =
+let extractBits(x: Int64) : Int64 =
   let b0 = if (x & 1) == 0 then 0 else 1 in
   let b1 = if (x & 2) == 0 then 0 else 2 in
   let b2 = if (x & 4) == 0 then 0 else 4 in
@@ -111,7 +111,7 @@ extractBits(7) = 7
 // These tests combine LICM with bit testing to exercise multiple
 // optimization passes together.
 
-def loopWithBitTest(mask: Int64, n: Int64, acc: Int64) : Int64 =
+let loopWithBitTest(mask: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     // Loop-invariant bit test on mask
@@ -141,7 +141,7 @@ loopWithBitTest(0, 10, 0) = 0
 // Multiply by 7 (2^3 - 1 = 8 - 1)
 // Correct: x * 7 = (x << 3) - x = 8x - x = 7x
 // If mutated to +: (x << 3) + x = 8x + x = 9x (WRONG)
-def mulBy7(x: Int64) : Int64 = x * 7
+let mulBy7(x: Int64) : Int64 = x * 7
 mulBy7(1) = 7
 mulBy7(2) = 14
 mulBy7(3) = 21
@@ -149,21 +149,21 @@ mulBy7(10) = 70
 mulBy7(100) = 700
 
 // Multiply by 15 (2^4 - 1 = 16 - 1)
-def mulBy15(x: Int64) : Int64 = x * 15
+let mulBy15(x: Int64) : Int64 = x * 15
 mulBy15(1) = 15
 mulBy15(2) = 30
 mulBy15(3) = 45
 mulBy15(10) = 150
 
 // Multiply by 31 (2^5 - 1 = 32 - 1)
-def mulBy31(x: Int64) : Int64 = x * 31
+let mulBy31(x: Int64) : Int64 = x * 31
 mulBy31(1) = 31
 mulBy31(2) = 62
 mulBy31(3) = 93
 mulBy31(10) = 310
 
 // Multiply by 63 (2^6 - 1 = 64 - 1)
-def mulBy63(x: Int64) : Int64 = x * 63
+let mulBy63(x: Int64) : Int64 = x * 63
 mulBy63(1) = 63
 mulBy63(2) = 126
 mulBy63(3) = 189
@@ -187,14 +187,14 @@ mulBy63(10) = 630
 
 // Power-of-2 mask values that trigger TBZ/TBNZ when isPowerOf2 works
 // These masks are: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024
-def checkPowerOf2Mask1(x: Int64) : Int64 =
+let checkPowerOf2Mask1(x: Int64) : Int64 =
   if (x & 1) != 0 then 1 else 0
 checkPowerOf2Mask1(0) = 0
 checkPowerOf2Mask1(1) = 1
 checkPowerOf2Mask1(2) = 0
 checkPowerOf2Mask1(3) = 1
 
-def checkPowerOf2Mask512(x: Int64) : Int64 =
+let checkPowerOf2Mask512(x: Int64) : Int64 =
   if (x & 512) != 0 then 1 else 0
 checkPowerOf2Mask512(0) = 0
 checkPowerOf2Mask512(511) = 0
@@ -202,7 +202,7 @@ checkPowerOf2Mask512(512) = 1
 checkPowerOf2Mask512(1023) = 1
 checkPowerOf2Mask512(1024) = 0
 
-def checkPowerOf2Mask1024(x: Int64) : Int64 =
+let checkPowerOf2Mask1024(x: Int64) : Int64 =
   if (x & 1024) != 0 then 1 else 0
 checkPowerOf2Mask1024(0) = 0
 checkPowerOf2Mask1024(1023) = 0
@@ -233,30 +233,30 @@ checkPowerOf2Mask1024(2048) = 0
 
 // Test multiply by same constant on both sides - this should NOT use
 // strength reduction because both operands are the same constant
-def squareConst7() : Int64 = 7 * 7
+let squareConst7() : Int64 = 7 * 7
 squareConst7() = 49
 
-def squareConst15() : Int64 = 15 * 15
+let squareConst15() : Int64 = 15 * 15
 squareConst15() = 225
 
-def squareConst31() : Int64 = 31 * 31
+let squareConst31() : Int64 = 31 * 31
 squareConst31() = 961
 
 // Test that nested expressions with strength-reduction constants work correctly
 // These create more complex patterns that could confuse a buggy optimizer
-def nestedMul7(x: Int64) : Int64 = (x * 7) * 7
+let nestedMul7(x: Int64) : Int64 = (x * 7) * 7
 nestedMul7(1) = 49
 nestedMul7(2) = 98
 nestedMul7(3) = 147
 
-def nestedMul15(x: Int64) : Int64 = (x * 15) * 15
+let nestedMul15(x: Int64) : Int64 = (x * 15) * 15
 nestedMul15(1) = 225
 nestedMul15(2) = 450
 nestedMul15(3) = 675
 
 // Test multiply where both operands come from the same expression
 // This creates a scenario where registers might be reused
-def selfMulPattern(x: Int64) : Int64 =
+let selfMulPattern(x: Int64) : Int64 =
   let y = x + 1 in
   let z = y * 7 in  // strength reduction: (y << 3) - y
   z * z             // should NOT use strength reduction here
@@ -264,7 +264,7 @@ selfMulPattern(1) = 196   // (1+1)*7 = 14, 14*14 = 196
 selfMulPattern(2) = 441   // (2+1)*7 = 21, 21*21 = 441
 
 // Test mixing strength-reducible and non-reducible multiplies
-def mixedMul(x: Int64) : Int64 =
+let mixedMul(x: Int64) : Int64 =
   let a = x * 7 in    // strength reducible
   let b = x * 11 in   // NOT strength reducible (11 is not 2^n ± 1)
   a + b
@@ -295,7 +295,7 @@ mixedMul(10) = 180    // 70 + 110 = 180
 // Then do a completely separate multiply. With the mutation, this would produce
 // wrong results because the optimizer incorrectly applies the 7 optimization.
 
-def testMutation178_separateConstant(x: Int64, y: Int64) : Int64 =
+let testMutation178_separateConstant(x: Int64, y: Int64) : Int64 =
   let seven = 7 in        // Creates: Mov tempReg, 7
   let result = x * y in   // Creates: Mul dest, xReg, yReg (neither is tempReg!)
   result + seven          // Use seven so it's not optimized away
@@ -307,7 +307,7 @@ testMutation178_separateConstant(5, 4) = 27    // 5*4 + 7 = 27
 testMutation178_separateConstant(10, 10) = 107 // 10*10 + 7 = 107
 
 // Additional test with different strength-reduction constants
-def testMutation178_with15(x: Int64, y: Int64) : Int64 =
+let testMutation178_with15(x: Int64, y: Int64) : Int64 =
   let fifteen = 15 in     // Creates: Mov tempReg, 15
   let result = x * y in   // Creates: Mul dest, xReg, yReg
   result + fifteen
@@ -318,7 +318,7 @@ testMutation178_with15(3, 4) = 27
 testMutation178_with15(2, 5) = 25    // 2*5 + 15 = 25
 
 // Test where x == y to ensure we're testing the right path
-def testMutation178_sameArgs(x: Int64) : Int64 =
+let testMutation178_sameArgs(x: Int64) : Int64 =
   let seven = 7 in
   let result = x * x in   // Square, not multiply by 7!
   result + seven
@@ -352,7 +352,7 @@ testMutation178_sameArgs(10) = 107   // 10*10 + 7 = 107
 // Test: Create a MUL followed by an ADD that uses different registers.
 // The MUL result should NOT influence the ADD result.
 
-def testMutation179_independentMulAdd(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
+let testMutation179_independentMulAdd(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
   let mulResult = a * b in   // Creates: MUL temp, aReg, bReg
   let addResult = x + y in   // Creates: ADD dest, xReg, yReg (NOT temp!)
   addResult + mulResult      // Use both to prevent dead code elimination
@@ -364,7 +364,7 @@ testMutation179_independentMulAdd(3, 7, 10, 20) = 51    // (10+20) + (3*7) = 30 
 testMutation179_independentMulAdd(1, 1, 100, 200) = 301 // (100+200) + (1*1) = 300 + 1 = 301
 
 // Additional test with larger values to make the difference more obvious
-def testMutation179_largeValues(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
+let testMutation179_largeValues(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
   let product = a * b in
   let sum = x + y in
   sum * 2 + product      // Use both results
@@ -374,7 +374,7 @@ testMutation179_largeValues(4, 6, 5, 3) = 40
 testMutation179_largeValues(10, 10, 1, 2) = 106  // (1+2)*2 + 10*10 = 6 + 100 = 106
 
 // Test where the MUL result is used elsewhere but not in the immediate ADD
-def testMutation179_delayedUse(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
+let testMutation179_delayedUse(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
   let mul1 = a * b in      // MUL temp1, a, b
   let add1 = x + y in      // ADD dest1, x, y (independent of mul1!)
   let add2 = add1 + mul1 in // Now use both

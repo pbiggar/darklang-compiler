@@ -400,7 +400,7 @@ Stdlib.String.split("x666666y", "6") = ["x", "", "", "", "", "", "y"]
 
 Stdlib.String.join(["a", "b", "c"], ",") = "a,b,c"
 Stdlib.String.join(["hello"], ",") = "hello"
-def emptyStringListForJoin() : List<String> = []
+let emptyStringListForJoin() : List<String> = []
 Stdlib.String.join(emptyStringListForJoin(), ",") = ""
 Stdlib.String.join(["a", "b"], "") = "ab"
 Stdlib.String.join(["a", "b", "c"], " - ") = "a - b - c"

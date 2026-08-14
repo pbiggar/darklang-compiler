@@ -38,51 +38,13 @@ let private formatFloatLiteral (value: float) : string =
     else
         $"{raw}.0"
 
-let private reservedIdentifierNames : Set<string> =
-    set [
-        "let"
-        "in"
-        "if"
-        "then"
-        "else"
-        "def"
-        "type"
-        "of"
-        "match"
-        "with"
-        "when"
-        "fun"
-        "true"
-        "false"
-        "_"
-    ]
-
-let private isIdentifierStartChar (c: char) : bool =
-    System.Char.IsLetter(c) || c = '_'
-
-let private isIdentifierContinueChar (c: char) : bool =
-    System.Char.IsLetterOrDigit(c) || c = '_'
-
-let private isBareIdentifierSegment (name: string) : bool =
-    name.Length > 0
-    && isIdentifierStartChar name[0]
-    && (name |> Seq.forall isIdentifierContinueChar)
-    && not (Set.contains name reservedIdentifierNames)
-
 let private formatIdentifierSegment (name: string) : string =
-    if isBareIdentifierSegment name then
-        name
-    else
-        $"``{name}``"
+    NameSyntax.formatIdentifier (NameSyntax.identifierFromText name)
 
 let private formatIdentifierPath (name: string) : string =
-    if name.Contains "." then
-        name.Split('.')
-        |> Array.toList
-        |> List.map formatIdentifierSegment
-        |> String.concat "."
-    else
-        formatIdentifierSegment name
+    match NameSyntax.tryParseLegacySpelling name with
+    | Some parsed -> NameSyntax.formatQualifiedName parsed
+    | None -> formatIdentifierSegment name
 
 let rec private formatType (typ: Type) : string =
     match typ with
@@ -778,44 +740,25 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         $"Closure({formatIdentifierPath funcName}, [{capturesText}])"
 
 let private formatFunctionDef (syntax: Syntax) (funcDef: FunctionDef) : string =
-    match syntax with
-    | CompilerSyntax ->
-        let typeParamsText =
-            if List.isEmpty funcDef.TypeParams then ""
+    let typeParamsText =
+        if List.isEmpty funcDef.TypeParams then ""
+        else
+            let joined =
+                funcDef.TypeParams
+                |> List.map (fun name -> $"'{name}")
+                |> String.concat ", "
+            $"<{joined}>"
+    let paramsText =
+        funcDef.Params
+        |> NonEmptyList.toList
+        |> (fun parameters ->
+            if isSyntheticUnitParamList funcDef.Params then
+                ""
             else
-                let joined = String.concat ", " funcDef.TypeParams
-                $"<{joined}>"
-        let paramsText =
-            funcDef.Params
-            |> NonEmptyList.toList
-            |> (fun parameters ->
-                if isSyntheticUnitParamList funcDef.Params then
-                    ""
-                else
-                    parameters
-                    |> List.map (fun (name, typ) -> $"{formatIdentifierSegment name}: {formatType typ}")
-                    |> String.concat ", ")
-        $"def {formatIdentifierSegment funcDef.Name}{typeParamsText}({paramsText}) : {formatType funcDef.ReturnType} = {formatExpr syntax funcDef.Body}"
-    | InterpreterSyntax ->
-        let typeParamsText =
-            if List.isEmpty funcDef.TypeParams then ""
-            else
-                let joined =
-                    funcDef.TypeParams
-                    |> List.map (fun name -> $"'{name}")
-                    |> String.concat ", "
-                $"<{joined}>"
-        let paramsText =
-            funcDef.Params
-            |> NonEmptyList.toList
-            |> (fun parameters ->
-                if isSyntheticUnitParamList funcDef.Params then
-                    ""
-                else
-                    parameters
-                    |> List.map (fun (name, typ) -> $"{formatIdentifierSegment name}: {formatType typ}")
-                    |> String.concat ", ")
-        $"let {formatIdentifierSegment funcDef.Name}{typeParamsText}({paramsText}) : {formatType funcDef.ReturnType} = {formatExpr syntax funcDef.Body}"
+                parameters
+                |> List.map (fun (name, typ) -> $"{formatIdentifierSegment name}: {formatType typ}")
+                |> String.concat ", ")
+    $"let {formatIdentifierSegment funcDef.Name}{typeParamsText}({paramsText}) : {formatType funcDef.ReturnType} = {formatExpr syntax funcDef.Body}"
 
 let private formatTypeDef (syntax: Syntax) (typeDef: TypeDef) : string =
     let formatTypeParams (typeParams: string list) : string =
@@ -824,9 +767,7 @@ let private formatTypeDef (syntax: Syntax) (typeDef: TypeDef) : string =
             let joined =
                 typeParams
                 |> List.map (fun name ->
-                    match syntax with
-                    | CompilerSyntax -> name
-                    | InterpreterSyntax -> $"'{name}")
+                    $"'{name}")
                 |> String.concat ", "
             $"<{joined}>"
 
@@ -858,9 +799,47 @@ let private formatTopLevel (syntax: Syntax) (topLevel: TopLevel) : string =
     | TypeDef typeDef -> formatTypeDef syntax typeDef
     | Expression expr -> formatExpr syntax expr
 
+let private tryRestoreModuleDeclaration (topLevel: TopLevel) : (NameSyntax.QualifiedName * TopLevel) option =
+    let splitName name =
+        NameSyntax.tryParseLegacySpelling name
+        |> Option.bind NameSyntax.trySplitLast
+        |> Option.map (fun (moduleName, declarationName) ->
+            (moduleName, NameSyntax.identifierText declarationName))
+    match topLevel with
+    | FunctionDef definition ->
+        splitName definition.Name
+        |> Option.map (fun (moduleName, declarationName) ->
+            (moduleName, FunctionDef { definition with Name = declarationName }))
+    | TypeDef (RecordDef (name, typeParams, fields)) ->
+        splitName name
+        |> Option.map (fun (moduleName, declarationName) ->
+            (moduleName, TypeDef (RecordDef (declarationName, typeParams, fields))))
+    | TypeDef (SumTypeDef (name, typeParams, variants)) ->
+        splitName name
+        |> Option.map (fun (moduleName, declarationName) ->
+            (moduleName, TypeDef (SumTypeDef (declarationName, typeParams, variants))))
+    | TypeDef (TypeAlias (name, typeParams, targetType)) ->
+        splitName name
+        |> Option.map (fun (moduleName, declarationName) ->
+            (moduleName, TypeDef (TypeAlias (declarationName, typeParams, targetType))))
+    | Expression _ -> None
+
 let formatProgram (syntax: Syntax) (Program items: Program) : string =
     let separator =
         match syntax with
         | CompilerSyntax -> "\n"
         | InterpreterSyntax -> "\n;\n"
-    items |> List.map (formatTopLevel syntax) |> String.concat separator
+    let restored = items |> List.map tryRestoreModuleDeclaration
+    match restored with
+    | Some (firstModule, _) :: _
+        when restored
+             |> List.forall (function
+                 | Some (moduleName, _) -> moduleName = firstModule
+                 | None -> false) ->
+        let declarations =
+            restored
+            |> List.choose (Option.map snd)
+            |> List.map (formatTopLevel syntax)
+            |> String.concat separator
+        $"module {NameSyntax.formatQualifiedName firstModule}\n{declarations}"
+    | _ -> items |> List.map (formatTopLevel syntax) |> String.concat separator

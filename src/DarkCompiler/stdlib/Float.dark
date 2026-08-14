@@ -2,42 +2,44 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
+module Stdlib.Float
+
 // Stdlib.Float - Float operations
 
-def Stdlib.Float.add(a: Float, b: Float) : Float = a + b
+let add(a: Float, b: Float) : Float = a + b
 
-def Stdlib.Float.multiply(a: Float, b: Float) : Float = a * b
+let multiply(a: Float, b: Float) : Float = a * b
 
 // Arithmetic helpers ported from darklang/dark packages/darklang/stdlib/float.dark.
-def Stdlib.Float.absoluteValue(a: Float) : Float =
+let absoluteValue(a: Float) : Float =
     if a < 0.0 then a * -1.0 else a
 
-def Stdlib.Float.subtract(a: Float, b: Float) : Float = a - b
+let subtract(a: Float, b: Float) : Float = a - b
 
-def Stdlib.Float.divide(a: Float, b: Float) : Float = a / b
+let divide(a: Float, b: Float) : Float = a / b
 
-def Stdlib.Float.greaterThan(a: Float, b: Float) : Bool = a > b
+let greaterThan(a: Float, b: Float) : Bool = a > b
 
-def Stdlib.Float.greaterThanOrEqualTo(a: Float, b: Float) : Bool = a >= b
+let greaterThanOrEqualTo(a: Float, b: Float) : Bool = a >= b
 
-def Stdlib.Float.lessThan(a: Float, b: Float) : Bool = a < b
+let lessThan(a: Float, b: Float) : Bool = a < b
 
-def Stdlib.Float.lessThanOrEqualTo(a: Float, b: Float) : Bool = a <= b
+let lessThanOrEqualTo(a: Float, b: Float) : Bool = a <= b
 
-def Stdlib.Float.min(a: Float, b: Float) : Float = if a < b then a else b
+let min(a: Float, b: Float) : Float = if a < b then a else b
 
-def Stdlib.Float.max(a: Float, b: Float) : Float = if a > b then a else b
+let max(a: Float, b: Float) : Float = if a > b then a else b
 
-def Stdlib.Float.sum(values: List<Float>) : Float =
+let sum(values: List<Float>) : Float =
     Stdlib.Float.__sum(values, 0.0)
 
-def Stdlib.Float.__sum(values: List<Float>, total: Float) : Float =
+let __sum(values: List<Float>, total: Float) : Float =
     match values with
     | [] -> total
     | [head, ...tail] -> Stdlib.Float.__sum(tail, total + head)
 
 // Get IEEE 754 bit representation of Float as UInt64 (intrinsic)
-def Stdlib.Float.toBits(f: Float) : UInt64 = 0UL
+let toBits(f: Float) : UInt64 = 0UL
 
 // IEEE 754 double precision format:
 // Sign: bit 63 (1 bit)
@@ -45,7 +47,7 @@ def Stdlib.Float.toBits(f: Float) : UInt64 = 0UL
 // Mantissa: bits 0-51 (52 bits)
 
 // Helper: Convert a single digit (0-9) to its string representation (Int64 version)
-def Stdlib.Float.__digitToChar(n: Int64) : String =
+let __digitToChar(n: Int64) : String =
     match n with
     | 0 -> "0"
     | 1 -> "1"
@@ -60,13 +62,13 @@ def Stdlib.Float.__digitToChar(n: Int64) : String =
     | _ -> "?"
 
 // Helper: Convert Int64 to string (handles negative)
-def Stdlib.Float.__int64ToString(n: Int64) : String =
+let __int64ToString(n: Int64) : String =
     if n < 0 then "-" ++ Stdlib.Float.__int64ToString(0 - n)
     else if n < 10 then Stdlib.Float.__digitToChar(n)
     else Stdlib.Float.__int64ToString(n / 10) ++ Stdlib.Float.__digitToChar(n % 10)
 
 // Helper: Strip trailing zeros from a string, but keep at least one digit after decimal
-def Stdlib.Float.__stripTrailingZeros(s: String, minLen: Int64) : String =
+let __stripTrailingZeros(s: String, minLen: Int64) : String =
     let len = Stdlib.String.length(s) in
     if len <= minLen then s
     else
@@ -79,7 +81,7 @@ def Stdlib.Float.__stripTrailingZeros(s: String, minLen: Int64) : String =
 // Helper: Extract decimal digits from fractional part
 // Multiplies by 10 repeatedly and extracts integer part
 // Returns string of fractional digits (without leading "0.")
-def Stdlib.Float.__extractFracDigits(frac: Float, remaining: Int64, acc: String) : String =
+let __extractFracDigits(frac: Float, remaining: Int64, acc: String) : String =
     if remaining <= 0 then acc
     else if frac == 0.0 then acc
     else
@@ -91,7 +93,7 @@ def Stdlib.Float.__extractFracDigits(frac: Float, remaining: Int64, acc: String)
 
 // Helper: Convert small UInt64 (0-2047) to Int64 by extracting low bits
 // This works because the value fits in the positive range of Int64
-def Stdlib.Float.__smallUInt64ToInt64(n: UInt64) : Int64 =
+let __smallUInt64ToInt64(n: UInt64) : Int64 =
     // For values 0-2047, we can safely interpret the bits as Int64
     // We use a match on small ranges to avoid needing a direct cast
     if n == 0UL then 0
@@ -111,7 +113,7 @@ def Stdlib.Float.__smallUInt64ToInt64(n: UInt64) : Int64 =
 
 // Helper: Convert positive float to decimal string (no sign)
 // Uses scientific notation for very large or very small numbers
-def Stdlib.Float.__positiveToString(f: Float, bits: UInt64) : String =
+let __positiveToString(f: Float, bits: UInt64) : String =
     let rawExp = (bits >> 52UL) & 2047UL in
     let rawExpInt = Stdlib.Float.__smallUInt64ToInt64(rawExp) in
     let actualExp = if rawExp == 0UL then 0 - 1022 else (rawExpInt - 1023) in
@@ -126,7 +128,7 @@ def Stdlib.Float.__positiveToString(f: Float, bits: UInt64) : String =
         Stdlib.Float.__toDecimalNotation(f)
 
 // Helper: Convert to regular decimal notation (e.g., "123.456")
-def Stdlib.Float.__toDecimalNotation(f: Float) : String =
+let __toDecimalNotation(f: Float) : String =
     // Get integer part
     let intPart = Stdlib.Float.toInt(f) in
     let intPartFloat = Stdlib.Int64.toFloat(intPart) in
@@ -149,7 +151,7 @@ def Stdlib.Float.__toDecimalNotation(f: Float) : String =
         intStr ++ "." ++ strippedFrac
 
 // Helper: Calculate base-10 exponent for scientific notation
-def Stdlib.Float.__calcDecimalExponent(f: Float, exp: Int64) : Int64 =
+let __calcDecimalExponent(f: Float, exp: Int64) : Int64 =
     if f >= 10.0 then
         Stdlib.Float.__calcDecimalExponent(f / 10.0, exp + 1)
     else if f < 1.0 && f > 0.0 then
@@ -158,7 +160,7 @@ def Stdlib.Float.__calcDecimalExponent(f: Float, exp: Int64) : Int64 =
         exp
 
 // Helper: Normalize to [1, 10) range for scientific notation
-def Stdlib.Float.__normalizeForScientific(f: Float) : Float =
+let __normalizeForScientific(f: Float) : Float =
     if f >= 10.0 then
         Stdlib.Float.__normalizeForScientific(f / 10.0)
     else if f < 1.0 && f > 0.0 then
@@ -167,7 +169,7 @@ def Stdlib.Float.__normalizeForScientific(f: Float) : Float =
         f
 
 // Helper: Convert to scientific notation (e.g., "1.23e+10")
-def Stdlib.Float.__toScientificNotation(f: Float) : String =
+let __toScientificNotation(f: Float) : String =
     // Calculate the decimal exponent
     let decExp = Stdlib.Float.__calcDecimalExponent(f, 0) in
     // Normalize mantissa to [1, 10)
@@ -184,11 +186,11 @@ def Stdlib.Float.__toScientificNotation(f: Float) : String =
     mantissaStr ++ "e" ++ expStrPadded
 
 // Helper for float absolute value (workaround for compiler bug with float in if-else)
-def Stdlib.Float.__floatAbs(x: Float) : Float =
+let __floatAbs(x: Float) : Float =
     if x < 0.0 then 0.0 - x else x * 1.0
 
 // Helper for extracting fractional digits, simplified to avoid internal func calls
-def Stdlib.Float.__getFracDigits(frac: Float, remaining: Int64) : String =
+let __getFracDigits(frac: Float, remaining: Int64) : String =
     if remaining <= 0 then ""
     else if frac == 0.0 then ""
     else
@@ -199,7 +201,7 @@ def Stdlib.Float.__getFracDigits(frac: Float, remaining: Int64) : String =
         digitStr ++ Stdlib.Float.__getFracDigits(newFrac, remaining - 1)
 
 // Helper to strip trailing zeros from fractional part string
-def Stdlib.Float.__stripZeros(s: String, minLen: Int64) : String =
+let __stripZeros(s: String, minLen: Int64) : String =
     let len = Stdlib.String.length(s) in
     if len <= minLen then s
     else
@@ -210,13 +212,13 @@ def Stdlib.Float.__stripZeros(s: String, minLen: Int64) : String =
             s
 
 // Helper: Check if float is negative using sign bit (handles -0.0 correctly)
-def Stdlib.Float.__isNegative(f: Float) : Bool =
+let __isNegative(f: Float) : Bool =
     let bits = Stdlib.Float.toBits(f) in
     let signBit = bits >> 63UL in
     signBit == 1UL
 
 // Convert Float to String with up to 12 significant digits
-def Stdlib.Float.toString(f: Float) : String =
+let toString(f: Float) : String =
     // Use Stdlib.Float.abs which is an intrinsic (no if-else)
     let absF = Stdlib.Float.abs(f) in
     let intPart = Stdlib.Float.toInt(absF) in
@@ -236,23 +238,3 @@ def Stdlib.Float.toString(f: Float) : String =
         // Strip trailing zeros but keep at least 1 digit
         let strippedFrac = Stdlib.Float.__stripZeros(fracStr, 1) in
         signStr ++ intStr ++ "." ++ strippedFrac
-
-def Stdlib.List.__floatsDisplayItems(list: List<Float>, first: Bool) : String =
-    if Stdlib.__SkewList.isEmpty<Float>(list) then ""
-    else
-        match Stdlib.__SkewList.head<Float>(list) with
-        | None -> ""
-        | Some(h) ->
-            let item = Stdlib.Float.toString(h) in
-            let tail = Stdlib.__SkewList.tail<Float>(list) in
-            let rest = Stdlib.List.__floatsDisplayItems(tail, false) in
-            if first then item ++ rest else ", " ++ item ++ rest
-
-def Stdlib.List.toDisplayString_f64(list: List<Float>) : String =
-    "[" ++ Stdlib.List.__floatsDisplayItems(list, true) ++ "]"
-
-def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
-    match (list1, list2) with
-    | ([], _) -> []
-    | (_, []) -> []
-    | ([h1, ...t1], [h2, ...t2]) -> [(h1, h2), ...Stdlib.List.zip<a, b>(t1, t2)]

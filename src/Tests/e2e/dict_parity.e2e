@@ -2,7 +2,7 @@
 // The compiler comparison point for this work is c97f99a1c953b4e6739daafc05934f98924e139f.
 
 // Public typing is String-keyed and exposes exactly one value type parameter.
-def dictIdentity<a>(dict: Dict<a>): Dict<a> = dict dictIdentity<Int64>(Dict { answer = 42 }) = Dict { answer = 42 }
+let dictIdentity<'a>(dict: Dict<a>): Dict<a> = dict dictIdentity<Int64>(Dict { answer = 42 }) = Dict { answer = 42 }
 Stdlib.Dict.get<String, Int64>(Dict { }, "a") = error="Stdlib.Dict.get expects 1 type argument, but got 2 type arguments"
 Stdlib.Dict.singleton(1, "one") = error="expected String"
 

@@ -88,14 +88,14 @@ let a = 2 in let b = a + 1 in let c = b + 2 in let d = c + 3 in d = 8
 // Modulo by power of 2 with negative dividend (tests tryLog2 boundary check)
 // For positive power-of-two divisors, Euclidean modulo matches bit masking:
 // -7 % 2 = 1 and -7 & 1 = 1.
-def mod2(x: Int64) : Int64 = x % 2 mod2(-7) = 1
+let mod2(x: Int64) : Int64 = x % 2 mod2(-7) = 1
 
 // Division by a power of 2 must preserve signed division semantics.
 // Rewriting signed division to logical shift-right turns negative dividends
 // into huge positive results.
-def signedDiv2(x: Int64) : Int64 = x / 2
+let signedDiv2(x: Int64) : Int64 = x / 2
 signedDiv2(-8) = -4
-def signedDiv4(x: Int64) : Int64 = x / 4
+let signedDiv4(x: Int64) : Int64 = x / 4
 signedDiv4(-7) = -1
 
 // ===================================================================
@@ -111,7 +111,7 @@ let x = 42 in x = 42
 
 // Return propagation through if-else branches (tests changed flag propagation)
 // Both branches have Return statements that need constant propagation
-def branchReturn(cond: Bool) : Int64 =
+let branchReturn(cond: Bool) : Int64 =
   let x = 100 in
     if cond then x else x + 1
 branchReturn(true) = 100
@@ -147,12 +147,12 @@ let a = true in let b = a in let c = b in if c then 100 else 200 = 100
 
 // If condition aliased from function parameter
 // Tests aliasing with runtime values (not compile-time constants)
-def testCondAlias(flag: Bool) : Int64 = let alias = flag in if alias then 10 else 20
+let testCondAlias(flag: Bool) : Int64 = let alias = flag in if alias then 10 else 20
 testCondAlias(true) = 10
 testCondAlias(false) = 20
 
 // Nested if with different aliased conditions from parameters
-def testNestedCondAlias(outer: Bool, inner: Bool) : Int64 = let outerAlias = outer in let innerAlias = inner in if outerAlias then (if innerAlias then 1 else 2) else 3
+let testNestedCondAlias(outer: Bool, inner: Bool) : Int64 = let outerAlias = outer in let innerAlias = inner in if outerAlias then (if innerAlias then 1 else 2) else 3
 testNestedCondAlias(true, true) = 1
 testNestedCondAlias(true, false) = 2
 testNestedCondAlias(false, true) = 3
@@ -174,7 +174,7 @@ testNestedCondAlias(false, false) = 3
 // The outer Let (a = x + y) has cexprChanged=false, bodyChanged=true
 // Correct: returns (Let(a, x+y, a+3), true)
 // Mutation (|| -> &&): would return (Let(a, x+y, a+3), false) - wrong!
-def testLetChangeFlag(x: Int64, y: Int64) : Int64 =
+let testLetChangeFlag(x: Int64, y: Int64) : Int64 =
   let a = x + y in
   let b = 1 + 2 in
   a + b
@@ -182,7 +182,7 @@ testLetChangeFlag(10, 20) = 33
 
 // Chain where outer binding can't fold but inner bindings fold
 // This tests change flag propagation through nested Let nodes
-def testNestedLetChangeFlag(x: Int64) : Int64 =
+let testNestedLetChangeFlag(x: Int64) : Int64 =
   let a = x * 2 in      // Can't fold (x is param), but result is used
   let b = 3 + 4 in      // Folds to 7, beta-reduced
   let c = b + 5 in      // After b→7, becomes 7+5=12, beta-reduced
@@ -190,7 +190,7 @@ def testNestedLetChangeFlag(x: Int64) : Int64 =
 testNestedLetChangeFlag(5) = 22
 
 // Multiple non-foldable bindings with foldable ones interleaved
-def testInterleavedChangeFlags(x: Int64, y: Int64) : Int64 =
+let testInterleavedChangeFlags(x: Int64, y: Int64) : Int64 =
   let a = x + 1 in      // Can't fully fold (x is param), a = x + 1
   let b = 2 + 3 in      // Folds to 5, beta-reduced
   let c = y + a in      // Can't fold (y, a are runtime), uses a
@@ -217,7 +217,7 @@ testInterleavedChangeFlags(10, 20) = 40
 // The else-branch is a simple literal (no change)
 // With ||: changed = false || true || false = true (correct)
 // With &&: changed = false && true && false = false (WRONG - stops optimization early)
-def testIfChangeFlagThenOnly(flag: Bool) : Int64 =
+let testIfChangeFlagThenOnly(flag: Bool) : Int64 =
   if flag then
     let x = 1 + 2 in
     let y = x + 3 in
@@ -229,7 +229,7 @@ testIfChangeFlagThenOnly(false) = 100
 
 // Test where only elseBranch has changes
 // Same principle but changes are in the else branch
-def testIfChangeFlagElseOnly(flag: Bool) : Int64 =
+let testIfChangeFlagElseOnly(flag: Bool) : Int64 =
   if flag then
     200
   else
@@ -257,7 +257,7 @@ testIfChangeFlagElseOnly(false) = 20
 // The outer Let sees bodyChanged from the If.
 // If If reports false, the function reports changed=false, stopping early.
 // This test verifies correct behavior when nested inside Let.
-def testIfMultiPassSingleBranch(flag: Bool) : Int64 =
+let testIfMultiPassSingleBranch(flag: Bool) : Int64 =
   if flag then
     let a = 2 + 3 in
     let b = a + 1 in
@@ -271,7 +271,7 @@ testIfMultiPassSingleBranch(false) = 99
 // The inner If has changes only in one branch
 // The outer Let uses the If result
 // Tests that change propagates: inner If → outer Let → function → more passes
-def testNestedIfChangeFlag(outer: Bool, inner: Bool) : Int64 =
+let testNestedIfChangeFlag(outer: Bool, inner: Bool) : Int64 =
   let x = (if inner then
              let a = 3 + 4 in  // folds to 7, beta-reduced
              a
@@ -312,7 +312,7 @@ let x = 3 in let y = 2 in if x <= y then 100 else 200 = 200
 
 // Test with copy before loop-invariant computation in recursive function
 // The copy 'alias = x' creates a Mov, and 'alias * alias' is loop-invariant
-def licmCopy(x: Int64, n: Int64, acc: Int64) : Int64 =
+let licmCopy(x: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     let alias = x in
@@ -323,7 +323,7 @@ licmCopy(3, 5, 0) = 45
 licmCopy(4, 3, 0) = 48
 
 // Chain of copies that LICM needs to resolve
-def licmCopyChain(x: Int64, n: Int64, acc: Int64) : Int64 =
+let licmCopyChain(x: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     let a = x in
@@ -336,7 +336,7 @@ licmCopyChain(2, 4, 0) = 16
 licmCopyChain(5, 3, 0) = 75
 
 // Copy used in comparison (loop condition optimization)
-def licmCopyCmp(x: Int64, limit: Int64, n: Int64) : Int64 =
+let licmCopyCmp(x: Int64, limit: Int64, n: Int64) : Int64 =
   if n <= 0 then 0
   else
     let xCopy = x in
@@ -356,7 +356,7 @@ licmCopyCmp(3, 5, 3) = 0
 // Basic register-to-register copy propagation
 // Creates Mov(y, Register x) which should be tracked
 // Then y should be replaced with x, enabling constant folding
-def copyPropBasic(x: Int64) : Int64 =
+let copyPropBasic(x: Int64) : Int64 =
   let y = x in
   let z = y in
   z + 1
@@ -367,7 +367,7 @@ copyPropBasic(-5) = -4
 // Chain of copies that main copy propagation resolves
 // Creates: a = param, b = a, c = b, result = c + 1
 // Copy prop should resolve c -> b -> a -> param
-def copyPropChain(input: Int64) : Int64 =
+let copyPropChain(input: Int64) : Int64 =
   let a = input in
   let b = a in
   let c = b in
@@ -378,7 +378,7 @@ copyPropChain(100) = 200
 
 // Copy propagation across arithmetic operations
 // The copy must be propagated correctly through expressions
-def copyPropArith(x: Int64, y: Int64) : Int64 =
+let copyPropArith(x: Int64, y: Int64) : Int64 =
   let xCopy = x in
   let yCopy = y in
   (xCopy * yCopy) + (xCopy - yCopy)
@@ -389,7 +389,7 @@ copyPropArith(10, 2) = 28
 // High register pressure with copies
 // Creates many live values through copies, testing that copy propagation
 // correctly reduces virtual register usage before register allocation
-def copyPropPressure(x: Int64) : Int64 =
+let copyPropPressure(x: Int64) : Int64 =
   let a = x in
   let b = a in
   let c = b in
@@ -428,7 +428,7 @@ copyPropPressure(5) = 50
 // The test verifies correctness, and should catch any issues
 // from incorrect copy propagation behavior.
 
-def copyPropEnablesCSE(x: Int64, z: Int64) : Int64 =
+let copyPropEnablesCSE(x: Int64, z: Int64) : Int64 =
   let y = x in
   let temp1 = y + z in
   let temp2 = x + z in
@@ -439,7 +439,7 @@ copyPropEnablesCSE(7, 3) = 20
 copyPropEnablesCSE(-5, 2) = -6
 
 // More complex copy propagation + CSE interaction
-def copyPropCSEComplex(a: Int64, b: Int64) : Int64 =
+let copyPropCSEComplex(a: Int64, b: Int64) : Int64 =
   let aCopy = a in
   let bCopy = b in
   let sum1 = aCopy + bCopy in
@@ -467,7 +467,7 @@ copyPropCSEComplex(5, 5) = 30
 // Simple phi with identical sources from both branches
 // Creates: y = phi(x, x) from both if-branches returning x
 // The optimizer should propagate y -> x, enabling y + y -> x + x
-def phiCopyProp(flag: Bool, x: Int64) : Int64 =
+let phiCopyProp(flag: Bool, x: Int64) : Int64 =
   let y = if flag then x else x in
   y + y
 
@@ -476,7 +476,7 @@ phiCopyProp(false, 7) = 14
 
 // Phi copy propagation enabling further optimization
 // After phi propagation, uses of 'result' become uses of 'input'
-def phiCopyPropChain(flag: Bool, input: Int64) : Int64 =
+let phiCopyPropChain(flag: Bool, input: Int64) : Int64 =
   let a = input in
   let result = if flag then a else a in
   result * 2 + input
@@ -486,7 +486,7 @@ phiCopyPropChain(false, 8) = 24
 
 // Nested branches creating phi with same sources
 // The inner if-else creates a phi, then outer expression uses it
-def phiCopyPropNested(outer: Bool, inner: Bool, x: Int64) : Int64 =
+let phiCopyPropNested(outer: Bool, inner: Bool, x: Int64) : Int64 =
   let value = x + 1 in
   let y = if inner then value else value in
   if outer then y + value else y - value
@@ -515,7 +515,7 @@ phiCopyPropNested(false, false, 10) = 0
 // to ensure constant propagation correctly tracks and optimizes Int64 constants.
 
 // Multiple constant assignments that should all propagate correctly
-def multiConstProp(x: Int64) : Int64 =
+let multiConstProp(x: Int64) : Int64 =
   let a = 10 in
   let b = 20 in
   let c = a + b in  // c = 30 after constant folding
@@ -527,7 +527,7 @@ multiConstProp(-10) = 20
 
 // Chain of constant propagation with conditionals
 // Tests that Int64Const propagation works correctly through branches
-def constPropThroughBranch(flag: Bool, x: Int64) : Int64 =
+let constPropThroughBranch(flag: Bool, x: Int64) : Int64 =
   let base = 100 in
   let result = if flag then
     let adjusted = base + x in  // 100 + x
@@ -546,7 +546,7 @@ constPropThroughBranch(false, 0) = 200
 // Test that constant propagation respects phi destinations
 // When a variable is assigned in multiple branches, it becomes a phi dest
 // and should NOT be propagated to avoid incorrect optimizations
-def constPropWithPhi(flag: Bool) : Int64 =
+let constPropWithPhi(flag: Bool) : Int64 =
   let x = if flag then 42 else 99 in
   let y = x + 1 in  // x is phi dest, y should use x (not constant)
   y
@@ -572,7 +572,7 @@ constPropWithPhi(false) = 100
 // Simple recursive loop with invariant computation
 // The invariant 'base * base' should produce correct results
 // whether or not it gets hoisted by LICM
-def dominationLoop(base: Int64, n: Int64, acc: Int64) : Int64 =
+let dominationLoop(base: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     let invariant = base * base in
@@ -584,7 +584,7 @@ dominationLoop(2, 10, 0) = 40
 
 // Nested invariant computations that rely on domination
 // The optimizer should correctly handle invariants at different levels
-def nestedDominationLoop(a: Int64, b: Int64, n: Int64, acc: Int64) : Int64 =
+let nestedDominationLoop(a: Int64, b: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     let outerInvariant = a + b in
@@ -596,7 +596,7 @@ nestedDominationLoop(10, 5, 3, 0) = 90
 
 // Test where domination affects which blocks are in the loop body
 // This creates a control flow where entry domination matters
-def conditionalDominationLoop(x: Int64, flag: Bool, n: Int64) : Int64 =
+let conditionalDominationLoop(x: Int64, flag: Bool, n: Int64) : Int64 =
   if n <= 0 then 0
   else
     let value = if flag then x * x else x + x in
@@ -628,7 +628,7 @@ conditionalDominationLoop(3, false, 4) = 24
 // The 'selected' variable is a phi dest (from if-then-else)
 // The copy 'copy = selected' creates a Mov
 // LICM should correctly handle this without treating selected as a simple copy
-def licmPhiDestCheck(x: Int64, y: Int64, flag: Bool, n: Int64, acc: Int64) : Int64 =
+let licmPhiDestCheck(x: Int64, y: Int64, flag: Bool, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     // 'selected' is a phi destination (comes from different branches)
@@ -649,7 +649,7 @@ licmPhiDestCheck(2, 5, false, 4, 0) = 100
 
 // More complex: nested conditionals with multiple phi nodes
 // This creates multiple phi destinations that copy propagation must respect
-def licmNestedPhiDest(a: Int64, b: Int64, c: Int64, f1: Bool, f2: Bool, n: Int64) : Int64 =
+let licmNestedPhiDest(a: Int64, b: Int64, c: Int64, f1: Bool, f2: Bool, n: Int64) : Int64 =
   if n <= 0 then 0
   else
     // First phi: p1 = phi(a, b)
@@ -701,7 +701,7 @@ licmNestedPhiDest(1, 2, 3, false, false, 3) = 12
 // Test: outside source from before the loop, not yet in invariant map
 // The 'precomputed' value is computed before the recursive calls
 // Inside the loop, a conditional creates a phi with precomputed as outside source
-def licmPhiOutsideSource(x: Int64, flag: Bool, n: Int64, acc: Int64) : Int64 =
+let licmPhiOutsideSource(x: Int64, flag: Bool, n: Int64, acc: Int64) : Int64 =
   // precomputed is defined BEFORE the loop (recursive calls)
   let precomputed = x * x in
   if n <= 0 then acc
@@ -723,7 +723,7 @@ licmPhiOutsideSource(4, false, 4, 0) = 64
 
 // More complex: multiple precomputed values used in phi
 // Tests that LICM correctly handles multiple outside sources
-def licmPhiMultiOutside(a: Int64, b: Int64, flag: Bool, n: Int64) : Int64 =
+let licmPhiMultiOutside(a: Int64, b: Int64, flag: Bool, n: Int64) : Int64 =
   let pre1 = a * a in
   let pre2 = b * b in
   if n <= 0 then 0
@@ -738,7 +738,7 @@ licmPhiMultiOutside(2, 3, true, 3) = 12
 licmPhiMultiOutside(2, 3, false, 3) = 27
 
 // Chain of precomputed values where LICM must resolve correctly
-def licmPhiChainedOutside(x: Int64, flag: Bool, n: Int64) : Int64 =
+let licmPhiChainedOutside(x: Int64, flag: Bool, n: Int64) : Int64 =
   let step1 = x + 1 in
   let step2 = step1 * 2 in
   let step3 = step2 + 3 in
@@ -782,7 +782,7 @@ licmPhiChainedOutside(5, false, 4) = 60
 // Inside the loop, 'sq = base * base' uses only 'base' which is loop-invariant
 // With correct ||: base is invariant (not in loopDefs), so sq is hoistable
 // With && mutation: base wrongly fails (not in invs on first pass)
-def licmHoistableUses(base: Int64, n: Int64, acc: Int64) : Int64 =
+let licmHoistableUses(base: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     // This computation uses only 'base' which is defined outside the loop
@@ -797,7 +797,7 @@ licmHoistableUses(3, 6, 0) = 54
 
 // More complex: multiple invariant uses in one instruction
 // Tests that all operands of a binary operation are checked
-def licmHoistableMultiUses(a: Int64, b: Int64, n: Int64, acc: Int64) : Int64 =
+let licmHoistableMultiUses(a: Int64, b: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     // Both 'a' and 'b' are loop-invariant (defined outside)
@@ -812,7 +812,7 @@ licmHoistableMultiUses(5, 7, 3, 0) = 105
 
 // Chain of hoistable instructions where each depends on previous
 // Tests that LICM correctly propagates invariant status through invs
-def licmHoistableChain(x: Int64, n: Int64, acc: Int64) : Int64 =
+let licmHoistableChain(x: Int64, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     // step1 uses only x (invariant), so step1 is hoistable
@@ -858,7 +858,7 @@ licmHoistableChain(10, 3, 0) = 81
 // Test: multiple blocks in loop, only some have hoistable code
 // The conditional creates multiple basic blocks in the CFG
 // The then-branch has hoistable code, the else-branch has runtime-dependent code
-def licmBlockChangeProp(x: Int64, flag: Bool, n: Int64, acc: Int64) : Int64 =
+let licmBlockChangeProp(x: Int64, flag: Bool, n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     let result = if flag then
@@ -877,7 +877,7 @@ licmBlockChangeProp(3, true, 4, 0) = 36
 licmBlockChangeProp(3, false, 4, 0) = 20
 
 // More complex: chain across blocks where hoisting in one enables another
-def licmBlockChainHoist(a: Int64, b: Int64, flag: Bool, n: Int64) : Int64 =
+let licmBlockChainHoist(a: Int64, b: Int64, flag: Bool, n: Int64) : Int64 =
   if n <= 0 then 0
   else
     // First block: hoistable computation
@@ -933,7 +933,7 @@ licmBlockChainHoist(3, 4, false, 3) = 21
 // The else-branch has no dead code
 // DCE should remove 'unused' and report changed=true
 // With mutation: DCE reports false, but still removes the code (just doesn't iterate more)
-def dceMultiBlock(flag: Bool, x: Int64) : Int64 =
+let dceMultiBlock(flag: Bool, x: Int64) : Int64 =
   if flag then
     let unused = x * x in  // dead code - unused
     let result = x + 1 in
@@ -950,7 +950,7 @@ dceMultiBlock(false, 10) = 12
 // Pass 1: DCE removes 'dead1' (unused)
 // This simplifies the code, potentially enabling more optimizations
 // If DCE's change flag is wrong, fewer passes run
-def dceChainOptimization(flag: Bool, x: Int64) : Int64 =
+let dceChainOptimization(flag: Bool, x: Int64) : Int64 =
   if flag then
     let dead1 = x * x * x in  // unused - dead code
     let dead2 = dead1 + 1 in  // depends on dead1, also becomes dead
@@ -968,7 +968,7 @@ dceChainOptimization(false, 7) = 27
 // Test where DCE in multiple blocks should all report changes
 // Every branch has dead code, but with && mutation this would still fail
 // because ch starts as false and && with anything keeps it false
-def dceAllBlocksHaveDead(choice: Int64) : Int64 =
+let dceAllBlocksHaveDead(choice: Int64) : Int64 =
   if choice == 1 then
     let dead = 100 in  // unused
     1
@@ -987,7 +987,7 @@ dceAllBlocksHaveDead(0) = 3
 // Recursive function where DCE iterates
 // Each recursive call creates dead code patterns
 // The optimizer should iterate until no more dead code exists
-def dceRecursive(n: Int64, acc: Int64) : Int64 =
+let dceRecursive(n: Int64, acc: Int64) : Int64 =
   if n <= 0 then acc
   else
     let dead = n * n in  // unused - dead code
@@ -1029,7 +1029,7 @@ dceRecursive(0, 0) = 0
 // The copy 'alias = selected' creates a Mov
 // With correct ||: selected is phi dest, so not added to copy map
 // With && mutation: selected added to copy map (wrongly), then propagated
-def phiDestCopyMap(flag: Bool, a: Int64, b: Int64) : Int64 =
+let phiDestCopyMap(flag: Bool, a: Int64, b: Int64) : Int64 =
   // 'selected' is a phi destination - its value depends on flag
   let selected = if flag then a else b in
   // Create a copy of the phi result
@@ -1043,7 +1043,7 @@ phiDestCopyMap(true, 10, 5) = 20
 phiDestCopyMap(false, 10, 5) = 10
 
 // More complex: phi dest used in arithmetic before copy
-def phiDestCopyArith(flag: Bool, x: Int64, y: Int64) : Int64 =
+let phiDestCopyArith(flag: Bool, x: Int64, y: Int64) : Int64 =
   let chosen = if flag then x * 2 else y * 3 in
   let copy = chosen in
   chosen - copy  // Should always be 0
@@ -1054,7 +1054,7 @@ phiDestCopyArith(false, 5, 10) = 0
 
 // Nested conditionals creating multiple phi destinations
 // Tests that all phi destinations are correctly excluded from copy map
-def nestedPhiDestCopy(f1: Bool, f2: Bool, a: Int64, b: Int64, c: Int64) : Int64 =
+let nestedPhiDestCopy(f1: Bool, f2: Bool, a: Int64, b: Int64, c: Int64) : Int64 =
   let p1 = if f1 then a else b in
   let p2 = if f2 then p1 else c in
   let copy1 = p1 in
@@ -1100,7 +1100,7 @@ nestedPhiDestCopy(false, false, 1, 2, 3) = 10
 // The outer condition uses a runtime parameter (flag)
 // With ||: change flag is true, enabling further passes
 // With && mutation: change flag incorrectly becomes false
-def constantBranchMultiBlock(flag: Bool, x: Int64) : Int64 =
+let constantBranchMultiBlock(flag: Bool, x: Int64) : Int64 =
   if flag then
     // This block has a constant branch: 'if true then 10 else 20' -> 10
     let inner = if true then 10 else 20 in
@@ -1116,7 +1116,7 @@ constantBranchMultiBlock(false, 5) = 10
 
 // More complex: chain of constant branches that require multiple passes
 // First pass simplifies outer constant, second pass can see more patterns
-def constantBranchChain(flag: Bool) : Int64 =
+let constantBranchChain(flag: Bool) : Int64 =
   if flag then
     // Multiple constant conditions in sequence
     let a = if true then 1 else 99 in
@@ -1134,7 +1134,7 @@ constantBranchChain(false) = 42
 // Test that relies on constant branch enabling dead code elimination
 // The constant branch simplifies 'if true then x else y' to just x
 // This makes 'y' potentially dead if not used elsewhere
-def constantBranchEnablesDCE(flag: Bool, x: Int64, y: Int64) : Int64 =
+let constantBranchEnablesDCE(flag: Bool, x: Int64, y: Int64) : Int64 =
   if flag then
     // Constant branch chooses x, making the computation for y unused
     let result = if true then x * 2 else y * 3 in
@@ -1150,7 +1150,7 @@ constantBranchEnablesDCE(false, 10, 5) = 15
 
 // Nested constant branches in different blocks
 // Each level has a constant condition that simplifies
-def nestedConstantBranches(flag: Bool) : Int64 =
+let nestedConstantBranches(flag: Bool) : Int64 =
   if flag then
     // Outer constant branch
     if true then
@@ -1196,7 +1196,7 @@ nestedConstantBranches(false) = 400
 // The constant 'if true' creates an unreachable else-branch
 // Multiple variables are assigned in both branches, creating multiple phis
 // When the unreachable branch is eliminated, all phis have sources trimmed
-def multiPhiMerge(flag: Bool, x: Int64) : Int64 =
+let multiPhiMerge(flag: Bool, x: Int64) : Int64 =
   let choice = if true then 1 else 2 in
   let result = if flag then choice + x else choice - x in
   result
@@ -1208,7 +1208,7 @@ multiPhiMerge(false, 5) = -4
 
 // More complex: nested conditionals creating multiple merge points with phis
 // Each merge point may have multiple phi nodes that need source trimming
-def nestedPhiMerge(flag: Bool, x: Int64, y: Int64) : Int64 =
+let nestedPhiMerge(flag: Bool, x: Int64, y: Int64) : Int64 =
   let a = if true then x else y in  // constant branch creates unreachable
   let b = if true then y else x in  // another constant branch
   let result = if flag then a + b else a - b in
@@ -1221,7 +1221,7 @@ nestedPhiMerge(false, 3, 7) = -4
 
 // Test where constant branch in one path affects phi in sibling path
 // This creates a more complex CFG structure for elimination
-def siblingPhiElimination(outer: Bool, x: Int64) : Int64 =
+let siblingPhiElimination(outer: Bool, x: Int64) : Int64 =
   if outer then
     // This branch has a constant condition
     let inner = if true then x * 2 else x * 3 in

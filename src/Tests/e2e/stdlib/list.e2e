@@ -218,14 +218,14 @@ Stdlib.List.all([1, 2, 3], fun x -> x > 2) = false
 // but currently gated off (enabling it regresses 37 other tests). See
 // docs/x64-refcounting.md.
 //
-// def memReclaimMakeHelper(n: Int64, acc: List<Int64>) : List<Int64> =
+// let memReclaimMakeHelper(n: Int64, acc: List<Int64>) : List<Int64> =
 //     if n <= 0 then acc
 //     else memReclaimMakeHelper(n - 1, [n, ...acc])
 //
-// def memReclaimMake(n: Int64) : List<Int64> =
+// let memReclaimMake(n: Int64) : List<Int64> =
 //     memReclaimMakeHelper(n, [])
 //
-// def memReclaimBurn(iters: Int64, total: Int64) : Int64 =
+// let memReclaimBurn(iters: Int64, total: Int64) : Int64 =
 //     if iters <= 0 then total
 //     else
 //         let l = memReclaimMake(400) in

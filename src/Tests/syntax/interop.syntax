@@ -81,7 +81,7 @@ public Dict type rejects a key type argument
 ---PARSE-AS---
 compiler
 ---SOURCE---
-def badDictArity(dict: Dict<String, Int64>): Int64 = 0
+let badDictArity(dict: Dict<String, Int64>): Int64 = 0
 ---EXPECT-ERROR---
 Dict expects exactly one type argument
 

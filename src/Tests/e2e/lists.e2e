@@ -246,10 +246,10 @@ match [] with | [...t] -> 1 | _ -> 0 = 1
 match [1] with | [...t] -> 1 | _ -> 0 = 1
 
 // Recursive length using cons pattern
-def length(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
+let length(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
 
 // Recursive sum using cons pattern
-def sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
+let sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
 
 // =====================================================
 // Stdlib.List Function Tests
@@ -315,7 +315,7 @@ let x = [3, 4] in Stdlib.List.length([1, 2, ...x]) = 4
 let x = [1, 2, 3] in Stdlib.List.length([...x]) = 3
 
 // Spread with empty tail (use function to get typed empty list)
-def emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = 2
+let emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = 2
 
 // Verify element values with pattern matching
 let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = 6
@@ -360,7 +360,7 @@ match [(2, 3), (4, 5)] with | [t1, t2] -> t1.0 * t1.1 + t2.0 * t2.1 | _ -> 0 = 2
 match [(10, 20)] with | [t] -> t.0 + t.1 | _ -> 0 = 30
 
 // Recursive list construction with tuple elements
-def makePairs(n: Int64) : List<(Int64, Int64)> =
+let makePairs(n: Int64) : List<(Int64, Int64)> =
     if n <= 0 then
         []
     else
@@ -386,7 +386,7 @@ match [(1.0, 2.5), (3.5, 4.0)] with | [t1, t2] -> t1.0 + t1.1 + t2.0 + t2.1 | _ 
 match [("a", 0.5)] with | [t] -> if t.1 < 0.6 then 1 else 0 | _ -> 0 = 1
 
 // Cumulative float tuple selection in list
-def makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> = match Stdlib.List.head<(Int64, Float)>(table) with | None -> [] | Some(item) -> let c = Stdlib.Tuple2.first<Int64, Float>(item) in let p = Stdlib.Tuple2.second<Int64, Float>(item) in let newRunning = running + p in match Stdlib.List.tail<(Int64, Float)>(table) with | None -> [(c, newRunning)] | Some(rest) -> Stdlib.List.push<(Int64, Float)>(makeCumulative(rest, newRunning), (c, newRunning)) def selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 = match Stdlib.List.getAt(table, idx) with | None -> 0 | Some(item) -> let c = Stdlib.Tuple2.first(item) in let p = Stdlib.Tuple2.second(item) in if r < p then c else if idx + 1 >= Stdlib.List.length(table) then c else selectRandom(table, r, idx + 1) let table = [(97, 0.27), (99, 0.12), (103, 0.12), (116, 0.27)] in let cumulative = makeCumulative(table, 0.0) in let newSeed = (1 * 3877 + 29573) % 139968 in let r = Stdlib.Int64.toFloat(newSeed) / 139968.0 in selectRandom(cumulative, r, 0) = 97
+let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> = match Stdlib.List.head<(Int64, Float)>(table) with | None -> [] | Some(item) -> let c = Stdlib.Tuple2.first<Int64, Float>(item) in let p = Stdlib.Tuple2.second<Int64, Float>(item) in let newRunning = running + p in match Stdlib.List.tail<(Int64, Float)>(table) with | None -> [(c, newRunning)] | Some(rest) -> Stdlib.List.push<(Int64, Float)>(makeCumulative(rest, newRunning), (c, newRunning)) let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 = match Stdlib.List.getAt(table, idx) with | None -> 0 | Some(item) -> let c = Stdlib.Tuple2.first(item) in let p = Stdlib.Tuple2.second(item) in if r < p then c else if idx + 1 >= Stdlib.List.length(table) then c else selectRandom(table, r, idx + 1) let table = [(97, 0.27), (99, 0.12), (103, 0.12), (116, 0.27)] in let cumulative = makeCumulative(table, 0.0) in let newSeed = (1 * 3877 + 29573) % 139968 in let r = Stdlib.Int64.toFloat(newSeed) / 139968.0 in selectRandom(cumulative, r, 0) = 97
 
 // =====================================================
 // Lists of Strings
@@ -416,11 +416,11 @@ match [true, false] with | [a, b] -> if a && b then 1 else 0 | _ -> -1 = 0
 // =====================================================
 
 // Sum list of floats recursively
-// DISABLED (same float list bug): def sumFloats(xs: List<Float>) : Float = match xs with | [] -> 0.0 | [h, ...t] -> h + sumFloats(t)
+// DISABLED (same float list bug): let sumFloats(xs: List<Float>) : Float = match xs with | [] -> 0.0 | [h, ...t] -> h + sumFloats(t)
 // DISABLED: sumFloats([1.0, 2.0, 3.0, 4.0]) = stdout="10.00\n"
 
 // Concatenate list of strings
-def concatStrings(xs: List<String>) : String = match xs with | [] -> "" | [h, ...t] -> h ++ concatStrings(t)
+let concatStrings(xs: List<String>) : String = match xs with | [] -> "" | [h, ...t] -> h ++ concatStrings(t)
 concatStrings(["a", "b", "c"]) = "abc"
 
 // =====================================================
@@ -645,7 +645,7 @@ let xs = [10, 20, 30, 40, 50, 60, 70] in Stdlib.Option.withDefault(Stdlib.List.g
 //
 // Key test: A single-element list matched with [h, ...t] should extract h,
 // not fall through to the empty list case.
-def checkSingle119(xs: List<Int64>) : Int64 =
+let checkSingle119(xs: List<Int64>) : Int64 =
     match xs with
     | [] -> 0
     | [h, ...t] -> h + 1000
@@ -675,7 +675,7 @@ checkSingle119([10, 20, 30]) = 1010
 
 // Test with multiple match cases where cons pattern is NOT the first case
 // This ensures the guard check is properly evaluated
-def checkGuard120(xs: List<Int64>) : Int64 =
+let checkGuard120(xs: List<Int64>) : Int64 =
     match xs with
     | [] -> 100
     | [h, ...t] -> h + 200
@@ -688,7 +688,7 @@ checkGuard120([1, 2, 3]) = 201
 checkGuard120([]) = 100
 
 // Test with cons pattern as first alternative to exercise guard check path
-def checkGuardFirst120(xs: List<Int64>) : Int64 =
+let checkGuardFirst120(xs: List<Int64>) : Int64 =
     match xs with
     | [h, ...t] -> h + 300
     | [] -> 400
@@ -717,7 +717,7 @@ let xs = [42] in match [1, ...xs] with | [a, b] -> a + b | _ -> 0 = 43
 
 // List<Float> cons destructuring must preserve the floating-point representation
 // for heads extracted from both singleton and multi-element skew lists.
-def sumFloatList(xs: List<Float>) : Float =
+let sumFloatList(xs: List<Float>) : Float =
     match xs with
     | [] -> 0.0
     | [head, ...tail] -> head + sumFloatList(tail)
@@ -744,7 +744,7 @@ match WrappedFloatList([1.5]) with | WrappedFloatList([value]) -> Stdlib.Float.t
 // This test creates a List<Int64> via a function and accesses the head.
 // If the head is incorrectly typed as Float64, the integer bit pattern
 // would be interpreted as a float, giving a wrong result.
-def makeIntList167() : List<Int64> = [42, 84, 126]
+let makeIntList167() : List<Int64> = [42, 84, 126]
 match makeIntList167() with | [h, ...t] -> h + 100 | [] -> 999 = 142
 
 // =====================================================
@@ -762,7 +762,7 @@ match makeIntList167() with | [h, ...t] -> h + 100 | [] -> 999 = 142
 // This test creates a function that returns List<Int64>, stores it as a
 // first-class function value, calls it, and accesses the head. This exercises
 // the TFunction path in TypeMap lookup.
-def makeList168(n: Int64) : List<Int64> = [55 + n, 110, 165] let f = makeList168 in match f(0) with | [h, ...t] -> h + 200 | [] -> 999 = stdout="255\n"
+let makeList168(n: Int64) : List<Int64> = [55 + n, 110, 165] let f = makeList168 in match f(0) with | [h, ...t] -> h + 200 | [] -> 999 = stdout="255\n"
 
 // =====================================================
 // List head type tracking in convertExprToOperand (kills mutation #169)
@@ -779,7 +779,7 @@ def makeList168(n: Int64) : List<Int64> = [55 + n, 110, 165] let f = makeList168
 //
 // This test places the list pattern match inside an if-then branch to exercise
 // the convertExprToOperand code path rather than the convertExpr path.
-def testListInBranch169(flag: Bool) : Int64 =
+let testListInBranch169(flag: Bool) : Int64 =
     if flag then
         let xs = [55, 110, 165] in match xs with | [h, ...t] -> h | [] -> 0
     else
@@ -800,7 +800,7 @@ testListInBranch169(true) = 55
 //
 // This test combines the closure pattern from #168 with the branch context
 // from #169 to exercise the TFunction->TList case in convertExprToOperand.
-def makeList170(n: Int64) : List<Int64> = [77 + n, 154, 231] def testBranch170(flag: Bool) : Int64 = if flag then let f = makeList170 in match f(0) with | [h, ...t] -> h | [] -> 0 else 999 testBranch170(true) = 77
+let makeList170(n: Int64) : List<Int64> = [77 + n, 154, 231] let testBranch170(flag: Bool) : Int64 = if flag then let f = makeList170 in match f(0) with | [h, ...t] -> h | [] -> 0 else 999 testBranch170(true) = 77
 
 // Compound list elements use the same recursive value renderer.
 [(1, 2)] = stdout="[(1, 2)]\n"

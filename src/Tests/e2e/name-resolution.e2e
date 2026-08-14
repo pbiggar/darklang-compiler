@@ -7,10 +7,10 @@ Stdlib.Float.sqrt(4.0) = 2.0
 Float.sqrt(4.0) = error="Unresolved callable name: Float.sqrt"
 
 // Lexical callable values shadow a same-spelled top-level function.
-def shadowed(x: Int64): Int64 = x + 10 let shadowed = fun x -> x + 20 in shadowed(1) = 21
+let shadowed(x: Int64): Int64 = x + 10 let shadowed = fun x -> x + 20 in shadowed(1) = 21
 
 // Equal-precedence duplicate declarations are deterministic ambiguities.
-def duplicated(x: Int64): Int64 = x + 1 def duplicated(x: Int64): Int64 = x + 2 duplicated(1) = error="Ambiguous callable reference 'duplicated': function duplicated"
+let duplicated(x: Int64): Int64 = x + 1 let duplicated(x: Int64): Int64 = x + 2 duplicated(1) = error="Ambiguous callable reference 'duplicated': function duplicated"
 
 // Constructors from distinct user types do not acquire an order-dependent winner.
 type FirstChoice = SharedChoice | FirstOnly
@@ -26,4 +26,4 @@ QualifiedFirst.QualifiedShared == QualifiedFirst.QualifiedShared = true
 doesNotExist(1) = error="Unresolved callable name: doesNotExist"
 
 // A function identity in value position is never coerced into a call.
-def nullaryIdentity(): Int64 = 1 def needsInt64(): Int64 = nullaryIdentity needsInt64() = error="Type mismatch in variable nullaryIdentity: expected Int64, got (Unit) -> Int64"
+let nullaryIdentity(): Int64 = 1 let needsInt64(): Int64 = nullaryIdentity needsInt64() = error="Type mismatch in variable nullaryIdentity: expected Int64, got (Unit) -> Int64"
