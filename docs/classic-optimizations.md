@@ -528,6 +528,22 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk extension of ANF CSE for a pure floating-point operation; avoids repeating the same square-root computation before MIR lowering.
 - Notes: Implemented for repeated `FloatSqrt(atom)` expressions in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `cse_reuses_duplicate_float_sqrt` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+## Interprocedural optimization
+
+### Uniform literal direct-parameter propagation
+
+- Optimization name: Uniform literal direct-parameter propagation
+- Taxonomy category: Interprocedural constant propagation
+- Priority/rationale: Specializing internal signatures exposes program-wide literal parameters inside recursive helpers while removing their call-sequence argument setup.
+- Notes: Implemented in `src/DarkCompiler/passes/2.4.5_ANF_DirectCallSpecialization.fs` for internal functions with at least one known direct call and no `FuncRef` or `ClosureAlloc` use. Normal, borrowed, and tail calls are rewritten consistently. Focused ANF tests cover mutual recursion, differing literals, and indirect-use exclusions. ARM64 routine Cachegrind improved quicksort by 11,088 instructions and spectral norm by 60, with the other 17 workloads unchanged; the displayed aggregate performance ratio remains 2.75x.
+
+### Dead direct-parameter elimination
+
+- Optimization name: Dead direct-parameter elimination
+- Taxonomy category: Dead argument elimination
+- Priority/rationale: Canonical signature cleanup, but retain only if existing workloads justify sharing the whole-program direct-call analysis.
+- Notes: Trialed with recursive normal/tail-call and indirect-use ANF coverage. The five-workload ARM64 quick matrix was exactly neutral (5,264,292 instructions before and after), so the transformation was removed from the retained candidate.
+
 ## Aggregate simplification
 
 ### Local tuple projection forwarding

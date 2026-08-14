@@ -444,6 +444,7 @@ let private buildAnf
     (registries: AST_to_ANF.Registries)
     (externalInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>)
     (functions: ANF.Function list)
+    (specializeInternalSignatures: bool)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<ANF.Function list * ANF.TypeMap, string> =
 
@@ -490,13 +491,27 @@ let private buildAnf
                 ANF_Inlining.defaultConfig
                 externalInlineCandidates
                 anfOptimized
+    if verbosity >= 1 && specializeInternalSignatures then
+        println "  [2.4.5/7] ANF Direct-Call Specialization..."
+    let specializationStart = sw.Elapsed.TotalMilliseconds
+    let anfSpecialized =
+        if options.DisableInlining || not specializeInternalSignatures then
+            anfInlined
+        else
+            ANF_DirectCallSpecialization.specializeProgram anfInlined
+    let specializationElapsed = sw.Elapsed.TotalMilliseconds - specializationStart
+    if specializeInternalSignatures then
+        recordPassTiming passTimingRecorder "ANF Direct-Call Specialization" specializationElapsed
+    if verbosity >= 2 && specializeInternalSignatures then
+        let t = System.Math.Round(specializationElapsed, 1)
+        println $"        {t}ms"
     let inlineElapsed = sw.Elapsed.TotalMilliseconds - inlineStart
     recordPassTiming passTimingRecorder "ANF Inlining" inlineElapsed
     if verbosity >= 2 then
         let t = System.Math.Round(inlineElapsed, 1)
         println $"        {t}ms"
 
-    let convResult = buildConversionResult anfInlined registries
+    let convResult = buildConversionResult anfSpecialized registries
 
     if verbosity >= 1 then println "  [2.5/7] Reference Count Insertion..."
     let rcStart = sw.Elapsed.TotalMilliseconds
@@ -1209,7 +1224,7 @@ let buildStdlibWithTrace
                 let context = buildContext target typeCheckEnv genericFuncDefs Map.empty registries returnTypes
                 let (ANF.Program (stdlibFunctions, _)) = anfResult.Program
                 let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
-                match buildAnf 0 stdlibOptions sw registries Map.empty stdlibFunctions passTimingRecorder with
+                match buildAnf 0 stdlibOptions sw registries Map.empty stdlibFunctions false passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, typeMap) ->
@@ -1328,7 +1343,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                         let sw = Stopwatch.StartNew()
-                        buildAnf 0 stdlibOptions sw registries Map.empty anfFuncs passTimingRecorder
+                        buildAnf 0 stdlibOptions sw registries Map.empty anfFuncs false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, typeMap) ->
                             let tcoFunctions = applyTco 0 stdlibOptions sw anfFunctions passTimingRecorder
                             let newAnfFuncMap =
@@ -1798,6 +1813,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 userRegistries
                                 plan.ExternalInlineCandidates
                                 (entryFunction :: functionsToCompile)
+                                true
                                 plan.PassTimingRecorder
                         match anfResult with
                         | Error err -> Error err
@@ -1993,7 +2009,7 @@ let buildPreambleContext
                         mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
                     let pipelineContext =
                         buildContext stdlib.Context.Target preambleTypeCheckEnv mergedGenericDefs Map.empty preambleRegistries preambleReturnTypes
-                    match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions passTimingRecorder with
+                    match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions false passTimingRecorder with
                     | Error err ->
                         let rcPrefix = "Reference count insertion error: "
                         let msg =
@@ -2095,7 +2111,7 @@ let buildPreambleContextFromAnalysis
             mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
         let pipelineContext =
             buildContext stdlib.Context.Target analysis.TypeCheckEnv mergedGenericDefs combinedSpecRegistry preambleRegistries preambleReturnTypes
-        match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions passTimingRecorder with
+        match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions false passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
             let msg =
@@ -2460,7 +2476,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     FuncParams = userOnly.FuncParams
                     ModuleRegistry = userOnly.ModuleRegistry
                 }
-                match buildAnf 0 coverageOptions sw userRegistries Map.empty (entryFunction :: userOnly.UserFunctions) None with
+                match buildAnf 0 coverageOptions sw userRegistries Map.empty (entryFunction :: userOnly.UserFunctions) false None with
                 | Error err -> Error err
                 | Ok (userFunctions, _typeMap) ->
                     match PrintInsertion.insertPrintInEntry "_start" boundaryProgramType userFunctions with
