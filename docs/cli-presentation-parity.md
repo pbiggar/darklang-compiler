@@ -8,6 +8,13 @@ and the then-current parity documents were discovery aids only; every retained
 claim below was checked again against that exact revision pair. Performance is
 outside this contract unless it changes observable behavior.
 
+The focused native comparison revision is compiler commit
+`9a83ab2ff25bfc6697e30fbe1c7a9db55e4d14ff`, still against interpreter
+`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. At that pair the presentation
+matrix passed 19/19, the color-focused matrix passed 33/33, and the affected
+String and integer matrices passed 699/699 and 1986/1986 respectively.
+Repository-wide verification and integration remain the worker's responsibility.
+
 The pinned interpreter sources are
 `packages/darklang/stdlib/cli/log.dark` and
 `packages/darklang/stdlib/cli/ui/{color,progress,prompt,spinner,table}.dark`.
