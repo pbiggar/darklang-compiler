@@ -6,6 +6,13 @@ darklang/dark revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d` from
 2026-08-10. The pre-change compiler HEAD used to reproduce every retained gap
 was `69f92d2f9cd8d47476c0123557175387e411366c`.
 
+Integration rebased that implementation without semantic changes onto compiler
+main `1f5282a113b2abbc15622d5ad7187fb29199964b`, producing implementation
+revision `493d51575a842c6f38fb3e3721fa44518c834d6a`. The complete post-rebase
+conformance run used compiler HEAD
+`449b8a8bafe519fcd5c3f6778ddeddbb34cdb9f9` and the same exact interpreter
+revision above.
+
 The historical DCB1 report at
 `8a402797ccccda0ca47b516b356ae1de4d670038`, the earlier compiler snapshots
 `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` and
