@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "367fbac8c4f6420951592af456195c7874d231b771326a90ff149b7d6ba8ab85",
-  "generated_at": "2026-08-15T01:21:49+00:00",
+  "generated_at": "2026-08-15T01:53:01+00:00",
   "compiler": {
-    "commit": "1fdb9ef9b2d013a9bb34b38b56c05f736bae4e52",
-    "subject": "Align List language and module with interpreter"
+    "commit": "c5649b7086201214dd5ef770b4bd42467bb8415b",
+    "subject": "Optimize sibling recursion modulo addition"
   },
   "benchmarks": [
     {
@@ -37,7 +37,7 @@
     },
     {
       "name": "fib",
-      "instructions": 642006238
+      "instructions": 477772383
     },
     {
       "name": "leibniz",

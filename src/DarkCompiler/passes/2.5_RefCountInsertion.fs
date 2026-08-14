@@ -41,10 +41,23 @@ let emptyCExprTypeCache : CExprTypeCache = Map.empty
 
 /// Create initial context from conversion result
 let createContext (result: ConversionResult) : TypeContext =
+    let (Program (functions, _)) = result.Program
+    let funcReg =
+        functions
+        |> List.fold
+            (fun registry func ->
+                Map.add
+                    func.Name
+                    (AST.TFunction (
+                        func.TypedParams |> List.map (fun param -> param.Type),
+                        func.ReturnType
+                    ))
+                    registry)
+            result.FuncReg
     { TypeReg = result.TypeReg
       VariantLookup = result.VariantLookup
       SumShapeReg = rcSumShapeRegistryFromVariantLookup result.VariantLookup
-      FuncReg = result.FuncReg
+      FuncReg = funcReg
       FuncParams = result.FuncParams
       TempTypes = Map.empty
       ClosureFuncs = Map.empty }

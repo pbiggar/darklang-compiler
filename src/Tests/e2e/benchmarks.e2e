@@ -15,10 +15,18 @@ let fib(n: Int64) : Int64 =
     if n <= 1 then n
     else fib(n - 1) + fib(n - 2)
 
+// Tail recursion modulo addition must retain wrapping Int64 arithmetic and the
+// original base-case result, including inputs below the recursive range.
+let wrappingSiblingRecursion(n: Int64) : Int64 =
+    if n <= 0 then 9223372036854775807
+    else wrappingSiblingRecursion(n - 1) + wrappingSiblingRecursion(n - 1)
+
 fib(0) = 0
 fib(1) = 1
 fib(5) = 5
 fib(10) = 55
+wrappingSiblingRecursion(-1) = 9223372036854775807
+wrappingSiblingRecursion(2) = -4
 
 
 // ===================================================================

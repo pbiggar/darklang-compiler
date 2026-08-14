@@ -39,6 +39,44 @@ Function loop:
     branch v10025 ? loop_L2 : loop_L1
 
 ---NAME---
+tail_recursion_modulo_addition_forms_loop
+---INPUT---
+let fib(n: Int64) : Int64 =
+    if n <= 1 then n else fib(n - 1) + fib(n - 2)
+fib(10)
+---EXPECTED---
+Function fib:
+  fib_entry:
+    TailCall(fib$trmo, [v0, 0])
+    ret v11
+
+Function fib$trmo:
+  fib$trmo_entry:
+    jump fib$trmo_body
+  fib$trmo_L0:
+    v10025 <- v10012 + v10017 : TInt64
+    ret v10025
+  fib$trmo_L1:
+    v10019 <- v10017 - 1 : TInt64
+    v10020 <- Call(fib$trmo, [v10019, 0])
+    v10021 <- v10017 - 2 : TInt64
+    v10022 <- v10012 + v10020 : TInt64
+    v10023 <- v10021 : TInt64
+    v10024 <- v10022 : TInt64
+    jump fib$trmo_body
+  fib$trmo_body:
+    v10012 <- Phi([(v8, fib$trmo_entry), (v10024, fib$trmo_L1)]) : TInt64
+    v10017 <- Phi([(v0, fib$trmo_entry), (v10023, fib$trmo_L1)]) : TInt64
+    v10018 <- v10017 <= 1 : TInt64
+    branch v10018 ? fib$trmo_L0 : fib$trmo_L1
+
+Function _start:
+  _start_body:
+    v10007 <- Call(fib, [10])
+    Print(v10007, type=TInt64)
+    ret v10007
+
+---NAME---
 licm_hoists_recursive_effect_free_scalar_call
 ---INPUT---
 let factorial(n: Int64) : Int64 =

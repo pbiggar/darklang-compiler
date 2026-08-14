@@ -571,6 +571,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small fixed-trip scalar loops benefit from removing both recursive-call and loop-control overhead without exposing general recursion to code-size growth.
 - Notes: Implemented in ANF inlining for direct `Int64` recursion guarded by a literal `i >= bound`, entered with a literal induction value, and proven to advance by `i + 1`. Only primitive loop bodies are eligible; default limits are eight iterations and 48 expanded bindings per call site. Focused inlining tests cover the eight-round expansion and both caps, while an E2E hash case covers wrapping multiplication and XOR semantics. The routine merkletrees benchmark improves from 724,164,737 to 416,150,237 instructions (42.5%) with every other routine count unchanged.
 
+### Tail recursion modulo Int64 addition
+
+- Optimization name: Tail recursion modulo Int64 addition
+- Taxonomy category: Recursion-to-loop conversion
+- Priority/rationale: Eliminating one sibling recursive call turns the second branch of Fibonacci-style recursion into an accumulator-carrying loop while retaining the original asymptotic work and maximum call depth.
+- Notes: Implemented in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` for functions whose complete recursion consists of two direct self calls combined by a final `Int64` addition. A generated helper carries a zero-initialized accumulator; existing tail-call detection lowers its second call to a loop. Restricting the rewrite to wrapping `Int64` addition preserves reassociation and overflow semantics and excludes floating-point arithmetic. Focused ANF snapshots cover the positive and Float-negative shapes, a MIR snapshot records the accumulator phis and single remaining call, and E2E tests cover base cases and overflow. The routine fib benchmark improved from 642,006,238 to 477,772,383 instructions (25.58%); all other routine counts were unchanged and the aggregate performance ratio improved from 2.42x to 2.38x versus Rust.
+
 ### Effect-free direct-call hoisting
 
 - Optimization name: Effect-free direct-call hoisting

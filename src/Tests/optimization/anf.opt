@@ -2395,3 +2395,54 @@ return t0
 Main:
 let TempId 2 = f("dark")
 return t2
+
+---NAME---
+tail_recursion_modulo_integer_addition
+---INPUT---
+let fib(n: Int64) : Int64 =
+  if n <= 1 then n else fib(n - 1) + fib(n - 2)
+fib(10)
+---EXPECTED---
+Function fib:
+let TempId 11 = fib$trmo(t0, 0)
+return t11
+
+Function fib$trmo:
+let TempId 1 = t0 <= 1
+if t1 then
+let TempId 9 = t8 + t0
+return t9
+else
+let TempId 2 = t0 - 1
+let TempId 3 = fib$trmo(t2, 0)
+let TempId 4 = t0 - 2
+let TempId 10 = t8 + t3
+let TempId 5 = fib$trmo(t4, t10)
+return t5
+
+Main:
+let TempId 7 = fib(10)
+return t7
+
+---NAME---
+tail_recursion_modulo_addition_excludes_float
+---INPUT---
+let fibFloat(n: Int64) : Float =
+  if n <= 1 then 1.0 else fibFloat(n - 1) + fibFloat(n - 2)
+fibFloat(5)
+---EXPECTED---
+Function fibFloat:
+let TempId 1 = t0 <= 1
+if t1 then
+return 1
+else
+let TempId 2 = t0 - 1
+let TempId 3 = fibFloat(t2)
+let TempId 4 = t0 - 2
+let TempId 5 = fibFloat(t4)
+let TempId 6 = t3 + t5
+return t6
+
+Main:
+let TempId 7 = fibFloat(5)
+return t7

@@ -162,6 +162,7 @@ let private buildANFOptimizeOptions (options: CompilerOptions) : ANF_Optimize.Op
         EnableDCE = enabled && not options.DisableANFDCE
         EnableCSE = enabled
         EnableStrengthReduction = enabled && not options.DisableANFStrengthReduction
+        EnableTailRecursionModuloOperation = enabled && not options.DisableTCO
     }
 
 let private shouldRunANFOptimize (anfOptions: ANF_Optimize.OptimizeOptions) : bool =
@@ -171,6 +172,7 @@ let private shouldRunANFOptimize (anfOptions: ANF_Optimize.OptimizeOptions) : bo
     || anfOptions.EnableDCE
     || anfOptions.EnableCSE
     || anfOptions.EnableStrengthReduction
+    || anfOptions.EnableTailRecursionModuloOperation
 
 let private buildMIROptimizeOptions (options: CompilerOptions) : MIR_Optimize.OptimizeOptions =
     let enabled = not options.DisableMIROpt
@@ -323,6 +325,11 @@ let private lowerToAllocatedLir
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
     let functionOrder = functions |> List.map (fun f -> f.Name)
+    let allReturnTypes =
+        functions
+        |> List.fold
+            (fun returnTypes func -> Map.add func.Name func.ReturnType returnTypes)
+            externalReturnTypes
     let compileFunctions (functionsToCompile: ANF.Function list) : Result<LIR.Function list, string> =
         if List.isEmpty functionsToCompile then
             Ok []
@@ -338,7 +345,7 @@ let private lowerToAllocatedLir
                     registries.VariantLookup
                     registries.TypeReg
                     options.EnableCoverage
-                    externalReturnTypes
+                    allReturnTypes
             match mirResult with
             | Error err -> Error $"MIR conversion error: {err}"
             | Ok (mirFuncs, variantRegistry, mirRecordRegistry) ->

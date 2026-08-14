@@ -2,14 +2,14 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-08-15T01:21:49+00:00
+**Snapshot timestamp:** 2026-08-15T01:53:01+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 1)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `367fbac8c4f6420951592af456195c7874d231b771326a90ff149b7d6ba8ab85`
-**Compiler commit:** `1fdb9ef9b2d013a9bb34b38b56c05f736bae4e52` - Align List language and module with interpreter
+**Compiler commit:** `c5649b7086201214dd5ef770b4bd42467bb8415b` - Optimize sibling recursion modulo addition
 
-| Benchmark     |           Dark (2.42x) |          Rust |
+| Benchmark     |           Dark (2.38x) |          Rust |
 |---------------|------------------------|---------------|
 | ackermann     | 11,450,298,696 (2.46x) | 4,651,994,510 |
 | binary_trees  |    675,306,228 (0.37x) | 1,842,791,955 |
@@ -17,7 +17,7 @@ Best-known compatible routine-profile Dark performance vs audited Rust reference
 | edigits       |   4,664,674,103 (342x) |    13,637,551 |
 | factorial     |         64,214 (0.25x) |       257,669 |
 | fasta         |    549,966,883 (27.2x) |    20,252,213 |
-| fib           |    642,006,238 (2.49x) |   257,598,132 |
+| fib           |    477,772,383 (1.85x) |   257,598,132 |
 | leibniz       |    850,001,522 (1.06x) |   800,257,637 |
 | mandelbrot    |     17,621,940 (1.30x) |    13,595,721 |
 | matmul        |   2,027,686,855 (127x) |    15,983,852 |
