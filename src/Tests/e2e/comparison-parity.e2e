@@ -51,15 +51,15 @@ Dict { a = 1 } != Dict { a = 2 } = true
 
 // Lambda identity is its source expression and deliberately ignores captures.
 def comparisonMakeLambda(captured: Int64): (Int64) -> Int64 =
-  (value: Int64) => value + captured
+  fun value -> value + captured
 comparisonMakeLambda(1) == comparisonMakeLambda(2) = true
 [comparisonMakeLambda(1)] == [comparisonMakeLambda(2)] = true
-((value: Int64) => value) == ((value: Int64) => value) = false
+(fun value -> value) == (fun value -> value) = false
 
 // Named functions include resolved identity, specialization, and applied args.
 def comparisonAdd(left: Int64, right: Int64): Int64 = left + right
 def comparisonSub(left: Int64, right: Int64): Int64 = left - right
-((value: Int64) => comparisonAdd(1L, value)) != ((value: Int64) => comparisonAdd(1L, value)) = true
+(fun value -> comparisonAdd(1L, value)) != (fun value -> comparisonAdd(1L, value)) = true
 [comparisonAdd] == [comparisonAdd] = true
 [comparisonAdd] != [comparisonSub] = true
 [comparisonAdd(1L)] == [comparisonAdd(1L)] = true
