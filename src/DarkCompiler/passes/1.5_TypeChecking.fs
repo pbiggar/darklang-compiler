@@ -1042,7 +1042,7 @@ let private canonicalizeDeclaredTypeRefs
         | TDict (keyType, valueType) -> TDict (canonicalize keyType, canonicalize valueType)
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr -> current
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> current
 
     canonicalize typ
 
