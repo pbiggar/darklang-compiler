@@ -219,6 +219,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "crypto.dark")
     let x509UpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "x509.dark")
+    let cliPathUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "cli-path.dark")
+    let cliGlobUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "cli-glob.dark")
     let upstreamDarkPaths =
         [| eifUpstreamDarkPath
            ematchUpstreamDarkPath
@@ -250,7 +254,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            blobUpstreamDarkPath
            base64UpstreamDarkPath
            cryptoUpstreamDarkPath
-           x509UpstreamDarkPath |]
+           x509UpstreamDarkPath
+           cliPathUpstreamDarkPath
+           cliGlobUpstreamDarkPath |]
     let defaultUpstreamDarkPaths =
         [| eifUpstreamDarkPath
            ematchUpstreamDarkPath
@@ -277,7 +283,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            mathUpstreamDarkPath
            floatUpstreamDarkPath
            int64UpstreamDarkPath
-           intUpstreamDarkPath |]
+           intUpstreamDarkPath
+           cliPathUpstreamDarkPath
+           cliGlobUpstreamDarkPath |]
     for path in upstreamDarkPaths do
         if not (File.Exists path) then
             Crash.crash $"Missing required upstream dark test file: {path}"

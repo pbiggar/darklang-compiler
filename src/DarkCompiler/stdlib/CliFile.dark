@@ -1,0 +1,53 @@
+// Stdlib.Cli.File.dark - Portable path-pattern matching used by CLI workflows.
+// Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+def Stdlib.Cli.File.__segmentMatchesNoStar(pattern: String, path: String, patternIndex: Int64, pathIndex: Int64) : Bool =
+    let patternLength = Stdlib.String.length(pattern) in
+    let pathLength = Stdlib.String.length(path) in
+    if patternIndex == patternLength then pathIndex == pathLength
+    else
+        let patternByte = Stdlib.String.getByteAt(pattern, patternIndex) in
+        if patternByte == 63 then
+            pathIndex < pathLength
+            && Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex + 1, pathIndex + 1)
+        else
+            pathIndex < pathLength
+            && patternByte == Stdlib.String.getByteAt(path, pathIndex)
+            && Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex + 1, pathIndex + 1)
+
+def Stdlib.Cli.File.__segmentMatches(pattern: String, path: String, patternIndex: Int64, pathIndex: Int64) : Bool =
+    match Stdlib.String.indexOf(pattern, "*") with
+    | None -> Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex, pathIndex)
+    | Some(star) ->
+        let prefix = Stdlib.String.slice(pattern, 0, star) in
+        let suffix = Stdlib.String.dropFirst(pattern, star + 1) in
+        Stdlib.String.startsWith(path, prefix)
+        && Stdlib.String.endsWith(path, suffix)
+        && Stdlib.String.length(path) >= Stdlib.String.length(prefix) + Stdlib.String.length(suffix)
+
+def Stdlib.Cli.File.__copySegments(segments: List<String>) : List<String> =
+    match segments with
+    | [] -> []
+    | [head, ...tail] -> [head ++ "", ...Stdlib.Cli.File.__copySegments(tail)]
+
+def Stdlib.Cli.File.globMatchSegments(patternSegments: List<String>, pathSegments: List<String>) : Bool =
+    match patternSegments with
+    | [] -> Stdlib.List.length<String>(pathSegments) == 0
+    | [patternHead, ...patternTail] ->
+        if patternHead == "**" then
+            if Stdlib.Cli.File.globMatchSegments(
+                Stdlib.Cli.File.__copySegments(patternTail),
+                Stdlib.Cli.File.__copySegments(pathSegments)) then true
+            else
+                match pathSegments with
+                | [] -> false
+                | [_pathHead, ...pathTail] ->
+                    Stdlib.Cli.File.globMatchSegments(
+                        Stdlib.Cli.File.__copySegments(patternSegments),
+                        Stdlib.Cli.File.__copySegments(pathTail))
+        else
+            match pathSegments with
+            | [] -> false
+            | [pathHead, ...pathTail] ->
+                Stdlib.Cli.File.__segmentMatches(patternHead, pathHead, 0, 0)
+                && Stdlib.Cli.File.globMatchSegments(patternTail, pathTail)
