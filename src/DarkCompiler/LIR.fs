@@ -120,6 +120,7 @@ type Instr =
     | PrintFloatNoNewline of FReg
     | PrintString of string
     | RuntimeError of string
+    | RuntimeErrorString of Reg
     | PrintHeapStringNoNewline of Reg
     | PrintChars of byte list
     | PrintBytes of Reg

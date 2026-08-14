@@ -34,7 +34,7 @@ pretty_section "Building $BENCHMARK..."
 # Build Dark implementation
 if [ -f "$PROBLEM_DIR/dark/main.dark" ]; then
     pretty_info "Building Dark..."
-    "$PROJECT_ROOT/dark" "$PROBLEM_DIR/dark/main.dark" -o "$PROBLEM_DIR/dark/main" -q
+    "$PROJECT_ROOT/dark" --allow-internal "$PROBLEM_DIR/dark/main.dark" -o "$PROBLEM_DIR/dark/main" -q
     chmod +x "$PROBLEM_DIR/dark/main"
     pretty_ok "Dark build complete"
 fi

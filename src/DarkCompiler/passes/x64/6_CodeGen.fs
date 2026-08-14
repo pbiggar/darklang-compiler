@@ -2845,6 +2845,25 @@ let private translateInstr
             @ genExitSyscall
         )
 
+    | LIR.RuntimeErrorString messageReg ->
+        resolveReg messageReg
+        |> Result.map (fun resolvedMessageReg ->
+            [X86_64.MOV_reg (X86_64.R8, resolvedMessageReg)]
+            @ [X86_64.MOV_load (X86_64.RDX, X86_64.R8, 0)
+               X86_64.LEA (X86_64.RSI, X86_64.R8, 8)
+               X86_64.MOV_imm32 (X86_64.RDI, 2)]
+            @ genWriteSyscall
+            @ [X86_64.SUB_imm (X86_64.RSP, 8)]
+            @ loadImm64 scratch 10L
+            @ [X86_64.MOV_store (X86_64.RSP, 0, scratch)
+               X86_64.MOV_imm32 (X86_64.RDI, 2)
+               X86_64.MOV_reg (X86_64.RSI, X86_64.RSP)
+               X86_64.MOV_imm32 (X86_64.RDX, 1)]
+            @ genWriteSyscall
+            @ [X86_64.ADD_imm (X86_64.RSP, 8)]
+            @ loadImm64 X86_64.RDI 1L
+            @ genExitSyscall)
+
     | LIR.SaveRegs (intRegs, floatRegs) ->
         // Save caller-saved registers that are live across a call.
         // PUSH each in order — first pushed is deepest on the stack.

@@ -94,6 +94,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.DateTimeNow -> []      // No atoms
     | ANF.FloatToString atom -> extractFromAtom atom
     | ANF.RuntimeError _ -> []  // No atoms
+    | ANF.RuntimeErrorString atom -> extractFromAtom atom
 
 /// Extract function names from an ANF expression
 let rec private extractFromAExpr (aexpr: ANF.AExpr) : string list =

@@ -33,14 +33,14 @@ internal identifiers cannot be referenced directly.
 The originally reported user-visible impact is now covered by public behavior:
 
 ```dark
-Stdlib.Dict.size(Stdlib.Dict.fromList([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]))
+Stdlib.Dict.size(Stdlib.Dict.fromListOverwritingDuplicates([("1", 10), ("2", 20), ("3", 30), ("4", 40), ("5", 50)]))
 
-Stdlib.Dict.getOrDefault(Stdlib.Dict.fromList([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]), 5, -1)
+Stdlib.Dict.get(Stdlib.Dict.fromListOverwritingDuplicates([("1", 10), ("2", 20), ("3", 30), ("4", 40), ("5", 50)]), "5")
 
 List.fold([1, 2, 3, 4, 5], 0, (acc: Int64, x: Int64) => acc + x)
 ```
 
-These currently return `5`, `50`, and `15` respectively.
+These currently return `5I`, `Some(50)`, and `15` respectively.
 
 ---
 

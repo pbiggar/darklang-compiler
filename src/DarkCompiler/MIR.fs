@@ -95,6 +95,7 @@ type Instr =
     // Output operations (for main expression result printing)
     | Print of src:Operand * valueType:AST.Type    // Print value with type-appropriate formatting
     | RuntimeError of message:string               // Print runtime error to stderr and exit with code 1
+    | RuntimeErrorString of message:Operand        // Print a heap String error to stderr and exit with code 1
     // File I/O intrinsics (generate syscalls)
     | FileReadText of dest:VReg * path:Operand    // Read file, returns Result<String, String>
     | FileExists of dest:VReg * path:Operand      // Check if file exists, returns Bool

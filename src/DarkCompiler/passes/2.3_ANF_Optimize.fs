@@ -499,6 +499,7 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | DateTimeNow -> true       // Reads current time (syscall)
     | FloatToString _ -> false  // Pure conversion (but allocates - maybe should be true?)
     | RuntimeError _ -> true
+    | RuntimeErrorString _ -> true
 
 /// Add the TempId used by an atom to an existing liveness set.
 let private addAtomUse (atom: Atom) (uses: Set<TempId>) : Set<TempId> =
@@ -584,6 +585,7 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | DateTimeNow -> uses      // No atoms
     | FloatToString atom -> addAtomUse atom uses
     | RuntimeError _ -> uses
+    | RuntimeErrorString atom -> addAtomUse atom uses
 
 /// Test whether a CExpr uses a TempId without constructing a liveness set.
 let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
@@ -647,6 +649,7 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | RandomInt64
     | DateTimeNow
     | RuntimeError _ -> false
+    | RuntimeErrorString atom -> used atom
 
 /// Substitute atom in another atom
 let substAtom (env: Map<TempId, Atom>) (atom: Atom) : Atom =
@@ -748,6 +751,7 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | DateTimeNow -> DateTimeNow
     | FloatToString atom -> FloatToString (s atom)
     | RuntimeError message -> RuntimeError message
+    | RuntimeErrorString atom -> RuntimeErrorString (s atom)
 
 /// Substitute atoms in a CExpr, preserving the original value when there is no
 /// substitution environment.

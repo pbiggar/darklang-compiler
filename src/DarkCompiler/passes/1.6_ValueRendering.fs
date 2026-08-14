@@ -54,6 +54,10 @@ let private listItemsRendererName (typ: Type) : string =
     let text = TypeChecking.typeToString typ
     $"__dark_render_list_items_{stableHash text:x16}"
 
+let private dictItemsRendererName (typ: Type) : string =
+    let text = TypeChecking.typeToString typ
+    $"__dark_render_dict_items_{stableHash text:x16}"
+
 let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
     let rec apply typ =
         match typ with
@@ -175,6 +179,50 @@ and private ensureListItemsRenderer
         let completed = { placeholder with Body = body }
         (name, { withElemRenderer with Functions = Map.add name completed withElemRenderer.Functions })
 
+and private ensureDictItemsRenderer
+    (env: RenderEnv)
+    (valueType: Type)
+    (state: RenderState)
+    : string * RenderState =
+    let entryType = TTuple [TString; valueType]
+    let listType = TList entryType
+    let name = dictItemsRendererName (TDict (TString, valueType))
+    match Map.tryFind name state.Functions with
+    | Some _ -> (name, state)
+    | None ->
+        let placeholder = {
+            Name = name
+            TypeParams = []
+            Params = NonEmptyList.singleton ("__entries", listType)
+            ReturnType = TString
+            Body = StringLiteral ""
+        }
+        let reserved = { state with Functions = Map.add name placeholder state.Functions }
+        let entryValue = TupleAccess (Var "__entry", 1)
+        let (renderedValue, withValueRenderer) = renderCall env valueType entryValue reserved
+        let renderedEntry =
+            concat [
+                call "Stdlib.Dict.__renderKey" [TupleAccess (Var "__entry", 0)]
+                StringLiteral " = "
+                renderedValue
+            ]
+        let tailBody =
+            Match (
+                Var "__tail",
+                [ makeCase (PList []) (StringLiteral "")
+                  makeCase PWildcard (concat [StringLiteral "; "; call name [Var "__tail"]]) ]
+            )
+        let body =
+            Match (
+                Var "__entries",
+                [ makeCase (PList []) (StringLiteral "")
+                  makeCase
+                      (PListCons ([PVar "__entry"], PVar "__tail"))
+                      (concat [renderedEntry; tailBody]) ]
+            )
+        let completed = { placeholder with Body = body }
+        (name, { withValueRenderer with Functions = Map.add name completed withValueRenderer.Functions })
+
 and private renderBody
     (env: RenderEnv)
     (typ: Type)
@@ -216,6 +264,28 @@ and private renderBody
                 value,
                 [ makeCase (PList []) (StringLiteral $"{typeName} []")
                   makeCase PWildcard (concat [StringLiteral "["; call itemsName [value]; StringLiteral "]"]) ]
+            )
+        (body, nextState)
+    // An unconstrained Dict value can only be the polymorphic empty literal;
+    // no value renderer is needed because there are no entries to inspect.
+    | TDict (TString, TVar _) -> (StringLiteral "Dict { }", state)
+    | TDict (TString, valueType) ->
+        let (itemsName, nextState) = ensureDictItemsRenderer env valueType state
+        let entries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton value)
+        let body =
+            Let (
+                "__dict_entries",
+                entries,
+                Match (
+                    Var "__dict_entries",
+                    [ makeCase (PList []) (StringLiteral "Dict { }")
+                      makeCase
+                          PWildcard
+                          (concat
+                              [ StringLiteral "Dict { "
+                                call itemsName [Var "__dict_entries"]
+                                StringLiteral " }" ]) ]
+                )
             )
         (body, nextState)
     | TRecord ("DateTime", []) ->
@@ -299,9 +369,10 @@ and private renderBody
     | TBytes ->
         let length = call "Stdlib.Bytes.length" [value]
         (concat [StringLiteral "<"; call "Stdlib.Int64.toString" [length]; StringLiteral " bytes>"], state)
-    | TRawPtr | TDict _ ->
-        // These compiler extensions retain their existing pointer-like display contract.
+    | TRawPtr ->
         (call "Stdlib.Int64.toString" [value], state)
+    | TDict (keyType, _) ->
+        Crash.crash $"Public Dict renderer received non-String key type {TypeChecking.typeToString keyType}"
     | TRuntimeError -> (StringLiteral "()", state)
     | TVar name -> Crash.crash $"Unresolved type variable in value renderer: {name}"
 

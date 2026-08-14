@@ -194,7 +194,7 @@ for bench in $BENCHMARKS; do
     fi
 
     if [ "$NEEDS_BUILD" = true ]; then
-        if ! "$PROJECT_ROOT/dark" "$QUICK_DARK" -o "$QUICK_BIN" -q 2>/dev/null; then
+        if ! "$PROJECT_ROOT/dark" --allow-internal "$QUICK_DARK" -o "$QUICK_BIN" -q 2>/dev/null; then
             BUILD_FAILURES+=("$bench")
             if [ "$QUIET_MODE" != true ]; then
                 pretty_warn "$bench: build failed"

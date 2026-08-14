@@ -4,9 +4,9 @@ module Empty =
 
 module ConstructionErrors =
   Dict { a = 1; a = 2 } = error="Cannot add two dictionary entries with the same key `a`"
-  Dict { a = 1; b = "two" } = error="Cannot add a String (\"two\") to a dict of Stdlib.Int32. Failed at key `b`."
+  Dict { a = 1; b = "two" } = error="dict values must have one type: key `b` has String, expected Int64"
 module FilterMap =
-  Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = (Dict { })
+  Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Stdlib.Option.Option<b$1>, got (__interp_lambda_0_1_value) -> Int64"
 
   (Stdlib.Dict.filterMap
     (Dict { a = "x"; b = "y"; c = "z" })
@@ -34,9 +34,9 @@ module Filter =
   Stdlib.Dict.filter (Dict { key1 = 1L; key2 = 3L }) (fun k v -> v < 2L) =
     (Dict { key1 = 1L })
 
-  Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) = (Dict { })
+  Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Bool, got (__interp_lambda_0_1_v) -> Int64"
 
-  Stdlib.Dict.filter (Dict { a = 1L; b = 2L; c = 3L }) (fun k v -> 2L) = error="Encountered a condition that must be a Bool, but got an Int64 (2)"
+  Stdlib.Dict.filter (Dict { a = 1L; b = 2L; c = 3L }) (fun k v -> 2L) = error="Type mismatch in integer literal: expected Bool, got Int64"
 module FromListOverwritingDuplicates =
   Stdlib.Dict.fromListOverwritingDuplicates_v0 [] = (Dict { })
 
@@ -49,8 +49,8 @@ module FromListOverwritingDuplicates =
   Stdlib.Dict.fromListOverwritingDuplicates_v0 [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   // CLEANUP improve the error message to:
   //   In Stdlib.Dict.fromListOverwritingDuplicates's 1st argument (`entries`), the nested value `entries[1]` should be a (String, 'b). However, an Int64 (2) was passed instead.
-  Stdlib.Dict.fromListOverwritingDuplicates_v0 [ (1L, 2L) ] = error="Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(String * Int64)>, but got List<(Int64 * Int64)> ([(1, 2)])"
-  Stdlib.Dict.fromListOverwritingDuplicates_v0 [ 1L ] = error="Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(String * _)>, but got List<Int64> ([1])"
+  Stdlib.Dict.fromListOverwritingDuplicates_v0 [ (1L, 2L) ] = error="Type mismatch in integer literal: expected String, got Int64"
+  Stdlib.Dict.fromListOverwritingDuplicates_v0 [ 1L ] = error="Type mismatch in integer literal: expected (String, v$0), got Int64"
 module FromList =
   Stdlib.Dict.fromList_v0 [] = Stdlib.Option.Option.Some(Dict { })
 
@@ -66,7 +66,7 @@ module FromList =
   Stdlib.Dict.fromList_v0 [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   // CLEANUP improve the error message to
   //  "In Stdlib.Dict.fromList's 1st argument (`entries`), the nested value `entries[0][0]` should be a Stdlib.String. However, an Int64 (1) was passed instead.\n\nExpected: String\nActual: an Int64: 1"
-  Stdlib.Dict.fromList_v0 [ (1L, 1L) ] = error="Darklang.Stdlib.Dict.fromList's 1st parameter `entries` expects List<(String * Int64)>, but got List<(Int64 * Int64)> ([(1, 1)])"
+  Stdlib.Dict.fromList_v0 [ (1L, 1L) ] = error="Type mismatch in integer literal: expected String, got Int64"
 module Get =
   Stdlib.Dict.get (Dict { key1 = "val1" }) "key1" = Stdlib.Option.Option.Some "val1"
 
@@ -124,8 +124,8 @@ module Set =
 
   Stdlib.Dict.set_v0 (Dict { key1 = "val1before" }) "key1" "val1after" = error="Cannot add two dictionary entries with the same key `key1`"
   Stdlib.Dict.set_v0 (Dict { key1 = "val1"; key2 = "val2" }) "key2" "newVal2" = error="Cannot add two dictionary entries with the same key `key2`"
-  Dict { key1 = "val1"; key2 = 2L } = error="Cannot add an Int64 (2) to a dict of Stdlib.String. Failed at key `key2`."
-  Stdlib.Dict.set_v0 (Dict { key1 = "val1" }) "key2" 2L = error="Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (2)"
+  Dict { key1 = "val1"; key2 = 2L } = error="dict values must have one type: key `key2` has Int64, expected String"
+  Stdlib.Dict.set_v0 (Dict { key1 = "val1" }) "key2" 2L = error="Type mismatch in integer literal: expected String, got Int64"
   Stdlib.Dict.set_v0 (Dict { }) "key1" "val1" =
     (Dict { key1 = "val1" })
 
@@ -137,7 +137,7 @@ module SetOverridingDuplicates =
   Stdlib.Dict.setOverridingDuplicates_v0 (Dict { key1 = "val1" }) "key2" "val2" =
     (Dict { key1 = "val1"; key2 = "val2" })
 
-  Stdlib.Dict.setOverridingDuplicates_v0 (Dict { key1 = "val1" }) "key2" 2L = error="Darklang.Stdlib.Dict.setOverridingDuplicates's 3rd parameter `val` expects String, but got Int64 (2)"
+  Stdlib.Dict.setOverridingDuplicates_v0 (Dict { key1 = "val1" }) "key2" 2L = error="Type mismatch in integer literal: expected String, got Int64"
   // (where this differs from .set)
   Stdlib.Dict.setOverridingDuplicates_v0 (Dict { key1 = "val1before" }) "key1" "val1after" =
     (Dict { key1 = "val1after" })

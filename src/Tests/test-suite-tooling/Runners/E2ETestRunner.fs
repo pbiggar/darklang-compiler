@@ -13,7 +13,7 @@ open TestDSL.E2EFormat
 // Internal identifiers are only allowed for stdlib-internal tests.
 let private isInternalTestFile (sourceFile: string) : bool =
     let normalized = sourceFile.Replace('\\', '/')
-    normalized.Contains("/stdlib-internal/")
+    normalized.Contains("/stdlib-internal/") || normalized.Contains("/verification/")
 
 // Choose parser syntax from the test suite directory.
 let private sourceSyntaxForTestFile (sourceFile: string) : CompilerLibrary.SourceSyntax =
@@ -250,6 +250,30 @@ let private collectTypeAppsFromProgram (program: Program) : Set<SpecKey> =
         | _ -> Set.empty)
     |> List.fold Set.union Set.empty
 
+// Value rendering is generated after type checking. Include the generic calls
+// that a renderer introduces so prebuilt E2E contexts contain the same Dict
+// specializations as a full-program compilation.
+let rec private collectRendererSpecs (typ: Type) : Set<SpecKey> =
+    match typ with
+    | TDict (TString, valueType) ->
+        Set.add ("Stdlib.Dict.toList", [valueType]) (collectRendererSpecs valueType)
+    | TList elementType -> collectRendererSpecs elementType
+    | TTuple elementTypes
+    | TEnumFields elementTypes ->
+        elementTypes
+        |> List.map collectRendererSpecs
+        |> List.fold Set.union Set.empty
+    | TFunction (parameterTypes, returnType) ->
+        parameterTypes @ [returnType]
+        |> List.map collectRendererSpecs
+        |> List.fold Set.union Set.empty
+    | TRecord (_, typeArgs)
+    | TSum (_, typeArgs) ->
+        typeArgs
+        |> List.map collectRendererSpecs
+        |> List.fold Set.union Set.empty
+    | _ -> Set.empty
+
 let private filterSpecsByDefs (genericDefs: GenericFuncDefs) (specs: Set<SpecKey>) : Set<SpecKey> =
     specs |> Set.filter (fun (funcName, _) -> Map.containsKey funcName genericDefs)
 
@@ -386,6 +410,11 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         |> combineMany
     | TupleAccess (tupleExpr, _index) ->
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars tupleExpr
+    | DictLiteral (_, entries) ->
+        entries
+        |> List.map snd
+        |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
+        |> combineMany
     | RecordLiteral (_typeName, fields) ->
         fields
         |> List.map snd
@@ -750,9 +779,9 @@ let private collectSpecsFromTests
                     |> Result.bind (fun testAst ->
                         typeCheckProgramForSourceSyntax sourceSyntax typeCheckEnv testAst
                         |> Result.mapError typeErrorToString
-                        |> Result.map (fun (_programType, typedAst, _) ->
+                        |> Result.map (fun (programType, typedAst, _) ->
                             let (typeReg, variantLookup) = registriesFromTypedProgram typedAst
-                            (collectTypeAppsFromProgram typedAst, typeReg, variantLookup)))
+                            (Set.union (collectTypeAppsFromProgram typedAst) (collectRendererSpecs programType), typeReg, variantLookup)))
 
                 match specsResult with
                 | Ok (specs, typeReg, variantLookup) ->

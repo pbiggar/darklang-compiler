@@ -207,26 +207,6 @@ match GenErr(99) with | GenOk(x) -> x | GenErr(e) -> if e == 99 then 42 else 0 =
 match GenSome(GenOk(21)) with | GenSome(inner) -> match inner with | GenOk(v) -> v * 2 | GenErr(_) -> 0 | GenNone -> 0 = 42
 
 // =====================================================
-// Mutation #132: containsTypeVar for Dict with one type var
-// =====================================================
-// Tests that containsTypeVar correctly uses || (not &&) when checking
-// Dict types. A Dict<keyType, valueType> contains a type variable if
-// EITHER keyType or valueType contains one, not only when BOTH do.
-// With the mutation (|| -> &&), a Dict<t, Int64> would incorrectly
-// return false for containsTypeVar, causing incorrect function
-// specialization behavior.
-
-// Generic function that wraps a value in a Dict with generic key type
-// The Dict<t, Int64> has type var only in key position
-def dictWithGenericKey<t>(key: t, value: Int64): Dict<t, Int64> = Stdlib.Dict.set(Stdlib.Dict.empty<t, Int64>(), key, value)
-
-// Using the function with Int64 key - verifies the specialization works correctly
-Stdlib.Dict.getOrDefault(dictWithGenericKey(42, 100), 42, -1) = 100
-
-// Using the function with String key - different instantiation
-Stdlib.Dict.getOrDefault(dictWithGenericKey("hello", 200), "hello", -1) = 200
-
-// =====================================================
 // Mutation #218: consolidateBindings TVar preference order
 // =====================================================
 // Tests the consolidateBindings function which merges type variable bindings

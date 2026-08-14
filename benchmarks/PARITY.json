@@ -39,12 +39,12 @@
     },
     "edigits": {
       "status": "comparable",
-      "dark_sha256": "4e6cab717d5e36402f16a97301bebaf43fe6278f54cdfe85eb0e51aafcde0c0b",
+      "dark_sha256": "7937fc39e37219ec3aab580c1a955fcfb369ef24c6004b5b9f35fca51781c3c3",
       "rust_sha256": "85867398ba1b93f90b0ae5b89ba9dcf4379dc900749e0502f956313900942692",
       "expected_sha256": "c8d53375bef88fcb61536103082d83aaf6b40906254b4c7f4dfe95a9cfdbee73",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "3b9e260803562120f055300cb79b2dfab7a75a5acf468c2504212a9d40959146",
+        "dark_sha256": "6caa825b4c7b1c96fa07c8f9101db73e01fc219265ad37a0a3c94689ce76cc2f",
         "rust_sha256": "ccc699322e08ce05a250f6a751771abcba335a541ec88498016ff622c950215c",
         "expected_sha256": "2a62cf402cd3396aa00f55f892f4545f308f74d01c8caa0f2837b1982f821595"
       }
@@ -77,13 +77,13 @@
     },
     "fasta": {
       "status": "comparable",
-      "dark_sha256": "7b1e16d3a0dd86d3e11d26d908bbe51135958ff1975f02d066846b0b6bdda705",
+      "dark_sha256": "991bfb8e5528d57fb068b1796abc9bef2f5cf5f5c73c8d381f590385fc1d17e6",
       "rust_sha256": "199b0fc825aa6690ca007bc6a9b0838facc5a1f81a413a5fece5de1170059f4b",
       "expected_sha256": "a0ef450030e19e677ff0a8ed6e41cd7fe336c80214c1e4fd5e5be3ef5a282231",
       "dark_expected_sha256": "a0ef450030e19e677ff0a8ed6e41cd7fe336c80214c1e4fd5e5be3ef5a282231",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "797605b032694a8a708dfa03b72c19ca231aab8b823d43c8bca82854bf568808",
+        "dark_sha256": "1f95cfac4296f32ec6c8aa821cd68545c2e21d34d246b97b8b030d8a758af1f5",
         "rust_sha256": "88e4d940593cf143417e34e085a31d584153858743272a13dbaa7da34d27236e",
         "expected_sha256": "588c92b71be2135a4be5396f014245d7e68cff7ca4f553e47156b4a763490af9"
       }
@@ -126,12 +126,12 @@
     },
     "matmul": {
       "status": "comparable",
-      "dark_sha256": "2c20dba1e78511e7cf7712254bb7c1b36bbfac28e12b74504d91358060e79c84",
+      "dark_sha256": "840dcb962dc1bcb26b97f0a9e39d4bda27e07b9ea25345daeaa0f37484ec6715",
       "rust_sha256": "63576061cb459ad2b396d11cf93cbbb5110a64886aacd843d549f4a15d9dd684",
       "expected_sha256": "9d4e2dc64c76a592ce3c6e141b7be6a1bcf6a3a08024641f9770be0670f02b3c",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "0f5a6ddaf83a358d45e26660841bf5f4e3e75b85dde06bb3580fec0534122483",
+        "dark_sha256": "b17ccdd767593c24f570ada03901324c14704e0750cd869be997b54272ae5170",
         "rust_sha256": "74d9a6ce94c43168836cfbf6b8f4d83d8d84cd0023d369e67b17aa1ad621514b",
         "expected_sha256": "ec6f044956765868e156ac446db46799fe38dd56a4eae6dd940cc29f8e74d371"
       }
@@ -175,14 +175,14 @@
     "nsieve": {
       "status": "incomparable",
       "reason": "Rust mutates a flat bitmap and counts during marking for 100 runs; Dark persists Dict updates and counts in a separate pass for one run because its bump allocator cannot reclaim each sieve.",
-      "dark_sha256": "27f24e302cabf42f4329a6918eca84f5dfad5f2cf3eb53e117dd4dde904d9d70",
+      "dark_sha256": "92f8dd27abeb78e1e2761b10b1890bb303704f7b205f84812332fd4734200980",
       "rust_sha256": "ee3371e688d93b575124110462ad935e9d2ff6ca893a674e4aa6bd1f0e6ea508",
       "expected_sha256": "0778fcf18dec9e4c73e4677ce5f33b385f4028cd179682f3c6471f467f6f6538",
       "dark_expected_sha256": "0778fcf18dec9e4c73e4677ce5f33b385f4028cd179682f3c6471f467f6f6538",
       "quick": {
         "status": "incomparable",
         "reason": "Rust mutates a flat bitmap and counts during marking; Dark persists Dict updates and counts in a separate pass.",
-        "dark_sha256": "d076368964c4bff127e0ad83ee2a9aa1067d5d810f55db971b95adccb3f5078b",
+        "dark_sha256": "7f9e9d5d74b0aa063ab9de913be253324461275cfd7a2398348627aedb09181a",
         "rust_sha256": "96f82276fcc75da21bcd0ac5733102dd614760235978106396b5182fd4f9fadd",
         "expected_sha256": "64aeb9975f234becd55bb4635e6e2f2da7a6b7bf0a896f0c07763bdfbfb31420"
       }

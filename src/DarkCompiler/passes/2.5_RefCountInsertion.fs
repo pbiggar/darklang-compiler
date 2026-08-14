@@ -394,6 +394,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RefCountIncBytes _ -> Some AST.TUnit   // Returns unit
     | RefCountDecBytes _ -> Some AST.TUnit   // Returns unit
     | RuntimeError _ -> Some AST.TUnit
+    | RuntimeErrorString _ -> Some AST.TUnit
 
 /// Return analysis annotation for AExpr nodes
 type ReturnAnnotatedExpr =

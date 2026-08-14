@@ -54,7 +54,9 @@ type Type =
     | TList of Type                    // List<T> - polymorphic list type
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
     | TRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
-    | TDict of keyType:Type * valueType:Type  // Dict<K, V> - HAMT dictionary (K=Int64 for now)
+    // Native HAMT machinery retains both components. Public source syntax is
+    // String-keyed and renders only the value component as Dict<Value>.
+    | TDict of keyType:Type * valueType:Type
 
 /// A source constructor reference before or after nominal resolution.
 /// `None` is the genuinely unqualified form; no empty-name sentinel is used.
@@ -201,6 +203,7 @@ and Expr =
     | TypeApp of funcName:string * typeArgs:Type list * args:NonEmptyList<Expr>  // Generic call: funcName<T, U>(args)
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
+    | DictLiteral of valueType:Type * entries:(string * Expr) list  // Dict { key = value; ... }
     | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
     | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y

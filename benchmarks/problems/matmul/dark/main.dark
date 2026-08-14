@@ -10,10 +10,10 @@ def generateMatrixValues(remaining: Int64, index: Int64, seed: Int64, values: Di
     if remaining <= 0 then values
     else
         let next = nextRand(seed) in
-        generateMatrixValues(remaining - 1, index + 1, next, Stdlib.Dict.set<Int64, Int64>(values, index, next % 100))
+        generateMatrixValues(remaining - 1, index + 1, next, Stdlib.__HAMT.__setOverwriting<Int64, Int64>(values, index, next % 100))
 
 def matrixValue(values: Dict<Int64, Int64>, index: Int64) : Int64 =
-    Stdlib.Dict.getOrDefault<Int64, Int64>(values, index, 0)
+    Stdlib.__HAMT.__getOrDefault<Int64, Int64>(values, index, 0)
 
 def dotCell(a: Dict<Int64, Int64>, b: Dict<Int64, Int64>, n: Int64, i: Int64, j: Int64, k: Int64, acc: Int64) : Int64 =
     if k >= n then acc
@@ -28,7 +28,7 @@ def multiplyCells(a: Dict<Int64, Int64>, b: Dict<Int64, Int64>, n: Int64, i: Int
     else
         let cell = dotCell(a, b, n, i, j, 0, 0) in
         let index = i * n + j in
-        let updated = Stdlib.Dict.set<Int64, Int64>(result, index, cell) in
+        let updated = Stdlib.__HAMT.__setOverwriting<Int64, Int64>(result, index, cell) in
         multiplyCells(a, b, n, i, j + 1, updated)
 
 def checksumCells(result: Dict<Int64, Int64>, total: Int64, index: Int64, acc: Int64) : Int64 =
@@ -38,9 +38,9 @@ def checksumCells(result: Dict<Int64, Int64>, total: Int64, index: Int64, acc: I
         checksumCells(result, total, index + 1, (acc + cell * (index + 1)) % 1000000007)
 
 def matmulChecksum(n: Int64) : Int64 =
-    let a = generateMatrixValues(n * n, 0, 42, Stdlib.Dict.empty<Int64, Int64>()) in
-    let b = generateMatrixValues(n * n, 0, 123, Stdlib.Dict.empty<Int64, Int64>()) in
-    let result = multiplyCells(a, b, n, 0, 0, Stdlib.Dict.empty<Int64, Int64>()) in
+    let a = generateMatrixValues(n * n, 0, 42, Stdlib.__HAMT.__empty<Int64, Int64>()) in
+    let b = generateMatrixValues(n * n, 0, 123, Stdlib.__HAMT.__empty<Int64, Int64>()) in
+    let result = multiplyCells(a, b, n, 0, 0, Stdlib.__HAMT.__empty<Int64, Int64>()) in
     checksumCells(result, n * n, 0, 0)
 
 matmulChecksum(100)

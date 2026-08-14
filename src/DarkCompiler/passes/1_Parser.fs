@@ -556,7 +556,9 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             | TShr :: remaining -> Ok (TList elemType, TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type")
     | TIdent "Dict" :: TLt :: rest ->
-        // Dict type: Dict<KeyType, ValueType>
+        // Public syntax is Dict<ValueType>. Two arguments are parsed only so
+        // trusted compiler sources can retain the generic HAMT representation;
+        // parseString rejects that spelling for user programs below.
         parseTypeWithContext typeParams rest
         |> Result.bind (fun (firstTypeArg, afterFirstArg) ->
             match afterFirstArg with
@@ -688,7 +690,7 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
             | TShr :: remaining -> withPossibleArrow (TList elemType) (TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type in type argument")
     | TIdent "Dict" :: TLt :: rest ->
-        // Dict type: Dict<KeyType, ValueType>
+        // See parseTypeBase: public source validation rejects two arguments.
         parseTypeArgType rest
         |> Result.bind (fun (firstTypeArg, afterFirstArg) ->
             match afterFirstArg with
@@ -1833,6 +1835,8 @@ let parse (tokens: Token list) : Result<Program, string> =
                 parseCallArgs argsStart []
                 |> Result.map (fun (args, remaining) ->
                     (Call (fullName, args), remaining))
+            | _ when fullName = "Stdlib.Dict.empty" ->
+                Ok (DictLiteral (TVar "dictValue", []), afterQualified)
             | _ ->
                 // Qualified variable reference (function as value)
                 Ok (Var fullName, afterQualified)
@@ -1929,6 +1933,8 @@ let parse (tokens: Token list) : Result<Program, string> =
                 Error $"Expected record literal after type arguments for '{typeName}'"
             | Error _ ->
                 Ok (Constructor (UnresolvedConstructor None, typeName, None), TLt :: typeArgsStart)
+        | TIdent "Dict" :: TLBrace :: rest ->
+            parseDictLiteralFields rest []
         | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
             // Record literal with type name: Point { x = 1, y = 2 }
             parseRecordLiteralFieldsWithTypeName typeName rest []
@@ -2053,6 +2059,23 @@ let parse (tokens: Token list) : Result<Program, string> =
                     Ok (RecordLiteral (typeName, List.rev ((fieldName, value) :: acc)), rest')
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
+
+    and parseDictLiteralFields (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
+        let publicKey name = if name = "___" then "" else name
+        match toks with
+        | TRBrace :: rest ->
+            Ok (DictLiteral (TVar "dictValue", List.rev acc), rest)
+        | TIdent keyName :: TEquals :: rest ->
+            parseExpr rest
+            |> Result.bind (fun (value, remaining) ->
+                let entry = (publicKey keyName, value)
+                match remaining with
+                | (TComma | TSemicolon) :: rest' ->
+                    parseDictLiteralFields rest' (entry :: acc)
+                | TRBrace :: rest' ->
+                    Ok (DictLiteral (TVar "dictValue", List.rev (entry :: acc)), rest')
+                | _ -> Error "Expected ',' or '}' after dictionary entry value")
+        | _ -> Error "Expected dictionary key in Dict literal"
 
     and parseRecordUpdateFields (toks: Token list) (acc: (string * Expr) list) : Result<(string * Expr) list * Token list, string> =
         // Parse record update fields: field = expr, field = expr, ... }
@@ -2297,6 +2320,8 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     | TupleLiteral elems ->
         elems |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | TupleAccess (tupleExpr, _) -> validateExpr tupleExpr
+    | DictLiteral (_, entries) ->
+        entries |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | RecordLiteral (_, fields) ->
         fields |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | RecordUpdate (recordExpr, updates) ->
@@ -2364,10 +2389,35 @@ let private validateNoInternalIdentifiers (Program items) : Result<Program, stri
     |> List.fold (fun acc item -> Result.bind (fun () -> validateTopLevel item) acc) (Ok ())
     |> Result.map (fun () -> Program items)
 
+/// The generic key component exists only in trusted compiler sources. Keep the
+/// parser capable of reading those sources while rejecting the old public
+/// Dict<Key, Value> spelling before type checking.
+let private validatePublicDictTypeArity (tokens: Token list) : Result<unit, string> =
+    let rec containsTopLevelComma depth remaining =
+        match remaining with
+        | [] -> false
+        | TLt :: rest -> containsTopLevelComma (depth + 1) rest
+        | TGt :: _ when depth = 1 -> false
+        | TGt :: rest -> containsTopLevelComma (depth - 1) rest
+        | TShr :: _ when depth <= 2 -> false
+        | TShr :: rest -> containsTopLevelComma (depth - 2) rest
+        | TComma :: _ when depth = 1 -> true
+        | _ :: rest -> containsTopLevelComma depth rest
+
+    let rec validate remaining =
+        match remaining with
+        | [] -> Ok ()
+        | TIdent "Dict" :: TLt :: rest when containsTopLevelComma 1 rest ->
+            Error "Dict expects exactly one type argument"
+        | _ :: rest -> validate rest
+    validate tokens
+
 /// Parse a string directly to AST
 let parseString (allowInternal: bool) (input: string) : Result<Program, string> =
     lex input
-    |> Result.bind parse
+    |> Result.bind (fun tokens ->
+        if allowInternal then parse tokens
+        else validatePublicDictTypeArity tokens |> Result.bind (fun () -> parse tokens))
     |> Result.bind (fun program ->
         if allowInternal then Ok program
         else validateNoInternalIdentifiers program)

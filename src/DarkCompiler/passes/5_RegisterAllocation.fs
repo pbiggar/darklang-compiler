@@ -492,7 +492,7 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         closureVReg @ argsVRegs
     | LIR.PrintInt64 reg | LIR.PrintUInt64 reg | LIR.PrintBool reg
     | LIR.PrintInt64NoNewline reg | LIR.PrintUInt64NoNewline reg | LIR.PrintBoolNoNewline reg
-    | LIR.PrintHeapStringNoNewline reg | LIR.PrintList (reg, _)
+    | LIR.PrintHeapStringNoNewline reg | LIR.RuntimeErrorString reg | LIR.PrintList (reg, _)
     | LIR.PrintSum (reg, _) | LIR.PrintRecord (reg, _, _) ->
         regToVReg reg |> Option.toList
     | LIR.PrintFloatNoNewline _ -> []  // FP register, not GP
@@ -2859,6 +2859,9 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
     | LIR.PrintFloat freg -> [LIR.PrintFloat freg]
     | LIR.PrintString value -> [LIR.PrintString value]
     | LIR.RuntimeError message -> [LIR.RuntimeError message]
+    | LIR.RuntimeErrorString reg ->
+        let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.RuntimeErrorString regFinal]
     | LIR.PrintChars chars -> [LIR.PrintChars chars]
     | LIR.PrintBytes reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12

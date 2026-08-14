@@ -289,7 +289,7 @@ def Stdlib.String.__upperMapping(cp: Int64) : List<Int64> =
     else if cp < 128 then
         [cp]
     else
-        match Stdlib.Dict.get<Int64, List<Int64>>(Unicode.Data.__upperCase(), cp) with
+        match Stdlib.__HAMT.__get<Int64, List<Int64>>(Unicode.Data.__upperCase(), cp) with
         | Some(mapped) -> mapped
         | None -> [cp]
 
@@ -299,7 +299,7 @@ def Stdlib.String.__lowerMapping(cp: Int64) : List<Int64> =
     else if cp < 128 then
         [cp]
     else
-        match Stdlib.Dict.get<Int64, List<Int64>>(Unicode.Data.__lowerCase(), cp) with
+        match Stdlib.__HAMT.__get<Int64, List<Int64>>(Unicode.Data.__lowerCase(), cp) with
         | Some(mapped) -> mapped
         | None -> [cp]
 

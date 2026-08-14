@@ -344,6 +344,7 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | DateTimeNow -> DateTimeNow
     | FloatToString a -> FloatToString (r a)
     | RuntimeError message -> RuntimeError message
+    | RuntimeErrorString atom -> RuntimeErrorString (r atom)
 
 /// Rename all TempIds in an expression, allocating fresh TempIds
 let rec renameExpr (mapping: Map<TempId, TempId>) (varGen: VarGen) (expr: AExpr)

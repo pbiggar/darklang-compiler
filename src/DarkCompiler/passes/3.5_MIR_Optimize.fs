@@ -93,6 +93,7 @@ let hasSideEffects (instr: Instr) : bool =
     | DateTimeNow _ -> true      // Syscall
     | FloatToString _ -> false  // Pure conversion (allocates but no visible side effect)
     | RuntimeError _ -> true
+    | RuntimeErrorString _ -> true
     | CoverageHit _ -> true  // Must not be eliminated (tracking side effect)
 
 /// Find functions whose reachable call-graph components contain no MIR effects.
@@ -197,6 +198,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | DateTimeNow dest -> Some dest
     | FloatToString (dest, _) -> Some dest
     | RuntimeError _ -> None
+    | RuntimeErrorString _ -> None
     | CoverageHit _ -> None
 
 /// Fold over the VRegs used by an instruction without allocating an intermediate collection.
@@ -265,6 +267,7 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | RandomInt64 _
     | DateTimeNow _
     | RuntimeError _
+    | RuntimeErrorString _
     | CoverageHit _ -> state
 
 /// Get all VRegs used by an instruction.
@@ -1169,6 +1172,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | DateTimeNow dest -> DateTimeNow dest
     | FloatToString (dest, value) -> FloatToString (dest, p value)
     | RuntimeError message -> RuntimeError message
+    | RuntimeErrorString message -> RuntimeErrorString (p message)
     | CoverageHit exprId -> CoverageHit exprId
 
 /// Apply copy propagation to terminator

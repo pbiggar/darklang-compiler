@@ -112,6 +112,8 @@ let private prettyPrintANFCExpr = function
         $"print({prettyPrintANFAtom atom}, type={valueType})"
     | ANF.RuntimeError message ->
         $"runtime_error(\"{escapeStringContent message}\")"
+    | ANF.RuntimeErrorString message ->
+        $"runtime_error_string({prettyPrintANFAtom message})"
     | ANF.FileReadText path ->
         $"FileReadText({prettyPrintANFAtom path})"
     | ANF.FileExists path ->
@@ -321,6 +323,8 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"Print({prettyPrintMIROperand src}, type={valueType})"
     | MIR.RuntimeError message ->
         $"RuntimeError(\"{escapeStringContent message}\")"
+    | MIR.RuntimeErrorString message ->
+        $"RuntimeErrorString({prettyPrintMIROperand message})"
     | MIR.FileReadText (dest, path) ->
         $"{prettyPrintMIRVReg dest} <- FileReadText({prettyPrintMIROperand path})"
     | MIR.FileExists (dest, path) ->
@@ -605,6 +609,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintString(str[{escapeStringContent value}], len={value.Length})"
     | LIR.RuntimeError message ->
         $"RuntimeError(\"{escapeStringContent message}\")"
+    | LIR.RuntimeErrorString reg ->
+        $"RuntimeErrorString({prettyPrintLIRReg reg})"
     | LIR.PrintChars chars ->
         let s = chars |> List.map (fun b -> char b) |> System.String.Concat
         $"PrintChars(\"{escapeStringContent s}\")"

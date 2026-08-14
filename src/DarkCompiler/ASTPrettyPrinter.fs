@@ -107,7 +107,12 @@ let rec private formatType (typ: Type) : string =
     | TRawPtr -> "RawPtr"
     | TVar name -> formatIdentifierSegment name
     | TList elemType -> $"List<{formatType elemType}>"
-    | TDict (keyType, valueType) -> $"Dict<{formatType keyType}, {formatType valueType}>"
+    | TDict (TString, valueType) -> $"Dict<{formatType valueType}>"
+    | TDict (keyType, valueType) ->
+        // Non-String keys can only originate in trusted compiler sources.
+        // Preserve their private HAMT specialization for internal roundtrips;
+        // every public Dict type is rendered with its single value parameter.
+        $"Dict<{formatType keyType}, {formatType valueType}>"
     | TTuple elemTypes ->
         let elemText = elemTypes |> List.map formatType |> String.concat ", "
         $"({elemText})"
@@ -236,6 +241,7 @@ let rec private isAtomicExpr (expr: Expr) : bool =
     | TypeApp _
     | Apply _
     | TupleLiteral _
+    | DictLiteral _
     | RecordLiteral _
     | ListLiteral _
     | Constructor (_, _, None) -> true
@@ -618,6 +624,14 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             | _ ->
                 parenthesizeTupleBaseIfNeeded tupleExpr tupleBaseText
         $"{tupleText}.{index}"
+    | DictLiteral (_, entries) ->
+        let fieldsText =
+            entries
+            |> List.map (fun (key, value) ->
+                let keyText = if key = "" then "___" else formatIdentifierSegment key
+                $"{keyText} = {formatExpr syntax value}")
+            |> String.concat "; "
+        $"Dict {{ {fieldsText} }}"
     | RecordLiteral (typeName, fields) ->
         let fieldsText =
             fields

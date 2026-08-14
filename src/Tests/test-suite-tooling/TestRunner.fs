@@ -187,13 +187,14 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "language", "elambda.dark")
     let dtupleUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "language", "collections", "dtuple.dark")
-    // edict.dark is tracked upstream material but remains excluded until
-    // Dict literal parsing is supported; today `Dict { ... }` is parsed as an
-    // unknown record constructor.
+    let edictUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "language", "collections", "edict.dark")
     let dateUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "date.dark")
     let listUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "list.dark")
+    let dictUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "dict.dark")
     let uuidUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "uuid.dark")
     let charToAsciiCodeUpstreamDarkPath =
@@ -226,8 +227,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            derrorUpstreamDarkPath
            elambdaUpstreamDarkPath
            dtupleUpstreamDarkPath
+           edictUpstreamDarkPath
            dateUpstreamDarkPath
            listUpstreamDarkPath
+           dictUpstreamDarkPath
            uuidUpstreamDarkPath
            charToAsciiCodeUpstreamDarkPath
            optionUpstreamDarkPath
@@ -251,8 +254,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            epipeUpstreamDarkPath
            derrorUpstreamDarkPath
            dtupleUpstreamDarkPath
+           edictUpstreamDarkPath
            dateUpstreamDarkPath
            listUpstreamDarkPath
+           dictUpstreamDarkPath
            uuidUpstreamDarkPath
            charToAsciiCodeUpstreamDarkPath
            optionUpstreamDarkPath

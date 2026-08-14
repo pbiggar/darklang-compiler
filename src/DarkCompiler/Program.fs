@@ -58,6 +58,8 @@ type CliOptions = {
     Version: bool
     Argument: string option
     LeakCheck: bool
+    // Compiler-owned sources may use private runtime and HAMT helpers.
+    AllowInternal: bool
     // Optimization flags
     DisableFreeList: bool
     DisableANFOpt: bool
@@ -95,6 +97,7 @@ let defaultOptions = {
     Version = false
     Argument = None
     LeakCheck = false
+    AllowInternal = false
     DisableFreeList = false
     DisableANFOpt = false
     DisableANFConstFolding = false
@@ -241,6 +244,11 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
 
         | "--leak-check" :: rest ->
             parseFlags rest { opts with LeakCheck = true } lastVerbosity
+
+        | "--allow-internal" :: rest ->
+            // Deliberately omitted from user-facing help. This mode exists for
+            // compiler-owned stdlib, regression, and benchmark sources only.
+            parseFlags rest { opts with AllowInternal = true } lastVerbosity
 
         | "-h" :: rest | "--help" :: rest ->
             parseFlags rest { opts with Help = true } lastVerbosity
@@ -398,7 +406,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
                 SourceSyntax = cliOpts.SourceSyntax
                 Source = source
                 SourceFile = sourceFile
-                AllowInternal = false
+                AllowInternal = cliOpts.AllowInternal
                 Verbosity = verbosityToInt verbosity
                 Options = options
                 PassTimingRecorder = None
@@ -457,7 +465,7 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
                     SourceSyntax = cliOpts.SourceSyntax
                     Source = source
                     SourceFile = sourceFile
-                    AllowInternal = false
+                    AllowInternal = cliOpts.AllowInternal
                     Verbosity = verbosityToInt verbosity
                     Options = options
                     PassTimingRecorder = None

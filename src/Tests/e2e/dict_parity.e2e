@@ -1,0 +1,56 @@
+// Dict parity tests pinned to darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+// The compiler comparison point for this work is c97f99a1c953b4e6739daafc05934f98924e139f.
+
+// Public typing is String-keyed and exposes exactly one value type parameter.
+def dictIdentity<a>(dict: Dict<a>): Dict<a> = dict dictIdentity<Int64>(Dict { answer = 42 }) = Dict { answer = 42 }
+Stdlib.Dict.get<String, Int64>(Dict { }, "a") = error="Stdlib.Dict.get expects 1 type argument, but got 2 type arguments"
+Stdlib.Dict.singleton(1, "one") = error="expected String"
+
+// Empty and non-empty literals are distinct from records. Keys support escaped
+// spelling, with ___ reserved by the interpreter syntax for the empty key.
+Stdlib.Dict.empty = Dict { }
+Dict { answer = 42 } = Dict { answer = 42 }
+Dict { ``Content-Length`` = "0"; ___ = "empty" } = Dict { ``Content-Length`` = "0"; ___ = "empty" }
+Dict { duplicate = 1; duplicate = 2 } = error="Cannot add two dictionary entries with the same key `duplicate`"
+Dict { first = 1; second = "two" } = error="dict values must have one type"
+
+// Construction, lookup, update, removal, and merge match the interpreter.
+Stdlib.Dict.isEmpty(Stdlib.Dict.empty) = true
+Stdlib.Dict.isEmpty(Stdlib.Dict.singleton("a", 1)) = false
+Stdlib.Dict.size(Dict { a = 1; b = 2 }) = 2I
+Stdlib.Dict.get(Dict { a = 1 }, "a") = Some(1)
+Stdlib.Dict.get(Dict { a = 1 }, "missing") = None
+Stdlib.Dict.member(Dict { a = 1 }, "a") = true
+Stdlib.Dict.member(Dict { a = 1 }, "missing") = false
+Stdlib.Dict.remove(Dict { a = 1 }, "missing") = Dict { a = 1 }
+Stdlib.Dict.remove(Dict { a = 1 }, "a") = Dict { }
+Stdlib.Dict.merge(Dict { a = 1; shared = 2 }, Dict { shared = 3; z = 4 }) = Dict { a = 1; shared = 3; z = 4 }
+Stdlib.Dict.setOverridingDuplicates(Dict { a = 1 }, "a", 2) = Dict { a = 2 }
+
+// Rejecting and overwriting paths are observably separate.
+Stdlib.Dict.set(Dict { a = 1 }, "a", 2) = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `a`\n"
+let key = "d" ++ "ynamic" in Stdlib.Dict.set(Dict { dynamic = 1 }, key, 2) = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `dynamic`\n"
+Stdlib.Dict.fromList([("a", 1), ("b", 2)]) = Some(Dict { a = 1; b = 2 })
+Stdlib.Dict.fromList([("a", 1), ("a", 2)]) = None
+Stdlib.Dict.fromListOverwritingDuplicates([("a", 1), ("b", 2), ("a", 3)]) = Dict { a = 3; b = 2 }
+
+// All traversal-based operations use String ordering and key-then-value callbacks.
+Stdlib.Dict.keys(Dict { c = 3; a = 1; b = 2 }) = ["a", "b", "c"]
+Stdlib.Dict.values(Dict { c = 3; a = 1; b = 2 }) = [1, 2, 3]
+Stdlib.Dict.toList(Dict { c = 3; a = 1; b = 2 }) = [("a", 1), ("b", 2), ("c", 3)]
+Stdlib.Dict.keys(Dict { ``𐀀`` = 1; ```` = 2 }) = ["𐀀", ""]
+Stdlib.Dict.map(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => key ++ Stdlib.Int64.toString(value)) = Dict { a = "a1"; b = "b2" }
+Stdlib.Dict.filter(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => key == "b") = Dict { b = 2 }
+Stdlib.Dict.filterMap(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => if key == "a" then Some(value + 10) else None) = Dict { a = 11 }
+let observed = Stdlib.Dict.iter(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => ()) in observed = ()
+
+// Equality and rendering are content-based and independent of HAMT shape.
+Stdlib.Dict.setOverridingDuplicates(Stdlib.Dict.singleton("b", 2), "a", 1) == Dict { a = 1; b = 2 } = true
+Stdlib.Dict.fromList([("b", 2), ("a", 1)]) == Some(Dict { a = 1; b = 2 }) = true
+Dict { b = 2; a = 1 } != Dict { a = 1; b = 2 } = false
+Dict { nested = Dict { b = 2; a = 1 }; ``not an identifier`` = Dict { } } = stdout="Dict { nested = Dict { a = 1; b = 2 }; ``not an identifier`` = Dict { } }\n" stderr=""
+
+// Compiler-only public aliases are removed while internal HAMT names remain private.
+Stdlib.Dict.entries(Dict { }) = error="Unresolved callable name: Stdlib.Dict.entries"
+Stdlib.Dict.fold(Dict { }, 0, (acc: Int64, key: String, value: Int64) => acc) = error="Unresolved callable name: Stdlib.Dict.fold"
+Stdlib.Dict.getOrDefault(Dict { }, "a", 0) = error="Unresolved callable name: Stdlib.Dict.getOrDefault"

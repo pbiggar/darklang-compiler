@@ -87,6 +87,8 @@ let rec countMatches (expr: Expr) : int =
             args
         | TupleAccess (tuple, _) ->
             [tuple]
+        | DictLiteral (_, entries) ->
+            entries |> List.map snd
         | RecordLiteral (_, fields) ->
             fields |> List.map snd
         | RecordUpdate (recordExpr, updates) ->

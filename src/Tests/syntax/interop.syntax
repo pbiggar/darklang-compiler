@@ -77,6 +77,15 @@ let inc = (x: Int64) => x + 1 in inc 4L
 does not use '=>'
 
 ---NAME---
+public Dict type rejects a key type argument
+---PARSE-AS---
+compiler
+---SOURCE---
+def badDictArity(dict: Dict<String, Int64>): Int64 = 0
+---EXPECT-ERROR---
+Dict expects exactly one type argument
+
+---NAME---
 implicit curried lambda survives interpreter roundtrip
 ---PARSE-AS---
 interpreter

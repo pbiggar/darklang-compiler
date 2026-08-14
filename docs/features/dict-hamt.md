@@ -1,329 +1,145 @@
-# Dict (HAMT Implementation)
+# Dict: public contract and private HAMT
 
-This document describes the Hash Array Mapped Trie (HAMT) implementation used
-for Dark's immutable dictionaries.
+This document distinguishes Dark's public dictionary contract from the native
+HAMT that implements it.
 
-## Overview
+## Parity baseline
 
-`Dict<K, V>` is an immutable hash map implemented as a HAMT. It provides
-efficient O(log64 n) operations with structural sharing for immutability.
+The public contract was revalidated against these exact revisions:
 
-## What is a HAMT?
+- compiler comparison point: `c97f99a1c953b4e6739daafc05934f98924e139f`
+- darklang/dark interpreter: `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
+- DCB1 report `8a402797` was starting evidence only; retained findings were
+  checked again against the revisions above.
 
-A Hash Array Mapped Trie (HAMT) is a trie where:
-- Keys are hashed to 64-bit integers
-- Hash is consumed 6 bits at a time (64-way branching)
-- Bitmap compression reduces memory for sparse nodes
-- Maximum depth: 11 levels (64 bits / 6 bits per level, rounded up)
+The interpreter's F# Builtins Dict module and packaged `dict.dark` define the
+language-visible contract. Ahead-of-time compilation and the HAMT layout are
+compiler implementation details.
 
-## Node Types
+## Public type and literals
 
-Four tags are used. Three of them are allocated node layouts; empty is the
-null tagged root.
-
-### Empty (tag = 0)
-```
-0  (just the integer zero)
-```
-
-### Internal Node (tag = 1)
-```
-[bitmap, child0, child1, ..., childN, refcount]
-```
-- Bitmap: 64-bit, indicates which of 64 slots have children
-- Children: only present slots are stored (bitmap compression)
-- Refcount: trailing 64-bit node reference count
-
-### Leaf Node (tag = 2)
-```
-[key, value, refcount]
-```
-- Stores actual key-value pair
-- Refcount: trailing 64-bit node reference count
-
-### Collision Node (tag = 3)
-```
-[count, key0, value0, key1, value1, ..., refcount]
-```
-- Stores entries whose hashes collide through the entire trie depth
-- Refcount: trailing 64-bit node reference count
-
-## Memory Layout
-
-### Internal Node
-```
-Offset 0:  Bitmap (8 bytes)
-Offset 8:  Child 0 pointer (8 bytes)
-Offset 16: Child 1 pointer (8 bytes)
-...
-Offset 8 + childCount * 8: Refcount (8 bytes)
-```
-
-### Leaf Node
-```
-Offset 0:  Key (8 bytes)
-Offset 8:  Value (8 bytes)
-Offset 16: Refcount (8 bytes)
-```
-
-### Collision Node
-```
-Offset 0:  Count (8 bytes)
-Offset 8:  Key 0 (8 bytes)
-Offset 16: Value 0 (8 bytes)
-Offset 24: Key 1 (8 bytes)
-Offset 32: Value 1 (8 bytes)
-...
-Offset 8 + count * 16: Refcount (8 bytes)
-```
-
-## Bitmap Operations
-
-6 bits of hash select position (0-63) in bitmap:
+Source programs expose only a String-keyed, one-parameter type:
 
 ```dark
-def hashChunk(hash: Int64, level: Int64) : Int64 =
-    (hash >> (level * 6)) & 63
-
-def hasBit(bitmap: Int64, bit: Int64) : Bool =
-    (bitmap & (1 << bit)) != 0
-
-def childIndex(bitmap: Int64, bit: Int64) : Int64 =
-    Stdlib.Int64.popcount(bitmap & ((1 << bit) - 1))
-
-def setBit(bitmap: Int64, bit: Int64) : Int64 =
-    bitmap | (1 << bit)
-
-def clearBit(bitmap: Int64, bit: Int64) : Int64 =
-    bitmap & !(1 << bit)
+Dict<Int64>
 ```
 
-## Key Operations
+`Dict<K, V>`, non-String public keys, and two-type-argument Dict calls are
+compile-time errors. The compiler retains `TDict(keyType, valueType)` internally
+because native HAMT helpers are monomorphized over both components.
 
-### Get
+Dictionary literals are distinct from records:
 
 ```dark
-def get<k, v>(dict: Dict<k, v>, key: k) : Option<v>
+Dict { }
+Dict { name = "dark"; ``Content-Length`` = "0"; ___ = "empty key" }
 ```
 
-Algorithm:
-1. Compute hash of key
-2. For each level (0-10):
-   - Extract 6-bit chunk from hash
-   - Check if bitmap has that bit set
-   - If yes, follow child pointer
-   - If no, key not present
-3. At leaf: compare keys, return value if match
+Backticks quote non-identifier keys and `___` spells the empty String key.
+Literal entries are evaluated in source order. Duplicate literal keys and mixed
+value types are rejected statically.
 
-### Set
+## Public `Stdlib.Dict` surface
+
+`Stdlib.Dict.empty` is a polymorphic module value, not a function. The complete
+public callable surface is:
 
 ```dark
-def set<k, v>(dict: Dict<k, v>, key: k, value: v) : Dict<k, v>
+isEmpty(dict: Dict<a>) : Bool
+singleton(key: String, value: a) : Dict<a>
+size(dict: Dict<a>) : Int
+get(dict: Dict<a>, key: String) : Option<a>
+set(dict: Dict<a>, key: String, value: a) : Dict<a>
+setOverridingDuplicates(dict: Dict<a>, key: String, value: a) : Dict<a>
+remove(dict: Dict<a>, key: String) : Dict<a>
+merge(left: Dict<a>, right: Dict<a>) : Dict<a>
+keys(dict: Dict<a>) : List<String>
+values(dict: Dict<a>) : List<a>
+toList(dict: Dict<a>) : List<(String, a)>
+fromListOverwritingDuplicates(entries: List<(String, a)>) : Dict<a>
+fromList(entries: List<(String, a)>) : Option<Dict<a>>
+member(dict: Dict<a>, key: String) : Bool
+map(dict: Dict<a>, fn: String -> a -> b) : Dict<b>
+iter(dict: Dict<a>, fn: String -> a -> Unit) : Unit
+filter(dict: Dict<a>, fn: String -> a -> Bool) : Dict<a>
+filterMap(dict: Dict<a>, fn: String -> a -> Option<b>) : Dict<b>
 ```
 
-Algorithm:
-1. Compute hash of key
-2. Navigate to insertion point
-3. If empty: create leaf
-4. If leaf with same key: replace value
-5. If leaf with different key: expand to internal node
-6. If internal: recurse into appropriate child
-7. Create new nodes along path (structural sharing)
+The former compiler-only public names `entries`, `fold`, and `getOrDefault`
+are not registered. Their implementation equivalents remain private where the
+compiler needs them.
 
-### Remove
+## Observable behavior
 
-```dark
-def remove<k, v>(dict: Dict<k, v>, key: k) : Dict<k, v>
+- `set` fails if the key already exists. The native error includes the dynamic
+  key, for example: "Cannot add two dictionary entries with the same key
+  `key`".
+- `setOverridingDuplicates` replaces an existing value.
+- `fromList` returns `None` on any duplicate.
+- `fromListOverwritingDuplicates` returns a Dict and the last occurrence wins.
+- `merge` is right-biased; removing an absent key is a no-op.
+- `get` returns `Some(value)` or `None`.
+- traversal, rendering, equality, and higher-order callbacks all use the same
+  ordinal String-key ordering. HAMT bitmap shape, collision layout, insertion
+  history, and structural sharing are not observable.
+- equality compares entry counts, String key sets, and values using the
+  concrete value type's existing equality semantics.
+- rendering produces `Dict { key = renderedValue; ... }`, including for empty
+  and nested dictionaries.
+
+The compiler intentionally reports statically knowable key, value, generic
+arity, and callback-shape errors during AOT type checking. This differs from
+the interpreter's runtime diagnostic timing and wording. Duplicate `set` with
+a dynamic key remains language-visible at runtime and is emitted safely on
+both native architectures.
+
+## Private generic HAMT
+
+`src/DarkCompiler/stdlib/__HAMT.dark` remains a generic persistent Hash Array
+Mapped Trie. Compiler-owned consumers such as Unicode tables use private
+`Stdlib.__HAMT.__*` helpers for Int64 and other key types. User code cannot name
+these helpers.
+
+The private representation has four root tags:
+
+- `0`: empty/null root
+- `1`: bitmap-compressed internal node
+- `2`: leaf containing key, value, and refcount
+- `3`: full-hash collision node containing inline key/value pairs and refcount
+
+Hashes are consumed six bits at a time, giving 64-way branching. Updates copy
+only the modified path and retain shared children. Collision nodes, generic
+hash/equality specializations, and typed retain/release plans remain intact.
+
+### Native layouts
+
+```text
+internal:  [bitmap, child0, ..., childN, refcount]
+leaf:      [key, value, refcount]
+collision: [count, key0, value0, ..., refcount]
 ```
 
-Algorithm:
-1. Navigate to key
-2. If not found: return unchanged
-3. Remove leaf, propagate changes up
-4. Collapse single-child internals to leaves
-5. Create new nodes along path
+Tagged Dict roots use `__dict_to_rawptr` for a borrowed untagged view and
+`__rawptr_to_dict` to create a managed tagged root. Typed `__raw_slot_init`
+edges retain managed keys, values, and child Dict roots. Releasing a root walks
+the concrete type-directed release plan, including collision payloads.
 
-## Structural Sharing
+## Implementation and coverage
 
-HAMT modifications share unmodified subtrees:
+The contract is anchored in:
 
-```
-Before set(dict, "x", 1):
-     [root]
-    /      \
-  [A]      [B]
-  / \      / \
-[1] [2]  [3] [4]
+- `src/DarkCompiler/Stdlib.fs` for native intrinsic registration
+- `src/DarkCompiler/Runtime.fs` and architecture code generation for native
+  allocation, output, and failure behavior
+- `src/DarkCompiler/passes/1.5_TypeChecking.fs` for public typing and equality
+- `src/DarkCompiler/stdlib/Dict.dark` for the public module
+- `src/DarkCompiler/stdlib/__HAMT.dark` for private generic storage
+- `src/Tests/e2e/dict_parity.e2e` and pinned upstream Dict/edict cases for the
+  language boundary
+- `src/Tests/e2e/stdlib-internal/dict-hamt.e2e`, refcounting tests, and
+  architecture tests for private generic-key, collision, sharing, and ownership
+  behavior
 
-After set (modified path):
-     [root']    ← new
-    /      \
-  [A']     [B]  ← shared
-  / \      / \
-[1'] [2] [3] [4]  ← [1'] is new, [2] shared
-```
-
-## Collision Handling
-
-When two keys hash to the same value:
-1. Continue descending until hashes differ
-2. If all 64 bits match (extremely rare), collision node needed
-3. Collision nodes store the colliding key/value entries inline and are copied
-   on update/remove like other HAMT nodes
-
-## Raw Memory Intrinsics
-
-HAMT uses low-level memory operations:
-
-```dark
-__raw_alloc(size: Int64) : RawPtr
-__raw_get<T>(ptr: RawPtr, offset: Int64) : T
-__raw_write_word(ptr: RawPtr, offset: Int64, value: Int64) : Unit
-__raw_write_byte(ptr: RawPtr, offset: Int64, value: Int64) : Unit
-__raw_slot_init<T>(ptr: RawPtr, offset: Int64, value: T) : Unit
-```
-
-These bypass the normal value allocator for precise layout control. Typed slots
-must be initialized with `__raw_slot_init<T>` rather than `__raw_write_word` so
-the compiler/backend can retain copied managed edges.
-
-## Reference Counting
-
-`Dict<K, V>` roots are compiler-managed values whose raw HAMT nodes are also
-refcounted. Nodes are not uniquely owned and updates do not deep-copy the whole
-tree. Instead, `set`, `remove`, `map`, and collision updates path-copy the
-changed nodes and structurally share the untouched subtrees.
-
-The ownership invariant is:
-
-- every live dict root owns one reference to its tagged root node
-- every internal-node child slot owns one reference to the child node stored in
-  that slot
-- every leaf or collision key/value slot owns one reference to each managed
-  key or value stored in that slot
-- `__raw_get<T>` returns a borrowed value
-- `__raw_slot_init<T>` is the edge-creation operation and retains managed
-  roots stored into raw nodes or other raw-backed containers
-- `__raw_write_word` and `__raw_write_byte` write unmanaged metadata/bits only;
-  they do not create ownership edges
-
-Dict root retain increments only the root node's trailing node refcount. Dict
-root release decrements the root node refcount; only when it reaches zero does
-the helper recursively release child nodes and leaf/collision payload edges.
-This is what makes structural sharing safe: when a new internal node copies an
-unchanged child pointer from an old internal node,
-`__raw_slot_init<Dict<k, v>>` retains that child. Releasing either old or new root then
-removes only that root's edge. The shared child remains live until all parent
-edges and root edges have been released.
-
-For current Dark hashable key semantics, managed keys are dynamic strings and
-bytes. Dict release helpers handle primitive/no-release keys, dynamic
-string/bytes keys, and the covered managed value shapes through
-`RcReleasePlan`-selected helpers: dynamic buffers, lists, nested dicts,
-closures, tuples, records, and boxed sums. If the language later adds new
-managed hashable key families, dict release helpers need symmetric key-release
-support for those shapes.
-
-Raw HAMT memory is reclaimed through dict refcount helpers and backend
-allocation/free-list accounting for supported raw-node size classes. General
-manual `RawFree` policy remains separate from this managed HAMT lifecycle.
-
-## Tag Encoding
-
-Tags are encoded in the pointer:
-
-```dark
-def __getTag<k, v>(dict: Dict<k, v>) : Int64 =
-    __dict_get_tag<k, v>(dict)
-
-def __clearTag<k, v>(dict: Dict<k, v>) : RawPtr =
-    __dict_to_rawptr<k, v>(dict)
-
-def __setTag<k, v>(ptr: RawPtr, tag: Int64) : Dict<k, v> =
-    __rawptr_to_dict<k, v>(ptr, tag)
-```
-
-`__dict_to_rawptr` returns a borrowed raw view of the tagged dict pointer with
-tag bits cleared. It does not create an `Int64` round trip and does not transfer
-ownership. `__rawptr_to_dict` retags an initialized raw HAMT node as a managed
-`Dict<k, v>` root; refcount insertion treats the resulting dict value as owned
-when it is bound like any other managed value.
-
-## Stdlib.Dict API
-
-```dark
-def empty<k, v>() : Dict<k, v>
-def get<k, v>(dict: Dict<k, v>, key: k) : Option<v>
-def set<k, v>(dict: Dict<k, v>, key: k, value: v) : Dict<k, v>
-def remove<k, v>(dict: Dict<k, v>, key: k) : Dict<k, v>
-def contains<k, v>(dict: Dict<k, v>, key: k) : Bool
-def isEmpty<k, v>(dict: Dict<k, v>) : Bool
-def size<k, v>(dict: Dict<k, v>) : Int64
-def keys<k, v>(dict: Dict<k, v>) : List<k>
-def values<k, v>(dict: Dict<k, v>) : List<v>
-def entries<k, v>(dict: Dict<k, v>) : List<(k, v)>
-def fold<k, v, a>(dict: Dict<k, v>, init: a, f: (a, k, v) -> a) : a
-def map<k, v, w>(dict: Dict<k, v>, f: (k, v) -> w) : Dict<k, w>
-def filter<k, v>(dict: Dict<k, v>, f: (k, v) -> Bool) : Dict<k, v>
-def merge<k, v>(dict1: Dict<k, v>, dict2: Dict<k, v>) : Dict<k, v>
-def fromList<k, v>(pairs: List<(k, v)>) : Dict<k, v>
-def getOrDefault<k, v>(dict: Dict<k, v>, key: k, default: v) : v
-def singleton<k, v>(key: k, value: v) : Dict<k, v>
-def toList<k, v>(dict: Dict<k, v>) : List<(k, v)>
-```
-
-## Performance Characteristics
-
-| Operation | Complexity |
-|-----------|------------|
-| get | O(log64 n), effectively constant for normal sizes |
-| set | O(log64 n) |
-| remove | O(log64 n) |
-| size | O(n) |
-| keys/values | O(n) |
-
-With 64-way branching, depth is small for normal program dictionaries.
-
-## Hash Function
-
-Keys are hashed using `__hash<k>(key)`. Current stdlib hash/equality
-specializations cover:
-- Int64: identity
-- Bool: boolean identity
-- String: FNV-1a over string data
-- Bytes: FNV-1a over bytes data
-
-## Implementation Details
-
-Located in `src/DarkCompiler/stdlib/__HAMT.dark`:
-
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| Hash/bitmap helpers | top of file | Bit manipulation |
-| Tag helpers | top of file | Pointer tagging |
-| `__allocLeaf` | allocation section | Leaf allocation |
-| `__allocInternal` | allocation section | Internal-node allocation |
-| `__allocCollision` | collision section | Collision-node allocation |
-| `__getHelper` | dict helpers | Recursive get |
-| `__setHelper` | dict helpers | Recursive set |
-| `__removeHelper` | dict helpers | Recursive remove |
-| Iteration helpers | dict helpers | keys/values/entries/fold |
-
-## Example
-
-```dark
-let d = Stdlib.Dict.empty<String, Int64>()
-let d = Stdlib.Dict.set(d, "a", 1)
-let d = Stdlib.Dict.set(d, "b", 2)
-
-Stdlib.Dict.get(d, "a")  // Some(1)
-Stdlib.Dict.get(d, "c")  // None
-Stdlib.Dict.size(d)      // 2
-```
-
-## Why HAMT?
-
-- **Immutable**: Safe for functional programming
-- **Efficient sharing**: Modifications reuse most structure
-- **Fast operations**: Near-constant time
-- **Simple implementation**: Easier than red-black trees
+Performance differences from the interpreter are not parity requirements
+unless they alter observable behavior. The compiler continues to use the HAMT;
+it does not replace it with the interpreter's F# `Map` representation.

@@ -65,4 +65,4 @@ def runIterations(remaining: Int64, numDigits: Int64) : Int64 =
         if remaining == 1 then checksum else runIterations(remaining - 1, numDigits)
 
 // Reduced from ten 1,000-digit iterations to one 5-digit iteration.
-Stdlib.Int64.toString(runIterations(1, 5))
+runIterations(1, 5)

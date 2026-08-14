@@ -64,4 +64,4 @@ def runIterations(remaining: Int64, numDigits: Int64) : Int64 =
         let checksum = computeChecksum(digits, 0, 0, numDigits) in
         if remaining == 1 then checksum else runIterations(remaining - 1, numDigits)
 
-Stdlib.Int64.toString(runIterations(10, 1000))
+runIterations(10, 1000)

@@ -94,7 +94,7 @@ let rec typeToString (t: Type) : string =
     | TList elemType -> $"List<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
     | TRawPtr -> "RawPtr"  // Internal raw pointer type
-    | TDict (keyType, valueType) -> $"Dict<{typeToString keyType}, {typeToString valueType}>"
+    | TDict (_, valueType) -> $"Dict<{typeToString valueType}>"
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -219,6 +219,7 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
     | TypeApp (functionName, typeArgs, callArgs) -> TypeApp (functionName, typeArgs, NonEmptyList.map recurse callArgs)
     | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
     | TupleAccess (tuple, index) -> TupleAccess (recurse tuple, index)
+    | DictLiteral (valueType, entries) -> DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, recurse value)))
     | RecordLiteral (typeName, fields) -> RecordLiteral (typeName, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordUpdate (record, updates) -> RecordUpdate (recurse record, updates |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordAccess (record, field) -> RecordAccess (recurse record, field)
@@ -824,6 +825,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         TupleLiteral (List.map (applySubstToExpr subst) elements)
     | TupleAccess (tuple, index) ->
         TupleAccess (applySubstToExpr subst tuple, index)
+    | DictLiteral (valueType, entries) ->
+        DictLiteral (applySubst subst valueType, entries |> List.map (fun (key, value) -> (key, applySubstToExpr subst value)))
     | RecordLiteral (typeName, fields) ->
         RecordLiteral (typeName, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields)
     | RecordUpdate (record, updates) ->
@@ -1041,7 +1044,8 @@ let rec private needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ
     | TList elemType ->
         needsEqHelperForResolvedType variantLookup elemType
     | TTuple _
-    | TRecord _ ->
+    | TRecord _
+    | TDict _ ->
         true
     | TSum (sumTypeName, _) ->
         sumTypeHasPayload variantLookup sumTypeName
@@ -1163,6 +1167,8 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         elements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
     | TupleAccess (tuple, _) ->
         collectFreeVars tuple bound
+    | DictLiteral (_, entries) ->
+        entries |> List.map (fun (_, e) -> collectFreeVars e bound) |> List.fold Set.union Set.empty
     | RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> collectFreeVars e bound) |> List.fold Set.union Set.empty
     | RecordUpdate (record, updates) ->
@@ -4309,6 +4315,53 @@ let rec private checkExprWithParamNames
                     | None -> Error (TypeMismatch (expected, matchType, "match expression"))
                 | None -> Ok (matchType, Match (scrutinee', cases'))))
 
+    | DictLiteral (_, entries) ->
+        let duplicateKey =
+            entries
+            |> List.fold (fun (seen, duplicate) (key, _) ->
+                match duplicate with
+                | Some _ -> (seen, duplicate)
+                | None when Set.contains key seen -> (seen, Some key)
+                | None -> (Set.add key seen, None)) (Set.empty, None)
+            |> snd
+
+        match duplicateKey with
+        | Some key ->
+            Error (GenericError $"Cannot add two dictionary entries with the same key `{key}`")
+        | None ->
+            let expectedValueType =
+                match expectedType with
+                | Some (TDict (TString, valueType)) -> Some valueType
+                | _ -> None
+
+            let finish valueType checkedEntries =
+                let dictType = TDict (TString, valueType)
+                match expectedType with
+                | Some expected ->
+                    match reconcileTypes (Some aliasReg) expected dictType with
+                    | Some reconciled -> Ok (reconciled, DictLiteral (valueType, checkedEntries))
+                    | None -> Error (TypeMismatch (expected, dictType, "Dict literal"))
+                | None -> Ok (dictType, DictLiteral (valueType, checkedEntries))
+
+            match entries with
+            | [] ->
+                finish (Option.defaultValue (TVar "dictValue") expectedValueType) []
+            | (firstKey, firstValue) :: rest ->
+                checkExpr firstValue env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedValueType
+                |> Result.bind (fun (valueType, checkedFirst) ->
+                    let rec checkRemaining remaining acc =
+                        match remaining with
+                        | [] -> Ok (List.rev acc)
+                        | (key, value) :: tail ->
+                            checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                            |> Result.bind (fun (actualType, checkedValue) ->
+                                match reconcileTypes (Some aliasReg) valueType actualType with
+                                | Some _ -> checkRemaining tail ((key, checkedValue) :: acc)
+                                | None ->
+                                    Error (GenericError $"dict values must have one type: key `{key}` has {typeToString actualType}, expected {typeToString valueType}"))
+                    checkRemaining rest [(firstKey, checkedFirst)]
+                    |> Result.bind (finish valueType))
+
     | ListLiteral elements ->
         // Type-check elements and infer element type from first element
         match elements with
@@ -4628,6 +4681,13 @@ let rec private buildEqHelperExpr
     | _, TString ->
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
 
+    | ExpandCurrent, TDict (TString, valueType) ->
+        let entryType = TTuple [TString; resolveType aliasReg valueType]
+        let listType = TList entryType
+        let leftEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton leftExpr)
+        let rightEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton rightExpr)
+        buildEqHelperExpr aliasReg typeReg variantLookup UseHelperCall listType leftEntries rightEntries
+
     | ExpandCurrent, TTuple elemTypes ->
         let leftTupleVar = "__dark_eq_helper_tuple_left"
         let rightTupleVar = "__dark_eq_helper_tuple_right"
@@ -4744,6 +4804,8 @@ let private collectDirectEqHelperDeps
         match resolvedType with
         | TList elemType ->
             [elemType] |> List.choose addIfHelperType
+        | TDict (TString, valueType) ->
+            [TList (TTuple [TString; valueType])] |> List.choose addIfHelperType
         | TTuple elemTypes ->
             elemTypes |> List.choose addIfHelperType
         | TRecord (recordTypeName, typeArgs) ->
@@ -4878,6 +4940,8 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         collectFromExprs elements
     | TupleAccess (tupleExpr, _) ->
         collectEqHelperTypesFromExpr aliasReg tupleExpr
+    | DictLiteral (_, entries) ->
+        entries |> List.map snd |> collectFromExprs
     | RecordLiteral (_, fields) ->
         fields |> List.map snd |> collectFromExprs
     | RecordUpdate (recordExpr, updates) ->
@@ -4951,6 +5015,8 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         TupleLiteral (List.map recurse elements)
     | TupleAccess (tupleExpr, index) ->
         TupleAccess (recurse tupleExpr, index)
+    | DictLiteral (valueType, entries) ->
+        DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, recurse value)))
     | RecordLiteral (typeName, fields) ->
         RecordLiteral (typeName, fields |> List.map (fun (name, fieldExpr) -> (name, recurse fieldExpr)))
     | RecordUpdate (recordExpr, updates) ->
@@ -5170,6 +5236,8 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         elements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
     | TupleAccess (tuple, _) ->
         collectTypeAppSpecs tuple
+    | DictLiteral (_, entries) ->
+        entries |> List.map (snd >> collectTypeAppSpecs) |> List.fold Set.union Set.empty
     | RecordLiteral (_, fields) ->
         fields |> List.map (snd >> collectTypeAppSpecs) |> List.fold Set.union Set.empty
     | RecordUpdate (record, updates) ->
@@ -5494,6 +5562,10 @@ let private resolveProgramNames
                 fields
                 |> ResultList.traverse (fun (field, value) -> recurse value |> Result.map (fun value' -> (field, value')))
                 |> Result.map (fun fields' -> RecordLiteral (resolvedTypeName, fields')))
+        | DictLiteral (valueType, entries) ->
+            entries
+            |> ResultList.traverse (fun (key, value) -> recurse value |> Result.map (fun value' -> (key, value')))
+            |> Result.map (fun entries' -> DictLiteral (valueType, entries'))
         | BoundaryRender (renderer, value) -> recurse value |> Result.map (fun value' -> BoundaryRender (renderer, value'))
         | BinOp (op, left, right) -> recurse left |> Result.bind (fun l -> recurse right |> Result.map (fun r -> BinOp (op, l, r)))
         | UnaryOp (op, inner) -> recurse inner |> Result.map (fun inner' -> UnaryOp (op, inner'))

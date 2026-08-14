@@ -4378,6 +4378,27 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             ]
         )
 
+    | LIR.RuntimeErrorString messageReg ->
+        lirRegToARM64Reg messageReg
+        |> Result.map (fun resolvedMessageReg ->
+            let syscalls = ARM64.targetSyscalls ctx.Target
+            // Preserve the heap String address across the write and newline.
+            [ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, resolvedMessageReg)]
+            @ [
+                // Heap String layout: [length:8][UTF-8 data:length][refcount:8].
+                ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X11, 0s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X11, 8us)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 2us, 0)
+                ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
+                ARM64Symbolic.SVC syscalls.SvcImmediate
+            ]
+            @ runtimeInstrs (Runtime.generatePrintCharsToStderr ctx.Target [10uy])
+            @ [
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)
+                ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
+                ARM64Symbolic.SVC syscalls.SvcImmediate
+            ])
+
     // Floating-point instructions
     | LIR.FMov (dest, src) ->
         lirFRegToARM64FReg dest

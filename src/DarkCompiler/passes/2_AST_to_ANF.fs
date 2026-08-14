@@ -164,7 +164,8 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
             | _ ->
                 match tryPrimitive tok with
                 | Some prim -> [ (prim, rest) ]
-                | None when isFreshenedTypeVarName tok -> [ (AST.TVar tok, rest) ]
+                | None when isFreshenedTypeVarName tok || (tok.Length > 0 && System.Char.IsLower tok[0]) ->
+                    [ (AST.TVar tok, rest) ]
                 | None ->
                     let baseType = (mkNamedType tok [], rest)
                     let withArgs =
@@ -973,6 +974,11 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.TupleLiteral (List.map (applySubstToExpr subst) elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (applySubstToExpr subst tuple, index)
+    | AST.DictLiteral (valueType, entries) ->
+        AST.DictLiteral (
+            applySubstToType subst valueType,
+            entries |> List.map (fun (key, value) -> (key, applySubstToExpr subst value))
+        )
     | AST.RecordLiteral (typeName, fields) ->
         AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields)
     | AST.RecordUpdate (record, updates) ->
@@ -1110,6 +1116,11 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
     | AST.TupleAccess (tuple, _) ->
         collectTypeApps tuple
+    | AST.DictLiteral (valueType, entries) ->
+        let entrySpecs =
+            entries |> List.map (snd >> collectTypeApps) |> List.fold Set.union Set.empty
+        if List.isEmpty entries then entrySpecs
+        else Set.add ("Stdlib.__HAMT.__setOverwriting", [AST.TString; valueType]) entrySpecs
     | AST.RecordLiteral (_, fields) ->
         fields |> List.map (snd >> collectTypeApps) |> List.fold Set.union Set.empty
     | AST.RecordUpdate (record, updates) ->
@@ -1229,6 +1240,19 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.TupleLiteral (List.map replaceTypeApps elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (replaceTypeApps tuple, index)
+    | AST.DictLiteral (valueType, entries) ->
+        match entries with
+        | [] -> expr
+        | _ ->
+            let empty = AST.DictLiteral (valueType, [])
+            entries
+            |> List.fold (fun dictExpr (key, value) ->
+                AST.TypeApp (
+                    "Stdlib.__HAMT.__setOverwriting",
+                    [AST.TString; valueType],
+                    AST.NonEmptyList.fromList [dictExpr; AST.StringLiteral key; value]
+                )) empty
+            |> replaceTypeApps
     | AST.RecordLiteral (typeName, fields) ->
         AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, replaceTypeApps e)) fields)
     | AST.RecordUpdate (record, updates) ->
@@ -1378,6 +1402,19 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
             |> Result.map AST.TupleLiteral
         | AST.TupleAccess (tuple, index) ->
             replace tuple |> Result.map (fun tuple' -> AST.TupleAccess (tuple', index))
+        | AST.DictLiteral (valueType, entries) ->
+            match entries with
+            | [] -> Ok expr'
+            | _ ->
+                let lowered =
+                    entries
+                    |> List.fold (fun dictExpr (key, value) ->
+                        AST.TypeApp (
+                            "Stdlib.__HAMT.__setOverwriting",
+                            [AST.TString; valueType],
+                            AST.NonEmptyList.fromList [dictExpr; AST.StringLiteral key; value]
+                        )) (AST.DictLiteral (valueType, []))
+                replace lowered
         | AST.RecordLiteral (typeName, fields) ->
             fields
             |> mapResult (fun (name, value) ->
@@ -1603,6 +1640,7 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     | AST.TypeApp (_, _, args) -> args |> exprArgsToList |> List.exists (varOccursInExpr name)
     | AST.TupleLiteral elements -> List.exists (varOccursInExpr name) elements
     | AST.TupleAccess (tuple, _) -> varOccursInExpr name tuple
+    | AST.DictLiteral (_, entries) -> List.exists (fun (_, e) -> varOccursInExpr name e) entries
     | AST.RecordLiteral (_, fields) -> List.exists (fun (_, e) -> varOccursInExpr name e) fields
     | AST.RecordUpdate (record, updates) ->
         varOccursInExpr name record || List.exists (fun (_, e) -> varOccursInExpr name e) updates
@@ -1680,6 +1718,8 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         AST.TupleLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (inlineLambdas tuple lambdaEnv, index)
+    | AST.DictLiteral (valueType, entries) ->
+        AST.DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, inlineLambdas value lambdaEnv)))
     | AST.RecordLiteral (typeName, fields) ->
         AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) fields)
     | AST.RecordUpdate (record, updates) ->
@@ -1839,6 +1879,8 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         let headsFree = headElements |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
         Set.union headsFree (freeVars tail bound)
     | AST.TupleAccess (tuple, _) -> freeVars tuple bound
+    | AST.DictLiteral (_, entries) ->
+        entries |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
     | AST.RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
     | AST.RecordUpdate (record, updates) ->
@@ -2005,6 +2047,8 @@ let rec simpleInferType
         | Some (AST.TTuple elemTypes) when index >= 0 && index < List.length elemTypes ->
             Some (List.item index elemTypes)
         | _ -> None
+    | AST.DictLiteral (valueType, _) ->
+        Some (AST.TDict (AST.TString, valueType))
     | AST.RecordLiteral (typeName, fields) ->
         if typeName = "" then
             None
@@ -2135,9 +2179,35 @@ let rec simpleInferType
             // Fall back to funcReturnTypes for non-generic or arity mismatch
             Map.tryFind funcName funcReturnTypes
     | AST.If (_, thenExpr, elseExpr) ->
+        let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type option =
+            if left = right then Some left
+            else
+                match left, right with
+                | AST.TVar _, concrete
+                | concrete, AST.TVar _ -> Some concrete
+                | AST.TRuntimeError, concrete
+                | concrete, AST.TRuntimeError -> Some concrete
+                | AST.TSum (leftName, leftArgs), AST.TSum (rightName, rightArgs)
+                    when leftName = rightName && List.length leftArgs = List.length rightArgs ->
+                    List.zip leftArgs rightArgs
+                    |> List.fold (fun reconciled (leftArg, rightArg) ->
+                        reconciled
+                        |> Option.bind (fun args ->
+                            reconcileBranchTypes leftArg rightArg
+                            |> Option.map (fun arg -> arg :: args))) (Some [])
+                    |> Option.map (List.rev >> fun args -> AST.TSum (leftName, args))
+                | _ -> None
+
         match simpleInferType thenExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup,
               simpleInferType elseExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some thenType, Some elseType when thenType = elseType -> Some thenType
+        | Some (AST.TSum (thenName, thenArgs)), Some (AST.TSum (elseName, [])) when thenName = elseName ->
+            Some (AST.TSum (thenName, thenArgs))
+        | Some (AST.TSum (thenName, [])), Some (AST.TSum (elseName, elseArgs)) when thenName = elseName ->
+            Some (AST.TSum (elseName, elseArgs))
+        | Some AST.TRuntimeError, Some elseType -> Some elseType
+        | Some thenType, Some AST.TRuntimeError -> Some thenType
+        | Some thenType, Some elseType -> reconcileBranchTypes thenType elseType
         | _ -> None
     | AST.Sequence (_, next) ->
         simpleInferType next typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
@@ -2257,6 +2327,9 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     | AST.TupleAccess (tuple, index) ->
         liftLambdasInExpr tuple state
         |> Result.map (fun (tuple', state') -> (AST.TupleAccess (tuple', index), state'))
+    | AST.DictLiteral (valueType, entries) ->
+        liftLambdasInFields entries state
+        |> Result.map (fun (entries', state') -> (AST.DictLiteral (valueType, entries'), state'))
     | AST.RecordLiteral (typeName, fields) ->
         liftLambdasInFields fields state
         |> Result.map (fun (fields', state') -> (AST.RecordLiteral (typeName, fields'), state'))
@@ -2800,6 +2873,8 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
         (headElements |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)) @
         collectFuncRefsInExpr tail knownFuncs
     | AST.TupleAccess (e, _) -> collectFuncRefsInExpr e knownFuncs
+    | AST.DictLiteral (_, entries) ->
+        entries |> List.collect (fun (_, e) -> collectFuncRefsInExpr e knownFuncs)
     | AST.RecordLiteral (_, fields) ->
         fields |> List.collect (fun (_, e) -> collectFuncRefsInExpr e knownFuncs)
     | AST.RecordAccess (e, _) -> collectFuncRefsInExpr e knownFuncs
@@ -2859,6 +2934,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
         AST.TupleLiteral (es |> List.map (replaceInExpr wrapperMap))
     | AST.TupleAccess (e, i) ->
         AST.TupleAccess (replaceInExpr wrapperMap e, i)
+    | AST.DictLiteral (valueType, entries) ->
+        AST.DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, replaceInExpr wrapperMap value)))
     | AST.RecordLiteral (t, fields) ->
         AST.RecordLiteral (t, fields |> List.map (fun (n, e) -> (n, replaceInExpr wrapperMap e)))
     | AST.RecordAccess (e, f) ->
@@ -3181,6 +3258,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 match Stdlib.tryGetFunction moduleRegistry name with
                 | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
                 | None -> Error $"Cannot infer type: undefined variable '{name}'"
+    | AST.DictLiteral (valueType, _) ->
+        Ok (AST.TDict (AST.TString, valueType))
     | AST.RecordLiteral (typeName, fields) ->
         if typeName = "" then
             // Anonymous record literal - try to find matching type by field names
@@ -3903,6 +3982,9 @@ let private buildSkewListLiteral
 let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
     | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
+    | AST.DictLiteral (_, []) ->
+        Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
+    | AST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
     | AST.BoundaryRender (renderer, value) ->
         toANF value varGen env typeReg variantLookup funcReg moduleRegistry
         |> Result.map (fun (valueExpr, varGen1) ->
@@ -4373,14 +4455,28 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         let argList = exprArgsToList args
         match argList with
         | [messageExpr] ->
-            let messageText =
-                match unwrapErrorPayloadToString messageExpr with
-                | Some text -> text
-                | None -> "<runtime error>"
-            let fullMessage = $"Uncaught exception: {messageText}"
-            let (runtimeErrorVar, varGen1) = ANF.freshVar varGen
-            let runtimeErrorExpr = ANF.RuntimeError fullMessage
-            Ok (ANF.Let (runtimeErrorVar, runtimeErrorExpr, ANF.Return ANF.UnitLiteral), varGen1)
+            match unwrapErrorPayloadToString messageExpr with
+            | Some messageText ->
+                let fullMessage = $"Uncaught exception: {messageText}"
+                let (runtimeErrorVar, varGen1) = ANF.freshVar varGen
+                let runtimeErrorExpr = ANF.RuntimeError fullMessage
+                Ok (ANF.Let (runtimeErrorVar, runtimeErrorExpr, ANF.Return ANF.UnitLiteral), varGen1)
+            | None ->
+                toAtom messageExpr varGen env typeReg variantLookup funcReg moduleRegistry
+                |> Result.map (fun (messageAtom, messageBindings, varGen1) ->
+                    let (fullMessageVar, varGen2) = ANF.freshVar varGen1
+                    let (runtimeErrorVar, varGen3) = ANF.freshVar varGen2
+                    let errorExpr =
+                        ANF.Let (
+                            fullMessageVar,
+                            ANF.StringConcat (ANF.StringLiteral "Uncaught exception: ", messageAtom),
+                            ANF.Let (
+                                runtimeErrorVar,
+                                ANF.RuntimeErrorString (ANF.Var fullMessageVar),
+                                ANF.Return ANF.UnitLiteral
+                            )
+                        )
+                    (wrapBindings messageBindings errorExpr, varGen3))
         | _ ->
             Error $"Internal error: Builtin.testRuntimeError should have exactly 1 argument, got {List.length argList}"
 
@@ -7993,6 +8089,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
     | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
+    | AST.DictLiteral (_, []) ->
+        Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
+    | AST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
     | AST.BoundaryRender _ ->
         Error "BoundaryRender must be lowered through toANF"
     | AST.RuntimeError _ ->
@@ -8279,7 +8378,32 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         if isBuiltinUnwrapName funcName then
             Error "Internal error: Builtin.unwrap should be lowered via toANF, not toAtom"
         elif isBuiltinTestRuntimeErrorName funcName then
-            Error "Internal error: Builtin.testRuntimeError should be lowered via toANF, not toAtom"
+            let argList = exprArgsToList args
+            match argList with
+            | [messageExpr] ->
+                match unwrapErrorPayloadToString messageExpr with
+                | Some messageText ->
+                    let (runtimeErrorVar, varGen1) = ANF.freshVar varGen
+                    Ok (
+                        ANF.UnitLiteral,
+                        [(runtimeErrorVar, ANF.RuntimeError $"Uncaught exception: {messageText}")],
+                        varGen1
+                    )
+                | None ->
+                    toAtom messageExpr varGen env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.map (fun (messageAtom, messageBindings, varGen1) ->
+                        let (fullMessageVar, varGen2) = ANF.freshVar varGen1
+                        let (runtimeErrorVar, varGen3) = ANF.freshVar varGen2
+                        (
+                            ANF.UnitLiteral,
+                            messageBindings
+                            @ [ (fullMessageVar,
+                                 ANF.StringConcat (ANF.StringLiteral "Uncaught exception: ", messageAtom))
+                                (runtimeErrorVar, ANF.RuntimeErrorString (ANF.Var fullMessageVar)) ],
+                            varGen3
+                        ))
+            | _ ->
+                Error $"Internal error: Builtin.testRuntimeError should have exactly 1 argument, got {List.length argList}"
         else
             // Function call in atom position: convert all arguments to atoms
             let argExprList = exprArgsToList args

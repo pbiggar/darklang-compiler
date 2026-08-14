@@ -1223,6 +1223,10 @@ let selectInstr
 
     | MIR.RuntimeError message ->
         Ok ([LIR.RuntimeError message], state)
+    | MIR.RuntimeErrorString message ->
+        match convertOperand message with
+        | LIR.Reg register -> Ok ([LIR.RuntimeErrorString register], state)
+        | _ -> Error "Internal error: dynamic runtime error message must be held in a register"
 
     | MIR.StringConcat (dest, left, right) ->
         let lirDest = vregToLIRReg dest
@@ -1648,6 +1652,7 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
     | MIR.RefCountDec (addr, _, _, _) -> maxVRegId addr currentMax
     | MIR.Print (src, _) -> maxVRegIdFromOperand src currentMax
     | MIR.RuntimeError _ -> currentMax
+    | MIR.RuntimeErrorString message -> maxVRegIdFromOperand message currentMax
     | MIR.FileReadText (dest, path)
     | MIR.FileExists (dest, path)
     | MIR.FileDelete (dest, path)

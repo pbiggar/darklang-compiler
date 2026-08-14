@@ -715,6 +715,7 @@ let private foldRegUses folder state (instr: Instr) =
     | PrintFloatNoNewline _
     | PrintString _
     | RuntimeError _
+    | RuntimeErrorString _
     | PrintChars _
     | Exit
     | FPhi _
