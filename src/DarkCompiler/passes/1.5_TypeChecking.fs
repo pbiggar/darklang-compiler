@@ -243,6 +243,7 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
     | ListCons (heads, tail) -> ListCons (List.map recurse heads, recurse tail)
     | Lambda (parameters, returnAnnotation, body) -> Lambda (parameters, returnAnnotation, recurse body)
     | Apply (func, callArgs) -> Apply (recurse func, NonEmptyList.map recurse callArgs)
+    | IndirectApply (func, callArgs) -> IndirectApply (recurse func, NonEmptyList.map recurse callArgs)
     | Closure (functionName, captures) -> Closure (functionName, List.map recurse captures)
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
     | Int8Literal _ | Int16Literal _ | Int32Literal _
@@ -909,6 +910,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         Lambda (concreteParams, returnAnnotation |> Option.map (applySubst subst), applySubstToExpr subst body)
     | Apply (func, args) ->
         Apply (applySubstToExpr subst func, NonEmptyList.map (applySubstToExpr subst) args)
+    | IndirectApply (func, args) ->
+        IndirectApply (applySubstToExpr subst func, NonEmptyList.map (applySubstToExpr subst) args)
     | Closure (funcName, captures) ->
         Closure (funcName, List.map (applySubstToExpr subst) captures)
     | InterpolatedString parts ->
@@ -1441,7 +1444,8 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
             |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
             |> Set.ofList
         collectFreeVars body (Set.union bound paramNames)
-    | Apply (func, args) ->
+    | Apply (func, args)
+    | IndirectApply (func, args) ->
         let funcFree = collectFreeVars func bound
         let argsFree =
             args
@@ -1915,7 +1919,8 @@ let rec private checkExprWithParamNames
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
         | Constructor (_, _, payload) -> payload |> Option.bind (tryFindCallArguments targetName)
         | ListCons (head, tail) -> head @ [tail] |> tryChildren
-        | Apply (func, args) -> func :: NonEmptyList.toList args |> tryChildren
+        | Apply (func, args)
+        | IndirectApply (func, args) -> func :: NonEmptyList.toList args |> tryChildren
         | Closure (_, captures) -> tryChildren captures
         | InterpolatedString parts ->
             parts
@@ -1988,7 +1993,8 @@ let rec private checkExprWithParamNames
             :: (cases |> List.collect (fun case -> Option.toList case.Guard @ [case.Body]))
             |> tryChildren
         | ListCons (head, tail) -> head @ [tail] |> tryChildren
-        | Apply (func, arguments) -> func :: NonEmptyList.toList arguments |> tryChildren
+        | Apply (func, arguments)
+        | IndirectApply (func, arguments) -> func :: NonEmptyList.toList arguments |> tryChildren
         | Closure (_, captures) -> tryChildren captures
         | InterpolatedString parts ->
             parts
@@ -4925,7 +4931,8 @@ let rec private checkExprWithParamNames
                     List.zip parameterTypes argumentList
                     |> List.fold (fun state (parameterType, argument) -> collect (Some parameterType) argument state) constraints
                 | _ -> collectChildren argumentList constraints
-            | Apply (func, arguments) ->
+            | Apply (func, arguments)
+            | IndirectApply (func, arguments) ->
                 let argumentList = NonEmptyList.toList arguments
                 let constraints = collect None func constraints
                 match func with
@@ -5181,6 +5188,9 @@ let rec private checkExprWithParamNames
             | _ ->
                 Error (GenericError $"Cannot apply non-function type: {typeToString funcType}"))
 
+    | IndirectApply _ ->
+        Crash.crash "IndirectApply is compiler-generated after expression type checking"
+
     | FuncRef funcName ->
         // Function reference: look up function signature
         match Map.tryFind funcName env with
@@ -5255,15 +5265,13 @@ let rec private buildEqHelperExpr
                 LPVariable rightVar,
                 rightExpr,
                 If (
-                    Call (
-                        "Stdlib.String.equals",
-                        NonEmptyList.fromList [
-                            TupleAccess (Var leftVar, 1)
-                            TupleAccess (Var rightVar, 1)
-                        ]
+                    BinOp (
+                        Eq,
+                        TupleAccess (Var leftVar, 1),
+                        TupleAccess (Var rightVar, 1)
                     ),
-                    Apply (
-                        TupleAccess (Var leftVar, 2),
+                    IndirectApply (
+                        TupleAccess (Var leftVar, 1),
                         NonEmptyList.fromList [Var leftVar; Var rightVar]
                     ),
                     BoolLiteral false
@@ -5621,7 +5629,8 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         Set.union (collectFromExprs headElements) (collectEqHelperTypesFromExpr aliasReg tailExpr)
     | Lambda (_, _, body) ->
         collectEqHelperTypesFromExpr aliasReg body
-    | Apply (funcExpr, args) ->
+    | Apply (funcExpr, args)
+    | IndirectApply (funcExpr, args) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg funcExpr) (collectFromExprs (NonEmptyList.toList args))
     | Closure (_, captures) ->
         collectFromExprs captures
@@ -5692,6 +5701,8 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         Lambda (parameters, returnAnnotation, recurse body)
     | Apply (funcExpr, args) ->
         Apply (recurse funcExpr, NonEmptyList.map recurse args)
+    | IndirectApply (funcExpr, args) ->
+        IndirectApply (recurse funcExpr, NonEmptyList.map recurse args)
     | Closure (funcName, captures) ->
         Closure (funcName, List.map recurse captures)
     | InterpolatedString parts ->
@@ -5926,7 +5937,8 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
             (collectTypeAppSpecs tail)
     | Lambda (_, _, body) ->
         collectTypeAppSpecs body
-    | Apply (funcExpr, args) ->
+    | Apply (funcExpr, args)
+    | IndirectApply (funcExpr, args) ->
         Set.union
             (collectTypeAppSpecs funcExpr)
             (args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty)
@@ -6256,6 +6268,9 @@ let private resolveProgramNames
         | ListLiteral elements -> ResultList.traverse recurse elements |> Result.map ListLiteral
         | ListCons (heads, tail) -> ResultList.traverse recurse heads |> Result.bind (fun heads' -> recurse tail |> Result.map (fun tail' -> ListCons (heads', tail')))
         | Apply (func, args) -> recurse func |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> Apply (func', args')))
+        | IndirectApply (func, args) ->
+            recurse func
+            |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> IndirectApply (func', args')))
         | Closure (name, captures) ->
             resolveName NameResolution.ResolutionContext.Callable localNames name
             |> Result.bind (fun resolvedName -> ResultList.traverse recurse captures |> Result.map (fun captures' -> Closure (resolvedName, captures')))

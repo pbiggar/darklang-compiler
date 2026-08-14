@@ -2735,7 +2735,8 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
             names
             |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
         |> Result.bind (fun () -> validateExpr body)
-    | Apply (funcExpr, args) ->
+    | Apply (funcExpr, args)
+    | IndirectApply (funcExpr, args) ->
         validateExpr funcExpr
         |> Result.bind (fun () ->
             args

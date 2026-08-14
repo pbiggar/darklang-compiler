@@ -40,21 +40,19 @@ let private materializeComparisonPlan (targetType: AST.Type) (args: AST.Expr lis
             let leftName = "__comparison_plan_left"
             let rightName = "__comparison_plan_right"
             AST.Let (
-                leftName,
+                AST.LPVariable leftName,
                 leftExpr,
                 AST.Let (
-                    rightName,
+                    AST.LPVariable rightName,
                     rightExpr,
                     AST.If (
-                        AST.Call (
-                            "Stdlib.String.equals",
-                            AST.NonEmptyList.fromList [
-                                AST.TupleAccess (AST.Var leftName, 1)
-                                AST.TupleAccess (AST.Var rightName, 1)
-                            ]
+                        AST.BinOp (
+                            AST.Eq,
+                            AST.TupleAccess (AST.Var leftName, 1),
+                            AST.TupleAccess (AST.Var rightName, 1)
                         ),
-                        AST.Apply (
-                            AST.TupleAccess (AST.Var leftName, 2),
+                        AST.IndirectApply (
+                            AST.TupleAccess (AST.Var leftName, 1),
                             AST.NonEmptyList.fromList [AST.Var leftName; AST.Var rightName]
                         ),
                         AST.BoolLiteral false
@@ -1095,6 +1093,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.Lambda (substParams, returnAnnotation |> Option.map (applySubstToType subst), applySubstToExpr subst body)
     | AST.Apply (func, args) ->
         AST.Apply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
+    | AST.IndirectApply (func, args) ->
+        AST.IndirectApply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
     | AST.InterpolatedString parts ->
         let substPart part =
             match part with
@@ -1195,8 +1195,7 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         let argSpecs = args |> exprArgsToList |> List.map collectTypeApps |> List.fold Set.union Set.empty
         let hasTypeVars = List.exists containsTypeVar typeArgs
         if funcName = eqHelperDispatchMarker then
-            match typeArgs with
-            | _ -> argSpecs
+            argSpecs
         elif hasTypeVars && (funcName = "__hash" || funcName = "__key_eq") then
             argSpecs
         elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
@@ -1238,7 +1237,8 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         Set.union headsSpecs (collectTypeApps tail)
     | AST.Lambda (_, _, body) ->
         collectTypeApps body
-    | AST.Apply (func, args) ->
+    | AST.Apply (func, args)
+    | AST.IndirectApply (func, args) ->
         let funcSpecs = collectTypeApps func
         let argsSpecs = args |> exprArgsToList |> List.map collectTypeApps |> List.fold Set.union Set.empty
         Set.union funcSpecs argsSpecs
@@ -1375,6 +1375,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.Lambda (parameters, returnAnnotation, replaceTypeApps body)
     | AST.Apply (func, args) ->
         AST.Apply (replaceTypeApps func, AST.NonEmptyList.map replaceTypeApps args)
+    | AST.IndirectApply (func, args) ->
+        AST.IndirectApply (replaceTypeApps func, AST.NonEmptyList.map replaceTypeApps args)
     | AST.InterpolatedString parts ->
         let replacePart part =
             match part with
@@ -1580,6 +1582,11 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
             |> Result.bind (fun func' ->
                 mapResult replace (exprArgsToList args)
                 |> Result.map (fun args' -> AST.Apply (func', exprArgsFromList args')))
+        | AST.IndirectApply (func, args) ->
+            replace func
+            |> Result.bind (fun func' ->
+                mapResult replace (exprArgsToList args)
+                |> Result.map (fun args' -> AST.IndirectApply (func', exprArgsFromList args')))
         | AST.InterpolatedString parts ->
             parts
             |> mapResult (function
@@ -1650,7 +1657,7 @@ let private monomorphizeWithGenericFuncDefs (genericFuncDefs: GenericFuncDefs) (
 let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: AST.Program) : bool =
     let rec exprNeedsLambdaLowering (bound: Set<string>) (expr: AST.Expr) : bool =
         match expr with
-        | AST.Lambda _ | AST.Apply _ | AST.FuncRef _ | AST.Closure _ ->
+        | AST.Lambda _ | AST.Apply _ | AST.IndirectApply _ | AST.FuncRef _ | AST.Closure _ ->
             true
         | AST.Var name ->
             Set.contains name knownFuncNames && not (Set.contains name bound)
@@ -1781,7 +1788,8 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
             |> Set.ofList
         if Set.contains name paramNames then false
         else varOccursInExpr name body
-    | AST.Apply (func, args) ->
+    | AST.Apply (func, args)
+    | AST.IndirectApply (func, args) ->
         varOccursInExpr name func || (args |> exprArgsToList |> List.exists (varOccursInExpr name))
     | AST.FuncRef _ ->
         false  // Function references don't contain variable references
@@ -1889,6 +1897,11 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         | _ ->
             // Non-variable function (could be lambda or other expr)
             AST.Apply (inlineLambdas func lambdaEnv, args')
+    | AST.IndirectApply (func, args) ->
+        AST.IndirectApply (
+            inlineLambdas func lambdaEnv,
+            AST.NonEmptyList.map (fun arg -> inlineLambdas arg lambdaEnv) args
+        )
     | AST.FuncRef _ ->
         // Function references don't need lambda inlining
         expr
@@ -1949,6 +1962,8 @@ let inlineLambdasInProgram (program: AST.Program) : AST.Program =
 type LiftState = {
     Counter: int
     LiftedFunctions: AST.FunctionDef list
+    ComparisonFuncs: Map<string * AST.Type list, string>
+    ComparableFunctionParams: Set<AST.Type list>
     TypeEnv: Map<string, AST.Type>  // Variable name -> Type (for tracking types of captured variables)
     FuncParams: Map<string, (string * AST.Type) list>  // Function name -> params (for inferring function value types)
     FuncReturnTypes: Map<string, AST.Type>  // Function name -> Return type (for inferring call result types)
@@ -2041,6 +2056,15 @@ let rec private matchPatternBindingTypes
             merge headBindings (matchPatternBindingTypes typeReg variantLookup tailPattern scrutineeType)
         | _ -> Map.empty
 
+let private lambdaNeedsComparison
+    (parameters: AST.NonEmptyList<AST.LambdaParameter>)
+    (state: LiftState)
+    : bool =
+    parameters
+    |> AST.NonEmptyList.toList
+    |> List.map lambdaParameterType
+    |> fun paramTypes -> Set.contains paramTypes state.ComparableFunctionParams
+
 /// Collect free variables in an expression (variables not bound by let or lambda parameters)
 let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     match expr with
@@ -2116,7 +2140,8 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
             |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
             |> Set.ofList
         freeVars body (Set.union bound paramNames)
-    | AST.Apply (func, args) ->
+    | AST.Apply (func, args)
+    | AST.IndirectApply (func, args) ->
         let funcVars = freeVars func bound
         let argVars = args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
         Set.union funcVars argVars
@@ -2480,6 +2505,7 @@ let rec simpleInferType
             else
                 None
         | _ -> None
+    | AST.IndirectApply _ -> Some AST.TBool
     | _ -> None  // Complex expressions require full type inference
 
 let inferLambdaReturnType (body: AST.Expr) (state: LiftState) : Result<AST.Type, string> =
@@ -2495,6 +2521,25 @@ type private LambdaComparisonPlan = {
     Body: AST.Expr
     CompareCaptures: bool
 }
+
+let private comparisonNameForIdentity
+    (identity: string option)
+    (captureTypes: AST.Type list)
+    (state: LiftState)
+    : string * bool * LiftState =
+    match identity with
+    | None ->
+        let (name, state') = freshLiftedName state "__closure_comparison_"
+        (name, true, state')
+    | Some identity ->
+        let key = (identity, captureTypes)
+        match Map.tryFind key state.ComparisonFuncs with
+        | Some name -> (name, false, state)
+        | None ->
+            let (name, state') = freshLiftedName state "__closure_comparison_"
+            let state'' =
+                { state' with ComparisonFuncs = Map.add key name state'.ComparisonFuncs }
+            (name, true, state'')
 
 /// Recognize the lambdas synthesized for named partial application. Their
 /// already-applied arguments are semantic identity, unlike ordinary lexical
@@ -2612,11 +2657,9 @@ let private makeClosureComparator
     (compareCaptures: bool)
     (variantLookup: VariantLookup)
     : AST.FunctionDef =
-    // The comparator closure is captureless, so describing its payload as a
-    // one-word tuple gives reference counting the same physical shape.
-    let comparatorStorageType = AST.TTuple [AST.TInt64]
+    let comparatorStorageType = AST.TRawPtr
     let runtimeClosureType =
-        AST.TTuple (AST.TInt64 :: AST.TString :: comparatorStorageType :: captureTypes)
+        AST.TTuple (AST.TInt64 :: comparatorStorageType :: captureTypes)
     let leftName = "__comparison_left_closure"
     let rightName = "__comparison_right_closure"
     let comparisons =
@@ -2626,8 +2669,8 @@ let private makeClosureComparator
                 comparisonForCapturedValue
                     variantLookup
                     captureType
-                    (AST.TupleAccess (AST.Var leftName, index + 3))
-                    (AST.TupleAccess (AST.Var rightName, index + 3)))
+                    (AST.TupleAccess (AST.Var leftName, index + 2))
+                    (AST.TupleAccess (AST.Var rightName, index + 2)))
         else []
     let body =
         match comparisons with
@@ -2640,7 +2683,6 @@ let private makeClosureComparator
             paramsFromList
                 "makeClosureComparator"
                 [
-                    ("__comparison_closure", comparatorStorageType)
                     (leftName, runtimeClosureType)
                     (rightName, runtimeClosureType)
                 ]
@@ -2768,15 +2810,24 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
             |> Result.bind (fun plan ->
                 // Create lifted function
                 let (funcName, stateWithName) = freshLiftedName state1 "__closure_"
-                let (comparisonName, stateWithComparisonName) =
-                    freshLiftedName stateWithName "__closure_comparison_"
-                let comparatorStorageType = AST.TTuple [AST.TInt64]
-                // Function pointer, semantic identity, comparator closure, then
-                // operational captures.
+                let comparisonInfo =
+                    if lambdaNeedsComparison parameters state then
+                        let (name, addDef, nextState) =
+                            comparisonNameForIdentity plan.Identity plan.CaptureTypes stateWithName
+                        Some (name, addDef, nextState)
+                    else
+                        None
+                let stateWithComparison =
+                    comparisonInfo
+                    |> Option.map (fun (_, _, nextState) -> nextState)
+                    |> Option.defaultValue stateWithName
+                let metadataTypes =
+                    comparisonInfo |> Option.map (fun _ -> [AST.TRawPtr]) |> Option.defaultValue []
                 let closureTupleTypes =
-                    AST.TInt64 :: AST.TString :: comparatorStorageType :: plan.CaptureTypes
+                    AST.TInt64 :: (metadataTypes @ plan.CaptureTypes)
                 let closureParam = ("__closure", AST.TTuple closureTupleTypes)
                 let (loweredParameters, loweredBody) = lowerLambdaParameters parameters plan.Body
+                let captureOffset = if Option.isSome comparisonInfo then 2 else 1
 
                 // Build body that extracts captures from closure tuple
                 let bodyWithExtractions =
@@ -2785,7 +2836,7 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                     else
                         plan.CaptureNames
                         |> List.mapi (fun i capName ->
-                            (capName, AST.TupleAccess (AST.Var "__closure", i + 3)))
+                            (capName, AST.TupleAccess (AST.Var "__closure", i + captureOffset)))
                         |> List.foldBack (fun (capName, accessor) acc ->
                             AST.Let (AST.LPVariable capName, accessor, acc)) <| loweredBody
 
@@ -2806,14 +2857,26 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                         Body = bodyWithExtractions
                     }
                     let comparisonDef =
-                        makeClosureComparator
-                            comparisonName
-                            plan.CaptureTypes
-                            plan.CompareCaptures
-                            state1.VariantLookup
+                        comparisonInfo
+                        |> Option.bind (fun (comparisonName, addDef, _) ->
+                            if addDef then
+                                Some (
+                                    makeClosureComparator
+                                        comparisonName
+                                        plan.CaptureTypes
+                                        plan.CompareCaptures
+                                        state1.VariantLookup
+                                )
+                            else
+                                None)
                     let state' = {
-                        Counter = stateWithComparisonName.Counter
-                        LiftedFunctions = comparisonDef :: funcDef :: state1.LiftedFunctions
+                        Counter = stateWithComparison.Counter
+                        LiftedFunctions =
+                            comparisonDef
+                            |> Option.map (fun comparisonDef -> comparisonDef :: funcDef :: state1.LiftedFunctions)
+                            |> Option.defaultValue (funcDef :: state1.LiftedFunctions)
+                        ComparisonFuncs = stateWithComparison.ComparisonFuncs
+                        ComparableFunctionParams = state.ComparableFunctionParams
                         TypeEnv = state.TypeEnv  // Restore original TypeEnv (exclude lambda params)
                         FuncParams = state1.FuncParams
                         FuncReturnTypes = state1.FuncReturnTypes
@@ -2821,17 +2884,21 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                         TypeReg = state1.TypeReg
                         VariantLookup = state1.VariantLookup
                     }
-                    let identity = plan.Identity |> Option.defaultValue funcName
                     let closureCaptures =
-                        AST.StringLiteral identity
-                        :: AST.Closure (comparisonName, [])
-                        :: plan.CaptureExprs
+                        match comparisonInfo with
+                        | Some (comparisonName, _, _) -> AST.FuncRef comparisonName :: plan.CaptureExprs
+                        | None -> plan.CaptureExprs
                     Ok (AST.Closure (funcName, closureCaptures), state'))))
     | AST.Apply (func, args) ->
         liftLambdasInExpr func state
         |> Result.bind (fun (func', state1) ->
             liftLambdasInArgs args state1
             |> Result.map (fun (args', state2) -> (AST.Apply (func', args'), state2)))
+    | AST.IndirectApply (func, args) ->
+        liftLambdasInExpr func state
+        |> Result.bind (fun (func', state1) ->
+            liftLambdasInArgs args state1
+            |> Result.map (fun (args', state2) -> (AST.IndirectApply (func', args'), state2)))
     | AST.InterpolatedString parts ->
         let rec liftParts (ps: AST.StringPart list) (st: LiftState) (acc: AST.StringPart list) : Result<AST.StringPart list * LiftState, string> =
             match ps with
@@ -2870,13 +2937,24 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                         // All lambdas become closures (even non-capturing ones) for uniform calling convention
                         // The lifted function takes closure as first param, then original params
                         let (funcName, stateWithName) = freshLiftedName state1 "__closure_"
-                        let (comparisonName, stateWithComparisonName) =
-                            freshLiftedName stateWithName "__closure_comparison_"
-                        let comparatorStorageType = AST.TTuple [AST.TInt64]
+                        let comparisonInfo =
+                            if lambdaNeedsComparison parameters state then
+                                let (name, addDef, nextState) =
+                                    comparisonNameForIdentity plan.Identity plan.CaptureTypes stateWithName
+                                Some (name, addDef, nextState)
+                            else
+                                None
+                        let stateWithComparison =
+                            comparisonInfo
+                            |> Option.map (fun (_, _, nextState) -> nextState)
+                            |> Option.defaultValue stateWithName
+                        let metadataTypes =
+                            comparisonInfo |> Option.map (fun _ -> [AST.TRawPtr]) |> Option.defaultValue []
                         let closureTupleTypes =
-                            AST.TInt64 :: AST.TString :: comparatorStorageType :: plan.CaptureTypes
+                            AST.TInt64 :: (metadataTypes @ plan.CaptureTypes)
                         let closureParam = ("__closure", AST.TTuple closureTupleTypes)
                         let (loweredParameters, loweredBody) = lowerLambdaParameters parameters plan.Body
+                        let captureOffset = if Option.isSome comparisonInfo then 2 else 1
 
                         // Build body that extracts captures from closure tuple:
                         // let cap1 = __closure.1 in let cap2 = __closure.2 in ... original_body
@@ -2886,7 +2964,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                             else
                                 plan.CaptureNames
                                 |> List.mapi (fun i capName ->
-                                    (capName, AST.TupleAccess (AST.Var "__closure", i + 3)))
+                                    (capName, AST.TupleAccess (AST.Var "__closure", i + captureOffset)))
                                 |> List.foldBack (fun (capName, accessor) acc ->
                                     AST.Let (AST.LPVariable capName, accessor, acc)) <| loweredBody
 
@@ -2907,14 +2985,26 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                                 Body = bodyWithExtractions
                             }
                             let comparisonDef =
-                                makeClosureComparator
-                                    comparisonName
-                                    plan.CaptureTypes
-                                    plan.CompareCaptures
-                                    state1.VariantLookup
+                                comparisonInfo
+                                |> Option.bind (fun (comparisonName, addDef, _) ->
+                                    if addDef then
+                                        Some (
+                                            makeClosureComparator
+                                                comparisonName
+                                                plan.CaptureTypes
+                                                plan.CompareCaptures
+                                                state1.VariantLookup
+                                        )
+                                    else
+                                        None)
                             let state' = {
-                                Counter = stateWithComparisonName.Counter
-                                LiftedFunctions = comparisonDef :: funcDef :: state1.LiftedFunctions
+                                Counter = stateWithComparison.Counter
+                                LiftedFunctions =
+                                    comparisonDef
+                                    |> Option.map (fun comparisonDef -> comparisonDef :: funcDef :: state1.LiftedFunctions)
+                                    |> Option.defaultValue (funcDef :: state1.LiftedFunctions)
+                                ComparisonFuncs = stateWithComparison.ComparisonFuncs
+                                ComparableFunctionParams = state.ComparableFunctionParams
                                 TypeEnv = state.TypeEnv  // Restore original TypeEnv (exclude lambda params)
                                 FuncParams = state1.FuncParams
                                 FuncReturnTypes = state1.FuncReturnTypes
@@ -2922,11 +3012,10 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                                 TypeReg = state1.TypeReg
                                 VariantLookup = state1.VariantLookup
                             }
-                            let identity = plan.Identity |> Option.defaultValue funcName
                             let closureCaptures =
-                                AST.StringLiteral identity
-                                :: AST.Closure (comparisonName, [])
-                                :: plan.CaptureExprs
+                                match comparisonInfo with
+                                | Some (comparisonName, _, _) -> AST.FuncRef comparisonName :: plan.CaptureExprs
+                                | None -> plan.CaptureExprs
                             loop rest state' (AST.Closure (funcName, closureCaptures) :: acc))))
 
             | AST.FuncRef origFuncName ->
@@ -2936,11 +3025,11 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                 match Map.tryFind origFuncName state.FuncParams, Map.tryFind origFuncName state.FuncReturnTypes with
                 | Some origParams, Some origReturnType ->
                     let (wrapperName, stateWithName) = freshLiftedName state "__funcref_wrapper_"
-                    let (comparisonName, stateWithComparisonName) =
-                        freshLiftedName stateWithName "__closure_comparison_"
-                    let comparatorStorageType = AST.TTuple [AST.TInt64]
+                    let (comparisonName, addComparisonDef, stateWithComparisonName) =
+                        comparisonNameForIdentity (Some origFuncName) [] stateWithName
+                    let comparatorStorageType = AST.TRawPtr
                     let closureParam =
-                        ("__closure", AST.TTuple [AST.TInt64; AST.TString; comparatorStorageType])
+                        ("__closure", AST.TTuple [AST.TInt64; comparatorStorageType])
                     // Generate parameter names for wrapper that match original function's parameters
                     let wrapperParams = origParams |> List.mapi (fun i (_, t) -> ($"__arg{i}", t))
                     let wrapperArgs = wrapperParams |> List.map (fun (name, _) -> AST.Var name)
@@ -2956,7 +3045,13 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                         makeClosureComparator comparisonName [] false state.VariantLookup
                     let state' = {
                         Counter = stateWithComparisonName.Counter
-                        LiftedFunctions = comparisonDef :: wrapperDef :: state.LiftedFunctions
+                        LiftedFunctions =
+                            if addComparisonDef then
+                                comparisonDef :: wrapperDef :: state.LiftedFunctions
+                            else
+                                wrapperDef :: state.LiftedFunctions
+                        ComparisonFuncs = stateWithComparisonName.ComparisonFuncs
+                        ComparableFunctionParams = state.ComparableFunctionParams
                         TypeEnv = state.TypeEnv
                         FuncParams = state.FuncParams
                         FuncReturnTypes = state.FuncReturnTypes
@@ -2967,7 +3062,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                     let closure =
                         AST.Closure (
                             wrapperName,
-                            [AST.StringLiteral origFuncName; AST.Closure (comparisonName, [])]
+                            [AST.FuncRef comparisonName]
                         )
                     loop rest state' (closure :: acc)
                 | None, _ ->
@@ -3073,9 +3168,9 @@ let generateFuncWrapper
     | Some parameters, Some returnType ->
         // Create wrapper: __funcref_wrapper_N(__closure, ...params) = origFunc(...params)
         let (wrapperName, stateWithName) = freshLiftedName stateWithFuncs.State "__funcref_wrapper_"
-        let comparatorStorageType = AST.TTuple [AST.TInt64]
+        let comparatorStorageType = AST.TRawPtr
         let closureParam =
-            ("__closure", AST.TTuple [AST.TInt64; AST.TString; comparatorStorageType])
+            ("__closure", AST.TTuple [AST.TInt64; comparatorStorageType])
         let wrapperBody =
             parameters
             |> List.map (fun (name, _) -> AST.Var name)
@@ -3107,6 +3202,52 @@ let generateFuncWrapper
         Error $"Cannot find parameters for function '{origFuncName}'"
     | _, None ->
         Error $"Cannot find return type for function '{origFuncName}'"
+
+let rec private containsIndirectApply (expr: AST.Expr) : bool =
+    let anyExpr exprs = List.exists containsIndirectApply exprs
+    match expr with
+    | AST.IndirectApply _ -> true
+    | AST.BoundaryRender (_, value) -> containsIndirectApply value
+    | AST.BinOp (_, left, right) -> containsIndirectApply left || containsIndirectApply right
+    | AST.UnaryOp (_, inner) -> containsIndirectApply inner
+    | AST.Let (_, value, body) -> containsIndirectApply value || containsIndirectApply body
+    | AST.If (condition, thenBranch, elseBranch) ->
+        containsIndirectApply condition
+        || containsIndirectApply thenBranch
+        || containsIndirectApply elseBranch
+    | AST.Sequence (first, next) -> containsIndirectApply first || containsIndirectApply next
+    | AST.Call (_, args)
+    | AST.TypeApp (_, _, args) -> args |> exprArgsToList |> anyExpr
+    | AST.TupleLiteral elements
+    | AST.ListLiteral elements -> anyExpr elements
+    | AST.ListCons (heads, tail) -> anyExpr heads || containsIndirectApply tail
+    | AST.TupleAccess (tuple, _) -> containsIndirectApply tuple
+    | AST.DictLiteral (_, entries)
+    | AST.RecordLiteral (_, entries) -> entries |> List.map snd |> anyExpr
+    | AST.RecordUpdate (record, updates) ->
+        containsIndirectApply record || (updates |> List.map snd |> anyExpr)
+    | AST.RecordAccess (record, _) -> containsIndirectApply record
+    | AST.Constructor (_, _, payload) -> Option.exists containsIndirectApply payload
+    | AST.Match (scrutinee, cases) ->
+        containsIndirectApply scrutinee
+        || (cases
+            |> List.exists (fun case ->
+                Option.exists containsIndirectApply case.Guard
+                || containsIndirectApply case.Body))
+    | AST.Lambda (_, _, body) -> containsIndirectApply body
+    | AST.Apply (func, args) ->
+        containsIndirectApply func || (args |> exprArgsToList |> anyExpr)
+    | AST.Closure (_, captures) -> anyExpr captures
+    | AST.InterpolatedString parts ->
+        parts
+        |> List.exists (function
+            | AST.StringText _ -> false
+            | AST.StringExpr partExpr -> containsIndirectApply partExpr)
+    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _
+    | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
+    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
+    | AST.Var _ | AST.FuncRef _ | AST.RuntimeError _ -> false
 
 /// Lift lambdas in a program, generating new top-level functions
 let rec liftLambdasInProgram
@@ -3224,9 +3365,24 @@ let rec liftLambdasInProgram
         Map.fold (fun acc k v -> Map.add k v acc) baseFuncReturnTypes (Map.fold (fun acc k v -> Map.add k v acc) userFuncReturnTypes moduleFuncReturnTypes)
     let genericFuncDefs = Map.fold (fun acc k v -> Map.add k v acc) userGenericFuncDefs moduleGenericFuncDefs
 
+    let comparableFunctionParams =
+        topLevels
+        |> List.choose (function
+            | AST.FunctionDef funcDef when containsIndirectApply funcDef.Body ->
+                funcDef.Params
+                |> paramsToList
+                |> List.tryPick (fun (_, typ) ->
+                    match typ with
+                    | AST.TFunction (paramTypes, _) -> Some paramTypes
+                    | _ -> None)
+            | _ -> None)
+        |> Set.ofList
+
     let initialState = {
         Counter = 0
         LiftedFunctions = []
+        ComparisonFuncs = Map.empty
+        ComparableFunctionParams = comparableFunctionParams
         TypeEnv = Map.empty
         FuncParams = funcParams
         FuncReturnTypes = funcReturnTypes
@@ -3326,7 +3482,8 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
                 |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
                 |> Set.ofList
             collect (Set.union bound parameterNames) body
-        | AST.Apply (func, args) -> collectChildren (func :: exprArgsToList args)
+        | AST.Apply (func, args)
+        | AST.IndirectApply (func, args) -> collectChildren (func :: exprArgsToList args)
         | AST.Closure (_, captures) -> collectChildren captures
         | _ -> []
     collect Set.empty expr
@@ -3351,7 +3508,7 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
             | Some wrapperName ->
                 AST.Closure (
                     wrapperName,
-                    [AST.StringLiteral name; AST.Closure ($"{wrapperName}__comparison", [])]
+                    [AST.FuncRef $"{wrapperName}__comparison"]
                 )
             | None -> Crash.crash $"replaceInExpr expected wrapper for function '{name}'"
         | AST.Closure (funcName, captures) ->
@@ -3359,8 +3516,7 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
             | Some wrapperName ->
                 AST.Closure (
                     wrapperName,
-                    AST.StringLiteral funcName
-                    :: AST.Closure ($"{wrapperName}__comparison", [])
+                    AST.FuncRef $"{wrapperName}__comparison"
                     :: (captures |> List.map (replace bound))
                 )
             | None -> AST.Closure (funcName, captures |> List.map (replace bound))
@@ -3412,6 +3568,7 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
                 |> Set.ofList
             AST.Lambda (parameters, returnAnnotation, replace (Set.union bound parameterNames) body)
         | AST.Apply (func, args) -> AST.Apply (replace bound func, replaceArgs args)
+        | AST.IndirectApply (func, args) -> AST.IndirectApply (replace bound func, replaceArgs args)
         | _ -> candidate
     replace Set.empty expr
 
@@ -4298,6 +4455,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             match funcType with
             | AST.TFunction (_, returnType) -> Ok returnType
             | _ -> Error "Apply requires a function type")
+    | AST.IndirectApply _ -> Ok AST.TBool
     | AST.FuncRef name ->
         // Function reference has the function's type
         match Map.tryFind name funcReg with
@@ -4605,6 +4763,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
             match caps with
             | [] -> Ok (List.rev acc, vg)
+            | AST.FuncRef funcName :: rest ->
+                convertCaptures rest vg ((ANF.FuncRef funcName, []) :: acc)
             | cap :: rest ->
                 toAtom cap vg env typeReg variantLookup funcReg moduleRegistry
                 |> Result.bind (fun (capAtom, capBindings, vg') ->
@@ -8461,6 +8621,25 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         // Lambda in expression position - closures not yet fully implemented
         Error "Lambda expressions (closures) are not yet fully implemented"
 
+    | AST.IndirectApply (func, args) ->
+        toAtom func varGen env typeReg variantLookup funcReg moduleRegistry
+        |> Result.bind (fun (funcAtom, funcBindings, varGen1) ->
+            let rec convertArgs remaining vg acc =
+                match remaining with
+                | [] -> Ok (List.rev acc, vg)
+                | arg :: rest ->
+                    toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.bind (fun (argAtom, argBindings, vg') ->
+                        convertArgs rest vg' ((argAtom, argBindings) :: acc))
+            convertArgs (exprArgsToList args) varGen1 []
+            |> Result.map (fun (argResults, varGen2) ->
+                let argAtoms = argResults |> List.map fst
+                let bindings = funcBindings @ (argResults |> List.collect snd)
+                let (resultId, varGen3) = ANF.freshVar varGen2
+                let resultExpr =
+                    ANF.Let (resultId, ANF.IndirectCall (funcAtom, argAtoms), ANF.Return (ANF.Var resultId))
+                (wrapBindings bindings resultExpr, varGen3)))
+
     | AST.Apply (func, args) ->
         // Apply a function expression to arguments
         // For now, only support immediate application of lambdas
@@ -8579,6 +8758,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
                 match caps with
                 | [] -> Ok (List.rev acc, vg)
+                | AST.FuncRef funcName :: rest ->
+                    convertCaptures rest vg ((ANF.FuncRef funcName, []) :: acc)
                 | cap :: rest ->
                     toAtom cap vg env typeReg variantLookup funcReg moduleRegistry
                     |> Result.bind (fun (capAtom, capBindings, vg') ->
@@ -8728,6 +8909,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
             match caps with
             | [] -> Ok (List.rev acc, vg)
+            | AST.FuncRef funcName :: rest ->
+                convertCaptures rest vg ((ANF.FuncRef funcName, []) :: acc)
             | cap :: rest ->
                 toAtom cap vg env typeReg variantLookup funcReg moduleRegistry
                 |> Result.bind (fun (capAtom, capBindings, vg') ->
@@ -9541,6 +9724,23 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         // Lambda in atom position - closures not yet fully implemented
         Error "Lambda expressions (closures) are not yet fully implemented"
 
+    | AST.IndirectApply (func, args) ->
+        toAtom func varGen env typeReg variantLookup funcReg moduleRegistry
+        |> Result.bind (fun (funcAtom, funcBindings, varGen1) ->
+            let rec convertArgs remaining vg acc =
+                match remaining with
+                | [] -> Ok (List.rev acc, vg)
+                | arg :: rest ->
+                    toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.bind (fun (argAtom, argBindings, vg') ->
+                        convertArgs rest vg' ((argAtom, argBindings) :: acc))
+            convertArgs (exprArgsToList args) varGen1 []
+            |> Result.map (fun (argResults, varGen2) ->
+                let argAtoms = argResults |> List.map fst
+                let bindings = funcBindings @ (argResults |> List.collect snd)
+                let (resultId, varGen3) = ANF.freshVar varGen2
+                (ANF.Var resultId, bindings @ [(resultId, ANF.IndirectCall (funcAtom, argAtoms))], varGen3)))
+
     | AST.Apply (func, args) ->
         // Apply in atom position - convert via toANF and extract result
         let argsList = exprArgsToList args
@@ -9629,6 +9829,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
                 match caps with
                 | [] -> Ok (List.rev acc, vg)
+                | AST.FuncRef funcName :: rest ->
+                    convertCaptures rest vg ((ANF.FuncRef funcName, []) :: acc)
                 | cap :: rest ->
                     toAtom cap vg env typeReg variantLookup funcReg moduleRegistry
                     |> Result.bind (fun (capAtom, capBindings, vg') ->

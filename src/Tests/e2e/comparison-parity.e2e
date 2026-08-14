@@ -45,9 +45,9 @@ comparisonGenericEquals<List<(Int64, String)>>([(1, "one")], [(1, "one")]) = tru
 comparisonGenericEquals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
 
 // Dict equality compares mappings, independently of insertion order and shape.
-(let left = Stdlib.Dict.fromList<String, Int64>([("a", 1), ("b", 2)]) in let right = Stdlib.Dict.fromList<String, Int64>([("b", 2), ("a", 1)]) in left == right) = true
-(let left = Stdlib.Dict.fromList<String, List<Int64>>([("a", [1, 2]), ("b", [3])]) in let right = Stdlib.Dict.fromList<String, List<Int64>>([("b", [3]), ("a", [1, 2])]) in comparisonGenericEquals<Dict<String, List<Int64>>>(left, right)) = true
-(let left = Stdlib.Dict.fromList<String, Int64>([("a", 1)]) in let right = Stdlib.Dict.fromList<String, Int64>([("a", 2)]) in left != right) = true
+Dict { a = 1; b = 2 } == Dict { b = 2; a = 1 } = true
+comparisonGenericEquals<Dict<List<Int64>>>(Dict { a = [1, 2]; b = [3] }, Dict { b = [3]; a = [1, 2] }) = true
+Dict { a = 1 } != Dict { a = 2 } = true
 
 // Lambda identity is its source expression and deliberately ignores captures.
 def comparisonMakeLambda(captured: Int64): (Int64) -> Int64 =

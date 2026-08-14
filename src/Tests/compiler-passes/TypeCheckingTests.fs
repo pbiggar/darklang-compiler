@@ -101,7 +101,8 @@ let rec countMatches (expr: Expr) : int =
             head @ [tail]
         | Lambda (_, _, body) ->
             [body]
-        | Apply (func, args) ->
+        | Apply (func, args)
+        | IndirectApply (func, args) ->
             func :: NonEmptyList.toList args
         | Closure (_, captures) ->
             captures

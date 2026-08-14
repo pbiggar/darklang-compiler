@@ -487,7 +487,8 @@ let rec private collectExprReferencedPreambleFuncsWithBound
             |> List.fold Set.union Set.empty
             |> Set.union boundVars
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions lambdaBoundVars bodyExpr
-    | Apply (funcExpr, args) ->
+    | Apply (funcExpr, args)
+    | IndirectApply (funcExpr, args) ->
         let funcRefs =
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars funcExpr
         let argRefs =

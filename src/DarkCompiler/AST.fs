@@ -297,6 +297,7 @@ and Expr =
     | ListCons of head:Expr list * tail:Expr                 // [a, b, ...rest]
     | Lambda of parameters:NonEmptyList<LambdaParameter> * returnAnnotation:Type option * body:Expr
     | Apply of func:Expr * args:NonEmptyList<Expr>                    // Apply function expr: f(x) where f is expression
+    | IndirectApply of func:Expr * args:NonEmptyList<Expr>            // Compiler-generated call through a raw function pointer
     | FuncRef of funcName:string                             // Reference to a function (for passing as value)
     | Closure of funcName:string * captures:Expr list        // Closure: function + captured values
     | RuntimeError of message:string                         // Compiler-generated interpreter runtime error

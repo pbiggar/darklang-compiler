@@ -239,7 +239,7 @@ let rec private isAtomicExpr (expr: Expr) : bool =
     | FuncRef _
     | Call _
     | TypeApp _
-    | Apply _
+    | Apply _ | IndirectApply _
     | TupleLiteral _
     | DictLiteral _
     | RecordLiteral _
@@ -415,7 +415,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             | TupleLiteral _ -> $"({argText})"
             | Call _
             | TypeApp _
-            | Apply _ -> $"({argText})"
+            | Apply _ | IndirectApply _ -> $"({argText})"
             | _ -> parenthesizeIfNeeded arg argText
 
     let rec formatInterpreterAppArgs (args: Expr list) : string list =
@@ -512,7 +512,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             | Var funcName when funcName.Contains "." -> true
             | Call _
             | TypeApp _
-            | Apply _
+            | Apply _ | IndirectApply _
             | Constructor (_, _, None) -> true
             | _ -> false
         let isNumericLiteralExpr (expr: Expr) : bool =
@@ -605,7 +605,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         let tupleBaseText = formatExpr syntax tupleExpr
         let tupleText =
             match syntax, tupleExpr with
-            | InterpreterSyntax, (Call _ | TypeApp _ | Apply _) ->
+            | InterpreterSyntax, (Call _ | TypeApp _ | Apply _ | IndirectApply _) ->
                 // In interpreter syntax, call application has no mandatory wrapping.
                 // Parenthesize before postfix access so `.0` binds to the call result.
                 $"({tupleBaseText})"
@@ -642,7 +642,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         let recordBaseText = formatExpr syntax recordExpr
         let recordText =
             match syntax, recordExpr with
-            | InterpreterSyntax, (Call _ | TypeApp _ | Apply _) ->
+            | InterpreterSyntax, (Call _ | TypeApp _ | Apply _ | IndirectApply _) ->
                 // Same ambiguity as tuple access: ensure `.field` applies to call result.
                 $"({recordBaseText})"
             | _ ->
@@ -720,7 +720,8 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
                 |> List.map (fun parameter -> formatLetPattern parameter.Pattern)
                 |> String.concat " "
             $"fun {paramsText} -> {formatExpr syntax body}"
-    | Apply (funcExpr, args) ->
+    | Apply (funcExpr, args)
+    | IndirectApply (funcExpr, args) ->
         let argsList = NonEmptyList.toList args
         match syntax with
         | CompilerSyntax ->
@@ -758,7 +759,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
                 let funcText = parenthesizeIfNeeded funcExpr (formatExpr syntax funcExpr)
                 let argsText = argsList |> List.map (formatExpr syntax) |> String.concat ", "
                 $"{funcText}({argsText})"
-            | Apply _, _ when List.length argsList > 1 ->
+            | (Apply _ | IndirectApply _), _ when List.length argsList > 1 ->
                 // Preserve grouped argument shape for nested apply chains that
                 // originated from parenthesized multi-arg application.
                 let funcText = formatExpr syntax funcExpr

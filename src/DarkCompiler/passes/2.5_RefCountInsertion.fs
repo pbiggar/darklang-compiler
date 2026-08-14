@@ -260,6 +260,9 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | Var tid ->
             match tryGetType ctx tid with
             | Some (AST.TFunction (_, retType)) -> Some retType
+            // Raw code pointers are pointer-sized integers after projection
+            // from the internal function-closure layout.
+            | Some AST.TRawPtr | Some AST.TInt64 -> Some AST.TBool
             | _ -> None
         | _ -> None
     | IndirectTailCall (funcAtom, _) ->
@@ -268,6 +271,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | Var tid ->
             match tryGetType ctx tid with
             | Some (AST.TFunction (_, retType)) -> Some retType
+            | Some AST.TRawPtr | Some AST.TInt64 -> Some AST.TBool
             | _ -> None
         | _ -> None
     | ClosureAlloc (funcName, _) ->

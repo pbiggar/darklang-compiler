@@ -516,6 +516,7 @@ let private inferSimpleCExprDestType
     | ANF.IndirectCall (func, _) ->
         match atomType builder func with
         | AST.TFunction (_, retType) -> Some retType
+        | AST.TRawPtr | AST.TInt64 -> Some AST.TBool
         | other -> Crash.crash $"IndirectCall: Expected TFunction type for func, got {other}"
     | ANF.ClosureCall (closure, _) -> Some (closureCallReturnType builder tempId closure)
     | ANF.TupleGet (ANF.Var tupleId, index) ->
@@ -941,6 +942,7 @@ let rec convertExpr
                     let returnType =
                         match atomType builder func with
                         | AST.TFunction (_, retType) -> retType
+                        | AST.TRawPtr | AST.TInt64 -> AST.TBool
                         | other -> Crash.crash $"IndirectCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
@@ -999,6 +1001,7 @@ let rec convertExpr
                     let returnType =
                         match atomType builder func with
                         | AST.TFunction (_, retType) -> retType
+                        | AST.TRawPtr | AST.TInt64 -> AST.TBool
                         | other -> Crash.crash $"IndirectTailCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
@@ -1578,6 +1581,7 @@ and convertExprToOperand
                     let returnType =
                         match atomType builder func with
                         | AST.TFunction (_, retType) -> retType
+                        | AST.TRawPtr | AST.TInt64 -> AST.TBool
                         | other -> Crash.crash $"IndirectCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
@@ -1636,6 +1640,7 @@ and convertExprToOperand
                     let returnType =
                         match atomType builder func with
                         | AST.TFunction (_, retType) -> retType
+                        | AST.TRawPtr | AST.TInt64 -> AST.TBool
                         | other -> Crash.crash $"IndirectTailCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->

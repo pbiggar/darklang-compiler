@@ -41,14 +41,15 @@ canonical arbitrary-integer implementation, rather than lexical comparison of
 their internal decimal strings. Native signed and unsigned conditions remain
 selected by the concrete integer type.
 
-Function closures carry an explicit semantic identity and comparator in
-addition to their operational code pointer. An ordinary lambda's identity is
-its source expression, so repeated evaluation of that expression compares
-equal and its captures are ignored. Two separate lambda expressions compare
-unequal. A named function's identity contains the resolved specialized
-function name; a partial application additionally compares its already-applied
-arguments recursively. This representation is used by direct, nested, and
-generic equality and is included in closure reference-count traversal.
+For function types used by equality, the AOT compiler adds one raw comparator
+pointer to their closures. That pointer is also the semantic identity: ordinary
+lambdas receive one per source expression, while named partials reuse one per
+resolved specialization and applied-argument shape. The comparator ignores an
+ordinary lambda's captures and recursively compares a named partial's already-
+applied arguments. Function types that are never compared retain the ordinary
+closure layout, so higher-order code pays no comparison-metadata cost. The raw
+pointer is unmanaged; reference-count traversal continues to cover only the
+operational captures.
 
 Generic equality is a typed plan. It remains in the typed AST while type
 variables are unresolved, is substituted during monomorphization, and is
@@ -85,14 +86,15 @@ identity data in `backend/src/LibExecution/RuntimeTypes.fs` around lines
 
 Compiler enforcement and typed comparison plans live in
 `src/DarkCompiler/passes/1.5_TypeChecking.fs` (type errors at 47-121,
-classification at 1119-1239, helper construction at 4745-5025, and helper
-materialization at 5223-5290). Specialization and structural lowering live in
+classification at 1244-1305, helper construction at 4855-5155, and helper
+materialization at 5261-5365). Specialization and structural lowering live in
 `src/DarkCompiler/passes/2_AST_to_ANF.fs` (plan materialization at 26-69 and
-closure identity at 2276-2410), with post-specialization orchestration in
-`src/DarkCompiler/CompilerLibrary.fs` at 1682-1705. Closure layout reaches
+closure identity and AOT layout selection at 2365-3075), with
+post-specialization orchestration in `src/DarkCompiler/CompilerLibrary.fs` at
+832-889. Closure layout reaches
 native code through `src/DarkCompiler/passes/4_MIR_to_LIR.fs`.
-The semantic Dict implementation is in `src/DarkCompiler/stdlib/Dict.dark` at
-95-106,
+Semantic Dict equality is lowered in the type checker through the public
+String-keyed `Dict.toList` mapping view in `src/DarkCompiler/stdlib/Dict.dark`,
 using the layout and key helpers exposed from `src/DarkCompiler/Stdlib.fs`.
 Float conditions and architecture-specific integer conditions remain in the
 shared MIR-to-LIR pass and the ARM64/x64 backends. Focused executable evidence

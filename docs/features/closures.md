@@ -24,12 +24,17 @@ in f(5)  // Returns 15
 
 At runtime, a closure is a heap-allocated tuple containing:
 1. A pointer to the lifted function
-2. The captured values (in order they appear)
-3. A trailing refcount slot
+2. For function types used by equality, an unmanaged identity/comparator pointer
+3. The captured values (in order they appear)
+4. A trailing refcount slot
 
 ```
-Closure memory layout: [func_ptr, cap1, cap2, ..., refcount]
+Ordinary layout:   [func_ptr, cap1, cap2, ..., refcount]
+Comparable layout: [func_ptr, comparator_ptr, cap1, cap2, ..., refcount]
 ```
+
+The comparison slot is selected statically from typed equality plans. It is
+omitted when the function type is never compared.
 
 ## Lambda Lifting Algorithm
 
