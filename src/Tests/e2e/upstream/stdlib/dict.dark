@@ -6,7 +6,7 @@ module ConstructionErrors =
   Dict { a = 1; a = 2 } = error="Cannot add two dictionary entries with the same key `a`"
   Dict { a = 1; b = "two" } = error="dict values must have one type: key `b` has String, expected Int64"
 module FilterMap =
-  Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Stdlib.Option.Option<b$1>, got (__interp_lambda_0_1_value) -> Int64"
+  Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Stdlib.Option.Option<b$1>, got (binding_lambda_0_value) -> Int64"
 
   (Stdlib.Dict.filterMap
     (Dict { a = "x"; b = "y"; c = "z" })
@@ -34,7 +34,7 @@ module Filter =
   Stdlib.Dict.filter (Dict { key1 = 1L; key2 = 3L }) (fun k v -> v < 2L) =
     (Dict { key1 = 1L })
 
-  Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Bool, got (__interp_lambda_0_1_v) -> Int64"
+  Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Bool, got (binding_lambda_0_v) -> Int64"
 
   Stdlib.Dict.filter (Dict { a = 1L; b = 2L; c = 3L }) (fun k v -> 2L) = error="Type mismatch in integer literal: expected Bool, got Int64"
 module FromListOverwritingDuplicates =

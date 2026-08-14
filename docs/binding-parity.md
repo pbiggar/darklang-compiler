@@ -58,8 +58,9 @@ extensions and have been removed.
 
 ## Verification
 
-The repository-wide suite passed `5790/5790` tests with `./run-tests --ai`.
+The repository-wide suite passed `5857/5857` tests with `./run-tests --ai`
+after rebasing the implementation onto compiler integration HEAD `ef1887ca`.
 The canonical routine profile was recorded after the intentional lowering and
 syntax migration, then passed `./benchmarks/run_benchmarks.sh --verify routine`
-for all 19 full-size benchmarks. The recorded performance ratio is **2.76x**
+for all 19 full-size benchmarks. The recorded performance ratio is **2.75x**
 versus the audited Rust references (`benchmarks/RESULTS.md`).
