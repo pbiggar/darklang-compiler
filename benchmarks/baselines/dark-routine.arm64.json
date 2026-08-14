@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "b6e9cc373aa5cca7e4f415318f69b0734d654e76514956970854c83d0a599617",
-  "generated_at": "2026-08-14T23:25:36+00:00",
+  "generated_at": "2026-08-14T23:40:32+00:00",
   "compiler": {
-    "commit": "f57a9ef05528134850b50f79edd2f00c798d1605",
-    "subject": "Treat sequential inline sites independently"
+    "commit": "2c32e1c90e1b3e036e385c3ae70f0bcb7710decb",
+    "subject": "Avoid saving dead call arguments"
   },
   "benchmarks": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 5306290103
+      "instructions": 5304268103
     },
     {
       "name": "factorial",
@@ -33,7 +33,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 551566921
+      "instructions": 549966883
     },
     {
       "name": "fib",
@@ -45,7 +45,7 @@
     },
     {
       "name": "mandelbrot",
-      "instructions": 17701940
+      "instructions": 17621940
     },
     {
       "name": "matmul",
@@ -61,7 +61,7 @@
     },
     {
       "name": "nqueen",
-      "instructions": 295286949
+      "instructions": 276882241
     },
     {
       "name": "pisum",
@@ -73,11 +73,11 @@
     },
     {
       "name": "quicksort",
-      "instructions": 227600529
+      "instructions": 226373955
     },
     {
       "name": "spectral_norm",
-      "instructions": 89749057
+      "instructions": 89610017
     },
     {
       "name": "sum_to_n",

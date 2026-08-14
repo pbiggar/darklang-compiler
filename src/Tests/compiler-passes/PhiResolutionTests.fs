@@ -9,6 +9,7 @@
 // - Phi where some predecessors share the same source value
 // - Floating-point loop phi coalescing through a direct feeder move
 // - Floating-point phi coalescing that preserves an existing return-register allocation
+// - Caller-save population around allocated call and argument-move sequences
 
 module PhiResolutionTests
 
@@ -564,6 +565,83 @@ let testFloatLoopPhiPreservesReturnRegister () : TestResult =
         else
             Error "FPhi coalescing should not add a move into the ABI float return register")
 
+/// Test: Argument-only values die before a call and must not be preserved by
+/// the caller-save pair. A separate value used by the continuation remains
+/// live across the call and must still be saved.
+let testCallerSaveExcludesDeadArguments () : TestResult =
+    let label = makeLabel "caller_save_dead_args"
+    let block =
+        makeRetBlock
+            label
+            [Mov (vr 0, Imm 10L)
+             Mov (vr 1, Imm 20L)
+             Mov (vr 2, Imm 30L)
+             SaveRegs ([], [])
+             ArgMoves [(LIR.X0, Imm 0L); (LIR.X1, vreg 0); (LIR.X2, vreg 1)]
+             Call (vr 3, "callee", [vreg 0; vreg 1])
+             RestoreRegs ([], [])
+             Mov (vr 3, Reg (phys LIR.X0))
+             Add (vr 4, vr 2, vreg 3)]
+    let cfg = makeCFG label [block]
+    let (domain, blockIndex, liveness) = RegisterAllocation.computeLivenessBits cfg
+    let (_, _, floatLiveness) = RegisterAllocation.computeFloatLivenessBits cfg
+    let allocation =
+        buildAllocationResult
+            domain
+            [(0, RegisterAllocation.PhysReg LIR.X1)
+             (1, RegisterAllocation.PhysReg LIR.X2)
+             (2, RegisterAllocation.PhysReg LIR.X3)
+             (3, RegisterAllocation.PhysReg LIR.X19)
+             (4, RegisterAllocation.PhysReg LIR.X20)]
+    let allocated =
+        RegisterAllocation.applyToBlockWithLiveness
+            Platform.ARM64
+            allocation
+            emptyFloatAllocation
+            liveness.[blockIndex.EntryIndex].LiveOut
+            floatLiveness.[blockIndex.EntryIndex].LiveOut
+            block
+    match allocated.Instrs |> List.tryPick (function | SaveRegs (intRegs, floatRegs) -> Some (intRegs, floatRegs) | _ -> None) with
+    | Some ([LIR.X3], []) -> Ok ()
+    | Some regs -> Error $"Expected only continuation register X3 to be saved, got {regs}"
+    | None -> Error "Expected populated SaveRegs instruction"
+
+/// Test: Values needed to resolve an argument-register cycle must retain their
+/// SaveRegs backing even when they are dead in the post-call continuation.
+let testCallerSavePreservesArgumentCycle () : TestResult =
+    let label = makeLabel "caller_save_arg_cycle"
+    let block =
+        makeRetBlock
+            label
+            [Mov (vr 0, Imm 10L)
+             Mov (vr 1, Imm 20L)
+             SaveRegs ([], [])
+             ArgMoves [(LIR.X1, vreg 1); (LIR.X2, vreg 0)]
+             Call (vr 2, "callee", [vreg 1; vreg 0])
+             RestoreRegs ([], [])
+             Mov (vr 2, Reg (phys LIR.X0))]
+    let cfg = makeCFG label [block]
+    let (domain, blockIndex, liveness) = RegisterAllocation.computeLivenessBits cfg
+    let (_, _, floatLiveness) = RegisterAllocation.computeFloatLivenessBits cfg
+    let allocation =
+        buildAllocationResult
+            domain
+            [(0, RegisterAllocation.PhysReg LIR.X1)
+             (1, RegisterAllocation.PhysReg LIR.X2)
+             (2, RegisterAllocation.PhysReg LIR.X19)]
+    let allocated =
+        RegisterAllocation.applyToBlockWithLiveness
+            Platform.ARM64
+            allocation
+            emptyFloatAllocation
+            liveness.[blockIndex.EntryIndex].LiveOut
+            floatLiveness.[blockIndex.EntryIndex].LiveOut
+            block
+    match allocated.Instrs |> List.tryPick (function | SaveRegs (intRegs, floatRegs) -> Some (intRegs, floatRegs) | _ -> None) with
+    | Some ([LIR.X1; LIR.X2], []) -> Ok ()
+    | Some regs -> Error $"Expected X1/X2 argument cycle backing, got {regs}"
+    | None -> Error "Expected populated SaveRegs instruction"
+
 let tests = [
     ("simple phi resolution", testSimplePhiResolution)
     ("multiple phis parallel", testMultiplePhisParallel)
@@ -574,6 +652,8 @@ let tests = [
     ("loop phi coalesced", testLoopPhiCoalesced)
     ("float loop phi coalesced", testFloatLoopPhiCoalesced)
     ("float loop phi preserves return register", testFloatLoopPhiPreservesReturnRegister)
+    ("caller save excludes dead arguments", testCallerSaveExcludesDeadArguments)
+    ("caller save preserves argument cycle", testCallerSavePreservesArgumentCycle)
 ]
 
 /// Run all phi resolution tests

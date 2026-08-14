@@ -64,13 +64,13 @@
     "fannkuch": {
       "status": "reduced",
       "reason": "Rust correctly enumerates n=9; Dark correctly enumerates n=8 because the complete n=9 persistent traversal exhausts Dark's fixed heap.",
-      "dark_sha256": "bd5340ca8df95996b987acb73de683489b360fb6a8b357b3b0b3089c6bbe0519",
+      "dark_sha256": "0711d5f10953af3bd0622eceae9bdefa599681e708e5215f81a2985f6d7074d3",
       "rust_sha256": "e2586d8b82f65066911e3d751b9a0796bed453f4689e2ca52996e4b5c20e4c4e",
       "expected_sha256": "f4ccd05b3271c386ee55d9876c7450012a3b361e5065c09dc22075e38b3cc35c",
       "dark_expected_sha256": "f14b4987904bcb5814e4459a057ed4d20f58a633152288a761214dcd28780b56",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "92875d887b8a5ef7ba84adc18182b0758cc67d123cc595286e328d9c437aebcf",
+        "dark_sha256": "2cec346858805c641fbb0683fb103b1fd3683f0a3771cf9473b665b0cc1c4efe",
         "rust_sha256": "77782912b47d9bed07e1010bfe910511b877cd59c61121ffc3981f0d93d7c147",
         "expected_sha256": "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"
       }

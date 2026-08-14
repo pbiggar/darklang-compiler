@@ -1040,8 +1040,9 @@ let computeFloatLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiv
     let (domain, liveness) = computeFloatLivenessBitsRaw blockIndex blocks []
     (domain, blockIndex, liveness)
 
-/// Compute integer and floating-point liveness only where an empty SaveRegs
-/// placeholder consumes it. The snapshots are returned in instruction order.
+/// Compute integer and floating-point liveness across each call bracketed by
+/// empty SaveRegs/RestoreRegs placeholders. Taking the snapshot at RestoreRegs
+/// excludes argument-only values while retaining values used by the continuation.
 let private computeSaveRegsLiveness
     (intDomain: VRegDomain)
     (floatDomain: VRegDomain)
@@ -1057,16 +1058,27 @@ let private computeSaveRegsLiveness
 
     let rec walkBackwards
         (instrs: LIR.Instr list)
+        (pendingRestores: (BitSet * BitSet) list)
         (snapshots: (BitSet * BitSet) list)
         : (BitSet * BitSet) list =
         match instrs with
-        | [] -> snapshots
+        | [] ->
+            if List.isEmpty pendingRestores then
+                snapshots
+            else
+                Crash.crash "Unmatched RestoreRegs while computing caller-save liveness"
         | instr :: remaining ->
-            let snapshots =
+            let (pendingRestores, snapshots) =
                 match instr with
+                | LIR.RestoreRegs ([], []) ->
+                    ((bitsetClone intLive, bitsetClone floatLive) :: pendingRestores, snapshots)
                 | LIR.SaveRegs ([], []) ->
-                    (bitsetClone intLive, bitsetClone floatLive) :: snapshots
-                | _ -> snapshots
+                    match pendingRestores with
+                    | snapshot :: pendingRestores ->
+                        (pendingRestores, snapshot :: snapshots)
+                    | [] ->
+                        Crash.crash "Unmatched SaveRegs while computing caller-save liveness"
+                | _ -> (pendingRestores, snapshots)
 
             match getDefinedVReg instr with
             | Some id -> bitsetRemoveInPlace intDomain id intLive
@@ -1080,14 +1092,72 @@ let private computeSaveRegsLiveness
             getUsedFVRegs instr
             |> List.iter (fun id -> bitsetAddInPlace floatDomain id floatLive)
 
-            walkBackwards remaining snapshots
+            walkBackwards remaining pendingRestores snapshots
 
-    walkBackwards (List.rev block.Instrs) []
+    walkBackwards (List.rev block.Instrs) [] []
 
 let private isEmptySaveRegs (instr: LIR.Instr) : bool =
     match instr with
     | LIR.SaveRegs ([], []) -> true
     | _ -> false
+
+/// Caller-saved argument sources that the current ARM64 ArgMoves lowering reads
+/// from the SaveRegs area to preserve parallel-move semantics.
+let private computeArgMoveBackingRegs
+    (mapping: AllocationResult)
+    (block: LIR.BasicBlock)
+    : LIR.PhysReg list list =
+    let sourcePhysReg (operand: LIR.Operand) : LIR.PhysReg option =
+        match operand with
+        | LIR.Reg (LIR.Physical reg) -> Some reg
+        | LIR.Reg (LIR.Virtual id) ->
+            match tryIndexOf mapping.Domain id with
+            | Some idx ->
+                match mapping.Allocations.[idx] with
+                | Some (PhysReg reg) -> Some reg
+                | Some (StackSlot _)
+                | None -> None
+            | None -> None
+        | _ -> None
+
+    let isCallerSavedArgReg (reg: LIR.PhysReg) : bool =
+        match reg with
+        | LIR.X1 | LIR.X2 | LIR.X3 | LIR.X4 | LIR.X5 | LIR.X6 | LIR.X7 -> true
+        | _ -> false
+
+    let backingForMoves (moves: (LIR.PhysReg * LIR.Operand) list) : LIR.PhysReg list =
+        let destinations = moves |> List.map fst |> Set.ofList
+        moves
+        |> List.choose (fun (dest, source) ->
+            match sourcePhysReg source with
+            | Some sourceReg
+                when sourceReg <> dest
+                     && isCallerSavedArgReg sourceReg
+                     && Set.contains sourceReg destinations ->
+                Some sourceReg
+            | _ -> None)
+
+    let mergeBacking (existing: LIR.PhysReg list) (additional: LIR.PhysReg list) =
+        existing @ additional |> List.distinct |> List.sort
+
+    let (active, completedRev) =
+        block.Instrs
+        |> List.fold (fun (active, completedRev) instr ->
+            match instr, active with
+            | LIR.SaveRegs ([], []), None -> (Some [], completedRev)
+            | LIR.SaveRegs ([], []), Some _ ->
+                Crash.crash "Nested SaveRegs while computing argument-move backing"
+            | LIR.ArgMoves moves, Some backing ->
+                (Some (mergeBacking backing (backingForMoves moves)), completedRev)
+            | LIR.RestoreRegs ([], []), Some backing -> (None, backing :: completedRev)
+            | LIR.RestoreRegs ([], []), None ->
+                Crash.crash "Unmatched RestoreRegs while computing argument-move backing"
+            | _ -> (active, completedRev)
+        ) (None, [])
+
+    match active with
+    | Some _ -> Crash.crash "Unmatched SaveRegs while computing argument-move backing"
+    | None -> List.rev completedRev
 
 // ============================================================================
 // Register Definitions
@@ -3356,37 +3426,53 @@ let applyToBlockWithLiveness
         else
             []
 
-    // First pass: find SaveRegs/RestoreRegs pairs and compute the registers to save
-    // For each SaveRegs, use the liveness immediately after the placeholder.
-    // This ensures SaveRegs and RestoreRegs have matching register lists
-    let allocatedInstrGroups, (_, remainingLiveness) =
+    let argMoveBackingRegs =
+        if arch = Platform.ARM64 && List.exists isEmptySaveRegs block.Instrs then
+            computeArgMoveBackingRegs mapping block
+        else
+            saveRegsLiveness |> List.map (fun _ -> [])
+
+    // First pass: find SaveRegs/RestoreRegs pairs and compute the registers to save.
+    // Each SaveRegs uses continuation liveness captured at its matching RestoreRegs,
+    // plus any registers needed as backing for ARM64 argument parallel moves.
+    let allocatedInstrGroups, (_, remainingLiveness, remainingArgMoveBacking) =
         block.Instrs
-        |> List.mapFold (fun (savedRegsStack, remainingLiveness) instr ->
+        |> List.mapFold (fun (savedRegsStack, remainingLiveness, remainingArgMoveBacking) instr ->
             match instr with
             | LIR.SaveRegs ([], []) ->
-                match remainingLiveness with
-                | (liveAfter, floatLiveAfter) :: remainingLiveness ->
+                match remainingLiveness, remainingArgMoveBacking with
+                | (liveAfter, floatLiveAfter) :: remainingLiveness,
+                  argMoveBacking :: remainingArgMoveBacking ->
                     let liveCallerSaved = getLiveCallerSavedRegs mapping liveAfter
+                    let intRegs =
+                        liveCallerSaved @ argMoveBacking
+                        |> List.distinct
+                        |> List.sort
                     let liveCallerSavedFloat =
                         getLiveCallerSavedFloatRegs floatLiveAfter floatAllocation
-                    let regs = (liveCallerSaved, liveCallerSavedFloat)
+                    let regs = (intRegs, liveCallerSavedFloat)
                     let allocated = applyToInstr arch mapping (LIR.SaveRegs regs)
-                    (allocated, (regs :: savedRegsStack, remainingLiveness))
-                | [] ->
+                    (allocated, (regs :: savedRegsStack, remainingLiveness, remainingArgMoveBacking))
+                | [], _ ->
                     Crash.crash "Missing liveness snapshot for SaveRegs"
+                | _, [] ->
+                    Crash.crash "Missing argument-move backing for SaveRegs"
             | LIR.RestoreRegs ([], []) ->
                 match savedRegsStack with
                 | regs :: savedRegsStack ->
                     let allocated = applyToInstr arch mapping (LIR.RestoreRegs regs)
-                    (allocated, (savedRegsStack, remainingLiveness))
+                    (allocated, (savedRegsStack, remainingLiveness, remainingArgMoveBacking))
                 | [] ->
                     Crash.crash "Unmatched RestoreRegs: SaveRegs stack is empty"
             | _ ->
-                (applyToInstr arch mapping instr, (savedRegsStack, remainingLiveness))
-        ) ([], saveRegsLiveness)
+                (applyToInstr arch mapping instr, (savedRegsStack, remainingLiveness, remainingArgMoveBacking))
+        ) ([], saveRegsLiveness, argMoveBackingRegs)
 
     if not (List.isEmpty remainingLiveness) then
         Crash.crash "Unused liveness snapshot for SaveRegs"
+
+    if not (List.isEmpty remainingArgMoveBacking) then
+        Crash.crash "Unused argument-move backing for SaveRegs"
 
     let allocatedInstrs = List.concat allocatedInstrGroups
 
