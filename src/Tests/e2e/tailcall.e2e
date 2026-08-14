@@ -1,5 +1,29 @@
 // Tail call optimization tests
 
+// Counted scalar loops remain correct when factor-two unrolling handles no work.
+def unrollZero(i: Int64, limit: Int64, acc: Int64) : Int64 =
+    if i >= limit then acc else unrollZero(i + 1, limit, acc + i)
+
+unrollZero(0, 0, 0) = 0
+
+// Counted scalar loops execute both iterations in each unrolled pair.
+def unrollEven(i: Int64, limit: Int64, acc: Int64) : Int64 =
+    if i >= limit then acc else unrollEven(i + 1, limit, acc + i)
+
+unrollEven(0, 4, 0) = 6
+
+// Counted scalar loops execute the final unpaired iteration exactly once.
+def unrollOdd(i: Int64, limit: Int64, acc: Int64) : Int64 =
+    if i >= limit then acc else unrollOdd(i + 1, limit, acc + i)
+
+unrollOdd(0, 5, 0) = 10
+
+// The first step can reach Int64.MaxValue without wrapping the induction value.
+def unrollBoundary(i: Int64, limit: Int64, acc: Int64) : Int64 =
+    if i >= limit then acc else unrollBoundary(i + 1, limit, acc + i)
+
+unrollBoundary(9223372036854775806, 9223372036854775807, 0) = 9223372036854775806
+
 // Simple tail recursion (accumulator pattern)
 // This pattern should be detected and optimized
 let sumTo(n: Int64, acc: Int64) : Int64 =

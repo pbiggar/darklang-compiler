@@ -109,9 +109,9 @@ recursive function call.
 
 ---
 
-### 2. Missing Loop Unrolling for hashLoop
+### 2. Partial Loop Unrolling for hashLoop
 
-**Impact: ~20-30% reduction in hashLoop execution time**
+**Status: factor-two counted-loop unrolling implemented**
 
 #### Root Cause
 
@@ -130,9 +130,10 @@ hashLoop_body:
   CondBranch(GE, Label "hashLoop_L2", Label "hashLoop_L1")
 ```
 
-Each iteration still pays loop control overhead: three body instructions plus a
-compare and branch in `hashLoop_body`. The loop is much cleaner than older
-evidence, but it is still not unrolled.
+Factor-two MIR unrolling now executes two consecutive scalar iterations per
+backedge and uses a safe remainder return for an odd final trip. This reduces
+the routine benchmark from 724,164,728 to 684,843,728 instructions (5.4%). The
+loop is still not fully unrolled across its fixed eight iterations.
 
 #### Evidence from Rust disassembly (lines 5327-5349):
 
@@ -151,9 +152,8 @@ Total: 16 instructions (2 per iteration, no loop overhead)
 
 #### Implementation Approach
 
-1. Add loop unrolling pass that recognizes fixed-count loops
-2. Unroll when iteration count is small and known at compile time
-3. Alternative: Inline `hashLoop` entirely into callers
+1. Consider full unrolling when the exact small trip count is known
+2. Inline `hashLoop` entirely into callers before evaluating further growth
 
 #### Files to Modify
 - `src/DarkCompiler/ANFOptimization.fs` - Add unrolling heuristics
@@ -222,7 +222,7 @@ The hash code is completely inlined - no `call` instructions to a separate hash 
 
 1. **Eliminate duplicate buildTree call** - largest remaining benchmark-specific opportunity.
 2. **Inline hashLoop into buildTree** - removes hot-path call overhead.
-3. **Loop unrolling for hashLoop** - most useful when combined with inlining.
+3. **Full unrolling for fixed small trip counts** - factor-two unrolling is complete; reassess only after inlining.
 
 ## Estimated Combined Impact
 

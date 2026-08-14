@@ -569,6 +569,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Carrying `2 * i + 1` as a derived induction value removes its repeated shift and addition from a hot `i + 1` loop.
 - Notes: Implemented in MIR for a deliberately narrow two-block, single-backedge `Int64` loop. The preheader computes the initial affine value, a header phi carries it, and the latch advances it by two after its last use. The `derived_induction_affine_shift` MIR snapshot covers the exact before/after shape. The ARM64 quick Leibniz workload improves from 1,000,143 to 900,145 instructions (10.0%); the other quick workloads are unchanged relative to the same current-main build.
 
+### Factor-two canonical counted-loop unrolling
+
+- Optimization name: Factor-two canonical counted-loop unrolling
+- Taxonomy category: Loop unrolling
+- Priority/rationale: Two consecutive scalar iterations share one backedge, reducing loop-control overhead without the code growth of full unrolling.
+- Notes: Implemented in MIR only for a two-block natural loop guarded by an invariant `Int64` upper bound, with a proven `i + 1` backedge, a scalar return path, and at most 12 scalar latch instructions. Calls, allocation, memory access, and ownership operations are excluded. A cloned remainder return handles the final odd iteration; cloned floating-point instructions retain their original sequential order. MIR and LIR snapshots cover the generated shape, while end-to-end tests cover zero, even, odd, and `Int64.MaxValue`-adjacent trip counts. Routine Cachegrind counts improved `leibniz` from 900,001,513 to 850,001,513 instructions (5.6%) and `merkletrees` from 724,164,728 to 684,843,728 (5.4%); all other routine counts were unchanged and the aggregate Dark/Rust ratio improved from 2.75x to 2.74x.
+
 ## Control-flow simplification
 
 ### Same-target branch elimination

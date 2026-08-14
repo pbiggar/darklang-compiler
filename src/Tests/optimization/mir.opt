@@ -2,6 +2,43 @@
 // Tests MIR optimizations such as loop-invariant code motion in SSA form.
 
 ---NAME---
+counted_loop_unroll_by_two_mir
+---INPUT---
+def loop(i: Int64, limit: Int64, sum: Float, sign: Float) : Float =
+    if i >= limit then sum
+    else loop(i + 1, limit, sum + sign, Stdlib.Float.negate(sign))
+---EXPECTED---
+Function loop:
+  loop_entry:
+    jump loop_body
+  loop_L1:
+    v10026 <- v10024 + 1 : TInt64
+    v10027 <- v10022 + v10021 : TFloat64
+    v10028 <- FloatNeg(v10021)
+    v10037 <- v10026 >= v10023 : TInt64
+    branch v10037 ? loop_L2_unroll_remainder : loop_L1_unroll_second
+  loop_L1_unroll_second:
+    v10038 <- v10026 + 1 : TInt64
+    v10039 <- v10027 + v10028 : TFloat64
+    v10040 <- FloatNeg(v10028)
+    v10041 <- v10038 : TInt64
+    v10042 <- v10023 : TInt64
+    v10043 <- v10039 : TFloat64
+    v10044 <- v10040 : TFloat64
+    jump loop_body
+  loop_L2:
+    ret v10022
+  loop_L2_unroll_remainder:
+    ret v10027
+  loop_body:
+    v10021 <- Phi([(v3, loop_entry), (v10044, loop_L1_unroll_second)]) : TFloat64
+    v10022 <- Phi([(v2, loop_entry), (v10043, loop_L1_unroll_second)]) : TFloat64
+    v10023 <- Phi([(v1, loop_entry), (v10042, loop_L1_unroll_second)]) : TInt64
+    v10024 <- Phi([(v0, loop_entry), (v10041, loop_L1_unroll_second)]) : TInt64
+    v10025 <- v10024 >= v10023 : TInt64
+    branch v10025 ? loop_L2 : loop_L1
+
+---NAME---
 licm_hoists_recursive_effect_free_scalar_call
 ---INPUT---
 let factorial(n: Int64) : Int64 =
@@ -364,17 +401,25 @@ Function loop:
     v10027 <- v10023 + 1 : TInt64
     v10028 <- v10021 + v10026 : TInt64
     v10037 <- v10026 + 2 : TInt64
-    v10038 <- v10037 : TInt64
-    v10032 <- v10027 : TInt64
-    v10033 <- v10022 : TInt64
-    v10034 <- v10028 : TInt64
+    v10039 <- v10027 >= v10022 : TInt64
+    branch v10039 ? loop_L2_unroll_remainder : loop_L1_unroll_second
+  loop_L1_unroll_second:
+    v10040 <- v10027 + 1 : TInt64
+    v10041 <- v10028 + v10037 : TInt64
+    v10042 <- v10037 + 2 : TInt64
+    v10043 <- v10042 : TInt64
+    v10044 <- v10040 : TInt64
+    v10045 <- v10022 : TInt64
+    v10046 <- v10041 : TInt64
     jump loop_body
   loop_L2:
     ret v10021
+  loop_L2_unroll_remainder:
+    ret v10028
   loop_body:
-    v10021 <- Phi([(v2, loop_entry), (v10034, loop_L1)]) : TInt64
-    v10022 <- Phi([(v1, loop_entry), (v10033, loop_L1)]) : TInt64
-    v10023 <- Phi([(v0, loop_entry), (v10032, loop_L1)]) : TInt64
-    v10026 <- Phi([(v10036, loop_entry), (v10038, loop_L1)]) : TInt64
+    v10021 <- Phi([(v2, loop_entry), (v10046, loop_L1_unroll_second)]) : TInt64
+    v10022 <- Phi([(v1, loop_entry), (v10045, loop_L1_unroll_second)]) : TInt64
+    v10023 <- Phi([(v0, loop_entry), (v10044, loop_L1_unroll_second)]) : TInt64
+    v10026 <- Phi([(v10036, loop_entry), (v10043, loop_L1_unroll_second)]) : TInt64
     v10024 <- v10023 >= v10022 : TInt64
     branch v10024 ? loop_L2 : loop_L1

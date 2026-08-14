@@ -2,6 +2,47 @@
 // Tests LIR peephole optimizations and loop-invariant code motion.
 
 ---NAME---
+counted_loop_unroll_by_two_generated_code
+---INPUT---
+def loop(i: Int64, limit: Int64, sum: Float, sign: Float) : Float =
+    if i >= limit then sum
+    else loop(i + 1, limit, sum + sign, Stdlib.Float.negate(sign))
+---EXPECTED---
+loop:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "loop_L1":
+    v10026 <- Add(v10024, Imm 1)
+    fv10027 <- FAdd(fv10022, fv10021)
+    fv10028 <- FNeg(fv10021)
+    Cmp(v10026, Reg v10023)
+    CondBranch(GE, Label "loop_L2_unroll_remainder", Label "loop_L1_unroll_second")
+  Label "loop_L1_unroll_second":
+    v10038 <- Add(v10026, Imm 1)
+    fv10039 <- FAdd(fv10027, fv10028)
+    fv10040 <- FNeg(fv10028)
+    v10041 <- Mov(Reg v10038)
+    v10042 <- Mov(Reg v10023)
+    fv10043 <- FMov(fv10039)
+    fv10044 <- FMov(fv10040)
+    Jump(Label "loop_body")
+  Label "loop_L2":
+    D0 <- FMov(fv10022)
+    Ret
+  Label "loop_L2_unroll_remainder":
+    D0 <- FMov(fv10027)
+    Ret
+  Label "loop_body":
+    fv10021 <- FPhi([(fv3, loop_entry), (fv10044, loop_L1_unroll_second)])
+    fv10022 <- FPhi([(fv2, loop_entry), (fv10043, loop_L1_unroll_second)])
+    v10023 <- Phi([(Reg v1, loop_entry), (Reg v10042, loop_L1_unroll_second)])
+    v10024 <- Phi([(Reg v0, loop_entry), (Reg v10041, loop_L1_unroll_second)])
+    Cmp(v10024, Reg v10023)
+    CondBranch(GE, Label "loop_L2", Label "loop_L1")
+  Label "loop_entry":
+    Jump(Label "loop_body")
+
+---NAME---
 retarget_dead_float_arithmetic_move
 ---INPUT---
 let add(left: Float, right: Float) : Float =
