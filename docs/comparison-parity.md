@@ -8,8 +8,13 @@ same-source native probes started from compiler HEAD
 was used only to locate candidates; every finding below was checked again at
 these revisions. Post-rebase integration, the complete executable matrix, and
 the native benchmark verification used compiler commit
-`d5c1460a12edc1cbe9ee7af812a2362ba3209eda` against the same pinned interpreter
+`069a096cc49f5388f0bdcab756cbb8eb0387538e` against the same pinned interpreter
 revision.
+
+At that compiler revision the focused comparison matrix passed 71/71 cases,
+the complete native suite passed 5928/5928 tests, and the routine benchmark
+profile matched all 19 audited instruction-count baselines. The profile's
+recorded aggregate performance ratio is 2.75x.
 
 The executable matrix is `src/Tests/e2e/comparison-parity.e2e`. Its probes use
 only the interpreter spellings `==`, `!=`, `<`, `>`, `<=`, and `>=`.
@@ -89,15 +94,16 @@ identity data in `backend/src/LibExecution/RuntimeTypes.fs` around lines
 
 Compiler enforcement and typed comparison plans live in
 `src/DarkCompiler/passes/1.5_TypeChecking.fs` (type errors at 47-121,
-classification at 1244-1305, helper construction at 4855-5155, and helper
-materialization at 5261-5365). Specialization and structural lowering live in
+classification at 1172-1345, helper construction at 5231-5552, and helper
+materialization at 5553-5777). Specialization and structural lowering live in
 `src/DarkCompiler/passes/2_AST_to_ANF.fs` (plan materialization at 26-69 and
-closure identity and AOT layout selection at 2365-3075), with
+closure identity and AOT layout selection at 2516-3204), with
 post-specialization orchestration in `src/DarkCompiler/CompilerLibrary.fs` at
-832-889. Closure layout reaches
+832-920. Closure layout reaches
 native code through `src/DarkCompiler/passes/4_MIR_to_LIR.fs`.
 Semantic Dict equality is lowered in the type checker through the public
-String-keyed `Dict.toList` mapping view in `src/DarkCompiler/stdlib/Dict.dark`,
+String-keyed `Dict.toList` mapping view at
+`src/DarkCompiler/stdlib/Dict.dark:111-113`,
 using the layout and key helpers exposed from `src/DarkCompiler/Stdlib.fs`.
 Float conditions and architecture-specific integer conditions remain in the
 shared MIR-to-LIR pass and the ARM64/x64 backends. Focused executable evidence
