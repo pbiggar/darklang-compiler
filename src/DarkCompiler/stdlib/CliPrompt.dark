@@ -1,0 +1,35 @@
+// CliPrompt.dark - line-oriented terminal prompts with pinned retry behavior.
+
+module Stdlib.Cli.UI.Prompt
+
+let ask(question: String) : String =
+    let _ = Builtin.print(question ++ " ") in
+    Builtin.stdinReadLine(())
+
+let confirm(question: String) : Bool =
+    let _ = Builtin.print(question ++ " [y/N] ") in
+    let answer = Stdlib.String.toLowercase(Builtin.stdinReadLine(())) in
+    answer == "y" || answer == "yes"
+
+let select(question: String, choices: List<String>) : String =
+    let _ = Builtin.printLine(question) in
+    let _ =
+        Stdlib.List.indexedMap<String, Unit>(choices, fun i choice ->
+            Builtin.printLine(
+                "  " ++
+                Stdlib.Cli.UI.Color.bold(Stdlib.Int64.toString(i + 1)) ++
+                ". " ++ choice)) in
+    let _ = Builtin.print("Enter number: ") in
+    let input = Builtin.stdinReadLine(()) in
+    let parsed = Stdlib.Int.parse(input) in
+    if Stdlib.Result.isError<Int, Stdlib.Int.ParseError>(parsed) then
+        let _ = Builtin.printLine(Stdlib.Cli.UI.Color.red("Please enter a number")) in
+        Stdlib.Cli.UI.Prompt.select(question, choices)
+    else
+        let n = Stdlib.Result.withDefault<Int, Stdlib.Int.ParseError>(parsed, Stdlib.Int.fromInt64(0)) in
+        let index = Stdlib.Int.__toInt64Unchecked(Stdlib.Int.subtract(n, Stdlib.Int.fromInt64(1))) in
+        match Stdlib.List.getAt<String>(choices, index) with
+        | Some(choice) -> choice
+        | None ->
+            let _ = Builtin.printLine(Stdlib.Cli.UI.Color.red("Invalid selection")) in
+            Stdlib.Cli.UI.Prompt.select(question, choices)

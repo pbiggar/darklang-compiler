@@ -110,6 +110,9 @@ let private prettyPrintANFCExpr = function
         $"{prettyPrintANFAtom left} ++ {prettyPrintANFAtom right}"
     | ANF.Print (atom, valueType) ->
         $"print({prettyPrintANFAtom atom}, type={valueType})"
+    | ANF.StdoutWrite (atom, appendNewline) ->
+        $"stdout_write({prettyPrintANFAtom atom}, newline={appendNewline})"
+    | ANF.StdinReadLine -> "stdin_read_line()"
     | ANF.RuntimeError message ->
         $"runtime_error(\"{escapeStringContent message}\")"
     | ANF.RuntimeErrorString message ->
@@ -321,6 +324,10 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"RefCountDec({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind})"
     | MIR.Print (src, valueType) ->
         $"Print({prettyPrintMIROperand src}, type={valueType})"
+    | MIR.StdoutWrite (_, src, appendNewline) ->
+        $"StdoutWrite({prettyPrintMIROperand src}, newline={appendNewline})"
+    | MIR.StdinReadLine dest ->
+        $"{prettyPrintMIRVReg dest} <- StdinReadLine()"
     | MIR.RuntimeError message ->
         $"RuntimeError(\"{escapeStringContent message}\")"
     | MIR.RuntimeErrorString message ->
@@ -607,6 +614,10 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintFloat({prettyPrintLIRFReg freg})"
     | LIR.PrintString value ->
         $"PrintString(str[{escapeStringContent value}], len={value.Length})"
+    | LIR.StdoutWrite (_, value, appendNewline) ->
+        $"StdoutWrite({prettyPrintLIROperand value}, newline={appendNewline})"
+    | LIR.StdinReadLine (_, dest) ->
+        $"{prettyPrintLIRReg dest} <- StdinReadLine()"
     | LIR.RuntimeError message ->
         $"RuntimeError(\"{escapeStringContent message}\")"
     | LIR.RuntimeErrorString reg ->

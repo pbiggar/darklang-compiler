@@ -498,6 +498,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 ("src/Tests/e2e/upstream/stdlib/math.dark", Set.ofList [ 5; 6; 8; 9; 47; 48 ])
                 ("src/Tests/e2e/upstream/stdlib/float.dark", Set.ofList [ 60; 105; 116; 118; 120; 122; 128; 137; 193; 195 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int64.dark", Set.ofList [ 185; 194; 204 ])
+                ("src/Tests/e2e/upstream/stdlib/cli-color.dark", Set.ofList [ 1 .. 18 ])
             ]
 
     let normalizePath (path: string) : string =

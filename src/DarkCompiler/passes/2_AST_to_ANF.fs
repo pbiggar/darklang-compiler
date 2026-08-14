@@ -151,6 +151,14 @@ let private normalizeNullaryIntrinsicArgs (args: ANF.Atom list) : ANF.Atom list 
     | [ANF.UnitLiteral] -> []
     | _ -> args
 
+/// Convert the public console builtins into explicit ordered effects.
+let tryPresentationIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
+    match funcName, args with
+    | "Builtin.print", [value] -> Some (ANF.StdoutWrite (value, false))
+    | "Builtin.printLine", [value] -> Some (ANF.StdoutWrite (value, true))
+    | "Builtin.stdinReadLine", [ANF.UnitLiteral] -> Some ANF.StdinReadLine
+    | _ -> None
+
 /// Parse a mangled type name (from typeToMangledName) into an AST type.
 /// Returns Error if the mangled form is ambiguous or unsupported.
 let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Result<AST.Type, string> =
@@ -5256,10 +5264,15 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 // Variable exists but is not a function type
                 Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
             | None ->
-                // Not a variable - check if it's a file intrinsic first
+                // Not a variable - check explicit presentation effects first.
+                match tryPresentationIntrinsic funcName argAtoms with
+                | Some intrinsicExpr ->
+                    let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                    Ok (withArgSetups finalExpr, varGen2)
+                | None ->
+                // Check if it's a file intrinsic.
                 match tryFileIntrinsic funcName argAtoms with
                 | Some intrinsicExpr ->
-                    // File I/O intrinsic call
                     let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                     Ok (withArgSetups finalExpr, varGen2)
                 | None ->
@@ -9200,13 +9213,18 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     // Variable exists but is not a function type
                     Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
                 | None ->
-                    // Not a variable - check if it's a file intrinsic first
-                    match tryFileIntrinsic funcName argAtoms with
+                    // Not a variable - check explicit presentation effects first.
+                    match tryPresentationIntrinsic funcName argAtoms with
                     | Some intrinsicExpr ->
-                        // File I/O intrinsic call
                         let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                         Ok (ANF.Var tempVar, allBindings, varGen2)
                     | None ->
+                        // Check if it's a file intrinsic.
+                        match tryFileIntrinsic funcName argAtoms with
+                        | Some intrinsicExpr ->
+                            let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
+                            Ok (ANF.Var tempVar, allBindings, varGen2)
+                        | None ->
                         // Check if it's a raw memory intrinsic
                         match tryRawMemoryIntrinsic variantLookup funcName argAtoms with
                         | Some intrinsicExpr ->

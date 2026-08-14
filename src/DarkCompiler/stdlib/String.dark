@@ -351,13 +351,49 @@ let __isExtend(cp: Int64) : Bool =
     (cp >= 6832 && cp <= 6911) ||
     // Combining Half Marks (FE20-FE2F)
     (cp >= 65056 && cp <= 65071) ||
+    // Combining marks used by symbols and enclosing keycaps (20D0-20FF)
+    (cp >= 8400 && cp <= 8447) ||
+    // Hebrew points and Arabic combining marks
+    (cp >= 1425 && cp <= 1479) ||
+    (cp >= 1552 && cp <= 1562) ||
+    (cp >= 1611 && cp <= 1631) ||
+    // Indic signs and viramas used in conjunct clusters
+    (cp >= 2304 && cp <= 2307) || cp == 2362 || cp == 2363 ||
+    (cp >= 2366 && cp <= 2381) || cp == 2385 || cp == 2386 ||
+    (cp >= 2389 && cp <= 2403) ||
+    // Combining marks supplement
+    (cp >= 7616 && cp <= 7679) ||
     // Emoji Fitzpatrick modifiers (skin tones) (1F3FB-1F3FF)
     (cp >= 127995 && cp <= 127999) ||
+    // Emoji tag characters
+    (cp >= 917536 && cp <= 917631) ||
     // Emoji component (hair styles, etc) - simplified range
     (cp >= 127988 && cp <= 127988)
 
 // Check if codepoint is ZWJ (Zero Width Joiner)
 let __isZWJ(cp: Int64) : Bool = cp == 8205
+
+let __isRegionalIndicator(cp: Int64) : Bool = cp >= 127462 && cp <= 127487
+
+let __isControl(cp: Int64) : Bool =
+    cp == 10 || cp == 13 || (cp >= 0 && cp <= 31) || (cp >= 127 && cp <= 159)
+
+let __isHangulL(cp: Int64) : Bool =
+    (cp >= 4352 && cp <= 4447) || (cp >= 43360 && cp <= 43388)
+
+let __isHangulV(cp: Int64) : Bool =
+    (cp >= 4448 && cp <= 4519) || (cp >= 55216 && cp <= 55238)
+
+let __isHangulT(cp: Int64) : Bool =
+    (cp >= 4520 && cp <= 4607) || (cp >= 55243 && cp <= 55291)
+
+let __isHangulSyllable(cp: Int64) : Bool = cp >= 44032 && cp <= 55203
+
+let __isHangulLV(cp: Int64) : Bool =
+    Stdlib.String.__isHangulSyllable(cp) && ((cp - 44032) % 28 == 0)
+
+let __isHangulLVT(cp: Int64) : Bool =
+    Stdlib.String.__isHangulSyllable(cp) && !Stdlib.String.__isHangulLV(cp)
 
 // Segment codepoints into grapheme clusters
 // Returns list of codepoint lists (each inner list is one grapheme)
@@ -399,9 +435,49 @@ let toGraphemes(s: String) : List<String> =
     let segments = Stdlib.String.__segmentGraphemes(cps, [], []) in
     Stdlib.List.map<List<Int64>, String>(segments, Stdlib.String.__codepointsToString)
 
-// Get number of grapheme clusters in a string
+// Count grapheme clusters without materializing a second list of strings.
+// Extend and ZWJ codepoints remain attached to the current cluster; the
+// character after ZWJ is attached as well. CRLF is one cluster.
+let __countGraphemes(cps: List<Int64>, previous: Int64, joinNext: Bool, regionalRun: Int64, count: Int64) : Int64 =
+    match cps with
+    | [] -> count
+    | [cp, ...rest] ->
+        let hangulJoin =
+            (Stdlib.String.__isHangulL(previous) &&
+                (Stdlib.String.__isHangulL(cp) || Stdlib.String.__isHangulV(cp) ||
+                 Stdlib.String.__isHangulLV(cp) || Stdlib.String.__isHangulLVT(cp))) ||
+            ((Stdlib.String.__isHangulLV(previous) || Stdlib.String.__isHangulV(previous)) &&
+                (Stdlib.String.__isHangulV(cp) || Stdlib.String.__isHangulT(cp))) ||
+            ((Stdlib.String.__isHangulLVT(previous) || Stdlib.String.__isHangulT(previous)) &&
+                Stdlib.String.__isHangulT(cp)) in
+        let regionalJoin =
+            Stdlib.String.__isRegionalIndicator(previous) &&
+            Stdlib.String.__isRegionalIndicator(cp) &&
+            regionalRun % 2 == 1 in
+        let joins =
+            count == 0 ||
+            (previous == 13 && cp == 10) ||
+            (!Stdlib.String.__isControl(previous) && !Stdlib.String.__isControl(cp) &&
+                (Stdlib.String.__isExtend(cp) ||
+                 Stdlib.String.__isZWJ(cp) ||
+                 joinNext ||
+                 hangulJoin ||
+                 regionalJoin)) in
+        let nextCount = if joins && count > 0 then count else count + 1 in
+        let nextRegionalRun =
+            if Stdlib.String.__isRegionalIndicator(cp) then
+                if Stdlib.String.__isRegionalIndicator(previous) then regionalRun + 1 else 1
+            else 0 in
+        Stdlib.String.__countGraphemes(
+            rest,
+            cp,
+            Stdlib.String.__isZWJ(cp),
+            nextRegionalRun,
+            nextCount)
+
+// Get number of extended grapheme clusters in a string.
 let graphemeLength(s: String) : Int64 =
-    Stdlib.List.length<String>(Stdlib.String.toGraphemes(s))
+    Stdlib.String.__countGraphemes(Stdlib.String.toCodepoints(s), -1, false, 0, 0)
 
 // =============================================================================
 // High-Level String API

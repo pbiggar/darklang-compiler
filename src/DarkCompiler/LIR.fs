@@ -119,6 +119,8 @@ type Instr =
     | PrintFloat of FReg
     | PrintFloatNoNewline of FReg
     | PrintString of string
+    | StdoutWrite of effectId:int * value:Operand * appendNewline:bool
+    | StdinReadLine of effectId:int * dest:Reg
     | RuntimeError of string
     | RuntimeErrorString of Reg
     | PrintHeapStringNoNewline of Reg

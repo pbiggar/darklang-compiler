@@ -951,6 +951,9 @@ let private stderrFromRun (run: E2ERun) : string =
 let private failRun (run: E2ERun) (message: string) : E2ETestResult =
     Error { Run = run; Message = message }
 
+let private visibleOutput (value: string) : string =
+    value.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n")
+
 let private didValueEqualityPass (run: E2ERun) : bool =
     if exitCodeFromRun run <> 0 then
         false
@@ -986,21 +989,28 @@ let private evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
             | None -> true
             | Some expected ->
                 let actual = stdoutFromRun run
-                actual.Trim() = expected.Trim()
+                match test.OutputMatch with
+                | TestDSL.E2EFormat.ExactBytes -> actual = expected
+                | TestDSL.E2EFormat.NormalizedText -> actual.Trim() = expected.Trim()
 
         let stderrMatches =
             match test.ExpectedStderr with
             | None -> true
             | Some expected ->
                 let actual = stderrFromRun run
-                actual.Trim() = expected.Trim()
+                match test.OutputMatch with
+                | TestDSL.E2EFormat.ExactBytes -> actual = expected
+                | TestDSL.E2EFormat.NormalizedText -> actual.Trim() = expected.Trim()
 
         let exitCodeMatches = exitCodeFromRun run = test.ExpectedExitCode
 
         if stdoutMatches && stderrMatches && exitCodeMatches then
             Ok run
         else
-            failRun run "Output mismatch"
+            let expectedStdout = test.ExpectedStdout |> Option.defaultValue "<not asserted>"
+            let expectedStderr = test.ExpectedStderr |> Option.defaultValue "<not asserted>"
+            failRun run
+                $"Output mismatch. stdout expected '{visibleOutput expectedStdout}', actual '{visibleOutput (stdoutFromRun run)}'; stderr expected '{visibleOutput expectedStderr}', actual '{visibleOutput (stderrFromRun run)}'"
 
 let private buildCompilerOptions
     (_sourceSyntax: CompilerLibrary.SourceSyntax)
@@ -1034,17 +1044,29 @@ let private buildCompilerOptions
         DumpLIR = false
     }
 
-let private tryExecuteBinary (target: Platform.Target) (binary: byte array) : Result<CompilerLibrary.ExecutionOutput, string> =
-    try Ok (CompilerLibrary.execute target 0 binary)
+let private tryExecuteBinary
+    (target: Platform.Target)
+    (stdin: TestDSL.E2EFormat.TestStdin)
+    (binary: byte array)
+    : Result<CompilerLibrary.ExecutionOutput, string> =
+    let input =
+        match stdin with
+        | TestDSL.E2EFormat.Closed -> CompilerLibrary.Closed
+        | TestDSL.E2EFormat.Bytes value ->
+            value |> System.Text.Encoding.UTF8.GetBytes |> CompilerLibrary.Bytes
+    try Ok (CompilerLibrary.executeCaptured target 0 input binary)
     with ex -> Error ex.Message
 
-let private compileAndRun (request: CompilerLibrary.CompileRequest) : E2ERun =
+let private compileAndRun
+    (stdin: TestDSL.E2EFormat.TestStdin)
+    (request: CompilerLibrary.CompileRequest)
+    : E2ERun =
     let compileReport = CompilerLibrary.compile request
     match compileReport.Result with
     | Error err ->
         CompileFailed (1, err, compileReport.CompileTime)
     | Ok binary ->
-        match tryExecuteBinary compileReport.Target binary with
+        match tryExecuteBinary compileReport.Target stdin binary with
         | Ok execResult ->
             Ran (execResult.ExitCode, execResult.Stdout, execResult.Stderr, compileReport.CompileTime, execResult.RuntimeTime)
         | Error err ->
@@ -1133,7 +1155,7 @@ let runE2ETestWithPreambleContext
             Options = options
             PassTimingRecorder = passTimingRecorder
         }
-        let run = compileAndRun request
+        let run = compileAndRun test.Stdin request
         let primaryResult = evaluateExpectations test run
 
         let shouldTryRawPreambleFallback =
@@ -1162,7 +1184,7 @@ let runE2ETestWithPreambleContext
                 Options = options
                 PassTimingRecorder = passTimingRecorder
             }
-            let fallbackRun = compileAndRun fallbackRequest
+            let fallbackRun = compileAndRun test.Stdin fallbackRequest
             match evaluateExpectations test fallbackRun with
             | Ok _ as success ->
                 success

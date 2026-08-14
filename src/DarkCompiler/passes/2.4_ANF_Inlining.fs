@@ -308,6 +308,8 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | RefCountInc (a, size, kind, sourceType) -> RefCountInc (r a, size, kind, sourceType)
     | RefCountDec (a, size, kind, sourceType) -> RefCountDec (r a, size, kind, sourceType)
     | Print (a, t) -> Print (r a, t)
+    | StdoutWrite (a, appendNewline) -> StdoutWrite (r a, appendNewline)
+    | StdinReadLine -> StdinReadLine
     | FileReadText path -> FileReadText (r path)
     | FileExists path -> FileExists (r path)
     | FileWriteText (path, content) -> FileWriteText (r path, r content)

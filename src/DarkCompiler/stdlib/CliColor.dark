@@ -1,0 +1,25 @@
+// CliColor.dark - unconditional ANSI color and style wrappers.
+
+module Stdlib.Cli.UI.Color
+
+let esc(code: String, text: String) : String =
+    "\u001b[" ++ code ++ "m" ++ text ++ "\u001b[0m"
+
+let red(text: String) : String = Stdlib.Cli.UI.Color.esc("31", text)
+let green(text: String) : String = Stdlib.Cli.UI.Color.esc("32", text)
+let yellow(text: String) : String = Stdlib.Cli.UI.Color.esc("33", text)
+let blue(text: String) : String = Stdlib.Cli.UI.Color.esc("34", text)
+let magenta(text: String) : String = Stdlib.Cli.UI.Color.esc("35", text)
+let cyan(text: String) : String = Stdlib.Cli.UI.Color.esc("36", text)
+let white(text: String) : String = Stdlib.Cli.UI.Color.esc("37", text)
+let gray(text: String) : String = Stdlib.Cli.UI.Color.esc("90", text)
+let bold(text: String) : String = Stdlib.Cli.UI.Color.esc("1", text)
+let dim(text: String) : String = Stdlib.Cli.UI.Color.esc("2", text)
+let italic(text: String) : String = Stdlib.Cli.UI.Color.esc("3", text)
+let underline(text: String) : String = Stdlib.Cli.UI.Color.esc("4", text)
+let strikethrough(text: String) : String = Stdlib.Cli.UI.Color.esc("9", text)
+let bgRed(text: String) : String = Stdlib.Cli.UI.Color.esc("41", text)
+let bgGreen(text: String) : String = Stdlib.Cli.UI.Color.esc("42", text)
+let bgYellow(text: String) : String = Stdlib.Cli.UI.Color.esc("43", text)
+let bgBlue(text: String) : String = Stdlib.Cli.UI.Color.esc("44", text)
+

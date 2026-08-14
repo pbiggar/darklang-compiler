@@ -205,6 +205,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RefCountInc (atom, _, _, _) -> maxTempIdInAtom atom
     | ANF.RefCountDec (atom, _, _, _) -> maxTempIdInAtom atom
     | ANF.Print (atom, _) -> maxTempIdInAtom atom
+    | ANF.StdoutWrite (atom, _) -> maxTempIdInAtom atom
+    | ANF.StdinReadLine -> -1
     | ANF.RuntimeError _ -> -1
     | ANF.RuntimeErrorString atom -> maxTempIdInAtom atom
     | ANF.ClosureAlloc (_, captures) ->
@@ -573,6 +575,8 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RefCountInc _ -> "RefCountInc"
     | ANF.RefCountDec _ -> "RefCountDec"
     | ANF.Print _ -> "Print"
+    | ANF.StdoutWrite _ -> "StdoutWrite"
+    | ANF.StdinReadLine -> "StdinReadLine"
     | ANF.RuntimeError _ -> "RuntimeError"
     | ANF.RuntimeErrorString _ -> "RuntimeErrorString"
     | ANF.FileReadText _ -> "FileReadText"
@@ -1062,6 +1066,14 @@ let rec convertExpr
                 | ANF.Print (atom, valueType) ->
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Print (op, valueType)])
+                | ANF.StdoutWrite (atom, appendNewline) ->
+                    let (MIR.VReg effectId) = destReg
+                    atomToOperand builder atom
+                    |> Result.map (fun op ->
+                        [ MIR.StdoutWrite (effectId, op, appendNewline)
+                          MIR.Mov (destReg, MIR.Int64Const 0L, Some AST.TUnit) ])
+                | ANF.StdinReadLine ->
+                    Ok [MIR.StdinReadLine destReg]
                 | ANF.RuntimeError message ->
                     Ok [MIR.RuntimeError message]
                 | ANF.RuntimeErrorString message ->
@@ -1701,6 +1713,14 @@ and convertExprToOperand
                 | ANF.Print (atom, valueType) ->
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Print (op, valueType)])
+                | ANF.StdoutWrite (atom, appendNewline) ->
+                    let (MIR.VReg effectId) = destReg
+                    atomToOperand builder atom
+                    |> Result.map (fun op ->
+                        [ MIR.StdoutWrite (effectId, op, appendNewline)
+                          MIR.Mov (destReg, MIR.Int64Const 0L, Some AST.TUnit) ])
+                | ANF.StdinReadLine ->
+                    Ok [MIR.StdinReadLine destReg]
                 | ANF.RuntimeError message ->
                     Ok [MIR.RuntimeError message]
                 | ANF.RuntimeErrorString message ->

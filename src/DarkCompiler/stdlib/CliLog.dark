@@ -1,0 +1,19 @@
+// CliLog.dark - stdout-only leveled logging with ANSI prefixes.
+
+module Stdlib.Cli.Log
+
+let info(msg: String) : Unit =
+    Builtin.printLine(Stdlib.Cli.UI.Color.green("[INFO]") ++ " " ++ msg)
+
+let warn(msg: String) : Unit =
+    Builtin.printLine(Stdlib.Cli.UI.Color.yellow("[WARN]") ++ " " ++ msg)
+
+let error(msg: String) : Unit =
+    Builtin.printLine(Stdlib.Cli.UI.Color.red("[ERROR]") ++ " " ++ msg)
+
+let debug(msg: String) : Unit =
+    Builtin.printLine(Stdlib.Cli.UI.Color.gray("[DEBUG]") ++ " " ++ msg)
+
+let success(msg: String) : Unit =
+    Builtin.printLine(Stdlib.Cli.UI.Color.green("[OK]") ++ " " ++ msg)
+

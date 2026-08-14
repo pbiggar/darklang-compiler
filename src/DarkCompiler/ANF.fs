@@ -231,6 +231,8 @@ type CExpr =
     | RefCountDec of Atom * payloadSize:int * kind:RcKind * metadata:RcMetadata option    // Decrement ref count, free if zero
     // Output operations (for main expression result)
     | Print of Atom * AST.Type                 // Print value with type-appropriate formatting
+    | StdoutWrite of value:Atom * appendNewline:bool // Explicit stdout effect; returns Unit
+    | StdinReadLine                            // Read one UTF-8 line from stdin; returns String
     | RuntimeError of message:string           // Print runtime error to stderr and exit with code 1
     | RuntimeErrorString of message:Atom       // Print a language String error to stderr and exit with code 1
     // File I/O intrinsics (generate syscalls)

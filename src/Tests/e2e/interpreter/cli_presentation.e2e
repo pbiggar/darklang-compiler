@@ -1,0 +1,27 @@
+// CLI presentation parity at darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+// All output cases are byte-exact so spaces, CR, ANSI escapes, and newlines matter.
+
+(Builtin.print "left"; Builtin.printLine "right"; ()) = stdout="leftright\n" stderr="" exact_bytes=true
+(Builtin.printLine "one"; Builtin.printLine "two"; ()) = stdout="one\ntwo\n" stderr="" exact_bytes=true disable_opt_anf=true disable_opt_mir=true disable_opt_lir=true
+(let first = Builtin.stdinReadLine(()) in let second = Builtin.stdinReadLine(()) in first ++ "|" ++ second) = stdout="\"one|two\"\n" stderr="" stdin="one\r\ntwo" exact_bytes=true
+
+(Stdlib.Cli.Log.info "hello"; Stdlib.Cli.Log.warn "careful"; Stdlib.Cli.Log.error "bad"; Stdlib.Cli.Log.debug "trace"; Stdlib.Cli.Log.success "good"; ()) = stdout="\u001b[32m[INFO]\u001b[0m hello\n\u001b[33m[WARN]\u001b[0m careful\n\u001b[31m[ERROR]\u001b[0m bad\n\u001b[90m[DEBUG]\u001b[0m trace\n\u001b[32m[OK]\u001b[0m good\n" stderr="" exact_bytes=true
+
+(Stdlib.Cli.UI.Progress.bar 0I 0I "zero"; ()) = stdout="\r[------------------------------] 0% zero\n" stderr="" exact_bytes=true
+(Stdlib.Cli.UI.Progress.bar 1I 3I "load"; ()) = stdout="\r[##########--------------------] 33% load" stderr="" exact_bytes=true
+(Stdlib.Cli.UI.Progress.bar 3I 3I "done"; ()) = stdout="\r[##############################] 100% done\n" stderr="" exact_bytes=true
+(Stdlib.Cli.UI.Progress.bar 40I 30I "over"; ()) = stdout="\r[########################################] 133% over\n" stderr="" exact_bytes=true
+
+Stdlib.Cli.UI.Prompt.ask "Name?" = stdout="Name? \"Ada\"\n" stderr="" stdin="Ada\n" exact_bytes=true
+Stdlib.Cli.UI.Prompt.ask "Name?" = stdout="Name? \"\"\n" stderr="" stdin=closed exact_bytes=true
+Stdlib.Cli.UI.Prompt.confirm "Continue?" = stdout="Continue? [y/N] true\n" stderr="" stdin="YES\n" exact_bytes=true
+Stdlib.Cli.UI.Prompt.confirm "Continue?" = stdout="Continue? [y/N] false\n" stderr="" stdin=closed exact_bytes=true
+Stdlib.Cli.UI.Prompt.select "Pick" ["alpha"; "beta"] = stdout="Pick\n  \u001b[1m1\u001b[0m. alpha\n  \u001b[1m2\u001b[0m. beta\nEnter number: \u001b[31mPlease enter a number\u001b[0m\nPick\n  \u001b[1m1\u001b[0m. alpha\n  \u001b[1m2\u001b[0m. beta\nEnter number: \"beta\"\n" stderr="" stdin="wat\n +2 \n" exact_bytes=true
+Stdlib.Cli.UI.Prompt.select "Pick" ["alpha"; "beta"] = stdout="Pick\n  \u001b[1m1\u001b[0m. alpha\n  \u001b[1m2\u001b[0m. beta\nEnter number: \u001b[31mInvalid selection\u001b[0m\nPick\n  \u001b[1m1\u001b[0m. alpha\n  \u001b[1m2\u001b[0m. beta\nEnter number: \"alpha\"\n" stderr="" stdin="3\n1\n" exact_bytes=true
+
+Stdlib.Cli.UI.Spinner.run "Working" (fun () -> 7L) = stdout="Working... \u001b[32mdone\u001b[0m\n7\n" stderr="" exact_bytes=true
+Stdlib.Cli.UI.Spinner.run "Working" (fun () -> let _ = Builtin.testRuntimeError "boom" in 0L) = exit=1 stdout="Working... " stderr="Uncaught exception: boom" exact_bytes=true
+
+(Stdlib.Cli.UI.Table.print ["Name"; "Value"] [["e\u0301"; "x"]; ["long"]]; ()) = stdout="\u001b[1mName  Value\u001b[0m\n----  -----\ne\u0301     x    \nlong       \n" stderr="" exact_bytes=true
+(Stdlib.Cli.UI.Table.print ["G"] [["🇺🇸"]; ["가"]; ["1️⃣"]]; ()) = stdout="\u001b[1mG\u001b[0m\n-\n🇺🇸\n가\n1️⃣\n" stderr="" exact_bytes=true
+(Stdlib.Cli.UI.Table.print [] [["ignored"]]; ()) = stdout="\u001b[1m\u001b[0m\n\n\n" stderr="" exact_bytes=true

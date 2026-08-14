@@ -205,6 +205,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FloatToString _ -> Some AST.TString
     | RandomInt64 -> Some AST.TInt64
     | DateTimeNow -> Some AST.TInt64
+    | StdoutWrite _ -> Some AST.TUnit
+    | StdinReadLine -> Some AST.TString
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
     | Call (funcName, args)
     | BorrowedCall (funcName, args) ->

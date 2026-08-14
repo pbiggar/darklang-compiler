@@ -463,6 +463,8 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | RefCountInc _ -> true
     | RefCountDec _ -> true
     | Print _ -> true
+    | StdoutWrite _ -> true
+    | StdinReadLine -> true
     | FileReadText _ -> true
     | FileExists _ -> true
     | FileWriteText _ -> true
@@ -545,6 +547,8 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RefCountInc (atom, _, _, _) -> addAtomUse atom uses
     | RefCountDec (atom, _, _, _) -> addAtomUse atom uses
     | Print (atom, _) -> addAtomUse atom uses
+    | StdoutWrite (atom, _) -> addAtomUse atom uses
+    | StdinReadLine -> uses
     | FileReadText path -> addAtomUse path uses
     | FileExists path -> addAtomUse path uses
     | FileWriteText (path, content) -> uses |> addAtomUse path |> addAtomUse content
@@ -623,6 +627,7 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | RefCountIncBlob atom
     | RefCountDecBlob atom
     | FloatToString atom -> used atom
+    | StdoutWrite (atom, _) -> used atom
     | Prim (_, left, right)
     | StringConcat (left, right)
     | FileWriteText (left, right)
@@ -648,6 +653,7 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | ClosureTailCall (first, rest) -> used first || anyUsed rest
     | RandomInt64
     | DateTimeNow
+    | StdinReadLine
     | RuntimeError _ -> false
     | RuntimeErrorString atom -> used atom
 
@@ -715,6 +721,8 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RefCountInc (atom, size, kind, sourceType) -> RefCountInc (s atom, size, kind, sourceType)
     | RefCountDec (atom, size, kind, sourceType) -> RefCountDec (s atom, size, kind, sourceType)
     | Print (atom, t) -> Print (s atom, t)
+    | StdoutWrite (atom, appendNewline) -> StdoutWrite (s atom, appendNewline)
+    | StdinReadLine -> StdinReadLine
     | FileReadText path -> FileReadText (s path)
     | FileExists path -> FileExists (s path)
     | FileWriteText (path, content) -> FileWriteText (s path, s content)

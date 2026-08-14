@@ -1,0 +1,72 @@
+// CliTable.dark - EGC-measured, two-space-separated table rendering.
+
+module Stdlib.Cli.UI.Table
+
+let __pad(value: String, width: Int64) : String =
+    let padding = width - Stdlib.String.graphemeLength(value) in
+    if padding <= 0 then value else value ++ Stdlib.String.repeat(" ", padding)
+
+let __maxCellLength(rows: List<List<String>>, index: Int64, current: Int64) : Int64 =
+    match rows with
+    | [] -> current
+    | [row, ...rest] ->
+        let next =
+            match Stdlib.List.getAt<String>(row, index) with
+            | Some(cell) -> Stdlib.Int64.max(current, Stdlib.String.graphemeLength(cell))
+            | None -> current in
+        Stdlib.Cli.UI.Table.__maxCellLength(rest, index, next)
+
+let __columnWidths(columns: List<String>, rows: List<List<String>>, index: Int64) : List<Int64> =
+    match columns with
+    | [] -> []
+    | [header, ...rest] ->
+        let width =
+            Stdlib.Int64.max(
+                Stdlib.String.graphemeLength(header),
+                Stdlib.Cli.UI.Table.__maxCellLength(rows, index, 0)) in
+        [width, ...Stdlib.Cli.UI.Table.__columnWidths(rest, rows, index + 1)]
+
+let __headerLine(columns: List<String>, widths: List<Int64>) : String =
+    match (columns, widths) with
+    | ([], _) -> ""
+    | ([header], [width]) -> Stdlib.Cli.UI.Table.__pad(header, width)
+    | ([header, ...restHeaders], [width, ...restWidths]) ->
+        Stdlib.Cli.UI.Table.__pad(header, width) ++
+        "  " ++
+        Stdlib.Cli.UI.Table.__headerLine(restHeaders, restWidths)
+    | _ -> ""
+
+let __separatorLine(widths: List<Int64>) : String =
+    match widths with
+    | [] -> ""
+    | [width] -> Stdlib.String.repeat("-", width)
+    | [width, ...rest] ->
+        Stdlib.String.repeat("-", width) ++ "  " ++ Stdlib.Cli.UI.Table.__separatorLine(rest)
+
+let __rowLine(columns: List<String>, widths: List<Int64>, row: List<String>) : String =
+    match (columns, widths, row) with
+    | ([], _, _) -> ""
+    | ([_header], [width], []) -> Stdlib.Cli.UI.Table.__pad("", width)
+    | ([_header], [width], [cell, ..._surplus]) -> Stdlib.Cli.UI.Table.__pad(cell, width)
+    | ([_header, ...restHeaders], [width, ...restWidths], []) ->
+        Stdlib.Cli.UI.Table.__pad("", width) ++
+        "  " ++
+        Stdlib.Cli.UI.Table.__rowLine(restHeaders, restWidths, [])
+    | ([_header, ...restHeaders], [width, ...restWidths], [cell, ...restCells]) ->
+        Stdlib.Cli.UI.Table.__pad(cell, width) ++
+        "  " ++
+        Stdlib.Cli.UI.Table.__rowLine(restHeaders, restWidths, restCells)
+    | _ -> ""
+
+let __printRows(columns: List<String>, widths: List<Int64>, rows: List<List<String>>) : Unit =
+    match rows with
+    | [] -> ()
+    | [row, ...rest] ->
+        let _ = Builtin.printLine(Stdlib.Cli.UI.Table.__rowLine(columns, widths, row)) in
+        Stdlib.Cli.UI.Table.__printRows(columns, widths, rest)
+
+let print(columns: List<String>, rows: List<List<String>>) : Unit =
+    let widths = Stdlib.Cli.UI.Table.__columnWidths(columns, rows, 0) in
+    let _ = Builtin.printLine(Stdlib.Cli.UI.Color.bold(Stdlib.Cli.UI.Table.__headerLine(columns, widths))) in
+    let _ = Builtin.printLine(Stdlib.Cli.UI.Table.__separatorLine(widths)) in
+    Stdlib.Cli.UI.Table.__printRows(columns, widths, rows)

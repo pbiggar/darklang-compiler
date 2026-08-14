@@ -13,6 +13,18 @@ module TestDSL.E2EFormat
 
 open System
 
+/// Input supplied to the native process. Tests must choose between an already
+/// closed stream and a finite byte sequence whose stream closes after delivery.
+type TestStdin =
+    | Closed
+    | Bytes of string
+
+/// Output comparison policy. Presentation tests use ExactBytes so control
+/// bytes, whitespace, and the absence of a final newline remain observable.
+type OutputMatch =
+    | NormalizedText
+    | ExactBytes
+
 /// End-to-end test specification
 type E2ETest = {
     Name: string
@@ -25,6 +37,8 @@ type E2ETest = {
     Preamble: string
     ExpectedStdout: string option
     ExpectedStderr: string option
+    Stdin: TestStdin
+    OutputMatch: OutputMatch
     ExpectedExitCode: int
     /// If true, expect the compiler to fail (type error, parse error, etc.)
     ExpectCompileError: bool
@@ -82,6 +96,8 @@ type private OptFlags = {
     DisableLIRPeephole: bool
     DisableFunctionTreeShaking: bool
     DisableLeakCheck: bool
+    Stdin: TestStdin
+    OutputMatch: OutputMatch
 }
 
 let private defaultOptFlags = {
@@ -105,6 +121,8 @@ let private defaultOptFlags = {
     DisableLIRPeephole = false
     DisableFunctionTreeShaking = false
     DisableLeakCheck = false
+    Stdin = Closed
+    OutputMatch = NormalizedText
 }
 
 /// Extract function name from a definition line (e.g., "def buildTree(...)" -> "buildTree")
@@ -129,9 +147,15 @@ let private parseStringLiteral (s: string) : Result<string, string> =
             elif content.[i] = '\\' && i + 1 < content.Length then
                 match content.[i + 1] with
                 | 'n' -> loop (i + 2) ('\n' :: charsRev)
+                | 'r' -> loop (i + 2) ('\r' :: charsRev)
                 | 't' -> loop (i + 2) ('\t' :: charsRev)
                 | '\\' -> loop (i + 2) ('\\' :: charsRev)
                 | '"' -> loop (i + 2) ('"' :: charsRev)
+                | 'u' when i + 5 < content.Length ->
+                    let hex = content.Substring(i + 2, 4)
+                    match UInt16.TryParse(hex, Globalization.NumberStyles.HexNumber, Globalization.CultureInfo.InvariantCulture) with
+                    | true, code -> loop (i + 6) (char code :: charsRev)
+                    | false, _ -> loop (i + 2) ('u' :: '\\' :: charsRev)
                 | escaped ->
                     loop (i + 2) (escaped :: '\\' :: charsRev)
             else
@@ -258,6 +282,8 @@ let private isExpectationStart (rest: string) : bool =
          || trimmed.StartsWith("skip")
          || trimmed.StartsWith("no_free_list")
          || trimmed.StartsWith("disable_leak_check")
+         || trimmed.StartsWith("stdin")
+         || trimmed.StartsWith("exact_bytes")
          || trimmed.StartsWith("error")
          || trimmed.StartsWith("disable_opt_") then
         true
@@ -296,6 +322,8 @@ let private isExpectationCandidate (rest: string) : bool =
          || trimmed.StartsWith("exit")
          || trimmed.StartsWith("no_free_list")
          || trimmed.StartsWith("disable_leak_check")
+         || trimmed.StartsWith("stdin")
+         || trimmed.StartsWith("exact_bytes")
          || trimmed.StartsWith("disable_opt_") then
         true
     else
@@ -319,6 +347,8 @@ let private isAttributeKey (key: string) : bool =
     | "skip"
     | "no_free_list"
     | "disable_leak_check"
+    | "stdin"
+    | "exact_bytes"
     | "disable_opt_freelist"
     | "disable_opt_anf"
     | "disable_opt_anf_const_folding"
@@ -800,6 +830,18 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                                             match parseBool value "disable_leak_check" with
                                             | Some b -> optFlags <- { optFlags with DisableLeakCheck = b }
                                             | None -> ()
+                                        | "stdin" ->
+                                            if value = "closed" then
+                                                optFlags <- { optFlags with Stdin = Closed }
+                                            else
+                                                match parseStringLiteral value with
+                                                | Ok input -> optFlags <- { optFlags with Stdin = Bytes input }
+                                                | Error e -> errors <- $"Invalid stdin: {e}" :: errors
+                                        | "exact_bytes" ->
+                                            match parseBool value "exact_bytes" with
+                                            | Some true -> optFlags <- { optFlags with OutputMatch = ExactBytes }
+                                            | Some false -> optFlags <- { optFlags with OutputMatch = NormalizedText }
+                                            | None -> ()
                                         | _ -> errors <- $"Unknown attribute: {key}" :: errors
                                     | Error e -> errors <- e :: errors
 
@@ -848,6 +890,8 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 Preamble = preamble
                 ExpectedStdout = stdout
                 ExpectedStderr = stderr
+                Stdin = optFlags.Stdin
+                OutputMatch = optFlags.OutputMatch
                 ExpectedExitCode = exitCode
                 ExpectCompileError = expectError
                 ExpectedErrorMessage = errorMessage

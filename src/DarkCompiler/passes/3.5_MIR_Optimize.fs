@@ -57,6 +57,8 @@ let hasSideEffects (instr: Instr) : bool =
     | RefCountInc _ -> true
     | RefCountDec _ -> true
     | Print _ -> true
+    | StdoutWrite _ -> true
+    | StdinReadLine _ -> true
     | FileReadText _ -> true
     | FileExists _ -> true
     | FileWriteText _ -> true
@@ -157,6 +159,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | HeapAlloc (dest, _) -> Some dest
     | HeapLoad (dest, _, _, _) -> Some dest
     | StringConcat (dest, _, _) -> Some dest
+    | StdinReadLine dest -> Some dest
     | FileReadText (dest, _) -> Some dest
     | FileExists (dest, _) -> Some dest
     | FileWriteText (dest, _, _) -> Some dest
@@ -186,6 +189,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | RefCountInc _ -> None
     | RefCountDec _ -> None
     | Print _ -> None
+    | StdoutWrite _ -> None
     | RawFree _ -> None
     | RawWriteWord _ -> None
     | RawWriteByte _ -> None
@@ -234,6 +238,7 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | RawPtrToDict (_, left, right)
     | RawPtrToList (_, left, right) -> fromOperand (fromOperand state left) right
     | Print (src, _)
+    | StdoutWrite (_, src, _)
     | FileReadText (_, src)
     | FileExists (_, src)
     | FileDelete (_, src)
@@ -266,6 +271,7 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
         sources |> List.fold (fun acc (op, _) -> fromOperand acc op) state
     | RandomInt64 _
     | DateTimeNow _
+    | StdinReadLine _
     | RuntimeError _
     | RuntimeErrorString _
     | CoverageHit _ -> state
@@ -1133,6 +1139,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
         RefCountDec (addr', size, kind, sourceType)
     | Print (src, vt) -> Print (p src, vt)
+    | StdoutWrite (effectId, src, appendNewline) -> StdoutWrite (effectId, p src, appendNewline)
+    | StdinReadLine dest -> StdinReadLine dest
     | FileReadText (dest, path) -> FileReadText (dest, p path)
     | FileExists (dest, path) -> FileExists (dest, p path)
     | FileWriteText (dest, path, content) -> FileWriteText (dest, p path, p content)

@@ -4364,6 +4364,173 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             ARM64Symbolic.ADD_label (ARM64Symbolic.X0, ARM64Symbolic.X0, labelRef)  // Add page offset
         ] @ runtimeInstrs (Runtime.generatePrintString ctx.Target len))
 
+    | LIR.StdoutWrite (effectId, value, appendNewline) ->
+        let syscalls = ARM64.targetSyscalls ctx.Target
+        let label suffix = $"__presentation_{ctx.FunctionName}_{effectId}_{suffix}"
+        let writeLoop prefix =
+            let loopLabel = label $"{prefix}_write"
+            let retryLabel = label $"{prefix}_retry"
+            let errorLabel = label $"{prefix}_error"
+            let doneLabel = label $"{prefix}_done"
+            let resultCheck =
+                match ARM64.targetOS ctx.Target with
+                | Platform.MacOS ->
+                    [ ARM64Symbolic.B_cond_label (ARM64Symbolic.HS, errorLabel)
+                      ARM64Symbolic.B_label $"{prefix}_success"
+                      ARM64Symbolic.Label errorLabel
+                      ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 4us)
+                      ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, retryLabel)
+                      ARM64Symbolic.B_label doneLabel
+                      ARM64Symbolic.Label $"{prefix}_success" ]
+                | Platform.Linux ->
+                    loadImmediate ARM64Symbolic.X12 -4L
+                    @ [ ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, retryLabel)
+                        ARM64Symbolic.TBNZ_label (ARM64Symbolic.X0, 63, doneLabel) ]
+            [ ARM64Symbolic.Label loopLabel
+              ARM64Symbolic.CBZ (ARM64Symbolic.X2, doneLabel)
+              ARM64Symbolic.Label retryLabel
+              ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
+              ARM64Symbolic.SVC syscalls.SvcImmediate ]
+            @ resultCheck
+            @ [ ARM64Symbolic.CBZ (ARM64Symbolic.X0, doneLabel)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X0)
+                ARM64Symbolic.SUB_reg (ARM64Symbolic.X2, ARM64Symbolic.X2, ARM64Symbolic.X0)
+                ARM64Symbolic.B_label loopLabel
+                ARM64Symbolic.Label doneLabel ]
+
+        let setupValue =
+            match value with
+            | LIR.Reg reg ->
+                lirRegToARM64Reg reg
+                |> Result.map (fun src ->
+                    [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X9, src)
+                      ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X9, 0s)
+                      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X9, 8us) ])
+            | LIR.StackSlot offset ->
+                loadStackSlot ARM64Symbolic.X9 offset
+                |> Result.map (fun load ->
+                    load
+                    @ [ ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X9, 0s)
+                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X9, 8us) ])
+            | LIR.StringSymbol text ->
+                Ok (loadStringLiteralPointer ARM64Symbolic.X9 text
+                    @ [ ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X9, 0s)
+                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X9, 8us) ])
+            | _ -> Error "StdoutWrite requires a String operand"
+
+        setupValue
+        |> Result.map (fun setup ->
+            let savedRegs =
+                [ ARM64Symbolic.X0; ARM64Symbolic.X1; ARM64Symbolic.X2; ARM64Symbolic.X3
+                  ARM64Symbolic.X4; ARM64Symbolic.X5; ARM64Symbolic.X6; ARM64Symbolic.X7
+                  ARM64Symbolic.X8; ARM64Symbolic.X9; ARM64Symbolic.X10; ARM64Symbolic.X11
+                  ARM64Symbolic.X12; ARM64Symbolic.X13; ARM64Symbolic.X14; ARM64Symbolic.X15
+                  ARM64Symbolic.X16; ARM64Symbolic.X17 ]
+            let save =
+                [ ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 160us) ]
+                @ (savedRegs |> List.mapi (fun i reg -> ARM64Symbolic.STR (reg, ARM64Symbolic.SP, int16 (i * 8))))
+            let restore =
+                (savedRegs |> List.mapi (fun i reg -> ARM64Symbolic.LDR (reg, ARM64Symbolic.SP, int16 (i * 8))))
+                @ [ ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 160us) ]
+            let newline =
+                if not appendNewline then []
+                else
+                    [ ARM64Symbolic.MOVZ (ARM64Symbolic.X9, 10us, 0)
+                      ARM64Symbolic.STRB (ARM64Symbolic.X9, ARM64Symbolic.SP, 144)
+                      ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)
+                      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 144us)
+                      ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 1us, 0) ]
+                    @ writeLoop "stdout_newline"
+            save
+            @ setup
+            @ [ ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0) ]
+            @ writeLoop "stdout"
+            @ newline
+            @ restore)
+
+    | LIR.StdinReadLine (effectId, dest) ->
+        lirRegToARM64Reg dest
+        |> Result.map (fun destReg ->
+            let syscalls = ARM64.targetSyscalls ctx.Target
+            let label suffix = $"__presentation_{ctx.FunctionName}_{effectId}_{suffix}"
+            let readLabel = label "stdin_read"
+            let retryLabel = label "stdin_retry"
+            let gotByteLabel = label "stdin_byte"
+            let finishLabel = label "stdin_finish"
+            let noCrLabel = label "stdin_no_cr"
+            let readResultCheck =
+                match ARM64.targetOS ctx.Target with
+                | Platform.MacOS ->
+                    let errorLabel = label "stdin_error"
+                    [ ARM64Symbolic.B_cond_label (ARM64Symbolic.HS, errorLabel)
+                      ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 1us)
+                      ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, gotByteLabel)
+                      ARM64Symbolic.B_label finishLabel
+                      ARM64Symbolic.Label errorLabel
+                      ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 4us)
+                      ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, retryLabel)
+                      ARM64Symbolic.B_label finishLabel ]
+                | Platform.Linux ->
+                    loadImmediate ARM64Symbolic.X12 -4L
+                    @ [ ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, retryLabel)
+                        ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 1us)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, gotByteLabel)
+                        ARM64Symbolic.B_label finishLabel ]
+            let savedRegs =
+                [ ARM64Symbolic.X0; ARM64Symbolic.X1; ARM64Symbolic.X2; ARM64Symbolic.X3
+                  ARM64Symbolic.X4; ARM64Symbolic.X5; ARM64Symbolic.X6; ARM64Symbolic.X7
+                  ARM64Symbolic.X8; ARM64Symbolic.X9; ARM64Symbolic.X10; ARM64Symbolic.X11
+                  ARM64Symbolic.X12; ARM64Symbolic.X13; ARM64Symbolic.X14; ARM64Symbolic.X15
+                  ARM64Symbolic.X16; ARM64Symbolic.X17 ]
+            [ ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 160us) ]
+            @ (savedRegs |> List.mapi (fun i reg -> ARM64Symbolic.STR (reg, ARM64Symbolic.SP, int16 (i * 8))))
+            @ [ ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 0us, 0)
+                ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.SP, 144s)
+                ARM64Symbolic.Label readLabel
+                ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.SP, 144s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X28, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X10)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 1us, 0)
+                ARM64Symbolic.Label retryLabel
+                ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Read, 0)
+                ARM64Symbolic.SVC syscalls.SvcImmediate ]
+            @ readResultCheck
+            @ [ ARM64Symbolic.Label gotByteLabel
+                ARM64Symbolic.LDRB_imm (ARM64Symbolic.X11, ARM64Symbolic.X1, 0)
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X11, 10us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, finishLabel)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.SP, 144s)
+                ARM64Symbolic.B_label readLabel
+                ARM64Symbolic.Label finishLabel
+                ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.SP, 144s)
+                ARM64Symbolic.CBZ (ARM64Symbolic.X10, noCrLabel)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X28, 7us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X10)
+                ARM64Symbolic.LDRB_imm (ARM64Symbolic.X11, ARM64Symbolic.X1, 0)
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X11, 13us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, noCrLabel)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 1us)
+                ARM64Symbolic.Label noCrLabel
+                ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X28, 0s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X10, 7us)
+                ARM64Symbolic.LSR_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 3)
+                ARM64Symbolic.LSL_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 3)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X28, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X11)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)
+                ARM64Symbolic.STR (ARM64Symbolic.X0, ARM64Symbolic.X1, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X28, ARM64Symbolic.SP, 152s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 16us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X28, ARM64Symbolic.X28, ARM64Symbolic.X11) ]
+            @ generateLeakCounterInc ctx
+            @ (savedRegs |> List.mapi (fun i reg -> ARM64Symbolic.LDR (reg, ARM64Symbolic.SP, int16 (i * 8))))
+            @ [ ARM64Symbolic.LDR (destReg, ARM64Symbolic.SP, 152s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 160us) ])
+
     | LIR.RuntimeError message ->
         let syscalls = ARM64.targetSyscalls ctx.Target
         let messageBytes =
@@ -5344,7 +5511,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         // 3. Compute data pointer (X9 + 8) into X1
         // 4. Set X0 = 1 (stdout)
         // 5. write syscall
-        // 6. Restore input register if it was clobbered
+        // 6. Write the result-rendering newline
+        // 7. Restore input register if it was clobbered
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             let isClobbered = regARM64 = ARM64Symbolic.X0 || regARM64 = ARM64Symbolic.X1 || regARM64 = ARM64Symbolic.X2 || regARM64 = ARM64Symbolic.X8
@@ -5354,7 +5522,17 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X9, 0s)           // X2 = length
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X9, 8us)      // X1 = data pointer (X9 + 8)
                 ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)                // X0 = stdout fd
-            ] @ runtimeInstrs (Runtime.generateWriteSyscall ctx.Target) @ restoreInstrs)
+            ]
+            @ runtimeInstrs (Runtime.generateWriteSyscall ctx.Target)
+            @ [ ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 10us, 0)
+                ARM64Symbolic.STRB (ARM64Symbolic.X10, ARM64Symbolic.SP, 0)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 1us, 0)
+                ARM64Symbolic.MOV_reg (ARM64Symbolic.X1, ARM64Symbolic.SP)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 1us, 0) ]
+            @ runtimeInstrs (Runtime.generateWriteSyscall ctx.Target)
+            @ [ ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us) ]
+            @ restoreInstrs)
 
     | LIR.LoadFuncAddr (dest, funcName) ->
         // Load the address of a function into the destination register using ADR

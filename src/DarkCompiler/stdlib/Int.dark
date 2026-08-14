@@ -403,13 +403,16 @@ let __validDigits(value: String, index: Int64) : Bool =
         byte >= 48 && byte <= 57 && Stdlib.Int.__validDigits(value, index + 1)
 
 let parse(value: String) : Stdlib.Result.Result<Int, Stdlib.Int.ParseError> =
-    let length = Stdlib.String.length(value) in
-    let negative = length > 0 && Stdlib.String.getByteAt(value, 0) == 45 in
-    let digitStart = if negative then 1 else 0 in
-    if digitStart >= length || !Stdlib.Int.__validDigits(value, digitStart) then
+    let input = Stdlib.String.trim(value) in
+    let length = Stdlib.String.length(input) in
+    let first = if length > 0 then Stdlib.String.getByteAt(input, 0) else 0 in
+    let negative = first == 45 in
+    let hasSign = negative || first == 43 in
+    let digitStart = if hasSign then 1 else 0 in
+    if digitStart >= length || !Stdlib.Int.__validDigits(input, digitStart) then
         Error(Stdlib.Int.ParseError.BadFormat)
     else
-        let magnitude = Stdlib.Int.__normalizeMagnitude(Stdlib.String.drop(value, digitStart)) in
+        let magnitude = Stdlib.Int.__normalizeMagnitude(Stdlib.String.drop(input, digitStart)) in
         Ok(Stdlib.Int.__value(Stdlib.Int.__withSign(negative, magnitude)))
 
 let fromInt8(value: Int8) : Int = Stdlib.Int.__value(Stdlib.Int8.toString(value))

@@ -275,6 +275,8 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RefCountInc _ -> defs
         | RefCountDec _ -> defs
         | Print _ -> defs
+        | StdoutWrite _ -> defs
+        | StdinReadLine dest -> Set.add dest defs
         | FileReadText (dest, _) -> Set.add dest defs
         | FileExists (dest, _) -> Set.add dest defs
         | FileWriteText (dest, _, _) -> Set.add dest defs
@@ -376,6 +378,8 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | RefCountInc (addr, _, _, _) -> Set.add addr uses
             | RefCountDec (addr, _, _, _) -> Set.add addr uses
             | Print (src, _) -> Set.union uses (getOperandUses src)
+            | StdoutWrite (_, src, _) -> Set.union uses (getOperandUses src)
+            | StdinReadLine _ -> uses
             | FileReadText (_, path) -> Set.union uses (getOperandUses path)
             | FileExists (_, path) -> Set.union uses (getOperandUses path)
             | FileWriteText (_, path, content) ->
@@ -793,6 +797,13 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
     | Print (src, vt) ->
         let src' = renameOperand state src
         (Print (src', vt), state)
+
+    | StdoutWrite (effectId, src, appendNewline) ->
+        (StdoutWrite (effectId, renameOperand state src, appendNewline), state)
+
+    | StdinReadLine dest ->
+        let (_, newDest, state') = newVersion state dest
+        (StdinReadLine newDest, state')
 
     | FileReadText (dest, path) ->
         let path' = renameOperand state path

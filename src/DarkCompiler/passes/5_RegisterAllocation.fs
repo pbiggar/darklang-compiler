@@ -497,6 +497,8 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         regToVReg reg |> Option.toList
     | LIR.PrintFloatNoNewline _ -> []  // FP register, not GP
     | LIR.PrintChars _ -> []  // No registers used
+    | LIR.StdoutWrite (_, value, _) -> operandToVReg value |> Option.toList
+    | LIR.StdinReadLine _ -> []
     | LIR.PrintBlob reg -> regToVReg reg |> Option.toList
     | LIR.HeapAlloc (_, _) -> []
     | LIR.HeapStore (addr, _, src, valueType) ->
@@ -608,6 +610,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.HeapAlloc (dest, _) -> regToVReg dest
     | LIR.HeapLoad (dest, _, _) -> regToVReg dest
     | LIR.StringConcat (dest, _, _) -> regToVReg dest
+    | LIR.StdinReadLine (_, dest) -> regToVReg dest
     | LIR.LoadFuncAddr (dest, _) -> regToVReg dest
     | LIR.FileReadText (dest, _) -> regToVReg dest
     | LIR.FileExists (dest, _) -> regToVReg dest
@@ -2858,6 +2861,16 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
 
     | LIR.PrintFloat freg -> [LIR.PrintFloat freg]
     | LIR.PrintString value -> [LIR.PrintString value]
+    | LIR.StdoutWrite (effectId, value, appendNewline) ->
+        let (valueOp, valueLoads) = applyToOperand mapping value LIR.X12
+        valueLoads @ [LIR.StdoutWrite (effectId, valueOp, appendNewline)]
+    | LIR.StdinReadLine (effectId, dest) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        [LIR.StdinReadLine (effectId, destReg)] @ storeInstrs
     | LIR.RuntimeError message -> [LIR.RuntimeError message]
     | LIR.RuntimeErrorString reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12

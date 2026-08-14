@@ -101,6 +101,17 @@ let dateTimeModule : ModuleDef = {
     ]
 }
 
+/// Explicit CLI presentation primitives. These are compiler intrinsics rather
+/// than host-library calls, so their effects are visible throughout the IR.
+let builtinPresentationModule : ModuleDef = {
+    Name = "Builtin"
+    Functions = [
+        { Name = "print"; TypeParams = []; ParamTypes = [TString]; ReturnType = TUnit }
+        { Name = "printLine"; TypeParams = []; ParamTypes = [TString]; ReturnType = TUnit }
+        { Name = "stdinReadLine"; TypeParams = []; ParamTypes = [TUnit]; ReturnType = TString }
+    ]
+}
+
 /// Raw memory intrinsics - internal only for HAMT implementation
 /// These functions bypass the type system and should only be used in stdlib code
 /// The names start with __ to indicate they are internal
@@ -187,6 +198,7 @@ let allModules : ModuleDef list = [
     platformModule
     randomModule
     dateTimeModule
+    builtinPresentationModule
 ]
 
 /// Compiler-visible values are registered separately from functions so a value

@@ -1258,6 +1258,13 @@ let selectInstr
         let lirRight = convertOperand right
         Ok ([LIR.StringConcat (lirDest, lirLeft, lirRight)], state)
 
+    | MIR.StdoutWrite (effectId, value, appendNewline) ->
+        Ok ([LIR.StdoutWrite (effectId, convertOperand value, appendNewline)], state)
+
+    | MIR.StdinReadLine dest ->
+        let (MIR.VReg effectId) = dest
+        Ok ([LIR.StdinReadLine (effectId, vregToLIRReg dest)], state)
+
     | MIR.FileReadText (dest, path) ->
         let lirDest = vregToLIRReg dest
         let lirPath = convertOperand path
@@ -1675,6 +1682,8 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
     | MIR.RefCountInc (addr, _, _, _)
     | MIR.RefCountDec (addr, _, _, _) -> maxVRegId addr currentMax
     | MIR.Print (src, _) -> maxVRegIdFromOperand src currentMax
+    | MIR.StdoutWrite (_, src, _) -> maxVRegIdFromOperand src currentMax
+    | MIR.StdinReadLine dest -> maxVRegId dest currentMax
     | MIR.RuntimeError _ -> currentMax
     | MIR.RuntimeErrorString message -> maxVRegIdFromOperand message currentMax
     | MIR.FileReadText (dest, path)

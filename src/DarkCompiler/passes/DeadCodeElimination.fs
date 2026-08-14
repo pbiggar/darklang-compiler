@@ -81,6 +81,8 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.PrintFloat _
     | LIR.PrintFloatNoNewline _
     | LIR.PrintString _
+    | LIR.StdoutWrite _
+    | LIR.StdinReadLine _
     | LIR.RuntimeError _
     | LIR.RuntimeErrorString _
     | LIR.PrintHeapStringNoNewline _

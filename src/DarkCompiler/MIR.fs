@@ -94,6 +94,8 @@ type Instr =
     | RefCountDec of addr:VReg * payloadSize:int * kind:RcKind * metadata:ANF.RcMetadata option   // Decrement ref count, free if zero
     // Output operations (for main expression result printing)
     | Print of src:Operand * valueType:AST.Type    // Print value with type-appropriate formatting
+    | StdoutWrite of effectId:int * value:Operand * appendNewline:bool // Explicit stdout effect
+    | StdinReadLine of dest:VReg                       // Read one line from stdin
     | RuntimeError of message:string               // Print runtime error to stderr and exit with code 1
     | RuntimeErrorString of message:Operand        // Print a heap String error to stderr and exit with code 1
     // File I/O intrinsics (generate syscalls)

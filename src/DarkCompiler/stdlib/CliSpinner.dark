@@ -1,0 +1,10 @@
+// CliSpinner.dark - the pinned static status wrapper (no timer or TTY branch).
+
+module Stdlib.Cli.UI.Spinner
+
+let run<'a>(message: String, fn: (Unit) -> a) : a =
+    let _ = Builtin.print(message ++ "... ") in
+    let result = fn(()) in
+    let _ = Builtin.printLine(Stdlib.Cli.UI.Color.green("done")) in
+    result
+

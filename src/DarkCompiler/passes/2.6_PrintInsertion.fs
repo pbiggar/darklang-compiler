@@ -52,6 +52,10 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
 
         // For list types, call toDisplayString first
         match printType with
+        | AST.TUnit ->
+            // Explicit output functions return Unit. Matching the interpreter,
+            // a final Unit has no implicit textual representation.
+            (Return atom, varGen)
         | AST.TSum ("Stdlib.Option.Option", [AST.TList elemType]) ->
             match ListDisplay.getDisplayStringFunc elemType with
             | Some toDisplayStringName ->

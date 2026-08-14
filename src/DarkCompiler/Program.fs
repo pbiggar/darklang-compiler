@@ -478,15 +478,13 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
                       Stderr = err
                       RuntimeTime = TimeSpan.Zero }
                 | Ok binary ->
-                    CompilerLibrary.execute compileReport.Target (verbosityToInt verbosity) binary
+                    CompilerLibrary.executeAttached compileReport.Target (verbosityToInt verbosity) binary
 
     if showNormal then
-        if execResult.Stdout <> "" then
-            println $"{execResult.Stdout}"
-        if execResult.Stderr <> "" then
-            eprintln $"{execResult.Stderr}"
         println "---"
         println $"Exit code: {execResult.ExitCode}"
+    if execResult.Stderr <> "" then
+        eprintln $"{execResult.Stderr}"
 
     execResult.ExitCode
 

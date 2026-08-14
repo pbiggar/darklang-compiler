@@ -707,6 +707,8 @@ let private foldRegUses folder state (instr: Instr) =
     | FileDelete (_, path)
     | FileSetExecutable (_, path) ->
         foldOperandRegUse folder state path
+    | StdoutWrite (_, value, _) ->
+        foldOperandRegUse folder state value
     | Cset _
     | SaveRegs _
     | RestoreRegs _
@@ -714,6 +716,7 @@ let private foldRegUses folder state (instr: Instr) =
     | PrintFloat _
     | PrintFloatNoNewline _
     | PrintString _
+    | StdinReadLine _
     | RuntimeError _
     | RuntimeErrorString _
     | PrintChars _

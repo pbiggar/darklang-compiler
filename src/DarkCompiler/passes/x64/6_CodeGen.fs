@@ -2824,6 +2824,134 @@ let private translateInstr
             @ genExitSyscall
         )
 
+    | LIR.StdoutWrite (_, value, appendNewline) ->
+        let writeLoop prefix =
+            let loopLabel = freshLabel $"{prefix}_write"
+            let retryLabel = freshLabel $"{prefix}_retry"
+            let doneLabel = freshLabel $"{prefix}_done"
+            [ X86_64.Label loopLabel
+              X86_64.CMP_imm (X86_64.RDX, 0)
+              X86_64.Jcc (X86_64.LE, doneLabel)
+              X86_64.Label retryLabel ]
+            @ genWriteSyscall
+            @ [ X86_64.CMP_imm (X86_64.RAX, -4) // Linux EINTR
+                X86_64.Jcc (X86_64.EQ, retryLabel)
+                X86_64.CMP_imm (X86_64.RAX, 0)
+                X86_64.Jcc (X86_64.LE, doneLabel)
+                X86_64.ADD_reg (X86_64.RSI, X86_64.RAX)
+                X86_64.SUB_reg (X86_64.RDX, X86_64.RAX)
+                X86_64.JMP loopLabel
+                X86_64.Label doneLabel ]
+
+        let setupValue =
+            match value with
+            | LIR.Reg reg ->
+                resolveReg reg
+                |> Result.map (fun src ->
+                    [ X86_64.MOV_reg (X86_64.R10, src)
+                      X86_64.MOV_load (X86_64.RDX, X86_64.R10, 0)
+                      X86_64.LEA (X86_64.RSI, X86_64.R10, 8) ])
+            | LIR.StackSlot offset ->
+                Ok [ X86_64.MOV_load (X86_64.R10, X86_64.RBP, int32 (adjustStackOffset ctx offset))
+                     X86_64.MOV_load (X86_64.RDX, X86_64.R10, 0)
+                     X86_64.LEA (X86_64.RSI, X86_64.R10, 8) ]
+            | LIR.StringSymbol text ->
+                Ok (emitStringLiteralNoRefCount X86_64.R10 text
+                    @ [ X86_64.MOV_load (X86_64.RDX, X86_64.R10, 0)
+                        X86_64.LEA (X86_64.RSI, X86_64.R10, 8) ])
+            | _ -> Error "StdoutWrite requires a String operand"
+
+        setupValue
+        |> Result.map (fun setup ->
+            let saved =
+                [ X86_64.RAX; X86_64.RDI; X86_64.RSI; X86_64.RDX; X86_64.RCX
+                  X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11 ]
+            let save = saved |> List.map X86_64.PUSH
+            let restore = saved |> List.rev |> List.map X86_64.POP
+            let newline =
+                if not appendNewline then []
+                else
+                    [ X86_64.SUB_imm (X86_64.RSP, 8) ]
+                    @ loadImm64 scratch 10L
+                    @ [ X86_64.MOV_store (X86_64.RSP, 0, scratch)
+                        X86_64.MOV_imm32 (X86_64.RDI, 1)
+                        X86_64.MOV_reg (X86_64.RSI, X86_64.RSP)
+                        X86_64.MOV_imm32 (X86_64.RDX, 1) ]
+                    @ writeLoop "stdout_newline"
+                    @ [ X86_64.ADD_imm (X86_64.RSP, 8) ]
+            save
+            @ setup
+            @ [ X86_64.MOV_imm32 (X86_64.RDI, 1) ]
+            @ writeLoop "stdout"
+            @ newline
+            @ restore)
+
+    | LIR.StdinReadLine (_, dest) ->
+        resolveReg dest
+        |> Result.map (fun destReg ->
+            let readLabel = freshLabel "stdin_read"
+            let retryLabel = freshLabel "stdin_retry"
+            let gotByteLabel = freshLabel "stdin_byte"
+            let finishLabel = freshLabel "stdin_finish"
+            let noCrLabel = freshLabel "stdin_no_cr"
+            let saved =
+                [ X86_64.RAX; X86_64.RDI; X86_64.RSI; X86_64.RDX; X86_64.RCX
+                  X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11 ]
+            let save = saved |> List.map X86_64.PUSH
+            let restore = saved |> List.rev |> List.map X86_64.POP
+            let savedBytes = int32 (List.length saved * 8 + 8)
+            save
+            @ [ X86_64.SUB_imm (X86_64.RSP, 16) ]
+            @ loadImm64 X86_64.R10 0L
+            @ [ X86_64.MOV_store (X86_64.RSP, 0, X86_64.R10)
+                X86_64.Label readLabel
+                X86_64.MOV_load (X86_64.R10, X86_64.RSP, 0)
+                X86_64.LEA (X86_64.RSI, heapPtr, 8)
+                X86_64.ADD_reg (X86_64.RSI, X86_64.R10)
+                X86_64.XOR_reg (X86_64.RDI, X86_64.RDI)
+                X86_64.MOV_imm32 (X86_64.RDX, 1)
+                X86_64.Label retryLabel ]
+            @ loadImm64 X86_64.RAX (int64 syscalls.Read)
+            @ [ X86_64.SYSCALL
+                X86_64.CMP_imm (X86_64.RAX, -4)
+                X86_64.Jcc (X86_64.EQ, retryLabel)
+                X86_64.CMP_imm (X86_64.RAX, 1)
+                X86_64.Jcc (X86_64.EQ, gotByteLabel)
+                X86_64.JMP finishLabel
+                X86_64.Label gotByteLabel
+                X86_64.MOV_load_byte (X86_64.R11, X86_64.RSI, 0)
+                X86_64.CMP_imm (X86_64.R11, 10)
+                X86_64.Jcc (X86_64.EQ, finishLabel)
+                X86_64.ADD_imm (X86_64.R10, 1)
+                X86_64.MOV_store (X86_64.RSP, 0, X86_64.R10)
+                X86_64.JMP readLabel
+                X86_64.Label finishLabel
+                X86_64.MOV_load (X86_64.R10, X86_64.RSP, 0)
+                X86_64.CMP_imm (X86_64.R10, 0)
+                X86_64.Jcc (X86_64.LE, noCrLabel)
+                X86_64.LEA (X86_64.RSI, heapPtr, 7)
+                X86_64.ADD_reg (X86_64.RSI, X86_64.R10)
+                X86_64.MOV_load_byte (X86_64.R11, X86_64.RSI, 0)
+                X86_64.CMP_imm (X86_64.R11, 13)
+                X86_64.Jcc (X86_64.NE, noCrLabel)
+                X86_64.SUB_imm (X86_64.R10, 1)
+                X86_64.Label noCrLabel
+                X86_64.MOV_store (heapPtr, 0, X86_64.R10)
+                X86_64.MOV_reg (X86_64.R11, X86_64.R10)
+                X86_64.ADD_imm (X86_64.R11, 7)
+                X86_64.AND_imm (X86_64.R11, -8)
+                X86_64.LEA (X86_64.RSI, heapPtr, 8)
+                X86_64.ADD_reg (X86_64.RSI, X86_64.R11) ]
+            @ loadImm64 X86_64.RAX 1L
+            @ [ X86_64.MOV_store (X86_64.RSI, 0, X86_64.RAX)
+                X86_64.MOV_store (X86_64.RSP, 8, heapPtr)
+                X86_64.ADD_imm (X86_64.R11, 16)
+                X86_64.ADD_reg (heapPtr, X86_64.R11) ]
+            @ genLeakCounterInc ctx
+            @ [ X86_64.ADD_imm (X86_64.RSP, 16) ]
+            @ restore
+            @ [ X86_64.MOV_load (destReg, X86_64.RSP, -savedBytes) ])
+
     | LIR.RuntimeError msg ->
         // Write error message to stderr (fd=2) and exit(1)
         let bytes = System.Text.Encoding.UTF8.GetBytes(msg + "\n")

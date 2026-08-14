@@ -48,6 +48,8 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RefCountInc (atom, _, _, _) -> extractFromAtom atom
     | ANF.RefCountDec (atom, _, _, _) -> extractFromAtom atom
     | ANF.Print (atom, _) -> extractFromAtom atom
+    | ANF.StdoutWrite (atom, _) -> extractFromAtom atom
+    | ANF.StdinReadLine -> []
     | ANF.FileReadText path -> extractFromAtom path
     | ANF.FileExists path -> extractFromAtom path
     | ANF.FileWriteText (path, content) ->

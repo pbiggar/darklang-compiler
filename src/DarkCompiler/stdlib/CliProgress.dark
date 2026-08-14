@@ -1,0 +1,19 @@
+// CliProgress.dark - fixed-width interpreter-compatible progress rendering.
+
+module Stdlib.Cli.UI.Progress
+
+let bar(current: Int, total: Int, label: String) : Unit =
+    // Compiler String/List internals still take Int64. Keep that adaptation
+    // private while retaining the interpreter's public Int signature.
+    let current64 = Stdlib.Int.__toInt64Unchecked(current) in
+    let total64 = Stdlib.Int.__toInt64Unchecked(total) in
+    let width = 30 in
+    let filled =
+        if total64 == 0 then 0 else (current64 * width) / total64 in
+    let empty = width - filled in
+    let filledStr = Stdlib.String.repeat("#", filled) in
+    let emptyStr = Stdlib.String.repeat("-", empty) in
+    let pct =
+        if total64 == 0 then 0 else (current64 * 100) / total64 in
+    let _ = Builtin.print("\r[" ++ filledStr ++ emptyStr ++ "] " ++ Stdlib.Int64.toString(pct) ++ "% " ++ label) in
+    if current64 >= total64 then Builtin.printLine("") else ()
