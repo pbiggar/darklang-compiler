@@ -1,24 +1,26 @@
 // Stdlib.Blob.dark - immutable binary values and interpreter-compatible codecs.
 
-def Stdlib.Blob.__int64ToUInt8(value: Int64) : UInt8 =
+module Stdlib.Blob
+
+let __int64ToUInt8(value: Int64) : UInt8 =
     match Stdlib.Int.toUInt8(Stdlib.Int.fromInt64(value)) with
     | Some(converted) -> converted
     | None -> Builtin.testRuntimeError("Blob byte did not fit UInt8")
 
-def Stdlib.Blob.__uint8ToInt64(value: UInt8) : Int64 =
+let __uint8ToInt64(value: UInt8) : Int64 =
     match Stdlib.Int.toInt64(Stdlib.Int.fromUInt8(value)) with
     | Some(converted) -> converted
     | None -> Builtin.testRuntimeError("UInt8 did not fit Int64")
 
-def Stdlib.Blob.__intToInt64(value: Int) : Int64 =
+let __intToInt64(value: Int) : Int64 =
     match Stdlib.Int.toInt64(value) with
     | Some(converted) -> converted
     | None -> Builtin.testRuntimeError("Clamped Blob index did not fit Int64")
 
-def Stdlib.Blob.length(blob: Blob) : Int =
+let length(blob: Blob) : Int =
     Stdlib.Int.fromInt64(Stdlib.Bytes.length(blob))
 
-def Stdlib.Blob.__toList(blob: Blob, index: Int64, acc: List<UInt8>) : List<UInt8> =
+let __toList(blob: Blob, index: Int64, acc: List<UInt8>) : List<UInt8> =
     if index < 0 then acc
     else
         Stdlib.Blob.__toList(
@@ -26,32 +28,32 @@ def Stdlib.Blob.__toList(blob: Blob, index: Int64, acc: List<UInt8>) : List<UInt
             index - 1,
             [Stdlib.Blob.__int64ToUInt8(Stdlib.Bytes.get(blob, index)), ...acc])
 
-def Stdlib.Blob.toList(blob: Blob) : List<UInt8> =
+let toList(blob: Blob) : List<UInt8> =
     Stdlib.Blob.__toList(blob, Stdlib.Bytes.length(blob) - 1, [])
 
-def Stdlib.Blob.__fromList(bytes: List<UInt8>, acc: List<Int64>) : Blob =
+let __fromList(bytes: List<UInt8>, acc: List<Int64>) : Blob =
     match bytes with
     | [] -> Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc))
     | [byte, ...rest] ->
         Stdlib.Blob.__fromList(rest, [Stdlib.Blob.__uint8ToInt64(byte), ...acc])
 
-def Stdlib.Blob.fromList(bytes: List<UInt8>) : Blob =
+let fromList(bytes: List<UInt8>) : Blob =
     Stdlib.Blob.__fromList(bytes, [])
 
-def Stdlib.Blob.__appendBlob(blob: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
+let __appendBlob(blob: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
     if index >= Stdlib.Bytes.length(blob) then acc
     else Stdlib.Blob.__appendBlob(blob, index + 1, [Stdlib.Bytes.get(blob, index), ...acc])
 
-def Stdlib.Blob.__concat(blobs: List<Blob>, acc: List<Int64>) : Blob =
+let __concat(blobs: List<Blob>, acc: List<Int64>) : Blob =
     match blobs with
     | [] -> Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc))
     | [blob, ...rest] ->
         Stdlib.Blob.__concat(rest, Stdlib.Blob.__appendBlob(blob, 0, acc))
 
-def Stdlib.Blob.concat(blobs: List<Blob>) : Blob =
+let concat(blobs: List<Blob>) : Blob =
     Stdlib.Blob.__concat(blobs, [])
 
-def Stdlib.Blob.slice(blob: Blob, start: Int, length: Int) : Blob =
+let slice(blob: Blob, start: Int, length: Int) : Blob =
     let zero = Stdlib.Int.fromInt64(0) in
     let blobLength = Stdlib.Blob.length(blob) in
     let safeStart = if start < zero then zero else if start > blobLength then blobLength else start in
@@ -64,16 +66,16 @@ def Stdlib.Blob.slice(blob: Blob, start: Int, length: Int) : Blob =
             Stdlib.List.drop<Int64>(Stdlib.Bytes.toList(blob), start64),
             length64))
 
-def Stdlib.Blob.toHex(blob: Blob) : String =
+let toHex(blob: Blob) : String =
     Stdlib.Bytes.hexEncode(blob)
 
-def Stdlib.Blob.__hexValue(byte: Int64) : Int64 =
+let __hexValue(byte: Int64) : Int64 =
     if byte >= 48 && byte <= 57 then byte - 48
     else if byte >= 65 && byte <= 70 then byte - 55
     else if byte >= 97 && byte <= 102 then byte - 87
     else -1
 
-def Stdlib.Blob.__fromHex(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Result<Blob, String> =
+let __fromHex(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Result<Blob, String> =
     if index >= Stdlib.String.length(value) then
         Ok(Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc)))
     else
@@ -83,15 +85,15 @@ def Stdlib.Blob.__fromHex(value: String, index: Int64, acc: List<Int64>) : Stdli
             Error("Invalid hex string: The input is not a valid hex string as it contains a non-hex character.")
         else Stdlib.Blob.__fromHex(value, index + 2, [high * 16 + low, ...acc])
 
-def Stdlib.Blob.fromHex(value: String) : Stdlib.Result.Result<Blob, String> =
+let fromHex(value: String) : Stdlib.Result.Result<Blob, String> =
     if Stdlib.String.length(value) % 2 != 0 then
         Error("Invalid hex string: The input is not a valid hex string as its length is not a multiple of 2.")
     else Stdlib.Blob.__fromHex(value, 0, [])
 
-def Stdlib.Blob.toBase64(blob: Blob) : String =
+let toBase64(blob: Blob) : String =
     Stdlib.Base64.encode(blob)
 
-def Stdlib.Blob.__removeBase64Whitespace(value: String) : String =
+let __removeBase64Whitespace(value: String) : String =
     Stdlib.String.replace(
         Stdlib.String.replace(
             Stdlib.String.replace(
@@ -103,7 +105,7 @@ def Stdlib.Blob.__removeBase64Whitespace(value: String) : String =
         "\n",
         "")
 
-def Stdlib.Blob.fromBase64(value: String) : Stdlib.Result.Result<Blob, String> =
+let fromBase64(value: String) : Stdlib.Result.Result<Blob, String> =
     // Match the interpreter's ordering: normalize the URL alphabet and infer
     // padding before Convert-style whitespace removal.
     let alphabetNormalized =
@@ -119,17 +121,17 @@ def Stdlib.Blob.fromBase64(value: String) : Stdlib.Result.Result<Blob, String> =
     | Error(_) ->
         Error("Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.")
 
-def Stdlib.Blob.__stringBytes(value: String, index: Int64, acc: List<Int64>) : List<Int64> =
+let __stringBytes(value: String, index: Int64, acc: List<Int64>) : List<Int64> =
     if index >= Stdlib.String.length(value) then Stdlib.List.reverse<Int64>(acc)
     else Stdlib.Blob.__stringBytes(value, index + 1, [Stdlib.String.getByteAt(value, index), ...acc])
 
-def Stdlib.Blob.fromString(value: String) : Blob =
+let fromString(value: String) : Blob =
     Stdlib.Bytes.fromList(Stdlib.Blob.__stringBytes(value, 0, []))
 
-def Stdlib.Blob.__isContinuation(byte: Int64) : Bool =
+let __isContinuation(byte: Int64) : Bool =
     byte >= 128 && byte <= 191
 
-def Stdlib.Blob.__invalidUtf8(byte: Int64, index: Int64) : String =
+let __invalidUtf8(byte: Int64, index: Int64) : String =
     "Invalid UTF-8: Unable to translate bytes [" ++
     Stdlib.Bytes.__byteToHex(byte) ++
     "] at index " ++
@@ -137,7 +139,7 @@ def Stdlib.Blob.__invalidUtf8(byte: Int64, index: Int64) : String =
     " from specified code page to Unicode."
 
 // Returns the first invalid byte index, or -1 when the complete Blob is valid UTF-8.
-def Stdlib.Blob.__validateUtf8(blob: Blob, index: Int64, length: Int64) : Int64 =
+let __validateUtf8(blob: Blob, index: Int64, length: Int64) : Int64 =
     if index >= length then -1
     else
         let b0 = Stdlib.Bytes.get(blob, index) in
@@ -168,7 +170,7 @@ def Stdlib.Blob.__validateUtf8(blob: Blob, index: Int64, length: Int64) : Int64 
                 else Stdlib.Blob.__validateUtf8(blob, index + 4, length)
         else index
 
-def Stdlib.Blob.__copyToString(blob: Blob) : String =
+let __copyToString(blob: Blob) : String =
     let length = Stdlib.Bytes.length(blob) in
     if length == 0 then ""
     else
@@ -179,7 +181,7 @@ def Stdlib.Blob.__copyToString(blob: Blob) : String =
         let _ = __raw_write_word(ptr, 8 + dataSize, 1) in
         __rawptr_to_string(ptr)
 
-def Stdlib.Blob.toString(blob: Blob) : Stdlib.Result.Result<String, String> =
+let toString(blob: Blob) : Stdlib.Result.Result<String, String> =
     let invalidIndex = Stdlib.Blob.__validateUtf8(blob, 0, Stdlib.Bytes.length(blob)) in
     if invalidIndex < 0 then Ok(Stdlib.Blob.__copyToString(blob))
     else Error(Stdlib.Blob.__invalidUtf8(Stdlib.Bytes.get(blob, invalidIndex), invalidIndex))
