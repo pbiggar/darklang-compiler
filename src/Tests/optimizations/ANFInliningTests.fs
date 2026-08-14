@@ -37,6 +37,15 @@ let rec private countCalls (target: string) (expr: AExpr) : int =
     | If (_, thenBranch, elseBranch) ->
         countCalls target thenBranch + countCalls target elseBranch
 
+let rec private countPrimOps (target: BinOp) (expr: AExpr) : int =
+    match expr with
+    | Return _ -> 0
+    | Let (_, Prim (op, _, _), body) ->
+        (if op = target then 1 else 0) + countPrimOps target body
+    | Let (_, _, body) -> countPrimOps target body
+    | If (_, thenBranch, elseBranch) ->
+        countPrimOps target thenBranch + countPrimOps target elseBranch
+
 let rec private hasLiteralLet (expr: AExpr) : bool =
     match expr with
     | Return _ -> false
@@ -303,6 +312,89 @@ let testBorrowedSelfCallBlocksInlining () : TestResult =
     else
         Error "Expected function with borrowed self-call to remain recursive and not be inlined"
 
+let private boundedHashLoop (bound: int64) : Function =
+    let hashParam = { Id = TempId 0; Type = AST.TInt64 }
+    let dataParam = { Id = TempId 1; Type = AST.TInt64 }
+    let indexParam = { Id = TempId 2; Type = AST.TInt64 }
+    { Name = "hashLoop"
+      TypedParams = [hashParam; dataParam; indexParam]
+      ReturnType = AST.TInt64
+      ReturnOwnership = OwnedReturn
+      Body =
+        Let (
+            TempId 3,
+            Prim (Gte, Var indexParam.Id, intAtom bound),
+            If (
+                Var (TempId 3),
+                Return (Var hashParam.Id),
+                Let (
+                    TempId 4,
+                    Prim (BitAnd, Var dataParam.Id, intAtom 255L),
+                    Let (
+                        TempId 5,
+                        Prim (BitXor, Var hashParam.Id, Var (TempId 4)),
+                        Let (
+                            TempId 6,
+                            Prim (Mul, Var (TempId 5), intAtom 1099511628211L),
+                            Let (
+                                TempId 7,
+                                Prim (Add, Var indexParam.Id, intAtom 1L),
+                                Let (
+                                    TempId 8,
+                                    Call (
+                                        "hashLoop",
+                                        [Var (TempId 6); Var dataParam.Id; Var (TempId 7)]
+                                    ),
+                                    Return (Var (TempId 8))
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        ) }
+
+let private boundedHashCall () : AExpr =
+    Let (
+        TempId 9,
+        Call (
+            "hashLoop",
+            [intAtom -3750763034362895579L; intAtom 42L; intAtom 0L]
+        ),
+        Return (Var (TempId 9))
+    )
+
+let testBoundedRecursiveLoopUnrollsEightIterations () : TestResult =
+    let hashLoop = boundedHashLoop 8L
+    let main =
+        boundedHashCall ()
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramDefault (Program ([hashLoop], main))
+    match containsCall "hashLoop" inlinedMain, countPrimOps Mul inlinedMain with
+    | false, 8 -> Ok ()
+    | hasCall, multiplyCount ->
+        Error $"Expected an eight-round straight-line hash, but call={hasCall} and multiplies={multiplyCount}"
+
+let testBoundedRecursiveLoopHonorsIterationLimit () : TestResult =
+    let hashLoop = boundedHashLoop 9L
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramDefault (Program ([hashLoop], boundedHashCall ()))
+    if containsCall "hashLoop" inlinedMain then
+        Ok ()
+    else
+        Error "Expected a nine-iteration recursive loop to remain over the unrolling limit"
+
+let testBoundedRecursiveLoopHonorsExpansionLimit () : TestResult =
+    let hashLoop = boundedHashLoop 8L
+    let config =
+        { ANF_Inlining.defaultConfig with MaxBoundedLoopExpansion = 31 }
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgram config (Program ([hashLoop], boundedHashCall ()))
+    if containsCall "hashLoop" inlinedMain then
+        Ok ()
+    else
+        Error "Expected bounded recursive loop to remain over the expansion cost cap"
+
 let tests = [
     ("Inlining literal args removes call", testInliningWithLiteralArgumentsRemovesCall)
     ("Inlining literal args binds literal TempId", testInliningWithLiteralArgumentsBindsTemp)
@@ -313,4 +405,7 @@ let tests = [
     ("External control-flow candidates are not inlined", testExternalInlineCandidateRejectsControlFlowBody)
     ("External inlining honors caller budget", testExternalInliningHonorsCallerBudget)
     ("Borrowed self-call blocks inlining", testBorrowedSelfCallBlocksInlining)
+    ("Bounded recursive loops unroll eight iterations", testBoundedRecursiveLoopUnrollsEightIterations)
+    ("Bounded recursive loops honor iteration limit", testBoundedRecursiveLoopHonorsIterationLimit)
+    ("Bounded recursive loops honor expansion limit", testBoundedRecursiveLoopHonorsExpansionLimit)
 ]

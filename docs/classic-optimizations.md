@@ -564,6 +564,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Loop optimization
 
+### Bounded recursive-loop unrolling
+
+- Optimization name: Bounded recursive-loop unrolling
+- Taxonomy category: Loop unrolling / partial evaluation
+- Priority/rationale: Small fixed-trip scalar loops benefit from removing both recursive-call and loop-control overhead without exposing general recursion to code-size growth.
+- Notes: Implemented in ANF inlining for direct `Int64` recursion guarded by a literal `i >= bound`, entered with a literal induction value, and proven to advance by `i + 1`. Only primitive loop bodies are eligible; default limits are eight iterations and 48 expanded bindings per call site. Focused inlining tests cover the eight-round expansion and both caps, while an E2E hash case covers wrapping multiplication and XOR semantics. The routine merkletrees benchmark improves from 724,164,737 to 416,150,237 instructions (42.5%) with every other routine count unchanged.
+
 ### Effect-free direct-call hoisting
 
 - Optimization name: Effect-free direct-call hoisting

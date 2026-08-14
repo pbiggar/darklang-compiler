@@ -6,6 +6,7 @@
 // Heuristics:
 // - MaxFunctionSize: Only inline functions with <= N TempIds in body
 // - MaxInlineDepth: Limit recursive inlining to prevent code explosion
+// - Small scalar recursive loops with a literal trip count can be fully unrolled
 // - Skip recursive functions (direct and mutual recursion via SCC detection)
 // - Skip functions with closures (complex runtime behavior)
 // - Skip tail calls (preserve TCO optimization)
@@ -32,6 +33,10 @@ type InliningConfig = {
     MaxInlineDepth: int
     /// Maximum external stdlib wrapper calls to inline in one caller body
     MaxExternalInlineSites: int
+    /// Maximum statically proven recursive-loop iterations to expand
+    MaxBoundedLoopIterations: int
+    /// Maximum primitive bindings introduced by one bounded-loop expansion
+    MaxBoundedLoopExpansion: int
 }
 
 /// Default inlining configuration
@@ -39,6 +44,8 @@ let defaultConfig = {
     MaxFunctionSize = 20
     MaxInlineDepth = 3
     MaxExternalInlineSites = 8
+    MaxBoundedLoopIterations = 8
+    MaxBoundedLoopExpansion = 48
 }
 
 /// Information about a function for inlining decisions
@@ -495,6 +502,180 @@ let inlineCallBody (info: FunctionInfo) (args: Atom list) (varGen: VarGen)
 
     (bodyWithLiteralBindings, varGen'')
 
+type private BoundedRecursiveLoop = {
+    InductionParam: TempId
+    Bound: int64
+    ExitResult: Atom
+    IterationBindings: (TempId * CExpr) list
+    RecursiveArgs: Atom list
+}
+
+let private isBoundedLoopPrimitive (cexpr: CExpr) : bool =
+    match cexpr with
+    | Atom _
+    | TypedAtom (_, AST.TInt64)
+    | Prim _
+    | UnaryPrim _ -> true
+    | _ -> false
+
+let private trySplitBoundedLoopIteration
+    (functionName: string)
+    (expr: AExpr)
+    : ((TempId * CExpr) list * Atom list) option =
+    let rec split bindings remaining =
+        match remaining with
+        | Let (resultId, Call (callee, recursiveArgs), Return (Var returnedId))
+            when callee = functionName && resultId = returnedId ->
+            Some (List.rev bindings, recursiveArgs)
+        | Let (id, cexpr, body) when isBoundedLoopPrimitive cexpr ->
+            split ((id, cexpr) :: bindings) body
+        | _ -> None
+    split [] expr
+
+let private tryBoundedRecursiveLoop (info: FunctionInfo) : BoundedRecursiveLoop option =
+    let int64Params =
+        info.Func.TypedParams |> List.forall (fun param -> param.Type = AST.TInt64)
+    match int64Params, info.Func.ReturnType, info.Func.Body with
+    | true, AST.TInt64,
+      Let (
+          guardId,
+          Prim (Gte, Var inductionParam, IntLiteral (Int64 bound)),
+          If (Var conditionId, Return exitResult, iteration)
+      ) when guardId = conditionId ->
+        let parameterIds = info.Func.TypedParams |> List.map (fun param -> param.Id)
+        match List.tryFindIndex (fun id -> id = inductionParam) parameterIds,
+              trySplitBoundedLoopIteration info.Func.Name iteration with
+        | Some inductionIndex, Some (iterationBindings, recursiveArgs)
+            when List.length recursiveArgs = List.length parameterIds ->
+            let inductionAdvance = List.item inductionIndex recursiveArgs
+            let advancesByOne =
+                match inductionAdvance with
+                | Var nextId ->
+                    iterationBindings
+                    |> List.exists (fun (id, cexpr) ->
+                        id = nextId
+                        && cexpr = Prim (Add, Var inductionParam, IntLiteral (Int64 1L)))
+                | _ -> false
+            let exitUsesOnlyParameters =
+                match exitResult with
+                | Var id -> List.contains id parameterIds
+                | IntLiteral _ -> true
+                | _ -> false
+            if advancesByOne && exitUsesOnlyParameters then
+                Some {
+                    InductionParam = inductionParam
+                    Bound = bound
+                    ExitResult = exitResult
+                    IterationBindings = iterationBindings
+                    RecursiveArgs = recursiveArgs
+                }
+            else
+                None
+        | _ -> None
+    | _ -> None
+
+let private tryBoundedTripCount
+    (maximumIterations: int)
+    (start: int64)
+    (bound: int64)
+    : int option =
+    let rec count current iterationsLeft completed =
+        if current >= bound then
+            Some completed
+        elif iterationsLeft = 0 || current = System.Int64.MaxValue then
+            None
+        else
+            count (current + 1L) (iterationsLeft - 1) (completed + 1)
+    count start maximumIterations 0
+
+let private substituteBoundedLoopAtom
+    (mapping: Map<TempId, Atom>)
+    (atom: Atom)
+    : Atom =
+    match atom with
+    | Var id -> Map.tryFind id mapping |> Option.defaultValue atom
+    | _ -> atom
+
+let private substituteBoundedLoopCExpr
+    (mapping: Map<TempId, Atom>)
+    (cexpr: CExpr)
+    : CExpr =
+    let substitute = substituteBoundedLoopAtom mapping
+    match cexpr with
+    | Atom atom -> Atom (substitute atom)
+    | TypedAtom (atom, valueType) -> TypedAtom (substitute atom, valueType)
+    | Prim (op, left, right) -> Prim (op, substitute left, substitute right)
+    | UnaryPrim (op, source) -> UnaryPrim (op, substitute source)
+    | _ -> Crash.crash "ANF_Inlining: unsupported primitive in bounded-loop expansion"
+
+let private cloneBoundedLoopIteration
+    (parameterMapping: Map<TempId, Atom>)
+    (bindings: (TempId * CExpr) list)
+    (varGen: VarGen)
+    : (TempId * CExpr) list * Map<TempId, Atom> * VarGen =
+    let (bindingsReversed, mapping, varGen') =
+        bindings
+        |> List.fold (fun (cloned, currentMapping, currentVarGen) (originalId, cexpr) ->
+            let (freshId, nextVarGen) = freshVar currentVarGen
+            let clonedCExpr = substituteBoundedLoopCExpr currentMapping cexpr
+            (
+                (freshId, clonedCExpr) :: cloned,
+                Map.add originalId (Var freshId) currentMapping,
+                nextVarGen
+            )) ([], parameterMapping, varGen)
+    (List.rev bindingsReversed, mapping, varGen')
+
+let private tryUnrollBoundedCall
+    (info: FunctionInfo)
+    (config: InliningConfig)
+    (args: Atom list)
+    (resultId: TempId)
+    (continuation: AExpr)
+    (varGen: VarGen)
+    : (AExpr * VarGen) option =
+    let parameterIds = info.Func.TypedParams |> List.map (fun param -> param.Id)
+    match tryBoundedRecursiveLoop info with
+    | Some loop ->
+        match List.tryFindIndex (fun id -> id = loop.InductionParam) parameterIds with
+        | Some inductionIndex when List.length args = List.length parameterIds ->
+            match List.item inductionIndex args with
+            | IntLiteral (Int64 start) ->
+                match tryBoundedTripCount config.MaxBoundedLoopIterations start loop.Bound with
+                | Some tripCount
+                    when tripCount * List.length loop.IterationBindings
+                         <= config.MaxBoundedLoopExpansion ->
+                    let rec expand remaining currentArgs allBindings currentVarGen =
+                        let parameterMapping =
+                            List.zip parameterIds currentArgs |> Map.ofList
+                        if remaining = 0 then
+                            let finalResult =
+                                substituteBoundedLoopAtom parameterMapping loop.ExitResult
+                            let expanded =
+                                List.foldBack
+                                    (fun (id, cexpr) body -> Let (id, cexpr, body))
+                                    allBindings
+                                    (Let (resultId, Atom finalResult, continuation))
+                            Some (expanded, currentVarGen)
+                        else
+                            let (iterationBindings, iterationMapping, nextVarGen) =
+                                cloneBoundedLoopIteration
+                                    parameterMapping
+                                    loop.IterationBindings
+                                    currentVarGen
+                            let nextArgs =
+                                loop.RecursiveArgs
+                                |> List.map (substituteBoundedLoopAtom iterationMapping)
+                            expand
+                                (remaining - 1)
+                                nextArgs
+                                (allBindings @ iterationBindings)
+                                nextVarGen
+                    expand tripCount args [] varGen
+                | _ -> None
+            | _ -> None
+        | _ -> None
+    | None -> None
+
 /// Recursively inline calls in an expression
 let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
                      (depth: int) (varGen: VarGen) (expr: AExpr)
@@ -503,6 +684,13 @@ let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
     | Let (tid, Call (funcName, args), body) ->
         // Check if this is a regular call (not tail call) to a user function
         match Map.tryFind funcName funcs with
+        | Some info when info.IsRecursive ->
+            match tryUnrollBoundedCall info config args tid body varGen with
+            | Some (expanded, varGen') ->
+                inlineInExpr funcs config (depth + 1) varGen' expanded
+            | None ->
+                let (body', varGen') = inlineInExpr funcs config depth varGen body
+                (Let (tid, Call (funcName, args), body'), varGen')
         | Some info when shouldInline info config depth ->
             if info.IsExternal then
                 let (body', varGen') =

@@ -24,6 +24,12 @@ let unrollBoundary(i: Int64, limit: Int64, acc: Int64) : Int64 =
 
 unrollBoundary(9223372036854775806, 9223372036854775807, 0) = 9223372036854775806
 
+// A statically bounded scalar loop can expand without changing wrapping
+// multiplication or bitwise semantics.
+let boundedHashLoop(h: Int64, data: Int64, i: Int64) : Int64 =
+    if i >= 8 then h
+    else boundedHashLoop((h ^ (data & 255)) * 1099511628211, data, i + 1)
+
 // Simple tail recursion (accumulator pattern)
 // This pattern should be detected and optimized
 let sumTo(n: Int64, acc: Int64) : Int64 =
@@ -318,3 +324,5 @@ let tailWith3FloatLits(a: Float, b: Float, c: Float, n: Int64) : Float =
     else tailWith3FloatLits(5.0, 10.0, 15.0, n - 1)
 
 tailWith3FloatLits(0.0, 0.0, 0.0, 1) = 30.0
+
+boundedHashLoop(-3750763034362895579, 42, 0) = 5726281766666561765

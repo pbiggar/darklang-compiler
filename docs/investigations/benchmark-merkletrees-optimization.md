@@ -2,15 +2,13 @@
 
 ## Executive Summary
 
-The Dark compiler currently generates **733,993,597 instructions** for the
-merkletrees benchmark, which is **6.48x slower** than Rust
-(113,304,119 instructions) and faster than OCaml (1,004,581,199 instructions at
-8.87x).
+The Dark compiler currently generates **416,150,237 instructions** for the
+merkletrees benchmark, which is **3.34x** the audited Rust instruction count
+(124,776,610).
 
-This investigation currently tracks **3 remaining optimization opportunities**
-and **2 opportunities that no longer reproduce**. The most impactful remaining
-issue is a duplicate `buildTree` call in `benchmark` after `verifyTree` is
-inlined, which rebuilds the same tree twice per iteration.
+Bounded recursive-loop unrolling now removes both loop control and call overhead
+from the fixed eight-round hash. The intentional second `buildTree` execution
+remains: verification rebuilds the tree in every reference implementation.
 
 ## Benchmark Overview
 
@@ -28,30 +26,31 @@ Current Cachegrind evidence for Dark, with cached Rust and OCaml baselines:
 
 | Language | Instructions | vs Rust | Data refs | Branches | Mispred |
 |----------|-------------:|--------:|----------:|---------:|--------:|
-| Rust     | 113,304,119 | 1.00x | 19,760,299 | 3,322,450 | 12.8% |
-| **Dark** | **733,993,597** | **6.48x** | **104,856,036** | **65,535,215** | **15.1%** |
-| OCaml    | 1,004,581,199 | 8.87x | 226,897,520 | 124,769,269 | 8.6% |
+| Rust     | 124,776,610 | 1.00x | 32,868,514 | 3,323,129 | 12.8% |
+| **Dark** | **416,150,237** | **3.34x** | **78,642,352** | **6,553,846** | **12.8%** |
+| OCaml    | 1,004,581,199 | 8.05x | 226,897,520 | 124,769,269 | 8.6% |
 
-The Dark run has about 5.3x Rust's data references and about 19.7x Rust's
-branches. The branch delta is consistent with the current evidence below:
-`benchmark` rebuilds the same tree twice per iteration, and `hashLoop` remains a
-small recursive loop rather than Rust's unrolled straight-line hash sequence.
+The Dark run now has about 2.4x Rust's data references and 2.0x Rust's branches.
+The remaining work includes the intentional verification rebuild; `hashLoop`
+call sites now use an unrolled straight-line hash sequence.
 
-## Optimization Opportunities
+## Findings
 
-### 1. CRITICAL: Duplicate buildTree Call in Benchmark Function
+### 1. REQUIRED: Two buildTree Executions
 
-**Impact: ~50% reduction expected (eliminates half the work)**
+**Status: intentionally preserved for reference parity**
 
-#### Root Cause
+#### Source behavior
 
-After inlining `verifyTree`, the Dark compiler generates **two separate calls** to `buildTree` with identical arguments instead of reusing the first call's result.
+After inlining `verifyTree`, the Dark compiler correctly retains two separate
+calls to `buildTree` with identical arguments. The second execution verifies
+the first result and is also present in the Rust and OCaml reference sources.
 
 #### Evidence from current ANF after inlining:
 
 ```
 let TempId 42 = buildTree(t37, t39)
-let TempId 62 = buildTree(t37, t39)   // duplicate call
+let TempId 62 = buildTree(t37, t39)   // verification rebuild
 let TempId 63 = t62 == t42
 ```
 
@@ -59,7 +58,7 @@ let TempId 63 = t62 == t42
 
 ```
 v42 <- Call(buildTree, [v37, v39])
-v62 <- Call(buildTree, [v37, v39])   // duplicate call
+v62 <- Call(buildTree, [v37, v39])   // verification rebuild
 v63 <- v62 == v42 : TFunction ([TInt64; TInt64], TInt64)
 ```
 
@@ -70,7 +69,7 @@ ArgMoves(X0 <- Reg X22, X1 <- Reg X24)
 X20 <- Call(buildTree, [Reg X22, Reg X24])
 ...
 ArgMoves(X0 <- Reg X22, X1 <- Reg X24)
-X19 <- Call(buildTree, [Reg X22, Reg X24])   // duplicate call
+X19 <- Call(buildTree, [Reg X22, Reg X24])   // verification rebuild
 ```
 
 #### Analysis
@@ -87,37 +86,26 @@ let verifyTree(depth, leafStart, expectedRoot) =
     buildTree(depth, leafStart) == expectedRoot
 ```
 
-After inlining `verifyTree`, this should become:
+After inlining `verifyTree`, this becomes:
 ```
 let root = buildTree(depth, i)
-let verified = (buildTree(depth, i) == root)  // Should reuse root!
+let verified = (buildTree(depth, i) == root)
 ```
 
-The compiler should recognize that `buildTree(depth, i)` is a pure function and
-the second call is redundant with `root`. Existing CSE does not eliminate this
-recursive function call.
-
-#### Implementation Approach
-
-1. Extend CSE to safely cover pure function calls, including recursive calls.
-2. Hash the `(function, args)` tuple and check for an existing binding.
-3. Replace duplicate calls with a reference to the existing result.
-
-#### Files to Modify
-- `src/DarkCompiler/ANFOptimization.fs` - Extend CSE to eligible calls
-- `src/DarkCompiler/ANF.fs` - May need purity annotations
+Eliminating the second call would change the audited workload rather than
+optimize its execution, so call CSE must not be applied to this case.
 
 ---
 
-### 2. Partial Loop Unrolling for hashLoop
+### 2. RESOLVED: Loop Unrolling for hashLoop
 
-**Status: factor-two counted-loop unrolling implemented**
+**Measured impact: 42.5% reduction in whole-benchmark instructions**
 
-#### Root Cause
+#### Previous Root Cause
 
 The `hashLoop` function iterates 8 times (fixed count) but Dark compiles it as a recursive tail-call loop, while Rust completely unrolls it into 8 inline XOR/MUL sequences.
 
-#### Evidence from current Dark LIR:
+#### Evidence from Dark LIR before bounded unrolling:
 
 ```asm
 hashLoop_L1:
@@ -130,10 +118,12 @@ hashLoop_body:
   CondBranch(GE, Label "hashLoop_L2", Label "hashLoop_L1")
 ```
 
-Factor-two MIR unrolling now executes two consecutive scalar iterations per
-backedge and uses a safe remainder return for an odd final trip. This reduces
-the routine benchmark from 724,164,737 to 684,843,737 instructions (5.4%). The
-loop is still not fully unrolled across its fixed eight iterations.
+Each iteration paid loop control overhead: three body instructions plus a
+compare and branch in `hashLoop_body`.
+
+Factor-two MIR unrolling subsequently reduced the loop to four backedges. The
+bounded ANF expansion supersedes that partial optimization at eligible call
+sites by removing the recursive call and all eight iterations of loop control.
 
 #### Evidence from Rust disassembly (lines 5327-5349):
 
@@ -150,24 +140,27 @@ ca080129   eor x9, x9, x8
 
 Total: 16 instructions (2 per iteration, no loop overhead)
 
-#### Implementation Approach
+#### Implementation
 
-1. Consider full unrolling when the exact small trip count is known
-2. Inline `hashLoop` entirely into callers before evaluating further growth
+ANF inlining recognizes direct scalar recursion with a literal bound and entry,
+proves unit induction, and clones the primitive body. Default caps allow no more
+than eight iterations or 48 expanded bindings at one call site. The generated
+`buildTree` paths contain eight ordered XOR/multiply pairs and no `hashLoop`
+call.
 
-#### Files to Modify
-- `src/DarkCompiler/ANFOptimization.fs` - Add unrolling heuristics
-- `src/DarkCompiler/ANFInlining.fs` - Consider aggressive inlining for small recursive functions
+The transformation preserves the original ANF primitive operations, including
+wrapping `Int64` multiplication and XOR. Quick and routine Cachegrind counts
+both improved by 42.5%.
 
 ---
 
-### 3. Function Call Overhead for hashLoop
+### 3. RESOLVED: Function Call Overhead for hashLoop
 
-**Impact: ~15-20% reduction (combined with unrolling)**
+**Impact: included in the measured 42.5% whole-benchmark reduction**
 
-#### Root Cause
+#### Previous Root Cause
 
-Dark makes actual function calls to `hashLoop` from `buildTree`, incurring:
+Dark made actual function calls to `hashLoop` from `buildTree`, incurring:
 - Stack frame setup/teardown
 - Register save/restore
 - Branch prediction overhead
@@ -187,14 +180,11 @@ RestoreRegs([], [])
 
 The hash code is completely inlined - no `call` instructions to a separate hash function.
 
-#### Implementation Approach
+#### Implementation
 
-1. Mark `hashLoop` as an inlining candidate
-2. Inline small recursive functions with known bounds
-3. After inlining, loop unrolling can eliminate the recursion entirely
-
-#### Files to Modify
-- `src/DarkCompiler/ANFInlining.fs` - Increase inlining threshold for recursive functions with small bodies
+The bounded-loop expansion happens at eligible literal-entry call sites, so it
+simultaneously removes recursive-loop control and the caller's function call.
+Non-eligible calls retain the original recursive function.
 
 ---
 
@@ -212,23 +202,19 @@ The hash code is completely inlined - no `call` instructions to a separate hash 
 ### Dark buildTree:
 
 ```asm
-; Function makes 3 function calls per invocation:
-;   - 2x buildTree (recursive)
-;   - 1x hashLoop (should be inlined)
-; Plus duplicate buildTree call in benchmark
+; Internal nodes make 2x buildTree recursive calls.
+; The hash itself is eight inlined XOR/multiply pairs.
+; Verification intentionally invokes buildTree a second time.
 ```
 
 ## Recommended Priority
 
-1. **Eliminate duplicate buildTree call** - largest remaining benchmark-specific opportunity.
-2. **Inline hashLoop into buildTree** - removes hot-path call overhead.
-3. **Full unrolling for fixed small trip counts** - factor-two unrolling is complete; reassess only after inlining.
+The two `buildTree` executions are intentional parity behavior and must remain.
+Further work should target general compiler overhead without removing the
+verification rebuild.
 
 ## Estimated Combined Impact
 
-With all optimizations implemented, Dark could potentially achieve:
-- Current: 733,993,597 instructions (6.48x vs Rust)
-- Target: ~300-400M instructions (~3-4x vs Rust)
-
-Dark is already ahead of OCaml on this benchmark by instruction count; the
-remaining opportunities would move it closer to Rust.
+Current bounded unrolling produces 416,150,237 instructions (3.34x Rust), down
+from 724,164,737 (5.80x). Dark remains ahead of OCaml by instruction count while
+preserving the reference workload's two tree builds.
