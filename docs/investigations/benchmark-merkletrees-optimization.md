@@ -132,7 +132,7 @@ hashLoop_body:
 
 Factor-two MIR unrolling now executes two consecutive scalar iterations per
 backedge and uses a safe remainder return for an odd final trip. This reduces
-the routine benchmark from 724,164,728 to 684,843,728 instructions (5.4%). The
+the routine benchmark from 724,164,737 to 684,843,737 instructions (5.4%). The
 loop is still not fully unrolled across its fixed eight iterations.
 
 #### Evidence from Rust disassembly (lines 5327-5349):

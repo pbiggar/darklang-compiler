@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "6dbb096b37aaf32192bf960168fde271a2595f94f83653b43b94ec5b2e104758",
-  "generated_at": "2026-08-14T18:40:59+00:00",
+  "generated_at": "2026-08-14T21:26:54+00:00",
   "compiler": {
-    "commit": "6452e96afa1528fb3a92208c44e5752d87d4c45f",
-    "subject": "Repair CLI integration after grammar rebase"
+    "commit": "ec8ea92a6274393228e39f0affc79586b6bbf923",
+    "subject": "Unroll canonical counted loops by two"
   },
   "benchmarks": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "name": "leibniz",
-      "instructions": 900001522
+      "instructions": 850001522
     },
     {
       "name": "mandelbrot",
@@ -53,7 +53,7 @@
     },
     {
       "name": "merkletrees",
-      "instructions": 724164737
+      "instructions": 684843737
     },
     {
       "name": "nbody",

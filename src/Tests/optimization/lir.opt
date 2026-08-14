@@ -4,7 +4,7 @@
 ---NAME---
 counted_loop_unroll_by_two_generated_code
 ---INPUT---
-def loop(i: Int64, limit: Int64, sum: Float, sign: Float) : Float =
+let loop(i: Int64, limit: Int64, sum: Float, sign: Float) : Float =
     if i >= limit then sum
     else loop(i + 1, limit, sum + sign, Stdlib.Float.negate(sign))
 ---EXPECTED---
