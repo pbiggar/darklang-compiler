@@ -389,8 +389,7 @@ let rec lex (input: string) : Result<Token list, string> =
                                 let exprStr = System.String(exprChars |> List.toArray)
                                 match lex exprStr with
                                 | Ok tokens ->
-                                    let tokens' = tokens |> List.filter (fun t -> t <> TEOF)
-                                    parseInterpParts afterExpr (InterpTokens tokens' :: parts)
+                                    parseInterpParts afterExpr (InterpTokens tokens :: parts)
                                 | Error err -> Error $"Error in interpolated expression: {err}"
                             | Error err -> Error err
                         | _ ->
@@ -1760,8 +1759,9 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | InterpText s :: remaining ->
                     parseInterpParts remaining (AST.StringText s :: acc)
                 | InterpTokens tokens :: remaining ->
-                    // Parse the tokens as an expression
-                    match parseExpr (tokens @ [TEOF]) with
+                    // The lexer preserves the terminating token, so parsing does
+                    // not need to traverse and copy the expression token stream.
+                    match parseExpr tokens with
                     | Ok (expr, [TEOF]) ->
                         parseInterpParts remaining (AST.StringExpr expr :: acc)
                     | Ok (_, leftover) ->

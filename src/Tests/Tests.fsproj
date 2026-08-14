@@ -66,6 +66,7 @@
     <Compile Include="compiler-passes/PlatformTests.fs" />
     <Compile Include="compiler-passes/IRSymbolTests.fs" />
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
+    <Compile Include="compiler-passes/ParserTests.fs" />
     <Compile Include="compiler-passes/ANFToMIRTests.fs" />
     <Compile Include="compiler-passes/TypeCheckingTests.fs" />
     <Compile Include="compiler-passes/BitsetTests.fs" />

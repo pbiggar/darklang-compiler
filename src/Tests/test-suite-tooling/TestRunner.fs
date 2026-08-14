@@ -350,6 +350,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "LIR Execution Fixture Tests"; Tests = TestDSL.LIRExecutionTestRunner.tests lirExecutionTestFiles }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
         { Name = "ARM64 Binary Tests"; Tests = ARM64BinaryTests.tests }
+        { Name = "Parser Tests"; Tests = ParserTests.tests }
         { Name = "ARM64 CodeGen Tests"; Tests = ARM64CodeGenTests.tests }
         { Name = "x64 Encoding Fixture Tests"; Tests = TestDSL.X86_64EncodingTestRunner.tests x64encTestFiles }
         { Name = "x64 Binary Tests"; Tests = X86_64BinaryTests.tests }
