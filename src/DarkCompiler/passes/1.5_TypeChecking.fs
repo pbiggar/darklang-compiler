@@ -1238,6 +1238,57 @@ let private equalityComparableType
 
     comparable Set.empty typ
 
+let rec private reconcileComparisonTypes
+    (aliasReg: AliasRegistry)
+    (leftType: Type)
+    (rightType: Type)
+    : Type option =
+    let leftResolved = resolveType aliasReg leftType
+    let rightResolved = resolveType aliasReg rightType
+    let rec reconcileMany leftTypes rightTypes acc =
+        match leftTypes, rightTypes with
+        | [], [] -> Some (List.rev acc)
+        | left :: leftRest, right :: rightRest ->
+            reconcileComparisonTypes aliasReg left right
+            |> Option.bind (fun reconciled ->
+                reconcileMany leftRest rightRest (reconciled :: acc))
+        | _ -> None
+
+    if leftResolved = rightResolved then
+        Some leftResolved
+    else
+        match leftResolved, rightResolved with
+        | TRuntimeError, other
+        | other, TRuntimeError -> Some other
+        | TVar _, other
+        | other, TVar _ -> Some other
+        | TList leftElement, TList rightElement ->
+            reconcileComparisonTypes aliasReg leftElement rightElement
+            |> Option.map TList
+        | TDict (leftKey, leftValue), TDict (rightKey, rightValue) ->
+            reconcileComparisonTypes aliasReg leftKey rightKey
+            |> Option.bind (fun keyType ->
+                reconcileComparisonTypes aliasReg leftValue rightValue
+                |> Option.map (fun valueType -> TDict (keyType, valueType)))
+        | TTuple leftElements, TTuple rightElements ->
+            reconcileMany leftElements rightElements [] |> Option.map TTuple
+        | TEnumFields leftFields, TEnumFields rightFields ->
+            reconcileMany leftFields rightFields [] |> Option.map TEnumFields
+        | TRecord (leftName, leftArgs), TRecord (rightName, rightArgs)
+            when leftName = rightName ->
+            reconcileMany leftArgs rightArgs []
+            |> Option.map (fun typeArgs -> TRecord (leftName, typeArgs))
+        | TSum (leftName, leftArgs), TSum (rightName, rightArgs)
+            when leftName = rightName ->
+            reconcileMany leftArgs rightArgs []
+            |> Option.map (fun typeArgs -> TSum (leftName, typeArgs))
+        | TFunction (leftParams, leftReturn), TFunction (rightParams, rightReturn) ->
+            reconcileMany leftParams rightParams []
+            |> Option.bind (fun parameterTypes ->
+                reconcileComparisonTypes aliasReg leftReturn rightReturn
+                |> Option.map (fun returnType -> TFunction (parameterTypes, returnType)))
+        | _ -> None
+
 let private classifyComparison
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
@@ -1250,20 +1301,20 @@ let private classifyComparison
     let rightResolved = resolveType aliasReg rightType
     match op with
     | Eq | Neq ->
-        let comparableType =
-            if leftResolved = rightResolved then Some leftResolved
-            elif leftResolved = TRuntimeError then Some rightResolved
-            elif rightResolved = TRuntimeError then Some leftResolved
-            else None
+        let comparableType = reconcileComparisonTypes aliasReg leftResolved rightResolved
         match comparableType with
         | Some typ when equalityComparableType aliasReg typeReg variantLookup typ ->
             Ok (EqualityComparison typ)
         | _ ->
             Error (IncompatibleEqualityOperands (leftResolved, rightResolved))
     | Lt | Gt | Lte | Gte ->
-        if leftResolved = rightResolved && comparisonNumericType leftResolved then
-            Ok (OrderingComparison leftResolved)
-        else
+        match reconcileComparisonTypes aliasReg leftResolved rightResolved with
+        | Some numericType when comparisonNumericType numericType ->
+            // A literal or other concrete operand constrains the unresolved
+            // generic operand. The enclosing call can remain polymorphic when
+            // no value reaches that operand (for example List.all []).
+            Ok (OrderingComparison numericType)
+        | _ ->
             Error (IncompatibleOrderingOperands (leftResolved, rightResolved))
     | _ ->
         Crash.crash $"Non-comparison operator reached comparison classification: {op}"
@@ -5432,25 +5483,25 @@ let rec private ensureEqHelperForType
     (state: EqHelperGenerationState)
     : EqHelperGenerationState =
     let resolvedType = resolveType aliasReg typ
-    let rec isConcreteHelperType candidate =
+    let rec referencesKnownNominals candidate =
         match resolveType aliasReg candidate with
-        | TVar _ -> false
         | TRecord (name, typeArgs) ->
-            Map.containsKey name typeReg && List.forall isConcreteHelperType typeArgs
+            Map.containsKey name typeReg && List.forall referencesKnownNominals typeArgs
         | TSum (name, typeArgs) ->
             variantLookup
             |> Map.exists (fun _ (owner, _, _, _) -> owner = name)
-            && List.forall isConcreteHelperType typeArgs
-        | TList elementType -> isConcreteHelperType elementType
+            && List.forall referencesKnownNominals typeArgs
+        | TList elementType -> referencesKnownNominals elementType
         | TDict (keyType, valueType) ->
-            isConcreteHelperType keyType && isConcreteHelperType valueType
+            referencesKnownNominals keyType && referencesKnownNominals valueType
         | TTuple elementTypes
-        | TEnumFields elementTypes -> List.forall isConcreteHelperType elementTypes
+        | TEnumFields elementTypes -> List.forall referencesKnownNominals elementTypes
         | TFunction (parameterTypes, returnType) ->
-            List.forall isConcreteHelperType parameterTypes && isConcreteHelperType returnType
+            List.forall referencesKnownNominals parameterTypes
+            && referencesKnownNominals returnType
         | _ -> true
     if not (needsEqHelperForResolvedType variantLookup resolvedType)
-       || not (isConcreteHelperType resolvedType) then
+       || not (referencesKnownNominals resolvedType) then
         state
     else
         let helper = eqHelperName resolvedType
@@ -5532,6 +5583,7 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         | None ->
             typeArgs
             |> List.map (resolveType aliasReg)
+            |> List.filter (containsTVar >> not)
             |> List.fold
                 (fun helpers typ -> Set.add typ helpers)
                 (collectFromExprs (NonEmptyList.toList args))
@@ -5605,11 +5657,7 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         match tryDecodeInternalTypeApp typeAppExpr with
         | Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr)) ->
             let helperType = resolveType aliasReg targetType
-            if containsTVar helperType then
-                makeInternalTypeApp
-                    (EqHelperDispatchTypeApp (helperType, recurse leftExpr, recurse rightExpr))
-            else
-                Call (eqHelperName helperType, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
+            Call (eqHelperName helperType, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
         | None ->
             TypeApp (funcName, typeArgs, NonEmptyList.map recurse args)
     | TupleLiteral elements ->
@@ -5662,8 +5710,12 @@ let materializeEqHelpersInTopLevels
     : TopLevel list =
     let collectFromTopLevel (topLevel: TopLevel) : Set<Type> =
         match topLevel with
-        | FunctionDef funcDef ->
+        | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
             collectEqHelperTypesFromExpr aliasReg funcDef.Body
+        | FunctionDef _ ->
+            // Generic templates are retained for later specialization. Their
+            // comparison plans are materialized in each concrete copy.
+            Set.empty
         | Expression expr ->
             collectEqHelperTypesFromExpr aliasReg expr
         | TypeDef _ ->
@@ -5671,8 +5723,10 @@ let materializeEqHelpersInTopLevels
 
     let rewriteTopLevel (topLevel: TopLevel) : TopLevel =
         match topLevel with
-        | FunctionDef funcDef ->
+        | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
             FunctionDef { funcDef with Body = materializeEqHelperCallsInExpr aliasReg funcDef.Body }
+        | FunctionDef _ ->
+            topLevel
         | Expression expr ->
             Expression (materializeEqHelperCallsInExpr aliasReg expr)
         | TypeDef _ ->

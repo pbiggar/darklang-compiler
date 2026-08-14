@@ -1324,7 +1324,9 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
                     (args |> exprArgsToList |> List.map replaceTypeApps)
                 |> replaceTypeApps
             | _ ->
-                AST.TypeApp (funcName, typeArgs, AST.NonEmptyList.map replaceTypeApps args)
+                match args |> exprArgsToList |> List.map replaceTypeApps with
+                | [leftExpr; rightExpr] -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
+                | _ -> Crash.crash "Comparison plan expected exactly two operands"
         elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
            && exprArgsToList args = [AST.ListLiteral []]
            && not hasTypeVars then
@@ -1490,6 +1492,16 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                 mapResult replace (exprArgsToList args)
                 |> Result.map (fun args' ->
                     wrapWithIgnoredArgEvaluations args' (unresolvedKeyIntrinsicTypeArgErrorExpr funcName))
+            elif funcName = eqHelperDispatchMarker && hasTypeVars then
+                // The original generic template remains in the combined
+                // preamble alongside its callable concrete specializations.
+                // Concrete copies have already received substituted plans;
+                // lower only this unreachable template to a compilable form.
+                mapResult replace (exprArgsToList args)
+                |> Result.map (fun args' ->
+                    match args' with
+                    | [leftExpr; rightExpr] -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
+                    | _ -> Crash.crash "Comparison plan expected exactly two operands")
             else
                 if funcName = eqHelperDispatchMarker && not hasTypeVars then
                     mapResult replace (exprArgsToList args)

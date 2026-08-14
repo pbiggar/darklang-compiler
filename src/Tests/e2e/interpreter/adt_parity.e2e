@@ -48,6 +48,6 @@ SharedParityCase = error="Ambiguous constructor reference 'SharedParityCase': co
 // Qualification selects the declaring nominal type despite a case collision.
 type ParityQualifiedLeft = | QualifiedParityCase
 type ParityQualifiedRight = | QualifiedParityCase
-ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedRight.QualifiedParityCase = stdout="false\n" stderr=""
-let parityLeft = ParityQualifiedLeft.QualifiedParityCase in let parityRight = ParityQualifiedRight.QualifiedParityCase in parityLeft == parityRight = stdout="false\n" stderr=""
+ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedRight.QualifiedParityCase = error="Cannot perform equality check on ParityQualifiedLeft and ParityQualifiedRight"
+let parityLeft = ParityQualifiedLeft.QualifiedParityCase in let parityRight = ParityQualifiedRight.QualifiedParityCase in parityLeft == parityRight = error="Cannot perform equality check on ParityQualifiedLeft and ParityQualifiedRight"
 ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedLeft.QualifiedParityCase = stdout="true\n" stderr=""
