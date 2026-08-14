@@ -51,6 +51,8 @@ type TypeError =
     | UndefinedCallTarget of name:string
     | MissingTypeAnnotation of context:string
     | InvalidOperation of op:string * types:Type list
+    | IncompatibleEqualityOperands of left:Type * right:Type
+    | IncompatibleOrderingOperands of left:Type * right:Type
     | ResolutionFailure of NameResolution.ResolutionError
     | GenericError of string
 
@@ -112,6 +114,10 @@ let typeErrorToString (err: TypeError) : string =
     | InvalidOperation (op, types) ->
         let typesStr = types |> List.map typeToString |> String.concat ", "
         $"Invalid operation '{op}' on types: {typesStr}"
+    | IncompatibleEqualityOperands (left, right) ->
+        $"Cannot perform equality check on {typeToString left} and {typeToString right}"
+    | IncompatibleOrderingOperands (left, right) ->
+        $"Cannot perform numeric operation on {typeToString left} and {typeToString right}"
     | ResolutionFailure error ->
         NameResolution.errorToString error
     | GenericError msg ->
@@ -1087,21 +1093,12 @@ let private sumTypeHasPayload (variantLookup: VariantLookup) (sumTypeName: strin
     |> Map.exists (fun _ (variantTypeName, _, _, payloadTypeOpt) ->
         variantTypeName = sumTypeName && payloadTypeOpt.IsSome)
 
-/// Only tuple/record and payload-carrying sums need generated helpers.
-let rec private needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: Type) : bool =
+/// Every concrete compound comparable type has one equality entry point.
+let rec needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: Type) : bool =
     match typ with
-    | TFunction _ ->
-        true
-    | TList elemType ->
-        needsEqHelperForResolvedType variantLookup elemType
-    | TTuple _
-    | TRecord _
-    | TDict _ ->
-        true
-    | TSum (sumTypeName, _) ->
-        sumTypeHasPayload variantLookup sumTypeName
-    | _ ->
-        false
+    | TFunction _ | TList _ | TDict _ | TTuple _ | TRecord _ -> true
+    | TSum (sumTypeName, _) -> sumTypeHasPayload variantLookup sumTypeName
+    | _ -> false
 
 let private sanitizeHelperNamePrefix (input: string) : string =
     let chars =
@@ -1123,7 +1120,7 @@ let private stableHelperNameHash (input: string) : uint64 =
     |> Seq.fold (fun acc ch -> (acc ^^^ uint64 (int ch)) * prime) initial
 
 /// Name for a concrete structural equality helper.
-let private eqHelperName (typ: Type) : string =
+let eqHelperName (typ: Type) : string =
     let typeText = typeToString typ
     let prefix = sanitizeHelperNamePrefix typeText
     let hash = stableHelperNameHash typeText
@@ -1149,6 +1146,10 @@ let private buildEqExprForType
     : Expr =
     let resolvedType = resolveType aliasReg typ
     match resolvedType with
+    | TVar _ ->
+        // A generic comparison cannot select a representation-level operation
+        // until specialization. Preserve the typed plan through substitution.
+        makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
     | TFunction _ ->
         makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
     | TString ->
@@ -1164,6 +1165,138 @@ let private buildEqExprForType
         makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
     | _ ->
         BinOp (Eq, leftExpr, rightExpr)
+
+/// A comparison is classified while both resolved operand types are available.
+/// Equality plans may still contain type variables in a generic body; the
+/// internal typed marker carries them through substitution and is materialized
+/// only after a concrete specialization exists.
+type private ComparisonPlan =
+    | EqualityComparison of comparableType:Type
+    | OrderingComparison of numericType:Type
+
+let private comparisonNumericType (typ: Type) : bool =
+    match typ with
+    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+    | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+    | TFloat64 -> true
+    | _ -> false
+
+let private equalityComparableType
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (typ: Type)
+    : bool =
+    let rec comparable (seen: Set<Type>) (candidate: Type) : bool =
+        let resolved = resolveType aliasReg candidate
+        if Set.contains resolved seen then
+            // Recursive nominal types are admissible when the cycle itself has
+            // introduced no rejected payload type.
+            true
+        else
+            let seen = Set.add resolved seen
+            let recurse = comparable seen
+            match resolved with
+            | TVar _ -> true
+            | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+            | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+            | TFloat64 | TChar | TString -> true
+            | TFunction (parameterTypes, returnType) ->
+                List.forall recurse parameterTypes && recurse returnType
+            | TTuple elementTypes
+            | TEnumFields elementTypes ->
+                List.forall recurse elementTypes
+            | TList elementType ->
+                recurse elementType
+            | TDict (keyType, valueType) ->
+                // Dict key admission remains owned by Dict. Comparison reuses
+                // the key semantics already selected for an admitted key type.
+                recurse keyType && recurse valueType
+            | TRecord (recordName, typeArgs) ->
+                match Map.tryFind recordName typeReg with
+                | None -> false
+                | Some recordInfo ->
+                    match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                    | Error _ -> false
+                    | Ok subst ->
+                        recordInfo.Fields
+                        |> List.forall (fun (_, fieldType) -> recurse (applySubst subst fieldType))
+            | TSum (sumName, typeArgs) ->
+                variantLookup
+                |> Map.toList
+                |> List.choose (fun (_, (ownerName, typeParams, _, payloadType)) ->
+                    if ownerName <> sumName then None
+                    else
+                        payloadType
+                        |> Option.map (fun payload ->
+                            if List.length typeParams = List.length typeArgs then
+                                applySubst (List.zip typeParams typeArgs |> Map.ofList) payload
+                            else
+                                payload))
+                |> List.forall recurse
+            | TBytes | TRawPtr | TRuntimeError -> false
+
+    comparable Set.empty typ
+
+let private classifyComparison
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (op: BinOp)
+    (leftType: Type)
+    (rightType: Type)
+    : Result<ComparisonPlan, TypeError> =
+    let leftResolved = resolveType aliasReg leftType
+    let rightResolved = resolveType aliasReg rightType
+    match op with
+    | Eq | Neq ->
+        let comparableType =
+            if leftResolved = rightResolved then Some leftResolved
+            elif leftResolved = TRuntimeError then Some rightResolved
+            elif rightResolved = TRuntimeError then Some leftResolved
+            else None
+        match comparableType with
+        | Some typ when equalityComparableType aliasReg typeReg variantLookup typ ->
+            Ok (EqualityComparison typ)
+        | _ ->
+            Error (IncompatibleEqualityOperands (leftResolved, rightResolved))
+    | Lt | Gt | Lte | Gte ->
+        if leftResolved = rightResolved && comparisonNumericType leftResolved then
+            Ok (OrderingComparison leftResolved)
+        else
+            Error (IncompatibleOrderingOperands (leftResolved, rightResolved))
+    | _ ->
+        Crash.crash $"Non-comparison operator reached comparison classification: {op}"
+
+let private orderingFunctionName (op: BinOp) : string =
+    match op with
+    | Lt -> "Stdlib.Int.lessThan"
+    | Gt -> "Stdlib.Int.greaterThan"
+    | Lte -> "Stdlib.Int.lessThanOrEqualTo"
+    | Gte -> "Stdlib.Int.greaterThanOrEqualTo"
+    | _ -> Crash.crash $"Non-ordering operator has no Int comparison helper: {op}"
+
+let private buildOrderingExprForType
+    (op: BinOp)
+    (numericType: Type)
+    (leftExpr: Expr)
+    (rightExpr: Expr)
+    : Expr =
+    let convertedOperands =
+        match numericType with
+        | TInt128 ->
+            (Call ("__int128_to_int", NonEmptyList.singleton leftExpr),
+             Call ("__int128_to_int", NonEmptyList.singleton rightExpr))
+        | TUInt128 ->
+            (Call ("__uint128_to_int", NonEmptyList.singleton leftExpr),
+             Call ("__uint128_to_int", NonEmptyList.singleton rightExpr))
+        | _ ->
+            (leftExpr, rightExpr)
+    match numericType, convertedOperands with
+    | (TInt128 | TUInt128), (leftInt, rightInt) ->
+        Call (orderingFunctionName op, NonEmptyList.fromList [leftInt; rightInt])
+    | _ ->
+        BinOp (op, leftExpr, rightExpr)
 
 // =============================================================================
 // Free Variable Analysis for Closures
@@ -2062,7 +2195,36 @@ let rec private checkExprWithParamNames
                 | _ -> Crash.crash $"Non-comparison operator reached comparison type-checking path: {op}"
 
             let lambdaLiteralFastPath : Result<Type * Expr, TypeError> option =
-                None
+                let comparisonResult =
+                    checkExpr left env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                    |> Result.bind (fun (leftType, left') ->
+                        // Check without context first so rejected comparisons keep
+                        // the right operand's actual type in their diagnostic.
+                        let rightWithoutContext =
+                            checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                        let rightResult =
+                            match rightWithoutContext with
+                            | Ok (rightType, _) when containsTVar rightType ->
+                                checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some leftType)
+                            | Ok _ -> rightWithoutContext
+                            | Error _ ->
+                                checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some leftType)
+                        rightResult
+                        |> Result.bind (fun (rightType, right') ->
+                            classifyComparison aliasReg typeReg variantLookup op leftType rightType
+                            |> Result.bind (fun plan ->
+                                let comparisonExpr =
+                                    match plan with
+                                    | EqualityComparison comparableType ->
+                                        let equality =
+                                            buildEqExprForType aliasReg variantLookup comparableType left' right'
+                                        if op = Neq then UnaryOp (Not, equality) else equality
+                                    | OrderingComparison numericType ->
+                                        buildOrderingExprForType op numericType left' right'
+                                match expectedType with
+                                | Some TBool | None -> Ok (TBool, comparisonExpr)
+                                | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}")))))
+                Some comparisonResult
 
             match lambdaLiteralFastPath with
             | Some result ->
@@ -3069,6 +3231,25 @@ let rec private checkExprWithParamNames
                     )
                 | None ->
                     Error (UndefinedCallTarget funcName)
+
+    | TypeApp (funcName, [targetType], { Head = leftExpr; Tail = [rightExpr] })
+        when funcName = internalTypeAppMarkerName EqHelperDispatch ->
+        // Specialized programs can be checked again by the E2E preamble
+        // planner. Keep this compiler-internal plan well typed without
+        // exposing its marker as a source-level function.
+        checkExpr leftExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some targetType)
+        |> Result.bind (fun (_, leftExpr') ->
+            checkExpr rightExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some targetType)
+            |> Result.bind (fun (_, rightExpr') ->
+                match expectedType with
+                | Some expected when not (typesCompatible expected TBool) ->
+                    Error (TypeMismatch (expected, TBool, "comparison result"))
+                | _ ->
+                    Ok (
+                        TBool,
+                        makeInternalTypeApp
+                            (EqHelperDispatchTypeApp (targetType, leftExpr', rightExpr'))
+                    )))
 
     | TypeApp (funcName, typeArgs, args) ->
         // Generic function call with explicit type arguments: func<Type1, Type2>(args)
@@ -5011,9 +5192,9 @@ let rec private buildEqHelperExpr
         Call (eqHelperName helperType, NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TFunction _ ->
-        // Every function value is a closure whose first slot is the stable code
-        // identity. Lambda lifting gives each source lambda its own code identity;
-        // named function references reuse their resolved wrapper identity.
+        // Lambda lifting stores semantic identity and a capture-aware comparator
+        // after the operational code pointer. The comparator is fixed during
+        // specialization, so generic function equality requires no type dispatch.
         let leftVar = "__dark_eq_helper_fn_left"
         let rightVar = "__dark_eq_helper_fn_right"
         Let (
@@ -5022,7 +5203,20 @@ let rec private buildEqHelperExpr
             Let (
                 LPVariable rightVar,
                 rightExpr,
-                BinOp (Eq, TupleAccess (Var leftVar, 0), TupleAccess (Var rightVar, 0))
+                If (
+                    Call (
+                        "Stdlib.String.equals",
+                        NonEmptyList.fromList [
+                            TupleAccess (Var leftVar, 1)
+                            TupleAccess (Var rightVar, 1)
+                        ]
+                    ),
+                    Apply (
+                        TupleAccess (Var leftVar, 2),
+                        NonEmptyList.fromList [Var leftVar; Var rightVar]
+                    ),
+                    BoolLiteral false
+                )
             )
         )
 
@@ -5059,6 +5253,9 @@ let rec private buildEqHelperExpr
 
     | _, TList elemType ->
         TypeApp ("Stdlib.List.equals", [resolveType aliasReg elemType], NonEmptyList.fromList [leftExpr; rightExpr])
+
+    | ExpandCurrent, TString ->
+        BinOp (Eq, leftExpr, rightExpr)
 
     | _, TString ->
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
@@ -5235,7 +5432,25 @@ let rec private ensureEqHelperForType
     (state: EqHelperGenerationState)
     : EqHelperGenerationState =
     let resolvedType = resolveType aliasReg typ
-    if not (needsEqHelperForResolvedType variantLookup resolvedType) then
+    let rec isConcreteHelperType candidate =
+        match resolveType aliasReg candidate with
+        | TVar _ -> false
+        | TRecord (name, typeArgs) ->
+            Map.containsKey name typeReg && List.forall isConcreteHelperType typeArgs
+        | TSum (name, typeArgs) ->
+            variantLookup
+            |> Map.exists (fun _ (owner, _, _, _) -> owner = name)
+            && List.forall isConcreteHelperType typeArgs
+        | TList elementType -> isConcreteHelperType elementType
+        | TDict (keyType, valueType) ->
+            isConcreteHelperType keyType && isConcreteHelperType valueType
+        | TTuple elementTypes
+        | TEnumFields elementTypes -> List.forall isConcreteHelperType elementTypes
+        | TFunction (parameterTypes, returnType) ->
+            List.forall isConcreteHelperType parameterTypes && isConcreteHelperType returnType
+        | _ -> true
+    if not (needsEqHelperForResolvedType variantLookup resolvedType)
+       || not (isConcreteHelperType resolvedType) then
         state
     else
         let helper = eqHelperName resolvedType
@@ -5306,7 +5521,7 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
             (collectEqHelperTypesFromExpr aliasReg next)
     | Call (_, args) ->
         collectFromExprs (NonEmptyList.toList args)
-    | TypeApp (_, _, args) as typeAppExpr ->
+    | TypeApp (_, typeArgs, args) as typeAppExpr ->
         match tryDecodeInternalTypeApp typeAppExpr with
         | Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr)) ->
             Set.add
@@ -5315,7 +5530,11 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
                     (collectEqHelperTypesFromExpr aliasReg leftExpr)
                     (collectEqHelperTypesFromExpr aliasReg rightExpr))
         | None ->
-            collectFromExprs (NonEmptyList.toList args)
+            typeArgs
+            |> List.map (resolveType aliasReg)
+            |> List.fold
+                (fun helpers typ -> Set.add typ helpers)
+                (collectFromExprs (NonEmptyList.toList args))
     | TupleLiteral elements ->
         collectFromExprs elements
     | TupleAccess (tupleExpr, _) ->
@@ -5386,7 +5605,11 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         match tryDecodeInternalTypeApp typeAppExpr with
         | Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr)) ->
             let helperType = resolveType aliasReg targetType
-            Call (eqHelperName helperType, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
+            if containsTVar helperType then
+                makeInternalTypeApp
+                    (EqHelperDispatchTypeApp (helperType, recurse leftExpr, recurse rightExpr))
+            else
+                Call (eqHelperName helperType, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
         | None ->
             TypeApp (funcName, typeArgs, NonEmptyList.map recurse args)
     | TupleLiteral elements ->
@@ -5431,7 +5654,7 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
                 | StringExpr partExpr -> StringExpr (recurse partExpr))
         )
 
-let private materializeEqHelpersInTopLevels
+let materializeEqHelpersInTopLevels
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
@@ -5480,9 +5703,16 @@ let private materializeEqHelpersInTopLevels
                 initialState
 
         let helperTopLevels =
+            let existingFunctionNames =
+                topLevels
+                |> List.choose (function
+                    | FunctionDef funcDef -> Some funcDef.Name
+                    | _ -> None)
+                |> Set.ofList
             finalState.Generated
             |> Map.toList
             |> List.map snd
+            |> List.filter (fun helperDef -> not (Set.contains helperDef.Name existingFunctionNames))
             |> List.sortBy (fun helperDef -> helperDef.Name)
             |> List.map FunctionDef
 

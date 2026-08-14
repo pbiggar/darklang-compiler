@@ -1,0 +1,106 @@
+// Equality, ordering, and comparability parity matrix.
+//
+// Interpreter spelling and behavior were revalidated against darklang/dark
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. The approved compiler evidence
+// revision is b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899; implementation started
+// from compiler HEAD 2e5690c6d16f4e6f261ffdc86f075e52766753c8.
+
+// Scalar equality truth tables.
+() == () = true
+true == true = true
+true != false = true
+1y == 1y = true
+1s == 2s = false
+1l != 2l = true
+1L == 1L = true
+1Q == 1Q = true
+1I != 2I = true
+1uy == 1uy = true
+1us != 2us = true
+1ul == 1ul = true
+1UL != 2UL = true
+1Z == 1Z = true
+1.5 == 1.5 = true
+Builtin.testNan_v0 == Builtin.testNan_v0 = false
+Builtin.testNan_v0 != Builtin.testNan_v0 = true
+0.0 == -0.0 = true
+'a' == 'a' = true
+'a' != 'b' = true
+"dark" == "dark" = true
+"dark" != "lang" = true
+
+// Same nominal type plus recursive contents determine structural equality.
+(1, [2, 3], (true, "x")) == (1, [2, 3], (true, "x")) = true
+(1, [2, 3], (true, "x")) != (1, [2, 4], (true, "x")) = true
+type ComparisonRecord = { name: String, values: List<(Int64, Bool)> }
+(ComparisonRecord { name = "r", values = [(1, true), (2, false)] } == ComparisonRecord { name = "r", values = [(1, true), (2, false)] }) = true
+type ComparisonBox = ComparisonBox of List<(Int64, String)>
+ComparisonBox([(1, "one"), (2, "two")]) == ComparisonBox([(1, "one"), (2, "two")]) = true
+ComparisonBox([(1, "one"), (2, "two")]) != ComparisonBox([(1, "one"), (3, "three")]) = true
+
+// A typed comparison plan survives substitution and specialization.
+def comparisonGenericEquals<a>(left: a, right: a): Bool = left == right
+comparisonGenericEquals<List<Int64>>([1, 2, 3], [1, 2, 3]) = true
+comparisonGenericEquals<List<(Int64, String)>>([(1, "one")], [(1, "one")]) = true
+comparisonGenericEquals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
+
+// Dict equality compares mappings, independently of insertion order and shape.
+(let left = Stdlib.Dict.fromList<String, Int64>([("a", 1), ("b", 2)]) in let right = Stdlib.Dict.fromList<String, Int64>([("b", 2), ("a", 1)]) in left == right) = true
+(let left = Stdlib.Dict.fromList<String, List<Int64>>([("a", [1, 2]), ("b", [3])]) in let right = Stdlib.Dict.fromList<String, List<Int64>>([("b", [3]), ("a", [1, 2])]) in comparisonGenericEquals<Dict<String, List<Int64>>>(left, right)) = true
+(let left = Stdlib.Dict.fromList<String, Int64>([("a", 1)]) in let right = Stdlib.Dict.fromList<String, Int64>([("a", 2)]) in left != right) = true
+
+// Lambda identity is its source expression and deliberately ignores captures.
+def comparisonMakeLambda(captured: Int64): (Int64) -> Int64 =
+  (value: Int64) => value + captured
+comparisonMakeLambda(1) == comparisonMakeLambda(2) = true
+[comparisonMakeLambda(1)] == [comparisonMakeLambda(2)] = true
+((value: Int64) => value) == ((value: Int64) => value) = false
+
+// Named functions include resolved identity, specialization, and applied args.
+def comparisonAdd(left: Int64, right: Int64): Int64 = left + right
+def comparisonSub(left: Int64, right: Int64): Int64 = left - right
+((value: Int64) => comparisonAdd(1L, value)) != ((value: Int64) => comparisonAdd(1L, value)) = true
+[comparisonAdd] == [comparisonAdd] = true
+[comparisonAdd] != [comparisonSub] = true
+[comparisonAdd(1L)] == [comparisonAdd(1L)] = true
+[comparisonAdd(1L)] != [comparisonAdd(2L)] = true
+[comparisonAdd(1L)] != [comparisonSub(1L)] = true
+def comparisonFirst<a>(left: a, right: a): a = left
+[comparisonFirst<Int64>(1L)] == [comparisonFirst<Int64>(1L)] = true
+(let left = [comparisonAdd(1L)] in let right = [comparisonAdd(1L)] in comparisonGenericEquals<List<(Int64) -> Int64>>(left, right)) = true
+
+// Numeric ordering covers every width; 128-bit values are numeric, not lexical.
+-2y < 1y = true
+-2s <= -2s = true
+-2l < 1l = true
+-2L <= 1L = true
+-10Q < -2Q = true
+10Q > 2Q = true
+-10I < -2I = true
+10I >= 2I = true
+2uy < 10uy = true
+2us <= 10us = true
+2ul < 10ul = true
+2UL <= 10UL = true
+2Z < 10Z = true
+10Z >= 2Z = true
+-1.5 < 0.0 = true
+Builtin.testNan_v0 < 0.0 = false
+Builtin.testNan_v0 > 0.0 = false
+Builtin.testNan_v0 <= 0.0 = false
+Builtin.testNan_v0 >= 0.0 = false
+
+// The compiler rejects these during AOT type checking. The interpreter reaches
+// the corresponding public runtime errors after evaluating both operands.
+'a' == "a" = error="Cannot perform equality check on Char and String"
+1L == 1.0 = error="Cannot perform equality check on Int64 and Float"
+type ComparisonNominalA = ComparisonOnlyA | ComparisonOtherA
+type ComparisonNominalB = ComparisonOnlyB | ComparisonOtherB
+ComparisonOnlyA == ComparisonOnlyB = error="Cannot perform equality check on ComparisonNominalA and ComparisonNominalB"
+type ComparisonRecordA = { value: Int64 }
+type ComparisonRecordB = { value: Int64 }
+(ComparisonRecordA { value = 1 } == ComparisonRecordB { value = 1 }) = error="Cannot perform equality check on ComparisonRecordA and ComparisonRecordB"
+true < false = error="Cannot perform numeric operation on Bool and Bool"
+"a" >= "b" = error="Cannot perform numeric operation on String and String"
+1L < 1.0 = error="Cannot perform numeric operation on Int64 and Float"
+Stdlib.Bytes.create(0) == Stdlib.Bytes.create(0) = error="Cannot perform equality check on Bytes and Bytes"

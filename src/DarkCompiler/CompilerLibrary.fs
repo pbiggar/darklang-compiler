@@ -1694,7 +1694,14 @@ let buildPreambleContextFromAnalysis
 
     let (AST.Program items) = analysis.TypedAST
     let specializedTopLevels = specialization.SpecializedFuncs |> List.map AST.FunctionDef
-    let programWithSpecializations = AST.Program (specializedTopLevels @ items)
+    let specializedAndOriginalTopLevels = specializedTopLevels @ items
+    let materializedTopLevels =
+        TypeChecking.materializeEqHelpersInTopLevels
+            analysis.TypeCheckEnv.AliasReg
+            analysis.TypeCheckEnv.IndexedTypeReg
+            analysis.TypeCheckEnv.VariantLookup
+            specializedAndOriginalTopLevels
+    let programWithSpecializations = AST.Program materializedTopLevels
 
     convertTypedProgramToUserOnlyWithMode
         stdlib.Context
