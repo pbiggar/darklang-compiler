@@ -96,4 +96,4 @@ def Stdlib.UInt16.isOdd(n: UInt16) : Bool =
 
 // Sum all integers in a list
 def Stdlib.UInt16.sum(list: List<UInt16>) : UInt16 =
-    Stdlib.List.fold<UInt16, UInt16>(list, 0us, (acc: UInt16, x: UInt16) => acc + x)
+    Stdlib.List.fold<UInt16, UInt16>(list, 0us, fun acc x -> acc + x)

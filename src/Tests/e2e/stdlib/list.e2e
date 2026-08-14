@@ -56,22 +56,22 @@ match Stdlib.List.reverse([1, 2, 3]) with | [a, b, c] -> a | _ -> 0 = 3
 // Stdlib.List.map - Apply a function to each element
 // ===================================================================
 
-match Stdlib.List.map([1, 2, 3], (x: Int64) => x + 1) with | [a, b, c] -> a + b + c | _ -> 0 = 9
-Stdlib.List.length(Stdlib.List.map([1, 2, 3, 4], (x: Int64) => x * 2)) = 4
-let add = Stdlib.Int64.add in match Stdlib.List.map([1, 2, 3], (x: Int64) => add(x, 1)) with | [a, b, c] -> a + b + c | _ -> 0 = 9
+match Stdlib.List.map([1, 2, 3], fun x -> x + 1) with | [a, b, c] -> a + b + c | _ -> 0 = 9
+Stdlib.List.length(Stdlib.List.map([1, 2, 3, 4], fun x -> x * 2)) = 4
+let add = Stdlib.Int64.add in match Stdlib.List.map([1, 2, 3], fun x -> add(x, 1)) with | [a, b, c] -> a + b + c | _ -> 0 = 9
 
 // ===================================================================
 // Stdlib.List.filter - Keep elements that match predicate
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.filter([1, 2, 3, 4, 5], (x: Int64) => x > 2)) = 3
+Stdlib.List.length(Stdlib.List.filter([1, 2, 3, 4, 5], fun x -> x > 2)) = 3
 
 // ===================================================================
 // Stdlib.List.fold - Reduce list with accumulator
 // ===================================================================
 
-Stdlib.List.fold([1, 2, 3, 4, 5], 0, (acc: Int64, x: Int64) => acc + x) = 15
-Stdlib.List.fold([1, 2, 3, 4], 1, (acc: Int64, x: Int64) => acc * x) = 24
+Stdlib.List.fold([1, 2, 3, 4, 5], 0, fun acc x -> acc + x) = 15
+Stdlib.List.fold([1, 2, 3, 4], 1, fun acc x -> acc * x) = 24
 
 // ===================================================================
 // Stdlib.List.drop - Drop first n elements
@@ -124,24 +124,24 @@ Stdlib.Option.isNone<Int64>(Stdlib.List.getAt<Int64>([1, 2, 3], 10)) = true
 // Stdlib.List.findFirst - Find first element matching predicate
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.findFirst([1, 2, 3, 4], (x: Int64) => x > 2), 0) = 3
-Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], (x: Int64) => x > 10)) = true
+Stdlib.Option.withDefault(Stdlib.List.findFirst([1, 2, 3, 4], fun x -> x > 2), 0) = 3
+Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], fun x -> x > 10)) = true
 
 // ===================================================================
 // Stdlib.List.forAll - Check if all elements satisfy predicate
 // ===================================================================
 
-Stdlib.List.forAll([1, 2, 3], (x: Int64) => x > 0) = true
-Stdlib.List.forAll([1, 2, 3], (x: Int64) => x > 2) = false
-Stdlib.List.forAll<Int64>([], (x: Int64) => x > 0) = true
+Stdlib.List.forAll([1, 2, 3], fun x -> x > 0) = true
+Stdlib.List.forAll([1, 2, 3], fun x -> x > 2) = false
+Stdlib.List.forAll<Int64>([], fun x -> x > 0) = true
 
 // ===================================================================
 // Stdlib.List.any - Check if any element satisfies predicate
 // ===================================================================
 
-Stdlib.List.any([1, 2, 3], (x: Int64) => x > 2) = true
-Stdlib.List.any([1, 2, 3], (x: Int64) => x > 10) = false
-Stdlib.List.any<Int64>([], (x: Int64) => x > 0) = false
+Stdlib.List.any([1, 2, 3], fun x -> x > 2) = true
+Stdlib.List.any([1, 2, 3], fun x -> x > 10) = false
+Stdlib.List.any<Int64>([], fun x -> x > 0) = false
 
 // ===================================================================
 // Stdlib.List.last - Get last element or None
@@ -194,22 +194,22 @@ Stdlib.List.length(Stdlib.List.setAt([1, 2, 3], 0, 100)) = 3
 // ===================================================================
 
 // Sum of index + value for [10, 20, 30] = (0+10) + (1+20) + (2+30) = 63
-Stdlib.List.fold(Stdlib.List.indexedMap([10, 20, 30], (i: Int64, x: Int64) => i + x), 0, (acc: Int64, x: Int64) => acc + x) = 63
-Stdlib.List.length(Stdlib.List.indexedMap([1, 2, 3, 4], (i: Int64, x: Int64) => x)) = 4
+Stdlib.List.fold(Stdlib.List.indexedMap([10, 20, 30], fun i x -> i + x), 0, fun acc x -> acc + x) = 63
+Stdlib.List.length(Stdlib.List.indexedMap([1, 2, 3, 4], fun i x -> x)) = 4
 
 // ===================================================================
 // Stdlib.List.partition - Split list by predicate
 // ===================================================================
 
-match Stdlib.List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> Stdlib.List.length(trues) | _ -> 0 = 3
-match Stdlib.List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> Stdlib.List.length(falses) | _ -> 0 = 2
+match Stdlib.List.partition([1, 2, 3, 4, 5], fun x -> x > 2) with | (trues, falses) -> Stdlib.List.length(trues) | _ -> 0 = 3
+match Stdlib.List.partition([1, 2, 3, 4, 5], fun x -> x > 2) with | (trues, falses) -> Stdlib.List.length(falses) | _ -> 0 = 2
 
 // ===================================================================
 // Stdlib.List.all - Check if all satisfy predicate (alias for forAll)
 // ===================================================================
 
-Stdlib.List.all([1, 2, 3], (x: Int64) => x > 0) = true
-Stdlib.List.all([1, 2, 3], (x: Int64) => x > 2) = false
+Stdlib.List.all([1, 2, 3], fun x -> x > 0) = true
+Stdlib.List.all([1, 2, 3], fun x -> x > 2) = false
 
 // ===================================================================
 // List memory reclamation regression

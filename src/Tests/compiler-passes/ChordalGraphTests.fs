@@ -20,9 +20,9 @@ let graphHasVertex (graph: InterferenceGraph) (vregId: int) : bool =
     RegisterAllocation.graphHasVertex graph vregId
 
 /// Test 16: Build interference graph from real LIR CFG
-/// Simulates a function (a, b) => a * b where parameters should interfere
+/// Simulates `fun a b -> a * b`, where parameters should interfere.
 let testBuildFromCFG () : TestResult =
-    // Create a minimal CFG for: (a, b) => a * b
+    // Create a minimal CFG for: fun a b -> a * b
     // Virtual 0 = a (parameter)
     // Virtual 1 = b (parameter)
     // Virtual 2 = a * b (result)

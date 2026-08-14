@@ -41,34 +41,34 @@ Stdlib.Tuple3.third(("one", 2, "pi")) = "pi"
 // Stdlib.Tuple3.mapFirst - Transform the first value in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first(Stdlib.Tuple3.mapFirst((x: Int64) => x + 1, (5, 10, 15))) = 6
-Stdlib.Tuple3.second(Stdlib.Tuple3.mapFirst((x: Int64) => x + 1, (5, 10, 15))) = 10
-Stdlib.Tuple3.third(Stdlib.Tuple3.mapFirst((x: Int64) => x + 1, (5, 10, 15))) = 15
-Stdlib.Tuple3.mapFirst((x: String) => Stdlib.String.toUpperCase(x), ("one", 2, "pi")) = ("ONE", 2, "pi")
+Stdlib.Tuple3.first(Stdlib.Tuple3.mapFirst(fun x -> x + 1, (5, 10, 15))) = 6
+Stdlib.Tuple3.second(Stdlib.Tuple3.mapFirst(fun x -> x + 1, (5, 10, 15))) = 10
+Stdlib.Tuple3.third(Stdlib.Tuple3.mapFirst(fun x -> x + 1, (5, 10, 15))) = 15
+Stdlib.Tuple3.mapFirst(fun x -> Stdlib.String.toUpperCase(x), ("one", 2, "pi")) = ("ONE", 2, "pi")
 
 // ===================================================================
 // Stdlib.Tuple3.mapSecond - Transform the second value in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first(Stdlib.Tuple3.mapSecond((x: Int64) => x + 1, (5, 10, 15))) = 5
-Stdlib.Tuple3.second(Stdlib.Tuple3.mapSecond((x: Int64) => x + 1, (5, 10, 15))) = 11
-Stdlib.Tuple3.third(Stdlib.Tuple3.mapSecond((x: Int64) => x + 1, (5, 10, 15))) = 15
-Stdlib.Tuple3.mapSecond((x: Int64) => x - 2, ("one", 2, "pi")) = ("one", 0, "pi")
+Stdlib.Tuple3.first(Stdlib.Tuple3.mapSecond(fun x -> x + 1, (5, 10, 15))) = 5
+Stdlib.Tuple3.second(Stdlib.Tuple3.mapSecond(fun x -> x + 1, (5, 10, 15))) = 11
+Stdlib.Tuple3.third(Stdlib.Tuple3.mapSecond(fun x -> x + 1, (5, 10, 15))) = 15
+Stdlib.Tuple3.mapSecond(fun x -> x - 2, ("one", 2, "pi")) = ("one", 0, "pi")
 
 // ===================================================================
 // Stdlib.Tuple3.mapThird - Transform the third value in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first(Stdlib.Tuple3.mapThird((x: Int64) => x + 1, (5, 10, 15))) = 5
-Stdlib.Tuple3.second(Stdlib.Tuple3.mapThird((x: Int64) => x + 1, (5, 10, 15))) = 10
-Stdlib.Tuple3.third(Stdlib.Tuple3.mapThird((x: Int64) => x + 1, (5, 10, 15))) = 16
-Stdlib.Tuple3.mapThird((x: String) => Stdlib.String.toUpperCase(x), ("one", 2, "pi")) = ("one", 2, "PI")
+Stdlib.Tuple3.first(Stdlib.Tuple3.mapThird(fun x -> x + 1, (5, 10, 15))) = 5
+Stdlib.Tuple3.second(Stdlib.Tuple3.mapThird(fun x -> x + 1, (5, 10, 15))) = 10
+Stdlib.Tuple3.third(Stdlib.Tuple3.mapThird(fun x -> x + 1, (5, 10, 15))) = 16
+Stdlib.Tuple3.mapThird(fun x -> Stdlib.String.toUpperCase(x), ("one", 2, "pi")) = ("one", 2, "PI")
 
 // ===================================================================
 // Stdlib.Tuple3.mapAllThree - Transform all three values in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first(Stdlib.Tuple3.mapAllThree((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 6
-Stdlib.Tuple3.second(Stdlib.Tuple3.mapAllThree((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 20
-Stdlib.Tuple3.third(Stdlib.Tuple3.mapAllThree((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 14
-Stdlib.Tuple3.mapAllThree((x: String) => Stdlib.String.toUpperCase(x), (y: Int64) => y - 2, (z: String) => Stdlib.String.toUpperCase(z), ("one", 2, "pi")) = ("ONE", 0, "PI")
+Stdlib.Tuple3.first(Stdlib.Tuple3.mapAllThree(fun x -> x + 1, fun y -> y * 2, fun z -> z - 1, (5, 10, 15))) = 6
+Stdlib.Tuple3.second(Stdlib.Tuple3.mapAllThree(fun x -> x + 1, fun y -> y * 2, fun z -> z - 1, (5, 10, 15))) = 20
+Stdlib.Tuple3.third(Stdlib.Tuple3.mapAllThree(fun x -> x + 1, fun y -> y * 2, fun z -> z - 1, (5, 10, 15))) = 14
+Stdlib.Tuple3.mapAllThree(fun x -> Stdlib.String.toUpperCase(x), fun y -> y - 2, fun z -> Stdlib.String.toUpperCase(z), ("one", 2, "pi")) = ("ONE", 0, "PI")

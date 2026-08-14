@@ -33,7 +33,7 @@ let private convertProgramToAnf (typedAst: AST.Program) : Result<ANF.Program, st
 let testLetBoundTupleReturnType () : TestResult =
     let source =
         "def apply(f: (Int64) -> (Int64, Int64), x: Int64) : (Int64, Int64) = f(x)\n" +
-        "apply((x: Int64) => let t = (x, x + 1) in t, 1)"
+        "apply((fun x -> let t = (x, x + 1) in t), 1)"
     match parseString false source with
     | Error err -> Error $"Parse error: {err}"
     | Ok ast ->

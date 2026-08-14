@@ -17,10 +17,10 @@ def orderedUpdateFailureA(): Int64 = Builtin.testRuntimeError("record update a")
 { orderedUpdateBase() with c = orderedUpdateFailureC(), a = orderedUpdateFailureA() } = error="record update c"
 
 // Function equality uses source identity, including inside compound values.
-let sameLambda = (x: Int64) => x in sameLambda == sameLambda = stdout="true\n"
-((x: Int64) => x) == ((x: Int64) => x) = stdout="false\n"
-[(x: Int64) => x] == [(x: Int64) => x] = stdout="false\n"
-let sameCompoundLambda = (x: Int64) => x in (sameCompoundLambda, [sameCompoundLambda]) == (sameCompoundLambda, [sameCompoundLambda]) = stdout="true\n"
+let sameLambda = fun x -> x in sameLambda == sameLambda = stdout="true\n"
+(fun x -> x) == (fun x -> x) = stdout="false\n"
+[fun x -> x] == [fun x -> x] = stdout="false\n"
+let sameCompoundLambda = fun x -> x in (sameCompoundLambda, [sameCompoundLambda]) == (sameCompoundLambda, [sameCompoundLambda]) = stdout="true\n"
 def parityAdd(left: Int64, right: Int64): Int64 = left + right
 parityAdd(1L) == parityAdd(1L) = stdout="true\n"
 parityAdd(1L) == parityAdd(2L) = stdout="false\n"
@@ -51,4 +51,4 @@ RenderValue((7, "seven")) = stdout="RenderEnum<Int64>.RenderValue((7, \"seven\")
 def renderedNamedFunction(x: Int64): Int64 = x
 renderedNamedFunction = stdout="renderedNamedFunction\n"
 parityAdd(1L) = stdout="parityAdd\n"
-((x: Int64) => x) = stdout="(lambda)\n"
+(fun x -> x) = stdout="(lambda)\n"

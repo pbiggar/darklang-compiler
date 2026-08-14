@@ -37,7 +37,7 @@ Stdlib.Dict.size(Stdlib.Dict.fromListOverwritingDuplicates([("1", 10), ("2", 20)
 
 Stdlib.Dict.get(Stdlib.Dict.fromListOverwritingDuplicates([("1", 10), ("2", 20), ("3", 30), ("4", 40), ("5", 50)]), "5")
 
-List.fold([1, 2, 3, 4, 5], 0, (acc: Int64, x: Int64) => acc + x)
+List.fold([1, 2, 3, 4, 5], 0, fun acc x -> acc + x)
 ```
 
 These currently return `5I`, `Some(50)`, and `15` respectively.

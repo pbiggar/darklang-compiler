@@ -274,7 +274,7 @@ and private renderBody
         let entries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton value)
         let body =
             Let (
-                "__dict_entries",
+                LPVariable "__dict_entries",
                 entries,
                 Match (
                     Var "__dict_entries",
@@ -441,11 +441,17 @@ let rewriteProgram
 
     let tryNamedPartialName expr =
         match expr with
-        | Lambda (parameters, body) ->
+        | Lambda (parameters, returnAnnotation, body) ->
             let parameterNames =
-                parameters |> NonEmptyList.toList |> List.map fst
+                parameters
+                |> NonEmptyList.toList
+                |> List.choose (fun parameter ->
+                    match parameter.Pattern with
+                    | LPVariable name -> Some name
+                    | _ -> None)
             let generatedPartial =
-                parameterNames |> List.forall (fun name -> name.StartsWith "__partial_")
+                List.length parameterNames = NonEmptyList.length parameters
+                && (parameterNames |> List.forall (fun name -> name.StartsWith "__partial_"))
             let callNameAndArgs =
                 match body with
                 | Call (name, callArgs) -> Some (name, NonEmptyList.toList callArgs)
@@ -467,13 +473,13 @@ let rewriteProgram
             | TRecord ("DateTime", []), _, _ ->
                 BoundaryRender ("Stdlib.DateTime.toString_v0", expr)
             | TFunction _, _, Some name ->
-                Let ("__rendered_named_partial", expr, StringLiteral name)
+                Let (LPVariable "__rendered_named_partial", expr, StringLiteral name)
             | TFunction _, Var name, _ when Set.contains name namedFunctions ->
-                Let ("__rendered_named_function", expr, StringLiteral name)
+                Let (LPVariable "__rendered_named_function", expr, StringLiteral name)
             | TFunction _, FuncRef name, _ ->
-                Let ("__rendered_named_function", expr, StringLiteral name)
+                Let (LPVariable "__rendered_named_function", expr, StringLiteral name)
             | TFunction _, Lambda _, _ ->
-                Let ("__rendered_lambda", expr, StringLiteral "(lambda)")
+                Let (LPVariable "__rendered_lambda", expr, StringLiteral "(lambda)")
             | _ ->
                 BoundaryRender (
                     renderName |> Option.defaultWith (fun () -> Crash.crash "Missing boundary value renderer"),

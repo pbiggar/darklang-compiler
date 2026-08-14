@@ -312,6 +312,15 @@ let rec private collectPatternBoundNames (pattern: Pattern) : Set<string> =
     | _ ->
         Set.empty
 
+let rec private collectLetPatternBoundNames (pattern: LetPattern) : Set<string> =
+    match pattern with
+    | LPVariable name -> Set.singleton name
+    | LPTuple (first, second, rest) ->
+        first :: second :: rest
+        |> List.map collectLetPatternBoundNames
+        |> List.fold Set.union Set.empty
+    | LPUnit | LPWildcard -> Set.empty
+
 let rec private collectExprReferencedPreambleFuncsWithBound
     (knownPreambleFunctions: Set<string>)
     (boundVars: Set<string>)
@@ -335,10 +344,6 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         Set.union fromFuncName fromArgs
 
     match expr with
-    | LetPattern (_, value, body) ->
-        Set.union
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars value)
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars body)
     | BoundaryRender (_, value) ->
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars value
     | UnitLiteral
@@ -375,13 +380,13 @@ let rec private collectExprReferencedPreambleFuncsWithBound
             (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars right)
     | UnaryOp (_, inner) ->
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars inner
-    | Let (name, valueExpr, bodyExpr) ->
+    | Let (pattern, valueExpr, bodyExpr) ->
         let valueRefs =
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars valueExpr
         let bodyRefs =
             collectExprReferencedPreambleFuncsWithBound
                 knownPreambleFunctions
-                (Set.add name boundVars)
+                (Set.union boundVars (collectLetPatternBoundNames pattern))
                 bodyExpr
         Set.union valueRefs bodyRefs
     | Var name ->
@@ -474,12 +479,12 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         let tailRefs =
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars tailExpr
         Set.union headRefs tailRefs
-    | Lambda (parameters, bodyExpr) ->
+    | Lambda (parameters, _, bodyExpr) ->
         let lambdaBoundVars =
             parameters
             |> NonEmptyList.toList
-            |> List.map fst
-            |> Set.ofList
+            |> List.map (fun parameter -> collectLetPatternBoundNames parameter.Pattern)
+            |> List.fold Set.union Set.empty
             |> Set.union boundVars
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions lambdaBoundVars bodyExpr
     | Apply (funcExpr, args) ->
@@ -1022,10 +1027,7 @@ let private buildCompilerOptions
         DisableFunctionTreeShaking = test.DisableFunctionTreeShaking
         EnableCoverage = false
         EnableLeakCheck = not test.DisableLeakCheck
-        Warnings = {
-            CompilerLibrary.defaultWarningSettings with
-                WarnOnDuplicatePatternBindings = test.WarnOnDuplicatePatternBindings
-        }
+        Warnings = CompilerLibrary.defaultWarningSettings
         DumpANF = false
         DumpMIR = false
         DumpLIR = false

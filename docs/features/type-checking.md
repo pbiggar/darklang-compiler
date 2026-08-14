@@ -119,7 +119,7 @@ let addFive = add(5)  // Partial application
 
 Desugars to:
 ```dark
-let addFive = (x: Int64) => add(5, x)
+let addFive = fun x -> add(5, x)
 ```
 
 This is handled by generating lambda wrappers with fresh parameter names.

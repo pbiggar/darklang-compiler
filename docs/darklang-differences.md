@@ -31,7 +31,7 @@ converts from compiler syntax to interpreter syntax.
 | Unsigned integers | `1uy`, `1us`, `1ul` | Not supported | UInt8, UInt16, UInt32 suffixes |
 | List separators | `[1, 2]` | `[1L; 2L]` | Comma to semicolon |
 | Function calls | `Mod.fn(a, b)` | `Stdlib.Mod.fn a b` | Parentheses to spaces |
-| Lambdas | `(x: T) => body` | `fun x -> body` | Different arrow syntax |
+| Lambdas | `fun x -> body` | `fun x -> body` | Shared public syntax |
 | Type parameters | `List<Int64>` | Different syntax | Generic type notation |
 | String interpolation | `$"Hello {x}"` | Not supported | Interpolated strings |
 
@@ -80,11 +80,11 @@ darklang-interpreter eval "Stdlib.Int64.add 1L 2L"
 # Returns: 3
 ```
 
-### 1.4 Lambda Syntax
+### 1.4 Bindings and lambdas
 
-**Conversion:** `(x: Int64) => body` → `fun x -> body`
-
-Different arrow syntax between compilers.
+Let patterns, optional `in`, layout continuations, and `fun` binders now share
+the interpreter grammar. See [binding-parity.md](binding-parity.md) for the
+revision-pinned behavior matrix and AOT diagnostic differences.
 
 ---
 

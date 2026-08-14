@@ -39,10 +39,10 @@ Stdlib.Dict.keys(Dict { c = 3; a = 1; b = 2 }) = ["a", "b", "c"]
 Stdlib.Dict.values(Dict { c = 3; a = 1; b = 2 }) = [1, 2, 3]
 Stdlib.Dict.toList(Dict { c = 3; a = 1; b = 2 }) = [("a", 1), ("b", 2), ("c", 3)]
 Stdlib.Dict.keys(Dict { ``𐀀`` = 1; ```` = 2 }) = ["𐀀", ""]
-Stdlib.Dict.map(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => key ++ Stdlib.Int64.toString(value)) = Dict { a = "a1"; b = "b2" }
-Stdlib.Dict.filter(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => key == "b") = Dict { b = 2 }
-Stdlib.Dict.filterMap(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => if key == "a" then Some(value + 10) else None) = Dict { a = 11 }
-let observed = Stdlib.Dict.iter(Dict { b = 2; a = 1 }, (key: String) => (value: Int64) => ()) in observed = ()
+Stdlib.Dict.map(Dict { b = 2; a = 1 }, fun key -> fun value -> key ++ Stdlib.Int64.toString(value)) = Dict { a = "a1"; b = "b2" }
+Stdlib.Dict.filter(Dict { b = 2; a = 1 }, fun key -> fun value -> key == "b") = Dict { b = 2 }
+Stdlib.Dict.filterMap(Dict { b = 2; a = 1 }, fun key -> fun value -> if key == "a" then Some(value + 10) else None) = Dict { a = 11 }
+let observed = Stdlib.Dict.iter(Dict { b = 2; a = 1 }, fun key -> fun value -> ()) in observed = ()
 
 // Equality and rendering are content-based and independent of HAMT shape.
 Stdlib.Dict.setOverridingDuplicates(Stdlib.Dict.singleton("b", 2), "a", 1) == Dict { a = 1; b = 2 } = true
@@ -52,5 +52,5 @@ Dict { nested = Dict { b = 2; a = 1 }; ``not an identifier`` = Dict { } } = stdo
 
 // Compiler-only public aliases are removed while internal HAMT names remain private.
 Stdlib.Dict.entries(Dict { }) = error="Unresolved callable name: Stdlib.Dict.entries"
-Stdlib.Dict.fold(Dict { }, 0, (acc: Int64, key: String, value: Int64) => acc) = error="Unresolved callable name: Stdlib.Dict.fold"
+Stdlib.Dict.fold(Dict { }, 0, fun acc key value -> acc) = error="Unresolved callable name: Stdlib.Dict.fold"
 Stdlib.Dict.getOrDefault(Dict { }, "a", 0) = error="Unresolved callable name: Stdlib.Dict.getOrDefault"

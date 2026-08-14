@@ -147,22 +147,22 @@ type Option4<t> = None4 | Some4 of t match (if true then (if false then None4 el
 // =====================================================
 
 // Lambda captures result of explicit TypeApp - tests TypeApp return type instantiation (c4d-zts)
-def gen_capture_explicit<t>(x: t) : t = x let captured = gen_capture_explicit<Int64>(42) in ((y: Int64) => captured + y)(10) = 52
+def gen_capture_explicit<t>(x: t) : t = x let captured = gen_capture_explicit<Int64>(42) in (fun y -> captured + y)(10) = 52
 
 // Lambda captures TypeApp result used in stored closure
-def gen_store_explicit<t>(x: t) : t = x let val = gen_store_explicit<Int64>(100) in let f = (x: Int64) => val + x in f(5) = 105
+def gen_store_explicit<t>(x: t) : t = x let val = gen_store_explicit<Int64>(100) in let f = fun x -> val + x in f(5) = 105
 
 // Multiple type params with explicit TypeApp - capture first result
-def gen_fst_explicit<a, b>(x: a, y: b) : a = x let r = gen_fst_explicit<Int64, Bool>(20, true) in ((z: Int64) => r + z)(22) = 42
+def gen_fst_explicit<a, b>(x: a, y: b) : a = x let r = gen_fst_explicit<Int64, Bool>(20, true) in (fun z -> r + z)(22) = 42
 
 // Capture Bool result from explicit TypeApp - exposes TVar default bug (c4d-zts)
-def gen_bool<t>(x: t) : t = x let flag = gen_bool<Bool>(true) in ((y: Int64) => if flag then y else 0)(42) = 42
+def gen_bool<t>(x: t) : t = x let flag = gen_bool<Bool>(true) in (fun y -> if flag then y else 0)(42) = 42
 
 // Capture String result from explicit TypeApp - exposes TVar default bug (c4d-zts)
-def gen_string<t>(x: t) : t = x let s = gen_string<String>("hello") in ((x: Int64) => if s == "hello" then x else 0)(42) = 42
+def gen_string<t>(x: t) : t = x let s = gen_string<String>("hello") in (fun x -> if s == "hello" then x else 0)(42) = 42
 
 // TypeApp call inside lambda with captured outer value (c4d-zts)
-def gen_inner<t>(x: t) : t = x let outer = 10 in ((x: Int64) => gen_inner<Int64>(outer) + x)(32) = 42
+def gen_inner<t>(x: t) : t = x let outer = 10 in (fun x -> gen_inner<Int64>(outer) + x)(32) = 42
 
 // =====================================================
 // Tuple Types as Type Arguments (3+ elements)

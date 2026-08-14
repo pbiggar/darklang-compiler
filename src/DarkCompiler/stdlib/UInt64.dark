@@ -99,4 +99,4 @@ def Stdlib.UInt64.isOdd(n: UInt64) : Bool =
 
 // Sum all integers in a list
 def Stdlib.UInt64.sum(list: List<UInt64>) : UInt64 =
-    Stdlib.List.fold<UInt64, UInt64>(list, 0UL, (acc: UInt64, x: UInt64) => acc + x)
+    Stdlib.List.fold<UInt64, UInt64>(list, 0UL, fun acc x -> acc + x)

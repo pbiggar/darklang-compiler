@@ -37,7 +37,7 @@ SYNTAX CONVERSIONS:
     - Integer literals: 5 -> 5L
     - List separators: [1, 2] -> [1L; 2L]
     - Function calls: Module.fn(a, b) -> Stdlib.Module.fn a b
-    - Lambdas: (x: T) => body -> fun x -> body
+    - Lambdas already use the shared `fun x -> body` syntax
 
 TEST CONVERSION EXAMPLE:
     For a test like `let x = 5 in x + 1 = 6`:
@@ -396,9 +396,6 @@ class SyntaxConverter:
         # Convert stdlib function calls: Module.func(args) -> Stdlib.Module.func args
         result = self._convert_stdlib_calls(result)
 
-        # Convert lambdas: (x: Int64) => body -> fun x -> body
-        result = self._convert_lambdas(result)
-
         # Convert list syntax: [1, 2, 3] -> [1L; 2L; 3L]
         result = self._convert_lists(result)
 
@@ -632,33 +629,6 @@ class SyntaxConverter:
             args.append(''.join(current).strip())
 
         return args
-
-    def _convert_lambdas(self, expr: str) -> str:
-        """Convert Ralph2 lambda syntax to Darklang."""
-        result = expr
-
-        # Pattern: (x: Type, y: Type) => body
-        # Convert to: fun x y -> body
-        lambda_params = r'\(([^()]*)\)\s*=>'
-
-        def replace_lambda(m):
-            params_str = m.group(1).strip()
-            params = self._split_args(params_str)
-            names = []
-
-            for param in params:
-                name_match = re.match(r'\s*(\w+)\s*:', param)
-                if not name_match:
-                    return m.group(0)
-                names.append(name_match.group(1))
-
-            if not names:
-                return m.group(0)
-            return f'fun {" ".join(names)} ->'
-
-        result = re.sub(lambda_params, replace_lambda, result)
-
-        return result
 
     def _convert_lists(self, expr: str) -> str:
         """Convert list syntax: [1, 2, 3] -> [1L; 2L; 3L]."""

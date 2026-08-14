@@ -361,10 +361,10 @@ match (1 > 10) || (10 > 1) with | true -> 42 | false -> 0 = 42
 match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive"
 
 // Duplicate bindings in a single pattern should be rejected by type checking.
-match (1, 2) with | (x, x) -> x | _ -> 0 = error="Duplicate pattern bindings are not allowed: x"
+match (1, 2) with | (x, x) -> x | _ -> 0 = error="Duplicate binding 'x' in the same pattern"
 
 // Pattern groups must bind the same names in every alternative.
-match (1, 2) with | (x, _) | (_, _) -> x | _ -> 0 = error="Pattern grouping requires complete bindings in every alternative: expected [x], got []" warn_on_duplicate_pattern_bindings=false
+match (1, 2) with | (x, _) | (_, _) -> x | _ -> 0 = error="Pattern matches require all branches to provide the same variables - expected [x], got []"
 
 // Grouped list-pattern alternatives on non-list scrutinees must compile as non-matches.
 // Regression: lowering previously hit a TInt64 fallback and crashed during MIR conversion.

@@ -30,17 +30,17 @@ Stdlib.Option.withDefault(Stdlib.Option.Option.None, 42) = 42
 // Stdlib.Option.map - Apply a function to the value if Some
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.Option.map(Stdlib.Option.Option.Some(5), (x: Int64) => x + 1), 0) = 6
-Stdlib.Option.isNone(Stdlib.Option.map(Stdlib.Option.Option.None, (x: Int64) => x + 1)) = true
+Stdlib.Option.withDefault(Stdlib.Option.map(Stdlib.Option.Option.Some(5), fun x -> x + 1), 0) = 6
+Stdlib.Option.isNone(Stdlib.Option.map(Stdlib.Option.Option.None, fun x -> x + 1)) = true
 
 // ===================================================================
 // Stdlib.Option.andThen - Chain Option computations
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.Option.andThen(Stdlib.Option.Option.Some(5), (x: Int64) => Stdlib.Option.Option.Some(x * 2)), 0) = 10
-Stdlib.Option.isNone(Stdlib.Option.andThen(Stdlib.Option.Option.None, (x: Int64) => Stdlib.Option.Option.Some(x * 2))) = true
+Stdlib.Option.withDefault(Stdlib.Option.andThen(Stdlib.Option.Option.Some(5), fun x -> Stdlib.Option.Option.Some(x * 2)), 0) = 10
+Stdlib.Option.isNone(Stdlib.Option.andThen(Stdlib.Option.Option.None, fun x -> Stdlib.Option.Option.Some(x * 2))) = true
 // NOTE: Needs type params because the lambda returns None which doesn't constrain the output type
-Stdlib.Option.isNone(Stdlib.Option.andThen<Int64, Int64>(Stdlib.Option.Option.Some(5), (x: Int64) => Stdlib.Option.Option.None)) = true
+Stdlib.Option.isNone(Stdlib.Option.andThen<Int64, Int64>(Stdlib.Option.Option.Some(5), fun x -> Stdlib.Option.Option.None)) = true
 
 // ===================================================================
 // Stdlib.Option.or - Return the first Some, or fall back to the second option
@@ -64,7 +64,7 @@ Stdlib.List.isEmpty(Stdlib.Option.toList(Stdlib.Option.Option.None)) = true
 
 Stdlib.Option.Option.Some(42) |> Stdlib.Option.isSome() = true
 Stdlib.Option.Option.None |> Stdlib.Option.isNone() = true
-Stdlib.Option.Option.Some(10) |> Stdlib.Option.map((x: Int64) => x * 2) |> Stdlib.Option.withDefault(0) = 20
+Stdlib.Option.Option.Some(10) |> Stdlib.Option.map(fun x -> x * 2) |> Stdlib.Option.withDefault(0) = 20
 
 // ===================================================================
 // Unresolved type variable resolved later by context

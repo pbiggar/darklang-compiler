@@ -57,8 +57,8 @@ OneTuple.OneTuple((1L, "one"))
 ```
 
 The interpreter parser rejects compiler-dialect declarations such as
-`type Option<a> = Some of a | None`, qualified declaration names, and `=>`
-lambdas. Compiler syntax remains an explicitly separate input dialect for the
+`type Option<a> = Some of a | None` and qualified declaration names. Compiler
+declaration syntax remains an explicitly separate input dialect for the
 existing compiler stdlib and legacy `.e2e` corpus; it is not accepted by
 `--syntax=interpreter` and is not an interpreter parity claim.
 

@@ -257,12 +257,12 @@ let private parenthesizeTupleBaseIfNeeded (expr: Expr) (text: string) : string =
     | TupleAccess _ -> $"({text})"
     | _ -> parenthesizeIfNeeded expr text
 
-let private isSyntheticUnitParam ((paramName, paramType): string * Type) : bool =
-    paramType = TUnit && paramName.StartsWith("$unit")
+let private isUnitLambdaParameter (parameter: LambdaParameter) : bool =
+    parameter.Pattern = LPUnit
 
 let private isSyntheticUnitParamList (parameters: NonEmptyList<string * Type>) : bool =
     match NonEmptyList.toList parameters with
-    | [singleParam] -> isSyntheticUnitParam singleParam
+    | [(paramName, TUnit)] -> paramName.StartsWith("$unit")
     | _ -> false
 
 let private isUnitArgumentList (args: NonEmptyList<Expr>) : bool =
@@ -291,43 +291,6 @@ let private tryParseInterpreterLambdaTypeVar (typeVarName: string) : (int * int)
                 match System.Int32.TryParse seedText, System.Int32.TryParse indexText with
                 | (true, seed), (true, paramIndex) -> Some (seed, paramIndex)
                 | _ -> None
-
-let private trySingleInterpreterLambdaParamInfo
-    (parameters: NonEmptyList<string * Type>)
-    : ((string * Type) * (int * int)) option =
-    match NonEmptyList.toList parameters with
-    | [singleParam] ->
-        let (_, paramType) = singleParam
-        match paramType with
-        | TVar typeVarName ->
-            tryParseInterpreterLambdaTypeVar typeVarName
-            |> Option.map (fun info -> (singleParam, info))
-        | _ -> None
-    | _ -> None
-
-let private tryCollectImplicitCurriedLambdaParameters
-    (parameters: NonEmptyList<string * Type>)
-    (body: Expr)
-    : ((string * Type) list * Expr) option =
-    match trySingleInterpreterLambdaParamInfo parameters with
-    | None -> None
-    | Some (firstParam, (seed, startIndex)) ->
-        let rec collect
-            (expectedIndex: int)
-            (collectedRev: (string * Type) list)
-            (currentExpr: Expr)
-            : ((string * Type) list * Expr) =
-            match currentExpr with
-            | Lambda (nextParameters, nextBody) ->
-                match trySingleInterpreterLambdaParamInfo nextParameters with
-                | Some (nextParam, (nextSeed, nextIndex))
-                    when nextSeed = seed && nextIndex = expectedIndex ->
-                    collect (expectedIndex + 1) (nextParam :: collectedRev) nextBody
-                | _ -> (List.rev collectedRev, currentExpr)
-            | _ -> (List.rev collectedRev, currentExpr)
-
-        let (collected, finalBody) = collect (startIndex + 1) [firstParam] body
-        if List.length collected > 1 then Some (collected, finalBody) else None
 
 let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
     match pattern with
@@ -415,6 +378,17 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         else
             $"[{headText}{separator}...{formatPattern syntax tail}]"
 
+let rec private formatLetPattern (pattern: LetPattern) : string =
+    match pattern with
+    | LPUnit -> "()"
+    | LPWildcard -> "_"
+    | LPVariable name -> formatIdentifierSegment name
+    | LPTuple (first, second, rest) ->
+        first :: second :: rest
+        |> List.map formatLetPattern
+        |> String.concat ", "
+        |> fun elements -> $"({elements})"
+
 let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
     let isNegativeNumericLiteral (arg: Expr) : bool =
         match arg with
@@ -468,8 +442,6 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         match syntax with
         | CompilerSyntax -> $"Builtin.testRuntimeError(\"{escaped}\")"
         | InterpreterSyntax -> $"Builtin.testRuntimeError \"{escaped}\""
-    | LetPattern (pattern, value, body) ->
-        $"let {formatPattern syntax pattern} = {formatExpr syntax value} in {formatExpr syntax body}"
     | UnitLiteral -> "()"
     | Int64Literal n ->
         match syntax with
@@ -569,8 +541,24 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
     | UnaryOp (op, inner) ->
         let innerText = parenthesizeIfNeeded inner (formatExpr syntax inner)
         $"{formatUnaryOp op}{innerText}"
-    | Let (name, value, body) ->
-        $"let {formatIdentifierSegment name} = {formatExpr syntax value} in {formatExpr syntax body}"
+    | Let (LPVariable name, Lambda (parameters, Some returnType, functionBody), body)
+        when syntax = InterpreterSyntax ->
+        let annotatedParameters =
+            parameters
+            |> NonEmptyList.toList
+            |> List.map (fun parameter ->
+                match parameter.Pattern, parameter.SourceAnnotation with
+                | LPVariable parameterName, Some parameterType ->
+                    Some $"({formatIdentifierSegment parameterName}: {formatType parameterType})"
+                | _ -> None)
+        if annotatedParameters |> List.forall Option.isSome then
+            let paramsText = annotatedParameters |> List.choose id |> String.concat " "
+            $"let {formatIdentifierSegment name} {paramsText} : {formatType returnType} = {formatExpr syntax functionBody}\n{formatExpr syntax body}"
+        else
+            let lambda = Lambda (parameters, Some returnType, functionBody)
+            $"let {formatLetPattern (LPVariable name)} = {formatExpr syntax lambda} in {formatExpr syntax body}"
+    | Let (pattern, value, body) ->
+        $"let {formatLetPattern pattern} = {formatExpr syntax value} in {formatExpr syntax body}"
     | Var name -> formatIdentifierPath name
     | If (cond, thenBranch, elseBranch) ->
         $"if {formatExpr syntax cond} then {formatExpr syntax thenBranch} else {formatExpr syntax elseBranch}"
@@ -715,53 +703,23 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             $"[...{formatExpr syntax tail}]"
         else
             $"[{headText}{separator}...{formatExpr syntax tail}]"
-    | Lambda (parameters, body) ->
+    | Lambda (parameters, returnAnnotation, body) ->
         let parameterList = NonEmptyList.toList parameters
-        match syntax with
-        | CompilerSyntax ->
-            match parameterList, body with
-            | [ (paramName, TBool) ], BinOp (And, Var varName, rightArg) when paramName = "$pipe_arg" && varName = "$pipe_arg" ->
-                $"(&&) {formatAppArg rightArg}"
-            | [ (paramName, TBool) ], BinOp (Or, Var varName, rightArg) when paramName = "$pipe_arg" && varName = "$pipe_arg" ->
-                $"(||) {formatAppArg rightArg}"
-            | _ ->
-                if isSyntheticUnitParamList parameters then
-                    $"() => {formatExpr syntax body}"
-                else
-                    let paramsText =
-                        parameterList
-                        |> List.map (fun (name, typ) ->
-                            $"{formatIdentifierSegment name}: {formatType typ}")
-                        |> String.concat ", "
-                    $"({paramsText}) => {formatExpr syntax body}"
-        | InterpreterSyntax ->
-            if isSyntheticUnitParamList parameters then
-                $"fun () -> {formatExpr syntax body}"
-            else
-                match parameterList, body with
-                | [ (paramName, TBool) ], BinOp (And, Var varName, rightArg) when paramName = "$pipe_arg" && varName = "$pipe_arg" ->
-                    $"(&&) {formatAppArg rightArg}"
-                | [ (paramName, TBool) ], BinOp (Or, Var varName, rightArg) when paramName = "$pipe_arg" && varName = "$pipe_arg" ->
-                    $"(||) {formatAppArg rightArg}"
-                | _ ->
-                    let parametersToFormat, bodyToFormat =
-                        match tryCollectImplicitCurriedLambdaParameters parameters body with
-                        | Some flattened -> flattened
-                        | None -> (parameterList, body)
-
-                    let paramsText =
-                        parametersToFormat
-                        |> List.map (fun (name, typ) ->
-                            match typ with
-                            | TVar typeVar ->
-                                match tryParseInterpreterLambdaTypeVar typeVar with
-                                | Some _ -> formatIdentifierSegment name
-                                | None ->
-                                    $"({formatIdentifierSegment name}: {formatType typ})"
-                            | _ ->
-                                $"({formatIdentifierSegment name}: {formatType typ})")
-                        |> String.concat " "
-                    $"fun {paramsText} -> {formatExpr syntax bodyToFormat}"
+        match parameterList, body with
+        | [ { Pattern = LPVariable paramName; InferredType = Some TBool } ],
+          BinOp (And, Var varName, rightArg) when paramName = "$pipe_arg" && varName = "$pipe_arg" ->
+            $"(&&) {formatAppArg rightArg}"
+        | [ { Pattern = LPVariable paramName; InferredType = Some TBool } ],
+          BinOp (Or, Var varName, rightArg) when paramName = "$pipe_arg" && varName = "$pipe_arg" ->
+            $"(||) {formatAppArg rightArg}"
+        | [singleParameter], _ when isUnitLambdaParameter singleParameter ->
+            $"fun () -> {formatExpr syntax body}"
+        | _ ->
+            let paramsText =
+                parameterList
+                |> List.map (fun parameter -> formatLetPattern parameter.Pattern)
+                |> String.concat " "
+            $"fun {paramsText} -> {formatExpr syntax body}"
     | Apply (funcExpr, args) ->
         let argsList = NonEmptyList.toList args
         match syntax with

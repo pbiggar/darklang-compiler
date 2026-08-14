@@ -97,12 +97,6 @@ and Token =
     | TTypeVar of string // apostrophe-prefixed type variable; apostrophe is syntax, not part of identity
     | TEOF
 
-/// Tracks whether an interpreter lambda parameter type was inferred or written
-/// explicitly until the parser has decided whether to curry the lambda.
-type private ParsedLambdaParamType =
-    | Implicit of Type
-    | Explicit of Type
-
 /// Lexer: convert string to list of tokens
 let lex (input: string) : Result<Token list, string> =
     let rec lexHelper (chars: char list) (acc: Token list) : Result<Token list, string> =
@@ -1396,6 +1390,32 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
                 parseListPattern rest (pat :: acc)
             | _ -> Error "Expected ';', ',', or ']' in list pattern")
 
+/// Parse the restricted pattern language shared by lets and lambdas.
+let rec parseLetPattern (tokens: Token list) : Result<LetPattern * Token list, string> =
+    match tokens with
+    | TUnderscore :: rest -> Ok (LPWildcard, rest)
+    | TIdent name :: rest when not (System.Char.IsUpper(name.[0])) ->
+        Ok (LPVariable name, rest)
+    | TLParen :: TRParen :: rest -> Ok (LPUnit, rest)
+    | TLParen :: rest ->
+        parseLetPattern rest
+        |> Result.bind (fun (first, afterFirst) ->
+            match afterFirst with
+            | TRParen :: remaining -> Ok (first, remaining)
+            | TComma :: afterComma ->
+                parseLetPattern afterComma
+                |> Result.bind (fun (second, afterSecond) ->
+                    let rec parseRest acc remaining =
+                        match remaining with
+                        | TRParen :: tail -> Ok (LPTuple (first, second, List.rev acc), tail)
+                        | TComma :: tail ->
+                            parseLetPattern tail
+                            |> Result.bind (fun (next, afterNext) -> parseRest (next :: acc) afterNext)
+                        | _ -> Error "Expected ',' or ')' in let binding tuple pattern"
+                    parseRest [] afterSecond)
+            | _ -> Error "Expected ',' or ')' in let binding pattern")
+    | _ -> Error "Expected a let binding pattern"
+
 /// Parse a single case: | pat1 | pat2 when guard -> expr
 /// Supports multiple patterns (pattern grouping) and optional guard clause
 let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<MatchCase * Token list, string> =
@@ -1444,23 +1464,6 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
 let parse (tokens: Token list) : Result<Program, string> =
     // Recursive descent parser with operator precedence
     // Precedence (low to high): or < and < comparison < +/- < */ < unary
-
-    // Stable lambda seed for generated implicit type variables.
-    // Uses parse-order instead of token-list length so pretty-print roundtrips
-    // preserve equivalent lambda variable naming.
-    let mutable lambdaSeedCounter = 0
-
-    let nextLambdaSeed () : int =
-        let current = lambdaSeedCounter
-        lambdaSeedCounter <- lambdaSeedCounter + 1
-        current
-
-    let implicitLambdaTypeVarName
-        (lambdaSeed: int)
-        (paramIndex: int)
-        (paramName: string)
-        : string =
-        $"__interp_lambda_{lambdaSeed}_{paramIndex}_{paramName}"
 
     let startsWithNegativeNumericLiteral (toks: Token list) : bool =
         match toks with
@@ -1541,7 +1544,7 @@ let parse (tokens: Token list) : Result<Program, string> =
             match funcExpr with
             // Preserve uncurried lambda applications as a single Apply node
             // while still allowing curried chains to remain left-associated.
-            | Lambda (parameters, _) when NonEmptyList.length existingArgs < NonEmptyList.length parameters ->
+            | Lambda (parameters, _, _) when NonEmptyList.length existingArgs < NonEmptyList.length parameters ->
                 Apply (funcExpr, NonEmptyList.snoc existingArgs argExpr)
             | _ ->
                 Apply (callee, NonEmptyList.singleton argExpr)
@@ -1568,7 +1571,10 @@ let parse (tokens: Token list) : Result<Program, string> =
             (body: Expr)
             (remainingAfterBody: Token list)
             : Expr * Token list =
-            (Let (funcDef.Name, Lambda (funcDef.Params, funcDef.Body), body), remainingAfterBody)
+            let lambdaParameters =
+                funcDef.Params
+                |> NonEmptyList.map (fun (name, typ) -> typedLambdaVariable name typ)
+            (Let (LPVariable funcDef.Name, Lambda (lambdaParameters, Some funcDef.ReturnType, funcDef.Body), body), remainingAfterBody)
 
         let betterSplit
             (currentBest: (Expr * Token list) option)
@@ -1628,12 +1634,10 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TLet :: rest ->
             // Parse: let pattern = value in body
             // Supports simple let (let x = ...) and pattern matching (let (a, b) = ...)
-            parsePattern rest
+            parseLetPattern rest
             |> Result.bind (fun (pattern, remaining) ->
                 let buildLetExpression (value: Expr) (body: Expr) (remaining'': Token list) =
-                    match pattern with
-                    | PVar name -> (Let (name, value, body), remaining'')
-                    | _ -> (LetPattern (pattern, value, body), remaining'')
+                    (Let (pattern, value, body), remaining'')
                 match remaining with
                 | TEquals :: rest' ->
                     let tryParseWithoutInFallback () : Result<Expr * Token list, string> =
@@ -2047,119 +2051,29 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
         | TFun :: rest ->
             // Interpreter lambda syntax: fun x y -> body
-            let lambdaSeed = nextLambdaSeed ()
-
             let rec parseFunParameters
                 (toks: Token list)
-                (paramIndex: int)
-                (acc: (string * ParsedLambdaParamType * Pattern option) list)
-                : Result<(string * ParsedLambdaParamType * Pattern option) list * Token list, string> =
+                (acc: LetPattern list)
+                : Result<LetPattern list * Token list, string> =
                 match toks with
                 | TArrow :: remaining when not (List.isEmpty acc) ->
                     Ok (List.rev acc, remaining)
-                | TUnderscore :: remaining ->
-                    let syntheticParamName = $"lambdaWildcard{lambdaSeed}_{paramIndex}"
-                    let typeVarName = implicitLambdaTypeVarName lambdaSeed paramIndex syntheticParamName
-                    parseFunParameters
-                        remaining
-                        (paramIndex + 1)
-                        ((syntheticParamName, Implicit (TVar typeVarName), None) :: acc)
-                | TIdent name :: remaining when not (System.Char.IsUpper(name.[0])) ->
-                    let typeVarName = implicitLambdaTypeVarName lambdaSeed paramIndex name
-                    parseFunParameters
-                        remaining
-                        (paramIndex + 1)
-                        ((name, Implicit (TVar typeVarName), None) :: acc)
                 | TLParen :: TIdent name :: TColon :: remaining when not (System.Char.IsUpper(name.[0])) ->
-                    parseType remaining
-                    |> Result.bind (fun (paramType, afterType) ->
-                        match afterType with
-                        | TRParen :: remaining' ->
-                            parseFunParameters
-                                remaining'
-                                (paramIndex + 1)
-                                ((name, Explicit paramType, None) :: acc)
-                        | _ -> Error "Expected ')' after typed lambda parameter")
-                | TLParen :: _ ->
-                    parsePattern toks
+                    Error "Lambda parameter annotations are not supported; annotate a local function declaration instead"
+                | _ ->
+                    parseLetPattern toks
                     |> Result.bind (fun (pattern, remaining) ->
-                        match pattern with
-                        | PVar name ->
-                            let typeVarName =
-                                implicitLambdaTypeVarName lambdaSeed paramIndex name
-                            parseFunParameters
-                                remaining
-                                (paramIndex + 1)
-                                ((name, Implicit (TVar typeVarName), None) :: acc)
-                        | _ ->
-                            let syntheticParamName = $"lambdaPattern{lambdaSeed}_{paramIndex}"
-                            let typeVarName =
-                                implicitLambdaTypeVarName
-                                    lambdaSeed
-                                    paramIndex
-                                    syntheticParamName
-                            parseFunParameters
-                                remaining
-                                (paramIndex + 1)
-                                ((syntheticParamName, Implicit (TVar typeVarName), Some pattern) :: acc))
-                | _ -> Error "Expected one or more parameters before '->' in fun expression"
+                        parseFunParameters remaining (pattern :: acc))
 
-            parseFunParameters rest 0 []
+            parseFunParameters rest []
             |> Result.bind (fun (parsedParameters, bodyStart) ->
                 parseExpr bodyStart
                 |> Result.map (fun (body, remaining) ->
                     let parameters =
                         parsedParameters
-                        |> List.map (fun (paramName, parsedParamType, _) ->
-                            let paramType =
-                                match parsedParamType with
-                                | Implicit typ | Explicit typ -> typ
-                            (paramName, paramType))
-
-                    let patternBindings =
-                        parsedParameters
-                        |> List.choose (fun (paramName, _, bindingPattern) ->
-                            match bindingPattern with
-                            | Some pattern -> Some (paramName, pattern)
-                            | None -> None)
-
-                    let bodyWithPatternBindings =
-                        List.foldBack (fun (paramName, pattern) innerBody ->
-                            Match (
-                                Var paramName,
-                                [
-                                    {
-                                        Patterns = NonEmptyList.singleton pattern
-                                        Guard = None
-                                        Body = innerBody
-                                    }
-                                ]
-                            )) patternBindings body
-
-                    // Preserve typed lambdas as multi-parameter AST for stable
-                    // parser/pretty roundtrips. Curry fully-untyped interpreter
-                    // lambdas (`fun x y -> ...`) to match upstream behavior for
-                    // partial application.
-                    let shouldCurry =
-                        parsedParameters
-                        |> List.forall (fun (_, paramType, _) ->
-                            match paramType with
-                            | Implicit _ -> true
-                            | Explicit _ -> false)
-
-                    if shouldCurry then
-                        let rec buildCurriedLambda
-                            (remainingParams: (string * Type) list)
-                            (innerBody: Expr)
-                            : Expr =
-                            match remainingParams with
-                            | [] -> innerBody
-                            | param :: restParams ->
-                                Lambda (NonEmptyList.singleton param, buildCurriedLambda restParams innerBody)
-
-                        (buildCurriedLambda parameters bodyWithPatternBindings, remaining)
-                    else
-                        (Lambda (NonEmptyList.fromList parameters, bodyWithPatternBindings), remaining)))
+                        |> List.map lambdaParameter
+                        |> NonEmptyList.fromList
+                    (Lambda (parameters, None, body), remaining)))
         // Qualified identifier: Stdlib.Int64.add, Module.func, or Stdlib.Result.Result.Ok
         | TIdent name :: TDot :: TIdent nextName :: rest when System.Char.IsUpper(name.[0]) ->
             // Parse the full qualified name
@@ -2271,63 +2185,63 @@ let parse (tokens: Token list) : Result<Program, string> =
             // Check for operator section: (&&), (||), (+), (-), (*), (/), etc.
             let parsePipeOperatorSection
                 (op: BinOp)
-                (paramType: Type)
                 (afterOp: Token list)
                 : Result<Expr * Token list, string> =
                 parseUnary afterOp
                 |> Result.map (fun (rightArg, remaining) ->
                     let lambda =
-                        Lambda (NonEmptyList.singleton ("$pipe_arg", paramType), BinOp (op, Var "$pipe_arg", rightArg))
+                        Lambda (
+                            NonEmptyList.singleton (lambdaParameter (LPVariable "$pipe_arg")),
+                            None,
+                            BinOp (op, Var "$pipe_arg", rightArg)
+                        )
                     (lambda, remaining))
             let parseGeneratedPipeOperatorSection
-                (sectionName: string)
                 (op: BinOp)
                 (afterOp: Token list)
                 : Result<Expr * Token list, string> =
-                let sectionType =
-                    TVar $"__interp_pipe_{sectionName}_section_{List.length rest}_{List.length afterOp}"
-                parsePipeOperatorSection op sectionType afterOp
+                parsePipeOperatorSection op afterOp
             match rest with
             | TAnd :: TRParen :: afterOp ->
                 // (&&) - operator section, parse the right operand
-                parsePipeOperatorSection And TBool afterOp
+                parsePipeOperatorSection And afterOp
             | TOr :: TRParen :: afterOp ->
                 // (||) - operator section
-                parsePipeOperatorSection Or TBool afterOp
+                parsePipeOperatorSection Or afterOp
             | TPlus :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "add" Add afterOp
+                parseGeneratedPipeOperatorSection Add afterOp
             | TMinus :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "sub" Sub afterOp
+                parseGeneratedPipeOperatorSection Sub afterOp
             | TStar :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "mul" Mul afterOp
+                parseGeneratedPipeOperatorSection Mul afterOp
             | TSlash :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "div" Div afterOp
+                parseGeneratedPipeOperatorSection Div afterOp
             | TPercent :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "mod" Mod afterOp
+                parseGeneratedPipeOperatorSection Mod afterOp
             | TEqEq :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "eq" Eq afterOp
+                parseGeneratedPipeOperatorSection Eq afterOp
             | TNeq :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "neq" Neq afterOp
+                parseGeneratedPipeOperatorSection Neq afterOp
             | TLt :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "lt" Lt afterOp
+                parseGeneratedPipeOperatorSection Lt afterOp
             | TGt :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "gt" Gt afterOp
+                parseGeneratedPipeOperatorSection Gt afterOp
             | TLte :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "lte" Lte afterOp
+                parseGeneratedPipeOperatorSection Lte afterOp
             | TGte :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "gte" Gte afterOp
+                parseGeneratedPipeOperatorSection Gte afterOp
             | TBitAnd :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "bitand" BitAnd afterOp
+                parseGeneratedPipeOperatorSection BitAnd afterOp
             | TBitOr :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "bitor" BitOr afterOp
+                parseGeneratedPipeOperatorSection BitOr afterOp
             | TBitXor :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "bitxor" BitXor afterOp
+                parseGeneratedPipeOperatorSection BitXor afterOp
             | TShl :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "shl" Shl afterOp
+                parseGeneratedPipeOperatorSection Shl afterOp
             | TShr :: TRParen :: afterOp ->
-                parseGeneratedPipeOperatorSection "shr" Shr afterOp
+                parseGeneratedPipeOperatorSection Shr afterOp
             | TPlusPlus :: TRParen :: afterOp ->
-                parsePipeOperatorSection StringConcat AST.TString afterOp
+                parsePipeOperatorSection StringConcat afterOp
             | _ ->
                 parseExpr rest
                 |> Result.bind (fun (firstExpr, remaining) ->
@@ -2740,10 +2654,11 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     match expr with
     | BoundaryRender (_, value) -> validateExpr value
     | RuntimeError _ -> Ok ()
-    | LetPattern (_, value, body) ->
-        validateExpr value |> Result.bind (fun () -> validateExpr body)
-    | Let (name, value, body) ->
-        validateNoInternalIdentifier name
+    | Let (pattern, value, body) ->
+        validateBinders (LetBinderPatterns [pattern])
+        |> Result.bind (fun names ->
+            names
+            |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
         |> Result.bind (fun () -> validateExpr value)
         |> Result.bind (fun () -> validateExpr body)
     | Var name -> validateNoInternalIdentifier name
@@ -2810,10 +2725,15 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     | ListCons (head, tail) ->
         let headResult = head |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
         Result.bind (fun () -> validateExpr tail) headResult
-    | Lambda (parameters, body) ->
+    | Lambda (parameters, returnAnnotation, body) ->
         parameters
         |> NonEmptyList.toList
-        |> List.fold (fun acc (name, _) -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ())
+        |> List.map (fun parameter -> parameter.Pattern)
+        |> LetBinderPatterns
+        |> validateBinders
+        |> Result.bind (fun names ->
+            names
+            |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
         |> Result.bind (fun () -> validateExpr body)
     | Apply (funcExpr, args) ->
         validateExpr funcExpr

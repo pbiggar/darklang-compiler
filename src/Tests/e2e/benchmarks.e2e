@@ -265,7 +265,7 @@ def addFactorialTerm(e: List<Int64>, term: List<Int64>, n: Int64, maxN: Int64, l
         addFactorialTerm(newE, newTerm, n + 1, maxN, len)
 
 def zeros(n: Int64) : List<Int64> =
-    Stdlib.List.map<Int64, Int64>(Stdlib.List.range(0, n), (x: Int64) => 0)
+    Stdlib.List.map<Int64, Int64>(Stdlib.List.range(0, n), fun x -> 0)
 
 def initDigits(n: Int64) : List<Int64> =
     Stdlib.List.setAt<Int64>(zeros(n), 0, 1)

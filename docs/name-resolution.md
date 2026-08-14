@@ -99,3 +99,10 @@ name`, and `Ambiguous <context> reference`.
   extensions.
 
 Performance-only differences are outside this matrix.
+
+Lexical binding construction, duplicate validation, non-recursive RHS scope,
+shadow restoration, and definition-time capture are specified separately in
+[binding-parity.md](binding-parity.md). Each accepted binder creates a new
+lexical identity; child expression environments are discarded when that child
+finishes, and a shadowed outer identity is restored rather than reconstructed
+from its text.

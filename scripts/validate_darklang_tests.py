@@ -13,16 +13,16 @@ def load_validate_darklang_module():
     return module
 
 
-def test_multi_argument_lambda_conversion():
+def test_public_lambda_syntax_is_unchanged():
     module = load_validate_darklang_module()
     converter = module.SyntaxConverter()
-    actual = converter.convert("(x: Int64, y: Int64) => x + y")
+    actual = converter.convert("fun x y -> x + y")
     expected = "fun x y -> x + y"
     assert actual == expected, f"expected {expected!r}, got {actual!r}"
 
 
 def main():
-    test_multi_argument_lambda_conversion()
+    test_public_lambda_syntax_is_unchanged()
 
 
 if __name__ == "__main__":

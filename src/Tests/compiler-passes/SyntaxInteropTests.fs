@@ -26,8 +26,14 @@ let testParseInterpreterLambdaApplication () : TestResult =
     | Error err -> Error $"Interpreter parser failed: {err}"
     | Ok (Program [Expression expr]) ->
         match expr with
-        | Let ("inc", Lambda (parameters, body), Call ("inc", callArgs)) ->
-            let paramNames = parameters |> NonEmptyList.toList |> List.map fst
+        | Let (LPVariable "inc", Lambda (parameters, returnAnnotation, body), Call ("inc", callArgs)) ->
+            let paramNames =
+                parameters
+                |> NonEmptyList.toList
+                |> List.choose (fun parameter ->
+                    match parameter.Pattern with
+                    | LPVariable name -> Some name
+                    | _ -> None)
             let callArgsList = callArgs |> NonEmptyList.toList
             match paramNames, callArgsList, body with
             | [paramName], [Int64Literal 41L], Call ("Stdlib.Int64.add", addArgs)
@@ -47,9 +53,9 @@ let testParseInterpreterNestedFunctionAfterLetBinding () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on nested function after let binding: {err}"
-    | Ok (Program [Expression (Let ("limit", Int64Literal 10L, Let ("sumUpTo", Lambda (parameters, body), Call ("sumUpTo", callArgs))))]) ->
+    | Ok (Program [Expression (Let (LPVariable "limit", Int64Literal 10L, Let (LPVariable "sumUpTo", Lambda (parameters, returnAnnotation, body), Call ("sumUpTo", callArgs))))]) ->
         match NonEmptyList.toList parameters, body, NonEmptyList.toList callArgs with
-        | [("i", AST.TInt64)], If (BinOp (Gt, Var "i", Var "limit"), Int64Literal 0L, BinOp (Add, Var "i", Call ("sumUpTo", recursiveArgs))), [Int64Literal 1L] ->
+        | [{ Pattern = LPVariable "i"; SourceAnnotation = Some AST.TInt64 }], If (BinOp (Gt, Var "i", Var "limit"), Int64Literal 0L, BinOp (Add, Var "i", Call ("sumUpTo", recursiveArgs))), [Int64Literal 1L] ->
             match NonEmptyList.toList recursiveArgs with
             | [BinOp (Add, Var "i", Int64Literal 1L)] -> Ok ()
             | other -> Error $"Unexpected recursive call args for nested function: {other}"
@@ -65,9 +71,9 @@ let testInterpreterParserParsesWildcardLambdaParameter () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on wildcard lambda parameter: {err}"
-    | Ok (Program [Expression (Lambda (parameters, Int64Literal 1L))]) ->
+    | Ok (Program [Expression (Lambda (parameters, None, Int64Literal 1L))]) ->
         match NonEmptyList.toList parameters with
-        | [ (paramName, TVar typeVarName) ] when paramName.StartsWith "lambdaWildcard" && typeVarName.StartsWith "__interp_lambda_" ->
+        | [{ Pattern = LPWildcard; SourceAnnotation = None; InferredType = None }] ->
             Ok ()
         | other ->
             Error $"Unexpected lambda parameters for wildcard lambda: {other}"
@@ -110,8 +116,14 @@ let testParseInterpreterPipeMinusOperatorSection () : TestResult =
         Error $"Interpreter parser failed on pipe minus operator section: {err}"
     | Ok (Program [Expression expr]) ->
         match expr with
-        | Apply (Lambda (parameters, BinOp (Sub, Var leftName, Int64Literal 3L)), args) ->
-            let paramNames = parameters |> NonEmptyList.toList |> List.map fst
+        | Apply (Lambda (parameters, None, BinOp (Sub, Var leftName, Int64Literal 3L)), args) ->
+            let paramNames =
+                parameters
+                |> NonEmptyList.toList
+                |> List.choose (fun parameter ->
+                    match parameter.Pattern with
+                    | LPVariable name -> Some name
+                    | _ -> None)
             let argList = args |> NonEmptyList.toList
             match paramNames, argList with
             | [paramName], [Int64Literal 4L] ->
@@ -270,13 +282,14 @@ let testInterpreterParserParsesApostropheTupleTypeVarsInTypeAnnotation () : Test
         Error $"Unexpected AST for apostrophe tuple type-var annotation: {other}"
 
 let testInterpreterParserParsesApostropheSuffixedIdentifierName () : TestResult =
-    let source = "fun (default': 'a) -> default'"
+    let source = "fun default' -> default'"
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on apostrophe-suffixed identifier name: {err}"
-    | Ok (Program [Expression (Lambda (parameters, Var varName))]) ->
+    | Ok (Program [Expression (Lambda (parameters, None, Var varName))]) ->
         match NonEmptyList.toList parameters with
-        | [ ("default'", TVar "a") ] when varName = "default'" ->
+        | [{ Pattern = LPVariable "default'"; SourceAnnotation = None; InferredType = None }]
+            when varName = "default'" ->
             Ok ()
         | other ->
             Error $"Unexpected lambda parameters/body for apostrophe-suffixed identifier name: {other} / {varName}"
@@ -600,7 +613,7 @@ let testInterpreterParserParsesBareIntLiteral () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on bare integer literal: {err}"
-    | Ok (Program [Expression (Let ("x", Int64Literal 5L, Var "x"))]) ->
+    | Ok (Program [Expression (Let (LPVariable "x", Int64Literal 5L, Var "x"))]) ->
         Ok ()
     | Ok other ->
         Error $"Unexpected AST for bare integer literal: {other}"
@@ -761,24 +774,14 @@ let testInterpreterParserParsesConstructorOverApplicationChain () : TestResult =
     | Ok other ->
         Error $"Unexpected AST/program shape for constructor over-application chain: {other}"
 
-let testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried () : TestResult =
+let testInterpreterParserRejectsTypedLambdaParameters () : TestResult =
     let source =
         "fun (x: '__interp_lambda_0_0_x) (y: '__interp_lambda_0_1_y) -> x"
 
     match InterpreterParser.parseString false source with
-    | Error err ->
-        Error $"Interpreter parser failed for explicitly typed lambda: {err}"
-    | Ok (Program [Expression (Lambda (parameters, Var "x"))]) ->
-        match NonEmptyList.toList parameters with
-        | [ ("x", TVar "__interp_lambda_0_0_x")
-            ("y", TVar "__interp_lambda_0_1_y") ] ->
-            Ok ()
-        | other ->
-            Error $"Unexpected explicitly typed lambda parameters: {other}"
-    | Ok (Program [Expression expr]) ->
-        Error $"Expected one uncurried explicitly typed lambda, got: {expr}"
-    | Ok other ->
-        Error $"Expected single expression program, got: {other}"
+    | Error err when err.Contains "Lambda parameter annotations are not supported" -> Ok ()
+    | Error err -> Error $"Unexpected typed-lambda diagnostic: {err}"
+    | Ok other -> Error $"Expected typed lambda parameters to be rejected, got: {other}"
 
 let testInterpreterParserRejectsCompilerOnlyAdtForms () : TestResult =
     let rejectedSources = [
@@ -850,6 +853,6 @@ let tests = [
     ("parse pipe operator sections", testInterpreterParserParsesPipeOperatorSections)
     ("parse qualified record literal", testInterpreterParserParsesQualifiedRecordLiteral)
     ("parse constructor over-application chain", testInterpreterParserParsesConstructorOverApplicationChain)
-    ("explicit prefix-matching lambda type vars remain uncurried", testInterpreterParserKeepsExplicitPrefixMatchingTypeVarsUncurried)
+    ("typed lambda parameters are rejected", testInterpreterParserRejectsTypedLambdaParameters)
     ("reject compiler-only ADT forms in interpreter syntax", testInterpreterParserRejectsCompilerOnlyAdtForms)
 ]

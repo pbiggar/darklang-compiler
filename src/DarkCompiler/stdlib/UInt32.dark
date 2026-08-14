@@ -97,4 +97,4 @@ def Stdlib.UInt32.isOdd(n: UInt32) : Bool =
 
 // Sum all integers in a list
 def Stdlib.UInt32.sum(list: List<UInt32>) : UInt32 =
-    Stdlib.List.fold<UInt32, UInt32>(list, 0ul, (acc: UInt32, x: UInt32) => acc + x)
+    Stdlib.List.fold<UInt32, UInt32>(list, 0ul, fun acc x -> acc + x)

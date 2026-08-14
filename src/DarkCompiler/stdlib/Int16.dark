@@ -102,4 +102,4 @@ def Stdlib.Int16.isOdd(n: Int16) : Bool =
 
 // Sum all integers in a list
 def Stdlib.Int16.sum(list: List<Int16>) : Int16 =
-    Stdlib.List.fold<Int16, Int16>(list, 0s, (acc: Int16, x: Int16) => acc + x)
+    Stdlib.List.fold<Int16, Int16>(list, 0s, fun acc x -> acc + x)

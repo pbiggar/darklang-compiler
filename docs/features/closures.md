@@ -16,7 +16,7 @@ A **free variable** in a lambda is a variable used but not defined within the la
 
 ```dark
 let y = 10 in
-let f = (x: Int64) => x + y  // y is free, x is bound
+let f = fun x -> x + y  // y is free, x is bound
 in f(5)  // Returns 15
 ```
 
@@ -58,7 +58,7 @@ When a lambda is encountered in argument position:
 **Before:**
 ```dark
 let y = 10 in
-((x: Int64) => x + y)(5)
+(fun x -> x + y)(5)
 ```
 
 **After lifting:**
@@ -82,7 +82,7 @@ function support:
 
 ```dark
 // Even this creates a trivial closure:
-let f = (x: Int64) => x + 1  // ClosureAlloc(__closure_1, [])
+let f = fun x -> x + 1  // ClosureAlloc(__closure_1, [])
 in f(5)
 ```
 
@@ -126,33 +126,33 @@ in parity with ARM64.
 
 ### Basic Closures
 ```dark
-let y = 10 in ((x: Int64) => x + y)(5)  // 15
+let y = 10 in (fun x -> x + y)(5)  // 15
 ```
 
 ### First-Class Functions
 ```dark
-let f = (x: Int64) => x + 1 in f(5)  // 6
+let f = fun x -> x + 1 in f(5)  // 6
 ```
 
 ### Multiple Captures
 ```dark
-let a = 1 in let b = 2 in ((x: Int64) => a + b + x)(39)  // 42
+let a = 1 in let b = 2 in (fun x -> a + b + x)(39)  // 42
 ```
 
 ### Nested Lambdas
 ```dark
-let y = 10 in ((x: Int64) => ((z: Int64) => x + y + z)(2))(30)  // 42
+let y = 10 in (fun x -> (fun z -> x + y + z)(2))(30)  // 42
 ```
 
 ### Higher-Order Functions
 ```dark
-let apply = (f: Int64 -> Int64, x: Int64) => f(x)
-in apply((x: Int64) => x * 2, 21)  // 42
+let apply = fun f x -> f(x)
+in apply(fun x -> x * 2, 21)  // 42
 ```
 
 ### Partial Application
 ```dark
-let add = (x: Int64) => (y: Int64) => x + y
+let add = fun x -> fun y -> x + y
 in add(10)(32)  // 42
 ```
 
@@ -162,7 +162,7 @@ in add(10)(32)  // 42
 - `6945c98` - Add higher-order functions: pass functions as arguments
 - `772b0f9` - Add first-class functions: store lambdas in variables
 - `92f6245` - Add lambda expressions with immediate application support
-- `6d50977` - Add curried lambda support (x => y => x + y)
+- `6d50977` - Add curried lambda support (`fun x -> fun y -> x + y`)
 - `73d0cd2` - Add partial application support for functions and lambdas
 
 ## Implementation Files

@@ -103,4 +103,4 @@ def Stdlib.Int32.isOdd(n: Int32) : Bool =
 
 // Sum all integers in a list
 def Stdlib.Int32.sum(list: List<Int32>) : Int32 =
-    Stdlib.List.fold<Int32, Int32>(list, 0l, (acc: Int32, x: Int32) => acc + x)
+    Stdlib.List.fold<Int32, Int32>(list, 0l, fun acc x -> acc + x)

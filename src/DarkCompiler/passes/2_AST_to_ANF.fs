@@ -726,6 +726,53 @@ let private exprArgsFromList (args: AST.Expr list) : AST.NonEmptyList<AST.Expr> 
 let private paramsToList (parameters: AST.NonEmptyList<string * AST.Type>) : (string * AST.Type) list =
     AST.NonEmptyList.toList parameters
 
+let private lambdaParameterType (parameter: AST.LambdaParameter) : AST.Type =
+    parameter.InferredType
+    |> Option.defaultWith (fun () -> Crash.crash "Lambda parameter reached ANF lowering without an inferred type")
+
+let rec private letPatternBindingTypes
+    (pattern: AST.LetPattern)
+    (typ: AST.Type)
+    : (string * AST.Type) list =
+    match pattern, typ with
+    | AST.LPVariable name, bindingType -> [(name, bindingType)]
+    | AST.LPWildcard, _ | AST.LPUnit, _ -> []
+    | AST.LPTuple (first, second, rest), AST.TTuple elementTypes ->
+        let patterns = first :: second :: rest
+        if List.length patterns <> List.length elementTypes then
+            Crash.crash "Typed lambda tuple pattern changed arity before ANF lowering"
+        else
+            List.zip patterns elementTypes
+            |> List.collect (fun (innerPattern, innerType) ->
+                letPatternBindingTypes innerPattern innerType)
+    | AST.LPTuple _, _ ->
+        Crash.crash "Typed lambda tuple pattern lost its tuple type before ANF lowering"
+
+let private lambdaParameterBindings (parameter: AST.LambdaParameter) : (string * AST.Type) list =
+    letPatternBindingTypes parameter.Pattern (lambdaParameterType parameter)
+
+let private lowerLambdaParameters
+    (parameters: AST.NonEmptyList<AST.LambdaParameter>)
+    (body: AST.Expr)
+    : (string * AST.Type) list * AST.Expr =
+    parameters
+    |> AST.NonEmptyList.toList
+    |> List.mapi (fun index parameter ->
+        let parameterType = lambdaParameterType parameter
+        match parameter.Pattern with
+        | AST.LPVariable name -> ((name, parameterType), None)
+        | pattern ->
+            let argumentName = $"__lambda_pattern_arg_{index}"
+            ((argumentName, parameterType), Some (pattern, argumentName)))
+    |> fun lowered ->
+        let functionParameters = lowered |> List.map fst
+        let destructuredBody =
+            lowered
+            |> List.choose snd
+            |> List.foldBack (fun (pattern, argumentName) continuation ->
+                AST.Let (pattern, AST.Var argumentName, continuation)) <| body
+        (functionParameters, destructuredBody)
+
 let private paramsFromList (context: string) (parameters: (string * AST.Type) list) : AST.NonEmptyList<string * AST.Type> =
     match AST.NonEmptyList.tryFromList parameters with
     | Some nonEmptyParams -> nonEmptyParams
@@ -762,7 +809,7 @@ let private wrapWithIgnoredArgEvaluations (args: AST.Expr list) (body: AST.Expr)
     |> List.indexed
     |> List.rev
     |> List.fold (fun acc (index, argExpr) ->
-        AST.Let ($"__dark_internal_unresolved_arg_eval_{index}", argExpr, acc)) body
+        AST.Let (AST.LPVariable $"__dark_internal_unresolved_arg_eval_{index}", argExpr, acc)) body
 
 /// Type substitution - maps type variable names to concrete types
 type Substitution = Map<string, AST.Type>
@@ -953,10 +1000,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
     | AST.UnaryOp (op, inner) ->
         AST.UnaryOp (op, applySubstToExpr subst inner)
-    | AST.Let (name, value, body) ->
-        AST.Let (name, applySubstToExpr subst value, applySubstToExpr subst body)
-    | AST.LetPattern (pattern, value, body) ->
-        AST.LetPattern (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
+    | AST.Let (pattern, value, body) ->
+        AST.Let (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (applySubstToExpr subst cond, applySubstToExpr subst thenBranch, applySubstToExpr subst elseBranch)
     | AST.Sequence (first, next) ->
@@ -994,12 +1039,15 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.ListLiteral (List.map (applySubstToExpr subst) elements)
     | AST.ListCons (headElements, tail) ->
         AST.ListCons (List.map (applySubstToExpr subst) headElements, applySubstToExpr subst tail)
-    | AST.Lambda (parameters, body) ->
+    | AST.Lambda (parameters, returnAnnotation, body) ->
         // Substitute types in parameter annotations and body
         let substParams =
             parameters
-            |> AST.NonEmptyList.map (fun (name, ty) -> (name, applySubstToType subst ty))
-        AST.Lambda (substParams, applySubstToExpr subst body)
+            |> AST.NonEmptyList.map (fun parameter ->
+                { parameter with
+                    SourceAnnotation = parameter.SourceAnnotation |> Option.map (applySubstToType subst)
+                    InferredType = parameter.InferredType |> Option.map (applySubstToType subst) })
+        AST.Lambda (substParams, returnAnnotation |> Option.map (applySubstToType subst), applySubstToExpr subst body)
     | AST.Apply (func, args) ->
         AST.Apply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
     | AST.InterpolatedString parts ->
@@ -1091,8 +1139,6 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         collectTypeApps inner
     | AST.Let (_, value, body) ->
         Set.union (collectTypeApps value) (collectTypeApps body)
-    | AST.LetPattern (_, value, body) ->
-        Set.union (collectTypeApps value) (collectTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeApps cond) (Set.union (collectTypeApps thenBranch) (collectTypeApps elseBranch))
     | AST.Sequence (first, next) ->
@@ -1142,7 +1188,7 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     | AST.ListCons (headElements, tail) ->
         let headsSpecs = headElements |> List.map collectTypeApps |> List.fold Set.union Set.empty
         Set.union headsSpecs (collectTypeApps tail)
-    | AST.Lambda (_, body) ->
+    | AST.Lambda (_, _, body) ->
         collectTypeApps body
     | AST.Apply (func, args) ->
         let funcSpecs = collectTypeApps func
@@ -1211,10 +1257,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.BinOp (op, replaceTypeApps left, replaceTypeApps right)
     | AST.UnaryOp (op, inner) ->
         AST.UnaryOp (op, replaceTypeApps inner)
-    | AST.Let (name, value, body) ->
-        AST.Let (name, replaceTypeApps value, replaceTypeApps body)
-    | AST.LetPattern (pattern, value, body) ->
-        AST.LetPattern (pattern, replaceTypeApps value, replaceTypeApps body)
+    | AST.Let (pattern, value, body) ->
+        AST.Let (pattern, replaceTypeApps value, replaceTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (replaceTypeApps cond, replaceTypeApps thenBranch, replaceTypeApps elseBranch)
     | AST.Sequence (first, next) ->
@@ -1268,8 +1312,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.ListLiteral (List.map replaceTypeApps elements)
     | AST.ListCons (headElements, tail) ->
         AST.ListCons (List.map replaceTypeApps headElements, replaceTypeApps tail)
-    | AST.Lambda (parameters, body) ->
-        AST.Lambda (parameters, replaceTypeApps body)
+    | AST.Lambda (parameters, returnAnnotation, body) ->
+        AST.Lambda (parameters, returnAnnotation, replaceTypeApps body)
     | AST.Apply (func, args) ->
         AST.Apply (replaceTypeApps func, AST.NonEmptyList.map replaceTypeApps args)
     | AST.InterpolatedString parts ->
@@ -1341,14 +1385,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                 |> Result.map (fun right' -> AST.BinOp (op, left', right')))
         | AST.UnaryOp (op, inner) ->
             replace inner |> Result.map (fun inner' -> AST.UnaryOp (op, inner'))
-        | AST.Let (name, value, body) ->
+        | AST.Let (pattern, value, body) ->
             replace value
             |> Result.bind (fun value' ->
-                replace body |> Result.map (fun body' -> AST.Let (name, value', body')))
-        | AST.LetPattern (pattern, value, body) ->
-            replace value
-            |> Result.bind (fun value' ->
-                replace body |> Result.map (fun body' -> AST.LetPattern (pattern, value', body')))
+                replace body |> Result.map (fun body' -> AST.Let (pattern, value', body')))
         | AST.If (cond, thenBranch, elseBranch) ->
             replace cond
             |> Result.bind (fun cond' ->
@@ -1455,8 +1495,8 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
             mapResult replace headElements
             |> Result.bind (fun heads' ->
                 replace tail |> Result.map (fun tail' -> AST.ListCons (heads', tail')))
-        | AST.Lambda (parameters, body) ->
-            replace body |> Result.map (fun body' -> AST.Lambda (parameters, body'))
+        | AST.Lambda (parameters, returnAnnotation, body) ->
+            replace body |> Result.map (fun body' -> AST.Lambda (parameters, returnAnnotation, body'))
         | AST.Apply (func, args) ->
             replace func
             |> Result.bind (fun func' ->
@@ -1538,11 +1578,11 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: AST.Progr
             Set.contains name knownFuncNames && not (Set.contains name bound)
         | AST.BoundaryRender (_, value) ->
             exprNeedsLambdaLowering bound value
-        | AST.Let (name, value, body) ->
+        | AST.Let (pattern, value, body) ->
             exprNeedsLambdaLowering bound value
-            || exprNeedsLambdaLowering (Set.add name bound) body
-        | AST.LetPattern (_, value, body) ->
-            exprNeedsLambdaLowering bound value || exprNeedsLambdaLowering bound body
+            || exprNeedsLambdaLowering
+                (Set.union bound (AST.letPatternBindings pattern |> Set.ofList))
+                body
         | AST.If (cond, thenBranch, elseBranch) ->
             exprNeedsLambdaLowering bound cond
             || exprNeedsLambdaLowering bound thenBranch
@@ -1608,9 +1648,9 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: AST.Progr
 // =============================================================================
 // For first-class function support, we inline lambdas at their call sites.
 // This transforms:
-//   let f = (x: int) => x + 1 in f(5)
+//   let f = fun x -> x + 1 in f(5)
 // Into:
-//   let f = (x: int) => x + 1 in ((x: int) => x + 1)(5)
+//   let f = fun x -> x + 1 in (fun x -> x + 1)(5)
 // Which is then handled by immediate application desugaring.
 
 /// Environment mapping variable names to their lambda definitions
@@ -1626,10 +1666,10 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     | AST.Var n -> n = name
     | AST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
     | AST.UnaryOp (_, inner) -> varOccursInExpr name inner
-    | AST.Let (n, value, body) ->
-        varOccursInExpr name value || (n <> name && varOccursInExpr name body)
-    | AST.LetPattern (_, value, body) ->
-        varOccursInExpr name value || varOccursInExpr name body
+    | AST.Let (pattern, value, body) ->
+        varOccursInExpr name value
+        || (not (AST.letPatternBindings pattern |> List.contains name)
+            && varOccursInExpr name body)
     | AST.If (cond, thenBranch, elseBranch) ->
         varOccursInExpr name cond || varOccursInExpr name thenBranch || varOccursInExpr name elseBranch
     | AST.Sequence (first, next) ->
@@ -1654,9 +1694,13 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     | AST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
     | AST.ListCons (headElements, tail) ->
         List.exists (varOccursInExpr name) headElements || varOccursInExpr name tail
-    | AST.Lambda (parameters, body) ->
+    | AST.Lambda (parameters, returnAnnotation, body) ->
         // If name is shadowed by a parameter, it doesn't occur
-        let paramNames = parameters |> paramsToList |> List.map fst |> Set.ofList
+        let paramNames =
+            parameters
+            |> AST.NonEmptyList.toList
+            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> Set.ofList
         if Set.contains name paramNames then false
         else varOccursInExpr name body
     | AST.Apply (func, args) ->
@@ -1687,21 +1731,18 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         AST.BinOp (op, inlineLambdas left lambdaEnv, inlineLambdas right lambdaEnv)
     | AST.UnaryOp (op, inner) ->
         AST.UnaryOp (op, inlineLambdas inner lambdaEnv)
-    | AST.Let (name, value, body) ->
+    | AST.Let (pattern, value, body) ->
         let value' = inlineLambdas value lambdaEnv
-        // If the value is a lambda, add it to the environment for the body
+        let childEnv =
+            AST.letPatternBindings pattern
+            |> List.fold (fun current name -> Map.remove name current) lambdaEnv
+        // If the value is a lambda, make the name callable only in the body.
         let lambdaEnv' =
-            match value' with
-            | AST.Lambda _ -> Map.add name value' lambdaEnv
-            | _ -> lambdaEnv
+            match pattern, value' with
+            | AST.LPVariable name, AST.Lambda _ -> Map.add name value' childEnv
+            | _ -> childEnv
         let body' = inlineLambdas body lambdaEnv'
-        // Dead lambda elimination: if the value was a lambda and the variable
-        // is no longer used in the body (all uses were inlined), drop the binding
-        match value' with
-        | AST.Lambda _ when not (varOccursInExpr name body') -> body'
-        | _ -> AST.Let (name, value', body')
-    | AST.LetPattern (pattern, value, body) ->
-        AST.LetPattern (pattern, inlineLambdas value lambdaEnv, inlineLambdas body lambdaEnv)
+        AST.Let (pattern, value', body')
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (inlineLambdas cond lambdaEnv, inlineLambdas thenBranch lambdaEnv, inlineLambdas elseBranch lambdaEnv)
     | AST.Sequence (first, next) ->
@@ -1710,7 +1751,7 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         let args' = AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args
         // Check if funcName is actually a lambda variable (parser can't distinguish)
         match Map.tryFind funcName lambdaEnv with
-        | Some lambdaExpr -> AST.Apply (lambdaExpr, args')
+        | Some _ -> AST.Apply (AST.Var funcName, args')
         | None -> AST.Call (funcName, args')
     | AST.TypeApp (funcName, typeArgs, args) ->
         AST.TypeApp (funcName, typeArgs, AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args)
@@ -1729,24 +1770,41 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
     | AST.Constructor (typeName, variantName, payload) ->
         AST.Constructor (typeName, variantName, Option.map (fun e -> inlineLambdas e lambdaEnv) payload)
     | AST.Match (scrutinee, cases) ->
-        AST.Match (inlineLambdas scrutinee lambdaEnv,
-                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (fun g -> inlineLambdas g lambdaEnv); Body = inlineLambdas mc.Body lambdaEnv }))
+        let cases' =
+            cases
+            |> List.map (fun mc ->
+                let caseBoundNames =
+                    mc.Patterns
+                    |> AST.NonEmptyList.toList
+                    |> List.collect (fun pattern ->
+                        AST.validateBinders (AST.MatchBinderPattern pattern)
+                        |> Result.defaultValue [])
+                let caseEnv =
+                    caseBoundNames
+                    |> List.fold (fun current name -> Map.remove name current) lambdaEnv
+                { mc with
+                    Guard = mc.Guard |> Option.map (fun g -> inlineLambdas g caseEnv)
+                    Body = inlineLambdas mc.Body caseEnv })
+        AST.Match (inlineLambdas scrutinee lambdaEnv, cases')
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
     | AST.ListCons (headElements, tail) ->
         AST.ListCons (List.map (fun e -> inlineLambdas e lambdaEnv) headElements, inlineLambdas tail lambdaEnv)
-    | AST.Lambda (parameters, body) ->
-        // Lambdas can reference outer lambdas, so inline in body
-        AST.Lambda (parameters, inlineLambdas body lambdaEnv)
+    | AST.Lambda (parameters, returnAnnotation, body) ->
+        let bodyEnv =
+            parameters
+            |> AST.NonEmptyList.toList
+            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> List.fold (fun current name -> Map.remove name current) lambdaEnv
+        AST.Lambda (parameters, returnAnnotation, inlineLambdas body bodyEnv)
     | AST.Apply (func, args) ->
         let args' = AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args
         match func with
         | AST.Var name ->
             // Check if this variable is a known lambda
             match Map.tryFind name lambdaEnv with
-            | Some lambdaExpr ->
-                // Substitute the lambda at the call site
-                AST.Apply (lambdaExpr, args')
+            | Some _ ->
+                AST.Apply (AST.Var name, args')
             | None ->
                 // Unknown function variable - keep as-is (will error later if not valid)
                 AST.Apply (AST.Var name, args')
@@ -1841,6 +1899,70 @@ let private freshLiftedName (state: LiftState) (prefix: string) : string * LiftS
     let name = $"{prefix}{nextCounter}"
     (name, { state with Counter = nextCounter + 1 })
 
+let rec private matchPatternBindingTypes
+    (typeReg: TypeRegistry)
+    (variantLookup: VariantLookup)
+    (pattern: AST.Pattern)
+    (scrutineeType: AST.Type)
+    : Map<string, AST.Type> =
+    let merge left right = Map.fold (fun current name typ -> Map.add name typ current) left right
+    match pattern with
+    | AST.PVar name -> Map.ofList [(name, scrutineeType)]
+    | AST.PWildcard | AST.PUnit | AST.PInt64 _ | AST.PInt128Literal _
+    | AST.PInt8Literal _ | AST.PInt16Literal _ | AST.PInt32Literal _
+    | AST.PUInt8Literal _ | AST.PUInt16Literal _ | AST.PUInt32Literal _
+    | AST.PUInt64Literal _ | AST.PUInt128Literal _ | AST.PBool _
+    | AST.PString _ | AST.PChar _ | AST.PFloat _ -> Map.empty
+    | AST.PTuple patterns ->
+        match scrutineeType with
+        | AST.TTuple elementTypes when List.length patterns = List.length elementTypes ->
+            List.zip patterns elementTypes
+            |> List.fold (fun current (innerPattern, elementType) ->
+                merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
+        | _ -> Map.empty
+    | AST.PRecord (typeName, fieldPatterns) ->
+        match Map.tryFind typeName typeReg with
+        | Some fields ->
+            fieldPatterns
+            |> List.fold (fun current (fieldName, fieldPattern) ->
+                match fields |> List.tryFind (fun (name, _) -> name = fieldName) with
+                | Some (_, fieldType) ->
+                    merge current (matchPatternBindingTypes typeReg variantLookup fieldPattern fieldType)
+                | None -> current) Map.empty
+        | None -> Map.empty
+    | AST.PConstructor (variantName, payloadPattern) ->
+        match Map.tryFind variantName variantLookup, payloadPattern with
+        | Some (typeName, typeParameters, _, Some payloadType), Some innerPattern ->
+            let substitution =
+                match scrutineeType with
+                | AST.TSum (scrutineeTypeName, typeArguments)
+                    when scrutineeTypeName = typeName
+                         && List.length typeParameters = List.length typeArguments ->
+                    List.zip typeParameters typeArguments |> Map.ofList
+                | _ -> Map.empty
+            matchPatternBindingTypes
+                typeReg
+                variantLookup
+                innerPattern
+                (applySubstToType substitution payloadType)
+        | _ -> Map.empty
+    | AST.PList patterns ->
+        match scrutineeType with
+        | AST.TList elementType ->
+            patterns
+            |> List.fold (fun current innerPattern ->
+                merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
+        | _ -> Map.empty
+    | AST.PListCons (headPatterns, tailPattern) ->
+        match scrutineeType with
+        | AST.TList elementType ->
+            let headBindings =
+                headPatterns
+                |> List.fold (fun current innerPattern ->
+                    merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
+            merge headBindings (matchPatternBindingTypes typeReg variantLookup tailPattern scrutineeType)
+        | _ -> Map.empty
+
 /// Collect free variables in an expression (variables not bound by let or lambda parameters)
 let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     match expr with
@@ -1851,12 +1973,11 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     | AST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
     | AST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
     | AST.UnaryOp (_, inner) -> freeVars inner bound
-    | AST.Let (name, value, body) ->
+    | AST.Let (pattern, value, body) ->
         let valueVars = freeVars value bound
-        let bodyVars = freeVars body (Set.add name bound)
+        let bodyVars =
+            freeVars body (Set.union bound (AST.letPatternBindings pattern |> Set.ofList))
         Set.union valueVars bodyVars
-    | AST.LetPattern (_, value, body) ->
-        Set.union (freeVars value bound) (freeVars body bound)
     | AST.If (cond, thenBr, elseBr) ->
         Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
     | AST.Sequence (first, next) ->
@@ -1892,12 +2013,30 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         payload |> Option.map (fun e -> freeVars e bound) |> Option.defaultValue Set.empty
     | AST.Match (scrutinee, cases) ->
         let scrutineeVars = freeVars scrutinee bound
-        let caseVars = cases |> List.map (fun mc ->
-            let guardVars = mc.Guard |> Option.map (fun g -> freeVars g bound) |> Option.defaultValue Set.empty
-            Set.union guardVars (freeVars mc.Body bound)) |> List.fold Set.union Set.empty
+        let caseVars =
+            cases
+            |> List.map (fun mc ->
+                let caseNames =
+                    mc.Patterns
+                    |> AST.NonEmptyList.toList
+                    |> List.collect (fun pattern ->
+                        AST.validateBinders (AST.MatchBinderPattern pattern)
+                        |> Result.defaultValue [])
+                    |> Set.ofList
+                let caseBound = Set.union bound caseNames
+                let guardVars =
+                    mc.Guard
+                    |> Option.map (fun guard -> freeVars guard caseBound)
+                    |> Option.defaultValue Set.empty
+                Set.union guardVars (freeVars mc.Body caseBound))
+            |> List.fold Set.union Set.empty
         Set.union scrutineeVars caseVars
-    | AST.Lambda (parameters, body) ->
-        let paramNames = parameters |> paramsToList |> List.map fst |> Set.ofList
+    | AST.Lambda (parameters, returnAnnotation, body) ->
+        let paramNames =
+            parameters
+            |> AST.NonEmptyList.toList
+            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> Set.ofList
         freeVars body (Set.union bound paramNames)
     | AST.Apply (func, args) ->
         let funcVars = freeVars func bound
@@ -2023,11 +2162,18 @@ let rec simpleInferType
             | Some parameters, Some returnType ->
                 Some (AST.TFunction (parameters |> List.map snd, returnType))
             | _ -> None
-    | AST.Let (name, value, body) ->
+    | AST.FuncRef name ->
+        match Map.tryFind name funcParams, Map.tryFind name funcReturnTypes with
+        | Some parameters, Some returnType ->
+            Some (AST.TFunction (parameters |> List.map snd, returnType))
+        | _ -> None
+    | AST.Let (pattern, value, body) ->
         let valueType = simpleInferType value typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let typeEnv' =
             match valueType with
-            | Some typ -> Map.add name typ typeEnv
+            | Some typ ->
+                letPatternBindingTypes pattern typ
+                |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) typeEnv
             | None -> typeEnv
         simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
     | AST.TupleLiteral elements ->
@@ -2232,9 +2378,14 @@ let rec simpleInferType
             | _ -> None
         else
             None
-    | AST.Lambda (parameters, body) ->
-        let paramTypes = parameters |> paramsToList |> List.map snd
-        let lambdaParamTypes = parameters |> paramsToList |> Map.ofList
+    | AST.Lambda (parameters, returnAnnotation, body) ->
+        let paramTypes =
+            parameters |> AST.NonEmptyList.toList |> List.map lambdaParameterType
+        let lambdaParamTypes =
+            parameters
+            |> AST.NonEmptyList.toList
+            |> List.collect lambdaParameterBindings
+            |> Map.ofList
         let typeEnv' = Map.fold (fun acc k v -> Map.add k v acc) typeEnv lambdaParamTypes
         match simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some returnType -> Some (AST.TFunction (paramTypes, returnType))
@@ -2276,24 +2427,25 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     | AST.UnaryOp (op, inner) ->
         liftLambdasInExpr inner state
         |> Result.map (fun (inner', state') -> (AST.UnaryOp (op, inner'), state'))
-    | AST.Let (name, value, body) ->
+    | AST.Let (pattern, value, body) ->
         liftLambdasInExpr value state
         |> Result.bind (fun (value', state1) ->
             // Try to infer the type of the value for capturing in nested lambdas
             let valueType = simpleInferType value state1.TypeEnv state1.FuncParams state1.FuncReturnTypes state1.GenericFuncDefs state1.TypeReg state1.VariantLookup
-            let state1' = match valueType with
-                          | Some t -> { state1 with TypeEnv = Map.add name t state1.TypeEnv }
-                          | None -> state1
+            let state1' =
+                match valueType with
+                | Some typ ->
+                    let newEnv =
+                        letPatternBindingTypes pattern typ
+                        |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) state1.TypeEnv
+                    { state1 with TypeEnv = newEnv }
+                | None -> state1
             liftLambdasInExpr body state1'
             |> Result.map (fun (body', state2) ->
-                // Restore TypeEnv (remove the let binding)
-                let state2' = { state2 with TypeEnv = Map.remove name state2.TypeEnv }
-                (AST.Let (name, value', body'), state2')))
-    | AST.LetPattern (pattern, value, body) ->
-        liftLambdasInExpr value state
-        |> Result.bind (fun (value', state1) ->
-            liftLambdasInExpr body state1
-            |> Result.map (fun (body', state2) -> (AST.LetPattern (pattern, value', body'), state2)))
+                // The child scope must restore the complete incoming environment;
+                // removing by text would lose an outer binding after shadowing.
+                let state2' = { state2 with TypeEnv = state.TypeEnv }
+                (AST.Let (pattern, value', body'), state2')))
     | AST.If (cond, thenBr, elseBr) ->
         liftLambdasInExpr cond state
         |> Result.bind (fun (cond', state1) ->
@@ -2348,20 +2500,33 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
             liftLambdasInExpr p state
             |> Result.map (fun (p', state') -> (AST.Constructor (typeName, variantName, Some p'), state'))
     | AST.Match (scrutinee, cases) ->
+        let scrutineeType =
+            simpleInferType
+                scrutinee
+                state.TypeEnv
+                state.FuncParams
+                state.FuncReturnTypes
+                state.GenericFuncDefs
+                state.TypeReg
+                state.VariantLookup
         liftLambdasInExpr scrutinee state
         |> Result.bind (fun (scrutinee', state1) ->
-            liftLambdasInCases cases state1
+            liftLambdasInCases cases scrutineeType state1
             |> Result.map (fun (cases', state2) -> (AST.Match (scrutinee', cases'), state2)))
-    | AST.Lambda (parameters, body) ->
+    | AST.Lambda (parameters, returnAnnotation, body) ->
         // Lambda in expression position - lift it to a closure
         // Add lambda parameters to type environment before processing body
-        let lambdaParamTypes = parameters |> paramsToList |> Map.ofList
+        let lambdaParamTypes =
+            parameters
+            |> AST.NonEmptyList.toList
+            |> List.collect lambdaParameterBindings
+            |> Map.ofList
         let stateWithLambdaParams = { state with TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv lambdaParamTypes }
         // First, lift any lambdas within the body
         liftLambdasInExpr body stateWithLambdaParams
         |> Result.bind (fun (body', state1) ->
             // Now lift this lambda itself to a closure
-            let paramNames = parameters |> paramsToList |> List.map fst |> Set.ofList
+            let paramNames = lambdaParamTypes |> Map.keys |> Set.ofSeq
             let freeVarsInBody = freeVars body' paramNames
             // Filter to only include variables actually in TypeEnv (excludes top-level function names)
             let captures = freeVarsInBody |> Set.filter (fun name -> Map.containsKey name state.TypeEnv) |> Set.toList
@@ -2382,17 +2547,18 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                 // First element is function pointer (Int64), rest are captures with their actual types
                 let closureTupleTypes = AST.TInt64 :: captureTypes
                 let closureParam = ("__closure", AST.TTuple closureTupleTypes)
+                let (loweredParameters, loweredBody) = lowerLambdaParameters parameters body'
 
                 // Build body that extracts captures from closure tuple
                 let bodyWithExtractions =
                     if List.isEmpty captures then
-                        body'
+                        loweredBody
                     else
                         captures
                         |> List.mapi (fun i capName ->
                             (capName, AST.TupleAccess (AST.Var "__closure", i + 1)))
                         |> List.foldBack (fun (capName, accessor) acc ->
-                            AST.Let (capName, accessor, acc)) <| body'
+                            AST.Let (AST.LPVariable capName, accessor, acc)) <| loweredBody
 
                 let stateForReturnType = {
                     stateWithLambdaParams with
@@ -2406,7 +2572,7 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                     let funcDef : AST.FunctionDef = {
                         Name = funcName
                         TypeParams = []
-                        Params = AST.NonEmptyList.cons closureParam parameters
+                        Params = paramsFromList "lifted lambda" (closureParam :: loweredParameters)
                         ReturnType = returnType
                         Body = bodyWithExtractions
                     }
@@ -2450,15 +2616,19 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
         | [] -> Ok (exprArgsFromList (List.rev acc), state)
         | arg :: rest ->
             match arg with
-            | AST.Lambda (parameters, body) ->
+            | AST.Lambda (parameters, returnAnnotation, body) ->
                 // Add lambda parameters to type environment before processing body
-                let lambdaParamTypes = parameters |> paramsToList |> Map.ofList
+                let lambdaParamTypes =
+                    parameters
+                    |> AST.NonEmptyList.toList
+                    |> List.collect lambdaParameterBindings
+                    |> Map.ofList
                 let stateWithLambdaParams = { state with TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv lambdaParamTypes }
                 // First, recursively lift any nested lambdas in the body
                 liftLambdasInExpr body stateWithLambdaParams
                 |> Result.bind (fun (body', state1) ->
                     // Check for free variables (captures)
-                    let paramNames = parameters |> paramsToList |> List.map fst |> Set.ofList
+                    let paramNames = lambdaParamTypes |> Map.keys |> Set.ofSeq
                     let freeVarsInBody = freeVars body' paramNames
                     // Filter to only include variables actually in TypeEnv (excludes top-level function names)
                     let captures = freeVarsInBody |> Set.filter (fun name -> Map.containsKey name state.TypeEnv) |> Set.toList
@@ -2479,19 +2649,20 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                         // First element is function pointer (Int64), rest are captures with their actual types
                         let closureTupleTypes = AST.TInt64 :: captureTypes
                         let closureParam = ("__closure", AST.TTuple closureTupleTypes)
+                        let (loweredParameters, loweredBody) = lowerLambdaParameters parameters body'
 
                         // Build body that extracts captures from closure tuple:
                         // let cap1 = __closure.1 in let cap2 = __closure.2 in ... original_body
                         let bodyWithExtractions =
                             if List.isEmpty captures then
-                                body'  // No captures to extract
+                                loweredBody  // No captures to extract
                             else
                                 captures
                                 |> List.mapi (fun i capName ->
                                     // Capture at index i+1 (index 0 is the function pointer)
                                     (capName, AST.TupleAccess (AST.Var "__closure", i + 1)))
                                 |> List.foldBack (fun (capName, accessor) acc ->
-                                    AST.Let (capName, accessor, acc)) <| body'
+                                    AST.Let (AST.LPVariable capName, accessor, acc)) <| loweredBody
 
                         let stateForReturnType = {
                             stateWithLambdaParams with
@@ -2505,7 +2676,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                             let funcDef : AST.FunctionDef = {
                                 Name = funcName
                                 TypeParams = []
-                                Params = AST.NonEmptyList.cons closureParam parameters  // Closure is always first param
+                                Params = paramsFromList "lifted argument lambda" (closureParam :: loweredParameters)
                                 ReturnType = returnType
                                 Body = bodyWithExtractions
                             }
@@ -2594,24 +2765,42 @@ and liftLambdasInFields (fields: (string * AST.Expr) list) (state: LiftState) : 
     loop fields state []
 
 /// Helper to lift lambdas in match cases
-and liftLambdasInCases (cases: AST.MatchCase list) (state: LiftState) : Result<AST.MatchCase list * LiftState, string> =
+and liftLambdasInCases
+    (cases: AST.MatchCase list)
+    (scrutineeType: AST.Type option)
+    (state: LiftState)
+    : Result<AST.MatchCase list * LiftState, string> =
     let rec loop (remaining: AST.MatchCase list) (state: LiftState) (acc: AST.MatchCase list) =
         match remaining with
         | [] -> Ok (List.rev acc, state)
         | mc :: rest ->
+            let caseBindings =
+                match scrutineeType with
+                | Some typ ->
+                    mc.Patterns
+                    |> AST.NonEmptyList.toList
+                    |> List.map (fun pattern ->
+                        matchPatternBindingTypes state.TypeReg state.VariantLookup pattern typ)
+                    |> List.fold (fun current bindings ->
+                        Map.fold (fun acc name bindingType -> Map.add name bindingType acc) current bindings) Map.empty
+                | None -> Map.empty
+            let caseState =
+                { state with
+                    TypeEnv =
+                        Map.fold (fun current name typ -> Map.add name typ current) state.TypeEnv caseBindings }
             // Lift lambdas in guard if present
             let guardResult =
                 match mc.Guard with
-                | None -> Ok (None, state)
+                | None -> Ok (None, caseState)
                 | Some g ->
-                    liftLambdasInExpr g state
+                    liftLambdasInExpr g caseState
                     |> Result.map (fun (g', s) -> (Some g', s))
             guardResult
             |> Result.bind (fun (guard', state1) ->
                 liftLambdasInExpr mc.Body state1
                 |> Result.bind (fun (body', state2) ->
                     let newCase = { mc with Guard = guard'; Body = body' }
-                    loop rest state2 (newCase :: acc)))
+                    loop rest { state2 with TypeEnv = state.TypeEnv } (newCase :: acc)))
     loop cases state []
 
 /// Lift lambdas in a function definition
@@ -2841,57 +3030,53 @@ let rec liftLambdasInProgram
 
 /// Collect function names that are used as values (not in Call position)
 and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AST.Type) list>) : string list =
-    match expr with
-    | AST.BoundaryRender (_, value) -> collectFuncRefsInExpr value knownFuncs
-    | AST.Var name when Map.containsKey name knownFuncs -> [name]
-    | AST.Call (_, args) ->
-        // Check if any arg is a reference to a known function
-        (exprArgsToList args)
-        |> List.collect (fun arg ->
-            match arg with
-            | AST.Var name when Map.containsKey name knownFuncs -> [name]
-            | _ -> collectFuncRefsInExpr arg knownFuncs)
-    | AST.Let (_, value, body) ->
-        // Also check if value is a function reference being bound
-        let valueRefs =
-            match value with
-            | AST.Var name when Map.containsKey name knownFuncs -> [name]
-            | _ -> collectFuncRefsInExpr value knownFuncs
-        valueRefs @ collectFuncRefsInExpr body knownFuncs
-    | AST.LetPattern (_, value, body) ->
-        collectFuncRefsInExpr value knownFuncs @ collectFuncRefsInExpr body knownFuncs
-    | AST.If (c, t, e) ->
-        collectFuncRefsInExpr c knownFuncs @ collectFuncRefsInExpr t knownFuncs @ collectFuncRefsInExpr e knownFuncs
-    | AST.Sequence (first, next) ->
-        collectFuncRefsInExpr first knownFuncs @ collectFuncRefsInExpr next knownFuncs
-    | AST.BinOp (_, l, r) ->
-        collectFuncRefsInExpr l knownFuncs @ collectFuncRefsInExpr r knownFuncs
-    | AST.UnaryOp (_, e) -> collectFuncRefsInExpr e knownFuncs
-    | AST.TupleLiteral es | AST.ListLiteral es ->
-        es |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)
-    | AST.ListCons (headElements, tail) ->
-        (headElements |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)) @
-        collectFuncRefsInExpr tail knownFuncs
-    | AST.TupleAccess (e, _) -> collectFuncRefsInExpr e knownFuncs
-    | AST.DictLiteral (_, entries) ->
-        entries |> List.collect (fun (_, e) -> collectFuncRefsInExpr e knownFuncs)
-    | AST.RecordLiteral (_, fields) ->
-        fields |> List.collect (fun (_, e) -> collectFuncRefsInExpr e knownFuncs)
-    | AST.RecordAccess (e, _) -> collectFuncRefsInExpr e knownFuncs
-    | AST.Constructor (_, _, payload) ->
-        payload |> Option.map (fun e -> collectFuncRefsInExpr e knownFuncs) |> Option.defaultValue []
-    | AST.Match (scrut, cases) ->
-        collectFuncRefsInExpr scrut knownFuncs @ (cases |> List.collect (fun mc ->
-            (mc.Guard |> Option.map (fun g -> collectFuncRefsInExpr g knownFuncs) |> Option.defaultValue []) @
-            collectFuncRefsInExpr mc.Body knownFuncs))
-    | AST.Lambda (_, body) -> collectFuncRefsInExpr body knownFuncs
-    | AST.Apply (f, args) ->
-        collectFuncRefsInExpr f knownFuncs @ (args |> exprArgsToList |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs))
-    | AST.Closure (_, caps) ->
-        caps |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)
-    | AST.TypeApp (_, _, args) ->
-        args |> exprArgsToList |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)
-    | _ -> []
+    let rec collect (bound: Set<string>) candidate =
+        let collectChildren children = children |> List.collect (collect bound)
+        match candidate with
+        | AST.BoundaryRender (_, value) -> collect bound value
+        | AST.Var name when Map.containsKey name knownFuncs && not (Set.contains name bound) -> [name]
+        | AST.Call (_, args) | AST.TypeApp (_, _, args) ->
+            args |> exprArgsToList |> collectChildren
+        | AST.Let (pattern, value, body) ->
+            let bodyBound = Set.union bound (AST.letPatternBindings pattern |> Set.ofList)
+            collect bound value @ collect bodyBound body
+        | AST.If (condition, thenBranch, elseBranch) ->
+            collectChildren [condition; thenBranch; elseBranch]
+        | AST.Sequence (first, next) | AST.BinOp (_, first, next) ->
+            collectChildren [first; next]
+        | AST.UnaryOp (_, value) | AST.TupleAccess (value, _) | AST.RecordAccess (value, _) ->
+            collect bound value
+        | AST.TupleLiteral elements | AST.ListLiteral elements -> collectChildren elements
+        | AST.ListCons (headElements, tail) -> collectChildren (headElements @ [tail])
+        | AST.DictLiteral (_, entries) -> entries |> List.map snd |> collectChildren
+        | AST.RecordLiteral (_, fields) -> fields |> List.map snd |> collectChildren
+        | AST.RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd))
+        | AST.Constructor (_, _, payload) -> payload |> Option.map (collect bound) |> Option.defaultValue []
+        | AST.Match (scrutinee, cases) ->
+            collect bound scrutinee
+            @ (cases
+               |> List.collect (fun case ->
+                   let caseNames =
+                       case.Patterns
+                       |> AST.NonEmptyList.toList
+                       |> List.collect (fun pattern ->
+                           AST.validateBinders (AST.MatchBinderPattern pattern)
+                           |> Result.defaultValue [])
+                       |> Set.ofList
+                   let caseBound = Set.union bound caseNames
+                   (case.Guard |> Option.map (collect caseBound) |> Option.defaultValue [])
+                   @ collect caseBound case.Body))
+        | AST.Lambda (parameters, _, body) ->
+            let parameterNames =
+                parameters
+                |> AST.NonEmptyList.toList
+                |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+                |> Set.ofList
+            collect (Set.union bound parameterNames) body
+        | AST.Apply (func, args) -> collectChildren (func :: exprArgsToList args)
+        | AST.Closure (_, captures) -> collectChildren captures
+        | _ -> []
+    collect Set.empty expr
 
 /// Replace function references with wrapper references in a TopLevel
 and replaceFuncRefsWithWrappers (wrapperMap: Map<string, string>) (topLevel: AST.TopLevel) : AST.TopLevel =
@@ -2904,58 +3089,67 @@ and replaceFuncRefsWithWrappers (wrapperMap: Map<string, string>) (topLevel: AST
 
 /// Replace function references with wrapper references in an expression
 and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr =
-    match expr with
-    | AST.BoundaryRender (renderer, value) ->
-        AST.BoundaryRender (renderer, replaceInExpr wrapperMap value)
-    | AST.Var name when Map.containsKey name wrapperMap ->
-        // This is a function reference used as a value - replace with closure to wrapper
-        match Map.tryFind name wrapperMap with
-        | Some wrapperName -> AST.Closure (wrapperName, [])
-        | None -> Crash.crash $"replaceInExpr expected wrapper for function '{name}'"
-    | AST.Closure (funcName, caps) ->
-        // If this closure references a known function, use the wrapper instead
-        let newFuncName = Map.tryFind funcName wrapperMap |> Option.defaultValue funcName
-        AST.Closure (newFuncName, caps |> List.map (replaceInExpr wrapperMap))
-    | AST.Call (name, args) ->
-        AST.Call (name, args |> AST.NonEmptyList.map (replaceInExpr wrapperMap))
-    | AST.Let (n, v, b) ->
-        AST.Let (n, replaceInExpr wrapperMap v, replaceInExpr wrapperMap b)
-    | AST.LetPattern (pattern, value, body) ->
-        AST.LetPattern (pattern, replaceInExpr wrapperMap value, replaceInExpr wrapperMap body)
-    | AST.If (c, t, e) ->
-        AST.If (replaceInExpr wrapperMap c, replaceInExpr wrapperMap t, replaceInExpr wrapperMap e)
-    | AST.Sequence (first, next) ->
-        AST.Sequence (replaceInExpr wrapperMap first, replaceInExpr wrapperMap next)
-    | AST.BinOp (op, l, r) ->
-        AST.BinOp (op, replaceInExpr wrapperMap l, replaceInExpr wrapperMap r)
-    | AST.UnaryOp (op, e) ->
-        AST.UnaryOp (op, replaceInExpr wrapperMap e)
-    | AST.TupleLiteral es ->
-        AST.TupleLiteral (es |> List.map (replaceInExpr wrapperMap))
-    | AST.TupleAccess (e, i) ->
-        AST.TupleAccess (replaceInExpr wrapperMap e, i)
-    | AST.DictLiteral (valueType, entries) ->
-        AST.DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, replaceInExpr wrapperMap value)))
-    | AST.RecordLiteral (t, fields) ->
-        AST.RecordLiteral (t, fields |> List.map (fun (n, e) -> (n, replaceInExpr wrapperMap e)))
-    | AST.RecordAccess (e, f) ->
-        AST.RecordAccess (replaceInExpr wrapperMap e, f)
-    | AST.Constructor (t, v, payload) ->
-        AST.Constructor (t, v, payload |> Option.map (replaceInExpr wrapperMap))
-    | AST.Match (scrut, cases) ->
-        AST.Match (replaceInExpr wrapperMap scrut,
-                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (replaceInExpr wrapperMap); Body = replaceInExpr wrapperMap mc.Body }))
-    | AST.ListLiteral es ->
-        AST.ListLiteral (es |> List.map (replaceInExpr wrapperMap))
-    | AST.ListCons (headElements, tail) ->
-        AST.ListCons (headElements |> List.map (replaceInExpr wrapperMap), replaceInExpr wrapperMap tail)
-    | AST.Lambda (ps, body) ->
-        AST.Lambda (ps, replaceInExpr wrapperMap body)
-    | AST.Apply (f, args) ->
-        AST.Apply (replaceInExpr wrapperMap f, args |> AST.NonEmptyList.map (replaceInExpr wrapperMap))
-    | AST.TypeApp (n, ts, args) ->
-        AST.TypeApp (n, ts, args |> AST.NonEmptyList.map (replaceInExpr wrapperMap))
-    | _ -> expr
+    let rec replace (bound: Set<string>) candidate =
+        let replaceArgs args = args |> AST.NonEmptyList.map (replace bound)
+        match candidate with
+        | AST.BoundaryRender (renderer, value) -> AST.BoundaryRender (renderer, replace bound value)
+        | AST.Var name when Map.containsKey name wrapperMap && not (Set.contains name bound) ->
+            match Map.tryFind name wrapperMap with
+            | Some wrapperName -> AST.Closure (wrapperName, [])
+            | None -> Crash.crash $"replaceInExpr expected wrapper for function '{name}'"
+        | AST.Closure (funcName, captures) ->
+            let newFuncName = Map.tryFind funcName wrapperMap |> Option.defaultValue funcName
+            AST.Closure (newFuncName, captures |> List.map (replace bound))
+        | AST.Call (name, args) -> AST.Call (name, replaceArgs args)
+        | AST.TypeApp (name, typeArgs, args) -> AST.TypeApp (name, typeArgs, replaceArgs args)
+        | AST.Let (pattern, value, body) ->
+            let bodyBound = Set.union bound (AST.letPatternBindings pattern |> Set.ofList)
+            AST.Let (pattern, replace bound value, replace bodyBound body)
+        | AST.If (condition, thenBranch, elseBranch) ->
+            AST.If (replace bound condition, replace bound thenBranch, replace bound elseBranch)
+        | AST.Sequence (first, next) -> AST.Sequence (replace bound first, replace bound next)
+        | AST.BinOp (op, left, right) -> AST.BinOp (op, replace bound left, replace bound right)
+        | AST.UnaryOp (op, value) -> AST.UnaryOp (op, replace bound value)
+        | AST.TupleLiteral elements -> AST.TupleLiteral (elements |> List.map (replace bound))
+        | AST.TupleAccess (value, index) -> AST.TupleAccess (replace bound value, index)
+        | AST.DictLiteral (valueType, entries) ->
+            AST.DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, replace bound value)))
+        | AST.RecordLiteral (typeName, fields) ->
+            AST.RecordLiteral (typeName, fields |> List.map (fun (name, value) -> (name, replace bound value)))
+        | AST.RecordUpdate (record, fields) ->
+            AST.RecordUpdate (replace bound record, fields |> List.map (fun (name, value) -> (name, replace bound value)))
+        | AST.RecordAccess (value, field) -> AST.RecordAccess (replace bound value, field)
+        | AST.Constructor (typeName, variant, payload) ->
+            AST.Constructor (typeName, variant, payload |> Option.map (replace bound))
+        | AST.Match (scrutinee, cases) ->
+            let cases' =
+                cases
+                |> List.map (fun case ->
+                    let caseNames =
+                        case.Patterns
+                        |> AST.NonEmptyList.toList
+                        |> List.collect (fun pattern ->
+                            AST.validateBinders (AST.MatchBinderPattern pattern)
+                            |> Result.defaultValue [])
+                        |> Set.ofList
+                    let caseBound = Set.union bound caseNames
+                    { case with
+                        Guard = case.Guard |> Option.map (replace caseBound)
+                        Body = replace caseBound case.Body })
+            AST.Match (replace bound scrutinee, cases')
+        | AST.ListLiteral elements -> AST.ListLiteral (elements |> List.map (replace bound))
+        | AST.ListCons (headElements, tail) ->
+            AST.ListCons (headElements |> List.map (replace bound), replace bound tail)
+        | AST.Lambda (parameters, returnAnnotation, body) ->
+            let parameterNames =
+                parameters
+                |> AST.NonEmptyList.toList
+                |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+                |> Set.ofList
+            AST.Lambda (parameters, returnAnnotation, replace (Set.union bound parameterNames) body)
+        | AST.Apply (func, args) -> AST.Apply (replace bound func, replaceArgs args)
+        | _ -> candidate
+    replace Set.empty expr
 
 /// Monomorphize a program: collect all specializations, generate specialized functions, replace TypeApps
 /// Uses iterative approach: keep specializing until no new concrete TypeApps are found
@@ -3228,7 +3422,6 @@ let rec generateStructuralEquality
 /// Used for type-directed field lookup in record access
 let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.Type, string> =
     match expr with
-    | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
     | AST.BoundaryRender _ -> Ok AST.TString
     | AST.RuntimeError _ -> Ok AST.TRuntimeError
     | AST.UnitLiteral -> Ok AST.TUnit
@@ -3410,10 +3603,12 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 refineElemType elemType headElements
                 |> Result.map (fun finalElemType -> AST.TList finalElemType)
             | _ -> Ok tailType)
-    | AST.Let (name, value, body) ->
+    | AST.Let (pattern, value, body) ->
         inferType value typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun valueType ->
-            let typeEnv' = Map.add name valueType typeEnv
+            let typeEnv' =
+                letPatternBindingTypes pattern valueType
+                |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) typeEnv
             inferType body typeEnv' typeReg variantLookup funcReg moduleRegistry)
     | AST.If (_, thenExpr, elseExpr) ->
         let inferBranchType (branchExpr: AST.Expr) : Result<AST.Type, string> =
@@ -3822,10 +4017,14 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
     | AST.TypeApp (_funcName, _typeArgs, _args) ->
         // Generic function call - not yet implemented
         Error "Generic function calls not yet implemented"
-    | AST.Lambda (parameters, body) ->
+    | AST.Lambda (parameters, returnAnnotation, body) ->
         // Lambda has function type (paramTypes) -> returnType
-        let paramTypes = parameters |> paramsToList |> List.map snd
-        let typeEnv' = parameters |> paramsToList |> List.fold (fun env (name, ty) -> Map.add name ty env) typeEnv
+        let parameterList = parameters |> AST.NonEmptyList.toList
+        let paramTypes = parameterList |> List.map lambdaParameterType
+        let typeEnv' =
+            parameterList
+            |> List.collect lambdaParameterBindings
+            |> List.fold (fun env (name, ty) -> Map.add name ty env) typeEnv
         inferType body typeEnv' typeReg variantLookup funcReg moduleRegistry
         |> Result.map (fun returnType -> AST.TFunction (paramTypes, returnType))
     | AST.Apply (func, _args) ->
@@ -3974,6 +4173,59 @@ let private buildSkewListLiteral
     let (root, _, bindings, finalVarGen) = buildDigits trees treeVarGen treeBindings
     (root, bindings, finalVarGen)
 
+/// Prepare every projection for one binding before its continuation is
+/// lowered. The type checker has already proved the complete unit/tuple shape.
+let rec private lowerLetPatternBindings
+    (pattern: AST.LetPattern)
+    (sourceAtom: ANF.Atom)
+    (sourceType: AST.Type)
+    (env: VarEnv)
+    (bindingsRev: (ANF.TempId * ANF.CExpr) list)
+    (varGen: ANF.VarGen)
+    : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+    match pattern with
+    | AST.LPUnit | AST.LPWildcard -> Ok (env, bindingsRev, varGen)
+    | AST.LPVariable name ->
+        let (bindingId, nextVarGen) = ANF.freshVar varGen
+        let env' = Map.add name (bindingId, sourceType) env
+        Ok (env', (bindingId, ANF.TypedAtom (sourceAtom, sourceType)) :: bindingsRev, nextVarGen)
+    | AST.LPTuple (first, second, rest) ->
+        let patterns = first :: second :: rest
+        match sourceType with
+        | AST.TTuple elementTypes when List.length patterns = List.length elementTypes ->
+            List.zip patterns elementTypes
+            |> List.indexed
+            |> List.fold (fun result (index, (innerPattern, innerType)) ->
+                result
+                |> Result.bind (fun (currentEnv, currentBindings, currentVarGen) ->
+                    let (rawId, afterRaw) = ANF.freshVar currentVarGen
+                    let (typedId, afterTyped) = ANF.freshVar afterRaw
+                    let projectionBindings =
+                        (typedId, ANF.TypedAtom (ANF.Var rawId, innerType))
+                        :: (rawId, ANF.TupleGet (sourceAtom, index))
+                        :: currentBindings
+                    lowerLetPatternBindings
+                        innerPattern
+                        (ANF.Var typedId)
+                        innerType
+                        currentEnv
+                        projectionBindings
+                        afterTyped)) (Ok (env, bindingsRev, varGen))
+        | _ -> Error "Let tuple pattern reached ANF lowering with an incompatible type"
+
+let rec private letPatternAcceptsType
+    (pattern: AST.LetPattern)
+    (valueType: AST.Type)
+    : bool =
+    match pattern, valueType with
+    | AST.LPVariable _, _ | AST.LPWildcard, _ -> true
+    | AST.LPUnit, AST.TUnit -> true
+    | AST.LPTuple (first, second, rest), AST.TTuple elementTypes ->
+        let patterns = first :: second :: rest
+        List.length patterns = List.length elementTypes
+        && List.forall2 letPatternAcceptsType patterns elementTypes
+    | _ -> false
+
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds and their types
 /// typeReg maps record type names to field definitions
@@ -3981,7 +4233,6 @@ let private buildSkewListLiteral
 /// funcReg maps function names to their return types
 let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
-    | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
     | AST.DictLiteral (_, []) ->
         Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
     | AST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
@@ -4105,38 +4356,72 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let exprWithBindings = wrapBindings allBindings finalExpr
             (exprWithBindings, varGen2))
 
-    | AST.Let (name, value, body) ->
-        // Let binding: convert value to atom, allocate fresh temp, convert body with extended env
+    | AST.Let (pattern, value, body) ->
+        // Evaluate the RHS in the incoming environment, then prepare every
+        // projection before exposing any binder to the continuation.
         // Infer the type of the value for type-directed field lookup
         let typeEnv = typeEnvFromVarEnv env
         inferType value typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun valueType ->
-            // Try toAtom first; if it fails for complex expressions like Match, use toANF
-            match toAtom value varGen env typeReg variantLookup funcReg moduleRegistry with
-            | Ok (valueAtom, valueBindings, varGen1) ->
-                let (tempId, varGen2) = ANF.freshVar varGen1
-                let env' = Map.add name (tempId, valueType) env
-                toANF body varGen2 env' typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (bodyExpr, varGen3) ->
-                    // Build: valueBindings + let tempId = valueAtom + body
-                    let finalExpr = ANF.Let (tempId, ANF.Atom valueAtom, bodyExpr)
-                    let exprWithBindings = wrapBindings valueBindings finalExpr
-                    (exprWithBindings, varGen3))
-            | Error _ ->
-                // Complex expression (like Match) - compile with toANF and transform returns
-                let (tempId, varGen1) = ANF.freshVar varGen
-                let env' = Map.add name (tempId, valueType) env
-                toANF value varGen1 env typeReg variantLookup funcReg moduleRegistry
-                |> Result.bind (fun (valueExpr, varGen2) ->
+            if not (letPatternAcceptsType pattern valueType) then
+                // Type checking has replaced the continuation with the binding
+                // mismatch error. Preserve every RHS effect, then transition
+                // directly to that error without preparing any projection.
+                toANF value varGen env typeReg variantLookup funcReg moduleRegistry
+                |> Result.bind (fun (valueExpr, varGen1) ->
+                    toANF body varGen1 env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.map (fun (failureExpr, varGen2) ->
+                        (bindReturns valueExpr (fun _ -> failureExpr), varGen2)))
+            else
+              let compileContinuation valueAtom valueBindings varGen1 =
+                match pattern with
+                | AST.LPVariable name ->
+                    let (bindingId, varGen2) = ANF.freshVar varGen1
+                    let env' = Map.add name (bindingId, valueType) env
                     toANF body varGen2 env' typeReg variantLookup funcReg moduleRegistry
                     |> Result.map (fun (bodyExpr, varGen3) ->
-                        // Transform: replace all Returns in valueExpr with Let bindings to tempId + bodyExpr
-                        let rec transformReturns expr =
-                            match expr with
-                            | ANF.Return atom -> ANF.Let (tempId, ANF.Atom atom, bodyExpr)
-                            | ANF.Let (id, cexpr, rest) -> ANF.Let (id, cexpr, transformReturns rest)
-                            | ANF.If (cond, thenBr, elseBr) ->
-                                ANF.If (cond, transformReturns thenBr, transformReturns elseBr)
-                        (transformReturns valueExpr, varGen3))))
+                        let transition =
+                            ANF.Let (bindingId, ANF.Atom valueAtom, bodyExpr)
+                            |> wrapBindings valueBindings
+                        (transition, varGen3))
+                | AST.LPUnit | AST.LPWildcard ->
+                    toANF body varGen1 env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.map (fun (bodyExpr, varGen2) ->
+                        (wrapBindings valueBindings bodyExpr, varGen2))
+                | AST.LPTuple _ ->
+                    let (rootId, varGen2) = ANF.freshVar varGen1
+                    lowerLetPatternBindings pattern (ANF.Var rootId) valueType env [] varGen2
+                    |> Result.bind (fun (env', patternBindingsRev, varGen3) ->
+                        toANF body varGen3 env' typeReg variantLookup funcReg moduleRegistry
+                        |> Result.map (fun (bodyExpr, varGen4) ->
+                            let transition =
+                                wrapBindings (List.rev patternBindingsRev) bodyExpr
+                                |> fun continuation -> ANF.Let (rootId, ANF.Atom valueAtom, continuation)
+                                |> wrapBindings valueBindings
+                            (transition, varGen4)))
+
+              // Try toAtom first; if it fails for complex expressions like Match, use toANF
+              match toAtom value varGen env typeReg variantLookup funcReg moduleRegistry with
+              | Ok (valueAtom, valueBindings, varGen1) ->
+                  compileContinuation valueAtom valueBindings varGen1
+              | Error _ ->
+                  // Complex expression (like Match) - compile with toANF and transform returns
+                  toANF value varGen env typeReg variantLookup funcReg moduleRegistry
+                  |> Result.bind (fun (valueExpr, varGen2) ->
+                      let (rootId, varGen3) = ANF.freshVar varGen2
+                      lowerLetPatternBindings pattern (ANF.Var rootId) valueType env [] varGen3
+                      |> Result.bind (fun (env', patternBindingsRev, varGen4) ->
+                          toANF body varGen4 env' typeReg variantLookup funcReg moduleRegistry
+                          |> Result.map (fun (bodyExpr, varGen5) ->
+                              let patternContinuation =
+                                  wrapBindings (List.rev patternBindingsRev) bodyExpr
+                              let rec transformReturns anfExpr =
+                                  match anfExpr with
+                                  | ANF.Return atom -> ANF.Let (rootId, ANF.Atom atom, patternContinuation)
+                                  | ANF.Let (id, cexpr, rest) -> ANF.Let (id, cexpr, transformReturns rest)
+                                  | ANF.If (cond, thenBr, elseBr) ->
+                                      ANF.If (cond, transformReturns thenBr, transformReturns elseBr)
+                              (transformReturns valueExpr, varGen5)))))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: use operand type to select float vs integer path
@@ -7908,7 +8193,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     (partToExpr first)
             toANF desugared varGen env typeReg variantLookup funcReg moduleRegistry
 
-    | AST.Lambda (_parameters, _body) ->
+    | AST.Lambda (_parameters, _, _body) ->
         // Lambda in expression position - closures not yet fully implemented
         Error "Lambda expressions (closures) are not yet fully implemented"
 
@@ -7917,18 +8202,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         // For now, only support immediate application of lambdas
         let argsList = exprArgsToList args
         match func with
-        | AST.Lambda (parameters, body) ->
-            // Immediate application: ((x: int) => x + 1)(5) becomes let x = 5 in x + 1
-            let parameterList = paramsToList parameters
+        | AST.Lambda (parameters, returnAnnotation, body) ->
+            // Immediate application becomes one non-recursive let per binder.
+            let parameterList = AST.NonEmptyList.toList parameters
             if List.length argsList <> List.length parameterList then
                 Error $"Expected {List.length parameterList} arguments, got {List.length argsList}"
             else
                 // Build nested let bindings: let p1 = arg1 in let p2 = arg2 in ... body
-                let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                let rec buildLets (ps: AST.LambdaParameter list) (as': AST.Expr list) : AST.Expr =
                     match ps, as' with
                     | [], [] -> body
-                    | (pName, _) :: restPs, argExpr :: restAs ->
-                        AST.Let (pName, argExpr, buildLets restPs restAs)
+                    | parameter :: restPs, argExpr :: restAs ->
+                        AST.Let (parameter.Pattern, argExpr, buildLets restPs restAs)
                     | _ -> body  // Should not happen due to length check
                 let desugared = buildLets parameterList argsList
                 toANF desugared varGen env typeReg variantLookup funcReg moduleRegistry
@@ -7959,7 +8244,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 Error $"Cannot apply variable '{name}' as function - variable not in scope"
 
         | AST.Apply (_, _) ->
-            // Nested application: ((x) => (y) => ...)(a)(b)(c)...
+            // Nested application: (fun x -> fun y -> ...)(a)(b)(c)...
             // Flatten all nested applies first, then desugar from innermost out
             let rec flattenApplies expr argLists =
                 match expr with
@@ -7979,18 +8264,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | [] -> currentFunc
                     | currentArgs :: restArgLists ->
                         match currentFunc with
-                        | AST.Lambda (lambdaParams, body) ->
-                            let lambdaParamList = paramsToList lambdaParams
+                        | AST.Lambda (lambdaParams, returnAnnotation, body) ->
+                            let lambdaParamList = AST.NonEmptyList.toList lambdaParams
                             if List.length currentArgs <> List.length lambdaParamList then
                                 // Will error later, just wrap in Apply for now
                                 desugaAll (AST.Apply (currentFunc, exprArgsFromList currentArgs)) restArgLists
                             else
                                 // Desugar: let p1 = a1 in let p2 = a2 in ... body
-                                let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                                let rec buildLets (ps: AST.LambdaParameter list) (as': AST.Expr list) : AST.Expr =
                                     match ps, as' with
                                     | [], [] -> body
-                                    | (pName, _) :: restPs, argExpr :: restAs ->
-                                        AST.Let (pName, argExpr, buildLets restPs restAs)
+                                    | parameter :: restPs, argExpr :: restAs ->
+                                        AST.Let (parameter.Pattern, argExpr, buildLets restPs restAs)
                                     | _ -> body
                                 let desugared = buildLets lambdaParamList currentArgs
                                 desugaAll desugared restArgLists
@@ -8088,7 +8373,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
-    | AST.LetPattern _ -> Error "LetPattern must be eliminated by type checking"
     | AST.DictLiteral (_, []) ->
         Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
     | AST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
@@ -8193,19 +8477,42 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let closureAlloc = ANF.ClosureAlloc (funcName, captureAtoms)
             (ANF.Var closureId, allBindings @ [(closureId, closureAlloc)], varGen2))
 
-    | AST.Let (name, value, body) ->
+    | AST.Let (pattern, value, body) ->
         // Let binding in atom position: need to evaluate and return the body as an atom
         // Infer the type of the value for type-directed field lookup
         let typeEnv = typeEnvFromVarEnv env
         inferType value typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun valueType ->
-            toAtom value varGen env typeReg variantLookup funcReg moduleRegistry |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
-                let (tempId, varGen2) = ANF.freshVar varGen1
-                let env' = Map.add name (tempId, valueType) env
-                toAtom body varGen2 env' typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (bodyAtom, bodyBindings, varGen3) ->
-                    // All bindings: valueBindings + binding tempId to value + bodyBindings
-                    let allBindings = valueBindings @ [(tempId, ANF.Atom valueAtom)] @ bodyBindings
-                    (bodyAtom, allBindings, varGen3))))
+            if not (letPatternAcceptsType pattern valueType) then
+                Error "Binding mismatch requires control-flow lowering"
+            else
+              toAtom value varGen env typeReg variantLookup funcReg moduleRegistry
+            |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+                match pattern with
+                | AST.LPVariable name ->
+                    let (bindingId, varGen2) = ANF.freshVar varGen1
+                    let env' = Map.add name (bindingId, valueType) env
+                    toAtom body varGen2 env' typeReg variantLookup funcReg moduleRegistry
+                    |> Result.map (fun (bodyAtom, bodyBindings, varGen3) ->
+                        (bodyAtom,
+                         valueBindings @ [(bindingId, ANF.Atom valueAtom)] @ bodyBindings,
+                         varGen3))
+                | AST.LPUnit | AST.LPWildcard ->
+                    toAtom body varGen1 env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.map (fun (bodyAtom, bodyBindings, varGen2) ->
+                        (bodyAtom, valueBindings @ bodyBindings, varGen2))
+                | AST.LPTuple _ ->
+                    let (rootId, varGen2) = ANF.freshVar varGen1
+                    lowerLetPatternBindings pattern (ANF.Var rootId) valueType env [] varGen2
+                    |> Result.bind (fun (env', patternBindingsRev, varGen3) ->
+                        toAtom body varGen3 env' typeReg variantLookup funcReg moduleRegistry
+                        |> Result.map (fun (bodyAtom, bodyBindings, varGen4) ->
+                            let allBindings =
+                                valueBindings
+                                @ [(rootId, ANF.Atom valueAtom)]
+                                @ (List.rev patternBindingsRev)
+                                @ bodyBindings
+                            (bodyAtom, allBindings, varGen4)))))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: use operand type to select float vs integer path
@@ -8966,7 +9273,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // For now, just return an error - complex match in atom position needs more work
             Error "Match expressions in atom position not yet supported (use let binding)")
 
-    | AST.Lambda (_parameters, _body) ->
+    | AST.Lambda (_parameters, _, _body) ->
         // Lambda in atom position - closures not yet fully implemented
         Error "Lambda expressions (closures) are not yet fully implemented"
 
@@ -8974,35 +9281,35 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         // Apply in atom position - convert via toANF and extract result
         let argsList = exprArgsToList args
         match func with
-        | AST.Lambda (parameters, body) ->
+        | AST.Lambda (parameters, returnAnnotation, body) ->
             // Immediate application: desugar to let bindings
-            let parameterList = paramsToList parameters
+            let parameterList = AST.NonEmptyList.toList parameters
             if List.length argsList <> List.length parameterList then
                 Error $"Expected {List.length parameterList} arguments, got {List.length argsList}"
             else
-                let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                let rec buildLets (ps: AST.LambdaParameter list) (as': AST.Expr list) : AST.Expr =
                     match ps, as' with
                     | [], [] -> body
-                    | (pName, _) :: restPs, argExpr :: restAs ->
-                        AST.Let (pName, argExpr, buildLets restPs restAs)
+                    | parameter :: restPs, argExpr :: restAs ->
+                        AST.Let (parameter.Pattern, argExpr, buildLets restPs restAs)
                     | _ -> body
                 let desugared = buildLets parameterList argsList
                 toAtom desugared varGen env typeReg variantLookup funcReg moduleRegistry
 
         | AST.Apply (innerFunc, innerArgs) ->
-            // Nested application in atom position: ((x) => (y) => ...)(a)(b)
+            // Nested application in atom position: (fun x -> fun y -> ...)(a)(b)
             let innerArgsList = exprArgsToList innerArgs
             match innerFunc with
-            | AST.Lambda (innerParams, innerBody) ->
-                let innerParamList = paramsToList innerParams
+            | AST.Lambda (innerParams, returnAnnotation, innerBody) ->
+                let innerParamList = AST.NonEmptyList.toList innerParams
                 if List.length innerArgsList <> List.length innerParamList then
                     Error $"Inner lambda expects {List.length innerParamList} arguments, got {List.length innerArgsList}"
                 else
-                    let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                    let rec buildLets (ps: AST.LambdaParameter list) (as': AST.Expr list) : AST.Expr =
                         match ps, as' with
                         | [], [] -> innerBody
-                        | (pName, _) :: restPs, argExpr :: restAs ->
-                            AST.Let (pName, argExpr, buildLets restPs restAs)
+                        | parameter :: restPs, argExpr :: restAs ->
+                            AST.Let (parameter.Pattern, argExpr, buildLets restPs restAs)
                         | _ -> innerBody
                     let desugaredInner = buildLets innerParamList innerArgsList
                     toAtom (AST.Apply (desugaredInner, args)) varGen env typeReg variantLookup funcReg moduleRegistry

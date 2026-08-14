@@ -49,8 +49,8 @@ Stdlib.Result.withDefault(Stdlib.Result.Result.Error(99), 42) = 42
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Stdlib.Result.withDefault(Stdlib.Result.map(Stdlib.Result.Result.Ok(5), (x: Int64) => x + 1), 0) = 6
-Stdlib.Result.isError(Stdlib.Result.map(Stdlib.Result.Result.Error(99), (x: Int64) => x + 1)) = true
+Stdlib.Result.withDefault(Stdlib.Result.map(Stdlib.Result.Result.Ok(5), fun x -> x + 1), 0) = 6
+Stdlib.Result.isError(Stdlib.Result.map(Stdlib.Result.Result.Error(99), fun x -> x + 1)) = true
 
 // ===================================================================
 // Stdlib.Result.mapError - Apply a function to the Error value
@@ -58,17 +58,17 @@ Stdlib.Result.isError(Stdlib.Result.map(Stdlib.Result.Result.Error(99), (x: Int6
 // When changing error type from e to f, the Error constructor gets the wrong type
 // ===================================================================
 
-// Stdlib.Result.mapError(Stdlib.Result.Result.Error(99), (e: Int64) => e + 1)
+// Stdlib.Result.mapError(Stdlib.Result.Result.Error(99), fun e -> e + 1)
 
 // ===================================================================
 // Stdlib.Result.andThen - Chain Result computations
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Stdlib.Result.withDefault(Stdlib.Result.andThen(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Ok(x * 2)), 0) = 10
-Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Error(99), (x: Int64) => Stdlib.Result.Result.Ok(x * 2))) = true
+Stdlib.Result.withDefault(Stdlib.Result.andThen(Stdlib.Result.Result.Ok(5), fun x -> Stdlib.Result.Result.Ok(x * 2)), 0) = 10
+Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Error(99), fun x -> Stdlib.Result.Result.Ok(x * 2))) = true
 // When lambda returns Error, unresolved ok type is preserved
-Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Error(99))) = true
+Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Ok(5), fun x -> Stdlib.Result.Result.Error(99))) = true
 
 // ===================================================================
 // Pipe operator with Result functions
@@ -77,7 +77,7 @@ Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Ok(5), (x: Int6
 // Unresolved type variables are preserved during monomorphization
 Stdlib.Result.Result.Ok(42) |> Stdlib.Result.isOk() = true
 Stdlib.Result.Result.Error(99) |> Stdlib.Result.isError() = true
-Stdlib.Result.Result.Ok(10) |> Stdlib.Result.map((x: Int64) => x * 2) |> Stdlib.Result.withDefault(0) = 20
+Stdlib.Result.Result.Ok(10) |> Stdlib.Result.map(fun x -> x * 2) |> Stdlib.Result.withDefault(0) = 20
 
 // ===================================================================
 // Unresolved type variable resolved later by context

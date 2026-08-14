@@ -99,4 +99,4 @@ def Stdlib.Int8.isOdd(n: Int8) : Bool =
 
 // Sum all integers in a list
 def Stdlib.Int8.sum(list: List<Int8>) : Int8 =
-    Stdlib.List.fold<Int8, Int8>(list, 0y, (acc: Int8, x: Int8) => acc + x)
+    Stdlib.List.fold<Int8, Int8>(list, 0y, fun acc x -> acc + x)

@@ -38,8 +38,8 @@ let private normalizeNullaryCallArgs (expectedParamCount: int) (args: Expr list)
     else
         args
 
-let private toLambdaParams (parameters: (string * Type) list) : NonEmptyList<string * Type> =
-    match NonEmptyList.tryFromList parameters with
+let private toLambdaParams (parameters: (string * Type) list) : NonEmptyList<LambdaParameter> =
+    match parameters |> List.map (fun (name, typ) -> inferredLambdaVariable name typ) |> NonEmptyList.tryFromList with
     | Some nel -> nel
     | None -> Crash.crash "Type checker attempted to construct a lambda with zero parameters"
 
@@ -203,14 +203,16 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
             | StringExpr (Var varName) when varName = name -> StringExpr literal
             | StringExpr inner -> StringExpr (recurse inner))
         |> InterpolatedString
-    | Let (boundName, value, body) ->
-        let body' = if boundName = name then body else recurse body
-        Let (boundName, recurse value, body')
-    | LetPattern (pattern, value, body) ->
-        LetPattern (pattern, recurse value, recurse body)
-    | Lambda (parameters, body) when
-        parameters |> NonEmptyList.toList |> List.exists (fun (parameterName, _) -> parameterName = name) ->
-        Lambda (parameters, body)
+    | Let (pattern, value, body) ->
+        let body' =
+            if letPatternBindings pattern |> List.contains name then body else recurse body
+        Let (pattern, recurse value, body')
+    | Lambda (parameters, returnAnnotation, body) when
+        parameters
+        |> NonEmptyList.toList
+        |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
+        |> List.contains name ->
+        Lambda (parameters, returnAnnotation, body)
     | BinOp (op, left, right) -> BinOp (op, recurse left, recurse right)
     | UnaryOp (op, inner) -> UnaryOp (op, recurse inner)
     | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
@@ -233,7 +235,7 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
         )
     | ListLiteral elements -> ListLiteral (List.map recurse elements)
     | ListCons (heads, tail) -> ListCons (List.map recurse heads, recurse tail)
-    | Lambda (parameters, body) -> Lambda (parameters, recurse body)
+    | Lambda (parameters, returnAnnotation, body) -> Lambda (parameters, returnAnnotation, recurse body)
     | Apply (func, callArgs) -> Apply (recurse func, NonEmptyList.map recurse callArgs)
     | Closure (functionName, captures) -> Closure (functionName, List.map recurse captures)
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
@@ -285,8 +287,9 @@ let rec private isKnownUnwrapFailureExpr (boundExprs: Map<string, Expr>) (expr: 
     match expr with
     | Call (funcName, { Head = argExpr; Tail = [] }) when isBuiltinUnwrapName funcName ->
         argIsKnownFailure argExpr
-    | Let (name, valueExpr, bodyExpr) ->
+    | Let (LPVariable name, valueExpr, bodyExpr) ->
         isKnownUnwrapFailureExpr (Map.add name valueExpr boundExprs) bodyExpr
+    | Let (_, _, bodyExpr) -> isKnownUnwrapFailureExpr boundExprs bodyExpr
     | _ ->
         false
 
@@ -295,8 +298,9 @@ let rec private isKnownTestRuntimeErrorExpr (boundExprs: Map<string, Expr>) (exp
     match expr with
     | Call (funcName, { Head = _; Tail = [] }) when isBuiltinTestRuntimeErrorName funcName ->
         true
-    | Let (name, valueExpr, bodyExpr) ->
+    | Let (LPVariable name, valueExpr, bodyExpr) ->
         isKnownTestRuntimeErrorExpr (Map.add name valueExpr boundExprs) bodyExpr
+    | Let (_, _, bodyExpr) -> isKnownTestRuntimeErrorExpr boundExprs bodyExpr
     | Var varName ->
         boundExprs
         |> Map.tryFind varName
@@ -316,9 +320,10 @@ let rec private tryExtractStringLiteral (boundExprs: Map<string, Expr>) (expr: E
             // Keep a stable diagnostic when the value is only known at runtime
             // (for example a function parameter passed into Builtin.testRuntimeError).
             Some varName
-    | Let (name, valueExpr, bodyExpr) ->
+    | Let (LPVariable name, valueExpr, bodyExpr) ->
         let boundExprs' = Map.add name valueExpr boundExprs
         tryExtractStringLiteral boundExprs' bodyExpr
+    | Let (_, _, bodyExpr) -> tryExtractStringLiteral boundExprs bodyExpr
     | _ ->
         None
 
@@ -330,9 +335,10 @@ let rec private tryExtractKnownTestRuntimeErrorMessage
     match expr with
     | Call (funcName, { Head = argExpr; Tail = [] }) when isBuiltinTestRuntimeErrorName funcName ->
         tryExtractStringLiteral boundExprs argExpr
-    | Let (name, valueExpr, bodyExpr) ->
+    | Let (LPVariable name, valueExpr, bodyExpr) ->
         let boundExprs' = Map.add name valueExpr boundExprs
         tryExtractKnownTestRuntimeErrorMessage boundExprs' bodyExpr
+    | Let (_, _, bodyExpr) -> tryExtractKnownTestRuntimeErrorMessage boundExprs bodyExpr
     | Var varName ->
         boundExprs
         |> Map.tryFind varName
@@ -381,6 +387,52 @@ let rec private formatDeconstructionPattern (pattern: Pattern) : string =
         |> String.concat ", "
         |> fun text -> $"({text})"
     | _ -> "[pattern]"
+
+let rec private formatLetDeconstructionPattern (pattern: LetPattern) : string =
+    match pattern with
+    | LPVariable _ -> "[variable]"
+    | LPWildcard -> "_"
+    | LPUnit -> "()"
+    | LPTuple (first, second, rest) ->
+        first :: second :: rest
+        |> List.map formatLetDeconstructionPattern
+        |> String.concat ", "
+        |> fun text -> $"({text})"
+
+let rec private inferredLetPatternType (path: string) (pattern: LetPattern) : Type =
+    match pattern with
+    | LPUnit -> TUnit
+    | LPVariable name -> TVar $"binding_{path}_{name}"
+    | LPWildcard -> TVar $"binding_{path}_wildcard"
+    | LPTuple (first, second, rest) ->
+        first :: second :: rest
+        |> List.mapi (fun index inner -> inferredLetPatternType $"{path}_{index}" inner)
+        |> TTuple
+
+/// Check the entire let pattern shape before returning any bindings.
+let rec private bindLetPatternTypes
+    (pattern: LetPattern)
+    (valueType: Type)
+    : (string * Type) list option =
+    match pattern, valueType with
+    | LPVariable name, typ -> Some [(name, typ)]
+    | LPWildcard, _ -> Some []
+    | LPUnit, TUnit -> Some []
+    | LPUnit, TVar _ -> Some []
+    | LPTuple (first, second, rest), TVar _ ->
+        bindLetPatternTypes pattern (inferredLetPatternType "tuple" pattern)
+    | LPTuple (first, second, rest), TTuple elementTypes ->
+        let patterns = first :: second :: rest
+        if List.length patterns <> List.length elementTypes then
+            None
+        else
+            List.zip patterns elementTypes
+            |> List.fold (fun bindings (innerPattern, innerType) ->
+                match bindings, bindLetPatternTypes innerPattern innerType with
+                | Some accumulated, Some innerBindings -> Some (accumulated @ innerBindings)
+                | _ -> None) (Some [])
+    | LPUnit, _
+    | LPTuple _, _ -> None
 
 let private formatFloatLiteralForPatternMismatch (f: float) : string =
     let formatted = string f
@@ -807,11 +859,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
     | UnaryOp (op, inner) ->
         UnaryOp (op, applySubstToExpr subst inner)
-    | LetPattern (pattern, value, body) ->
-        LetPattern (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
-
-    | Let (name, value, body) ->
-        Let (name, applySubstToExpr subst value, applySubstToExpr subst body)
+    | Let (pattern, value, body) ->
+        Let (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
     | If (cond, thenBr, elseBr) ->
         If (applySubstToExpr subst cond, applySubstToExpr subst thenBr, applySubstToExpr subst elseBr)
     | Sequence (first, next) ->
@@ -844,12 +893,14 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         ListLiteral (List.map (applySubstToExpr subst) elements)
     | ListCons (heads, tail) ->
         ListCons (List.map (applySubstToExpr subst) heads, applySubstToExpr subst tail)
-    | Lambda (params', body) ->
+    | Lambda (params', returnAnnotation, body) ->
         let concreteParams =
             params'
-            |> NonEmptyList.map (fun (paramName, paramType) ->
-                (paramName, applySubst subst paramType))
-        Lambda (concreteParams, applySubstToExpr subst body)
+            |> NonEmptyList.map (fun parameter ->
+                { parameter with
+                    SourceAnnotation = parameter.SourceAnnotation |> Option.map (applySubst subst)
+                    InferredType = parameter.InferredType |> Option.map (applySubst subst) })
+        Lambda (concreteParams, returnAnnotation |> Option.map (applySubst subst), applySubstToExpr subst body)
     | Apply (func, args) ->
         Apply (applySubstToExpr subst func, NonEmptyList.map (applySubstToExpr subst) args)
     | Closure (funcName, captures) ->
@@ -1140,12 +1191,11 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         Set.union (collectFreeVars left bound) (collectFreeVars right bound)
     | UnaryOp (_, inner) ->
         collectFreeVars inner bound
-    | Let (name, value, body) ->
+    | Let (pattern, value, body) ->
         let valueFree = collectFreeVars value bound
-        let bodyFree = collectFreeVars body (Set.add name bound)
+        let names = letPatternBindings pattern |> Set.ofList
+        let bodyFree = collectFreeVars body (Set.union names bound)
         Set.union valueFree bodyFree
-    | LetPattern (_, value, body) ->
-        Set.union (collectFreeVars value bound) (collectFreeVars body bound)
     | If (cond, thenBranch, elseBranch) ->
         let condFree = collectFreeVars cond bound
         let thenFree = collectFreeVars thenBranch bound
@@ -1200,8 +1250,12 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         let headsFree = headElements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
         let tailFree = collectFreeVars tail bound
         Set.union headsFree tailFree
-    | Lambda (parameters, body) ->
-        let paramNames = parameters |> NonEmptyList.toList |> List.map fst |> Set.ofList
+    | Lambda (parameters, returnAnnotation, body) ->
+        let paramNames =
+            parameters
+            |> NonEmptyList.toList
+            |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
+            |> Set.ofList
         collectFreeVars body (Set.union bound paramNames)
     | Apply (func, args) ->
         let funcFree = collectFreeVars func bound
@@ -1619,6 +1673,149 @@ let rec private checkExprWithParamNames
         expectedType
         |> Option.map (canonicalizeBareSumTypeRefs variantLookup)
 
+    let rec tryFindCallArguments (targetName: string) (candidate: Expr) : Expr list option =
+        let tryChildren children = children |> List.tryPick (tryFindCallArguments targetName)
+        let letPatternShadows pattern =
+            AST.letPatternBindings pattern |> List.contains targetName
+        let matchPatternShadows pattern =
+            AST.validateBinders (MatchBinderPattern pattern)
+            |> Result.map (List.contains targetName)
+            |> Result.defaultValue true
+
+        match candidate with
+        | Call (name, args) when name = targetName -> Some (NonEmptyList.toList args)
+        | Apply (Var name, args) when name = targetName -> Some (NonEmptyList.toList args)
+        | Let (pattern, value, body) ->
+            match tryFindCallArguments targetName value with
+            | Some args -> Some args
+            | None when letPatternShadows pattern -> None
+            | None -> tryFindCallArguments targetName body
+        | Lambda (parameters, returnAnnotation, body) ->
+            let shadowed =
+                parameters
+                |> NonEmptyList.toList
+                |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+                |> List.contains targetName
+            if shadowed then None else tryFindCallArguments targetName body
+        | Match (scrutinee, cases) ->
+            match tryFindCallArguments targetName scrutinee with
+            | Some args -> Some args
+            | None ->
+                cases
+                |> List.tryPick (fun case ->
+                    let shadows =
+                        case.Patterns
+                        |> NonEmptyList.toList
+                        |> List.exists matchPatternShadows
+                    let guardResult =
+                        if shadows then None
+                        else case.Guard |> Option.bind (tryFindCallArguments targetName)
+                    guardResult
+                    |> Option.orElseWith (fun () ->
+                        if shadows then None
+                        else tryFindCallArguments targetName case.Body))
+        | BoundaryRender (_, value)
+        | UnaryOp (_, value)
+        | TupleAccess (value, _)
+        | RecordAccess (value, _) -> tryFindCallArguments targetName value
+        | BinOp (_, left, right)
+        | Sequence (left, right) -> tryChildren [left; right]
+        | If (condition, thenBranch, elseBranch) ->
+            tryChildren [condition; thenBranch; elseBranch]
+        | Call (_, args)
+        | TypeApp (_, _, args) -> args |> NonEmptyList.toList |> tryChildren
+        | TupleLiteral elements
+        | ListLiteral elements -> tryChildren elements
+        | DictLiteral (_, entries) -> entries |> List.map snd |> tryChildren
+        | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
+        | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
+        | Constructor (_, _, payload) -> payload |> Option.bind (tryFindCallArguments targetName)
+        | ListCons (head, tail) -> head @ [tail] |> tryChildren
+        | Apply (func, args) -> func :: NonEmptyList.toList args |> tryChildren
+        | Closure (_, captures) -> tryChildren captures
+        | InterpolatedString parts ->
+            parts
+            |> List.choose (function StringExpr inner -> Some inner | StringText _ -> None)
+            |> tryChildren
+        | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
+        | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
+        | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+        | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
+        | Var _ | FuncRef _ | RuntimeError _ -> None
+
+    let inferFunctionExpectationFromArguments
+        (parameterCount: int)
+        (arguments: Expr list)
+        : Type option =
+        if List.length arguments <> parameterCount then
+            None
+        else
+            arguments
+            |> ResultList.traverse (fun argument ->
+                checkExpr argument env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                |> Result.map fst)
+            |> Result.toOption
+            |> Option.map (fun argumentTypes ->
+                TFunction (argumentTypes, TVar "binding_return"))
+
+    let rec tryFindFunctionValueExpectation
+        (targetName: string)
+        (candidate: Expr)
+        : Type option =
+        let tryChildren children =
+            children |> List.tryPick (tryFindFunctionValueExpectation targetName)
+        let fromCall (functionName: string) (arguments: Expr list) =
+            match Map.tryFind functionName env with
+            | Some (TFunction (parameterTypes, _)) when List.length parameterTypes = List.length arguments ->
+                List.zip parameterTypes arguments
+                |> List.tryPick (fun (parameterType, argument) ->
+                    match argument with
+                    | Var name when name = targetName -> Some parameterType
+                    | _ -> tryFindFunctionValueExpectation targetName argument)
+            | _ -> tryChildren arguments
+
+        match candidate with
+        | Call (functionName, arguments) -> fromCall functionName (NonEmptyList.toList arguments)
+        | TypeApp (functionName, _, arguments) -> fromCall functionName (NonEmptyList.toList arguments)
+        | Let (pattern, value, body) ->
+            tryFindFunctionValueExpectation targetName value
+            |> Option.orElseWith (fun () ->
+                if letPatternBindings pattern |> List.contains targetName then None
+                else tryFindFunctionValueExpectation targetName body)
+        | Lambda (parameters, _, body) ->
+            let shadows =
+                parameters
+                |> NonEmptyList.toList
+                |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
+                |> List.contains targetName
+            if shadows then None else tryFindFunctionValueExpectation targetName body
+        | BoundaryRender (_, value) | UnaryOp (_, value)
+        | TupleAccess (value, _) | RecordAccess (value, _) ->
+            tryFindFunctionValueExpectation targetName value
+        | BinOp (_, left, right) | Sequence (left, right) -> tryChildren [left; right]
+        | If (condition, thenBranch, elseBranch) -> tryChildren [condition; thenBranch; elseBranch]
+        | TupleLiteral elements | ListLiteral elements -> tryChildren elements
+        | DictLiteral (_, entries) -> entries |> List.map snd |> tryChildren
+        | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
+        | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
+        | Constructor (_, _, payload) -> payload |> Option.bind (tryFindFunctionValueExpectation targetName)
+        | Match (scrutinee, cases) ->
+            scrutinee
+            :: (cases |> List.collect (fun case -> Option.toList case.Guard @ [case.Body]))
+            |> tryChildren
+        | ListCons (head, tail) -> head @ [tail] |> tryChildren
+        | Apply (func, arguments) -> func :: NonEmptyList.toList arguments |> tryChildren
+        | Closure (_, captures) -> tryChildren captures
+        | InterpolatedString parts ->
+            parts
+            |> List.choose (function StringExpr inner -> Some inner | StringText _ -> None)
+            |> tryChildren
+        | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
+        | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
+        | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+        | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
+        | Var _ | FuncRef _ | RuntimeError _ -> None
+
     match expr with
     | BoundaryRender (renderer, value) ->
         checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
@@ -1809,7 +2006,7 @@ let rec private checkExprWithParamNames
                                 Ok (
                                     leftNumericType,
                                     Let (
-                                        evaluatedOperands,
+                                        LPVariable evaluatedOperands,
                                         TupleLiteral [left'; right'],
                                         RuntimeError errorMessage
                                     )
@@ -1900,7 +2097,7 @@ let rec private checkExprWithParamNames
                                         Ok (
                                             TBool,
                                             Let (
-                                                evaluatedOperands,
+                                                LPVariable evaluatedOperands,
                                                 TupleLiteral [left'; right'],
                                                 result
                                             )
@@ -1919,11 +2116,14 @@ let rec private checkExprWithParamNames
                             | Some comparableType ->
                                 let tryNamedPartialState (candidate: Expr) : (string * (Type * Expr) list) option =
                                     match candidate with
-                                    | Lambda (parameters, body) ->
+                                    | Lambda (parameters, returnAnnotation, body) ->
                                         let parameterList = NonEmptyList.toList parameters
                                         let generatedPartial =
                                             parameterList
-                                            |> List.forall (fun (name, _) -> name.StartsWith "__partial_")
+                                            |> List.forall (fun parameter ->
+                                                match parameter.Pattern with
+                                                | LPVariable name -> name.StartsWith "__partial_"
+                                                | _ -> false)
 
                                         let callDetails =
                                             match body with
@@ -1941,7 +2141,10 @@ let rec private checkExprWithParamNames
                                                 appliedCount > 0
                                                 && List.length trailingArgs = remainingCount
                                                 && List.forall2
-                                                    (fun arg (parameterName, _) -> arg = Var parameterName)
+                                                    (fun arg parameter ->
+                                                        match parameter.Pattern with
+                                                        | LPVariable parameterName -> arg = Var parameterName
+                                                        | _ -> false)
                                                     trailingArgs
                                                     parameterList
 
@@ -2000,7 +2203,7 @@ let rec private checkExprWithParamNames
                                     let comparison = chainAndExpr stateComparisons
                                     (leftBindings @ rightBindings)
                                     |> List.foldBack
-                                        (fun (name, _, value) body -> Let (name, value, body))
+                                        (fun (name, _, value) body -> Let (LPVariable name, value, body))
                                         <| comparison
 
                                 let eqExpr =
@@ -2194,58 +2397,44 @@ let rec private checkExprWithParamNames
                         Error (TypeMismatch (expected, innerType, "result of ~~~"))
                     | _ -> Ok (innerType, UnaryOp (op, inner')))
 
-    | LetPattern (pattern, value, body) ->
-        checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
-        |> Result.bind (fun (_, value') ->
-            let definitelyDoesNotMatch =
-                match pattern, value' with
-                | PUnit, UnitLiteral -> false
-                | PUnit, _ -> Option.isSome (tryFormatLiteralValue value')
-                | PTuple patterns, TupleLiteral values -> List.length patterns <> List.length values
-                | PTuple _, _ -> Option.isSome (tryFormatLiteralValue value')
-                | _ -> false
-
-            if definitelyDoesNotMatch then
-                let renderedValue =
-                    tryFormatLiteralValue value'
-                    |> Option.defaultWith (fun () -> Crash.crash "Known let-pattern mismatch lost its literal value")
-                let message =
-                    $"Could not deconstruct value {renderedValue} into pattern {formatDeconstructionPattern pattern}"
-                Ok (TRuntimeError, Let ("__", value', RuntimeError message))
-            else
-                let matchCase = {
-                    Patterns = NonEmptyList.singleton pattern
-                    Guard = None
-                    Body = body
-                }
-                checkExpr
-                    (Match (value', [matchCase]))
-                    env
-                    typeReg
-                    variantLookup
-                    genericFuncReg
-                    warningSettings
-                    moduleRegistry
-                    aliasReg
-                    expectedType)
-
-    | Let (name, value, body) ->
-        // Let binding: check value, extend environment, check body
+    | Let (pattern, value, body) ->
+        // The RHS is checked in the incoming environment. Only a completely
+        // validated and type-compatible pattern extends the continuation.
         let valueExpectedType =
-            match value with
-            | ListLiteral [] -> Some (TList (TVar "t"))
+            match pattern, value with
+            | LPVariable name, Lambda (parameters, _, _) ->
+                tryFindFunctionValueExpectation name body
+                |> Option.orElseWith (fun () ->
+                    tryFindCallArguments name body
+                    |> Option.bind (inferFunctionExpectationFromArguments (parameters |> NonEmptyList.toList |> List.length)))
+            | _, ListLiteral [] -> Some (TList (TVar "t"))
             | _ -> None
 
         checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg valueExpectedType
         |> Result.bind (fun (valueType, value') ->
             let valueType = canonicalizeBareSumTypeRefs variantLookup valueType
-            let env' = Map.add name valueType env
-            let bodyForChecking =
-                match value' with
-                | FloatLiteral _ | Int64Literal _ -> substituteInterpolationLiteral name value' body
-                | _ -> body
-            checkExpr bodyForChecking env' typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType
-            |> Result.map (fun (bodyType, body') -> (bodyType, Let (name, value', body'))))
+            match validateBinders (LetBinderPatterns [pattern]) with
+            | Error message -> Error (GenericError message)
+            | Ok _ ->
+                match bindLetPatternTypes pattern valueType with
+                | None ->
+                    let renderedValue =
+                        tryFormatLiteralValue value'
+                        |> Option.defaultValue $"<{typeToString valueType}>"
+                    let message =
+                        $"Could not deconstruct value {renderedValue} into pattern {formatLetDeconstructionPattern pattern}"
+                    Ok (TRuntimeError, Let (pattern, value', RuntimeError message))
+                | Some bindings ->
+                    let env' =
+                        bindings |> List.fold (fun current (name, typ) -> Map.add name typ current) env
+                    let bodyForChecking =
+                        match pattern, value' with
+                        | LPVariable name, (FloatLiteral _ | Int64Literal _) ->
+                            substituteInterpolationLiteral name value' body
+                        | _ -> body
+                    checkExpr bodyForChecking env' typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType
+                    |> Result.map (fun (bodyType, body') ->
+                        (bodyType, Let (pattern, value', body'))))
 
     | Var name ->
         if isBuiltinTestNanName name then
@@ -2494,8 +2683,8 @@ let rec private checkExprWithParamNames
                                 let allArgs = concreteArgs @ (remainingParams |> List.map (fun (name, _) -> Var name))
                                 let lambdaBody = TypeApp (resolvedFuncName, inferredTypeArgs, toCallArgs allArgs)
 
-                                // Create the lambda: (p0, p1, ...) => funcName<types>(providedArgs, p0, p1, ...)
-                                let lambdaExpr = Lambda (toLambdaParams remainingParams, lambdaBody)
+                                // Create the lambda: fun p0 p1 ... -> funcName<types>(providedArgs, p0, p1, ...)
+                                let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
 
                                 // The resulting type is a function from remaining params to return type
                                 let partialType = TFunction (concreteRemainingParamTypes, concreteReturnType)
@@ -2604,8 +2793,8 @@ let rec private checkExprWithParamNames
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
                         let lambdaBody = Call (resolvedFuncName, toCallArgs allArgs)
 
-                        // Create the lambda: (p0, p1, ...) => funcName(providedArgs, p0, p1, ...)
-                        let lambdaExpr = Lambda (toLambdaParams remainingParams, lambdaBody)
+                        // Create the lambda: fun p0 p1 ... -> funcName(providedArgs, p0, p1, ...)
+                        let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
 
                         // The resulting type is a function from remaining params to return type
                         let partialType = TFunction (remainingParamTypes, origReturnType)
@@ -2724,8 +2913,8 @@ let rec private checkExprWithParamNames
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
                         let lambdaBody = Call (resolvedFuncName, toCallArgs allArgs)
 
-                        // Create the lambda: (p0, p1, ...) => funcName(providedArgs, p0, p1, ...)
-                        let lambdaExpr = Lambda (toLambdaParams remainingParams, lambdaBody)
+                        // Create the lambda: fun p0 p1 ... -> funcName(providedArgs, p0, p1, ...)
+                        let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
 
                         // The resulting type is a function from remaining params to return type
                         let partialType = TFunction (remainingParamTypes, returnType)
@@ -2784,7 +2973,7 @@ let rec private checkExprWithParamNames
                             let lambdaBody = TypeApp (resolvedFuncName, inferredTypeArgs, toCallArgs allArgs)
 
                             // Create the lambda
-                            let lambdaExpr = Lambda (toLambdaParams remainingParams, lambdaBody)
+                            let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
 
                             // The resulting type is a function from remaining params to return type
                             let partialType = TFunction (concreteRemainingTypes, concreteReturnType)
@@ -2977,7 +3166,7 @@ let rec private checkExprWithParamNames
                                 let lambdaBody = TypeApp (resolvedFuncName, typeArgs, toCallArgs allArgs)
 
                                 // Create the lambda
-                                let lambdaExpr = Lambda (toLambdaParams remainingParams, lambdaBody)
+                                let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
 
                                 // The resulting type is a function from remaining params to return type
                                 let partialType = TFunction (remainingParamTypes, concreteReturnType)
@@ -3136,7 +3325,7 @@ let rec private checkExprWithParamNames
                                 let lambdaBody = TypeApp (resolvedFuncName, typeArgs, toCallArgs allArgs)
 
                                 // Create the lambda
-                                let lambdaExpr = Lambda (toLambdaParams remainingParams, lambdaBody)
+                                let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
 
                                 // The resulting type is a function from remaining params to return type
                                 let partialType = TFunction (remainingParamTypes, concreteReturnType)
@@ -4021,12 +4210,9 @@ let rec private checkExprWithParamNames
                     match remaining with
                     | [] -> Ok ()
                     | pattern :: rest ->
-                        let duplicates = duplicatePatternBindings pattern
-                        if warningSettings.WarnOnDuplicatePatternBindings
-                           && not (List.isEmpty duplicates) then
-                            let duplicateNames = String.concat ", " duplicates
-                            Error (GenericError $"Duplicate pattern bindings are not allowed: {duplicateNames}")
-                        else
+                        match validateBinders (MatchBinderPattern pattern) with
+                        | Error message -> Error (GenericError message)
+                        | Ok _ ->
                             let bindings = collectPatternBindings pattern
                             match expectedBindings with
                             | None -> loop rest (Some bindings)
@@ -4035,16 +4221,10 @@ let rec private checkExprWithParamNames
                             | Some expected ->
                                 let expectedText = formatBindingSet expected
                                 let actualText = formatBindingSet bindings
-                                if warningSettings.WarnOnDuplicatePatternBindings then
-                                    Error (
-                                        GenericError
-                                            $"Pattern matches require all branches to provide the same variables - expected [{expectedText}], got [{actualText}]"
-                                    )
-                                else
-                                    Error (
-                                        GenericError
-                                            $"Pattern grouping requires complete bindings in every alternative: expected [{expectedText}], got [{actualText}]"
-                                    )
+                                Error (
+                                    GenericError
+                                        $"Pattern matches require all branches to provide the same variables - expected [{expectedText}], got [{actualText}]"
+                                )
 
                 loop allPatterns None
 
@@ -4435,39 +4615,234 @@ let rec private checkExprWithParamNames
                     | None -> Ok (listType, ListCons (heads', tail')))
             | other -> Error (TypeMismatch (TList (TVar "t"), other, "list cons tail must be a list")))
 
-    | Lambda (parameters, body) ->
+    | Lambda (parameters, returnAnnotation, body) ->
         let parametersList = NonEmptyList.toList parameters
+        let parameterNames =
+            parametersList
+            |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
+            |> Set.ofList
+
+        let concreteTypeOf candidate =
+            let candidateType =
+                match candidate with
+                | UnitLiteral -> Some TUnit
+                | Int64Literal _ -> Some TInt64
+                | Int128Literal _ -> Some TInt128
+                | BigIntLiteral _ -> Some TInt
+                | Int8Literal _ -> Some TInt8
+                | Int16Literal _ -> Some TInt16
+                | Int32Literal _ -> Some TInt32
+                | UInt8Literal _ -> Some TUInt8
+                | UInt16Literal _ -> Some TUInt16
+                | UInt32Literal _ -> Some TUInt32
+                | UInt64Literal _ -> Some TUInt64
+                | UInt128Literal _ -> Some TUInt128
+                | FloatLiteral _ -> Some TFloat64
+                | BoolLiteral _ -> Some TBool
+                | StringLiteral _ -> Some TString
+                | CharLiteral _ -> Some TChar
+                | Var name -> Map.tryFind name env
+                | Call (name, _) ->
+                    match Map.tryFind name env with
+                    | Some (TFunction (_, returnType)) -> Some returnType
+                    | _ ->
+                        Stdlib.tryGetFunction moduleRegistry name
+                        |> Option.map (fun (fn, _) -> fn.ReturnType)
+                | _ -> None
+            candidateType |> Option.filter (containsTVar >> not)
+
+        let addConstraint name typ constraints =
+            if Set.contains name parameterNames && not (containsTVar typ) then
+                match Map.tryFind name constraints with
+                | Some existing ->
+                    match reconcileTypes (Some aliasReg) existing typ with
+                    | Some reconciled -> Map.add name reconciled constraints
+                    | None -> constraints
+                | None -> Map.add name typ constraints
+            else
+                constraints
+
+        let rec collectConstraints expected candidate constraints =
+            let collect expectedType inner current =
+                collectConstraints expectedType inner current
+            let collectChildren children current =
+                children |> List.fold (fun state child -> collect None child state) current
+            match candidate with
+            | Var name ->
+                expected |> Option.map (fun typ -> addConstraint name typ constraints) |> Option.defaultValue constraints
+            | BinOp (op, left, right) ->
+                match op with
+                | Add | Sub | Mul | Div | Mod | Shl | Shr | BitAnd | BitOr | BitXor ->
+                    let operandType =
+                        expected
+                        |> Option.filter (containsTVar >> not)
+                        |> Option.orElseWith (fun () -> concreteTypeOf left)
+                        |> Option.orElseWith (fun () -> concreteTypeOf right)
+                    constraints |> collect operandType left |> collect operandType right
+                | Lt | Gt | Lte | Gte | Eq | Neq ->
+                    let operandType = concreteTypeOf left |> Option.orElseWith (fun () -> concreteTypeOf right)
+                    constraints |> collect operandType left |> collect operandType right
+                | StringConcat -> constraints |> collect (Some TString) left |> collect (Some TString) right
+                | And | Or -> constraints |> collect (Some TBool) left |> collect (Some TBool) right
+            | UnaryOp (Not, inner) -> collect (Some TBool) inner constraints
+            | UnaryOp (_, inner) -> collect expected inner constraints
+            | Call (name, arguments) ->
+                let argumentList = NonEmptyList.toList arguments
+                match Map.tryFind name env with
+                | Some (TFunction (parameterTypes, _)) when List.length parameterTypes = List.length argumentList ->
+                    List.zip parameterTypes argumentList
+                    |> List.fold (fun state (parameterType, argument) -> collect (Some parameterType) argument state) constraints
+                | _ -> collectChildren argumentList constraints
+            | Apply (func, arguments) ->
+                let argumentList = NonEmptyList.toList arguments
+                let constraints = collect None func constraints
+                match func with
+                | Var name ->
+                    match Map.tryFind name env with
+                    | Some (TFunction (parameterTypes, _)) when List.length argumentList <= List.length parameterTypes ->
+                        List.zip (List.take (List.length argumentList) parameterTypes) argumentList
+                        |> List.fold (fun state (parameterType, argument) -> collect (Some parameterType) argument state) constraints
+                    | _ -> collectChildren argumentList constraints
+                | _ -> collectChildren argumentList constraints
+            | Let (pattern, value, continuation) ->
+                let afterValue = collect None value constraints
+                if letPatternBindings pattern |> List.exists (fun name -> Set.contains name parameterNames) then afterValue
+                else collect expected continuation afterValue
+            | Lambda (nestedParameters, _, nestedBody) ->
+                let shadows =
+                    nestedParameters
+                    |> NonEmptyList.toList
+                    |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
+                    |> List.exists (fun name -> Set.contains name parameterNames)
+                if shadows then
+                    constraints
+                else
+                    let nestedReturnExpectation =
+                        match expected with
+                        | Some (TFunction (_, returnType)) -> Some returnType
+                        | _ -> None
+                    collect nestedReturnExpectation nestedBody constraints
+            | BoundaryRender (_, value) | TupleAccess (value, _) | RecordAccess (value, _) ->
+                collect None value constraints
+            | Sequence (first, next) -> constraints |> collect None first |> collect expected next
+            | If (condition, thenBranch, elseBranch) ->
+                constraints
+                |> collect (Some TBool) condition
+                |> collect expected thenBranch
+                |> collect expected elseBranch
+            | TypeApp (_, _, arguments) -> collectChildren (NonEmptyList.toList arguments) constraints
+            | TupleLiteral elements | ListLiteral elements -> collectChildren elements constraints
+            | DictLiteral (_, entries) -> collectChildren (entries |> List.map snd) constraints
+            | RecordLiteral (_, fields) -> collectChildren (fields |> List.map snd) constraints
+            | RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd)) constraints
+            | Constructor (_, _, payload) -> payload |> Option.map (fun value -> collect None value constraints) |> Option.defaultValue constraints
+            | Match (scrutinee, cases) ->
+                let afterScrutinee = collect None scrutinee constraints
+                cases
+                |> List.fold (fun state case ->
+                    state
+                    |> fun current -> case.Guard |> Option.map (fun guard -> collect (Some TBool) guard current) |> Option.defaultValue current
+                    |> collect expected case.Body) afterScrutinee
+            | ListCons (head, tail) -> collectChildren (head @ [tail]) constraints
+            | Closure (_, captures) -> collectChildren captures constraints
+            | InterpolatedString parts ->
+                parts
+                |> List.choose (function StringExpr inner -> Some inner | StringText _ -> None)
+                |> fun children -> collectChildren children constraints
+            | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
+            | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
+            | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+            | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
+            | FuncRef _ | RuntimeError _ -> constraints
+
+        let bodyConstraints = collectConstraints returnAnnotation body Map.empty
+
+        let rec refinePatternType pattern typ =
+            match pattern, typ with
+            | LPVariable name, _ -> Map.tryFind name bodyConstraints |> Option.defaultValue typ
+            | LPTuple (first, second, rest), TTuple elementTypes ->
+                let patterns = first :: second :: rest
+                if List.length patterns = List.length elementTypes then
+                    List.zip patterns elementTypes
+                    |> List.map (fun (innerPattern, innerType) -> refinePatternType innerPattern innerType)
+                    |> TTuple
+                else typ
+            | _ -> typ
+
         let typeCheckLambdaWithParams
-            (resolvedParams: (string * Type) list)
+            (resolvedParams: (LambdaParameter * Type) list)
             (bodyExpectedType: Type option)
             : Result<Type * Expr, TypeError> =
-            let paramEnv =
+            let bindingResults =
                 resolvedParams
-                |> List.fold (fun e (name, ty) -> Map.add name ty e) env
-            checkExpr body paramEnv typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg bodyExpectedType
-            |> Result.map (fun (bodyType, body') ->
-                let paramTypes = resolvedParams |> List.map snd
-                (TFunction (paramTypes, bodyType), Lambda (toLambdaParams resolvedParams, body')))
+                |> List.map (fun (parameter, typ) -> bindLetPatternTypes parameter.Pattern typ)
+            if bindingResults |> List.exists Option.isNone then
+                Error (GenericError "Lambda parameter pattern is incompatible with its inferred type")
+            else
+                let bindings = bindingResults |> List.choose id |> List.concat
+                let paramEnv =
+                    bindings
+                    |> List.fold (fun current (name, typ) -> Map.add name typ current) env
+                let effectiveBodyExpectedType =
+                    returnAnnotation |> Option.orElse bodyExpectedType
+                checkExpr body paramEnv typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg effectiveBodyExpectedType
+                |> Result.map (fun (bodyType, body') ->
+                    let paramTypes = resolvedParams |> List.map snd
+                    let typedParams =
+                        resolvedParams
+                        |> List.map (fun (parameter, typ) -> { parameter with InferredType = Some typ })
+                        |> NonEmptyList.fromList
+                    (TFunction (paramTypes, bodyType), Lambda (typedParams, returnAnnotation, body')))
+
+        let initialParams =
+            parametersList
+            |> List.mapi (fun index parameter ->
+                let initialType =
+                    parameter.InferredType
+                    |> Option.orElse parameter.SourceAnnotation
+                    |> Option.defaultValue (inferredLetPatternType $"lambda_{index}" parameter.Pattern)
+                (parameter, refinePatternType parameter.Pattern initialType))
 
         match expectedType with
         | Some (TFunction (expectedParams, expectedRet)) ->
-            if List.length expectedParams <> List.length parametersList then
+            if List.length expectedParams < List.length parametersList then
+                // Interpreter lambdas may expose a prefix of their binders as
+                // the callable expected by a higher-order argument. Preserve
+                // the remaining binders as a returned lambda so applying the
+                // outer closure once has the same curried behavior.
+                let (outerParameters, remainingParameters) =
+                    List.splitAt (List.length expectedParams) parametersList
+                match NonEmptyList.tryFromList outerParameters, NonEmptyList.tryFromList remainingParameters with
+                | Some outer, Some remaining ->
+                    let nested = Lambda (remaining, returnAnnotation, body)
+                    checkExpr
+                        (Lambda (outer, None, nested))
+                        env
+                        typeReg
+                        variantLookup
+                        genericFuncReg
+                        warningSettings
+                        moduleRegistry
+                        aliasReg
+                        expectedType
+                | _ -> Error (GenericError "Lambda currying requires non-empty binder groups")
+            elif List.length expectedParams <> List.length parametersList then
                 Error (GenericError $"Expected {List.length parametersList} arguments, got {List.length expectedParams}")
             else
                 let rec reconcileParamTypes
-                    (remaining: ((string * Type) * Type) list)
-                    (acc: (string * Type) list)
-                    : Result<(string * Type) list, TypeError> =
+                    (remaining: ((LambdaParameter * Type) * Type) list)
+                    (acc: (LambdaParameter * Type) list)
+                    : Result<(LambdaParameter * Type) list, TypeError> =
                     match remaining with
                     | [] -> Ok (List.rev acc)
-                    | ((name, declaredParamType), expectedParamType) :: rest ->
+                    | ((parameter, declaredParamType), expectedParamType) :: rest ->
                         match reconcileTypes (Some aliasReg) declaredParamType expectedParamType with
                         | Some reconciledParamType ->
-                            reconcileParamTypes rest ((name, reconciledParamType) :: acc)
+                            reconcileParamTypes rest ((parameter, reconciledParamType) :: acc)
                         | None ->
                             Error (TypeMismatch (expectedParamType, declaredParamType, "lambda parameter type"))
 
-                reconcileParamTypes (List.zip parametersList expectedParams) []
+                reconcileParamTypes (List.zip initialParams expectedParams) []
                 |> Result.bind (fun reconciledParams ->
                     let bodyExpectedType =
                         if containsTVar expectedRet then
@@ -4486,18 +4861,25 @@ let rec private checkExprWithParamNames
                         | _ ->
                             Error (GenericError "Internal error: lambda did not type-check to a function")))
         | Some other ->
-            typeCheckLambdaWithParams parametersList None
+            typeCheckLambdaWithParams initialParams None
             |> Result.bind (fun (funcType, lambdaExpr) ->
                 match reconcileTypes (Some aliasReg) other funcType with
                 | Some reconciledType -> Ok (reconciledType, lambdaExpr)
                 | None -> Error (TypeMismatch (other, funcType, "lambda")))
         | None ->
-            typeCheckLambdaWithParams parametersList None
+            typeCheckLambdaWithParams initialParams None
 
     | Apply (func, args) ->
         let argsList = NonEmptyList.toList args
+        let functionExpectedType =
+            match func with
+            | Lambda (parameters, _, _) ->
+                inferFunctionExpectationFromArguments
+                    (parameters |> NonEmptyList.toList |> List.length)
+                    argsList
+            | _ -> None
         // Type-check the function expression
-        checkExpr func env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+        checkExpr func env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg functionExpectedType
         |> Result.bind (fun (funcType, func') ->
             match funcType with
             | TFunction (paramTypes, returnType) ->
@@ -4535,8 +4917,8 @@ let rec private checkExprWithParamNames
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
                         let lambdaBody = Apply (func', toCallArgs allArgs)
 
-                        // Create the lambda: (p0, p1, ...) => func(providedArgs, p0, p1, ...)
-                        let lambdaExpr = Lambda (toLambdaParams remainingParams, lambdaBody)
+                        // Create the lambda: fun p0 p1 ... -> func(providedArgs, p0, p1, ...)
+                        let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
 
                         // The resulting type is a function from remaining params to return type
                         let partialType = TFunction (remainingParamTypes, returnType)
@@ -4635,10 +5017,10 @@ let rec private buildEqHelperExpr
         let leftVar = "__dark_eq_helper_fn_left"
         let rightVar = "__dark_eq_helper_fn_right"
         Let (
-            leftVar,
+            LPVariable leftVar,
             leftExpr,
             Let (
-                rightVar,
+                LPVariable rightVar,
                 rightExpr,
                 BinOp (Eq, TupleAccess (Var leftVar, 0), TupleAccess (Var rightVar, 0))
             )
@@ -4702,7 +5084,7 @@ let rec private buildEqHelperExpr
                     elemType
                     (TupleAccess (Var leftTupleVar, index))
                     (TupleAccess (Var rightTupleVar, index)))
-        Let (leftTupleVar, leftExpr, Let (rightTupleVar, rightExpr, chainAndExpr elementComparisons))
+        Let (LPVariable leftTupleVar, leftExpr, Let (LPVariable rightTupleVar, rightExpr, chainAndExpr elementComparisons))
 
     | ExpandCurrent, TRecord (recordTypeName, typeArgs) ->
         match Map.tryFind recordTypeName typeReg with
@@ -4730,7 +5112,7 @@ let rec private buildEqHelperExpr
                         fieldType
                         (TupleAccess (Var leftRecordVar, index))
                         (TupleAccess (Var rightRecordVar, index)))
-            Let (leftRecordVar, leftExpr, Let (rightRecordVar, rightExpr, chainAndExpr fieldComparisons))
+            Let (LPVariable leftRecordVar, leftExpr, Let (LPVariable rightRecordVar, rightExpr, chainAndExpr fieldComparisons))
 
     | ExpandCurrent, TSum (sumTypeName, sumTypeArgs) ->
         if not (sumTypeHasPayload variantLookup sumTypeName) then
@@ -4784,7 +5166,7 @@ let rec private buildEqHelperExpr
 
             let defaultCase = makeSimpleMatchCase PWildcard (BoolLiteral false)
             let sumPairVar = "__dark_eq_helper_sum_pair"
-            Let (sumPairVar, TupleLiteral [leftExpr; rightExpr], Match (Var sumPairVar, variantCases @ [defaultCase]))
+            Let (LPVariable sumPairVar, TupleLiteral [leftExpr; rightExpr], Match (Var sumPairVar, variantCases @ [defaultCase]))
 
     | _, _ ->
         BinOp (Eq, leftExpr, rightExpr)
@@ -4912,8 +5294,6 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         collectEqHelperTypesFromExpr aliasReg inner
     | Let (_, value, body) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg value) (collectEqHelperTypesFromExpr aliasReg body)
-    | LetPattern (_, value, body) ->
-        Set.union (collectEqHelperTypesFromExpr aliasReg value) (collectEqHelperTypesFromExpr aliasReg body)
     | If (cond, thenBranch, elseBranch) ->
         Set.union
             (collectEqHelperTypesFromExpr aliasReg cond)
@@ -4968,7 +5348,7 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         collectFromExprs elements
     | ListCons (headElements, tailExpr) ->
         Set.union (collectFromExprs headElements) (collectEqHelperTypesFromExpr aliasReg tailExpr)
-    | Lambda (_, body) ->
+    | Lambda (_, _, body) ->
         collectEqHelperTypesFromExpr aliasReg body
     | Apply (funcExpr, args) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg funcExpr) (collectFromExprs (NonEmptyList.toList args))
@@ -4996,8 +5376,6 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         UnaryOp (op, recurse inner)
     | Let (name, value, body) ->
         Let (name, recurse value, recurse body)
-    | LetPattern (pattern, value, body) ->
-        LetPattern (pattern, recurse value, recurse body)
     | If (cond, thenBranch, elseBranch) ->
         If (recurse cond, recurse thenBranch, recurse elseBranch)
     | Sequence (first, next) ->
@@ -5039,8 +5417,8 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         ListLiteral (List.map recurse elements)
     | ListCons (headElements, tailExpr) ->
         ListCons (List.map recurse headElements, recurse tailExpr)
-    | Lambda (parameters, body) ->
-        Lambda (parameters, recurse body)
+    | Lambda (parameters, returnAnnotation, body) ->
+        Lambda (parameters, returnAnnotation, recurse body)
     | Apply (funcExpr, args) ->
         Apply (recurse funcExpr, NonEmptyList.map recurse args)
     | Closure (funcName, captures) ->
@@ -5220,8 +5598,6 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         collectTypeAppSpecs inner
     | Let (_, value, body) ->
         Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
-    | LetPattern (_, value, body) ->
-        Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
     | If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeAppSpecs cond) (Set.union (collectTypeAppSpecs thenBranch) (collectTypeAppSpecs elseBranch))
     | Sequence (first, next) ->
@@ -5264,7 +5640,7 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         Set.union
             (headElements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty)
             (collectTypeAppSpecs tail)
-    | Lambda (_, body) ->
+    | Lambda (_, _, body) ->
         collectTypeAppSpecs body
     | Apply (funcExpr, args) ->
         Set.union
@@ -5518,24 +5894,33 @@ let private resolveProgramNames
                     |> Result.map (fun payload' ->
                         Constructor (resolvedConstructorReference resolvedTypeName, caseName, payload'))
                 | [] -> Error (GenericError "Resolved constructor name contained no segments"))
-        | Let (name, value, body) ->
+        | Let (pattern, value, body) ->
             recurse value
-            |> Result.bind (fun value' -> resolveExpr (Set.add name localNames) body |> Result.map (fun body' -> Let (name, value', body')))
-        | LetPattern (pattern, value, body) ->
-            resolvePattern localNames pattern
-            |> Result.bind (fun pattern' ->
-                recurse value
-                |> Result.bind (fun value' ->
-                    resolveExpr (Set.union localNames (patternBoundNames pattern)) body
-                    |> Result.map (fun body' -> LetPattern (pattern', value', body'))))
-        | Lambda (parameters, body) ->
+            |> Result.bind (fun value' ->
+                let bindings = letPatternBindings pattern |> Set.ofList
+                resolveExpr (Set.union localNames bindings) body
+                |> Result.map (fun body' -> Let (pattern, value', body')))
+        | Lambda (parameters, returnAnnotation, body) ->
+            let resolveOptionalType = function
+                | None -> Ok None
+                | Some typ -> resolveTypeRefs typ |> Result.map Some
             parameters
             |> NonEmptyList.toList
-            |> ResultList.traverse (fun (name, typ) -> resolveTypeRefs typ |> Result.map (fun typ' -> (name, typ')))
+            |> ResultList.traverse (fun parameter ->
+                resolveOptionalType parameter.SourceAnnotation
+                |> Result.bind (fun sourceAnnotation ->
+                    resolveOptionalType parameter.InferredType
+                    |> Result.map (fun inferredType ->
+                        { parameter with SourceAnnotation = sourceAnnotation; InferredType = inferredType })))
             |> Result.bind (fun parameters' ->
-                let parameterNames = parameters' |> List.map fst |> Set.ofList
-                resolveExpr (Set.union localNames parameterNames) body
-                |> Result.map (fun body' -> Lambda (NonEmptyList.fromList parameters', body')))
+                let parameterNames =
+                    parameters'
+                    |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
+                    |> Set.ofList
+                resolveOptionalType returnAnnotation
+                |> Result.bind (fun returnAnnotation' ->
+                    resolveExpr (Set.union localNames parameterNames) body
+                    |> Result.map (fun body' -> Lambda (NonEmptyList.fromList parameters', returnAnnotation', body'))))
         | Match (scrutinee, cases) ->
             recurse scrutinee
             |> Result.bind (fun scrutinee' ->

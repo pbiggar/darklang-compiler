@@ -11,7 +11,7 @@
 127y + 1y = -127y - 1y // MAX + 1 wraps to MIN
 -127y - 2y = 127y // MIN - 1 wraps to MAX (use -127-2 instead of -128-1)
 100y + 100y = -56y // 200 wraps to -56 (200 - 256)
-let f = (a: Int8, b: Int8, c: Int8) => a + b + c in f(60y, 60y, 120y) = -16y // chained Int8 addition must not widen to Int64
+let f = fun a b c -> a + b + c in f(60y, 60y, 120y) = -16y // chained Int8 addition must not widen to Int64
 let x = 120y in x + 120y = -16y // let-bound Int8 literals must not widen to Int64
 
 // Int16: range -32768 to 32767

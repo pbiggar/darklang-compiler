@@ -66,8 +66,8 @@ and Token =
     | TOf          // of (sum type payload)
     | TMatch       // match (pattern matching)
     | TWith        // with (pattern matching)
+    | TFun         // fun (lambda)
     | TArrow       // -> (pattern matching)
-    | TFatArrow    // => (lambda)
     | TUnderscore  // _ (wildcard pattern)
     | TWhen        // when (guard clause in pattern matching)
     | TLBracket    // [ (list literal)
@@ -117,7 +117,8 @@ let rec lex (input: string) : Result<Token list, string> =
             | '+' -> lexHelper (position + 1) (TPlus :: acc)
             | '-' when hasChar position 1 '>' -> lexHelper (position + 2) (TArrow :: acc)
             | '-' -> lexHelper (position + 1) (TMinus :: acc)
-            | '=' when hasChar position 1 '>' -> lexHelper (position + 2) (TFatArrow :: acc)
+            | '=' when hasChar position 1 '>' ->
+                Error "Public binding syntax does not use '=>'; use 'fun <args> -> <body>'"
             | '*' -> lexHelper (position + 1) (TStar :: acc)
             | '/' when hasChar position 1 '/' ->
                 let rec skipToEndOfLine (index: int) : int =
@@ -213,6 +214,7 @@ let rec lex (input: string) : Result<Token list, string> =
                     | "of" -> TOf
                     | "match" -> TMatch
                     | "with" -> TWith
+                    | "fun" -> TFun
                     | "when" -> TWhen
                     | "true" -> TTrue
                     | "false" -> TFalse
@@ -1318,6 +1320,32 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
                 parseListPattern rest (pat :: acc)
             | _ -> Error "Expected ',' or ']' in list pattern")
 
+/// Parse the restricted pattern language shared by lets and lambdas.
+let rec parseLetPattern (tokens: Token list) : Result<LetPattern * Token list, string> =
+    match tokens with
+    | TUnderscore :: rest -> Ok (LPWildcard, rest)
+    | TIdent name :: rest when not (System.Char.IsUpper(name.[0])) ->
+        Ok (LPVariable name, rest)
+    | TLParen :: TRParen :: rest -> Ok (LPUnit, rest)
+    | TLParen :: rest ->
+        parseLetPattern rest
+        |> Result.bind (fun (first, afterFirst) ->
+            match afterFirst with
+            | TRParen :: remaining -> Ok (first, remaining)
+            | TComma :: afterComma ->
+                parseLetPattern afterComma
+                |> Result.bind (fun (second, afterSecond) ->
+                    let rec parseRest acc remaining =
+                        match remaining with
+                        | TRParen :: tail -> Ok (LPTuple (first, second, List.rev acc), tail)
+                        | TComma :: tail ->
+                            parseLetPattern tail
+                            |> Result.bind (fun (next, afterNext) -> parseRest (next :: acc) afterNext)
+                        | _ -> Error "Expected ',' or ')' in let binding tuple pattern"
+                    parseRest [] afterSecond)
+            | _ -> Error "Expected ',' or ')' in let binding pattern")
+    | _ -> Error "Expected a let binding pattern"
+
 /// Parse a single case: | pat1 | pat2 when guard -> expr
 /// Supports multiple patterns (pattern grouping) and optional guard clause
 let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<MatchCase * Token list, string> =
@@ -1361,33 +1389,6 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
             |> Result.map (fun (body, remaining') ->
                 ({ Patterns = patternsNel; Guard = None; Body = body }, remaining'))
         | _ -> Error "Expected 'when' or '->' after pattern")
-
-/// Try to parse lambda parameters: (ident : type, ident : type, ...)
-/// Returns Some (params, remaining) if successful, None otherwise
-let tryParseLambdaParams (tokens: Token list) : (NonEmptyList<string * Type> * Token list) option =
-    let rec parseParams (toks: Token list) (acc: (string * Type) list) : (NonEmptyList<string * Type> * Token list) option =
-        match toks with
-        | TRParen :: rest ->
-            // End of parameters
-            match List.rev acc with
-            | [] -> Some (NonEmptyList.singleton (generatedUnitParam 0), rest)
-            | parameters -> Some (NonEmptyList.fromList parameters, rest)
-        | TIdent name :: TColon :: rest when not (System.Char.IsUpper(name.[0])) ->
-            // Parameter: name : type
-            match parseType rest with
-            | Ok (ty, remaining) ->
-                match remaining with
-                | TComma :: rest' ->
-                    // More parameters
-                    parseParams rest' ((name, ty) :: acc)
-                | TRParen :: rest' ->
-                    // End of parameters
-                    Some (NonEmptyList.fromList (List.rev ((name, ty) :: acc)), rest')
-                | _ -> None  // Not a valid lambda
-            | Error _ -> None  // Type parse failed
-        | _ -> None  // Not a valid lambda parameter
-
-    parseParams tokens []
 
 /// Parser: convert tokens to AST
 let parse (tokens: Token list) : Result<Program, string> =
@@ -1439,7 +1440,7 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TLet :: rest ->
             // Parse: let pattern = value in body
             // Supports simple let (let x = ...) and pattern matching (let (a, b) = ...)
-            parsePattern rest
+            parseLetPattern rest
             |> Result.bind (fun (pattern, remaining) ->
                 match remaining with
                 | TEquals :: rest' ->
@@ -1448,11 +1449,10 @@ let parse (tokens: Token list) : Result<Program, string> =
                         match remaining' with
                         | TIn :: rest'' ->
                             parseExpr rest''
-                            |> Result.map (fun (body, remaining'') ->
-                                match pattern with
-                                | PVar name -> (Let (name, value, body), remaining'')
-                                | _ -> (LetPattern (pattern, value, body), remaining''))
-                        | _ -> Error "Expected 'in' after let binding value")
+                            |> Result.map (fun (body, remaining'') -> (Let (pattern, value, body), remaining''))
+                        | _ ->
+                            parseExpr remaining'
+                            |> Result.map (fun (body, remaining'') -> (Let (pattern, value, body), remaining'')))
                 | _ -> Error "Expected '=' after let binding pattern")
         | TIf :: rest ->
             // Parse: if cond then thenBranch [elif cond then branch ...] [else elseBranch]
@@ -1944,6 +1944,21 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TIdent name :: rest ->
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)
+        | TFun :: rest ->
+            let rec parseParameters acc remaining =
+                match remaining with
+                | TArrow :: bodyStart when not (List.isEmpty acc) ->
+                    parseExpr bodyStart
+                    |> Result.map (fun (body, afterBody) ->
+                        let parameters = acc |> List.rev |> List.map lambdaParameter |> NonEmptyList.fromList
+                        (Lambda (parameters, None, body), afterBody))
+                | TLParen :: TIdent _ :: TColon :: _ ->
+                    Error "Lambda parameter annotations are not supported; annotate a local function declaration instead"
+                | _ ->
+                    parseLetPattern remaining
+                    |> Result.bind (fun (parameter, afterParameter) ->
+                        parseParameters (parameter :: acc) afterParameter)
+            parseParameters [] rest
         | TLParen :: TRParen :: rest ->
             // Unit literal: ()
             Ok (UnitLiteral, rest)
@@ -1957,25 +1972,17 @@ let parse (tokens: Token list) : Result<Program, string> =
                 |> Result.map (fun (rightArg, remaining) ->
                     // Create lambda: \$x -> $x && rightArg
                     let lambda =
-                        Lambda (NonEmptyList.singleton ("$pipe_arg", TBool), BinOp (And, Var "$pipe_arg", rightArg))
+                        Lambda (NonEmptyList.singleton (lambdaParameter (LPVariable "$pipe_arg")), None, BinOp (And, Var "$pipe_arg", rightArg))
                     (lambda, remaining))
             | TOr :: TRParen :: afterOp ->
                 // (||) - operator section
                 parseUnary afterOp
                 |> Result.map (fun (rightArg, remaining) ->
                     let lambda =
-                        Lambda (NonEmptyList.singleton ("$pipe_arg", TBool), BinOp (Or, Var "$pipe_arg", rightArg))
+                        Lambda (NonEmptyList.singleton (lambdaParameter (LPVariable "$pipe_arg")), None, BinOp (Or, Var "$pipe_arg", rightArg))
                     (lambda, remaining))
             | _ ->
-                // Check if it looks like lambda params: (ident : type, ...) =>
-                match tryParseLambdaParams rest with
-                | Some (lambdaParams, TFatArrow :: bodyStart) ->
-                    // It's a lambda: (params) => body
-                    parseExpr bodyStart
-                    |> Result.map (fun (body, remaining) ->
-                        (Lambda (lambdaParams, body), remaining))
-                | _ ->
-                    // Not a lambda - parse as expression/tuple
+                    // Parse as expression/tuple; fat-arrow lambdas were rejected by the lexer.
                     parseExpr rest
                     |> Result.bind (fun (firstExpr, remaining) ->
                         match remaining with
@@ -2283,10 +2290,11 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     match expr with
     | BoundaryRender (_, value) -> validateExpr value
     | RuntimeError _ -> Ok ()
-    | LetPattern (_, value, body) ->
-        validateExpr value |> Result.bind (fun () -> validateExpr body)
-    | Let (name, value, body) ->
-        validateNoInternalIdentifier name
+    | Let (pattern, value, body) ->
+        validateBinders (LetBinderPatterns [pattern])
+        |> Result.bind (fun names ->
+            names
+            |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
         |> Result.bind (fun () -> validateExpr value)
         |> Result.bind (fun () -> validateExpr body)
     | Var name -> validateNoInternalIdentifier name
@@ -2353,10 +2361,15 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     | ListCons (head, tail) ->
         let headResult = head |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
         Result.bind (fun () -> validateExpr tail) headResult
-    | Lambda (parameters, body) ->
+    | Lambda (parameters, returnAnnotation, body) ->
         parameters
         |> NonEmptyList.toList
-        |> List.fold (fun acc (name, _) -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ())
+        |> List.map (fun parameter -> parameter.Pattern)
+        |> LetBinderPatterns
+        |> validateBinders
+        |> Result.bind (fun names ->
+            names
+            |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
         |> Result.bind (fun () -> validateExpr body)
     | Apply (funcExpr, args) ->
         validateExpr funcExpr

@@ -205,7 +205,7 @@ def Stdlib.String.__utf8ByteLen(cp: Int64) : Int64 =
 
 // Calculate total UTF-8 byte length for a list of codepoints
 def Stdlib.String.__totalUtf8Len(cps: List<Int64>) : Int64 =
-    Stdlib.List.fold<Int64, Int64>(cps, 0, (acc: Int64, cp: Int64) => acc + Stdlib.String.__utf8ByteLen(cp))
+    Stdlib.List.fold<Int64, Int64>(cps, 0, fun acc cp -> acc + Stdlib.String.__utf8ByteLen(cp))
 
 // Encode a single codepoint to UTF-8 bytes at given offset, return new offset
 def Stdlib.String.__encodeUtf8At(ptr: RawPtr, offset: Int64, cp: Int64) : Int64 =

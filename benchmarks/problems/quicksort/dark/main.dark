@@ -13,9 +13,9 @@ def quicksort(arr: List<Int64>) : List<Int64> =
     if len <= 1 then arr
     else
         let pivot = getAtOrDefault(arr, len / 2, 0) in
-        let left = Stdlib.List.filter<Int64>(arr, (x: Int64) => x < pivot) in
-        let middle = Stdlib.List.filter<Int64>(arr, (x: Int64) => x == pivot) in
-        let right = Stdlib.List.filter<Int64>(arr, (x: Int64) => x > pivot) in
+        let left = Stdlib.List.filter<Int64>(arr, fun x -> x < pivot) in
+        let middle = Stdlib.List.filter<Int64>(arr, fun x -> x == pivot) in
+        let right = Stdlib.List.filter<Int64>(arr, fun x -> x > pivot) in
         Stdlib.List.append<Int64>(
             Stdlib.List.append<Int64>(quicksort(left), middle),
             quicksort(right))

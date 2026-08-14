@@ -1,0 +1,46 @@
+// Binding evaluation, atomic destructuring, scope, and capture parity.
+
+// Optional `in`, layout continuations, and nested destructuring.
+(let x = 5L
+ x + 1L) = 6L
+(let ((a, _), (b, ())) = ((1L, 2L), (3L, ()))
+ a + b) = 4L
+
+// A value is evaluated before any names in its pattern become visible.
+(let x = 10L
+ let x = x + 1L
+ x) = 11L
+(let x = x + 1L in x) = error="Unresolved value name: x"
+
+// Values run left-to-right and failure prevents the continuation.
+(let (_, _) = (Builtin.testRuntimeError "first", Builtin.testRuntimeError "second")
+ 0L) = error="Uncaught exception: first"
+(let (a, b) = (1L, 2L, 3L)
+ Builtin.testRuntimeError "continuation") = error="Could not deconstruct value (1, 2, 3) into pattern ([variable], [variable])"
+
+// Wildcards may repeat and nested binders shadow outer bindings.
+(let (_, _) = (1L, 2L) in 3L) = 3L
+(let x = 1L
+ let f = fun x -> x + 10L
+ f 2L + x) = 13L
+
+// Closures capture the identity visible at definition time; rebinding RHSs see
+// the old identity and the new identity is confined to the continuation.
+(let x = 1L
+ let f = fun _ -> x
+ let x = 2L
+ f ()) = 1L
+(let x = 4L
+ let x = x + 1L
+ x) = 5L
+(let x = 100L
+ match (1L, 2L) with
+ | (x, y) ->
+   let f = fun _ -> x + y
+   f ()) = 3L
+
+// Bindings in child expressions never escape their expression region.
+((if (let c = true in c) then (let arm = 1L in arm) else 0L); arm) = error="Unresolved value name: arm"
+((match (let subject = 1L in subject) with | caseValue -> caseValue); caseValue) = error="Unresolved value name: caseValue"
+((fun lambdaValue -> lambdaValue) 1L; lambdaValue) = error="Unresolved value name: lambdaValue"
+((let operand = 1L in operand) + 1L; operand) = error="Unresolved value name: operand"

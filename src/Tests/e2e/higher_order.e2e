@@ -18,58 +18,58 @@ def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) def double(n: Int64): 
 // =====================================================
 
 // Pass simple lambda as argument
-def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply((y: Int64) => y + 1, 5) = 6
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply(fun y -> y + 1, 5) = 6
 
 // Lambda with multiplication
-def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply((y: Int64) => y * 2, 21) = 42
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply(fun y -> y * 2, 21) = 42
 
 // Two-argument lambda
-def apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b) apply2((a: Int64, b: Int64) => a * b, 6, 7) = 42
+def apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b) apply2(fun a b -> a * b, 6, 7) = 42
 
 // =====================================================
 // Lambda with Captures as Argument
 // =====================================================
 
 // Pass capturing lambda - closure support
-def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let base = 10 in apply((y: Int64) => y + base, 5) = 15
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let base = 10 in apply(fun y -> y + base, 5) = 15
 
 // Two variables captured
-def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let a = 10 in let b = 20 in apply((y: Int64) => y + a + b, 12) = 42
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let a = 10 in let b = 20 in apply(fun y -> y + a + b, 12) = 42
 
 // Capture and multiply
-def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let factor = 7 in apply((y: Int64) => y * factor, 6) = 42
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let factor = 7 in apply(fun y -> y * factor, 6) = 42
 
 // =====================================================
 // Composed Function Applications
 // =====================================================
 
 // Apply function twice using higher-order function
-def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) twice((y: Int64) => y + 1, 5) = 7
+def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) twice(fun y -> y + 1, 5) = 7
 
 // Twice with capturing lambda
-def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let inc = 3 in twice((y: Int64) => y + inc, 5) = 11
+def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let inc = 3 in twice(fun y -> y + inc, 5) = 11
 
 // =====================================================
 // Nested Lambdas (CPS-style)
 // =====================================================
 
 // Nested lambda passed as continuation
-def withCont(x: Int64, cont: (Int64) -> Int64): Int64 = cont(x + 1) withCont(5, (r: Int64) => r * 2) = 12
+def withCont(x: Int64, cont: (Int64) -> Int64): Int64 = cont(x + 1) withCont(5, fun r -> r * 2) = 12
 
 // Two levels of nesting - inner lambda calls outer function
-def cps1(x: Int64, k: (Int64) -> Int64): Int64 = k(x) def cps2(x: Int64): Int64 = cps1(x + 1, (r: Int64) => r * 2) cps2(5) = 12
+def cps1(x: Int64, k: (Int64) -> Int64): Int64 = k(x) def cps2(x: Int64): Int64 = cps1(x + 1, fun r -> r * 2) cps2(5) = 12
 
 // Three levels of CPS-style nesting
-def step(x: Int64, k: (Int64) -> Int64): Int64 = k(x + 1) step(1, (a: Int64) => step(a, (b: Int64) => step(b, (c: Int64) => c))) = 4
+def step(x: Int64, k: (Int64) -> Int64): Int64 = k(x + 1) step(1, fun a -> step(a, fun b -> step(b, fun c -> c))) = 4
 
 // Nested lambda capturing outer lambda's parameter
-def outer(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def inner(g: (Int64) -> Int64, y: Int64): Int64 = g(y) outer((a: Int64) => inner((b: Int64) => a + b, 10), 32) = 42
+def outer(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def inner(g: (Int64) -> Int64, y: Int64): Int64 = g(y) outer(fun a -> inner(fun b -> a + b, 10), 32) = 42
 
 // CPS-style with captured variables
-def cpsAdd(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let base = 10 in cpsAdd(5, (r: Int64) => r + base) = 15
+def cpsAdd(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let base = 10 in cpsAdd(5, fun r -> r + base) = 15
 
 // Capturing function parameter in nested lambda (requires proper type tracking)
-def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def wrapper(k: (Int64) -> Int64, x: Int64): Int64 = apply((r: Int64) => k(r), x) wrapper((n: Int64) => n * 2, 21) = 42
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def wrapper(k: (Int64) -> Int64, x: Int64): Int64 = apply(fun r -> k(r), x) wrapper(fun n -> n * 2, 21) = 42
 
 // =====================================================
 // Multiple FuncRefs (tests wrapper name uniqueness)

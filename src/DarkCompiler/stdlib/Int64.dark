@@ -113,4 +113,4 @@ def Stdlib.Int64.isOdd(n: Int64) : Bool =
 
 // Sum all integers in a list
 def Stdlib.Int64.sum(list: List<Int64>) : Int64 =
-    Stdlib.List.fold<Int64, Int64>(list, 0, (acc: Int64, x: Int64) => acc + x)
+    Stdlib.List.fold<Int64, Int64>(list, 0, fun acc x -> acc + x)

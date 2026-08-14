@@ -40,8 +40,6 @@ let testUInt128Literal () : TestResult =
 let rec countMatches (expr: Expr) : int =
     let childMatches =
         match expr with
-        | LetPattern (_, value, body) ->
-            [value; body]
         | BoundaryRender (_, value) ->
             [value]
         | UnitLiteral
@@ -101,7 +99,7 @@ let rec countMatches (expr: Expr) : int =
             scrutinee :: (cases |> List.map (fun c -> c.Body))
         | ListCons (head, tail) ->
             head @ [tail]
-        | Lambda (_, body) ->
+        | Lambda (_, _, body) ->
             [body]
         | Apply (func, args) ->
             func :: NonEmptyList.toList args
@@ -129,10 +127,10 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
 
     let eqExpr =
         Let (
-            "a",
+            LPVariable "a",
             Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", Some (Int64Literal 1L)),
             Let (
-                "b",
+                LPVariable "b",
                 Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", Some (Int64Literal 1L)),
                 BinOp (Eq, Var "a", Var "b")
             )

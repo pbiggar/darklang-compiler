@@ -12,13 +12,12 @@ module AST
 type NonEmptyList<'a> = { Head: 'a; Tail: 'a list }
 
 /// Compiler-wide warning settings passed from the driver into compiler passes.
-type WarningSettings = {
-    WarnOnDuplicatePatternBindings: bool
-}
+/// Duplicate binders are language errors, not configurable warnings.
+type WarningSettings =
+    private
+    | WarningSettings
 
-let defaultWarningSettings : WarningSettings = {
-    WarnOnDuplicatePatternBindings = true
-}
+let defaultWarningSettings : WarningSettings = WarningSettings
 
 /// Type system shared by parsing, type checking, ANF lowering, and later passes.
 type Type =
@@ -168,6 +167,92 @@ type Pattern =
     | PList of Pattern list                                // [a, b, c] - exact length match
     | PListCons of head:Pattern list * tail:Pattern        // [a, b, ...t] - head elements + rest
 
+/// The deliberately restricted pattern language shared by non-recursive lets
+/// and lambda parameters. Match-only patterns cannot be represented here.
+type LetPattern =
+    | LPUnit
+    | LPWildcard
+    | LPVariable of string
+    | LPTuple of first:LetPattern * second:LetPattern * rest:LetPattern list
+
+/// A lambda binder is parsed without an annotation. Type checking fills in its
+/// inferred type without changing the source-level binding pattern.
+type LambdaParameter = {
+    Pattern: LetPattern
+    SourceAnnotation: Type option
+    InferredType: Type option
+}
+
+let lambdaParameter (pattern: LetPattern) : LambdaParameter =
+    { Pattern = pattern; SourceAnnotation = None; InferredType = None }
+
+let typedLambdaVariable (name: string) (typ: Type) : LambdaParameter =
+    { Pattern = LPVariable name; SourceAnnotation = Some typ; InferredType = Some typ }
+
+let inferredLambdaVariable (name: string) (typ: Type) : LambdaParameter =
+    { Pattern = LPVariable name; SourceAnnotation = None; InferredType = Some typ }
+
+let rec letPatternBindings (pattern: LetPattern) : string list =
+    match pattern with
+    | LPVariable name -> [name]
+    | LPTuple (first, second, rest) ->
+        first :: second :: rest |> List.collect letPatternBindings
+    | LPUnit | LPWildcard -> []
+
+let rec mapLetPatternBindings (f: string -> string) (pattern: LetPattern) : LetPattern =
+    match pattern with
+    | LPVariable name -> LPVariable (f name)
+    | LPTuple (first, second, rest) ->
+        LPTuple (
+            mapLetPatternBindings f first,
+            mapLetPatternBindings f second,
+            rest |> List.map (mapLetPatternBindings f)
+        )
+    | LPUnit -> LPUnit
+    | LPWildcard -> LPWildcard
+
+type BinderStructure =
+    | LetBinderPatterns of LetPattern list
+    | MatchBinderPattern of Pattern
+
+/// Validate one complete binder structure before any of its names enter scope.
+/// The returned list preserves source order and never contains ignored names.
+let validateBinders (structure: BinderStructure) : Result<string list, string> =
+    let rec matchPatternBindings pattern =
+        match pattern with
+        | PVar name -> [name]
+        | PConstructor (_, payload) ->
+            payload |> Option.map matchPatternBindings |> Option.defaultValue []
+        | PTuple patterns | PList patterns -> patterns |> List.collect matchPatternBindings
+        | PRecord (_, fields) -> fields |> List.collect (snd >> matchPatternBindings)
+        | PListCons (heads, tail) ->
+            (heads |> List.collect matchPatternBindings) @ matchPatternBindings tail
+        | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _
+        | PInt16Literal _ | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _
+        | PUInt32Literal _ | PUInt64Literal _ | PUInt128Literal _ | PBool _
+        | PString _ | PChar _ | PFloat _ -> []
+
+    let names =
+        match structure with
+        | LetBinderPatterns patterns -> patterns |> List.collect letPatternBindings
+        | MatchBinderPattern pattern -> matchPatternBindings pattern
+
+    let usableNames =
+        names |> List.filter (fun name -> name <> "" && not (name.StartsWith "_"))
+
+    let duplicate =
+        usableNames
+        |> List.fold (fun (seen, found) name ->
+            match found with
+            | Some _ -> (seen, found)
+            | None when Set.contains name seen -> (seen, Some name)
+            | None -> (Set.add name seen, None)) (Set.empty, None)
+        |> snd
+
+    match duplicate with
+    | Some name -> Error $"Duplicate binding '{name}' in the same pattern"
+    | None -> Ok usableNames
+
 /// Part of an interpolated string: either a literal or an expression
 type StringPart =
     | StringText of string    // Literal text: "Hello "
@@ -194,8 +279,7 @@ and Expr =
     | InterpolatedString of StringPart list // $"Hello {name}!"
     | BinOp of BinOp * Expr * Expr
     | UnaryOp of UnaryOp * Expr
-    | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
-    | LetPattern of pattern:Pattern * value:Expr * body:Expr  // Let deconstruction before type checking
+    | Let of pattern:LetPattern * value:Expr * body:Expr  // Atomic non-recursive binding
     | Var of string  // Variable reference
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
     | Sequence of first:Expr * next:Expr  // Statement sequence: first must produce Unit; next supplies the value
@@ -211,7 +295,7 @@ and Expr =
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]
     | ListCons of head:Expr list * tail:Expr                 // [a, b, ...rest]
-    | Lambda of parameters:NonEmptyList<(string * Type)> * body:Expr  // (x: int) => x + 1
+    | Lambda of parameters:NonEmptyList<LambdaParameter> * returnAnnotation:Type option * body:Expr
     | Apply of func:Expr * args:NonEmptyList<Expr>                    // Apply function expr: f(x) where f is expression
     | FuncRef of funcName:string                             // Reference to a function (for passing as value)
     | Closure of funcName:string * captures:Expr list        // Closure: function + captured values

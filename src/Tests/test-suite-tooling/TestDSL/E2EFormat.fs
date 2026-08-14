@@ -53,7 +53,6 @@ type E2ETest = {
     DisableLIRPeephole: bool
     DisableFunctionTreeShaking: bool
     DisableLeakCheck: bool
-    WarnOnDuplicatePatternBindings: bool
     /// Source file this test came from (for grouping in output)
     SourceFile: string
     /// Maps function names to their definition line numbers in the source file
@@ -83,7 +82,6 @@ type private OptFlags = {
     DisableLIRPeephole: bool
     DisableFunctionTreeShaking: bool
     DisableLeakCheck: bool
-    WarnOnDuplicatePatternBindings: bool
 }
 
 let private defaultOptFlags = {
@@ -107,7 +105,6 @@ let private defaultOptFlags = {
     DisableLIRPeephole = false
     DisableFunctionTreeShaking = false
     DisableLeakCheck = false
-    WarnOnDuplicatePatternBindings = true
 }
 
 /// Extract function name from a definition line (e.g., "def buildTree(...)" -> "buildTree")
@@ -261,7 +258,6 @@ let private isExpectationStart (rest: string) : bool =
          || trimmed.StartsWith("skip")
          || trimmed.StartsWith("no_free_list")
          || trimmed.StartsWith("disable_leak_check")
-         || trimmed.StartsWith("warn_on_duplicate_pattern_bindings")
          || trimmed.StartsWith("error")
          || trimmed.StartsWith("disable_opt_") then
         true
@@ -300,7 +296,6 @@ let private isExpectationCandidate (rest: string) : bool =
          || trimmed.StartsWith("exit")
          || trimmed.StartsWith("no_free_list")
          || trimmed.StartsWith("disable_leak_check")
-         || trimmed.StartsWith("warn_on_duplicate_pattern_bindings")
          || trimmed.StartsWith("disable_opt_") then
         true
     else
@@ -324,7 +319,6 @@ let private isAttributeKey (key: string) : bool =
     | "skip"
     | "no_free_list"
     | "disable_leak_check"
-    | "warn_on_duplicate_pattern_bindings"
     | "disable_opt_freelist"
     | "disable_opt_anf"
     | "disable_opt_anf_const_folding"
@@ -597,12 +591,6 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
             let tokens = splitBySpacesRespectingQuotes trimmed
 
             let parseErrorAttributeFlags (attributeTokens: string list) : Result<OptFlags, string> =
-                let parseBool (value: string) : Result<bool, string> =
-                    match value.ToLowerInvariant() with
-                    | "true" | "1" -> Ok true
-                    | "false" | "0" -> Ok false
-                    | _ -> Error $"Invalid boolean value: {value} (expected true/false)"
-
                 let rec loop (remaining: string list) (current: OptFlags) : Result<OptFlags, string> =
                     match remaining with
                     | [] -> Ok current
@@ -611,16 +599,7 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                         | Error e ->
                             Error e
                         | Ok (key, value) ->
-                            match key with
-                            | "warn_on_duplicate_pattern_bindings" ->
-                                parseBool value
-                                |> Result.bind (fun parsedValue ->
-                                    loop rest {
-                                        current with
-                                            WarnOnDuplicatePatternBindings = parsedValue
-                                    })
-                            | _ ->
-                                Error $"Unknown attribute: {key}"
+                            Error $"Unknown attribute: {key}={value}"
 
                 loop attributeTokens defaultOptFlags
 
@@ -821,14 +800,6 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                                             match parseBool value "disable_leak_check" with
                                             | Some b -> optFlags <- { optFlags with DisableLeakCheck = b }
                                             | None -> ()
-                                        | "warn_on_duplicate_pattern_bindings" ->
-                                            match parseBool value "warn_on_duplicate_pattern_bindings" with
-                                            | Some b ->
-                                                optFlags <- {
-                                                    optFlags with
-                                                        WarnOnDuplicatePatternBindings = b
-                                                }
-                                            | None -> ()
                                         | _ -> errors <- $"Unknown attribute: {key}" :: errors
                                     | Error e -> errors <- e :: errors
 
@@ -836,7 +807,7 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                                 Error (String.concat "; " (List.rev errors))
                             elif leadingText.IsSome && not sawRuntimeExpectationAttribute then
                                 // Value expectation with trailing compiler flags, e.g.:
-                                // `... = 5L warn_on_duplicate_pattern_bindings=false`
+                                // `... = 5L disable_opt_anf=true`
                                 Ok (leadingText, exitCode, None, None, optFlags, false, None, skipReason)
                             else
                                 let leadingStdoutResult =
@@ -901,7 +872,6 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 DisableLIRPeephole = optFlags.DisableLIRPeephole
                 DisableFunctionTreeShaking = optFlags.DisableFunctionTreeShaking
                 DisableLeakCheck = optFlags.DisableLeakCheck
-                WarnOnDuplicatePatternBindings = optFlags.WarnOnDuplicatePatternBindings
                 SourceFile = filePath
                 FunctionLineMap = funcLineMap
             }

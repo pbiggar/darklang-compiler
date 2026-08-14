@@ -376,7 +376,7 @@ module List =
   // duplicate variable name
   (match [ 1L; 2L; 5L ] with
    | [ a; a; a ] -> a
-   | name -> name ++ "var") = 5L warn_on_duplicate_pattern_bindings=false
+   | name -> name ++ "var") = error="Duplicate binding 'a' in the same pattern"
 
 
 
@@ -526,7 +526,7 @@ module Tuple =
 
    match tpl with
    | (a, b, (a, b), a) -> (a, b)
-   | name -> name ++ "var") = (5L, 4L) warn_on_duplicate_pattern_bindings=false
+   | name -> name ++ "var") = error="Duplicate binding 'a' in the same pattern"
 
 
 
