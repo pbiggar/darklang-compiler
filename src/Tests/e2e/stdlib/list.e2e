@@ -108,6 +108,13 @@ Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30], 0I), 0) = 10
 Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30], 2I), 0) = 30
 Stdlib.Option.isNone<Int64>(Stdlib.List.getAt<Int64>([1, 2, 3], 10I)) = true
 
+// Stdlib.List.getAtOrDefault returns the element without allocating an Option.
+Stdlib.List.getAtOrDefault<Int64>([10, 20, 30], 1, 99) = 20
+Stdlib.List.getAtOrDefault<Int64>([10, 20, 30], -1, 99) = 99
+Stdlib.List.getAtOrDefault<Int64>([10, 20, 30], 3, 99) = 99
+let selected = Stdlib.List.getAtOrDefault<Float>([-0.0], 0, 1.0) in Stdlib.Float.toBits(selected) = 9223372036854775808UL
+let fallback = Stdlib.List.getAtOrDefault<Float>([1.0], 1, -0.0) in Stdlib.Float.toBits(fallback) = 9223372036854775808UL
+
 // Regression test: Stdlib.List.getAt<Float> should correctly extract Float from Option
 // NOTE: Float list storage works (FpToGp converts Float bits to GP for RawSlotInit),
 // but extraction doesn't work yet - __raw_get<Float> returns bits in GP register

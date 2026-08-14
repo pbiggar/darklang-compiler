@@ -4,11 +4,11 @@
   "profile": "routine",
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
-  "contract_sha256": "b6e9cc373aa5cca7e4f415318f69b0734d654e76514956970854c83d0a599617",
-  "generated_at": "2026-08-14T23:40:32+00:00",
+  "contract_sha256": "4883a0181a78f647027e25f38741c9878f2858fc21af25d29b93d32293becaf5",
+  "generated_at": "2026-08-14T23:55:14+00:00",
   "compiler": {
-    "commit": "2c32e1c90e1b3e036e385c3ae70f0bcb7710decb",
-    "subject": "Avoid saving dead call arguments"
+    "commit": "58a58ecef904e3eff1290147e543013420edd603",
+    "subject": "Fuse list getAt defaults without Option allocation"
   },
   "benchmarks": [
     {
@@ -77,7 +77,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 89610017
+      "instructions": 79129381
     },
     {
       "name": "sum_to_n",

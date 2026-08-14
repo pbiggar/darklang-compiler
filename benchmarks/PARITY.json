@@ -225,12 +225,12 @@
     },
     "spectral_norm": {
       "status": "comparable",
-      "dark_sha256": "4d12d22df904be6d208ac46a78fbb302e4aee251324711504423a557e60d4f9a",
+      "dark_sha256": "5b81c30e5c3910fc39667bb4ad613ea5d6371960a6003f1911ceba71332d1242",
       "rust_sha256": "9e6db5e04d5420528804499658e2466a7a12f3369648d85b280af507a7144481",
       "expected_sha256": "add12a9ed9083e1b212cbe0738a5b4939e0409b75f24ac7241856d13d9f05394",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "b720236f05eb9d78222ebabda748ef31659d9b2842acf30e174074c2074a6b4d",
+        "dark_sha256": "36d2f02d5f4ec8ccb69a1bc456f6c1ac076280d7001e07f26ad8289569555da6",
         "rust_sha256": "63d63fc3584ba719efa4d088629dc67c021bf925e54a04d6c3160bdfd55bf373",
         "expected_sha256": "064416b2125c1d63bddcf8311160f0f36ec2fe6615cde0638b838a49643261a0"
       }

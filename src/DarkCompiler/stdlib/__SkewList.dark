@@ -165,6 +165,11 @@ let getAt<'a>(list: List<a>, index: Int64) : Stdlib.Option.Option<a> =
     else if index >= Stdlib.Internal.SkewList.length<a>(list) then None
     else Some(Stdlib.Internal.SkewList.__digitsGetAt<a>(list, index))
 
+let getAtOrDefault<'a>(list: List<a>, index: Int64, default_: a) : a =
+    if index < 0 then default_
+    else if index >= Stdlib.Internal.SkewList.length<a>(list) then default_
+    else Stdlib.Internal.SkewList.__digitsGetAt<a>(list, index)
+
 let __treeSetAt<'a>(tree: List<a>, weight: Int64, index: Int64, replacement: a) : List<a> =
     if weight == 1 then
         Stdlib.Internal.SkewList.__allocLeaf<a>(replacement)

@@ -7,9 +7,7 @@ let matA(i: Int64, j: Int64) : Float =
 
 // All callers prove the index is within the fixed vector length.
 let getAt(v: List<Float>, i: Int64) : Float =
-    match Stdlib.Internal.SkewList.getAt<Float>(v, i) with
-    | Some(value) -> value
-    | None -> 0.0
+    Stdlib.List.getAtOrDefault<Float>(v, i, 0.0)
 
 let avRow(i: Int64, j: Int64, n: Int64, v: List<Float>, acc: Float) : Float =
     if j >= n then acc

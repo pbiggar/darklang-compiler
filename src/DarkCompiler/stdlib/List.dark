@@ -228,6 +228,10 @@ let getAt<'a>(list: List<a>, index: Int) : Stdlib.Option.Option<a> =
     | None -> None
     | Some(machineIndex) -> Stdlib.Internal.SkewList.getAt<a>(list, machineIndex)
 
+// Get element at index or return a caller-provided default - O(log n)
+let getAtOrDefault<'a>(list: List<a>, index: Int64, default_: a) : a =
+    Stdlib.Internal.SkewList.getAtOrDefault<a>(list, index, default_)
+
 // Set element at index (0-based) - O(log n), returns original list if index out of bounds
 let setAt<'a>(list: List<a>, index: Int64, value: a) : List<a> =
     Stdlib.Internal.SkewList.setAt<a>(list, index, value)

@@ -48,7 +48,7 @@ weight-one digit or splits one complete tree into two child digits.
 | Operation | Complexity |
 |---|---|
 | `push`, `head`, `tail`, `length`, `isEmpty` | O(1) worst case |
-| `getAt`, `setAt`, `last` | O(log n) |
+| `getAt`, `getAtOrDefault`, `setAt`, `last` | O(log n) |
 | `map`, `filter`, `reverse`, `append` | O(n) |
 | `pushBack`, `dropLast` | O(n) |
 
