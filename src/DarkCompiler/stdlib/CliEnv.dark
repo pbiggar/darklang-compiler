@@ -1,0 +1,7 @@
+// Stdlib.Cli.Env - environment lookup support.
+
+module Stdlib.Cli.Env
+
+let get(name: String) : Stdlib.Option.Option<String> =
+    let result = Stdlib.Cli.execute("printenv " ++ Stdlib.Cli.Posix.__shellQuote(name)) in
+    if result.exitCode == 0I then Some(Stdlib.String.trimEnd(result.stdout)) else Stdlib.Option.Option.None

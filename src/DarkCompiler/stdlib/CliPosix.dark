@@ -6,6 +6,7 @@ module Stdlib.Cli.Posix
 type Error = { errno: Int, message: String }
 
 type StatResult = { mode: Int, size: Int, mtimeSec: Int }
+
 let __error(error: Stdlib.Cli.NativePosixError) : Stdlib.Cli.Posix.Error =
     Stdlib.Cli.Posix.Error { errno = Stdlib.Int.fromInt64(error.errno), message = error.message }
 

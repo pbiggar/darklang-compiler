@@ -1,25 +1,27 @@
 // Stdlib.Cli.Process - portable process helpers over the native execution boundary.
 
-type Stdlib.Cli.Process.ProcessHandle = Int
-type Stdlib.Cli.Process.Output = { exitCode: Int, stdout: String, stderr: String }
+module Stdlib.Cli.Process
 
-def Stdlib.Cli.Process.__replaceQuotes(s: String) : String = Stdlib.String.replace(s, "'", "'\\''")
-def Stdlib.Cli.Process.shellQuote(s: String) : String = "'" ++ Stdlib.Cli.Process.__replaceQuotes(s) ++ "'"
+type ProcessHandle = Int
+type Output = { exitCode: Int, stdout: String, stderr: String }
 
-def Stdlib.Cli.Process.__quotedArgs(args: List<String>) : String =
+let __replaceQuotes(s: String) : String = Stdlib.String.replace(s, "'", "'\\''")
+let shellQuote(s: String) : String = "'" ++ Stdlib.Cli.Process.__replaceQuotes(s) ++ "'"
+
+let __quotedArgs(args: List<String>) : String =
     Stdlib.String.join(Stdlib.List.map<String, String>(args, fun arg -> Stdlib.Cli.Process.shellQuote(arg)), " ")
 
-def Stdlib.Cli.Process.__output(result: Stdlib.Cli.NativeOutput) : Stdlib.Cli.Process.Output =
+let __output(result: Stdlib.Cli.NativeOutput) : Stdlib.Cli.Process.Output =
     Stdlib.Cli.Process.Output { exitCode = Stdlib.Int.fromInt64(result.exitCode), stdout = result.stdout, stderr = result.stderr }
 
-def Stdlib.Cli.Process.run(program: String, args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+let run(program: String, args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
     let command = Stdlib.Cli.Process.shellQuote(program) ++ " " ++ Stdlib.Cli.Process.__quotedArgs(args) in
     let result = Stdlib.Cli.__execute(command) in
     if result.exitCode == 127 && Stdlib.String.contains(result.stderr, "No such file or directory") then
         Error(Stdlib.Cli.Posix.Error { errno = 2I, message = "No such file or directory" })
     else Ok(Stdlib.Cli.Process.__output(result))
 
-def Stdlib.Cli.Process.exec(program: String, args: List<String>) : Stdlib.Result.Result<String, String> =
+let exec(program: String, args: List<String>) : Stdlib.Result.Result<String, String> =
     match Stdlib.Cli.Process.run(program, args) with
     | Error(error) -> Error(error.message)
     | Ok(output) ->
@@ -27,32 +29,32 @@ def Stdlib.Cli.Process.exec(program: String, args: List<String>) : Stdlib.Result
         else let error = Stdlib.String.trimEnd(output.stderr) in
              if error == "" then Error("Command failed with exit code " ++ Stdlib.Int.toString(output.exitCode)) else Error(error)
 
-def Stdlib.Cli.Process.kill(pid: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Posix.kill(pid, Stdlib.Cli.Posix.sigterm())
-def Stdlib.Cli.Process.forceKill(pid: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Posix.kill(pid, Stdlib.Cli.Posix.sigkill())
+let kill(pid: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Posix.kill(pid, Stdlib.Cli.Posix.sigterm())
+let forceKill(pid: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Posix.kill(pid, Stdlib.Cli.Posix.sigkill())
 
-def Stdlib.Cli.Process.runIn(directory: String, program: String, args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+let runIn(directory: String, program: String, args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.Process.run("/bin/sh", ["-c", "cd " ++ Stdlib.Cli.Process.shellQuote(directory) ++ " && " ++ Stdlib.Cli.Process.shellQuote(program) ++ " " ++ Stdlib.Cli.Process.__quotedArgs(args)])
 
-def Stdlib.Cli.Process.runSilent(program: String, args: List<String>) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
+let runSilent(program: String, args: List<String>) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
     match Stdlib.Cli.Process.run(program, args) with | Ok(output) -> Ok(output.exitCode) | Error(error) -> Error(error)
 
-def Stdlib.Cli.Process.__envArgs(env: List<(String, String)>) : List<String> =
+let __envArgs(env: List<(String, String)>) : List<String> =
     Stdlib.List.map<(String, String), String>(env, fun pair -> let (key, value) = pair in key ++ "=" ++ value)
 
-def Stdlib.Cli.Process.__firstInvalidEnv(env: List<(String, String)>) : Stdlib.Option.Option<String> =
+let __firstInvalidEnv(env: List<(String, String)>) : Stdlib.Option.Option<String> =
     match env with
-    | [] -> None
+    | [] -> Stdlib.Option.Option.None
     | [(key, _), ...rest] -> if Stdlib.String.contains(key, "=") || Stdlib.String.contains(key, " ") then Some(key) else Stdlib.Cli.Process.__firstInvalidEnv(rest)
 
-def Stdlib.Cli.Process.runWithEnv(program: String, args: List<String>, env: List<(String, String)>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
+let runWithEnv(program: String, args: List<String>, env: List<(String, String)>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
     match Stdlib.Cli.Process.__firstInvalidEnv(env) with
     | Some(name) -> Error("Invalid env var name: '" ++ name ++ "' (must not contain '=' or spaces)")
-    | None ->
+    | _ ->
         match Stdlib.Cli.Process.run("/usr/bin/env", Stdlib.List.append(Stdlib.Cli.Process.__envArgs(env), Stdlib.List.append([program], args))) with
         | Ok(output) -> Ok(output)
         | Error(error) -> Error(error.message)
 
-def Stdlib.Cli.Process.runWithTimeout(timeoutMs: Int, program: String, args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
+let runWithTimeout(timeoutMs: Int, program: String, args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
     if timeoutMs <= 0I then Error("timeoutMs must be positive")
     else
         let seconds = Stdlib.Float.toString(Stdlib.Int.toFloat(timeoutMs) / 1000.0) ++ "s" in
@@ -60,28 +62,23 @@ def Stdlib.Cli.Process.runWithTimeout(timeoutMs: Int, program: String, args: Lis
         | Error(error) -> Error(error.message)
         | Ok(output) -> if output.exitCode == 124I || output.exitCode == 137I then Error("Process timed out") else Ok(output)
 
-def Stdlib.Cli.Process.pipe(program1: String, args1: List<String>, program2: String, args2: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+let pipe(program1: String, args1: List<String>, program2: String, args2: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.Process.run("/bin/sh", ["-c", Stdlib.Cli.Process.shellQuote(program1) ++ " " ++ Stdlib.Cli.Process.__quotedArgs(args1) ++ " | " ++ Stdlib.Cli.Process.shellQuote(program2) ++ " " ++ Stdlib.Cli.Process.__quotedArgs(args2)])
 
-def Stdlib.Cli.Process.shellPipeline(commands: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+let shellPipeline(commands: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.Process.run("/bin/sh", ["-c", Stdlib.String.join(commands, " | ")])
 
-def Stdlib.Cli.Process.isRunning(pid: Int) : Bool = Stdlib.Cli.Posix.isProcessRunning(pid)
+let isRunning(pid: Int) : Bool = Stdlib.Cli.Posix.isProcessRunning(pid)
 
-def Stdlib.Cli.Process.waitFor(pid: Int) : Unit =
+let waitFor(pid: Int) : Unit =
     if Stdlib.Cli.Posix.isProcessRunning(pid) then let _ = Stdlib.Cli.Posix.sleep(100.0) in Stdlib.Cli.Process.waitFor(pid) else ()
 
-// Interactive handles use a distinct native table; these stubs are replaced during lowering.
-def Stdlib.Cli.__spawnProcess(command: String) : Int64 = -1
-def Stdlib.Cli.__processIO(handle: Int64, input: String) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "Invalid process handle" }
-def Stdlib.Cli.__terminateProcess(handle: Int64) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "Invalid process handle" }
-
-def Stdlib.Cli.Process.spawn(command: String) : Stdlib.Cli.Process.ProcessHandle = Stdlib.Int.fromInt64(Stdlib.Cli.__spawnProcess(command))
-def Stdlib.Cli.Process.communicate(handle: Stdlib.Cli.Process.ProcessHandle, input: String) : Stdlib.Cli.ExecutionOutcome =
+let spawn(command: String) : Stdlib.Cli.Process.ProcessHandle = Stdlib.Int.fromInt64(Stdlib.Cli.__spawnProcess(command))
+let communicate(handle: Stdlib.Cli.Process.ProcessHandle, input: String) : Stdlib.Cli.ExecutionOutcome =
     match Stdlib.Int.toInt64(handle) with
-    | None -> Stdlib.Cli.ExecutionOutcome { exitCode = -1I, stdout = "", stderr = "Invalid process handle" }
+    | _ -> Stdlib.Cli.ExecutionOutcome { exitCode = -1I, stdout = "", stderr = "Invalid process handle" }
     | Some(handle) -> let result = Stdlib.Cli.__processIO(handle, input) in Stdlib.Cli.ExecutionOutcome { exitCode = Stdlib.Int.fromInt64(result.exitCode), stdout = result.stdout, stderr = result.stderr }
-def Stdlib.Cli.Process.terminate(handle: Stdlib.Cli.Process.ProcessHandle) : Stdlib.Cli.ExecutionOutcome =
+let terminate(handle: Stdlib.Cli.Process.ProcessHandle) : Stdlib.Cli.ExecutionOutcome =
     match Stdlib.Int.toInt64(handle) with
-    | None -> Stdlib.Cli.ExecutionOutcome { exitCode = -1I, stdout = "", stderr = "Invalid process handle" }
+    | _ -> Stdlib.Cli.ExecutionOutcome { exitCode = -1I, stdout = "", stderr = "Invalid process handle" }
     | Some(handle) -> let result = Stdlib.Cli.__terminateProcess(handle) in Stdlib.Cli.ExecutionOutcome { exitCode = Stdlib.Int.fromInt64(result.exitCode), stdout = result.stdout, stderr = result.stderr }

@@ -3313,18 +3313,20 @@ let rec liftLambdasInProgram
             | AST.TypeDef (AST.SumTypeDef (typeName, typeParams, variants)) ->
                 Some (typeName, typeParams, variants)
             | _ -> None)
-        |> List.collect (fun (typeName, typeParams, variants) ->
+        |> List.fold (fun lookup (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun ordinal variant ->
+            |> List.indexed
+            |> List.fold (fun typeLookup (ordinal, variant) ->
                 let tag =
                     if Set.contains variant.Name collidingCaseNames then
                         AST.constructorRuntimeIdentity typeName variant.Name
                     else
                         ordinal
                 let info = (typeName, typeParams, tag, variant.Payload)
-                [(variant.Name, info); ($"{typeName}.{variant.Name}", info)])
-            |> List.concat)
-        |> Map.ofList
+                let withBare =
+                    if Map.containsKey variant.Name typeLookup then typeLookup
+                    else Map.add variant.Name info typeLookup
+                Map.add $"{typeName}.{variant.Name}" info withBare) lookup) Map.empty
 
     let mergeMapsLocal m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     let mergedTypeReg = mergeMapsLocal baseTypeReg typeReg
@@ -10159,18 +10161,9 @@ let buildRegistries
 /// Merge registries with overlay taking precedence (module registry stays from base)
 let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
-    let mergeVariants baseVariants overlayVariants =
-        overlayVariants
-        |> Map.fold (fun acc (lookupName: string) variantInfo ->
-            if lookupName.Contains(".") || not (Map.containsKey lookupName acc) then
-                Map.add lookupName variantInfo acc
-            else
-                acc) baseVariants
     {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
-        // Qualified names are canonical. Keep the first bare alias when case
-        // names collide so legacy lowering never silently changes its owner.
-        VariantLookup = mergeVariants baseRegs.VariantLookup overlay.VariantLookup
+        VariantLookup = mergeMaps baseRegs.VariantLookup overlay.VariantLookup
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry

@@ -1,0 +1,9 @@
+// Stdlib.Cli.Stdin - terminal key input boundary.
+
+module Stdlib.Cli.Stdin
+
+// Replaced by the target terminal decoder during lowering.
+let __readKey() : Stdlib.Cli.Stdin.KeyRead.KeyRead =
+    Stdlib.Cli.Stdin.KeyRead.KeyRead { key = Stdlib.Cli.Stdin.Key.Key.Escape, modifiers = Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = false, ctrl = false, shift = false }, keyChar = "", repeat = 1I }
+
+let readKey() : Stdlib.Cli.Stdin.KeyRead.KeyRead = Stdlib.Cli.Stdin.__readKey()

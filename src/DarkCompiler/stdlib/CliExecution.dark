@@ -1,13 +1,28 @@
 // Stdlib.Cli.Execution - shell execution and canonical execution outcomes.
 
-type Stdlib.Cli.ExecutionOutcome = { exitCode: Int, stdout: String, stderr: String }
-type Stdlib.Cli.NativeOutput = { exitCode: Int64, stdout: String, stderr: String }
+module Stdlib.Cli
+
+type ExecutionOutcome = { exitCode: Int, stdout: String, stderr: String }
+type NativeOutput = { exitCode: Int64, stdout: String, stderr: String }
+type NativePosixError = { errno: Int64, message: String }
 
 // Replaced by the native CLI effect during AST-to-ANF conversion.
-def Stdlib.Cli.__execute(command: String) : Stdlib.Cli.NativeOutput =
+let __execute(command: String) : Stdlib.Cli.NativeOutput =
     Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "native CLI execution unavailable" }
 
-def Stdlib.Cli.execute(command: String) : Stdlib.Cli.ExecutionOutcome =
+let __hostOSCode() : Int64 = -1
+let __getenv(name: String) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
+let __kill(pid: Int64, signal: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok(())
+let __sleep(delayMs: Float) : Unit = ()
+let __getpid() : Int64 = 0
+let __getuid() : Int64 = 0
+let __cpuCount() : Int64 = 1
+let __currentUser() : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
+let __spawnProcess(command: String) : Int64 = -1
+let __processIO(handle: Int64, input: String) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "Invalid process handle" }
+let __terminateProcess(handle: Int64) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "Invalid process handle" }
+
+let execute(command: String) : Stdlib.Cli.ExecutionOutcome =
     let result = Stdlib.Cli.__execute(command) in
     Stdlib.Cli.ExecutionOutcome {
         exitCode = Stdlib.Int.fromInt64(result.exitCode),
@@ -15,10 +30,10 @@ def Stdlib.Cli.execute(command: String) : Stdlib.Cli.ExecutionOutcome =
         stderr = result.stderr
     }
 
-def Stdlib.Cli.executeWithUnitOrStdErr(command: String) : Stdlib.Result.Result<Unit, String> =
+let executeWithUnitOrStdErr(command: String) : Stdlib.Result.Result<Unit, String> =
     let result = Stdlib.Cli.execute(command) in
     if result.exitCode == 0I then Ok(()) else Error(result.stderr)
 
-def Stdlib.Cli.executeWithStdOutOrStdErr(command: String) : Stdlib.Result.Result<String, String> =
+let executeWithStdOutOrStdErr(command: String) : Stdlib.Result.Result<String, String> =
     let result = Stdlib.Cli.execute(command) in
     if result.exitCode == 0I then Ok(result.stdout) else Error(result.stderr)

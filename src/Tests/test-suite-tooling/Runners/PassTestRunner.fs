@@ -146,7 +146,7 @@ let prettyPrintARM64Reg = function
     | ARM64.X4 -> "X4" | ARM64.X5 -> "X5" | ARM64.X6 -> "X6" | ARM64.X7 -> "X7"
     | ARM64.X8 -> "X8" | ARM64.X9 -> "X9" | ARM64.X10 -> "X10" | ARM64.X11 -> "X11"
     | ARM64.X12 -> "X12" | ARM64.X13 -> "X13" | ARM64.X14 -> "X14" | ARM64.X15 -> "X15"
-    | ARM64.X16 -> "X16" | ARM64.X17 -> "X17"
+    | ARM64.X16 -> "X16" | ARM64.X17 -> "X17" | ARM64.X18 -> "X18"
     | ARM64.X19 -> "X19" | ARM64.X20 -> "X20" | ARM64.X21 -> "X21" | ARM64.X22 -> "X22"
     | ARM64.X23 -> "X23" | ARM64.X24 -> "X24" | ARM64.X25 -> "X25" | ARM64.X26 -> "X26"
     | ARM64.X27 -> "X27" | ARM64.X28 -> "X28"

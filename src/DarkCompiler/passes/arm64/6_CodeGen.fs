@@ -47,6 +47,7 @@ type CodeGenContext = {
     ClosureCaptureTypes: Map<string, AST.Type list>
     /// Reuses labels already derived while planning generic list release helpers.
     PlannedListDecHelperLabels: Map<ANF.RcReleasePlan, string>
+    NeedsCliRuntimeState: bool
     FunctionName: string
     // Function context for tail call epilogue generation
     StackSize: int
@@ -6461,7 +6462,7 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
     @ closeFd 0s 0 @ closeFd 0s 32 @ closeFd 8s 0 @ closeFd 8s 32
     @ loadStringLiteralPointer ARM64Symbolic.X0 "/bin/bash"
     @ [ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 8us)
-       ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X26)
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X18)
        ARM64Symbolic.Label "__dark_cli_find_shell"
        ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
        ARM64Symbolic.CBZ (ARM64Symbolic.X13, "__dark_cli_shell_found")
@@ -6497,7 +6498,7 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
        zero ARM64Symbolic.X9
        ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 80s)
        ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 56us)
-       ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X26)]
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X18)]
     @ syscall 221us
     @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 127us, 0)]
     @ syscall 93us
@@ -6621,17 +6622,20 @@ let convertFunction
         let functionEntryLabel = [ARM64Symbolic.Label func.Name]
 
         // The kernel supplies argc/argv/envp on the original stack. Capture
-        // envp before the language prologue changes SP; the remaining reserved
-        // registers own the handle table and pending terminal event roots.
-        let cliRuntimeInit =
-            if func.Name = "_start" then
-                [ARM64Symbolic.ADD_imm (ARM64Symbolic.X26, ARM64Symbolic.SP, 8us)
+        // envp before the language prologue changes SP. X18 is outside the
+        // allocator-visible register set and is touched only by CLI binaries.
+        let cliEnvironmentInit =
+            if ctx.NeedsCliRuntimeState then
+                [ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.SP, 8us)
                  ARM64Symbolic.Label "__dark_cli_find_envp"
-                 ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X26, 0s)
-                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X26, ARM64Symbolic.X26, 8us)
+                 ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X18, 0s)
+                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.X18, 8us)
                  ARM64Symbolic.CBNZ (ARM64Symbolic.X9, "__dark_cli_find_envp")
-                 ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)
-                 ARM64Symbolic.MOVZ (ARM64Symbolic.X24, 0us, 0)]
+                 ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)]
+            else []
+        let cliRuntimeInit =
+            if func.Name = "_start" && ctx.NeedsCliRuntimeState then
+                cliEnvironmentInit
             else []
 
         // Combine: function label + prologue + heap init + param setup + CFG body + epilogue label + epilogue
@@ -6891,6 +6895,13 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
+    let needsCliRuntimeState =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function | LIR.CliNative _ -> true | _ -> false)))
     let needsCliExecuteHelper =
         functions
         |> List.exists (fun func ->
@@ -7381,6 +7392,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         ClosurePayloadSizes = closurePayloadSizes
         ClosureCaptureTypes = programMetadata.Facts.ClosureCaptureTypes
         PlannedListDecHelperLabels = Map.empty
+        NeedsCliRuntimeState = needsCliRuntimeState
         FunctionName = ""
         StackSize = 0
         UsedCalleeSaved = []

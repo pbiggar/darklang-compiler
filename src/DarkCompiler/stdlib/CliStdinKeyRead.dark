@@ -1,0 +1,8 @@
+// Stdlib.Cli.Stdin.KeyRead - decoded terminal input events.
+
+module Stdlib.Cli.Stdin.KeyRead
+
+type KeyRead = { key: Stdlib.Cli.Stdin.Key.Key, modifiers: Stdlib.Cli.Stdin.Modifiers.Modifiers, keyChar: String, repeat: Int }
+
+let toString(keyRead: Stdlib.Cli.Stdin.KeyRead.KeyRead) : String =
+    Stdlib.Cli.Stdin.Modifiers.toString(keyRead.modifiers) ++ Stdlib.Cli.Stdin.Key.toString(keyRead.key)

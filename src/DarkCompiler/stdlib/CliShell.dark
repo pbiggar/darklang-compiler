@@ -1,0 +1,32 @@
+// Stdlib.Cli.Shell - portable public shell model and discovery.
+
+module Stdlib.Cli.Shell
+
+type Shell = Bash | Zsh | Fish | PowerShell
+
+let __linux(shell: String) : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
+    let shell = Stdlib.String.trim(shell) in
+    if shell == "/bin/bash" then Ok(Stdlib.Cli.Shell.Shell.Bash)
+    else if shell == "/bin/zsh" then Ok(Stdlib.Cli.Shell.Shell.Zsh)
+    else if Stdlib.String.contains(shell, "/fish") then Ok(Stdlib.Cli.Shell.Shell.Fish)
+    else Error("Unsupported shell, if you are on Linux please use Bash, Zsh, or Fish")
+
+let __macOS(shell: String) : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
+    let shell = Stdlib.String.trim(shell) in
+    if shell == "/bin/zsh" then Ok(Stdlib.Cli.Shell.Shell.Zsh)
+    else if Stdlib.String.contains(shell, "/bin/bash") then Ok(Stdlib.Cli.Shell.Shell.Bash)
+    else if Stdlib.String.contains(shell, "/fish") then Ok(Stdlib.Cli.Shell.Shell.Fish)
+    else Error("Unsupported shell, if you are on MacOS please use Bash, Zsh, or Fish")
+
+let getDefaultShell() : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
+    match Stdlib.Cli.OS.getOS() with
+    | Ok(Linux) ->
+        match Stdlib.Cli.executeWithStdOutOrStdErr("echo $SHELL") with
+        | Ok(shell) -> Stdlib.Cli.Shell.__linux(shell)
+        | Error(error) -> Error(error)
+    | Ok(MacOS) ->
+        match Stdlib.Cli.executeWithStdOutOrStdErr("echo $SHELL") with
+        | Ok(shell) -> Stdlib.Cli.Shell.__macOS(shell)
+        | Error(error) -> Error(error)
+    | Ok(Windows) -> Ok(Stdlib.Cli.Shell.Shell.PowerShell)
+    | Error(_) -> Error("Unsupported OS, couldn't determine default shell")

@@ -29,6 +29,7 @@ let X14: Reg = ARM64.X14
 let X15: Reg = ARM64.X15
 let X16: Reg = ARM64.X16
 let X17: Reg = ARM64.X17
+let X18: Reg = ARM64.X18
 let X19: Reg = ARM64.X19
 let X20: Reg = ARM64.X20
 let X21: Reg = ARM64.X21

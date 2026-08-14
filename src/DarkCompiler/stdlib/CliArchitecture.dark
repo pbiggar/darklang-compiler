@@ -1,0 +1,26 @@
+// Stdlib.Cli.Architecture - portable public architecture model.
+
+module Stdlib.Cli.Architecture
+
+type Architecture = X86_64 | Aarch64 | Arm | Arm64 | Armv7l
+
+let __fromName(arch: String) : Stdlib.Result.Result<Stdlib.Cli.Architecture.Architecture, String> =
+    if arch == "x86_64" then Ok(Stdlib.Cli.Architecture.Architecture.X86_64)
+    else if arch == "aarch64" then Ok(Stdlib.Cli.Architecture.Architecture.Aarch64)
+    else if arch == "arm" then Ok(Stdlib.Cli.Architecture.Architecture.Arm)
+    else if arch == "arm64" then Ok(Stdlib.Cli.Architecture.Architecture.Arm64)
+    else if arch == "armv7l" then Ok(Stdlib.Cli.Architecture.Architecture.Armv7l)
+    else Error("Unsupported architecture")
+
+let getArchitecture() : Stdlib.Result.Result<Stdlib.Cli.Architecture.Architecture, String> =
+    match Stdlib.Cli.OS.getOS() with
+    | Error(error) -> Error(error)
+    | Ok(Linux) ->
+        let result = Stdlib.Cli.execute("uname -m") in
+        if result.exitCode == 0I then Stdlib.Cli.Architecture.__fromName(Stdlib.String.trim(result.stdout))
+        else Error(result.stderr)
+    | Ok(MacOS) ->
+        let result = Stdlib.Cli.execute("uname -m") in
+        if result.exitCode == 0I then Stdlib.Cli.Architecture.__fromName(Stdlib.String.trim(result.stdout))
+        else Error(result.stderr)
+    | Ok(Windows) -> Error("Unsupported architecture")

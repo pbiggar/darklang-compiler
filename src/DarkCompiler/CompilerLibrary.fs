@@ -1090,10 +1090,17 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/CliSpinner.dark"
         "stdlib/CliTable.dark"
         "stdlib/CliExecution.dark"
+        "stdlib/CliOS.dark"
+        "stdlib/CliArchitecture.dark"
+        "stdlib/CliShell.dark"
         "stdlib/CliHost.dark"
+        "stdlib/CliEnv.dark"
         "stdlib/CliProcess.dark"
         "stdlib/CliSys.dark"
         "stdlib/CliStdin.dark"
+        "stdlib/CliStdinModifiers.dark"
+        "stdlib/CliStdinKeyRead.dark"
+        "stdlib/CliStdinRead.dark"
     ]
     let mergeFile (acc: AST.TopLevel list) (filename: string) : Result<AST.TopLevel list, string> =
         match loadDarkFileAllowInternal filename with

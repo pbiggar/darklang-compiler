@@ -179,6 +179,7 @@ let private convertRawAlloc
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
         PlannedListDecHelperLabels = Map.empty
+        NeedsCliRuntimeState = false
         FunctionName = "test"
         StackSize = 0
         UsedCalleeSaved = []

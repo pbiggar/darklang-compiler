@@ -1,23 +1,25 @@
 // Stdlib.Cli.Sys - portable system-information wrappers.
 
-def Stdlib.Cli.Sys.currentUser() : Stdlib.Option.Option<String> =
+module Stdlib.Cli.Sys
+
+let currentUser() : Stdlib.Option.Option<String> =
     match Stdlib.Cli.Env.get("LOGNAME") with
     | Some(user) -> Some(user)
-    | None ->
+    | _ ->
         match Stdlib.Cli.Env.get("USER") with
         | Some(user) -> Some(user)
-        | None ->
+        | _ ->
             let result = Stdlib.Cli.execute("/usr/bin/id -un") in
-            if result.exitCode == 0I then Some(Stdlib.String.trimEnd(result.stdout)) else None
+            if result.exitCode == 0I then Some(Stdlib.String.trimEnd(result.stdout)) else Stdlib.Option.Option.None
 
-def Stdlib.Cli.Sys.__uname(flag: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+let __uname(flag: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     match Stdlib.Cli.Process.exec("uname", [flag]) with
     | Ok(value) -> Ok(value)
     | Error(message) -> Error(Stdlib.Cli.Posix.Error { errno = 0I, message = message })
 
-def Stdlib.Cli.Sys.hostname() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys.__uname("-n")
-def Stdlib.Cli.Sys.os() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys.__uname("-s")
-def Stdlib.Cli.Sys.arch() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys.__uname("-m")
-def Stdlib.Cli.Sys.cpuCount() : Int = Stdlib.Int.fromInt64(Stdlib.Cli.__cpuCount())
-def Stdlib.Cli.Sys.currentPid() : Int = Stdlib.Int.fromInt64(Stdlib.Cli.__getpid())
-def Stdlib.Cli.Sys.isRoot() : Bool = Stdlib.Cli.__getuid() == 0
+let hostname() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys.__uname("-n")
+let os() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys.__uname("-s")
+let arch() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys.__uname("-m")
+let cpuCount() : Int = Stdlib.Int.fromInt64(Stdlib.Cli.__cpuCount())
+let currentPid() : Int = Stdlib.Int.fromInt64(Stdlib.Cli.__getpid())
+let isRoot() : Bool = Stdlib.Cli.__getuid() == 0

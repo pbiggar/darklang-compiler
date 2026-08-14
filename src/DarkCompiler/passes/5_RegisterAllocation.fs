@@ -1112,8 +1112,9 @@ let calleeSavedRegsFor (arch: Platform.Arch) =
         // X24-X26 have no x86_64 equivalents
         [LIR.X19; LIR.X20; LIR.X21]
     | Platform.ARM64 ->
-        // X24-X26 hold CLI runtime state; X27/X28 hold allocator state.
-        [LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23]
+        // ARM64: X27/X28 reserved, X19-X26 allocatable.
+        [LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23
+         LIR.X24; LIR.X25; LIR.X26]
 
 /// Check if an instruction is a non-tail call (requires SaveRegs/RestoreRegs)
 let isNonTailCall (instr: LIR.Instr) : bool =

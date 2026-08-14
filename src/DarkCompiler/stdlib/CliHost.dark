@@ -1,67 +1,10 @@
-// Stdlib.Cli host model - portable public variants over native target discovery.
+// Stdlib.Cli.Host - aggregate runtime host discovery.
 
-type Stdlib.Cli.OS.OS = Linux | MacOS | Windows
-type Stdlib.Cli.Architecture.Architecture = X86_64 | Aarch64 | Arm | Arm64 | Armv7l
-type Stdlib.Cli.Shell.Shell = Bash | Zsh | Fish | PowerShell
-type Stdlib.Cli.Host.Host = { os: Stdlib.Cli.OS.OS, arch: Stdlib.Cli.Architecture.Architecture, defaultShell: Stdlib.Cli.Shell.Shell }
+module Stdlib.Cli.Host
 
-// Replaced with a target-specific constant. Windows remains represented for source compatibility.
-def Stdlib.Cli.__hostOSCode() : Int64 = -1
+type Host = { os: Stdlib.Cli.OS.OS, arch: Stdlib.Cli.Architecture.Architecture, defaultShell: Stdlib.Cli.Shell.Shell }
 
-def Stdlib.Cli.OS.getOS() : Stdlib.Result.Result<Stdlib.Cli.OS.OS, String> =
-    if Stdlib.Cli.__hostOSCode() == 1 then Ok(Stdlib.Cli.OS.OS.Linux)
-    else if Stdlib.Cli.__hostOSCode() == 2 then Ok(Stdlib.Cli.OS.OS.MacOS)
-    else Error("Unsupported operating system")
-
-def Stdlib.Cli.Architecture.__fromName(arch: String) : Stdlib.Result.Result<Stdlib.Cli.Architecture.Architecture, String> =
-    if arch == "x86_64" then Ok(Stdlib.Cli.Architecture.Architecture.X86_64)
-    else if arch == "aarch64" then Ok(Stdlib.Cli.Architecture.Architecture.Aarch64)
-    else if arch == "arm" then Ok(Stdlib.Cli.Architecture.Architecture.Arm)
-    else if arch == "arm64" then Ok(Stdlib.Cli.Architecture.Architecture.Arm64)
-    else if arch == "armv7l" then Ok(Stdlib.Cli.Architecture.Architecture.Armv7l)
-    else Error("Unsupported architecture")
-
-def Stdlib.Cli.Architecture.getArchitecture() : Stdlib.Result.Result<Stdlib.Cli.Architecture.Architecture, String> =
-    match Stdlib.Cli.OS.getOS() with
-    | Error(error) -> Error(error)
-    | Ok(Linux) ->
-        let result = Stdlib.Cli.execute("uname -m") in
-        if result.exitCode == 0I then Stdlib.Cli.Architecture.__fromName(Stdlib.String.trim(result.stdout))
-        else Error(result.stderr)
-    | Ok(MacOS) ->
-        let result = Stdlib.Cli.execute("uname -m") in
-        if result.exitCode == 0I then Stdlib.Cli.Architecture.__fromName(Stdlib.String.trim(result.stdout))
-        else Error(result.stderr)
-    | Ok(Windows) -> Error("Unsupported architecture")
-
-def Stdlib.Cli.Shell.__linux(shell: String) : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
-    let shell = Stdlib.String.trim(shell) in
-    if shell == "/bin/bash" then Ok(Stdlib.Cli.Shell.Shell.Bash)
-    else if shell == "/bin/zsh" then Ok(Stdlib.Cli.Shell.Shell.Zsh)
-    else if Stdlib.String.contains(shell, "/fish") then Ok(Stdlib.Cli.Shell.Shell.Fish)
-    else Error("Unsupported shell, if you are on Linux please use Bash, Zsh, or Fish")
-
-def Stdlib.Cli.Shell.__macOS(shell: String) : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
-    let shell = Stdlib.String.trim(shell) in
-    if shell == "/bin/zsh" then Ok(Stdlib.Cli.Shell.Shell.Zsh)
-    else if Stdlib.String.contains(shell, "/bin/bash") then Ok(Stdlib.Cli.Shell.Shell.Bash)
-    else if Stdlib.String.contains(shell, "/fish") then Ok(Stdlib.Cli.Shell.Shell.Fish)
-    else Error("Unsupported shell, if you are on MacOS please use Bash, Zsh, or Fish")
-
-def Stdlib.Cli.Shell.getDefaultShell() : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
-    match Stdlib.Cli.OS.getOS() with
-    | Ok(Linux) ->
-        match Stdlib.Cli.executeWithStdOutOrStdErr("echo $SHELL") with
-        | Ok(shell) -> Stdlib.Cli.Shell.__linux(shell)
-        | Error(error) -> Error(error)
-    | Ok(MacOS) ->
-        match Stdlib.Cli.executeWithStdOutOrStdErr("echo $SHELL") with
-        | Ok(shell) -> Stdlib.Cli.Shell.__macOS(shell)
-        | Error(error) -> Error(error)
-    | Ok(Windows) -> Ok(Stdlib.Cli.Shell.Shell.PowerShell)
-    | Error(_) -> Error("Unsupported OS, couldn't determine default shell")
-
-def Stdlib.Cli.Host.getRuntimeHost() : Stdlib.Result.Result<Stdlib.Cli.Host.Host, String> =
+let getRuntimeHost() : Stdlib.Result.Result<Stdlib.Cli.Host.Host, String> =
     let os = Stdlib.Cli.OS.getOS() in
     let arch = Stdlib.Cli.Architecture.getArchitecture() in
     let shell = Stdlib.Cli.Shell.getDefaultShell() in

@@ -63,8 +63,8 @@ Native interpreter behavior is in
 `backend/src/Builtins/Builtins.Cli/Libs/Execution.fs:25-427`,
 `Posix.fs:343-545,945-1052,1305-1398`, and `Stdin.fs:15-386`.
 
-The compiler public wrappers are in
-`src/DarkCompiler/stdlib/Cli{Execution,Host,Posix,Process,Sys,Stdin}.dark`.
+The compiler public wrappers are in the `src/DarkCompiler/stdlib/Cli*.dark`
+module files.
 The registry is `src/DarkCompiler/Stdlib.fs`; typed lowering starts in
 `passes/2_AST_to_ANF.fs`, passes through `ANF.fs`, `MIR.fs`, and `LIR.fs`, and
 ends in both architecture code generators. Focused native evidence is
@@ -73,10 +73,9 @@ ends in both architecture code generators. Focused native evidence is
 
 ## Verification record
 
-The isolated implementation passed 21/21 focused CLI/process/host/input cases,
-11/11 pinned upstream `cli-process` cases, 34/34 file-I/O/platform migration
-cases, and 98/98 Option collision-regression cases. The DarkCompiler project
-also built with zero warnings and zero errors. Full-suite and routine-profile
-integration are intentionally performed by the repository worker after this
-turn; that record must add the exact integrated commit, complete test totals,
-benchmark failures, and the `RESULTS.md` performance ratio.
+The implementation was rebased onto compiler commit
+`8025617cb935bb959308315a0b886228800d06fe`. The integrated tree passed the
+complete test suite (`6020/6020`) with a zero-warning, zero-error build. The
+routine benchmark verifier reported all 19 programs equal to the compatible
+baseline, a current/baseline geometric ratio of `1.000000`, and the
+`RESULTS.md` performance ratio remained `2.75x`.
