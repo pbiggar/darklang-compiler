@@ -3,8 +3,7 @@
 // === Empty List ===
 
 // Empty list should not default to Int64 element type
-Stdlib.List.length(if true then [] else [true]) = 0
-
+Stdlib.List.length(if true then [] else [true]) = 0I
 // Top-level char lists use the recursive interpreter value renderer.
 ['a', 'b'] = stdout="['a', 'b']\n"
 
@@ -261,15 +260,13 @@ Stdlib.List.isEmpty([1]) = false
 Stdlib.List.isEmpty([1, 2, 3]) = false
 
 // Stdlib.List.length
-Stdlib.List.length<Int64>([]) = 0
-Stdlib.List.length([1]) = 1
-Stdlib.List.length([1, 2]) = 2
-Stdlib.List.length([1, 2, 3]) = 3
-Stdlib.List.length([1, 2, 3, 4, 5]) = 5
-
+Stdlib.List.length<Int64>([]) = 0I
+Stdlib.List.length([1]) = 1I
+Stdlib.List.length([1, 2]) = 2I
+Stdlib.List.length([1, 2, 3]) = 3I
+Stdlib.List.length([1, 2, 3, 4, 5]) = 5I
 // Stdlib.List.length with different types
-Stdlib.List.length([true, false, true]) = 3
-
+Stdlib.List.length([true, false, true]) = 3I
 // =====================================================
 // Large List Literal Tests (6-50 elements)
 // =====================================================
@@ -277,24 +274,23 @@ Stdlib.List.length([true, false, true]) = 3
 // Int lists (6+)
 match [1, 2, 3, 4, 5, 6] with | [a, b, c, d, e, f] -> a + f | _ -> 0 = 7
 match [10, 11, 12, 13, 14, 15, 16] with | [a, b, c, d, e, f, g] -> g - a | _ -> 0 = 6
-Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8], 7), 0) = 8
+Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8], 7I), 0) = 8
 match [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] with | [a, b, c, d, e, f, g, h, i, j, k, l] -> k + l | _ -> 0 = 23
-Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 10), 0) = 11
-Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 18), 0) = 19
-Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 25), 0) = 26
-Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50], 49), 0) = 50
+Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 10I), 0) = 11
+Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 18I), 0) = 19
+Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 25I), 0) = 26
+Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50], 49I), 0) = 50
 
 // Bool lists (6+)
 match [true, false, true, false, true, false] with | [a, b, c, d, e, f] -> if f then 1 else 0 | _ -> -1 = 0
 match [false, false, false, false, true, true, true, true] with | [a, b, c, d, e, f, g, h] -> if e && h then 1 else 0 | _ -> -1 = 1
-Stdlib.Option.withDefault(Stdlib.List.getAt([true, false, true, false, true, false, true, false, true, false, true, false], 10), false) = true
-Stdlib.List.length([true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false]) = 16
-
+Stdlib.Option.withDefault(Stdlib.List.getAt([true, false, true, false, true, false, true, false, true, false, true, false], 10I), false) = true
+Stdlib.List.length([true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false]) = 16I
 // String lists (6+)
 match ["a", "b", "c", "d", "e", "f"] with | [a, b, c, d, e, f] -> a ++ f | _ -> "" = "af"
-Stdlib.Option.withDefault(Stdlib.List.getAt(["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"], 9), "") = "s10"
-Stdlib.Option.withDefault(Stdlib.List.getAt(["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12"], 11), "") = "s12"
-Stdlib.Option.withDefault(Stdlib.List.getAt(["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "t12", "t13", "t14", "t15", "t16", "t17", "t18", "t19", "t20"], 15), "") = "t16"
+Stdlib.Option.withDefault(Stdlib.List.getAt(["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"], 9I), "") = "s10"
+Stdlib.Option.withDefault(Stdlib.List.getAt(["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12"], 11I), "") = "s12"
+Stdlib.Option.withDefault(Stdlib.List.getAt(["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "t12", "t13", "t14", "t15", "t16", "t17", "t18", "t19", "t20"], 15I), "") = "t16"
 
 // Record lists (6+)
 type Item = { id: Int64, name: String } match [Item { id = 1, name = "one" }, Item { id = 2, name = "two" }, Item { id = 3, name = "three" }, Item { id = 4, name = "four" }, Item { id = 5, name = "five" }, Item { id = 6, name = "six" }] with | [a, b, c, d, e, f] -> f.name | _ -> "" = "six"
@@ -306,17 +302,13 @@ type Item = { id: Int64, name: String } match [Item { id = 1, name = "one" }, It
 // =====================================================
 
 // Basic spread construction - prepend single element
-let x = [2, 3] in Stdlib.List.length([1, ...x]) = 3
-
+let x = [2, 3] in Stdlib.List.length([1, ...x]) = 3I
 // Prepend multiple elements
-let x = [3, 4] in Stdlib.List.length([1, 2, ...x]) = 4
-
+let x = [3, 4] in Stdlib.List.length([1, 2, ...x]) = 4I
 // Empty spread - just return tail
-let x = [1, 2, 3] in Stdlib.List.length([...x]) = 3
-
+let x = [1, 2, 3] in Stdlib.List.length([...x]) = 3I
 // Spread with empty tail (use function to get typed empty list)
-let emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = 2
-
+let emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = 2I
 // Verify element values with pattern matching
 let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = 6
 
@@ -324,14 +316,12 @@ let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = 6
 let x = [2, 3] in match [10 + 1, ...x] with | [a, b, c] -> a | _ -> 0 = 11
 
 // Use in match case body
-match [1, 2, 3] with | [h, ...rest] -> Stdlib.List.length([h, ...rest]) | [] -> 0 = 3
-
+match [1, 2, 3] with | [h, ...rest] -> Stdlib.List.length([h, ...rest]) | [] -> 0I = 3I
 // Rebuild list with modified head
 match [1, 2, 3] with | [h, ...rest] -> match [h + 10, ...rest] with | [a, b, c] -> a + b + c | _ -> 0 | [] -> 0 = 16
 
 // Chain of spreads
-let a = [3] in let b = [2, ...a] in Stdlib.List.length([1, ...b]) = 3
-
+let a = [3] in let b = [2, ...a] in Stdlib.List.length([1, ...b]) = 3I
 // =====================================================
 // Lists of Floats
 // KNOWN BUG: Float list pattern matching fails - lists fall through to wildcard
@@ -386,8 +376,7 @@ match [(1.0, 2.5), (3.5, 4.0)] with | [t1, t2] -> t1.0 + t1.1 + t2.0 + t2.1 | _ 
 match [("a", 0.5)] with | [t] -> if t.1 < 0.6 then 1 else 0 | _ -> 0 = 1
 
 // Cumulative float tuple selection in list
-let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> = match Stdlib.List.head<(Int64, Float)>(table) with | None -> [] | Some(item) -> let c = Stdlib.Tuple2.first<Int64, Float>(item) in let p = Stdlib.Tuple2.second<Int64, Float>(item) in let newRunning = running + p in match Stdlib.List.tail<(Int64, Float)>(table) with | None -> [(c, newRunning)] | Some(rest) -> Stdlib.List.push<(Int64, Float)>(makeCumulative(rest, newRunning), (c, newRunning)) let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 = match Stdlib.List.getAt(table, idx) with | None -> 0 | Some(item) -> let c = Stdlib.Tuple2.first(item) in let p = Stdlib.Tuple2.second(item) in if r < p then c else if idx + 1 >= Stdlib.List.length(table) then c else selectRandom(table, r, idx + 1) let table = [(97, 0.27), (99, 0.12), (103, 0.12), (116, 0.27)] in let cumulative = makeCumulative(table, 0.0) in let newSeed = (1 * 3877 + 29573) % 139968 in let r = Stdlib.Int64.toFloat(newSeed) / 139968.0 in selectRandom(cumulative, r, 0) = 97
-
+let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> = match Stdlib.List.head<(Int64, Float)>(table) with | None -> [] | Some(item) -> let c = Stdlib.Tuple2.first<Int64, Float>(item) in let p = Stdlib.Tuple2.second<Int64, Float>(item) in let newRunning = running + p in match Stdlib.List.tail<(Int64, Float)>(table) with | None -> [(c, newRunning)] | Some(rest) -> Stdlib.List.push<(Int64, Float)>(makeCumulative(rest, newRunning), (c, newRunning)) let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int) : Int64 = match Stdlib.List.getAt(table, idx) with | None -> 0 | Some(item) -> let c = Stdlib.Tuple2.first(item) in let p = Stdlib.Tuple2.second(item) in if r < p then c else if idx + 1I >= Stdlib.List.length(table) then c else selectRandom(table, r, idx + 1I) let table = [(97, 0.27), (99, 0.12), (103, 0.12), (116, 0.27)] in let cumulative = makeCumulative(table, 0.0) in let newSeed = (1 * 3877 + 29573) % 139968 in let r = Stdlib.Int64.toFloat(newSeed) / 139968.0 in selectRandom(cumulative, r, 0I) = 97
 // =====================================================
 // Lists of Strings
 // =====================================================
@@ -431,10 +420,10 @@ concatStrings(["a", "b", "c"]) = "abc"
 // calculated for navigating to middle elements.
 
 // Access element at index 2 (first element in middle NODE2)
-Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6], 2), 0) = 3
+Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6], 2I), 0) = 3
 
 // Access element at index 3 (second element in middle NODE2)
-Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6], 3), 0) = 4
+Stdlib.Option.withDefault(Stdlib.List.getAt([1, 2, 3, 4, 5, 6], 3I), 0) = 4
 
 // =====================================================
 // DEEP node element extraction offset tests (kills mutation #69)
@@ -567,7 +556,7 @@ match [(1000, 100, 10, 1), (500, 50, 5, 0)] with | [(_, _, c, d), (_, _, g, h)] 
 // If - 4 were changed to + 4, groupSizes would return [2, 2, 3, 3]
 // expecting 10 nodes but only having 4, causing incorrect tree construction.
 // The 8th element (at index 7) would not be accessible if tree is malformed.
-Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70, 80], 7), 0) = 80
+Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70, 80], 7I), 0) = 80
 
 // =====================================================
 // groupSizes nodeCount % 3 == 2 test (kills mutation #91)
@@ -579,7 +568,7 @@ Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70, 80], 7)
 // If - 2 were changed to + 2, groupSizes would return [2, 3, 3]
 // expecting 8 nodes but only having 5, causing incorrect tree construction.
 // The 9th element (at index 8) would not be accessible if tree is malformed.
-Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70, 80, 90], 8), 0) = 90
+Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70, 80, 90], 8I), 0) = 90
 
 // =====================================================
 // Nested list pattern element extraction test (kills mutation #92)
@@ -621,7 +610,7 @@ match WrapList5([10, 20, 30, 40, 50]) with | WrapList5([a, b, c, d, e]) -> c + d
 // If / were changed to *, groupSizes would return [3, 3, 3, 3, 3, 3, 3, 3, 3]
 // expecting 27 nodes but only having 3, causing incorrect tree construction.
 // The 7th element (at index 6) would not be accessible if tree is malformed.
-Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70], 6), 0) = 70
+Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70], 6I), 0) = 70
 
 // =====================================================
 // groupSizes nodeCount % 3 == 0 in toAtom (kills mutation #109)
@@ -632,7 +621,7 @@ Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30, 40, 50, 60, 70], 6), 0)
 // If / were changed to *, the list construction would fail trying to
 // create 9 groups of 3 from only 3 middle nodes.
 // Uses a variable to ensure the list is compiled via toAtom as an argument.
-let xs = [10, 20, 30, 40, 50, 60, 70] in Stdlib.Option.withDefault(Stdlib.List.getAt(xs, 6), 0) = 70
+let xs = [10, 20, 30, 40, 50, 60, 70] in Stdlib.Option.withDefault(Stdlib.List.getAt(xs, 6I), 0) = 70
 
 // =====================================================
 // Single-element list cons pattern empty check (kills mutation #119)

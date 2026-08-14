@@ -228,6 +228,12 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
                 parseType rest
                 |> List.collect (fun (keyT, rem1) ->
                     parseType rem1 |> List.map (fun (valueT, rem2) -> (AST.TDict (keyT, valueT), rem2)))
+            | tupleToken when tupleToken.StartsWith("tup") && tupleToken.Length > 3 ->
+                match System.Int32.TryParse(tupleToken.Substring(3)) with
+                | true, arity when arity >= 0 ->
+                    parseExactly arity rest
+                    |> List.map (fun (elems, rem) -> (AST.TTuple elems, rem))
+                | _ -> []
             | "tup" ->
                 parseTupleElems rest |> List.map (fun (elems, rem) -> (AST.TTuple elems, rem))
             | "fn" ->
@@ -243,6 +249,15 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
                         parseTupleElems rest
                         |> List.map (fun (args, rem) -> (mkNamedType tok args, rem))
                     baseType :: withArgs
+
+    and parseExactly (count: int) (toks: string list) : (AST.Type list * string list) list =
+        if count = 0 then
+            [([], toks)]
+        else
+            parseType toks
+            |> List.collect (fun (firstT, rem1) ->
+                parseExactly (count - 1) rem1
+                |> List.map (fun (restTs, rem2) -> (firstT :: restTs, rem2)))
 
     and parseTupleElems (toks: string list) : (AST.Type list * string list) list =
         parseType toks
@@ -744,7 +759,7 @@ let rec typeToMangledName (t: AST.Type) : string =
         $"fn_{paramStr}_to_{retStr}"
     | AST.TTuple elemTypes ->
         let elemsStr = elemTypes |> List.map typeToMangledName |> String.concat "_"
-        $"tup_{elemsStr}"
+        $"tup{List.length elemTypes}_{elemsStr}"
     | AST.TEnumFields fieldTypes ->
         let fieldsStr = fieldTypes |> List.map typeToMangledName |> String.concat "_"
         $"enumfields_{fieldsStr}"
@@ -1222,7 +1237,7 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         // This is a generic call - collect this specialization plus any in args
         let argSpecs = args |> exprArgsToList |> List.map collectTypeApps |> List.fold Set.union Set.empty
         let hasTypeVars = List.exists containsTypeVar typeArgs
-        if funcName = eqHelperDispatchMarker then
+        if funcName = eqHelperDispatchMarker || funcName = "__compare" then
             argSpecs
         elif hasTypeVars && (funcName = "__hash" || funcName = "__key_eq") then
             argSpecs
@@ -1409,6 +1424,18 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
                 match args |> exprArgsToList |> List.map replaceTypeApps with
                 | [leftExpr; rightExpr] -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
                 | _ -> Crash.crash "Comparison plan expected exactly two operands"
+        elif funcName = "__compare" then
+            let replacedArgs = args |> exprArgsToList |> List.map replaceTypeApps
+            match typeArgs, replacedArgs with
+            | [targetType], [leftExpr; rightExpr] when not hasTypeVars ->
+                AST.Call (
+                    TypeChecking.compareHelperName targetType,
+                    exprArgsFromList [leftExpr; rightExpr]
+                )
+            | _, evaluatedArgs ->
+                wrapWithIgnoredArgEvaluations
+                    evaluatedArgs
+                    (AST.RuntimeError "Canonical comparison remained polymorphic after monomorphization")
         elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
            && exprArgsToList args = [AST.ListLiteral []]
            && not hasTypeVars then
@@ -1559,6 +1586,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                     match typeArgs with
                     | [targetType] when not hasTypeVars -> Ok eqHelperDispatchMarker
                     | _ -> Error "Comparison helper remained polymorphic after monomorphization"
+                elif funcName = "__compare" then
+                    match typeArgs with
+                    | [targetType] when not hasTypeVars -> Ok (TypeChecking.compareHelperName targetType)
+                    | _ -> Error "Canonical comparison remained polymorphic after monomorphization"
                 elif isGenericKeyIntrinsicName funcName then
                     Ok (specName funcName typeArgs)
                 elif isIntrinsicTypeAppName funcName then
@@ -1577,16 +1608,21 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                 mapResult replace (exprArgsToList args)
                 |> Result.map (fun args' ->
                     wrapWithIgnoredArgEvaluations args' (unresolvedKeyIntrinsicTypeArgErrorExpr funcName))
-            elif funcName = eqHelperDispatchMarker && hasTypeVars then
+            elif (funcName = eqHelperDispatchMarker || funcName = "__compare") && hasTypeVars then
                 // The original generic template remains in the combined
                 // preamble alongside its callable concrete specializations.
                 // Concrete copies have already received substituted plans;
                 // lower only this unreachable template to a compilable form.
                 mapResult replace (exprArgsToList args)
                 |> Result.map (fun args' ->
-                    match args' with
-                    | [leftExpr; rightExpr] -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
-                    | _ -> Crash.crash "Comparison plan expected exactly two operands")
+                    if funcName = eqHelperDispatchMarker then
+                        match args' with
+                        | [leftExpr; rightExpr] -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
+                        | _ -> Crash.crash "Comparison plan expected exactly two operands"
+                    else
+                        wrapWithIgnoredArgEvaluations
+                            args'
+                            (AST.RuntimeError "Canonical comparison remained polymorphic after monomorphization"))
             else
                 if funcName = eqHelperDispatchMarker && not hasTypeVars then
                     mapResult replace (exprArgsToList args)
@@ -4848,6 +4884,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     [("currentModule", AST.ListLiteral [])]
                 ))
                 varGen env typeReg variantLookup funcReg moduleRegistry
+        else if name = "Stdlib.List.empty" || name = "Stdlib.List.empty_v0" then
+            // The empty skew-list is the null pointer with tag zero.
+            Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
         else
             // Variable reference: look up in environment
             match tryLookupResolved name env with
@@ -9029,6 +9068,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     [("currentModule", AST.ListLiteral [])]
                 ))
                 varGen env typeReg variantLookup funcReg moduleRegistry
+        else if name = "Stdlib.List.empty" || name = "Stdlib.List.empty_v0" then
+            Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
         else
             // Variable reference: look up in environment
             match tryLookupResolved name env with

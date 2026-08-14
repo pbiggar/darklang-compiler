@@ -1,0 +1,85 @@
+// Stdlib.List.SortByComparatorHelpers.dark - validated stable merge sorting.
+//
+// Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+module Stdlib.List.SortByComparatorHelpers
+
+let validate<'a>(comparator: (a, a) -> Int, x: a, y: a) : Stdlib.Result.Result<Int, String> =
+    let result = comparator(x, y) in
+    if result == -1I || result == 0I || result == 1I then Ok(result)
+    else Error("Expected comparator function to return -1, 0, or 1, but it returned " ++ Stdlib.Int.toString(result))
+
+let __copyList<'a>(list: List<a>) : List<a> =
+    match list with
+    | [] -> []
+    | [head, ...tail] ->
+        let retainedHead = [head] in
+        Stdlib.List.append<a>(retainedHead, Stdlib.List.SortByComparatorHelpers.__copyList<a>(tail))
+
+let __mergeWithComparatorState<'a>(comparatorState: List<(a, a) -> Int>, left: List<a>, right: List<a>) : Stdlib.Result.Result<List<a>, String> =
+    match (left, right) with
+    | ([], _) -> Ok(Stdlib.List.SortByComparatorHelpers.__copyList<a>(right))
+    | (_, []) -> Ok(Stdlib.List.SortByComparatorHelpers.__copyList<a>(left))
+    | ([x, ...xs], [y, ...ys]) ->
+        match comparatorState with
+        | [comparator] ->
+            match Stdlib.List.SortByComparatorHelpers.validate<a>(comparator, x, y) with
+            | Error(message) -> Error(message)
+            | Ok(result) ->
+                if result <= 0I then
+                    let retainedX = [x] in
+                    match Stdlib.List.SortByComparatorHelpers.__mergeWithComparatorState<a>([comparator], xs, right) with
+                    | Error(message) -> Error(message)
+                    | Ok(merged) -> Ok(Stdlib.List.append<a>(retainedX, merged))
+                else
+                    let retainedY = [y] in
+                    match Stdlib.List.SortByComparatorHelpers.__mergeWithComparatorState<a>([comparator], left, ys) with
+                    | Error(message) -> Error(message)
+                    | Ok(merged) -> Ok(Stdlib.List.append<a>(retainedY, merged))
+        | _ -> Builtin.testRuntimeError("merge comparator state was empty")
+
+let merge<'a>(comparator: (a, a) -> Int, left: List<a>, right: List<a>) : Stdlib.Result.Result<List<a>, String> =
+    Stdlib.List.SortByComparatorHelpers.__mergeWithComparatorState<a>([comparator], left, right)
+
+let splitList<'a>(list: List<a>) : (List<a>, List<a>) =
+    match list with
+    | [] -> ([], [])
+    | [x] -> ([x], [])
+    | [x, y, ...rest] ->
+        // Root borrowed compound elements across the recursive call.
+        let retainedX = [x] in
+        let retainedY = [y] in
+        let split = Stdlib.List.SortByComparatorHelpers.splitList<a>(rest) in
+        (Stdlib.List.append<a>(retainedX, split.0), Stdlib.List.append<a>(retainedY, split.1))
+
+let __mergeSortWithComparatorState<'a>(comparatorState: List<(a, a) -> Int>, list: List<a>) : Stdlib.Result.Result<List<a>, String> =
+    match list with
+    | [] -> Ok([])
+    | [value] -> Ok([value])
+    | _ ->
+        match comparatorState with
+        | [comparator] ->
+            match Stdlib.List.SortByComparatorHelpers.splitList<a>(list) with
+            | (left, right) ->
+                // Keep sibling compound values rooted across recursive calls.
+                let retainedLeft = [left] in
+                let retainedRight = [right] in
+                match (retainedLeft, retainedRight) with
+                | ([rootedLeft], [rootedRight]) ->
+                    match Stdlib.List.SortByComparatorHelpers.__mergeSortWithComparatorState<a>([comparator], rootedLeft) with
+                    | Error(message) -> Error(message)
+                    | Ok(sortedLeft) ->
+                        let retainedSortedLeft = [sortedLeft] in
+                        match Stdlib.List.SortByComparatorHelpers.__mergeSortWithComparatorState<a>([comparator], rootedRight) with
+                        | Error(message) -> Error(message)
+                        | Ok(sortedRight) ->
+                            let retainedSortedRight = [sortedRight] in
+                            match (retainedSortedLeft, retainedSortedRight) with
+                            | ([rootedSortedLeft], [rootedSortedRight]) ->
+                                Stdlib.List.SortByComparatorHelpers.merge<a>(comparator, rootedSortedLeft, rootedSortedRight)
+                            | _ -> Builtin.testRuntimeError("mergeSort retained sorted state was empty")
+                | _ -> Builtin.testRuntimeError("mergeSort retained split state was empty")
+        | _ -> Builtin.testRuntimeError("mergeSort comparator state was empty")
+
+let mergeSort<'a>(comparator: (a, a) -> Int, list: List<a>) : Stdlib.Result.Result<List<a>, String> =
+    Stdlib.List.SortByComparatorHelpers.__mergeSortWithComparatorState<a>([comparator], list)

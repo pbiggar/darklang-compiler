@@ -150,36 +150,36 @@ let d1 = setStr(emptyStr(), "a", 1) in let d2 = setStr(d1, "b", 2) in Stdlib.Int
 // ========== Dict enumeration (Int64-keyed) ==========
 
 // keys tests
-Stdlib.List.length(Stdlib.Internal.HAMT.__keys(emptyInt())) = 0
-Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setInt(emptyInt(), 1, 100))) = 1
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2
+Stdlib.List.length(Stdlib.Internal.HAMT.__keys(emptyInt())) = 0I
+Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setInt(emptyInt(), 1, 100))) = 1I
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2I
 
 // values tests
-Stdlib.List.length(Stdlib.Internal.HAMT.__values(emptyInt())) = 0
-Stdlib.List.length(Stdlib.Internal.HAMT.__values(setInt(emptyInt(), 1, 100))) = 1
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 2
+Stdlib.List.length(Stdlib.Internal.HAMT.__values(emptyInt())) = 0I
+Stdlib.List.length(Stdlib.Internal.HAMT.__values(setInt(emptyInt(), 1, 100))) = 1I
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 2I
 
 // ========== Dict enumeration (String-keyed) ==========
 
 // keys tests
-Stdlib.List.length(Stdlib.Internal.HAMT.__keys(emptyStr())) = 0
-Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setStr(emptyStr(), "a", 100))) = 1
-let d = setStr(setStr(emptyStr(), "a", 10), "b", 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2
+Stdlib.List.length(Stdlib.Internal.HAMT.__keys(emptyStr())) = 0I
+Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setStr(emptyStr(), "a", 100))) = 1I
+let d = setStr(setStr(emptyStr(), "a", 10), "b", 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2I
 
 // values tests
-Stdlib.List.length(Stdlib.Internal.HAMT.__values(emptyStr())) = 0
-Stdlib.List.length(Stdlib.Internal.HAMT.__values(setStr(emptyStr(), "a", 100))) = 1
+Stdlib.List.length(Stdlib.Internal.HAMT.__values(emptyStr())) = 0I
+Stdlib.List.length(Stdlib.Internal.HAMT.__values(setStr(emptyStr(), "a", 100))) = 1I
 
 // ========== Stdlib.Internal.HAMT.__entries tests ==========
 
 // entries on empty dict
-Stdlib.List.length(Stdlib.Internal.HAMT.__entries(emptyInt())) = 0
+Stdlib.List.length(Stdlib.Internal.HAMT.__entries(emptyInt())) = 0I
 
 // entries on single-entry dict
-Stdlib.List.length(Stdlib.Internal.HAMT.__entries(setInt(emptyInt(), 1, 100))) = 1
+Stdlib.List.length(Stdlib.Internal.HAMT.__entries(setInt(emptyInt(), 1, 100))) = 1I
 
 // entries on two-entry dict
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 2
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 2I
 
 // ========== Stdlib.Internal.HAMT.__fold tests ==========
 
@@ -306,10 +306,10 @@ let setListDict(d: Dict<Int64, List<Int64>>, k: Int64, v: List<Int64>): Dict<Int
 let getListDict(d: Dict<Int64, List<Int64>>, k: Int64): Stdlib.Option.Option<List<Int64>> = Stdlib.Internal.HAMT.__get(d, k)
 
 // Set and get list value
-Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), [])) = 3
+Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), [])) = 3I
 
 // Multiple list entries
-let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), [])) = 3
+let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), [])) = 3I
 
 // Empty list as value
 Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 42, []), 42), [-1]) = []

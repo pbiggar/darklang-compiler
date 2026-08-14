@@ -71,7 +71,7 @@ let __copySegments(segments: List<String>) : List<String> =
 
 let globMatchSegments(patternSegments: List<String>, pathSegments: List<String>) : Bool =
     match patternSegments with
-    | [] -> Stdlib.List.length<String>(pathSegments) == 0
+    | [] -> Stdlib.List.length<String>(pathSegments) == 0I
     | [patternHead, ...patternTail] ->
         if patternHead == "**" then
             if Stdlib.Cli.File.globMatchSegments(

@@ -558,7 +558,7 @@ let singleListConsWithAcc(a: List<Int64>, acc: List<Int64>) : List<Int64> =
     | [] -> acc
     | [x, ...xs] -> singleListConsWithAcc(xs, [x, ...acc])
 
-Stdlib.List.length<Int64>(singleListConsWithAcc([1, 2, 3], [])) = 3
+Stdlib.List.length<Int64>(singleListConsWithAcc([1, 2, 3], [])) = 3I
 
 // Workaround for tuple+cons+list-accumulator: use nested matches instead of tuple pattern
 // This is the pattern used in Stdlib.Crypto.__xorByteLists
@@ -570,7 +570,7 @@ let nestedMatchListCons(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List
         | [] -> acc
         | [y, ...ys] -> nestedMatchListCons(xs, ys, [(x + y), ...acc])
 
-Stdlib.List.length<Int64>(nestedMatchListCons([1, 2, 3], [4, 5, 6], [])) = 3
+Stdlib.List.length<Int64>(nestedMatchListCons([1, 2, 3], [4, 5, 6], [])) = 3I
 
 // Tuple+cons pattern with list accumulator body - now fixed with TypedAtom wrapper
 let tupleConsListAccum(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
@@ -579,7 +579,7 @@ let tupleConsListAccum(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<
     | (_, []) -> acc
     | ([x, ...xs], [y, ...ys]) -> tupleConsListAccum(xs, ys, [(x + y), ...acc])
 
-Stdlib.List.length<Int64>(tupleConsListAccum([1, 2, 3], [4, 5, 6], [])) = 3
+Stdlib.List.length<Int64>(tupleConsListAccum([1, 2, 3], [4, 5, 6], [])) = 3I
 
 // ===================================================================
 // Variable in scrutinee only (kills mutation #140)
@@ -615,8 +615,8 @@ type U128Wrap = U128Wrap of UInt128 | U128None
 match I128Wrap(170141183460469231731687303715884105727Q) with | I128Wrap(170141183460469231731687303715884105727Q) -> true | _ -> false = true
 match U128Wrap(340282366920938463463374607431768211455Z) with | U128Wrap(340282366920938463463374607431768211455Z) -> true | _ -> false = true
 
-match [170141183460469231731687303715884105727Q, 1Q] with | [170141183460469231731687303715884105727Q, ...tail] -> Stdlib.List.length<Int128>(tail) | _ -> 0 = 1
-match [340282366920938463463374607431768211455Z, 1Z] with | [340282366920938463463374607431768211455Z, ...tail] -> Stdlib.List.length<UInt128>(tail) | _ -> 0 = 1
+match [170141183460469231731687303715884105727Q, 1Q] with | [170141183460469231731687303715884105727Q, ...tail] -> Stdlib.List.length<Int128>(tail) | _ -> 0I = 1I
+match [340282366920938463463374607431768211455Z, 1Z] with | [340282366920938463463374607431768211455Z, ...tail] -> Stdlib.List.length<UInt128>(tail) | _ -> 0I = 1I
 
 match 5Q with | 4Q | 5Q -> 1 | _ -> 0 = 1
 match 5Z with | 4Z | 5Z -> 1 | _ -> 0 = 1

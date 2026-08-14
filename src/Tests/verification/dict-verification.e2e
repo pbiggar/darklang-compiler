@@ -102,13 +102,13 @@ verifyOddsRemoved(99, buildAndRemoveOdds(100, emptyDict()), 0) = 50
 // ===================================================================
 
 // keys() count matches size()
-let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 100
+let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 100I
 
 // values() count matches size()
-let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 100
+let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 100I
 
 // entries() count matches size()
-let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 100
+let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 100I
 
 // ===================================================================
 // Immutability Verification

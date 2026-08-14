@@ -59,12 +59,10 @@ let slice(blob: Blob, start: Int, length: Int) : Blob =
     let safeStart = if start < zero then zero else if start > blobLength then blobLength else start in
     let remaining = blobLength - safeStart in
     let safeLength = if length < zero then zero else if length > remaining then remaining else length in
-    let start64 = Stdlib.Blob.__intToInt64(safeStart) in
-    let length64 = Stdlib.Blob.__intToInt64(safeLength) in
     Stdlib.Bytes.fromList(
         Stdlib.List.take<Int64>(
-            Stdlib.List.drop<Int64>(Stdlib.Bytes.toList(blob), start64),
-            length64))
+            Stdlib.List.drop<Int64>(Stdlib.Bytes.toList(blob), safeStart),
+            safeLength))
 
 let toHex(blob: Blob) : String =
     Stdlib.Bytes.hexEncode(blob)

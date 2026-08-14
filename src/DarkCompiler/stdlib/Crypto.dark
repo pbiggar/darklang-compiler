@@ -167,22 +167,22 @@ let debugMd5PaddedLen(data: Blob) : Int64 =
 let debugCopyFirst4(data: Blob) : List<Int64> =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
-    Stdlib.List.take<Int64>(dataList, 4)
+    Stdlib.List.take<Int64>(dataList, 4I)
 
 // Debug function: copy data and flatten with empty list, take first 4
 let debugFlattenFirst4(data: Blob) : List<Int64> =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let paddedList = Stdlib.List.flatten<Int64>([dataList, []]) in
-    Stdlib.List.take<Int64>(paddedList, 4)
+    Stdlib.List.take<Int64>(paddedList, 4I)
 
 // Debug: just wrap in list-of-lists and access first element, no flatten
 let debugListOfLists(data: Blob) : List<Int64> =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let listOfLists = [dataList, []] in
-    match Stdlib.List.getAt<List<Int64>>(listOfLists, 0) with
-    | Some(first) -> Stdlib.List.take<Int64>(first, 4)
+    match Stdlib.List.getAt<List<Int64>>(listOfLists, 0I) with
+    | Some(first) -> Stdlib.List.take<Int64>(first, 4I)
     | None -> []
 
 // Debug: use ++ instead of flatten
@@ -190,15 +190,15 @@ let debugAppendFirst4(data: Blob) : List<Int64> =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let combined = Stdlib.List.append<Int64>(dataList, []) in
-    Stdlib.List.take<Int64>(combined, 4)
+    Stdlib.List.take<Int64>(combined, 4I)
 
 // Debug: wrap in single-element list-of-lists
 let debugSingleListOfLists(data: Blob) : List<Int64> =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let listOfLists = [dataList] in
-    match Stdlib.List.getAt<List<Int64>>(listOfLists, 0) with
-    | Some(first) -> Stdlib.List.take<Int64>(first, 4)
+    match Stdlib.List.getAt<List<Int64>>(listOfLists, 0I) with
+    | Some(first) -> Stdlib.List.take<Int64>(first, 4I)
     | None -> []
 
 // Debug: what if we just read back the list after assigning to a variable?
@@ -206,7 +206,7 @@ let debugJustAssign(data: Blob) : List<Int64> =
     let dataLen = Stdlib.Bytes.length(data) in
     let dataList = Stdlib.Crypto.__copyDataToList(data, 0, dataLen, []) in
     let same = dataList in
-    Stdlib.List.take<Int64>(same, 4)
+    Stdlib.List.take<Int64>(same, 4I)
 
 // Debug function: convert data to list, flatten, convert to bytes, read back first 4 bytes
 let debugRoundtrip4(data: Blob) : (Int64, Int64, Int64, Int64) =
@@ -489,7 +489,7 @@ let debugMd5Round1Trace(padded: Blob) : (Int64, Int64, Int64, Int64, Int64, Int6
 
 // Unsafe list access - returns 0 if index out of bounds (should never happen in hash algorithms)
 let __listGet(list: List<Int64>, index: Int64) : Int64 =
-    match Stdlib.List.getAt<Int64>(list, index) with
+    match Stdlib.List.getAt<Int64>(list, Stdlib.Int.fromInt64(index)) with
     | Some(v) -> v
     | None -> 0
 
@@ -1244,12 +1244,12 @@ let debugBitwiseOr(a: Int64, b: Int64) : Int64 =
 let debugHmacKeyLen(keyLen: Int64, blockSize: Int64) : Int64 =
     let key = Stdlib.Bytes.create(keyLen) in
     let keyPadded = Stdlib.Crypto.__hmacPrepareKey(key, blockSize, Stdlib.Crypto.sha256) in
-    Stdlib.List.length<Int64>(keyPadded)
+    Stdlib.Internal.SkewList.length<Int64>(keyPadded)
 
 // Debug: Test HMAC ipad/opad generation
 let debugHmacPadLen(blockSize: Int64) : Int64 =
     let pad = Stdlib.Crypto.__hmacCreatePad(54, blockSize) in
-    Stdlib.List.length<Int64>(pad)
+    Stdlib.Internal.SkewList.length<Int64>(pad)
 
 // Debug: Test just the hash function call in HMAC context
 let debugHashCall() : Int64 =
@@ -1265,14 +1265,14 @@ let debugSimpleHmac() : Int64 =
     let blockSize = 64 in
     let hashFn = Stdlib.Crypto.sha256 in
     let keyPadded = Stdlib.Crypto.__hmacPrepareKey(key, blockSize, hashFn) in
-    Stdlib.List.length<Int64>(keyPadded)
+    Stdlib.Internal.SkewList.length<Int64>(keyPadded)
 
 // Debug: Test XOR of two lists
 let debugXorLists() : Int64 =
     let list1 = [1, 2, 3, 4] in
     let list2 = [5, 6, 7, 8] in
     let result = Stdlib.Crypto.__xorByteLists(list1, list2, []) in
-    Stdlib.List.length<Int64>(result)
+    Stdlib.Internal.SkewList.length<Int64>(result)
 
 // Debug: Test tuple of lists pattern match
 let debugTupleMatch() : Int64 =

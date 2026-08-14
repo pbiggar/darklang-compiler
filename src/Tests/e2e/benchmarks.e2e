@@ -233,7 +233,7 @@ nqueen(8) = 92
 let divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int64) : List<Int64> =
     if idx >= len then digits
     else
-        let d = Stdlib.List.getAt<Int64>(digits, idx) in
+        let d = Stdlib.List.getAt<Int64>(digits, Stdlib.Int.fromInt64(idx)) in
         match d with
         | None -> digits
         | Some(digit) ->
@@ -246,8 +246,8 @@ let divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int6
 let addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : List<Int64> =
     if idx < 0 then e
     else
-        let eOpt = Stdlib.List.getAt<Int64>(e, idx) in
-        let termOpt = Stdlib.List.getAt<Int64>(term, idx) in
+        let eOpt = Stdlib.List.getAt<Int64>(e, Stdlib.Int.fromInt64(idx)) in
+        let termOpt = Stdlib.List.getAt<Int64>(term, Stdlib.Int.fromInt64(idx)) in
         match (eOpt, termOpt) with
         | (Some(eDigit), Some(termDigit)) ->
             let total = eDigit + termDigit + carry in
@@ -265,7 +265,7 @@ let addFactorialTerm(e: List<Int64>, term: List<Int64>, n: Int64, maxN: Int64, l
         addFactorialTerm(newE, newTerm, n + 1, maxN, len)
 
 let zeros(n: Int64) : List<Int64> =
-    Stdlib.List.map<Int64, Int64>(Stdlib.List.range(0, n), fun x -> 0)
+    Stdlib.List.map<Int, Int64>(Stdlib.List.range(0I, Stdlib.Int.fromInt64(n - 1)), fun x -> 0L)
 
 let initDigits(n: Int64) : List<Int64> =
     Stdlib.List.setAt<Int64>(zeros(n), 0, 1)
@@ -279,7 +279,7 @@ let computeEDigits(numDigits: Int64) : List<Int64> =
 let computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int64) : Int64 =
     if idx >= numDigits then acc
     else
-        let d = Stdlib.List.getAt<Int64>(digits, idx) in
+        let d = Stdlib.List.getAt<Int64>(digits, Stdlib.Int.fromInt64(idx)) in
         match d with
         | None -> acc
         | Some(digit) ->
@@ -298,7 +298,7 @@ let edigitsChecksum(numDigits: Int64) : Int64 =
 // ===================================================================
 
 let getAlu(aluBytes: List<Int64>, i: Int64) : Int64 =
-    match Stdlib.List.getAt<Int64>(aluBytes, i % 287) with
+    match Stdlib.List.getAt<Int64>(aluBytes, Stdlib.Int.fromInt64(i % 287)) with
     | Some(v) -> v
     | None -> 0
 
@@ -323,14 +323,14 @@ let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, F
             Stdlib.List.push<(Int64, Float)>(restCum, (c, newRunning))
 
 let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 =
-    match Stdlib.List.getAt(table, idx) with
+    match Stdlib.List.getAt(table, Stdlib.Int.fromInt64(idx)) with
     | None -> 0
     | Some(item) ->
         let c = Stdlib.Tuple2.first(item) in
         let p = Stdlib.Tuple2.second(item) in
         if r < p then c
         else
-            if idx + 1 >= Stdlib.List.length(table) then c
+            if Stdlib.Int.fromInt64(idx + 1) >= Stdlib.List.length(table) then c
             else selectRandom(table, r, idx + 1)
 
 let makeRandomFasta(n: Int64, table: List<(Int64, Float)>, seed: Int64, i: Int64, checksum: Int64) : (Int64, Int64) =

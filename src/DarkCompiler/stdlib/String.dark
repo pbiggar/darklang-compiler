@@ -192,7 +192,7 @@ let __toCodepointsHelper(s: String, byteIndex: Int64, byteLen: Int64, acc: List<
 
 // Get the number of codepoints in a string (not bytes)
 let codepointLength(s: String) : Int64 =
-    Stdlib.List.length<Int64>(Stdlib.String.toCodepoints(s))
+    Stdlib.Internal.SkewList.length<Int64>(Stdlib.String.toCodepoints(s))
 
 // =============================================================================
 // UTF-8 Encoding (codepoints to string)

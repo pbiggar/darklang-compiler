@@ -4,12 +4,12 @@
 // The Rust reference chooses the middle element and traverses the input once
 // for each of its three partitions. Keep the same source-level work here.
 let getAtOrDefault(list: List<Int64>, index: Int64, default_: Int64) : Int64 =
-    match Stdlib.List.getAt<Int64>(list, index) with
+    match Stdlib.Internal.SkewList.getAt<Int64>(list, index) with
     | Some(v) -> v
     | None -> default_
 
 let quicksort(arr: List<Int64>) : List<Int64> =
-    let len = Stdlib.List.length<Int64>(arr) in
+    let len = Stdlib.Internal.SkewList.length<Int64>(arr) in
     if len <= 1 then arr
     else
         let pivot = getAtOrDefault(arr, len / 2, 0) in

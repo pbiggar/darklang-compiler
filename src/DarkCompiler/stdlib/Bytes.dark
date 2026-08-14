@@ -82,7 +82,7 @@ let create(size: Int64) : Blob =
 
 // Create bytes from a list of Int64 values (each 0-255)
 let fromList(list: List<Int64>) : Blob =
-    let len = Stdlib.List.length<Int64>(list) in
+    let len = Stdlib.Internal.SkewList.length<Int64>(list) in
     if len == 0 then
         Stdlib.Bytes.create(0)
     else

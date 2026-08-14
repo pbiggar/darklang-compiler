@@ -112,7 +112,7 @@ let __orderedEntries<'v>(dict: Dict<v>, entries: List<(String, v)>, remaining: I
 
 let toList<'v>(dict: Dict<v>) : List<(String, v)> =
     let entries = Stdlib.Internal.HAMT.__entries<String, v>(dict) in
-    Stdlib.Dict.__orderedEntries<v>(dict, entries, Stdlib.List.length<(String, v)>(entries), None)
+    Stdlib.Dict.__orderedEntries<v>(dict, entries, Stdlib.Internal.SkewList.length<(String, v)>(entries), None)
 
 let __keysFromEntries<'v>(entries: List<(String, v)>) : List<String> =
     match entries with

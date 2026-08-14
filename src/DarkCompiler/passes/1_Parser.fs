@@ -985,6 +985,12 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 parseRecordFieldsWithContext typeParamSet bodyRest []
                 |> Result.map (fun (fields, remaining) ->
                     (RecordDef (typeName, typeParams, fields), remaining))
+            | TEquals :: TBar :: bodyRest ->
+                // Canonical sum syntax permits a leading bar, including for a
+                // single no-payload variant where alias syntax is ambiguous.
+                parseVariantsWithContext typeParams bodyRest []
+                |> Result.map (fun (variants, remaining) ->
+                    (SumTypeDef (typeName, typeParams, variants), remaining))
             | TEquals :: TIdent variantName :: TOf :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
                 // Sum type with first variant having payload: type Name = Variant of Type | ...
                 let typeParamSet = Set.ofList typeParams

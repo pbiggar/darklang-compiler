@@ -1164,6 +1164,13 @@ let eqHelperName (typ: Type) : string =
     let hash = stableHelperNameHash typeText
     $"__dark_eq_{prefix}_{hash:x16}"
 
+/// Name for a concrete canonical three-way comparison helper.
+let compareHelperName (typ: Type) : string =
+    let typeText = typeToString typ
+    let prefix = sanitizeHelperNamePrefix typeText
+    let hash = stableHelperNameHash typeText
+    $"__dark_compare_{prefix}_{hash:x16}"
+
 /// Build a left-associative boolean conjunction chain.
 let private chainAndExpr (exprs: Expr list) : Expr =
     match exprs with
@@ -1276,6 +1283,80 @@ let private equalityComparableType
             | TRawPtr | TRuntimeError -> false
 
     comparable Set.empty typ
+
+/// Canonical sorting is selected statically. Values with no interpreter
+/// ordering in the compiler representation are rejected before lowering.
+let private canonicalSortableType
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (typ: Type)
+    : bool =
+    let rec sortable (seen: Set<Type>) (candidate: Type) : bool =
+        let resolved = resolveType aliasReg candidate
+        if Set.contains resolved seen then
+            true
+        else
+            let seen = Set.add resolved seen
+            let recurse = sortable seen
+            match resolved with
+            | TVar _ -> true
+            | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+            | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+            | TFloat64 | TChar | TString | TDateTime -> true
+            | TTuple elementTypes
+            | TEnumFields elementTypes -> List.forall recurse elementTypes
+            | TList elementType -> recurse elementType
+            | TDict (TString, valueType) -> recurse valueType
+            | TRecord (recordName, typeArgs) ->
+                match Map.tryFind recordName typeReg with
+                | None -> false
+                | Some recordInfo ->
+                    match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                    | Error _ -> false
+                    | Ok subst ->
+                        recordInfo.Fields
+                        |> List.forall (fun (_, fieldType) -> recurse (applySubst subst fieldType))
+            | TSum (sumName, typeArgs) ->
+                variantLookup
+                |> Map.toList
+                |> List.choose (fun (_, (ownerName, typeParams, _, payloadType)) ->
+                    if ownerName <> sumName then None
+                    else
+                        payloadType
+                        |> Option.map (fun payload ->
+                            if List.length typeParams = List.length typeArgs then
+                                applySubst (List.zip typeParams typeArgs |> Map.ofList) payload
+                            else
+                                payload))
+                |> List.forall recurse
+            | TDict _ | TFunction _ | TBlob | TRawPtr | TRuntimeError -> false
+
+    sortable Set.empty typ
+
+let private validateCanonicalSortableCall
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (funcName: string)
+    (typeArgs: Type list)
+    : Result<unit, TypeError> =
+    let requiredTypes =
+        match funcName, typeArgs with
+        | "__compare", [valueType]
+        | "Stdlib.List.sort", [valueType]
+        | "Stdlib.List.unique", [valueType]
+        | "Stdlib.List.uniqueBy", [valueType; _] -> [valueType]
+        | "Stdlib.List.sortBy", [valueType; keyType] -> [valueType; keyType]
+        | _ -> []
+
+    match requiredTypes |> List.tryFind (canonicalSortableType aliasReg typeReg variantLookup >> not) with
+    | None -> Ok ()
+    | Some unsupportedType ->
+        Error (
+            GenericError
+                $"Canonical sorting is not supported for type {typeToString (resolveType aliasReg unsupportedType)}"
+        )
 
 let rec private reconcileComparisonTypes
     (aliasReg: AliasRegistry)
@@ -3005,9 +3086,15 @@ let rec private checkExprWithParamNames
                         inferTypeArgs typeParams paramTypes argTypes (Some returnType) expectedType
                         |> Result.mapError GenericError
                         |> Result.bind (fun inferredTypeArgs ->
-                            // Build substitution and compute concrete types
-                            buildSubstitution typeParams inferredTypeArgs
-                            |> Result.mapError GenericError
+                            validateCanonicalSortableCall
+                                aliasReg
+                                typeReg
+                                variantLookup
+                                resolvedFuncName
+                                inferredTypeArgs
+                            |> Result.bind (fun () ->
+                                buildSubstitution typeParams inferredTypeArgs
+                                |> Result.mapError GenericError)
                             |> Result.bind (fun subst ->
                                 let concreteReturnType = applySubst subst returnType
                                 // Apply substitution to nested expressions (e.g., inner TypeApp nodes)
@@ -3377,8 +3464,8 @@ let rec private checkExprWithParamNames
                         typeArgs
                         |> List.map (canonicalizeBareSumTypeRefs variantLookup)
 
-                    buildSubstitution typeParams typeArgs
-                    |> Result.mapError GenericError
+                    validateCanonicalSortableCall aliasReg typeReg variantLookup resolvedFuncName typeArgs
+                    |> Result.bind (fun () -> buildSubstitution typeParams typeArgs |> Result.mapError GenericError)
                     |> Result.bind (fun subst ->
                         // 4. Apply substitution to get concrete types
                         let concreteParamTypes =
@@ -3536,8 +3623,8 @@ let rec private checkExprWithParamNames
                         typeArgs
                         |> List.map (canonicalizeBareSumTypeRefs variantLookup)
 
-                    buildSubstitution typeParams typeArgs
-                    |> Result.mapError GenericError
+                    validateCanonicalSortableCall aliasReg typeReg variantLookup resolvedFuncName typeArgs
+                    |> Result.bind (fun () -> buildSubstitution typeParams typeArgs |> Result.mapError GenericError)
                     |> Result.bind (fun subst ->
                         // Apply substitution to get concrete types
                         let concreteParamTypes =
@@ -5504,6 +5591,238 @@ let rec private buildEqHelperExpr
     | _, _ ->
         BinOp (Eq, leftExpr, rightExpr)
 
+let private comparisonResultLiteral (value: int64) : Expr = Int64Literal value
+
+let private compareFromPredicates (lessExpr: Expr) (greaterExpr: Expr) : Expr =
+    If (
+        lessExpr,
+        comparisonResultLiteral -1L,
+        If (greaterExpr, comparisonResultLiteral 1L, comparisonResultLiteral 0L)
+    )
+
+let private chainCompareExprs (comparisons: Expr list) : Expr =
+    let rec build index remaining =
+        match remaining with
+        | [] -> comparisonResultLiteral 0L
+        | comparison :: rest ->
+            let resultName = $"__dark_compare_component_{index}"
+            Let (
+                LPVariable resultName,
+                comparison,
+                If (
+                    BinOp (Eq, Var resultName, comparisonResultLiteral 0L),
+                    build (index + 1) rest,
+                    Var resultName
+                )
+            )
+    build 0 comparisons
+
+let rec private buildCompareHelperExpr
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (mode: EqHelperExprMode)
+    (typ: Type)
+    (leftExpr: Expr)
+    (rightExpr: Expr)
+    : Expr =
+    let resolvedType = resolveType aliasReg typ
+    let callHelper helperType left right =
+        Call (
+            compareHelperName (resolveType aliasReg helperType),
+            NonEmptyList.fromList [left; right]
+        )
+    let compareNative left right =
+        compareFromPredicates (BinOp (Lt, left, right)) (BinOp (Gt, left, right))
+    let compareString left right =
+        let resultName = "__dark_compare_string_result"
+        Let (
+            LPVariable resultName,
+            Call ("Stdlib.Dict.__compareString", NonEmptyList.fromList [left; right]),
+            compareFromPredicates
+                (BinOp (Lt, Var resultName, Int32Literal 0))
+                (BinOp (Gt, Var resultName, Int32Literal 0))
+        )
+
+    match mode, resolvedType with
+    | UseHelperCall, helperType -> callHelper helperType leftExpr rightExpr
+
+    | ExpandCurrent, TUnit -> comparisonResultLiteral 0L
+    | ExpandCurrent, TBool ->
+        If (
+            BinOp (Eq, leftExpr, rightExpr),
+            comparisonResultLiteral 0L,
+            If (leftExpr, comparisonResultLiteral 1L, comparisonResultLiteral -1L)
+        )
+    | ExpandCurrent, TInt ->
+        Call ("Stdlib.Int.compare", NonEmptyList.fromList [leftExpr; rightExpr])
+    | ExpandCurrent, TInt128 ->
+        Call (
+            "Stdlib.Int.compare",
+            NonEmptyList.fromList [
+                Call ("__int128_to_int", NonEmptyList.singleton leftExpr)
+                Call ("__int128_to_int", NonEmptyList.singleton rightExpr)
+            ]
+        )
+    | ExpandCurrent, TUInt128 ->
+        Call (
+            "Stdlib.Int.compare",
+            NonEmptyList.fromList [
+                Call ("__uint128_to_int", NonEmptyList.singleton leftExpr)
+                Call ("__uint128_to_int", NonEmptyList.singleton rightExpr)
+            ]
+        )
+    | ExpandCurrent, TFloat64 ->
+        let leftNan = BinOp (Neq, leftExpr, leftExpr)
+        let rightNan = BinOp (Neq, rightExpr, rightExpr)
+        If (
+            leftNan,
+            If (rightNan, comparisonResultLiteral 0L, comparisonResultLiteral -1L),
+            If (rightNan, comparisonResultLiteral 1L, compareNative leftExpr rightExpr)
+        )
+    | ExpandCurrent, (TInt8 | TInt16 | TInt32 | TInt64
+                     | TUInt8 | TUInt16 | TUInt32 | TUInt64) ->
+        compareNative leftExpr rightExpr
+    | ExpandCurrent, (TString | TChar) -> compareString leftExpr rightExpr
+    | ExpandCurrent, TDateTime ->
+        compareFromPredicates
+            (Call ("Stdlib.DateTime.lessThan", NonEmptyList.fromList [leftExpr; rightExpr]))
+            (Call ("Stdlib.DateTime.greaterThan", NonEmptyList.fromList [leftExpr; rightExpr]))
+
+    | ExpandCurrent, TList elemType ->
+        let leftHead = "__dark_compare_list_left_head"
+        let leftTail = "__dark_compare_list_left_tail"
+        let rightHead = "__dark_compare_list_right_head"
+        let rightTail = "__dark_compare_list_right_tail"
+        let headComparison = callHelper elemType (Var leftHead) (Var rightHead)
+        let tailComparison = callHelper resolvedType (Var leftTail) (Var rightTail)
+        let nonEmptyBody =
+            let headResult = "__dark_compare_list_head_result"
+            Let (
+                LPVariable headResult,
+                headComparison,
+                If (
+                    BinOp (Eq, Var headResult, comparisonResultLiteral 0L),
+                    tailComparison,
+                    Var headResult
+                )
+            )
+        Match (
+            TupleLiteral [leftExpr; rightExpr],
+            [ makeSimpleMatchCase (PTuple [PList []; PList []]) (comparisonResultLiteral 0L)
+              makeSimpleMatchCase (PTuple [PList []; PWildcard]) (comparisonResultLiteral -1L)
+              makeSimpleMatchCase (PTuple [PWildcard; PList []]) (comparisonResultLiteral 1L)
+              makeSimpleMatchCase
+                (PTuple [
+                    PListCons ([PVar leftHead], PVar leftTail)
+                    PListCons ([PVar rightHead], PVar rightTail)
+                ])
+                nonEmptyBody ]
+        )
+
+    | ExpandCurrent, TDict (TString, valueType) ->
+        let entryType = TTuple [TString; resolveType aliasReg valueType]
+        let listType = TList entryType
+        let leftEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton leftExpr)
+        let rightEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton rightExpr)
+        callHelper listType leftEntries rightEntries
+
+    | ExpandCurrent, TTuple elemTypes ->
+        let leftName = "__dark_compare_tuple_left"
+        let rightName = "__dark_compare_tuple_right"
+        let comparisons =
+            elemTypes
+            |> List.mapi (fun index elemType ->
+                callHelper elemType (TupleAccess (Var leftName, index)) (TupleAccess (Var rightName, index)))
+        Let (
+            LPVariable leftName,
+            leftExpr,
+            Let (LPVariable rightName, rightExpr, chainCompareExprs comparisons)
+        )
+
+    | ExpandCurrent, TRecord (recordTypeName, typeArgs) ->
+        match Map.tryFind recordTypeName typeReg with
+        | None -> RuntimeError $"Canonical sorting is not supported for type {typeToString resolvedType}"
+        | Some recordInfo ->
+            let concreteFields =
+                match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                | Ok subst ->
+                    recordInfo.Fields
+                    |> List.map (fun (name, fieldType) ->
+                        (name, resolveType aliasReg (applySubst subst fieldType)))
+                | Error _ ->
+                    recordInfo.Fields
+                    |> List.map (fun (name, fieldType) -> (name, resolveType aliasReg fieldType))
+            let orderedFields =
+                concreteFields
+                |> List.mapi (fun index (name, fieldType) -> (name, index, fieldType))
+                |> List.sortBy (fun (name, _, _) -> name)
+            let leftName = "__dark_compare_record_left"
+            let rightName = "__dark_compare_record_right"
+            let comparisons =
+                orderedFields
+                |> List.map (fun (_, index, fieldType) ->
+                    callHelper fieldType (TupleAccess (Var leftName, index)) (TupleAccess (Var rightName, index)))
+            Let (
+                LPVariable leftName,
+                leftExpr,
+                Let (LPVariable rightName, rightExpr, chainCompareExprs comparisons)
+            )
+
+    | ExpandCurrent, TSum (sumTypeName, sumTypeArgs) ->
+        let variants =
+            variantLookup
+            |> Map.toList
+            |> List.choose (fun (qualifiedVariantName, (ownerName, typeParams, _, payloadOpt)) ->
+                let qualifiedPrefix = ownerName + "."
+                if ownerName <> sumTypeName || not (qualifiedVariantName.StartsWith(qualifiedPrefix)) then None
+                else
+                    let caseName = qualifiedVariantName.Substring(qualifiedPrefix.Length)
+                    let concretePayload =
+                        match payloadOpt with
+                        | Some payload when List.length typeParams = List.length sumTypeArgs ->
+                            Some (resolveType aliasReg (applySubst (List.zip typeParams sumTypeArgs |> Map.ofList) payload))
+                        | Some payload -> Some (resolveType aliasReg payload)
+                        | None -> None
+                    Some (caseName, qualifiedVariantName, concretePayload))
+            |> List.sortBy (fun (caseName, _, _) -> caseName)
+        let cases =
+            variants
+            |> List.collect (fun (leftCaseName, leftVariant, leftPayload) ->
+                variants
+                |> List.map (fun (rightCaseName, rightVariant, rightPayload) ->
+                    let order = System.String.CompareOrdinal(leftCaseName, rightCaseName)
+                    match leftPayload, rightPayload, order with
+                    | None, None, 0 ->
+                        makeSimpleMatchCase
+                            (PTuple [PConstructor (leftVariant, None); PConstructor (rightVariant, None)])
+                            (comparisonResultLiteral 0L)
+                    | Some payloadType, Some _, 0 ->
+                        let leftPayloadName = "__dark_compare_sum_left_payload"
+                        let rightPayloadName = "__dark_compare_sum_right_payload"
+                        makeSimpleMatchCase
+                            (PTuple [
+                                PConstructor (leftVariant, Some (PVar leftPayloadName))
+                                PConstructor (rightVariant, Some (PVar rightPayloadName))
+                            ])
+                            (callHelper payloadType (Var leftPayloadName) (Var rightPayloadName))
+                    | _ ->
+                        let leftPattern =
+                            match leftPayload with
+                            | None -> PConstructor (leftVariant, None)
+                            | Some _ -> PConstructor (leftVariant, Some PWildcard)
+                        let rightPattern =
+                            match rightPayload with
+                            | None -> PConstructor (rightVariant, None)
+                            | Some _ -> PConstructor (rightVariant, Some PWildcard)
+                        makeSimpleMatchCase
+                            (PTuple [leftPattern; rightPattern])
+                            (comparisonResultLiteral (if order < 0 then -1L else 1L))))
+        Match (TupleLiteral [leftExpr; rightExpr], cases)
+
+    | ExpandCurrent, _ ->
+        RuntimeError $"Canonical sorting is not supported for type {typeToString resolvedType}"
+
 let private collectDirectEqHelperDeps
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
@@ -5627,6 +5946,151 @@ let rec private ensureEqHelperForType
                 Generated = Map.add helper helperDef stateWithDeps.Generated
             }
 
+let private collectDirectCompareHelperDeps
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (typ: Type)
+    : Type list =
+    let resolvedType = resolveType aliasReg typ
+    let deps =
+        match resolvedType with
+        | TList elemType -> [resolveType aliasReg elemType; resolvedType]
+        | TDict (TString, valueType) ->
+            [TList (TTuple [TString; resolveType aliasReg valueType])]
+        | TTuple elemTypes -> elemTypes |> List.map (resolveType aliasReg)
+        | TRecord (recordTypeName, typeArgs) ->
+            match Map.tryFind recordTypeName typeReg with
+            | None -> []
+            | Some recordInfo ->
+                match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                | Ok subst ->
+                    recordInfo.Fields
+                    |> List.map (fun (_, fieldType) -> resolveType aliasReg (applySubst subst fieldType))
+                | Error _ ->
+                    recordInfo.Fields |> List.map (snd >> resolveType aliasReg)
+        | TSum (sumTypeName, sumTypeArgs) ->
+            variantLookup
+            |> Map.toList
+            |> List.choose (fun (_, (ownerName, typeParams, _, payloadOpt)) ->
+                if ownerName <> sumTypeName then None
+                else
+                    match payloadOpt with
+                    | Some payload when List.length typeParams = List.length sumTypeArgs ->
+                        Some (resolveType aliasReg (applySubst (List.zip typeParams sumTypeArgs |> Map.ofList) payload))
+                    | Some payload -> Some (resolveType aliasReg payload)
+                    | None -> None)
+        | _ -> []
+    deps |> List.distinctBy compareHelperName
+
+type private CompareHelperGenerationState = {
+    InProgress: Set<string>
+    Generated: Map<string, FunctionDef>
+}
+
+let rec private ensureCompareHelperForType
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (typ: Type)
+    (state: CompareHelperGenerationState)
+    : CompareHelperGenerationState =
+    let resolvedType = resolveType aliasReg typ
+    let helper = compareHelperName resolvedType
+    if not (canonicalSortableType aliasReg typeReg variantLookup resolvedType)
+       || Map.containsKey helper state.Generated
+       || Set.contains helper state.InProgress then
+        state
+    else
+        let stateInProgress = { state with InProgress = Set.add helper state.InProgress }
+        let stateWithDeps =
+            collectDirectCompareHelperDeps aliasReg typeReg variantLookup resolvedType
+            |> List.fold
+                (fun currentState dependency ->
+                    ensureCompareHelperForType aliasReg typeReg variantLookup dependency currentState)
+                stateInProgress
+        let leftParam = "__dark_compare_left"
+        let rightParam = "__dark_compare_right"
+        let helperDef : FunctionDef = {
+            Name = helper
+            TypeParams = []
+            Params = NonEmptyList.fromList [leftParam, resolvedType; rightParam, resolvedType]
+            ReturnType = TInt64
+            Body =
+                buildCompareHelperExpr
+                    aliasReg
+                    typeReg
+                    variantLookup
+                    ExpandCurrent
+                    resolvedType
+                    (Var leftParam)
+                    (Var rightParam)
+        }
+        {
+            InProgress = Set.remove helper stateWithDeps.InProgress
+            Generated = Map.add helper helperDef stateWithDeps.Generated
+        }
+
+let rec private collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Expr) : Set<Type> =
+    let collectFromExprs expressions =
+        expressions
+        |> List.map (collectCompareHelperTypesFromExpr aliasReg)
+        |> List.fold Set.union Set.empty
+    let recurse = collectCompareHelperTypesFromExpr aliasReg
+
+    match expr with
+    | BoundaryRender (_, value) -> recurse value
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> Set.empty
+    | BinOp (_, left, right) -> Set.union (recurse left) (recurse right)
+    | UnaryOp (_, inner) -> recurse inner
+    | Let (_, value, body) -> Set.union (recurse value) (recurse body)
+    | If (condition, thenBranch, elseBranch) ->
+        Set.union (recurse condition) (Set.union (recurse thenBranch) (recurse elseBranch))
+    | Sequence (first, next) -> Set.union (recurse first) (recurse next)
+    | Call (_, args) -> collectFromExprs (NonEmptyList.toList args)
+    | TypeApp ("__compare", [targetType], args) ->
+        let nested = collectFromExprs (NonEmptyList.toList args)
+        let resolvedType = resolveType aliasReg targetType
+        if containsTVar resolvedType then nested else Set.add resolvedType nested
+    | TypeApp (("Stdlib.List.sort" | "Stdlib.List.unique"), [valueType], args)
+    | TypeApp ("Stdlib.List.uniqueBy", [valueType; _], args) ->
+        let nested = collectFromExprs (NonEmptyList.toList args)
+        let resolvedType = resolveType aliasReg valueType
+        if containsTVar resolvedType then nested else Set.add resolvedType nested
+    | TypeApp ("Stdlib.List.sortBy", [valueType; keyType], args) ->
+        let nested = collectFromExprs (NonEmptyList.toList args)
+        let pairType = TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
+        if containsTVar pairType then nested else Set.add pairType nested
+    | TypeApp (_, _, args) ->
+        collectFromExprs (NonEmptyList.toList args)
+    | TupleLiteral elements | ListLiteral elements -> collectFromExprs elements
+    | TupleAccess (tupleExpr, _) -> recurse tupleExpr
+    | DictLiteral (_, entries) -> entries |> List.map snd |> collectFromExprs
+    | RecordLiteral (_, fields) -> fields |> List.map snd |> collectFromExprs
+    | RecordUpdate (recordExpr, updates) ->
+        Set.union (recurse recordExpr) (updates |> List.map snd |> collectFromExprs)
+    | RecordAccess (recordExpr, _) -> recurse recordExpr
+    | Constructor (_, _, payload) -> payload |> Option.map recurse |> Option.defaultValue Set.empty
+    | Match (scrutinee, cases) ->
+        let caseTypes =
+            cases
+            |> List.map (fun matchCase ->
+                let guardTypes = matchCase.Guard |> Option.map recurse |> Option.defaultValue Set.empty
+                Set.union guardTypes (recurse matchCase.Body))
+            |> List.fold Set.union Set.empty
+        Set.union (recurse scrutinee) caseTypes
+    | ListCons (heads, tailExpr) -> Set.union (collectFromExprs heads) (recurse tailExpr)
+    | Lambda (_, _, body) -> recurse body
+    | Apply (funcExpr, args) | IndirectApply (funcExpr, args) ->
+        Set.union (recurse funcExpr) (collectFromExprs (NonEmptyList.toList args))
+    | Closure (_, captures) -> collectFromExprs captures
+    | InterpolatedString parts ->
+        parts
+        |> List.choose (function StringText _ -> None | StringExpr partExpr -> Some (recurse partExpr))
+        |> List.fold Set.union Set.empty
+
 let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Expr) : Set<Type> =
     let collectFromExprs (exprs: Expr list) : Set<Type> =
         exprs
@@ -5718,8 +6182,13 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
             | StringExpr partExpr -> Some (collectEqHelperTypesFromExpr aliasReg partExpr))
         |> List.fold Set.union Set.empty
 
-let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: Expr) : Expr =
-    let recurse = materializeEqHelperCallsInExpr aliasReg
+let rec private materializeHelperCallsInExpr
+    (includeEquality: bool)
+    (aliasReg: AliasRegistry)
+    (variantLookup: VariantLookup)
+    (expr: Expr)
+    : Expr =
+    let recurse = materializeHelperCallsInExpr includeEquality aliasReg variantLookup
 
     match expr with
     | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
@@ -5741,11 +6210,18 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
         Call (funcName, NonEmptyList.map recurse args)
     | TypeApp (funcName, typeArgs, args) as typeAppExpr ->
         match tryDecodeInternalTypeApp typeAppExpr with
-        | Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr)) ->
+        | Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr)) when includeEquality ->
             let helperType = resolveType aliasReg targetType
-            Call (eqHelperName helperType, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
-        | None ->
-            TypeApp (funcName, typeArgs, NonEmptyList.map recurse args)
+            if needsEqHelperForResolvedType variantLookup helperType then
+                Call (eqHelperName helperType, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
+            else
+                TypeApp (funcName, typeArgs, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
+        | _ ->
+            match funcName, typeArgs with
+            | "__compare", [targetType] when not (containsTVar targetType) ->
+                let helperType = resolveType aliasReg targetType
+                Call (compareHelperName helperType, NonEmptyList.map recurse args)
+            | _ -> TypeApp (funcName, typeArgs, NonEmptyList.map recurse args)
     | TupleLiteral elements ->
         TupleLiteral (List.map recurse elements)
     | TupleAccess (tupleExpr, index) ->
@@ -5790,7 +6266,8 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
                 | StringExpr partExpr -> StringExpr (recurse partExpr))
         )
 
-let materializeEqHelpersInTopLevels
+let private materializeHelpersInTopLevels
+    (includeEquality: bool)
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
@@ -5809,40 +6286,73 @@ let materializeEqHelpersInTopLevels
         | TypeDef _ ->
             Set.empty
 
+    let collectCompareFromTopLevel (topLevel: TopLevel) : Set<Type> =
+        match topLevel with
+        | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
+            collectCompareHelperTypesFromExpr aliasReg funcDef.Body
+        | FunctionDef _ -> Set.empty
+        | Expression expr -> collectCompareHelperTypesFromExpr aliasReg expr
+        | TypeDef _ -> Set.empty
+
     let rewriteTopLevel (topLevel: TopLevel) : TopLevel =
         match topLevel with
         | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
-            FunctionDef { funcDef with Body = materializeEqHelperCallsInExpr aliasReg funcDef.Body }
+            FunctionDef {
+                funcDef with
+                    Body = materializeHelperCallsInExpr includeEquality aliasReg variantLookup funcDef.Body
+            }
         | FunctionDef _ ->
             topLevel
         | Expression expr ->
-            Expression (materializeEqHelperCallsInExpr aliasReg expr)
+            Expression (materializeHelperCallsInExpr includeEquality aliasReg variantLookup expr)
         | TypeDef _ ->
             topLevel
 
     let helperTypes =
+        if includeEquality then
+            topLevels
+            |> List.map collectFromTopLevel
+            |> List.fold Set.union Set.empty
+        else
+            Set.empty
+
+    let compareHelperTypes =
         topLevels
-        |> List.map collectFromTopLevel
+        |> List.map collectCompareFromTopLevel
         |> List.fold Set.union Set.empty
 
     let rewrittenTopLevels = topLevels |> List.map rewriteTopLevel
 
-    if Set.isEmpty helperTypes then
+    if Set.isEmpty helperTypes && Set.isEmpty compareHelperTypes then
         rewrittenTopLevels
     else
-        let initialState = {
+        let initialEqState : EqHelperGenerationState = {
             InProgress = Set.empty
             Generated = Map.empty
         }
 
-        let finalState =
+        let finalEqState =
             helperTypes
             |> Set.toList
             |> List.sortBy typeToString
             |> List.fold
                 (fun currentState helperType ->
                     ensureEqHelperForType aliasReg typeReg variantLookup helperType currentState)
-                initialState
+                initialEqState
+
+        let initialCompareState : CompareHelperGenerationState = {
+            InProgress = Set.empty
+            Generated = Map.empty
+        }
+
+        let finalCompareState =
+            compareHelperTypes
+            |> Set.toList
+            |> List.sortBy typeToString
+            |> List.fold
+                (fun currentState helperType ->
+                    ensureCompareHelperForType aliasReg typeReg variantLookup helperType currentState)
+                initialCompareState
 
         let helperTopLevels =
             let existingFunctionNames =
@@ -5851,7 +6361,10 @@ let materializeEqHelpersInTopLevels
                     | FunctionDef funcDef -> Some funcDef.Name
                     | _ -> None)
                 |> Set.ofList
-            finalState.Generated
+            Map.fold
+                (fun generated name helperDef -> Map.add name helperDef generated)
+                finalEqState.Generated
+                finalCompareState.Generated
             |> Map.toList
             |> List.map snd
             |> List.filter (fun helperDef -> not (Set.contains helperDef.Name existingFunctionNames))
@@ -5859,6 +6372,27 @@ let materializeEqHelpersInTopLevels
             |> List.map FunctionDef
 
         helperTopLevels @ rewrittenTopLevels
+
+/// Materialize equality and canonical comparison dispatches in a complete
+/// concrete program.
+let materializeEqHelpersInTopLevels
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (topLevels: TopLevel list)
+    : TopLevel list =
+    materializeHelpersInTopLevels true aliasReg typeReg variantLookup topLevels
+
+/// Materialize only canonical comparison dispatches in newly-specialized
+/// stdlib functions. Equality dispatches retain the established stdlib
+/// specialization path.
+let materializeCompareHelpersInTopLevels
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (topLevels: TopLevel list)
+    : TopLevel list =
+    materializeHelpersInTopLevels false aliasReg typeReg variantLookup topLevels
 
 /// Type-check a function definition
 /// Returns the transformed function body (with Call -> TypeApp transformations)

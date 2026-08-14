@@ -4,11 +4,11 @@
   "profile": "routine",
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
-  "contract_sha256": "6dbb096b37aaf32192bf960168fde271a2595f94f83653b43b94ec5b2e104758",
-  "generated_at": "2026-08-14T21:42:50+00:00",
+  "contract_sha256": "b6e9cc373aa5cca7e4f415318f69b0734d654e76514956970854c83d0a599617",
+  "generated_at": "2026-08-14T20:50:28+00:00",
   "compiler": {
-    "commit": "7de7f71cdab965f0505887766e9a94004ce6baf5",
-    "subject": "Specialize uniform literal parameters"
+    "commit": "ba8d319f3ea663bce5f4f0c559dc04fb51d1791d",
+    "subject": "dcb2: complete issue Implement CLI execution, host, process, and input"
   },
   "benchmarks": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 6667246313
+      "instructions": 6666546223
     },
     {
       "name": "factorial",
@@ -33,7 +33,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 726627716
+      "instructions": 696394347
     },
     {
       "name": "fib",
@@ -41,7 +41,7 @@
     },
     {
       "name": "leibniz",
-      "instructions": 850001522
+      "instructions": 900001522
     },
     {
       "name": "mandelbrot",
@@ -49,11 +49,11 @@
     },
     {
       "name": "matmul",
-      "instructions": 2039852085
+      "instructions": 2043852085
     },
     {
       "name": "merkletrees",
-      "instructions": 684843737
+      "instructions": 724164737
     },
     {
       "name": "nbody",
@@ -73,11 +73,11 @@
     },
     {
       "name": "quicksort",
-      "instructions": 378597060
+      "instructions": 378553896
     },
     {
       "name": "spectral_norm",
-      "instructions": 143862512
+      "instructions": 129949885
     },
     {
       "name": "sum_to_n",

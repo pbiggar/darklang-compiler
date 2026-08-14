@@ -93,6 +93,9 @@ name`, and `Ambiguous <context> reference`.
   builtin candidates. The parser recognizes `val` and reports the unsupported
   AOT initialization boundary explicitly; source constants such as
   `Stdlib.Math.pi` are compiler nullary functions and must be called with `()`.
+  `Stdlib.List.empty` is the narrow exception: it is a registered polymorphic
+  module-value identity lowered directly to the empty skew-list representation,
+  not general source-level constant support.
 - Repeated flattened type declarations with the same canonical type identity
   are identity-deduplicated. This preserves existing module-adapter behavior;
   distinct type identities and distinct constructor owners remain ambiguous.

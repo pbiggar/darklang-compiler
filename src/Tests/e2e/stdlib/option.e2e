@@ -55,7 +55,7 @@ Stdlib.Option.or(Stdlib.Option.Option.None, Stdlib.Option.Option.None) = Stdlib.
 // Stdlib.Option.toList - Convert to a list
 // ===================================================================
 
-Stdlib.List.length(Stdlib.Option.toList(Stdlib.Option.Option.Some(42))) = 1
+Stdlib.List.length(Stdlib.Option.toList(Stdlib.Option.Option.Some(42))) = 1I
 Stdlib.List.isEmpty(Stdlib.Option.toList(Stdlib.Option.Option.None)) = true
 
 // ===================================================================
@@ -117,7 +117,7 @@ let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, (1, 2)) = (1, 
 let x = Stdlib.Option.Option.None in Stdlib.Option.withDefault(x, (1, 2, 3)) = (1, 2, 3)
 
 // List
-let x = Stdlib.Option.Option.None in Stdlib.List.length(Stdlib.Option.withDefault(x, [1, 2, 3])) = 3
+let x = Stdlib.Option.Option.None in Stdlib.List.length(Stdlib.Option.withDefault(x, [1, 2, 3])) = 3I
 
 // Nested Option (Option<Option<Int64>>)
 let x = Stdlib.Option.Option.None in Stdlib.Option.isSome(Stdlib.Option.withDefault(x, Stdlib.Option.Option.Some(42))) = true

@@ -1122,6 +1122,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Tuple3.dark"
         "stdlib/Result.dark"
         "stdlib/Option.dark"
+        "stdlib/ListSortByComparatorHelpers.dark"
         "stdlib/List.dark"
         "stdlib/Fun.dark"
         "stdlib/Float.dark"
@@ -1290,7 +1291,7 @@ let buildStdlibSpecializations
         Ok stdlib
     else
         let specialization = AST_to_ANF.specializeFromSpecs stdlib.Context.GenericFuncDefs specs
-        let combinedSpecRegistry = mergeSpecRegistries stdlib.Context.SpecRegistry specialization.SpecRegistry
+        let initialCombinedSpecRegistry = mergeSpecRegistries stdlib.Context.SpecRegistry specialization.SpecRegistry
         let existingNames =
             stdlib.StdlibANFFunctions
             |> Map.keys
@@ -1300,7 +1301,7 @@ let buildStdlibSpecializations
             |> List.filter (fun f -> not (Set.contains f.Name existingNames))
 
         if List.isEmpty newSpecializedFuncs then
-            let updatedContext = { stdlib.Context with SpecRegistry = combinedSpecRegistry }
+            let updatedContext = { stdlib.Context with SpecRegistry = initialCombinedSpecRegistry }
             Ok {
                 stdlib with
                     Context = updatedContext
@@ -1317,12 +1318,51 @@ let buildStdlibSpecializations
 
             AST_to_ANF.splitTopLevels stdlib.TypedAST
             |> Result.bind (fun (typeDefs, _functions, _expr) ->
+                let initiallyMaterializedFunctions =
+                    newSpecializedFuncs
+                    |> List.collect (fun funcDef ->
+                        let materialize =
+                            if funcDef.Name.StartsWith("Stdlib.List.__groupContainsKey")
+                               || funcDef.Name.StartsWith("Stdlib.List.__appendToGroup") then
+                                TypeChecking.materializeEqHelpersInTopLevels
+                            else
+                                TypeChecking.materializeCompareHelpersInTopLevels
+                        [AST.FunctionDef funcDef]
+                        |> materialize
+                            stdlib.Context.TypeCheckEnv.AliasReg
+                            stdlib.Context.TypeCheckEnv.IndexedTypeReg
+                            stdlib.Context.TypeCheckEnv.VariantLookup)
+                    |> List.choose (function
+                        | AST.FunctionDef funcDef -> Some funcDef
+                        | _ -> None)
+                let helperSpecs =
+                    initiallyMaterializedFunctions
+                    |> List.map AST_to_ANF.collectTypeAppsFromFunc
+                    |> List.fold Set.union Set.empty
+                    |> Set.filter (fun (funcName, _) ->
+                        Map.containsKey funcName stdlib.Context.GenericFuncDefs)
+                let helperSpecialization =
+                    AST_to_ANF.specializeFromSpecs stdlib.Context.GenericFuncDefs helperSpecs
+                let combinedSpecRegistry =
+                    mergeSpecRegistries initialCombinedSpecRegistry helperSpecialization.SpecRegistry
+                let materializedFunctions =
+                    (helperSpecialization.SpecializedFuncs @ initiallyMaterializedFunctions)
+                    |> List.filter (fun f -> not (Set.contains f.Name existingNames))
+                    |> List.map AST.FunctionDef
+                    |> TypeChecking.materializeCompareHelpersInTopLevels
+                        stdlib.Context.TypeCheckEnv.AliasReg
+                        stdlib.Context.TypeCheckEnv.IndexedTypeReg
+                        stdlib.Context.TypeCheckEnv.VariantLookup
+                    |> List.choose (function
+                        | AST.FunctionDef funcDef -> Some funcDef
+                        | _ -> None)
+                    |> List.distinctBy (fun funcDef -> funcDef.Name)
                 let (registries, localRegistries, resolvedFunctions) =
                     buildRegistriesForProgram
                         stdlib.Context.Registries.ModuleRegistry
                         stdlib.Context.Registries
                         typeDefs
-                        newSpecializedFuncs
+                        materializedFunctions
                 let registries = {
                     registries with
                         TypeReg =

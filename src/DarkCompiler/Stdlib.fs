@@ -205,6 +205,9 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__hash"; TypeParams = ["k"]; ParamTypes = [TVar "k"]; ReturnType = TInt64 }
     // __key_eq<k> : (k, k) -> Bool - compare two keys for equality
     { Name = "__key_eq"; TypeParams = ["k"]; ParamTypes = [TVar "k"; TVar "k"]; ReturnType = TBool }
+    // __compare<a> is an AOT-only dispatch marker. Type checking replaces every
+    // concrete use with a synthesized canonical three-way comparison helper.
+    { Name = "__compare"; TypeParams = ["a"]; ParamTypes = [TVar "a"; TVar "a"]; ReturnType = TInt64 }
 
     // List intrinsics for the direct-payload skew RAL implementation.
     // __list_empty<a> : () -> List<a> - create empty list (null pointer with tag 0)
@@ -238,6 +241,8 @@ let allValues : ModuleValue list = [
     { Name = "Stdlib.Blob.empty"; Type = TBlob }
     { Name = "Darklang.LanguageTools.PackageManager.PickContext.empty"
       Type = TRecord ("Darklang.LanguageTools.PackageManager.PickContext", []) }
+    { Name = "Stdlib.List.empty"; Type = TList(TVar "a") }
+    { Name = "Stdlib.List.empty_v0"; Type = TList(TVar "a") }
 ]
 
 let private valueRegistry : ModuleValueRegistry =

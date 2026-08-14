@@ -6,7 +6,7 @@ let __pad(value: String, width: Int64) : String =
     let padding = width - Stdlib.String.graphemeLength(value) in
     if padding <= 0 then value else value ++ Stdlib.String.repeat(" ", padding)
 
-let __maxCellLength(rows: List<List<String>>, index: Int64, current: Int64) : Int64 =
+let __maxCellLength(rows: List<List<String>>, index: Int, current: Int64) : Int64 =
     match rows with
     | [] -> current
     | [row, ...rest] ->
@@ -16,7 +16,7 @@ let __maxCellLength(rows: List<List<String>>, index: Int64, current: Int64) : In
             | None -> current in
         Stdlib.Cli.UI.Table.__maxCellLength(rest, index, next)
 
-let __columnWidths(columns: List<String>, rows: List<List<String>>, index: Int64) : List<Int64> =
+let __columnWidths(columns: List<String>, rows: List<List<String>>, index: Int) : List<Int64> =
     match columns with
     | [] -> []
     | [header, ...rest] ->
@@ -24,7 +24,7 @@ let __columnWidths(columns: List<String>, rows: List<List<String>>, index: Int64
             Stdlib.Int64.max(
                 Stdlib.String.graphemeLength(header),
                 Stdlib.Cli.UI.Table.__maxCellLength(rows, index, 0)) in
-        [width, ...Stdlib.Cli.UI.Table.__columnWidths(rest, rows, index + 1)]
+        [width, ...Stdlib.Cli.UI.Table.__columnWidths(rest, rows, index + 1I)]
 
 let __headerLine(columns: List<String>, widths: List<Int64>) : String =
     match (columns, widths) with
@@ -66,7 +66,7 @@ let __printRows(columns: List<String>, widths: List<Int64>, rows: List<List<Stri
         Stdlib.Cli.UI.Table.__printRows(columns, widths, rest)
 
 let print(columns: List<String>, rows: List<List<String>>) : Unit =
-    let widths = Stdlib.Cli.UI.Table.__columnWidths(columns, rows, 0) in
+    let widths = Stdlib.Cli.UI.Table.__columnWidths(columns, rows, 0I) in
     let _ = Builtin.printLine(Stdlib.Cli.UI.Color.bold(Stdlib.Cli.UI.Table.__headerLine(columns, widths))) in
     let _ = Builtin.printLine(Stdlib.Cli.UI.Table.__separatorLine(widths)) in
     Stdlib.Cli.UI.Table.__printRows(columns, widths, rows)

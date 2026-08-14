@@ -99,10 +99,10 @@ let resolve(path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error>
 let resolveToAbsolute(path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.Path.resolve(path)
 
-let __commonPrefixLength(left: List<String>, right: List<String>, count: Int64) : Int64 =
+let __commonPrefixLength(left: List<String>, right: List<String>, count: Int) : Int =
     match (left, right) with
     | ([leftHead, ...leftTail], [rightHead, ...rightTail]) ->
-        if leftHead == rightHead then Stdlib.Cli.Path.__commonPrefixLength(leftTail, rightTail, count + 1)
+        if leftHead == rightHead then Stdlib.Cli.Path.__commonPrefixLength(leftTail, rightTail, count + 1I)
         else count
     | _ -> count
 
@@ -118,12 +118,12 @@ let relativeTo(fromPath: String, toPath: String) : Stdlib.Result.Result<String, 
     | (Ok(absFrom), Ok(absTo)) ->
         let fromParts = Stdlib.Cli.Path.__nonEmpty(Stdlib.String.split(absFrom, "/")) in
         let toParts = Stdlib.Cli.Path.__nonEmpty(Stdlib.String.split(absTo, "/")) in
-        let commonLength = Stdlib.Cli.Path.__commonPrefixLength(fromParts, toParts, 0) in
+        let commonLength = Stdlib.Cli.Path.__commonPrefixLength(fromParts, toParts, 0I) in
         let upCount = Stdlib.List.length<String>(fromParts) - commonLength in
-        let ups = Stdlib.List.repeat<String>("..", upCount) in
+        let ups = Stdlib.List.repeatUnsafe<String>(upCount, "..") in
         let tail = Stdlib.List.drop<String>(toParts, commonLength) in
         let parts = Stdlib.List.append<String>(ups, tail) in
-        if Stdlib.List.length<String>(parts) == 0 then Ok(".")
+        if Stdlib.List.length<String>(parts) == 0I then Ok(".")
         else Ok(Stdlib.String.join(parts, "/"))
     | (Error(error), _) -> Error(error)
     | (_, Error(error)) -> Error(error)

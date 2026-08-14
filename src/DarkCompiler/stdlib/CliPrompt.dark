@@ -17,7 +17,7 @@ let select(question: String, choices: List<String>) : String =
         Stdlib.List.indexedMap<String, Unit>(choices, fun i choice ->
             Builtin.printLine(
                 "  " ++
-                Stdlib.Cli.UI.Color.bold(Stdlib.Int64.toString(i + 1)) ++
+                Stdlib.Cli.UI.Color.bold(Stdlib.Int.toString(i + 1I)) ++
                 ". " ++ choice)) in
     let _ = Builtin.print("Enter number: ") in
     let input = Builtin.stdinReadLine(()) in
@@ -27,7 +27,7 @@ let select(question: String, choices: List<String>) : String =
         Stdlib.Cli.UI.Prompt.select(question, choices)
     else
         let n = Stdlib.Result.withDefault<Int, Stdlib.Int.ParseError>(parsed, Stdlib.Int.fromInt64(0)) in
-        let index = Stdlib.Int.__toInt64Unchecked(Stdlib.Int.subtract(n, Stdlib.Int.fromInt64(1))) in
+        let index = Stdlib.Int.subtract(n, Stdlib.Int.fromInt64(1)) in
         match Stdlib.List.getAt<String>(choices, index) with
         | Some(choice) -> choice
         | None ->

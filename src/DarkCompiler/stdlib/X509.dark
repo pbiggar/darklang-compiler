@@ -74,7 +74,13 @@ let __subjectPublicKeyInfo(certificate: Blob) : Stdlib.Option.Option<Blob> =
                                     | None -> None
                                     | Some((_content, _length, spkiEnd)) ->
                                         if spkiEnd > tbsEnd then None
-                                        else Some(Stdlib.Bytes.fromList(Stdlib.List.take<Int64>(Stdlib.List.drop<Int64>(Stdlib.Bytes.toList(certificate), spkiStart), spkiEnd - spkiStart)))
+                                        else Some(
+                                            Stdlib.Bytes.fromList(
+                                                Stdlib.List.take<Int64>(
+                                                    Stdlib.List.drop<Int64>(
+                                                        Stdlib.Bytes.toList(certificate),
+                                                        Stdlib.Int.fromInt64(spkiStart)),
+                                                    Stdlib.Int.fromInt64(spkiEnd - spkiStart))))
 
 let __pemLines(base64: String, offset: Int64, acc: String) : String =
     if offset >= Stdlib.String.length(base64) then acc

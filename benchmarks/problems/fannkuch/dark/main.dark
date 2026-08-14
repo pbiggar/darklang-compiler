@@ -3,7 +3,7 @@
 
 // Get element at index (unsafe - assumes valid index)
 let getAt(list: List<Int64>, index: Int64) : Int64 =
-    match Stdlib.List.getAt<Int64>(list, index) with
+    match Stdlib.List.getAt<Int64>(list, Stdlib.Int.fromInt64(index)) with
     | Some(v) -> v
     | None -> 0
 
@@ -77,11 +77,15 @@ let fannkuchLoop(perm: List<Int64>, count: List<Int64>, n: Int64, maxFlips: Int6
 
 // Create initial list [0, 1, 2, ..., n-1]
 let createRange(n: Int64) : List<Int64> =
-    Stdlib.List.range(0, n)
+    Stdlib.List.map<Int, Int64>(
+        Stdlib.List.range(0I, Stdlib.Int.fromInt64(n - 1)),
+        fun value -> Builtin.unwrap(Stdlib.Int.toInt64(value)))
 
 let fannkuch(n: Int64) : Int64 =
     let perm = createRange(n) in
-    let count = Stdlib.List.range(1, n + 1) in
+    let count = Stdlib.List.map<Int, Int64>(
+        Stdlib.List.range(1I, Stdlib.Int.fromInt64(n)),
+        fun value -> Builtin.unwrap(Stdlib.Int.toInt64(value))) in
     fannkuchLoop(perm, count, n, 0)
 
 // Dark's fixed heap cannot complete the correct n=9 permutation traversal.

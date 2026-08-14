@@ -1,7 +1,7 @@
 // Fasta Benchmark - Quick check version
 
 let getAlu(aluBytes: List<Int64>, i: Int64) : Int64 =
-    match Stdlib.List.getAt<Int64>(aluBytes, i % 287) with
+    match Stdlib.Internal.SkewList.getAt<Int64>(aluBytes, i % 287) with
     | Some(v) -> v
     | None -> 0
 
@@ -26,14 +26,14 @@ let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, F
             Stdlib.List.push<(Int64, Float)>(restCum, (c, newRunning))
 
 let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 =
-    match Stdlib.List.getAt(table, idx) with
+    match Stdlib.Internal.SkewList.getAt(table, idx) with
     | None -> 0
     | Some(item) ->
         let c = Stdlib.Tuple2.first(item) in
         let p = Stdlib.Tuple2.second(item) in
         if r < p then c
         else
-            if idx + 1 >= Stdlib.List.length(table) then c
+            if idx + 1 >= Stdlib.Internal.SkewList.length(table) then c
             else selectRandom(table, r, idx + 1)
 
 let makeRandomFasta(n: Int64, table: List<(Int64, Float)>, seed: Int64, i: Int64, checksum: Int64) : (Int64, Int64) =
