@@ -2,12 +2,12 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-08-14T21:26:54+00:00
+**Snapshot timestamp:** 2026-08-14T21:42:50+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 1)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `6dbb096b37aaf32192bf960168fde271a2595f94f83653b43b94ec5b2e104758`
-**Compiler commit:** `ec8ea92a6274393228e39f0affc79586b6bbf923` - Unroll canonical counted loops by two
+**Compiler commit:** `7de7f71cdab965f0505887766e9a94004ce6baf5` - Specialize uniform literal parameters
 
 | Benchmark     |           Dark (2.73x) |          Rust |
 |---------------|------------------------|---------------|
@@ -20,13 +20,13 @@ Best-known compatible routine-profile Dark performance vs audited Rust reference
 | fib           |    642,006,238 (2.49x) |   257,598,132 |
 | leibniz       |    850,001,522 (1.06x) |   800,257,637 |
 | mandelbrot    |     17,701,940 (1.30x) |    13,595,721 |
-| matmul        |   2,043,852,085 (128x) |    15,983,852 |
+| matmul        |   2,039,852,085 (128x) |    15,983,852 |
 | merkletrees   |    684,843,737 (5.49x) |   124,776,610 |
 | nbody         |  1,239,502,646 (5.00x) |   247,760,534 |
 | nqueen        |    295,286,949 (2.11x) |   139,988,273 |
 | pisum         |         95,431 (0.00x) |    50,258,602 |
 | primes        |      2,075,933 (1.53x) |     1,358,980 |
-| quicksort     |    378,608,148 (57.6x) |     6,574,976 |
-| spectral_norm |    143,862,572 (27.2x) |     5,297,561 |
+| quicksort     |    378,597,060 (57.6x) |     6,574,976 |
+| spectral_norm |    143,862,512 (27.2x) |     5,297,561 |
 | sum_to_n      |         71,873 (0.28x) |       257,603 |
 | tak           |     63,580,610 (1.88x) |    33,730,191 |

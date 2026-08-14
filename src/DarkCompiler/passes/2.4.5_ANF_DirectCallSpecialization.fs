@@ -48,6 +48,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | RefCountInc (atom, _, _, _)
     | RefCountDec (atom, _, _, _)
     | Print (atom, _)
+    | StdoutWrite (atom, _)
     | FileReadText atom
     | FileExists atom
     | FileDelete atom
@@ -63,14 +64,14 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | RawGetByte (atom, _)
     | StringToRawPtr atom
     | RawPtrToString atom
-    | BytesToRawPtr atom
-    | RawPtrToBytes atom
+    | BlobToRawPtr atom
+    | RawPtrToBlob atom
     | DictToRawPtr atom
     | ListToRawPtr atom
     | RefCountIncString atom
     | RefCountDecString atom
-    | RefCountIncBytes atom
-    | RefCountDecBytes atom
+    | RefCountIncBlob atom
+    | RefCountDecBlob atom
     | FloatToString atom
     | RuntimeErrorString atom -> analyze atom analysis
     | Prim (_, left, right)
@@ -94,6 +95,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
         { analysis with IndirectTargets = Set.add name analysis.IndirectTargets }
         |> analyzeMany captures
     | TupleAlloc atoms -> analyzeMany atoms analysis
+    | CliNative (_, args) -> analyzeMany args analysis
     | TupleGet (tuple, _) -> analyze tuple analysis
     | FileWriteFromPtr (path, ptr, length) -> analyzeMany [path; ptr; length] analysis
     | RawWriteWord (ptr, offset, value)
@@ -101,6 +103,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | RawSlotInit (ptr, offset, value, _) -> analyzeMany [ptr; offset; value] analysis
     | RandomInt64
     | DateTimeNow
+    | StdinReadLine
     | RuntimeError _ -> analysis
 
 let rec private analyzeExpr (expr: AExpr) (analysis: ProgramAnalysis) : ProgramAnalysis =
@@ -214,6 +217,8 @@ let private rewriteCExpr
     | RefCountInc (atom, size, kind, metadata) -> RefCountInc (rewrite atom, size, kind, metadata)
     | RefCountDec (atom, size, kind, metadata) -> RefCountDec (rewrite atom, size, kind, metadata)
     | Print (atom, typ) -> Print (rewrite atom, typ)
+    | StdoutWrite (atom, appendNewline) -> StdoutWrite (rewrite atom, appendNewline)
+    | StdinReadLine -> StdinReadLine
     | FileReadText path -> FileReadText (rewrite path)
     | FileExists path -> FileExists (rewrite path)
     | FileWriteText (path, content) -> FileWriteText (rewrite path, rewrite content)
@@ -236,18 +241,19 @@ let private rewriteCExpr
     | RawSlotInit (ptr, offset, value, typ) -> RawSlotInit (rewrite ptr, rewrite offset, rewrite value, typ)
     | StringToRawPtr atom -> StringToRawPtr (rewrite atom)
     | RawPtrToString atom -> RawPtrToString (rewrite atom)
-    | BytesToRawPtr atom -> BytesToRawPtr (rewrite atom)
-    | RawPtrToBytes atom -> RawPtrToBytes (rewrite atom)
+    | BlobToRawPtr atom -> BlobToRawPtr (rewrite atom)
+    | RawPtrToBlob atom -> RawPtrToBlob (rewrite atom)
     | DictToRawPtr atom -> DictToRawPtr (rewrite atom)
     | RawPtrToDict (ptr, tag, typ) -> RawPtrToDict (rewrite ptr, rewrite tag, typ)
     | ListToRawPtr atom -> ListToRawPtr (rewrite atom)
     | RawPtrToList (ptr, tag, typ) -> RawPtrToList (rewrite ptr, rewrite tag, typ)
     | RefCountIncString atom -> RefCountIncString (rewrite atom)
     | RefCountDecString atom -> RefCountDecString (rewrite atom)
-    | RefCountIncBytes atom -> RefCountIncBytes (rewrite atom)
-    | RefCountDecBytes atom -> RefCountDecBytes (rewrite atom)
+    | RefCountIncBlob atom -> RefCountIncBlob (rewrite atom)
+    | RefCountDecBlob atom -> RefCountDecBlob (rewrite atom)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
+    | CliNative (operation, args) -> CliNative (operation, rewriteMany args)
     | FloatToString atom -> FloatToString (rewrite atom)
     | RuntimeError message -> RuntimeError message
     | RuntimeErrorString atom -> RuntimeErrorString (rewrite atom)

@@ -535,7 +535,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Uniform literal direct-parameter propagation
 - Taxonomy category: Interprocedural constant propagation
 - Priority/rationale: Specializing internal signatures exposes program-wide literal parameters inside recursive helpers while removing their call-sequence argument setup.
-- Notes: Implemented in `src/DarkCompiler/passes/2.4.5_ANF_DirectCallSpecialization.fs` for internal functions with at least one known direct call and no `FuncRef` or `ClosureAlloc` use. Normal, borrowed, and tail calls are rewritten consistently. Focused ANF tests cover mutual recursion, differing literals, and indirect-use exclusions. ARM64 routine Cachegrind improved quicksort by 11,088 instructions and spectral norm by 60, with the other 17 workloads unchanged; the displayed aggregate performance ratio remains 2.75x.
+- Notes: Implemented in `src/DarkCompiler/passes/2.4.5_ANF_DirectCallSpecialization.fs` for internal functions with at least one known direct call and no `FuncRef` or `ClosureAlloc` use. Normal, borrowed, and tail calls are rewritten consistently. Focused ANF tests cover mutual recursion, differing literals, and indirect-use exclusions. The isolated ARM64 routine trial improved quicksort by 11,088 instructions and spectral norm by 60. After rebasing onto counted-loop unrolling, the combined routine recording also improves matmul by 4,000,000 instructions, has no regressions, and records a 0.999895 current/baseline geometric ratio; the displayed aggregate performance ratio remains 2.73x.
 
 ### Dead direct-parameter elimination
 

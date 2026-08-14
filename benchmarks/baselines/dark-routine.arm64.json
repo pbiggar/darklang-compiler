@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "6dbb096b37aaf32192bf960168fde271a2595f94f83653b43b94ec5b2e104758",
-  "generated_at": "2026-08-14T21:26:54+00:00",
+  "generated_at": "2026-08-14T21:42:50+00:00",
   "compiler": {
-    "commit": "ec8ea92a6274393228e39f0affc79586b6bbf923",
-    "subject": "Unroll canonical counted loops by two"
+    "commit": "7de7f71cdab965f0505887766e9a94004ce6baf5",
+    "subject": "Specialize uniform literal parameters"
   },
   "benchmarks": [
     {
@@ -49,7 +49,7 @@
     },
     {
       "name": "matmul",
-      "instructions": 2043852085
+      "instructions": 2039852085
     },
     {
       "name": "merkletrees",
@@ -73,11 +73,11 @@
     },
     {
       "name": "quicksort",
-      "instructions": 378608148
+      "instructions": 378597060
     },
     {
       "name": "spectral_norm",
-      "instructions": 143862572
+      "instructions": 143862512
     },
     {
       "name": "sum_to_n",
