@@ -74,8 +74,9 @@ ends in both architecture code generators. Focused native evidence is
 ## Verification record
 
 The implementation was rebased onto compiler commit
-`1f5282a113b2abbc15622d5ad7187fb29199964b`. The integrated tree passed the
-complete test suite (`6108/6108`) with a zero-warning, zero-error build. Before
+`fb61d714723f34d6c43e9bdc03dd96fb46f0c4ea`. Compiler commit
+`252f1af6b6dcb4a3b9b2eca3eeaaed5f69c81ae9` passed the complete test suite
+(`6338/6338`) with a zero-warning, zero-error build. Before
 that final rebase, the process implementation verified equal to the routine
 baseline. Current main's exact-byte presentation repair adds one observable
 final LF write (nine instructions) to every benchmark, so the old snapshot
