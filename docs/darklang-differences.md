@@ -104,7 +104,7 @@ Areas where compiler produces WRONG output. These need to be fixed to match Dark
 | `Base64.decode` | — | Valid unpadded final groups were rejected | Fixed |
 | `String.reverse` | — | Decomposed grapheme clusters were reversed as individual codepoints | Fixed |
 | `Math.degrees` | — | Official degree values could not be converted to radians | Fixed |
-| Float precision | `eval:float_precision` | High-precision floats have different representation | Needs fix |
+| Float precision | `eval:float_precision` | High-precision values now use shortest round-trip rendering | Fixed |
 
 ### 2.1 Modulo Operator (`%`)
 
@@ -249,6 +249,10 @@ Features implemented in this compiler that should be added to the Darklang inter
 | Random | `stdlib:random` | `Random.int64` |
 | Byte operations | `stdlib:byte_ops` | `String.getByteAt` |
 | Int64 math | `stdlib:int64_math` | `Int64.sub`, `Int64.mul`, `Int64.div`, `Int64.isEven`, `Int64.isOdd` |
-| Float operations | `stdlib:float_ops` | `Float.toBits`, `Float.toString`, `Float.toInt`, `Float.abs`, `Float.negate`, `Float.sqrt` |
+| Float operations | `stdlib:float_ops` | `Float.toBits`, `Float.toInt`, `Float.abs` |
+| Math conveniences | `stdlib:math_extensions` | `Math.e`, `Math.abs`, `Math.sqrt`, and Int64-returning `Math.truncate`, `floor`, `ceiling`, `round` |
 | List functions | `stdlib:missing` | `List.take`, `List.drop` |
 | String functions | `stdlib:missing` | `String.substring`, `String.take`, `String.drop` |
+
+Float/Math parity behavior, the shortest-formatting divergence, and retained
+extensions are revision-pinned in [float-math-parity.md](float-math-parity.md).

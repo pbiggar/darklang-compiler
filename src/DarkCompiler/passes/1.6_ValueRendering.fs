@@ -390,8 +390,14 @@ let private sumRegistryFromVariants
             variantLookup
             |> Map.toList
             |> List.choose (fun (lookupName, (owner, _, tag, payload)) ->
-                if owner <> typeName || lookupName.Contains "." then None
-                else Some { Name = lookupName; Tag = tag; Payload = payload })
+                let qualifiedPrefix = $"{typeName}."
+                if owner <> typeName || not (lookupName.StartsWith qualifiedPrefix) then None
+                else
+                    Some {
+                        Name = lookupName.Substring(qualifiedPrefix.Length)
+                        Tag = tag
+                        Payload = payload
+                    })
             |> List.distinctBy (fun variant -> variant.Tag)
         (typeName, { TypeParams = typeParams; Variants = variants }))
     |> Map.ofList

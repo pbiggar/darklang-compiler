@@ -74,3 +74,25 @@ Stdlib.Math.round(-2.5) = -2
 Stdlib.Math.round(-3.5) = -4
 Stdlib.Math.round(-3.4) = -3
 Stdlib.Math.round(-3.0) = -3
+
+// Interpreter transcendental surface and domain behavior
+Stdlib.Math.sin(Stdlib.Math.pi() / 2.0) = 1.0
+Stdlib.Math.cos(0.0) = 1.0
+Stdlib.Math.tan(Stdlib.Math.pi() / 4.0) = 1.0
+Stdlib.Math.atan(1.0) = 0.7853981633974483
+Stdlib.Math.atan2(1.0, -1.0) = 2.356194490192345
+Stdlib.Math.atan2(-1.0, -1.0) = -2.356194490192345
+Stdlib.Math.asin(1.0) = Some(1.5707963267948966)
+Stdlib.Math.asin(2.0) = None
+Stdlib.Math.acos(-1.0) = Some(3.141592653589793)
+Stdlib.Math.acos(Builtin.testNan) = None
+Stdlib.Math.cosh(0.0) = 1.0
+Stdlib.Math.sinh(1.0) = 1.1752011936438014
+Stdlib.Math.cosh(1000.0) = 1.0 / 0.0
+Stdlib.Float.isNaN(Stdlib.Math.sin(1.0 / 0.0)) = true
+Stdlib.Float.toBits(Stdlib.Math.sin(-0.0)) = 9223372036854775808UL
+Stdlib.Float.toBits(Stdlib.Math.cos(1.0)) = 4603041830072026764UL
+Stdlib.Float.toBits(Stdlib.Math.atan2(-0.0, 1.0)) = 9223372036854775808UL
+
+// I@04fbe9 compatibility anomaly: mathTanh dispatches to sinh.
+Stdlib.Math.tanh(1.0) = 1.1752011936438014

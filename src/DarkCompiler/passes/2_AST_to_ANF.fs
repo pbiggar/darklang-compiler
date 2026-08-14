@@ -524,7 +524,10 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcS
     variantLookup
     |> Map.toList
     |> List.filter (fun (variantName, (typeName, _, _, _)) ->
-        not (variantName.StartsWith($"{typeName}.")))
+        // Qualified constructor identities are collision-free. Bare names can
+        // be overwritten when several sum types expose cases such as
+        // ParseError.BadFormat, which previously dropped whole enum shapes.
+        variantName.StartsWith($"{typeName}."))
     |> List.fold addVariant Map.empty
     |> Map.map toSumShapeInfo
 

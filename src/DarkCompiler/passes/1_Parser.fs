@@ -1028,12 +1028,13 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                         // e.g., type Unit2 = Unit2 defines a sum type with variant Unit2
                         let variant = { Name = potentialVariant; Payload = None }
                         Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
-                    | TRecord (potentialVariant, _) when
-                        // Not a primitive type and at end of input - treat as sum type for backwards compat
+                    | TRecord (potentialVariant, []) when
+                        // A bare uppercase name is a nullary constructor. Primitive aliases
+                        // have already parsed to their dedicated Type cases; named aliases
+                        // with type arguments remain unambiguous TRecord applications.
                         potentialVariant <> "Int64" && potentialVariant <> "Int32" && potentialVariant <> "Int16" && potentialVariant <> "Int8" &&
                         potentialVariant <> "UInt64" && potentialVariant <> "UInt32" && potentialVariant <> "UInt16" && potentialVariant <> "UInt8" &&
-                        potentialVariant <> "Bool" && potentialVariant <> "String" && potentialVariant <> "Float" &&
-                        (match remaining with [] -> true | _ -> false) ->
+                        potentialVariant <> "Bool" && potentialVariant <> "String" && potentialVariant <> "Float" ->
                         let variant = { Name = potentialVariant; Payload = None }
                         Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
                     | _ ->
