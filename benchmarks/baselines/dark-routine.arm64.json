@@ -5,87 +5,87 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "6dbb096b37aaf32192bf960168fde271a2595f94f83653b43b94ec5b2e104758",
-  "generated_at": "2026-08-14T17:03:11+00:00",
+  "generated_at": "2026-08-14T18:40:59+00:00",
   "compiler": {
-    "commit": "aa0c36de548eaaddd363b6497ac249ed9c2e3134",
-    "subject": "Align identifier and qualified-name grammar"
+    "commit": "6452e96afa1528fb3a92208c44e5752d87d4c45f",
+    "subject": "Repair CLI integration after grammar rebase"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 11450298687
+      "instructions": 11450298696
     },
     {
       "name": "binary_trees",
-      "instructions": 675306219
+      "instructions": 675306228
     },
     {
       "name": "collatz",
-      "instructions": 81543075
+      "instructions": 81543084
     },
     {
       "name": "edigits",
-      "instructions": 6667246304
+      "instructions": 6667246313
     },
     {
       "name": "factorial",
-      "instructions": 64205
+      "instructions": 64214
     },
     {
       "name": "fasta",
-      "instructions": 726627707
+      "instructions": 726627716
     },
     {
       "name": "fib",
-      "instructions": 642006229
+      "instructions": 642006238
     },
     {
       "name": "leibniz",
-      "instructions": 900001513
+      "instructions": 900001522
     },
     {
       "name": "mandelbrot",
-      "instructions": 17701931
+      "instructions": 17701940
     },
     {
       "name": "matmul",
-      "instructions": 2043852076
+      "instructions": 2043852085
     },
     {
       "name": "merkletrees",
-      "instructions": 724164728
+      "instructions": 724164737
     },
     {
       "name": "nbody",
-      "instructions": 1239502637
+      "instructions": 1239502646
     },
     {
       "name": "nqueen",
-      "instructions": 295286940
+      "instructions": 295286949
     },
     {
       "name": "pisum",
-      "instructions": 95422
+      "instructions": 95431
     },
     {
       "name": "primes",
-      "instructions": 2075924
+      "instructions": 2075933
     },
     {
       "name": "quicksort",
-      "instructions": 378608139
+      "instructions": 378608148
     },
     {
       "name": "spectral_norm",
-      "instructions": 143862563
+      "instructions": 143862572
     },
     {
       "name": "sum_to_n",
-      "instructions": 71864
+      "instructions": 71873
     },
     {
       "name": "tak",
-      "instructions": 63580601
+      "instructions": 63580610
     }
   ]
 }

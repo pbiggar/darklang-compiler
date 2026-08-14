@@ -74,8 +74,11 @@ ends in both architecture code generators. Focused native evidence is
 ## Verification record
 
 The implementation was rebased onto compiler commit
-`8025617cb935bb959308315a0b886228800d06fe`. The integrated tree passed the
-complete test suite (`6020/6020`) with a zero-warning, zero-error build. The
-routine benchmark verifier reported all 19 programs equal to the compatible
-baseline, a current/baseline geometric ratio of `1.000000`, and the
-`RESULTS.md` performance ratio remained `2.75x`.
+`1f5282a113b2abbc15622d5ad7187fb29199964b`. The integrated tree passed the
+complete test suite (`6108/6108`) with a zero-warning, zero-error build. Before
+that final rebase, the process implementation verified equal to the routine
+baseline. Current main's exact-byte presentation repair adds one observable
+final LF write (nine instructions) to every benchmark, so the old snapshot
+reported `1.000019`. After the required compatibility reset, all 19 programs
+verified equal at a current/baseline geometric ratio of `1.000000`; the
+`RESULTS.md` performance ratio remains `2.75x`.
