@@ -40,9 +40,13 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.Path` | Path operations |
 | `Stdlib.Platform` | Platform detection |
 | `Stdlib.Random` | Random numbers |
-| `Stdlib.DateTime` | UTC date/time operations with millisecond precision |
+| `Stdlib.DateTime` | Distinct UTC instants with 100ns storage and canonical `Int` APIs |
+| `Stdlib.Duration` | Canonical short-duration parsing to arbitrary-precision seconds |
 | `Stdlib.Math` | Math helpers |
 | `Stdlib.Uuid` | UUID helpers |
+
+The revision-pinned DateTime representation, range, rounding, clock, parsing,
+and Duration contract is documented in [temporal-parity.md](../temporal-parity.md).
 
 ## Implementation Types
 

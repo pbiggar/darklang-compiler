@@ -26,7 +26,7 @@ converts from compiler syntax to interpreter syntax.
 
 | Feature | Compiler | Interpreter | Conversion |
 |---------|----------|-------------|------------|
-| Integer literals | `5` | `5L` | Add L suffix |
+| Integer literals | Default syntax: `5` is `Int64`; interpreter syntax: `5` is `Int` | `5` is `Int` | Select the matching parser mode |
 | Sized integers | `1y`, `1s`, `1l` | Not supported | Int8, Int16, Int32 suffixes |
 | Unsigned integers | `1uy`, `1us`, `1ul` | Not supported | UInt8, UInt16, UInt32 suffixes |
 | List separators | `[1, 2]` | `[1L; 2L]` | Comma to semicolon |
@@ -37,16 +37,18 @@ converts from compiler syntax to interpreter syntax.
 
 ### 1.1 Integer Literals
 
-**Conversion:** `5` → `5L`
-
-This compiler allows bare integers; Darklang requires the `L` suffix.
+The compiler's interpreter-syntax parser matches current Dark: an unsuffixed
+literal such as `5` is arbitrary-precision `Int`, while `5L` is `Int64`. The
+default compiler syntax retains its historical bare-`Int64` meaning. The `I`
+suffix explicitly selects `Int` in either compiler parser and is a
+compiler-only spelling.
 
 ```
-# This compiler
+# Default compiler syntax
 1 + 2 = 3
 
-# Darklang
-darklang-interpreter eval "1L + 2L"
+# Current/interpreter syntax
+darklang-interpreter eval "1 + 2"
 # Returns: 3
 ```
 
@@ -171,6 +173,13 @@ heterogeneous conditional arms during type checking, and rejects a non-Unit
 non-final sequence expression during type checking. The pinned interpreter
 accepts both source shapes and applies only its dynamic condition/statement
 checks while evaluating the selected path.
+
+### 3.3 Temporal AOT boundaries
+
+DateTime and Duration public values, signatures, ranges, parsing, arithmetic,
+and errors are aligned with the pinned interpreter. The remaining deliberate
+differences are the AOT compiler's earlier static rejection phase and direct
+UTC host-clock syscall boundary. See [temporal-parity.md](temporal-parity.md).
 
 ## 4. Tooling Differences
 
