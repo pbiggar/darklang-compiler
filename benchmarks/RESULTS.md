@@ -1,9 +1,13 @@
 # Benchmark Results
 
-Latest routine-profile Dark performance vs audited Rust references (instruction counts).
+Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Last Updated:** 2026-08-14 14:19:19
-**Commit:** `2cc404d0` - dcb2: record trial result for Resolve Mandelbrot FMA legality
+**Snapshot timestamp:** 2026-08-14T16:06:03+00:00
+**Architecture:** `arm64`
+**Profile:** `routine` (schema 1)
+**Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
+**Workload contract:** `830436fb7fd9384da5a221c8f51fbf634a0ab7ca407a71964c507f81d14ad9ea`
+**Compiler commit:** `cc328308922ad646cbbd61655e979b5202e7f83b` - dcb2: analyze issue Implement Diff and ValueSearch utilities
 
 | Benchmark     |           Dark (2.75x) |          Rust |
 |---------------|------------------------|---------------|

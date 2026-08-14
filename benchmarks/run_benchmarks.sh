@@ -1,13 +1,14 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify] [--refresh-baseline[=rust]] [--machine=ID] [--jobs[=N]] [routine|benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-fresh] [--reset-dark-baseline] [--refresh-baseline=rust] [--machine=ID] [--jobs[=N]] [routine|benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
-#   --verify                 Verify the routine profile against RESULTS.md without updating tracked files
-#   --refresh-baseline       Re-run all baseline languages (default: use cached values)
-#   --refresh-baseline=rust  Re-run the audited Rust reference baselines
+#   --verify                 Read-only routine verification; equal or improved suites pass
+#   --verify-fresh           Read-only integration gate; an unrecorded improvement fails
+#   --reset-dark-baseline    Replace Dark routine snapshot from one complete successful run
+#   --refresh-baseline=rust  Independently refresh audited Rust reference rows
 #   --machine=ID             Optional machine registry ID for recorded history
 #   --jobs, --jobs=N         Run up to N benchmarks in parallel (default: 1)
 #   --list                   Print the benchmarks that would run and exit
@@ -32,6 +33,8 @@ RUN_FAILURES=()
 PROCESS_FAILURES=()
 LIST_ONLY=false
 VERIFY_RESULTS=false
+VERIFY_FRESH=false
+RESET_DARK_BASELINE=false
 JOB_COUNT=""
 SKIP_BENCHMARKS=()
 PROFILE=""
@@ -51,8 +54,17 @@ while [[ $# -gt 0 ]]; do
             VERIFY_RESULTS=true
             shift
             ;;
+        --verify-fresh)
+            VERIFY_RESULTS=true
+            VERIFY_FRESH=true
+            shift
+            ;;
+        --reset-dark-baseline)
+            RESET_DARK_BASELINE=true
+            shift
+            ;;
         --refresh-baseline)
-            REFRESH_BASELINE="all"
+            REFRESH_BASELINE="rust"
             shift
             ;;
         --refresh-baseline=*)
@@ -103,18 +115,33 @@ if [ "$VERIFY_RESULTS" = true ] && [ "$USE_CACHEGRIND" != true ]; then
     exit 1
 fi
 
+if [ "$RESET_DARK_BASELINE" = true ] && [ "$VERIFY_RESULTS" = true ]; then
+    pretty_fail "--reset-dark-baseline cannot be combined with verification"
+    exit 1
+fi
+
+if [ "$RESET_DARK_BASELINE" = true ] && [ "$USE_CACHEGRIND" != true ]; then
+    pretty_fail "--reset-dark-baseline requires Cachegrind"
+    exit 1
+fi
+
 if [ "$VERIFY_RESULTS" = true ] && [ "$REFRESH_BASELINE" != "false" ]; then
     pretty_fail "--verify cannot be combined with --refresh-baseline"
     exit 1
 fi
 
-if [ "$REFRESH_BASELINE" != "false" ] && [ "$REFRESH_BASELINE" != "all" ] && [ "$REFRESH_BASELINE" != "rust" ]; then
+if [ "$REFRESH_BASELINE" != "false" ] && [ "$REFRESH_BASELINE" != "rust" ]; then
     pretty_fail "Only audited Rust baselines can be refreshed"
     exit 1
 fi
 
 if [ "$VERIFY_RESULTS" = true ] && [ "$BENCHMARK" != "routine" ]; then
     pretty_fail "--verify requires the routine benchmark profile"
+    exit 1
+fi
+
+if [ "$RESET_DARK_BASELINE" = true ] && [ "$BENCHMARK" != "routine" ]; then
+    pretty_fail "--reset-dark-baseline requires the complete routine profile"
     exit 1
 fi
 
@@ -141,6 +168,13 @@ if [ -n "$PROFILE" ]; then
     fi
 else
     if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" check; then
+        exit 1
+    fi
+fi
+
+if [ "$PROFILE" = "routine" ] && [ "$USE_CACHEGRIND" = true ] && [ "$RESET_DARK_BASELINE" = false ] && [ "$LIST_ONLY" = false ]; then
+    if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_baseline.py" validate \
+        --benchmarks-dir "$SCRIPT_DIR" --architecture "$(uname -m)" --profile routine; then
         exit 1
     fi
 fi
@@ -180,6 +214,8 @@ mkdir -p "$OUTPUT_DIR"
 pretty_info "Recording compiler version..."
 git -C "$PROJECT_ROOT" rev-parse HEAD > "$OUTPUT_DIR/compiler_version.txt"
 git -C "$PROJECT_ROOT" log -1 --format="%s" >> "$OUTPUT_DIR/compiler_version.txt"
+date -u -Iseconds > "$OUTPUT_DIR/run_timestamp.txt"
+printf '%s-%s-%s\n' "$(date -u +%Y%m%dT%H%M%SZ)" "$$" "$(git -C "$PROJECT_ROOT" rev-parse --short=12 HEAD)" > "$OUTPUT_DIR/run_identity.txt"
 
 if [ -z "$JOB_COUNT" ]; then
     JOB_COUNT=1
@@ -209,8 +245,6 @@ mkdir -p "$STATUS_DIR"
 if [ "$USE_CACHEGRIND" = true ]; then
     if [ "$REFRESH_BASELINE" = "false" ]; then
         pretty_section "Mode: Cachegrind (instruction counts) - Dark only (use --refresh-baseline for baselines)"
-    elif [ "$REFRESH_BASELINE" = "all" ]; then
-        pretty_section "Mode: Cachegrind (instruction counts) - refreshing all baselines"
     else
         pretty_section "Mode: Cachegrind (instruction counts) - refreshing: $REFRESH_BASELINE"
     fi
@@ -326,6 +360,18 @@ for bench in $BENCHMARKS; do
 done
 rm -rf "$STATUS_DIR"
 
+# No result processor or tracked-file recorder may observe an incomplete build/run.
+if [ ${#BUILD_FAILURES[@]} -ne 0 ] || [ ${#RUN_FAILURES[@]} -ne 0 ]; then
+    if [ ${#BUILD_FAILURES[@]} -ne 0 ]; then
+        pretty_fail "Build failures: ${BUILD_FAILURES[*]}"
+    fi
+    if [ ${#RUN_FAILURES[@]} -ne 0 ]; then
+        pretty_fail "Benchmark run failures: ${RUN_FAILURES[*]}"
+    fi
+    pretty_fail "Incomplete run; canonical snapshots and tracked reports were not changed"
+    exit 1
+fi
+
 # Process results
 pretty_info "Processing results..."
     if [ "$USE_CACHEGRIND" = true ]; then
@@ -341,7 +387,11 @@ pretty_info "Processing results..."
             fi
         fi
         if [ "$VERIFY_RESULTS" = true ]; then
-            if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_verifier.py" "$OUTPUT_DIR" "$PROFILE"; then
+            VERIFY_ARGS=()
+            if [ "$VERIFY_FRESH" = true ]; then
+                VERIFY_ARGS+=(--require-recorded)
+            fi
+            if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_verifier.py" "$OUTPUT_DIR" "$PROFILE" "${VERIFY_ARGS[@]}"; then
                 PROCESS_FAILURES+=("benchmark_verifier")
                 pretty_warn "benchmark verification failed"
             fi
@@ -355,7 +405,11 @@ pretty_info "Processing results..."
             if [ -n "$MACHINE_ID" ]; then
                 HISTORY_MACHINE_ARGS+=(--machine "$MACHINE_ID")
             fi
-            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE" "${HISTORY_MACHINE_ARGS[@]}" "${HISTORY_REFRESH_ARGS[@]}"; then
+            HISTORY_RESET_ARGS=()
+            if [ "$RESET_DARK_BASELINE" = true ]; then
+                HISTORY_RESET_ARGS+=(--reset-dark-baseline)
+            fi
+            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE" "${HISTORY_MACHINE_ARGS[@]}" "${HISTORY_REFRESH_ARGS[@]}" "${HISTORY_RESET_ARGS[@]}"; then
                 PROCESS_FAILURES+=("history_updater")
                 pretty_warn "history_updater failed (continuing)"
             fi

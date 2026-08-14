@@ -27,7 +27,8 @@ python3 --version
 ## Quick Start
 
 ```bash
-# Record the canonical routine profile (instruction counts via cachegrind)
+# Record the routine profile. Improved Dark suites advance automatically;
+# equal suites keep the snapshot; regressed suites are logged and fail.
 ./benchmarks/run_benchmarks.sh
 
 # Run every benchmark, including diagnostic-only workloads, without recording it
@@ -46,6 +47,10 @@ python3 --version
 # Verify the canonical routine profile without updating tracked files
 ./benchmarks/run_benchmarks.sh --verify routine
 
+# Establish a Dark baseline after an intentional contract/policy reset
+./benchmarks/run_benchmarks.sh --reset-dark-baseline routine
+./benchmarks/quick_check.sh --reset-dark-baseline
+
 # Validate every reduced Dark/Rust pair and compare instruction counts
 ./benchmarks/quick_check.sh --build
 ```
@@ -59,7 +64,9 @@ and locks the SHA-256 hashes of both audited sources and their expected output.
 The full Rust programs define the reference workload: parity fixes change Dark
 or mark the pair non-comparable. A correctness fix may change Rust only while
 preserving the original workload and algorithm. Every run checks the hashes
-before recording numbers. The routine profile accepts only `comparable` full
+before recording numbers. The ordered `profiles/routine.txt`,
+`profiles/quick.txt`, and `profiles/quick-fast.txt` files make suite membership
+and discovery order contractual. The routine profile accepts only `comparable` full
 pairs; reduced, Dark-only, and incomparable programs remain available for
 diagnostics without contributing to canonical ratios.
 
@@ -83,10 +90,28 @@ contains 19 pairs. It excludes incomparable nsieve and the reduced Dark
 fannkuch workload. Binary trees now uses the same recursive allocation and
 traversal shape as Rust. Full-size quicksort and spectral norm are included. A
 completed routine Cachegrind run records its measurements in
-`RESULTS.md` and `HISTORY.md`; targeted runs and `all` are diagnostic and do not
-update those canonical files. Recording accepts an optional `--machine` ID from
+the architecture-specific canonical JSON snapshot and `HISTORY.md`; targeted
+runs and `all` are diagnostic and do not update canonical files. `RESULTS.md` is
+presentation regenerated from that routine snapshot plus `BASELINES.md`'s
+audited Rust references. Recording accepts an optional `--machine` ID from
 the registry in `HISTORY.md`; omitted machine metadata is left blank rather than
 guessing the runner's identity. Verification does not update history.
+
+Dark snapshots live under `baselines/` and contain a schema version, suite and
+profile identity, normalized architecture, measurement-policy identifier,
+ordered names/counts, full compiler attribution, timestamp, and SHA-256 workload
+contract. The contract digest is derived from the ordered profile and relevant
+PARITY hashes/statuses. A profile, PARITY contract, Cachegrind-policy, extraction,
+schema, or architecture mismatch is never inferred or repaired: the command
+fails with explicit reset instructions. Only architectures with a trusted full
+run have a snapshot.
+
+All Dark decisions use the equal-weight geometric suite ratio, displayed as
+`current/baseline`: below 1 is improved, 1 is equal, and above 1 is regressed.
+Classification itself is exact: the tools compare arbitrary-precision integer
+products, then use logarithms only to display the ratio. Consequently a slower
+individual benchmark can be compensated by larger gains elsewhere. Every row's
+absolute and percentage delta is still reported.
 
 ### Quick correctness and regression mode
 
@@ -95,18 +120,41 @@ Every problem has `dark/quick.dark`, `rust/quick.rs`, and a shared
 algorithm and optimization opportunities while reducing only workload
 parameters. `quick_check.sh` builds the current Dark compiler, compiles Rust with
 the same `rustc -C opt-level=3` setting as the full suite, validates both native
-outputs, and counts both binaries under the same Cachegrind options. A committed
-architecture baseline additionally gates Dark compiler regressions when one is
-available; Rust counts are reported with a ratio for comparable pairs and
-marked diagnostic-only for incomparable pairs.
+outputs, and counts both binaries under the same Cachegrind options. The entire
+selected run is validated before comparison or mutation. A complete improved
+`quick` run atomically replaces the whole architecture snapshot; equality passes
+without rewriting; regression fails and preserves the stronger snapshot.
+Missing, malformed, incomplete, or incompatible snapshots fail and require an
+explicit complete `--reset-dark-baseline` run. Rust counts and Dark/Rust ratios
+remain correctness/comparison diagnostics and never enter the Dark decision.
+Pass `--decision-json=PATH` to retain the machine-readable quick decision;
+routine runs retain the same document in their generated results directory.
+
+`--fast` uses the declared five-workload `quick-fast` profile and projects those
+names from the compatible complete quick snapshot. It applies the same aggregate
+pass/fail decision but never advances or resets the complete snapshot. Fast,
+targeted, `all`, hyperfine, failed, and partial runs are ineligible for reset.
 
 ### Verification Mode (`--verify`)
 
-`./benchmarks/run_benchmarks.sh --verify routine` runs the exact profile named by
-`RESULTS.md` and compares each full-size Dark instruction count with its
-committed value. It fails for missing, unexpected, or changed results and never
-updates tracked files. Verification cannot be combined with `--hyperfine` or
-`--refresh-baseline`.
+`./benchmarks/run_benchmarks.sh --verify routine` compares a complete successful
+run to the routine snapshot using the shared aggregate rule. Equal and improved
+runs pass; regressions fail. It writes only generated run artifacts (including a
+machine-readable decision) and leaves the snapshot, `RESULTS.md`, `BASELINES.md`,
+and `HISTORY.md` unchanged.
+
+Normal routine recording appends every valid Dark run to `HISTORY.md` with a
+unique timestamp/run identity and decision. An improvement atomically advances
+the snapshot and regenerates every Dark `RESULTS.md` row; equality changes only
+history; regression changes only history and returns failure. Thus snapshots are
+the best-known compatible complete run, not necessarily the newest compiler
+commit. `--verify-fresh` is the integration variant: unlike ordinary read-only
+verification, it fails on an improvement because that better run must first be
+recorded. `scripts/land-on-main.sh` uses this freshness check.
+
+`--refresh-baseline=rust` is separate from Dark reset/advancement. It refreshes
+only the audited reference data in `BASELINES.md` after a complete successful
+run; Rust values do not affect the Dark monotonic decision.
 
 ### Timing Mode (`--hyperfine`)
 
@@ -131,7 +179,10 @@ Hyperfine should remain at one job when avoiding timing skew matters.
 ```
 benchmarks/
   run_benchmarks.sh          # Main entry point
+  quick_check.sh             # Complete reduced-workload monotonic gate
   README.md                  # This file
+  baselines/                 # Typed architecture-specific Dark snapshots
+  profiles/                  # Ordered contractual suite membership
 
   infrastructure/
     build_all.sh             # Compile Dark and Rust implementations
@@ -139,7 +190,8 @@ benchmarks/
     hyperfine_runner.sh      # Run hyperfine timing benchmarks
     result_processor.py      # Generate timing summary
     cachegrind_processor.py  # Generate instruction count summary
-    history_updater.py       # Append results to HISTORY.md
+    benchmark_baseline.py    # Snapshot contract and exact shared comparison
+    history_updater.py       # Monotonic routine recorder and history writer
 
   problems/
     fib/                     # Each benchmark has its own directory

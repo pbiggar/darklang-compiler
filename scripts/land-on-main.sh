@@ -94,8 +94,8 @@ while true; do
   if [[ "$main_head" != "$feature_head" ]]; then
     (cd "$repo_root" && ./run-tests --ai)
 
-    # Verify the canonical deterministic profile without dirtying the branch being landed.
-    (cd "$repo_root" && ./benchmarks/run_benchmarks.sh --verify --jobs 3 routine)
+    # Integration requires both non-regression and a recorded better routine snapshot.
+    (cd "$repo_root" && ./benchmarks/run_benchmarks.sh --verify-fresh --jobs 3 routine)
   else
     echo "No changes to land; main already matches $current_branch."
   fi

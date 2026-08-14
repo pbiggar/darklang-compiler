@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "suite": "dark-compiler",
+  "profile": "routine",
+  "architecture": "arm64",
+  "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
+  "contract_sha256": "830436fb7fd9384da5a221c8f51fbf634a0ab7ca407a71964c507f81d14ad9ea",
+  "generated_at": "2026-08-14T16:06:03+00:00",
+  "compiler": {
+    "commit": "cc328308922ad646cbbd61655e979b5202e7f83b",
+    "subject": "dcb2: analyze issue Implement Diff and ValueSearch utilities"
+  },
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 11450298687
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 675306219
+    },
+    {
+      "name": "collatz",
+      "instructions": 81543075
+    },
+    {
+      "name": "edigits",
+      "instructions": 6667246304
+    },
+    {
+      "name": "factorial",
+      "instructions": 64205
+    },
+    {
+      "name": "fasta",
+      "instructions": 726627707
+    },
+    {
+      "name": "fib",
+      "instructions": 642006229
+    },
+    {
+      "name": "leibniz",
+      "instructions": 900001513
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 17701931
+    },
+    {
+      "name": "matmul",
+      "instructions": 2043852076
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 724164728
+    },
+    {
+      "name": "nbody",
+      "instructions": 1239502637
+    },
+    {
+      "name": "nqueen",
+      "instructions": 295286940
+    },
+    {
+      "name": "pisum",
+      "instructions": 95422
+    },
+    {
+      "name": "primes",
+      "instructions": 2075924
+    },
+    {
+      "name": "quicksort",
+      "instructions": 378608139
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 143862563
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 71864
+    },
+    {
+      "name": "tak",
+      "instructions": 63580601
+    }
+  ]
+}

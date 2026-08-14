@@ -2,44 +2,41 @@
 """
 Update benchmark result files after a benchmark run.
 
-Manages three files:
-- RESULTS.md: Latest complete routine profile vs other languages
+Manages three files plus the canonical Dark snapshot:
+- RESULTS.md: Best compatible routine profile vs audited Rust
 - BASELINES.md: Detailed baseline metrics for reference languages (no Dark)
 - HISTORY.md: Append-only log of all Dark benchmark runs
 
-Usage: python3 history_updater.py <results_dir> --profile <profile> [--machine <id>] [--refresh-baseline]
+Usage: python3 history_updater.py <results_dir> --profile <profile> [--machine <id>] [--refresh-baseline] [--reset-dark-baseline]
 """
 
+import argparse
 import json
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
+from benchmark_baseline import (
+    BaselineError,
+    CompilerAttribution,
+    Snapshot,
+    atomic_write_json,
+    atomic_write_text,
+    compare_suites,
+    comparison_dict,
+    create_snapshot,
+    load_dark_counts,
+    load_snapshot,
+    machine_architecture,
+    print_comparison,
+    snapshot_path,
+    write_snapshot,
+)
 from benchmark_profiles import load_profile
 
 RESULTS_FILE = "RESULTS.md"
 BASELINES_FILE = "BASELINES.md"
 HISTORY_FILE = "HISTORY.md"
-
-
-def is_reduced_size_benchmark(benchmarks_dir: Path, benchmark: str) -> bool:
-    """Check if a benchmark runs at reduced size for Dark.
-
-    A benchmark is reduced-size if it has a dark/expected_output.txt that differs
-    from the main expected_output.txt. These should not be included in RESULTS.md
-    or HISTORY.md since the instruction counts aren't comparable.
-    """
-    problems_dir = benchmarks_dir / "problems" / benchmark
-    main_expected = problems_dir / "expected_output.txt"
-    dark_expected = problems_dir / "dark" / "expected_output.txt"
-
-    if not dark_expected.exists():
-        return False
-    if not main_expected.exists():
-        return False
-
-    return main_expected.read_text().strip() != dark_expected.read_text().strip()
 
 
 def format_number(n: int) -> str:
@@ -81,26 +78,34 @@ def load_json_results(results_dir: Path) -> dict:
 
 def get_run_metadata(results_dir: Path) -> dict:
     """Extract timestamp and commit info from results directory."""
-    dir_name = results_dir.name
+    timestamp_file = results_dir / "run_timestamp.txt"
+    identity_file = results_dir / "run_identity.txt"
+    if not timestamp_file.is_file() or not identity_file.is_file():
+        raise BaselineError("run timestamp or unique run identity is missing")
+    timestamp = timestamp_file.read_text().strip()
+    run_identity = identity_file.read_text().strip()
+    if not timestamp or not run_identity:
+        raise BaselineError("run timestamp and identity must be non-empty")
     try:
-        dt = datetime.strptime(dir_name, "%Y-%m-%d_%H%M%S")
-        timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
-        date_only = dt.strftime("%Y-%m-%d")
-    except ValueError:
-        timestamp = dir_name
-        date_only = dir_name
+        parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise BaselineError("run timestamp must be ISO-8601") from error
+    if parsed_timestamp.tzinfo is None:
+        raise BaselineError("run timestamp must include a UTC offset")
 
     version_file = results_dir / "compiler_version.txt"
-    commit_hash = "unknown"
+    commit_hash = ""
     commit_message = ""
     if version_file.exists():
         lines = version_file.read_text().strip().split("\n")
-        commit_hash = lines[0][:8] if lines else "unknown"
+        commit_hash = lines[0] if lines else ""
         commit_message = lines[1] if len(lines) > 1 else ""
+    if len(commit_hash) != 40:
+        raise BaselineError("compiler_version.txt must contain a full Git commit")
 
     return {
         "timestamp": timestamp,
-        "date": date_only,
+        "run_identity": run_identity,
         "commit_hash": commit_hash,
         "commit_message": commit_message,
     }
@@ -110,93 +115,24 @@ def get_run_metadata(results_dir: Path) -> dict:
 # RESULTS.md - Quick overview table
 # ============================================================================
 
-def load_results_file(benchmarks_dir: Path) -> dict:
-    """Load existing results from RESULTS.md.
-
-    Returns: {benchmark: {language: instructions}}
-    """
+def update_results_file(benchmarks_dir: Path, snapshot: Snapshot, baselines: dict):
+    """Regenerate RESULTS.md from the canonical Dark snapshot and audited Rust rows."""
     results_path = benchmarks_dir / RESULTS_FILE
-    if not results_path.exists():
-        return {}
-
-    results = {}
-    content = results_path.read_text()
-
-    in_table = False
-    for line in content.split("\n"):
-        if line.startswith("| Benchmark"):
-            in_table = True
-            # Parse header to get language columns (strip speedup suffix like " (5.30x)")
-            cols = [c.strip() for c in line.split("|")]
-            languages = []
-            for col in cols[2:]:  # Skip empty and Benchmark columns
-                lang = col.split(" (")[0] if " (" in col else col
-                languages.append(lang)
-            continue
-        if line.startswith("|---"):
-            continue
-        if in_table and line.startswith("|"):
-            cols = [c.strip() for c in line.split("|")]
-            if len(cols) >= 3:
-                benchmark = cols[1].strip()
-                if not benchmark:  # Skip empty rows (like averages row)
-                    continue
-                results[benchmark] = {}
-                for i, lang in enumerate(languages):
-                    if i + 2 < len(cols) and cols[i + 2]:
-                        val = cols[i + 2].replace(",", "").strip()
-                        # Strip inline speedup suffix like " (4.14x)"
-                        if " (" in val:
-                            val = val.split(" (")[0]
-                        if val and val != "-" and val != "(timeout)":
-                            try:
-                                results[benchmark][lang.lower()] = int(val)
-                            except ValueError:
-                                pass
-
-    return results
-
-
-def update_results_file(
-    benchmarks_dir: Path,
-    json_results: dict,
-    baselines: dict,
-    metadata: dict,
-    profile: list[str],
-):
-    """Update RESULTS.md with latest results."""
-    results_path = benchmarks_dir / RESULTS_FILE
-
-    # RESULTS.md is the complete latest snapshot of one named profile.
-    existing = {benchmark: {} for benchmark in profile}
-
-    # Merge with existing results from file
-    for benchmark, langs in load_results_file(benchmarks_dir).items():
-        if benchmark in existing:
-            existing[benchmark].update(langs)
-
-    # Merge with new results (skip reduced-size Dark benchmarks)
-    for benchmark, benchmark_results in json_results.items():
-        if benchmark in existing:
-            for r in benchmark_results:
-                lang = r.get("language", "").lower()
-                instrs = r.get("instructions", 0)
-                if instrs > 0:
-                    # Skip Dark results for reduced-size benchmarks
-                    if lang == "dark" and is_reduced_size_benchmark(benchmarks_dir, benchmark):
-                        print(f"  Skipping {benchmark} Dark results (reduced-size benchmark)")
-                        continue
-                    existing[benchmark][lang] = instrs
-
-    # Merge with baselines
+    existing = {
+        row.name: {"dark": row.instructions}
+        for row in snapshot.benchmarks
+    }
     for benchmark, baseline_list in baselines.items():
         if benchmark not in existing:
             continue
-        for b in baseline_list:
-            lang = b.get("language", "").lower()
-            instrs = b.get("instructions", 0)
-            if instrs > 0 and lang != "dark":
-                existing[benchmark][lang] = instrs
+        rust_rows = [
+            row for row in baseline_list
+            if row.get("language", "").lower() == "rust"
+            and isinstance(row.get("instructions"), int)
+            and row["instructions"] > 0
+        ]
+        if len(rust_rows) == 1:
+            existing[benchmark]["rust"] = rust_rows[0]["instructions"]
 
     # Only the human-audited Dark/Rust pairs are canonical comparisons. Other
     # language implementations remain useful diagnostics but are not covered by
@@ -250,10 +186,15 @@ def update_results_file(
     lines = [
         "# Benchmark Results",
         "",
-        "Latest routine-profile Dark performance vs audited Rust references (instruction counts).",
+        "Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).",
         "",
-        f"**Last Updated:** {metadata['timestamp']}",
-        f"**Commit:** `{metadata['commit_hash']}`" + (f" - {metadata['commit_message']}" if metadata['commit_message'] else ""),
+        f"**Snapshot timestamp:** {snapshot.generated_at}",
+        f"**Architecture:** `{snapshot.architecture}`",
+        f"**Profile:** `{snapshot.profile}` (schema {snapshot.schema_version})",
+        f"**Measurement policy:** `{snapshot.measurement_policy}`",
+        f"**Workload contract:** `{snapshot.contract_sha256}`",
+        f"**Compiler commit:** `{snapshot.compiler.commit}`"
+        + (f" - {snapshot.compiler.subject}" if snapshot.compiler.subject else ""),
         "",
     ]
 
@@ -267,7 +208,7 @@ def update_results_file(
     lines.append(separator)
 
     # Data rows
-    for benchmark in sorted(existing.keys()):
+    for benchmark in (row.name for row in snapshot.benchmarks):
         row = f"| {benchmark:<{col_widths['benchmark']}} |"
         for lang in languages:
             if lang in existing[benchmark]:
@@ -280,7 +221,7 @@ def update_results_file(
         lines.append(row)
 
     lines.append("")
-    results_path.write_text("\n".join(lines))
+    atomic_write_text(results_path, "\n".join(lines))
     print(f"Results updated: {results_path}")
 
 
@@ -393,7 +334,7 @@ def update_baselines_file(benchmarks_dir: Path, json_results: dict):
             )
 
     lines.append("")
-    baselines_path.write_text("\n".join(lines))
+    atomic_write_text(baselines_path, "\n".join(lines))
     print(f"Baselines updated: {baselines_path}")
 
 
@@ -401,37 +342,15 @@ def update_baselines_file(benchmarks_dir: Path, json_results: dict):
 # HISTORY.md - Append-only Dark results log
 # ============================================================================
 
-HISTORY_HEADER = """# Benchmark History
+SUITE_RUNS_HEADER = """| Timestamp                 | Run                                   | Decision  | Machine | Commit   | Profile | Architecture | Current/Baseline |
+|---------------------------|---------------------------------------|-----------|---------|----------|---------|--------------|------------------|"""
 
-Dark compiler performance over time (append-only log).
-
-| Date       | Machine | Commit   | Benchmark     | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |
-|------------|---------|----------|---------------|------------------|------------------|-------------|-------------|-----------------|---------|
-"""
+HISTORY_TABLE_HEADER = """| Date       | Machine | Commit   | Benchmark     | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |
+|------------|---------|----------|---------------|------------------|------------------|-------------|-------------|-----------------|---------|"""
 
 
 def history_row_cells(line: str) -> list[str]:
     return [cell.strip() for cell in line.split("|")[1:-1]]
-
-
-def history_row_identity(line: str) -> tuple[str, str, str] | None:
-    if not re.match(r"^\| \d{4}-\d{2}-\d{2} \|", line):
-        return None
-    cells = history_row_cells(line)
-    if len(cells) == 9:
-        return (cells[0], cells[1], cells[2])
-    if len(cells) == 10:
-        return (cells[0], cells[2], cells[3])
-    return None
-
-
-def normalize_history_row(line: str) -> str:
-    """Add an empty machine cell to legacy rows that predate machine tracking."""
-    cells = history_row_cells(line)
-    if history_row_identity(line) is not None and len(cells) == 9:
-        cells.insert(1, "")
-        return "| " + " | ".join(cells) + " |"
-    return line
 
 
 def registered_machine_ids(history_path: Path) -> set[str]:
@@ -461,91 +380,108 @@ def registered_machine_ids(history_path: Path) -> set[str]:
     }
 
 
-def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
-    """Append Dark results to HISTORY.md."""
+def validate_history_log(history_path: Path) -> None:
+    if not history_path.is_file():
+        raise BaselineError(f"{HISTORY_FILE} is missing")
+    lines = history_path.read_text().splitlines()
+    log_index = next((i for i, line in enumerate(lines) if line == "## Log"), None)
+    if log_index is None or not any(
+        line.startswith("|---") for line in lines[log_index + 1 :]
+    ):
+        raise BaselineError(f"{HISTORY_FILE} has no valid Log table")
+
+
+def validate_new_run_identity(history_path: Path, run_identity: str) -> None:
+    if any(
+        len(cells := history_row_cells(line)) >= 2 and cells[1] == run_identity
+        for line in history_path.read_text().splitlines()
+        if line.startswith("|")
+    ):
+        raise BaselineError(f"run identity already exists in {HISTORY_FILE}: {run_identity}")
+
+
+def append_to_history(
+    benchmarks_dir: Path,
+    json_results: dict,
+    metadata: dict,
+    decision: str,
+    ratio: float,
+    profile_name: str,
+    architecture: str,
+    profile: list[str],
+):
+    """Add a complete Dark run without replacing any prior run identity."""
     history_path = benchmarks_dir / HISTORY_FILE
-
-    # Generate new rows for Dark results only (skip reduced-size benchmarks)
     new_rows = []
-    for benchmark, benchmark_results in sorted(json_results.items()):
-        for r in benchmark_results:
-            lang = r.get("language", "").lower()
-            if lang != "dark":
-                continue  # Only log Dark results
+    for benchmark in profile:
+        dark_rows = [
+            row for row in json_results[benchmark]
+            if row.get("language", "").lower() == "dark"
+        ]
+        row = dark_rows[0]
+        branch_count = row.get("branches", 0)
+        mispreds = row.get("branch_mispredicts", 0)
+        mispred_rate = (mispreds / branch_count * 100) if branch_count > 0 else 0
+        new_rows.append(
+            f"| {metadata['timestamp'][:10]} | {metadata['machine']} | "
+            f"{metadata['commit_hash'][:8]} | {benchmark:<13} | "
+            f"{format_number(row['instructions']):>16} | "
+            f"{format_number(row.get('data_refs', 0)):>16} | "
+            f"{format_number(row.get('d1_misses', 0)):>11} | "
+            f"{format_number(row.get('ll_misses', 0)):>11} | "
+            f"{format_number(branch_count):>15} | {mispred_rate:>6.1f}% |"
+        )
 
-            # Skip reduced-size benchmarks
-            if is_reduced_size_benchmark(benchmarks_dir, benchmark):
-                continue
-
-            instrs = format_number(r.get("instructions", 0))
-            data_refs = format_number(r.get("data_refs", 0))
-            d1_misses = format_number(r.get("d1_misses", 0))
-            ll_misses = format_number(r.get("ll_misses", 0))
-            branches = format_number(r.get("branches", 0))
-            branch_count = r.get("branches", 0)
-            mispreds = r.get("branch_mispredicts", 0)
-            mispred_rate = (mispreds / branch_count * 100) if branch_count > 0 else 0
-
-            new_rows.append(
-                f"| {metadata['date']} | {metadata['machine']} | {metadata['commit_hash']} | {benchmark:<13} | {instrs:>16} | {data_refs:>16} | {d1_misses:>11} | {ll_misses:>11} | {branches:>15} | {mispred_rate:>6.1f}% |"
-            )
-
-    if not new_rows:
-        return
-
-    # Read existing or create new
-    if history_path.exists():
-        content = history_path.read_text()
-        lines = content.split("\n")
-        log_start = None
-        for i, line in enumerate(lines):
-            if line.strip() == "## Log":
-                log_start = i
-                break
-
-        if log_start is None:
-            header = HISTORY_HEADER.rstrip()
-            existing_rows = content
-        else:
-            misplaced_rows = []
-            pre_log_lines = []
-            for line in lines[:log_start]:
-                if re.match(r"^\| \d{4}-\d{2}-\d{2} \|", line):
-                    misplaced_rows.append(line)
-                else:
-                    pre_log_lines.append(line)
-
-            log_lines = lines[log_start:]
-            header_end = len(log_lines)
-            for i, line in enumerate(log_lines):
-                if line.startswith("|---") or line.startswith("| Date"):
-                    header_end = i + 1
-                    if line.startswith("|---"):
-                        break
-
-            table_header = "\n".join(HISTORY_HEADER.rstrip().splitlines()[-2:])
-            header = "\n".join(pre_log_lines).rstrip() + "\n\n## Log\n\n" + table_header
-            existing_row_lines = misplaced_rows + log_lines[header_end:]
-            new_identities = {
-                identity
-                for line in new_rows
-                if (identity := history_row_identity(line)) is not None
-            }
-            existing_rows = "\n".join(
-                normalize_history_row(line)
-                for line in existing_row_lines
-                if history_row_identity(line) not in new_identities
-            )
+    if not history_path.is_file():
+        raise BaselineError(f"{HISTORY_FILE} is missing")
+    lines = history_path.read_text().splitlines()
+    suite_index = next(
+        (i for i, line in enumerate(lines) if line == "## Suite Runs"), None
+    )
+    suite_row = (
+        f"| {metadata['timestamp']} | {metadata['run_identity']} | {decision:<9} | "
+        f"{metadata['machine']} | {metadata['commit_hash'][:8]} | {profile_name} | "
+        f"{architecture} | {ratio:.6f} |"
+    )
+    if suite_index is None:
+        log_section = next(
+            (i for i, line in enumerate(lines) if line == "## Log"), None
+        )
+        if log_section is None:
+            raise BaselineError(f"{HISTORY_FILE} has no Log section")
+        suite_section = [
+            "## Suite Runs",
+            "",
+            *SUITE_RUNS_HEADER.splitlines(),
+            suite_row,
+            "",
+        ]
+        lines[log_section:log_section] = suite_section
     else:
-        header = HISTORY_HEADER.rstrip()
-        existing_rows = ""
-
-    # Prepend new rows to the Log table.
-    new_content = header + "\n" + "\n".join(new_rows)
-    if existing_rows.strip():
-        new_content += "\n" + existing_rows
-
-    history_path.write_text(new_content)
+        suite_separator = next(
+            (
+                i
+                for i in range(suite_index + 1, len(lines))
+                if lines[i].startswith("|---")
+            ),
+            None,
+        )
+        if suite_separator is None:
+            raise BaselineError(f"{HISTORY_FILE} has no Suite Runs table")
+        lines[suite_separator + 1 : suite_separator + 1] = [suite_row]
+    log_index = next((i for i, line in enumerate(lines) if line == "## Log"), None)
+    if log_index is None:
+        raise BaselineError(f"{HISTORY_FILE} has no Log section")
+    separator_index = next(
+        (i for i in range(log_index + 1, len(lines)) if lines[i].startswith("|---")),
+        None,
+    )
+    if separator_index is None:
+        raise BaselineError(f"{HISTORY_FILE} has no Log table")
+    lines[separator_index - 1 : separator_index + 1] = HISTORY_TABLE_HEADER.splitlines()
+    insertion_index = separator_index + 1
+    lines[insertion_index:insertion_index] = new_rows
+    atomic_write_text(history_path, "\n".join(lines) + "\n")
     print(f"History updated: {history_path}")
 
 
@@ -553,90 +489,167 @@ def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
 # Main entry point
 # ============================================================================
 
-def main():
-    if len(sys.argv) < 4 or sys.argv[2] != "--profile":
-        print(
-            "Usage: python3 history_updater.py <results_dir> "
-            "--profile <profile> [--machine <id>] [--refresh-baseline]"
-        )
-        sys.exit(1)
+def validate_rust_refresh(json_results: dict, profile: list[str]) -> None:
+    for benchmark in profile:
+        rust_rows = [
+            row for row in json_results[benchmark]
+            if row.get("language", "").lower() == "rust"
+        ]
+        if len(rust_rows) != 1:
+            raise BaselineError(
+                f"{benchmark}: audited Rust refresh expected one result, found {len(rust_rows)}"
+            )
+        instructions = rust_rows[0].get("instructions")
+        if (
+            isinstance(instructions, bool)
+            or not isinstance(instructions, int)
+            or instructions <= 0
+        ):
+            raise BaselineError(f"{benchmark}: audited Rust instruction count is invalid")
 
-    results_dir = Path(sys.argv[1])
-    optional_args = sys.argv[4:]
-    if optional_args == []:
-        machine = None
-        refresh_baseline = False
-    elif optional_args == ["--refresh-baseline"]:
-        machine = None
-        refresh_baseline = True
-    elif (
-        len(optional_args) in {2, 3}
-        and optional_args[0] == "--machine"
-        and optional_args[1]
-        and optional_args[2:] in ([], ["--refresh-baseline"])
-    ):
-        machine = optional_args[1]
-        refresh_baseline = optional_args[2:] == ["--refresh-baseline"]
-    else:
-        print(
-            "Usage: python3 history_updater.py <results_dir> "
-            "--profile <profile> [--machine <id>] [--refresh-baseline]"
-        )
-        sys.exit(1)
 
-    if not results_dir.exists():
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("results_dir")
+    parser.add_argument("--profile", required=True)
+    parser.add_argument("--machine")
+    parser.add_argument("--refresh-baseline", action="store_true")
+    parser.add_argument("--reset-dark-baseline", action="store_true")
+    args = parser.parse_args()
+    results_dir = Path(args.results_dir)
+    if not results_dir.is_dir():
         print(f"Error: Results directory not found: {results_dir}")
-        sys.exit(1)
+        return 1
 
-    # Determine benchmarks directory (parent of results/)
     benchmarks_dir = results_dir.parent.parent
     registered_machines = registered_machine_ids(benchmarks_dir / HISTORY_FILE)
     if (
-        machine is not None
+        args.machine is not None
         and registered_machines
-        and machine not in registered_machines
+        and args.machine not in registered_machines
     ):
-        print(
-            f"Error: machine ID {machine!r} is not registered in {HISTORY_FILE}"
-        )
-        sys.exit(1)
+        print(f"Error: machine ID {args.machine!r} is not registered in {HISTORY_FILE}")
+        return 1
+
     try:
-        profile = load_profile(benchmarks_dir, sys.argv[3])
-    except ValueError as error:
-        print(f"Error: {error}")
-        sys.exit(1)
+        profile = load_profile(benchmarks_dir, args.profile)
+        json_results = load_json_results(results_dir)
+        actual_names = set(json_results)
+        expected_names = set(profile)
+        if actual_names != expected_names:
+            missing = sorted(expected_names - actual_names)
+            unexpected = sorted(actual_names - expected_names)
+            details = []
+            if missing:
+                details.append(f"missing {', '.join(missing)}")
+            if unexpected:
+                details.append(f"unexpected {', '.join(unexpected)}")
+            raise BaselineError(
+                f"profile result set is incomplete ({'; '.join(details)})"
+            )
+        current = load_dark_counts(results_dir, profile)
+        metadata = get_run_metadata(results_dir)
+        metadata["machine"] = "" if args.machine is None else args.machine
+        architecture = machine_architecture()
+        canonical_path = snapshot_path(benchmarks_dir, args.profile, architecture)
+        validate_history_log(benchmarks_dir / HISTORY_FILE)
+        validate_new_run_identity(
+            benchmarks_dir / HISTORY_FILE, metadata["run_identity"]
+        )
 
-    json_results = load_json_results(results_dir)
-    if not json_results:
-        print("No cachegrind results found, skipping updates.")
-        sys.exit(0)
+        # A requested audited Rust refresh is independent of the Dark decision,
+        # but only a complete successful reference run may reach this recorder.
+        if args.refresh_baseline:
+            validate_rust_refresh(json_results, profile)
+            update_baselines_file(benchmarks_dir, json_results)
 
-    actual_names = set(json_results)
-    profile_names = set(profile)
-    if actual_names != profile_names:
-        missing = sorted(profile_names - actual_names)
-        unexpected = sorted(actual_names - profile_names)
-        if missing:
-            print(f"Error: profile run is missing results: {', '.join(missing)}")
-        if unexpected:
-            print(f"Error: profile run has unexpected results: {', '.join(unexpected)}")
-        sys.exit(1)
+        compiler = CompilerAttribution(
+            metadata["commit_hash"], metadata["commit_message"]
+        )
+        if args.reset_dark_baseline:
+            new_snapshot = create_snapshot(
+                benchmarks_dir,
+                args.profile,
+                architecture,
+                current,
+                metadata["timestamp"],
+                compiler,
+            )
+            write_snapshot(canonical_path, new_snapshot)
+            decision = "reset"
+            ratio = 1.0
+            action = "reset"
+            decision_document = {
+                "schema_version": 1,
+                "suite": "dark-compiler",
+                "profile": args.profile,
+                "architecture": architecture,
+                "baseline": {
+                    "profile": args.profile,
+                    "commit": compiler.commit,
+                    "contract_sha256": new_snapshot.contract_sha256,
+                    "measurement_policy": new_snapshot.measurement_policy,
+                },
+                "decision": decision,
+                "current_baseline_ratio": 1.0,
+                "snapshot_action": action,
+                "benchmarks": [],
+            }
+            active_snapshot = new_snapshot
+            print(f"Dark routine baseline reset atomically: {canonical_path}")
+        else:
+            old_snapshot = load_snapshot(
+                canonical_path, benchmarks_dir, args.profile, architecture
+            )
+            comparison = compare_suites(current, old_snapshot.benchmarks)
+            print_comparison(comparison, old_snapshot)
+            decision = comparison.decision
+            ratio = comparison.ratio
+            if decision == "improved":
+                active_snapshot = create_snapshot(
+                    benchmarks_dir,
+                    args.profile,
+                    architecture,
+                    current,
+                    metadata["timestamp"],
+                    compiler,
+                )
+                write_snapshot(canonical_path, active_snapshot)
+                action = "advanced"
+            elif decision == "equal":
+                active_snapshot = old_snapshot
+                action = "unchanged-equal"
+            else:
+                active_snapshot = old_snapshot
+                action = "preserved-stronger-baseline"
+            decision_document = comparison_dict(
+                comparison, args.profile, old_snapshot, action
+            )
+            print(f"Dark routine snapshot: {action}")
 
-    metadata = get_run_metadata(results_dir)
-    metadata["machine"] = "" if machine is None else machine
+        baselines = load_baselines_file(benchmarks_dir)
+        if decision in {"improved", "reset"} or args.refresh_baseline:
+            update_results_file(benchmarks_dir, active_snapshot, baselines)
+        append_to_history(
+            benchmarks_dir,
+            json_results,
+            metadata,
+            decision,
+            ratio,
+            args.profile,
+            architecture,
+            profile,
+        )
+        atomic_write_json(results_dir / "dark_suite_decision.json", decision_document)
+        return 1 if decision == "regressed" else 0
+    except (BaselineError, OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"Dark routine recording failed: {error}")
+        print(
+            "No baseline repair was attempted. Contract incompatibility requires "
+            "a complete successful --reset-dark-baseline run."
+        )
+        return 1
 
-    # Persist refreshed reference rows before generating RESULTS.md so the
-    # current run, rather than the previously cached Rust values, is rendered.
-    if refresh_baseline:
-        update_baselines_file(benchmarks_dir, json_results)
-
-    baselines = load_baselines_file(benchmarks_dir)
-
-    # Always update RESULTS.md with latest Dark + cached baselines
-    update_results_file(benchmarks_dir, json_results, baselines, metadata, profile)
-
-    # Always append Dark results to HISTORY.md
-    append_to_history(benchmarks_dir, json_results, metadata)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

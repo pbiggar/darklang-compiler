@@ -3,7 +3,7 @@
 # Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh]
 #
 # By default, only runs Dark and uses the cached Rust row from BASELINES.md.
-# Pass `rust` or `all` as baseline_refresh to re-run the Rust reference.
+# Pass `rust` as baseline_refresh to re-run the audited Rust reference.
 
 set -e
 
@@ -21,7 +21,6 @@ if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
 fi
 
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
-RESULTS_FILE="$BENCHMARKS_DIR/RESULTS.md"
 EXPECTED_FILE="$PROBLEM_DIR/expected_output.txt"
 EXPECTED=""
 HAS_EXPECTED=false
@@ -49,63 +48,7 @@ should_run_lang() {
     if [ -z "$REFRESH_BASELINE" ] || [ "$REFRESH_BASELINE" = "false" ]; then
         return 1
     fi
-    if [ "$REFRESH_BASELINE" = "true" ] || [ "$REFRESH_BASELINE" = "all" ]; then
-        return 0
-    fi
     echo ",$REFRESH_BASELINE," | grep -q ",$lang,"
-}
-
-latest_results_count() {
-    local lang="$1"
-    local column_index=""
-
-    case "$lang" in
-        dark) column_index=3 ;;
-        rust) column_index=4 ;;
-        ocaml) column_index=5 ;;
-        python) column_index=6 ;;
-        node) column_index=7 ;;
-        *) return ;;
-    esac
-
-    if [ ! -f "$RESULTS_FILE" ]; then
-        return
-    fi
-
-    awk -F'|' -v bench="$BENCHMARK" -v idx="$column_index" '
-        function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
-        /^\|/ {
-            name = trim($2)
-            if (name == bench) {
-                value = trim($(idx))
-                gsub(/\([^)]*\)/, "", value)
-                value = trim(value)
-                print value
-                exit
-            }
-        }' "$RESULTS_FILE"
-}
-
-numeric_count() {
-    echo "$1" | tr -d ',' | tr -d ' '
-}
-
-format_improvement() {
-    local current="$1"
-    local baseline="$2"
-
-    if [ -z "$current" ] || [ -z "$baseline" ] || [ "$baseline" = "0" ]; then
-        return
-    fi
-
-    awk -v current="$current" -v baseline="$baseline" 'BEGIN {
-        diff = (baseline - current) / baseline * 100.0
-        if (diff >= 0) {
-            printf "+%.1f%% vs latest", diff
-        } else {
-            printf "%.1f%% vs latest", diff
-        }
-    }'
 }
 
 expected_output_for_impl() {
@@ -236,19 +179,7 @@ for impl in $IMPLS; do
   }
 EOF
 
-        LATEST_RESULTS=$(latest_results_count "$impl")
-        LATEST_NUM=$(numeric_count "$LATEST_RESULTS")
-        CURRENT_NUM=$(numeric_count "$I_REFS")
-        if [ -n "$LATEST_NUM" ] && [ "$LATEST_RESULTS" != "-" ] && [ "$LATEST_NUM" != "$CURRENT_NUM" ]; then
-            IMPROVEMENT=$(format_improvement "$CURRENT_NUM" "$LATEST_NUM")
-            if [ -n "$IMPROVEMENT" ]; then
-                pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS, $IMPROVEMENT)"
-            else
-                pretty_info "Instructions: $I_REFS"
-            fi
-        else
-            pretty_info "Instructions: $I_REFS"
-        fi
+        pretty_info "Instructions: $I_REFS"
     fi
 done
 
@@ -306,19 +237,7 @@ if [ "$PARITY_STATUS" = "comparable" ] && should_run_lang "python" && [ -f "$PRO
   }
 EOF
 
-            LATEST_RESULTS=$(latest_results_count "python")
-            LATEST_NUM=$(numeric_count "$LATEST_RESULTS")
-            CURRENT_NUM=$(numeric_count "$I_REFS")
-            if [ -n "$LATEST_NUM" ] && [ "$LATEST_RESULTS" != "-" ] && [ "$LATEST_NUM" != "$CURRENT_NUM" ]; then
-                IMPROVEMENT=$(format_improvement "$CURRENT_NUM" "$LATEST_NUM")
-                if [ -n "$IMPROVEMENT" ]; then
-                    pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS, $IMPROVEMENT)"
-                else
-                    pretty_info "Instructions: $I_REFS"
-                fi
-            else
-                pretty_info "Instructions: $I_REFS"
-            fi
+            pretty_info "Instructions: $I_REFS"
         fi
     fi
 fi
@@ -376,19 +295,7 @@ if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
   }
 EOF
 
-            LATEST_RESULTS=$(latest_results_count "node")
-            LATEST_NUM=$(numeric_count "$LATEST_RESULTS")
-            CURRENT_NUM=$(numeric_count "$I_REFS")
-            if [ -n "$LATEST_NUM" ] && [ "$LATEST_RESULTS" != "-" ] && [ "$LATEST_NUM" != "$CURRENT_NUM" ]; then
-                IMPROVEMENT=$(format_improvement "$CURRENT_NUM" "$LATEST_NUM")
-                if [ -n "$IMPROVEMENT" ]; then
-                    pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS, $IMPROVEMENT)"
-                else
-                    pretty_info "Instructions: $I_REFS"
-                fi
-            else
-                pretty_info "Instructions: $I_REFS"
-            fi
+            pretty_info "Instructions: $I_REFS"
         fi
     fi
 fi

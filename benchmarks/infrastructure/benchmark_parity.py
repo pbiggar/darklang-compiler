@@ -180,12 +180,13 @@ def main() -> int:
         except ValueError as error:
             failures.append(str(error))
             selected = []
-        for benchmark in selected:
-            status = contract.get(benchmark, {}).get("status")
-            if status != "comparable":
-                failures.append(
-                    f"{benchmark}: profile requires comparable status, got {status or 'missing'}"
-                )
+        if sys.argv[2] not in {"quick", "quick-fast"}:
+            for benchmark in selected:
+                status = contract.get(benchmark, {}).get("status")
+                if status != "comparable":
+                    failures.append(
+                        f"{benchmark}: profile requires comparable status, got {status or 'missing'}"
+                    )
 
     for benchmark in selected:
         entry = contract.get(benchmark)

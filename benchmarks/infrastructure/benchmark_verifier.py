@@ -1,96 +1,77 @@
 #!/usr/bin/env python3
-"""Verify a named Dark benchmark profile without modifying tracked files."""
+"""Read-only exact-product verification of a canonical Dark benchmark snapshot."""
 
+import argparse
 import sys
 from pathlib import Path
 
-from benchmark_profiles import load_profile
-from history_updater import (
-    is_reduced_size_benchmark,
-    load_json_results,
-    load_results_file,
+from benchmark_baseline import (
+    BaselineError,
+    atomic_write_json,
+    compare_suites,
+    comparison_dict,
+    load_dark_counts,
+    load_snapshot,
+    machine_architecture,
+    print_comparison,
+    snapshot_path,
 )
+from benchmark_profiles import load_profile
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("Usage: python3 benchmark_verifier.py <results_dir> <profile>")
-        return 1
-
-    results_dir = Path(sys.argv[1])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("results_dir")
+    parser.add_argument("profile")
+    parser.add_argument(
+        "--require-recorded",
+        action="store_true",
+        help="fail when the run is improved and therefore must be recorded",
+    )
+    args = parser.parse_args()
+    results_dir = Path(args.results_dir)
     if not results_dir.is_dir():
         print(f"Error: Results directory not found: {results_dir}")
         return 1
-
     benchmarks_dir = results_dir.parent.parent
     try:
-        profile = load_profile(benchmarks_dir, sys.argv[2])
-    except ValueError as error:
-        print(f"Error: {error}")
-        return 1
-    expected = load_results_file(benchmarks_dir)
-    actual = load_json_results(results_dir)
-    failures = []
-    verified = 0
-
-    profile_names = set(profile)
-    actual_names = set(actual)
-    expected_names = set(expected)
-    for benchmark in sorted(profile_names - actual_names):
-        failures.append(f"{benchmark}: missing result from profile run")
-    for benchmark in sorted(actual_names - profile_names):
-        failures.append(f"{benchmark}: unexpected result outside profile")
-    for benchmark in sorted(profile_names - expected_names):
-        failures.append(f"{benchmark}: missing row in RESULTS.md")
-    for benchmark in sorted(expected_names - profile_names):
-        failures.append(f"{benchmark}: unexpected RESULTS.md row outside profile")
-
-    for benchmark in profile:
-        if benchmark not in actual:
-            continue
-        results = actual[benchmark]
-        if is_reduced_size_benchmark(benchmarks_dir, benchmark):
-            print(f"Skipping {benchmark}: reduced-size Dark benchmark")
-            continue
-
-        dark_results = [
-            result
-            for result in results
-            if result.get("language", "").lower() == "dark"
-        ]
-        if len(dark_results) != 1:
-            failures.append(
-                f"{benchmark}: expected one Dark result, found {len(dark_results)}"
-            )
-            continue
-
-        instructions = dark_results[0].get("instructions", 0)
-        expected_instructions = expected.get(benchmark, {}).get("dark")
-        if expected_instructions is None:
-            failures.append(f"{benchmark}: missing Dark result in RESULTS.md")
-            continue
-
-        verified += 1
-        if instructions != expected_instructions:
-            difference = instructions - expected_instructions
-            failures.append(
-                f"{benchmark}: expected {expected_instructions:,}, "
-                f"measured {instructions:,} ({difference:+,})"
-            )
-
-    if verified == 0:
-        failures.append("no full-size Dark benchmark results were available to verify")
-
-    if failures:
-        print("Benchmark verification failed:")
-        for failure in failures:
-            print(f"  {failure}")
+        profile = load_profile(benchmarks_dir, args.profile)
+        architecture = machine_architecture()
+        baseline = load_snapshot(
+            snapshot_path(benchmarks_dir, args.profile, architecture),
+            benchmarks_dir,
+            args.profile,
+            architecture,
+        )
+        current = load_dark_counts(results_dir, profile)
+        comparison = compare_suites(current, baseline.benchmarks)
+    except (BaselineError, OSError, ValueError) as error:
+        print(f"Dark benchmark verification requires a baseline reset: {error}")
+        print(
+            "Run a complete successful routine suite with "
+            "--reset-dark-baseline. No tracked benchmark files were changed."
+        )
         return 1
 
-    print(
-        f"Verified {verified} full-size result(s) across the "
-        f"{len(profile)}-benchmark {sys.argv[2]} profile against RESULTS.md"
+    if comparison.decision == "improved":
+        action = "requires-recording"
+    elif comparison.decision == "equal":
+        action = "unchanged-equal"
+    else:
+        action = "preserved-stronger-baseline"
+    print_comparison(comparison, baseline)
+    print(f"Dark routine snapshot: {action}")
+    atomic_write_json(
+        results_dir / "dark_suite_decision.json",
+        comparison_dict(comparison, args.profile, baseline, action),
     )
+
+    if comparison.decision == "regressed":
+        return 1
+    if comparison.decision == "improved":
+        print("Routine improvement must be recorded before integration.")
+    if comparison.decision == "improved" and args.require_recorded:
+        return 1
     return 0
 
 
