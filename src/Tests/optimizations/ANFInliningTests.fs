@@ -395,6 +395,42 @@ let testBoundedRecursiveLoopHonorsExpansionLimit () : TestResult =
     else
         Error "Expected bounded recursive loop to remain over the expansion cost cap"
 
+let testSequentialCallsDoNotConsumeInlineDepth () : TestResult =
+    let param = { Id = TempId 0; Type = AST.TInt64 }
+    let addOne =
+        { Name = "addOne"
+          TypedParams = [param]
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          Body =
+            Let (
+                TempId 1,
+                Prim (Add, Var param.Id, intAtom 1L),
+                Return (Var (TempId 1))
+            ) }
+    let rec calls remaining argumentTid resultTid =
+        if remaining = 0 then
+            Return (Var argumentTid)
+        else
+            Let (
+                TempId resultTid,
+                Call ("addOne", [Var argumentTid]),
+                calls (remaining - 1) (TempId resultTid) (resultTid + 1)
+            )
+    let main =
+        Let (
+            TempId 2,
+            Atom (intAtom 0L),
+            calls 5 (TempId 2) 3
+        )
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramDefault (Program ([addOne], main))
+    let remainingCalls = countCalls "addOne" inlinedMain
+    if remainingCalls = 0 then
+        Ok ()
+    else
+        Error $"Expected all sequential calls to inline, but found {remainingCalls}"
+
 let tests = [
     ("Inlining literal args removes call", testInliningWithLiteralArgumentsRemovesCall)
     ("Inlining literal args binds literal TempId", testInliningWithLiteralArgumentsBindsTemp)
@@ -408,4 +444,5 @@ let tests = [
     ("Bounded recursive loops unroll eight iterations", testBoundedRecursiveLoopUnrollsEightIterations)
     ("Bounded recursive loops honor iteration limit", testBoundedRecursiveLoopHonorsIterationLimit)
     ("Bounded recursive loops honor expansion limit", testBoundedRecursiveLoopHonorsExpansionLimit)
+    ("Sequential calls do not consume inline depth", testSequentialCallsDoNotConsumeInlineDepth)
 ]

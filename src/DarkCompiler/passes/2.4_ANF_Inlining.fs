@@ -5,7 +5,7 @@
 //
 // Heuristics:
 // - MaxFunctionSize: Only inline functions with <= N TempIds in body
-// - MaxInlineDepth: Limit recursive inlining to prevent code explosion
+// - MaxInlineDepth: Limit nested inlining to prevent code explosion
 // - Small scalar recursive loops with a literal trip count can be fully unrolled
 // - Skip recursive functions (direct and mutual recursion via SCC detection)
 // - Skip functions with closures (complex runtime behavior)
@@ -29,7 +29,7 @@ open ANF
 type InliningConfig = {
     /// Maximum function body size (in TempIds) to inline
     MaxFunctionSize: int
-    /// Maximum depth of recursive inlining
+    /// Maximum depth of nested inlining
     MaxInlineDepth: int
     /// Maximum external stdlib wrapper calls to inline in one caller body
     MaxExternalInlineSites: int
@@ -484,9 +484,7 @@ let bindLiteralArgs
     loop parameters args Map.empty [] varGen
 
 /// Inline a function call
-/// Returns the renamed function body and updated VarGen. Callers choose whether
-/// to optimize the continuation before or after substitution based on the
-/// candidate source.
+/// Returns the renamed function body and updated VarGen.
 let inlineCallBody (info: FunctionInfo) (args: Atom list) (varGen: VarGen)
     : AExpr * VarGen =
     // Step 1: Bind literal args and build parameter -> TempId mapping
@@ -692,20 +690,16 @@ let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
                 let (body', varGen') = inlineInExpr funcs config depth varGen body
                 (Let (tid, Call (funcName, args), body'), varGen')
         | Some info when shouldInline info config depth ->
-            if info.IsExternal then
-                let (body', varGen') =
-                    inlineInExpr funcs config depth varGen body
-                let (inlinedBody, varGen'') = inlineCallBody info args varGen'
-                let (inlinedBody', varGen''') =
-                    inlineInExpr funcs config (depth + 1) varGen'' inlinedBody
-                let result = substituteReturn tid body' inlinedBody'
-                (result, varGen''')
-            else
-                let (inlinedBody, varGen') = inlineCallBody info args varGen
-                let inlinedExpr = substituteReturn tid body inlinedBody
-                let (result, varGen'') =
-                    inlineInExpr funcs config (depth + 1) varGen' inlinedExpr
-                (result, varGen'')
+            // Only calls inside the callee body increase nesting depth. The
+            // continuation remains at the caller's depth, so independent
+            // helper calls receive the same size-and-depth cost decision.
+            let (body', varGen') =
+                inlineInExpr funcs config depth varGen body
+            let (inlinedBody, varGen'') = inlineCallBody info args varGen'
+            let (inlinedBody', varGen''') =
+                inlineInExpr funcs config (depth + 1) varGen'' inlinedBody
+            let result = substituteReturn tid body' inlinedBody'
+            (result, varGen''')
         | _ ->
             // Don't inline - continue processing body
             let (body', varGen') = inlineInExpr funcs config depth varGen body
