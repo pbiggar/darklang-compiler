@@ -409,6 +409,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
                 AllowInternal = cliOpts.AllowInternal
                 Verbosity = verbosityToInt verbosity
                 Options = options
+                PackageValues = CompilerLibrary.emptyPackageValueCatalog
                 PassTimingRecorder = None
             }
             let compileReport = CompilerLibrary.compile request
@@ -468,6 +469,7 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
                     AllowInternal = cliOpts.AllowInternal
                     Verbosity = verbosityToInt verbosity
                     Options = options
+                    PackageValues = CompilerLibrary.emptyPackageValueCatalog
                     PassTimingRecorder = None
                 }
                 let compileReport = CompilerLibrary.compile request

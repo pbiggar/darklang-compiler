@@ -100,6 +100,11 @@ name`, and `Ambiguous <context> reference`.
   identities are introduced after type checking. They are not public resolution
   extensions.
 
+The immutable package-value snapshot used by `ValueSearch` is specified in
+[diff-value-search-parity.md](diff-value-search-parity.md). It is an explicit
+AOT bridge and does not add live package lookup or top-level values to this
+resolution model.
+
 Performance-only differences are outside this matrix.
 
 Lexical binding construction, duplicate validation, non-recursive RHS scope,

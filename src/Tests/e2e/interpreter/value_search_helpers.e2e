@@ -1,0 +1,13 @@
+// ValueSearch helper parity at darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+Darklang.Stdlib.ValueSearch.parseNamespace "" = []
+Darklang.Stdlib.ValueSearch.parseNamespace "Darklang.Stdlib.List" = ["Darklang"; "Stdlib"; "List"]
+
+Darklang.Stdlib.ValueSearch.isValueInNamespace [] ["Owner"; "Module"] = true
+Darklang.Stdlib.ValueSearch.isValueInNamespace ["Owner"; "Mod"] ["Owner"; "Module"] = false
+Darklang.Stdlib.ValueSearch.isValueInNamespace ["Owner"; "Module"] ["Owner"] = false
+Darklang.Stdlib.ValueSearch.isValueInNamespace ["Owner"] ["Owner"] = true
+Darklang.Stdlib.ValueSearch.isValueInNamespace ["Owner"; "Module"] ["Owner"; "Module"; "valueName"] = true
+
+Darklang.Stdlib.ValueSearch.buildPathFromLocation "Owner" [] "valueName" = "Owner.valueName"
+Darklang.Stdlib.ValueSearch.buildPathFromLocation "Owner" ["One"; "Two"] "valueName" = "Owner.One.Two.valueName"

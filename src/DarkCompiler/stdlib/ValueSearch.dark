@@ -1,0 +1,51 @@
+// ValueSearch.dark - typed package-value discovery over the compiler's AOT catalog.
+
+module Darklang.Stdlib.ValueSearch
+
+type FoundValue<'a> =
+    { path: String,
+      value: a }
+
+let parseNamespace(targetNamespace: String) : List<String> =
+    if Stdlib.String.length(targetNamespace) == 0 then []
+    else Stdlib.String.split(targetNamespace, ".")
+
+let isValueInNamespace(namespaceParts: List<String>, valuePath: List<String>) : Bool =
+    if Stdlib.List.length<String>(namespaceParts) == 0 then true
+    else Stdlib.List.take<String>(valuePath, Stdlib.List.length<String>(namespaceParts)) == namespaceParts
+
+let buildPathFromLocation(owner: String, modules: List<String>, name: String) : String =
+    Stdlib.String.join(Stdlib.List.append<String>(Stdlib.List.append<String>([owner], modules), [name]), ".")
+
+let __filterValues<'value>(branchId: String, namespaceParts: List<String>, valueHashes: List<Darklang.LanguageTools.ProgramTypes.Hash>) : List<Darklang.Stdlib.ValueSearch.FoundValue<value>> =
+    match valueHashes with
+    | [] -> []
+    | [valueHash, ...remainingHashes] ->
+        let remaining = Darklang.Stdlib.ValueSearch.__filterValues<value>(branchId, namespaceParts, remainingHashes) in
+        match Darklang.LanguageTools.PackageManager.pickLocation(
+            Darklang.LanguageTools.PackageManager.PickContext.empty,
+            Builtin.pmGetLocationsByValue(branchId, valueHash)) with
+        | Some(location) ->
+            let valuePath = Stdlib.List.append<String>([location.owner], location.modules) in
+            if Darklang.Stdlib.ValueSearch.isValueInNamespace(namespaceParts, valuePath) then
+                match Builtin.pmEvaluateValue<value>(valueHash) with
+                | Some(evaluatedValue) ->
+                    [Darklang.Stdlib.ValueSearch.FoundValue {
+                        path = Darklang.Stdlib.ValueSearch.buildPathFromLocation(location.owner, location.modules, location.name),
+                        value = evaluatedValue },
+                     ...remaining]
+                | None -> remaining
+            else remaining
+        | None -> remaining
+
+// Uuid is a String alias in the compiler's AOT type model.
+let findByType<'value>(branchId: String, targetNamespace: String, targetTypeHash: Darklang.LanguageTools.ProgramTypes.Hash) : List<Darklang.Stdlib.ValueSearch.FoundValue<value>> =
+    let namespaceParts = Darklang.Stdlib.ValueSearch.parseNamespace(targetNamespace) in
+    let runtimeHash = Darklang.LanguageTools.RuntimeTypes.Hash.Hash(Darklang.LanguageTools.ProgramTypes.hashToString(targetTypeHash)) in
+    let valueType =
+        Darklang.LanguageTools.RuntimeTypes.ValueType.Known(
+            Darklang.LanguageTools.RuntimeTypes.KnownType.KTCustomType(
+                (Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName.Package(runtimeHash),
+                 []))) in
+    let valueHashes = Builtin.pmFindValuesByValueType(valueType) in
+    Darklang.Stdlib.ValueSearch.__filterValues<value>(branchId, namespaceParts, valueHashes)

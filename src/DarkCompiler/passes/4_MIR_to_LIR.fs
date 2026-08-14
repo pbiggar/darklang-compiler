@@ -232,6 +232,18 @@ let shouldCheckNegativeDivisor (operandType: AST.Type) : bool =
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 -> true
     | _ -> false
 
+let shouldCheckNegativeModuloDivisor
+    (functionName: string)
+    (operandType: AST.Type)
+    (divisor: MIR.Operand)
+    : bool =
+    shouldCheckNegativeDivisor operandType
+    && not (
+        // Int64.toString's decimal divisor is the fixed literal 10. Its inferred
+        // MIR type can otherwise depend on unrelated generic-specialization order.
+        functionName = "Stdlib.Int64.toString"
+        && divisor = MIR.Int64Const 10L)
+
 let isUnsignedIntegerType (operandType: AST.Type) : bool =
     match operandType with
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> true
@@ -1802,6 +1814,7 @@ let moduloNegativeDivisorErrorBlock (label: LIR.Label) : LIR.BasicBlock =
     }
 
 let selectBlocksWithModuloChecks
+    (functionName: string)
     (block: MIR.BasicBlock)
     (variantRegistry: MIR.VariantRegistry)
     (recordRegistry: MIR.RecordRegistry)
@@ -1816,7 +1829,8 @@ let selectBlocksWithModuloChecks
         | [] -> Ok (blocksRev, counter, currentLabel, currentInstrsRev, currentState)
         | instr :: rest ->
             match instr with
-            | MIR.BinOp (dest, MIR.Mod, left, right, operandType) when shouldCheckNegativeDivisor operandType ->
+            | MIR.BinOp (dest, MIR.Mod, left, right, operandType)
+                when shouldCheckNegativeModuloDivisor functionName operandType right ->
                 let lirDest = vregToLIRReg dest
                 match buildIntegerModuloParts lirDest left right operandType currentState with
                 | Error err -> Error err
@@ -1858,6 +1872,7 @@ let selectBlocksWithModuloChecks
 
 /// Convert MIR CFG to LIR CFG
 let selectCFG
+    (functionName: string)
     (cfg: MIR.CFG)
     (variantRegistry: MIR.VariantRegistry)
     (recordRegistry: MIR.RecordRegistry)
@@ -1876,7 +1891,7 @@ let selectCFG
         match remaining with
         | [] -> Ok (List.rev blocksAcc |> List.concat, labelMapAcc |> Map.ofList, currentState)
         | (_label, block) :: rest ->
-            match selectBlocksWithModuloChecks block variantRegistry recordRegistry returnType floatRegs errorLabel currentState with
+            match selectBlocksWithModuloChecks functionName block variantRegistry recordRegistry returnType floatRegs errorLabel currentState with
             | Error err -> Error err
             | Ok (lirBlocks, finalLabel, nextState) ->
                 let originalLabel = convertLabel block.Label
@@ -2023,7 +2038,7 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
     let convertFunc (mirFunc: MIR.Function) : Result<LIR.Function, string> =
         let errorLabel = LIR.Label $"__modulo_negative_divisor_error_{mirFunc.Name}"
         let tempState = initTempState mirFunc
-        match selectCFG mirFunc.CFG variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs errorLabel tempState with
+        match selectCFG mirFunc.Name mirFunc.CFG variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs errorLabel tempState with
         | Error err -> Error err
         | Ok lirCFG ->
             // Convert MIR TypedParams to LIR TypedLIRParams

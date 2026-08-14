@@ -1281,6 +1281,60 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
 let collectTypeAppsFromFunc (funcDef: AST.FunctionDef) : Set<SpecKey> =
     collectTypeApps funcDef.Body
 
+/// Collect canonical call targets without interpreting their names. The AOT
+/// catalog bridge uses this typed traversal to materialize only lookup
+/// primitives that are reachable from the current compilation.
+let rec collectCalledFunctions (expr: AST.Expr) : Set<string> =
+    let combine expressions =
+        expressions
+        |> List.map collectCalledFunctions
+        |> List.fold Set.union Set.empty
+
+    match expr with
+    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _
+    | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
+    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _
+    | AST.UInt64Literal _ | AST.UInt128Literal _ | AST.BoolLiteral _
+    | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
+    | AST.Var _ | AST.FuncRef _ | AST.RuntimeError _ -> Set.empty
+    | AST.BoundaryRender (_, value)
+    | AST.UnaryOp (_, value)
+    | AST.TupleAccess (value, _)
+    | AST.RecordAccess (value, _) -> collectCalledFunctions value
+    | AST.BinOp (_, left, right)
+    | AST.Sequence (left, right) -> combine [left; right]
+    | AST.Let (_, value, body) -> combine [value; body]
+    | AST.If (condition, thenBranch, elseBranch) ->
+        combine [condition; thenBranch; elseBranch]
+    | AST.Call (name, args)
+    | AST.TypeApp (name, _, args) ->
+        Set.add name (combine (exprArgsToList args))
+    | AST.TupleLiteral elements
+    | AST.ListLiteral elements -> combine elements
+    | AST.DictLiteral (_, entries) -> entries |> List.map snd |> combine
+    | AST.RecordLiteral (_, fields) -> fields |> List.map snd |> combine
+    | AST.RecordUpdate (record, fields) ->
+        combine (record :: (fields |> List.map snd))
+    | AST.Constructor (_, _, payload) ->
+        payload |> Option.map collectCalledFunctions |> Option.defaultValue Set.empty
+    | AST.Match (scrutinee, cases) ->
+        let caseCalls =
+            cases
+            |> List.collect (fun case ->
+                case.Body :: (case.Guard |> Option.toList))
+            |> combine
+        Set.union (collectCalledFunctions scrutinee) caseCalls
+    | AST.ListCons (heads, tail) -> combine (heads @ [tail])
+    | AST.Lambda (_, _, body) -> collectCalledFunctions body
+    | AST.Apply (func, args)
+    | AST.IndirectApply (func, args) ->
+        combine (func :: exprArgsToList args)
+    | AST.Closure (name, captures) -> Set.add name (combine captures)
+    | AST.InterpolatedString parts ->
+        parts
+        |> List.choose (function AST.StringExpr value -> Some value | AST.StringText _ -> None)
+        |> combine
+
 /// Specialize only the requested generic specs, returning new functions and a registry
 let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<SpecKey>) : SpecializationResult =
     let rec iterate
@@ -1426,6 +1480,7 @@ let private isIntrinsicTypeAppName (funcName: string) : bool =
     | "__list_get_tag"
     | "__list_to_rawptr"
     | "__rawptr_to_list" -> true
+    | "Builtin.pmEvaluateValue" -> true
     | _ -> false
 
 let private missingSpecMessage (funcName: string) (typeArgs: AST.Type list) : string =
@@ -2065,7 +2120,9 @@ let rec private matchPatternBindingTypes
                 typeReg
                 variantLookup
                 innerPattern
-                (applySubstToType substitution payloadType)
+                (match applySubstToType substitution payloadType with
+                 | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
+                 | other -> other)
         | _ -> Map.empty
     | AST.PList patterns ->
         match scrutineeType with
@@ -2251,7 +2308,11 @@ let rec simpleInferType
                              && List.length typeParams = List.length typeArgs ->
                         List.zip typeParams typeArgs |> Map.ofList
                     | _ -> Map.empty
-                extractPatternBindings pat (applySubstToType subst payloadType)
+                extractPatternBindings
+                    pat
+                    (match applySubstToType subst payloadType with
+                     | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
+                     | other -> other)
             | _ -> Map.empty
         | AST.PList innerPats ->
             match scrutType with
@@ -3333,7 +3394,21 @@ let rec liftLambdasInProgram
 
     let mergeMapsLocal m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     let mergedTypeReg = mergeMapsLocal baseTypeReg typeReg
-    let mergedVariantLookup = mergeMapsLocal baseVariantLookup variantLookup
+    let rawMergedVariantLookup = mergeMapsLocal baseVariantLookup variantLookup
+    let mergedVariantLookup =
+        rawMergedVariantLookup
+        |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
+            let isCatalogBoundaryType =
+                typeName.StartsWith("Darklang.LanguageTools.ProgramTypes.")
+                || typeName.StartsWith("Darklang.LanguageTools.RuntimeTypes.")
+            (typeName,
+             typeParams,
+             tag,
+             if isCatalogBoundaryType then
+                 payloadType
+                 |> Option.map (canonicalizeBareSumTypeRefs rawMergedVariantLookup)
+             else
+                 payloadType))
 
     // First pass: collect all function definitions and their parameters
     let userFuncParams : Map<string, (string * AST.Type) list> =
@@ -4766,6 +4841,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         else if name = "Stdlib.Blob.empty" then
             // Blob.empty shares the immortal empty dynamic-buffer literal.
             Ok (ANF.Return (ANF.StringLiteral ""), varGen)
+        else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
+            toANF
+                (AST.RecordLiteral (
+                    "Darklang.LanguageTools.PackageManager.PickContext",
+                    [("currentModule", AST.ListLiteral [])]
+                ))
+                varGen env typeReg variantLookup funcReg moduleRegistry
         else
             // Variable reference: look up in environment
             match tryLookupResolved name env with
@@ -6655,7 +6737,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     match pat with
                     | AST.PTuple innerPatterns ->
                         match patType with
-                        | AST.TTuple elemTypes ->
+                        | AST.TTuple elemTypes
+                        | AST.TEnumFields elemTypes ->
                             List.length innerPatterns <> List.length elemTypes
                             || List.exists2 patternDefinitelyCannotMatchType innerPatterns elemTypes
                         | AST.TVar _ -> false
@@ -6755,6 +6838,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         substituteType subst payloadTypeTemplate
                                     | _ -> payloadTypeTemplate
                                     |> canonicalizeBareSumTypeRefs variantLookup
+                                    |> function
+                                        | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
+                                        | other -> other
 
                                 Ok (Some payloadType)
                             | Some (_, _, _, None) ->
@@ -7237,7 +7323,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 match pattern with
                 | AST.PTuple innerPatterns ->
                     match sourceType with
-                    | AST.TTuple elemTypes ->
+                    | AST.TTuple elemTypes
+                    | AST.TEnumFields elemTypes ->
                         if List.length elemTypes <> List.length innerPatterns then
                             true
                         else
@@ -7335,6 +7422,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let tupleElemTypesOpt =
                         match sourceType with
                         | AST.TTuple types when List.length types = List.length patterns ->
+                            Some types
+                        | AST.TEnumFields types when List.length types = List.length patterns ->
                             Some types
                         | AST.TVar sourceTypeVar ->
                             Some (
@@ -8933,6 +9022,13 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             Ok (ANF.FloatLiteral System.Double.NaN, [], varGen)
         else if name = "Stdlib.Blob.empty" then
             Ok (ANF.StringLiteral "", [], varGen)
+        else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
+            toAtom
+                (AST.RecordLiteral (
+                    "Darklang.LanguageTools.PackageManager.PickContext",
+                    [("currentModule", AST.ListLiteral [])]
+                ))
+                varGen env typeReg variantLookup funcReg moduleRegistry
         else
             // Variable reference: look up in environment
             match tryLookupResolved name env with
@@ -10098,7 +10194,7 @@ let buildRegistries
             | _ -> None)
         |> Map.ofList
 
-    let variantLookup : VariantLookup =
+    let rawVariantLookup : VariantLookup =
         let collidingCaseNames = AST.collidingConstructorCaseNames typeDefs
         typeDefs
         |> List.choose (function
@@ -10119,6 +10215,21 @@ let buildRegistries
                     if Map.containsKey variant.Name typeLookup then typeLookup
                     else Map.add variant.Name info typeLookup
                 Map.add $"{typeName}.{variant.Name}" info withBare) lookup) Map.empty
+
+    let variantLookup : VariantLookup =
+        rawVariantLookup
+        |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
+            let isCatalogBoundaryType =
+                typeName.StartsWith("Darklang.LanguageTools.ProgramTypes.")
+                || typeName.StartsWith("Darklang.LanguageTools.RuntimeTypes.")
+            (typeName,
+             typeParams,
+             tag,
+             if isCatalogBoundaryType then
+                 payloadType
+                 |> Option.map (canonicalizeBareSumTypeRefs rawVariantLookup)
+             else
+                 payloadType))
 
     let typeReg =
         typeRegBase

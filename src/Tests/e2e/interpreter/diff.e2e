@@ -1,0 +1,15 @@
+// Diff parity at darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+// These assertions retain the interpreter's exact LCS tie rule and output order.
+
+Darklang.Stdlib.Diff.lines "same" "same" = [Darklang.Stdlib.Diff.DiffLine.Same "same"]
+Darklang.Stdlib.Diff.lines "a" "a\nb" = [Darklang.Stdlib.Diff.DiffLine.Same "a"; Darklang.Stdlib.Diff.DiffLine.Added "b"]
+Darklang.Stdlib.Diff.lines "a\nb" "a" = [Darklang.Stdlib.Diff.DiffLine.Same "a"; Darklang.Stdlib.Diff.DiffLine.Removed "b"]
+Darklang.Stdlib.Diff.lines "" "new" = [Darklang.Stdlib.Diff.DiffLine.Removed ""; Darklang.Stdlib.Diff.DiffLine.Added "new"]
+Darklang.Stdlib.Diff.lines "old" "" = [Darklang.Stdlib.Diff.DiffLine.Removed "old"; Darklang.Stdlib.Diff.DiffLine.Added ""]
+Darklang.Stdlib.Diff.lines "old" "new" = [Darklang.Stdlib.Diff.DiffLine.Removed "old"; Darklang.Stdlib.Diff.DiffLine.Added "new"]
+Darklang.Stdlib.Diff.lines "a\nb" "b\na" = [Darklang.Stdlib.Diff.DiffLine.Removed "a"; Darklang.Stdlib.Diff.DiffLine.Same "b"; Darklang.Stdlib.Diff.DiffLine.Added "a"]
+Darklang.Stdlib.Diff.lines "" "" = [Darklang.Stdlib.Diff.DiffLine.Same ""]
+Darklang.Stdlib.Diff.lines "\na" "\nb" = [Darklang.Stdlib.Diff.DiffLine.Same ""; Darklang.Stdlib.Diff.DiffLine.Removed "a"; Darklang.Stdlib.Diff.DiffLine.Added "b"]
+Darklang.Stdlib.Diff.lines "a\n" "b\n" = [Darklang.Stdlib.Diff.DiffLine.Removed "a"; Darklang.Stdlib.Diff.DiffLine.Added "b"; Darklang.Stdlib.Diff.DiffLine.Same ""]
+Darklang.Stdlib.Diff.lines "a\nb\nc" "a\nx\nc\nd" = [Darklang.Stdlib.Diff.DiffLine.Same "a"; Darklang.Stdlib.Diff.DiffLine.Removed "b"; Darklang.Stdlib.Diff.DiffLine.Added "x"; Darklang.Stdlib.Diff.DiffLine.Same "c"; Darklang.Stdlib.Diff.DiffLine.Added "d"]
+Darklang.Stdlib.Diff.lines "A\nB\nA" "A\nA\nB" = [Darklang.Stdlib.Diff.DiffLine.Same "A"; Darklang.Stdlib.Diff.DiffLine.Removed "B"; Darklang.Stdlib.Diff.DiffLine.Same "A"; Darklang.Stdlib.Diff.DiffLine.Added "B"]

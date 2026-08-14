@@ -1,0 +1,14 @@
+// ProgramTypes.dark - minimal canonical package identities used by ValueSearch.
+
+module Darklang.LanguageTools.ProgramTypes
+
+type Hash = Hash of String
+
+let hashToString(hash: Darklang.LanguageTools.ProgramTypes.Hash) : String =
+    match hash with
+    | Hash(value) -> value
+
+type PackageLocation =
+    { owner: String,
+      modules: List<String>,
+      name: String }

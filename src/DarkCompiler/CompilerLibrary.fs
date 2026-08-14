@@ -758,6 +758,50 @@ type CompileContext =
     | StdlibOnly of StdlibResult
     | StdlibWithPreamble of StdlibResult * PreambleContext
 
+/// Recursive custom-type identity retained only at the immutable package-value
+/// catalog boundary. Runtime type arguments use the same exact nested custom
+/// identities as ValueSearch's ValueType query.
+type PackageCustomType = {
+    Hash: string
+    TypeArguments: PackageCustomType list
+}
+
+/// A branch-visible package location. Input order is the interpreter package
+/// manager's branch-prioritized order and remains observable during selection.
+type CatalogPackageLocation = {
+    VisibleInBranches: string list
+    Owner: string
+    Modules: string list
+    Name: string
+}
+
+/// Evaluation availability is explicit; missing and failed package evaluation
+/// both become None at the public primitive, but are distinct catalog states.
+type PackageValueEvaluatorState =
+    | Available of AST.Expr
+    | Unavailable
+    | EvaluationFailure
+
+/// The evaluator's concrete result type is checked before its expression can
+/// cross into a monomorphized ValueSearch caller.
+type TypedPackageValueEvaluator = {
+    ResultType: AST.Type
+    State: PackageValueEvaluatorState
+}
+
+type PackageValueCatalogEntry = {
+    ValueHash: string
+    RuntimeType: PackageCustomType
+    Locations: CatalogPackageLocation list
+    Evaluator: TypedPackageValueEvaluator
+}
+
+/// Explicit AOT package snapshot. Unlike the interpreter package manager this
+/// value is immutable and contains no database or live branch traversal.
+type PackageValueCatalog = PackageValueCatalog of PackageValueCatalogEntry list
+
+let emptyPackageValueCatalog : PackageValueCatalog = PackageValueCatalog []
+
 /// Request for compiling source code
 type CompileRequest = {
     Context: CompileContext
@@ -768,6 +812,7 @@ type CompileRequest = {
     AllowInternal: bool
     Verbosity: int
     Options: CompilerOptions
+    PackageValues: PackageValueCatalog
     PassTimingRecorder: PassTimingRecorder option
 }
 
@@ -1034,7 +1079,12 @@ let private loadDarkFileAllowInternal (filename: string) : Result<AST.Program, s
         Error $"Could not find {filename} in any of: {pathsStr}"
     | Some path ->
         let source = File.ReadAllText(path)
-        Parser.parseString true source
+        let parse =
+            if filename = "stdlib/RuntimeValueType.dark" then
+                InterpreterParser.parseString
+            else
+                Parser.parseString
+        parse true source
         |> Result.mapError (fun err -> $"Error parsing {filename}: {err}")
 
 /// Load the stdlib and unicode_data.dark files
@@ -1071,6 +1121,14 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Dict.dark"
         "stdlib/__HAMT.dark"
         "stdlib/Uuid.dark"
+        "stdlib/Diff.dark"
+        "stdlib/ProgramTypes.dark"
+        "stdlib/RuntimeTypes.dark"
+        "stdlib/RuntimeFQTypeName.dark"
+        "stdlib/RuntimeValueType.dark"
+        "stdlib/RuntimeValueTypeSupport.dark"
+        "stdlib/PackageManager.dark"
+        "stdlib/ValueSearch.dark"
         "stdlib/DateTime.dark"
         "stdlib/Duration.dark"
         "stdlib/Bytes.dark"
@@ -1350,6 +1408,7 @@ type private UserCompilePlan = {
     SourceSyntax: SourceSyntax
     Verbosity: int
     Options: CompilerOptions
+    PackageValues: PackageValueCatalog
     PassTimingRecorder: PassTimingRecorder option
     Stdlib: StdlibResult
     BaseContext: PipelineContext
@@ -1373,6 +1432,274 @@ let parseProgram
     match sourceSyntax with
     | CompilerSyntax -> Parser.parseString allowInternal source
     | InterpreterSyntax -> InterpreterParser.parseString allowInternal source
+
+let private packageHashType =
+    AST.TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])
+
+let private packageLocationType =
+    AST.TRecord ("Darklang.LanguageTools.ProgramTypes.PackageLocation", [])
+
+let private runtimeValueType =
+    AST.TSum ("Darklang.LanguageTools.RuntimeTypes.ValueType", [])
+
+let private optionType (innerType: AST.Type) =
+    AST.TSum ("Stdlib.Option.Option", [innerType])
+
+let private constructor
+    (typeName: string)
+    (caseName: string)
+    (payload: AST.Expr option)
+    : AST.Expr =
+    AST.Constructor (AST.UnresolvedConstructor (Some typeName), caseName, payload)
+
+let private packageHashExpr (hash: string) : AST.Expr =
+    constructor
+        "Darklang.LanguageTools.ProgramTypes.Hash"
+        "Hash"
+        (Some (AST.StringLiteral hash))
+
+let private optionNoneExpr : AST.Expr =
+    constructor "Stdlib.Option.Option" "None" None
+
+let private optionSomeExpr (value: AST.Expr) : AST.Expr =
+    constructor "Stdlib.Option.Option" "Some" (Some value)
+
+let private call (name: string) (args: AST.Expr list) : AST.Expr =
+    AST.Call (name, AST.NonEmptyList.fromList args)
+
+let private addOrderedGroup
+    (key: 'key)
+    (value: 'value)
+    (groups: ('key * 'value list) list)
+    : ('key * 'value list) list
+    when 'key: equality =
+    let rec add remaining =
+        match remaining with
+        | [] -> [(key, [value])]
+        | (existingKey, values) :: rest when existingKey = key ->
+            (existingKey, values @ [value]) :: rest
+        | group :: rest -> group :: add rest
+    add groups
+
+let private nestedIf
+    (cases: (AST.Expr * AST.Expr) list)
+    (fallback: AST.Expr)
+    : AST.Expr =
+    List.foldBack
+        (fun (condition, result) remaining -> AST.If (condition, result, remaining))
+        cases
+        fallback
+
+let private catalogFunction
+    (name: string)
+    (parameters: (string * AST.Type) list)
+    (returnType: AST.Type)
+    (body: AST.Expr)
+    : AST.FunctionDef =
+    {
+        Name = name
+        TypeParams = []
+        Params = AST.NonEmptyList.fromList parameters
+        ReturnType = returnType
+        Body = body
+    }
+
+let private collectProgramSpecs (program: AST.Program) : Set<AST_to_ANF.SpecKey> =
+    let (AST.Program topLevels) = program
+    topLevels
+    |> List.map (function
+        | AST.FunctionDef func when List.isEmpty func.TypeParams ->
+            AST_to_ANF.collectTypeAppsFromFunc func
+        | AST.Expression expr -> AST_to_ANF.collectTypeApps expr
+        | _ -> Set.empty)
+    |> List.fold Set.union Set.empty
+
+let private collectProgramCalls (program: AST.Program) : Set<string> =
+    let (AST.Program topLevels) = program
+    topLevels
+    |> List.map (function
+        | AST.FunctionDef func -> AST_to_ANF.collectCalledFunctions func.Body
+        | AST.Expression expr -> AST_to_ANF.collectCalledFunctions expr
+        | AST.TypeDef _ -> Set.empty)
+    |> List.fold Set.union Set.empty
+
+let private validateDistinctCatalogHashes
+    (entries: PackageValueCatalogEntry list)
+    : Result<unit, string> =
+    let folder (state: Result<Set<string>, string>) entry =
+        state
+        |> Result.bind (fun hashes ->
+            if Set.contains entry.ValueHash hashes then
+                Error $"Package value catalog contains duplicate value hash '{entry.ValueHash}'"
+            else
+                Ok (Set.add entry.ValueHash hashes))
+    entries
+    |> List.fold folder (Ok Set.empty)
+    |> Result.map (fun _ -> ())
+
+let private materializePackageValueCatalog
+    (baseContext: PipelineContext)
+    (warningSettings: AST.WarningSettings)
+    (catalog: PackageValueCatalog)
+    (typedProgram: AST.Program)
+    : Result<AST.Program, string> =
+    let (PackageValueCatalog entries) = catalog
+    validateDistinctCatalogHashes entries
+    |> Result.bind (fun () ->
+        let localGenericDefs = AST_to_ANF.extractGenericFuncDefs typedProgram
+        let genericDefs =
+            Map.fold
+                (fun current name definition -> Map.add name definition current)
+                baseContext.GenericFuncDefs
+                localGenericDefs
+        let specialization =
+            typedProgram
+            |> collectProgramSpecs
+            |> AST_to_ANF.specializeFromSpecs genericDefs
+        let requestedEvaluatorTypes =
+            specialization.ExternalSpecs
+            |> Set.toList
+            |> List.choose (function
+                | "Builtin.pmEvaluateValue", [resultType] -> Some resultType
+                | _ -> None)
+            |> Set.ofList
+        let specializedCalls =
+            specialization.SpecializedFuncs
+            |> List.map (fun func -> AST_to_ANF.collectCalledFunctions func.Body)
+            |> List.fold Set.union Set.empty
+        let reachableCalls = Set.union (collectProgramCalls typedProgram) specializedCalls
+        let needsFind = Set.contains "Builtin.pmFindValuesByValueType" reachableCalls
+        let needsLocations = Set.contains "Builtin.pmGetLocationsByValue" reachableCalls
+        let needsEvaluators = not (Set.isEmpty requestedEvaluatorTypes)
+
+        if not needsFind && not needsLocations && not needsEvaluators then
+            Ok typedProgram
+        else
+            let reachableEntries =
+                entries
+                |> List.filter (fun entry ->
+                    Set.contains entry.Evaluator.ResultType requestedEvaluatorTypes)
+
+            let findGroups =
+                reachableEntries
+                |> List.filter (fun entry -> List.isEmpty entry.RuntimeType.TypeArguments)
+                |> List.fold
+                    (fun groups entry ->
+                        addOrderedGroup entry.RuntimeType entry.ValueHash groups)
+                    []
+            let findCases =
+                findGroups
+                |> List.map (fun (catalogType, hashes) ->
+                    let condition =
+                        call
+                            "Darklang.LanguageTools.RuntimeTypes.isCustomTypeWithNoTypeArguments"
+                            [AST.Var "valueType"; AST.StringLiteral catalogType.Hash]
+                    let result = hashes |> List.map packageHashExpr |> AST.ListLiteral
+                    (condition, result))
+            let findFunction =
+                catalogFunction
+                    "Builtin.pmFindValuesByValueType"
+                    [("valueType", runtimeValueType)]
+                    (AST.TList packageHashType)
+                    (nestedIf findCases (AST.ListLiteral []))
+
+            let visibleLocations =
+                reachableEntries
+                |> List.collect (fun entry ->
+                    entry.Locations
+                    |> List.collect (fun location ->
+                        location.VisibleInBranches
+                        |> List.map (fun branchId ->
+                            ((branchId, entry.ValueHash), location))))
+            let locationGroups =
+                visibleLocations
+                |> List.fold
+                    (fun groups (key, location) -> addOrderedGroup key location groups)
+                    []
+            let locationExpr (location: CatalogPackageLocation) =
+                AST.RecordLiteral (
+                    "Darklang.LanguageTools.ProgramTypes.PackageLocation",
+                    [
+                        ("owner", AST.StringLiteral location.Owner)
+                        ("modules", location.Modules |> List.map AST.StringLiteral |> AST.ListLiteral)
+                        ("name", AST.StringLiteral location.Name)
+                    ]
+                )
+            let locationCases =
+                locationGroups
+                |> List.map (fun ((branchId, valueHash), locations) ->
+                    let branchMatches =
+                        AST.BinOp (AST.Eq, AST.Var "branchId", AST.StringLiteral branchId)
+                    let hashMatches =
+                        AST.BinOp (AST.Eq, AST.Var "hashText", AST.StringLiteral valueHash)
+                    let result = locations |> List.map locationExpr |> AST.ListLiteral
+                    (AST.BinOp (AST.And, branchMatches, hashMatches), result))
+            let locationsBody =
+                AST.Let (
+                    AST.LPVariable "hashText",
+                    call "Darklang.LanguageTools.ProgramTypes.hashToString" [AST.Var "valueHash"],
+                    nestedIf locationCases (AST.ListLiteral [])
+                )
+            let locationsFunction =
+                catalogFunction
+                    "Builtin.pmGetLocationsByValue"
+                    [("branchId", AST.TString); ("valueHash", packageHashType)]
+                    (AST.TList packageLocationType)
+                    locationsBody
+
+            let evaluatorFunction (resultType: AST.Type) =
+                let name = AST_to_ANF.specName "Builtin.pmEvaluateValue" [resultType]
+                let cases =
+                    reachableEntries
+                    |> List.choose (fun entry ->
+                        if entry.Evaluator.ResultType <> resultType then
+                            None
+                        else
+                            match entry.Evaluator.State with
+                            | Available value ->
+                                let condition =
+                                    AST.BinOp (
+                                        AST.Eq,
+                                        AST.Var "hashText",
+                                        AST.StringLiteral entry.ValueHash
+                                    )
+                                Some (condition, optionSomeExpr value)
+                            | Unavailable
+                            | EvaluationFailure -> None)
+                let body =
+                    AST.Let (
+                        AST.LPVariable "hashText",
+                        call "Darklang.LanguageTools.ProgramTypes.hashToString" [AST.Var "valueHash"],
+                        nestedIf cases optionNoneExpr
+                    )
+                catalogFunction
+                    name
+                    [("valueHash", packageHashType)]
+                    (optionType resultType)
+                    body
+
+            let generatedFunctions =
+                (if needsFind then [findFunction] else [])
+                @ (if needsLocations then [locationsFunction] else [])
+                @ (requestedEvaluatorTypes |> Set.toList |> List.map evaluatorFunction)
+            let syntheticProgram =
+                AST.Program (
+                    (generatedFunctions |> List.map AST.FunctionDef)
+                    @ [AST.Expression AST.UnitLiteral]
+                )
+            TypeChecking.checkProgramWithBaseEnvAndSettings
+                baseContext.TypeCheckEnv
+                false
+                warningSettings
+                syntheticProgram
+            |> Result.mapError (fun error ->
+                $"Package value catalog validation failed: {TypeChecking.typeErrorToString error}")
+            |> Result.map (fun (_, AST.Program generatedTopLevels, _) ->
+                let generatedDefinitions =
+                    generatedTopLevels
+                    |> List.filter (function AST.Expression _ -> false | _ -> true)
+                let (AST.Program userTopLevels) = typedProgram
+                AST.Program (generatedDefinitions @ userTopLevels)))
 
 /// Compile a user/test program against a prebuilt stdlib/preamble context
 let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
@@ -1426,10 +1753,16 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     // Pass 2: AST → ANF (user only)
                     if plan.Verbosity >= 1 then println plan.Labels.Anf
                     let userOnlyResult =
-                        convertTypedProgramToUserOnlyWithMode
+                        materializePackageValueCatalog
                             plan.BaseContext
-                            plan.Monomorphization
+                            plan.Options.Warnings
+                            plan.PackageValues
                             renderedUserAst
+                        |> Result.bind (fun materializedProgram ->
+                            convertTypedProgramToUserOnlyWithMode
+                                plan.BaseContext
+                                plan.Monomorphization
+                                materializedProgram)
                     let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                     recordPassTiming plan.PassTimingRecorder "AST -> ANF" anfTime
                     if plan.Verbosity >= 2 then
@@ -1853,6 +2186,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
         SourceSyntax = request.SourceSyntax
         Verbosity = request.Verbosity
         Options = request.Options
+        PackageValues = request.PackageValues
         PassTimingRecorder = request.PassTimingRecorder
         Stdlib = stdlib
         BaseContext = baseContext

@@ -1153,6 +1153,7 @@ let runE2ETestWithPreambleContext
             AllowInternal = allowInternal
             Verbosity = 0
             Options = options
+            PackageValues = CompilerLibrary.emptyPackageValueCatalog
             PassTimingRecorder = passTimingRecorder
         }
         let run = compileAndRun test.Stdin request
@@ -1182,6 +1183,7 @@ let runE2ETestWithPreambleContext
                 AllowInternal = allowInternal
                 Verbosity = 0
                 Options = options
+                PackageValues = CompilerLibrary.emptyPackageValueCatalog
                 PassTimingRecorder = passTimingRecorder
             }
             let fallbackRun = compileAndRun test.Stdin fallbackRequest

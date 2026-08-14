@@ -121,6 +121,27 @@ let builtinPresentationModule : ModuleDef = {
     ]
 }
 
+/// Narrow package lookup surface consumed by ValueSearch. Compilation replaces
+/// these signatures with catalog-backed Dark functions for each concrete AOT
+/// specialization; there is no live package-manager service in native output.
+let packageCatalogModule : ModuleDef = {
+    Name = "Builtin"
+    Functions = [
+        { Name = "pmFindValuesByValueType"
+          TypeParams = []
+          ParamTypes = [TSum ("Darklang.LanguageTools.RuntimeTypes.ValueType", [])]
+          ReturnType = TList (TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])) }
+        { Name = "pmGetLocationsByValue"
+          TypeParams = []
+          ParamTypes = [TString; TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])]
+          ReturnType = TList (TRecord ("Darklang.LanguageTools.ProgramTypes.PackageLocation", [])) }
+        { Name = "pmEvaluateValue"
+          TypeParams = ["a"]
+          ParamTypes = [TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])]
+          ReturnType = TSum ("Stdlib.Option.Option", [TVar "a"]) }
+    ]
+}
+
 /// Raw memory intrinsics - internal only for HAMT implementation
 /// These functions bypass the type system and should only be used in stdlib code
 /// The names start with __ to indicate they are internal
@@ -208,12 +229,15 @@ let allModules : ModuleDef list = [
     randomModule
     dateTimeModule
     builtinPresentationModule
+    packageCatalogModule
 ]
 
 /// Compiler-visible values are registered separately from functions so a value
 /// cannot accidentally acquire nullary-call semantics.
 let allValues : ModuleValue list = [
     { Name = "Stdlib.Blob.empty"; Type = TBlob }
+    { Name = "Darklang.LanguageTools.PackageManager.PickContext.empty"
+      Type = TRecord ("Darklang.LanguageTools.PackageManager.PickContext", []) }
 ]
 
 let private valueRegistry : ModuleValueRegistry =

@@ -1,0 +1,12 @@
+// RuntimeValueType.dark - minimal canonical runtime value-type declarations copied in interpreter syntax.
+
+module Darklang.LanguageTools.RuntimeTypes
+
+type KnownType =
+  | KTCustomType of
+    Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName *
+    typeArgs: List<Darklang.LanguageTools.RuntimeTypes.ValueType>
+
+type ValueType =
+  | Unknown
+  | Known of Darklang.LanguageTools.RuntimeTypes.KnownType

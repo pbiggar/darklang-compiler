@@ -64,6 +64,7 @@
 
     <!-- Compiler pass tests (shared) -->
     <Compile Include="compiler-passes/PlatformTests.fs" />
+    <Compile Include="compiler-passes/ValueSearchCatalogTests.fs" />
     <Compile Include="compiler-passes/IRSymbolTests.fs" />
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
     <Compile Include="compiler-passes/ParserTests.fs" />

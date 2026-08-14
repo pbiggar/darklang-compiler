@@ -1012,6 +1012,40 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Typ
 
     canonicalize typ
 
+/// Resolve the parser's provisional generic named-type shape against nominal
+/// declarations. Generic spellings initially use TSum because parsing happens
+/// before the record and sum registries are available.
+let private canonicalizeDeclaredTypeRefs
+    (typeReg: Map<string, 'recordInfo>)
+    (variantLookup: VariantLookup)
+    (typ: Type)
+    : Type =
+    let sumTypeNames =
+        variantLookup
+        |> Map.toList
+        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
+        |> Set.ofList
+
+    let rec canonicalize current =
+        match current with
+        | TSum (name, typeArgs) when Map.containsKey name typeReg && not (Set.contains name sumTypeNames) ->
+            TRecord (name, List.map canonicalize typeArgs)
+        | TRecord (name, typeArgs) when Set.contains name sumTypeNames ->
+            TSum (name, List.map canonicalize typeArgs)
+        | TRecord (name, typeArgs) -> TRecord (name, List.map canonicalize typeArgs)
+        | TSum (name, typeArgs) -> TSum (name, List.map canonicalize typeArgs)
+        | TFunction (parameterTypes, returnType) ->
+            TFunction (List.map canonicalize parameterTypes, canonicalize returnType)
+        | TTuple elementTypes -> TTuple (List.map canonicalize elementTypes)
+        | TEnumFields fieldTypes -> TEnumFields (List.map canonicalize fieldTypes)
+        | TList elementType -> TList (canonicalize elementType)
+        | TDict (keyType, valueType) -> TDict (canonicalize keyType, canonicalize valueType)
+        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+        | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+        | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr -> current
+
+    canonicalize typ
+
 let private canonicalizeTypeRegistry
     (variantLookup: VariantLookup)
     (typeReg: TypeRegistry)
@@ -4193,6 +4227,9 @@ let rec private checkExprWithParamNames
                                 pType
                                 |> applySubst subst
                                 |> canonicalizeBareSumTypeRefs variantLookup
+                                |> function
+                                    | TEnumFields fieldTypes -> TTuple fieldTypes
+                                    | other -> other
 
                             extractPatternBindings innerPattern concretePayloadType allowNoMatchForKnownListLengthMismatch
                         | Some _, None ->
@@ -5839,10 +5876,11 @@ let private checkFunctionDef
     let canonicalParams =
         funcDef.Params
         |> NonEmptyList.map (fun (name, typ) ->
-            (name, canonicalizeBareSumTypeRefs variantLookup typ))
+            (name, canonicalizeDeclaredTypeRefs typeReg variantLookup typ))
 
     let canonicalReturnType =
-        canonicalizeBareSumTypeRefs variantLookup funcDef.ReturnType
+        funcDef.ReturnType
+        |> canonicalizeDeclaredTypeRefs typeReg variantLookup
 
     let canonicalFuncDef =
         { funcDef with
@@ -6631,14 +6669,18 @@ let private checkResolvedProgramInternal
     : Result<Type * Program * TypeCheckEnv, TypeError> =
     let (Program topLevels) = program
     let declarationSummary = summarizeTopLevelDeclarations topLevels
+    let programTypeReg =
+        resolveAliasesInTypeRegistry declarationSummary.AliasReg declarationSummary.TypeReg
 
     // Build environment with function signatures from THIS program
     let programFuncEnv =
         declarationSummary.FuncSigs
         |> Map.map (fun _ (paramTypes, returnType) ->
             TFunction (
-                List.map (canonicalizeBareSumTypeRefs declarationSummary.VariantLookup) paramTypes,
-                canonicalizeBareSumTypeRefs declarationSummary.VariantLookup returnType
+                paramTypes
+                |> List.map (canonicalizeDeclaredTypeRefs programTypeReg declarationSummary.VariantLookup),
+                returnType
+                |> canonicalizeDeclaredTypeRefs programTypeReg declarationSummary.VariantLookup
             ))
 
     let programGenericFuncReg : GenericFuncRegistry = {
@@ -6655,9 +6697,6 @@ let private checkResolvedProgramInternal
     let programResolutionEnv =
         declarationResolutionEnvironment topLevels moduleRegistry (Option.isNone baseEnv)
 
-    let programTypeReg =
-        resolveAliasesInTypeRegistry declarationSummary.AliasReg declarationSummary.TypeReg
-
     let recordVariantLookup =
         match baseEnv with
         | Some existingEnv ->
@@ -6667,11 +6706,26 @@ let private checkResolvedProgramInternal
                 declarationSummary.VariantLookup
         | None -> declarationSummary.VariantLookup
 
+    let canonicalVariantLookup =
+        recordVariantLookup
+        |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
+            let isCatalogBoundaryType =
+                typeName.StartsWith("Darklang.LanguageTools.ProgramTypes.")
+                || typeName.StartsWith("Darklang.LanguageTools.RuntimeTypes.")
+            (typeName,
+             typeParams,
+             tag,
+             if isCatalogBoundaryType then
+                 payloadType
+                 |> Option.map (canonicalizeBareSumTypeRefs recordVariantLookup)
+             else
+                 payloadType))
+
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
         TypeReg = programTypeReg
-        IndexedTypeReg = canonicalizeTypeRegistry recordVariantLookup programTypeReg
-        VariantLookup = declarationSummary.VariantLookup
+        IndexedTypeReg = canonicalizeTypeRegistry canonicalVariantLookup programTypeReg
+        VariantLookup = canonicalVariantLookup
         FuncEnv = programFuncEnv
         FuncParamNames = declarationSummary.FuncParamNames
         GenericFuncReg = programGenericFuncReg
