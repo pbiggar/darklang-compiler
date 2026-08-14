@@ -2162,7 +2162,7 @@ return t1
 ---NAME---
 tuple_get_from_local_tuple_alloc_preserves_owned_projection
 ---INPUT---
-def f(value: Bytes) : Bytes =
+def f(value: Blob) : Blob =
   let tuple = (value, 1) in
   tuple.0
 ---EXPECTED---

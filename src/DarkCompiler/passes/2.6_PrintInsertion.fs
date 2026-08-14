@@ -25,7 +25,7 @@ let private releasePrintedRoot (atom: Atom) (valueType: AST.Type) (body: AExpr) 
         let releaseExpr = RefCountDec (atom, payloadSize, kind, Some (metadataForPrintRelease valueType))
         (Let (releaseTmp, releaseExpr, body), varGen')
     | Some ANF.DynamicStringBuffer
-    | Some ANF.DynamicBytesBuffer
+    | Some ANF.DynamicBlobBuffer
     | None ->
         (body, varGen)
 

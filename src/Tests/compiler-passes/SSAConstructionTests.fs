@@ -60,8 +60,8 @@ let testGetBlockUsesCoversEveryOperandPosition () : TestResult =
         ("RawSlotInit", RawSlotInit (register first, register second, register third, AST.TInt64), expected [first; second; third])
         ("StringToRawPtr", StringToRawPtr (destination, register first), expected [first])
         ("RawPtrToString", RawPtrToString (destination, register first), expected [first])
-        ("BytesToRawPtr", BytesToRawPtr (destination, register first), expected [first])
-        ("RawPtrToBytes", RawPtrToBytes (destination, register first), expected [first])
+        ("BlobToRawPtr", BlobToRawPtr (destination, register first), expected [first])
+        ("RawPtrToBlob", RawPtrToBlob (destination, register first), expected [first])
         ("DictToRawPtr", DictToRawPtr (destination, register first), expected [first])
         ("RawPtrToDict", RawPtrToDict (destination, register first, register second), expected [first; second])
         ("ListToRawPtr", ListToRawPtr (destination, register first), expected [first])
@@ -74,8 +74,8 @@ let testGetBlockUsesCoversEveryOperandPosition () : TestResult =
         ("FloatToBits", FloatToBits (destination, register first), expected [first])
         ("RefCountIncString", RefCountIncString (register first), expected [first])
         ("RefCountDecString", RefCountDecString (register first), expected [first])
-        ("RefCountIncBytes", RefCountIncBytes (register first), expected [first])
-        ("RefCountDecBytes", RefCountDecBytes (register first), expected [first])
+        ("RefCountIncBlob", RefCountIncBlob (register first), expected [first])
+        ("RefCountDecBlob", RefCountDecBlob (register first), expected [first])
         ("FloatToString", FloatToString (destination, register first), expected [first])
     ]
     let terminatorCases = [

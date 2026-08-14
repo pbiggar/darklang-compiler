@@ -14,11 +14,11 @@ The compiler currently has these managed or partially managed runtime shapes:
 | Shape | Representation | Current ownership behavior |
 |---|---|---|
 | Fixed blocks | `[payload fields][refcount:8]` | Generic root retain/release; managed field release for many tuple, record, sum, and closure-capture shapes |
-| Boxed sums | fixed block with tag/payload | Root RC; payload release for strings, bytes, lists, dicts, closures, tuples, records, and selected nested sums |
+| Boxed sums | fixed block with tag/payload | Root RC; payload release for strings, Blobs, lists, dicts, closures, tuples, records, and selected nested sums |
 | Tagged lists | Direct-payload skew RAL nodes allocated through raw memory | Root and iterative node RC helpers with shape-driven `RcReleasePlan` cleanup for direct generic fixed-block and boxed-sum payloads |
 | Dicts | tagged HAMT root with refcounted raw HAMT nodes | Path-copy structural sharing; `RawSlotInit<T>` edge retains; recursive node/key/value release when node RC reaches zero |
 | Dynamic strings | `[length:8][data][padding][refcount:8]` | Scoped RC, field retain/release, borrowed projection retain, literal sentinel skip |
-| Dynamic bytes | `[length:8][data][padding][refcount:8]` | Scoped RC, constructor/transform coverage, container retains/releases, and initial parity with strings |
+| Dynamic Blob | `[length:8][data][padding][refcount:8]` | Scoped RC, constructor/transform coverage, container retains/releases, and initial parity with strings |
 | Closures | `[func_ptr][captures...][refcount:8]` | Closure root RC and recursive capture release for the covered capture shapes |
 | Raw pointers | raw addresses | Unmanaged; `RawFree` policy remains deferred |
 
@@ -60,14 +60,14 @@ expression predicates still decide whether a binding is owned or borrowed.
 ARM64 has the most complete memory support today:
 
 - fixed-block root RC
-- dynamic string/bytes RC
+- dynamic string/Blob RC
 - tagged-list root and recursive node helpers
 - list leaf payload helpers for direct roots and planned generic payloads
 - dict root helpers
 - closure root helpers
 - recursive field release for selected fixed-block, sum, and closure-capture
   shapes, including primitive-only nested fixed-block child roots and returned
-  closures with record string/bytes/list/dict-list captures
+  closures with record string/Blob/list/dict-list captures
 
 x64 has active root RC support and focused unit coverage for:
 
@@ -95,11 +95,11 @@ does not always mean the memory is reusable:
 
 - fixed-size blocks and many list/dict node sizes can be routed through free
   lists
-- dynamic strings and bytes currently balance leak accounting, while
+- dynamic strings and Blobs currently balance leak accounting, while
   variable-size reuse remains a design decision
 - raw pointers are not automatically reclaimed
-- `String`/`Bytes`/`Dict`/`List -> RawPtr` intrinsics expose borrowed raw views;
-  `RawPtr -> String`/`Bytes` and `RawPtr -> Dict`/`List` retag initialized raw
+- `String`/`Blob`/`Dict`/`List -> RawPtr` intrinsics expose borrowed raw views;
+  `RawPtr -> String`/`Blob` and `RawPtr -> Dict`/`List` retag initialized raw
   allocations as managed values with normal RC ownership rules
 
 Tests that need to prove allocator reuse should test reuse explicitly instead
@@ -112,10 +112,10 @@ The major remaining work is:
 - keep future backend helper selection on direct `RcReleasePlan` consumption
   rather than rebuilding tuple/record/sum helper matrices
 - extend dict/HAMT key-release helpers if new managed hashable key families are
-  added; current managed hashable keys are dynamic strings and bytes
+  added; current managed hashable keys are dynamic strings and Blobs
 - keep x64 and ARM64 recursive release semantics in parity as shape-plan work
   replaces helper-family special cases
-- add focused coverage for any new bytes/string runtime allocation paths
+- add focused coverage for any new Blob/string runtime allocation paths
 - distinguish static function references from heap closures
 - document or implement the deferred raw memory policy
 

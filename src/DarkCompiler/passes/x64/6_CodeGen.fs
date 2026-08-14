@@ -177,15 +177,18 @@ let private emitStringByteCopy (destReg: X86_64.Reg) (strBytes: byte array) : X8
 /// refcount sentinel so dynamic RC operations treat it as immutable literal data.
 /// Returns instructions that leave destReg pointing to the new string.
 let private emitStringLiteral (destReg: X86_64.Reg) (value: string) : X86_64.Instr list =
-    let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
-    let len = strBytes.Length
-    let totalSize = ((len + 16) + 7) &&& (~~~7)
-    let alloc = [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, int32 totalSize)]
-    let storeLen = loadImm64 scratch (int64 len) @ [X86_64.MOV_store (destReg, 0, scratch)]
-    let copyBytes = emitStringByteCopy destReg strBytes
-    let rcOffset = 8 + ((len + 7) &&& (~~~7))
-    let storeRefCount = loadImm64 scratch 0x7FFFFFFFFFFFFFFFL @ [X86_64.MOV_store (destReg, int32 rcOffset, scratch)]
-    alloc @ storeLen @ copyBytes @ storeRefCount
+    if value = "" then
+        [X86_64.LEA_rip (destReg, "_empty_dynamic_buffer")]
+    else
+        let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
+        let len = strBytes.Length
+        let totalSize = ((len + 16) + 7) &&& (~~~7)
+        let alloc = [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, int32 totalSize)]
+        let storeLen = loadImm64 scratch (int64 len) @ [X86_64.MOV_store (destReg, 0, scratch)]
+        let copyBytes = emitStringByteCopy destReg strBytes
+        let rcOffset = 8 + ((len + 7) &&& (~~~7))
+        let storeRefCount = loadImm64 scratch 0x7FFFFFFFFFFFFFFFL @ [X86_64.MOV_store (destReg, int32 rcOffset, scratch)]
+        alloc @ storeLen @ copyBytes @ storeRefCount
 
 /// Allocate a heap string without refcount (for file-op path buffers).
 /// Layout: [length:8][data:N]. Returns instructions with destReg = string ptr.
@@ -697,7 +700,7 @@ let private slotInitRootRetainTarget
             | ANF.DictRoot _ ->
                 Some SlotInitDictRootRetain
             | ANF.DynamicString
-            | ANF.DynamicBytes ->
+            | ANF.DynamicBlob ->
                 Some SlotInitDynamicBufferRetain
             | ANF.ClosureShape _ ->
                 Some SlotInitClosureRootRetain
@@ -2267,7 +2270,7 @@ let private generateClosureRefCountDecHelper
                     let fieldOffset = (captureIndex + 1) * 8
                     match captureType with
                     | AST.TString
-                    | AST.TBytes ->
+                    | AST.TBlob ->
                         releaseDynamicBufferCapture fieldOffset $"{index}_{captureIndex}"
                     | AST.TList _ ->
                         releaseHeapRootCapture fieldOffset (listDecHelperForType recordRegistry sumShapeRegistry captureType) $"{index}_{captureIndex}_list"
@@ -3452,7 +3455,7 @@ let private translateInstr
                 genRefCountDecGeneric ctx addrReg payloadSize metadata)
 
     | LIR.RefCountIncString str
-    | LIR.RefCountIncBytes str ->
+    | LIR.RefCountIncBlob str ->
         match str with
         | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
         | LIR.Reg reg ->
@@ -3486,7 +3489,7 @@ let private translateInstr
         | _ -> Error "dynamic buffer RefCountInc requires StringSymbol or Reg operand"
 
     | LIR.RefCountDecString str
-    | LIR.RefCountDecBytes str ->
+    | LIR.RefCountDecBlob str ->
         match str with
         | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
         | LIR.Reg reg ->
@@ -4184,7 +4187,7 @@ let private translateInstr
         resolveReg recordPtr
         |> Result.map (fun _ -> loadImm64 X86_64.RDI 0L @ genExitSyscall)
 
-    | LIR.PrintBytes reg ->
+    | LIR.PrintBlob reg ->
         resolveReg reg
         |> Result.map (fun _ -> loadImm64 X86_64.RDI 0L @ genExitSyscall)
 

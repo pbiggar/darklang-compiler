@@ -39,19 +39,60 @@
   = "0932CB57FE685FEBC66657AA30C7568A4AB05CAF"
 
 // aws
+(Stdlib.Crypto.sha256hmac
+  (Stdlib.Blob.fromString "AWS4wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
+  (Stdlib.Blob.fromString "20150830")
+ |> Stdlib.Blob.toHex
+ |> Stdlib.String.toLowercase)
+  = "0138c7a6cbd60aa727b2f653a522567439dfb9f3e72b21f9b25941a42f04a7cd"
+
+(let secret = Stdlib.Blob.fromString "AWS4wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
+ let date = (Stdlib.Crypto.sha256hmac secret (Stdlib.Blob.fromString "20150830"))
+ let regionData = Stdlib.Blob.fromString "us-east-1"
+ let region = (Stdlib.Crypto.sha256hmac date regionData)
+ Stdlib.Blob.toHex region)
+  = "F33D5808504BF34812E5FADE63308B424B244C59189BE2A591DD2282C7CB563F"
+
+(let secret = Stdlib.Blob.fromString "AWS4wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
+ let date = (Stdlib.Crypto.sha256hmac secret (Stdlib.Blob.fromString "20150830"))
+ let regionData = Stdlib.Blob.fromString "us-east-1"
+ let serviceData = Stdlib.Blob.fromString "iam"
+ let region = (Stdlib.Crypto.sha256hmac date regionData)
+ let service = (Stdlib.Crypto.sha256hmac region serviceData)
+ Stdlib.Blob.toHex service)
+  = "199E1F48C602A5AE77CE26A46906920E76FC8427AEAA53DA643646FCDA1CCFB0"
+
+(let secret = Stdlib.Blob.fromString "AWS4wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
+ let date = (Stdlib.Crypto.sha256hmac secret (Stdlib.Blob.fromString "20150830"))
+ let regionData = Stdlib.Blob.fromString "us-east-1"
+ let serviceData = Stdlib.Blob.fromString "iam"
+ let signingData = Stdlib.Blob.fromString "aws4_request"
+ let region = (Stdlib.Crypto.sha256hmac date regionData)
+ let service = (Stdlib.Crypto.sha256hmac region serviceData)
+ let signing = (Stdlib.Crypto.sha256hmac service signingData)
+ Stdlib.Blob.toHex signing)
+  = "C4AFB1CC5771D871763A393E44B703571B55CC28424D1A5E86DA6ED3C154A4B9"
+
 (let scope = "20150830/us-east-1/iam/aws4_request"
  let content = "f536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59"
  let strs = [ "AWS4-HMAC-SHA256"; "20150830T123600Z"; scope; content ]
- let strToSign = Stdlib.String.join strs Stdlib.String.newline
+ // The compiler's pre-existing String.newline extension is a zero-argument
+ // function. Use the same-source newline value directly so this pinned crypto
+ // probe remains scoped to the Blob/Crypto parity surface.
+ let strToSign = Stdlib.String.join strs "\n"
 
  let secret = Stdlib.Blob.fromString "AWS4wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
  let data = Stdlib.Blob.fromString "20150830"
+ let regionData = Stdlib.Blob.fromString "us-east-1"
+ let serviceData = Stdlib.Blob.fromString "iam"
+ let signingData = Stdlib.Blob.fromString "aws4_request"
+ let stringToSignData = Stdlib.Blob.fromString strToSign
 
- let date = Stdlib.Crypto.sha256hmac secret data
- let region = Stdlib.Crypto.sha256hmac date (Stdlib.Blob.fromString "us-east-1")
- let service = Stdlib.Crypto.sha256hmac region (Stdlib.Blob.fromString "iam")
- let signing = Stdlib.Crypto.sha256hmac service (Stdlib.Blob.fromString "aws4_request")
- let signed = Stdlib.Crypto.sha256hmac signing (Stdlib.Blob.fromString strToSign)
+ let date = (Stdlib.Crypto.sha256hmac secret data)
+ let region = (Stdlib.Crypto.sha256hmac date regionData)
+ let service = (Stdlib.Crypto.sha256hmac region serviceData)
+ let signing = (Stdlib.Crypto.sha256hmac service signingData)
+ let signed = (Stdlib.Crypto.sha256hmac signing stringToSignData)
 
  signed |> Stdlib.Blob.toHex |> Stdlib.String.toLowercase)
   = "5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7"

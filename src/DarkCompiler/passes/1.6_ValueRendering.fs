@@ -71,7 +71,7 @@ let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
         | TSum (name, typeArgs) -> TSum (name, List.map apply typeArgs)
         | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBytes | TChar | TUnit
+        | TBool | TFloat64 | TString | TBlob | TChar | TUnit
         | TRuntimeError | TRawPtr -> typ
     apply typ
 
@@ -366,9 +366,10 @@ and private renderBody
             let (cases, nextState) = buildCases (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
             (Match (value, cases), nextState)
     | TFunction _ -> (StringLiteral "(lambda)", state)
-    | TBytes ->
-        let length = call "Stdlib.Bytes.length" [value]
-        (concat [StringLiteral "<"; call "Stdlib.Int64.toString" [length]; StringLiteral " bytes>"], state)
+    | TBlob ->
+        // The interpreter deliberately does not expose ephemeral Blob payloads
+        // or process-local identities through value rendering.
+        (StringLiteral "<Blob: ephemeral>", state)
     | TRawPtr ->
         (call "Stdlib.Int64.toString" [value], state)
     | TDict (keyType, _) ->

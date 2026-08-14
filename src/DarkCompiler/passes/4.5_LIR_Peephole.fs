@@ -620,8 +620,8 @@ let private foldRegUses folder state (instr: Instr) =
     | Mov (_, src)
     | RefCountIncString src
     | RefCountDecString src
-    | RefCountIncBytes src
-    | RefCountDecBytes src ->
+    | RefCountIncBlob src
+    | RefCountDecBlob src ->
         foldOperandRegUse folder state src
     | Phi (_, sources, _) ->
         sources |> List.fold (fun acc (src, _) -> foldOperandRegUse folder acc src) state
@@ -633,7 +633,7 @@ let private foldRegUses folder state (instr: Instr) =
     | PrintUInt64NoNewline src
     | PrintBoolNoNewline src
     | PrintHeapStringNoNewline src
-    | PrintBytes src
+    | PrintBlob src
     | PrintList (src, _)
     | PrintSum (src, _)
     | PrintRecord (src, _, _)

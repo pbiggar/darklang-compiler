@@ -121,8 +121,8 @@ type Instr =
     | RawSlotInit of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
     | StringToRawPtr of dest:VReg * value:Operand // Borrow raw backing pointer from String
     | RawPtrToString of dest:VReg * ptr:Operand   // Reinterpret raw allocation as owned String
-    | BytesToRawPtr of dest:VReg * value:Operand  // Borrow raw backing pointer from Bytes
-    | RawPtrToBytes of dest:VReg * ptr:Operand    // Reinterpret raw allocation as owned Bytes
+    | BlobToRawPtr of dest:VReg * value:Operand  // Borrow raw backing pointer from Blob
+    | RawPtrToBlob of dest:VReg * ptr:Operand    // Reinterpret raw allocation as owned Blob
     | DictToRawPtr of dest:VReg * dict:Operand    // Strip Dict tag bits, returning RawPtr
     | RawPtrToDict of dest:VReg * ptr:Operand * tag:Operand // Re-tag RawPtr as Dict
     | ListToRawPtr of dest:VReg * list:Operand    // Strip List tag bits, returning RawPtr
@@ -130,8 +130,8 @@ type Instr =
     // Dynamic buffer reference counting (at offset computed from length)
     | RefCountIncString of str:Operand             // Increment string ref count (at [str + 8 + len])
     | RefCountDecString of str:Operand             // Decrement string ref count, free if zero
-    | RefCountIncBytes of bytes:Operand            // Increment bytes ref count (at [bytes + 8 + len])
-    | RefCountDecBytes of bytes:Operand            // Decrement bytes ref count, free if zero
+    | RefCountIncBlob of bytes:Operand            // Increment bytes ref count (at [bytes + 8 + len])
+    | RefCountDecBlob of bytes:Operand            // Decrement bytes ref count, free if zero
     // Random intrinsics
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
     // DateTime intrinsics

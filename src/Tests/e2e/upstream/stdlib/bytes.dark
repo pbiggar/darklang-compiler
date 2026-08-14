@@ -53,8 +53,8 @@
 ((Stdlib.Blob.fromString "hello") |> Stdlib.Blob.toBase64) = "aGVsbG8="
 
 // concat
-(match [ Stdlib.Blob.fromString "foo"
-         Stdlib.Blob.fromString "-"
+(match [ Stdlib.Blob.fromString "foo";
+         Stdlib.Blob.fromString "-";
          Stdlib.Blob.fromString "bar" ]
        |> Stdlib.Blob.concat
        |> Stdlib.Blob.toString with

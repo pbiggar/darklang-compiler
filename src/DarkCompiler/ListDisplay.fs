@@ -23,7 +23,7 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TUInt32
     | AST.TUInt64
     | AST.TUInt128
-    | AST.TBytes
+    | AST.TBlob
     | AST.TUnit
     | AST.TRuntimeError
     | AST.TFunction _

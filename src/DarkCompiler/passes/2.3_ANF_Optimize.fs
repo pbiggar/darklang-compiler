@@ -479,8 +479,8 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | RawSlotInit _ -> true  // Memory mutation plus possible ownership edge
     | StringToRawPtr _ -> false
     | RawPtrToString _ -> false
-    | BytesToRawPtr _ -> false
-    | RawPtrToBytes _ -> false
+    | BlobToRawPtr _ -> false
+    | RawPtrToBlob _ -> false
     | DictToRawPtr _ -> false
     | RawPtrToDict _ -> false
     | ListToRawPtr _ -> false
@@ -493,8 +493,8 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | FloatToBits _ -> false // Pure conversion
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
-    | RefCountIncBytes _ -> true    // Mutates refcount
-    | RefCountDecBytes _ -> true    // Mutates refcount
+    | RefCountIncBlob _ -> true    // Mutates refcount
+    | RefCountDecBlob _ -> true    // Mutates refcount
     | RandomInt64 -> true   // Reads from OS random source
     | DateTimeNow -> true       // Reads current time (syscall)
     | FloatToString _ -> false  // Pure conversion (but allocates - maybe should be true?)
@@ -565,8 +565,8 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
         uses |> addAtomUse ptr |> addAtomUse byteOffset |> addAtomUse value
     | StringToRawPtr value -> addAtomUse value uses
     | RawPtrToString ptr -> addAtomUse ptr uses
-    | BytesToRawPtr value -> addAtomUse value uses
-    | RawPtrToBytes ptr -> addAtomUse ptr uses
+    | BlobToRawPtr value -> addAtomUse value uses
+    | RawPtrToBlob ptr -> addAtomUse ptr uses
     | DictToRawPtr dict -> addAtomUse dict uses
     | RawPtrToDict (ptr, tag, _) -> uses |> addAtomUse ptr |> addAtomUse tag
     | ListToRawPtr list -> addAtomUse list uses
@@ -579,8 +579,8 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | FloatToBits atom -> addAtomUse atom uses
     | RefCountIncString str -> addAtomUse str uses
     | RefCountDecString str -> addAtomUse str uses
-    | RefCountIncBytes bytes -> addAtomUse bytes uses
-    | RefCountDecBytes bytes -> addAtomUse bytes uses
+    | RefCountIncBlob bytes -> addAtomUse bytes uses
+    | RefCountDecBlob bytes -> addAtomUse bytes uses
     | RandomInt64 -> uses  // No atoms
     | DateTimeNow -> uses      // No atoms
     | FloatToString atom -> addAtomUse atom uses
@@ -608,8 +608,8 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | RawFree atom
     | StringToRawPtr atom
     | RawPtrToString atom
-    | BytesToRawPtr atom
-    | RawPtrToBytes atom
+    | BlobToRawPtr atom
+    | RawPtrToBlob atom
     | DictToRawPtr atom
     | ListToRawPtr atom
     | FloatSqrt atom
@@ -620,8 +620,8 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | FloatToBits atom
     | RefCountIncString atom
     | RefCountDecString atom
-    | RefCountIncBytes atom
-    | RefCountDecBytes atom
+    | RefCountIncBlob atom
+    | RefCountDecBlob atom
     | FloatToString atom -> used atom
     | Prim (_, left, right)
     | StringConcat (left, right)
@@ -731,8 +731,8 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RawSlotInit (ptr, byteOffset, value, valueType) -> RawSlotInit (s ptr, s byteOffset, s value, valueType)
     | StringToRawPtr value -> StringToRawPtr (s value)
     | RawPtrToString ptr -> RawPtrToString (s ptr)
-    | BytesToRawPtr value -> BytesToRawPtr (s value)
-    | RawPtrToBytes ptr -> RawPtrToBytes (s ptr)
+    | BlobToRawPtr value -> BlobToRawPtr (s value)
+    | RawPtrToBlob ptr -> RawPtrToBlob (s ptr)
     | DictToRawPtr dict -> DictToRawPtr (s dict)
     | RawPtrToDict (ptr, tag, dictType) -> RawPtrToDict (s ptr, s tag, dictType)
     | ListToRawPtr list -> ListToRawPtr (s list)
@@ -745,8 +745,8 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | FloatToBits atom -> FloatToBits (s atom)
     | RefCountIncString str -> RefCountIncString (s str)
     | RefCountDecString str -> RefCountDecString (s str)
-    | RefCountIncBytes bytes -> RefCountIncBytes (s bytes)
-    | RefCountDecBytes bytes -> RefCountDecBytes (s bytes)
+    | RefCountIncBlob bytes -> RefCountIncBlob (s bytes)
+    | RefCountDecBlob bytes -> RefCountDecBlob (s bytes)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
     | FloatToString atom -> FloatToString (s atom)

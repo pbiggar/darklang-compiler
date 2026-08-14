@@ -386,8 +386,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RawSlotInit _ -> Some AST.TUnit  // Returns unit
     | StringToRawPtr _ -> Some AST.TRawPtr
     | RawPtrToString _ -> Some AST.TString
-    | BytesToRawPtr _ -> Some AST.TRawPtr
-    | RawPtrToBytes _ -> Some AST.TBytes
+    | BlobToRawPtr _ -> Some AST.TRawPtr
+    | RawPtrToBlob _ -> Some AST.TBlob
     | DictToRawPtr _ -> Some AST.TRawPtr
     | RawPtrToDict (_, _, dictType) -> Some dictType
     | ListToRawPtr _ -> Some AST.TRawPtr
@@ -395,8 +395,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     // Dynamic buffer refcount intrinsics
     | RefCountIncString _ -> Some AST.TUnit  // Returns unit
     | RefCountDecString _ -> Some AST.TUnit  // Returns unit
-    | RefCountIncBytes _ -> Some AST.TUnit   // Returns unit
-    | RefCountDecBytes _ -> Some AST.TUnit   // Returns unit
+    | RefCountIncBlob _ -> Some AST.TUnit   // Returns unit
+    | RefCountDecBlob _ -> Some AST.TUnit   // Returns unit
     | RuntimeError _ -> Some AST.TUnit
     | RuntimeErrorString _ -> Some AST.TUnit
 
@@ -452,7 +452,7 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | TupleGet _ -> true           // Extracts pointer from tuple/list - borrowed from parent
     | RawGet _ -> true             // RawGet reads existing memory; it does not transfer ownership
     | StringToRawPtr _ -> true     // RawPtr view is borrowed from the dynamic buffer
-    | BytesToRawPtr _ -> true      // RawPtr view is borrowed from the dynamic buffer
+    | BlobToRawPtr _ -> true      // RawPtr view is borrowed from the dynamic buffer
     | DictToRawPtr _ -> true       // RawPtr view is borrowed from the tagged container
     | ListToRawPtr _ -> true       // RawPtr view is borrowed from the tagged container
     | Atom (Var _) -> true         // Alias/copy of existing variable - don't double-dec
@@ -485,7 +485,7 @@ let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Typ
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
-        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar
         | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
             typ
 
@@ -512,7 +512,7 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
-        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar
         | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
             typ
 
@@ -552,8 +552,8 @@ let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type
     match rcShapeRetainOperation shape with
     | Some DynamicStringBuffer ->
         RefCountIncString (Var tempId)
-    | Some DynamicBytesBuffer ->
-        RefCountIncBytes (Var tempId)
+    | Some DynamicBlobBuffer ->
+        RefCountIncBlob (Var tempId)
     | Some (FixedSizeRoot (size, kind)) ->
         RefCountInc (Var tempId, size, kind, Some (rcMetadataForType ctx typ))
     | None ->
@@ -569,8 +569,8 @@ let private releaseExprForType
     match rcShapeReleaseOperation shape with
     | Some DynamicStringBuffer ->
         RefCountDecString (Var tempId)
-    | Some DynamicBytesBuffer ->
-        RefCountDecBytes (Var tempId)
+    | Some DynamicBlobBuffer ->
+        RefCountDecBlob (Var tempId)
     | Some (FixedSizeRoot (size, defaultKind)) ->
         let kind = kindOverride |> Option.defaultValue defaultKind
         RefCountDec (Var tempId, size, kind, Some (rcMetadataForType ctx typ))
@@ -811,7 +811,7 @@ let rec private collectMovableTailDecPrefix
         else
             let (bindings, remaining) = collectMovableTailDecPrefix tailArgTemps rest
             ((tmpId, RefCountDecString atom) :: bindings, remaining)
-    | Let (tmpId, RefCountDecBytes atom, rest) ->
+    | Let (tmpId, RefCountDecBlob atom, rest) ->
         let overlaps =
             match atom with
             | Var tid -> Set.contains tid tailArgTemps
@@ -820,7 +820,7 @@ let rec private collectMovableTailDecPrefix
             ([], expr)
         else
             let (bindings, remaining) = collectMovableTailDecPrefix tailArgTemps rest
-            ((tmpId, RefCountDecBytes atom) :: bindings, remaining)
+            ((tmpId, RefCountDecBlob atom) :: bindings, remaining)
     | _ ->
         ([], expr)
 

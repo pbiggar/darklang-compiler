@@ -32,7 +32,8 @@ Comparison aliases are not part of the language surface.
 | Constructor | Same nominal sum type, variant, and recursively equal payload | Rejected |
 | Dict | Same mapping, independent of insertion order or HAMT shape; values compare recursively | Rejected |
 | Function | Interpreter identity rules described below | Rejected |
-| Bytes, RawPtr, RuntimeError | Rejected by the compiler comparison type constraint | Rejected |
+| Blob | Handle identity, recursively inside equality-capable containers | Rejected |
+| RawPtr, RuntimeError | Rejected by the compiler comparison type constraint | Rejected |
 
 Both operands must resolve through aliases to the same admissible type.
 Consequently mixed numeric widths, integer/float pairs, Char/String pairs,
@@ -82,6 +83,9 @@ intentional public behavior divergence retained here.
 
 Performance differences are outside this contract unless they change an
 observable result.
+
+Blob identity and its canonical empty value are revision-pinned separately in
+[blob-parity.md](blob-parity.md).
 
 ## Source anchors
 

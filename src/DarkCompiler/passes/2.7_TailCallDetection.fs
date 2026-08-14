@@ -31,7 +31,7 @@ let isRefCountDec (cexpr: CExpr) : bool =
     match cexpr with
     | RefCountDec _ -> true
     | RefCountDecString _ -> true
-    | RefCountDecBytes _ -> true
+    | RefCountDecBlob _ -> true
     | _ -> false
 
 /// Check if an expression eventually returns a specific TempId
@@ -123,11 +123,11 @@ let rec private collectMovableDecPrefix
         ((tmpId, RefCountDecString atom) :: bindings, remaining)
     | Let (_, RefCountDecString _, _) ->
         ([], expr)
-    | Let (tmpId, RefCountDecBytes atom, rest)
+    | Let (tmpId, RefCountDecBlob atom, rest)
         when not (atomOverlapsTailArgs aliasRoots tailArgTemps atom) ->
         let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
-        ((tmpId, RefCountDecBytes atom) :: bindings, remaining)
-    | Let (_, RefCountDecBytes _, _) ->
+        ((tmpId, RefCountDecBlob atom) :: bindings, remaining)
+    | Let (_, RefCountDecBlob _, _) ->
         ([], expr)
     | _ ->
         ([], expr)
@@ -146,7 +146,7 @@ let rec private leadingRetainedParams
         Set.add tempId (leadingRetainedParams paramIds body)
     | Let (_, RefCountIncString (Var tempId), body) when Set.contains tempId paramIds ->
         Set.add tempId (leadingRetainedParams paramIds body)
-    | Let (_, RefCountIncBytes (Var tempId), body) when Set.contains tempId paramIds ->
+    | Let (_, RefCountIncBlob (Var tempId), body) when Set.contains tempId paramIds ->
         Set.add tempId (leadingRetainedParams paramIds body)
     | _ ->
         Set.empty
@@ -250,7 +250,7 @@ let rec detectTailCalls
                 match cexpr with
                 | RefCountDec (Var releasedTemp, _, _, _)
                 | RefCountDecString (Var releasedTemp)
-                | RefCountDecBytes (Var releasedTemp) ->
+                | RefCountDecBlob (Var releasedTemp) ->
                     Set.add (canonicalTempId aliasRoots releasedTemp) releasedTemps
                 | _ ->
                     releasedTemps

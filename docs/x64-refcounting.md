@@ -8,7 +8,7 @@ operations:
 - fixed-block allocation initializes trailing refcounts
 - fixed-block allocation participates in leak accounting
 - generic fixed-block `RefCountInc` and `RefCountDec` are enabled
-- generic tuple fixed-block `RefCountDec` releases dynamic string/bytes fields
+- generic tuple fixed-block `RefCountDec` releases dynamic string/Blob fields
   before freeing the enclosing block
 - tagged-list root `RefCountInc` and recursive node `RefCountDec` are enabled
 - tagged-list edge ownership is retained by `RawSlotInit<T>`
@@ -38,7 +38,7 @@ shape-driven story, and raw-memory policy remains deferred.
 - generic fixed-block dynamic string field release
 - generic fixed-block literal string field release skips release through the
   immutable refcount sentinel
-- generic fixed-block dynamic bytes field release
+- generic fixed-block dynamic Blob field release
 - generic fixed-block nested tuple field release for dynamic string payloads
 - generic fixed-block tuple string/list/dict field release
 - generic fixed-block record string field release
@@ -46,7 +46,7 @@ shape-driven story, and raw-memory policy remains deferred.
 - generic fixed-block record closure root field release
 - generic fixed-block record string/list/dict field release
 - generic fixed-block boxed sum string payload release
-- generic fixed-block boxed sum bytes payload release
+- generic fixed-block boxed sum Blob payload release
 - generic fixed-block nested boxed sum field release for dynamic string payloads
 - generic fixed-block boxed sum list payload release
 - generic fixed-block boxed sum dict payload release
@@ -67,18 +67,18 @@ shape-driven story, and raw-memory policy remains deferred.
 - zero-capture closure allocation plus explicit closure `RefCountDec` leak
   accounting
 - generic fixed-block zero-capture closure field release
-- direct closure dynamic string/bytes capture release on closure `RefCountDec`
+- direct closure dynamic string/Blob capture release on closure `RefCountDec`
 - direct closure list/dict/closure root capture release on closure
   `RefCountDec`
 - direct closure tuple/record/sum fixed-block capture release on closure
   `RefCountDec`, including dynamic string fields
 - direct closure tuple string/list/dict capture release on closure
   `RefCountDec`
-- direct closure tuple string/bytes/list/dict-list capture release on closure
+- direct closure tuple string/Blob/list/dict-list capture release on closure
   `RefCountDec`
 - direct closure record string/list/dict capture release on closure
   `RefCountDec`
-- direct closure record string/bytes/list/dict-list capture release on closure
+- direct closure record string/Blob/list/dict-list capture release on closure
   `RefCountDec`
 - direct closure sum tuple string/list/dict capture release on closure
   `RefCountDec`
@@ -93,11 +93,11 @@ shape-driven story, and raw-memory policy remains deferred.
   field combinations
 - tagged-list tuple3 string/list/dict payload release
 - tagged-list tuple3 closure/list/dict payload release
-- tagged-list tuple4 string/bytes/list/dict payload release
+- tagged-list tuple4 string/Blob/list/dict payload release
 - tagged-list tuple4 closure/bytes/list/dict payload release
-- tagged-list tuple2 payload release with nested tuple dynamic string/bytes
+- tagged-list tuple2 payload release with nested tuple dynamic string/Blob
   field combinations, list/dict fields, dict fields, closure fields,
-  string/list/dict fields, and string/bytes/list/dict fields through planned
+  string/list/dict fields, and string/Blob/list/dict fields through planned
   fixed-block `RcReleasePlan` leaf helpers
 - tagged-list tuple4 payload release with nested tuple dynamic-buffer fields,
   string/list/dict fields, string/list/dict-list fields, and
@@ -116,9 +116,9 @@ shape-driven story, and raw-memory policy remains deferred.
 - tagged-list one-field record dynamic-buffer field release
 - tagged-list three-field record dynamic-buffer field release for all non-empty
   dynamic field combinations
-- tagged-list three-field record string/bytes/list/dict payload release
+- tagged-list three-field record string/Blob/list/dict payload release
 - tagged-list three-field record closure/list/dict payload release
-- tagged-list four-field record string/bytes/list/dict payload release
+- tagged-list four-field record string/Blob/list/dict payload release
 - tagged-list four-field record closure/bytes/list/dict payload release
 - tagged-list boxed sum dynamic-buffer payload release
 - tagged-list boxed sum mixed no-payload/dynamic-payload release dispatch
@@ -130,10 +130,10 @@ shape-driven story, and raw-memory policy remains deferred.
 - tagged-list boxed sum tuple3 dynamic-buffer payload release for all non-empty
   dynamic field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
-- tagged-list boxed sum tuple4 string/bytes/list/dict payload release
+- tagged-list boxed sum tuple4 string/Blob/list/dict payload release
 - tagged-list boxed sum tuple4 nested tuple string/list/dict payload release
   through a planned `RcReleasePlan` leaf helper
-- tagged-list boxed sum tuple4 string/bytes/list/dict-list payload release
+- tagged-list boxed sum tuple4 string/Blob/list/dict-list payload release
 - tagged-list boxed sum tuple4 closure/bytes/list/dict payload release
 - tagged-list boxed sum tuple4 closure/string/list/dict-list payload release
 - tagged-list boxed sum record dynamic-buffer payload release, covering
@@ -141,8 +141,8 @@ shape-driven story, and raw-memory policy remains deferred.
   through planned fixed-block `RcReleasePlan` helpers
 - tagged-list boxed sum record3 string/list/dict payload release through a
   planned fixed-block `RcReleasePlan` helper
-- tagged-list boxed sum record4 string/bytes/list/dict payload release,
-  string/bytes/list/dict-list payload release, and closure/bytes/list/dict
+- tagged-list boxed sum record4 string/Blob/list/dict payload release,
+  string/Blob/list/dict-list payload release, and closure/bytes/list/dict
   payload release through planned fixed-block `RcReleasePlan` helpers
 - tagged-list nested boxed sum dynamic-buffer payload release
 
@@ -167,7 +167,7 @@ internal nodes. Direct static payload helpers remain only for root families:
 - closure roots
 - dict roots
 - dict roots whose values are lists
-- direct dynamic string/bytes buffers
+- direct dynamic string/Blob buffers
 
 Fixed-block and boxed-sum element payloads no longer have a static x64
 tuple/record/sum helper matrix. When a list element is represented as
@@ -239,7 +239,7 @@ The main x64 gaps are:
    exclusion. Direct `Dict<String, Int64>` dynamic leaf key release and
    `Dict<Int64, String>` dynamic leaf value release are covered, as is the
    combined `Dict<String, String>` leaf case. The same dynamic-buffer path is
-   pinned for `Dict<Bytes, Bytes>`, and mixed `Dict<String, List<Int64>>`
+   pinned for `Dict<Blob, Blob>`, and mixed `Dict<String, List<Int64>>`
    `Dict<String, Dict<Int64, Int64>>`, and
    `Dict<String, Dict<Int64, List<Int64>>>` release are covered. Dynamic
    string keys paired with tuple leaf values containing

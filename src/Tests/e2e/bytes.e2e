@@ -1,4 +1,4 @@
-// Bytes Module Tests
+// Blob Module Tests
 //
 // Tests for Stdlib.Bytes operations
 
@@ -40,7 +40,7 @@ Stdlib.Bytes.length(Stdlib.Bytes.fromList([])) = 0
 // Round-trip: create, set values, toList
 let b = Stdlib.Bytes.create(3) in let b = Stdlib.Bytes.set(b, 0, 10) in let b = Stdlib.Bytes.set(b, 1, 20) in let b = Stdlib.Bytes.set(b, 2, 30) in Stdlib.Bytes.toList(b) = [10, 20, 30]
 
-// Print bytes directly (shows as "<N bytes>")
+// Print a Blob without exposing its payload or process-local identity.
 Stdlib.Bytes.toList(Stdlib.Bytes.create(0)) = []
 Stdlib.Bytes.length(Stdlib.Bytes.create(10)) = 10
 Stdlib.Bytes.length(Stdlib.Bytes.create(100)) = 100

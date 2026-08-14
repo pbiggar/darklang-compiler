@@ -29,7 +29,7 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 5.5  | Function tree shaking   | `passes/5.5_FunctionTreeShaking.fs`                         | LIR → pruned LIR                              |
 | 6    | Code generation         | `passes/{arm64,x64}/6_CodeGen.fs`                           | LIR → ISA instructions                        |
 | 7    | Encode & resolve        | `passes/{arm64,x64}/7_Encoding.fs` + `7_Resolve.fs`         | ISA → machine code bytes                      |
-| 8    | Binary generation       | `passes/{arm64,x64}/8_Binary_Generation_*.fs`               | Bytes → Mach-O or ELF executable              |
+| 8    | Binary generation       | `passes/{arm64,x64}/8_Binary_Generation_*.fs`               | Blob → Mach-O or ELF executable              |
 
 Passes 1–5 are shared across targets. Passes 6–8 live under
 `passes/arm64/` or `passes/x64/`. The host is validated once as a

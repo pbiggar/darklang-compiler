@@ -103,4 +103,5 @@ type ComparisonRecordB = { value: Int64 }
 true < false = error="Cannot perform numeric operation on Bool and Bool"
 "a" >= "b" = error="Cannot perform numeric operation on String and String"
 1L < 1.0 = error="Cannot perform numeric operation on Int64 and Float"
-Stdlib.Bytes.create(0) == Stdlib.Bytes.create(0) = error="Cannot perform equality check on Bytes and Bytes"
+Stdlib.Bytes.create(0) != Stdlib.Bytes.create(0) = true
+let blob = Stdlib.Bytes.create(0) in blob == blob = true

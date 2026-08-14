@@ -289,8 +289,8 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RawGetByte (dest, _, _) -> Set.add dest defs
         | StringToRawPtr (dest, _) -> Set.add dest defs
         | RawPtrToString (dest, _) -> Set.add dest defs
-        | BytesToRawPtr (dest, _) -> Set.add dest defs
-        | RawPtrToBytes (dest, _) -> Set.add dest defs
+        | BlobToRawPtr (dest, _) -> Set.add dest defs
+        | RawPtrToBlob (dest, _) -> Set.add dest defs
         | DictToRawPtr (dest, _) -> Set.add dest defs
         | RawPtrToDict (dest, _, _) -> Set.add dest defs
         | ListToRawPtr (dest, _) -> Set.add dest defs
@@ -306,8 +306,8 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | FloatToBits (dest, _) -> Set.add dest defs
         | RefCountIncString _ -> defs
         | RefCountDecString _ -> defs
-        | RefCountIncBytes _ -> defs
-        | RefCountDecBytes _ -> defs
+        | RefCountIncBlob _ -> defs
+        | RefCountDecBlob _ -> defs
         | RandomInt64 dest -> Set.add dest defs
         | DateTimeNow dest -> Set.add dest defs
         | FloatToString (dest, _) -> Set.add dest defs
@@ -398,9 +398,9 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 uses |> Set.union (getOperandUses value)
             | RawPtrToString (_, ptr) ->
                 uses |> Set.union (getOperandUses ptr)
-            | BytesToRawPtr (_, value) ->
+            | BlobToRawPtr (_, value) ->
                 uses |> Set.union (getOperandUses value)
-            | RawPtrToBytes (_, ptr) ->
+            | RawPtrToBlob (_, ptr) ->
                 uses |> Set.union (getOperandUses ptr)
             | DictToRawPtr (_, dict) ->
                 uses |> Set.union (getOperandUses dict)
@@ -424,8 +424,8 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | FloatToBits (_, src) -> Set.union uses (getOperandUses src)
             | RefCountIncString str -> Set.union uses (getOperandUses str)
             | RefCountDecString str -> Set.union uses (getOperandUses str)
-            | RefCountIncBytes bytes -> Set.union uses (getOperandUses bytes)
-            | RefCountDecBytes bytes -> Set.union uses (getOperandUses bytes)
+            | RefCountIncBlob bytes -> Set.union uses (getOperandUses bytes)
+            | RefCountDecBlob bytes -> Set.union uses (getOperandUses bytes)
             | RandomInt64 _ -> uses  // No operand uses
             | DateTimeNow _ -> uses      // No operand uses
             | FloatToString (_, value) -> Set.union uses (getOperandUses value)
@@ -870,15 +870,15 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (RawPtrToString (newDest, ptr'), state')
 
-    | BytesToRawPtr (dest, value) ->
+    | BlobToRawPtr (dest, value) ->
         let value' = renameOperand state value
         let (_, newDest, state') = newVersion state dest
-        (BytesToRawPtr (newDest, value'), state')
+        (BlobToRawPtr (newDest, value'), state')
 
-    | RawPtrToBytes (dest, ptr) ->
+    | RawPtrToBlob (dest, ptr) ->
         let ptr' = renameOperand state ptr
         let (_, newDest, state') = newVersion state dest
-        (RawPtrToBytes (newDest, ptr'), state')
+        (RawPtrToBlob (newDest, ptr'), state')
 
     | DictToRawPtr (dest, dict) ->
         let dict' = renameOperand state dict
@@ -957,13 +957,13 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
     | RefCountDecString str ->
         let str' = renameOperand state str
         (RefCountDecString str', state)
-    | RefCountIncBytes bytes ->
+    | RefCountIncBlob bytes ->
         let bytes' = renameOperand state bytes
-        (RefCountIncBytes bytes', state)
+        (RefCountIncBlob bytes', state)
 
-    | RefCountDecBytes bytes ->
+    | RefCountDecBlob bytes ->
         let bytes' = renameOperand state bytes
-        (RefCountDecBytes bytes', state)
+        (RefCountDecBlob bytes', state)
 
     | RandomInt64 dest ->
         let (_, newDest, state') = newVersion state dest

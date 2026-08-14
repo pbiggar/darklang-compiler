@@ -84,7 +84,7 @@ def Stdlib.Base64.__encode1Byte(b0: Int64, urlSafe: Bool) : String =
         Stdlib.Base64.__encodeChar(c1) ++ "=="
 
 // Encode bytes to base64 helper
-def Stdlib.Base64.__encodeHelper(b: Bytes, index: Int64, len: Int64, urlSafe: Bool, acc: String) : String =
+def Stdlib.Base64.__encodeHelper(b: Blob, index: Int64, len: Int64, urlSafe: Bool, acc: String) : String =
     let remaining = len - index in
     if remaining <= 0 then
         acc
@@ -103,11 +103,11 @@ def Stdlib.Base64.__encodeHelper(b: Bytes, index: Int64, len: Int64, urlSafe: Bo
         acc ++ Stdlib.Base64.__encode1Byte(b0, urlSafe)
 
 // Encode bytes to standard base64 string
-def Stdlib.Base64.encode(bytes: Bytes) : String =
+def Stdlib.Base64.encode(bytes: Blob) : String =
     Stdlib.Base64.__encodeHelper(bytes, 0, Stdlib.Bytes.length(bytes), false, "")
 
 // Encode bytes to URL-safe base64 string
-def Stdlib.Base64.urlEncode(bytes: Bytes) : String =
+def Stdlib.Base64.urlEncode(bytes: Blob) : String =
     Stdlib.Base64.__encodeHelper(bytes, 0, Stdlib.Bytes.length(bytes), true, "")
 
 // Decode 4 base64 characters to up to 3 bytes
@@ -142,15 +142,18 @@ def Stdlib.Base64.__decodeHelper(s: String, index: Int64, len: Int64, acc: List<
     if index >= len then
         Ok(Stdlib.List.reverse<Int64>(acc))
     else if index + 4 > len then
-        Error("Invalid base64: length not multiple of 4")
+        Error("Not a valid base64 string")
     else
         let c0 = Stdlib.String.getByteAt(s, index) in
         let c1 = Stdlib.String.getByteAt(s, index + 1) in
         let c2 = Stdlib.String.getByteAt(s, index + 2) in
         let c3 = Stdlib.String.getByteAt(s, index + 3) in
-        let result = Stdlib.Base64.__decode4Chars(c0, c1, c2, c3) in
-        match result with
-        | (bytes, true) -> Error("Invalid base64 character")
+        if (c2 == 61 || c3 == 61) && index + 4 != len then
+            Error("Not a valid base64 string")
+        else
+          let result = Stdlib.Base64.__decode4Chars(c0, c1, c2, c3) in
+          match result with
+          | (bytes, true) -> Error("Not a valid base64 string")
         | (bytes, false) ->
             // Prepend bytes to accumulator (in reverse order since we'll reverse at end)
             let newAcc = Stdlib.Base64.__prependReversed(bytes, acc) in
@@ -163,13 +166,13 @@ def Stdlib.Base64.__prependReversed(bytes: List<Int64>, acc: List<Int64>) : List
     | [b, ...rest] -> Stdlib.Base64.__prependReversed(rest, [b, ...acc])
 
 // Decode base64 string to bytes
-def Stdlib.Base64.decode(s: String) : Stdlib.Result.Result<Bytes, String> =
+def Stdlib.Base64.decode(s: String) : Stdlib.Result.Result<Blob, String> =
     let len = Stdlib.String.length(s) in
     let remainder = len % 4 in
     if len == 0 then
         Ok(Stdlib.Bytes.create(0))
     else if remainder == 1 then
-        Error("Invalid base64: length not multiple of 4")
+        Error("Not a valid base64 string")
     else
         // Base64 permits the final two- or three-character group to omit padding.
         let padded =
@@ -178,10 +181,10 @@ def Stdlib.Base64.decode(s: String) : Stdlib.Result.Result<Bytes, String> =
             else s in
         match Stdlib.Base64.__decodeHelper(padded, 0, Stdlib.String.length(padded), []) with
         | Ok(byteList) -> Ok(Stdlib.Bytes.fromList(byteList))
-        | Error(msg) -> Error(msg)
+        | Error(_) -> Error("Not a valid base64 string")
 
 // Decode URL-safe base64 string to bytes (same decoder handles both)
-def Stdlib.Base64.urlDecode(s: String) : Stdlib.Result.Result<Bytes, String> =
+def Stdlib.Base64.urlDecode(s: String) : Stdlib.Result.Result<Blob, String> =
     Stdlib.Base64.decode(s)
 
 // =============================================================================

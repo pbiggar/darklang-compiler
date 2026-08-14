@@ -100,7 +100,7 @@ let rec private formatType (typ: Type) : string =
     | TBool -> "Bool"
     | TFloat64 -> "Float"
     | TString -> "String"
-    | TBytes -> "Bytes"
+    | TBlob -> "Blob"
     | TChar -> "Char"
     | TUnit -> "Unit"
     | TRuntimeError -> "RuntimeError"

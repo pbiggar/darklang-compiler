@@ -21,7 +21,7 @@ let private isCleanupDec (cexpr: CExpr) : bool =
     match cexpr with
     | RefCountDec _
     | RefCountDecString _
-    | RefCountDecBytes _ -> true
+    | RefCountDecBlob _ -> true
     | _ -> false
 
 let rec private hasDecAfterNonSelfTailCall (funcName: string) (expr: AExpr) : bool =

@@ -72,7 +72,7 @@ let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
 let private plannedListRefCountDecHelperLabelPrefix = "__dark_list_refcount_dec_plan_"
 let private listRefCountDecStringHelperLabel = "__dark_list_refcount_dec_string_helper"
-let private listRefCountDecBytesHelperLabel = "__dark_list_refcount_dec_bytes_helper"
+let private listRefCountDecBlobHelperLabel = "__dark_list_refcount_dec_blob_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
 let private listRefCountDecDictListHelperLabel = "__dark_list_refcount_dec_dict_list_helper"
@@ -177,7 +177,7 @@ let private slotInitRootRetainTarget
             | ANF.DictRoot _ ->
                 Some SlotInitDictRootRetain
             | ANF.DynamicString
-            | ANF.DynamicBytes ->
+            | ANF.DynamicBlob ->
                 Some SlotInitDynamicBufferRetain
             | ANF.ClosureShape _ ->
                 Some SlotInitClosureRootRetain
@@ -450,8 +450,8 @@ let private generateListRefCountDecHelperWith
                 listRefCountDecHelperLabel
             | ANF.DynamicBufferRelease ANF.DynamicStringBuffer ->
                 listRefCountDecStringHelperLabel
-            | ANF.DynamicBufferRelease ANF.DynamicBytesBuffer ->
-                listRefCountDecBytesHelperLabel
+            | ANF.DynamicBufferRelease ANF.DynamicBlobBuffer ->
+                listRefCountDecBlobHelperLabel
             | ANF.DynamicBufferRelease _ ->
                 listRefCountDecHelperLabel
             | ANF.RecursiveRelease sourceType ->
@@ -1045,9 +1045,9 @@ let private generateNeededListRefCountDecHelpers
                    []
            else
                [])
-        @ (if Set.contains listRefCountDecBytesHelperLabel neededHelperLabels then
+        @ (if Set.contains listRefCountDecBlobHelperLabel neededHelperLabels then
                generateListRefCountDecHelperWith
-                   listRefCountDecBytesHelperLabel
+                   listRefCountDecBlobHelperLabel
                    ctx
                    None
                    None
@@ -1536,7 +1536,7 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
                     let fieldOffset = (captureIndex + 1) * 8
                     match captureType with
                     | AST.TString
-                    | AST.TBytes ->
+                    | AST.TBlob ->
                         releaseDynamicCapture fieldOffset $"captures_{index}_{captureIndex}"
                     | _ ->
                         match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType with
@@ -1721,8 +1721,8 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
             listRefCountDecHelperLabel
         | ANF.DynamicBufferRelease ANF.DynamicStringBuffer ->
             listRefCountDecStringHelperLabel
-        | ANF.DynamicBufferRelease ANF.DynamicBytesBuffer ->
-            listRefCountDecBytesHelperLabel
+        | ANF.DynamicBufferRelease ANF.DynamicBlobBuffer ->
+            listRefCountDecBlobHelperLabel
         | ANF.DynamicBufferRelease _ ->
             listRefCountDecHelperLabel
         | ANF.RecursiveRelease sourceType ->
@@ -3630,14 +3630,14 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         // Print literal characters (for tuple/list delimiters like "(", ", ", ")")
         Ok (runtimeInstrs (Runtime.generatePrintChars ctx.Target chars))
 
-    | LIR.PrintBytes reg ->
-        // Print bytes as "<N bytes>\n"
+    | LIR.PrintBlob reg ->
+        // Render the in-process Blob without exposing its payload or identity.
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64Symbolic.X19 then
-                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, regARM64)] @ runtimeInstrs (Runtime.generatePrintBytes ctx.Target)
+                [ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, regARM64)] @ runtimeInstrs (Runtime.generatePrintBlob ctx.Target)
             else
-                runtimeInstrs (Runtime.generatePrintBytes ctx.Target))
+                runtimeInstrs (Runtime.generatePrintBlob ctx.Target))
 
     | LIR.PrintInt64NoNewline reg ->
         // Print integer without newline (for tuple elements)
@@ -5768,7 +5768,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     ])))
 
     | LIR.RefCountIncString str
-    | LIR.RefCountIncBytes str ->
+    | LIR.RefCountIncBlob str ->
         // Increment refcount for a heap string
         // Heap string layout: [length:8][data:N][padding:P][refcount:8] where P aligns to 8
         // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
@@ -5805,7 +5805,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         | _ -> Error "dynamic buffer RefCountInc requires StringSymbol or Reg operand"
 
     | LIR.RefCountDecString str
-    | LIR.RefCountDecBytes str ->
+    | LIR.RefCountDecBlob str ->
         // Decrement refcount for a heap string
         // Heap string layout: [length:8][data:N][padding:P][refcount:8] where P aligns to 8
         // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)

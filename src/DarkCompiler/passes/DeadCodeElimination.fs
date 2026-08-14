@@ -85,7 +85,7 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.RuntimeErrorString _
     | LIR.PrintHeapStringNoNewline _
     | LIR.PrintChars _
-    | LIR.PrintBytes _
+    | LIR.PrintBlob _
     | LIR.PrintList _
     | LIR.PrintRecord _
     | LIR.Exit
@@ -142,8 +142,8 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.FileSetExecutable (_, path)
     | LIR.RefCountIncString path
     | LIR.RefCountDecString path
-    | LIR.RefCountIncBytes path
-    | LIR.RefCountDecBytes path ->
+    | LIR.RefCountIncBlob path
+    | LIR.RefCountDecBlob path ->
         addCallFromOperand path calls
     | LIR.FileWriteText (_, path, content)
     | LIR.FileAppendText (_, path, content) ->

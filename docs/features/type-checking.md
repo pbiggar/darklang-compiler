@@ -23,7 +23,7 @@ Defined in `src/DarkCompiler/AST.fs`:
 type Type =
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBytes | TChar | TUnit
+    | TBool | TFloat64 | TString | TBlob | TChar | TUnit
     | TRuntimeError
     | TFunction of Type list * Type
     | TTuple of Type list
@@ -34,6 +34,10 @@ type Type =
     | TRawPtr
     | TDict of keyType:Type * valueType:Type
 ```
+
+`Blob` is the sole binary type. Blob equality is admitted as handle identity;
+there is no `Bytes` type. `Stdlib.Bytes` is only a legacy function namespace
+whose binary parameters and results are typed `Blob`.
 
 ## Type Registries
 

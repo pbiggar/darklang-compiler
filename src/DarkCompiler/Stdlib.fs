@@ -141,11 +141,11 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__int64_to_uint16"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TUInt16 }
     { Name = "__int64_to_uint32"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TUInt32 }
 
-    // Bytes intrinsics - for byte array operations
-    // __bytes_to_rawptr : (Bytes) -> RawPtr - borrow bytes backing pointer
-    { Name = "__bytes_to_rawptr"; TypeParams = []; ParamTypes = [TBytes]; ReturnType = TRawPtr }
-    // __rawptr_to_bytes : (RawPtr) -> Bytes - reinterpret initialized raw allocation as Bytes
-    { Name = "__rawptr_to_bytes"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TBytes }
+    // Blob intrinsics - for byte array operations
+    // __blob_to_rawptr : (Blob) -> RawPtr - borrow bytes backing pointer
+    { Name = "__blob_to_rawptr"; TypeParams = []; ParamTypes = [TBlob]; ReturnType = TRawPtr }
+    // __rawptr_to_blob : (RawPtr) -> Blob - reinterpret initialized raw allocation as Blob
+    { Name = "__rawptr_to_blob"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TBlob }
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> : () -> Dict<k, v> - create empty dict (null pointer)
@@ -188,6 +188,18 @@ let allModules : ModuleDef list = [
     randomModule
     dateTimeModule
 ]
+
+/// Compiler-visible values are registered separately from functions so a value
+/// cannot accidentally acquire nullary-call semantics.
+let allValues : ModuleValue list = [
+    { Name = "Stdlib.Blob.empty"; Type = TBlob }
+]
+
+let private valueRegistry : ModuleValueRegistry =
+    allValues |> List.map (fun value -> (value.Name, value)) |> Map.ofList
+
+let tryGetValue (qualifiedName: string) : ModuleValue option =
+    Map.tryFind qualifiedName valueRegistry
 
 /// Build the module registry from all modules
 /// Maps qualified function names (e.g., "Stdlib.Int64.add") to their definitions

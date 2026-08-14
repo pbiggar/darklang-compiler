@@ -59,11 +59,11 @@ Latest update:
   cleanup into later variant cases after helper calls.
 - ARM64 closure capture cleanup now also recurses through nested fixed-block
   and boxed-sum child release plans before freeing the child root. The first
-  pinned case is a captured tuple containing a nested tuple with a bytes field;
+  pinned case is a captured tuple containing a nested tuple with a Blob field;
   before the fix, the closure helper decremented the nested tuple root but did
-  not release the bytes field inside it.
+  not release the Blob field inside it.
 - ARM64 closure capture cleanup now dispatches boxed-sum variant payload
-  release plans as well. A captured boxed sum with a bytes payload now releases
+  release plans as well. A captured boxed sum with a Blob payload now releases
   that payload before the captured sum root is freed.
 - x64 top-level generic boxed-sum cleanup now uses sum-aware
   `RcReleasePlan` variant metadata when it is present: the generated release
@@ -96,8 +96,8 @@ Latest update:
   `X86_64CodeGenTests.testDictRefCountDecStringValue`, and
   `Dict<String, String>` now uses a combined dynamic key/value helper pinned by
   `X86_64CodeGenTests.testDictRefCountDecStringKeyValue`. The same
-  dynamic-buffer helper path is pinned for `Dict<Bytes, Bytes>` by
-  `X86_64CodeGenTests.testDictRefCountDecBytesKeyValue`. x64 also now covers
+  dynamic-buffer helper path is pinned for `Dict<Blob, Blob>` by
+  `X86_64CodeGenTests.testDictRefCountDecBlobKeyValue`. x64 also now covers
   mixed dynamic string keys with list leaf values via
   `X86_64CodeGenTests.testDictRefCountDecStringKeyListValue`, and mixed
   dynamic string keys with nested dict leaf values via
@@ -167,7 +167,7 @@ Latest update:
   payload cleanup through planned fixed-block `RcReleasePlan` helpers instead
   of the handwritten nested fixed-block list-helper variants. This covers the
   existing tuple2 dynamic-buffer, list/dict, dict, closure,
-  string/list/dict, string/bytes/list/dict, and string/bytes/list/dict-list
+  string/list/dict, string/Blob/list/dict, and string/Blob/list/dict-list
   tests, plus tuple4 dynamic-buffer, string/list/dict, string/list/dict-list,
   and closure/bytes/list/dict tests. The planned-helper dependency discovery
   now walks selected helpers' `RcReleasePlan`s so recursive list helper
@@ -198,9 +198,9 @@ Latest update:
   helper selection rather than one concrete tuple/record layout, so they should
   fail if a future change rebuilds a tuple/record list-helper matrix.
 
-Current head reviewed: includes x64 fixed-block dynamic string/bytes field
+Current head reviewed: includes x64 fixed-block dynamic string/Blob field
 release, tuple-only nested fixed-block field release, record-registry-based
-record field release, boxed sum string/bytes/list/dict/closure payload release,
+record field release, boxed sum string/Blob/list/dict/closure payload release,
 dict root field release, record dict/closure root field release, zero-capture
 closure field release, tagged-list closure leaf payload release, tagged-list
 dict leaf payload release, and tagged-list dynamic string leaf payload release,
@@ -213,19 +213,19 @@ release, tagged-list boxed sum dynamic string payload release, tagged-list
 boxed sum list payload release, tagged-list boxed sum dict payload release,
 tagged-list boxed sum closure payload release, tagged-list boxed sum tuple
 dynamic string payload release, tagged-list boxed sum tuple3 dynamic
-string/bytes payload release for all non-empty dynamic-buffer field
-combinations, tagged-list boxed sum bytes payload release, tagged-list boxed
+string/Blob payload release for all non-empty dynamic-buffer field
+combinations, tagged-list boxed sum Blob payload release, tagged-list boxed
 sum list/dict payload release through generic sum payload metadata,
 tagged-list boxed sum record dynamic string payload release,
-tagged-list boxed sum record3 dynamic string/bytes payload release for all
+tagged-list boxed sum record3 dynamic string/Blob payload release for all
 non-empty dynamic-buffer field combinations, tagged-list nested boxed sum
 dynamic string payload release, tagged-list three-field record
-string/bytes/list/dict payload release, tagged-list boxed sum record3
+string/Blob/list/dict payload release, tagged-list boxed sum record3
 string/list/dict payload release, tagged-list tuple3 string/list/dict payload
 release on ARM64, tagged-list boxed sum tuple3 string/list/dict payload
 release, and
 direct x64 closure dynamic
-string/bytes/list/dict/closure/tuple/tuple-string-list-dict/record/
+string/Blob/list/dict/closure/tuple/tuple-string-list-dict/record/
 record-string-list-dict/sum/sum-tuple-string-list-dict capture release,
 including a
 multiple-managed-capture closure probe, ARM64 string literal materialization via
@@ -238,12 +238,12 @@ using sentinel literal-pool entries, file read success/error result string
 payload leak accounting, unaligned file read string refcount layout, file write
 success root accounting, file write/append error string payload leak
 accounting, file delete and set-executable success/error result leak
-accounting, plus multiple dynamic bytes list payloads, repeated immutable
-bytes updates, dynamic bytes dict keys/values including overwrite, persistent
+accounting, plus multiple dynamic Blob list payloads, repeated immutable
+Blob updates, dynamic Blob dict keys/values including overwrite, persistent
 dict update/remove/overwrite old-root sharing with managed string values,
 persistent multi-branch dict sharing from a common base with managed string
 values, dict lookup `Option<String>` payload reclamation, dict string-to-string
-key/value reclamation, persistent int-to-bytes dict values with old and new
+key/value reclamation, persistent Int-to-Blob dict values with old and new
 roots live, dict record values with nested string fields, E2E suite-level
 stdlib specialization carrying test/preamble record type registries, ARM64
 fixed-block `Option` payload release for tuple/record values, ARM64 dict
@@ -259,17 +259,17 @@ covered, direct ARM64 tagged-list concrete non-generic sum payload release for
 metadata, and `RcShape`
 retain/release operation helper coverage and RC insertion retain/release
 emission, plus ARM64 tagged-list tuple3 and record3 closure/list/dict payload
-release, plus ARM64 tagged-list tuple3 string/bytes/list payload release, plus
-ARM64 tagged-list tuple3 string/bytes/dict payload release, plus
-ARM64 tagged-list tuple3 string/bytes/closure payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-record payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-record-dict payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-record-closure payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-list payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-dict payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-closure payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-dynamic payload release, plus
-ARM64 tagged-list tuple4 and record4 string/bytes/list/dict payload release,
+release, plus ARM64 tagged-list tuple3 string/Blob/list payload release, plus
+ARM64 tagged-list tuple3 string/Blob/dict payload release, plus
+ARM64 tagged-list tuple3 string/Blob/closure payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-record payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-record-dict payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-record-closure payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-list payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-dict payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-closure payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-dynamic payload release, plus
+ARM64 tagged-list tuple4 and record4 string/Blob/list/dict payload release,
 plus ARM64 tagged-list tuple4 and record4
 closure/dynamic-buffer/list/dict payload release, plus ARM64 tagged-list
 tuple4 nested tuple dynamic-buffer payload release, plus ARM64 tagged-list
@@ -280,27 +280,27 @@ tagged-list tuple4 nested record list/dynamic-buffer payload release, plus
 ARM64 tagged-list tuple4 nested record dict/dynamic-buffer payload release,
 plus ARM64 tagged-list tuple4 nested record closure/dynamic-buffer payload
 release, plus ARM64 tagged-list concrete boxed-sum tuple4 and record4
-string/bytes/list/dict payload release, plus ARM64 tagged-list concrete
+string/Blob/list/dict payload release, plus ARM64 tagged-list concrete
 boxed-sum tuple4 nested tuple/record payload release, plus ARM64 tagged-list
 concrete boxed-sum tuple4 nested tuple dict payload release, plus ARM64
 tagged-list concrete boxed-sum tuple4 nested tuple closure payload release,
 plus ARM64 tagged-list concrete boxed-sum record4 nested tuple payload release,
 plus ARM64 tagged-list concrete boxed-sum record4 nested tuple dict/closure
-payload release, plus x64 tagged-list record4 string/bytes/list/dict payload
-release, plus x64 tagged-list tuple4 string/bytes/list/dict payload release,
-plus x64 tagged-list boxed-sum tuple4 string/bytes/list/dict payload release,
-plus x64 tagged-list boxed-sum record4 string/bytes/list/dict payload release,
+payload release, plus x64 tagged-list record4 string/Blob/list/dict payload
+release, plus x64 tagged-list tuple4 string/Blob/list/dict payload release,
+plus x64 tagged-list boxed-sum tuple4 string/Blob/list/dict payload release,
+plus x64 tagged-list boxed-sum record4 string/Blob/list/dict payload release,
 plus planned x64 tagged-list boxed-sum tuple4 nested tuple string/list/dict
 payload release through the shared generic `RcReleasePlan` executor,
 plus x64 tagged-list boxed-sum tuple4 closure/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum record4 closure/bytes/list/dict payload release,
-plus x64 tagged-list tuple2 nested tuple dynamic string/bytes payload release
+plus x64 tagged-list tuple2 nested tuple dynamic string/Blob payload release
 for all non-empty dynamic-buffer field combinations, plus x64 tagged-list
 tuple2 nested tuple list/dict payload release, plus x64 tagged-list tuple2
 nested tuple dict payload release, plus x64 tagged-list tuple2 nested tuple
 closure payload release, plus x64 tagged-list tuple2 nested tuple
 string/list/dict payload release, plus x64 tagged-list tuple2 nested tuple
-string/bytes/list/dict payload release, plus x64 tagged-list tuple3
+string/Blob/list/dict payload release, plus x64 tagged-list tuple3
 closure/list/dict payload release, plus x64 tagged-list record3
 closure/list/dict payload release, plus x64 tagged-list tuple4
 closure/bytes/list/dict payload release, plus x64 tagged-list record4
@@ -320,7 +320,7 @@ string/list/dict-list payload release with ARM64 helper-selection parity
 coverage, plus initial
 `RcShape` storage-class classification used by RC insertion's legacy fixed-root
 compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
-fixed-block dynamic string/bytes, dict-root, and closure-root field release
+fixed-block dynamic string/Blob, dict-root, and closure-root field release
 consumption through `RcReleasePlan` for tuples, records, and boxed-sum payloads,
 plus planned boxed-sum tuple and record list helpers that carry source-type
 payload field cleanup through `RcReleasePlan`, plus boxed-sum release plans
@@ -331,22 +331,22 @@ child variant-dispatch coverage, plus x64 closure capture mixed boxed-sum
 variant-dispatch coverage, plus x64 tagged-list boxed-sum mixed
 no-payload/dynamic-payload variant-dispatch coverage.
 
-Last full-suite verification after the x64 fixed-block dynamic string/bytes
+Last full-suite verification after the x64 fixed-block dynamic string/Blob
 field coverage, nested fixed-block release, record string field release, boxed
-sum string/bytes/list/dict/closure payload release, dict root field release,
+sum string/Blob/list/dict/closure payload release, dict root field release,
 record dict/closure root field release, and zero-capture closure field release,
 including tagged-list
 closure/dict/dynamic-string leaf payload release, plus direct x64 closure
-dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
+dynamic string/Blob/list/dict/closure/tuple/record/sum capture release,
 including multiple managed captures in the same closure, and x64 tagged-list
 tuple3 and record3 dynamic-buffer payload release, plus tagged-list boxed sum
 list, dict, closure, bytes, generic sum-list and sum-dict payloads, tuple
-dynamic string, tuple3 dynamic string/bytes, and record dynamic string payload
+dynamic string, tuple3 dynamic string/Blob, and record dynamic string payload
 release, plus
 tagged-list boxed sum record3
-dynamic string/bytes payload release for all non-empty dynamic-buffer field
+dynamic string/Blob payload release for all non-empty dynamic-buffer field
 combinations, plus tagged-list nested boxed sum dynamic string payload release,
-plus tagged-list three-field record string/bytes/list/dict payload release,
+plus tagged-list three-field record string/Blob/list/dict payload release,
 plus tagged-list boxed sum record3 string/list/dict payload release, plus
 tagged-list tuple3 string/list/dict payload release on ARM64, plus
 tagged-list boxed sum tuple3 string/list/dict payload release, plus direct x64 closure tuple
@@ -372,16 +372,16 @@ tuple, and record projection retention, plus sum record payload release, plus mi
 no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
-literal string, list display string reclamation, multiple dynamic bytes list
-payloads, repeated immutable bytes update reclamation, dynamic bytes dict
+literal string, list display string reclamation, multiple dynamic Blob list
+payloads, repeated immutable Blob update reclamation, dynamic Blob dict
 key/value reclamation including overwrite, persistent dict
 update/remove/overwrite sharing with old roots still live, persistent
 multi-branch dict sharing from a common base, dict lookup `Option<String>`
 payload reclamation, dict string-to-string key/value reclamation, tagged-list
-boxed sum bytes payload release, tagged-list boxed sum list/dict payload
+boxed sum Blob payload release, tagged-list boxed sum list/dict payload
 release, tagged-list tuple3 string/list/dict payload release on ARM64,
 persistent
-dict int-to-bytes values with old and new roots live, dict record values with
+dict int-to-Blob values with old and new roots live, dict record values with
 nested string fields, dict list values with leaf payload release, dict closure
 value reclamation, nested dict value leaf payload release, dict tuple value
 nested string/list field reclamation, dict tuple3 value nested string/list/dict
@@ -392,22 +392,22 @@ retain/release operation helper tests plus RC insertion use of those helpers,
 plus direct concrete non-generic sum payload release in tagged lists for
 `Bytes`, `List`, `Dict`, and closure variants through variant metadata, plus
 tagged-list tuple bytes/list/dict/closure field release, tagged-list tuple3
-bytes/list/dict field release, ARM64 returned `Option<String>`/`Option<Bytes>`
+Blob/list/dict field release, ARM64 returned `Option<String>`/`Option<Blob>`
 payload release for values projected through `Dict.keys` and `List.head`, plus file read
 success/error, unaligned file read, file write success/error, file append
 error reclamation, and ARM64 tagged-list tuple3 and record3 closure/list/dict
-payload release, plus ARM64 tagged-list tuple3 string/bytes/list payload
-release, plus ARM64 tagged-list tuple3 string/bytes/dict payload release, plus
-ARM64 tagged-list tuple3 string/bytes/closure payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-record payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-record-dict payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-record-closure payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-list payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-dict payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-closure payload release, plus
-ARM64 tagged-list tuple3 string/bytes/nested-tuple-dynamic payload release, plus
+payload release, plus ARM64 tagged-list tuple3 string/Blob/list payload
+release, plus ARM64 tagged-list tuple3 string/Blob/dict payload release, plus
+ARM64 tagged-list tuple3 string/Blob/closure payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-record payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-record-dict payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-record-closure payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-list payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-dict payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-closure payload release, plus
+ARM64 tagged-list tuple3 string/Blob/nested-tuple-dynamic payload release, plus
 ARM64 tagged-list tuple4 and record4
-string/bytes/list/dict payload release, plus ARM64 tagged-list tuple4 and
+string/Blob/list/dict payload release, plus ARM64 tagged-list tuple4 and
 record4 closure/dynamic-buffer/list/dict payload release, plus ARM64
 tagged-list tuple4 nested tuple dynamic-buffer payload release, plus ARM64
 tagged-list tuple4 nested tuple list/dynamic-buffer payload release, plus
@@ -417,25 +417,25 @@ plus ARM64 tagged-list tuple4 nested record list/dynamic-buffer payload
 release, plus ARM64 tagged-list tuple4 nested record dict/dynamic-buffer
 payload release, plus ARM64 tagged-list tuple4 nested record
 closure/dynamic-buffer payload release, plus ARM64 tagged-list concrete
-boxed-sum tuple4 and record4 string/bytes/list/dict payload release, plus
+boxed-sum tuple4 and record4 string/Blob/list/dict payload release, plus
 ARM64 tagged-list concrete boxed-sum tuple4 nested tuple/record payload
 release, plus ARM64 tagged-list concrete boxed-sum tuple4 nested tuple dict
 payload release, plus ARM64 tagged-list concrete boxed-sum tuple4 nested tuple
 closure payload release, plus ARM64 tagged-list concrete boxed-sum record4
 nested tuple payload release, plus ARM64 tagged-list concrete boxed-sum record4
 nested tuple dict/closure payload release, plus x64 tagged-list record4
-string/bytes/list/dict payload release, plus x64 tagged-list tuple4
-string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum tuple4
-string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum record4
-string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum tuple4
+string/Blob/list/dict payload release, plus x64 tagged-list tuple4
+string/Blob/list/dict payload release, plus x64 tagged-list boxed-sum tuple4
+string/Blob/list/dict payload release, plus x64 tagged-list boxed-sum record4
+string/Blob/list/dict payload release, plus x64 tagged-list boxed-sum tuple4
 closure/bytes/list/dict payload release, plus x64 tagged-list boxed-sum record4
 closure/bytes/list/dict payload release, plus x64 tagged-list tuple2 nested
-tuple dynamic string/bytes payload release for all non-empty dynamic-buffer
+tuple dynamic string/Blob payload release for all non-empty dynamic-buffer
 field combinations, plus x64 tagged-list tuple2 nested tuple string/list/dict
 payload release, plus x64 tagged-list tuple2 nested tuple list/dict payload
 release, plus x64 tagged-list tuple2 nested tuple dict payload release, plus
 x64 tagged-list tuple2 nested tuple closure payload release, plus x64
-tagged-list tuple2 nested tuple string/bytes/list/dict payload release, plus
+tagged-list tuple2 nested tuple string/Blob/list/dict payload release, plus
 x64 tagged-list tuple3 closure/list/dict payload release, plus x64
 tagged-list record3 closure/list/dict payload release, plus x64 tagged-list
 tuple4 closure/bytes/list/dict payload release, plus x64 tagged-list record4
@@ -506,7 +506,7 @@ type RcShape =
     | TaggedListShape of elementShape:RcShape
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
-    | DynamicBytes
+    | DynamicBlob
     | ClosureShape of captureShapes:RcShape list
     | StaticString
     | RawUnmanaged
@@ -529,7 +529,7 @@ now exposes the first small ownership helpers and release-plan model:
 `2.5_RefCountInsertion.fs` uses those helpers for automatic scope release,
 borrowed-retain checks, and root dispatch where full type metadata is available.
 `2_AST_to_ANF.fs` also uses these helpers for list literal fixed/tagged-root
-element retains, while preserving the existing dynamic string/bytes list-leaf
+element retains, while preserving the existing dynamic string/Blob list-leaf
 ownership contract: list leaves consume those freshly owned dynamic buffers
 rather than retaining an additional reference. It deliberately preserves the
 previous non-crashing classification for record-like names whose field metadata
@@ -621,7 +621,7 @@ not the basic field ownership model.
 
 ### Dynamic Bytes Have Initial RC Coverage
 
-Recent commits added dynamic bytes reference counting and aligned bytes layout
+Recent commits added dynamic Blob reference counting and aligned bytes layout
 in `src/DarkCompiler/stdlib/Bytes.dark`.
 
 Covered by current tests:
@@ -631,20 +631,20 @@ Covered by current tests:
 - `Bytes.set` results reclaimed, including repeated immutable updates
 - `Bytes.fromList` results reclaimed
 - `Bytes.toList` releases both the result list and source bytes
-- closure captures of dynamic bytes are released
-- returned list releases dynamic bytes payloads
-- list literals with multiple dynamic bytes payloads are released
-- tuple and record dynamic bytes fields retain the byte buffer while both the
+- closure captures of dynamic Blob are released
+- returned list releases dynamic Blob payloads
+- list literals with multiple dynamic Blob payloads are released
+- tuple and record dynamic Blob fields retain the byte buffer while both the
   original binding and fixed block are live
-- returned record dynamic bytes fields remain usable after function cleanup
-- returned borrowed bytes projections remain usable after parent cleanup
-- dict roots release dynamic bytes keys and values
-- dict overwrite with equal dynamic bytes keys releases replaced dynamic payloads
+- returned record dynamic Blob fields remain usable after function cleanup
+- returned borrowed Blob projections remain usable after parent cleanup
+- dict roots release dynamic Blob keys and values
+- dict insertion with distinct equal-payload Blob handles preserves identity and releases both payloads
 - dict update/remove keep old and new roots live with managed string values
 - dict lookup `Option<String>` payloads are reclaimed on the dict path
 - dict string-to-string lookup retains and releases both dynamic keys and values
 - dict keys returned through `Dict.keys` and projected with `List.head` reclaim
-  returned `Option<String>`/`Option<Bytes>` payloads
+  returned `Option<String>`/`Option<Blob>` payloads
 - persistent dict values of `Bytes` remain live across old and new roots
 - dict record values release nested string fields after lookup; this required
   suite-level stdlib specialization to include test/preamble record type
@@ -684,7 +684,7 @@ Covered by current tests:
 - returned list releases dict payload roots
 - returned dict releases sum value payload fields
 - dict string-to-string key/value lookup reclaimed
-- dict int-to-bytes values stay live across old and new roots
+- dict int-to-Blob values stay live across old and new roots
 - dict int-to-record values release nested string fields after lookup
 - dict int-to-list values release leaf payload roots
 - dict int-to-closure values are reclaimed
@@ -707,7 +707,7 @@ Recent commits added:
 - closure payload release from list literals
 - returned list closure payload roots
 - returned list closure dynamic string captures
-- returned list bytes payloads
+- returned list Blob payloads
 
 Covered by current tests:
 
@@ -715,9 +715,9 @@ Covered by current tests:
 - list of closures reclaimed
 - returned list of closures reclaimed
 - list of dynamic strings reclaimed
-- returned list of dynamic bytes reclaimed
+- returned list of dynamic Blob reclaimed
 - list of tuple payloads reclaimed
-- list of tuple payloads with dynamic bytes fields reclaimed
+- list of tuple payloads with dynamic Blob fields reclaimed
 - list of tuple payloads with list fields reclaimed
 - list of tuple payloads with dict fields reclaimed
 - list of tuple payloads with closure fields reclaimed
@@ -729,14 +729,14 @@ Covered by current tests:
 - returned list of dicts reclaimed
 - returned list of single-field records reclaimed
 - returned list of two-field records reclaimed
-- returned list of records carrying bytes fields reclaimed
+- returned list of records carrying Blob fields reclaimed
 - returned list of three-field records with bytes, list, and dict fields
   reclaimed on ARM64
 - returned list of three-field records with string, list, and dict fields
   reclaimed
 - returned list of nested records reclaimed
 - returned list of sums carrying string payloads reclaimed
-- returned list of sums carrying bytes payloads reclaimed when the payload type
+- returned list of sums carrying Blob payloads reclaimed when the payload type
   is carried as a generic type argument
 - returned list of sums carrying list payloads reclaimed when the payload type
   is carried as a generic type argument
@@ -925,11 +925,11 @@ another matrix of source-type predicates and per-architecture helper labels.
 
 ### Current State
 
-`TBytes` is now treated as needing automatic decrement in
+`TBlob` is now treated as needing automatic decrement in
 `2.5_RefCountInsertion.fs`. The IR has:
 
-- `RefCountIncBytes`
-- `RefCountDecBytes`
+- `RefCountIncBlob`
+- `RefCountDecBlob`
 
 ARM64 and x64 lower bytes RC through the same dynamic-buffer logic as strings.
 `src/DarkCompiler/stdlib/Bytes.dark` now uses:
@@ -946,18 +946,18 @@ Current tests prove:
 - repeated immutable `Bytes.set` results are reclaimed
 - `Bytes.fromList` results are reclaimed
 - `Bytes.toList` releases both the result list and source bytes
-- closures release captured dynamic bytes
+- closures release captured dynamic Blob
 - returned list payloads of `Bytes` are released
 - list literals with multiple dynamic `Bytes` payloads are released
-- tuple and record fields retain dynamic bytes while both owners are live
-- returned record bytes fields remain usable and release cleanly
-- returned borrowed bytes field projections remain usable after the parent is
+- tuple and record fields retain dynamic Blob while both owners are live
+- returned record Blob fields remain usable and release cleanly
+- returned borrowed Blob field projections remain usable after the parent is
   released
-- dict roots release scoped dynamic bytes keys and values
-- dict overwrite with equal dynamic bytes keys uses byte-wise hash/equality and
-  releases replaced dynamic payloads
-- persistent dict bytes keys stay live across old and new roots
-- persistent dict bytes values stay live across old and new roots
+- dict roots release scoped dynamic Blob keys and values
+- dict insertion with distinct equal-payload Blob handles uses identity
+  equality (payload hashing may collide) and releases both payloads
+- persistent dict Blob keys stay live across old and new roots
+- persistent dict Blob values stay live across old and new roots
 - sum payloads containing bytes are released directly and under list payloads
 - nested bytes combinations under tuples, records, lists, sums, dicts, and
   closure-containing payloads are covered by leak-check tests
@@ -1128,7 +1128,7 @@ variant payload release plans.
 
 The implementation is still specialized and partial:
 
-- bytes fields are still not covered to the same level as strings across every
+- Blob fields are still not covered to the same level as strings across every
   backend path, though ARM64 generic fixed-block and closure nested fixed-block
   cleanup now have explicit bytes-field coverage
 - dict fields in arbitrary fixed blocks need explicit tests
@@ -1164,7 +1164,7 @@ The implementation is still specialized and partial:
 
 ### Suggested Commit Breakdown
 
-1. Cover bytes fields in fixed blocks.
+1. Cover Blob fields in fixed blocks.
 2. Cover dict fields in fixed blocks.
 3. Cover closure fields in tuples and multi-field records.
 4. Cover broader nested fixed-block field matrices outside closures.
@@ -1178,7 +1178,7 @@ The implementation is still specialized and partial:
 
 The list helper ecosystem has grown from root-only retain/release to multiple
 payload-specialized helpers. Current tests cover primitive lists, dynamic
-strings, dynamic bytes, nested lists, dicts, closures, tuple payloads, and
+strings, dynamic Blob, nested lists, dicts, closures, tuple payloads, and
 one/two-field records. The current ARM64 coverage also includes narrow helpers
 for records shaped as `String`, `List<Int64>`, and `Dict<Int64, Int64>`, records
 shaped as `List<Dict<Int64, Int64>>`, plus boxed-sum payload helpers.
@@ -1315,13 +1315,13 @@ commits enabled:
 - dict refcount helpers
 - dynamic string decref after `StringConcat`
 - generic fixed-block tuple field release for dynamic strings
-- generic fixed-block tuple field release for dynamic bytes
+- generic fixed-block tuple field release for dynamic Blob
 - tuple-only nested fixed-block field release
 - record-registry-based fixed-block record string field release
 - record-registry-based fixed-block record dict root field release
 - record-registry-based fixed-block record closure root field release
 - boxed sum string payload release
-- boxed sum bytes payload release
+- boxed sum Blob payload release
 - nested boxed sum string field release
 - boxed sum list payload release
 - boxed sum dict payload release
@@ -1336,7 +1336,7 @@ commits enabled:
 - tagged-list dict leaf payload release
 - tagged-list dynamic string leaf payload release
 - tagged-list tuple dynamic string field release
-- tagged-list tuple3 dynamic string/bytes field release for all non-empty
+- tagged-list tuple3 dynamic string/Blob field release for all non-empty
   dynamic-buffer field combinations
 - tagged-list tuple3 string/list/dict payload release
 - tagged-list tuple3 closure/list/dict payload release
@@ -1344,7 +1344,7 @@ commits enabled:
 - dict dynamic string leaf key release for `Dict<String, Int64>`
 - dict dynamic string leaf value release for `Dict<Int64, String>`
 - dict dynamic string leaf key/value release for `Dict<String, String>`
-- dict dynamic bytes leaf key/value release for `Dict<Bytes, Bytes>`
+- dict dynamic Blob leaf key/value release for `Dict<Blob, Blob>`
 - dict dynamic string leaf key plus list value release for
   `Dict<String, List<Int64>>`
 - dict dynamic string leaf key plus nested dict value release for
@@ -1360,35 +1360,35 @@ commits enabled:
 - tagged-list record4 nested tuple string/list/dict payload release
 - tagged-list record4 nested tuple closure/bytes/list/dict payload release
 - tagged-list one-field record dynamic string field release
-- tagged-list three-field record dynamic string/bytes field release for all
+- tagged-list three-field record dynamic string/Blob field release for all
   non-empty dynamic-buffer field combinations
-- tagged-list three-field record string/bytes/list/dict payload release
+- tagged-list three-field record string/Blob/list/dict payload release
 - tagged-list three-field record closure/list/dict payload release
 - tagged-list four-field record closure/bytes/list/dict payload release
 - tagged-list boxed sum dynamic string payload release
 - tagged-list boxed sum list payload release
 - tagged-list boxed sum dict payload release
 - tagged-list boxed sum closure payload release
-- tagged-list boxed sum tuple2 dynamic string/bytes payload release for all
+- tagged-list boxed sum tuple2 dynamic string/Blob payload release for all
   non-empty dynamic-buffer field combinations
-- tagged-list boxed sum tuple3 dynamic string/bytes payload release for all
+- tagged-list boxed sum tuple3 dynamic string/Blob payload release for all
   non-empty dynamic-buffer field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
 - tagged-list boxed sum tuple4 closure/bytes/list/dict payload release
 - tagged-list boxed sum tuple4 closure/string/list/dict-list payload release
-- tagged-list boxed sum record4 string/bytes/list/dict-list payload release
+- tagged-list boxed sum record4 string/Blob/list/dict-list payload release
 - tagged-list boxed sum record4 closure/bytes/list/dict payload release
 - tagged-list boxed sum record dynamic string payload release
-- tagged-list boxed sum record3 dynamic string/bytes payload release for all
+- tagged-list boxed sum record3 dynamic string/Blob payload release for all
   non-empty dynamic-buffer field combinations
 - tagged-list boxed sum record3 string/list/dict payload release
 - tagged-list nested boxed sum dynamic string payload release
-- direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
+- direct closure dynamic string/Blob/list/dict/closure/tuple/record/sum
   capture release
 - direct closure tuple string/list/dict capture release
-- direct closure tuple string/bytes/list/dict-list capture release
+- direct closure tuple string/Blob/list/dict-list capture release
 - direct closure record string/list/dict capture release
-- direct closure record string/bytes/list/dict-list capture release
+- direct closure record string/Blob/list/dict-list capture release
 - direct closure sum tuple string/list/dict capture release
 - direct closure sum record string/list/dict capture release
 - direct closure release with multiple managed captures
@@ -1436,28 +1436,28 @@ Likely gaps:
 - list payload helper variants beyond the currently covered tuple2, exhaustive
   tuple3 dynamic-buffer combinations, mixed tuple3 string/list/dict and
   closure/list/dict shapes,
-  mixed tuple4 string/bytes/list/dict, string/bytes/list/dict-list,
+  mixed tuple4 string/Blob/list/dict, string/Blob/list/dict-list,
   closure/bytes/list/dict, and closure/string/list/dict-list shapes, tuple2
-  nested tuple dynamic/list/dict/closure/string/bytes combinations through
+  nested tuple dynamic/list/dict/closure/string/Blob combinations through
   planned `RcReleasePlan` helpers, tuple4 nested tuple dynamic string,
   string/list/dict, string/list/dict-list, and closure/bytes/list/dict shapes
   through planned `RcReleasePlan` helpers, record4 nested tuple dynamic string,
   string/list/dict, and closure/bytes/list/dict shapes, tuple4 nested-record
   middle-field string/list/dict and string/list/dict-list through planned
   `RcReleasePlan` helpers, record1, exhaustive
-  record3 dynamic-buffer combinations, mixed record3 string/bytes/list/dict
+  record3 dynamic-buffer combinations, mixed record3 string/Blob/list/dict
   and closure/list/dict shapes, mixed record4
-  string/bytes/list/dict and closure/bytes/list/dict shapes, sum dynamic-buffer,
+  string/Blob/list/dict and closure/bytes/list/dict shapes, sum dynamic-buffer,
   sum-list/sum-dict,
   sum-closure, mixed sum-tuple3 string/list/dict variants, mixed sum-tuple4
-  string/bytes/list/dict, string/bytes/list/dict-list,
+  string/Blob/list/dict, string/Blob/list/dict-list,
   nested tuple string/list/dict, closure/bytes/list/dict, and
   closure/string/list/dict-list variants,
   sum-record3 string/list/dict variants, mixed sum-record4
-  string/bytes/list/dict and closure/bytes/list/dict variants,
+  string/Blob/list/dict and closure/bytes/list/dict variants,
   list/closure/dict/string
 - dict helper key/value recursion parity
-- dynamic bytes literal sentinel/aligned layout parity if a separate bytes
+- dynamic Blob literal sentinel/aligned layout parity if a separate Blob
   literal materialization path is introduced
 - register preservation around helper calls and inline releases beyond the
   covered x64 generic fixed-block dynamic-buffer, nested fixed-block, list,
@@ -1481,7 +1481,7 @@ Likely gaps:
    dict-list values, and multiple managed captures.
 5. Treat missing list behavior as a release-plan executor gap unless it is a
    direct root payload family.
-6. Confirm dynamic bytes literal layout if bytes gains a separate literal
+6. Confirm dynamic Blob literal layout if Blob gains a separate literal
    materialization path. x64 materialized string literals now carry the
    immutable sentinel and skip dynamic RC.
 7. Continue auditing helper register preservation using focused tests that
@@ -1554,7 +1554,7 @@ These tasks are intentionally deferred.
    - add tests for manual raw allocation and freeing
    - separate manual raw memory from compiler-managed raw-backed structures
 
-4. Decide how variable-size string/bytes memory enters reuse:
+4. Decide how variable-size string/Blob memory enters reuse:
 
    - specialized dynamic-buffer free list
    - general raw free
@@ -1644,7 +1644,7 @@ Current tests cover:
 
 - sum releases dynamic string payload
 - sum releases list payload
-- sum releases bytes payload
+- sum releases Blob payload
 - sum releases dict payload
 - sum releases closure payload
 - sum releases tuple payload containing dynamic string field
@@ -1703,7 +1703,7 @@ Closure roots and several capture cases are covered:
 - fixed-block capture retained when returned
 - fixed-block capture fields released
 - nested fixed-block capture fields released
-- returned closure uses and releases a record string/bytes/list/dict-list
+- returned closure uses and releases a record string/Blob/list/dict-list
   capture
 - list of closures released
 - returned list releases closure payload roots
@@ -1921,7 +1921,7 @@ appropriate.
 - returned record with `Bytes` field
 - returned record using `Bytes.length(r.field)`
 - nested bytes combinations under list or sum payloads
-- persistent dict sharing cases with bytes keys/values
+- persistent dict sharing cases with Blob keys/values
 
 ### Strings
 
@@ -1941,7 +1941,7 @@ appropriate.
 
 - list of three-element tuples with heap fields beyond string/list/dict
 - list of three-field records with heap fields beyond the currently covered
-  string/bytes/list/dict shapes
+  string/Blob/list/dict shapes
 - nested list of record containing list/dict
 
 ### Dicts

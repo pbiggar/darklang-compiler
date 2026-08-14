@@ -120,8 +120,8 @@ let private releasePrintedValueFromReg
     match ANF.rcShapeReleaseOperation shape with
     | Some ANF.DynamicStringBuffer ->
         [LIR.RefCountDecString (LIR.Reg reg)]
-    | Some ANF.DynamicBytesBuffer ->
-        [LIR.RefCountDecBytes (LIR.Reg reg)]
+    | Some ANF.DynamicBlobBuffer ->
+        [LIR.RefCountDecBlob (LIR.Reg reg)]
     | Some (ANF.FixedSizeRoot (payloadSize, kind)) ->
         let lirKind =
             match kind with
@@ -170,6 +170,16 @@ let ensureInRegister (operand: MIR.Operand) (state: TempState) : Result<LIR.Inst
         // Load function address into register using ADR instruction
         let (tempReg, nextState) = freshTempReg state
         Ok ([LIR.LoadFuncAddr (tempReg, name)], tempReg, nextState)
+
+/// Ensure a Blob handle is in a register. Blob.empty reuses the immutable
+/// dynamic-buffer literal pool but is compared as a handle, never as a String.
+let ensureBlobInRegister (operand: MIR.Operand) (state: TempState) : Result<LIR.Instr list * LIR.Reg * TempState, string> =
+    match operand with
+    | MIR.StringSymbol value ->
+        let (tempReg, nextState) = freshTempReg state
+        Ok ([LIR.Mov (tempReg, LIR.StringSymbol value)], tempReg, nextState)
+    | MIR.Register vreg -> Ok ([], vregToLIRReg vreg, state)
+    | _ -> Error "Internal error: Blob handle must be a literal or register"
 
 /// Ensure float operand is in an FP register
 let ensureInFRegister (operand: MIR.Operand) (state: TempState) : Result<LIR.Instr list * LIR.FReg * TempState, string> =
@@ -487,16 +497,30 @@ let selectInstr
 
             // Comparisons: CMP + CSET sequence
             | MIR.Eq ->
-                match ensureInRegister left state with
+                let ensure = if operandType = AST.TBlob then ensureBlobInRegister else ensureInRegister
+                match ensure left state with
                 | Error err -> Error err
-                | Ok (leftInstrs, leftReg, nextState) ->
-                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.EQ)], nextState)
+                | Ok (leftInstrs, leftReg, stateAfterLeft) ->
+                    if operandType = AST.TBlob then
+                        match ensure right stateAfterLeft with
+                        | Error err -> Error err
+                        | Ok (rightInstrs, rightReg, nextState) ->
+                            Ok (leftInstrs @ rightInstrs @ [LIR.Cmp (leftReg, LIR.Reg rightReg); LIR.Cset (lirDest, LIR.EQ)], nextState)
+                    else
+                        Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.EQ)], stateAfterLeft)
 
             | MIR.Neq ->
-                match ensureInRegister left state with
+                let ensure = if operandType = AST.TBlob then ensureBlobInRegister else ensureInRegister
+                match ensure left state with
                 | Error err -> Error err
-                | Ok (leftInstrs, leftReg, nextState) ->
-                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.NE)], nextState)
+                | Ok (leftInstrs, leftReg, stateAfterLeft) ->
+                    if operandType = AST.TBlob then
+                        match ensure right stateAfterLeft with
+                        | Error err -> Error err
+                        | Ok (rightInstrs, rightReg, nextState) ->
+                            Ok (leftInstrs @ rightInstrs @ [LIR.Cmp (leftReg, LIR.Reg rightReg); LIR.Cset (lirDest, LIR.NE)], nextState)
+                    else
+                        Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.NE)], stateAfterLeft)
 
             | MIR.Lt ->
                 match ensureInRegister left state with
@@ -1208,15 +1232,15 @@ let selectInstr
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             finishPrint (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)])
-        | AST.TBytes ->
-            // Bytes: print as "<N bytes>" where N is the length
+        | AST.TBlob ->
+            // Blob: render as the interpreter-compatible ephemeral marker.
             let lirSrc = convertOperand src
             let moveToX19 =
                 match lirSrc with
                 | LIR.Reg (LIR.Physical LIR.X19) -> []
                 | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
                 | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
-            finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintBytes (LIR.Physical LIR.X19)])
+            finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintBlob (LIR.Physical LIR.X19)])
         | AST.TVar _ ->
             // Type variables should be monomorphized away before reaching LIR
             Error "Internal error: Type variable reached MIR_to_LIR (should be monomorphized)"
@@ -1384,10 +1408,10 @@ let selectInstr
     | MIR.RawPtrToString (dest, ptr) ->
         Ok ([LIR.Mov (vregToLIRReg dest, convertOperand ptr)], state)
 
-    | MIR.BytesToRawPtr (dest, value) ->
+    | MIR.BlobToRawPtr (dest, value) ->
         Ok ([LIR.Mov (vregToLIRReg dest, convertOperand value)], state)
 
-    | MIR.RawPtrToBytes (dest, ptr) ->
+    | MIR.RawPtrToBlob (dest, ptr) ->
         Ok ([LIR.Mov (vregToLIRReg dest, convertOperand ptr)], state)
 
     | MIR.DictToRawPtr (dest, dict) ->
@@ -1479,13 +1503,13 @@ let selectInstr
     | MIR.RefCountDecString str ->
         let lirStr = convertOperand str
         Ok ([LIR.RefCountDecString lirStr], state)
-    | MIR.RefCountIncBytes bytes ->
+    | MIR.RefCountIncBlob bytes ->
         let lirBytes = convertOperand bytes
-        Ok ([LIR.RefCountIncBytes lirBytes], state)
+        Ok ([LIR.RefCountIncBlob lirBytes], state)
 
-    | MIR.RefCountDecBytes bytes ->
+    | MIR.RefCountDecBlob bytes ->
         let lirBytes = convertOperand bytes
-        Ok ([LIR.RefCountDecBytes lirBytes], state)
+        Ok ([LIR.RefCountDecBlob lirBytes], state)
 
     | MIR.RandomInt64 dest ->
         let lirDest = vregToLIRReg dest
@@ -1679,8 +1703,8 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
     | MIR.RawAlloc (dest, src)
     | MIR.StringToRawPtr (dest, src)
     | MIR.RawPtrToString (dest, src)
-    | MIR.BytesToRawPtr (dest, src)
-    | MIR.RawPtrToBytes (dest, src)
+    | MIR.BlobToRawPtr (dest, src)
+    | MIR.RawPtrToBlob (dest, src)
     | MIR.DictToRawPtr (dest, src)
     | MIR.ListToRawPtr (dest, src)
     | MIR.FloatToString (dest, src) ->
@@ -1688,8 +1712,8 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
     | MIR.RawFree ptr
     | MIR.RefCountIncString ptr
     | MIR.RefCountDecString ptr
-    | MIR.RefCountIncBytes ptr
-    | MIR.RefCountDecBytes ptr -> maxVRegIdFromOperand ptr currentMax
+    | MIR.RefCountIncBlob ptr
+    | MIR.RefCountDecBlob ptr -> maxVRegIdFromOperand ptr currentMax
     | MIR.RawGet (dest, ptr, byteOffset, _)
     | MIR.RawGetByte (dest, ptr, byteOffset)
     | MIR.RawPtrToDict (dest, ptr, byteOffset)

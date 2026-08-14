@@ -1,0 +1,47 @@
+// Blob parity tests: immutable binary values and interpreter-compatible codecs.
+
+Stdlib.Blob.length(Stdlib.Blob.empty) = 0I
+Stdlib.Blob.toHex(Stdlib.Blob.fromList([0uy, 15uy, 255uy])) = "000FFF"
+Stdlib.Blob.length(Stdlib.Blob.slice(Stdlib.Blob.fromString("abcdef"), -2I, 99I)) = 6I
+Stdlib.Blob.length(Stdlib.Blob.slice(Stdlib.Blob.fromString("abcdef"), 99I, 3I)) = 0I
+Stdlib.Blob.fromString("same") != Stdlib.Blob.fromString("same") = true
+
+let b = Stdlib.Blob.fromString("same") in b == b = true
+
+Stdlib.Blob.empty == Stdlib.Blob.empty = true
+
+let b = Stdlib.Blob.fromString("nested") in ([b], b) == ([b], b) = true
+
+([Stdlib.Blob.fromString("nested")], Stdlib.Blob.empty) != ([Stdlib.Blob.fromString("nested")], Stdlib.Blob.empty) = true
+
+Stdlib.Blob.concat([]) != Stdlib.Blob.empty = true
+
+Stdlib.Blob.fromString("rendered") = stdout="<Blob: ephemeral>" stderr=""
+
+Stdlib.Blob.fromHex("0") = Error("Invalid hex string: The input is not a valid hex string as its length is not a multiple of 2.")
+
+Stdlib.Blob.fromHex("GG") = Error("Invalid hex string: The input is not a valid hex string as it contains a non-hex character.")
+
+Stdlib.Blob.toString(Stdlib.Blob.fromList([192uy, 128uy])) = Error("Invalid UTF-8: Unable to translate bytes [C0] at index 0 from specified code page to Unicode.")
+
+Stdlib.Blob.toString(Stdlib.Blob.fromList([226uy])) = Error("Invalid UTF-8: Unable to translate bytes [E2] at index 0 from specified code page to Unicode.")
+
+Stdlib.Blob.toString(Stdlib.Blob.fromList([237uy, 160uy, 128uy])) = Error("Invalid UTF-8: Unable to translate bytes [ED] at index 0 from specified code page to Unicode.")
+
+Stdlib.Blob.toString(Stdlib.Blob.fromList([244uy, 144uy, 128uy, 128uy])) = Error("Invalid UTF-8: Unable to translate bytes [F4] at index 0 from specified code page to Unicode.")
+
+(match Stdlib.Base64.decode("Zg") with | Ok(b) -> Stdlib.Blob.toHex(b) | Error(e) -> e) = "66"
+
+Stdlib.Base64.decode("Z g==") = Error("Not a valid base64 string")
+
+(match Stdlib.Blob.fromBase64("Z g==") with | Ok(b) -> Stdlib.Blob.toHex(b) | Error(e) -> e) = "66"
+
+Stdlib.Blob.fromBase64("Z g") = Error("Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.")
+
+Stdlib.Blob.fromBase64("Z===") = Error("Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.")
+
+Stdlib.Blob.toHex(Stdlib.Bytes.create(9)) = "000000000000000000"
+
+Stdlib.Blob.toHex(Stdlib.Bytes.set(Stdlib.Blob.fromList([0uy]), 0, 511)) = "FF"
+
+let b = Stdlib.Blob.fromList([7uy]) in Stdlib.Bytes.set(b, 1, 9) == b = true

@@ -148,10 +148,10 @@ let private prettyPrintANFCExpr = function
         $"StringToRawPtr({prettyPrintANFAtom value})"
     | ANF.RawPtrToString ptr ->
         $"RawPtrToString({prettyPrintANFAtom ptr})"
-    | ANF.BytesToRawPtr value ->
-        $"BytesToRawPtr({prettyPrintANFAtom value})"
-    | ANF.RawPtrToBytes ptr ->
-        $"RawPtrToBytes({prettyPrintANFAtom ptr})"
+    | ANF.BlobToRawPtr value ->
+        $"BlobToRawPtr({prettyPrintANFAtom value})"
+    | ANF.RawPtrToBlob ptr ->
+        $"RawPtrToBlob({prettyPrintANFAtom ptr})"
     | ANF.DictToRawPtr dict ->
         $"DictToRawPtr({prettyPrintANFAtom dict})"
     | ANF.RawPtrToDict (ptr, tag, dictType) ->
@@ -178,10 +178,10 @@ let private prettyPrintANFCExpr = function
         $"RefCountIncString({prettyPrintANFAtom str})"
     | ANF.RefCountDecString str ->
         $"RefCountDecString({prettyPrintANFAtom str})"
-    | ANF.RefCountIncBytes bytes ->
-        $"RefCountIncBytes({prettyPrintANFAtom bytes})"
-    | ANF.RefCountDecBytes bytes ->
-        $"RefCountDecBytes({prettyPrintANFAtom bytes})"
+    | ANF.RefCountIncBlob bytes ->
+        $"RefCountIncBlob({prettyPrintANFAtom bytes})"
+    | ANF.RefCountDecBlob bytes ->
+        $"RefCountDecBlob({prettyPrintANFAtom bytes})"
     | ANF.RandomInt64 ->
         "RandomInt64()"
     | ANF.DateTimeNow ->
@@ -371,10 +371,10 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"{prettyPrintMIRVReg dest} <- StringToRawPtr({prettyPrintMIROperand value})"
     | MIR.RawPtrToString (dest, ptr) ->
         $"{prettyPrintMIRVReg dest} <- RawPtrToString({prettyPrintMIROperand ptr})"
-    | MIR.BytesToRawPtr (dest, value) ->
-        $"{prettyPrintMIRVReg dest} <- BytesToRawPtr({prettyPrintMIROperand value})"
-    | MIR.RawPtrToBytes (dest, ptr) ->
-        $"{prettyPrintMIRVReg dest} <- RawPtrToBytes({prettyPrintMIROperand ptr})"
+    | MIR.BlobToRawPtr (dest, value) ->
+        $"{prettyPrintMIRVReg dest} <- BlobToRawPtr({prettyPrintMIROperand value})"
+    | MIR.RawPtrToBlob (dest, ptr) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToBlob({prettyPrintMIROperand ptr})"
     | MIR.DictToRawPtr (dest, dict) ->
         $"{prettyPrintMIRVReg dest} <- DictToRawPtr({prettyPrintMIROperand dict})"
     | MIR.RawPtrToDict (dest, ptr, tag) ->
@@ -387,10 +387,10 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"RefCountIncString({prettyPrintMIROperand str})"
     | MIR.RefCountDecString str ->
         $"RefCountDecString({prettyPrintMIROperand str})"
-    | MIR.RefCountIncBytes bytes ->
-        $"RefCountIncBytes({prettyPrintMIROperand bytes})"
-    | MIR.RefCountDecBytes bytes ->
-        $"RefCountDecBytes({prettyPrintMIROperand bytes})"
+    | MIR.RefCountIncBlob bytes ->
+        $"RefCountIncBlob({prettyPrintMIROperand bytes})"
+    | MIR.RefCountDecBlob bytes ->
+        $"RefCountDecBlob({prettyPrintMIROperand bytes})"
     | MIR.RandomInt64 dest ->
         $"{prettyPrintMIRVReg dest} <- RandomInt64()"
     | MIR.DateTimeNow dest ->
@@ -614,8 +614,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.PrintChars chars ->
         let s = chars |> List.map (fun b -> char b) |> System.String.Concat
         $"PrintChars(\"{escapeStringContent s}\")"
-    | LIR.PrintBytes reg ->
-        $"PrintBytes({prettyPrintLIRReg reg})"
+    | LIR.PrintBlob reg ->
+        $"PrintBlob({prettyPrintLIRReg reg})"
     | LIR.PrintInt64NoNewline reg ->
         $"PrintIntNoNewline({prettyPrintLIRReg reg})"
     | LIR.PrintUInt64NoNewline reg ->
@@ -711,10 +711,10 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountIncString({prettyPrintLIROperand str})"
     | LIR.RefCountDecString str ->
         $"RefCountDecString({prettyPrintLIROperand str})"
-    | LIR.RefCountIncBytes bytes ->
-        $"RefCountIncBytes({prettyPrintLIROperand bytes})"
-    | LIR.RefCountDecBytes bytes ->
-        $"RefCountDecBytes({prettyPrintLIROperand bytes})"
+    | LIR.RefCountIncBlob bytes ->
+        $"RefCountIncBlob({prettyPrintLIROperand bytes})"
+    | LIR.RefCountDecBlob bytes ->
+        $"RefCountDecBlob({prettyPrintLIROperand bytes})"
     | LIR.RandomInt64 dest ->
         $"{prettyPrintLIRReg dest} <- RandomInt64()"
     | LIR.DateTimeNow dest ->

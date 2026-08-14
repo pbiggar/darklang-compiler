@@ -1,3 +1,10 @@
+Binary-family rows were revalidated at compiler
+`bcd4d46f49a12aaab8588844b72a9afa1f34a0db` and interpreter
+`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. `Blob`, the shared Base64 and
+Crypto rows, and X509 are parity API. `Bytes`, `Base64.urlDecode`,
+`Crypto.sha1`, `Crypto.bytesToHex`, and `Crypto.debug*` are compiler extensions
+over Blob. See `docs/blob-parity.md` for exact signatures and behavior.
+
 Module                       | Name                                | Int | Comp
 -----------------------------+-------------------------------------+-----+-----
                              | equals                              | ✅   | ❌
@@ -14,6 +21,18 @@ Base64                       | decode                              | ✅   | ✅
 Base64                       | encode                              | ✅   | ✅
 Base64                       | urlDecode                           | ❌   | ✅
 Base64                       | urlEncode                           | ✅   | ✅
+Blob                         | concat                              | ✅   | ✅
+Blob                         | empty                               | ✅   | ✅
+Blob                         | fromBase64                          | ✅   | ✅
+Blob                         | fromHex                             | ✅   | ✅
+Blob                         | fromList                            | ✅   | ✅
+Blob                         | fromString                          | ✅   | ✅
+Blob                         | length                              | ✅   | ✅
+Blob                         | slice                               | ✅   | ✅
+Blob                         | toBase64                            | ✅   | ✅
+Blob                         | toHex                               | ✅   | ✅
+Blob                         | toList                              | ✅   | ✅
+Blob                         | toString                            | ✅   | ✅
 Bool                         | and                                 | ✅   | ✅
 Bool                         | not                                 | ✅   | ✅
 Bool                         | or                                  | ✅   | ✅
@@ -22,7 +41,7 @@ Bool                         | xor                                 | ✅   | ✅
 Bytes                        | create                              | ❌   | ✅
 Bytes                        | fromList                            | ❌   | ✅
 Bytes                        | get                                 | ❌   | ✅
-Bytes                        | hexEncode                           | ✅   | ✅
+Bytes                        | hexEncode                           | ❌   | ✅
 Bytes                        | length                              | ❌   | ✅
 Bytes                        | set                                 | ❌   | ✅
 Bytes                        | toList                              | ❌   | ✅
@@ -942,4 +961,4 @@ Uuid                         | ParseError                          | ✅   | ❌
 Uuid                         | generate                            | ✅   | ✅
 Uuid                         | parse                               | ✅   | ❌
 Uuid                         | toString                            | ✅   | ❌
-X509                         | pemCertificatePublicKey             | ✅   | ❌
+X509                         | pemCertificatePublicKey             | ✅   | ✅

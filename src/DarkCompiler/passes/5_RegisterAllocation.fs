@@ -497,7 +497,7 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         regToVReg reg |> Option.toList
     | LIR.PrintFloatNoNewline _ -> []  // FP register, not GP
     | LIR.PrintChars _ -> []  // No registers used
-    | LIR.PrintBytes reg -> regToVReg reg |> Option.toList
+    | LIR.PrintBlob reg -> regToVReg reg |> Option.toList
     | LIR.HeapAlloc (_, _) -> []
     | LIR.HeapStore (addr, _, src, valueType) ->
         let a = regToVReg addr |> Option.toList
@@ -561,9 +561,9 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         operandToVReg str |> Option.toList
     | LIR.RefCountDecString str ->
         operandToVReg str |> Option.toList
-    | LIR.RefCountIncBytes bytes ->
+    | LIR.RefCountIncBlob bytes ->
         operandToVReg bytes |> Option.toList
-    | LIR.RefCountDecBytes bytes ->
+    | LIR.RefCountDecBlob bytes ->
         operandToVReg bytes |> Option.toList
     | LIR.RandomInt64 _ ->
         []  // No operands to read
@@ -631,8 +631,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.FpToGp (dest, _) -> regToVReg dest
     | LIR.RefCountIncString _ -> None
     | LIR.RefCountDecString _ -> None
-    | LIR.RefCountIncBytes _ -> None
-    | LIR.RefCountDecBytes _ -> None
+    | LIR.RefCountIncBlob _ -> None
+    | LIR.RefCountDecBlob _ -> None
     | LIR.RandomInt64 dest -> regToVReg dest
     | LIR.DateTimeNow dest -> regToVReg dest
     | LIR.FloatToString (dest, _) -> regToVReg dest
@@ -2863,9 +2863,9 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.RuntimeErrorString regFinal]
     | LIR.PrintChars chars -> [LIR.PrintChars chars]
-    | LIR.PrintBytes reg ->
+    | LIR.PrintBlob reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
-        regLoads @ [LIR.PrintBytes regFinal]
+        regLoads @ [LIR.PrintBlob regFinal]
 
     // FP instructions pass through unchanged
     | LIR.FMov (dest, src) -> [LIR.FMov (dest, src)]
@@ -3198,13 +3198,13 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (strOp, strLoads) = applyToOperand mapping str LIR.X12
         strLoads @ [LIR.RefCountDecString strOp]
 
-    | LIR.RefCountIncBytes bytes ->
+    | LIR.RefCountIncBlob bytes ->
         let (bytesOp, bytesLoads) = applyToOperand mapping bytes LIR.X12
-        bytesLoads @ [LIR.RefCountIncBytes bytesOp]
+        bytesLoads @ [LIR.RefCountIncBlob bytesOp]
 
-    | LIR.RefCountDecBytes bytes ->
+    | LIR.RefCountDecBlob bytes ->
         let (bytesOp, bytesLoads) = applyToOperand mapping bytes LIR.X12
-        bytesLoads @ [LIR.RefCountDecBytes bytesOp]
+        bytesLoads @ [LIR.RefCountDecBlob bytesOp]
 
     | LIR.RandomInt64 dest ->
         let (destReg, destAlloc) = applyToReg mapping dest

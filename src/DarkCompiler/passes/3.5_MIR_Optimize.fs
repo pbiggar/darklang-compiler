@@ -73,8 +73,8 @@ let hasSideEffects (instr: Instr) : bool =
     | RawSlotInit _ -> true  // Writes to memory and may retain a typed edge
     | StringToRawPtr _ -> false
     | RawPtrToString _ -> false
-    | BytesToRawPtr _ -> false
-    | RawPtrToBytes _ -> false
+    | BlobToRawPtr _ -> false
+    | RawPtrToBlob _ -> false
     | DictToRawPtr _ -> false
     | RawPtrToDict _ -> false
     | ListToRawPtr _ -> false
@@ -87,8 +87,8 @@ let hasSideEffects (instr: Instr) : bool =
     | FloatToBits _ -> false  // Pure conversion
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
-    | RefCountIncBytes _ -> true    // Mutates refcount
-    | RefCountDecBytes _ -> true    // Mutates refcount
+    | RefCountIncBlob _ -> true    // Mutates refcount
+    | RefCountDecBlob _ -> true    // Mutates refcount
     | RandomInt64 _ -> true  // Syscall
     | DateTimeNow _ -> true      // Syscall
     | FloatToString _ -> false  // Pure conversion (allocates but no visible side effect)
@@ -170,8 +170,8 @@ let getInstrDest (instr: Instr) : VReg option =
     | RawGetByte (dest, _, _) -> Some dest
     | StringToRawPtr (dest, _) -> Some dest
     | RawPtrToString (dest, _) -> Some dest
-    | BytesToRawPtr (dest, _) -> Some dest
-    | RawPtrToBytes (dest, _) -> Some dest
+    | BlobToRawPtr (dest, _) -> Some dest
+    | RawPtrToBlob (dest, _) -> Some dest
     | DictToRawPtr (dest, _) -> Some dest
     | RawPtrToDict (dest, _, _) -> Some dest
     | ListToRawPtr (dest, _) -> Some dest
@@ -192,8 +192,8 @@ let getInstrDest (instr: Instr) : VReg option =
     | RawSlotInit _ -> None
     | RefCountIncString _ -> None
     | RefCountDecString _ -> None
-    | RefCountIncBytes _ -> None
-    | RefCountDecBytes _ -> None
+    | RefCountIncBlob _ -> None
+    | RefCountDecBlob _ -> None
     | RandomInt64 dest -> Some dest
     | DateTimeNow dest -> Some dest
     | FloatToString (dest, _) -> Some dest
@@ -242,8 +242,8 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | RawFree src
     | StringToRawPtr (_, src)
     | RawPtrToString (_, src)
-    | BytesToRawPtr (_, src)
-    | RawPtrToBytes (_, src)
+    | BlobToRawPtr (_, src)
+    | RawPtrToBlob (_, src)
     | DictToRawPtr (_, src)
     | ListToRawPtr (_, src)
     | FloatSqrt (_, src)
@@ -254,8 +254,8 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | FloatToBits (_, src)
     | RefCountIncString src
     | RefCountDecString src
-    | RefCountIncBytes src
-    | RefCountDecBytes src
+    | RefCountIncBlob src
+    | RefCountDecBlob src
     | FloatToString (_, src) -> fromOperand state src
     | FileWriteFromPtr (_, first, second, third)
     | RawWriteWord (first, second, third)
@@ -1149,8 +1149,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RawGetByte (dest, ptr, byteOffset) -> RawGetByte (dest, p ptr, p byteOffset)
     | StringToRawPtr (dest, value) -> StringToRawPtr (dest, p value)
     | RawPtrToString (dest, ptr) -> RawPtrToString (dest, p ptr)
-    | BytesToRawPtr (dest, value) -> BytesToRawPtr (dest, p value)
-    | RawPtrToBytes (dest, ptr) -> RawPtrToBytes (dest, p ptr)
+    | BlobToRawPtr (dest, value) -> BlobToRawPtr (dest, p value)
+    | RawPtrToBlob (dest, ptr) -> RawPtrToBlob (dest, p ptr)
     | DictToRawPtr (dest, dict) -> DictToRawPtr (dest, p dict)
     | RawPtrToDict (dest, ptr, tag) -> RawPtrToDict (dest, p ptr, p tag)
     | ListToRawPtr (dest, list) -> ListToRawPtr (dest, p list)
@@ -1166,8 +1166,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | FloatToBits (dest, src) -> FloatToBits (dest, p src)
     | RefCountIncString str -> RefCountIncString (p str)
     | RefCountDecString str -> RefCountDecString (p str)
-    | RefCountIncBytes bytes -> RefCountIncBytes (p bytes)
-    | RefCountDecBytes bytes -> RefCountDecBytes (p bytes)
+    | RefCountIncBlob bytes -> RefCountIncBlob (p bytes)
+    | RefCountDecBlob bytes -> RefCountDecBlob (p bytes)
     | RandomInt64 dest -> RandomInt64 dest
     | DateTimeNow dest -> DateTimeNow dest
     | FloatToString (dest, value) -> FloatToString (dest, p value)
@@ -1771,7 +1771,7 @@ let applyCSE (cfg: CFG) : CFG * bool =
                         (instr :: instrs, Map.add key dest exprMap, Map.add key dest exported, ch)
                 | RefCountDec _
                 | RefCountDecString _
-                | RefCountDecBytes _
+                | RefCountDecBlob _
                 | RawFree _ ->
                     // A previously computed raw address can outlive its managed
                     // owner if reuse removes the later use that kept it alive.

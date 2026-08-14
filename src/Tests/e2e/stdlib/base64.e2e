@@ -32,7 +32,7 @@ Stdlib.Base64.encode(Stdlib.Bytes.fromList([65, 66, 67])) = "QUJD"
 // ===================================================================
 
 // Test that + and / are replaced with - and _
-// Bytes that would produce + in standard encoding
+// Blob that would produce + in standard encoding
 Stdlib.Base64.urlEncode(Stdlib.Bytes.fromList([251])) = "-w=="
 
 // ===================================================================
@@ -40,7 +40,7 @@ Stdlib.Base64.urlEncode(Stdlib.Bytes.fromList([251])) = "-w=="
 // ===================================================================
 
 // Empty string
-Stdlib.Result.isOk<Bytes, String>(Stdlib.Base64.decode("")) = true
+Stdlib.Result.isOk<Blob, String>(Stdlib.Base64.decode("")) = true
 
 // Single padded value
 match Stdlib.Base64.decode("AA==") with | Ok(b) -> Stdlib.Bytes.length(b) | Error(_) -> -1 = 1
@@ -62,10 +62,10 @@ match Stdlib.Base64.decode("Kw") with | Ok(b) -> Stdlib.Bytes.get(b, 0) | Error(
 match Stdlib.Base64.decode("ABC") with | Ok(b) -> (Stdlib.Bytes.get(b, 0), Stdlib.Bytes.get(b, 1)) | Error(_) -> (-1, -1) = (0, 16)
 
 // Invalid base64 - a single character cannot encode a byte
-Stdlib.Result.isError<Bytes, String>(Stdlib.Base64.decode("x")) = true
+Stdlib.Result.isError<Blob, String>(Stdlib.Base64.decode("x")) = true
 
 // Invalid base64 - padding is only valid in the final two positions
-Stdlib.Result.isError<Bytes, String>(Stdlib.Base64.decode("=AAA")) = true
+Stdlib.Result.isError<Blob, String>(Stdlib.Base64.decode("=AAA")) = true
 
 // ===================================================================
 // Roundtrip tests

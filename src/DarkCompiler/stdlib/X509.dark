@@ -1,0 +1,107 @@
+// Stdlib.X509.dark - total PEM certificate SubjectPublicKeyInfo extraction.
+
+def Stdlib.X509.__readLengthBytes(blob: Blob, index: Int64, remaining: Int64, acc: Int64) : Stdlib.Option.Option<(Int64, Int64)> =
+    if remaining == 0 then Some((index, acc))
+    else if index >= Stdlib.Bytes.length(blob) then None
+    else
+        let byte = Stdlib.Bytes.get(blob, index) in
+        let blobLength = Stdlib.Bytes.length(blob) in
+        if acc > blobLength then None
+        else Stdlib.X509.__readLengthBytes(blob, index + 1, remaining - 1, acc * 256 + byte)
+
+// Returns (content offset, content length, end offset).
+def Stdlib.X509.__tlv(blob: Blob, offset: Int64) : Stdlib.Option.Option<(Int64, Int64, Int64)> =
+    let blobLength = Stdlib.Bytes.length(blob) in
+    if offset < 0 || offset + 2 > blobLength then None
+    else
+        let firstLength = Stdlib.Bytes.get(blob, offset + 1) in
+        let parsed =
+            if firstLength < 128 then Some((offset + 2, firstLength))
+            else
+                let byteCount = firstLength & 127 in
+                if byteCount == 0 || byteCount > 8 then None
+                else Stdlib.X509.__readLengthBytes(blob, offset + 2, byteCount, 0) in
+        match parsed with
+        | None -> None
+        | Some((contentOffset, contentLength)) ->
+            let endOffset = contentOffset + contentLength in
+            if contentLength < 0 || endOffset < contentOffset || endOffset > blobLength then None
+            else Some((contentOffset, contentLength, endOffset))
+
+def Stdlib.X509.__skip(blob: Blob, offset: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.X509.__tlv(blob, offset) with
+    | None -> None
+    | Some((_contentOffset, _contentLength, endOffset)) -> Some(endOffset)
+
+def Stdlib.X509.__skipFields(blob: Blob, offset: Int64, remaining: Int64) : Stdlib.Option.Option<Int64> =
+    if remaining == 0 then Some(offset)
+    else
+        match Stdlib.X509.__skip(blob, offset) with
+        | None -> None
+        | Some(next) -> Stdlib.X509.__skipFields(blob, next, remaining - 1)
+
+def Stdlib.X509.__subjectPublicKeyInfo(certificate: Blob) : Stdlib.Option.Option<Blob> =
+    if Stdlib.Bytes.length(certificate) < 2 || Stdlib.Bytes.get(certificate, 0) != 48 then None
+    else
+        match Stdlib.X509.__tlv(certificate, 0) with
+        | None -> None
+        | Some((certificateContent, _certificateLength, certificateEnd)) ->
+            if certificateEnd != Stdlib.Bytes.length(certificate)
+               || certificateContent >= certificateEnd
+               || Stdlib.Bytes.get(certificate, certificateContent) != 48 then None
+            else
+                match Stdlib.X509.__tlv(certificate, certificateContent) with
+                | None -> None
+                | Some((tbsContent, _tbsLength, tbsEnd)) ->
+                    if tbsEnd > certificateEnd then None
+                    else
+                        let fieldsStart =
+                            if tbsContent < tbsEnd && Stdlib.Bytes.get(certificate, tbsContent) == 160 then
+                                Stdlib.X509.__skip(certificate, tbsContent)
+                            else Some(tbsContent) in
+                        match fieldsStart with
+                        | None -> None
+                        | Some(firstField) ->
+                            // serial, signature, issuer, validity, subject
+                            match Stdlib.X509.__skipFields(certificate, firstField, 5) with
+                            | None -> None
+                            | Some(spkiStart) ->
+                                if spkiStart >= tbsEnd || Stdlib.Bytes.get(certificate, spkiStart) != 48 then None
+                                else
+                                    match Stdlib.X509.__tlv(certificate, spkiStart) with
+                                    | None -> None
+                                    | Some((_content, _length, spkiEnd)) ->
+                                        if spkiEnd > tbsEnd then None
+                                        else Some(Stdlib.Bytes.fromList(Stdlib.List.take<Int64>(Stdlib.List.drop<Int64>(Stdlib.Bytes.toList(certificate), spkiStart), spkiEnd - spkiStart)))
+
+def Stdlib.X509.__pemLines(base64: String, offset: Int64, acc: String) : String =
+    if offset >= Stdlib.String.length(base64) then acc
+    else
+        let end_ = Stdlib.Int64.min(offset + 64, Stdlib.String.length(base64)) in
+        Stdlib.X509.__pemLines(base64, end_, acc ++ Stdlib.String.slice(base64, offset, end_) ++ "\n")
+
+def Stdlib.X509.__publicKeyPem(spki: Blob) : String =
+    "-----BEGIN PUBLIC KEY-----\n" ++
+    Stdlib.X509.__pemLines(Stdlib.Base64.encode(spki), 0, "") ++
+    "-----END PUBLIC KEY-----\n"
+
+def Stdlib.X509.pemCertificatePublicKey(pemCertificate: String) : Stdlib.Result.Result<String, String> =
+    let beginMarker = "-----BEGIN CERTIFICATE-----" in
+    let endMarker = "-----END CERTIFICATE-----" in
+    match Stdlib.String.indexOf(pemCertificate, beginMarker) with
+    | None -> Error("No certificates")
+    | Some(beginIndex) ->
+        let contentStart = beginIndex + Stdlib.String.length(beginMarker) in
+        let afterBegin = Stdlib.String.drop(pemCertificate, contentStart) in
+        match Stdlib.String.indexOf(afterBegin, endMarker) with
+        | None -> Error("No certificates")
+        | Some(endIndex) ->
+            let encoded = Stdlib.String.take(afterBegin, endIndex) in
+            // PEM whitespace is removed before Base64 normalization; this is
+            // the certificate parser's contract, distinct from Blob.fromBase64.
+            match Stdlib.Base64.decode(Stdlib.Blob.__removeBase64Whitespace(encoded)) with
+            | Error(_) -> Error("No certificates")
+            | Ok(certificate) ->
+                match Stdlib.X509.__subjectPublicKeyInfo(certificate) with
+                | None -> Error("No certificates")
+                | Some(spki) -> Ok(Stdlib.X509.__publicKeyPem(spki))

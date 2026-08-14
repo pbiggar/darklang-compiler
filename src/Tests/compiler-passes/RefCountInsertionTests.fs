@@ -71,7 +71,7 @@ let testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks () : TestResult =
 let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
     let samples = [
         (AST.TString, DynamicString)
-        (AST.TBytes, DynamicBytes)
+        (AST.TBlob, DynamicBlob)
         (AST.TRawPtr, RawUnmanaged)
         (AST.TFunction ([AST.TInt64], AST.TString), ClosureShape [])
         (AST.TSum ("Color", []), Immediate)
@@ -95,7 +95,7 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
         Map.ofList [
             ("Enum", { TypeParams = []; Payloads = [0, None; 1, None] })
             ("Maybe", { TypeParams = ["a"]; Payloads = [0, None; 1, Some (AST.TVar "a")] })
-            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some AST.TBytes] })
+            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some AST.TBlob] })
         ]
 
     let samples = [
@@ -111,10 +111,10 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
         AST.TSum ("Packet", []),
             BoxedSum (
                 16,
-                [(8, FixedBlock (8, [DynamicString])); (8, DynamicBytes)],
+                [(8, FixedBlock (8, [DynamicString])); (8, DynamicBlob)],
                 [
                     { Tag = 0; FieldShapes = [(8, FixedBlock (8, [DynamicString]))] }
-                    { Tag = 1; FieldShapes = [(8, DynamicBytes)] }
+                    { Tag = 1; FieldShapes = [(8, DynamicBlob)] }
                 ])
     ]
 
@@ -127,7 +127,7 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
 let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
     let managedShapes = [
         DynamicString
-        DynamicBytes
+        DynamicBlob
         FixedBlock (16, [Immediate; DynamicString])
         BoxedSum (16, [], [])
         TaggedListShape DynamicString
@@ -154,7 +154,7 @@ let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
 let testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs () : TestResult =
     let automaticDecShapes = [
         DynamicString
-        DynamicBytes
+        DynamicBlob
         FixedBlock (16, [Immediate; DynamicString])
         BoxedSum (16, [], [])
         TaggedListShape DynamicString
@@ -181,7 +181,7 @@ let testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs () : TestResult =
 let testRcShapeOwnershipHelpersClassifyBorrowedRetains () : TestResult =
     let retainedShapes = [
         DynamicString
-        DynamicBytes
+        DynamicBlob
         FixedBlock (16, [Immediate; DynamicString])
         BoxedSum (16, [], [])
         TaggedListShape DynamicString
@@ -215,7 +215,7 @@ let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
         (ClosureShape [DynamicString], Some ClosureHeap)
         (Immediate, None)
         (DynamicString, None)
-        (DynamicBytes, None)
+        (DynamicBlob, None)
         (RawUnmanaged, None)
     ]
 
@@ -234,7 +234,7 @@ let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
         (DictRoot (Immediate, DynamicString), Some (FixedSizeRoot (8, DictHeap)))
         (ClosureShape [DynamicString], Some (FixedSizeRoot (0, ClosureHeap)))
         (DynamicString, Some DynamicStringBuffer)
-        (DynamicBytes, Some DynamicBytesBuffer)
+        (DynamicBlob, Some DynamicBlobBuffer)
         (Immediate, None)
         (StaticString, None)
         (RawUnmanaged, None)
@@ -259,7 +259,7 @@ let testRcShapeOwnershipHelpersClassifyStorage () : TestResult =
         (DictRoot (Immediate, DynamicString), ManagedRcRoot (8, DictHeap))
         (ClosureShape [DynamicString], ManagedRcRoot (0, ClosureHeap))
         (DynamicString, ManagedDynamicBuffer DynamicStringBuffer)
-        (DynamicBytes, ManagedDynamicBuffer DynamicBytesBuffer)
+        (DynamicBlob, ManagedDynamicBuffer DynamicBlobBuffer)
         (Immediate, UnmanagedStorage)
         (StaticString, UnmanagedStorage)
         (RawUnmanaged, UnmanagedStorage)
@@ -283,7 +283,7 @@ let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
     let nonRootShapes = [
         Immediate
         DynamicString
-        DynamicBytes
+        DynamicBlob
         StaticString
         RawUnmanaged
     ]
@@ -310,7 +310,7 @@ let testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots () : TestResult =
     let nonTransferRootShapes = [
         Immediate
         DynamicString
-        DynamicBytes
+        DynamicBlob
         StaticString
         RawUnmanaged
     ]
@@ -337,7 +337,7 @@ let testRcShapeOwnershipHelpersClassifyRecursiveRelease () : TestResult =
     let nonRecursiveShapes = [
         Immediate
         DynamicString
-        DynamicBytes
+        DynamicBlob
         StaticString
         RawUnmanaged
         FixedBlock (8, [Immediate])
@@ -362,15 +362,15 @@ let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
         (StaticString, NoReleasePlan)
         (RawUnmanaged, NoReleasePlan)
         (DynamicString, DynamicBufferRelease DynamicStringBuffer)
-        (DynamicBytes, DynamicBufferRelease DynamicBytesBuffer)
+        (DynamicBlob, DynamicBufferRelease DynamicBlobBuffer)
         (TaggedListShape DynamicString, RootRelease (24, TaggedList, TaggedListPayloadRelease (DynamicBufferRelease DynamicStringBuffer)))
-        (DictRoot (DynamicString, FixedBlock (8, [DynamicBytes])),
+        (DictRoot (DynamicString, FixedBlock (8, [DynamicBlob])),
             RootRelease (
                 8,
                 DictHeap,
                 DictPayloadRelease (
                     DynamicBufferRelease DynamicStringBuffer,
-                    RootRelease (8, GenericHeap, FixedBlockPayloadRelease (8, [FieldRelease (0, DynamicBufferRelease DynamicBytesBuffer)])))))
+                    RootRelease (8, GenericHeap, FixedBlockPayloadRelease (8, [FieldRelease (0, DynamicBufferRelease DynamicBlobBuffer)])))))
         (FixedBlock (16, [Immediate; DynamicString]),
             RootRelease (16, GenericHeap, FixedBlockPayloadRelease (16, [FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)])))
         (ClosureShape [DynamicString],
@@ -387,7 +387,7 @@ let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
 let testRcReleasePlanOfTypeUsesRecordMetadata () : TestResult =
     let typeReg =
         Map.ofList [
-            ("Packet", [("header", AST.TInt64); ("body", AST.TString); ("tail", AST.TBytes)])
+            ("Packet", [("header", AST.TInt64); ("body", AST.TString); ("tail", AST.TBlob)])
         ]
 
     let expected =
@@ -398,7 +398,7 @@ let testRcReleasePlanOfTypeUsesRecordMetadata () : TestResult =
                 24,
                 [
                     FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                    FieldRelease (16, DynamicBufferRelease DynamicBytesBuffer)
+                    FieldRelease (16, DynamicBufferRelease DynamicBlobBuffer)
                 ]))
 
     let actual = rcReleasePlanOfType typeReg (AST.TRecord ("Packet", []))
@@ -430,7 +430,7 @@ let testRcReleasePlanOfTypeUsesSumPayloadMetadata () : TestResult =
 let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
     let typeReg =
         Map.ofList [
-            ("PayloadRecord", [("name", AST.TString); ("blob", AST.TBytes)])
+            ("PayloadRecord", [("name", AST.TString); ("blob", AST.TBlob)])
         ]
 
     let sumReg : RcSumShapeRegistry =
@@ -471,7 +471,7 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                                     16,
                                     [
                                         FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
-                                        FieldRelease (8, DynamicBufferRelease DynamicBytesBuffer)
+                                        FieldRelease (8, DynamicBufferRelease DynamicBlobBuffer)
                                     ])))
                     ; FieldRelease (
                         8,
@@ -494,7 +494,7 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                                             16,
                                             [
                                                 FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
-                                                FieldRelease (8, DynamicBufferRelease DynamicBytesBuffer)
+                                                FieldRelease (8, DynamicBufferRelease DynamicBlobBuffer)
                                             ])))
                             ]
                     }
@@ -554,12 +554,12 @@ let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
                 [])))
         (AST.TFunction ([AST.TInt64], AST.TString), RootRelease (0, ClosureHeap, ClosurePayloadRelease []))
         (AST.TString, DynamicBufferRelease DynamicStringBuffer)
-        (AST.TBytes, DynamicBufferRelease DynamicBytesBuffer)
-        (AST.TDict (AST.TString, AST.TBytes),
+        (AST.TBlob, DynamicBufferRelease DynamicBlobBuffer)
+        (AST.TDict (AST.TString, AST.TBlob),
             RootRelease (
                 8,
                 DictHeap,
-                DictPayloadRelease (DynamicBufferRelease DynamicStringBuffer, DynamicBufferRelease DynamicBytesBuffer)))
+                DictPayloadRelease (DynamicBufferRelease DynamicStringBuffer, DynamicBufferRelease DynamicBlobBuffer)))
         (AST.TRawPtr, NoReleasePlan)
     ]
 

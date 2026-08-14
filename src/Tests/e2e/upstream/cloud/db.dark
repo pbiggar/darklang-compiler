@@ -406,7 +406,7 @@ module Roundtrip =
         datetime = (Stdlib.DateTime.parse "2011-11-11T11:11:11Z") |> Builtin.unwrap
         unit = () }
 
-  // TODO: Add roundtrip for bytes (Bytes values not supported yet)
+  // TODO: Add roundtrip for bytes (Blob values not supported yet)
   (let v = sample ()
    let z = Stdlib.DB.set v "all" SampleDB
    (z, Stdlib.DB.get "all" SampleDB)) =

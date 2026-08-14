@@ -57,7 +57,7 @@ let private modRM (modBits: int) (reg: int) (rm: int) : byte =
 
 type private MemoryOperandEncoding = {
     BaseExt: bool
-    Bytes: byte array
+    Blob: byte array
 }
 
 /// Encode a 32-bit signed immediate as little-endian bytes
@@ -103,7 +103,7 @@ let private encodeMemoryOperand (opcodeBytes: byte array) (regField: int) (baseA
         else
             Array.concat [| opcodeBytes; [| modrm |]; disp |]
 
-    { BaseExt = baseExt; Bytes = operandBytes }
+    { BaseExt = baseExt; Blob = operandBytes }
 
 /// Encode register-to-register operation with REX.W and a 2-byte opcode of form [opcode] [ModR/M]
 let private encodeRegReg (opcode: byte) (dest: Reg) (src: Reg) : byte array =
@@ -160,19 +160,19 @@ let encodeInstruction (instr: Instr) : byte array =
         // REX.W + 8B /r (MOV r64, r/m64)
         let (destEnc, destExt) = regEncoding dest
         let mem = encodeMemoryOperand [| 0x8Buy |] destEnc baseAddr offset
-        Array.concat [| rex true destExt false mem.BaseExt; mem.Bytes |]
+        Array.concat [| rex true destExt false mem.BaseExt; mem.Blob |]
 
     | MOV_store (baseAddr, offset, src) ->
         // REX.W + 89 /r (MOV r/m64, r64)
         let (srcEnc, srcExt) = regEncoding src
         let mem = encodeMemoryOperand [| 0x89uy |] srcEnc baseAddr offset
-        Array.concat [| rex true srcExt false mem.BaseExt; mem.Bytes |]
+        Array.concat [| rex true srcExt false mem.BaseExt; mem.Blob |]
 
     | LEA (dest, baseAddr, offset) ->
         // REX.W + 8D /r (LEA r64, m)
         let (destEnc, destExt) = regEncoding dest
         let mem = encodeMemoryOperand [| 0x8Duy |] destEnc baseAddr offset
-        Array.concat [| rex true destExt false mem.BaseExt; mem.Bytes |]
+        Array.concat [| rex true destExt false mem.BaseExt; mem.Blob |]
 
     | PUSH reg ->
         // 50+rd (PUSH r64) — REX.B if R8-R15
@@ -332,14 +332,14 @@ let encodeInstruction (instr: Instr) : byte array =
         let mem = encodeMemoryOperand [| 0x88uy |] srcEnc baseAddr offset
         let needsRex = srcExt || mem.BaseExt || srcEnc >= 4  // Need REX for SPL/BPL/SIL/DIL
         let rexByte = if needsRex then [| 0x40uy ||| (if srcExt then 0x04uy else 0x00uy) ||| (if mem.BaseExt then 0x01uy else 0x00uy) |] else [||]
-        Array.concat [| rexByte; mem.Bytes |]
+        Array.concat [| rexByte; mem.Blob |]
 
     | MOV_load_byte (dest, baseAddr, offset) ->
         // 0F B6 /r (MOVZX r32, r/m8) — zero-extends to 64-bit
         let (destEnc, destExt) = regEncoding dest
         let mem = encodeMemoryOperand [| 0x0Fuy; 0xB6uy |] destEnc baseAddr offset
         let rexByte = if destExt || mem.BaseExt then [| 0x40uy ||| (if destExt then 0x04uy else 0x00uy) ||| (if mem.BaseExt then 0x01uy else 0x00uy) |] else [||]
-        Array.concat [| rexByte; mem.Bytes |]
+        Array.concat [| rexByte; mem.Blob |]
 
     // --- Sign/zero extension ---
 
@@ -428,14 +428,14 @@ let encodeInstruction (instr: Instr) : byte array =
         let (destEnc, destExt) = fregEncoding dest
         let mem = encodeMemoryOperand [| 0x0Fuy; 0x10uy |] destEnc baseAddr offset
         let rexByte = if destExt || mem.BaseExt then [| 0x40uy ||| (if destExt then 0x04uy else 0x00uy) ||| (if mem.BaseExt then 0x01uy else 0x00uy) |] else [||]
-        Array.concat [| [| 0xF2uy |]; rexByte; mem.Bytes |]
+        Array.concat [| [| 0xF2uy |]; rexByte; mem.Blob |]
 
     | MOVSD_store (baseAddr, offset, src) ->
         // F2 0F 11 /r (MOVSD m64, xmm)
         let (srcEnc, srcExt) = fregEncoding src
         let mem = encodeMemoryOperand [| 0x0Fuy; 0x11uy |] srcEnc baseAddr offset
         let rexByte = if srcExt || mem.BaseExt then [| 0x40uy ||| (if srcExt then 0x04uy else 0x00uy) ||| (if mem.BaseExt then 0x01uy else 0x00uy) |] else [||]
-        Array.concat [| [| 0xF2uy |]; rexByte; mem.Bytes |]
+        Array.concat [| [| 0xF2uy |]; rexByte; mem.Blob |]
 
     | MOVSD_reg (dest, src) ->
         // F2 0F 10 /r (MOVSD xmm1, xmm2)

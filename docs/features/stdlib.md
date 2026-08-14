@@ -29,10 +29,12 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.Result` | Error handling |
 | `Stdlib.Tuple2/3` | Tuple operations |
 | `Stdlib.Dict` | Hash map (HAMT) |
-| `Stdlib.Bytes` | Byte array operations |
+| `Stdlib.Blob` | Immutable binary values and public codecs |
+| `Stdlib.Bytes` | Legacy compiler-only Int64 bridge over Blob |
 | `Stdlib.Char` | Character helpers |
 | `Stdlib.Crypto` | Hashing and HMAC helpers |
 | `Stdlib.Base64` | Base64 encoding and decoding |
+| `Stdlib.X509` | Certificate public-key extraction |
 | `Stdlib.AWS` | AWS signing helpers |
 | `Stdlib.File` | File I/O |
 | `Stdlib.Path` | Path operations |

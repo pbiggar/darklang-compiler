@@ -229,8 +229,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RawSlotInit (ptr, offset, value, _) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
     | ANF.StringToRawPtr value -> maxTempIdInAtom value
     | ANF.RawPtrToString ptr -> maxTempIdInAtom ptr
-    | ANF.BytesToRawPtr value -> maxTempIdInAtom value
-    | ANF.RawPtrToBytes ptr -> maxTempIdInAtom ptr
+    | ANF.BlobToRawPtr value -> maxTempIdInAtom value
+    | ANF.RawPtrToBlob ptr -> maxTempIdInAtom ptr
     | ANF.DictToRawPtr dict -> maxTempIdInAtom dict
     | ANF.RawPtrToDict (ptr, tag, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom tag)
     | ANF.ListToRawPtr list -> maxTempIdInAtom list
@@ -243,8 +243,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.FloatToBits atom -> maxTempIdInAtom atom
     | ANF.RefCountIncString str -> maxTempIdInAtom str
     | ANF.RefCountDecString str -> maxTempIdInAtom str
-    | ANF.RefCountIncBytes bytes -> maxTempIdInAtom bytes
-    | ANF.RefCountDecBytes bytes -> maxTempIdInAtom bytes
+    | ANF.RefCountIncBlob bytes -> maxTempIdInAtom bytes
+    | ANF.RefCountDecBlob bytes -> maxTempIdInAtom bytes
     | ANF.RandomInt64 -> -1  // No atoms, so no TempIds
     | ANF.DateTimeNow -> -1      // No atoms, so no TempIds
     | ANF.FloatToString atom -> maxTempIdInAtom atom
@@ -522,11 +522,11 @@ let private inferSimpleCExprDestType
     | ANF.TupleGet (ANF.Var tupleId, index) ->
         tupleGetDestType builder tempId tupleGetAliasType tupleId index
     | ANF.StringToRawPtr _
-    | ANF.BytesToRawPtr _
+    | ANF.BlobToRawPtr _
     | ANF.DictToRawPtr _
     | ANF.ListToRawPtr _ -> Some AST.TRawPtr
     | ANF.RawPtrToString _ -> Some AST.TString
-    | ANF.RawPtrToBytes _ -> Some AST.TBytes
+    | ANF.RawPtrToBlob _ -> Some AST.TBlob
     | ANF.RawPtrToDict (_, _, dictType) -> Some dictType
     | ANF.RawPtrToList (_, _, listType) -> Some listType
     | ANF.FloatSqrt _
@@ -597,16 +597,16 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RawSlotInit _ -> "RawSlotInit"
     | ANF.StringToRawPtr _ -> "StringToRawPtr"
     | ANF.RawPtrToString _ -> "RawPtrToString"
-    | ANF.BytesToRawPtr _ -> "BytesToRawPtr"
-    | ANF.RawPtrToBytes _ -> "RawPtrToBytes"
+    | ANF.BlobToRawPtr _ -> "BlobToRawPtr"
+    | ANF.RawPtrToBlob _ -> "RawPtrToBlob"
     | ANF.DictToRawPtr _ -> "DictToRawPtr"
     | ANF.RawPtrToDict _ -> "RawPtrToDict"
     | ANF.ListToRawPtr _ -> "ListToRawPtr"
     | ANF.RawPtrToList _ -> "RawPtrToList"
     | ANF.RefCountIncString _ -> "RefCountIncString"
     | ANF.RefCountDecString _ -> "RefCountDecString"
-    | ANF.RefCountIncBytes _ -> "RefCountIncBytes"
-    | ANF.RefCountDecBytes _ -> "RefCountDecBytes"
+    | ANF.RefCountIncBlob _ -> "RefCountIncBlob"
+    | ANF.RefCountDecBlob _ -> "RefCountDecBlob"
     | ANF.RandomInt64 -> "RandomInt64"
     | ANF.DateTimeNow -> "DateTimeNow"
     | ANF.FloatToString _ -> "FloatToString"
@@ -644,11 +644,11 @@ let rec collectSelfTailCallCleanup
         |> Result.bind (fun strOp ->
             collectSelfTailCallCleanup builder callTempId rest
             |> Result.map (fun instrs -> MIR.RefCountDecString strOp :: instrs))
-    | ANF.Let (_, ANF.RefCountDecBytes bytesAtom, rest) ->
+    | ANF.Let (_, ANF.RefCountDecBlob bytesAtom, rest) ->
         atomToOperand builder bytesAtom
         |> Result.bind (fun bytesOp ->
             collectSelfTailCallCleanup builder callTempId rest
-            |> Result.map (fun instrs -> MIR.RefCountDecBytes bytesOp :: instrs))
+            |> Result.map (fun instrs -> MIR.RefCountDecBlob bytesOp :: instrs))
     | _ ->
         Error $"Internal error: unexpected expression after self tailcall in {builder.FuncName}"
 
@@ -1153,12 +1153,12 @@ let rec convertExpr
                 | ANF.RawPtrToString ptrAtom ->
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawPtrToString (destReg, ptrOp)])
-                | ANF.BytesToRawPtr valueAtom ->
+                | ANF.BlobToRawPtr valueAtom ->
                     atomToOperand builder valueAtom
-                    |> Result.map (fun valueOp -> [MIR.BytesToRawPtr (destReg, valueOp)])
-                | ANF.RawPtrToBytes ptrAtom ->
+                    |> Result.map (fun valueOp -> [MIR.BlobToRawPtr (destReg, valueOp)])
+                | ANF.RawPtrToBlob ptrAtom ->
                     atomToOperand builder ptrAtom
-                    |> Result.map (fun ptrOp -> [MIR.RawPtrToBytes (destReg, ptrOp)])
+                    |> Result.map (fun ptrOp -> [MIR.RawPtrToBlob (destReg, ptrOp)])
                 | ANF.DictToRawPtr dictAtom ->
                     atomToOperand builder dictAtom
                     |> Result.map (fun dictOp -> [MIR.DictToRawPtr (destReg, dictOp)])
@@ -1200,12 +1200,12 @@ let rec convertExpr
                 | ANF.RefCountDecString strAtom ->
                     atomToOperand builder strAtom
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
-                | ANF.RefCountIncBytes bytesAtom ->
+                | ANF.RefCountIncBlob bytesAtom ->
                     atomToOperand builder bytesAtom
-                    |> Result.map (fun bytesOp -> [MIR.RefCountIncBytes bytesOp])
-                | ANF.RefCountDecBytes bytesAtom ->
+                    |> Result.map (fun bytesOp -> [MIR.RefCountIncBlob bytesOp])
+                | ANF.RefCountDecBlob bytesAtom ->
                     atomToOperand builder bytesAtom
-                    |> Result.map (fun bytesOp -> [MIR.RefCountDecBytes bytesOp])
+                    |> Result.map (fun bytesOp -> [MIR.RefCountDecBlob bytesOp])
                 | ANF.RandomInt64 ->
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateTimeNow ->
@@ -1792,12 +1792,12 @@ and convertExprToOperand
                 | ANF.RawPtrToString ptrAtom ->
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawPtrToString (destReg, ptrOp)])
-                | ANF.BytesToRawPtr valueAtom ->
+                | ANF.BlobToRawPtr valueAtom ->
                     atomToOperand builder valueAtom
-                    |> Result.map (fun valueOp -> [MIR.BytesToRawPtr (destReg, valueOp)])
-                | ANF.RawPtrToBytes ptrAtom ->
+                    |> Result.map (fun valueOp -> [MIR.BlobToRawPtr (destReg, valueOp)])
+                | ANF.RawPtrToBlob ptrAtom ->
                     atomToOperand builder ptrAtom
-                    |> Result.map (fun ptrOp -> [MIR.RawPtrToBytes (destReg, ptrOp)])
+                    |> Result.map (fun ptrOp -> [MIR.RawPtrToBlob (destReg, ptrOp)])
                 | ANF.DictToRawPtr dictAtom ->
                     atomToOperand builder dictAtom
                     |> Result.map (fun dictOp -> [MIR.DictToRawPtr (destReg, dictOp)])
@@ -1839,12 +1839,12 @@ and convertExprToOperand
                 | ANF.RefCountDecString strAtom ->
                     atomToOperand builder strAtom
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
-                | ANF.RefCountIncBytes bytesAtom ->
+                | ANF.RefCountIncBlob bytesAtom ->
                     atomToOperand builder bytesAtom
-                    |> Result.map (fun bytesOp -> [MIR.RefCountIncBytes bytesOp])
-                | ANF.RefCountDecBytes bytesAtom ->
+                    |> Result.map (fun bytesOp -> [MIR.RefCountIncBlob bytesOp])
+                | ANF.RefCountDecBlob bytesAtom ->
                     atomToOperand builder bytesAtom
-                    |> Result.map (fun bytesOp -> [MIR.RefCountDecBytes bytesOp])
+                    |> Result.map (fun bytesOp -> [MIR.RefCountDecBlob bytesOp])
                 | ANF.RandomInt64 ->
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateTimeNow ->
@@ -2068,10 +2068,10 @@ let convertANFFunction
                 when Set.contains tempId paramIds ->
                 let (remainingRetains, loopBody) = splitLeadingParamRetains body
                 (MIR.RefCountIncString (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
-            | ANF.Let (_, ANF.RefCountIncBytes (ANF.Var tempId), body)
+            | ANF.Let (_, ANF.RefCountIncBlob (ANF.Var tempId), body)
                 when Set.contains tempId paramIds ->
                 let (remainingRetains, loopBody) = splitLeadingParamRetains body
-                (MIR.RefCountIncBytes (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
+                (MIR.RefCountIncBlob (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
             | _ ->
                 ([], expr)
         let (entryRetains, loopBody) = splitLeadingParamRetains anfFunc.Body

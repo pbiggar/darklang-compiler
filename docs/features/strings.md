@@ -14,7 +14,7 @@ offset 8 + aligned(len):  refcount, Int64
 ```
 
 `aligned(len)` rounds the byte length up to the next 8-byte boundary. This is
-the same dynamic-buffer convention used by `Bytes`.
+the same dynamic-buffer convention used by `Blob`.
 
 Literal-pool strings are immutable. Backends skip ordinary dynamic-buffer RC for
 literal operands. ARM64 literal pool entries and x64 materialized string

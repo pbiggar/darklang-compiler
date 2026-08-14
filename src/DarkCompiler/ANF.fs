@@ -137,7 +137,7 @@ type RcShape =
     | TaggedListShape of elementShape:RcShape
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
-    | DynamicBytes
+    | DynamicBlob
     | ClosureShape of captureShapes:RcShape list
     | StaticString
     | RawUnmanaged
@@ -158,7 +158,7 @@ type RcSumShapeRegistry = Map<string, RcSumShapeInfo>
 type RcOperation =
     | FixedSizeRoot of payloadSize:int * kind:RcKind
     | DynamicStringBuffer
-    | DynamicBytesBuffer
+    | DynamicBlobBuffer
 
 /// High-level storage management class selected from a runtime shape.
 type RcStorageClass =
@@ -258,8 +258,8 @@ type CExpr =
     | RawSlotInit of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
     | StringToRawPtr of value:Atom              // Borrow raw backing pointer from String
     | RawPtrToString of ptr:Atom                // Reinterpret raw allocation as owned String
-    | BytesToRawPtr of value:Atom               // Borrow raw backing pointer from Bytes
-    | RawPtrToBytes of ptr:Atom                 // Reinterpret raw allocation as owned Bytes
+    | BlobToRawPtr of value:Atom               // Borrow raw backing pointer from Blob
+    | RawPtrToBlob of ptr:Atom                 // Reinterpret raw allocation as owned Blob
     | DictToRawPtr of dict:Atom                 // Strip Dict tag bits, returning RawPtr
     | RawPtrToDict of ptr:Atom * tag:Atom * dictType:AST.Type  // Re-tag RawPtr as Dict
     | ListToRawPtr of list:Atom                 // Strip List tag bits, returning RawPtr
@@ -267,8 +267,8 @@ type CExpr =
     // Dynamic buffer reference counting (at offset computed from length)
     | RefCountIncString of Atom               // Increment string ref count
     | RefCountDecString of Atom               // Decrement string ref count, free if zero
-    | RefCountIncBytes of Atom                // Increment bytes ref count
-    | RefCountDecBytes of Atom                // Decrement bytes ref count, free if zero
+    | RefCountIncBlob of Atom                // Increment bytes ref count
+    | RefCountDecBlob of Atom                // Decrement bytes ref count, free if zero
     // Random intrinsics
     | RandomInt64                             // Get 8 random bytes as Int64
     // DateTime intrinsics
@@ -366,8 +366,8 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TString
     | AST.TInt ->
         DynamicString
-    | AST.TBytes ->
-        DynamicBytes
+    | AST.TBlob ->
+        DynamicBlob
     | AST.TFunction _ ->
         ClosureShape []
     | AST.TRawPtr ->
@@ -405,7 +405,7 @@ let private collectTypeVarsInOrder (typ: AST.Type) : string list =
         | AST.TBool
         | AST.TFloat64
         | AST.TString
-        | AST.TBytes
+        | AST.TBlob
         | AST.TChar
         | AST.TUnit
         | AST.TRawPtr
@@ -450,7 +450,7 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
     | AST.TBool
     | AST.TFloat64
     | AST.TString
-    | AST.TBytes
+    | AST.TBlob
     | AST.TChar
     | AST.TUnit
     | AST.TRawPtr
@@ -526,8 +526,8 @@ let rcShapeOfTypeWithSums
         | AST.TString
         | AST.TInt ->
             DynamicString
-        | AST.TBytes ->
-            DynamicBytes
+        | AST.TBlob ->
+            DynamicBlob
         | AST.TRawPtr ->
             RawUnmanaged
         | AST.TInt8
@@ -559,7 +559,7 @@ let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
     | RawUnmanaged ->
         false
     | DynamicString
-    | DynamicBytes
+    | DynamicBlob
     | FixedBlock _
     | BoxedSum _
     | RecursiveSumRef _
@@ -581,7 +581,7 @@ let rcShapeIsRootManaged (shape: RcShape) : bool =
         true
     | Immediate
     | DynamicString
-    | DynamicBytes
+    | DynamicBlob
     | StaticString
     | RawUnmanaged ->
         false
@@ -607,7 +607,7 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
         captureShapes |> List.exists rcShapeNeedsOwnedScopeRelease
     | Immediate
     | DynamicString
-    | DynamicBytes
+    | DynamicBlob
     | StaticString
     | RawUnmanaged ->
         false
@@ -628,7 +628,7 @@ let rcShapeRootKind (shape: RcShape) : RcKind option =
         Some ClosureHeap
     | Immediate
     | DynamicString
-    | DynamicBytes
+    | DynamicBlob
     | StaticString
     | RawUnmanaged ->
         None
@@ -649,7 +649,7 @@ let rcShapePayloadSize (shape: RcShape) : int option =
         Some 0
     | Immediate
     | DynamicString
-    | DynamicBytes
+    | DynamicBlob
     | StaticString
     | RawUnmanaged ->
         None
@@ -660,8 +660,8 @@ let rcShapeStorageClass (shape: RcShape) : RcStorageClass =
     match shape with
     | DynamicString ->
         ManagedDynamicBuffer DynamicStringBuffer
-    | DynamicBytes ->
-        ManagedDynamicBuffer DynamicBytesBuffer
+    | DynamicBlob ->
+        ManagedDynamicBuffer DynamicBlobBuffer
     | _ ->
         match rcShapePayloadSize shape, rcShapeRootKind shape with
         | Some payloadSize, Some kind ->
@@ -765,7 +765,7 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
             NoPayloadRelease
         | Immediate
         | DynamicString
-        | DynamicBytes
+        | DynamicBlob
         | StaticString
         | RawUnmanaged ->
             NoPayloadRelease

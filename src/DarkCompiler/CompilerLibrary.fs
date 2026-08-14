@@ -576,6 +576,7 @@ let private generateBinary
             match X86_64_Resolve.resolveAndEncode x86Instructions with
             | Error err -> Error $"x86-64 resolve error: {err}"
             | Ok resolveResult ->
+                let (_, x64StaticStringPool) = LiteralPool.addString LiteralPool.emptyStringPool ""
                 // Patch data labels (e.g., leak counter) if there are deferred fixups
                 let patchedResult =
                     if List.isEmpty resolveResult.DeferredFixups then
@@ -586,9 +587,15 @@ let private generateBinary
                         let codeFileOffset = elfHeaderSize + programHeaderSize
                         let codeSize = resolveResult.MachineCode.Length
                         let alignedDataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
-                        // Leak counter is at start of data section (no float/string pools on x86_64)
-                        let leakCounterFileOffset = alignedDataStart
-                        let dataLabels = Map.ofList [("_leak_count", leakCounterFileOffset)]
+                        // The canonical empty dynamic buffer occupies the first
+                        // 16 bytes of the x64 literal data section.
+                        let emptyBufferFileOffset = alignedDataStart
+                        let leakCounterFileOffset = alignedDataStart + 16
+                        let dataLabels =
+                            Map.ofList [
+                                ("_empty_dynamic_buffer", emptyBufferFileOffset)
+                                ("_leak_count", leakCounterFileOffset)
+                            ]
                         X86_64_Resolve.patchDataLabels resolveResult dataLabels codeFileOffset
                 match patchedResult with
                 | Error err -> Error $"x86-64 data label error: {err}"
@@ -598,7 +605,7 @@ let private generateBinary
                     | Ok entryOffset ->
                         let binary =
                             Binary_Generation_ELF_X86_64.createExecutableWithPools
-                                resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool
+                                resolveResult.MachineCode x64StaticStringPool LiteralPool.emptyFloatPool
                                 options.EnableLeakCheck entryOffset
                         let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
                         recordPassTiming passTimingRecorder "x86-64 Emit" emitElapsed
@@ -1057,9 +1064,11 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Uuid.dark"
         "stdlib/DateTime.dark"
         "stdlib/Bytes.dark"
+        "stdlib/Blob.dark"
         "stdlib/Char.dark"
         "stdlib/AWS.dark"
         "stdlib/Base64.dark"
+        "stdlib/X509.dark"
         "stdlib/Crypto.dark"
         "stdlib/Math.dark"
         "stdlib/__SkewList.dark"

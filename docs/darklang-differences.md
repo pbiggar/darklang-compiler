@@ -154,7 +154,15 @@ its base character.
 
 ## 3. Intentional Semantic Divergences
 
-### 3.1 Conditional and sequence type timing
+### 3.1 Blob-family parity
+
+The revision-pinned Blob, Base64, Crypto, and X509 public divergence table is
+empty. The retained `Bytes`, `Base64.urlDecode`, `Crypto.sha1`,
+`Crypto.bytesToHex`, and `Crypto.debug*` names are explicitly compiler-only
+extensions over Blob, not alternate parity behavior. See
+[blob-parity.md](blob-parity.md).
+
+### 3.2 Conditional and sequence type timing
 
 Conditional selection and statement execution order match the interpreter, as
 documented in the [conditional and sequence parity matrix](conditional-sequence-parity.md).

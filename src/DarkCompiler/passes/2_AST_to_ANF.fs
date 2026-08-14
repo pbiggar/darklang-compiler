@@ -97,7 +97,7 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TUInt8 -> "u8"
     | AST.TBool -> "bool"
     | AST.TString -> "str"
-    | AST.TBytes -> "bytes"
+    | AST.TBlob -> "blob"
     | AST.TChar -> "char"
     | AST.TFloat64 -> "f64"
     | AST.TUnit -> "unit"
@@ -183,7 +183,7 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
         | "bool" -> Some AST.TBool
         | "f64" -> Some AST.TFloat64
         | "str" -> Some AST.TString
-        | "bytes" -> Some AST.TBytes
+        | "blob" -> Some AST.TBlob
         | "char" -> Some AST.TChar
         | "unit" -> Some AST.TUnit
         | "rawptr" -> Some AST.TRawPtr
@@ -384,10 +384,10 @@ let tryRawMemoryIntrinsic
     | "__int64_to_uint16", [valueAtom]
     | "__int64_to_uint32", [valueAtom] ->
         Some (ANF.Atom valueAtom)
-    | "__bytes_to_rawptr", [bytesAtom] ->
-        Some (ANF.BytesToRawPtr bytesAtom)
-    | "__rawptr_to_bytes", [ptrAtom] ->
-        Some (ANF.RawPtrToBytes ptrAtom)
+    | "__blob_to_rawptr", [bytesAtom] ->
+        Some (ANF.BlobToRawPtr bytesAtom)
+    | "__rawptr_to_blob", [ptrAtom] ->
+        Some (ANF.RawPtrToBlob ptrAtom)
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> returns 0 (null pointer)
@@ -539,7 +539,7 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
-        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar
         | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
             typ
 
@@ -596,7 +596,7 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
     | AST.TBool
     | AST.TFloat64
     | AST.TString
-    | AST.TBytes
+    | AST.TBlob
     | AST.TChar
     | AST.TUnit
     | AST.TRawPtr
@@ -706,7 +706,7 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TBool -> "bool"
     | AST.TFloat64 -> "f64"
     | AST.TString -> "str"
-    | AST.TBytes -> "bytes"
+    | AST.TBlob -> "blob"
     | AST.TChar -> "char"
     | AST.TUnit -> "unit"
     | AST.TRuntimeError -> "runtime_error"
@@ -883,7 +883,7 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
     | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TUInt128
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Collect type variable names in first-seen order.
@@ -914,7 +914,7 @@ let rec collectTypeVarsInType (typ: AST.Type) (acc: string list) : string list =
     | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TUInt128
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
         acc
 
 /// Infer record type parameter order from field type variables.
@@ -3868,10 +3868,13 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             match tryLookupResolved name typeEnv with
             | Some (t, _) -> Ok t
             | None ->
-                // Check if it's a module function (e.g., Stdlib.Int64.add)
-                match Stdlib.tryGetFunction moduleRegistry name with
-                | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
-                | None -> Error $"Cannot infer type: undefined variable '{name}'"
+                match Stdlib.tryGetValue name with
+                | Some moduleValue -> Ok moduleValue.Type
+                | None ->
+                    // Check if it's a module function (e.g., Stdlib.Int64.add)
+                    match Stdlib.tryGetFunction moduleRegistry name with
+                    | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
+                    | None -> Error $"Cannot infer type: undefined variable '{name}'"
     | AST.DictLiteral (valueType, _) ->
         Ok (AST.TDict (AST.TString, valueType))
     | AST.RecordLiteral (typeName, fields) ->
@@ -4730,6 +4733,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
     | AST.Var name ->
         if isBuiltinTestNanName name then
             Ok (ANF.Return (ANF.FloatLiteral System.Double.NaN), varGen)
+        else if name = "Stdlib.Blob.empty" then
+            // Blob.empty shares the immortal empty dynamic-buffer literal.
+            Ok (ANF.Return (ANF.StringLiteral ""), varGen)
         else
             // Variable reference: look up in environment
             match tryLookupResolved name env with
@@ -8877,6 +8883,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
     | AST.Var name ->
         if isBuiltinTestNanName name then
             Ok (ANF.FloatLiteral System.Double.NaN, [], varGen)
+        else if name = "Stdlib.Blob.empty" then
+            Ok (ANF.StringLiteral "", [], varGen)
         else
             // Variable reference: look up in environment
             match tryLookupResolved name env with

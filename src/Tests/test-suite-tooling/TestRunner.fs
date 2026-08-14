@@ -211,6 +211,14 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "ints", "int64.dark")
     let intUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "ints", "int.dark")
+    let blobUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "bytes.dark")
+    let base64UpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "base64.dark")
+    let cryptoUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "crypto.dark")
+    let x509UpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "x509.dark")
     let upstreamDarkPaths =
         [| eifUpstreamDarkPath
            ematchUpstreamDarkPath
@@ -238,7 +246,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            mathUpstreamDarkPath
            floatUpstreamDarkPath
            int64UpstreamDarkPath
-           intUpstreamDarkPath |]
+           intUpstreamDarkPath
+           blobUpstreamDarkPath
+           base64UpstreamDarkPath
+           cryptoUpstreamDarkPath
+           x509UpstreamDarkPath |]
     let defaultUpstreamDarkPaths =
         [| eifUpstreamDarkPath
            ematchUpstreamDarkPath

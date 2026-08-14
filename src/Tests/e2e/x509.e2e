@@ -1,0 +1,9 @@
+// X509 parity tests: malformed PEM and DER must be total.
+
+Stdlib.X509.pemCertificatePublicKey("-----BEGIN CERTIFICATE-----\nMAMCAQE=\n-----END CERTIFICATE-----\n") = Error("No certificates")
+
+Stdlib.X509.pemCertificatePublicKey("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n") = Error("No certificates")
+
+Stdlib.X509.pemCertificatePublicKey("-----BEGIN CERTIFICATE-----\nMAA=\n-----END CERTIFICATE-----\n") = Error("No certificates")
+
+Stdlib.X509.pemCertificatePublicKey("-----BEGIN CERTIFICATE REQUEST-----\nMAMCAQE=\n-----END CERTIFICATE REQUEST-----\n") = Error("No certificates")

@@ -27,6 +27,6 @@ let p = __raw_alloc(16) in let s = dynamicString("a") in let _ = __raw_slot_init
 
 // Structured values expose RawPtr views without routing through Stdlib.Int64.
 let s = "a" ++ "b" in __raw_get<Int64>(__string_to_rawptr(s), 0) = 2
-let b = Stdlib.Bytes.create(3) in __raw_get<Int64>(__bytes_to_rawptr(b), 0) = 3
+let b = Stdlib.Bytes.create(3) in __raw_get<Int64>(__blob_to_rawptr(b), 0) = 3
 let p = __raw_alloc(24) in let _ = __raw_write_word(p, 0, 1) in let _ = __raw_write_byte(p, 8, 90) in let _ = __raw_write_word(p, 16, 1) in Stdlib.String.getByteAt(__rawptr_to_string(p), 0) = 90
-let p = __raw_alloc(24) in let _ = __raw_write_word(p, 0, 1) in let _ = __raw_write_byte(p, 8, 91) in let _ = __raw_write_word(p, 16, 1) in Stdlib.Bytes.get(__rawptr_to_bytes(p), 0) = 91
+let p = __raw_alloc(24) in let _ = __raw_write_word(p, 0, 1) in let _ = __raw_write_byte(p, 8, 91) in let _ = __raw_write_word(p, 16, 1) in Stdlib.Bytes.get(__rawptr_to_blob(p), 0) = 91

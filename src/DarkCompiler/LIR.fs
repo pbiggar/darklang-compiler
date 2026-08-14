@@ -123,7 +123,7 @@ type Instr =
     | RuntimeErrorString of Reg
     | PrintHeapStringNoNewline of Reg
     | PrintChars of byte list
-    | PrintBytes of Reg
+    | PrintBlob of Reg
     | PrintList of listPtr:Reg * elemType:AST.Type
     | PrintSum of sumPtr:Reg * variants:(string * int * AST.Type option) list
     | PrintRecord of recordPtr:Reg * typeName:string * fields:(string * AST.Type) list
@@ -168,8 +168,8 @@ type Instr =
     | RawSlotInit of ptr:Reg * byteOffset:Reg * value:Reg * valueType:AST.Type
     | RefCountIncString of str:Operand
     | RefCountDecString of str:Operand
-    | RefCountIncBytes of bytes:Operand
-    | RefCountDecBytes of bytes:Operand
+    | RefCountIncBlob of bytes:Operand
+    | RefCountDecBlob of bytes:Operand
     | RandomInt64 of dest:Reg
     | DateTimeNow of dest:Reg
     | FloatToString of dest:Reg * value:FReg

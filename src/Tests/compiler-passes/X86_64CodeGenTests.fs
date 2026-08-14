@@ -73,7 +73,7 @@ let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegist
     | AST.TBool
     | AST.TFloat64
     | AST.TString
-    | AST.TBytes
+    | AST.TBlob
     | AST.TChar
     | AST.TUnit
     | AST.TRawPtr
@@ -484,14 +484,14 @@ let testGenericRefCountDecLiteralStringFieldSkipsRelease () : Result<unit, strin
         else Error $"Expected literal string field release to skip leak accounting, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 generic fixed-block RefCountDec releases a dynamic bytes field.
-let testGenericRefCountDecBytesField () : Result<unit, string> =
+let testGenericRefCountDecBlobField () : Result<unit, string> =
     let program =
         makeSimpleProgram
             [
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
-                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TBytes]))))
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBlob)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TBlob]))))
             ]
             LIR.Ret
 
@@ -728,14 +728,14 @@ let testGenericRefCountDecSumStringPayload () : Result<unit, string> =
 
 /// Test: x64 generic fixed-block RefCountDec releases a boxed sum bytes payload.
 let testGenericRefCountDecSumBytesPayload () : Result<unit, string> =
-    let sumType = AST.TSum ("X64RcSumBytes", [AST.TBytes])
+    let sumType = AST.TSum ("X64RcSumBytes", [AST.TBlob])
     let program =
         makeSimpleProgram
             [
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
-                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBlob)
                 LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
@@ -756,7 +756,7 @@ let testGenericRefCountDecMixedSumPayloadUsesVariantDispatch () : Result<unit, s
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "X64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBytes }
+                        { Name = "X64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob }
                         { Name = "X64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64) }
                     ] })
         ]
@@ -839,7 +839,7 @@ let testGenericRefCountDecNestedMixedSumPayloadUsesVariantDispatch () : Result<u
                   Variants =
                     [
                         { Name = "X64NestedMixedSumNoPayload"; Tag = 0; Payload = None }
-                        { Name = "X64NestedMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBytes }
+                        { Name = "X64NestedMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
                     ] })
         ]
     let sumShapes =
@@ -1123,16 +1123,16 @@ let testDictRefCountDecStringKeyValue () : Result<unit, string> =
         else Error $"Expected dict string keys and values to be released, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 DictHeap RefCountDec releases dynamic bytes leaf keys and values.
-let testDictRefCountDecBytesKeyValue () : Result<unit, string> =
-    let dictType = AST.TDict (AST.TBytes, AST.TBytes)
+let testDictRefCountDecBlobKeyValue () : Result<unit, string> =
+    let dictType = AST.TDict (AST.TBlob, AST.TBlob)
     let program =
         makeSimpleProgram
             [
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "!")
                 LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "!")
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
-                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
-                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBlob)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 2L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
                 LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.DictHeap, Some (rcMetadata dictType))
@@ -1589,7 +1589,7 @@ let testTaggedListTuple5PayloadUsesPlannedHelper () : Result<unit, string> =
     let tupleType =
         AST.TTuple [
             AST.TString
-            AST.TBytes
+            AST.TBlob
             AST.TList AST.TInt64
             AST.TDict (AST.TInt64, AST.TList AST.TInt64)
             AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -1611,7 +1611,7 @@ let testTaggedListRecord5PayloadUsesPlannedHelper () : Result<unit, string> =
             ("X64PlannedListRecord5Payload",
                 [
                     ("name", AST.TString)
-                    ("blob", AST.TBytes)
+                    ("blob", AST.TBlob)
                     ("items", AST.TList AST.TInt64)
                     ("lookup", AST.TDict (AST.TInt64, AST.TList AST.TInt64))
                     ("fn", AST.TFunction ([AST.TInt64], AST.TInt64))
@@ -1758,9 +1758,9 @@ let testGenericRefCountDecPreservesLiveRaxAcrossBytesFieldRelease () : Result<un
             [
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
-                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBlob)
                 LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 654L)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TBytes]))))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TBlob]))))
                 LIR.PrintInt64 (LIR.Physical LIR.X0)
             ]
             LIR.Ret
@@ -1881,8 +1881,8 @@ let testClosureRefCountDecStringCapture () : Result<unit, string> =
         else Error $"Expected closure string capture release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 closure RefCountDec releases dynamic bytes captures.
-let testClosureRefCountDecBytesCapture () : Result<unit, string> =
-    let closureTupleType = AST.TTuple [AST.TInt64; AST.TBytes]
+let testClosureRefCountDecBlobCapture () : Result<unit, string> =
+    let closureTupleType = AST.TTuple [AST.TInt64; AST.TBlob]
     let capturedFunc =
         makeEmptyFunction
             "x64_bytes_capture_fn"
@@ -2092,7 +2092,7 @@ let testClosureRefCountDecTupleStringListDictCapture () : Result<unit, string> =
 let testClosureRefCountDecTupleStringBytesListDictListCapture () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, listType)
-    let tupleType = AST.TTuple [AST.TString; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [AST.TString; AST.TBlob; listType; dictType]
     let closureTupleType = AST.TTuple [AST.TInt64; tupleType]
     let capturedFunc =
         makeEmptyFunction
@@ -2118,7 +2118,7 @@ let testClosureRefCountDecTupleStringBytesListDictListCapture () : Result<unit, 
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 32)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X21, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X21, 24, LIR.Reg (LIR.Physical LIR.X20), Some dictType)
                 LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_tuple_string_bytes_list_dict_list_capture_fn", [LIR.Reg (LIR.Physical LIR.X21)])
@@ -2215,7 +2215,7 @@ let testClosureRefCountDecRecordStringBytesListDictListCapture () : Result<unit,
     let records =
         Map.ofList
             [("X64ClosureCaptureRecordStringBytesListDictList",
-              [("name", AST.TString); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+              [("name", AST.TString); ("blob", AST.TBlob); ("items", listType); ("lookup", dictType)])]
     let closureTupleType = AST.TTuple [AST.TInt64; recordType]
     let capturedFunc =
         makeEmptyFunction
@@ -2241,7 +2241,7 @@ let testClosureRefCountDecRecordStringBytesListDictListCapture () : Result<unit,
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 32)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X21, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X21, 24, LIR.Reg (LIR.Physical LIR.X20), Some dictType)
                 LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_record_string_bytes_list_dict_list_capture_fn", [LIR.Reg (LIR.Physical LIR.X21)])
@@ -2298,7 +2298,7 @@ let testClosureRefCountDecMixedSumCaptureUsesVariantDispatch () : Result<unit, s
                   Variants =
                     [
                         { Name = "X64ClosureMixedSumNoPayload"; Tag = 0; Payload = None }
-                        { Name = "X64ClosureMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBytes }
+                        { Name = "X64ClosureMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
                     ] })
         ]
     let capturedFunc =
@@ -2610,7 +2610,7 @@ let testTaggedListRefCountDecTupleStringPayload () : Result<unit, string> =
 
 /// Test: x64 tagged-list RefCountDec releases higher-arity tuple leaf payloads.
 let testTaggedListRefCountDecTuple3DynamicPayload () : Result<unit, string> =
-    let tupleType = AST.TTuple [AST.TString; AST.TInt64; AST.TBytes]
+    let tupleType = AST.TTuple [AST.TString; AST.TInt64; AST.TBlob]
     let program =
         makeSimpleProgram
             [
@@ -2619,7 +2619,7 @@ let testTaggedListRefCountDecTuple3DynamicPayload () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 24)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Imm 42L, None)
-                LIR.HeapStore (LIR.Physical LIR.X4, 16, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X4, 16, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
@@ -2671,7 +2671,7 @@ let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, 
     let isDynamicField (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TString
-        | AST.TBytes -> true
+        | AST.TBlob -> true
         | _ -> false
 
     let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
@@ -2722,9 +2722,9 @@ let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, 
     runCases
         [ ("first", [AST.TString; AST.TInt64; AST.TInt64])
           ("third", [AST.TInt64; AST.TInt64; AST.TString])
-          ("first-second", [AST.TString; AST.TBytes; AST.TInt64])
-          ("second-third", [AST.TInt64; AST.TString; AST.TBytes])
-          ("all", [AST.TString; AST.TBytes; AST.TString]) ]
+          ("first-second", [AST.TString; AST.TBlob; AST.TInt64])
+          ("second-third", [AST.TInt64; AST.TString; AST.TBlob])
+          ("all", [AST.TString; AST.TBlob; AST.TString]) ]
 
 /// Test: x64 tagged-list RefCountDec releases tuple3 payloads with mixed managed fields.
 let testTaggedListRefCountDecTuple3StringListDictPayload () : Result<unit, string> =
@@ -2910,7 +2910,7 @@ let testTaggedListRefCountDecRecord3DynamicPayload () : Result<unit, string> =
     let recordType = AST.TRecord ("X64ListRcRecord3", [])
     let records =
         Map.ofList
-            [("X64ListRcRecord3", [("name", AST.TString); ("count", AST.TInt64); ("data", AST.TBytes)])]
+            [("X64ListRcRecord3", [("name", AST.TString); ("count", AST.TInt64); ("data", AST.TBlob)])]
     let program =
         makeSimpleProgramWithRecords
             [
@@ -2919,7 +2919,7 @@ let testTaggedListRefCountDecRecord3DynamicPayload () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 24)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Imm 42L, None)
-                LIR.HeapStore (LIR.Physical LIR.X4, 16, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X4, 16, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
@@ -2982,7 +2982,7 @@ let testTaggedListRefCountDecRecord3BytesListDictPayload () : Result<unit, strin
     let recordType = AST.TRecord ("X64ListRcRecord3BytesListDict", [])
     let records =
         Map.ofList
-            [("X64ListRcRecord3BytesListDict", [("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+            [("X64ListRcRecord3BytesListDict", [("blob", AST.TBlob); ("items", listType); ("lookup", dictType)])]
     let program =
         makeSimpleProgramWithRecords
             [
@@ -2997,7 +2997,7 @@ let testTaggedListRefCountDecRecord3BytesListDictPayload () : Result<unit, strin
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
                 LIR.HeapAlloc (LIR.Physical LIR.X7, 24)
-                LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X7, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X7, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 8)
@@ -3063,7 +3063,7 @@ let testTaggedListRefCountDecRecord4StringBytesListDictPayload () : Result<unit,
     let recordType = AST.TRecord ("X64ListRcRecord4StringBytesListDict", [])
     let records =
         Map.ofList
-            [("X64ListRcRecord4StringBytesListDict", [("name", AST.TString); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+            [("X64ListRcRecord4StringBytesListDict", [("name", AST.TString); ("blob", AST.TBlob); ("items", listType); ("lookup", dictType)])]
     let program =
         makeSimpleProgramWithRecords
             [
@@ -3080,7 +3080,7 @@ let testTaggedListRefCountDecRecord4StringBytesListDictPayload () : Result<unit,
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 8)
@@ -3106,7 +3106,7 @@ let testTaggedListRefCountDecRecord4ClosureBytesListDictPayload () : Result<unit
     let recordType = AST.TRecord ("X64ListRcRecord4ClosureBytesListDict", [])
     let records =
         Map.ofList
-            [("X64ListRcRecord4ClosureBytesListDict", [("callback", closureType); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+            [("X64ListRcRecord4ClosureBytesListDict", [("callback", closureType); ("blob", AST.TBlob); ("items", listType); ("lookup", dictType)])]
     let program =
         makeSimpleProgramWithRecords
             [
@@ -3123,7 +3123,7 @@ let testTaggedListRefCountDecRecord4ClosureBytesListDictPayload () : Result<unit
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 8)
@@ -3276,7 +3276,7 @@ let testTaggedListRefCountDecRecord4NestedTupleClosureBytesListDictPayload () : 
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
-    let nestedTupleType = AST.TTuple [closureType; AST.TBytes; listType; dictType]
+    let nestedTupleType = AST.TTuple [closureType; AST.TBlob; listType; dictType]
     let recordType = AST.TRecord ("X64ListRcRecord4NestedTupleClosureBytesListDict", [])
     let records =
         Map.ofList
@@ -3297,7 +3297,7 @@ let testTaggedListRefCountDecRecord4NestedTupleClosureBytesListDictPayload () : 
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 32)
@@ -3325,7 +3325,7 @@ let testTaggedListRefCountDecRecord4NestedTupleClosureBytesListDictListPayload (
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, listType)
-    let nestedTupleType = AST.TTuple [closureType; AST.TBytes; listType; dictType]
+    let nestedTupleType = AST.TTuple [closureType; AST.TBlob; listType; dictType]
     let recordType = AST.TRecord ("X64ListRcRecord4NestedTupleClosureBytesListDictList", [])
     let records =
         Map.ofList
@@ -3350,7 +3350,7 @@ let testTaggedListRefCountDecRecord4NestedTupleClosureBytesListDictListPayload (
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X19, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 32)
@@ -3377,7 +3377,7 @@ let testTaggedListRefCountDecRecord4NestedTupleClosureBytesListDictListPayload (
 let testTaggedListRefCountDecTuple4StringBytesListDictPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
-    let tupleType = AST.TTuple [AST.TString; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [AST.TString; AST.TBlob; listType; dictType]
     let program =
         makeSimpleProgram
             [
@@ -3394,7 +3394,7 @@ let testTaggedListRefCountDecTuple4StringBytesListDictPayload () : Result<unit, 
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 8)
@@ -3415,7 +3415,7 @@ let testTaggedListRefCountDecTuple4StringBytesListDictPayload () : Result<unit, 
 let testTaggedListRefCountDecTuple4StringBytesListDictListPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, listType)
-    let tupleType = AST.TTuple [AST.TString; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [AST.TString; AST.TBlob; listType; dictType]
     let program =
         makeSimpleProgram
             [
@@ -3436,7 +3436,7 @@ let testTaggedListRefCountDecTuple4StringBytesListDictListPayload () : Result<un
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 32)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X21, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X21, 24, LIR.Reg (LIR.Physical LIR.X20), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
@@ -3458,7 +3458,7 @@ let testTaggedListRefCountDecTuple4ClosureBytesListDictPayload () : Result<unit,
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
-    let tupleType = AST.TTuple [closureType; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [closureType; AST.TBlob; listType; dictType]
     let program =
         makeSimpleProgram
             [
@@ -3475,7 +3475,7 @@ let testTaggedListRefCountDecTuple4ClosureBytesListDictPayload () : Result<unit,
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 8)
@@ -3497,7 +3497,7 @@ let testTaggedListRefCountDecTuple4ClosureBytesListDictListPayload () : Result<u
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, listType)
-    let tupleType = AST.TTuple [closureType; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [closureType; AST.TBlob; listType; dictType]
     let program =
         makeSimpleProgram
             [
@@ -3518,7 +3518,7 @@ let testTaggedListRefCountDecTuple4ClosureBytesListDictListPayload () : Result<u
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 32)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X21, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X21, 24, LIR.Reg (LIR.Physical LIR.X20), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
@@ -3738,7 +3738,7 @@ let testTaggedListRefCountDecTuple4NestedTupleClosureBytesListDictPayload () : R
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
-    let nestedTupleType = AST.TTuple [closureType; AST.TBytes; listType; dictType]
+    let nestedTupleType = AST.TTuple [closureType; AST.TBlob; listType; dictType]
     let tupleType = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64; nestedTupleType]
     let program =
         makeSimpleProgram
@@ -3756,7 +3756,7 @@ let testTaggedListRefCountDecTuple4NestedTupleClosureBytesListDictPayload () : R
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 32)
@@ -3816,11 +3816,11 @@ let testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations () : Re
            [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")],
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 7L, None)
             LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)])
-          ("Both", AST.TTuple [AST.TString; AST.TBytes],
+          ("Both", AST.TTuple [AST.TString; AST.TBlob],
            [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
             LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "bytes", LIR.StringSymbol "payload")],
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)]) ]
+            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)]) ]
 
 /// Test: x64 tagged-list RefCountDec releases nested tuple dynamic/list/dict payloads.
 let testTaggedListRefCountDecTuple2NestedTupleStringListDictPayload () : Result<unit, string> =
@@ -3964,7 +3964,7 @@ let testTaggedListRefCountDecTuple2NestedTupleClosurePayload () : Result<unit, s
 let testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
-    let nestedTupleType = AST.TTuple [AST.TString; AST.TBytes; listType; dictType]
+    let nestedTupleType = AST.TTuple [AST.TString; AST.TBlob; listType; dictType]
     let tupleType = AST.TTuple [AST.TInt64; nestedTupleType]
     let program =
         makeSimpleProgram
@@ -3984,7 +3984,7 @@ let testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictPayload () : Re
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 7L, None)
@@ -4006,7 +4006,7 @@ let testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictPayload () : Re
 let testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictListPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, listType)
-    let nestedTupleType = AST.TTuple [AST.TString; AST.TBytes; listType; dictType]
+    let nestedTupleType = AST.TTuple [AST.TString; AST.TBlob; listType; dictType]
     let tupleType = AST.TTuple [AST.TInt64; nestedTupleType]
     let program =
         makeSimpleProgram
@@ -4030,7 +4030,7 @@ let testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictListPayload () 
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 7L, None)
@@ -4089,7 +4089,7 @@ let testTaggedListRefCountDecRecord3DynamicPayloadCombinations () : Result<unit,
     let isDynamicField (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TString
-        | AST.TBytes -> true
+        | AST.TBlob -> true
         | _ -> false
 
     let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
@@ -4146,9 +4146,9 @@ let testTaggedListRefCountDecRecord3DynamicPayloadCombinations () : Result<unit,
     runCases
         [ ("First", [AST.TString; AST.TInt64; AST.TInt64])
           ("Third", [AST.TInt64; AST.TInt64; AST.TString])
-          ("FirstSecond", [AST.TString; AST.TBytes; AST.TInt64])
-          ("SecondThird", [AST.TInt64; AST.TString; AST.TBytes])
-          ("All", [AST.TString; AST.TBytes; AST.TString]) ]
+          ("FirstSecond", [AST.TString; AST.TBlob; AST.TInt64])
+          ("SecondThird", [AST.TInt64; AST.TString; AST.TBlob])
+          ("All", [AST.TString; AST.TBlob; AST.TString]) ]
 
 /// Test: x64 tagged-list RefCountDec releases boxed sum leaf payload fields.
 let testTaggedListRefCountDecSumStringPayload () : Result<unit, string> =
@@ -4185,7 +4185,7 @@ let testTaggedListRefCountDecMixedSumDynamicPayloadUsesVariantDispatch () : Resu
                   Variants =
                     [
                         { Name = "X64ListMixedSumNoPayload"; Tag = 0; Payload = None }
-                        { Name = "X64ListMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBytes }
+                        { Name = "X64ListMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
                     ] })
         ]
     let sumShapes =
@@ -4381,11 +4381,11 @@ let testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations () : Result<uni
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 7L, None)
             LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TString)])
           ("both",
-           AST.TTuple [AST.TString; AST.TBytes],
+           AST.TTuple [AST.TString; AST.TBlob],
            [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "leftBoth0", LIR.StringSymbol "rightBoth0")
             LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "leftBoth1", LIR.StringSymbol "rightBoth1")],
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)]) ]
+            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)]) ]
 
 /// Test: x64 tagged-list RefCountDec releases boxed sum tuple3 dynamic combinations.
 let testTaggedListRefCountDecSumTuple3DynamicPayloadCombinations () : Result<unit, string> =
@@ -4399,7 +4399,7 @@ let testTaggedListRefCountDecSumTuple3DynamicPayloadCombinations () : Result<uni
     let isDynamicField (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TString
-        | AST.TBytes -> true
+        | AST.TBlob -> true
         | _ -> false
 
     let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
@@ -4455,10 +4455,10 @@ let testTaggedListRefCountDecSumTuple3DynamicPayloadCombinations () : Result<uni
         [ ("First", [AST.TString; AST.TInt64; AST.TInt64])
           ("Second", [AST.TInt64; AST.TString; AST.TInt64])
           ("Third", [AST.TInt64; AST.TInt64; AST.TString])
-          ("FirstSecond", [AST.TString; AST.TBytes; AST.TInt64])
-          ("SecondThird", [AST.TInt64; AST.TString; AST.TBytes])
-          ("FirstThird", [AST.TString; AST.TInt64; AST.TBytes])
-          ("All", [AST.TString; AST.TBytes; AST.TString]) ]
+          ("FirstSecond", [AST.TString; AST.TBlob; AST.TInt64])
+          ("SecondThird", [AST.TInt64; AST.TString; AST.TBlob])
+          ("FirstThird", [AST.TString; AST.TInt64; AST.TBlob])
+          ("All", [AST.TString; AST.TBlob; AST.TString]) ]
 
 /// Test: x64 tagged-list RefCountDec releases boxed sum tuple3 payloads with mixed managed fields.
 let testTaggedListRefCountDecSumTuple3StringListDictPayload () : Result<unit, string> =
@@ -4634,7 +4634,7 @@ let testTaggedListRefCountDecSumTuple3ClosureListDictListPayload () : Result<uni
 let testTaggedListRefCountDecSumTuple4StringBytesListDictPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
-    let tupleType = AST.TTuple [AST.TString; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [AST.TString; AST.TBlob; listType; dictType]
     let sumType = AST.TSum ("X64ListRcSumTuple4StringBytesListDict", [tupleType])
     let program =
         makeSimpleProgram
@@ -4652,7 +4652,7 @@ let testTaggedListRefCountDecSumTuple4StringBytesListDictPayload () : Result<uni
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
@@ -4722,7 +4722,7 @@ let testTaggedListRefCountDecSumTuple4NestedTupleStringListDictPayload () : Resu
 let testTaggedListRefCountDecSumTuple4StringBytesListDictListPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, listType)
-    let tupleType = AST.TTuple [AST.TString; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [AST.TString; AST.TBlob; listType; dictType]
     let sumType = AST.TSum ("X64ListRcSumTuple4StringBytesListDictList", [tupleType])
     let program =
         makeSimpleProgram
@@ -4744,7 +4744,7 @@ let testTaggedListRefCountDecSumTuple4StringBytesListDictListPayload () : Result
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X19, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
@@ -4769,7 +4769,7 @@ let testTaggedListRefCountDecSumTuple4ClosureBytesListDictPayload () : Result<un
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let listType = AST.TList AST.TInt64
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
-    let tupleType = AST.TTuple [closureType; AST.TBytes; listType; dictType]
+    let tupleType = AST.TTuple [closureType; AST.TBlob; listType; dictType]
     let sumType = AST.TSum ("X64ListRcSumTuple4ClosureBytesListDict", [tupleType])
     let program =
         makeSimpleProgram
@@ -4787,7 +4787,7 @@ let testTaggedListRefCountDecSumTuple4ClosureBytesListDictPayload () : Result<un
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
@@ -4934,7 +4934,7 @@ let testTaggedListRefCountDecSumRecord4StringBytesListDictPayload () : Result<un
     let recordType = AST.TRecord ("X64ListRcSumRecord4StringBytesListDict", [])
     let records =
         Map.ofList
-            [("X64ListRcSumRecord4StringBytesListDict", [("name", AST.TString); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+            [("X64ListRcSumRecord4StringBytesListDict", [("name", AST.TString); ("blob", AST.TBlob); ("items", listType); ("lookup", dictType)])]
     let sumType = AST.TSum ("X64ListRcSumRecord4StringBytesListDictWrapper", [recordType])
     let program =
         makeSimpleProgramWithRecords
@@ -4952,7 +4952,7 @@ let testTaggedListRefCountDecSumRecord4StringBytesListDictPayload () : Result<un
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
@@ -4980,7 +4980,7 @@ let testTaggedListRefCountDecSumRecord4StringBytesListDictListPayload () : Resul
     let recordType = AST.TRecord ("X64ListRcSumRecord4StringBytesListDictList", [])
     let records =
         Map.ofList
-            [("X64ListRcSumRecord4StringBytesListDictList", [("name", AST.TString); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+            [("X64ListRcSumRecord4StringBytesListDictList", [("name", AST.TString); ("blob", AST.TBlob); ("items", listType); ("lookup", dictType)])]
     let sumType = AST.TSum ("X64ListRcSumRecord4StringBytesListDictListWrapper", [recordType])
     let program =
         makeSimpleProgramWithRecords
@@ -5002,7 +5002,7 @@ let testTaggedListRefCountDecSumRecord4StringBytesListDictListPayload () : Resul
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 32)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X21, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X21, 24, LIR.Reg (LIR.Physical LIR.X20), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
@@ -5031,7 +5031,7 @@ let testTaggedListRefCountDecSumRecord4ClosureBytesListDictPayload () : Result<u
     let recordType = AST.TRecord ("X64ListRcSumRecord4ClosureBytesListDict", [])
     let records =
         Map.ofList
-            [("X64ListRcSumRecord4ClosureBytesListDict", [("callback", closureType); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+            [("X64ListRcSumRecord4ClosureBytesListDict", [("callback", closureType); ("blob", AST.TBlob); ("items", listType); ("lookup", dictType)])]
     let sumType = AST.TSum ("X64ListRcSumRecord4ClosureBytesListDictWrapper", [recordType])
     let program =
         makeSimpleProgramWithRecords
@@ -5049,7 +5049,7 @@ let testTaggedListRefCountDecSumRecord4ClosureBytesListDictPayload () : Result<u
                 LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
                 LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
@@ -5115,7 +5115,7 @@ let testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations () : Result<un
     let isDynamicField (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TString
-        | AST.TBytes -> true
+        | AST.TBlob -> true
         | _ -> false
 
     let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
@@ -5176,10 +5176,10 @@ let testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations () : Result<un
     runCases
         [ ("First", [AST.TString; AST.TInt64; AST.TInt64])
           ("Third", [AST.TInt64; AST.TInt64; AST.TString])
-          ("FirstSecond", [AST.TString; AST.TBytes; AST.TInt64])
-          ("SecondThird", [AST.TInt64; AST.TString; AST.TBytes])
-          ("FirstThird", [AST.TString; AST.TInt64; AST.TBytes])
-          ("All", [AST.TString; AST.TBytes; AST.TString]) ]
+          ("FirstSecond", [AST.TString; AST.TBlob; AST.TInt64])
+          ("SecondThird", [AST.TInt64; AST.TString; AST.TBlob])
+          ("FirstThird", [AST.TString; AST.TInt64; AST.TBlob])
+          ("All", [AST.TString; AST.TBlob; AST.TString]) ]
 
 /// Test: x64 tagged-list RefCountDec releases nested boxed sum leaf payloads.
 let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
@@ -5215,7 +5215,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR conditional branch", testBranch)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)
-    ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
+    ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBlobField)
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
     ("LIR generic RefCountDec releases tuple string/list/dict fields", testGenericRefCountDecTupleStringListDictFields)
     ("LIR generic RefCountDec releases dict field list values", testGenericRefCountDecDictListValueField)
@@ -5238,7 +5238,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec releases string leaf keys", testDictRefCountDecStringKey)
     ("LIR DictHeap RefCountDec releases string leaf values", testDictRefCountDecStringValue)
     ("LIR DictHeap RefCountDec releases string leaf keys and values", testDictRefCountDecStringKeyValue)
-    ("LIR DictHeap RefCountDec releases bytes leaf keys and values", testDictRefCountDecBytesKeyValue)
+    ("LIR DictHeap RefCountDec releases bytes leaf keys and values", testDictRefCountDecBlobKeyValue)
     ("LIR DictHeap RefCountDec releases string leaf keys and list values", testDictRefCountDecStringKeyListValue)
     ("LIR DictHeap RefCountDec releases string leaf keys and dict values", testDictRefCountDecStringKeyDictValue)
     ("LIR DictHeap RefCountDec releases string leaf keys and dict-list values", testDictRefCountDecStringKeyDictListValue)
@@ -5267,7 +5267,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
     ("LIR generic RefCountDec releases sum closure payload", testGenericRefCountDecSumClosurePayload)
     ("LIR closure RefCountDec releases string capture", testClosureRefCountDecStringCapture)
-    ("LIR closure RefCountDec releases bytes capture", testClosureRefCountDecBytesCapture)
+    ("LIR closure RefCountDec releases bytes capture", testClosureRefCountDecBlobCapture)
     ("LIR closure RefCountDec releases list capture", testClosureRefCountDecListCapture)
     ("LIR closure RefCountDec releases dict capture", testClosureRefCountDecDictCapture)
     ("LIR closure RefCountDec releases dict list value capture", testClosureRefCountDecDictListValueCapture)

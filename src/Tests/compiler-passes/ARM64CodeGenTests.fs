@@ -423,7 +423,7 @@ let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
             Ok ()
 
 let testListTuple3BytesListDictListValueUsesTypedDictHelper () : TestResult =
-    let tupleType = AST.TTuple [ AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ]
+    let tupleType = AST.TTuple [ AST.TBlob; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ]
     let program =
         makeSimpleProgramWithVariants
             [
@@ -497,7 +497,7 @@ let testListTuple4StringBytesListDictListValueUsesTypedDictHelper () : TestResul
     assertListElementUsesTypedDictListHelper
         (AST.TTuple [
             AST.TString
-            AST.TBytes
+            AST.TBlob
             AST.TList AST.TInt64
             AST.TDict (AST.TInt64, AST.TList AST.TInt64)
         ])
@@ -517,7 +517,7 @@ let testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper () : TestResu
     assertListElementUsesTypedDictListHelper
         (AST.TTuple [
             AST.TFunction ([ AST.TInt64 ], AST.TInt64)
-            AST.TBytes
+            AST.TBlob
             AST.TList AST.TInt64
             AST.TDict (AST.TInt64, AST.TList AST.TInt64)
         ])
@@ -532,7 +532,7 @@ let testListNestedTupleDictListValueUsesTypedDictHelper () : TestResult =
     assertListElementUsesTypedDictListHelper
         (AST.TTuple [
             AST.TString
-            AST.TBytes
+            AST.TBlob
             AST.TTuple [ AST.TDict (AST.TInt64, AST.TList AST.TInt64); AST.TString ]
             AST.TList AST.TInt64
         ])
@@ -544,7 +544,7 @@ let testListTuple2NestedTupleDictListValueUsesTypedDictHelper () : TestResult =
             AST.TInt64
             AST.TTuple [
                 AST.TString
-                AST.TBytes
+                AST.TBlob
                 AST.TList AST.TInt64
                 AST.TDict (AST.TInt64, AST.TList AST.TInt64)
             ]
@@ -678,7 +678,7 @@ let testListSumTuple3DictListValueUsesTypedDictHelper () : TestResult =
 
 let testListSumTuple4DictListValueUsesTypedDictHelper () : TestResult =
     assertListSumPayloadUsesTypedDictListHelper
-        (AST.TTuple [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ])
+        (AST.TTuple [ AST.TString; AST.TBlob; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ])
         "sum tuple4 string bytes list dict-list"
 
 let testListSumTuple3ClosureDictListValueUsesTypedDictHelper () : TestResult =
@@ -694,7 +694,7 @@ let testListSumTuple4ClosureDictListValueUsesTypedDictHelper () : TestResult =
     assertListSumPayloadUsesTypedDictListHelper
         (AST.TTuple [
             AST.TFunction ([ AST.TInt64 ], AST.TInt64)
-            AST.TBytes
+            AST.TBlob
             AST.TList AST.TInt64
             AST.TDict (AST.TInt64, AST.TList AST.TInt64)
         ])
@@ -920,7 +920,7 @@ let testDictStringKeyTupleValuePlannedHelperReleasesCollisionPayloads () : TestR
             Error "Dict<string, tuple<string, list<int>>> planned helper did not emit a collision generic payload release loop"
 
 let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
-    let nestedType = AST.TTuple [ AST.TBytes ]
+    let nestedType = AST.TTuple [ AST.TBlob ]
     let parentType = AST.TTuple [ nestedType ]
     let program =
         makeSimpleProgramWithVariants
@@ -1071,7 +1071,7 @@ let testPlannedListTuple5PayloadUsesPlannedHelper () : TestResult =
     let tupleType =
         AST.TTuple [
             AST.TString
-            AST.TBytes
+            AST.TBlob
             AST.TList AST.TInt64
             AST.TDict (AST.TInt64, AST.TList AST.TInt64)
             AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -1103,7 +1103,7 @@ let testPlannedListRecord5PayloadUsesPlannedHelper () : TestResult =
             ("ARM64PlannedListRecord5Payload",
                 [
                     ("name", AST.TString)
-                    ("blob", AST.TBytes)
+                    ("blob", AST.TBlob)
                     ("items", AST.TList AST.TInt64)
                     ("lookup", AST.TDict (AST.TInt64, AST.TList AST.TInt64))
                     ("fn", AST.TFunction ([AST.TInt64], AST.TInt64))
@@ -1170,7 +1170,7 @@ let testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch () :
                   Variants =
                     [
                         { Name = "Arm64NestedFixedBlockNoPayload"; Tag = 0; Payload = None }
-                        { Name = "Arm64NestedFixedBlockSumBytesPayload"; Tag = 1; Payload = Some AST.TBytes }
+                        { Name = "Arm64NestedFixedBlockSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
                     ] })
         ]
     let sumShapes =
@@ -1217,7 +1217,7 @@ let testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases () : TestResult =
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "Arm64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBytes }
+                        { Name = "Arm64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob }
                         { Name = "Arm64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64) }
                     ] })
         ]
@@ -1266,7 +1266,7 @@ let testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases () : TestResult =
             Error "Generic mixed boxed-sum payload release did not branch past remaining variant cases after a match"
 
 let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult =
-    let nestedType = AST.TTuple [ AST.TBytes ]
+    let nestedType = AST.TTuple [ AST.TBlob ]
     let captureType = AST.TTuple [ nestedType ]
     let closureParamType = AST.TTuple [ AST.TInt64; captureType ]
     let capturedFunc =
@@ -1320,7 +1320,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "Arm64ClosureCaptureSumBytesPayload"; Tag = 0; Payload = Some AST.TBytes }
+                        { Name = "Arm64ClosureCaptureSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob }
                     ] })
         ]
     let capturedFunc =
