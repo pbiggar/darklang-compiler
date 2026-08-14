@@ -6627,56 +6627,6 @@ let convertFunction
         // Note: Coverage buffer is in BSS section (zero-initialized by OS)
         // No runtime initialization needed - CoverageHit uses ADRP+ADD to access it
 
-        // Generate parameter setup: move X0-X7/D0-D7 to allocated parameter registers
-        // This must come AFTER the prologue but BEFORE the function body
-        // Strategy: Save all source registers to temp regs first to avoid clobbering
-        let argRegs = [ARM64Symbolic.X0; ARM64Symbolic.X1; ARM64Symbolic.X2; ARM64Symbolic.X3; ARM64Symbolic.X4; ARM64Symbolic.X5; ARM64Symbolic.X6; ARM64Symbolic.X7]
-        let tempRegs = [ARM64Symbolic.X9; ARM64Symbolic.X10; ARM64Symbolic.X11; ARM64Symbolic.X12; ARM64Symbolic.X13; ARM64Symbolic.X14; ARM64Symbolic.X15]
-
-        // AAPCS64: int and float use SEPARATE register counters
-        let paramsWithTypes = func.TypedParams |> List.map (fun tp -> (tp.Reg, tp.Type))
-
-        // Collect integer parameters with their calling convention index
-        let intParamsWithIdx =
-            paramsWithTypes
-            |> List.indexed
-            |> List.fold (fun (intIdx, acc) (_, (param, typ)) ->
-                if typ = AST.TFloat64 then
-                    (intIdx, acc)  // Skip float params
-                else
-                    (intIdx + 1, (param, intIdx) :: acc)
-            ) (0, [])
-            |> snd
-            |> List.rev
-
-        // Step 1a: Save integer calling convention registers to temps
-        let saveIntToTemps =
-            intParamsWithIdx
-            |> List.map (fun (_, intIdx) ->
-                let argReg = List.item intIdx argRegs
-                let tempReg = List.item intIdx tempRegs
-                ARM64Symbolic.MOV_reg (tempReg, argReg))
-
-        // Note: Float parameter setup is NOT done here - it's handled by RegisterAllocation
-        // which inserts FMov instructions at the start of the CFG entry block.
-        // Doing it here would corrupt D0/D1 before those CFG instructions run.
-
-        // Step 2a: Move integers from temps to allocated parameter registers
-        let moveIntFromTemps =
-            intParamsWithIdx
-            |> List.map (fun (paramReg, intIdx) ->
-                let tempReg = List.item intIdx tempRegs
-                match lirRegToARM64Reg paramReg with
-                | Ok paramArm64 ->
-                    if paramArm64 = tempReg then
-                        []  // Already in the right place
-                    else
-                        [ARM64Symbolic.MOV_reg (paramArm64, tempReg)]
-                | Error msg -> Crash.crash $"ParamSetup: lirRegToARM64Reg failed: {msg}")
-            |> List.concat
-
-        let paramSetup = saveIntToTemps @ moveIntFromTemps
-
         // Shared cold path for allocation overflow in this function.
         let heapOverflowTrap =
             if needsHeapOverflowTrap then
@@ -6720,9 +6670,11 @@ let convertFunction
                 cliEnvironmentInit
             else []
 
-        // Combine: function label + prologue + heap init + param setup + CFG body + epilogue label + epilogue
+        // Parameter stack stores and parallel register moves are already the first
+        // instructions in the allocated CFG entry block.
+        // Combine: function label + CLI init + prologue + heap init + CFG body + epilogue label + epilogue
         // All Ret terminators jump to the epilogue label
-        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ paramSetup @ cfgInstrs @ heapOverflowTrap @ epilogueLabelInstr @ epilogue)
+        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ heapOverflowTrap @ epilogueLabelInstr @ epilogue)
 
 type private RegisterLifetimeStep =
     | Unrelated

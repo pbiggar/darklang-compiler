@@ -5,87 +5,87 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "367fbac8c4f6420951592af456195c7874d231b771326a90ff149b7d6ba8ab85",
-  "generated_at": "2026-08-15T01:53:01+00:00",
+  "generated_at": "2026-08-15T02:34:48+00:00",
   "compiler": {
-    "commit": "c5649b7086201214dd5ef770b4bd42467bb8415b",
-    "subject": "Optimize sibling recursion modulo addition"
+    "commit": "153d9588152ac5ba7b98ce8d699eacea1abc3b0e",
+    "subject": "Eliminate redundant ARM64 entry parameter copies"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 11450298696
+      "instructions": 10019035996
     },
     {
       "name": "binary_trees",
-      "instructions": 675306228
+      "instructions": 649092194
     },
     {
       "name": "collatz",
-      "instructions": 81543084
+      "instructions": 81143046
     },
     {
       "name": "edigits",
-      "instructions": 4664674103
+      "instructions": 4528733711
     },
     {
       "name": "factorial",
-      "instructions": 64214
+      "instructions": 64094
     },
     {
       "name": "fasta",
-      "instructions": 549966883
+      "instructions": 514839089
     },
     {
       "name": "fib",
-      "instructions": 477772383
+      "instructions": 418050947
     },
     {
       "name": "leibniz",
-      "instructions": 850001522
+      "instructions": 850001482
     },
     {
       "name": "mandelbrot",
-      "instructions": 17621940
+      "instructions": 17459510
     },
     {
       "name": "matmul",
-      "instructions": 2027686855
+      "instructions": 1968521113
     },
     {
       "name": "merkletrees",
-      "instructions": 416150237
+      "instructions": 389936193
     },
     {
       "name": "nbody",
-      "instructions": 1214502260
+      "instructions": 1193502228
     },
     {
       "name": "nqueen",
-      "instructions": 276882241
+      "instructions": 221668085
     },
     {
       "name": "pisum",
-      "instructions": 95431
+      "instructions": 95371
     },
     {
       "name": "primes",
-      "instructions": 2075933
+      "instructions": 2045919
     },
     {
       "name": "quicksort",
-      "instructions": 226373955
+      "instructions": 222570011
     },
     {
       "name": "spectral_norm",
-      "instructions": 79204301
+      "instructions": 74939493
     },
     {
       "name": "sum_to_n",
-      "instructions": 71873
+      "instructions": 71833
     },
     {
       "name": "tak",
-      "instructions": 63580610
+      "instructions": 52360530
     }
   ]
 }

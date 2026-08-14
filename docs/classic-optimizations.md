@@ -677,6 +677,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Register allocation
 
+### ARM64 entry parameter copy elimination
+
+- Optimization name: ARM64 entry parameter copy elimination
+- Taxonomy category: Post-allocation copy elimination
+- Priority/rationale: The allocator already emits ordered parameter stack stores and a cycle-safe parallel entry shuffle, so a second blanket save-and-restore through `X9`-`X15` adds work to every integer-parameter function and cannot represent the eighth argument.
+- Notes: Implemented by making the allocator-generated entry instructions authoritative in `src/DarkCompiler/passes/arm64/6_CodeGen.fs`. Generated-code regressions cover an identity parameter, mixed integer/float parameters, a spilled integer parameter whose store precedes the shuffle, an `X16`-mediated swap, and the eight-integer-argument boundary. Against the current ARM64 target baseline, all 19 routine workloads improved, from 23,073,872,749 to 21,204,130,845 aggregate instructions (8.10%); `ackermann` improved 12.50%, `fib` 12.50%, `tak` 17.65%, and `nqueen` 19.94%. The recorded routine ratio improved from 2.38x to 2.25x.
+
 ### Floating-point phi coalescing
 
 - Optimization name: Floating-point phi coalescing

@@ -141,6 +141,144 @@ let private makeEmptyFunction
         UsedCalleeSaved = []
     }
 
+let private makeAllocatedEntryFunction
+    (name: string)
+    (typedParams: LIR.TypedLIRParam list)
+    (entryInstrs: LIR.Instr list)
+    (stackSize: int)
+    : LIR.Function =
+    let label = LIR.Label $"{name}_entry"
+    {
+        Name = name
+        TypedParams = typedParams
+        CFG = {
+            Entry = label
+            Blocks = Map.ofList [
+                label,
+                {
+                    Label = label
+                    Instrs = entryInstrs
+                    Terminator = LIR.Ret
+                }
+            ]
+        }
+        StackSize = stackSize
+        UsedCalleeSaved = []
+    }
+
+let private generatedEntryTransfers
+    (func: LIR.Function)
+    : Result<ARM64Symbolic.Instr list, string> =
+    let ctx : CodeGen.CodeGenContext = {
+        Target = target
+        Options = CodeGen.defaultOptions
+        SumShapeRegistry = Map.empty
+        RecordRegistry = Map.empty
+        ClosurePayloadSizes = Map.empty
+        ClosureCaptureTypes = Map.empty
+        PlannedListDecHelperLabels = Map.empty
+        NeedsCliRuntimeState = false
+        FunctionName = func.Name
+        StackSize = func.StackSize
+        UsedCalleeSaved = func.UsedCalleeSaved
+        HeapOverflowLabel = $"__heap_oom_{func.Name}"
+    }
+
+    CodeGen.convertFunction [] ctx func
+    |> Result.map (List.filter (function
+        | ARM64Symbolic.MOV_reg (ARM64.X29, ARM64.SP) -> false
+        | ARM64Symbolic.MOV_reg _
+        | ARM64Symbolic.FMOV_reg _
+        | ARM64Symbolic.STUR _ -> true
+        | _ -> false))
+
+let private assertGeneratedEntryTransfers
+    (caseName: string)
+    (func: LIR.Function)
+    (expected: ARM64Symbolic.Instr list)
+    : TestResult =
+    match generatedEntryTransfers func with
+    | Error e -> Error $"{caseName} failed code generation: {e}"
+    | Ok actual when actual = expected -> Ok ()
+    | Ok actual ->
+        let render instrs =
+            instrs
+            |> List.map TestDSL.PassTestRunner.prettyPrintARM64Instr
+            |> String.concat "; "
+        Error $"{caseName} expected [{render expected}], got [{render actual}]"
+
+let testGeneratedEntryUsesAllocatorTransfersOnly () : TestResult =
+    let intParam reg = { LIR.Reg = LIR.Physical reg; LIR.Type = AST.TInt64 }
+    let floatParam = { LIR.Reg = LIR.Physical LIR.X0; LIR.Type = AST.TFloat64 }
+
+    let identity =
+        makeAllocatedEntryFunction "arm64_entry_identity" [intParam LIR.X0] [] 0
+
+    let mixedWithSpill =
+        makeAllocatedEntryFunction
+            "arm64_entry_mixed_spill"
+            [intParam LIR.X0; floatParam; intParam LIR.X1; floatParam]
+            [
+                LIR.FMov (LIR.FPhysical LIR.D4, LIR.FPhysical LIR.D0)
+                LIR.FMov (LIR.FPhysical LIR.D5, LIR.FPhysical LIR.D1)
+                LIR.Store (-8, LIR.Physical LIR.X1)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Reg (LIR.Physical LIR.X0))
+            ]
+            16
+
+    let swap =
+        makeAllocatedEntryFunction
+            "arm64_entry_swap"
+            [intParam LIR.X0; intParam LIR.X1]
+            [
+                LIR.Mov (LIR.Physical LIR.X16, LIR.Reg (LIR.Physical LIR.X0))
+                LIR.Mov (LIR.Physical LIR.X0, LIR.Reg (LIR.Physical LIR.X1))
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Reg (LIR.Physical LIR.X16))
+            ]
+            0
+
+    let eightArgs =
+        makeAllocatedEntryFunction
+            "arm64_entry_eight_args"
+            [
+                intParam LIR.X0; intParam LIR.X1; intParam LIR.X2; intParam LIR.X3
+                intParam LIR.X4; intParam LIR.X5; intParam LIR.X6; intParam LIR.X7
+            ]
+            [
+                LIR.Store (-8, LIR.Physical LIR.X7)
+                LIR.Mov (LIR.Physical LIR.X7, LIR.Reg (LIR.Physical LIR.X6))
+            ]
+            16
+
+    assertGeneratedEntryTransfers "identity parameter" identity []
+    |> Result.bind (fun () ->
+        assertGeneratedEntryTransfers
+            "mixed integer/float parameters with spill"
+            mixedWithSpill
+            [
+                ARM64Symbolic.FMOV_reg (ARM64.D4, ARM64.D0)
+                ARM64Symbolic.FMOV_reg (ARM64.D5, ARM64.D1)
+                ARM64Symbolic.STUR (ARM64.X1, ARM64.X29, -8s)
+                ARM64Symbolic.MOV_reg (ARM64.X3, ARM64.X0)
+            ])
+    |> Result.bind (fun () ->
+        assertGeneratedEntryTransfers
+            "parallel-move swap"
+            swap
+            [
+                ARM64Symbolic.MOV_reg (ARM64.X16, ARM64.X0)
+                ARM64Symbolic.MOV_reg (ARM64.X0, ARM64.X1)
+                ARM64Symbolic.MOV_reg (ARM64.X1, ARM64.X16)
+            ])
+    |> Result.bind (fun () ->
+        assertGeneratedEntryTransfers
+            "eight integer arguments"
+            eightArgs
+            [
+                ARM64Symbolic.STUR (ARM64.X7, ARM64.X29, -8s)
+                ARM64Symbolic.MOV_reg (ARM64.X7, ARM64.X6)
+            ])
+
 /// Test: malformed ARM64 CFGs should be reported as codegen errors instead of silently dropping the entry.
 let testReportsMissingEntryBlock () : TestResult =
     let entryLabel = LIR.Label "_start_entry"
@@ -1368,6 +1506,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
 let tests : (string * (unit -> TestResult)) list = [
     ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
+    ("Generated ARM64 entry uses allocator transfers only", testGeneratedEntryUsesAllocatorTransfersOnly)
     ("ARM64 peephole fuses bit-clear sequence", testPeepholeFusesBitClearSequence)
     ("ARM64 UInt64 runtime zero branches target digit handlers", testPrintUInt64RuntimeZeroBranches)
     ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)
