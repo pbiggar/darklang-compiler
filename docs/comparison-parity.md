@@ -6,7 +6,10 @@ evidence revision `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`. Implementation wor
 same-source native probes started from compiler HEAD
 `2e5690c6d16f4e6f261ffdc86f075e52766753c8`. DCB1 report commit `8a402797`
 was used only to locate candidates; every finding below was checked again at
-these revisions.
+these revisions. Post-rebase integration, the complete executable matrix, and
+the native benchmark verification used compiler commit
+`d5c1460a12edc1cbe9ee7af812a2362ba3209eda` against the same pinned interpreter
+revision.
 
 The executable matrix is `src/Tests/e2e/comparison-parity.e2e`. Its probes use
 only the interpreter spellings `==`, `!=`, `<`, `>`, `<=`, and `>=`.
