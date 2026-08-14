@@ -128,7 +128,10 @@ let lex (input: string) : Result<Token list, string> =
                 | '\r' :: '\n' :: remaining -> remaining
                 | '\r' :: remaining -> remaining
                 | _ :: remaining -> skipToEndOfLine remaining
-            lexHelper (skipToEndOfLine rest) acc
+            match skipToEndOfLine rest with
+            | '<' :: ('<' :: _ | '=' :: _) as remaining -> lexHelper remaining acc
+            | '<' :: remaining -> lexHelper remaining (TSpacedLt :: acc)
+            | remaining -> lexHelper remaining acc
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
         | '(' :: rest -> lexHelper rest (TLParen :: acc)
         | ')' :: rest -> lexHelper rest (TRParen :: acc)

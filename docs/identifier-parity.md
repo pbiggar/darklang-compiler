@@ -45,7 +45,7 @@ resolver; `NameSyntax.QualifiedName` remains segment-aware until that boundary.
 | keyword prefix (`lettuce`) | Same single identifier | ordinary identifier | `names.syntax` | none |
 | glued number (`123abc`, `1.5abc`, `12l3`) | Same rejection as one unit | no number/name split | compiler/interpreter syntax probes | numeric defaults are out of scope |
 | adjacent `Name<T>` | Same generic interpretation | name plus type arguments | generic and apostrophe call tests | none |
-| spaced `Name < T` | Same comparison interpretation | `TSpacedLt`, lowered as comparison | spaced declaration-generic rejection | comments before `<` use the normal diagnostic path |
+| spaced or comment-separated `Name < T` | Same comparison interpretation | `TSpacedLt`, lowered as comparison | spaced and comment-separated declaration-generic rejection in both parser modes | comments preserve the non-adjacent boundary |
 | `let f`, `val x`, module header/block | All declaration starters recognized | module path typed, functions/types normalized | module and `val` boundary probes | top-level value execution is absent |
 | `def f`, `let A.f`, declaration `<a>` | Same rejection as legacy syntax | no alias | explicit rejection cases | none |
 

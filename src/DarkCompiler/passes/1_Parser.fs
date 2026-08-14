@@ -146,7 +146,14 @@ let rec lex (input: string) : Result<Token list, string> =
                         | '\r' -> index + 1
                         | _ -> skipToEndOfLine (index + 1)
 
-                lexHelper (skipToEndOfLine (position + 2)) acc
+                let next = skipToEndOfLine (position + 2)
+                if next < inputLength
+                   && input[next] = '<'
+                   && not (hasChar next 1 '<')
+                   && not (hasChar next 1 '=') then
+                    lexHelper (next + 1) (TSpacedLt :: acc)
+                else
+                    lexHelper next acc
             | '/' -> lexHelper (position + 1) (TSlash :: acc)
             | '(' -> lexHelper (position + 1) (TLParen :: acc)
             | ')' -> lexHelper (position + 1) (TRParen :: acc)

@@ -167,6 +167,26 @@ let identity <'a>(value: a) : a = value
 Expected '=' after let binding pattern
 
 ---NAME---
+comment-separated declaration generic is not adjacent
+---PARSE-AS---
+compiler
+---SOURCE---
+let identity// comment breaks adjacency
+<'a>(value: a) : a = value
+---EXPECT-ERROR---
+Expected '=' after let binding pattern
+
+---NAME---
+interpreter comment-separated declaration generic is not adjacent
+---PARSE-AS---
+interpreter
+---SOURCE---
+let identity// comment breaks adjacency
+<'a>(value: a) : a = value
+---EXPECT-ERROR---
+Expected '=' after let binding pattern
+
+---NAME---
 module header normalizes public declarations
 ---PARSE-AS---
 compiler
