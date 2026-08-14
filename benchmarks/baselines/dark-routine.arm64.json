@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "b6e9cc373aa5cca7e4f415318f69b0734d654e76514956970854c83d0a599617",
-  "generated_at": "2026-08-14T21:52:45+00:00",
+  "generated_at": "2026-08-14T22:05:41+00:00",
   "compiler": {
-    "commit": "132ffab7f50ca851e90cc335083ab415526d081b",
-    "subject": "Repair List parity consumers after rebase"
+    "commit": "e0f5d5fb78bd8c4a3c7c5eef2c8a82a334d78b7f",
+    "subject": "Record rebased List parity benchmarks"
   },
   "benchmarks": [
     {
@@ -49,7 +49,7 @@
     },
     {
       "name": "matmul",
-      "instructions": 2043852085
+      "instructions": 2039852085
     },
     {
       "name": "merkletrees",
@@ -73,7 +73,7 @@
     },
     {
       "name": "quicksort",
-      "instructions": 378553896
+      "instructions": 378537264
     },
     {
       "name": "spectral_norm",
