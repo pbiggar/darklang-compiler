@@ -1,0 +1,6 @@
+// Stdlib.Cli.Posix.Error.dark - Display helpers for canonical POSIX errors.
+
+module Stdlib.Cli.Posix.Error
+
+let toString(error: Stdlib.Cli.Posix.Error) : String =
+    error.message

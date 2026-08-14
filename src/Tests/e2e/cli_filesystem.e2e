@@ -1,0 +1,4 @@
+// CLI filesystem parity regressions not covered by the pinned upstream probes.
+
+Stdlib.Cli.File.globMatchSegments(["a*b*c"], ["axbyc"]) = stdout="true\n" stderr=""
+Stdlib.Cli.File.globMatchSegments(["a*b*c"], ["axbyd"]) = stdout="false\n" stderr=""

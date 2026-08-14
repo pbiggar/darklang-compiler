@@ -1,9 +1,8 @@
 // Stdlib.Cli.Posix.dark - Shared POSIX value types used by portable CLI code.
 // Public shapes follow darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
-type Stdlib.Cli.Posix.Error = { errno: Int, message: String }
+module Stdlib.Cli.Posix
 
-type Stdlib.Cli.Posix.StatResult = { mode: Int, size: Int, mtimeSec: Int }
+type Error = { errno: Int, message: String }
 
-def Stdlib.Cli.Posix.Error.toString(error: Stdlib.Cli.Posix.Error) : String =
-    error.message
+type StatResult = { mode: Int, size: Int, mtimeSec: Int }

@@ -1056,6 +1056,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Fun.dark"
         "stdlib/Float.dark"
         "stdlib/CliPosix.dark"
+        "stdlib/CliPosixError.dark"
         "stdlib/CliPath.dark"
         "stdlib/CliFile.dark"
         "stdlib/Path.dark"

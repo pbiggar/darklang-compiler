@@ -1,7 +1,9 @@
 // Stdlib.Cli.File.dark - Portable path-pattern matching used by CLI workflows.
 // Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
-def Stdlib.Cli.File.__segmentMatchesNoStar(pattern: String, path: String, patternIndex: Int64, pathIndex: Int64) : Bool =
+module Stdlib.Cli.File
+
+let __segmentMatchesNoStar(pattern: String, path: String, patternIndex: Int64, pathIndex: Int64) : Bool =
     let patternLength = Stdlib.String.length(pattern) in
     let pathLength = Stdlib.String.length(path) in
     if patternIndex == patternLength then pathIndex == pathLength
@@ -15,22 +17,59 @@ def Stdlib.Cli.File.__segmentMatchesNoStar(pattern: String, path: String, patter
             && patternByte == Stdlib.String.getByteAt(path, pathIndex)
             && Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex + 1, pathIndex + 1)
 
-def Stdlib.Cli.File.__segmentMatches(pattern: String, path: String, patternIndex: Int64, pathIndex: Int64) : Bool =
+let __chunkMatchesAt(chunk: String, path: String, chunkIndex: Int64, pathIndex: Int64) : Bool =
+    if chunkIndex == Stdlib.String.length(chunk) then true
+    else if pathIndex >= Stdlib.String.length(path) then false
+    else
+        let chunkByte = Stdlib.String.getByteAt(chunk, chunkIndex) in
+        let pathByte = Stdlib.String.getByteAt(path, pathIndex) in
+        (chunkByte == 63 || chunkByte == pathByte)
+        && Stdlib.Cli.File.__chunkMatchesAt(chunk, path, chunkIndex + 1, pathIndex + 1)
+
+let __findChunk(chunk: String, path: String, pathIndex: Int64) : Int64 =
+    if pathIndex + Stdlib.String.length(chunk) > Stdlib.String.length(path) then -1
+    else if Stdlib.Cli.File.__chunkMatchesAt(chunk ++ "", path ++ "", 0, pathIndex) then pathIndex
+    else Stdlib.Cli.File.__findChunk(chunk, path, pathIndex + 1)
+
+let __allEmpty(parts: List<String>) : Bool =
+    match parts with
+    | [] -> true
+    | [part, ...rest] -> part == "" && Stdlib.Cli.File.__allEmpty(rest)
+
+let __matchStarParts(parts: List<String>, path: String, pathIndex: Int64, anchoredStart: Bool, anchoredEnd: Bool) : Bool =
+    match parts with
+    | [] -> if anchoredEnd then pathIndex == Stdlib.String.length(path) else true
+    | [part, ...rest] ->
+        if part == "" then
+            Stdlib.Cli.File.__matchStarParts(rest, path, pathIndex, false, anchoredEnd)
+        else
+            let found =
+                if anchoredStart then
+                    if Stdlib.Cli.File.__chunkMatchesAt(part ++ "", path ++ "", 0, pathIndex) then pathIndex else -1
+                else Stdlib.Cli.File.__findChunk(part ++ "", path ++ "", pathIndex) in
+            if found < 0 then false
+            else
+                let nextIndex = found + Stdlib.String.length(part) in
+                if Stdlib.Cli.File.__allEmpty(rest) then
+                    if anchoredEnd then nextIndex == Stdlib.String.length(path) else true
+                else
+                    Stdlib.Cli.File.__matchStarParts(rest, path, nextIndex, false, anchoredEnd)
+
+let __segmentMatches(pattern: String, path: String, patternIndex: Int64, pathIndex: Int64) : Bool =
     match Stdlib.String.indexOf(pattern, "*") with
     | None -> Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex, pathIndex)
-    | Some(star) ->
-        let prefix = Stdlib.String.slice(pattern, 0, star) in
-        let suffix = Stdlib.String.dropFirst(pattern, star + 1) in
-        Stdlib.String.startsWith(path, prefix)
-        && Stdlib.String.endsWith(path, suffix)
-        && Stdlib.String.length(path) >= Stdlib.String.length(prefix) + Stdlib.String.length(suffix)
+    | Some(_) ->
+        let parts = Stdlib.String.split(pattern, "*") in
+        let anchoredStart = !Stdlib.String.startsWith(pattern, "*") in
+        let anchoredEnd = !Stdlib.String.endsWith(pattern, "*") in
+        Stdlib.Cli.File.__matchStarParts(parts, path, pathIndex, anchoredStart, anchoredEnd)
 
-def Stdlib.Cli.File.__copySegments(segments: List<String>) : List<String> =
+let __copySegments(segments: List<String>) : List<String> =
     match segments with
     | [] -> []
     | [head, ...tail] -> [head ++ "", ...Stdlib.Cli.File.__copySegments(tail)]
 
-def Stdlib.Cli.File.globMatchSegments(patternSegments: List<String>, pathSegments: List<String>) : Bool =
+let globMatchSegments(patternSegments: List<String>, pathSegments: List<String>) : Bool =
     match patternSegments with
     | [] -> Stdlib.List.length<String>(pathSegments) == 0
     | [patternHead, ...patternTail] ->
