@@ -66,6 +66,20 @@ type RcKind =
     | DictHeap
     | ClosureHeap
 
+type CliOperation =
+    | Execute
+    | HostOS
+    | GetEnv
+    | Kill
+    | Sleep
+    | GetPid
+    | GetUid
+    | CpuCount
+    | CurrentUser
+    | SpawnProcess
+    | ProcessIO
+    | TerminateProcess
+
 /// Basic block label (wrapper type for type safety)
 type Label = Label of string
 
@@ -174,6 +188,7 @@ type Instr =
     | RefCountDecBlob of bytes:Operand
     | RandomInt64 of dest:Reg
     | DateTimeNow of dest:Reg
+    | CliNative of dest:Reg * operation:CliOperation * args:Operand list
     | FloatToString of dest:Reg * value:FReg
     | CoverageHit of exprId:int
 

@@ -571,6 +571,8 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         []  // No operands to read
     | LIR.DateTimeNow _ ->
         []  // No operands to read
+    | LIR.CliNative (_, _, args) ->
+        args |> List.choose operandToVReg
     | LIR.FloatToString _ ->
         []  // Float value is in FP register, tracked by getUsedFVRegs
     // ArgMoves/TailArgMoves contain operands that use virtual registers
@@ -638,6 +640,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RefCountDecBlob _ -> None
     | LIR.RandomInt64 dest -> regToVReg dest
     | LIR.DateTimeNow dest -> regToVReg dest
+    | LIR.CliNative (dest, _, _) -> regToVReg dest
     | LIR.FloatToString (dest, _) -> regToVReg dest
     // Phi defines its destination at block entry
     | LIR.Phi (dest, _, _) -> regToVReg dest
@@ -1109,14 +1112,13 @@ let calleeSavedRegsFor (arch: Platform.Arch) =
         // X24-X26 have no x86_64 equivalents
         [LIR.X19; LIR.X20; LIR.X21]
     | Platform.ARM64 ->
-        // ARM64: X27/X28 reserved, X19-X26 allocatable
-        [LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23
-         LIR.X24; LIR.X25; LIR.X26]
+        // X24-X26 hold CLI runtime state; X27/X28 hold allocator state.
+        [LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23]
 
 /// Check if an instruction is a non-tail call (requires SaveRegs/RestoreRegs)
 let isNonTailCall (instr: LIR.Instr) : bool =
     match instr with
-    | LIR.Call _ | LIR.IndirectCall _ | LIR.ClosureCall _ -> true
+    | LIR.Call _ | LIR.IndirectCall _ | LIR.ClosureCall _ | LIR.CliNative _ -> true
     | _ -> false
 
 /// Check if a function has any non-tail calls
@@ -3236,6 +3238,22 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         [dateInstr] @ storeInstrs
+
+    | LIR.CliNative (dest, operation, args) ->
+        let scratchRegs = [LIR.X12; LIR.X13; LIR.X14]
+        let resolvedArgs =
+            args
+            |> List.mapi (fun index arg ->
+                let scratch = List.item (min index 2) scratchRegs
+                applyToOperand mapping arg scratch)
+        let argLoads = resolvedArgs |> List.collect snd
+        let args' = resolvedArgs |> List.map fst
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        argLoads @ [LIR.CliNative (destReg, operation, args')] @ storeInstrs
 
     | LIR.FloatToString (dest, value) ->
         // FP register value is already physical after float allocation

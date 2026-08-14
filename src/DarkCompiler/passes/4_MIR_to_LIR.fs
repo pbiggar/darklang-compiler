@@ -14,6 +14,21 @@
 
 module MIR_to_LIR
 
+let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
+    match operation with
+    | MIR.Execute -> LIR.Execute
+    | MIR.HostOS -> LIR.HostOS
+    | MIR.GetEnv -> LIR.GetEnv
+    | MIR.Kill -> LIR.Kill
+    | MIR.Sleep -> LIR.Sleep
+    | MIR.GetPid -> LIR.GetPid
+    | MIR.GetUid -> LIR.GetUid
+    | MIR.CpuCount -> LIR.CpuCount
+    | MIR.CurrentUser -> LIR.CurrentUser
+    | MIR.SpawnProcess -> LIR.SpawnProcess
+    | MIR.ProcessIO -> LIR.ProcessIO
+    | MIR.TerminateProcess -> LIR.TerminateProcess
+
 open ResultList
 
 let moduloNegativeDivisorErrorMessage =
@@ -1528,6 +1543,9 @@ let selectInstr
         let lirDest = vregToLIRReg dest
         Ok ([LIR.DateTimeNow lirDest], state)
 
+    | MIR.CliNative (dest, operation, args) ->
+        Ok ([LIR.CliNative (vregToLIRReg dest, convertCliOperation operation, List.map convertOperand args)], state)
+
     | MIR.FloatToString (dest, value) ->
         let lirDest = vregToLIRReg dest
         // Ensure value is in an FP register
@@ -1746,6 +1764,8 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
         |> maxVRegIdFromOperand value
     | MIR.RandomInt64 dest
     | MIR.DateTimeNow dest -> maxVRegId dest currentMax
+    | MIR.CliNative (dest, _, args) ->
+        currentMax |> maxVRegId dest |> maxVRegIdsFromOperands args
     | MIR.Phi (dest, sources, _) ->
         sources
         |> List.fold

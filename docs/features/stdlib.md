@@ -38,7 +38,7 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.AWS` | AWS signing helpers |
 | `Stdlib.File` | File I/O |
 | `Stdlib.Path` | Path operations |
-| `Stdlib.Platform` | Platform detection |
+| `Stdlib.Cli` | Execution, processes, host/system discovery, and terminal input |
 | `Stdlib.Random` | Random numbers |
 | `Stdlib.DateTime` | Distinct UTC instants with 100ns storage and canonical `Int` APIs |
 | `Stdlib.Duration` | Canonical short-duration parsing to arbitrary-precision seconds |
@@ -168,14 +168,18 @@ let setExecutable(path: String) : Result<Unit, String>
 
 These generate syscall sequences (open, read/write, close).
 
-## Stdlib.Platform (Intrinsic)
+## Stdlib.Cli
 
 ```dark
-let isMacOS() : Bool
-let isLinux() : Bool
+def Stdlib.Cli.execute(command: String) : Stdlib.Cli.ExecutionOutcome
+def Stdlib.Cli.Process.run(program: String, args: List<String>) : Result<Output, Posix.Error>
+def Stdlib.Cli.OS.getOS() : Result<OS, String>
+def Stdlib.Cli.Stdin.readKey() : KeyRead
 ```
 
-Constant-folded at compile time based on target platform.
+Portable helpers are Dark source; typed CLI operations lower through
+ANF/MIR/LIR to target-native process, host, signal, and terminal primitives.
+`Platform.Target` remains an F# compiler-driver type and is not a Dark API.
 
 ## Stdlib.Random (Intrinsic)
 

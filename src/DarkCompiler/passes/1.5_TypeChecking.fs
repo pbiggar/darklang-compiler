@@ -3918,17 +3918,26 @@ let rec private checkExprWithParamNames
 
     | Constructor (constructorReference, variantName, payload) ->
         // Look up the variant to find its type and expected payload
+        let expectedVariant =
+            match constructorReference, expectedType with
+            | UnresolvedConstructor None, Some (TSum (typeName, _)) ->
+                Map.tryFind $"{typeName}.{variantName}" variantLookup
+            | _ -> None
         if genericFuncReg.RequireExplicitTypeArgsForBareCalls
            && constructorReference = UnresolvedConstructor None
-           && unqualifiedVariantOwnerCount variantName variantLookup > 1 then
+           && unqualifiedVariantOwnerCount variantName variantLookup > 1
+           && Option.isNone expectedVariant then
             Error (GenericError $"Ambiguous constructor: {variantName}")
         else
         let resolvedVariant =
-            match tryFindVariant constructorReference variantName variantLookup with
+            match expectedVariant with
             | Some found -> Some found
-            | None when not genericFuncReg.RequireExplicitTypeArgsForBareCalls ->
-                Map.tryFind variantName variantLookup
-            | None -> None
+            | None ->
+              match tryFindVariant constructorReference variantName variantLookup with
+              | Some found -> Some found
+              | None when not genericFuncReg.RequireExplicitTypeArgsForBareCalls ->
+                  Map.tryFind variantName variantLookup
+              | None -> None
         match resolvedVariant with
         | None ->
             Error (GenericError $"Unknown constructor: {variantName}")
@@ -6195,22 +6204,26 @@ let private resolveProgramNames
                 |> Result.bind (fun types' -> resolveArgs args |> Result.map (fun args' -> TypeApp (resolvedName, types', args'))))
         | FuncRef name -> resolveName NameResolution.ResolutionContext.Callable localNames name |> Result.map FuncRef
         | Constructor (constructorReference, variantName, payload) ->
-            let spelling =
-                match constructorReferenceTypeName constructorReference with
-                | None -> variantName
-                | Some typeName -> $"{typeName}.{variantName}"
-            resolveName NameResolution.ResolutionContext.Constructor localNames spelling
-            |> Result.bind (fun resolvedName ->
-                let segments = resolvedName.Split('.') |> Array.toList
-                match List.rev segments with
-                | caseName :: reversedTypeName ->
-                    let resolvedTypeName = reversedTypeName |> List.rev |> String.concat "."
-                    payload
-                    |> Option.map recurse
-                    |> ResultList.sequenceOption
-                    |> Result.map (fun payload' ->
-                        Constructor (resolvedConstructorReference resolvedTypeName, caseName, payload'))
-                | [] -> Error (GenericError "Resolved constructor name contained no segments"))
+            match constructorReferenceTypeName constructorReference with
+            | None ->
+                // An expected sum type can disambiguate equal unqualified case names.
+                payload
+                |> Option.map recurse
+                |> ResultList.sequenceOption
+                |> Result.map (fun payload' -> Constructor (constructorReference, variantName, payload'))
+            | Some typeName ->
+                resolveName NameResolution.ResolutionContext.Constructor localNames $"{typeName}.{variantName}"
+                |> Result.bind (fun resolvedName ->
+                    let segments = resolvedName.Split('.') |> Array.toList
+                    match List.rev segments with
+                    | caseName :: reversedTypeName ->
+                        let resolvedTypeName = reversedTypeName |> List.rev |> String.concat "."
+                        payload
+                        |> Option.map recurse
+                        |> ResultList.sequenceOption
+                        |> Result.map (fun payload' ->
+                            Constructor (resolvedConstructorReference resolvedTypeName, caseName, payload'))
+                    | [] -> Error (GenericError "Resolved constructor name contained no segments"))
         | Let (pattern, value, body) ->
             recurse value
             |> Result.bind (fun value' ->

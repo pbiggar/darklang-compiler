@@ -108,6 +108,11 @@ Why ref counting?
 - `compile` for in-memory compilation via `CompileRequest`
 - `execute` for running compiled binaries with their selected target and timing
 
+This driver `execute` is distinct from the Dark `Stdlib.Cli.execute` effect.
+CLI/process operations remain typed through ANF, MIR, and LIR and reach the
+native syscall/ABI boundary only in the selected backend. See
+[CLI/process/host/input parity](cli-process-host-input-parity.md).
+
 ## Compiler Cache
 
 The compiler does not use a compile cache anymore. `docs/compiler-cache.md`

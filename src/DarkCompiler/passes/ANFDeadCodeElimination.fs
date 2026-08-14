@@ -45,6 +45,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.TupleGet (tuple, _) -> extractFromAtom tuple
     | ANF.StringConcat (left, right) ->
         extractFromAtom left @ extractFromAtom right
+    | ANF.CliNative (_, args) -> extractFromAtoms args
     | ANF.RefCountInc (atom, _, _, _) -> extractFromAtom atom
     | ANF.RefCountDec (atom, _, _, _) -> extractFromAtom atom
     | ANF.Print (atom, _) -> extractFromAtom atom

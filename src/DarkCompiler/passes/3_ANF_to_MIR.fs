@@ -117,6 +117,21 @@ let convertUnaryOp (op: ANF.UnaryOp) : MIR.UnaryOp =
     | ANF.Not -> MIR.Not
     | ANF.BitNot -> MIR.BitNot
 
+let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
+    match operation with
+    | ANF.Execute -> MIR.Execute
+    | ANF.HostOS -> MIR.HostOS
+    | ANF.GetEnv -> MIR.GetEnv
+    | ANF.Kill -> MIR.Kill
+    | ANF.Sleep -> MIR.Sleep
+    | ANF.GetPid -> MIR.GetPid
+    | ANF.GetUid -> MIR.GetUid
+    | ANF.CpuCount -> MIR.CpuCount
+    | ANF.CurrentUser -> MIR.CurrentUser
+    | ANF.SpawnProcess -> MIR.SpawnProcess
+    | ANF.ProcessIO -> MIR.ProcessIO
+    | ANF.TerminateProcess -> MIR.TerminateProcess
+
 /// Precomputed descriptions for primitive ops (avoids formatting on hot path)
 let private binOpDescription (op: ANF.BinOp) : string =
     match op with
@@ -249,6 +264,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RefCountDecBlob bytes -> maxTempIdInAtom bytes
     | ANF.RandomInt64 -> -1  // No atoms, so no TempIds
     | ANF.DateTimeNow -> -1      // No atoms, so no TempIds
+    | ANF.CliNative (_, args) -> maxTempIdInAtoms args
     | ANF.FloatToString atom -> maxTempIdInAtom atom
 
 /// Find the maximum TempId in an AExpr
@@ -613,6 +629,7 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RefCountDecBlob _ -> "RefCountDecBlob"
     | ANF.RandomInt64 -> "RandomInt64"
     | ANF.DateTimeNow -> "DateTimeNow"
+    | ANF.CliNative (operation, _) -> $"CliNative {operation}"
     | ANF.FloatToString _ -> "FloatToString"
 
 /// Generate coverage instrumentation for an expression
@@ -1222,6 +1239,9 @@ let rec convertExpr
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateTimeNow ->
                     Ok [MIR.DateTimeNow destReg]
+                | ANF.CliNative (operation, args) ->
+                    ResultList.mapResults (atomToOperand builder) args
+                    |> Result.map (fun operands -> [MIR.CliNative (destReg, convertCliOperation operation, operands)])
                 | ANF.FloatToString valueAtom ->
                     atomToOperand builder valueAtom
                     |> Result.map (fun valueOp -> [MIR.FloatToString (destReg, valueOp)])
@@ -1869,6 +1889,9 @@ and convertExprToOperand
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateTimeNow ->
                     Ok [MIR.DateTimeNow destReg]
+                | ANF.CliNative (operation, args) ->
+                    ResultList.mapResults (atomToOperand builder) args
+                    |> Result.map (fun operands -> [MIR.CliNative (destReg, convertCliOperation operation, operands)])
                 | ANF.FloatToString valueAtom ->
                     atomToOperand builder valueAtom
                     |> Result.map (fun valueOp -> [MIR.FloatToString (destReg, valueOp)])

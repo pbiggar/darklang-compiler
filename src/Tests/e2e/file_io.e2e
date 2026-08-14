@@ -124,8 +124,5 @@ Stdlib.Path.combine(Stdlib.Path.tempDir(), "myfile.txt") = "/tmp/myfile.txt"
 // Platform Detection
 // ===================================================================
 
-// Platform detection functions return booleans.
-// These calls are constant-folded at compile time based on the compiler host.
-// Exactly one supported platform predicate should be true
-
-Stdlib.Platform.isMacOS() != Stdlib.Platform.isLinux() = true
+// Public host discovery uses the interpreter-compatible CLI model.
+match Stdlib.Cli.OS.getOS() with | Ok(Linux) -> true | Ok(MacOS) -> true | _ -> false = true

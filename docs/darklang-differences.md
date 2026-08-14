@@ -164,7 +164,17 @@ empty. The retained `Bytes`, `Base64.urlDecode`, `Crypto.sha1`,
 extensions over Blob, not alternate parity behavior. See
 [blob-parity.md](blob-parity.md).
 
-### 3.2 Conditional and sequence type timing
+### 3.2 CLI host failure paths
+
+The CLI surface follows the pinned interpreter contract. One explicit static
+repair remains: Linux architecture discovery returns `Error(stderr)` when
+`uname -m` exits nonzero. The interpreter source has no corresponding match
+arm, while the compiler requires a total, statically typed expression. Public
+Windows/legacy-ARM/PowerShell variants are represented but unproduced on the
+supported native targets. See
+[CLI/process/host/input parity](cli-process-host-input-parity.md).
+
+### 3.3 Conditional and sequence type timing
 
 Conditional selection and statement execution order match the interpreter, as
 documented in the [conditional and sequence parity matrix](conditional-sequence-parity.md).

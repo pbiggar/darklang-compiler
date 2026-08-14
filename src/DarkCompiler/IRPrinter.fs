@@ -189,6 +189,9 @@ let private prettyPrintANFCExpr = function
         "RandomInt64()"
     | ANF.DateTimeNow ->
         "DateTimeNow()"
+    | ANF.CliNative (operation, args) ->
+        let argText = args |> commaSeparated prettyPrintANFAtom
+        $"CliNative.{operation}({argText})"
     | ANF.TailCall (funcName, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
         $"TailCall({funcName}, [{argStr}])"
@@ -402,6 +405,9 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"{prettyPrintMIRVReg dest} <- RandomInt64()"
     | MIR.DateTimeNow dest ->
         $"{prettyPrintMIRVReg dest} <- DateTimeNow()"
+    | MIR.CliNative (dest, operation, args) ->
+        let argText = args |> commaSeparated prettyPrintMIROperand
+        $"{prettyPrintMIRVReg dest} <- CliNative.{operation}({argText})"
     | MIR.FloatToString (dest, value) ->
         $"{prettyPrintMIRVReg dest} <- FloatToString({prettyPrintMIROperand value})"
     | MIR.Phi (dest, sources, valueType) ->
@@ -730,6 +736,9 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- RandomInt64()"
     | LIR.DateTimeNow dest ->
         $"{prettyPrintLIRReg dest} <- DateTimeNow()"
+    | LIR.CliNative (dest, operation, args) ->
+        let argText = args |> commaSeparated prettyPrintLIROperand
+        $"{prettyPrintLIRReg dest} <- CliNative.{operation}({argText})"
     | LIR.FloatToString (dest, value) ->
         $"{prettyPrintLIRReg dest} <- FloatToString({prettyPrintLIRFReg value})"
     | LIR.CoverageHit exprId ->

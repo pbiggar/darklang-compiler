@@ -344,6 +344,8 @@ the allocator is aware of this via `isX86_64 arch` checks.
   (ARM64Symbolic for arm64, `X86_64.Instr` for x64).
 - **Prologue/epilogue**: Function entry/exit code.
 - **Stack frame setup**: Allocate space for spills and locals.
+- **CLI native effects**: Lower process, host, signal, and terminal operations;
+  construct language-managed results with ordinary ownership.
 - **Two-operand conflict handling (x64 only)**: Swap operands or use
   XMM15/R11 temps when dest == right for commutative/non-commutative ops.
 

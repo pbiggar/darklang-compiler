@@ -709,6 +709,8 @@ let private foldRegUses folder state (instr: Instr) =
         foldOperandRegUse folder state path
     | StdoutWrite (_, value, _) ->
         foldOperandRegUse folder state value
+    | CliNative (_, _, args) ->
+        args |> List.fold (foldOperandRegUse folder) state
     | Cset _
     | SaveRegs _
     | RestoreRegs _

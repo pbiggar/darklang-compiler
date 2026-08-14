@@ -125,6 +125,7 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.FloatToString _
     | LIR.CoverageHit _ ->
         calls
+    | LIR.CliNative (_, _, args) -> addCallsFromOperands args calls
     | LIR.PrintSum (_, variants) ->
         variants
         |> List.fold (fun calls (_, _, payloadType) ->

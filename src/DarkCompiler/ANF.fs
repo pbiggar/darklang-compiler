@@ -207,6 +207,21 @@ type ReturnOwnership =
     | OwnedReturn
     | BorrowedReturn
 
+/// Typed native effects retained after the portable Stdlib.Cli wrappers lower.
+type CliOperation =
+    | Execute
+    | HostOS
+    | GetEnv
+    | Kill
+    | Sleep
+    | GetPid
+    | GetUid
+    | CpuCount
+    | CurrentUser
+    | SpawnProcess
+    | ProcessIO
+    | TerminateProcess
+
 /// Complex expressions (produce values)
 type CExpr =
     | Atom of Atom
@@ -275,6 +290,7 @@ type CExpr =
     | RandomInt64                             // Get 8 random bytes as Int64
     // DateTime intrinsics
     | DateTimeNow                             // Get the current UTC instant as 100ns Unix ticks
+    | CliNative of operation:CliOperation * args:Atom list
     // Float to String conversion
     | FloatToString of Atom                   // Convert Float to heap String
 

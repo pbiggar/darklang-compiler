@@ -40,6 +40,12 @@ dotnet build
 echo $?   # exit code
 ```
 
+Compiled programs can invoke commands with `Stdlib.Cli.execute`, use
+argument-vector helpers under `Stdlib.Cli.Process`, discover the runtime host
+under `Stdlib.Cli.Host`/`Sys`, and read terminal keys with
+`Stdlib.Cli.Stdin.readKey`. These are program effects, separate from `./dark`
+launching the produced executable.
+
 ## Flags
 
 - Flags can appear in any order: `./dark -o out prog.dark -q` and

@@ -3011,6 +3011,18 @@ let loadStackSlot (dest: ARM64Symbolic.Reg) (offset: int) : Result<ARM64Symbolic
     else
         Error $"Stack offset {offset} exceeds supported range (-4095 to +4095)"
 
+/// Load an integer or managed-string operand for a native CLI helper call.
+let private loadCliOperand (dest: ARM64Symbolic.Reg) (operand: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
+    match operand with
+    | LIR.Imm value -> Ok (loadImmediate dest value)
+    | LIR.Reg source ->
+        lirRegToARM64Reg source
+        |> Result.map (fun sourceReg ->
+            if sourceReg = dest then [] else [ARM64Symbolic.MOV_reg (dest, sourceReg)])
+    | LIR.StackSlot offset -> loadStackSlot dest offset
+    | LIR.StringSymbol value -> Ok (loadStringLiteralPointer dest value)
+    | _ -> Error "CLI native operation received a non-integer operand"
+
 /// Generate ARM64 instructions to store a register to a stack slot
 /// Stack slots are accessed relative to FP (X29)
 /// Uses STUR for small offsets (-256 to +255), computes address for larger offsets
@@ -6044,6 +6056,58 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         |> Result.map (fun destReg ->
             runtimeInstrs (Runtime.generateDateTimeNow ctx.Target destReg))
 
+    | LIR.CliNative (dest, operation, args) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            match operation with
+            | LIR.HostOS ->
+                Ok [ARM64Symbolic.MOVZ (destReg, (if ARM64.targetOS ctx.Target = Platform.MacOS then 2us else 1us), 0)]
+            | LIR.Execute when ARM64.targetOS ctx.Target = Platform.Linux ->
+                match args with
+                | [command] ->
+                    loadCliOperand ARM64Symbolic.X0 command
+                    |> Result.map (fun loads ->
+                        loads
+                        @ [ARM64Symbolic.BL "__dark_cli_execute"]
+                        @ (if destReg = ARM64Symbolic.X0 then []
+                           else [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))
+                | _ -> Error "CLI execute expects exactly one command"
+            | LIR.GetPid | LIR.GetUid ->
+                let os = ARM64.targetOS ctx.Target
+                let number =
+                    match operation, os with
+                    | LIR.GetPid, Platform.Linux -> 172us
+                    | LIR.GetPid, Platform.MacOS -> 20us
+                    | LIR.GetUid, Platform.Linux -> 174us
+                    | LIR.GetUid, Platform.MacOS -> 24us
+                    | _ -> 0us
+                let syscalls = ARM64.targetSyscalls ctx.Target
+                Ok [ARM64Symbolic.MOVZ (syscalls.SyscallRegister, number, 0)
+                    ARM64Symbolic.SVC syscalls.SvcImmediate
+                    ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]
+            | LIR.CpuCount -> Ok [ARM64Symbolic.MOVZ (destReg, 1us, 0)]
+            | LIR.Execute | LIR.ProcessIO | LIR.TerminateProcess ->
+                let errorMessage =
+                    match operation with
+                    | LIR.ProcessIO | LIR.TerminateProcess -> "Invalid process handle"
+                    | _ -> "native CLI operation unavailable"
+                Ok (loadStringLiteralPointer ARM64Symbolic.X8 ""
+                @ loadStringLiteralPointer ARM64Symbolic.X9 errorMessage
+                @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X28)
+                   ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 32us)
+                   ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 0us, 0)
+                   ARM64Symbolic.MVN (ARM64Symbolic.X10, ARM64Symbolic.X10)
+                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 0s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X8, destReg, 8s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X9, destReg, 16s)
+                   ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
+                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 24s)])
+            | LIR.GetEnv | LIR.CurrentUser | LIR.Kill | LIR.Sleep ->
+                Ok [ARM64Symbolic.MOVZ (destReg, 0us, 0)]
+            | LIR.SpawnProcess ->
+                Ok [ARM64Symbolic.ADD_imm (ARM64Symbolic.X25, ARM64Symbolic.X25, 1us)
+                    ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X25)])
+
     | LIR.FloatToString (dest, value) ->
         // Convert float in FP register to heap string
         lirRegToARM64Reg dest
@@ -6239,6 +6303,205 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
         // No need to zero free list - MAP_ANONYMOUS provides zeroed pages
     ]
 
+/// Linux AArch64 shell runner. Generated binaries remain libc-free, and both
+/// redirected streams are made nonblocking and drained on every wait probe.
+let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
+    let syscall number =
+        [ARM64Symbolic.MOVZ (ARM64Symbolic.X8, number, 0)
+         ARM64Symbolic.SVC 0us]
+    let zero reg = ARM64Symbolic.MOVZ (reg, 0us, 0)
+    let pairFd slot shift =
+        [ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.SP, slot)
+         ARM64Symbolic.LSR_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, shift)]
+    let closeFd slot shift = pairFd slot shift @ syscall 57us
+    let setNonblocking slot =
+        pairFd slot 0
+        @ [ARM64Symbolic.AND_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 0xffffffffUL)
+           ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 4us, 0)
+           ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 2048us, 0)]
+        @ syscall 25us
+    let readPipe slot buffer lengthReg nextLabel =
+        pairFd slot 0
+        @ [ARM64Symbolic.AND_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 0xffffffffUL)
+           ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, buffer, 8us)
+           ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, lengthReg)]
+        @ loadImmediate ARM64Symbolic.X2 1048576L
+        @ [ARM64Symbolic.SUB_reg (ARM64Symbolic.X2, ARM64Symbolic.X2, lengthReg)]
+        @ syscall 63us
+        @ [ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+           ARM64Symbolic.B_cond_label (ARM64Symbolic.LE, nextLabel)
+           ARM64Symbolic.ADD_reg (lengthReg, lengthReg, ARM64Symbolic.X0)]
+    let finalizeString buffer lengthReg =
+        [ARM64Symbolic.STR (lengthReg, buffer, 0s)
+         ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, buffer, 8us)
+         ARM64Symbolic.ADD_reg (ARM64Symbolic.X9, ARM64Symbolic.X9, lengthReg)
+         ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 7us)
+         ARM64Symbolic.LSR_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 3)
+         ARM64Symbolic.LSL_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 3)
+         ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
+         ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X9, 0s)]
+    [ARM64Symbolic.Label "__dark_cli_execute"
+     ARM64Symbolic.STP_pre (ARM64Symbolic.X29, ARM64Symbolic.X30, ARM64Symbolic.SP, -16s)
+     ARM64Symbolic.MOV_reg (ARM64Symbolic.X29, ARM64Symbolic.SP)
+     ARM64Symbolic.STP_pre (ARM64Symbolic.X19, ARM64Symbolic.X20, ARM64Symbolic.SP, -16s)
+     ARM64Symbolic.STP_pre (ARM64Symbolic.X21, ARM64Symbolic.X22, ARM64Symbolic.SP, -16s)
+     ARM64Symbolic.STP_pre (ARM64Symbolic.X23, ARM64Symbolic.X30, ARM64Symbolic.SP, -16s)
+     ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 96us)
+     // Copy the managed command to a NUL-terminated native buffer.
+     ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, ARM64Symbolic.X28)
+     ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s)
+     ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X0, 8us)
+     zero ARM64Symbolic.X12
+     ARM64Symbolic.Label "__dark_cli_command_copy"
+     ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X10)
+     ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, "__dark_cli_command_copied")
+     ARM64Symbolic.LDRB (ARM64Symbolic.X13, ARM64Symbolic.X11, ARM64Symbolic.X12)
+     ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X19, ARM64Symbolic.X12)
+     ARM64Symbolic.STRB_reg (ARM64Symbolic.X13, ARM64Symbolic.X14)
+     ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, ARM64Symbolic.X12, 1us)
+     ARM64Symbolic.B_label "__dark_cli_command_copy"
+     ARM64Symbolic.Label "__dark_cli_command_copied"
+     ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X19, ARM64Symbolic.X10)
+     zero ARM64Symbolic.X15
+     ARM64Symbolic.STRB_reg (ARM64Symbolic.X15, ARM64Symbolic.X14)
+     ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 8us)
+     ARM64Symbolic.LSR_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 3)
+     ARM64Symbolic.LSL_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 3)
+     ARM64Symbolic.ADD_reg (ARM64Symbolic.X28, ARM64Symbolic.X28, ARM64Symbolic.X10)
+     // Reserve two bounded managed string blocks.
+     ARM64Symbolic.MOV_reg (ARM64Symbolic.X20, ARM64Symbolic.X28)]
+    @ loadImmediate ARM64Symbolic.X10 1048592L
+    @ [ARM64Symbolic.ADD_reg (ARM64Symbolic.X28, ARM64Symbolic.X28, ARM64Symbolic.X10)
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X21, ARM64Symbolic.X28)
+       ARM64Symbolic.ADD_reg (ARM64Symbolic.X28, ARM64Symbolic.X28, ARM64Symbolic.X10)
+       zero ARM64Symbolic.X22; zero ARM64Symbolic.X23
+       // pipe2(stdout), pipe2(stderr)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.SP, 0us); zero ARM64Symbolic.X1]
+    @ syscall 59us
+    @ [ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, "__dark_cli_spawn_error")
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.SP, 8us); zero ARM64Symbolic.X1]
+    @ syscall 59us
+    @ [ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, "__dark_cli_spawn_error_close_stdout")
+       // clone(SIGCHLD, 0, 0, 0, 0)
+       ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 17us, 0)
+       zero ARM64Symbolic.X1; zero ARM64Symbolic.X2; zero ARM64Symbolic.X3; zero ARM64Symbolic.X4]
+    @ syscall 220us
+    @ [ARM64Symbolic.CBZ (ARM64Symbolic.X0, "__dark_cli_child")
+       ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, "__dark_cli_spawn_error_close_all")
+       ARM64Symbolic.STR (ARM64Symbolic.X0, ARM64Symbolic.SP, 32s)
+       zero ARM64Symbolic.X9
+       ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 16s)]
+    @ closeFd 0s 32 @ closeFd 8s 32
+    @ setNonblocking 0s @ setNonblocking 8s
+    @ [ARM64Symbolic.Label "__dark_cli_drain_wait"]
+    @ readPipe 0s ARM64Symbolic.X20 ARM64Symbolic.X22 "__dark_cli_read_stderr"
+    @ [ARM64Symbolic.Label "__dark_cli_read_stderr"]
+    @ readPipe 8s ARM64Symbolic.X21 ARM64Symbolic.X23 "__dark_cli_wait"
+    @ [ARM64Symbolic.Label "__dark_cli_wait"
+       ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.SP, 32s)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 16us)
+       ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 1us, 0); zero ARM64Symbolic.X3]
+    @ syscall 260us
+    @ [ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, "__dark_cli_drain_wait")
+       ARM64Symbolic.CBNZ (ARM64Symbolic.X0, "__dark_cli_finished")
+       zero ARM64Symbolic.X9
+       ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 40s)]
+    @ loadImmediate ARM64Symbolic.X9 1000000L
+    @ [ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 48s)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.SP, 40us); zero ARM64Symbolic.X1]
+    @ syscall 101us
+    @ [ARM64Symbolic.B_label "__dark_cli_drain_wait"
+       ARM64Symbolic.Label "__dark_cli_finished"]
+    @ readPipe 0s ARM64Symbolic.X20 ARM64Symbolic.X22 "__dark_cli_final_stderr"
+    @ [ARM64Symbolic.Label "__dark_cli_final_stderr"]
+    @ readPipe 8s ARM64Symbolic.X21 ARM64Symbolic.X23 "__dark_cli_final_close"
+    @ [ARM64Symbolic.Label "__dark_cli_final_close"]
+    @ closeFd 0s 0 @ closeFd 8s 0
+    @ [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.SP, 16s)
+       ARM64Symbolic.AND_imm (ARM64Symbolic.X11, ARM64Symbolic.X10, 0x7fUL)
+       ARM64Symbolic.CBNZ (ARM64Symbolic.X11, "__dark_cli_signaled")
+       ARM64Symbolic.LSR_imm (ARM64Symbolic.X12, ARM64Symbolic.X10, 8)
+       ARM64Symbolic.B_label "__dark_cli_build_result"
+       ARM64Symbolic.Label "__dark_cli_signaled"
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, ARM64Symbolic.X11, 128us)
+       ARM64Symbolic.B_label "__dark_cli_build_result"
+       ARM64Symbolic.Label "__dark_cli_spawn_error_close_all"]
+    @ closeFd 8s 0 @ closeFd 8s 32
+    @ [ARM64Symbolic.Label "__dark_cli_spawn_error_close_stdout"]
+    @ closeFd 0s 0 @ closeFd 0s 32
+    @ [ARM64Symbolic.Label "__dark_cli_spawn_error"
+       ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 127us, 0)
+       ARM64Symbolic.Label "__dark_cli_build_result"]
+    @ finalizeString ARM64Symbolic.X20 ARM64Symbolic.X22
+    @ finalizeString ARM64Symbolic.X21 ARM64Symbolic.X23
+    @ [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X28)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 32us)
+       ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X0, 0s)
+       ARM64Symbolic.STR (ARM64Symbolic.X20, ARM64Symbolic.X0, 8s)
+       ARM64Symbolic.STR (ARM64Symbolic.X21, ARM64Symbolic.X0, 16s)
+       ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
+       ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X0, 24s)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 96us)
+       ARM64Symbolic.LDP_post (ARM64Symbolic.X23, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+       ARM64Symbolic.LDP_post (ARM64Symbolic.X21, ARM64Symbolic.X22, ARM64Symbolic.SP, 16s)
+       ARM64Symbolic.LDP_post (ARM64Symbolic.X19, ARM64Symbolic.X20, ARM64Symbolic.SP, 16s)
+       ARM64Symbolic.LDP_post (ARM64Symbolic.X29, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+       ARM64Symbolic.RET
+       ARM64Symbolic.Label "__dark_cli_child"]
+    @ pairFd 0s 32
+    @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 1us, 0); zero ARM64Symbolic.X2]
+    @ syscall 24us
+    @ pairFd 8s 32
+    @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 2us, 0); zero ARM64Symbolic.X2]
+    @ syscall 24us
+    @ closeFd 0s 0 @ closeFd 0s 32 @ closeFd 8s 0 @ closeFd 8s 32
+    @ loadStringLiteralPointer ARM64Symbolic.X0 "/bin/bash"
+    @ [ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 8us)
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X26)
+       ARM64Symbolic.Label "__dark_cli_find_shell"
+       ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
+       ARM64Symbolic.CBZ (ARM64Symbolic.X13, "__dark_cli_shell_found")
+       ARM64Symbolic.LDRB_imm (ARM64Symbolic.X10, ARM64Symbolic.X13, 0)
+       ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 83us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, "__dark_cli_next_env")
+       ARM64Symbolic.LDRB_imm (ARM64Symbolic.X10, ARM64Symbolic.X13, 1)
+       ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 72us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, "__dark_cli_next_env")
+       ARM64Symbolic.LDRB_imm (ARM64Symbolic.X10, ARM64Symbolic.X13, 2)
+       ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 69us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, "__dark_cli_next_env")
+       ARM64Symbolic.LDRB_imm (ARM64Symbolic.X10, ARM64Symbolic.X13, 3)
+       ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 76us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, "__dark_cli_next_env")
+       ARM64Symbolic.LDRB_imm (ARM64Symbolic.X10, ARM64Symbolic.X13, 4)
+       ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 76us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, "__dark_cli_next_env")
+       ARM64Symbolic.LDRB_imm (ARM64Symbolic.X10, ARM64Symbolic.X13, 5)
+       ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 61us)
+       ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, "__dark_cli_next_env")
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X13, 6us)
+       ARM64Symbolic.B_label "__dark_cli_shell_found"
+       ARM64Symbolic.Label "__dark_cli_next_env"
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 8us)
+       ARM64Symbolic.B_label "__dark_cli_find_shell"
+       ARM64Symbolic.Label "__dark_cli_shell_found"
+       ARM64Symbolic.STR (ARM64Symbolic.X0, ARM64Symbolic.SP, 56s)]
+    @ loadStringLiteralPointer ARM64Symbolic.X9 "-c"
+    @ [ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)
+       ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+       ARM64Symbolic.STR (ARM64Symbolic.X19, ARM64Symbolic.SP, 72s)
+       zero ARM64Symbolic.X9
+       ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 80s)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 56us)
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X26)]
+    @ syscall 221us
+    @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 127us, 0)]
+    @ syscall 93us
+
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
 let convertFunction
     (heapOverflowTrapBody: ARM64Symbolic.Instr list)
@@ -6357,9 +6620,23 @@ let convertFunction
         // Add function entry label (for BL to branch to)
         let functionEntryLabel = [ARM64Symbolic.Label func.Name]
 
+        // The kernel supplies argc/argv/envp on the original stack. Capture
+        // envp before the language prologue changes SP; the remaining reserved
+        // registers own the handle table and pending terminal event roots.
+        let cliRuntimeInit =
+            if func.Name = "_start" then
+                [ARM64Symbolic.ADD_imm (ARM64Symbolic.X26, ARM64Symbolic.SP, 8us)
+                 ARM64Symbolic.Label "__dark_cli_find_envp"
+                 ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X26, 0s)
+                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X26, ARM64Symbolic.X26, 8us)
+                 ARM64Symbolic.CBNZ (ARM64Symbolic.X9, "__dark_cli_find_envp")
+                 ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)
+                 ARM64Symbolic.MOVZ (ARM64Symbolic.X24, 0us, 0)]
+            else []
+
         // Combine: function label + prologue + heap init + param setup + CFG body + epilogue label + epilogue
         // All Ret terminators jump to the epilogue label
-        Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ heapOverflowTrap @ epilogueLabelInstr @ epilogue)
+        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ paramSetup @ cfgInstrs @ heapOverflowTrap @ epilogueLabelInstr @ epilogue)
 
 type private RegisterLifetimeStep =
     | Unrelated
@@ -6614,6 +6891,15 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
+    let needsCliExecuteHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.CliNative (_, LIR.Execute, _) -> true
+                    | _ -> false)))
 
     // Ensure _start is first (entry point)
     let sortedFunctions =
@@ -7331,7 +7617,10 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
             programMetadata.Facts.RecursiveReleaseTypes
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
-        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers @ recursiveSumRcHelpers) |> peepholeOptimize)
+        let cliHelpers =
+            if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper ()
+            else []
+        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers @ recursiveSumRcHelpers @ cliHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
 let generateARM64 (target: ARM64.TargetConfig) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =

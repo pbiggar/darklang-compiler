@@ -93,6 +93,7 @@ let hasSideEffects (instr: Instr) : bool =
     | RefCountDecBlob _ -> true    // Mutates refcount
     | RandomInt64 _ -> true  // Syscall
     | DateTimeNow _ -> true      // Syscall
+    | CliNative _ -> true
     | FloatToString _ -> false  // Pure conversion (allocates but no visible side effect)
     | RuntimeError _ -> true
     | RuntimeErrorString _ -> true
@@ -200,6 +201,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | RefCountDecBlob _ -> None
     | RandomInt64 dest -> Some dest
     | DateTimeNow dest -> Some dest
+    | CliNative (dest, _, _) -> Some dest
     | FloatToString (dest, _) -> Some dest
     | RuntimeError _ -> None
     | RuntimeErrorString _ -> None
@@ -269,6 +271,7 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
         fromOperand (fromOperand (fromOperand state first) second) third
     | Phi (_, sources, _) ->
         sources |> List.fold (fun acc (op, _) -> fromOperand acc op) state
+    | CliNative (_, _, args) -> fromOperands state args
     | RandomInt64 _
     | DateTimeNow _
     | StdinReadLine _
@@ -1178,6 +1181,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RefCountDecBlob bytes -> RefCountDecBlob (p bytes)
     | RandomInt64 dest -> RandomInt64 dest
     | DateTimeNow dest -> DateTimeNow dest
+    | CliNative (dest, operation, args) -> CliNative (dest, operation, List.map p args)
     | FloatToString (dest, value) -> FloatToString (dest, p value)
     | RuntimeError message -> RuntimeError message
     | RuntimeErrorString message -> RuntimeErrorString (p message)

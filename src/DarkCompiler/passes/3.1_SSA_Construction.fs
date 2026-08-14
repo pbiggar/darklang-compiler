@@ -312,6 +312,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RefCountDecBlob _ -> defs
         | RandomInt64 dest -> Set.add dest defs
         | DateTimeNow dest -> Set.add dest defs
+        | CliNative (dest, _, _) -> Set.add dest defs
         | FloatToString (dest, _) -> Set.add dest defs
         | RuntimeError _ -> defs
         | RuntimeErrorString _ -> defs
@@ -432,6 +433,8 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | RefCountDecBlob bytes -> Set.union uses (getOperandUses bytes)
             | RandomInt64 _ -> uses  // No operand uses
             | DateTimeNow _ -> uses      // No operand uses
+            | CliNative (_, _, args) ->
+                args |> List.fold (fun current arg -> Set.union current (getOperandUses arg)) uses
             | FloatToString (_, value) -> Set.union uses (getOperandUses value)
             | RuntimeError _ -> uses
             | RuntimeErrorString message -> Set.union uses (getOperandUses message)
@@ -983,6 +986,11 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
     | DateTimeNow dest ->
         let (_, newDest, state') = newVersion state dest
         (DateTimeNow newDest, state')
+
+    | CliNative (dest, operation, args) ->
+        let args' = List.map (renameOperand state) args
+        let (_, newDest, state') = newVersion state dest
+        (CliNative (newDest, operation, args'), state')
 
     | FloatToString (dest, value) ->
         let value' = renameOperand state value

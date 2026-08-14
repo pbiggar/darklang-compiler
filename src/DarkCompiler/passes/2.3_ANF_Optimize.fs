@@ -499,6 +499,7 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | RefCountDecBlob _ -> true    // Mutates refcount
     | RandomInt64 -> true   // Reads from OS random source
     | DateTimeNow -> true       // Reads current time (syscall)
+    | CliNative _ -> true
     | FloatToString _ -> false  // Pure conversion (but allocates - maybe should be true?)
     | RuntimeError _ -> true
     | RuntimeErrorString _ -> true
@@ -587,6 +588,7 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RefCountDecBlob bytes -> addAtomUse bytes uses
     | RandomInt64 -> uses  // No atoms
     | DateTimeNow -> uses      // No atoms
+    | CliNative (_, args) -> addAtomUses args uses
     | FloatToString atom -> addAtomUse atom uses
     | RuntimeError _ -> uses
     | RuntimeErrorString atom -> addAtomUse atom uses
@@ -647,6 +649,7 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | TailCall (_, atoms)
     | ClosureAlloc (_, atoms)
     | TupleAlloc atoms -> anyUsed atoms
+    | CliNative (_, atoms) -> anyUsed atoms
     | IndirectCall (first, rest)
     | IndirectTailCall (first, rest)
     | ClosureCall (first, rest)
@@ -757,6 +760,7 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RefCountDecBlob bytes -> RefCountDecBlob (s bytes)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
+    | CliNative (operation, args) -> CliNative (operation, List.map s args)
     | FloatToString atom -> FloatToString (s atom)
     | RuntimeError message -> RuntimeError message
     | RuntimeErrorString atom -> RuntimeErrorString (s atom)

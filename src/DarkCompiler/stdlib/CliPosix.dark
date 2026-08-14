@@ -6,3 +6,29 @@ module Stdlib.Cli.Posix
 type Error = { errno: Int, message: String }
 
 type StatResult = { mode: Int, size: Int, mtimeSec: Int }
+let __error(error: Stdlib.Cli.NativePosixError) : Stdlib.Cli.Posix.Error =
+    Stdlib.Cli.Posix.Error { errno = Stdlib.Int.fromInt64(error.errno), message = error.message }
+
+let __shellQuote(value: String) : String = "'" ++ Stdlib.String.replace(value, "'", "'\\''") ++ "'"
+
+let kill(pid: Int, signal: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    match (Stdlib.Int.toInt64(pid), Stdlib.Int.toInt64(signal)) with
+    | (Some(pid), Some(signal)) ->
+        let result = Stdlib.Cli.execute("/bin/kill -" ++ Stdlib.Int64.toString(signal) ++ " " ++ Stdlib.Int64.toString(pid)) in
+        if result.exitCode == 0I then Ok(())
+        else
+            let message = Stdlib.String.trimEnd(result.stderr) in
+            let errno = if Stdlib.String.contains(message, "Operation not permitted") then 1I else 3I in
+            Error(Stdlib.Cli.Posix.Error { errno = errno, message = message })
+    | _ -> Error(Stdlib.Cli.Posix.Error { errno = 22I, message = "Invalid argument" })
+
+let sigterm() : Int = 15I
+let sigkill() : Int = 9I
+
+let sleep(delayMs: Float) : Unit =
+    let _ = Stdlib.Cli.execute("sleep " ++ Stdlib.Float.toString(delayMs / 1000.0)) in ()
+
+let isProcessRunning(pid: Int) : Bool =
+    match Stdlib.Cli.Posix.kill(pid, 0I) with
+    | Ok(()) -> true
+    | Error(error) -> error.errno == 1I

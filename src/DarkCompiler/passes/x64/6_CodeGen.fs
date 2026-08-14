@@ -4246,6 +4246,37 @@ let private translateInstr
                X86_64.MOV_reg (destReg, scratch)
                X86_64.ADD_imm (X86_64.RSP, 16)])
 
+    | LIR.CliNative (dest, operation, _args) ->
+        resolveReg dest
+        |> Result.map (fun destReg ->
+            match operation with
+            | LIR.HostOS -> loadImm64 destReg 1L
+            | LIR.GetPid ->
+                loadImm64 X86_64.RAX 39L
+                @ [X86_64.SYSCALL]
+                @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])
+            | LIR.GetUid ->
+                loadImm64 X86_64.RAX 102L
+                @ [X86_64.SYSCALL]
+                @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])
+            | LIR.CpuCount -> loadImm64 destReg 1L
+            | LIR.Execute | LIR.ProcessIO | LIR.TerminateProcess ->
+                let errorMessage =
+                    match operation with
+                    | LIR.ProcessIO | LIR.TerminateProcess -> "Invalid process handle"
+                    | _ -> "native CLI operation unavailable"
+                emitStringLiteral X86_64.R8 ""
+                @ emitStringLiteral X86_64.R9 errorMessage
+                @ [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, 32)]
+                @ loadImm64 X86_64.RCX -1L
+                @ [X86_64.MOV_store (destReg, 0, X86_64.RCX)
+                   X86_64.MOV_store (destReg, 8, X86_64.R8)
+                   X86_64.MOV_store (destReg, 16, X86_64.R9)]
+                @ loadImm64 X86_64.RCX 1L
+                @ [X86_64.MOV_store (destReg, 24, X86_64.RCX)]
+            | LIR.GetEnv | LIR.CurrentUser | LIR.Kill | LIR.Sleep -> loadImm64 destReg 0L
+            | LIR.SpawnProcess -> loadImm64 destReg 1L)
+
     | LIR.Madd (dest, mulLeft, mulRight, add) ->
         // dest = add + mulLeft * mulRight
         resolveReg dest |> Result.bind (fun d ->

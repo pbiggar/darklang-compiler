@@ -70,15 +70,23 @@ let pathModule : ModuleDef = {
     ]
 }
 
-/// Stdlib.Platform module - platform detection
-/// These are constant-folded at compile time based on target platform
-let platformModule : ModuleDef = {
-    Name = "Stdlib.Platform"
+/// Internal native operations supporting the public Stdlib.Cli modules.
+/// Portable policy stays in Dark; these typed effects are lowered by the compiler.
+let cliIntrinsicModule : ModuleDef = {
+    Name = "Stdlib.Cli"
     Functions = [
-        // isMacOS : () -> Bool
-        { Name = "isMacOS"; TypeParams = []; ParamTypes = []; ReturnType = TBool }
-        // isLinux : () -> Bool
-        { Name = "isLinux"; TypeParams = []; ParamTypes = []; ReturnType = TBool }
+        { Name = "__execute"; TypeParams = []; ParamTypes = [TString]; ReturnType = TRecord ("Stdlib.Cli.NativeOutput", []) }
+        { Name = "__hostOSCode"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+        { Name = "__getenv"; TypeParams = []; ParamTypes = [TString]; ReturnType = TSum ("Stdlib.Option.Option", [TString]) }
+        { Name = "__kill"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TSum ("Stdlib.Result.Result", [TUnit; TRecord ("Stdlib.Cli.NativePosixError", [])]) }
+        { Name = "__sleep"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TUnit }
+        { Name = "__getpid"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+        { Name = "__getuid"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+        { Name = "__cpuCount"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+        { Name = "__currentUser"; TypeParams = []; ParamTypes = []; ReturnType = TSum ("Stdlib.Option.Option", [TString]) }
+        { Name = "__spawnProcess"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
+        { Name = "__processIO"; TypeParams = []; ParamTypes = [TInt64; TString]; ReturnType = TRecord ("Stdlib.Cli.NativeOutput", []) }
+        { Name = "__terminateProcess"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TRecord ("Stdlib.Cli.NativeOutput", []) }
     ]
 }
 
@@ -196,7 +204,7 @@ let allModules : ModuleDef list = [
     floatIntrinsicModule
     fileModule
     pathModule
-    platformModule
+    cliIntrinsicModule
     randomModule
     dateTimeModule
     builtinPresentationModule

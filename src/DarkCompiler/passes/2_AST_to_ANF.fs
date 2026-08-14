@@ -147,6 +147,24 @@ let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option
         Some (ANF.FileWriteFromPtr (pathAtom, ptrAtom, lengthAtom))
     | _ -> None
 
+let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
+    let operation =
+        match funcName with
+        | "Stdlib.Cli.__execute" -> Some ANF.Execute
+        | "Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
+        | "Stdlib.Cli.__getenv" -> Some ANF.GetEnv
+        | "Stdlib.Cli.__kill" -> Some ANF.Kill
+        | "Stdlib.Cli.__sleep" -> Some ANF.Sleep
+        | "Stdlib.Cli.__getpid" -> Some ANF.GetPid
+        | "Stdlib.Cli.__getuid" -> Some ANF.GetUid
+        | "Stdlib.Cli.__cpuCount" -> Some ANF.CpuCount
+        | "Stdlib.Cli.__currentUser" -> Some ANF.CurrentUser
+        | "Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
+        | "Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
+        | "Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
+        | _ -> None
+    operation |> Option.map (fun op -> ANF.CliNative (op, args))
+
 let private normalizeNullaryIntrinsicArgs (args: ANF.Atom list) : ANF.Atom list =
     match args with
     | [ANF.UnitLiteral] -> []
@@ -291,15 +309,6 @@ let tryFloatIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr optio
 let tryConstantFoldIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     let args = normalizeNullaryIntrinsicArgs args
     match funcName, args with
-    | "Stdlib.Platform.isMacOS", [] ->
-        // Constant-fold based on target platform using .NET runtime detection
-        let isMac = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-            System.Runtime.InteropServices.OSPlatform.OSX)
-        Some (ANF.Atom (ANF.BoolLiteral isMac))
-    | "Stdlib.Platform.isLinux", [] ->
-        let isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-            System.Runtime.InteropServices.OSPlatform.Linux)
-        Some (ANF.Atom (ANF.BoolLiteral isLinux))
     | "Stdlib.Path.tempDir", [] ->
         // Both macOS and Linux use /tmp
         Some (ANF.Atom (ANF.StringLiteral "/tmp"))
@@ -5278,6 +5287,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                     Ok (withArgSetups finalExpr, varGen2)
                 | None ->
+                match tryCliIntrinsic funcName (normalizeNullaryIntrinsicArgs argAtoms) with
+                | Some intrinsicExpr ->
+                    let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                    Ok (withArgSetups finalExpr, varGen2)
+                | None ->
                 // Check if it's a file intrinsic.
                 match tryFileIntrinsic funcName argAtoms with
                 | Some intrinsicExpr ->
@@ -5849,8 +5863,16 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
             // Check if the TYPE that a variant belongs to has any variant with a payload
             // This determines if values are heap-allocated or simple integers
-            let typeHasAnyPayload (variantName: string) : bool =
-                match Map.tryFind variantName variantLookup with
+            let tryFindPatternVariant (sourceType: AST.Type) (variantName: string) =
+                match sourceType with
+                | AST.TSum (typeName, _)
+                | AST.TRecord (typeName, _) ->
+                    tryFindVariant (AST.resolvedConstructorReference typeName) variantName variantLookup
+                    |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
+                | _ -> Map.tryFind variantName variantLookup
+
+            let typeHasAnyPayload (sourceType: AST.Type) (variantName: string) : bool =
+                match tryFindPatternVariant sourceType variantName with
                 | Some (typeName, _, _, _) ->
                     variantLookup
                     |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
@@ -5948,7 +5970,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     match payloadPattern with
                     | None -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                     | Some innerPattern ->
-                        match Map.tryFind constructorName variantLookup with
+                        match tryFindPatternVariant scrutType constructorName with
                         | Some (_, _, _, None) ->
                             // Constructor arity mismatch behaves as non-matching.
                             // Do not introduce payload bindings in this branch body.
@@ -6058,7 +6080,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | _ -> typ
 
                             let resolvePayloadType (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type option, string> =
-                                match Map.tryFind constructorName variantLookup with
+                                match tryFindPatternVariant scrutineeType constructorName with
                                 | Some (_, typeParams, _, Some payloadTypeTemplate) ->
                                     let payloadType =
                                         match scrutineeType with
@@ -6972,7 +6994,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.FloatLiteral f)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PConstructor (variantName, payloadPattern) ->
-                    match Map.tryFind variantName variantLookup with
+                    match tryFindPatternVariant scrutType variantName with
                     | Some (_, _, tag, variantPayloadType) ->
                         let arityMismatch =
                             match payloadPattern, variantPayloadType with
@@ -6985,7 +7007,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let (cmpVar, vg1) = ANF.freshVar vg
                             let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
                             Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-                        elif typeHasAnyPayload variantName then
+                        elif typeHasAnyPayload scrutType variantName then
                             // Mixed or payload-carrying sum type: tag is stored in heap at index 0.
                             let (tagVar, vg1) = ANF.freshVar vg
                             let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
@@ -9227,6 +9249,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                         let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                         Ok (ANF.Var tempVar, allBindings, varGen2)
                     | None ->
+                        match tryCliIntrinsic funcName (normalizeNullaryIntrinsicArgs argAtoms) with
+                        | Some intrinsicExpr ->
+                            let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
+                            Ok (ANF.Var tempVar, allBindings, varGen2)
+                        | None ->
                         // Check if it's a file intrinsic.
                         match tryFileIntrinsic funcName argAtoms with
                         | Some intrinsicExpr ->
@@ -10073,23 +10100,29 @@ let buildRegistries
             | AST.SumTypeDef (typeName, typeParams, variants) ->
                 Some (typeName, typeParams, variants)
             | _ -> None)
-        |> List.collect (fun (typeName, typeParams, variants) ->
+        |> List.fold (fun lookup (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun ordinal variant ->
+            |> List.indexed
+            |> List.fold (fun typeLookup (ordinal, variant) ->
                 let tag =
                     if Set.contains variant.Name collidingCaseNames then
                         AST.constructorRuntimeIdentity typeName variant.Name
                     else
                         ordinal
                 let info = (typeName, typeParams, tag, variant.Payload)
-                [(variant.Name, info); ($"{typeName}.{variant.Name}", info)])
-            |> List.concat)
-        |> Map.ofList
+                let withBare =
+                    if Map.containsKey variant.Name typeLookup then typeLookup
+                    else Map.add variant.Name info typeLookup
+                Map.add $"{typeName}.{variant.Name}" info withBare) lookup) Map.empty
 
     let typeReg =
         typeRegBase
         |> resolveAliasesInTypeRegistry aliasReg
         |> fun reg -> expandTypeRegWithAliases reg aliasReg
+        |> Map.map (fun _ fields ->
+            fields
+            |> List.map (fun (fieldName, fieldType) ->
+                (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType)))
 
     let funcReg : FunctionRegistry =
         functions
@@ -10126,9 +10159,18 @@ let buildRegistries
 /// Merge registries with overlay taking precedence (module registry stays from base)
 let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
+    let mergeVariants baseVariants overlayVariants =
+        overlayVariants
+        |> Map.fold (fun acc (lookupName: string) variantInfo ->
+            if lookupName.Contains(".") || not (Map.containsKey lookupName acc) then
+                Map.add lookupName variantInfo acc
+            else
+                acc) baseVariants
     {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
-        VariantLookup = mergeMaps baseRegs.VariantLookup overlay.VariantLookup
+        // Qualified names are canonical. Keep the first bare alias when case
+        // names collide so legacy lowering never silently changes its owner.
+        VariantLookup = mergeVariants baseRegs.VariantLookup overlay.VariantLookup
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry
