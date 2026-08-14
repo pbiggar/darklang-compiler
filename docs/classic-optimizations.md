@@ -678,3 +678,19 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Taxonomy category: Partial redundancy elimination / code motion
 - Priority/rationale: Canonical, bounded cross-branch sharing that reduces duplicated generated code while reusing the existing ANF purity classification.
 - Notes: Implemented for identical side-effect-free leading bindings in both branches when the local condition producer and the remaining branch bodies are also side-effect-free. The shared binding moves before the condition producer so compare/branch combining remains available; branch bodies containing calls or other effects are conservatively excluded to avoid extending live ranges across them. ANF snapshots cover the rewrite and effectful-leading-binding exclusion.
+
+## Closure optimization
+
+### Capture-free local closure devirtualization
+
+- Optimization name: Capture-free local closure devirtualization
+- Taxonomy category: Devirtualization / scalar replacement
+- Priority/rationale: A known capture-free closure does not need a heap object or an indirect call when every use is a direct local invocation and the closure never escapes.
+- Notes: Implemented in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`; ordinary copy propagation first removes public-syntax aliases, then the lifted function keeps its unused hidden ABI slot while callers pass `Unit` directly. The analysis rejects closures that are captured, returned, stored, or forwarded to another call. Focused ANF, MIR, LIR, and native execution tests cover capture-free direct calls, captured-closure preservation, escaping closures, and repeated local calls. On the refreshed target, a repeated 100,000-call Cachegrind probe improved from `6,701,640` to `801,631` instructions (`88.0%`), while full quicksort remained `378,608,148` and the 19-workload routine profile was exactly neutral.
+
+### Interprocedural captured-closure scalarization
+
+- Optimization name: Interprocedural captured-closure scalarization
+- Taxonomy category: Escape analysis / partial specialization
+- Priority/rationale: Quicksort passes pivot-capturing predicates to `Stdlib.List.filter`, so removing those allocations and indirect calls requires specializing a known higher-order call chain rather than only rewriting lexical calls.
+- Notes: A local-only one-scalar-capture prototype was rejected because its signature/body rewrite machinery did not improve a real workload. In the refreshed retained-candidate comparison, the scalar-captured 100,000-call control remained `7,701,640` instructions and quicksort remained `378,608,148`; the routine source scan found no other higher-order workload. A future attempt should specialize the known `Stdlib.List.filter` and recursive `Stdlib.List.__filterToReverse` chain while preserving capture evaluation and ownership; closures crossing unknown calls remain ineligible.

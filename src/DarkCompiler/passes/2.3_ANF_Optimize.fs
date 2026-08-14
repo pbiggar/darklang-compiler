@@ -13,6 +13,7 @@
 // - Control-flow simplification: collapse Boolean literal branches
 // - Instruction combining: fold single-use negation into integer subtraction
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
+// - Closure devirtualization: directly call capture-free local closures that do not escape
 //
 // These optimizations run in a loop until no more changes occur.
 
@@ -1381,6 +1382,93 @@ let rec private collectAExprTempIds (expr: AExpr) (tempIds: Set<TempId>) : Set<T
         |> collectAExprTempIds thenBranch
         |> collectAExprTempIds elseBranch
 
+/// Count uses of a local closure while rejecting every use that is not a call
+/// through that exact closure value. A positive result proves the allocation
+/// neither escapes nor reaches storage or an unknown callee.
+let rec private countKnownClosureCalls (closureId: TempId) (expr: AExpr) : int option =
+    let combine left right =
+        match left, right with
+        | Some leftCount, Some rightCount -> Some (leftCount + rightCount)
+        | _ -> None
+
+    let classifyCExpr cexpr =
+        match cexpr with
+        | ClosureCall (Var calledId, args) when calledId = closureId && not (atomsUseTemp closureId args) ->
+            Some 1
+        | ClosureTailCall (Var calledId, args) when calledId = closureId && not (atomsUseTemp closureId args) ->
+            Some 1
+        | _ when not (cexprUsesTemp closureId cexpr) ->
+            Some 0
+        | _ ->
+            None
+
+    match expr with
+    | Return atom ->
+        if atomUsesTemp closureId atom then None else Some 0
+    | Let (boundId, cexpr, body) ->
+        match classifyCExpr cexpr with
+        | None -> None
+        | Some callCount when boundId = closureId -> Some callCount
+        | Some callCount ->
+            countKnownClosureCalls closureId body
+            |> Option.map (fun bodyCount -> callCount + bodyCount)
+    | If (condition, thenBranch, elseBranch) ->
+        if atomUsesTemp closureId condition then
+            None
+        else
+            combine
+                (countKnownClosureCalls closureId thenBranch)
+                (countKnownClosureCalls closureId elseBranch)
+
+/// Replace proven calls through one capture-free local closure with calls to
+/// its lifted target. The unused hidden closure argument remains explicit so
+/// the lifted function's established ABI does not change.
+let rec private rewriteKnownCaptureFreeCalls
+    (closureId: TempId)
+    (funcName: string)
+    (expr: AExpr)
+    : AExpr =
+    let rewriteCExpr cexpr =
+        match cexpr with
+        | ClosureCall (Var calledId, args) when calledId = closureId ->
+            Call (funcName, UnitLiteral :: args)
+        | ClosureTailCall (Var calledId, args) when calledId = closureId ->
+            TailCall (funcName, UnitLiteral :: args)
+        | _ -> cexpr
+
+    match expr with
+    | Return _ -> expr
+    | Let (boundId, cexpr, body) ->
+        let body' =
+            if boundId = closureId then body
+            else rewriteKnownCaptureFreeCalls closureId funcName body
+        Let (boundId, rewriteCExpr cexpr, body')
+    | If (condition, thenBranch, elseBranch) ->
+        If (
+            condition,
+            rewriteKnownCaptureFreeCalls closureId funcName thenBranch,
+            rewriteKnownCaptureFreeCalls closureId funcName elseBranch)
+
+/// Eliminate only capture-free closure allocations whose complete lexical use
+/// set consists of one or more known calls.
+let rec private devirtualizeCaptureFreeClosures (expr: AExpr) : AExpr =
+    match expr with
+    | Return _ -> expr
+    | Let (closureId, ClosureAlloc (funcName, []), body) ->
+        let body' = devirtualizeCaptureFreeClosures body
+        match countKnownClosureCalls closureId body' with
+        | Some callCount when callCount > 0 ->
+            rewriteKnownCaptureFreeCalls closureId funcName body'
+        | _ ->
+            Let (closureId, ClosureAlloc (funcName, []), body')
+    | Let (tempId, cexpr, body) ->
+        Let (tempId, cexpr, devirtualizeCaptureFreeClosures body)
+    | If (condition, thenBranch, elseBranch) ->
+        If (
+            condition,
+            devirtualizeCaptureFreeClosures thenBranch,
+            devirtualizeCaptureFreeClosures elseBranch)
+
 let private freshVarGenForProgram (Program (functions, mainExpr)) : VarGen =
     let tempIds =
         functions
@@ -1443,8 +1531,15 @@ let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOpti
             program
     let (Program (functions, mainExpr)) = program'
 
-    // Optimize all functions
-    let functions' = functions |> List.map (fun f -> optimizeToFixedPoint context options f 10)
+    // Copy propagation first removes administrative aliases introduced by the
+    // public `fun` syntax, exposing the exact local closure use set. Running
+    // devirtualization afterwards does not need another fixed-point iteration:
+    // it only removes a zero-capture allocation and changes known call forms.
+    let functions' =
+        functions
+        |> List.map (fun func ->
+            let optimized = optimizeToFixedPoint context options func 10
+            { optimized with Body = devirtualizeCaptureFreeClosures optimized.Body })
 
     // Optimize main expression
     let mainFunc = { Name = "__main__"
@@ -1454,7 +1549,7 @@ let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOpti
                      Body = mainExpr }
     let mainOptimized = optimizeToFixedPoint context options mainFunc 10
 
-    Program (functions', mainOptimized.Body)
+    Program (functions', devirtualizeCaptureFreeClosures mainOptimized.Body)
 
 /// Optimize a program with default options
 let optimizeProgram (context: OptimizeContext) (program: Program) : Program =

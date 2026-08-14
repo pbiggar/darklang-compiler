@@ -261,3 +261,115 @@ choosePartial:
   Label "choosePartial_entry":
     v10020 <- HeapLoad(v10, 0)
     BranchZero(v10020, Label "choosePartial_L0", Label "choosePartial_L1")
+
+---NAME---
+closure_devirtualization_capture_free_generated_code
+---INPUT---
+let applyOnce(value: Int64) : Int64 =
+  let increment = fun x -> x + 1 in
+  increment(value)
+---EXPECTED---
+__closure_0:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "__closure_0_entry":
+    v10002 <- Add(v1, Imm 1)
+    X0 <- Mov(Reg v10002)
+    Ret
+
+applyOnce:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "applyOnce_entry":
+    TailArgMoves(X0 <- Imm 0, X1 <- Reg v3)
+    TailCall(__closure_0, [Imm 0, Reg v3])
+    X0 <- Mov(Reg v6)
+    Ret
+
+---NAME---
+closure_devirtualization_captured_generated_code
+---INPUT---
+let addOffset(value: Int64, offset: Int64) : Int64 =
+  let add = fun x -> x + offset in
+  add(value)
+---EXPECTED---
+__closure_0:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "__closure_0_entry":
+    v10004 <- HeapLoad(v0, 8)
+    v10005 <- Add(v1, Reg v10004)
+    X0 <- Mov(Reg v10005)
+    Ret
+
+addOffset:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "addOffset_entry":
+    v10009 <- HeapAlloc(16)
+    HeapStore(v10009, 0, &__closure_0)
+    HeapStore(v10009, 8, Reg v6)
+    SaveRegs([], [])
+    X10 <- Mov(Reg v10009)
+    ArgMoves(X0 <- Reg X10, X1 <- Reg v5)
+    X9 <- HeapLoad(X0, 0)
+    v10010 <- ClosureCall(X9, [Reg v5])
+    RestoreRegs([], [])
+    v10010 <- Mov(Reg X0)
+    RefCountDec(v10009, 0, closure)
+    X0 <- Mov(Reg v10010)
+    Ret
+
+---NAME---
+closure_devirtualization_preserves_escaping_generated_code
+---INPUT---
+let makeIncrement() : (Int64) -> Int64 =
+  let increment = fun x -> x + 1 in
+  increment
+---EXPECTED---
+__closure_0:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "__closure_0_entry":
+    v10002 <- Add(v1, Imm 1)
+    X0 <- Mov(Reg v10002)
+    Ret
+
+makeIncrement:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeIncrement_entry":
+    v10003 <- HeapAlloc(8)
+    HeapStore(v10003, 0, &__closure_0)
+    X0 <- Mov(Reg v10003)
+    Ret
+
+---NAME---
+closure_devirtualization_reuses_local_generated_code
+---INPUT---
+let applyTwice(value: Int64) : Int64 =
+  let increment = fun x -> x + 1 in
+  let once = increment(value) in
+  increment(once)
+---EXPECTED---
+__closure_0:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "__closure_0_entry":
+    v10002 <- Add(v1, Imm 1)
+    X0 <- Mov(Reg v10002)
+    Ret
+
+applyTwice:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "applyTwice_entry":
+    SaveRegs([], [])
+    ArgMoves(X0 <- Imm 0, X1 <- Reg v3)
+    v10006 <- Call(__closure_0, [Imm 0, Reg v3])
+    RestoreRegs([], [])
+    v10006 <- Mov(Reg X0)
+    TailArgMoves(X0 <- Imm 0, X1 <- Reg v10006)
+    TailCall(__closure_0, [Imm 0, Reg v10006])
+    X0 <- Mov(Reg v8)
+    Ret

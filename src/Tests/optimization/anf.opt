@@ -2270,6 +2270,70 @@ let TempId 2 = f("dark")
 return t2
 
 ---NAME---
+closure_devirtualization_capture_free_local
+---INPUT---
+let applyOnce(value: Int64) : Int64 =
+  let increment = fun x -> x + 1 in
+  increment(value)
+---EXPECTED---
+Function __closure_0:
+let TempId 2 = t1 + 1
+return t2
+
+Function applyOnce:
+let TempId 6 = __closure_0((), t3)
+return t6
+
+---NAME---
+closure_devirtualization_captured_local
+---INPUT---
+let addOffset(value: Int64, offset: Int64) : Int64 =
+  let add = fun x -> x + offset in
+  add(value)
+---EXPECTED---
+Function __closure_0:
+let TempId 2 = t0.1
+let TempId 4 = t1 + t2
+return t4
+
+Function addOffset:
+let TempId 7 = ClosureAlloc(__closure_0, [t6])
+let TempId 9 = ClosureCall(t7, [t5])
+return t9
+
+---NAME---
+closure_devirtualization_preserves_escaping_closure
+---INPUT---
+let makeIncrement() : (Int64) -> Int64 =
+  let increment = fun x -> x + 1 in
+  increment
+---EXPECTED---
+Function __closure_0:
+let TempId 2 = t1 + 1
+return t2
+
+Function makeIncrement:
+let TempId 3 = ClosureAlloc(__closure_0, [])
+return t3
+
+---NAME---
+closure_devirtualization_reuses_local_closure
+---INPUT---
+let applyTwice(value: Int64) : Int64 =
+  let increment = fun x -> x + 1 in
+  let once = increment(value) in
+  increment(once)
+---EXPECTED---
+Function __closure_0:
+let TempId 2 = t1 + 1
+return t2
+
+Function applyTwice:
+let TempId 6 = __closure_0((), t3)
+let TempId 8 = __closure_0((), t6)
+return t8
+
+---NAME---
 hoist_identical_pure_leading_branch_binding
 ---INPUT---
 let f(x: Int64) : Int64 =

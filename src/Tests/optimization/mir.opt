@@ -423,3 +423,79 @@ Function loop:
     v10026 <- Phi([(v10036, loop_entry), (v10043, loop_L1_unroll_second)]) : TInt64
     v10024 <- v10023 >= v10022 : TInt64
     branch v10024 ? loop_L2 : loop_L1
+
+---NAME---
+closure_devirtualization_capture_free_local
+---INPUT---
+let applyOnce(value: Int64) : Int64 =
+  let increment = fun x -> x + 1 in
+  increment(value)
+---EXPECTED---
+Function __closure_0:
+  __closure_0_entry:
+    v10002 <- v1 + 1 : TInt64
+    ret v10002
+
+Function applyOnce:
+  applyOnce_entry:
+    TailCall(__closure_0, [0, v3])
+    ret v6
+
+---NAME---
+closure_devirtualization_captured_local
+---INPUT---
+let addOffset(value: Int64, offset: Int64) : Int64 =
+  let add = fun x -> x + offset in
+  add(value)
+---EXPECTED---
+Function __closure_0:
+  __closure_0_entry:
+    v10004 <- HeapLoad(v0, 8)
+    v10005 <- v1 + v10004 : TInt64
+    ret v10005
+
+Function addOffset:
+  addOffset_entry:
+    v10009 <- HeapAlloc(16)
+    HeapStore(v10009, 0, &__closure_0)
+    HeapStore(v10009, 8, v6)
+    v10010 <- ClosureCall(v10009, [v5])
+    RefCountDec(v10009, size=0, kind=closure)
+    ret v10010
+
+---NAME---
+closure_devirtualization_preserves_escaping_closure
+---INPUT---
+let makeIncrement() : (Int64) -> Int64 =
+  let increment = fun x -> x + 1 in
+  increment
+---EXPECTED---
+Function __closure_0:
+  __closure_0_entry:
+    v10002 <- v1 + 1 : TInt64
+    ret v10002
+
+Function makeIncrement:
+  makeIncrement_entry:
+    v10003 <- HeapAlloc(8)
+    HeapStore(v10003, 0, &__closure_0)
+    ret v10003
+
+---NAME---
+closure_devirtualization_reuses_local_closure
+---INPUT---
+let applyTwice(value: Int64) : Int64 =
+  let increment = fun x -> x + 1 in
+  let once = increment(value) in
+  increment(once)
+---EXPECTED---
+Function __closure_0:
+  __closure_0_entry:
+    v10002 <- v1 + 1 : TInt64
+    ret v10002
+
+Function applyTwice:
+  applyTwice_entry:
+    v10006 <- Call(__closure_0, [0, v3])
+    TailCall(__closure_0, [0, v10006])
+    ret v8

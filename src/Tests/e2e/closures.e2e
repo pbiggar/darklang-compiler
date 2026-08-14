@@ -489,3 +489,13 @@ let offset = 10.0 in let addWithOffset = fun a b -> a + b + offset in tailCallCl
 // Five float args via closure tail call - many temp registers needed
 let tailCallClosure5F(f: (Float, Float, Float, Float, Float) -> Float, a: Float, b: Float, c: Float, d: Float, e: Float): Float = f(a, b, c, d, e)
 let sum5f = fun a b c d e -> a + b + c + d + e in tailCallClosure5F(sum5f, 1.0, 2.0, 3.0, 4.0, 5.0) = 15.0
+
+// Devirtualized non-escaping closures preserve generated-code behavior.
+let increment = fun x -> x + 1 in increment(41) = 42
+
+let offset = 40 in let addOffset = fun x -> x + offset in addOffset(2) = 42
+
+let makeIncrementForEscape() : (Int64) -> Int64 = let increment = fun x -> x + 1 in increment
+let escapedIncrement = makeIncrementForEscape() in escapedIncrement(41) = 42
+
+let incrementTwice = fun x -> x + 1 in let once = incrementTwice(40) in incrementTwice(once) = 42
