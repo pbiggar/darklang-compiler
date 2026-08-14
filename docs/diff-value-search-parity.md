@@ -33,10 +33,11 @@ unwinding, so output remains in source order. On a trace tie it follows the
 upper cell as `Added`; because the walk is backwards, a one-line replacement
 is rendered as `Removed old` followed by `Added new`. `tableGet` and trace's
 line reads retain the interpreter's zero or empty-string defaults for invalid
-indices. Public table indices and cells remain `Int`; only the compiler's
-internal `List` indexing boundary is checked and converted to `Int64`.
+indices. Public table indices and cells remain `Int`; canonical `List.getAt`
+performs the checked internal conversion and returns `None` when it cannot fit
+the skew-list's machine-sized index.
 
-The copied implementation is in `src/DarkCompiler/stdlib/Diff.dark:3-100`.
+The copied implementation is in `src/DarkCompiler/stdlib/Diff.dark:3-80`.
 Exact ordered probes for identical text, additions, removals, replacements,
 repeated-line ties, empty strings, boundary empty lines, and mixed edits are in
 `src/Tests/e2e/interpreter/diff.e2e:4-13`.

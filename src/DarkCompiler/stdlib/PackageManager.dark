@@ -20,7 +20,7 @@ let pickLocation(ctx: Darklang.LanguageTools.PackageManager.PickContext, locatio
         let firstScore = Darklang.LanguageTools.PackageManager.countMatchingPrefix(ctx.currentModule, firstPath) in
         let firstLength = Stdlib.List.length<String>(firstPath) in
         let (_bestScore, _bestLength, bestLocation) =
-            Stdlib.List.fold<Darklang.LanguageTools.ProgramTypes.PackageLocation, (Int, Int64, Darklang.LanguageTools.ProgramTypes.PackageLocation)>(
+            Stdlib.List.fold<Darklang.LanguageTools.ProgramTypes.PackageLocation, (Int, Int, Darklang.LanguageTools.ProgramTypes.PackageLocation)>(
                 rest,
                 (firstScore, firstLength, first),
                 fun acc location ->

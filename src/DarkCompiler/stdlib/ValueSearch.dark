@@ -11,7 +11,7 @@ let parseNamespace(targetNamespace: String) : List<String> =
     else Stdlib.String.split(targetNamespace, ".")
 
 let isValueInNamespace(namespaceParts: List<String>, valuePath: List<String>) : Bool =
-    if Stdlib.List.length<String>(namespaceParts) == 0 then true
+    if Stdlib.List.length<String>(namespaceParts) == 0I then true
     else Stdlib.List.take<String>(valuePath, Stdlib.List.length<String>(namespaceParts)) == namespaceParts
 
 let buildPathFromLocation(owner: String, modules: List<String>, name: String) : String =

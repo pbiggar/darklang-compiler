@@ -22,12 +22,12 @@ public Int contracts and sorting functions are at lines 13-188, indexing and
 bounds operations at 221-326, and the newly ported collection functions at
 352-502. Comparator helpers are at
 `src/DarkCompiler/stdlib/ListSortByComparatorHelpers.dark:7-85`. The polymorphic
-`empty` identity is registered at `src/DarkCompiler/Stdlib.fs:220` and lowered
-at `src/DarkCompiler/passes/2_AST_to_ANF.fs:4802` and `:8972`.
+`empty` identity is registered at `src/DarkCompiler/Stdlib.fs:244-245` and
+lowered at `src/DarkCompiler/passes/2_AST_to_ANF.fs:4887` and `:9071`.
 
 Canonical comparison is selected from concrete AOT types in
-`src/DarkCompiler/passes/1.5_TypeChecking.fs:1255-1324`, synthesized at
-`:5583-6012`, and materialized at `:6232-6358`. The type-directed plan covers
+`src/DarkCompiler/passes/1.5_TypeChecking.fs:1289-1358`, synthesized at
+`:5620-6049`, and materialized at `:6269-6395`. The type-directed plan covers
 the compiler representations of sortable scalar values and recursively covers
 lists, tuples, string-keyed dictionaries, records, and enums. Unsupported
 concrete types are rejected during type checking.
@@ -50,7 +50,7 @@ It produces `[Dict { a = 1 }, Dict { a = 2 }, Dict { b = 2 }]`.
 
 | Area | Compiler behavior | Revalidated source/test evidence | Classification |
 | --- | --- | --- | --- |
-| `empty` | bare polymorphic `Stdlib.List.empty`, version-zero identity | C `Stdlib.fs:220-221`, `2_AST_to_ANF.fs:4802,8972`, probe `list_parity.e2e:1-2`; I `list.dark:4-5`, test `list.dark:1` | parity |
+| `empty` | bare polymorphic `Stdlib.List.empty`, version-zero identity | C `Stdlib.fs:244-245`, `2_AST_to_ANF.fs:4887,9071`, probe `list_parity.e2e:1-2`; I `list.dark:4-5`, test `list.dark:1` | parity |
 | `length` | returns `Int` | C `List.dark:16-18`, probe `list_parity.e2e:3`; I `list.dark:106-108`, tests `list.dark:5-6` | parity |
 | `findFirstIndex`, `indexedMap` | indices are `Int`; callbacks retain canonical currying/order | C `List.dark:321-329,353-359`, probes `list_parity.e2e:4-5`; I `list.dark:72-78,390-398`, tests `list.dark:118-124,160-163` | parity |
 | `getAt` | accepts `Int`; negative, out-of-range, and non-`Int64` values return `None` | C `List.dark:225-229`, probes `list_parity.e2e:6-8`; I `list.dark:509-512`, tests `list.dark:143-153` | parity |
@@ -62,7 +62,7 @@ It produces `[Dict { a = 1 }, Dict { a = 2 }, Dict { b = 2 }]`.
 | `groupByWithKey` | structural key equality with first-key and element order | C `List.dark:434-472`, probes `list_parity.e2e:23-24`; I `list.dark:522-541`, tests `list.dark:339-361` | parity |
 | `iter` | ordered, exactly-once Unit sequencing | C `List.dark:474-479`, failing-callback probes `list_parity.e2e:26-27`; I `list.dark:559-565`, tests `list.dark:61-84` | parity |
 | `randomElement` | no draw for empty; unbiased bounded member selection otherwise | C `List.dark:481-489`, probes `list_parity.e2e:28-29`; I `list.dark:515-519`, tests `list.dark:235-238` | parity |
-| `sort`, `sortBy`, `unique`, `uniqueBy` | canonical type-directed ordering and canonical retained-value behavior | C `List.dark:139-188`, `1.5_TypeChecking.fs:1255-1324,5583-6012`, probes `list_parity.e2e:37-45`; I `list.dark:161-204`, runtime `List.fs:13-171,304-348`, tests `list.dark:256-261,307-318` | parity |
+| `sort`, `sortBy`, `unique`, `uniqueBy` | canonical type-directed ordering and canonical retained-value behavior | C `List.dark:139-188`, `1.5_TypeChecking.fs:1289-1358,5620-6049`, probes `list_parity.e2e:37-45`; I `list.dark:161-204`, runtime `List.fs:13-171,304-348`, tests `list.dark:256-261,307-318` | parity |
 | comparator helpers and `sortByComparator` | `Int` comparator, alternating-split merge sort, left-before-right equality, only `-1`, `0`, `1` accepted, exact error text | C `ListSortByComparatorHelpers.dark:7-85`, probes `list_parity.e2e:47-55`; I `list.dark:207-281`, tests `list.dark:263-280` | parity |
 
 ## Extensions and intentional AOT divergences

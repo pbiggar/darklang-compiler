@@ -10,6 +10,6 @@ let isCustomTypeWithNoTypeArguments(valueType: Darklang.LanguageTools.RuntimeTyp
         match knownType with
         | KTCustomType((fqTypeName, typeArguments)) ->
             let runtimeHash = Darklang.LanguageTools.RuntimeTypes.FQTypeName.packageHash(fqTypeName) in
-            Stdlib.List.length<Darklang.LanguageTools.RuntimeTypes.ValueType>(typeArguments) == 0 &&
+            Stdlib.List.length<Darklang.LanguageTools.RuntimeTypes.ValueType>(typeArguments) == 0I &&
             Darklang.LanguageTools.RuntimeTypes.hashToString(runtimeHash) == expectedHash
     | _ -> false
