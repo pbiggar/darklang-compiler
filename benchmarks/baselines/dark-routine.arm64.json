@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "b6e9cc373aa5cca7e4f415318f69b0734d654e76514956970854c83d0a599617",
-  "generated_at": "2026-08-14T20:50:28+00:00",
+  "generated_at": "2026-08-14T21:52:45+00:00",
   "compiler": {
-    "commit": "ba8d319f3ea663bce5f4f0c559dc04fb51d1791d",
-    "subject": "dcb2: complete issue Implement CLI execution, host, process, and input"
+    "commit": "132ffab7f50ca851e90cc335083ab415526d081b",
+    "subject": "Repair List parity consumers after rebase"
   },
   "benchmarks": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "name": "leibniz",
-      "instructions": 900001522
+      "instructions": 850001522
     },
     {
       "name": "mandelbrot",
@@ -53,7 +53,7 @@
     },
     {
       "name": "merkletrees",
-      "instructions": 724164737
+      "instructions": 684843737
     },
     {
       "name": "nbody",
