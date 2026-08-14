@@ -7,4 +7,3 @@ let run<'a>(message: String, fn: (Unit) -> a) : a =
     let result = fn(()) in
     let _ = Builtin.printLine(Stdlib.Cli.UI.Color.green("done")) in
     result
-

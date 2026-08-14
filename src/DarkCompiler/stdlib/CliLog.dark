@@ -16,4 +16,3 @@ let debug(msg: String) : Unit =
 
 let success(msg: String) : Unit =
     Builtin.printLine(Stdlib.Cli.UI.Color.green("[OK]") ++ " " ++ msg)
-

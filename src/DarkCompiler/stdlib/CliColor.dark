@@ -22,4 +22,3 @@ let bgRed(text: String) : String = Stdlib.Cli.UI.Color.esc("41", text)
 let bgGreen(text: String) : String = Stdlib.Cli.UI.Color.esc("42", text)
 let bgYellow(text: String) : String = Stdlib.Cli.UI.Color.esc("43", text)
 let bgBlue(text: String) : String = Stdlib.Cli.UI.Color.esc("44", text)
-
