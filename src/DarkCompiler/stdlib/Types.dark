@@ -1,4 +1,3 @@
 // Types.dark - Root aliases for runtime-backed public scalar types.
 
-type DateTime = Int64
 type Uuid = String

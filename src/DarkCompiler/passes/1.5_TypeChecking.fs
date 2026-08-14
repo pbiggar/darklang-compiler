@@ -75,6 +75,7 @@ let rec typeToString (t: Type) : string =
     | TString -> "String"
     | TBlob -> "Blob"
     | TChar -> "Char"
+    | TDateTime -> "DateTime"
     | TUnit -> "Unit"
     | TRuntimeError -> "RuntimeError"
     | TFunction (params', ret) ->
@@ -188,7 +189,7 @@ let private interpolationTypeMismatchMessage (expr: Expr) (actualType: Type) : s
         | TFloat64 -> Some "Float"
         | TBool -> Some "Bool"
         | TChar -> Some "Char"
-        | TRecord ("DateTime", []) -> Some "DateTime"
+        | TDateTime -> Some "DateTime"
         | _ -> None
     let hint =
         conversionModule
@@ -568,7 +569,7 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
     | TRecord (name, args) -> TRecord (name, List.map (applyTypeVarRenaming subst) args)
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr -> t
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> t
 
 /// Type environment - maps variable names to their types
 type TypeEnv = Map<string, Type>
@@ -702,7 +703,7 @@ let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (ty
         TDict (applySubstWithSeen seen subst keyType, applySubstWithSeen seen subst valueType)
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Apply a substitution to a type, replacing type variables with concrete types
@@ -734,7 +735,7 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
         collectTypeVarsInType valueType withKey
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
         acc
 
 /// Infer record type parameter order from field type variables.
@@ -791,7 +792,7 @@ let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : T
         TDict (resolveAliasTargetType aliasReg keyType, resolveAliasTargetType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
         typ
 
 let private tryResolveGenericRecordAliasFields
@@ -970,7 +971,7 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
         TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
         typ  // Primitive types and type variables are unchanged
 
 let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistry) : TypeRegistry =
@@ -1006,7 +1007,7 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Typ
             TDict (canonicalize keyType, canonicalize valueType)
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr ->
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
             typ
 
     canonicalize typ
@@ -1203,7 +1204,7 @@ let private equalityComparableType
             | TVar _ -> true
             | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-            | TFloat64 | TChar | TString -> true
+            | TFloat64 | TChar | TString | TDateTime -> true
             | TFunction (parameterTypes, returnType) ->
                 List.forall recurse parameterTypes && recurse returnType
             | TTuple elementTypes
@@ -1548,6 +1549,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
         | TChar -> Ok []
         | _ -> matchConcrete TString actual
     | TBlob -> matchConcrete TBlob actual
+    | TDateTime -> matchConcrete TDateTime actual
     | TChar ->
         match actual with
         | TString -> Ok []
@@ -6139,7 +6141,7 @@ let private resolveProgramNames
             |> Result.bind (fun key' -> recurse valueType |> Result.map (fun value' -> TDict (key', value')))
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr -> Ok typ
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> Ok typ
 
     let rec patternBoundNames pattern =
         match pattern with
@@ -6394,7 +6396,7 @@ let private validateTopLevelTypeDeclarations
         | TDict (key, value) -> validateAll [key; value]
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TUnit | TRuntimeError | TRawPtr -> Ok ()
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> Ok ()
 
     let duplicateTypeName =
         typeDefs

@@ -71,7 +71,7 @@ let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
         | TSum (name, typeArgs) -> TSum (name, List.map apply typeArgs)
         | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TUnit
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit
         | TRuntimeError | TRawPtr -> typ
     apply typ
 
@@ -246,6 +246,7 @@ and private renderBody
     | TFloat64 -> (call "Stdlib.Float.toString" [value], state)
     | TString -> (escapedString "\"" value, state)
     | TChar -> (escapedString "'" value, state)
+    | TDateTime -> (call "Stdlib.DateTime.toString" [value], state)
     | TTuple elemTypes ->
         let items = elemTypes |> List.mapi (fun index elemType -> (elemType, TupleAccess (value, index)))
         let (rendered, nextState) = renderDelimited env items state
@@ -288,8 +289,6 @@ and private renderBody
                 )
             )
         (body, nextState)
-    | TRecord ("DateTime", []) ->
-        (call "Stdlib.DateTime.toString_v0" [value], state)
     | TRecord (typeName, typeArgs) ->
         match Map.tryFind typeName env.Records with
         | None ->
@@ -435,7 +434,7 @@ let rewriteProgram
     let env = { Records = records; Sums = sums; NamedFunctions = namedFunctions }
     let (renderName, state) =
         match programType with
-        | TRecord ("DateTime", []) -> (None, { Functions = Map.empty })
+        | TDateTime -> (None, { Functions = Map.empty })
         | _ ->
             let (name, generatedState) = ensureRenderer env programType { Functions = Map.empty }
             (Some name, generatedState)
@@ -471,8 +470,8 @@ let rewriteProgram
     let rewriteExpression expr =
         let rendered =
             match programType, expr, tryNamedPartialName expr with
-            | TRecord ("DateTime", []), _, _ ->
-                BoundaryRender ("Stdlib.DateTime.toString_v0", expr)
+            | TDateTime, _, _ ->
+                BoundaryRender ("Stdlib.DateTime.toString", expr)
             | TFunction _, _, Some name ->
                 Let (LPVariable "__rendered_named_partial", expr, StringLiteral name)
             | TFunction _, Var name, _ when Set.contains name namedFunctions ->

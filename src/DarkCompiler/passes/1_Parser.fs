@@ -548,6 +548,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "String" :: rest -> Ok (AST.TString, rest)
     | TIdent "Blob" :: rest -> Ok (AST.TBlob, rest)
     | TIdent "Char" :: rest -> Ok (AST.TChar, rest)
+    | TIdent "DateTime" :: rest -> Ok (AST.TDateTime, rest)
     | TIdent "Float" :: rest -> Ok (AST.TFloat64, rest)
     | TIdent "Unit" :: rest -> Ok (AST.TUnit, rest)
     | TIdent "RawPtr" :: rest -> Ok (AST.TRawPtr, rest)  // Internal raw pointer type
@@ -700,6 +701,7 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
     | TIdent "String" :: rest -> withPossibleArrow AST.TString rest
     | TIdent "Blob" :: rest -> withPossibleArrow AST.TBlob rest
     | TIdent "Char" :: rest -> withPossibleArrow AST.TChar rest
+    | TIdent "DateTime" :: rest -> withPossibleArrow AST.TDateTime rest
     | TIdent "Float" :: rest -> withPossibleArrow AST.TFloat64 rest
     | TIdent "Unit" :: rest -> withPossibleArrow AST.TUnit rest
     | TIdent "RawPtr" :: rest -> withPossibleArrow AST.TRawPtr rest  // Internal raw pointer type

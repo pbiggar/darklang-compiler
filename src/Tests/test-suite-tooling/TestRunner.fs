@@ -191,6 +191,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "language", "collections", "edict.dark")
     let dateUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "date.dark")
+    let durationUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "duration.dark")
     let listUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "list.dark")
     let dictUpstreamDarkPath =
@@ -241,6 +243,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            dtupleUpstreamDarkPath
            edictUpstreamDarkPath
            dateUpstreamDarkPath
+           durationUpstreamDarkPath
            listUpstreamDarkPath
            dictUpstreamDarkPath
            uuidUpstreamDarkPath
@@ -274,6 +277,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            dtupleUpstreamDarkPath
            edictUpstreamDarkPath
            dateUpstreamDarkPath
+           durationUpstreamDarkPath
            listUpstreamDarkPath
            dictUpstreamDarkPath
            uuidUpstreamDarkPath
@@ -490,7 +494,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 ("src/Tests/e2e/upstream/language/custom-data/aliases.dark", Set.ofList [ 6; 9; 15; 16; 19; 89; 91; 108 ])
                 ("src/Tests/e2e/upstream/language/flow-control/epipe.dark", Set.ofList [ 3; 4; 7; 27; 53; 93; 96; 102 ])
                 ("src/Tests/e2e/upstream/language/derror.dark", Set.ofList [ 14; 20 ])
-                ("src/Tests/e2e/upstream/stdlib/date.dark", Set.ofList [ 216 ])
                 ("src/Tests/e2e/upstream/stdlib/list.dark", Set.ofList [ 3; 8; 9; 12; 15; 16; 17; 18; 25; 26; 27; 28; 29; 31; 32; 33; 34; 35; 36; 54; 93; 99; 100; 111; 112; 114; 115; 116; 127; 132; 133; 155; 158; 166; 176; 182; 185; 190; 195; 196; 208; 213; 215; 218; 229; 230; 232; 233; 252; 253; 254; 287; 289; 290; 303; 321; 324; 363; 364; 365; 378 ])
                 ("src/Tests/e2e/upstream/stdlib/uuid.dark", Set.ofList [ 2; 6 ])
                 ("src/Tests/e2e/upstream/stdlib/option.dark", Set.ofList [ 251; 281; 319 ])

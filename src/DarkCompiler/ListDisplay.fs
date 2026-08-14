@@ -24,6 +24,7 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TUInt64
     | AST.TUInt128
     | AST.TBlob
+    | AST.TDateTime
     | AST.TUnit
     | AST.TRuntimeError
     | AST.TFunction _

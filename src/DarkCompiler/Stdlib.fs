@@ -92,12 +92,13 @@ let randomModule : ModuleDef = {
     ]
 }
 
-/// Internal clock operation used by the pure Stdlib.DateTime module.
+/// Internal typed operations used by the portable Stdlib.DateTime module.
 let dateTimeModule : ModuleDef = {
     Name = "Stdlib.DateTime"
     Functions = [
-        // The public DateTime value is constructed in DateTime.dark.
-        { Name = "__nowMilliseconds"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+        { Name = "__now"; TypeParams = []; ParamTypes = []; ReturnType = TDateTime }
+        { Name = "__fromUnixTimeTicks"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TDateTime }
+        { Name = "__toUnixTimeTicks"; TypeParams = []; ParamTypes = [TDateTime]; ReturnType = TInt64 }
     ]
 }
 

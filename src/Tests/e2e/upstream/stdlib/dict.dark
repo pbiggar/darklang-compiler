@@ -4,7 +4,7 @@ module Empty =
 
 module ConstructionErrors =
   Dict { a = 1; a = 2 } = error="Cannot add two dictionary entries with the same key `a`"
-  Dict { a = 1; b = "two" } = error="dict values must have one type: key `b` has String, expected Int64"
+  Dict { a = 1; b = "two" } = error="dict values must have one type: key `b` has String, expected Int"
 module FilterMap =
   Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Stdlib.Option.Option<b$1>, got (binding_lambda_0_value) -> Int64"
 

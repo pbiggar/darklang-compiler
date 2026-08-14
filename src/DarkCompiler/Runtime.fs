@@ -2447,7 +2447,7 @@ let generateRandomInt64 (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM6
             ARM64.MOV_reg (destReg, ARM64.X0)
         ]
 
-/// Generate ARM64 instructions to get current Unix epoch milliseconds as Int64.
+/// Generate ARM64 instructions to get the current UTC instant as 100ns Unix ticks.
 /// destReg: destination register for the timestamp
 /// Uses gettimeofday (macOS) or clock_gettime (Linux) syscall
 /// Note: This function saves/restores caller-saved registers that may contain live values.
@@ -2470,12 +2470,13 @@ let generateDateTimeNow (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM6
             ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Gettimeofday, 0)
             ARM64.SVC syscalls.SvcImmediate
 
-            // milliseconds = tv_sec * 1000 + tv_usec / 1000
+            // ticks = tv_sec * 10_000_000 + tv_usec * 10
             ARM64.LDR (ARM64.X0, ARM64.SP, 0s)
             ARM64.LDR (ARM64.X1, ARM64.SP, 8s)
-            ARM64.MOVZ (ARM64.X2, 1000us, 0)
+        ] @ generateLoadUInt64Immediate ARM64.X2 10000000UL @ [
             ARM64.MUL (ARM64.X0, ARM64.X0, ARM64.X2)
-            ARM64.UDIV (ARM64.X1, ARM64.X1, ARM64.X2)
+            ARM64.MOVZ (ARM64.X2, 10us, 0)
+            ARM64.MUL (ARM64.X1, ARM64.X1, ARM64.X2)
             ARM64.ADD_reg (ARM64.X0, ARM64.X0, ARM64.X1)
 
             ARM64.LDR (ARM64.X1, ARM64.SP, 40s)
@@ -2502,13 +2503,12 @@ let generateDateTimeNow (target: ARM64.TargetConfig) (destReg: ARM64.Reg) : ARM6
             ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Gettimeofday, 0)
             ARM64.SVC syscalls.SvcImmediate
 
-            // milliseconds = tv_sec * 1000 + tv_nsec / 1_000_000
+            // ticks = tv_sec * 10_000_000 + tv_nsec / 100
             ARM64.LDR (ARM64.X0, ARM64.SP, 0s)
             ARM64.LDR (ARM64.X1, ARM64.SP, 8s)
-            ARM64.MOVZ (ARM64.X2, 1000us, 0)
+        ] @ generateLoadUInt64Immediate ARM64.X2 10000000UL @ [
             ARM64.MUL (ARM64.X0, ARM64.X0, ARM64.X2)
-            ARM64.MOVZ (ARM64.X2, 0x4240us, 0)
-            ARM64.MOVK (ARM64.X2, 0x000Fus, 16)
+            ARM64.MOVZ (ARM64.X2, 100us, 0)
             ARM64.UDIV (ARM64.X1, ARM64.X1, ARM64.X2)
             ARM64.ADD_reg (ARM64.X0, ARM64.X0, ARM64.X1)
 

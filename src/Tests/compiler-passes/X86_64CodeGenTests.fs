@@ -75,6 +75,7 @@ let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegist
     | AST.TString
     | AST.TBlob
     | AST.TChar
+    | AST.TDateTime
     | AST.TUnit
     | AST.TRawPtr
     | AST.TRuntimeError
@@ -297,6 +298,31 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
 
 let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     makeSimpleProgramWithRecords instrs term Map.empty
+
+/// The host is ARM64, so inspect the x64 syscall lowering directly. DateTime
+/// clock values retain nanosecond-derived precision as 100ns Unix ticks.
+let testDateTimeNowLowersTo100nsUnixTicks () : Result<unit, string> =
+    let program = makeSimpleProgram [LIR.DateTimeNow (LIR.Physical LIR.X0)] LIR.Ret
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error error -> Error $"DateTimeNow x64 lowering failed: {error}"
+    | Ok instrs ->
+        let hasTicksPerSecond =
+            instrs
+            |> List.exists (function
+                | X86_64.IMUL_imm (_, _, 10000000) -> true
+                | _ -> false)
+        let hasNanosecondsPerTick =
+            instrs
+            |> List.exists (function
+                | X86_64.MOV_imm32 (X86_64.RDI, 100) -> true
+                | _ -> false)
+        let hasTickDivision =
+            instrs
+            |> List.exists (function
+                | X86_64.IDIV X86_64.RDI -> true
+                | _ -> false)
+        if hasTicksPerSecond && hasNanosecondsPerTick && hasTickDivision then Ok ()
+        else Error $"DateTimeNow did not lower to 100ns Unix ticks: {instrs}"
 
 let private runInNamedFunction (name: string) (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     match makeSimpleProgram [LIR.Call (LIR.Physical LIR.X0, name, [])] LIR.Ret with
@@ -5212,6 +5238,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
+    ("LIR DateTimeNow x64 lowering uses 100ns Unix ticks", testDateTimeNowLowersTo100nsUnixTicks)
     ("LIR conditional branch", testBranch)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)

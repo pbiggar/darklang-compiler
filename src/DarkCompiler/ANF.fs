@@ -274,7 +274,7 @@ type CExpr =
     // Random intrinsics
     | RandomInt64                             // Get 8 random bytes as Int64
     // DateTime intrinsics
-    | DateTimeNow                             // Get current Unix epoch milliseconds as Int64
+    | DateTimeNow                             // Get the current UTC instant as 100ns Unix ticks
     // Float to String conversion
     | FloatToString of Atom                   // Convert Float to heap String
 
@@ -336,6 +336,7 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TBool
     | AST.TFloat64
     | AST.TChar
+    | AST.TDateTime
     | AST.TUnit
     | AST.TRuntimeError
     | AST.TVar _ ->
@@ -409,6 +410,7 @@ let private collectTypeVarsInOrder (typ: AST.Type) : string list =
         | AST.TString
         | AST.TBlob
         | AST.TChar
+        | AST.TDateTime
         | AST.TUnit
         | AST.TRawPtr
         | AST.TRuntimeError ->
@@ -454,6 +456,7 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
     | AST.TString
     | AST.TBlob
     | AST.TChar
+    | AST.TDateTime
     | AST.TUnit
     | AST.TRawPtr
     | AST.TRuntimeError ->
@@ -545,6 +548,7 @@ let rcShapeOfTypeWithSums
         | AST.TBool
         | AST.TFloat64
         | AST.TChar
+        | AST.TDateTime
         | AST.TUnit
         | AST.TRuntimeError
         | AST.TVar _ ->

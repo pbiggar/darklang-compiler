@@ -40,6 +40,7 @@ type Type =
     | TString
     | TBlob     // Byte array: [length:8][data:N][refcount:8]
     | TChar      // Extended Grapheme Cluster (single visual character)
+    | TDateTime  // Opaque UTC instant stored as signed 100ns Unix ticks
     | TUnit
     | TRuntimeError                 // Bottom-like type for guaranteed runtime-failing expressions
     | TFunction of Type list * Type  // parameter types * return type

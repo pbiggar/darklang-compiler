@@ -12,7 +12,7 @@
 // - Parentheses for explicit grouping
 //
 // Example:
-//   "2 + 3 * 4" → BinOp(Add, Int64Literal(2), BinOp(Mul, Int64Literal(3), Int64Literal(4)))
+//   "2 + 3 * 4" → BinOp(Add, BigIntLiteral(2), BinOp(Mul, BigIntLiteral(3), BigIntLiteral(4)))
 
 module InterpreterParser
 
@@ -270,8 +270,9 @@ let lex (input: string) : Result<Token list, string> =
                     | (true, value) -> emitNumber remaining (TFloat value)
                     | (false, _) -> Error $"Invalid float literal: {numStr}"
             | _ ->
-                // Interpreter syntax accepts legacy bare Int64 literals for
-                // upstream compatibility.
+                // Current interpreter syntax uses arbitrary-precision Int for
+                // every unsuffixed integer literal. The legacy I suffix remains
+                // accepted as a compiler extension; L selects Int64 explicitly.
                 let numStr = System.String(List.toArray intDigits)
                 let parseInt64OrError (remaining: char list) =
                     match System.Int64.TryParse(numStr) with
@@ -358,7 +359,7 @@ let lex (input: string) : Result<Token list, string> =
                 | 'U' :: 'L' :: rest ->
                     parseSizedIntOrError "UInt64" System.UInt64.TryParse TUInt64 rest
                 | _ ->
-                    parseInt64OrError afterInt
+                    parseBigIntOrError afterInt
         | '$' :: '"' :: rest ->
             // Parse interpolated string: $"Hello {name}!"
             // Returns TInterpString token with parts list
@@ -661,6 +662,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "String" :: rest -> Ok (AST.TString, rest)
     | TIdent "Blob" :: rest -> Ok (AST.TBlob, rest)
     | TIdent "Char" :: rest -> Ok (AST.TChar, rest)
+    | TIdent "DateTime" :: rest -> Ok (AST.TDateTime, rest)
     | TIdent "Float" :: rest -> Ok (AST.TFloat64, rest)
     | TIdent "Unit" :: rest -> Ok (AST.TUnit, rest)
     | TIdent "RawPtr" :: rest -> Ok (AST.TRawPtr, rest)  // Internal raw pointer type
@@ -2443,6 +2445,12 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         // Handle postfix operations: tuple access (.0, .1), field access (.fieldName),
         // and optional parenthesized call arguments.
         match toks with
+        | TDot :: TBigInt index :: rest ->
+            if index > bigint System.Int32.MaxValue then
+                Error "Tuple index is too large"
+            else
+                let accessExpr = TupleAccess (expr, int index)
+                parsePostfix accessExpr rest
         | TDot :: TInt64 index :: rest ->
             if index < 0L then
                 Error "Tuple index cannot be negative"

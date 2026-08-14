@@ -64,6 +64,7 @@ let rec private formatType (typ: Type) : string =
     | TString -> "String"
     | TBlob -> "Blob"
     | TChar -> "Char"
+    | TDateTime -> "DateTime"
     | TUnit -> "Unit"
     | TRuntimeError -> "RuntimeError"
     | TRawPtr -> "RawPtr"

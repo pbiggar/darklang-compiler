@@ -509,7 +509,7 @@ let testParseInterpreterParenthesizedSequenceWithTrailingLet () : TestResult =
         Error $"Expected single expression program for parenthesized sequence with trailing let, got: {other}"
 
 let testConditionalSequenceSameSourceShape () : TestResult =
-    let source = "if false then (() ; 1) elif true then (() ; 2) else (() ; 3)"
+    let source = "if false then (() ; 1L) elif true then (() ; 2L) else (() ; 3L)"
     let expected =
         If (
             BoolLiteral false,
@@ -613,7 +613,8 @@ let testInterpreterParserParsesBareIntLiteral () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on bare integer literal: {err}"
-    | Ok (Program [Expression (Let (LPVariable "x", Int64Literal 5L, Var "x"))]) ->
+    | Ok (Program [Expression (Let (LPVariable "x", BigIntLiteral value, Var "x"))])
+        when value = System.Numerics.BigInteger(5) ->
         Ok ()
     | Ok other ->
         Error $"Unexpected AST for bare integer literal: {other}"

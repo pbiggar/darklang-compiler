@@ -6039,7 +6039,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             runtimeInstrs (Runtime.generateRandomInt64 ctx.Target destReg))
 
     | LIR.DateTimeNow dest ->
-        // Generate current Unix epoch milliseconds as Int64.
+        // Generate the current UTC instant as 100ns Unix ticks.
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
             runtimeInstrs (Runtime.generateDateTimeNow ctx.Target destReg))

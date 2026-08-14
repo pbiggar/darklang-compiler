@@ -1604,6 +1604,7 @@ let isReflexiveEqualityType (opType: AST.Type) : bool =
     | AST.TUInt128
     | AST.TBool
     | AST.TChar
+    | AST.TDateTime
     | AST.TUnit -> true
     | _ -> false
 
@@ -1751,7 +1752,7 @@ let private isCrossBlockCSEType (opType: AST.Type) : bool =
     match opType with
     | AST.TInt64 | AST.TInt32 | AST.TInt16 | AST.TInt8
     | AST.TUInt64 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
-    | AST.TFloat64 | AST.TBool | AST.TChar -> true
+    | AST.TFloat64 | AST.TBool | AST.TChar | AST.TDateTime -> true
     | _ -> false
 
 /// Apply CSE to a CFG, carrying available expressions into dominated blocks.

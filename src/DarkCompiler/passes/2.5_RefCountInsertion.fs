@@ -204,7 +204,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FloatToBits _ -> Some AST.TUInt64
     | FloatToString _ -> Some AST.TString
     | RandomInt64 -> Some AST.TInt64
-    | DateTimeNow -> Some AST.TInt64
+    | DateTimeNow -> Some AST.TDateTime
     | StdoutWrite _ -> Some AST.TUnit
     | StdinReadLine -> Some AST.TString
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
@@ -487,7 +487,7 @@ let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Typ
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
-        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
         | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
             typ
 
@@ -514,7 +514,7 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
-        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
         | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
             typ
 

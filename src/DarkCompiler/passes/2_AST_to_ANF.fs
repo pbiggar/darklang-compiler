@@ -99,6 +99,7 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TString -> "str"
     | AST.TBlob -> "blob"
     | AST.TChar -> "char"
+    | AST.TDateTime -> "datetime"
     | AST.TFloat64 -> "f64"
     | AST.TUnit -> "unit"
     | AST.TRuntimeError -> "runtime_error"
@@ -193,6 +194,7 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
         | "str" -> Some AST.TString
         | "blob" -> Some AST.TBlob
         | "char" -> Some AST.TChar
+        | "datetime" -> Some AST.TDateTime
         | "unit" -> Some AST.TUnit
         | "rawptr" -> Some AST.TRawPtr
         | _ -> None
@@ -446,8 +448,12 @@ let tryRandomIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr opti
 let tryDateTimeIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     let args = normalizeNullaryIntrinsicArgs args
     match funcName, args with
-    | "Stdlib.DateTime.__nowMilliseconds", [] ->
+    | "Stdlib.DateTime.__now", [] ->
         Some ANF.DateTimeNow
+    | "Stdlib.DateTime.__fromUnixTimeTicks", [ticks] ->
+        Some (ANF.TypedAtom (ticks, AST.TDateTime))
+    | "Stdlib.DateTime.__toUnixTimeTicks", [date] ->
+        Some (ANF.TypedAtom (date, AST.TInt64))
     | _ -> None
 
 let isBuiltinUnwrapName (funcName: string) : bool =
@@ -547,7 +553,7 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
-        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
         | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
             typ
 
@@ -606,6 +612,7 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
     | AST.TString
     | AST.TBlob
     | AST.TChar
+    | AST.TDateTime
     | AST.TUnit
     | AST.TRawPtr
     | AST.TRuntimeError ->
@@ -716,6 +723,7 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TString -> "str"
     | AST.TBlob -> "blob"
     | AST.TChar -> "char"
+    | AST.TDateTime -> "datetime"
     | AST.TUnit -> "unit"
     | AST.TRuntimeError -> "runtime_error"
     | AST.TFunction (paramTypes, retType) ->
@@ -891,7 +899,7 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
     | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TUInt128
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Collect type variable names in first-seen order.
@@ -922,7 +930,7 @@ let rec collectTypeVarsInType (typ: AST.Type) (acc: string list) : string list =
     | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TUInt128
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
         acc
 
 /// Infer record type parameter order from field type variables.

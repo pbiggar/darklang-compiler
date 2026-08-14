@@ -1,0 +1,21 @@
+// Stdlib.Duration.dark - Portable canonical short-duration suffix parser.
+
+module Stdlib.Duration
+
+let parse(value: String) : Stdlib.Result.Result<Int, String> =
+    let length = Stdlib.String.length(value) in
+    if length < 2 then
+        Error("Duration too short: '" ++ value ++ "'; need a number + unit (s/m/h/d), e.g. 5m")
+    else
+        let unit = Stdlib.String.last(value, 1) in
+        let numberPart = Stdlib.String.dropLast(value, 1) in
+        match Stdlib.Int.parse(numberPart) with
+        | Error(_) ->
+            Error("Invalid duration '" ++ value ++ "'; need a number + unit (s/m/h/d), e.g. 5m")
+        | Ok(number) ->
+            match unit with
+            | "s" -> Ok(number)
+            | "m" -> Ok(Stdlib.Int.multiply(number, Stdlib.Int.fromInt64(60)))
+            | "h" -> Ok(Stdlib.Int.multiply(number, Stdlib.Int.fromInt64(3600)))
+            | "d" -> Ok(Stdlib.Int.multiply(number, Stdlib.Int.fromInt64(86400)))
+            | _ -> Error("Unknown unit '" ++ unit ++ "' in '" ++ value ++ "'; use s, m, h, or d")

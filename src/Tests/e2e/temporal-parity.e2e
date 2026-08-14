@@ -1,0 +1,26 @@
+// DateTime and Duration parity at canonical public boundaries.
+
+Stdlib.DateTime.toString(Stdlib.DateTime.fromMilliseconds(1564353756123I)) = "2019-07-28T22:42:36.123Z"
+Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.fromMilliseconds(-1I)) = -1I
+Stdlib.DateTime.toSeconds(Stdlib.DateTime.fromMilliseconds(-1I)) = -1I
+Stdlib.DateTime.year(Builtin.unwrap(Stdlib.DateTime.parse("2000-02-29T23:59:59.999Z"))) = 2000I
+Stdlib.DateTime.month(Builtin.unwrap(Stdlib.DateTime.parse("2000-02-29T23:59:59.999Z"))) = 2I
+Stdlib.DateTime.day(Builtin.unwrap(Stdlib.DateTime.parse("2000-02-29T23:59:59.999Z"))) = 29I
+Stdlib.DateTime.fromMilliseconds(0I) == Stdlib.DateTime.fromMilliseconds(0I) = true
+Stdlib.DateTime.fromMilliseconds(0I) == 0I = error="Cannot perform equality check on DateTime and Int"
+let temporalNeedsInt64(value: Int64): Int64 = value temporalNeedsInt64(Stdlib.DateTime.fromMilliseconds(0I)) = error="temporalNeedsInt64's 1st parameter `value` expects Int64, but got DateTime (DateTime)"
+let temporalNeedsInt(value: Int): Int = value temporalNeedsInt(Stdlib.DateTime.fromMilliseconds(0I)) = error="temporalNeedsInt's 1st parameter `value` expects Int, but got DateTime (DateTime)"
+let temporalNeedsDateTime(value: DateTime): DateTime = value temporalNeedsDateTime(0L) = error="temporalNeedsDateTime's 1st parameter `value` expects DateTime, but got Int64 (0)"
+let temporalNeedsDateTimeInt(value: DateTime): DateTime = value temporalNeedsDateTimeInt(0I) = error="temporalNeedsDateTimeInt's 1st parameter `value` expects DateTime, but got Int (0)"
+
+Stdlib.Duration.parse("30s") = Stdlib.Result.Result.Ok(30I)
+Stdlib.Duration.parse("5m") = Stdlib.Result.Result.Ok(300I)
+Stdlib.Duration.parse("1h") = Stdlib.Result.Result.Ok(3600I)
+Stdlib.Duration.parse("2d") = Stdlib.Result.Result.Ok(172800I)
+Stdlib.Duration.parse("+5m") = Stdlib.Result.Result.Ok(300I)
+Stdlib.Duration.parse(" -5m") = Stdlib.Result.Result.Ok(-300I)
+Stdlib.Duration.parse(" 5 m") = Stdlib.Result.Result.Ok(300I)
+Stdlib.Duration.parse("9223372036854775808d") = Stdlib.Result.Result.Ok(796899343984252629811200I)
+Stdlib.Duration.parse("5") = Stdlib.Result.Result.Error("Duration too short: '5'; need a number + unit (s/m/h/d), e.g. 5m")
+Stdlib.Duration.parse("xm") = Stdlib.Result.Result.Error("Invalid duration 'xm'; need a number + unit (s/m/h/d), e.g. 5m")
+Stdlib.Duration.parse("5x") = Stdlib.Result.Result.Error("Unknown unit 'x' in '5x'; use s, m, h, or d")

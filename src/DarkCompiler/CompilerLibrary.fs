@@ -1073,6 +1073,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/__HAMT.dark"
         "stdlib/Uuid.dark"
         "stdlib/DateTime.dark"
+        "stdlib/Duration.dark"
         "stdlib/Bytes.dark"
         "stdlib/Blob.dark"
         "stdlib/Char.dark"

@@ -2,16 +2,16 @@
 // into a number of seconds (arbitrary-precision Int).
 
 // --- units ---
-Stdlib.Duration.parse "30s" = Stdlib.Result.Result.Ok 30I
-Stdlib.Duration.parse "5m" = Stdlib.Result.Result.Ok 300I
-Stdlib.Duration.parse "1h" = Stdlib.Result.Result.Ok 3600I
-Stdlib.Duration.parse "2d" = Stdlib.Result.Result.Ok 172800I
-Stdlib.Duration.parse "0s" = Stdlib.Result.Result.Ok 0I
+Stdlib.Duration.parse "30s" = Stdlib.Result.Result.Ok 30
+Stdlib.Duration.parse "5m" = Stdlib.Result.Result.Ok 300
+Stdlib.Duration.parse "1h" = Stdlib.Result.Result.Ok 3600
+Stdlib.Duration.parse "2d" = Stdlib.Result.Result.Ok 172800
+Stdlib.Duration.parse "0s" = Stdlib.Result.Result.Ok 0
 
-// --- arbitrary precision: a value past Int64 range now parses (Stdlib.Int64.parse
+// --- arbitrary precision: a value past Int64 range now parses (Int64.parse
 // would have rejected it as out-of-range) ---
 Stdlib.Duration.parse "9223372036854775808s" =
-  Stdlib.Result.Result.Ok 9223372036854775808I
+  Stdlib.Result.Result.Ok 9223372036854775808
 
 // --- errors ---
 // too short (no unit)

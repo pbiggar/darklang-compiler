@@ -1,41 +1,11 @@
-Stdlib.DateTime.toString_v0(Stdlib.DateTime.fromMilliseconds(1564353756123)) = "2019-07-28T22:42:36.123Z"
-Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.now()) > 1000000000000 = true
-Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.fromMilliseconds(1564353756123)) = 1564353756123
-Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.fromMilliseconds(-1000)) = -1000
-Stdlib.DateTime.toSeconds_v0(Stdlib.DateTime.fromMilliseconds(-1)) = -1
-Stdlib.DateTime.toSeconds_v0(Stdlib.DateTime.fromSeconds_v0(3340954895)) = 3340954895
-Stdlib.DateTime.fromSeconds_v0(9223372036854775807) = error="Encountered out-of-range value for type of Int"
-Stdlib.DateTime.addSeconds_v0(Stdlib.DateTime.fromSeconds_v0(0), 9223372036854775807) = error="Encountered out-of-range value for type of Int"
-Stdlib.DateTime.toString_v0(Builtin.unwrap(Stdlib.DateTime.parse("2019-07-28T22:42:36Z"))) = "2019-07-28T22:42:36Z"
-Stdlib.DateTime.toString_v0(Builtin.unwrap(Stdlib.DateTime.parse("2019-07-28T22:42:36.001Z"))) = "2019-07-28T22:42:36.001Z"
-Stdlib.DateTime.toString_v0(Builtin.unwrap(Stdlib.DateTime.parse("2019-07-28T22:42:36.000Z"))) = "2019-07-28T22:42:36Z"
-Stdlib.DateTime.toString_v0(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = "1919-07-28T22:42:36Z"
-Stdlib.DateTime.toString_v0(Stdlib.DateTime.fromMilliseconds(-1)) = "1969-12-31T23:59:59.999Z"
-Stdlib.Result.isError(Stdlib.DateTime.parse("2019-02-29T00:00:00Z")) = true
-Stdlib.Result.isOk(Stdlib.DateTime.parse("2020-02-29T00:00:00Z")) = true
-Stdlib.Result.isError(Stdlib.DateTime.parse("2020-01-01T00:00:00.12Z")) = true
-Stdlib.Result.isError(Stdlib.DateTime.parse("2020-01-01T00:00:00z")) = true
-Stdlib.DateTime.year_v0(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = 1919
-Stdlib.DateTime.month_v0(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = 7
-Stdlib.DateTime.day_v0(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = 28
-Stdlib.DateTime.weekday_v0(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = 1
-Stdlib.DateTime.hour(Builtin.unwrap(Stdlib.DateTime.parse("1919-12-27T03:27:36Z"))) = 3
-Stdlib.DateTime.minute(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = 42
-Stdlib.DateTime.second(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = 36
-Stdlib.DateTime.millisecond(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36.456Z"))) = 456
-Stdlib.DateTime.toStringISO8601BasicDate_v0(Builtin.unwrap(Stdlib.DateTime.parse("1069-07-28T22:42:36Z"))) = "10690728"
-Stdlib.DateTime.toStringISO8601BasicDateTime_v0(Builtin.unwrap(Stdlib.DateTime.parse("1919-07-28T22:42:36Z"))) = "19190728T224236Z"
-Stdlib.DateTime.toString_v0(Stdlib.DateTime.atStartOfDay_v0(Builtin.unwrap(Stdlib.DateTime.parse("2019-07-28T22:42:36.123Z")))) = "2019-07-28T00:00:00Z"
-Stdlib.DateTime.toString_v0(Stdlib.DateTime.addSeconds_v0(Builtin.unwrap(Stdlib.DateTime.parse("2020-11-26T04:37:46Z")), 1000000)) = "2020-12-07T18:24:26Z"
-Stdlib.DateTime.toString_v0(Stdlib.DateTime.subtractSeconds(Builtin.unwrap(Stdlib.DateTime.parse("2020-11-26T04:37:46Z")), -10)) = "2020-11-26T04:37:56Z"
-Stdlib.DateTime.toString_v0(Stdlib.DateTime.addMilliseconds(Builtin.unwrap(Stdlib.DateTime.parse("2020-11-26T04:37:46Z")), -500)) = "2020-11-26T04:37:45.500Z"
-Stdlib.DateTime.toString_v0(Stdlib.DateTime.subtractMilliseconds(Builtin.unwrap(Stdlib.DateTime.parse("2020-11-26T04:37:46Z")), -500)) = "2020-11-26T04:37:46.500Z"
-Stdlib.DateTime.subtractMs(Stdlib.DateTime.fromMilliseconds(10000), Stdlib.DateTime.fromMilliseconds(0)) = 10000
-Stdlib.DateTime.subtract(Stdlib.DateTime.fromMilliseconds(500), Stdlib.DateTime.fromMilliseconds(0)) = 0
-Stdlib.DateTime.subtract(Stdlib.DateTime.fromMilliseconds(1500), Stdlib.DateTime.fromMilliseconds(0)) = 2
-Stdlib.DateTime.subtract(Stdlib.DateTime.fromMilliseconds(-1500), Stdlib.DateTime.fromMilliseconds(0)) = -2
-Stdlib.DateTime.lessThan(Stdlib.DateTime.fromMilliseconds(1), Stdlib.DateTime.fromMilliseconds(2)) = true
-Stdlib.DateTime.lessThanOrEqualTo(Stdlib.DateTime.fromMilliseconds(2), Stdlib.DateTime.fromMilliseconds(2)) = true
-Stdlib.DateTime.greaterThan(Stdlib.DateTime.fromMilliseconds(2), Stdlib.DateTime.fromMilliseconds(1)) = true
-Stdlib.DateTime.greaterThanOrEqualTo(Stdlib.DateTime.fromMilliseconds(2), Stdlib.DateTime.fromMilliseconds(2)) = true
-Stdlib.DateTime.atStartOfDay_v0(Stdlib.DateTime.today_v0()) = Stdlib.DateTime.today_v0()
+// Supplemental clock and full-range cases beyond the pinned interpreter corpus.
+
+Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.now()) > 1000000000000I = true
+Stdlib.DateTime.atStartOfDay(Stdlib.DateTime.today()) = Stdlib.DateTime.today()
+Stdlib.DateTime.hour(Stdlib.DateTime.today()) = 0I
+Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.fromMilliseconds(-377673580800000I)) = -377673580800000I
+Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.fromMilliseconds(253402300799999I)) = 253402300799999I
+Stdlib.DateTime.fromMilliseconds(-377673580800001I) = error="Encountered out-of-range value for type of Int"
+Stdlib.DateTime.fromMilliseconds(253402300800000I) = error="Encountered out-of-range value for type of Int"
+Stdlib.DateTime.addMilliseconds(Stdlib.DateTime.fromMilliseconds(253402300799999I), 1I) = error="Encountered out-of-range value for type of Int"
+Stdlib.DateTime.subtractMilliseconds(Stdlib.DateTime.fromMilliseconds(-377673580800000I), 1I) = error="Encountered out-of-range value for type of Int"

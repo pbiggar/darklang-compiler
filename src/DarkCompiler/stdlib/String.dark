@@ -496,9 +496,9 @@ let join(strs: List<String>, sep: String) : String =
     | [only] -> only ++ ""
     | [first, ...rest] -> first ++ sep ++ Stdlib.String.join(rest, sep)
 
-// Check if byte is ASCII whitespace (space, tab, newline, carriage return)
+// Check if byte is ASCII whitespace accepted by numeric parsing.
 let __isWhitespace(b: Int64) : Bool =
-    b == 32 || b == 9 || b == 10 || b == 13
+    b == 32 || b == 9 || b == 10 || b == 11 || b == 12 || b == 13
 
 // Trim leading whitespace
 let trimStart(s: String) : String =

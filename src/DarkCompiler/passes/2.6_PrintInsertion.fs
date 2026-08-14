@@ -88,12 +88,11 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             let callExpr = Call ("Stdlib.Float.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
-        | AST.TRecord ("DateTime", []) ->
-            // Type aliases are preserved at the program boundary. Display a
-            // DateTime through its public formatter instead of as its Int64 payload.
+        | AST.TDateTime ->
+            // DateTime is an opaque immediate; display it through its public formatter.
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
-            let callExpr = Call ("Stdlib.DateTime.toString_v0", [atom])
+            let callExpr = Call ("Stdlib.DateTime.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | _ ->

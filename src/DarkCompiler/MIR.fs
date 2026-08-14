@@ -137,7 +137,7 @@ type Instr =
     // Random intrinsics
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
     // DateTime intrinsics
-    | DateTimeNow of dest:VReg                 // Get current Unix epoch milliseconds as Int64
+    | DateTimeNow of dest:VReg                 // Get the current UTC instant as 100ns Unix ticks
     // Float to String conversion
     | FloatToString of dest:VReg * value:Operand   // Convert Float to heap String
     // SSA phi node - merges values from different predecessor blocks
