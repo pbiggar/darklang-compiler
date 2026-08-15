@@ -688,6 +688,76 @@ let testInterpreterParserParsesNewlineDelimitedListElements () : TestResult =
     | Ok other ->
         Error $"Expected single expression program, got: {other}"
 
+let testBothParsersNormalizeListSeparators () : TestResult =
+    let source = "[1L +\n0L; 2L // layout comment\n3L,]"
+    let expected =
+        Program
+            [Expression
+                (ListLiteral
+                    [BinOp (Add, Int64Literal 1L, Int64Literal 0L)
+                     Int64Literal 2L
+                     Int64Literal 3L])]
+    match Parser.parseString false source, InterpreterParser.parseString false source with
+    | Ok compilerProgram, Ok interpreterProgram
+        when compilerProgram = expected && interpreterProgram = expected ->
+        Ok ()
+    | Error error, _ | _, Error error ->
+        Error $"List separator probe failed to parse: {error}"
+    | other ->
+        Error $"List separators did not normalize to one AST: {other}"
+
+let testBothParsersNormalizeRightAssociativeConsPatterns () : TestResult =
+    let source = "match xs with | head :: second :: tail -> head | [] -> 0L"
+    let hasCanonicalConsPattern program =
+        match program with
+        | Program [Expression (Match (Var "xs", firstCase :: _))] ->
+            match firstCase.Patterns.Head with
+            | PListCons ([PVar "head"; PVar "second"], PVar "tail") -> true
+            | _ -> false
+        | _ -> false
+
+    match Parser.parseString false source, InterpreterParser.parseString false source with
+    | Ok compilerProgram, Ok interpreterProgram
+        when hasCanonicalConsPattern compilerProgram && hasCanonicalConsPattern interpreterProgram ->
+        Ok ()
+    | Error error, _ | _, Error error ->
+        Error $"Cons-pattern probe failed to parse: {error}"
+    | other ->
+        Error $"Cons patterns did not normalize to canonical right-associative PListCons: {other}"
+
+let testBothParsersNormalizeRightAssociativeListAppend () : TestResult =
+    let source = "[1L] @ [2L] @ [3L]"
+    let isCanonicalAppend program =
+        match program with
+        | Program [Expression (Call ("Stdlib.List.append", outerArgs))] ->
+            match NonEmptyList.toList outerArgs with
+            | [ListLiteral [Int64Literal 1L]; Call ("Stdlib.List.append", innerArgs)] ->
+                NonEmptyList.toList innerArgs =
+                    [ListLiteral [Int64Literal 2L]; ListLiteral [Int64Literal 3L]]
+            | _ -> false
+        | _ -> false
+
+    match Parser.parseString false source, InterpreterParser.parseString false source with
+    | Ok compilerProgram, Ok interpreterProgram
+        when isCanonicalAppend compilerProgram && isCanonicalAppend interpreterProgram ->
+        Ok ()
+    | Error error, _ | _, Error error ->
+        Error $"List-append probe failed to parse: {error}"
+    | other ->
+        Error $"List append did not normalize to right-associative List.append calls: {other}"
+
+let testBothParsersRejectListSpread () : TestResult =
+    let expressionSpread = "[1L, ...tail]"
+    let patternSpread = "match xs with | [head, ...tail] -> head | _ -> 0L"
+    match
+        Parser.parseString false expressionSpread,
+        InterpreterParser.parseString false expressionSpread,
+        Parser.parseString false patternSpread,
+        InterpreterParser.parseString false patternSpread
+    with
+    | Error _, Error _, Error _, Error _ -> Ok ()
+    | results -> Error $"Former list spread syntax was unexpectedly accepted: {results}"
+
 let testInterpreterParserParsesBacktickIdentifiers () : TestResult =
     let source =
         "type Sample = { ``ALLCAPS``: Int64; ``true``: Bool }\n"
@@ -901,6 +971,10 @@ let tests = [
     ("parse negative int8 minimum literal", testInterpreterParserParsesNegativeInt8MinLiteral)
     ("parse comma-separated lists", testInterpreterParserParsesCommaSeparatedLists)
     ("parse newline-delimited list elements", testInterpreterParserParsesNewlineDelimitedListElements)
+    ("normalize list separators in both parsers", testBothParsersNormalizeListSeparators)
+    ("normalize right-associative cons patterns in both parsers", testBothParsersNormalizeRightAssociativeConsPatterns)
+    ("normalize right-associative list append in both parsers", testBothParsersNormalizeRightAssociativeListAppend)
+    ("reject list spread in both parsers", testBothParsersRejectListSpread)
     ("parse backtick identifiers", testInterpreterParserParsesBacktickIdentifiers)
     ("record field boundary blocks space application", testInterpreterParserDoesNotCrossRecordFieldBoundaryWithApplication)
     ("record field boundary blocks qualified constructor payload", testInterpreterParserDoesNotCrossRecordFieldBoundaryWithQualifiedConstructor)

@@ -241,7 +241,6 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
                 { matchCase with Guard = Option.map recurse matchCase.Guard; Body = recurse matchCase.Body })
         )
     | ListLiteral elements -> ListLiteral (List.map recurse elements)
-    | ListCons (heads, tail) -> ListCons (List.map recurse heads, recurse tail)
     | Lambda (parameters, returnAnnotation, body) -> Lambda (parameters, returnAnnotation, recurse body)
     | Apply (func, callArgs) -> Apply (recurse func, NonEmptyList.map recurse callArgs)
     | IndirectApply (func, callArgs) -> IndirectApply (recurse func, NonEmptyList.map recurse callArgs)
@@ -899,8 +898,6 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
                              Body = applySubstToExpr subst mc.Body }))
     | ListLiteral elements ->
         ListLiteral (List.map (applySubstToExpr subst) elements)
-    | ListCons (heads, tail) ->
-        ListCons (List.map (applySubstToExpr subst) heads, applySubstToExpr subst tail)
     | Lambda (params', returnAnnotation, body) ->
         let concreteParams =
             params'
@@ -1201,11 +1198,7 @@ let private buildEqExprForType
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TList elemType ->
         let resolvedElemType = resolveType aliasReg elemType
-        match resolvedElemType with
-        | _ when needsEqHelperForResolvedType variantLookup resolvedElemType ->
-            makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
-        | _ ->
-            TypeApp ("Stdlib.List.equals", [resolvedElemType], NonEmptyList.fromList [leftExpr; rightExpr])
+        makeInternalTypeApp (EqHelperDispatchTypeApp (TList resolvedElemType, leftExpr, rightExpr))
     | _ when needsEqHelperForResolvedType variantLookup resolvedType ->
         makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
     | _ ->
@@ -1550,10 +1543,6 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         Set.union scrutineeFree (casesFree |> List.fold Set.union Set.empty)
     | ListLiteral elements ->
         elements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
-    | ListCons (headElements, tail) ->
-        let headsFree = headElements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
-        let tailFree = collectFreeVars tail bound
-        Set.union headsFree tailFree
     | Lambda (parameters, returnAnnotation, body) ->
         let paramNames =
             parameters
@@ -2036,7 +2025,6 @@ let rec private checkExprWithParamNames
         | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
         | Constructor (_, _, payload) -> payload |> Option.bind (tryFindCallArguments targetName)
-        | ListCons (head, tail) -> head @ [tail] |> tryChildren
         | Apply (func, args)
         | IndirectApply (func, args) -> func :: NonEmptyList.toList args |> tryChildren
         | Closure (_, captures) -> tryChildren captures
@@ -2110,7 +2098,6 @@ let rec private checkExprWithParamNames
             scrutinee
             :: (cases |> List.collect (fun case -> Option.toList case.Guard @ [case.Body]))
             |> tryChildren
-        | ListCons (head, tail) -> head @ [tail] |> tryChildren
         | Apply (func, arguments)
         | IndirectApply (func, arguments) -> func :: NonEmptyList.toList arguments |> tryChildren
         | Closure (_, captures) -> tryChildren captures
@@ -4958,7 +4945,8 @@ let rec private checkExprWithParamNames
             // lambda/list literals in expected contexts reconcile type variables consistently.
             let firstExpectedType =
                 match expectedType with
-                | Some (TList expectedElemType) -> Some expectedElemType
+                | Some (TList expectedElemType) when not (containsTVar expectedElemType) ->
+                    Some expectedElemType
                 | _ -> None
             checkExpr first env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg firstExpectedType
             |> Result.bind (fun (elemType, first') ->
@@ -4981,41 +4969,6 @@ let rec private checkExprWithParamNames
                         | Some reconciledType -> Ok (reconciledType, ListLiteral elements')
                         | None -> Error (TypeMismatch (expected, listType, "list literal"))
                     | None -> Ok (listType, ListLiteral elements')))
-
-    | ListCons (headElements, tail) ->
-        // Type-check tail first to get element type
-        // Pass expected type to tail if it's a list type
-        let tailExpectedType =
-            match expectedType with
-            | Some (TList _) -> expectedType
-            | _ -> None
-        checkExpr tail env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg tailExpectedType
-        |> Result.bind (fun (tailType, tail') ->
-            match tailType with
-            | TList elemType ->
-                // Type-check each head element with the inferred element type
-                // Track the most concrete element type as we process elements
-                let rec checkHeads elems currentElemType acc =
-                    match elems with
-                    | [] -> Ok (currentElemType, List.rev acc)
-                    | h :: rest ->
-                        checkExpr h env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some currentElemType)
-                        |> Result.bind (fun (hType, h') ->
-                            // Use reconcileTypes to allow type variables to unify with concrete types
-                            match reconcileTypes (Some aliasReg) currentElemType hType with
-                            | None -> Error (TypeMismatch (currentElemType, hType, "list cons element"))
-                            | Some reconciledElemType -> checkHeads rest reconciledElemType (h' :: acc))
-                checkHeads headElements elemType []
-                |> Result.bind (fun (finalElemType, heads') ->
-                    let listType = TList finalElemType
-                    match expectedType with
-                    | Some expected ->
-                        // Use reconcileTypes to allow type variables to unify with concrete types
-                        match reconcileTypes (Some aliasReg) expected listType with
-                        | None -> Error (TypeMismatch (expected, listType, "list cons"))
-                        | Some reconciledType -> Ok (reconciledType, ListCons (heads', tail'))
-                    | None -> Ok (listType, ListCons (heads', tail')))
-            | other -> Error (TypeMismatch (TList (TVar "t"), other, "list cons tail must be a list")))
 
     | Lambda (parameters, returnAnnotation, body) ->
         let parametersList = NonEmptyList.toList parameters
@@ -5146,7 +5099,6 @@ let rec private checkExprWithParamNames
                     state
                     |> fun current -> case.Guard |> Option.map (fun guard -> collect (Some TBool) guard current) |> Option.defaultValue current
                     |> collect expected case.Body) afterScrutinee
-            | ListCons (head, tail) -> collectChildren (head @ [tail]) constraints
             | Closure (_, captures) -> collectChildren captures constraints
             | InterpolatedString parts ->
                 parts
@@ -5474,8 +5426,11 @@ let rec private buildEqHelperExpr
                 (BinOp (And, headsEqual, tailsEqual))
         Match (TupleLiteral [leftExpr; rightExpr], [bothEmpty; bothNonEmpty; makeSimpleMatchCase PWildcard (BoolLiteral false)])
 
-    | _, TList elemType ->
-        TypeApp ("Stdlib.List.equals", [resolveType aliasReg elemType], NonEmptyList.fromList [leftExpr; rightExpr])
+    | UseHelperCall, TList elemType ->
+        Call (
+            eqHelperName (TList (resolveType aliasReg elemType)),
+            NonEmptyList.fromList [leftExpr; rightExpr]
+        )
 
     | ExpandCurrent, TString ->
         BinOp (Eq, leftExpr, rightExpr)
@@ -6081,7 +6036,6 @@ let rec private collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (exp
                 Set.union guardTypes (recurse matchCase.Body))
             |> List.fold Set.union Set.empty
         Set.union (recurse scrutinee) caseTypes
-    | ListCons (heads, tailExpr) -> Set.union (collectFromExprs heads) (recurse tailExpr)
     | Lambda (_, _, body) -> recurse body
     | Apply (funcExpr, args) | IndirectApply (funcExpr, args) ->
         Set.union (recurse funcExpr) (collectFromExprs (NonEmptyList.toList args))
@@ -6166,8 +6120,6 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         Set.union scrutineeTypes caseTypes
     | ListLiteral elements ->
         collectFromExprs elements
-    | ListCons (headElements, tailExpr) ->
-        Set.union (collectFromExprs headElements) (collectEqHelperTypesFromExpr aliasReg tailExpr)
     | Lambda (_, _, body) ->
         collectEqHelperTypesFromExpr aliasReg body
     | Apply (funcExpr, args)
@@ -6248,8 +6200,6 @@ let rec private materializeHelperCallsInExpr
         )
     | ListLiteral elements ->
         ListLiteral (List.map recurse elements)
-    | ListCons (headElements, tailExpr) ->
-        ListCons (List.map recurse headElements, recurse tailExpr)
     | Lambda (parameters, returnAnnotation, body) ->
         Lambda (parameters, returnAnnotation, recurse body)
     | Apply (funcExpr, args) ->
@@ -6543,10 +6493,6 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         Set.union scrutineeSpecs caseSpecs
     | ListLiteral elements ->
         elements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
-    | ListCons (headElements, tail) ->
-        Set.union
-            (headElements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty)
-            (collectTypeAppSpecs tail)
     | Lambda (_, _, body) ->
         collectTypeAppSpecs body
     | Apply (funcExpr, args)
@@ -6909,7 +6855,6 @@ let private resolveProgramNames
             |> Result.bind (fun record' -> updates |> ResultList.traverse (fun (field, value) -> recurse value |> Result.map (fun value' -> (field, value'))) |> Result.map (fun updates' -> RecordUpdate (record', updates')))
         | RecordAccess (record, fieldName) -> recurse record |> Result.map (fun record' -> RecordAccess (record', fieldName))
         | ListLiteral elements -> ResultList.traverse recurse elements |> Result.map ListLiteral
-        | ListCons (heads, tail) -> ResultList.traverse recurse heads |> Result.bind (fun heads' -> recurse tail |> Result.map (fun tail' -> ListCons (heads', tail')))
         | Apply (func, args) -> recurse func |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> Apply (func', args')))
         | IndirectApply (func, args) ->
             recurse func

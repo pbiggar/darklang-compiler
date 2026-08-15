@@ -44,7 +44,7 @@ let __envArgs(env: List<(String, String)>) : List<String> =
 let __firstInvalidEnv(env: List<(String, String)>) : Stdlib.Option.Option<String> =
     match env with
     | [] -> Stdlib.Option.Option.None
-    | [(key, _), ...rest] -> if Stdlib.String.contains(key, "=") || Stdlib.String.contains(key, " ") then Some(key) else Stdlib.Cli.Process.__firstInvalidEnv(rest)
+    | (key, _) :: rest -> if Stdlib.String.contains(key, "=") || Stdlib.String.contains(key, " ") then Some(key) else Stdlib.Cli.Process.__firstInvalidEnv(rest)
 
 let runWithEnv(program: String, args: List<String>, env: List<(String, String)>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
     match Stdlib.Cli.Process.__firstInvalidEnv(env) with

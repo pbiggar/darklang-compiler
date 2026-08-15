@@ -39,5 +39,5 @@ type MyList118<'t> = List<t>
 // Use the alias with a concrete type argument
 // If the mutation is applied, the alias won't resolve because substitution is skipped
 // when typeParams.Length = args.Length (should be <>, mutation makes it =)
-let sumMyList(xs: MyList118<Int64>): Int64 = match xs with | [] -> 0 | [x, ...rest] -> x + sumMyList(rest)
+let sumMyList(xs: MyList118<Int64>): Int64 = match xs with | [] -> 0 | x :: rest -> x + sumMyList(rest)
 sumMyList([10, 20, 12]) = 42

@@ -17,7 +17,7 @@ match [] with | [x] -> x | [] -> 99 = 99
 match [] with | [] -> true | [x] -> x | _ -> false = true
 
 // Empty list should not erase element types when cons'ing tuples
-let xs = [] in let ys = [("hi", "there"), ...xs] in match ys with | [(a, b)] -> a ++ b | [] -> "" = "hithere"
+let xs = [] in let ys = [("hi", "there")] @ xs in match ys with | [(a, b)] -> a ++ b | [] -> "" = "hithere"
 
 // Nested Int64 list display should format inner lists, not read inner list pointers as integers.
 [[1, 2], [3, 4]] = stdout="[[1, 2], [3, 4]]\n" stderr=""
@@ -216,39 +216,39 @@ let bs = [true, false, true] in match bs with | [a, b, c] -> if a && c then 1 el
 let xs = [10, 20, 30] in match xs with | [a, b, c] -> a + b + c | _ -> 0 = 60
 
 // =====================================================
-// Cons Pattern Tests [h, ...t]
+// Cons Pattern Tests h :: t
 // =====================================================
 
 // Basic cons pattern - extract head
-match [1, 2, 3] with | [h, ...t] -> h | [] -> 0 = 1
+match [1, 2, 3] with | h :: t -> h | [] -> 0 = 1
 
 // Cons pattern - tail is a list
-match [1, 2, 3] with | [h, ...t] -> match t with | [a, b] -> a + b | _ -> 0 | [] -> 0 = 5
+match [1, 2, 3] with | h :: t -> match t with | [a, b] -> a + b | _ -> 0 | [] -> 0 = 5
 
-// Empty list doesn't match [h, ...t]
-match [] with | [h, ...t] -> 1 | [] -> 0 = 0
+// Empty list doesn't match h :: t
+match [] with | h :: t -> 1 | [] -> 0 = 0
 
 // Single element - tail is empty
-match [42] with | [h, ...t] -> match t with | [] -> h | _ -> 0 | [] -> 0 = 42
+match [42] with | h :: t -> match t with | [] -> h | _ -> 0 | [] -> 0 = 42
 
 // Multiple head elements before rest
-match [1, 2, 3, 4] with | [a, b, ...t] -> a + b | [] -> 0 | _ -> 0 = 3
+match [1, 2, 3, 4] with | a :: b :: t -> a + b | [] -> 0 | _ -> 0 = 3
 
 // Wildcard in head position
-match [1, 2, 3] with | [_, ...t] -> match t with | [a, b] -> a + b | _ -> 0 | [] -> 0 = 5
+match [1, 2, 3] with | _ :: t -> match t with | [a, b] -> a + b | _ -> 0 | [] -> 0 = 5
 
 // Wildcard as tail
-match [1, 2, 3] with | [h, ..._] -> h | [] -> 0 = 1
+match [1, 2, 3] with | h :: _ -> h | [] -> 0 = 1
 
-// Rest pattern matches any list including empty: [...t]
-match [] with | [...t] -> 1 | _ -> 0 = 1
-match [1] with | [...t] -> 1 | _ -> 0 = 1
+// A variable pattern matches any list, including empty.
+match [] with | t -> 1 = 1
+match [1] with | t -> 1 = 1
 
 // Recursive length using cons pattern
-let length(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
+let length(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | _ :: t -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
 
 // Recursive sum using cons pattern
-let sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
+let sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | h :: t -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
 
 // =====================================================
 // Stdlib.List Function Tests
@@ -298,30 +298,30 @@ type Item = { id: Int64, name: String } match [Item { id = 1, name = "one" }, It
 type Item = { id: Int64, name: String } match [Item { id = 1, name = "one" }, Item { id = 2, name = "two" }, Item { id = 3, name = "three" }, Item { id = 4, name = "four" }, Item { id = 5, name = "five" }, Item { id = 6, name = "six" }, Item { id = 7, name = "seven" }, Item { id = 8, name = "eight" }, Item { id = 9, name = "nine" }, Item { id = 10, name = "ten" }] with | [a, b, c, d, e, f, g, h, i, j] -> j.name | _ -> "" = "ten"
 
 // =====================================================
-// List Spread Construction Tests [a, b, ...rest]
+// List Append Construction Tests
 // =====================================================
 
 // Basic spread construction - prepend single element
-let x = [2, 3] in Stdlib.List.length([1, ...x]) = 3I
+let x = [2, 3] in Stdlib.List.length([1] @ x) = 3I
 // Prepend multiple elements
-let x = [3, 4] in Stdlib.List.length([1, 2, ...x]) = 4I
+let x = [3, 4] in Stdlib.List.length([1, 2] @ x) = 4I
 // Empty spread - just return tail
-let x = [1, 2, 3] in Stdlib.List.length([...x]) = 3I
+let x = [1, 2, 3] in Stdlib.List.length(x) = 3I
 // Spread with empty tail (use function to get typed empty list)
-let emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = 2I
+let emptyList() : List<Int64> = [] Stdlib.List.length([1, 2] @ emptyList()) = 2I
 // Verify element values with pattern matching
-let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = 6
+let x = [2, 3] in match [1] @ x with | [a, b, c] -> a + b + c | _ -> 0 = 6
 
 // Prepend computed value
-let x = [2, 3] in match [10 + 1, ...x] with | [a, b, c] -> a | _ -> 0 = 11
+let x = [2, 3] in match [10 + 1] @ x with | [a, b, c] -> a | _ -> 0 = 11
 
 // Use in match case body
-match [1, 2, 3] with | [h, ...rest] -> Stdlib.List.length([h, ...rest]) | [] -> 0I = 3I
+match [1, 2, 3] with | h :: rest -> Stdlib.List.length([h] @ rest) | [] -> 0I = 3I
 // Rebuild list with modified head
-match [1, 2, 3] with | [h, ...rest] -> match [h + 10, ...rest] with | [a, b, c] -> a + b + c | _ -> 0 | [] -> 0 = 16
+match [1, 2, 3] with | h :: rest -> match [h + 10] @ rest with | [a, b, c] -> a + b + c | _ -> 0 | [] -> 0 = 16
 
 // Chain of spreads
-let a = [3] in let b = [2, ...a] in Stdlib.List.length([1, ...b]) = 3I
+let a = [3] in let b = [2] @ a in Stdlib.List.length([1] @ b) = 3I
 // =====================================================
 // Lists of Floats
 // KNOWN BUG: Float list pattern matching fails - lists fall through to wildcard
@@ -354,7 +354,7 @@ let makePairs(n: Int64) : List<(Int64, Int64)> =
     if n <= 0 then
         []
     else
-        [(n, n + 1), ...makePairs(n - 1)]
+        Stdlib.List.push<(Int64, Int64)>(makePairs(n - 1), (n, n + 1))
 
 let pairs = makePairs(1) in match pairs with | [(a, b)] -> a + b | _ -> 999 = 3
 
@@ -367,7 +367,7 @@ match [(100, 40, 7)] with | [(a, b, c)] -> a - b - c | _ -> 0 = 53
 
 // Tuple arity mismatch under a guard should not bind missing elements as Int64 defaults.
 // This pattern cannot match a 2-tuple list element and must fall through.
-match [(1, 2)] with | [(a, b, c)] when true -> 1 = error="Non-exhaustive match: No matching case found for value <unknown> in match expression"
+match [(1, 2)] with | [(a, b, c)] when true -> 1 = error="Non-exhaustive match: No matching case found for value [(1, 2)] in match expression"
 
 // List of float tuples
 match [(1.0, 2.5), (3.5, 4.0)] with | [t1, t2] -> t1.0 + t1.1 + t2.0 + t2.1 | _ -> 0.0 = 11.0
@@ -405,11 +405,11 @@ match [true, false] with | [a, b] -> if a && b then 1 else 0 | _ -> -1 = 0
 // =====================================================
 
 // Sum list of floats recursively
-// DISABLED (same float list bug): let sumFloats(xs: List<Float>) : Float = match xs with | [] -> 0.0 | [h, ...t] -> h + sumFloats(t)
+// DISABLED (same float list bug): let sumFloats(xs: List<Float>) : Float = match xs with | [] -> 0.0 | h :: t -> h + sumFloats(t)
 // DISABLED: sumFloats([1.0, 2.0, 3.0, 4.0]) = stdout="10.00\n"
 
 // Concatenate list of strings
-let concatStrings(xs: List<String>) : String = match xs with | [] -> "" | [h, ...t] -> h ++ concatStrings(t)
+let concatStrings(xs: List<String>) : String = match xs with | [] -> "" | h :: t -> h ++ concatStrings(t)
 concatStrings(["a", "b", "c"]) = "abc"
 
 // =====================================================
@@ -493,14 +493,14 @@ match [(1000, 100, 10, 1)] with | [(a, b, c, d)] -> a - b - c - d | _ -> 999 = 8
 // =====================================================
 // Tests that wildcards inside tuple patterns correctly increment the index
 // when extracting subsequent elements in collectTupleBindings within collectListConsBindings.
-// This is specifically for list cons patterns like [(a, _, c), ...rest] where the head
+// This is specifically for list cons patterns like (a, _, c) :: rest where the head
 // element is a tuple containing wildcards.
 // If idx + 1 were changed to idx - 1 in the PWildcard case inside the nested collectTupleBindings
 // (within collectListConsBindings), the element after the wildcard would be extracted from wrong index.
-match [(100, 50, 7), (1, 2, 3)] with | [(a, _, c), ...rest] -> a - c | [] -> 999 = 93
+match [(100, 50, 7), (1, 2, 3)] with | (a, _, c) :: rest -> a - c | [] -> 999 = 93
 
 // Verify with more elements after the wildcard in tuple inside cons pattern
-match [(1000, 500, 100, 10), (1, 2, 3, 4)] with | [(a, _, c, d), ...rest] -> a - c - d | [] -> 999 = 890
+match [(1000, 500, 100, 10), (1, 2, 3, 4)] with | (a, _, c, d) :: rest -> a - c - d | [] -> 999 = 890
 
 // =====================================================
 // Tuple destructuring in multi-element list patterns (kills mutation #87)
@@ -632,20 +632,20 @@ let xs = [10, 20, 30, 40, 50, 60, 70] in Stdlib.Option.withDefault(Stdlib.List.g
 // If the <> 0 check were changed to = 0, the cons pattern would incorrectly
 // treat single-element lists as empty and fall through to the [] branch.
 //
-// Key test: A single-element list matched with [h, ...t] should extract h,
+// Key test: A single-element list matched with h :: t should extract h,
 // not fall through to the empty list case.
 let checkSingle119(xs: List<Int64>) : Int64 =
     match xs with
     | [] -> 0
-    | [h, ...t] -> h + 1000
+    | h :: t -> h + 1000
 
-// Single-element list should match [h, ...t], returning head + 1000
+// Single-element list should match h :: t, returning head + 1000
 checkSingle119([42]) = 1042
 
 // Empty list should match [], returning 0
 checkSingle119([]) = 0
 
-// Multi-element list (DEEP node) should also match [h, ...t]
+// Multi-element list should also match h :: t
 checkSingle119([10, 20, 30]) = 1010
 
 // =====================================================
@@ -653,7 +653,7 @@ checkSingle119([10, 20, 30]) = 1010
 // =====================================================
 // Tests that the guard condition for list cons patterns correctly uses <> (not =)
 // when checking if the list is not nil. This guard is generated in compileListConsGuard
-// for patterns like [h, ...t] which require at least one element.
+// for patterns like h :: t which require at least one element.
 // If the <> 0 check were changed to = 0, the cons pattern would incorrectly
 // match empty lists and reject non-empty lists.
 //
@@ -667,7 +667,7 @@ checkSingle119([10, 20, 30]) = 1010
 let checkGuard120(xs: List<Int64>) : Int64 =
     match xs with
     | [] -> 100
-    | [h, ...t] -> h + 200
+    | h :: t -> h + 200
 
 // Non-empty list should match cons pattern, returning head + 200
 checkGuard120([50]) = 250
@@ -679,7 +679,7 @@ checkGuard120([]) = 100
 // Test with cons pattern as first alternative to exercise guard check path
 let checkGuardFirst120(xs: List<Int64>) : Int64 =
     match xs with
-    | [h, ...t] -> h + 300
+    | h :: t -> h + 300
     | [] -> 400
 
 // Non-empty list should match cons pattern
@@ -699,17 +699,17 @@ checkGuardFirst120([]) = 400
 // incorrectly considered as not occurring, causing dead code elimination
 // to remove the let binding.
 //
-// This test uses a variable only in the tail of the list cons [1, ...xs].
+// This test uses a variable only in the tail of the list cons 1 :: xs.
 // The variable xs must be recognized as used; otherwise the compiler would
 // eliminate the let binding and produce incorrect code.
-let xs = [42] in match [1, ...xs] with | [a, b] -> a + b | _ -> 0 = 43
+let xs = [42] in match [1] @ xs with | [a, b] -> a + b | _ -> 0 = 43
 
 // List<Float> cons destructuring must preserve the floating-point representation
 // for heads extracted from both singleton and multi-element skew lists.
 let sumFloatList(xs: List<Float>) : Float =
     match xs with
     | [] -> 0.0
-    | [head, ...tail] -> head + sumFloatList(tail)
+    | head :: tail -> head + sumFloatList(tail)
 
 Stdlib.Float.toInt(sumFloatList([1.5, 2.25]) * 100.0) = 375
 
@@ -734,7 +734,7 @@ match WrappedFloatList([1.5]) with | WrappedFloatList([value]) -> Stdlib.Float.t
 // If the head is incorrectly typed as Float64, the integer bit pattern
 // would be interpreted as a float, giving a wrong result.
 let makeIntList167() : List<Int64> = [42, 84, 126]
-match makeIntList167() with | [h, ...t] -> h + 100 | [] -> 999 = 142
+match makeIntList167() with | h :: t -> h + 100 | [] -> 999 = 142
 
 // =====================================================
 // List head type tracking via TFunction test (kills mutation #168)
@@ -751,7 +751,7 @@ match makeIntList167() with | [h, ...t] -> h + 100 | [] -> 999 = 142
 // This test creates a function that returns List<Int64>, stores it as a
 // first-class function value, calls it, and accesses the head. This exercises
 // the TFunction path in TypeMap lookup.
-let makeList168(n: Int64) : List<Int64> = [55 + n, 110, 165] let f = makeList168 in match f(0) with | [h, ...t] -> h + 200 | [] -> 999 = stdout="255\n"
+let makeList168(n: Int64) : List<Int64> = [55 + n, 110, 165] let f = makeList168 in match f(0) with | h :: t -> h + 200 | [] -> 999 = stdout="255\n"
 
 // =====================================================
 // List head type tracking in convertExprToOperand (kills mutation #169)
@@ -770,7 +770,7 @@ let makeList168(n: Int64) : List<Int64> = [55 + n, 110, 165] let f = makeList168
 // the convertExprToOperand code path rather than the convertExpr path.
 let testListInBranch169(flag: Bool) : Int64 =
     if flag then
-        let xs = [55, 110, 165] in match xs with | [h, ...t] -> h | [] -> 0
+        let xs = [55, 110, 165] in match xs with | h :: t -> h | [] -> 0
     else
         999
 testListInBranch169(true) = 55
@@ -789,7 +789,7 @@ testListInBranch169(true) = 55
 //
 // This test combines the closure pattern from #168 with the branch context
 // from #169 to exercise the TFunction->TList case in convertExprToOperand.
-let makeList170(n: Int64) : List<Int64> = [77 + n, 154, 231] let testBranch170(flag: Bool) : Int64 = if flag then let f = makeList170 in match f(0) with | [h, ...t] -> h | [] -> 0 else 999 testBranch170(true) = 77
+let makeList170(n: Int64) : List<Int64> = [77 + n, 154, 231] let testBranch170(flag: Bool) : Int64 = if flag then let f = makeList170 in match f(0) with | h :: t -> h | [] -> 0 else 999 testBranch170(true) = 77
 
 // Compound list elements use the same recursive value renderer.
 [(1, 2)] = stdout="[(1, 2)]\n"

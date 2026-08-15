@@ -7,20 +7,28 @@ counting for every shared root, structural edge, and managed element payload.
 ## Surface Syntax
 
 ```dark
-[]                    // empty list
-[1, 2, 3]             // list literal
-[head, ...tail]       // prepend
-Stdlib.List.push(xs, x)
+[]                       // empty list
+[1, 2, 3]                // comma-separated literal
+[1; 2; 3;]               // semicolons and trailing separators are accepted
+[left] @ [middle, right]  // right-associative append
+Stdlib.List.push(xs, x)   // prepend a value
 ```
+
+Newlines may also separate literal elements. All separator forms normalize to
+one homogeneous `ListLiteral`; spread syntax is not part of the language.
 
 Pattern matching supports empty, exact-length, and head/tail forms:
 
 ```dark
 match xs with
 | [] -> "empty"
-| [h, ...t] -> "non-empty"
+| h :: t -> "non-empty"
+| first :: second :: rest -> "at least two"
 | [a, b] -> "exactly two"
 ```
+
+`::` is a right-associative pattern operator. It is not an expression-level
+constructor; use `List.push` to prepend and `@`/`List.append` to concatenate.
 
 ## Runtime Representation
 
@@ -48,7 +56,7 @@ weight-one digit or splits one complete tree into two child digits.
 | Operation | Complexity |
 |---|---|
 | `push`, `head`, `tail`, `length`, `isEmpty` | O(1) worst case |
-| `getAt`, `getAtOrDefault`, `setAt`, `last` | O(log n) |
+| `getAt`, `last`, extension `getAtOrDefault`, private `setAt` | O(log n) |
 | `map`, `filter`, `reverse`, `append` | O(n) |
 | `pushBack`, `dropLast` | O(n) |
 
@@ -57,6 +65,21 @@ plus one digit per source digit. Traversal-oriented operations use repeated
 head/tail with O(1) prepend accumulators and reverse once where order requires
 it. Workloads that repeatedly append at the right should instead build in
 reverse with `push`.
+
+## Public Contract
+
+`Stdlib.List.empty` is a polymorphic value, not a nullary function. Public
+indices, counts, lengths, range bounds, chunk sizes, and comparator results use
+arbitrary-precision `Int`; native operations perform checked conversions.
+`range` includes both bounds, `repeat` validates negative counts and returns a
+`Result`, and exact `zip` returns an `Option` while `zipShortest` truncates.
+
+The module also provides the interpreter-compatible traversal, predicate,
+pairwise, sorting, uniqueness, grouping, partition, iteration, random-element,
+and chunking functions. See [`../list-parity.md`](../list-parity.md) for the
+revision-stamped signature and behavior matrix. Names beginning with `__` and
+the `Stdlib.Internal.SkewList` module are private compiler implementation
+surface.
 
 ## Lowering and Reference Counting
 

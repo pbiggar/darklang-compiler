@@ -471,14 +471,6 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         elements
         |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
         |> combineMany
-    | ListCons (headElements, tailExpr) ->
-        let headRefs =
-            headElements
-            |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-            |> combineMany
-        let tailRefs =
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars tailExpr
-        Set.union headRefs tailRefs
     | Lambda (parameters, _, bodyExpr) ->
         let lambdaBoundVars =
             parameters

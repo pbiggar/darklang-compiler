@@ -12,7 +12,7 @@ let divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int6
             let current = carry * 10 + digit in
             let newDigit = current / n in
             let newCarry = current % n in
-            let updated = Stdlib.List.setAt<Int64>(digits, idx, newDigit) in
+            let updated = Stdlib.Internal.SkewList.setAt<Int64>(digits, idx, newDigit) in
             divideByN(updated, n, newCarry, idx + 1, len)
 
 // Add the current factorial term right-to-left, matching Rust's reverse loop.
@@ -28,7 +28,7 @@ let addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : 
                 let total = eDigit + termDigit + carry in
                 let newDigit = total % 10 in
                 let newCarry = total / 10 in
-                let updated = Stdlib.List.setAt<Int64>(e, idx, newDigit) in
+                let updated = Stdlib.Internal.SkewList.setAt<Int64>(e, idx, newDigit) in
                 addWithCarry(updated, term, newCarry, idx - 1)
 
 let addFactorialTerms(e: List<Int64>, term: List<Int64>, n: Int64, len: Int64) : List<Int64> =
@@ -39,7 +39,7 @@ let addFactorialTerms(e: List<Int64>, term: List<Int64>, n: Int64, len: Int64) :
         addFactorialTerms(newE, newTerm, n + 1, len)
 
 let initDigits(len: Int64) : List<Int64> =
-    [1, ...Stdlib.List.__repeatInt64<Int64>(len - 1, 0, [])]
+    Stdlib.List.push<Int64>(Stdlib.List.__repeatInt64<Int64>(len - 1, 0, []), 1)
 
 let computeEDigits(numDigits: Int64) : List<Int64> =
     // Rust uses indices 0..=precision, hence numDigits + 11 elements.

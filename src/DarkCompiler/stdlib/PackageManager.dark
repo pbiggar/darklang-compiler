@@ -6,7 +6,7 @@ type PickContext = { currentModule: List<String> }
 
 let countMatchingPrefix(a: List<String>, b: List<String>) : Int =
     match (a, b) with
-    | ([aHead, ...aTail], [bHead, ...bTail]) ->
+    | (aHead :: aTail, bHead :: bTail) ->
         if aHead == bHead then 1I + Darklang.LanguageTools.PackageManager.countMatchingPrefix(aTail, bTail)
         else 0I
     | _ -> 0I
@@ -15,7 +15,7 @@ let pickLocation(ctx: Darklang.LanguageTools.PackageManager.PickContext, locatio
     match locations with
     | [] -> Stdlib.Option.Option.None
     | [single] -> Stdlib.Option.Option.Some(single)
-    | [first, ...rest] ->
+    | first :: rest ->
         let firstPath = Stdlib.List.push<String>(first.modules, first.owner) in
         let firstScore = Darklang.LanguageTools.PackageManager.countMatchingPrefix(ctx.currentModule, firstPath) in
         let firstLength = Stdlib.List.length<String>(firstPath) in

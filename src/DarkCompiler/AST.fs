@@ -166,7 +166,7 @@ type Pattern =
     | PTuple of Pattern list                               // (a, b, c)
     | PRecord of typeName:string * fields:(string * Pattern) list  // { x = a, y = b }
     | PList of Pattern list                                // [a, b, c] - exact length match
-    | PListCons of head:Pattern list * tail:Pattern        // [a, b, ...t] - head elements + rest
+    | PListCons of head:Pattern list * tail:Pattern        // a :: b :: t - head elements + rest
 
 /// The deliberately restricted pattern language shared by non-recursive lets
 /// and lambda parameters. Match-only patterns cannot be represented here.
@@ -295,7 +295,6 @@ and Expr =
     | Constructor of reference:ConstructorReference * variantName:string * payload:Expr option
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]
-    | ListCons of head:Expr list * tail:Expr                 // [a, b, ...rest]
     | Lambda of parameters:NonEmptyList<LambdaParameter> * returnAnnotation:Type option * body:Expr
     | Apply of func:Expr * args:NonEmptyList<Expr>                    // Apply function expr: f(x) where f is expression
     | IndirectApply of func:Expr * args:NonEmptyList<Expr>            // Compiler-generated call through a raw function pointer

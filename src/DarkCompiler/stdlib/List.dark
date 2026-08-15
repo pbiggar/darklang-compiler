@@ -17,25 +17,6 @@ let isEmpty<'t>(list: List<t>) : Bool =
 let length<'t>(list: List<t>) : Int =
     Stdlib.Int.fromInt64(Stdlib.Internal.SkewList.length<t>(list))
 
-// Compare two lists for structural equality - O(n)
-let equals<'a>(left: List<a>, right: List<a>) : Bool =
-    if Stdlib.Internal.SkewList.isEmpty<a>(left) then
-        Stdlib.Internal.SkewList.isEmpty<a>(right)
-    else if Stdlib.Internal.SkewList.isEmpty<a>(right) then
-        false
-    else
-        match Stdlib.Internal.SkewList.head<a>(left) with
-        | None -> false
-        | Some(leftHead) ->
-            match Stdlib.Internal.SkewList.head<a>(right) with
-            | None -> false
-            | Some(rightHead) ->
-                if leftHead == rightHead then
-                    let leftTail = Stdlib.Internal.SkewList.tail<a>(left) in
-                    let rightTail = Stdlib.Internal.SkewList.tail<a>(right) in
-                    Stdlib.List.equals<a>(leftTail, rightTail)
-                else false
-
 // Create a single-element list - O(1)
 let singleton<'t>(value: t) : List<t> =
     Stdlib.Internal.SkewList.singleton<t>(value)
@@ -80,10 +61,6 @@ let __flattenOneToReverse<'a>(list: List<a>, acc: List<a>) : List<a> =
         let next = Stdlib.Internal.SkewList.push<a>(acc, Stdlib.Internal.SkewList.headUnsafe<a>(list)) in
         Stdlib.List.__flattenOneToReverse<a>(Stdlib.Internal.SkewList.tail<a>(list), next)
 
-// Apply a function that returns a list and flatten the results
-let flatMap<'a, 'b>(list: List<a>, fn: (a) -> List<b>) : List<b> =
-    Stdlib.List.flatten<b>(Stdlib.List.map<a, List<b>>(list, fn))
-
 // Keep only elements that satisfy a predicate - O(n)
 let filter<'a>(list: List<a>, fn: (a) -> Bool) : List<a> =
     Stdlib.Internal.SkewList.reverse<a>(Stdlib.List.__filterToReverse<a>(list, fn, Stdlib.Internal.SkewList.empty<a>()))
@@ -107,7 +84,7 @@ let __filterByIndexHelper<'a>(list: List<a>, fn: (a) -> Bool, index: Int64, len:
         match Stdlib.Internal.SkewList.getAt<a>(list, index) with
         | None -> Stdlib.List.reverse<a>(accRev)
         | Some(v) ->
-            let nextAccRev = if fn(v) then [v, ...accRev] else accRev in
+            let nextAccRev = if fn(v) then Stdlib.List.push<a>(accRev, v) else accRev in
             Stdlib.List.__filterByIndexHelper<a>(list, fn, index + 1, len, nextAccRev)
 
 // Append an element to the end of a list - O(n)
@@ -143,24 +120,24 @@ let sort<'a>(list: List<a>) : List<a> =
 let __canonicalInsert<'a>(value: a, sorted: List<a>) : List<a> =
     match sorted with
     | [] -> [value]
-    | [head, ...tail] ->
-        if __compare<a>(value, head) == -1L then [value, ...sorted]
-        else [head, ...Stdlib.List.__canonicalInsert<a>(value, tail)]
+    | head :: tail ->
+        if __compare<a>(value, head) == -1L then Stdlib.List.push<a>(sorted, value)
+        else Stdlib.List.push<a>(Stdlib.List.__canonicalInsert<a>(value, tail), head)
 
 let __canonicalSortHelper<'a>(remaining: List<a>, sorted: List<a>) : List<a> =
     match remaining with
     | [] -> sorted
-    | [head, ...tail] -> Stdlib.List.__canonicalSortHelper<a>(tail, Stdlib.List.__canonicalInsert<a>(head, sorted))
+    | head :: tail -> Stdlib.List.__canonicalSortHelper<a>(tail, Stdlib.List.__canonicalInsert<a>(head, sorted))
 
 let __sortByValues<'key, 'value>(pairs: List<(key, value)>) : List<value> =
     match pairs with
     | [] -> []
-    | [(key, value), ...tail] -> [value, ...Stdlib.List.__sortByValues<key, value>(tail)]
+    | (key, value) :: tail -> Stdlib.List.push<value>(Stdlib.List.__sortByValues<key, value>(tail), value)
 
 let __sortByPairs<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b, a)> =
     match list with
     | [] -> []
-    | [head, ...tail] -> [(fn(head), head), ...Stdlib.List.__sortByPairs<a, b>(tail, fn)]
+    | head :: tail -> Stdlib.List.push<(b, a)>(Stdlib.List.__sortByPairs<a, b>(tail, fn), (fn(head), head))
 
 let sortBy<'a, 'b>(list: List<a>, fn: (a) -> b) : List<a> =
     Stdlib.List.__sortByValues<b, a>(
@@ -172,8 +149,8 @@ let unique<'a>(list: List<a>) : List<a> =
 let __uniqueUnsorted<'a>(remaining: List<a>, uniqueValues: List<a>) : List<a> =
     match remaining with
     | [] -> uniqueValues
-    | [head, ...tail] ->
-        let next = if Stdlib.List.member<a>(uniqueValues, head) then uniqueValues else [head, ...uniqueValues] in
+    | head :: tail ->
+        let next = if Stdlib.List.member<a>(uniqueValues, head) then uniqueValues else Stdlib.List.push<a>(uniqueValues, head) in
         Stdlib.List.__uniqueUnsorted<a>(tail, next)
 
 let uniqueBy<'a, 'b>(list: List<a>, fn: (a) -> b) : List<a> =
@@ -182,10 +159,10 @@ let uniqueBy<'a, 'b>(list: List<a>, fn: (a) -> b) : List<a> =
 let __uniqueByHelper<'a, 'b>(remaining: List<a>, fn: (a) -> b, uniqueValues: List<a>, seen: List<b>) : List<a> =
     match remaining with
     | [] -> uniqueValues
-    | [value, ...tail] ->
+    | value :: tail ->
         let key = fn(value) in
         if Stdlib.List.member<b>(seen, key) then Stdlib.List.__uniqueByHelper<a, b>(tail, fn, uniqueValues, seen)
-        else Stdlib.List.__uniqueByHelper<a, b>(tail, fn, [value, ...uniqueValues], [key, ...seen])
+        else Stdlib.List.__uniqueByHelper<a, b>(tail, fn, Stdlib.List.push<a>(uniqueValues, value), Stdlib.List.push<b>(seen, key))
 
 // Fold left (reduce) over a list - O(n)
 let fold<'a, 'b>(list: List<a>, init: b, fn: (b, a) -> b) : b =
@@ -232,10 +209,6 @@ let getAt<'a>(list: List<a>, index: Int) : Stdlib.Option.Option<a> =
 let getAtOrDefault<'a>(list: List<a>, index: Int64, default_: a) : a =
     Stdlib.Internal.SkewList.getAtOrDefault<a>(list, index, default_)
 
-// Set element at index (0-based) - O(log n), returns original list if index out of bounds
-let setAt<'a>(list: List<a>, index: Int64, value: a) : List<a> =
-    Stdlib.Internal.SkewList.setAt<a>(list, index, value)
-
 // Find first element satisfying a predicate - O(n)
 let findFirst<'a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<a> =
     if Stdlib.Internal.SkewList.isEmpty<a>(list) then None
@@ -265,16 +238,6 @@ let drop<'a>(list: List<a>, n: Int) : List<a> =
     if n <= 0I then list
     else if Stdlib.Internal.SkewList.isEmpty<a>(list) then list
     else Stdlib.List.drop<a>(Stdlib.Internal.SkewList.tail<a>(list), n - 1I)
-
-// Check if all elements satisfy a predicate - O(n)
-let forAll<'a>(list: List<a>, fn: (a) -> Bool) : Bool =
-    if Stdlib.Internal.SkewList.isEmpty<a>(list) then true
-    else
-        match Stdlib.Internal.SkewList.head<a>(list) with
-        | None -> true
-        | Some(h) ->
-            if fn(h) then Stdlib.List.forAll<a>(Stdlib.Internal.SkewList.tail<a>(list), fn)
-            else false
 
 // Check if any element satisfies a predicate - O(n)
 let any<'a>(list: List<a>, fn: (a) -> Bool) : Bool =
@@ -337,21 +300,21 @@ let __indexedMapHelper<'a, 'b>(list: List<a>, fn: (Int, a) -> b, index: Int, acc
 // Partition a list into two lists based on a predicate
 // Returns (elements where predicate is true, elements where predicate is false)
 let partition<'a>(list: List<a>, fn: (a) -> Bool) : (List<a>, List<a>) =
-    Stdlib.List.__partitionHelper<a>(list, fn, Stdlib.Internal.SkewList.empty<a>(), Stdlib.Internal.SkewList.empty<a>())
+    match list with
+    | [] -> ([], [])
+    | head :: tail ->
+        match Stdlib.List.partition<a>(tail, fn) with
+        | (trueList, falseList) ->
+            if fn(head) then
+                (Stdlib.List.push<a>(trueList, head), falseList)
+            else
+                (trueList, Stdlib.List.push<a>(falseList, head))
 
-let __partitionHelper<'a>(list: List<a>, fn: (a) -> Bool, trueAcc: List<a>, falseAcc: List<a>) : (List<a>, List<a>) =
-    if Stdlib.Internal.SkewList.isEmpty<a>(list) then (Stdlib.Internal.SkewList.reverse<a>(trueAcc), Stdlib.Internal.SkewList.reverse<a>(falseAcc))
-    else
-        match Stdlib.Internal.SkewList.head<a>(list) with
-        | None -> (Stdlib.Internal.SkewList.reverse<a>(trueAcc), Stdlib.Internal.SkewList.reverse<a>(falseAcc))
-        | Some(h) ->
-            let newTrue = if fn(h) then Stdlib.Internal.SkewList.push<a>(trueAcc, h) else trueAcc in
-            let newFalse = if fn(h) then falseAcc else Stdlib.Internal.SkewList.push<a>(falseAcc, h) in
-            Stdlib.List.__partitionHelper<a>(Stdlib.Internal.SkewList.tail<a>(list), fn, newTrue, newFalse)
-
-// Alias for forAll (darklang naming convention)
+// Check if all elements satisfy a predicate, short-circuiting left-to-right.
 let all<'a>(list: List<a>, fn: (a) -> Bool) : Bool =
-    Stdlib.List.forAll<a>(list, fn)
+    match list with
+    | [] -> true
+    | head :: tail -> if fn(head) then Stdlib.List.all<a>(tail, fn) else false
 
 // Collection helpers ported from darklang/dark packages/darklang/stdlib/list.dark.
 let findFirstIndex<'a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<Int> =
@@ -360,44 +323,44 @@ let findFirstIndex<'a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<In
 let __findFirstIndexHelper<'a>(list: List<a>, fn: (a) -> Bool, index: Int) : Stdlib.Option.Option<Int> =
     match list with
     | [] -> None
-    | [head, ...tail] -> if fn(head) then Some(index) else Stdlib.List.__findFirstIndexHelper<a>(tail, fn, index + 1I)
+    | head :: tail -> if fn(head) then Some(index) else Stdlib.List.__findFirstIndexHelper<a>(tail, fn, index + 1I)
 
 let member<'a>(list: List<a>, value: a) : Bool =
     match list with
     | [] -> false
-    | [head, ...tail] -> if head == value then true else Stdlib.List.member<a>(tail, value)
+    | head :: tail -> if head == value then true else Stdlib.List.member<a>(tail, value)
 
 let interpose<'a>(list: List<a>, separator: a) : List<a> =
     match list with
     | [] -> []
     | [single] -> [single]
-    | [head, ...tail] -> [head, separator, ...Stdlib.List.interpose<a>(tail, separator)]
+    | head :: tail -> [head, separator] @ Stdlib.List.interpose<a>(tail, separator)
 
 let interleave<'a>(listA: List<a>, listB: List<a>) : List<a> =
     match listA with
     | [] -> listB
-    | [headA, ...tailA] ->
+    | headA :: tailA ->
         match listB with
         | [] -> listA
-        | [headB, ...tailB] -> [headA, headB, ...Stdlib.List.interleave<a>(tailA, tailB)]
+        | headB :: tailB -> [headA, headB] @ Stdlib.List.interleave<a>(tailA, tailB)
 
 let filterMap<'a, 'b>(list: List<a>, fn: (a) -> Stdlib.Option.Option<b>) : List<b> =
     match list with
     | [] -> []
-    | [head, ...tail] ->
+    | head :: tail ->
         match fn(head) with
-        | Some(value) -> [value, ...Stdlib.List.filterMap<a, b>(tail, fn)]
+        | Some(value) -> Stdlib.List.push<b>(Stdlib.List.filterMap<a, b>(tail, fn), value)
         | None -> Stdlib.List.filterMap<a, b>(tail, fn)
 
 let dropWhile<'a>(list: List<a>, fn: (a) -> Bool) : List<a> =
     match list with
     | [] -> []
-    | [head, ...tail] -> if fn(head) then Stdlib.List.dropWhile<a>(tail, fn) else list
+    | head :: tail -> if fn(head) then Stdlib.List.dropWhile<a>(tail, fn) else list
 
 let takeWhile<'a>(list: List<a>, fn: (a) -> Bool) : List<a> =
     match list with
     | [] -> []
-    | [head, ...tail] -> if fn(head) then [head, ...Stdlib.List.takeWhile<a>(tail, fn)] else []
+    | head :: tail -> if fn(head) then Stdlib.List.push<a>(Stdlib.List.takeWhile<a>(tail, fn), head) else []
 
 let map2shortest<'a, 'b, 'c>(listA: List<a>, listB: List<b>, fn: (a, b) -> c) : List<c> =
     Stdlib.List.map2shortestHelper<a, b, c>(listA, listB, fn, [])
@@ -406,7 +369,7 @@ let map2shortestHelper<'a, 'b, 'c>(listA: List<a>, listB: List<b>, fn: (a, b) ->
     match (listA, listB) with
     | ([], _) -> result
     | (_, []) -> result
-    | ([headA, ...tailA], [headB, ...tailB]) ->
+    | (headA :: tailA, headB :: tailB) ->
         Stdlib.List.map2shortestHelper<a, b, c>(
             tailA,
             tailB,
@@ -421,19 +384,19 @@ let zipShortest<'a, 'b>(listA: List<a>, listB: List<b>) : List<(a, b)> =
     match (listA, listB) with
     | ([], _) -> []
     | (_, []) -> []
-    | ([headA, ...tailA], [headB, ...tailB]) -> [(headA, headB), ...Stdlib.List.zipShortest<a, b>(tailA, tailB)]
+    | (headA :: tailA, headB :: tailB) -> Stdlib.List.push<(a, b)>(Stdlib.List.zipShortest<a, b>(tailA, tailB), (headA, headB))
 
 let unzip<'a, 'b>(pairs: List<(a, b)>) : (List<a>, List<b>) =
     match pairs with
     | [] -> ([], [])
-    | [(first, second), ...tail] ->
+    | (first, second) :: tail ->
         match Stdlib.List.unzip<a, b>(tail) with
-        | (firsts, seconds) -> ([first, ...firsts], [second, ...seconds])
+        | (firsts, seconds) -> (Stdlib.List.push<a>(firsts, first), Stdlib.List.push<b>(seconds, second))
 
 let splitLast<'a>(list: List<a>) : Stdlib.Option.Option<(List<a>, a)> =
     match Stdlib.List.reverse<a>(list) with
     | [] -> None
-    | [last, ...reversedInit] -> Some((Stdlib.List.reverse<a>(reversedInit), last))
+    | last :: reversedInit -> Some((Stdlib.List.reverse<a>(reversedInit), last))
 
 let groupByWithKey<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b, List<a>)> =
     Stdlib.List.__groupByWithKeyHelper<a, b>(list, fn, [])
@@ -441,19 +404,19 @@ let groupByWithKey<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b, List<a>)> =
 let __groupContainsKey<'a, 'b>(groups: List<(b, List<a>)>, key: b) : Bool =
     match groups with
     | [] -> false
-    | [group, ...tail] -> if group.0 == key then true else Stdlib.List.__groupContainsKey<a, b>(tail, key)
+    | group :: tail -> if group.0 == key then true else Stdlib.List.__groupContainsKey<a, b>(tail, key)
 
 let __appendToGroup<'a, 'b>(groups: List<(b, List<a>)>, key: b, element: a) : List<(b, List<a>)> =
     match groups with
     | [] -> []
-    | [group, ...tail] ->
-        if group.0 == key then [(group.0, Stdlib.List.pushBack<a>(group.1, element)), ...tail]
-        else [group, ...Stdlib.List.__appendToGroup<a, b>(tail, key, element)]
+    | group :: tail ->
+        if group.0 == key then Stdlib.List.push<(b, List<a>)>(tail, (group.0, Stdlib.List.pushBack<a>(group.1, element)))
+        else Stdlib.List.push<(b, List<a>)>(Stdlib.List.__appendToGroup<a, b>(tail, key, element), group)
 
 let __groupByWithKeyHelper<'a, 'b>(remaining: List<a>, fn: (a) -> b, groups: List<(b, List<a>)>) : List<(b, List<a>)> =
     match remaining with
     | [] -> groups
-    | [element, ...tail] ->
+    | element :: tail ->
         let key = fn(element) in
         let retainedGroups = [groups] in
         let retainedKey = [key] in
@@ -478,7 +441,7 @@ let __groupByWithKeyHelper<'a, 'b>(remaining: List<a>, fn: (a) -> b, groups: Lis
 let iter<'a>(list: List<a>, fn: (a) -> Unit) : Unit =
     match list with
     | [] -> ()
-    | [head, ...tail] ->
+    | head :: tail ->
         let _ = fn(head) in
         Stdlib.List.iter<a>(tail, fn)
 
@@ -498,7 +461,7 @@ let chunkBySizeHelper<'a>(size: Int, currentList: List<a>, accum: List<List<a>>)
     | _ ->
         let taken = Stdlib.List.take<a>(currentList, size) in
         let rest = Stdlib.List.drop<a>(currentList, size) in
-        let next = if Stdlib.List.isEmpty<a>(taken) then accum else [taken, ...accum] in
+        let next = if Stdlib.List.isEmpty<a>(taken) then accum else Stdlib.List.push<List<a>>(accum, taken) in
         Stdlib.List.chunkBySizeHelper<a>(size, rest, next)
 
 let chunkBySize<'a>(list: List<a>, size: Int) : Stdlib.Result.Result<List<List<a>>, Stdlib.List.ChunkBySizeError> =
@@ -524,7 +487,7 @@ let __int64sToStrings(list: List<Int64>, acc: List<String>) : List<String> =
             let newAcc = Stdlib.Internal.SkewList.push<String>(acc, s) in
             Stdlib.List.__int64sToStrings(Stdlib.Internal.SkewList.tail<Int64>(list), newAcc)
 
-let toDisplayString_i64(list: List<Int64>) : String =
+let __toDisplayString_i64(list: List<Int64>) : String =
     let strs = Stdlib.List.__int64sToStrings(list, Stdlib.Internal.SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
@@ -537,7 +500,7 @@ let __intsToStrings(list: List<Int>, acc: List<String>) : List<String> =
             let next = Stdlib.Internal.SkewList.push<String>(acc, Stdlib.Int.toString(h)) in
             Stdlib.List.__intsToStrings(Stdlib.Internal.SkewList.tail<Int>(list), next)
 
-let toDisplayString_int(list: List<Int>) : String =
+let __toDisplayString_int(list: List<Int>) : String =
     let strs = Stdlib.List.__intsToStrings(list, Stdlib.Internal.SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
@@ -547,11 +510,11 @@ let __i64ListsToStrings(list: List<List<Int64>>, acc: List<String>) : List<Strin
         match Stdlib.Internal.SkewList.head<List<Int64>>(list) with
         | None -> Stdlib.Internal.SkewList.reverse<String>(acc)
         | Some(h) ->
-            let s = Stdlib.List.toDisplayString_i64(h) in
+            let s = Stdlib.List.__toDisplayString_i64(h) in
             let newAcc = Stdlib.Internal.SkewList.push<String>(acc, s) in
             Stdlib.List.__i64ListsToStrings(Stdlib.Internal.SkewList.tail<List<Int64>>(list), newAcc)
 
-let toDisplayString_list_i64(list: List<List<Int64>>) : String =
+let __toDisplayString_list_i64(list: List<List<Int64>>) : String =
     let strs = Stdlib.List.__i64ListsToStrings(list, Stdlib.Internal.SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
@@ -575,12 +538,12 @@ let __stringsDisplayItems(list: List<String>, first: Bool) : String =
     | [h] ->
         if first then Stdlib.List.__quoteStringForDisplay(h)
         else ", " ++ Stdlib.List.__quoteStringForDisplay(h)
-    | [h, ...t] ->
+    | h :: t ->
         let item = Stdlib.List.__quoteStringForDisplay(h) in
         let rest = Stdlib.List.__stringsDisplayItems(t, false) in
         if first then item ++ rest else ", " ++ item ++ rest
 
-let toDisplayString_str(list: List<String>) : String =
+let __toDisplayString_str(list: List<String>) : String =
     "[" ++ Stdlib.List.__stringsDisplayItems(list, true) ++ "]"
 
 let __charsDisplayItems(list: List<Char>, first: Bool) : String =
@@ -588,11 +551,11 @@ let __charsDisplayItems(list: List<Char>, first: Bool) : String =
     | [] -> ""
     | [h] ->
         if first then h else ", " ++ h
-    | [h, ...t] ->
+    | h :: t ->
         let rest = Stdlib.List.__charsDisplayItems(t, false) in
         if first then h ++ rest else ", " ++ h ++ rest
 
-let toDisplayString_char(list: List<Char>) : String =
+let __toDisplayString_char(list: List<Char>) : String =
     "[" ++ Stdlib.List.__charsDisplayItems(list, true) ++ "]"
 
 // Helper to build string list from Bool list
@@ -606,7 +569,7 @@ let __boolsToStrings(list: List<Bool>, acc: List<String>) : List<String> =
             let newAcc = Stdlib.Internal.SkewList.push<String>(acc, s) in
             Stdlib.List.__boolsToStrings(Stdlib.Internal.SkewList.tail<Bool>(list), newAcc)
 
-let toDisplayString_bool(list: List<Bool>) : String =
+let __toDisplayString_bool(list: List<Bool>) : String =
     let strs = Stdlib.List.__boolsToStrings(list, Stdlib.Internal.SkewList.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
@@ -621,11 +584,9 @@ let __floatsDisplayItems(list: List<Float>, first: Bool) : String =
             let rest = Stdlib.List.__floatsDisplayItems(tail, false) in
             if first then item ++ rest else ", " ++ item ++ rest
 
-let toDisplayString_f64(list: List<Float>) : String =
+let __toDisplayString_f64(list: List<Float>) : String =
     "[" ++ Stdlib.List.__floatsDisplayItems(list, true) ++ "]"
 
-let zip<'a, 'b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
-    match (list1, list2) with
-    | ([], _) -> []
-    | (_, []) -> []
-    | ([h1, ...t1], [h2, ...t2]) -> [(h1, h2), ...Stdlib.List.zip<a, b>(t1, t2)]
+let zip<'a, 'b>(list1: List<a>, list2: List<b>) : Stdlib.Option.Option<List<(a, b)>> =
+    if Stdlib.List.length<a>(list1) != Stdlib.List.length<b>(list2) then None
+    else Some(Stdlib.List.zipShortest<a, b>(list1, list2))

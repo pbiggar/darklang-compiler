@@ -99,13 +99,13 @@ let toOption<'t, 'e>(result: Stdlib.Result.Result<t, e>) : Stdlib.Option.Option<
 let collect<'t, 'e>(results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.Result<List<t>, e> =
     match results with
     | [] -> Ok([])
-    | [result, ...rest] ->
+    | result :: rest ->
         match result with
         | Error(error) -> Error(error)
         | Ok(value) ->
             match Stdlib.Result.collect<t, e>(rest) with
             | Error(error) -> Error(error)
-            | Ok(values) -> Ok([value, ...values])
+            | Ok(values) -> Ok(Stdlib.List.push<t>(values, value))
 
 let join<'t, 'e>(result: Stdlib.Result.Result<Stdlib.Result.Result<t, e>, e>) : Stdlib.Result.Result<t, e> =
     match result with
@@ -118,10 +118,10 @@ let combine<'t, 'e>(results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.R
 let values<'t, 'e>(results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.Result<List<t>, e> =
     match results with
     | [] -> Ok([])
-    | [result, ...rest] ->
+    | result :: rest ->
         match Stdlib.Result.values<t, e>(rest) with
         | Error(error) -> Error(error)
         | Ok(values) ->
             match result with
-            | Ok(value) -> Ok([value, ...values])
+            | Ok(value) -> Ok(Stdlib.List.push<t>(values, value))
             | Error(_) -> Ok(values)

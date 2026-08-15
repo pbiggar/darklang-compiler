@@ -11,7 +11,7 @@ let stripTrailing(path: String) : String =
 let __join(parts: List<String>, acc: String) : String =
     match parts with
     | [] -> acc
-    | [part, ...rest] ->
+    | part :: rest ->
         let next =
             if part == "" then acc
             else if Stdlib.String.startsWith(part, "/") then part
@@ -68,7 +68,7 @@ let isAbsolute(path: String) : Bool =
 let __normalizeParts(parts: List<String>, absolute: Bool, acc: List<String>) : List<String> =
     match parts with
     | [] -> acc
-    | [part, ...rest] ->
+    | part :: rest ->
         if part == "" || part == "." then
             Stdlib.Cli.Path.__normalizeParts(rest, absolute, acc)
         else if part == ".." then
@@ -101,7 +101,7 @@ let resolveToAbsolute(path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Po
 
 let __commonPrefixLength(left: List<String>, right: List<String>, count: Int) : Int =
     match (left, right) with
-    | ([leftHead, ...leftTail], [rightHead, ...rightTail]) ->
+    | (leftHead :: leftTail, rightHead :: rightTail) ->
         if leftHead == rightHead then Stdlib.Cli.Path.__commonPrefixLength(leftTail, rightTail, count + 1I)
         else count
     | _ -> count
@@ -109,9 +109,9 @@ let __commonPrefixLength(left: List<String>, right: List<String>, count: Int) : 
 let __nonEmpty(parts: List<String>) : List<String> =
     match parts with
     | [] -> []
-    | [part, ...rest] ->
+    | part :: rest ->
         if part == "" then Stdlib.Cli.Path.__nonEmpty(rest)
-        else [part, ...Stdlib.Cli.Path.__nonEmpty(rest)]
+        else Stdlib.List.push<String>(Stdlib.Cli.Path.__nonEmpty(rest), part)
 
 let relativeTo(fromPath: String, toPath: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     match (Stdlib.Cli.Path.resolveToAbsolute(fromPath), Stdlib.Cli.Path.resolveToAbsolute(toPath)) with

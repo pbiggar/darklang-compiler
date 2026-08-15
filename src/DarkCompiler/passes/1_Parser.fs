@@ -57,6 +57,8 @@ and Token =
     | TElif        // elif
     | TFunctionDeclaration         // private marker for a public `let` declaration
     | TType        // type (type definition)
+    | TCons        // :: (list cons pattern)
+    | TAt          // @ (list append)
     | TColon       // : (type annotation)
     | TComma       // , (parameter separator)
     | TSemicolon   // ; (statement separator)
@@ -85,7 +87,6 @@ and Token =
     | TOr          // ||
     | TNot         // !
     | TPipe        // |> (pipe operator)
-    | TDotDotDot    // ... (rest pattern in lists)
     | TPercent     // % (modulo)
     | TShl         // << (left shift)
     | TShr         // >> (right shift)
@@ -108,6 +109,42 @@ let rec lex (input: string) : Result<Token list, string> =
     let substring (startPosition: int) (endPosition: int) : string =
         input.Substring(startPosition, endPosition - startPosition)
 
+    let isDirectlyInsideList (tokensReversed: Token list) : bool =
+        let rec nearestUnclosedDelimiter closingDelimiters tokens =
+            match tokens with
+            | [] -> None
+            | TRBracket :: rest -> nearestUnclosedDelimiter (TRBracket :: closingDelimiters) rest
+            | TRParen :: rest -> nearestUnclosedDelimiter (TRParen :: closingDelimiters) rest
+            | TRBrace :: rest -> nearestUnclosedDelimiter (TRBrace :: closingDelimiters) rest
+            | TLBracket :: rest ->
+                match closingDelimiters with
+                | TRBracket :: remaining -> nearestUnclosedDelimiter remaining rest
+                | [] -> Some TLBracket
+                | _ -> None
+            | TLParen :: rest ->
+                match closingDelimiters with
+                | TRParen :: remaining -> nearestUnclosedDelimiter remaining rest
+                | [] -> Some TLParen
+                | _ -> None
+            | TLBrace :: rest ->
+                match closingDelimiters with
+                | TRBrace :: remaining -> nearestUnclosedDelimiter remaining rest
+                | [] -> Some TLBrace
+                | _ -> None
+            | _ :: rest -> nearestUnclosedDelimiter closingDelimiters rest
+
+        match nearestUnclosedDelimiter [] tokensReversed with
+        | Some TLBracket -> true
+        | _ -> false
+
+    let canEndListElement (tokensReversed: Token list) : bool =
+        match tokensReversed with
+        | (TInt64 _ | TInt128 _ | TBigInt _ | TInt8 _ | TInt16 _ | TInt32 _
+          | TUInt8 _ | TUInt16 _ | TUInt32 _ | TUInt64 _ | TUInt128 _
+          | TFloat _ | TStringLit _ | TCharLit _ | TInterpString _ | TTrue
+          | TFalse | TIdent _ | TRParen | TRBrace | TRBracket) :: _ -> true
+        | _ -> false
+
     let rec lexHelper (position: int) (acc: Token list) : Result<Token list, string> =
         if position >= inputLength then
             Ok (List.rev (TEOF :: acc))
@@ -115,13 +152,27 @@ let rec lex (input: string) : Result<Token list, string> =
             let current = input[position]
             match current with
             | ' ' | '\t' | '\n' | '\r' ->
-                let rec skipWhitespace index =
+                let rec skipWhitespace index sawNewline =
                     if index < inputLength && System.Char.IsWhiteSpace input[index] then
-                        skipWhitespace (index + 1)
+                        skipWhitespace (index + 1) (sawNewline || input[index] = '\n' || input[index] = '\r')
                     else
-                        index
-                let next = skipWhitespace (position + 1)
-                if next < inputLength
+                        (index, sawNewline)
+                let (next, sawNewline) =
+                    skipWhitespace
+                        (position + 1)
+                        (current = '\n' || current = '\r')
+                let separatesListElements =
+                    sawNewline
+                    && isDirectlyInsideList acc
+                    && canEndListElement acc
+                    && next < inputLength
+                    && input[next] <> ']'
+                    && input[next] <> ','
+                    && input[next] <> ';'
+                    && input[next] <> '{'
+                if separatesListElements then
+                    lexHelper next (TSemicolon :: acc)
+                else if next < inputLength
                    && input[next] = '<'
                    && not (hasChar next 1 '<')
                    && not (hasChar next 1 '=') then
@@ -141,9 +192,8 @@ let rec lex (input: string) : Result<Token list, string> =
                         inputLength
                     else
                         match input[index] with
-                        | '\n' -> index + 1
-                        | '\r' when hasChar index 1 '\n' -> index + 2
-                        | '\r' -> index + 1
+                        | '\n'
+                        | '\r' -> index
                         | _ -> skipToEndOfLine (index + 1)
 
                 let next = skipToEndOfLine (position + 2)
@@ -161,11 +211,11 @@ let rec lex (input: string) : Result<Token list, string> =
             | '}' -> lexHelper (position + 1) (TRBrace :: acc)
             | '[' -> lexHelper (position + 1) (TLBracket :: acc)
             | ']' -> lexHelper (position + 1) (TRBracket :: acc)
+            | ':' when hasChar position 1 ':' -> lexHelper (position + 2) (TCons :: acc)
             | ':' -> lexHelper (position + 1) (TColon :: acc)
+            | '@' -> lexHelper (position + 1) (TAt :: acc)
             | ',' -> lexHelper (position + 1) (TComma :: acc)
             | ';' -> lexHelper (position + 1) (TSemicolon :: acc)
-            | '.' when hasChar position 1 '.' && hasChar position 2 '.' ->
-                lexHelper (position + 3) (TDotDotDot :: acc)
             | '.' -> lexHelper (position + 1) (TDot :: acc)
             | '=' when hasChar position 1 '=' -> lexHelper (position + 2) (TEqEq :: acc)
             | '=' -> lexHelper (position + 1) (TEquals :: acc)
@@ -1184,6 +1234,21 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
 
 /// Parse a pattern for pattern matching
 let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string> =
+    parsePatternBase tokens
+    |> Result.bind (fun (headPattern, remaining) ->
+        match remaining with
+        | TCons :: rest ->
+            parsePattern rest
+            |> Result.map (fun (tailPattern, rest') ->
+                match tailPattern with
+                | PListCons (tailHeads, finalTail) ->
+                    (PListCons (headPattern :: tailHeads, finalTail), rest')
+                | _ ->
+                    (PListCons ([headPattern], tailPattern), rest'))
+        | _ ->
+            Ok (headPattern, remaining))
+
+and parsePatternBase (tokens: Token list) : Result<Pattern * Token list, string> =
     match tokens with
     | TUnderscore :: rest ->
         // Wildcard pattern: _
@@ -1276,7 +1341,9 @@ and parseTuplePattern (tokens: Token list) (acc: Pattern list) : Result<Pattern 
         | TRParen :: rest ->
             // End of tuple pattern
             let patterns = List.rev (pat :: acc)
-            Ok (PTuple patterns, rest)
+            match patterns with
+            | [single] -> Ok (single, rest)
+            | _ -> Ok (PTuple patterns, rest)
         | TComma :: rest ->
             // More elements
             parseTuplePattern rest (pat :: acc)
@@ -1309,14 +1376,6 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
     | TRBracket :: rest ->
         // Empty list or end of list pattern
         Ok (PList (List.rev acc), rest)
-    | TDotDotDot :: rest ->
-        // Rest pattern at start: [...t]
-        parsePattern rest
-        |> Result.bind (fun (tailPat, remaining) ->
-            match remaining with
-            | TRBracket :: rest' ->
-                Ok (PListCons (List.rev acc, tailPat), rest')
-            | _ -> Error "Expected ']' after rest pattern")
     | _ ->
         parsePattern tokens
         |> Result.bind (fun (pat, remaining) ->
@@ -1324,18 +1383,10 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
             | TRBracket :: rest ->
                 // End of list pattern
                 Ok (PList (List.rev (pat :: acc)), rest)
-            | TComma :: TDotDotDot :: rest ->
-                // Rest pattern after element: [a, b, ...t]
-                parsePattern rest
-                |> Result.bind (fun (tailPat, remaining') ->
-                    match remaining' with
-                    | TRBracket :: rest' ->
-                        Ok (PListCons (List.rev (pat :: acc), tailPat), rest')
-                    | _ -> Error "Expected ']' after rest pattern")
-            | TComma :: rest ->
+            | (TComma | TSemicolon) :: rest ->
                 // More elements
                 parseListPattern rest (pat :: acc)
-            | _ -> Error "Expected ',' or ']' in list pattern")
+            | _ -> Error "Expected ',', ';', or ']' in list pattern")
 
 /// Parse the restricted pattern language shared by lets and lambdas.
 let rec parseLetPattern (tokens: Token list) : Result<LetPattern * Token list, string> =
@@ -1618,35 +1669,46 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             parseBitAndRest left remaining)
 
     and parseComparison (toks: Token list) : Result<Expr * Token list, string> =
-        parseShift toks
+        parseListAppend toks
         |> Result.bind (fun (left, remaining) ->
             // Comparison operators are non-associative (no chaining)
             match remaining with
             | TEqEq :: rest ->
-                parseShift rest
+                parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Eq, left, right), remaining'))
             | TNeq :: rest ->
-                parseShift rest
+                parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Neq, left, right), remaining'))
             | (TLt | TSpacedLt) :: rest ->
-                parseShift rest
+                parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Lt, left, right), remaining'))
             | TGt :: rest ->
-                parseShift rest
+                parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Gt, left, right), remaining'))
             | TLte :: rest ->
-                parseShift rest
+                parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Lte, left, right), remaining'))
             | TGte :: rest ->
-                parseShift rest
+                parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Gte, left, right), remaining'))
             | _ -> Ok (left, remaining))
+
+    and parseListAppend (toks: Token list) : Result<Expr * Token list, string> =
+        parseShift toks
+        |> Result.bind (fun (left, remaining) ->
+            match remaining with
+            | TAt :: rest ->
+                parseListAppend rest
+                |> Result.map (fun (right, remaining') ->
+                    (Call ("Stdlib.List.append", NonEmptyList.fromList [left; right]), remaining'))
+            | _ ->
+                Ok (left, remaining))
 
     and parseShift (toks: Token list) : Result<Expr * Token list, string> =
         parseAdditive toks
@@ -2130,38 +2192,22 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | _ -> Error "Expected field name in record update"
 
     and parseListLiteralElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
-        // Parse list literal elements: [expr, expr, ...] or [] or [a, b, ...rest]
+        // Parse list literal elements with comma, semicolon, or newline separators.
         match toks with
         | TRBracket :: rest ->
             // Empty list or end of list
             Ok (ListLiteral (List.rev acc), rest)
-        | TDotDotDot :: rest ->
-            // Spread at start: [...tail]
-            parseExpr rest
-            |> Result.bind (fun (tailExpr, remaining) ->
-                match remaining with
-                | TRBracket :: rest' ->
-                    Ok (ListCons (List.rev acc, tailExpr), rest')
-                | _ -> Error "Expected ']' after spread expression")
         | _ ->
             parseExpr toks
             |> Result.bind (fun (expr, remaining) ->
                 match remaining with
-                | TComma :: TDotDotDot :: rest ->
-                    // Spread after elements: [a, b, ...tail]
-                    parseExpr rest
-                    |> Result.bind (fun (tailExpr, remaining') ->
-                        match remaining' with
-                        | TRBracket :: rest' ->
-                            Ok (ListCons (List.rev (expr :: acc), tailExpr), rest')
-                        | _ -> Error "Expected ']' after spread expression")
-                | TComma :: rest ->
+                | (TComma | TSemicolon) :: rest ->
                     // More elements
                     parseListLiteralElements rest (expr :: acc)
                 | TRBracket :: rest ->
                     // End of list
                     Ok (ListLiteral (List.rev (expr :: acc)), rest)
-                | _ -> Error "Expected ',' or ']' in list literal")
+                | _ -> Error "Expected ',', ';', or ']' in list literal")
 
     and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
         // Handle postfix operations: tuple access (.0, .1), field access (.fieldName), or function application (args)
@@ -2406,9 +2452,6 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
             cases |> List.fold (fun acc case -> Result.bind (fun () -> validateCase case) acc) (Ok ()))
     | ListLiteral elems ->
         elems |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
-    | ListCons (head, tail) ->
-        let headResult = head |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
-        Result.bind (fun () -> validateExpr tail) headResult
     | Lambda (parameters, returnAnnotation, body) ->
         parameters
         |> NonEmptyList.toList

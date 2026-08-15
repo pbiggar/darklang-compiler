@@ -25,6 +25,6 @@ let first = skewDynamicString("first") in let second = skewDynamicString("second
 // numeric workloads such as edigits.
 let skewSetDescending(list: List<Int64>, index: Int64) : List<Int64> =
     if index < 0 then list
-    else skewSetDescending(Stdlib.List.setAt<Int64>(list, index, 9), index - 1)
+    else skewSetDescending(Stdlib.Internal.SkewList.setAt<Int64>(list, index, 9), index - 1)
 
 skewSetDescending([1, 0, 0], 2) = [9, 9, 9]

@@ -34,12 +34,12 @@ let __findChunk(chunk: String, path: String, pathIndex: Int64) : Int64 =
 let __allEmpty(parts: List<String>) : Bool =
     match parts with
     | [] -> true
-    | [part, ...rest] -> part == "" && Stdlib.Cli.File.__allEmpty(rest)
+    | part :: rest -> part == "" && Stdlib.Cli.File.__allEmpty(rest)
 
 let __matchStarParts(parts: List<String>, path: String, pathIndex: Int64, anchoredStart: Bool, anchoredEnd: Bool) : Bool =
     match parts with
     | [] -> if anchoredEnd then pathIndex == Stdlib.String.length(path) else true
-    | [part, ...rest] ->
+    | part :: rest ->
         if part == "" then
             Stdlib.Cli.File.__matchStarParts(rest, path, pathIndex, false, anchoredEnd)
         else
@@ -67,12 +67,12 @@ let __segmentMatches(pattern: String, path: String, patternIndex: Int64, pathInd
 let __copySegments(segments: List<String>) : List<String> =
     match segments with
     | [] -> []
-    | [head, ...tail] -> [head ++ "", ...Stdlib.Cli.File.__copySegments(tail)]
+    | head :: tail -> Stdlib.List.push<String>(Stdlib.Cli.File.__copySegments(tail), head ++ "")
 
 let globMatchSegments(patternSegments: List<String>, pathSegments: List<String>) : Bool =
     match patternSegments with
     | [] -> Stdlib.List.length<String>(pathSegments) == 0I
-    | [patternHead, ...patternTail] ->
+    | patternHead :: patternTail ->
         if patternHead == "**" then
             if Stdlib.Cli.File.globMatchSegments(
                 Stdlib.Cli.File.__copySegments(patternTail),
@@ -80,13 +80,13 @@ let globMatchSegments(patternSegments: List<String>, pathSegments: List<String>)
             else
                 match pathSegments with
                 | [] -> false
-                | [_pathHead, ...pathTail] ->
+                | _pathHead :: pathTail ->
                     Stdlib.Cli.File.globMatchSegments(
                         Stdlib.Cli.File.__copySegments(patternSegments),
                         Stdlib.Cli.File.__copySegments(pathTail))
         else
             match pathSegments with
             | [] -> false
-            | [pathHead, ...pathTail] ->
+            | pathHead :: pathTail ->
                 Stdlib.Cli.File.__segmentMatches(patternHead, pathHead, 0, 0)
                 && Stdlib.Cli.File.globMatchSegments(patternTail, pathTail)

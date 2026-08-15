@@ -130,13 +130,16 @@ scrutinee.
 ### List Pattern
 ```dark
 | [] -> 0
-| [h, ...t] -> h
+| h :: t -> h
 ```
-Checks for nil (tag=0) or cons (tag=1), extracts head/tail.
+Checks the native list length, then extracts the head and canonical tail through
+the private skew-list operations.
 
 ## Exhaustiveness Checking
 
-The compiler rejects non-exhaustive patterns at compile time.
+The compiler lowers an exhausted match to the standard nonexhaustive-match
+runtime failure. Statically invalid pattern/type combinations are rejected
+during AOT type checking.
 
 ### Exhaustive Patterns
 - Wildcard `_` or variable `x` in final position
@@ -197,13 +200,14 @@ Checks length, then extracts each element.
 ### Cons Pattern
 ```dark
 match list with
-| [h, ...t] -> h   // Matches non-empty list
+| h :: t -> h   // Matches non-empty list
 | [] -> 0
 ```
 
-1. Check if list is cons (tag == 1)
-2. Extract head: `HeapLoad(list, 8)`
-3. Extract tail: `HeapLoad(list, 16)`
+1. Check that the cached list length covers every normalized cons head.
+2. Extract each head through the typed private skew-list accessor.
+3. Advance with the private tail operation and bind or match the canonical
+   remaining list.
 
 List-cons lowering requires the scrutinee type to be `TList _`. It must not
 silently default to `Int64` when list element type information is missing.
@@ -220,9 +224,9 @@ checking must preserve per-slot unresolved element types (`__tuple_elem_*`)
 when extracting bindings. Dropping those bindings causes false `undefined
 variable` errors in match bodies.
 
-Tuple destructuring inside list-cons heads (for example, `[(a, b), ...rest]`)
+Tuple destructuring inside list-cons heads (for example, `(a, b) :: rest`)
 uses the tuple element type from the list element type. If tuple arity does not
-match (for example `[(a, b, c), ...rest]` against a list of 2-tuples), the
+match (for example `(a, b, c) :: rest` against a list of 2-tuples), the
 pattern is treated as a non-match and falls through to later cases. The ANF
 lowering does not default missing tuple element types to `Int64`.
 
@@ -241,7 +245,7 @@ guarded list patterns (`when ...`): mismatched tuple arity must fall through
 instead of binding extra elements as `Int64`.
 
 This also applies to constructor payloads inside list patterns. For example,
-`[Some((x, y)), ...rest]` against `List<Option<Int64>>` is statically
+`Some((x, y)) :: rest` against `List<Option<Int64>>` is statically
 impossible and must compile as a non-match, rather than matching `Some` and
 binding tuple payload fields with a default `Int64` type.
 

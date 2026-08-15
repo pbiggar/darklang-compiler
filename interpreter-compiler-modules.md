@@ -6,7 +6,7 @@ Crypto rows, and X509 are parity API. `Bytes`, `Base64.urlDecode`,
 over Blob. See `docs/blob-parity.md` for exact signatures and behavior.
 
 List-family rows were revalidated at compiler
-`ba8d319f3ea663bce5f4f0c559dc04fb51d1791d` and interpreter
+`14dc38f7964ad6a8fc6e383b43fb44f424c0f064` and interpreter
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. See
 `docs/list-parity.md` for contract evidence, focused probes, compiler
 extensions, and intentional AOT divergences.
@@ -581,15 +581,12 @@ List                         | drop                                | ✅   | ✅
 List                         | dropLast                            | ✅   | ✅
 List                         | dropWhile                           | ✅   | ✅
 List                         | empty                               | ✅   | ✅
-List                         | equals                              | ❌   | ✅
 List                         | filter                              | ✅   | ✅
 List                         | filterMap                           | ✅   | ✅
 List                         | findFirst                           | ✅   | ✅
 List                         | findFirstIndex                      | ✅   | ✅
-List                         | flatMap                             | ❌   | ✅
 List                         | flatten                             | ✅   | ✅
 List                         | fold                                | ✅   | ✅
-List                         | forAll                              | ❌   | ✅
 List                         | getAt                               | ✅   | ✅
 List                         | groupByWithKey                      | ✅   | ✅
 List                         | head                                | ✅   | ✅
@@ -614,7 +611,6 @@ List                         | repeat                              | ✅   | ✅
 List                         | repeatUnsafe                        | ✅   | ✅
 List                         | reverse                             | ✅   | ✅
 List                         | reverseHelper                       | ✅   | ❌
-List                         | setAt                               | ❌   | ✅
 List                         | singleton                           | ✅   | ✅
 List                         | sort                                | ✅   | ✅
 List                         | sortBy                              | ✅   | ✅
@@ -623,13 +619,6 @@ List                         | splitLast                           | ✅   | ✅
 List                         | tail                                | ✅   | ✅
 List                         | take                                | ✅   | ✅
 List                         | takeWhile                           | ✅   | ✅
-List                         | toDisplayString_bool                | ❌   | ✅
-List                         | toDisplayString_char                | ❌   | ✅
-List                         | toDisplayString_f64                 | ❌   | ✅
-List                         | toDisplayString_i64                 | ❌   | ✅
-List                         | toDisplayString_int                 | ❌   | ✅
-List                         | toDisplayString_list_i64            | ❌   | ✅
-List                         | toDisplayString_str                 | ❌   | ✅
 List                         | unique                              | ✅   | ✅
 List                         | uniqueBy                            | ✅   | ✅
 List                         | unzip                               | ✅   | ✅

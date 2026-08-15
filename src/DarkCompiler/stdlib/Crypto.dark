@@ -503,7 +503,7 @@ let __bytesToListFrom(b: Blob, index: Int64, len: Int64, acc: List<Int64>) : Lis
         Stdlib.List.reverse<Int64>(acc)
     else
         let byte = Stdlib.Bytes.get(b, index) in
-        Stdlib.Crypto.__bytesToListFrom(b, index + 1, len, [byte, ...acc])
+        Stdlib.Crypto.__bytesToListFrom(b, index + 1, len, Stdlib.List.push<Int64>(acc, byte))
 
 // XOR two byte lists of same length
 // Note: Using nested matches because tuple+cons patterns in recursive functions with accumulators
@@ -511,20 +511,20 @@ let __bytesToListFrom(b: Blob, index: Int64, len: Int64, acc: List<Int64>) : Lis
 let __xorByteLists(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
     match a with
     | [] -> Stdlib.List.reverse<Int64>(acc)
-    | [x, ...xs] ->
+    | x :: xs ->
         match b with
         | [] -> Stdlib.List.reverse<Int64>(acc)
-        | [y, ...ys] -> Stdlib.Crypto.__xorByteLists(xs, ys, [(x ^ y), ...acc])
+        | y :: ys -> Stdlib.Crypto.__xorByteLists(xs, ys, Stdlib.List.push<Int64>(acc, x ^ y))
 
 // Create a list of N zeros
 let __zeros(n: Int64, acc: List<Int64>) : List<Int64> =
     if n <= 0 then acc
-    else Stdlib.Crypto.__zeros(n - 1, [0, ...acc])
+    else Stdlib.Crypto.__zeros(n - 1, Stdlib.List.push<Int64>(acc, 0))
 
 // Create a list of N copies of a byte
 let __repeat(byte: Int64, n: Int64, acc: List<Int64>) : List<Int64> =
     if n <= 0 then acc
-    else Stdlib.Crypto.__repeat(byte, n - 1, [byte, ...acc])
+    else Stdlib.Crypto.__repeat(byte, n - 1, Stdlib.List.push<Int64>(acc, byte))
 
 // =============================================================================
 // MD5 Implementation
@@ -659,7 +659,7 @@ let __md5BuildPadding(dataLen: Int64) : List<Int64> =
     let zeros = Stdlib.Crypto.__zeros(zerosNeeded, []) in
     // 0x80 + zeros + 8-byte little-endian length
     // Use cons and append instead of flatten to avoid compiler bug with list-of-lists
-    let part1 = [128, ...zeros] in
+    let part1 = Stdlib.List.push<Int64>(zeros, 128) in
     Stdlib.List.append<Int64>(part1, Stdlib.Crypto.__int64ToLE(bitLen))
 
 // Copy data bytes to list
@@ -668,7 +668,7 @@ let __copyDataToList(data: Blob, index: Int64, len: Int64, acc: List<Int64>) : L
         Stdlib.List.reverse<Int64>(acc)
     else
         let byte = Stdlib.Bytes.get(data, index) in
-        Stdlib.Crypto.__copyDataToList(data, index + 1, len, [byte, ...acc])
+        Stdlib.Crypto.__copyDataToList(data, index + 1, len, Stdlib.List.push<Int64>(acc, byte))
 
 // Process all 64-byte blocks
 let __md5ProcessBlocks(h0: Int64, h1: Int64, h2: Int64, h3: Int64, padded: Blob, offset: Int64, totalLen: Int64) : (Int64, Int64, Int64, Int64) =
@@ -794,7 +794,7 @@ let __sha256BuildPadding(dataLen: Int64) : List<Int64> =
     let zerosNeeded = if remainder <= 56 then 56 - remainder else 120 - remainder in
     let zeros = Stdlib.Crypto.__zeros(zerosNeeded, []) in
     // Use cons and append instead of flatten to avoid compiler bug with list-of-lists
-    let part1 = [128, ...zeros] in
+    let part1 = Stdlib.List.push<Int64>(zeros, 128) in
     Stdlib.List.append<Int64>(part1, Stdlib.Crypto.__int64ToBE(bitLen))
 
 // Process all 64-byte blocks for SHA-1 (using paired tuples)
@@ -1128,7 +1128,7 @@ let __sha384BuildPadding(dataLen: Int64) : List<Int64> =
     // 8 bytes of zeros for high 64 bits of length (we only support < 2^64 bit messages)
     let highLen = Stdlib.Crypto.__zeros(8, []) in
     // Use cons and append instead of flatten to avoid compiler bug with list-of-lists
-    let part1 = [128, ...zeros] in
+    let part1 = Stdlib.List.push<Int64>(zeros, 128) in
     let part2 = Stdlib.List.append<Int64>(part1, highLen) in
     Stdlib.List.append<Int64>(part2, Stdlib.Crypto.__int64ToBE(bitLen))
 
@@ -1281,14 +1281,14 @@ let debugTupleMatch() : Int64 =
     match (a, b) with
     | ([], _) -> 0
     | (_, []) -> 1
-    | ([x, ...xs], [y, ...ys]) -> x + y
+    | (x :: xs, y :: ys) -> x + y
 
 // Debug: Test simple cons pattern on single list
 let debugConsMatch() : Int64 =
     let a = [1, 2, 3] in
     match a with
     | [] -> 0
-    | [x, ...xs] -> x
+    | x :: xs -> x
 
 // Debug: Full HMAC step by step
 let debugFullHmac() : Int64 =

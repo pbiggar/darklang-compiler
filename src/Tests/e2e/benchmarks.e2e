@@ -230,6 +230,10 @@ nqueen(8) = 92
 // Edigits (edigits) - reduced checksum test
 // ===================================================================
 
+let benchmarkSetAt(list: List<Int64>, index: Int64, value: Int64) : List<Int64> =
+    let target = Stdlib.Int.fromInt64(index) in
+    Stdlib.List.indexedMap<Int64, Int64>(list, fun currentIndex current -> if currentIndex == target then value else current)
+
 let divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int64) : List<Int64> =
     if idx >= len then digits
     else
@@ -240,7 +244,7 @@ let divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int6
             let current = carry * 10 + digit in
             let newDigit = current / n in
             let newCarry = current % n in
-            let updated = Stdlib.List.setAt<Int64>(digits, idx, newDigit) in
+            let updated = benchmarkSetAt(digits, idx, newDigit) in
             divideByN(updated, n, newCarry, idx + 1, len)
 
 let addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : List<Int64> =
@@ -253,7 +257,7 @@ let addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : 
             let total = eDigit + termDigit + carry in
             let newDigit = total % 10 in
             let newCarry = total / 10 in
-            let updated = Stdlib.List.setAt<Int64>(e, idx, newDigit) in
+            let updated = benchmarkSetAt(e, idx, newDigit) in
             addWithCarry(updated, term, newCarry, idx - 1)
         | _ -> e
 
@@ -268,7 +272,7 @@ let zeros(n: Int64) : List<Int64> =
     Stdlib.List.map<Int, Int64>(Stdlib.List.range(0I, Stdlib.Int.fromInt64(n - 1)), fun x -> 0L)
 
 let initDigits(n: Int64) : List<Int64> =
-    Stdlib.List.setAt<Int64>(zeros(n), 0, 1)
+    benchmarkSetAt(zeros(n), 0, 1)
 
 let computeEDigits(numDigits: Int64) : List<Int64> =
     let precision = numDigits + 10 in

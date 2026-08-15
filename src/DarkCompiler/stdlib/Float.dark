@@ -21,7 +21,7 @@ let sum(values: List<Float>) : Float = Stdlib.Float.__sum(values, 0.0)
 let __sum(values: List<Float>, total: Float) : Float =
     match values with
     | [] -> total
-    | [head, ...tail] -> Stdlib.Float.__sum(tail, total + head)
+    | head :: tail -> Stdlib.Float.__sum(tail, total + head)
 
 // Intrinsics retained as compiler extensions.
 let toBits(f: Float) : UInt64 = 0UL

@@ -85,7 +85,7 @@ module Stdlib.List
 let map<'a, 'b>(list: List<a>, fn: (a) -> b) : List<b> =
     match list with
     | [] -> []
-    | [h, ...t] -> [fn(h), ...Stdlib.List.map<a, b>(t, fn)]
+    | h :: t -> Stdlib.List.push<b>(Stdlib.List.map<a, b>(t, fn), fn(h))
 ```
 
 ## Stdlib.Int64

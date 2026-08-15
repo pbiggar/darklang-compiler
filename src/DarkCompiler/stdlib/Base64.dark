@@ -165,7 +165,7 @@ let __decodeHelper(s: String, index: Int64, len: Int64, acc: List<Int64>) : Stdl
 let __prependReversed(bytes: List<Int64>, acc: List<Int64>) : List<Int64> =
     match bytes with
     | [] -> acc
-    | [b, ...rest] -> Stdlib.Base64.__prependReversed(rest, [b, ...acc])
+    | b :: rest -> Stdlib.Base64.__prependReversed(rest, Stdlib.List.push<Int64>(acc, b))
 
 // Decode base64 string to bytes
 let decode(s: String) : Stdlib.Result.Result<Blob, String> =

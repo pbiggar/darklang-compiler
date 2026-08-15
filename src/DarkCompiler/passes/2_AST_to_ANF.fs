@@ -1123,8 +1123,6 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (applySubstToExpr subst) elements)
-    | AST.ListCons (headElements, tail) ->
-        AST.ListCons (List.map (applySubstToExpr subst) headElements, applySubstToExpr subst tail)
     | AST.Lambda (parameters, returnAnnotation, body) ->
         // Substitute types in parameter annotations and body
         let substParams =
@@ -1275,9 +1273,6 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         Set.union scrutineeSpecs caseSpecs
     | AST.ListLiteral elements ->
         elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
-    | AST.ListCons (headElements, tail) ->
-        let headsSpecs = headElements |> List.map collectTypeApps |> List.fold Set.union Set.empty
-        Set.union headsSpecs (collectTypeApps tail)
     | AST.Lambda (_, _, body) ->
         collectTypeApps body
     | AST.Apply (func, args)
@@ -1339,7 +1334,6 @@ let rec collectCalledFunctions (expr: AST.Expr) : Set<string> =
                 case.Body :: (case.Guard |> Option.toList))
             |> combine
         Set.union (collectCalledFunctions scrutinee) caseCalls
-    | AST.ListCons (heads, tail) -> combine (heads @ [tail])
     | AST.Lambda (_, _, body) -> collectCalledFunctions body
     | AST.Apply (func, args)
     | AST.IndirectApply (func, args) ->
@@ -1478,8 +1472,6 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map replaceTypeApps; Body = replaceTypeApps mc.Body }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map replaceTypeApps elements)
-    | AST.ListCons (headElements, tail) ->
-        AST.ListCons (List.map replaceTypeApps headElements, replaceTypeApps tail)
     | AST.Lambda (parameters, returnAnnotation, body) ->
         AST.Lambda (parameters, returnAnnotation, replaceTypeApps body)
     | AST.Apply (func, args) ->
@@ -1690,10 +1682,6 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                 |> Result.map (fun cases' -> AST.Match (scrutinee', cases')))
         | AST.ListLiteral elements ->
             mapResult replace elements |> Result.map AST.ListLiteral
-        | AST.ListCons (headElements, tail) ->
-            mapResult replace headElements
-            |> Result.bind (fun heads' ->
-                replace tail |> Result.map (fun tail' -> AST.ListCons (heads', tail')))
         | AST.Lambda (parameters, returnAnnotation, body) ->
             replace body |> Result.map (fun body' -> AST.Lambda (parameters, returnAnnotation, body'))
         | AST.Apply (func, args) ->
@@ -1804,9 +1792,6 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: AST.Progr
         | AST.TupleLiteral elems
         | AST.ListLiteral elems ->
             elems |> List.exists (exprNeedsLambdaLowering bound)
-        | AST.ListCons (headElements, tail) ->
-            (headElements |> List.exists (exprNeedsLambdaLowering bound))
-            || exprNeedsLambdaLowering bound tail
         | AST.TupleAccess (tuple, _) ->
             exprNeedsLambdaLowering bound tuple
         | AST.RecordLiteral (_, fields) ->
@@ -1896,8 +1881,6 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
             (mc.Guard |> Option.map (varOccursInExpr name) |> Option.defaultValue false) ||
             varOccursInExpr name mc.Body) cases
     | AST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
-    | AST.ListCons (headElements, tail) ->
-        List.exists (varOccursInExpr name) headElements || varOccursInExpr name tail
     | AST.Lambda (parameters, returnAnnotation, body) ->
         // If name is shadowed by a parameter, it doesn't occur
         let paramNames =
@@ -1993,8 +1976,6 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         AST.Match (inlineLambdas scrutinee lambdaEnv, cases')
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
-    | AST.ListCons (headElements, tail) ->
-        AST.ListCons (List.map (fun e -> inlineLambdas e lambdaEnv) headElements, inlineLambdas tail lambdaEnv)
     | AST.Lambda (parameters, returnAnnotation, body) ->
         let bodyEnv =
             parameters
@@ -2219,9 +2200,6 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
     | AST.TupleLiteral elems | AST.ListLiteral elems ->
         elems |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
-    | AST.ListCons (headElements, tail) ->
-        let headsFree = headElements |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
-        Set.union headsFree (freeVars tail bound)
     | AST.TupleAccess (tuple, _) -> freeVars tuple bound
     | AST.DictLiteral (_, entries) ->
         entries |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
@@ -2877,11 +2855,6 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     | AST.ListLiteral elems ->
         liftLambdasInList elems state
         |> Result.map (fun (elems', state') -> (AST.ListLiteral elems', state'))
-    | AST.ListCons (headElements, tail) ->
-        liftLambdasInList headElements state
-        |> Result.bind (fun (heads', state') ->
-            liftLambdasInExpr tail state'
-            |> Result.map (fun (tail', state'') -> (AST.ListCons (heads', tail'), state'')))
     | AST.TupleAccess (tuple, index) ->
         liftLambdasInExpr tuple state
         |> Result.map (fun (tuple', state') -> (AST.TupleAccess (tuple', index), state'))
@@ -3345,7 +3318,6 @@ let rec private containsIndirectApply (expr: AST.Expr) : bool =
     | AST.TypeApp (_, _, args) -> args |> exprArgsToList |> anyExpr
     | AST.TupleLiteral elements
     | AST.ListLiteral elements -> anyExpr elements
-    | AST.ListCons (heads, tail) -> anyExpr heads || containsIndirectApply tail
     | AST.TupleAccess (tuple, _) -> containsIndirectApply tuple
     | AST.DictLiteral (_, entries)
     | AST.RecordLiteral (_, entries) -> entries |> List.map snd |> anyExpr
@@ -3597,7 +3569,6 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
         | AST.UnaryOp (_, value) | AST.TupleAccess (value, _) | AST.RecordAccess (value, _) ->
             collect bound value
         | AST.TupleLiteral elements | AST.ListLiteral elements -> collectChildren elements
-        | AST.ListCons (headElements, tail) -> collectChildren (headElements @ [tail])
         | AST.DictLiteral (_, entries) -> entries |> List.map snd |> collectChildren
         | AST.RecordLiteral (_, fields) -> fields |> List.map snd |> collectChildren
         | AST.RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd))
@@ -3699,8 +3670,6 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
                         Body = replace caseBound case.Body })
             AST.Match (replace bound scrutinee, cases')
         | AST.ListLiteral elements -> AST.ListLiteral (elements |> List.map (replace bound))
-        | AST.ListCons (headElements, tail) ->
-            AST.ListCons (headElements |> List.map (replace bound), replace bound tail)
         | AST.Lambda (parameters, returnAnnotation, body) ->
             let parameterNames =
                 parameters
@@ -4144,30 +4113,6 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         | first :: _ ->
             inferType first typeEnv typeReg variantLookup funcReg moduleRegistry
             |> Result.map (fun elemType -> AST.TList elemType)
-    | AST.ListCons (headElements, tail) ->
-        // List cons has same element type as tail, but refine unknown element types from heads.
-        inferType tail typeEnv typeReg variantLookup funcReg moduleRegistry
-        |> Result.bind (fun tailType ->
-            match tailType with
-            | AST.TList elemType ->
-                let reconcileElemType (current: AST.Type) (next: AST.Type) : Result<AST.Type, string> =
-                    if containsTypeVar current && not (containsTypeVar next) then Ok next
-                    elif containsTypeVar next && not (containsTypeVar current) then Ok current
-                    elif current = next then Ok current
-                    else Error $"List cons element type mismatch: {typeToString current} vs {typeToString next}"
-
-                let rec refineElemType (current: AST.Type) (elems: AST.Expr list) : Result<AST.Type, string> =
-                    match elems with
-                    | [] -> Ok current
-                    | head :: rest ->
-                        inferType head typeEnv typeReg variantLookup funcReg moduleRegistry
-                        |> Result.bind (fun headType ->
-                            reconcileElemType current headType
-                            |> Result.bind (fun refined -> refineElemType refined rest))
-
-                refineElemType elemType headElements
-                |> Result.map (fun finalElemType -> AST.TList finalElemType)
-            | _ -> Ok tailType)
     | AST.Let (pattern, value, body) ->
         inferType value typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun valueType ->
@@ -5922,41 +5867,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 let exprWithBindings = wrapBindings resultBindings finalExpr
                 Ok (exprWithBindings, varGen3))
 
-    | AST.ListCons (headElements, tail) ->
-        // Compile list cons: [a, b, ...tail] prepends elements to tail
-        // Use Stdlib.Internal.SkewList.push to prepend each element
-        toAtom tail varGen env typeReg variantLookup funcReg moduleRegistry
-        |> Result.bind (fun (tailAtom, tailBindings, varGen1) ->
-            // Build list by prepending elements from right to left
-            // [a, b, ...tail] means push(push(tail, b), a)
-            let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (currentList: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
-                match elems with
-                | [] -> Ok (currentList, allBindings, vg)
-                | elem :: rest ->
-                    // First build the rest of the list, then prepend this element
-                    buildList rest vg currentList allBindings
-                    |> Result.bind (fun (restList, restBindings, vg1) ->
-                        toAtom elem vg1 env typeReg variantLookup funcReg moduleRegistry
-                        |> Result.map (fun (elemAtom, elemBindings, vg2) ->
-                            let (pushVar, vg3) = ANF.freshVar vg2
-                            // Call Stdlib.Internal.SkewList.push to prepend element
-                            let pushExpr = ANF.Call ("Stdlib.Internal.SkewList.push_i64", [restList; elemAtom])
-                            let newBindings = restBindings @ elemBindings @ [(pushVar, pushExpr)]
-                            (ANF.Var pushVar, newBindings, vg3)))
-
-            if List.isEmpty headElements then
-                // No head elements, just return tail
-                let finalExpr = ANF.Return tailAtom
-                let exprWithBindings = wrapBindings tailBindings finalExpr
-                Ok (exprWithBindings, varGen1)
-            else
-                // Build the list by pushing elements
-                buildList headElements varGen1 tailAtom tailBindings
-                |> Result.map (fun (listAtom, listBindings, varGen2) ->
-                    let finalExpr = ANF.Return listAtom
-                    let exprWithBindings = wrapBindings listBindings finalExpr
-                    (exprWithBindings, varGen2)))
-
     | AST.Match (scrutinee, cases) ->
         // Infer scrutinee type to pass to pattern extraction for correct typing
         let typeEnv = typeEnvFromVarEnv env
@@ -5975,7 +5885,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     mc.Patterns |> AST.NonEmptyList.toList |> List.exists (fun pat ->
                         match pat with
                         | AST.PList (_ :: _) -> true
-                        | AST.PListCons (_ :: _, _) -> true  // [h, ...t] also needs list access
+                        | AST.PListCons (_ :: _, _) -> true  // h :: t also needs list access
                         | _ -> false))
 
             // If there are non-empty list patterns, bind the scrutinee to a variable
@@ -7292,8 +7202,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 patternLen)))
                         Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
                 | AST.PListCons (headPatterns, _) ->
-                    // List cons pattern: [...t] matches any list, [h, ...t] needs at least one element,
-                    // [a, b, ...t] needs at least two, etc.
+                    // A cons pattern needs one element per normalized head before binding its tail;
+                    // a :: b :: t needs at least two, etc.
                     let minLength = List.length headPatterns
                     if minLength = 0 then
                         Ok None
@@ -8139,7 +8049,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                     | _ -> Error "Tail pattern in list cons must be variable or wildcard"
 
-                | [singleHeadPattern] ->
+                | [singleHeadPattern]
+                    when (match singleHeadPattern with
+                          | AST.PList _ | AST.PListCons _ | AST.PConstructor _ -> false
+                          | _ -> true)
+                         && (match tailPattern with
+                             | AST.PVar _ | AST.PWildcard -> true
+                             | _ -> false) ->
                     // Single head pattern [h, ...t] - most common case
                     // Use branching based on tag to handle SINGLE vs DEEP nodes
 
@@ -8489,12 +8405,35 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             | AST.PWildcard ->
                                 Ok (envAfterHeads, [], [], vg4)
                             | _ ->
-                                buildPatternComparison tailPattern (ANF.Var finalTailVar) vg4
-                                |> Result.map (fun cmpOpt ->
-                                    match cmpOpt with
-                                    | None -> (envAfterHeads, [], [], vg4)
-                                    | Some (condAtom, cmpBindings, vg5) ->
-                                        (envAfterHeads, cmpBindings, [condAtom], vg5))
+                                let staticallyCannotMatch =
+                                    patternStaticallyCannotMatchType tailPattern listType
+                                let comparisonResult =
+                                    if staticallyCannotMatch then
+                                        let (condAtom, bindings, vg5) = makeFalsePatternCondition vg4
+                                        Ok (Some (condAtom, bindings, vg5))
+                                    else
+                                        buildPatternComparison tailPattern (ANF.Var finalTailVar) vg4
+                                comparisonResult
+                                |> Result.bind (fun comparison ->
+                                    let (conditionAtoms, comparisonBindings, vg5) =
+                                        match comparison with
+                                        | None -> ([], [], vg4)
+                                        | Some (conditionAtom, bindings, nextVg) ->
+                                            ([conditionAtom], bindings, nextVg)
+                                    let nestedBindingsResult =
+                                        if patternBindsVariables tailPattern && not staticallyCannotMatch then
+                                            collectNestedPatternBindings
+                                                tailPattern
+                                                (ANF.Var finalTailVar)
+                                                listType
+                                                envAfterHeads
+                                                []
+                                                vg5
+                                        else
+                                            Ok (envAfterHeads, [], vg5)
+                                    nestedBindingsResult
+                                    |> Result.map (fun (tailEnv, nestedBindings, vg6) ->
+                                        (tailEnv, comparisonBindings @ nestedBindings, conditionAtoms, vg6)))
 
                         tailResult
                         |> Result.bind (fun (finalEnv, tailBindings, tailCondAtoms, vg5) ->
@@ -8608,6 +8547,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | _ -> string ch)
 
             let rec formatMatchValueForError (expr: AST.Expr) : string option =
+                let rec formatAll (expressions: AST.Expr list) (acc: string list) : string list option =
+                    match expressions with
+                    | [] -> Some (List.rev acc)
+                    | expression :: rest ->
+                        formatMatchValueForError expression
+                        |> Option.bind (fun formatted -> formatAll rest (formatted :: acc))
+
                 match expr with
                 | AST.Int64Literal n -> Some $"{n}"
                 | AST.Int128Literal n -> Some (int128ToCanonicalString n)
@@ -8624,6 +8570,16 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.UnitLiteral -> Some "()"
                 | AST.StringLiteral s -> Some $"\"{escapeForRuntimeError s}\""
                 | AST.CharLiteral c -> Some $"'{escapeForRuntimeError c}'"
+                | AST.TupleLiteral elements ->
+                    formatAll elements []
+                    |> Option.map (fun rendered ->
+                        let joined = String.concat ", " rendered
+                        $"({joined})")
+                | AST.ListLiteral elements ->
+                    formatAll elements []
+                    |> Option.map (fun rendered ->
+                        let joined = String.concat ", " rendered
+                        $"[{joined}]")
                 | AST.Constructor (constructorReference, variantName, payload) ->
                     let fullName =
                         match AST.constructorReferenceTypeName constructorReference with
@@ -9864,33 +9820,6 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 let (resultAtom, resultBindings, varGen2) =
                     buildSkewListLiteral listType elemAtoms varGen1 elemBindings
                 Ok (resultAtom, resultBindings, varGen2))
-
-    | AST.ListCons (headElements, tail) ->
-        // Compile list cons in atom position: [a, b, ...tail] prepends elements to tail
-        // Use Stdlib.Internal.SkewList.push to prepend each element
-        toAtom tail varGen env typeReg variantLookup funcReg moduleRegistry
-        |> Result.bind (fun (tailAtom, tailBindings, varGen1) ->
-            // Build list by prepending elements from right to left
-            // [a, b, ...tail] means push(push(tail, b), a)
-            let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (currentList: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
-                match elems with
-                | [] -> Ok (currentList, allBindings, vg)
-                | elem :: rest ->
-                    // First build the rest of the list, then prepend this element
-                    buildList rest vg currentList allBindings
-                    |> Result.bind (fun (restList, restBindings, vg1) ->
-                        toAtom elem vg1 env typeReg variantLookup funcReg moduleRegistry
-                        |> Result.map (fun (elemAtom, elemBindings, vg2) ->
-                            let (pushVar, vg3) = ANF.freshVar vg2
-                            // Call Stdlib.Internal.SkewList.push to prepend element
-                            let pushExpr = ANF.Call ("Stdlib.Internal.SkewList.push_i64", [restList; elemAtom])
-                            let newBindings = restBindings @ elemBindings @ [(pushVar, pushExpr)]
-                            (ANF.Var pushVar, newBindings, vg3)))
-
-            if List.isEmpty headElements then
-                Ok (tailAtom, tailBindings, varGen1)
-            else
-                buildList headElements varGen1 tailAtom tailBindings)
 
     | AST.InterpolatedString parts ->
         // Desugar interpolated string to StringConcat chain

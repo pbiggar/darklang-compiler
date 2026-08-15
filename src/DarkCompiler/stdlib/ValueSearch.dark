@@ -20,7 +20,7 @@ let buildPathFromLocation(owner: String, modules: List<String>, name: String) : 
 let __filterValues<'value>(branchId: String, namespaceParts: List<String>, valueHashes: List<Darklang.LanguageTools.ProgramTypes.Hash>) : List<Darklang.Stdlib.ValueSearch.FoundValue<value>> =
     match valueHashes with
     | [] -> []
-    | [valueHash, ...remainingHashes] ->
+    | valueHash :: remainingHashes ->
         let remaining = Darklang.Stdlib.ValueSearch.__filterValues<value>(branchId, namespaceParts, remainingHashes) in
         match Darklang.LanguageTools.PackageManager.pickLocation(
             Darklang.LanguageTools.PackageManager.PickContext.empty,
@@ -30,10 +30,11 @@ let __filterValues<'value>(branchId: String, namespaceParts: List<String>, value
             if Darklang.Stdlib.ValueSearch.isValueInNamespace(namespaceParts, valuePath) then
                 match Builtin.pmEvaluateValue<value>(valueHash) with
                 | Some(evaluatedValue) ->
-                    [Darklang.Stdlib.ValueSearch.FoundValue {
-                        path = Darklang.Stdlib.ValueSearch.buildPathFromLocation(location.owner, location.modules, location.name),
-                        value = evaluatedValue },
-                     ...remaining]
+                    Stdlib.List.push(
+                        remaining,
+                        Darklang.Stdlib.ValueSearch.FoundValue {
+                            path = Darklang.Stdlib.ValueSearch.buildPathFromLocation(location.owner, location.modules, location.name),
+                            value = evaluatedValue })
                 | None -> remaining
             else remaining
         | None -> remaining

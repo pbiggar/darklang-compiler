@@ -26,7 +26,7 @@ let __toList(blob: Blob, index: Int64, acc: List<UInt8>) : List<UInt8> =
         Stdlib.Blob.__toList(
             blob,
             index - 1,
-            [Stdlib.Blob.__int64ToUInt8(Stdlib.Bytes.get(blob, index)), ...acc])
+            Stdlib.List.push<UInt8>(acc, Stdlib.Blob.__int64ToUInt8(Stdlib.Bytes.get(blob, index))))
 
 let toList(blob: Blob) : List<UInt8> =
     Stdlib.Blob.__toList(blob, Stdlib.Bytes.length(blob) - 1, [])
@@ -34,20 +34,20 @@ let toList(blob: Blob) : List<UInt8> =
 let __fromList(bytes: List<UInt8>, acc: List<Int64>) : Blob =
     match bytes with
     | [] -> Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc))
-    | [byte, ...rest] ->
-        Stdlib.Blob.__fromList(rest, [Stdlib.Blob.__uint8ToInt64(byte), ...acc])
+    | byte :: rest ->
+        Stdlib.Blob.__fromList(rest, Stdlib.List.push<Int64>(acc, Stdlib.Blob.__uint8ToInt64(byte)))
 
 let fromList(bytes: List<UInt8>) : Blob =
     Stdlib.Blob.__fromList(bytes, [])
 
 let __appendBlob(blob: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
     if index >= Stdlib.Bytes.length(blob) then acc
-    else Stdlib.Blob.__appendBlob(blob, index + 1, [Stdlib.Bytes.get(blob, index), ...acc])
+    else Stdlib.Blob.__appendBlob(blob, index + 1, Stdlib.List.push<Int64>(acc, Stdlib.Bytes.get(blob, index)))
 
 let __concat(blobs: List<Blob>, acc: List<Int64>) : Blob =
     match blobs with
     | [] -> Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc))
-    | [blob, ...rest] ->
+    | blob :: rest ->
         Stdlib.Blob.__concat(rest, Stdlib.Blob.__appendBlob(blob, 0, acc))
 
 let concat(blobs: List<Blob>) : Blob =
@@ -81,7 +81,7 @@ let __fromHex(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Res
         let low = Stdlib.Blob.__hexValue(Stdlib.String.getByteAt(value, index + 1)) in
         if high < 0 || low < 0 then
             Error("Invalid hex string: The input is not a valid hex string as it contains a non-hex character.")
-        else Stdlib.Blob.__fromHex(value, index + 2, [high * 16 + low, ...acc])
+        else Stdlib.Blob.__fromHex(value, index + 2, Stdlib.List.push<Int64>(acc, high * 16 + low))
 
 let fromHex(value: String) : Stdlib.Result.Result<Blob, String> =
     if Stdlib.String.length(value) % 2 != 0 then
@@ -121,7 +121,7 @@ let fromBase64(value: String) : Stdlib.Result.Result<Blob, String> =
 
 let __stringBytes(value: String, index: Int64, acc: List<Int64>) : List<Int64> =
     if index >= Stdlib.String.length(value) then Stdlib.List.reverse<Int64>(acc)
-    else Stdlib.Blob.__stringBytes(value, index + 1, [Stdlib.String.getByteAt(value, index), ...acc])
+    else Stdlib.Blob.__stringBytes(value, index + 1, Stdlib.List.push<Int64>(acc, Stdlib.String.getByteAt(value, index)))
 
 let fromString(value: String) : Blob =
     Stdlib.Bytes.fromList(Stdlib.Blob.__stringBytes(value, 0, []))

@@ -395,7 +395,7 @@ match true with | 1 -> 42 | _ -> 0 = error="Cannot match Bool value true with an
 // List cons pattern on non-list type should be rejected (prevents TInt64 fallback in AST_to_ANF)
 // The type checker prevents this - without this check, the compiler would silently assume
 // TInt64 element type which would produce incorrect code
-match 42 with | [h, ...t] -> h | _ -> 0 = error="Cannot match Int64 value 42 with a List pattern"
+match 42 with | h :: t -> h | _ -> 0 = error="Cannot match Int64 value 42 with a List pattern"
 
 // === Nested pattern tests ===
 
@@ -414,10 +414,10 @@ type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x 
 match [(1, 2)] with | [(1, x)] -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
 
 // Nested constructor pattern in list cons head
-type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | [MySome(x), ...rest] -> x | _ -> 0 = error="Nested pattern in list cons element not yet supported"
+type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | MySome(x) :: rest -> x | _ -> 0 = error="Nested pattern in list cons element not yet supported"
 
 // Nested literal pattern inside tuple inside list cons
-match [(1, 2), (3, 4)] with | [(1, x), ...rest] -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
+match [(1, 2), (3, 4)] with | (1, x) :: rest -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
 
 // === Literal patterns in lists (now supported) ===
 // These test that literal patterns in list elements work correctly
@@ -429,28 +429,28 @@ match [1, 2, 3] with | [1, x, 3] -> x | _ -> 0 = 2
 match [1, 2, 4] with | [1, x, 3] -> x | _ -> 0 = 0
 
 // Literal pattern in list cons - match
-match [1, 2, 3] with | [1, ...rest] -> 42 | _ -> 0 = 42
+match [1, 2, 3] with | 1 :: rest -> 42 | _ -> 0 = 42
 
 // List cons should preserve string element typing even when scrutinee type comes from an if-expression
 // with an unreachable runtime-error branch.
-match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | [h, ...t] -> if h == "a" then 1 else 0 | _ -> 0 = 1
+match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t -> if h == "a" then 1 else 0 | _ -> 0 = 1
 
 // Guarded list cons should preserve string element typing from inferred scrutinee types.
-match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | [h, ...t] when h == "a" -> 1 | _ -> 0 = 1
+match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t when h == "a" -> 1 | _ -> 0 = 1
 
 // Literal pattern in list cons - no match
-match [2, 2, 3] with | [1, ...rest] -> 42 | _ -> 0 = 0
+match [2, 2, 3] with | 1 :: rest -> 42 | _ -> 0 = 0
 
 // Tuple arity mismatch in list-cons head must fall through (regression for TInt64 fallback in tuple element typing)
-match [(1, 2)] with | [(a, b, c), ...rest] -> 1 | _ -> 2 = 2
+match [(1, 2)] with | (a, b, c) :: rest -> 1 | _ -> 2 = 2
 
 // List-cons tuple head patterns must preserve unresolved tuple element bindings instead of dropping to TInt64/defaults.
 // Regression: when the list element type arrived as TVar from ANF inferType, this failed with `Undefined variable: a`.
-let x = match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))] in match x with | [(a, b), ...rest] -> match a with | _ -> 1 | _ -> 2 = 1
+let x = match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))] in match x with | (a, b) :: rest -> match a with | _ -> 1 | _ -> 2 = 1
 
 // Nested list-cons heads must not default unresolved inner element types to TInt64.
 // Regression: this produced 3.0 instead of 4.0 by lowering `a`/`b` as Int64 in ANF.
-let x = match false with | true -> [] | false -> [[1.5, 2.5], [3.0]] in match x with | [[a, b, ...inner], y, ...rest] -> a + b | _ -> 0.0 = 4.0
+let x = match false with | true -> [] | false -> [[1.5, 2.5], [3.0]] in match x with | (a :: b :: inner) :: y :: rest -> a + b | _ -> 0.0 = 4.0
 
 // Nested record pattern in a tuple should not silently bind Int64 when the tuple element is not a record.
 // Regression: this used to default to TInt64 and then execute as if the pattern were valid.
@@ -473,7 +473,7 @@ let genericPayloadTupleBinding(v: Stdlib.Option.Option<(String, Int64)>) : Strin
 let genericTopLevelListMatch<'t>(v: t) : Float = match v with | [a, b] -> 4.0 | _ -> 0.0 genericTopLevelListMatch([1.5, 2.5]) = 4.0
 
 // Generic tuple/list-cons patterns should preserve unresolved element bindings.
-let genericTupleListConsBinding<'t>(v: t) : String = match v with | ([x, ..._], _) -> x | _ -> "" genericTupleListConsBinding((["a" ++ ""], 1)) = "a"
+let genericTupleListConsBinding<'t>(v: t) : String = match v with | (x :: _, _) -> x | _ -> "" genericTupleListConsBinding((["a" ++ ""], 1)) = "a"
 
 // Single literal pattern
 match [13] with | [13] -> 1 | _ -> 0 = 1
@@ -538,7 +538,7 @@ let a = [] in let b = [] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | _ 
 type PersonEq = { name: String } let p = PersonEq { name = "a" ++ "b" } in let extracted = match p with | PersonEq { name = n } -> n in extracted == ("a" ++ "b") = true
 
 // Full pattern with list cons
-let a = [1, 2] in let b = [3, 4] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | ([x, ...xs], [y, ...ys]) -> x + y | _ -> 99 = 4
+let a = [1, 2] in let b = [3, 4] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | (x :: xs, y :: ys) -> x + y | _ -> 99 = 4
 
 // === Tuple+cons pattern matching with different body expressions ===
 // These tests verify tuple patterns containing list cons patterns work correctly.
@@ -548,7 +548,7 @@ let recursiveTupleConsHelper(a: List<Int64>, b: List<Int64>, acc: Int64) : Int64
     match (a, b) with
     | ([], _) -> acc
     | (_, []) -> acc
-    | ([x, ...xs], [y, ...ys]) -> recursiveTupleConsHelper(xs, ys, acc + x + y)
+    | (x :: xs, y :: ys) -> recursiveTupleConsHelper(xs, ys, acc + x + y)
 
 recursiveTupleConsHelper([1, 2, 3], [4, 5, 6], 0L) = 21
 
@@ -556,7 +556,7 @@ recursiveTupleConsHelper([1, 2, 3], [4, 5, 6], 0L) = 21
 let singleListConsWithAcc(a: List<Int64>, acc: List<Int64>) : List<Int64> =
     match a with
     | [] -> acc
-    | [x, ...xs] -> singleListConsWithAcc(xs, [x, ...acc])
+    | x :: xs -> singleListConsWithAcc(xs, Stdlib.List.push<Int64>(acc, x))
 
 Stdlib.List.length<Int64>(singleListConsWithAcc([1, 2, 3], [])) = 3I
 
@@ -565,10 +565,10 @@ Stdlib.List.length<Int64>(singleListConsWithAcc([1, 2, 3], [])) = 3I
 let nestedMatchListCons(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
     match a with
     | [] -> acc
-    | [x, ...xs] ->
+    | x :: xs ->
         match b with
         | [] -> acc
-        | [y, ...ys] -> nestedMatchListCons(xs, ys, [(x + y), ...acc])
+        | y :: ys -> nestedMatchListCons(xs, ys, Stdlib.List.push<Int64>(acc, x + y))
 
 Stdlib.List.length<Int64>(nestedMatchListCons([1, 2, 3], [4, 5, 6], [])) = 3I
 
@@ -577,7 +577,7 @@ let tupleConsListAccum(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<
     match (a, b) with
     | ([], _) -> acc
     | (_, []) -> acc
-    | ([x, ...xs], [y, ...ys]) -> tupleConsListAccum(xs, ys, [(x + y), ...acc])
+    | (x :: xs, y :: ys) -> tupleConsListAccum(xs, ys, Stdlib.List.push<Int64>(acc, x + y))
 
 Stdlib.List.length<Int64>(tupleConsListAccum([1, 2, 3], [4, 5, 6], [])) = 3I
 
@@ -601,12 +601,12 @@ match 18446744073709551616Z with | 0Z -> true | _ -> false = false
 
 // Regression: list mismatch checks must not treat 64-bit literal patterns as 128-bit.
 // These should fail at runtime as non-exhaustive matches, not type-check as known no-match.
-match [1L] with | [1L, 2L] -> 0L = error="Non-exhaustive match: No matching case found for value <unknown> in match expression"
-match [1UL] with | [1UL, 2UL] -> 0UL = error="Non-exhaustive match: No matching case found for value <unknown> in match expression"
+match [1L] with | [1L, 2L] -> 0L = error="Non-exhaustive match: No matching case found for value [1] in match expression"
+match [1UL] with | [1UL, 2UL] -> 0UL = error="Non-exhaustive match: No matching case found for value [1] in match expression"
 
 // Int128/UInt128 list literal length mismatch should behave consistently with other int types.
-match [1Q] with | [1Q, 2Q] -> 0Q = error="Non-exhaustive match: No matching case found for value <unknown> in match expression"
-match [1Z] with | [1Z, 2Z] -> 0Z = error="Non-exhaustive match: No matching case found for value <unknown> in match expression"
+match [1Q] with | [1Q, 2Q] -> 0Q = error="Non-exhaustive match: No matching case found for value [1] in match expression"
+match [1Z] with | [1Z, 2Z] -> 0Z = error="Non-exhaustive match: No matching case found for value [1] in match expression"
 
 // Int128/UInt128 pattern coverage parity with other integer literal patterns.
 type I128Wrap = I128Wrap of Int128 | I128None
@@ -615,8 +615,8 @@ type U128Wrap = U128Wrap of UInt128 | U128None
 match I128Wrap(170141183460469231731687303715884105727Q) with | I128Wrap(170141183460469231731687303715884105727Q) -> true | _ -> false = true
 match U128Wrap(340282366920938463463374607431768211455Z) with | U128Wrap(340282366920938463463374607431768211455Z) -> true | _ -> false = true
 
-match [170141183460469231731687303715884105727Q, 1Q] with | [170141183460469231731687303715884105727Q, ...tail] -> Stdlib.List.length<Int128>(tail) | _ -> 0I = 1I
-match [340282366920938463463374607431768211455Z, 1Z] with | [340282366920938463463374607431768211455Z, ...tail] -> Stdlib.List.length<UInt128>(tail) | _ -> 0I = 1I
+match [170141183460469231731687303715884105727Q, 1Q] with | 170141183460469231731687303715884105727Q :: tail -> Stdlib.List.length<Int128>(tail) | _ -> 0I = 1I
+match [340282366920938463463374607431768211455Z, 1Z] with | 340282366920938463463374607431768211455Z :: tail -> Stdlib.List.length<UInt128>(tail) | _ -> 0I = 1I
 
 match 5Q with | 4Q | 5Q -> 1 | _ -> 0 = 1
 match 5Z with | 4Z | 5Z -> 1 | _ -> 0 = 1

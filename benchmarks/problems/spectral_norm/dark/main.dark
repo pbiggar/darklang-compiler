@@ -19,11 +19,11 @@ let atvRow(i: Int64, j: Int64, n: Int64, v: List<Float>, acc: Float) : Float =
 
 let avRows(i: Int64, n: Int64, v: List<Float>, out: List<Float>) : List<Float> =
     if i >= n then out
-    else avRows(i + 1, n, v, Stdlib.List.setAt<Float>(out, i, avRow(i, 0, n, v, 0.0)))
+    else avRows(i + 1, n, v, Stdlib.Internal.SkewList.setAt<Float>(out, i, avRow(i, 0, n, v, 0.0)))
 
 let atvRows(i: Int64, n: Int64, v: List<Float>, out: List<Float>) : List<Float> =
     if i >= n then out
-    else atvRows(i + 1, n, v, Stdlib.List.setAt<Float>(out, i, atvRow(i, 0, n, v, 0.0)))
+    else atvRows(i + 1, n, v, Stdlib.Internal.SkewList.setAt<Float>(out, i, atvRow(i, 0, n, v, 0.0)))
 
 let atav(n: Int64, v: List<Float>) : List<Float> =
     let zeroes = Stdlib.List.__repeatInt64<Float>(n, 0.0, []) in

@@ -97,8 +97,6 @@ let rec countMatches (expr: Expr) : int =
             payload |> Option.toList
         | Match (scrutinee, cases) ->
             scrutinee :: (cases |> List.map (fun c -> c.Body))
-        | ListCons (head, tail) ->
-            head @ [tail]
         | Lambda (_, _, body) ->
             [body]
         | Apply (func, args)

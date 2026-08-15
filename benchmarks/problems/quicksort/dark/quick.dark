@@ -26,7 +26,7 @@ let generateListHelper(n: Int64, x: Int64, acc: List<Int64>) : List<Int64> =
     else
         let nextX = (x * 1103515245 + 12345) % 2147483648 in
         let value = nextX % 10000 in
-        generateListHelper(n - 1, nextX, [value, ...acc])
+        generateListHelper(n - 1, nextX, Stdlib.List.push<Int64>(acc, value))
 
 let generateList(n: Int64, seed: Int64) : List<Int64> =
     generateListHelper(n, seed, [])
@@ -35,7 +35,7 @@ let generateList(n: Int64, seed: Int64) : List<Int64> =
 let checksumHelper(arr: List<Int64>, index: Int64, acc: Int64) : Int64 =
     match arr with
     | [] -> acc
-    | [h, ...t] ->
+    | h :: t ->
         let newAcc = (acc + (h * (index + 1)) % 1000000007) % 1000000007 in
         checksumHelper(t, index + 1, newAcc)
 

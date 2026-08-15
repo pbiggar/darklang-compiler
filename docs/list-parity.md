@@ -1,86 +1,109 @@
 # List parity
 
-This matrix was revalidated from compiler HEAD
-`ba8d319f3ea663bce5f4f0c559dc04fb51d1791d` and darklang/dark
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
-`8a402797` and the prior module inventory were used only to locate candidates;
-the retained findings were checked against both revisions and current probes.
-Performance differences are outside this comparison unless observable behavior
-changes.
+This is the revision-stamped record for list syntax, typing, lowering, runtime
+behavior, and the public `Stdlib.List` contract. Every comparison in this file
+uses this evidence pair:
 
-## Evidence
+- compiler comparison HEAD: `14dc38f7964ad6a8fc6e383b43fb44f424c0f064`
+- darklang/dark interpreter: `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
 
-The interpreter API and algorithms are in
-`packages/darklang/stdlib/list.dark`, especially lines 4-117, 161-281,
-390-428, 509-600. Its runtime sortable-value ordering and primitive
-`sort`/`unique` behavior are in `backend/src/Builtins/Builtins.Pure/Libs/List.fs`
-lines 13-171 and 304-348. Expected values and errors are in
-`backend/testfiles/execution/stdlib/list.dark` lines 1-378.
+The approved compiler evidence revision
+`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`, DCB1 report commit
+`8a402797ccccda0ca47b516b356ae1de4d670038`, and the other parity documents
+were starting evidence only. Every finding retained below was checked again at
+the comparison HEAD and interpreter revision. Performance is excluded unless
+it changes observable behavior.
 
-The compiler implementation is in `src/DarkCompiler/stdlib/List.dark`: the
-public Int contracts and sorting functions are at lines 13-188, indexing and
-bounds operations at 221-326, and the newly ported collection functions at
-352-502. Comparator helpers are at
-`src/DarkCompiler/stdlib/ListSortByComparatorHelpers.dark:7-85`. The polymorphic
-`empty` identity is registered at `src/DarkCompiler/Stdlib.fs:244-245` and
-lowered at `src/DarkCompiler/passes/2_AST_to_ANF.fs:4887` and `:9071`.
+## Source anchors and probes
 
-Canonical comparison is selected from concrete AOT types in
-`src/DarkCompiler/passes/1.5_TypeChecking.fs:1289-1358`, synthesized at
-`:5620-6049`, and materialized at `:6269-6395`. The type-directed plan covers
-the compiler representations of sortable scalar values and recursively covers
-lists, tuples, string-keyed dictionaries, records, and enums. Unsupported
-concrete types are rejected during type checking.
+The interpreter baseline is `LibParser/Parser.fs` for list, cons, and append
+syntax; `LibExecution/TypeChecker.fs` for runtime element-type merging;
+`LibExecution/Interpreter.fs` for list construction and matching;
+`Builtins.Pure/Libs/NoModule.fs` for structural equality;
+`Builtins.Pure/Libs/List.fs` for sorting and uniqueness; and
+`packages/darklang/stdlib/list.dark` for the public contract. Expected behavior
+is exercised by `backend/testfiles/execution/language/collections/dlist.dark`
+and `backend/testfiles/execution/stdlib/list.dark` at the stamped revision.
 
-Focused compiler coverage is in `src/Tests/e2e/list_parity.e2e`. It covers the
-changed Int contracts, inclusive range, bounds, repeat error, structured chunk
-error, collection additions, stable sorting, canonical compound ordering,
-invalid comparators, and retained extensions. The upstream same-source List
-corpus enabled in `src/Tests/test-suite-tooling/TestRunner.fs` supplies 147
-enabled passing cases, including Char, Bool, and tuple group keys. A direct
-same-source dictionary ordering probe also passes:
+Compiler evidence is anchored in:
 
-```dark
-Stdlib.List.sort([Dict { b = 2L }, Dict { a = 2L }, Dict { a = 1L }])
-```
+- `src/DarkCompiler/passes/1_Parser.fs` and `1_InterpreterParser.fs` for the two
+  accepted source modes and their common AST normalization;
+- `AST.fs`, `passes/1.5_TypeChecking.fs`, and `passes/2_AST_to_ANF.fs` for the
+  canonical list form, homogeneous typing, private typed equality, native
+  construction, and pattern lowering;
+- `Runtime.fs`, `Stdlib.fs`, `stdlib/List.dark`, and
+  `stdlib/ListSortByComparatorHelpers.dark` for representation, `List.empty`,
+  random selection, and the callable contract;
+- `passes/1.6_ValueRendering.fs` and private `List.__toDisplayString_*` helpers
+  for typed recursive rendering; and
+- `src/Tests/e2e/list_language_parity.e2e`, `list_parity.e2e`, `lists.e2e`,
+  `stdlib/list.e2e`, `pattern_matching.e2e`, and
+  `compiler-passes/SyntaxInteropTests.fs` for focused same-source probes.
 
-It produces `[Dict { a = 1 }, Dict { a = 2 }, Dict { b = 2 }]`.
+## Language and runtime matrix
 
-## Public behavior matrix
-
-| Area | Compiler behavior | Revalidated source/test evidence | Classification |
+| Area | Interpreter contract and compiler result | Focused evidence | Classification |
 | --- | --- | --- | --- |
-| `empty` | bare polymorphic `Stdlib.List.empty`, version-zero identity | C `Stdlib.fs:244-245`, `2_AST_to_ANF.fs:4887,9071`, probe `list_parity.e2e:1-2`; I `list.dark:4-5`, test `list.dark:1` | parity |
-| `length` | returns `Int` | C `List.dark:16-18`, probe `list_parity.e2e:3`; I `list.dark:106-108`, tests `list.dark:5-6` | parity |
-| `findFirstIndex`, `indexedMap` | indices are `Int`; callbacks retain canonical currying/order | C `List.dark:321-329,353-359`, probes `list_parity.e2e:4-5`; I `list.dark:72-78,390-398`, tests `list.dark:118-124,160-163` | parity |
-| `getAt` | accepts `Int`; negative, out-of-range, and non-`Int64` values return `None` | C `List.dark:225-229`, probes `list_parity.e2e:6-8`; I `list.dark:509-512`, tests `list.dark:143-153` | parity |
-| `range` | inclusive `Int` bounds; descending bounds return `[]` | C `List.dark:293-299`, probes `list_parity.e2e:10-11`; I `list.dark:111-117`, tests `list.dark:188,239-241` | parity |
-| `repeatUnsafe`, `repeat` | times-first `Int`; validated form returns `Result` with canonical error text | C `List.dark:301-318`, probes `list_parity.e2e:12-14`; I `list.dark:86-103`, tests `list.dark:242-250` | parity |
-| `take`, `drop` | `Int` counts and canonical non-positive/oversized behavior | C `List.dark:245-263`, probes `list_parity.e2e:16-19`; I `list.dark:333-340,360-368`, tests `list.dark:39-51,292-299` | parity |
-| `ChunkBySizeError`, `chunkBySize`, helper | structured error, ordered chunks, short final chunk | C `List.dark:10,491-502`, probes `list_parity.e2e:31-35`; I `list.dark:568-600`, tests `list.dark:368-374` | parity |
-| `map2shortestHelper` | list/list/function/result order; stops at the shorter list | C `List.dark:398-410`, probes `list_parity.e2e:21-22`; I `list.dark:401-428`, tests `list.dark:199-206` | parity |
-| `groupByWithKey` | structural key equality with first-key and element order | C `List.dark:434-472`, probes `list_parity.e2e:23-24`; I `list.dark:522-541`, tests `list.dark:339-361` | parity |
-| `iter` | ordered, exactly-once Unit sequencing | C `List.dark:474-479`, failing-callback probes `list_parity.e2e:26-27`; I `list.dark:559-565`, tests `list.dark:61-84` | parity |
-| `randomElement` | no draw for empty; unbiased bounded member selection otherwise | C `List.dark:481-489`, probes `list_parity.e2e:28-29`; I `list.dark:515-519`, tests `list.dark:235-238` | parity |
-| `sort`, `sortBy`, `unique`, `uniqueBy` | canonical type-directed ordering and canonical retained-value behavior | C `List.dark:139-188`, `1.5_TypeChecking.fs:1289-1358,5620-6049`, probes `list_parity.e2e:37-45`; I `list.dark:161-204`, runtime `List.fs:13-171,304-348`, tests `list.dark:256-261,307-318` | parity |
-| comparator helpers and `sortByComparator` | `Int` comparator, alternating-split merge sort, left-before-right equality, only `-1`, `0`, `1` accepted, exact error text | C `ListSortByComparatorHelpers.dark:7-85`, probes `list_parity.e2e:47-55`; I `list.dark:207-281`, tests `list.dark:263-280` | parity |
+| Literals | `[]` and populated literals accept comma, semicolon, or newline separators, including trailing separators, and normalize to `ListLiteral`. | Both parser implementations; parser-mode tests and `list_language_parity.e2e`. | parity |
+| Removed spread | Expression and pattern forms using `...` are rejected. The expression-level `ListCons` AST case is deleted. | Parser rejection probes in both modes; no `ListCons` expression remains in `AST.fs`. | removed compiler extension |
+| Cons patterns | `head :: tail` is pattern syntax, associates right, and chained heads normalize to one internal `PListCons` without reordering bindings. | Both parsers and `SyntaxInteropTests.fs`; nested/list-tuple cases in `lists.e2e`. | parity; `PListCons` is internal only |
+| Append | `@` associates right at interpreter precedence and normalizes to `Stdlib.List.append`. Both operands are homogeneous lists. | Both parsers, AST-shape test, type and value probes in `list_language_parity.e2e`. | parity |
+| Inference | `[]` uses contextual polymorphic inference. A nonempty literal establishes one element type; heterogeneous elements and non-list cons tails are rejected. | `1.5_TypeChecking.fs`; focused positive and compile-error probes. | parity result, intentional AOT phase difference |
+| Construction | Elements and append operands evaluate once, left to right, before native structural assembly. The skew-list builder and ownership rules remain native. | `2_AST_to_ANF.fs`; first-failure probes in `list_language_parity.e2e`; skew-list/refcount suites. | retained native equivalence |
+| Representation | Empty is the zero root; populated values use direct-payload skew-binary trees with persistent reference-counted edges. | `stdlib/__SkewList.dark`, `Runtime.fs`, refcount insertion, and both code generators. | intentional compiler architecture; behavior-equivalent |
+| Matching | Exact patterns require exact length; cons patterns require a nonempty list; nested patterns bind in source order and tails are canonical list values. | All `PList`/`PListCons` paths in `2_AST_to_ANF.fs`; `lists.e2e` and `pattern_matching.e2e`. | parity |
+| Match failure | Exhausted alternatives use the standard nonexhaustive-match failure and recursively render literal list/tuple values instead of a list-specific fallback. | `2_AST_to_ANF.fs`; exact failure probes in `pattern_matching.e2e` and `lists.e2e`. | parity text for shared representable values |
+| Equality | `==`/`!=` synthesize private typed structural equality: lengths and elements are compared recursively in order. No public `List.equals` call is generated. | `1.5_TypeChecking.fs`; scalar, nested, tuple, record, enum, and list equality probes. | retained native equivalence |
+| Rendering | Boundary rendering is synthesized recursively for scalar, tuple, nested-list, record, and enum element types; legacy concrete helpers have private `__` identities. | `1.6_ValueRendering.fs`, `ListDisplay.fs`, value-rendering and refcount tests. | retained native equivalence |
 
-## Extensions and intentional AOT divergences
+The interpreter discovers a heterogeneous list while merging runtime
+`ValueType`s and reports the first mismatched index. The AOT compiler rejects
+the same program during type checking because its native list representation
+must be monomorphic before lowering. Callback arity/type errors and unsupported
+concrete equality/sort categories are rejected at the same AOT boundary. These
+are intentional failure-phase differences, not different accepted results.
+Interpreter-only dynamic values outside the compiler type universe are not
+claimed as supported compiler element categories.
 
-- `equals`, `flatMap`, `setAt`, and `forAll` remain compiler extensions
-  (`List.dark:20-37,83-85,231-233,265-273`; focused probes
-  `list_parity.e2e:57-60`). They are absent from the pinned interpreter module;
-  `all` remains its parity spelling. These extensions are not used to redefine
-  interpreter contracts.
-- `toDisplayString_*`, skew-list accessors, canonical-comparison helpers, and
-  ownership-rooting helpers are compiler display or implementation details,
-  not additional interpreter API claims.
-- Invalid comparator return types or arity are rejected at AOT type checking.
-  The interpreter reaches runtime errors for those dynamically typed calls.
-- `empty` is a deliberately narrow module-value intrinsic lowered directly to
-  the empty skew-list representation. This does not add general source-level
-  top-level constants; an otherwise unconstrained bare `empty` remains
-  uninferrable in the AOT compiler.
-- Sortability is decided from the concrete monomorphized type. Unsupported
-  representations fail compilation instead of introducing interpreter-style
-  tagged runtime dispatch.
+## Public `List` contract
+
+The F#-backed interpreter module defines the behavior; equivalent compiler Dark
+or native implementations are retained. Type variables below are polymorphic.
+
+| Contract group | Public signatures and behavior |
+| --- | --- |
+| Values and construction | `empty : List<a>` is a non-callable value; `singleton`, `push`, `pushBack`, and `append` retain order. `head`, `tail`, `last`, and `splitLast` return `Option` on empty input. |
+| Size and lookup | `length : List<a> -> Int`; `getAt : List<a> * Int -> Option<a>` returns `None` for negative, out-of-range, or non-native-sized indices; `isEmpty`, `member`, and `findFirst` match interpreter edge cases. |
+| Traversal | `fold`, `map`, `indexedMap`, `filter`, `filterMap`, `flatten`, `reverse`, `interpose`, `interleave`, `drop`, `dropWhile`, `dropLast`, `take`, and `takeWhile` preserve interpreter results and callback order. Counts and indices are public `Int`. |
+| Predicates | `all` and `any` invoke callbacks left to right, once per visited element, and stop at the first decisive result. `findFirst` and `findFirstIndex` stop at the first match. |
+| Pairwise | `map2shortest` and `zipShortest` truncate; `map2` and `zip` return `None` on unequal lengths and `Some` on equal lengths; `unzip` preserves order. |
+| Range and repetition | `range(start, end)` is inclusive and descending bounds return `[]`. `repeatUnsafe(times, value)` returns a list. `repeat(times, value)` returns `Result<List<a>, String>` and uses the canonical negative-count message. Bounds are `Int`. |
+| Sorting and uniqueness | `sort`, `sortBy`, `unique`, and `uniqueBy` use canonical typed ordering. `sortByComparator` is stable, accepts an `Int` comparator, and returns the exact error unless each result is `-1`, `0`, or `1`. |
+| Grouping and callbacks | `groupByWithKey` preserves first-key and member order and evaluates its key callback in source order. `partition` preserves output order, calls its predicate once per element, and observes the interpreter's tail-to-head callback order. `iter` calls a Unit callback left to right and returns Unit. |
+| Random | `randomElement : List<a> -> Option<a>` does not request entropy for `[]`; nonempty input uses rejection sampling and only returns a valid member. |
+| Chunking | Public `ChunkBySizeError.SizeMustBeGreaterThanZero`; `chunkBySize` rejects nonpositive `Int` sizes and otherwise returns ordered chunks with a possibly short final chunk. |
+
+Callback failures propagate from the first callback reached in the specified
+order. The focused suites cover fold/map/indexed-map, pairwise map, filters,
+find/all/any, drop/take-while, sorting, uniqueness, grouping, partition, and
+iteration, including short-circuit and failure cases.
+
+## Removed extensions and private implementation surface
+
+The former public compiler aliases `List.equals`, `List.flatMap`,
+`List.forAll`, and `List.setAt` are absent from callable lookup; focused probes
+assert unresolved-callable failures. Compiler-owned sources use canonical
+`==`, `List.flatten`/`map`, `List.all`, and private
+`Stdlib.Internal.SkewList.setAt` as appropriate. The misplaced truncating
+`List.zip` in `Float.dark` is removed; canonical `List.zip` returns `Option`.
+
+The compiler-only list spread grammar and expression representation are gone.
+Compiler stdlib, benchmarks, and tests use `::` patterns, `@`, `List.push`,
+`List.append`, or explicitly private skew-list operations. Helpers prefixed
+`__`, `Stdlib.Internal.SkewList`, generated comparison/rendering functions, and
+ownership-rooting helpers are implementation details and are not additions to
+the public interpreter contract. The existing `getAtOrDefault` machine-sized
+helper remains a documented compiler implementation extension because removing
+it was outside the approved public-helper removal set; parity callers use
+`getAt`.

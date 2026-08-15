@@ -331,15 +331,10 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         let items = patterns |> List.map (formatPattern syntax) |> String.concat separator
         $"[{items}]"
     | PListCons (head, tail) ->
-        let separator =
-            match syntax with
-            | CompilerSyntax -> ", "
-            | InterpreterSyntax -> "; "
-        let headText = head |> List.map (formatPattern syntax) |> String.concat separator
-        if headText = "" then
-            $"[...{formatPattern syntax tail}]"
-        else
-            $"[{headText}{separator}...{formatPattern syntax tail}]"
+        head
+        |> List.map (formatPattern syntax)
+        |> fun headParts -> headParts @ [formatPattern syntax tail]
+        |> String.concat " :: "
 
 let rec private formatLetPattern (pattern: LetPattern) : string =
     match pattern with
@@ -656,16 +651,6 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             | InterpreterSyntax -> "; "
         let elementsText = elements |> List.map (formatExpr syntax) |> String.concat separator
         $"[{elementsText}]"
-    | ListCons (head, tail) ->
-        let separator =
-            match syntax with
-            | CompilerSyntax -> ", "
-            | InterpreterSyntax -> "; "
-        let headText = head |> List.map (formatExpr syntax) |> String.concat separator
-        if headText = "" then
-            $"[...{formatExpr syntax tail}]"
-        else
-            $"[{headText}{separator}...{formatExpr syntax tail}]"
     | Lambda (parameters, returnAnnotation, body) ->
         let parameterList = NonEmptyList.toList parameters
         match parameterList, body with

@@ -30,7 +30,7 @@ This document lists the language features currently supported by the Dark compil
 - Tuple construction and zero-based access: `(1, 2)` and `t.0`
 - Record construction and field access: `Point { x = 1, y = 2 }` and `p.x`
 - Record update: `{ p with x = 100 }`
-- List literals and cons: `[]`, `[1, 2, 3]`, `[1, ...rest]`
+- List literals and append: `[]`, `[1, 2, 3]`, `[1; 2; 3]`, `[1] @ rest`
 - ADT constructors: `Option.Some 42L`, `Option.None`
 - Function application and pipe operator: `f(x)` and `x |> f`
 - Structural equality and inequality for tuples, records, ADTs, and Dicts
@@ -49,7 +49,7 @@ This document lists the language features currently supported by the Dark compil
 - Tuple patterns: `(a, b)`, `(x, _, z)`
 - Record patterns: `Point { x = a, y = b }` (type name required)
 - ADT constructor patterns: `Some(n)`, `None`
-- List patterns with exact-length and cons matching: `[]`, `[a, b]`, `[h, ...t]`
+- List patterns with exact-length and right-associative cons matching: `[]`, `[a, b]`, `h :: t`
 
 ## Functions and lambdas
 

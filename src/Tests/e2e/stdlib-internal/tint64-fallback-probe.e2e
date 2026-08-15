@@ -1,3 +1,3 @@
 // Probe for list-pattern lowering fallback paths with internal list intrinsics
 
-let xs = __list_empty<Int64>() in match xs with | [x, ...rest] -> x | _ -> 0 = 0
+let xs = __list_empty<Int64>() in match xs with | x :: rest -> x | _ -> 0 = 0

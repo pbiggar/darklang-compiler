@@ -1,0 +1,42 @@
+// list_language_parity.e2e - Canonical interpreter-compatible list syntax and behavior.
+
+// Literal separators and trailing layout normalize to ordinary list literals.
+[1L, 2L, 3L] = [1L; 2L; 3L]
+[1L, 2L, 3L,] = [1L; 2L; 3L;]
+[
+  1L
+  2L
+  3L
+] = [1L, 2L, 3L]
+[1L, ...[2L]] = error="Parse error: Expected expression"
+match [1L] with | [head, ...tail] -> head | _ -> 0L = error="Parse error: Expected pattern"
+
+// Append is right-associative and retains homogeneous list typing.
+[1L] @ [2L] @ [3L] = [1L, 2L, 3L]
+[1L, "two"] = error="Type mismatch"
+
+// Canonical cons patterns preserve binding order and support nesting.
+match [1L, 2L, 3L] with | head :: second :: tail -> (head, second, tail) | [] -> (0L, 0L, []) = (1L, 2L, [3L])
+match [[1L, 2L], [3L]] with | [first :: firstTail, [only]] -> (first, firstTail, only) | _ -> (0L, [], 0L) = (1L, [2L], 3L)
+match [1L] with | head :: [] -> head | _ -> 0L = 1L
+match [1L, 2L] with | head :: [last] -> head + last | _ -> 0L = 3L
+match [[1L, 2L]] with | (head :: innerTail) :: [] -> (head, innerTail) | _ -> (0L, []) = (1L, [2L])
+
+// Literal and append operands are evaluated once, from left to right.
+let literalFailure(message: String) : Int64 = Builtin.testRuntimeError(message) [literalFailure("literal-first"), literalFailure("literal-second")] = error="Uncaught exception: literal-first"
+let appendFailure(message: String) : Int64 = Builtin.testRuntimeError(message) [appendFailure("append-left")] @ [appendFailure("append-right")] = error="Uncaught exception: append-left"
+
+// Partition evaluates the tail first and invokes the predicate once per item.
+let partitionTrace(value: Int64) : Bool = let _ = Builtin.print(Stdlib.Int64.toString(value)) in value % 2L == 1L let _ = Stdlib.List.partition([1L, 2L, 3L], partitionTrace) in 0L = stdout="3210\n" stderr="" exact_bytes=true
+
+// Exact zip rejects unequal lengths while zipShortest truncates.
+Stdlib.List.zip([1L, 2L], ["a", "b"]) = Some([(1L, "a"), (2L, "b")])
+Stdlib.List.zip([1L], ["a", "b"]) = None
+Stdlib.List.zipShortest([1L], ["a", "b"]) = [(1L, "a")]
+
+// Former compiler-only public aliases do not remain callable.
+Stdlib.List.equals([1L], [1L]) = error="Unresolved callable name: Stdlib.List.equals"
+Stdlib.List.flatMap([1L], fun x -> [x]) = error="Unresolved callable name: Stdlib.List.flatMap"
+Stdlib.List.forAll([1L], fun _ -> true) = error="Unresolved callable name: Stdlib.List.forAll"
+Stdlib.List.setAt([1L], 0, 2L) = error="Unresolved callable name: Stdlib.List.setAt"
+Stdlib.List.toDisplayString_i64([1L]) = error="Unresolved callable name: Stdlib.List.toDisplayString_i64"

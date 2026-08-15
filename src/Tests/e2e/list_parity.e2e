@@ -54,7 +54,5 @@ Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 2I) = Error("Expected comparat
 Stdlib.List.sortByComparator([3L, 1L, 2L], fun a b -> if a == 3L && b == 2L then 2I else if a < b then -1I else if a > b then 1I else 0I) = Error("Expected comparator function to return -1, 0, or 1, but it returned 2")
 Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 0L) = error="Type mismatch"
 
-Stdlib.List.equals([1L, 2L], [1L, 2L]) = true
-Stdlib.List.flatMap([1L, 2L], fun value -> Stdlib.List.repeatUnsafe(2I, value)) = [1L, 1L, 2L, 2L]
-Stdlib.List.setAt([1L, 2L], 1L, 9L) = [1L, 9L]
-Stdlib.List.forAll([1L, 2L], fun value -> value > 0L) = true
+Stdlib.List.zip([1L, 2L], ["a", "b"]) = Some([(1L, "a"), (2L, "b")])
+Stdlib.List.zip([1L], ["a", "b"]) = None

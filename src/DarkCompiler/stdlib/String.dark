@@ -188,7 +188,7 @@ let __toCodepointsHelper(s: String, byteIndex: Int64, byteLen: Int64, acc: List<
         let result = Stdlib.String.__decodeUtf8At(s, byteIndex) in
         let cp = Stdlib.Tuple2.first<Int64, Int64>(result) in
         let consumed = Stdlib.Tuple2.second<Int64, Int64>(result) in
-        Stdlib.String.__toCodepointsHelper(s, byteIndex + consumed, byteLen, [cp, ...acc])
+        Stdlib.String.__toCodepointsHelper(s, byteIndex + consumed, byteLen, Stdlib.List.push<Int64>(acc, cp))
 
 // Get the number of codepoints in a string (not bytes)
 let codepointLength(s: String) : Int64 =
@@ -247,7 +247,7 @@ let __encodeUtf8At(ptr: RawPtr, offset: Int64, cp: Int64) : Int64 =
 let __encodeCodepointsAt(ptr: RawPtr, offset: Int64, cps: List<Int64>) : Int64 =
     match cps with
     | [] -> offset
-    | [cp, ...rest] ->
+    | cp :: rest ->
         let newOffset = Stdlib.String.__encodeUtf8At(ptr, offset, cp) in
         Stdlib.String.__encodeCodepointsAt(ptr, newOffset, rest)
 
@@ -309,7 +309,7 @@ let __lowerMapping(cp: Int64) : List<Int64> =
 let __mapUpper(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
     match cps with
     | [] -> Stdlib.List.reverse<Int64>(acc)
-    | [cp, ...rest] ->
+    | cp :: rest ->
         let upper = Stdlib.String.__upperMapping(cp) in
         Stdlib.String.__mapUpper(rest, Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(upper), acc))
 
@@ -317,7 +317,7 @@ let __mapUpper(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
 let __mapLower(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
     match cps with
     | [] -> Stdlib.List.reverse<Int64>(acc)
-    | [cp, ...rest] ->
+    | cp :: rest ->
         let lower = Stdlib.String.__lowerMapping(cp) in
         Stdlib.String.__mapLower(rest, Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(lower), acc))
 
@@ -404,26 +404,26 @@ let __segmentGraphemes(cps: List<Int64>, current: List<Int64>, result: List<List
         if Stdlib.List.isEmpty<Int64>(current) then
             Stdlib.List.reverse<List<Int64>>(result)
         else
-            Stdlib.List.reverse<List<Int64>>([Stdlib.List.reverse<Int64>(current), ...result])
-    | [cp, ...rest] ->
+            Stdlib.List.reverse<List<Int64>>(Stdlib.List.push<List<Int64>>(result, Stdlib.List.reverse<Int64>(current)))
+    | cp :: rest ->
         if Stdlib.List.isEmpty<Int64>(current) then
             // Start new grapheme
             Stdlib.String.__segmentGraphemes(rest, [cp], result)
         else if Stdlib.String.__isExtend(cp) || Stdlib.String.__isZWJ(cp) then
             // Extend current grapheme
-            Stdlib.String.__segmentGraphemes(rest, [cp, ...current], result)
+            Stdlib.String.__segmentGraphemes(rest, Stdlib.List.push<Int64>(current, cp), result)
         else if cp == 10 then
             // LF - check if preceded by CR
             match current with
             | [13] ->
                 // CR + LF = single grapheme
-                Stdlib.String.__segmentGraphemes(rest, [], [Stdlib.List.reverse<Int64>([cp, ...current]), ...result])
+                Stdlib.String.__segmentGraphemes(rest, [], Stdlib.List.push<List<Int64>>(result, Stdlib.List.reverse<Int64>(Stdlib.List.push<Int64>(current, cp))))
             | _ ->
                 // LF alone - end current, LF is its own grapheme
-                Stdlib.String.__segmentGraphemes(rest, [], [[cp], Stdlib.List.reverse<Int64>(current), ...result])
+                Stdlib.String.__segmentGraphemes(rest, [], [[cp], Stdlib.List.reverse<Int64>(current)] @ result)
         else
             // New base character - end current grapheme, start new one
-            Stdlib.String.__segmentGraphemes(rest, [cp], [Stdlib.List.reverse<Int64>(current), ...result])
+            Stdlib.String.__segmentGraphemes(rest, [cp], Stdlib.List.push<List<Int64>>(result, Stdlib.List.reverse<Int64>(current)))
 
 // Convert a list of codepoints to a string
 let __codepointsToString(cps: List<Int64>) : String =
@@ -441,7 +441,7 @@ let toGraphemes(s: String) : List<String> =
 let __countGraphemes(cps: List<Int64>, previous: Int64, joinNext: Bool, regionalRun: Int64, count: Int64) : Int64 =
     match cps with
     | [] -> count
-    | [cp, ...rest] ->
+    | cp :: rest ->
         let hangulJoin =
             (Stdlib.String.__isHangulL(previous) &&
                 (Stdlib.String.__isHangulL(cp) || Stdlib.String.__isHangulV(cp) ||
@@ -494,7 +494,7 @@ let join(strs: List<String>, sep: String) : String =
     match strs with
     | [] -> ""
     | [only] -> only ++ ""
-    | [first, ...rest] -> first ++ sep ++ Stdlib.String.join(rest, sep)
+    | first :: rest -> first ++ sep ++ Stdlib.String.join(rest, sep)
 
 // Check if byte is ASCII whitespace accepted by numeric parsing.
 let __isWhitespace(b: Int64) : Bool =
@@ -617,7 +617,7 @@ let head(s: String) : Stdlib.Option.Option<String> =
     let cps = Stdlib.String.toCodepoints(s) in
     match cps with
     | [] -> None
-    | [cp, ...rest] -> Some(Stdlib.String.fromCodepoints([cp]))
+    | cp :: rest -> Some(Stdlib.String.fromCodepoints([cp]))
 
 // Pad string on the left to reach target length
 // Uses byte-based length for simplicity

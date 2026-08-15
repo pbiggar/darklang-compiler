@@ -3,9 +3,9 @@
 // These tests guard against dropping RefCountDec operations when a self-tailcall
 // is lowered to a loop in ANF->MIR.
 
-let buildList(n: Int64, acc: List<Int64>) : List<Int64> = if n <= 0 then acc else buildList(n - 1, [n, ...acc]) let xs = buildList(50, []) in let _ = Stdlib.List.reverse<Int64>(xs) in 1 = stdout="1\n" stderr=""
-let buildList(n: Int64, acc: List<Int64>) : List<Int64> = if n <= 0 then acc else buildList(n - 1, [n, ...acc]) let xs = buildList(50, []) in let _ = Stdlib.List.filter<Int64>(xs, fun x -> x < 9999) in 1 = stdout="1\n" stderr=""
-let buildList(n: Int64, acc: List<Int64>) : List<Int64> = if n <= 0 then acc else buildList(n - 1, [n, ...acc]) let consume(xs: List<Int64>, acc: Int64) : Int64 = match xs with | [] -> acc | [_, ...t] -> consume(t, acc + 1) let xs = buildList(100, []) in consume(xs, 0) = stdout="100\n" stderr=""
+let buildList(n: Int64, acc: List<Int64>) : List<Int64> = if n <= 0 then acc else buildList(n - 1, Stdlib.List.push<Int64>(acc, n)) let xs = buildList(50, []) in let _ = Stdlib.List.reverse<Int64>(xs) in 1 = stdout="1\n" stderr=""
+let buildList(n: Int64, acc: List<Int64>) : List<Int64> = if n <= 0 then acc else buildList(n - 1, Stdlib.List.push<Int64>(acc, n)) let xs = buildList(50, []) in let _ = Stdlib.List.filter<Int64>(xs, fun x -> x < 9999) in 1 = stdout="1\n" stderr=""
+let buildList(n: Int64, acc: List<Int64>) : List<Int64> = if n <= 0 then acc else buildList(n - 1, Stdlib.List.push<Int64>(acc, n)) let consume(xs: List<Int64>, acc: Int64) : Int64 = match xs with | [] -> acc | _ :: t -> consume(t, acc + 1) let xs = buildList(100, []) in consume(xs, 0) = stdout="100\n" stderr=""
 
 // Replacing an owned record accumulator must release the old record before looping.
 type RcLoopState = { value: Int64 } let replaceRecord(state: RcLoopState, n: Int64) : RcLoopState = if n <= 0 then state else replaceRecord(RcLoopState { value = state.value + 1 }, n - 1) let result = replaceRecord(RcLoopState { value = 0 }, 500000) in result.value = stdout="500000\n" stderr=""

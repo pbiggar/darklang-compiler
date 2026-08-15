@@ -246,14 +246,14 @@ let __collectCollisionKeys<'k, 'v>(ptr: RawPtr, count: Int64, i: Int64, acc: Lis
     if i >= count then acc
     else
         let key = Stdlib.Internal.HAMT.__getCollisionKey<k, v>(ptr, i) in
-        Stdlib.Internal.HAMT.__collectCollisionKeys<k, v>(ptr, count, i + 1, [key, ...acc])
+        Stdlib.Internal.HAMT.__collectCollisionKeys<k, v>(ptr, count, i + 1, Stdlib.List.push<k>(acc, key))
 
 // Collect values from collision node
 let __collectCollisionValues<'k, 'v>(ptr: RawPtr, count: Int64, i: Int64, acc: List<v>) : List<v> =
     if i >= count then acc
     else
         let value = Stdlib.Internal.HAMT.__getCollisionValue<k, v>(ptr, i) in
-        Stdlib.Internal.HAMT.__collectCollisionValues<k, v>(ptr, count, i + 1, [value, ...acc])
+        Stdlib.Internal.HAMT.__collectCollisionValues<k, v>(ptr, count, i + 1, Stdlib.List.push<v>(acc, value))
 
 // Collect entries from collision node
 let __collectCollisionEntries<'k, 'v>(ptr: RawPtr, count: Int64, i: Int64, acc: List<(k, v)>) : List<(k, v)> =
@@ -261,7 +261,7 @@ let __collectCollisionEntries<'k, 'v>(ptr: RawPtr, count: Int64, i: Int64, acc: 
     else
         let key = Stdlib.Internal.HAMT.__getCollisionKey<k, v>(ptr, i) in
         let value = Stdlib.Internal.HAMT.__getCollisionValue<k, v>(ptr, i) in
-        Stdlib.Internal.HAMT.__collectCollisionEntries<k, v>(ptr, count, i + 1, [(key, value), ...acc])
+        Stdlib.Internal.HAMT.__collectCollisionEntries<k, v>(ptr, count, i + 1, Stdlib.List.push<(k, v)>(acc, (key, value)))
 
 // Fold over collision node entries
 let __foldCollision<'k, 'v, 'a>(ptr: RawPtr, count: Int64, i: Int64, acc: a, f: (a, k, v) -> a) : a =
@@ -623,7 +623,7 @@ let __keysHelper<'k, 'v>(node: Dict<k, v>, acc: List<k>) : List<k> =
         let ptr = Stdlib.Internal.HAMT.__clearTag<k, v>(node) in
         if tag == 2 then
             let key = __raw_get<k>(ptr, 0) in
-            [key, ...acc]
+            Stdlib.List.push<k>(acc, key)
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Internal.HAMT.__collectKeysFromChildren<k, v>(ptr, bitmap, 0, acc)
@@ -650,7 +650,7 @@ let __valuesHelper<'k, 'v>(node: Dict<k, v>, acc: List<v>) : List<v> =
         let ptr = Stdlib.Internal.HAMT.__clearTag<k, v>(node) in
         if tag == 2 then
             let value = __raw_get<v>(ptr, 8) in
-            [value, ...acc]
+            Stdlib.List.push<v>(acc, value)
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Internal.HAMT.__collectValuesFromChildren<k, v>(ptr, bitmap, 0, acc)
@@ -678,7 +678,7 @@ let __entriesHelper<'k, 'v>(node: Dict<k, v>, acc: List<(k, v)>) : List<(k, v)> 
         if tag == 2 then
             let key = __raw_get<k>(ptr, 0) in
             let value = __raw_get<v>(ptr, 8) in
-            [(key, value), ...acc]
+            Stdlib.List.push<(k, v)>(acc, (key, value))
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Internal.HAMT.__collectEntriesFromChildren<k, v>(ptr, bitmap, 0, acc)
@@ -817,7 +817,7 @@ let __mergeChildren<'k, 'v>(ptr: RawPtr, bitmap: Int64, idx: Int64, target: Dict
 let __fromListHelper<'k, 'v>(pairs: List<(k, v)>, acc: Dict<k, v>) : Dict<k, v> =
     match pairs with
     | [] -> acc
-    | [pair, ...rest] ->
+    | pair :: rest ->
         let key = Stdlib.Tuple2.first<k, v>(pair) in
         let value = Stdlib.Tuple2.second<k, v>(pair) in
         Stdlib.Internal.HAMT.__fromListHelper<k, v>(rest, Stdlib.Internal.HAMT.__setOverwriting<k, v>(acc, key, value))

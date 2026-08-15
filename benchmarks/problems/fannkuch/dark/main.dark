@@ -11,7 +11,7 @@ let getAt(list: List<Int64>, index: Int64) : Int64 =
 let prependReversed(source: List<Int64>, suffix: List<Int64>) : List<Int64> =
     match source with
     | [] -> suffix
-    | [h, ...t] -> prependReversed(t, [h, ...suffix])
+    | h :: t -> prependReversed(t, Stdlib.List.push<Int64>(suffix, h))
 
 // Reverse the first k+1 values in one source traversal.
 let reversePrefixCollect(source: List<Int64>, remaining: Int64, reversed: List<Int64>) : List<Int64> =
@@ -19,7 +19,7 @@ let reversePrefixCollect(source: List<Int64>, remaining: Int64, reversed: List<I
     else
         match source with
         | [] -> reversed
-        | [h, ...t] -> reversePrefixCollect(t, remaining - 1, [h, ...reversed])
+        | h :: t -> reversePrefixCollect(t, remaining - 1, Stdlib.List.push<Int64>(reversed, h))
 
 let reversePrefix(list: List<Int64>, k: Int64) : List<Int64> =
     reversePrefixCollect(list, k, [])
@@ -28,26 +28,26 @@ let reversePrefix(list: List<Int64>, k: Int64) : List<Int64> =
 let countFlips(perm: List<Int64>, flips: Int64) : Int64 =
     match perm with
     | [] -> flips
-    | [first, ..._] ->
+    | first :: _ ->
         if first == 0 then flips
         else countFlips(reversePrefix(perm, first), flips + 1)
 
 // Rotate first i+1 elements left by 1: [a,b,c,d,...] -> [b,c,d,a,...]
 let rotateLeftCollect(source: List<Int64>, remaining: Int64, reversed: List<Int64>, first: Int64) : List<Int64> =
-    if remaining <= 0 then prependReversed(reversed, [first, ...source])
+    if remaining <= 0 then prependReversed(reversed, Stdlib.List.push<Int64>(source, first))
     else
         match source with
         | [] -> prependReversed(reversed, [first])
-        | [h, ...t] -> rotateLeftCollect(t, remaining - 1, [h, ...reversed], first)
+        | h :: t -> rotateLeftCollect(t, remaining - 1, Stdlib.List.push<Int64>(reversed, h), first)
 
 let rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
     match list with
     | [] -> []
-    | [first, ...tail] -> rotateLeftCollect(tail, i, [], first)
+    | first :: tail -> rotateLeftCollect(tail, i, [], first)
 
 // Set element at index
 let setAt(list: List<Int64>, index: Int64, value: Int64) : List<Int64> =
-    Stdlib.List.setAt<Int64>(list, index, value)
+    Stdlib.Internal.SkewList.setAt<Int64>(list, index, value)
 
 // Generate next permutation, returns (newPerm, newCount, done)
 let nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<Int64>, List<Int64>, Bool) =
@@ -66,7 +66,7 @@ let fannkuchLoop(perm: List<Int64>, count: List<Int64>, n: Int64, maxFlips: Int6
     let flips =
         match perm with
         | [] -> 0
-        | [first, ..._] -> if first == 0 then 0 else countFlips(perm, 0) in
+        | first :: _ -> if first == 0 then 0 else countFlips(perm, 0) in
     let newMax = if flips > maxFlips then flips else maxFlips in
     let result = nextPerm(perm, count, 1, n) in
     let newPerm = Stdlib.Tuple3.first<List<Int64>, List<Int64>, Bool>(result) in
@@ -76,16 +76,19 @@ let fannkuchLoop(perm: List<Int64>, count: List<Int64>, n: Int64, maxFlips: Int6
     else fannkuchLoop(newPerm, newCount, n, newMax)
 
 // Create initial list [0, 1, 2, ..., n-1]
+let intToInt64(value: Int) : Int64 =
+    Builtin.unwrap(Stdlib.Int.toInt64(value))
+
 let createRange(n: Int64) : List<Int64> =
     Stdlib.List.map<Int, Int64>(
         Stdlib.List.range(0I, Stdlib.Int.fromInt64(n - 1)),
-        fun value -> Builtin.unwrap(Stdlib.Int.toInt64(value)))
+        intToInt64)
 
 let fannkuch(n: Int64) : Int64 =
     let perm = createRange(n) in
     let count = Stdlib.List.map<Int, Int64>(
         Stdlib.List.range(1I, Stdlib.Int.fromInt64(n)),
-        fun value -> Builtin.unwrap(Stdlib.Int.toInt64(value))) in
+        intToInt64) in
     fannkuchLoop(perm, count, n, 0)
 
 // Dark's fixed heap cannot complete the correct n=9 permutation traversal.

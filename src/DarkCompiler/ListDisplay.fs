@@ -7,13 +7,13 @@ module ListDisplay
 
 let getDisplayStringFunc (elemType: AST.Type) : string option =
     match elemType with
-    | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
-    | AST.TInt -> Some "Stdlib.List.toDisplayString_int"
-    | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
-    | AST.TString -> Some "Stdlib.List.toDisplayString_str"
-    | AST.TChar -> Some "Stdlib.List.toDisplayString_char"
-    | AST.TFloat64 -> Some "Stdlib.List.toDisplayString_f64"
-    | AST.TList AST.TInt64 -> Some "Stdlib.List.toDisplayString_list_i64"
+    | AST.TInt64 -> Some "Stdlib.List.__toDisplayString_i64"
+    | AST.TInt -> Some "Stdlib.List.__toDisplayString_int"
+    | AST.TBool -> Some "Stdlib.List.__toDisplayString_bool"
+    | AST.TString -> Some "Stdlib.List.__toDisplayString_str"
+    | AST.TChar -> Some "Stdlib.List.__toDisplayString_char"
+    | AST.TFloat64 -> Some "Stdlib.List.__toDisplayString_f64"
+    | AST.TList AST.TInt64 -> Some "Stdlib.List.__toDisplayString_list_i64"
     | AST.TInt8
     | AST.TInt16
     | AST.TInt32

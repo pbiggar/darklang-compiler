@@ -3,8 +3,7 @@
 //
 // Tests for List module functions
 //
-// NOTE: List spread syntax in expressions is supported and covered below.
-// Remaining disabled cases are documented near the affected tests.
+// Canonical list concatenation is covered below.
 
 // ===================================================================
 // Stdlib.List.singleton - Create a single-element list
@@ -14,15 +13,12 @@ Stdlib.List.length(Stdlib.List.singleton(42)) = 1I
 match Stdlib.List.singleton(5) with | [x] -> x | _ -> 0 = 5
 
 // ===================================================================
-// List spread syntax - [h, ...rest] in expressions
+// List append syntax
 // ===================================================================
 
-// Test basic spread syntax
-let rest = [3, 4, 5] in Stdlib.List.length([1, 2, ...rest]) = 5I
-// Test spread with empty list (need type annotation via function call)
-Stdlib.List.length<Int64>([1, ...[]]) = 1I
-// Test spread with single element head
-let tail = [2, 3] in match [1, ...tail] with | [a, b, c] -> a + b + c | _ -> 0 = 6
+let rest = [3, 4, 5] in Stdlib.List.length([1, 2] @ rest) = 5I
+Stdlib.List.length<Int64>([1] @ []) = 1I
+let tail = [2, 3] in match [1] @ tail with | [a, b, c] -> a + b + c | _ -> 0 = 6
 
 // ===================================================================
 // Stdlib.List.push - Add element to front of list
@@ -129,12 +125,12 @@ Stdlib.Option.withDefault(Stdlib.List.findFirst([1, 2, 3, 4], fun x -> x > 2), 0
 Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], fun x -> x > 10)) = true
 
 // ===================================================================
-// Stdlib.List.forAll - Check if all elements satisfy predicate
+// Stdlib.List.all - Check if all elements satisfy predicate
 // ===================================================================
 
-Stdlib.List.forAll([1, 2, 3], fun x -> x > 0) = true
-Stdlib.List.forAll([1, 2, 3], fun x -> x > 2) = false
-Stdlib.List.forAll<Int64>([], fun x -> x > 0) = true
+Stdlib.List.all([1, 2, 3], fun x -> x > 0) = true
+Stdlib.List.all([1, 2, 3], fun x -> x > 2) = false
+Stdlib.List.all<Int64>([], fun x -> x > 0) = true
 
 // ===================================================================
 // Stdlib.List.any - Check if any element satisfies predicate
@@ -179,17 +175,6 @@ Stdlib.List.length(Stdlib.List.repeatUnsafe(0I, 1)) = 0I
 match Stdlib.List.repeatUnsafe(3I, 7) with | [a, b, c] -> a + b + c | _ -> 0 = 21
 
 // ===================================================================
-// Stdlib.List.setAt - Set element at index
-// ===================================================================
-
-Stdlib.Option.withDefault(Stdlib.List.getAt(Stdlib.List.setAt([10, 20, 30], 1, 99), 1I), 0) = 99
-Stdlib.List.length(Stdlib.List.setAt([1, 2, 3], 0, 100)) = 3I
-// NOTE: Tail call optimization bug corrupts lists - see benchmarks.e2e
-// Lists built by tail-recursive functions (like Stdlib.List.repeat) get corrupted
-// when modified by other tail-recursive functions (like Stdlib.List.setAt).
-// Non-tail-recursive versions work correctly.
-
-// ===================================================================
 // Stdlib.List.indexedMap - Map with index
 // ===================================================================
 
@@ -218,7 +203,7 @@ Stdlib.List.all([1, 2, 3], fun x -> x > 2) = false
 //
 // let memReclaimMakeHelper(n: Int64, acc: List<Int64>) : List<Int64> =
 //     if n <= 0 then acc
-//     else memReclaimMakeHelper(n - 1, [n, ...acc])
+//     else memReclaimMakeHelper(n - 1, Stdlib.List.push(acc, n))
 //
 // let memReclaimMake(n: Int64) : List<Int64> =
 //     memReclaimMakeHelper(n, [])

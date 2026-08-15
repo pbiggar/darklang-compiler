@@ -103,18 +103,18 @@ let join<'a>(option: Stdlib.Option.Option<Stdlib.Option.Option<a>>) : Stdlib.Opt
 let combine<'a>(options: List<Stdlib.Option.Option<a>>) : Stdlib.Option.Option<List<a>> =
     match options with
     | [] -> Some([])
-    | [option, ...rest] ->
+    | option :: rest ->
         match option with
         | None -> None
         | Some(value) ->
             match Stdlib.Option.combine<a>(rest) with
             | None -> None
-            | Some(values) -> Some([value, ...values])
+            | Some(values) -> Some(Stdlib.List.push<a>(values, value))
 
 let values<'a>(options: List<Stdlib.Option.Option<a>>) : List<a> =
     match options with
     | [] -> []
-    | [option, ...rest] ->
+    | option :: rest ->
         match option with
-        | Some(value) -> [value, ...Stdlib.Option.values<a>(rest)]
+        | Some(value) -> Stdlib.List.push<a>(Stdlib.Option.values<a>(rest), value)
         | None -> Stdlib.Option.values<a>(rest)

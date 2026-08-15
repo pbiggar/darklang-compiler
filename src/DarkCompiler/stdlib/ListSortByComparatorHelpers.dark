@@ -12,7 +12,7 @@ let validate<'a>(comparator: (a, a) -> Int, x: a, y: a) : Stdlib.Result.Result<I
 let __copyList<'a>(list: List<a>) : List<a> =
     match list with
     | [] -> []
-    | [head, ...tail] ->
+    | head :: tail ->
         let retainedHead = [head] in
         Stdlib.List.append<a>(retainedHead, Stdlib.List.SortByComparatorHelpers.__copyList<a>(tail))
 
@@ -20,7 +20,7 @@ let __mergeWithComparatorState<'a>(comparatorState: List<(a, a) -> Int>, left: L
     match (left, right) with
     | ([], _) -> Ok(Stdlib.List.SortByComparatorHelpers.__copyList<a>(right))
     | (_, []) -> Ok(Stdlib.List.SortByComparatorHelpers.__copyList<a>(left))
-    | ([x, ...xs], [y, ...ys]) ->
+    | (x :: xs, y :: ys) ->
         match comparatorState with
         | [comparator] ->
             match Stdlib.List.SortByComparatorHelpers.validate<a>(comparator, x, y) with
@@ -45,7 +45,7 @@ let splitList<'a>(list: List<a>) : (List<a>, List<a>) =
     match list with
     | [] -> ([], [])
     | [x] -> ([x], [])
-    | [x, y, ...rest] ->
+    | x :: y :: rest ->
         // Root borrowed compound elements across the recursive call.
         let retainedX = [x] in
         let retainedY = [y] in

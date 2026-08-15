@@ -100,7 +100,7 @@ let fromList(list: List<Int64>) : Blob =
 let __writeListHelper(ptr: RawPtr, list: List<Int64>, offset: Int64) : Int64 =
     match list with
     | [] -> offset
-    | [b, ...rest] ->
+    | b :: rest ->
         let _ = __raw_write_byte(ptr, offset, b) in
         Stdlib.Bytes.__writeListHelper(ptr, rest, offset + 1)
 
@@ -119,7 +119,7 @@ let __toListHelper(b: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
         acc
     else
         let byte = Stdlib.Bytes.get(b, index) in
-        Stdlib.Bytes.__toListHelper(b, index - 1, [byte, ...acc])
+        Stdlib.Bytes.__toListHelper(b, index - 1, Stdlib.List.push<Int64>(acc, byte))
 
 // Convert nibble (0-15) to uppercase hex digit.
 let __hexDigit(n: Int64) : String =
