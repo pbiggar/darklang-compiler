@@ -470,15 +470,16 @@ let rec lex (input: string) : Result<Token list, string> =
                         match input[index] with
                         | '\'' ->
                             let str = System.String(List.rev chars |> List.toArray)
-                            if str.Length = 0 then
+                            let normalized = str.Normalize(System.Text.NormalizationForm.FormC)
+                            if normalized.Length = 0 then
                                 Error "Empty char literal"
                             else
-                                let enumerator = System.Globalization.StringInfo.GetTextElementEnumerator(str)
+                                let enumerator = System.Globalization.StringInfo.GetTextElementEnumerator(normalized)
                                 if enumerator.MoveNext() then
                                     if enumerator.MoveNext() then
-                                        Error $"Char literal contains more than one grapheme cluster: '{str}'"
+                                        Error $"Char literal contains more than one grapheme cluster: '{normalized}'"
                                     else
-                                        Ok (str, index + 1)
+                                        Ok (normalized, index + 1)
                                 else
                                     Error "Empty char literal"
                         | '\\' when hasChar index 1 'n' -> parseCharContent (index + 2) ('\n' :: chars)

@@ -123,7 +123,7 @@ let __toListHelper(b: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
 
 // Convert nibble (0-15) to uppercase hex digit.
 let __hexDigit(n: Int64) : String =
-    Stdlib.String.slice("0123456789ABCDEF", n, n + 1)
+    Stdlib.String.__byteSlice("0123456789ABCDEF", n, n + 1)
 
 let __byteToHex(b: Int64) : String =
     let hi = b / 16 in

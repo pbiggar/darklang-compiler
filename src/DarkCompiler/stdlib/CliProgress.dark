@@ -11,8 +11,8 @@ let bar(current: Int, total: Int, label: String) : Unit =
     let filled =
         if total64 == 0 then 0 else (current64 * width) / total64 in
     let empty = width - filled in
-    let filledStr = Stdlib.String.repeat("#", filled) in
-    let emptyStr = Stdlib.String.repeat("-", empty) in
+    let filledStr = Stdlib.String.repeat("#", Stdlib.Int.fromInt64(filled)) in
+    let emptyStr = Stdlib.String.repeat("-", Stdlib.Int.fromInt64(empty)) in
     let pct =
         if total64 == 0 then 0 else (current64 * 100) / total64 in
     let _ = Builtin.print("\r[" ++ filledStr ++ emptyStr ++ "] " ++ Stdlib.Int64.toString(pct) ++ "% " ++ label) in

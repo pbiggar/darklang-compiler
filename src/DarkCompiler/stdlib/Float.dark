@@ -95,7 +95,7 @@ let clamp(value: Float, limit1: Float, limit2: Float) : Stdlib.Result.Result<Flo
 let __isDigit(byte: Int64) : Bool = byte >= 48 && byte <= 57
 
 let __scanExponentDigits(value: String, index: Int64, magnitude: Int64, sawDigit: Bool) : Stdlib.Result.Result<Int64, Stdlib.Float.ParseError> =
-    if index >= Stdlib.String.length(value) then
+    if index >= Stdlib.String.__byteLength(value) then
         if sawDigit then Ok(magnitude) else Error(Stdlib.Float.ParseError.BadFormat)
     else
         let byte = Stdlib.String.getByteAt(value, index) in
@@ -105,7 +105,7 @@ let __scanExponentDigits(value: String, index: Int64, magnitude: Int64, sawDigit
         else Error(Stdlib.Float.ParseError.BadFormat)
 
 let __scanExponent(value: String, index: Int64) : Stdlib.Result.Result<Int64, Stdlib.Float.ParseError> =
-    if index >= Stdlib.String.length(value) then Error(Stdlib.Float.ParseError.BadFormat)
+    if index >= Stdlib.String.__byteLength(value) then Error(Stdlib.Float.ParseError.BadFormat)
     else
         let byte = Stdlib.String.getByteAt(value, index) in
         let negative = byte == 45 in
@@ -116,13 +116,13 @@ let __scanExponent(value: String, index: Int64) : Stdlib.Result.Result<Int64, St
         | Ok(magnitude) -> Ok(if negative then 0 - magnitude else magnitude)
 
 let __scanMantissa(value: String, index: Int64, digits: String, fractionalDigits: Int64, sawDot: Bool, sawDigit: Bool) : Stdlib.Result.Result<(String, Int64, Int64), Stdlib.Float.ParseError> =
-    if index >= Stdlib.String.length(value) then
+    if index >= Stdlib.String.__byteLength(value) then
         if sawDigit then Ok((digits, fractionalDigits, 0))
         else Error(Stdlib.Float.ParseError.BadFormat)
     else
         let byte = Stdlib.String.getByteAt(value, index) in
         if Stdlib.Float.__isDigit(byte) then
-            let digit = Stdlib.String.slice(value, index, index + 1) in
+            let digit = Stdlib.String.__byteSlice(value, index, index + 1) in
             Stdlib.Float.__scanMantissa(
                 value,
                 index + 1,
@@ -139,7 +139,7 @@ let __scanMantissa(value: String, index: Int64, digits: String, fractionalDigits
         else Error(Stdlib.Float.ParseError.BadFormat)
 
 let __pow10(exponent: Int64) : Int =
-    Stdlib.Int.__value("1" ++ Stdlib.String.repeat("0", exponent))
+    Stdlib.Int.__value("1" ++ Stdlib.String.repeat("0", Stdlib.Int.fromInt64(exponent)))
 
 let __powerOfTwo(exponent: Int64) : Int =
     Stdlib.Int.__value(Stdlib.Float.__multiplyTextByDigit("1", 2, exponent))
@@ -196,8 +196,8 @@ let __ratioToFloat(numerator: Int, denominator: Int) : Float =
     // lands within a few steps of the true exponent and avoids retaining a
     // thousand successively shifted big integers for extreme/subnormal input.
     let decimalLengthDifference =
-        Stdlib.String.length(Stdlib.Int.toString(numerator))
-        - Stdlib.String.length(Stdlib.Int.toString(denominator)) in
+        Stdlib.String.__byteLength(Stdlib.Int.toString(numerator))
+        - Stdlib.String.__byteLength(Stdlib.Int.toString(denominator)) in
     let estimate = decimalLengthDifference * 3322 / 1000 in
     let exponent = Stdlib.Float.__binaryExponent(numerator, denominator, estimate) in
     if exponent > 1023 then Stdlib.Float.__infinity()
@@ -218,7 +218,7 @@ let __decimalToFloat(digits: String, decimalExponent: Int64, negative: Bool) : F
     let normalized = Stdlib.Int.__normalizeMagnitude(digits) in
     if normalized == "0" then if negative then -0.0 else 0.0
     else
-        let decimalMagnitude = Stdlib.String.length(normalized) + decimalExponent in
+        let decimalMagnitude = Stdlib.String.__byteLength(normalized) + decimalExponent in
         let magnitude =
             if decimalMagnitude > 310 then Stdlib.Float.__infinity()
             else if decimalMagnitude < -400 then 0.0
@@ -226,7 +226,7 @@ let __decimalToFloat(digits: String, decimalExponent: Int64, negative: Bool) : F
                 let integer = Stdlib.Int.__value(normalized) in
                 let numerator =
                     if decimalExponent >= 0 then
-                        Stdlib.Int.__value(normalized ++ Stdlib.String.repeat("0", decimalExponent))
+                        Stdlib.Int.__value(normalized ++ Stdlib.String.repeat("0", Stdlib.Int.fromInt64(decimalExponent)))
                     else integer in
                 let denominator = if decimalExponent < 0 then Stdlib.Float.__pow10(0 - decimalExponent) else Stdlib.Int.fromInt64(1) in
                 Stdlib.Float.__ratioToFloat(numerator, denominator) in
@@ -237,7 +237,7 @@ let parse(input: String) : Stdlib.Result.Result<Float, Stdlib.Float.ParseError> 
     if value == "NaN" || value == "+NaN" || value == "-NaN" then Ok(Stdlib.Float.__nan())
     else if value == "Infinity" || value == "+Infinity" then Ok(Stdlib.Float.__infinity())
     else if value == "-Infinity" then Ok(Stdlib.Float.__negativeInfinity())
-    else if Stdlib.String.length(value) == 0 then Error(Stdlib.Float.ParseError.BadFormat)
+    else if Stdlib.String.__byteLength(value) == 0 then Error(Stdlib.Float.ParseError.BadFormat)
     else
         let first = Stdlib.String.getByteAt(value, 0) in
         let negative = first == 45 in
@@ -249,9 +249,9 @@ let parse(input: String) : Stdlib.Result.Result<Float, Stdlib.Float.ParseError> 
             Ok(Stdlib.Float.__decimalToFloat(digits, exponent - fractionalDigits, negative))
 
 let __stripDecimalTrailingZeros(value: String) : String =
-    let length = Stdlib.String.length(value) in
+    let length = Stdlib.String.__byteLength(value) in
     if length > 1 && Stdlib.String.getByteAt(value, length - 1) == 48 then
-        Stdlib.Float.__stripDecimalTrailingZeros(Stdlib.String.take(value, length - 1))
+        Stdlib.Float.__stripDecimalTrailingZeros(Stdlib.String.__byteTake(value, length - 1))
     else value
 
 let __signedExponent(exponent: Int64) : String =
@@ -261,27 +261,27 @@ let __signedExponent(exponent: Int64) : String =
 let __renderDecimalCandidate(digits: String, decimalExponent: Int64, negative: Bool) : String =
     let sign = if negative then "-" else "" in
     if decimalExponent < -4 || decimalExponent >= 12 then
-        let first = Stdlib.String.take(digits, 1) in
-        let rest = Stdlib.String.drop(digits, 1) in
+        let first = Stdlib.String.__byteTake(digits, 1) in
+        let rest = Stdlib.String.__byteDrop(digits, 1) in
         sign ++ first ++ (if rest == "" then "" else "." ++ rest) ++ "e" ++ Stdlib.Float.__signedExponent(decimalExponent)
     else
         let point = decimalExponent + 1 in
-        let length = Stdlib.String.length(digits) in
-        if point <= 0 then sign ++ "0." ++ Stdlib.String.repeat("0", 0 - point) ++ digits
-        else if point >= length then sign ++ digits ++ Stdlib.String.repeat("0", point - length) ++ ".0"
-        else sign ++ Stdlib.String.take(digits, point) ++ "." ++ Stdlib.String.drop(digits, point)
+        let length = Stdlib.String.__byteLength(digits) in
+        if point <= 0 then sign ++ "0." ++ Stdlib.String.repeat("0", Stdlib.Int.fromInt64(0 - point)) ++ digits
+        else if point >= length then sign ++ digits ++ Stdlib.String.repeat("0", Stdlib.Int.fromInt64(point - length)) ++ ".0"
+        else sign ++ Stdlib.String.__byteTake(digits, point) ++ "." ++ Stdlib.String.__byteDrop(digits, point)
 
 let __hasNonzeroDigit(value: String, index: Int64) : Bool =
-    if index >= Stdlib.String.length(value) then false
+    if index >= Stdlib.String.__byteLength(value) then false
     else if Stdlib.String.getByteAt(value, index) != 48 then true
     else Stdlib.Float.__hasNonzeroDigit(value, index + 1)
 
 let __roundedSignificand(exactText: String, precision: Int64) : String =
-    let exactLength = Stdlib.String.length(exactText) in
+    let exactLength = Stdlib.String.__byteLength(exactText) in
     if exactLength <= precision then
-        exactText ++ Stdlib.String.repeat("0", precision - exactLength)
+        exactText ++ Stdlib.String.repeat("0", Stdlib.Int.fromInt64(precision - exactLength))
     else
-        let prefix = Stdlib.String.take(exactText, precision) in
+        let prefix = Stdlib.String.__byteTake(exactText, precision) in
         let nextDigit = Stdlib.String.getByteAt(exactText, precision) - 48 in
         let lastKeptDigit = Stdlib.String.getByteAt(prefix, precision - 1) - 48 in
         let roundsUp =
@@ -294,16 +294,16 @@ let __roundedSignificand(exactText: String, precision: Int64) : String =
         else prefix
 
 let __shortestCandidate(originalBits: UInt64, exactText: String, scale: Int64, negative: Bool, precision: Int64) : String =
-    let exactLength = Stdlib.String.length(exactText) in
+    let exactLength = Stdlib.String.__byteLength(exactText) in
     let originalExponent = exactLength - scale - 1 in
     let roundedText = Stdlib.Float.__roundedSignificand(exactText, precision) in
-    let carried = Stdlib.String.length(roundedText) > precision in
+    let carried = Stdlib.String.__byteLength(roundedText) > precision in
     let exponent = if carried then originalExponent + 1 else originalExponent in
     let digits = Stdlib.Float.__stripDecimalTrailingZeros(roundedText) in
     let parsed =
         Stdlib.Float.__decimalToFloat(
             digits,
-            exponent - Stdlib.String.length(digits) + 1,
+            exponent - Stdlib.String.__byteLength(digits) + 1,
             negative) in
     if Stdlib.Float.toBits(parsed) == originalBits then
         Stdlib.Float.__renderDecimalCandidate(digits, exponent, negative)
@@ -326,7 +326,7 @@ let __writeDecimalProduct(value: String, index: Int64, digit: Int64, carry: Int6
         Stdlib.Float.__writeDecimalProduct(value, index - 1, digit, product / 10, ptr, outputIndex - 1)
 
 let __multiplyTextOnce(value: String, digit: Int64) : String =
-    let inputLength = Stdlib.String.length(value) in
+    let inputLength = Stdlib.String.__byteLength(value) in
     let finalCarry = Stdlib.Float.__decimalProductCarry(value, inputLength - 1, digit, 0) in
     let outputLength = inputLength + (if finalCarry == 0 then 0 else 1) in
     let dataSize = Stdlib.String.__alignedDataSize(outputLength) in

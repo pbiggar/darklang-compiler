@@ -1,0 +1,101 @@
+// Unicode.Data generated lookup index shard.
+// DO NOT EDIT. Regenerate with scripts/generate_unicode_tables.py.
+
+module Unicode.Data
+
+let __canonicalCompositionLookupGroup1(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table21.__canonicalCompositionChunk4(), 0, key, 12, 19, valueIndex) with
+    | Some(value) -> Some(value)
+    | None ->
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table22.__canonicalCompositionChunk5(), 0, key, 12, 19, valueIndex) with
+        | Some(value) -> Some(value)
+        | None ->
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table23.__canonicalCompositionChunk6(), 0, key, 12, 19, valueIndex) with
+            | Some(value) -> Some(value)
+            | None ->
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table24.__canonicalCompositionChunk7(), 0, key, 12, 19, valueIndex) with
+                | Some(value) -> Some(value)
+                | None ->
+                    None
+
+let contextualCasing() : List<(Int64, List<Int64>, List<Int64>, List<Int64>, String)> =
+    [
+        (931, [962], [931], [931], "Final_Sigma"),
+        (775, [775], [], [], "lt After_Soft_Dotted"),
+        (73, [105, 775], [73], [73], "lt More_Above"),
+        (74, [106, 775], [74], [74], "lt More_Above"),
+        (302, [303, 775], [302], [302], "lt More_Above"),
+        (204, [105, 775, 768], [204], [204], "lt"),
+        (205, [105, 775, 769], [205], [205], "lt"),
+        (296, [105, 775, 771], [296], [296], "lt"),
+        (304, [105], [304], [304], "tr"),
+        (304, [105], [304], [304], "az"),
+        (775, [], [775], [775], "tr After_I"),
+        (775, [], [775], [775], "az After_I"),
+        (73, [305], [73], [73], "tr Not_Before_Dot"),
+        (73, [305], [73], [73], "az Not_Before_Dot"),
+        (105, [105], [304], [304], "tr"),
+        (105, [105], [304], [304], "az")
+    ]
+
+let __generalCategoryLookupGroup3(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table27.__generalCategoryChunk12(), 0, codepoint, 14) with
+    | Some(value) -> Some(value)
+    | None ->
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table28.__generalCategoryChunk13(), 0, codepoint, 14) with
+        | Some(value) -> Some(value)
+        | None ->
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table29.__generalCategoryChunk14(), 0, codepoint, 14) with
+            | Some(value) -> Some(value)
+            | None ->
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table30.__generalCategoryChunk15(), 0, codepoint, 14) with
+                | Some(value) -> Some(value)
+                | None ->
+                    None
+
+let __generalCategoryLookupGroup1(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table19.__generalCategoryChunk4(), 0, codepoint, 14) with
+    | Some(value) -> Some(value)
+    | None ->
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table20.__generalCategoryChunk5(), 0, codepoint, 14) with
+        | Some(value) -> Some(value)
+        | None ->
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table21.__generalCategoryChunk6(), 0, codepoint, 14) with
+            | Some(value) -> Some(value)
+            | None ->
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table22.__generalCategoryChunk7(), 0, codepoint, 14) with
+                | Some(value) -> Some(value)
+                | None ->
+                    None
+
+let tableCounts() : List<(String, Int64)> =
+    [
+        ("canonicalCompositions", 965),
+        ("canonicalDecompositions", 2081),
+        ("caseIgnorableRanges", 464),
+        ("casedRanges", 158),
+        ("combiningClassRanges", 403),
+        ("compositionExclusions", 81),
+        ("contextualCasingMappings", 16),
+        ("extendedPictographicRanges", 451),
+        ("generalCategoryRanges", 3409),
+        ("graphemeBreakRanges", 1386),
+        ("indicConjunctRanges", 473),
+        ("lowercaseMappings", 1488),
+        ("uppercaseMappings", 1580),
+        ("whiteSpaceRanges", 11)
+    ]
+
+let __whiteSpaceLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table42.__whiteSpaceChunk0(), 0, codepoint, 14) with
+    | Some(value) -> Some(value)
+    | None ->
+        None
+
+let __whiteSpaceLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__whiteSpaceLookupGroup0(codepoint) with
+    | Some(value) -> Some(value)
+    | None ->
+        None
+
+let lookupLowercaseAt(codepoint: Int64, index: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__lowercaseLookup(codepoint, index)

@@ -1,169 +1,106 @@
-// Stdlib.Char.dark - Stdlib.Char definitions
-//
-// Split from stdlib.dark for modular stdlib loading.
+// Stdlib.Char - operations on one NFC-normalized extended grapheme cluster.
 
 module Stdlib.Char
 
-// Stdlib.Char - Character operations
-// =============================================================================
-// Note: In Dark, characters are represented as single-character strings.
-// These functions operate on the first codepoint of a string.
+let toString(char: Char) : String = char
 
-// Check if character is an ASCII digit (0-9)
-let isDigit(c: String) : Bool =
-    if Stdlib.String.isEmpty(c) then false
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) -> cp >= 48 && cp <= 57
-        | None -> false
+let __asChar(value: String) : Char = value
 
-// Check if character is an ASCII letter (a-z, A-Z)
-let isLetter(c: String) : Bool =
-    if Stdlib.String.isEmpty(c) then false
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) -> (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122)
-        | None -> false
+let toUppercase(char: Char) : Char =
+    Stdlib.Char.__asChar(Unicode.uppercase(Stdlib.Char.toString(char)))
 
-// Check if character is ASCII whitespace (space, tab, newline, carriage return)
-let isWhitespace(c: String) : Bool =
-    if Stdlib.String.isEmpty(c) then false
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) -> cp == 32 || cp == 9 || cp == 10 || cp == 13
-        | None -> false
+let toLowercase(char: Char) : Char =
+    Stdlib.Char.__asChar(Unicode.lowercase(Stdlib.Char.toString(char)))
 
-// Check if character is uppercase in the supported case-conversion pairs
-let isUppercase(c: String) : Bool =
-    if Stdlib.String.isEmpty(c) then false
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) ->
-            (cp >= 65 && cp <= 90)
-            || cp == 193
-            || cp == 379
-            || cp == 211
-            || cp == 321
-            || cp == 7358
-        | None -> false
+let isLowercase(char: Char) : Bool =
+    Stdlib.Char.toLowercase(char) == char && Stdlib.Char.toUppercase(char) != char
 
-// Check if character is an ASCII lowercase letter (a-z)
-let isLowercase(c: String) : Bool =
-    if Stdlib.String.isEmpty(c) then false
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) -> cp >= 97 && cp <= 122
-        | None -> false
+let isUppercase(char: Char) : Bool =
+    Stdlib.Char.toLowercase(char) != char && Stdlib.Char.toUppercase(char) == char
 
-// Check if character is alphanumeric (a-z, A-Z, 0-9)
-let isAlphanumeric(c: String) : Bool =
-    Stdlib.Char.isLetter(c) || Stdlib.Char.isDigit(c)
+let __firstCodepoint(char: Char) : Stdlib.Option.Option<Int64> =
+    Stdlib.List.head<Int64>(Stdlib.String.toCodepoints(Stdlib.Char.toString(char)))
 
-// Check if character is in the ASCII codepoint range
-let isASCII(c: String) : Bool =
-    if Stdlib.String.isEmpty(c) then false
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) -> cp >= 0 && cp <= 127
-        | None -> false
+let isDigit(char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint(char) with
+    | Some(codepoint) -> codepoint >= 48 && codepoint <= 57
+    | None -> false
 
-// Check if character is an ASCII letter (a-z, A-Z)
-let isASCIILetter(c: String) : Bool =
-    if Stdlib.Char.isASCII(c) then Stdlib.Char.isLetter(c)
-    else false
+let isASCIILetter(char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint(char) with
+    | Some(codepoint) -> (codepoint >= 65 && codepoint <= 90) || (codepoint >= 97 && codepoint <= 122)
+    | None -> false
 
-// Compare characters by first codepoint
-let isLessThan(left: String, right: String) : Bool =
-    Stdlib.Char.toCode(left) < Stdlib.Char.toCode(right)
-
-// Compare characters by first codepoint
-let isLessThanOrEqualTo(left: String, right: String) : Bool =
-    Stdlib.Char.toCode(left) <= Stdlib.Char.toCode(right)
-
-// Compare characters by first codepoint
-let isGreaterThan(left: String, right: String) : Bool =
-    Stdlib.Char.toCode(left) > Stdlib.Char.toCode(right)
-
-// Compare characters by first codepoint
-let isGreaterThanOrEqualTo(left: String, right: String) : Bool =
-    Stdlib.Char.toCode(left) >= Stdlib.Char.toCode(right)
-
-// Convert ASCII character to uppercase
-let toUppercase(c: String) : String =
-    if Stdlib.String.isEmpty(c) then ""
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) ->
-            if cp >= 97 && cp <= 122 then
-                Stdlib.String.fromCodepoints([cp - 32])
-            else if cp == 225 then
-                "Á"
-            else if cp == 380 then
-                "Ż"
-            else if cp == 243 then
-                "Ó"
-            else if cp == 322 then
-                "Ł"
-            else if cp == 4350 then
-                "Ჾ"
-            else
-                Stdlib.String.fromCodepoints([cp])
-        | None -> ""
-
-// Convert ASCII character to lowercase
-let toLowercase(c: String) : String =
-    if Stdlib.String.isEmpty(c) then ""
-    else
-        let cps = Stdlib.String.toCodepoints(c) in
-        match Stdlib.List.head<Int64>(cps) with
-        | Some(cp) ->
-            if cp >= 65 && cp <= 90 then
-                Stdlib.String.fromCodepoints([cp + 32])
-            else if cp == 193 then
-                "á"
-            else if cp == 379 then
-                "ż"
-            else if cp == 211 then
-                "ó"
-            else if cp == 321 then
-                "ł"
-            else if cp == 7358 then
-                "ჾ"
-            else
-                Stdlib.String.fromCodepoints([cp])
-        | None -> ""
-
-// Get the Unicode codepoint value of the first character
-let toCode(c: String) : Int64 =
-    let cps = Stdlib.String.toCodepoints(c) in
-    match Stdlib.List.head<Int64>(cps) with
-    | Some(cp) -> cp
-    | None -> 0
-
-// Get the ASCII code of the first character when representable in 0..255
-let toAsciiCode(c: String) : Stdlib.Option.Option<Int64> =
-    let cps = Stdlib.String.toCodepoints(c) in
-    match Stdlib.List.head<Int64>(cps) with
-    | Some(cp) ->
-        if cp >= 0 && cp <= 255 then
-            Some(cp)
-        else
-            None
+let toAsciiCode(char: Char) : Stdlib.Option.Option<Int> =
+    match Stdlib.Char.__firstCodepoint(char) with
+    | Some(codepoint) ->
+        if codepoint >= 0 && codepoint <= 255 then Some(Stdlib.Int.fromInt64(codepoint)) else None
     | None -> None
 
-// Create a single character string from a codepoint
-let fromCode(code: Int64) : String =
-    Stdlib.String.fromCodepoints([code])
+let isASCII(char: Char) : Bool =
+    match Stdlib.Char.toAsciiCode(char) with
+    | Some(code) -> code <= Stdlib.Int.fromInt64(127)
+    | None -> false
 
-// Convert a Char value to String (identity at runtime representation level)
-let toString(c: String) : String =
-    c
+let __utf16Units(codepoints: List<Int64>, acc: List<Int64>) : List<Int64> =
+    match codepoints with
+    | [] -> Stdlib.List.reverse<Int64>(acc)
+    | codepoint :: rest ->
+        if codepoint <= 65535 then Stdlib.Char.__utf16Units(rest, Stdlib.List.push<Int64>(acc, codepoint))
+        else
+            let adjusted = codepoint - 65536 in
+            let high = 55296 + (adjusted >> 10) in
+            let low = 56320 + (adjusted & 1023) in
+            Stdlib.Char.__utf16Units(rest, Stdlib.List.push<Int64>(Stdlib.List.push<Int64>(acc, high), low))
 
-// =============================================================================
+let __compareUnits(left: List<Int64>, right: List<Int64>) : Int64 =
+    match (left, right) with
+    | ([], []) -> 0
+    | ([], _) -> -1
+    | (_, []) -> 1
+    | (leftHead :: leftRest, rightHead :: rightRest) ->
+        if leftHead < rightHead then -1
+        else if leftHead > rightHead then 1
+        else Stdlib.Char.__compareUnits(leftRest, rightRest)
+
+let __compare(left: Char, right: Char) : Int64 =
+    Stdlib.Char.__compareUnits(
+        Stdlib.Char.__utf16Units(Stdlib.String.toCodepoints(Stdlib.Char.toString(left)), []),
+        Stdlib.Char.__utf16Units(Stdlib.String.toCodepoints(Stdlib.Char.toString(right)), []))
+
+let isLessThan(left: Char, right: Char) : Bool = Stdlib.Char.__compare(left, right) < 0
+let isLessThanOrEqualTo(left: Char, right: Char) : Bool = Stdlib.Char.__compare(left, right) <= 0
+let isGreaterThan(left: Char, right: Char) : Bool = Stdlib.Char.__compare(left, right) > 0
+let isGreaterThanOrEqualTo(left: Char, right: Char) : Bool = Stdlib.Char.__compare(left, right) >= 0
+
+let fromCodepoint(codepoint: Int) : Stdlib.Option.Option<Char> =
+    match Stdlib.Int.toInt64(codepoint) with
+    | None -> None
+    | Some(value) ->
+        if Unicode.isScalar(value) then Some(Stdlib.Char.__asChar(Stdlib.String.fromCodepoints([value])))
+        else None
+
+// Compiler extensions retained outside the parity surface.
+let isLetter(char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint(char) with
+    | Some(codepoint) -> Unicode.isLetter(codepoint)
+    | None -> false
+
+let isWhitespace(char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint(char) with
+    | Some(codepoint) -> Unicode.isWhitespace(codepoint)
+    | None -> false
+
+let isAlphanumeric(char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint(char) with
+    | Some(codepoint) -> Unicode.isLetter(codepoint) || Unicode.isNumber(codepoint)
+    | None -> false
+
+let toCode(char: Char) : Int64 =
+    match Stdlib.Char.__firstCodepoint(char) with
+    | Some(codepoint) -> codepoint
+    | None -> Builtin.testRuntimeError("Char invariant violated: empty value")
+
+let fromCode(codepoint: Int64) : Char =
+    if Unicode.isScalar(codepoint) then Stdlib.Char.__asChar(Stdlib.String.fromCodepoints([codepoint]))
+    else Builtin.testRuntimeError("Invalid Unicode scalar")

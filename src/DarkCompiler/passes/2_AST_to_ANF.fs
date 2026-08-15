@@ -418,6 +418,8 @@ let tryRawMemoryIntrinsic
         Some (ANF.StringToRawPtr strAtom)
     | "__rawptr_to_string", [ptrAtom] ->
         Some (ANF.RawPtrToString ptrAtom)
+    | "__string_concat_raw", [leftAtom; rightAtom] ->
+        Some (ANF.StringConcat (leftAtom, rightAtom))
     | "__int_to_string", [valueAtom]
     | "__string_to_int", [valueAtom]
     | "__int128_to_int", [valueAtom]
@@ -4858,11 +4860,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
     | AST.StringLiteral s ->
         // String literal becomes return
-        Ok (ANF.Return (ANF.StringLiteral s), varGen)
+        Ok (ANF.Return (ANF.StringLiteral (s.Normalize(System.Text.NormalizationForm.FormC))), varGen)
 
     | AST.CharLiteral s ->
         // Char literal becomes return (stored as string, same runtime representation)
-        Ok (ANF.Return (ANF.StringLiteral s), varGen)
+        Ok (ANF.Return (ANF.StringLiteral (s.Normalize(System.Text.NormalizationForm.FormC))), varGen)
 
     | AST.FloatLiteral f ->
         // Float literal becomes return
@@ -5137,9 +5139,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                             Ok (ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar)), varGen3)
                     | AST.StringConcat ->
-                        // String concatenation
+                        // Text concatenation is an NFC composition boundary.
                         let (tempVar, varGen3) = ANF.freshVar varGen2
-                        let cexpr = ANF.StringConcat (leftAtom, rightAtom)
+                        let cexpr = ANF.Call ("Stdlib.String.__appendNormalized", [leftAtom; rightAtom])
                         Ok (ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar)), varGen3)
                     // Arithmetic, bitwise, and comparison operators - use simple primitive
                     | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod
@@ -7054,12 +7056,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.PString s ->
                     // String patterns must use byte-wise equality, not pointer equality.
                     let (cmpVar, vg1) = ANF.freshVar vg
-                    let cmpExpr = ANF.Call ("__string_eq", [scrutAtom; ANF.StringLiteral s])
+                    let cmpExpr = ANF.Call ("__string_eq", [scrutAtom; ANF.StringLiteral (s.Normalize(System.Text.NormalizationForm.FormC))])
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PChar c ->
                     // Char values are represented as single-EGC strings at runtime.
                     let (cmpVar, vg1) = ANF.freshVar vg
-                    let cmpExpr = ANF.Call ("__string_eq", [scrutAtom; ANF.StringLiteral c])
+                    let cmpExpr = ANF.Call ("__string_eq", [scrutAtom; ANF.StringLiteral (c.Normalize(System.Text.NormalizationForm.FormC))])
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PFloat f ->
                     if f = 0.0 then
@@ -9091,11 +9093,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         Ok (ANF.BoolLiteral b, [], varGen)
 
     | AST.StringLiteral s ->
-        Ok (ANF.StringLiteral s, [], varGen)
+        Ok (ANF.StringLiteral (s.Normalize(System.Text.NormalizationForm.FormC)), [], varGen)
 
     | AST.CharLiteral s ->
         // Char literal uses same representation as string
-        Ok (ANF.StringLiteral s, [], varGen)
+        Ok (ANF.StringLiteral (s.Normalize(System.Text.NormalizationForm.FormC)), [], varGen)
 
     | AST.FloatLiteral f ->
         Ok (ANF.FloatLiteral f, [], varGen)
@@ -9332,7 +9334,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                         Ok (ANF.Var tempVar, allBindings, varGen3)
                 | AST.StringConcat ->
                     let (tempVar, varGen3) = ANF.freshVar varGen2
-                    let cexpr = ANF.StringConcat (leftAtom, rightAtom)
+                    let cexpr = ANF.Call ("Stdlib.String.__appendNormalized", [leftAtom; rightAtom])
                     let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
                     Ok (ANF.Var tempVar, allBindings, varGen3)
                 // Arithmetic, bitwise, and comparison operators - use simple primitive

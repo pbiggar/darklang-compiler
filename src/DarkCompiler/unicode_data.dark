@@ -1,22 +1,91 @@
-// Unicode data tables (minimal test version)
+// Unicode.Data generated lookup index shard.
+// DO NOT EDIT. Regenerate with scripts/generate_unicode_tables.py.
 
 module Unicode.Data
 
-// Uppercase mapping: codepoint -> list of codepoints
-let __upperCase() : Dict<Int64, List<Int64>> =
-    Stdlib.Internal.HAMT.__fromListOverwriting<Int64, List<Int64>>([
-        (97, [65]), (98, [66]), (99, [67]), (100, [68]), (101, [69]),
-        (223, [83, 83])
-    ])
+let __categoryFromCode(value: Int64) : Unicode.Data.GeneralCategory =
+    if value == 0 then Unicode.Data.GeneralCategory.Lu
+    else if value == 1 then Unicode.Data.GeneralCategory.Ll
+    else if value == 2 then Unicode.Data.GeneralCategory.Lt
+    else if value == 3 then Unicode.Data.GeneralCategory.Lm
+    else if value == 4 then Unicode.Data.GeneralCategory.Lo
+    else if value == 5 then Unicode.Data.GeneralCategory.Mn
+    else if value == 6 then Unicode.Data.GeneralCategory.Mc
+    else if value == 7 then Unicode.Data.GeneralCategory.Me
+    else if value == 8 then Unicode.Data.GeneralCategory.Nd
+    else if value == 9 then Unicode.Data.GeneralCategory.Nl
+    else if value == 10 then Unicode.Data.GeneralCategory.No
+    else if value == 11 then Unicode.Data.GeneralCategory.Pc
+    else if value == 12 then Unicode.Data.GeneralCategory.Pd
+    else if value == 13 then Unicode.Data.GeneralCategory.Ps
+    else if value == 14 then Unicode.Data.GeneralCategory.Pe
+    else if value == 15 then Unicode.Data.GeneralCategory.Pi
+    else if value == 16 then Unicode.Data.GeneralCategory.Pf
+    else if value == 17 then Unicode.Data.GeneralCategory.Po
+    else if value == 18 then Unicode.Data.GeneralCategory.Sm
+    else if value == 19 then Unicode.Data.GeneralCategory.Sc
+    else if value == 20 then Unicode.Data.GeneralCategory.Sk
+    else if value == 21 then Unicode.Data.GeneralCategory.So
+    else if value == 22 then Unicode.Data.GeneralCategory.Zs
+    else if value == 23 then Unicode.Data.GeneralCategory.Zl
+    else if value == 24 then Unicode.Data.GeneralCategory.Zp
+    else if value == 25 then Unicode.Data.GeneralCategory.Cc
+    else if value == 26 then Unicode.Data.GeneralCategory.Cf
+    else if value == 27 then Unicode.Data.GeneralCategory.Cs
+    else if value == 28 then Unicode.Data.GeneralCategory.Co
+    else Unicode.Data.GeneralCategory.Cn
 
-// Lowercase mapping: codepoint -> list of codepoints
-let __lowerCase() : Dict<Int64, List<Int64>> =
-    Stdlib.Internal.HAMT.__fromListOverwriting<Int64, List<Int64>>([
-        (65, [97]), (66, [98]), (67, [99]), (68, [100]), (69, [101])
-    ])
+let __generalCategoryLookupGroup5(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table35.__generalCategoryChunk20(), 0, codepoint, 14) with
+    | Some(value) -> Some(value)
+    | None ->
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table36.__generalCategoryChunk21(), 0, codepoint, 14) with
+        | Some(value) -> Some(value)
+        | None ->
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table37.__generalCategoryChunk22(), 0, codepoint, 14) with
+            | Some(value) -> Some(value)
+            | None ->
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table38.__generalCategoryChunk23(), 0, codepoint, 14) with
+                | Some(value) -> Some(value)
+                | None ->
+                    None
 
-// Grapheme break property (minimal)
-let __graphemeBreak() : Dict<Int64, Int64> =
-    Stdlib.Internal.HAMT.__fromListOverwriting<Int64, Int64>([
-        (10, 2), (13, 1), (8205, 5)
-    ])
+let sourceHashes() : List<(String, String)> =
+    [
+        ("CompositionExclusions.txt", "2f239196ef3b5b61db5cc476e9bd80f534d15aa1b74e1be1dea5d042a344c85f"),
+        ("DerivedCoreProperties.txt", "24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08"),
+        ("GraphemeBreakProperty.txt", "d6b51d1d2ae5c33b451b7ed994b48f1f4dc62b2272a5831e7fd418514a6bae89"),
+        ("PropList.txt", "130dcddcaadaf071008bdfce1e7743e04fdfbc910886f017d9f9ac931d8c64dd"),
+        ("SpecialCasing.txt", "efc25faf19de21b92c1194c111c932e03d2a5eaf18194e33f1156e96de4c9588"),
+        ("UnicodeData.txt", "2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c"),
+        ("emoji-data.txt", "2cb2bb9455cda83e8481541ecf5b6dfda66a3bb89efa3fa7c5297eccf607b72b")
+    ]
+
+let __graphemeBreakLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__graphemeBreakLookupGroup0(codepoint) with
+    | Some(value) -> Some(value)
+    | None ->
+        match Unicode.Data.__graphemeBreakLookupGroup1(codepoint) with
+        | Some(value) -> Some(value)
+        | None ->
+            match Unicode.Data.__graphemeBreakLookupGroup2(codepoint) with
+            | Some(value) -> Some(value)
+            | None ->
+                None
+
+let __canonicalCompositionLookup(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__canonicalCompositionLookupGroup0(key, valueIndex) with
+    | Some(value) -> Some(value)
+    | None ->
+        match Unicode.Data.__canonicalCompositionLookupGroup1(key, valueIndex) with
+        | Some(value) -> Some(value)
+        | None ->
+            None
+
+let __casedLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__casedLookupGroup0(codepoint) with
+    | Some(value) -> Some(value)
+    | None ->
+        None
+
+let lookupCanonicalComposition(key: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__canonicalCompositionLookup(key, 0)

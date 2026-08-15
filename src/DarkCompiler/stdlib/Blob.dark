@@ -74,7 +74,7 @@ let __hexValue(byte: Int64) : Int64 =
     else -1
 
 let __fromHex(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Result<Blob, String> =
-    if index >= Stdlib.String.length(value) then
+    if index >= Stdlib.String.__byteLength(value) then
         Ok(Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc)))
     else
         let high = Stdlib.Blob.__hexValue(Stdlib.String.getByteAt(value, index)) in
@@ -84,7 +84,7 @@ let __fromHex(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Res
         else Stdlib.Blob.__fromHex(value, index + 2, Stdlib.List.push<Int64>(acc, high * 16 + low))
 
 let fromHex(value: String) : Stdlib.Result.Result<Blob, String> =
-    if Stdlib.String.length(value) % 2 != 0 then
+    if Stdlib.String.__byteLength(value) % 2 != 0 then
         Error("Invalid hex string: The input is not a valid hex string as its length is not a multiple of 2.")
     else Stdlib.Blob.__fromHex(value, 0, [])
 
@@ -108,19 +108,19 @@ let fromBase64(value: String) : Stdlib.Result.Result<Blob, String> =
     // padding before Convert-style whitespace removal.
     let alphabetNormalized =
         Stdlib.String.replace(Stdlib.String.replace(value, "-", "+"), "_", "/") in
-    let remainder = Stdlib.String.length(alphabetNormalized) % 4 in
+    let remainder = Stdlib.String.__byteLength(alphabetNormalized) % 4 in
     let padded =
         if remainder == 2 then alphabetNormalized ++ "=="
         else if remainder == 3 then alphabetNormalized ++ "="
         else alphabetNormalized in
     let normalized = Stdlib.Blob.__removeBase64Whitespace(padded) in
-    match Stdlib.Base64.__decodeHelper(normalized, 0, Stdlib.String.length(normalized), []) with
+    match Stdlib.Base64.__decodeHelper(normalized, 0, Stdlib.String.__byteLength(normalized), []) with
     | Ok(bytes) -> Ok(Stdlib.Bytes.fromList(bytes))
     | Error(_) ->
         Error("Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.")
 
 let __stringBytes(value: String, index: Int64, acc: List<Int64>) : List<Int64> =
-    if index >= Stdlib.String.length(value) then Stdlib.List.reverse<Int64>(acc)
+    if index >= Stdlib.String.__byteLength(value) then Stdlib.List.reverse<Int64>(acc)
     else Stdlib.Blob.__stringBytes(value, index + 1, Stdlib.List.push<Int64>(acc, Stdlib.String.getByteAt(value, index)))
 
 let fromString(value: String) : Blob =

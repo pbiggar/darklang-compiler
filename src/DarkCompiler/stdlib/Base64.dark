@@ -169,7 +169,7 @@ let __prependReversed(bytes: List<Int64>, acc: List<Int64>) : List<Int64> =
 
 // Decode base64 string to bytes
 let decode(s: String) : Stdlib.Result.Result<Blob, String> =
-    let len = Stdlib.String.length(s) in
+    let len = Stdlib.String.__byteLength(s) in
     let remainder = len % 4 in
     if len == 0 then
         Ok(Stdlib.Bytes.create(0))
@@ -181,7 +181,7 @@ let decode(s: String) : Stdlib.Result.Result<Blob, String> =
             if remainder == 2 then s ++ "=="
             else if remainder == 3 then s ++ "="
             else s in
-        match Stdlib.Base64.__decodeHelper(padded, 0, Stdlib.String.length(padded), []) with
+        match Stdlib.Base64.__decodeHelper(padded, 0, Stdlib.String.__byteLength(padded), []) with
         | Ok(byteList) -> Ok(Stdlib.Bytes.fromList(byteList))
         | Error(_) -> Error("Not a valid base64 string")
 

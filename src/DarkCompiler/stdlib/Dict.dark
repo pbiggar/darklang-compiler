@@ -64,7 +64,7 @@ let __isIdentifierRest(byte: Int64) : Bool =
     Stdlib.Dict.__isIdentifierStart(byte) || (byte >= 48 && byte <= 57) || byte == 39
 
 let __isIdentifierAt(key: String, index: Int64) : Bool =
-    if index >= Stdlib.String.length(key) then true
+    if index >= Stdlib.String.__byteLength(key) then true
     else if Stdlib.Dict.__isIdentifierRest(Stdlib.String.getByteAt(key, index)) then
         Stdlib.Dict.__isIdentifierAt(key, index + 1)
     else false
@@ -75,7 +75,7 @@ let __renderKey(key: String) : String =
     else "``" ++ key ++ "``"
 
 let __copyKey(key: String) : String =
-    Stdlib.String.slice(key, 0, Stdlib.String.length(key))
+    Stdlib.String.__byteSlice(key, 0, Stdlib.String.__byteLength(key))
 
 let __findNextKey<'v>(entries: List<(String, v)>, after: Stdlib.Option.Option<String>, candidate: Stdlib.Option.Option<String>) : Stdlib.Option.Option<String> =
     match entries with

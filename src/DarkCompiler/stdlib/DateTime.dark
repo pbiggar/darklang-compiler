@@ -286,7 +286,7 @@ let toStringISO8601BasicDateTime(date: DateTime) : String =
     Stdlib.DateTime.__padZero2((withinDay / Stdlib.DateTime.__ticksPerSecond()) % 60) ++ "Z"
 
 let __digitAt(value: String, index: Int64) : Stdlib.Result.Result<Int64, String> =
-    if index >= Stdlib.String.length(value) then Error("Invalid date format")
+    if index >= Stdlib.String.__byteLength(value) then Error("Invalid date format")
     else
         let byte = Stdlib.String.getByteAt(value, index) in
         if byte >= 48 && byte <= 57 then Ok(byte - 48)
@@ -301,7 +301,7 @@ let __parseDigits(value: String, index: Int64, remaining: Int64, total: Int64) :
             Stdlib.DateTime.__parseDigits(value, index + 1, remaining - 1, total * 10 + digit)
 
 let __hasByte(value: String, index: Int64, expected: Int64) : Bool =
-    index < Stdlib.String.length(value) && Stdlib.String.getByteAt(value, index) == expected
+    index < Stdlib.String.__byteLength(value) && Stdlib.String.getByteAt(value, index) == expected
 
 let __isLeapYear(year: Int64) : Bool =
     if year % 4 != 0 then false
@@ -384,7 +384,7 @@ let __parseParts(value: String, hasMilliseconds: Bool) : Stdlib.Result.Result<Da
                                 else Error("Invalid date format")
 
 let parse(value: String) : Stdlib.Result.Result<DateTime, String> =
-    let length = Stdlib.String.length(value) in
+    let length = Stdlib.String.__byteLength(value) in
     if length == 20 then Stdlib.DateTime.__parseParts(value, false)
     else if length == 24 then Stdlib.DateTime.__parseParts(value, true)
     else Error("Invalid date format")

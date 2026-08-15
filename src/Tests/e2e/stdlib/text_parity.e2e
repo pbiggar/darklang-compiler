@@ -1,0 +1,27 @@
+// Char, String, and Regex parity tests.
+// Baseline: darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+// The historical compiler probe returned the UTF-8 byte length (3), not one EGC.
+Stdlib.String.length("é") = 1I
+
+// String-producing boundaries preserve the NFC invariant.
+"a" ++ "̂" = "â"
+
+// Canonical Char values and indexing operate on complete EGCs.
+Stdlib.Char.toString('👩‍👩‍👧‍👦') = "👩‍👩‍👧‍👦"
+Stdlib.Char.fromCodepoint(128514I) = Stdlib.Option.Option.Some('😂')
+Stdlib.String.charAt("a👩‍👩‍👧‍👦z", 1I) = Stdlib.Option.Option.Some('👩‍👩‍👧‍👦')
+
+// Search keeps its documented UTF-16 and EGC index units distinct.
+Stdlib.String.indexOf("😀x", "x") = Stdlib.Option.Option.Some(2I)
+Stdlib.String.indexOfEgc("😀x", "x") = Stdlib.Option.Option.Some(1I)
+
+// Regex returns full matches and advances deterministically after empty matches.
+Stdlib.Regex.find("test123", "\\d+") = Stdlib.Option.Option.Some("123")
+Stdlib.Regex.findAll("test", "") = ["", "", "", "", ""]
+Stdlib.Regex.split("a1b22c", "(\\d+)") = ["a", "1", "b", "22", "c"]
+Stdlib.Regex.isMatch("user@example.com", "^[\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]{2,}$") = true
+Stdlib.Regex.replace("a1b2", "(\\d)", "$1") = "a$1b2"
+Stdlib.Regex.replaceAll("a1b2", "(\\d)", "<$1>") = "a<1>b<2>"
+Stdlib.Regex.split("abc", "\\d+") = ["abc"]
+Stdlib.Regex.find("abc", "[") = exit=1 stderr="Uncaught exception: Invalid regex pattern\n"

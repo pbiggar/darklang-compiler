@@ -20,7 +20,7 @@ let __isUnreservedByte(b: Int64) : Bool =
 
 // Convert nibble (0-15) to uppercase hex digit.
 let __hexDigit(n: Int64) : String =
-    Stdlib.String.slice("0123456789ABCDEF", n, n + 1)
+    Stdlib.String.__byteSlice("0123456789ABCDEF", n, n + 1)
 
 // Convert a byte (0-255) into two uppercase hex digits.
 let __byteToHex(b: Int64) : String =
@@ -43,7 +43,7 @@ let __sanitizePercentSequences(input: String, idx: Int64, len: Int64, acc: Strin
                         input,
                         idx + 3,
                         len,
-                        acc ++ Stdlib.String.slice(input, idx, idx + 3)
+                        acc ++ Stdlib.String.__byteSlice(input, idx, idx + 3)
                     )
                 else
                     AWS.__sanitizePercentSequences(input, idx + 1, len, acc)
@@ -54,7 +54,7 @@ let __sanitizePercentSequences(input: String, idx: Int64, len: Int64, acc: Strin
                 input,
                 idx + 1,
                 len,
-                acc ++ Stdlib.String.slice(input, idx, idx + 1)
+                acc ++ Stdlib.String.__byteSlice(input, idx, idx + 1)
             )
 
 // Percent-encode UTF-8 bytes.
@@ -73,7 +73,7 @@ let __urlencodeBytes(input: String, idx: Int64, len: Int64, keepSlash: Bool, acc
                     idx + 3,
                     len,
                     keepSlash,
-                    acc ++ Stdlib.String.slice(input, idx, idx + 3)
+                    acc ++ Stdlib.String.__byteSlice(input, idx, idx + 3)
                 )
             else
                 AWS.__urlencodeBytes(
@@ -89,7 +89,7 @@ let __urlencodeBytes(input: String, idx: Int64, len: Int64, keepSlash: Bool, acc
                 idx + 1,
                 len,
                 keepSlash,
-                acc ++ Stdlib.String.slice(input, idx, idx + 1)
+                acc ++ Stdlib.String.__byteSlice(input, idx, idx + 1)
             )
         else
             AWS.__urlencodeBytes(
@@ -102,9 +102,9 @@ let __urlencodeBytes(input: String, idx: Int64, len: Int64, keepSlash: Bool, acc
 
 let __urlencode(input: String, keepSlash: Bool) : String =
     let sanitized =
-        AWS.__sanitizePercentSequences(input, 0, Stdlib.String.length(input), "")
+        AWS.__sanitizePercentSequences(input, 0, Stdlib.String.__byteLength(input), "")
     in
-    AWS.__urlencodeBytes(sanitized, 0, Stdlib.String.length(sanitized), keepSlash, "")
+    AWS.__urlencodeBytes(sanitized, 0, Stdlib.String.__byteLength(sanitized), keepSlash, "")
 
 // Legacy helper used by upstream tests.
 let urlencode_v0(input: String) : String =

@@ -1,0 +1,408 @@
+// Stdlib.Regex - portable, architecture-independent regular-expression matching.
+
+module Stdlib.Regex
+
+type Atom =
+    | Literal of Char
+    | Any
+    | Digit
+    | Word
+    | Whitespace
+    | CharacterClass of String
+    | StartAnchor
+    | EndAnchor
+    | Group of String
+
+type Quantifier = { minimum: Int64, maximum: Stdlib.Option.Option<Int64>, isLazy: Bool }
+type Piece = { atom: Stdlib.Regex.Atom, quantifier: Stdlib.Regex.Quantifier }
+type RepeatPlan = { atom: Stdlib.Regex.Atom, minimum: Int64, maximum: Stdlib.Option.Option<Int64>, isLazy: Bool }
+type RepeatState = { count: Int64, value: List<Char>, captures: List<String> }
+
+type Candidate = {
+    remaining: List<Char>,
+    value: List<Char>,
+    captures: List<String>,
+    atStart: Bool
+}
+
+type Found = {
+    before: List<Char>,
+    value: List<Char>,
+    after: List<Char>,
+    captures: List<String>
+}
+
+let __invalid<'a>() : 'a = Builtin.testRuntimeError("Invalid regex pattern")
+
+let __takeDelimited(chars: List<Char>, open_: Char, close_: Char, depth: Int64, escaped: Bool, acc: List<Char>) : Stdlib.Result.Result<(String, List<Char>), String> =
+    match chars with
+    | [] -> Error("unterminated regular-expression construct")
+    | char :: rest ->
+        if escaped then Stdlib.Regex.__takeDelimited(rest, open_, close_, depth, false, Stdlib.List.push<Char>(Stdlib.List.push<Char>(acc, '\\'), char))
+        else if char == '\\' then Stdlib.Regex.__takeDelimited(rest, open_, close_, depth, true, acc)
+        else if char == open_ then Stdlib.Regex.__takeDelimited(rest, open_, close_, depth + 1, false, Stdlib.List.push<Char>(acc, char))
+        else if char == close_ then
+            if depth == 1 then Ok((Stdlib.String.fromList(Stdlib.List.reverse<Char>(acc)), rest))
+            else Stdlib.Regex.__takeDelimited(rest, open_, close_, depth - 1, false, Stdlib.List.push<Char>(acc, char))
+        else Stdlib.Regex.__takeDelimited(rest, open_, close_, depth, false, Stdlib.List.push<Char>(acc, char))
+
+let __takeClass(chars: List<Char>, escaped: Bool, acc: List<Char>) : Stdlib.Result.Result<(String, List<Char>), String> =
+    match chars with
+    | [] -> Error("unterminated character class")
+    | char :: rest ->
+        if escaped then Stdlib.Regex.__takeClass(rest, false, Stdlib.List.push<Char>(Stdlib.List.push<Char>(acc, '\\'), char))
+        else if char == '\\' then Stdlib.Regex.__takeClass(rest, true, acc)
+        else if char == ']' then Ok((Stdlib.String.fromList(Stdlib.List.reverse<Char>(acc)), rest))
+        else Stdlib.Regex.__takeClass(rest, false, Stdlib.List.push<Char>(acc, char))
+
+let __digits(chars: List<Char>, value: Int64, saw: Bool) : (Int64, Bool, List<Char>) =
+    match chars with
+    | [] -> (value, saw, [])
+    | char :: rest ->
+        match Stdlib.Char.toAsciiCode(char) with
+        | Some(code) ->
+            if code >= 48I && code <= 57I then
+                match Stdlib.Int.toInt64(code) with
+                | Some(c) -> Stdlib.Regex.__digits(rest, value * 10 + c - 48, true)
+                | None -> (value, saw, chars)
+            else (value, saw, chars)
+        | None -> (value, saw, chars)
+
+let __quantifier(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Quantifier, List<Char>), String> =
+    let quantified =
+        match chars with
+        | [] -> Ok((1, Some(1), chars))
+        | quantifierStart :: rest ->
+            if quantifierStart == '*' then Ok((0, None, rest))
+            else if quantifierStart == '+' then Ok((1, None, rest))
+            else if quantifierStart == '?' then Ok((0, Some(1), rest))
+            else if quantifierStart != '{' then Ok((1, Some(1), chars))
+            else (let first = Stdlib.Regex.__digits(rest, 0, false) in
+             let minimum = Stdlib.Tuple3.first<Int64, Bool, List<Char>>(first) in
+             let sawMinimum = Stdlib.Tuple3.second<Int64, Bool, List<Char>>(first) in
+             let afterMinimum = Stdlib.Tuple3.third<Int64, Bool, List<Char>>(first) in
+             if !sawMinimum then Error("missing repetition count")
+             else
+                 match afterMinimum with
+                 | [] -> Error("invalid repetition")
+                 | delimiter :: afterDelimiter ->
+                     if delimiter == '}' then Ok((minimum, Some(minimum), afterDelimiter))
+                     else if delimiter != ',' then Error("invalid repetition")
+                     else
+                         let second = Stdlib.Regex.__digits(afterDelimiter, 0, false) in
+                         let maximum = Stdlib.Tuple3.first<Int64, Bool, List<Char>>(second) in
+                         let sawMaximum = Stdlib.Tuple3.second<Int64, Bool, List<Char>>(second) in
+                         let afterMaximum = Stdlib.Tuple3.third<Int64, Bool, List<Char>>(second) in
+                         match afterMaximum with
+                         | [] -> Error("unterminated repetition")
+                         | closing :: after ->
+                             if closing != '}' then Error("unterminated repetition")
+                             else if sawMaximum && maximum < minimum then Error("invalid repetition range")
+                             else Ok((minimum, if sawMaximum then Some(maximum) else None, after))) in
+    match quantified with
+    | Error(error) -> Error(error)
+    | Ok(values) ->
+        let minimum = Stdlib.Tuple3.first<Int64, Stdlib.Option.Option<Int64>, List<Char>>(values) in
+        let maximum = Stdlib.Tuple3.second<Int64, Stdlib.Option.Option<Int64>, List<Char>>(values) in
+        let rest = Stdlib.Tuple3.third<Int64, Stdlib.Option.Option<Int64>, List<Char>>(values) in
+        match rest with
+        | suffix :: after ->
+            if suffix == '?' then Ok((Stdlib.Regex.Quantifier { minimum = minimum, maximum = maximum, isLazy = true }, after))
+            else Ok((Stdlib.Regex.Quantifier { minimum = minimum, maximum = maximum, isLazy = false }, rest))
+        | [] -> Ok((Stdlib.Regex.Quantifier { minimum = minimum, maximum = maximum, isLazy = false }, rest))
+
+let __atom(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Atom, List<Char>), String> =
+    match chars with
+    | [] -> Error("missing atom")
+    | char :: rest ->
+        if char == '\\' then
+            match rest with
+            | [] -> Error("trailing escape")
+            | escaped :: after ->
+                if escaped == 'd' then Ok((Stdlib.Regex.Atom.Digit, after))
+                else if escaped == 'w' then Ok((Stdlib.Regex.Atom.Word, after))
+                else if escaped == 's' then Ok((Stdlib.Regex.Atom.Whitespace, after))
+                else Ok((Stdlib.Regex.Atom.Literal(escaped), after))
+        else if char == '[' then
+            match Stdlib.Regex.__takeClass(rest, false, []) with
+            | Error(error) -> Error(error)
+            | Ok(value) -> Ok((Stdlib.Regex.Atom.CharacterClass(Stdlib.Tuple2.first<String, List<Char>>(value)), Stdlib.Tuple2.second<String, List<Char>>(value)))
+        else if char == '(' then
+            match Stdlib.Regex.__takeDelimited(rest, '(', ')', 1, false, []) with
+            | Error(error) -> Error(error)
+            | Ok(value) ->
+                let pattern = Stdlib.Tuple2.first<String, List<Char>>(value) in
+                match Stdlib.Regex.__parsePattern(Stdlib.String.toList(pattern)) with
+                | Error(error) -> Error(error)
+                | Ok(_) -> Ok((Stdlib.Regex.Atom.Group(pattern), Stdlib.Tuple2.second<String, List<Char>>(value)))
+        else if char == '.' then Ok((Stdlib.Regex.Atom.Any, rest))
+        else if char == '^' then Ok((Stdlib.Regex.Atom.StartAnchor, rest))
+        else if char == '$' then Ok((Stdlib.Regex.Atom.EndAnchor, rest))
+        else if char == '*' || char == '+' || char == '?' || char == '{' || char == ')' then Error("quantifier without atom")
+        else Ok((Stdlib.Regex.Atom.Literal(char), rest))
+
+let __parseBranch(chars: List<Char>, acc: List<Stdlib.Regex.Piece>) : Stdlib.Result.Result<(List<Stdlib.Regex.Piece>, List<Char>), String> =
+    match chars with
+    | [] -> Ok((Stdlib.List.reverse<Stdlib.Regex.Piece>(acc), []))
+    | head :: _ ->
+        if head == '|' then Ok((Stdlib.List.reverse<Stdlib.Regex.Piece>(acc), chars))
+        else
+            match Stdlib.Regex.__atom(chars) with
+            | Error(error) -> Error(error)
+            | Ok(atomResult) ->
+                let atom = Stdlib.Tuple2.first<Stdlib.Regex.Atom, List<Char>>(atomResult) in
+                match Stdlib.Regex.__quantifier(Stdlib.Tuple2.second<Stdlib.Regex.Atom, List<Char>>(atomResult)) with
+                | Error(error) -> Error(error)
+                | Ok(quantifierResult) ->
+                    let quantifier = Stdlib.Tuple2.first<Stdlib.Regex.Quantifier, List<Char>>(quantifierResult) in
+                    Stdlib.Regex.__parseBranch(
+                        Stdlib.Tuple2.second<Stdlib.Regex.Quantifier, List<Char>>(quantifierResult),
+                        Stdlib.List.push<Stdlib.Regex.Piece>(acc, Stdlib.Regex.Piece { atom = atom, quantifier = quantifier }))
+
+let __parsePattern(chars: List<Char>) : Stdlib.Result.Result<List<List<Stdlib.Regex.Piece>>, String> =
+    match Stdlib.Regex.__parseBranch(chars, []) with
+    | Error(error) -> Error(error)
+    | Ok(branchResult) ->
+        let branch = Stdlib.Tuple2.first<List<Stdlib.Regex.Piece>, List<Char>>(branchResult) in
+        match Stdlib.Tuple2.second<List<Stdlib.Regex.Piece>, List<Char>>(branchResult) with
+        | [] -> Ok([branch])
+        | separator :: rest ->
+            if separator != '|' then Error("invalid pattern")
+            else
+                match Stdlib.Regex.__parsePattern(rest) with
+                | Error(error) -> Error(error)
+                | Ok(branches) -> Ok(Stdlib.List.push<List<Stdlib.Regex.Piece>>(branches, branch))
+
+let __escapedClassMatches(kind: Char, value: Char) : Bool =
+    if kind == 'd' then Stdlib.Char.isDigit(value)
+    else if kind == 'w' then Stdlib.Char.isAlphanumeric(value) || value == '_'
+    else if kind == 's' then Stdlib.Char.isWhitespace(value)
+    else value == kind
+
+let __inRange(value: Char, first: Char, last: Char) : Bool =
+    (value == first || Stdlib.Char.isGreaterThan(value, first)) &&
+    (value == last || Stdlib.Char.isLessThan(value, last))
+
+let __classAny(chars: List<Char>, value: Char) : Bool =
+    match chars with
+    | [] -> false
+    | char :: rest ->
+        if char == '\\' then
+            match rest with
+            | [] -> value == '\\'
+            | kind :: after -> Stdlib.Regex.__escapedClassMatches(kind, value) || Stdlib.Regex.__classAny(after, value)
+        else
+            match rest with
+            | dash :: last :: after ->
+                if dash == '-' then Stdlib.Regex.__inRange(value, char, last) || Stdlib.Regex.__classAny(after, value)
+                else char == value || Stdlib.Regex.__classAny(rest, value)
+            | _ -> char == value || Stdlib.Regex.__classAny(rest, value)
+
+let __classMatches(content: String, value: Char) : Bool =
+    match Stdlib.String.toList(content) with
+    | [] -> false
+    | first :: rest -> if first == '^' then !Stdlib.Regex.__classAny(rest, value) else Stdlib.Regex.__classAny(Stdlib.List.push<Char>(rest, first), value)
+
+let __consume(atom: Stdlib.Regex.Atom, input: List<Char>) : List<Stdlib.Regex.Candidate> =
+    match input with
+    | [] -> []
+    | char :: rest ->
+        let matches =
+            match atom with
+            | Literal(expected) -> char == expected
+            | Any -> char != '\n'
+            | Digit -> Stdlib.Char.isDigit(char)
+            | Word -> Stdlib.Char.isAlphanumeric(char) || char == '_'
+            | Whitespace -> Stdlib.Char.isWhitespace(char)
+            | CharacterClass(content) -> Stdlib.Regex.__classMatches(content, char)
+            | _ -> false in
+        if matches then [Stdlib.Regex.Candidate { remaining = rest, value = [char], captures = [], atStart = false }] else []
+
+let __single(atom: Stdlib.Regex.Atom, input: List<Char>, atStart: Bool) : List<Stdlib.Regex.Candidate> =
+    match atom with
+    | StartAnchor -> if atStart then [Stdlib.Regex.Candidate { remaining = input, value = [], captures = [], atStart = atStart }] else []
+    | EndAnchor -> if Stdlib.List.isEmpty<Char>(input) then [Stdlib.Regex.Candidate { remaining = input, value = [], captures = [], atStart = atStart }] else []
+    | Literal(_) -> Stdlib.Regex.__consume(atom, input)
+    | Any -> Stdlib.Regex.__consume(atom, input)
+    | Digit -> Stdlib.Regex.__consume(atom, input)
+    | Word -> Stdlib.Regex.__consume(atom, input)
+    | Whitespace -> Stdlib.Regex.__consume(atom, input)
+    | CharacterClass(_) -> Stdlib.Regex.__consume(atom, input)
+    | Group(pattern) ->
+        match Stdlib.Regex.__parsePattern(Stdlib.String.toList(pattern)) with
+        | Error(_) -> Stdlib.Regex.__invalid()
+        | Ok(branches) ->
+            Stdlib.List.map<Stdlib.Regex.Candidate, Stdlib.Regex.Candidate>(
+                Stdlib.Regex.__matchBranches(branches, input, atStart),
+                fun candidate ->
+                    Stdlib.Regex.Candidate { remaining = candidate.remaining,
+                      value = candidate.value,
+                      captures = Stdlib.List.push<String>(candidate.captures, Stdlib.String.fromList(candidate.value)),
+                      atStart = candidate.atStart })
+
+let __repeatFrom(candidates: List<Stdlib.Regex.Candidate>, plan: Stdlib.Regex.RepeatPlan, state: Stdlib.Regex.RepeatState) : List<Stdlib.Regex.Candidate> =
+    match candidates with
+    | [] -> []
+    | candidate :: rest ->
+        let combinedValue = Stdlib.List.append<Char>(state.value, candidate.value) in
+        let combinedCaptures = Stdlib.List.append<String>(state.captures, candidate.captures) in
+        let fromCandidate =
+            if Stdlib.List.isEmpty<Char>(candidate.value) then
+                if state.count + 1 >= plan.minimum then
+                    [Stdlib.Regex.Candidate { remaining = candidate.remaining, value = combinedValue, captures = combinedCaptures, atStart = candidate.atStart }]
+                else []
+            else Stdlib.Regex.__repeat(
+                plan,
+                candidate.remaining,
+                candidate.atStart,
+                Stdlib.Regex.RepeatState { count = state.count + 1, value = combinedValue, captures = combinedCaptures }) in
+        Stdlib.List.append<Stdlib.Regex.Candidate>(fromCandidate, Stdlib.Regex.__repeatFrom(rest, plan, state))
+
+let __repeat(plan: Stdlib.Regex.RepeatPlan, input: List<Char>, atStart: Bool, state: Stdlib.Regex.RepeatState) : List<Stdlib.Regex.Candidate> =
+    let stop = if state.count >= plan.minimum then [Stdlib.Regex.Candidate { remaining = input, value = state.value, captures = state.captures, atStart = atStart }] else [] in
+    let canContinue =
+        match plan.maximum with
+        | Some(limit) -> state.count < limit
+        | None -> true in
+    let deeper =
+        if canContinue then Stdlib.Regex.__repeatFrom(Stdlib.Regex.__single(plan.atom, input, atStart), plan, state)
+        else [] in
+    if plan.isLazy then Stdlib.List.append<Stdlib.Regex.Candidate>(stop, deeper)
+    else Stdlib.List.append<Stdlib.Regex.Candidate>(deeper, stop)
+
+let __continue(candidates: List<Stdlib.Regex.Candidate>, pieces: List<Stdlib.Regex.Piece>) : List<Stdlib.Regex.Candidate> =
+    match candidates with
+    | [] -> []
+    | candidate :: rest ->
+        let tails = Stdlib.Regex.__matchPieces(pieces, candidate.remaining, candidate.atStart) in
+        let combined = Stdlib.List.map<Stdlib.Regex.Candidate, Stdlib.Regex.Candidate>(
+            tails,
+            fun tail ->
+                Stdlib.Regex.Candidate { remaining = tail.remaining,
+                  value = Stdlib.List.append<Char>(candidate.value, tail.value),
+                  captures = Stdlib.List.append<String>(candidate.captures, tail.captures),
+                  atStart = tail.atStart }) in
+        Stdlib.List.append<Stdlib.Regex.Candidate>(combined, Stdlib.Regex.__continue(rest, pieces))
+
+let __matchPieces(pieces: List<Stdlib.Regex.Piece>, input: List<Char>, atStart: Bool) : List<Stdlib.Regex.Candidate> =
+    match pieces with
+    | [] -> [Stdlib.Regex.Candidate { remaining = input, value = [], captures = [], atStart = atStart }]
+    | piece :: rest ->
+        let plan = Stdlib.Regex.RepeatPlan {
+            atom = piece.atom,
+            minimum = piece.quantifier.minimum,
+            maximum = piece.quantifier.maximum,
+            isLazy = piece.quantifier.isLazy
+        } in
+        Stdlib.Regex.__continue(
+            Stdlib.Regex.__repeat(plan, input, atStart, Stdlib.Regex.RepeatState { count = 0, value = [], captures = [] }),
+            rest)
+
+let __matchBranches(branches: List<List<Stdlib.Regex.Piece>>, input: List<Char>, atStart: Bool) : List<Stdlib.Regex.Candidate> =
+    match branches with
+    | [] -> []
+    | branch :: rest ->
+        Stdlib.List.append<Stdlib.Regex.Candidate>(Stdlib.Regex.__matchPieces(branch, input, atStart), Stdlib.Regex.__matchBranches(rest, input, atStart))
+
+let __firstCandidate(candidates: List<Stdlib.Regex.Candidate>) : Stdlib.Option.Option<Stdlib.Regex.Candidate> =
+    match candidates with
+    | [] -> None
+    | candidate :: _ -> Some(candidate)
+
+let __findFrom(input: List<Char>, branches: List<List<Stdlib.Regex.Piece>>, atStart: Bool, before: List<Char>) : Stdlib.Option.Option<Stdlib.Regex.Found> =
+    match Stdlib.Regex.__firstCandidate(Stdlib.Regex.__matchBranches(branches, input, atStart)) with
+    | Some(candidate) -> Some(Stdlib.Regex.Found { before = Stdlib.List.reverse<Char>(before), value = candidate.value, after = candidate.remaining, captures = candidate.captures })
+    | None ->
+        match input with
+        | [] -> None
+        | char :: rest -> Stdlib.Regex.__findFrom(rest, branches, false, Stdlib.List.push<Char>(before, char))
+
+let __parse(pattern: String) : List<List<Stdlib.Regex.Piece>> =
+    match Stdlib.Regex.__parsePattern(Stdlib.String.toList(pattern)) with
+    | Ok(branches) -> branches
+    | Error(_) -> Stdlib.Regex.__invalid()
+
+let __find(input: String, pattern: String) : Stdlib.Option.Option<Stdlib.Regex.Found> =
+    Stdlib.Regex.__findFrom(Stdlib.String.toList(input), Stdlib.Regex.__parse(pattern), true, [])
+
+let isMatch(input: String, pattern: String) : Bool = Stdlib.Option.isSome<Stdlib.Regex.Found>(Stdlib.Regex.__find(input, pattern))
+
+let find(input: String, pattern: String) : Stdlib.Option.Option<String> =
+    match Stdlib.Regex.__find(input, pattern) with
+    | None -> None
+    | Some(found) -> Some(Stdlib.String.fromList(found.value))
+
+let __findAll(input: List<Char>, branches: List<List<Stdlib.Regex.Piece>>, acc: List<String>) : List<String> =
+    match Stdlib.Regex.__findFrom(input, branches, true, []) with
+    | None -> Stdlib.List.reverse<String>(acc)
+    | Some(found) ->
+        let matched = Stdlib.String.fromList(found.value) in
+        if Stdlib.List.isEmpty<Char>(found.value) then
+            match found.after with
+            | [] -> Stdlib.List.reverse<String>(Stdlib.List.push<String>(acc, matched))
+            | _char :: rest -> Stdlib.Regex.__findAll(rest, branches, Stdlib.List.push<String>(acc, matched))
+        else Stdlib.Regex.__findAll(found.after, branches, Stdlib.List.push<String>(acc, matched))
+
+let findAll(input: String, pattern: String) : List<String> =
+    Stdlib.Regex.__findAll(Stdlib.String.toList(input), Stdlib.Regex.__parse(pattern), [])
+
+let replace(input: String, pattern: String, replacement: String) : String =
+    match Stdlib.Regex.__find(input, pattern) with
+    | None -> input
+    | Some(found) -> Stdlib.String.fromList(found.before) ++ replacement ++ Stdlib.String.fromList(found.after)
+
+let __captureAt(captures: List<String>, index: Int64) : String =
+    match captures with
+    | [] -> ""
+    | capture :: rest -> if index == 1 then capture else Stdlib.Regex.__captureAt(rest, index - 1)
+
+let __expandReplacement(chars: List<Char>, full: String, captures: List<String>, acc: String) : String =
+    match chars with
+    | [] -> acc
+    | char :: rest ->
+        if char != '$' then Stdlib.Regex.__expandReplacement(rest, full, captures, acc ++ Stdlib.Char.toString(char))
+        else
+            match rest with
+            | [] -> acc ++ "$"
+            | substitution :: after ->
+                if substitution == '&' then Stdlib.Regex.__expandReplacement(after, full, captures, acc ++ full)
+                else if substitution == '$' then Stdlib.Regex.__expandReplacement(after, full, captures, acc ++ "$")
+                else
+                    match Stdlib.Char.toAsciiCode(substitution) with
+                    | Some(code) ->
+                        if code >= 49I && code <= 57I then
+                            match Stdlib.Int.toInt64(code) with
+                            | Some(value) -> Stdlib.Regex.__expandReplacement(after, full, captures, acc ++ Stdlib.Regex.__captureAt(captures, value - 48))
+                            | None -> Stdlib.Regex.__expandReplacement(after, full, captures, acc ++ "$" ++ Stdlib.Char.toString(substitution))
+                        else Stdlib.Regex.__expandReplacement(after, full, captures, acc ++ "$" ++ Stdlib.Char.toString(substitution))
+                    | None -> Stdlib.Regex.__expandReplacement(after, full, captures, acc ++ "$" ++ Stdlib.Char.toString(substitution))
+
+let __replaceAll(input: List<Char>, branches: List<List<Stdlib.Regex.Piece>>, replacement: String, acc: String) : String =
+    match Stdlib.Regex.__findFrom(input, branches, true, []) with
+    | None -> acc ++ Stdlib.String.fromList(input)
+    | Some(found) ->
+        let full = Stdlib.String.fromList(found.value) in
+        let next = acc ++ Stdlib.String.fromList(found.before) ++ Stdlib.Regex.__expandReplacement(Stdlib.String.toList(replacement), full, found.captures, "") in
+        if Stdlib.List.isEmpty<Char>(found.value) then
+            match found.after with
+            | [] -> next
+            | char :: rest -> Stdlib.Regex.__replaceAll(rest, branches, replacement, next ++ Stdlib.Char.toString(char))
+        else Stdlib.Regex.__replaceAll(found.after, branches, replacement, next)
+
+let replaceAll(input: String, pattern: String, replacement: String) : String =
+    Stdlib.Regex.__replaceAll(Stdlib.String.toList(input), Stdlib.Regex.__parse(pattern), replacement, "")
+
+let __split(input: List<Char>, branches: List<List<Stdlib.Regex.Piece>>, acc: List<String>) : List<String> =
+    match Stdlib.Regex.__findFrom(input, branches, true, []) with
+    | None -> Stdlib.List.reverse<String>(Stdlib.List.push<String>(acc, Stdlib.String.fromList(input)))
+    | Some(found) ->
+        let pieces = Stdlib.List.append<String>([Stdlib.String.fromList(found.before)], found.captures) in
+        let nextAcc = Stdlib.List.append<String>(Stdlib.List.reverse<String>(pieces), acc) in
+        if Stdlib.List.isEmpty<Char>(found.value) then
+            match found.after with
+            | [] -> Stdlib.List.reverse<String>(Stdlib.List.push<String>(nextAcc, ""))
+            | char :: rest -> Stdlib.Regex.__split(rest, branches, Stdlib.List.push<String>(nextAcc, Stdlib.Char.toString(char)))
+        else Stdlib.Regex.__split(found.after, branches, nextAcc)
+
+let split(input: String, pattern: String) : List<String> =
+    Stdlib.Regex.__split(Stdlib.String.toList(input), Stdlib.Regex.__parse(pattern), [])

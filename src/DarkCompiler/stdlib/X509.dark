@@ -83,10 +83,10 @@ let __subjectPublicKeyInfo(certificate: Blob) : Stdlib.Option.Option<Blob> =
                                                     Stdlib.Int.fromInt64(spkiEnd - spkiStart))))
 
 let __pemLines(base64: String, offset: Int64, acc: String) : String =
-    if offset >= Stdlib.String.length(base64) then acc
+    if offset >= Stdlib.String.__byteLength(base64) then acc
     else
-        let end_ = Stdlib.Int64.min(offset + 64, Stdlib.String.length(base64)) in
-        Stdlib.X509.__pemLines(base64, end_, acc ++ Stdlib.String.slice(base64, offset, end_) ++ "\n")
+        let end_ = Stdlib.Int64.min(offset + 64, Stdlib.String.__byteLength(base64)) in
+        Stdlib.X509.__pemLines(base64, end_, acc ++ Stdlib.String.__byteSlice(base64, offset, end_) ++ "\n")
 
 let __publicKeyPem(spki: Blob) : String =
     "-----BEGIN PUBLIC KEY-----\n" ++
@@ -96,15 +96,15 @@ let __publicKeyPem(spki: Blob) : String =
 let pemCertificatePublicKey(pemCertificate: String) : Stdlib.Result.Result<String, String> =
     let beginMarker = "-----BEGIN CERTIFICATE-----" in
     let endMarker = "-----END CERTIFICATE-----" in
-    match Stdlib.String.indexOf(pemCertificate, beginMarker) with
+    match Stdlib.String.__byteIndexOf(pemCertificate, beginMarker) with
     | None -> Error("No certificates")
     | Some(beginIndex) ->
-        let contentStart = beginIndex + Stdlib.String.length(beginMarker) in
-        let afterBegin = Stdlib.String.drop(pemCertificate, contentStart) in
-        match Stdlib.String.indexOf(afterBegin, endMarker) with
+        let contentStart = beginIndex + Stdlib.String.__byteLength(beginMarker) in
+        let afterBegin = Stdlib.String.__byteDrop(pemCertificate, contentStart) in
+        match Stdlib.String.__byteIndexOf(afterBegin, endMarker) with
         | None -> Error("No certificates")
         | Some(endIndex) ->
-            let encoded = Stdlib.String.take(afterBegin, endIndex) in
+            let encoded = Stdlib.String.__byteTake(afterBegin, endIndex) in
             // PEM whitespace is removed before Base64 normalization; this is
             // the certificate parser's contract, distinct from Blob.fromBase64.
             match Stdlib.Base64.decode(Stdlib.Blob.__removeBase64Whitespace(encoded)) with

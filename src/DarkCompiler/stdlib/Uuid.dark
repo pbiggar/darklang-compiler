@@ -29,7 +29,7 @@ let __hasValidFormatAt(s: String, index: Int64) : Bool =
             Stdlib.Uuid.__isHexByte(byte) && Stdlib.Uuid.__hasValidFormatAt(s, index + 1)
 
 let parse_v0(s: String) : Stdlib.Result.Result<String, Stdlib.Uuid.ParseError> =
-    if Stdlib.String.length(s) == 36 then
+    if Stdlib.String.__byteLength(s) == 36 then
         if Stdlib.Uuid.__hasValidFormatAt(s, 0) then
             Ok(s)
         else

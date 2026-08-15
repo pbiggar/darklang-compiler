@@ -67,3 +67,4 @@ profiles/
 __pycache__/
 *.pyc
 *.pyo
+scripts/.unicode_cache/

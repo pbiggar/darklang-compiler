@@ -201,6 +201,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "uuid.dark")
     let charToAsciiCodeUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "char-to-ascii-code.dark")
+    let charUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "char.dark")
+    let stringUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "string.dark")
+    let regexUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "regex.dark")
     let optionUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "option.dark")
     let resultUpstreamDarkPath =
@@ -256,6 +262,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            dictUpstreamDarkPath
            uuidUpstreamDarkPath
            charToAsciiCodeUpstreamDarkPath
+           charUpstreamDarkPath
+           stringUpstreamDarkPath
+           regexUpstreamDarkPath
            optionUpstreamDarkPath
            resultUpstreamDarkPath
            mathUpstreamDarkPath
@@ -294,6 +303,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            dictUpstreamDarkPath
            uuidUpstreamDarkPath
            charToAsciiCodeUpstreamDarkPath
+           charUpstreamDarkPath
+           stringUpstreamDarkPath
+           regexUpstreamDarkPath
            optionUpstreamDarkPath
            resultUpstreamDarkPath
            mathUpstreamDarkPath

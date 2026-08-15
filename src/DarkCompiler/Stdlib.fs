@@ -170,6 +170,9 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__string_to_rawptr"; TypeParams = []; ParamTypes = [TString]; ReturnType = TRawPtr }
     // __rawptr_to_string : (RawPtr) -> String - reinterpret initialized raw allocation as String
     { Name = "__rawptr_to_string"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TString }
+    // __string_concat_raw : (String, String) -> String - internal byte concat;
+    // public concatenation normalizes the result to NFC.
+    { Name = "__string_concat_raw"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = TString }
     // Int uses the same canonical decimal dynamic-buffer representation as String.
     { Name = "__int_to_string"; TypeParams = []; ParamTypes = [TInt]; ReturnType = TString }
     { Name = "__string_to_int"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt }

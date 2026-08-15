@@ -4,7 +4,7 @@ module Stdlib.Cli.UI.Table
 
 let __pad(value: String, width: Int64) : String =
     let padding = width - Stdlib.String.graphemeLength(value) in
-    if padding <= 0 then value else value ++ Stdlib.String.repeat(" ", padding)
+    if padding <= 0 then value else value ++ Stdlib.String.repeat(" ", Stdlib.Int.fromInt64(padding))
 
 let __maxCellLength(rows: List<List<String>>, index: Int, current: Int64) : Int64 =
     match rows with
@@ -39,9 +39,9 @@ let __headerLine(columns: List<String>, widths: List<Int64>) : String =
 let __separatorLine(widths: List<Int64>) : String =
     match widths with
     | [] -> ""
-    | [width] -> Stdlib.String.repeat("-", width)
+    | [width] -> Stdlib.String.repeat("-", Stdlib.Int.fromInt64(width))
     | width :: rest ->
-        Stdlib.String.repeat("-", width) ++ "  " ++ Stdlib.Cli.UI.Table.__separatorLine(rest)
+        Stdlib.String.repeat("-", Stdlib.Int.fromInt64(width)) ++ "  " ++ Stdlib.Cli.UI.Table.__separatorLine(rest)
 
 let __rowLine(columns: List<String>, widths: List<Int64>, row: List<String>) : String =
     match (columns, widths, row) with

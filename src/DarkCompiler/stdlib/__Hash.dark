@@ -8,7 +8,7 @@ let __hash_prime() : Int64 = 1099511628211
 
 // FNV-1a hash over UTF-8 bytes
 let __string_hash(s: String) : Int64 =
-    let len = Stdlib.String.length(s) in
+    let len = Stdlib.String.__byteLength(s) in
     __string_hash_loop(s, 0, len, __hash_offset())
 
 let __string_hash_loop(s: String, idx: Int64, len: Int64, acc: Int64) : Int64 =
