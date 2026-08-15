@@ -64,4 +64,7 @@ if [ "$BUILD_ONLY" = true ]; then
 fi
 
 TEST_EXE="$(find_test_exe "$SCRIPT_DIR" "Try running the build first.")"
+# Expected-error cases can terminate either the test host or generated native
+# programs abnormally. Keep OS crash dumps from dirtying the worktree.
+ulimit -c 0
 exec "$TEST_EXE" "${TEST_ARGS[@]}"
