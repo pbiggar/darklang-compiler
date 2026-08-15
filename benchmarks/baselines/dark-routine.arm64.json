@@ -4,88 +4,88 @@
   "profile": "routine",
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
-  "contract_sha256": "367fbac8c4f6420951592af456195c7874d231b771326a90ff149b7d6ba8ab85",
-  "generated_at": "2026-08-15T07:46:18+00:00",
+  "contract_sha256": "3662376c639f80762e5f9672675eed03667cedd6b77b005bf3f624a7708f03db",
+  "generated_at": "2026-08-15T08:45:41+00:00",
   "compiler": {
-    "commit": "671ab160ef4fb2de3829ee251285e09733e8c1e8",
-    "subject": "Keep NFC-safe formatting on raw concat"
+    "commit": "3a755ce9e001330e30aaf4905fbd7a69ee0f82c0",
+    "subject": "Bound test-build memory usage"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 10019035954
+      "instructions": 10019036010
     },
     {
       "name": "binary_trees",
-      "instructions": 649092132
+      "instructions": 649092188
     },
     {
       "name": "collatz",
-      "instructions": 81142974
+      "instructions": 81143030
     },
     {
       "name": "edigits",
-      "instructions": 4528733649
+      "instructions": 4528733705
     },
     {
       "name": "factorial",
-      "instructions": 63912
+      "instructions": 63968
     },
     {
       "name": "fasta",
-      "instructions": 514839007
+      "instructions": 514839063
     },
     {
       "name": "fib",
-      "instructions": 418050885
+      "instructions": 418050941
     },
     {
       "name": "leibniz",
-      "instructions": 850001400
+      "instructions": 850001456
     },
     {
       "name": "mandelbrot",
-      "instructions": 17459468
+      "instructions": 17459524
     },
     {
       "name": "matmul",
-      "instructions": 1968521021
+      "instructions": 1968521077
     },
     {
       "name": "merkletrees",
-      "instructions": 389936111
+      "instructions": 389936167
     },
     {
       "name": "nbody",
-      "instructions": 1193502216
+      "instructions": 1193502272
     },
     {
       "name": "nqueen",
-      "instructions": 221668043
+      "instructions": 221668099
     },
     {
       "name": "pisum",
-      "instructions": 95249
+      "instructions": 95305
     },
     {
       "name": "primes",
-      "instructions": 2045887
+      "instructions": 2045943
     },
     {
       "name": "quicksort",
-      "instructions": 222569929
+      "instructions": 222569985
     },
     {
       "name": "spectral_norm",
-      "instructions": 74939601
+      "instructions": 74939657
     },
     {
       "name": "sum_to_n",
-      "instructions": 71761
+      "instructions": 71817
     },
     {
       "name": "tak",
-      "instructions": 52360528
+      "instructions": 52360584
     }
   ]
 }
