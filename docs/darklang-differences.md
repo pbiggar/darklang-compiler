@@ -198,6 +198,15 @@ the pinned interpreter. `Html.s` is a compiler-only constructor extension;
 `Cookie` is data-only, and `responseWithJson` accepts an already serialized
 string. See the revision-pinned [Html/Http parity matrix](html-http-parity.md).
 
+### 3.5 Option, Result, Retry, and sleep
+
+The added control combinators and Retry functions have no intentional public
+behavior divergence from the pinned interpreter. `Stdlib.Cli.__sleep` is an
+internal compiler-only typed execution boundary beneath public
+`Stdlib.Cli.Posix.sleep`, not a public extension. Ahead-of-time type-error
+timing remains the sole retained divergence for this surface. See the
+[Option/Result/Retry parity matrix](option-result-retry-parity.md).
+
 ## 4. Tooling Differences
 
 Acceptable differences due to compilation vs interpretation model.

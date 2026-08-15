@@ -571,6 +571,8 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         []  // No operands to read
     | LIR.DateTimeNow _ ->
         []  // No operands to read
+    | LIR.Sleep _ ->
+        []  // Float delay is tracked by getUsedFVRegs
     | LIR.CliNative (_, _, args) ->
         args |> List.choose operandToVReg
     | LIR.FloatToString _ ->
@@ -679,6 +681,7 @@ let getUsedFVRegs (instr: LIR.Instr) : int list =
         moves |> List.choose (fun (_, src) -> fregToId src)
     | LIR.FPhi _ -> []  // Phi sources handled specially
     | LIR.FloatToString (_, value) -> fregToId value |> Option.toList
+    | LIR.Sleep (_, delayMs) -> fregToId delayMs |> Option.toList
     // HeapStore with float value: the Virtual register ID is shared with FVirtual
     | LIR.HeapStore (_, _, LIR.Reg (LIR.Virtual vregId), Some AST.TFloat64) -> [vregId]
     | _ -> []
@@ -1189,7 +1192,7 @@ let calleeSavedRegsFor (arch: Platform.Arch) =
 /// Check if an instruction is a non-tail call (requires SaveRegs/RestoreRegs)
 let isNonTailCall (instr: LIR.Instr) : bool =
     match instr with
-    | LIR.Call _ | LIR.IndirectCall _ | LIR.ClosureCall _ | LIR.CliNative _ -> true
+    | LIR.Call _ | LIR.IndirectCall _ | LIR.ClosureCall _ | LIR.Sleep _ | LIR.CliNative _ -> true
     | _ -> false
 
 /// Check if a function has any non-tail calls
@@ -2226,6 +2229,7 @@ let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR
     | LIR.FArgMoves moves ->
         LIR.FArgMoves (moves |> List.map (fun (physReg, src) -> (physReg, applyF src)))
     | LIR.FloatToString (dest, value) -> LIR.FloatToString (dest, applyF value)
+    | LIR.Sleep (effectId, delayMs) -> LIR.Sleep (effectId, applyF delayMs)
     // HeapStore with float value: the Virtual register ID is shared with FVirtual
     // We need to apply float allocation to convert Virtual(n) to the allocated physical register
     | LIR.HeapStore (addr, offset, LIR.Reg (LIR.Virtual vregId), Some AST.TFloat64) ->
@@ -3309,6 +3313,9 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         [dateInstr] @ storeInstrs
+
+    | LIR.Sleep _ ->
+        [instr]
 
     | LIR.CliNative (dest, operation, args) ->
         let scratchRegs = [LIR.X12; LIR.X13; LIR.X14]

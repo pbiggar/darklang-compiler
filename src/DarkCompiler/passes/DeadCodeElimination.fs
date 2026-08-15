@@ -122,6 +122,7 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.RawSlotInit _
     | LIR.RandomInt64 _
     | LIR.DateTimeNow _
+    | LIR.Sleep _
     | LIR.FloatToString _
     | LIR.CoverageHit _ ->
         calls

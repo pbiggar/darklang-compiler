@@ -73,7 +73,6 @@ type CliOperation =
     | HostOS
     | GetEnv
     | Kill
-    | Sleep
     | GetPid
     | GetUid
     | CpuCount
@@ -152,6 +151,7 @@ type Instr =
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
     // DateTime intrinsics
     | DateTimeNow of dest:VReg                 // Get the current UTC instant as 100ns Unix ticks
+    | Sleep of effectId:int * dest:VReg * delayMs:Operand // Blocking typed native delay
     | CliNative of dest:VReg * operation:CliOperation * args:Operand list
     // Float to String conversion
     | FloatToString of dest:VReg * value:Operand   // Convert Float to heap String

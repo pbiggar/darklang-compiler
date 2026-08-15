@@ -73,6 +73,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | RefCountIncBlob atom
     | RefCountDecBlob atom
     | FloatToString atom
+    | Sleep atom
     | RuntimeErrorString atom -> analyze atom analysis
     | Prim (_, left, right)
     | StringConcat (left, right)
@@ -253,6 +254,7 @@ let private rewriteCExpr
     | RefCountDecBlob atom -> RefCountDecBlob (rewrite atom)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
+    | Sleep delayMs -> Sleep (rewrite delayMs)
     | CliNative (operation, args) -> CliNative (operation, rewriteMany args)
     | FloatToString atom -> FloatToString (rewrite atom)
     | RuntimeError message -> RuntimeError message

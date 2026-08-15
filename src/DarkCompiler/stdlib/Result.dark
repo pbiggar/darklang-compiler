@@ -55,6 +55,18 @@ let andThen<'t, 'u, 'e>(result: Stdlib.Result.Result<t, e>, fn: (t) -> Stdlib.Re
     | Ok(v) -> fn(v)
     | Error(err) -> Error(err)
 
+// Return the second result only when the first result is Ok
+let and<'t, 'e>(result1: Stdlib.Result.Result<t, e>, result2: Stdlib.Result.Result<t, e>) : Stdlib.Result.Result<t, e> =
+    match result1 with
+    | Ok(_) -> result2
+    | Error(_) -> result1
+
+// Return the first result when it is Ok, otherwise return the second result
+let or<'t, 'e>(result1: Stdlib.Result.Result<t, e>, result2: Stdlib.Result.Result<t, e>) : Stdlib.Result.Result<t, e> =
+    match result1 with
+    | Ok(_) -> result1
+    | Error(_) -> result2
+
 // Combinators ported from darklang/dark packages/darklang/stdlib/result.dark.
 let map2<'a, 'b, 'c, 'e>(result1: Stdlib.Result.Result<a, e>, result2: Stdlib.Result.Result<b, e>, fn: (a, b) -> c) : Stdlib.Result.Result<c, e> =
     match (result1, result2) with

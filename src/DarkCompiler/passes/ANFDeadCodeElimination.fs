@@ -95,6 +95,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RefCountDecBlob atom -> extractFromAtom atom
     | ANF.RandomInt64 -> []  // No atoms
     | ANF.DateTimeNow -> []      // No atoms
+    | ANF.Sleep delayMs -> extractFromAtom delayMs
     | ANF.FloatToString atom -> extractFromAtom atom
     | ANF.RuntimeError _ -> []  // No atoms
     | ANF.RuntimeErrorString atom -> extractFromAtom atom

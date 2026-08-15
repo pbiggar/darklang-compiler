@@ -27,6 +27,7 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.List` | List operations |
 | `Stdlib.Option` | Optional values |
 | `Stdlib.Result` | Error handling |
+| `Stdlib.Retry` | Fixed-delay and exponential-backoff retries |
 | `Stdlib.Tuple2/3` | Tuple operations |
 | `Stdlib.Dict` | Hash map (HAMT) |
 | `Stdlib.Blob` | Immutable binary values and public codecs |
@@ -52,6 +53,9 @@ and Duration contract is documented in [temporal-parity.md](../temporal-parity.m
 The Html and Http value-module contract, including its Blob bridge and bounded
 cookie/JSON surface, is documented in
 [html-http-parity.md](../html-http-parity.md).
+The revision-pinned Option, Result, Retry, and native delay contract is
+documented in
+[option-result-retry-parity.md](../option-result-retry-parity.md).
 
 ## Implementation Types
 
@@ -142,6 +146,7 @@ let isNone<'t>(opt: Option<t>) : Bool
 let withDefault<'t>(opt: Option<t>, default: t) : t
 let map<'t, 'u>(opt: Option<t>, fn: (t) -> u) : Option<u>
 let andThen<'t, 'u>(opt: Option<t>, fn: (t) -> Option<u>) : Option<u>
+let and<'a, 'b>(option1: Option<a>, option2: Option<b>) : Option<b>
 let toList<'t>(opt: Option<t>) : List<t>
 ```
 
@@ -158,7 +163,25 @@ let withDefault<'t, 'e>(result: Result<t, e>, default: t) : t
 let map<'t, 'u, 'e>(result: Result<t, e>, fn: (t) -> u) : Result<u, e>
 let mapError<'t, 'e, 'f>(fn: (e) -> f, result: Result<t, e>) : Result<t, f>
 let andThen<'t, 'u, 'e>(result: Result<t, e>, fn: (t) -> Result<u, e>) : Result<u, e>
+let and<'t, 'e>(result1: Result<t, e>, result2: Result<t, e>) : Result<t, e>
+let or<'t, 'e>(result1: Result<t, e>, result2: Result<t, e>) : Result<t, e>
 ```
+
+## Stdlib.Retry
+
+```dark
+module Stdlib.Retry
+
+let withBackoffLoop<'a>(maxAttempts: Int, attempt: Int, delayMs: Float, fn: (Unit) -> Result<a, String>) : Result<a, String>
+let withBackoff<'a>(maxAttempts: Int, fn: (Unit) -> Result<a, String>) : Result<a, String>
+let withFixedDelayLoop<'a>(maxAttempts: Int, attempt: Int, delayMs: Float, fn: (Unit) -> Result<a, String>) : Result<a, String>
+let withFixedDelay<'a>(maxAttempts: Int, delayMs: Float, fn: (Unit) -> Result<a, String>) : Result<a, String>
+```
+
+Callbacks run at least once. Retry stops on the first `Ok` or once the current
+attempt reaches the maximum, returning the final callback result unchanged.
+Delays occur only between attempts; backoff starts at 100.0 ms and doubles,
+while fixed delay stays unchanged.
 
 ## Stdlib.File (Intrinsic)
 
@@ -180,11 +203,15 @@ def Stdlib.Cli.execute(command: String) : Stdlib.Cli.ExecutionOutcome
 def Stdlib.Cli.Process.run(program: String, args: List<String>) : Result<Output, Posix.Error>
 def Stdlib.Cli.OS.getOS() : Result<OS, String>
 def Stdlib.Cli.Stdin.readKey() : KeyRead
+def Stdlib.Cli.Posix.sleep(delayMs: Float) : Unit
 ```
 
 Portable helpers are Dark source; typed CLI operations lower through
 ANF/MIR/LIR to target-native process, host, signal, and terminal primitives.
 `Platform.Target` remains an F# compiler-driver type and is not a Dark API.
+`Cli.Posix.sleep` lowers through the internal compiler-only
+`Stdlib.Cli.__sleep` boundary to a blocking native millisecond delay on Linux
+ARM64, Linux x86_64, and macOS ARM64. It does not spawn a shell process.
 
 ## Stdlib.Random (Intrinsic)
 

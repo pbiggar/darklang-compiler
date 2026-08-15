@@ -6139,6 +6139,61 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         |> Result.map (fun destReg ->
             runtimeInstrs (Runtime.generateDateTimeNow ctx.Target destReg))
 
+    | LIR.Sleep (effectId, delayMs) ->
+        lirFRegToARM64FReg delayMs
+        |> Result.map (fun delayReg ->
+            let syscalls = ARM64.targetSyscalls ctx.Target
+            let label suffix = $"__sleep_{ctx.FunctionName}_{effectId}_{suffix}"
+            let retryLabel = label "retry"
+            let interruptedLabel = label "interrupted"
+            let releaseLabel = label "release"
+            let completeLabel = label "complete"
+            let millionLabel = floatDataLabel 1000000.0
+            let resultCheck =
+                match ARM64.targetOS ctx.Target with
+                | Platform.Linux ->
+                    loadImmediate ARM64Symbolic.X12 -4L
+                    @ [ ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, interruptedLabel)
+                        ARM64Symbolic.B_label releaseLabel ]
+                | Platform.MacOS ->
+                    [ ARM64Symbolic.B_cond_label (ARM64Symbolic.HS, interruptedLabel)
+                      ARM64Symbolic.B_label releaseLabel ]
+            let interruptCheck =
+                match ARM64.targetOS ctx.Target with
+                | Platform.Linux -> []
+                | Platform.MacOS ->
+                    [ ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 4us)
+                      ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, releaseLabel) ]
+            [ ARM64Symbolic.ADRP (ARM64Symbolic.X9, millionLabel)
+              ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, millionLabel)
+              ARM64Symbolic.LDR_fp (ARM64Symbolic.D16, ARM64Symbolic.X9, 0s)
+              ARM64Symbolic.FMUL (ARM64Symbolic.D16, delayReg, ARM64Symbolic.D16)
+              ARM64Symbolic.FCVTZS (ARM64Symbolic.X9, ARM64Symbolic.D16)
+              ARM64Symbolic.CMP_imm (ARM64Symbolic.X9, 0us)
+              ARM64Symbolic.B_cond_label (ARM64Symbolic.LE, completeLabel) ]
+            @ loadImmediate ARM64Symbolic.X12 1000000000L
+            @ [ ARM64Symbolic.SDIV (ARM64Symbolic.X10, ARM64Symbolic.X9, ARM64Symbolic.X12)
+                ARM64Symbolic.MSUB (ARM64Symbolic.X11, ARM64Symbolic.X10, ARM64Symbolic.X12, ARM64Symbolic.X9)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 32us)
+                ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 0us, 0)
+                ARM64Symbolic.STP (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.Label retryLabel
+                ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.SP)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 16us)
+                ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Nanosleep, 0)
+                ARM64Symbolic.SVC syscalls.SvcImmediate ]
+            @ resultCheck
+            @ [ ARM64Symbolic.Label interruptedLabel ]
+            @ interruptCheck
+            @ [ ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 0s)
+                ARM64Symbolic.B_label retryLabel
+                ARM64Symbolic.Label releaseLabel
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 32us)
+                ARM64Symbolic.Label completeLabel ])
+
     | LIR.CliNative (dest, operation, args) ->
         lirRegToARM64Reg dest
         |> Result.bind (fun destReg ->
@@ -6185,7 +6240,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                    ARM64Symbolic.STR (ARM64Symbolic.X9, destReg, 16s)
                    ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
                    ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 24s)])
-            | LIR.GetEnv | LIR.CurrentUser | LIR.Kill | LIR.Sleep ->
+            | LIR.GetEnv | LIR.CurrentUser | LIR.Kill ->
                 Ok [ARM64Symbolic.MOVZ (destReg, 0us, 0)]
             | LIR.SpawnProcess ->
                 Ok [ARM64Symbolic.ADD_imm (ARM64Symbolic.X25, ARM64Symbolic.X25, 1us)

@@ -123,7 +123,6 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.HostOS -> MIR.HostOS
     | ANF.GetEnv -> MIR.GetEnv
     | ANF.Kill -> MIR.Kill
-    | ANF.Sleep -> MIR.Sleep
     | ANF.GetPid -> MIR.GetPid
     | ANF.GetUid -> MIR.GetUid
     | ANF.CpuCount -> MIR.CpuCount
@@ -264,6 +263,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RefCountDecBlob bytes -> maxTempIdInAtom bytes
     | ANF.RandomInt64 -> -1  // No atoms, so no TempIds
     | ANF.DateTimeNow -> -1      // No atoms, so no TempIds
+    | ANF.Sleep delayMs -> maxTempIdInAtom delayMs
     | ANF.CliNative (_, args) -> maxTempIdInAtoms args
     | ANF.FloatToString atom -> maxTempIdInAtom atom
 
@@ -629,6 +629,7 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RefCountDecBlob _ -> "RefCountDecBlob"
     | ANF.RandomInt64 -> "RandomInt64"
     | ANF.DateTimeNow -> "DateTimeNow"
+    | ANF.Sleep _ -> "Sleep"
     | ANF.CliNative (operation, _) -> $"CliNative {operation}"
     | ANF.FloatToString _ -> "FloatToString"
 
@@ -1239,6 +1240,10 @@ let rec convertExpr
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateTimeNow ->
                     Ok [MIR.DateTimeNow destReg]
+                | ANF.Sleep delayMs ->
+                    let (MIR.VReg effectId) = destReg
+                    atomToOperand builder delayMs
+                    |> Result.map (fun delay -> [MIR.Sleep (effectId, destReg, delay)])
                 | ANF.CliNative (operation, args) ->
                     ResultList.mapResults (atomToOperand builder) args
                     |> Result.map (fun operands -> [MIR.CliNative (destReg, convertCliOperation operation, operands)])
@@ -1889,6 +1894,10 @@ and convertExprToOperand
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateTimeNow ->
                     Ok [MIR.DateTimeNow destReg]
+                | ANF.Sleep delayMs ->
+                    let (MIR.VReg effectId) = destReg
+                    atomToOperand builder delayMs
+                    |> Result.map (fun delay -> [MIR.Sleep (effectId, destReg, delay)])
                 | ANF.CliNative (operation, args) ->
                     ResultList.mapResults (atomToOperand builder) args
                     |> Result.map (fun operands -> [MIR.CliNative (destReg, convertCliOperation operation, operands)])

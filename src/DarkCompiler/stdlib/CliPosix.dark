@@ -27,7 +27,7 @@ let sigterm() : Int = 15I
 let sigkill() : Int = 9I
 
 let sleep(delayMs: Float) : Unit =
-    let _ = Stdlib.Cli.execute("sleep " ++ Stdlib.Float.toString(delayMs / 1000.0)) in ()
+    Stdlib.Cli.__sleep(delayMs)
 
 let isProcessRunning(pid: Int) : Bool =
     match Stdlib.Cli.Posix.kill(pid, 0I) with

@@ -487,6 +487,7 @@ let private genEpilogue (stackSize: int) (usedCalleeSaved: LIR.PhysReg list) : X
 
 /// Function context for instructions that need stack frame info (TailCall, etc.)
 type private FuncCtx = {
+    FunctionName: string
     StackSize: int
     UsedCalleeSaved: LIR.PhysReg list
     EnableLeakCheck: bool
@@ -1116,6 +1117,7 @@ let private generateRecursiveSumRefCountDecHelper
     let releasePlan =
         ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry sourceType
     let helperCtx : FuncCtx = {
+        FunctionName = "__dark_recursive_sum_rc_dec"
         StackSize = 0
         UsedCalleeSaved = []
         EnableLeakCheck = enableLeakCheck
@@ -1200,6 +1202,7 @@ let private generateListRefCountDecHelperWith
     : X86_64.Instr list =
     let label name = $"{helperLabel}_{name}"
     let helperCtx : FuncCtx = {
+        FunctionName = helperLabel
         StackSize = 0
         UsedCalleeSaved = []
         EnableLeakCheck = enableLeakCheck
@@ -1806,6 +1809,7 @@ let private generateDictRefCountDecHelper
             []
 
     let helperCtx : FuncCtx = {
+        FunctionName = "__dark_dict_refcount_dec_helper"
         StackSize = 0
         UsedCalleeSaved = []
         EnableLeakCheck = enableLeakCheck
@@ -2214,6 +2218,7 @@ let private generateClosureRefCountDecHelper
             []
 
     let helperCtx : FuncCtx = {
+        FunctionName = closureRefCountDecHelperLabel
         StackSize = 0
         UsedCalleeSaved = []
         EnableLeakCheck = enableLeakCheck
@@ -4267,6 +4272,52 @@ let private translateInstr
                X86_64.MOV_reg (destReg, scratch)
                X86_64.ADD_imm (X86_64.RSP, 16)])
 
+    | LIR.Sleep (effectId, delayMs) ->
+        match delayMs with
+        | LIR.FPhysical physicalDelay ->
+            let delayReg = lirFRegToX86 physicalDelay
+            let label suffix = $"__sleep_{ctx.FunctionName}_{effectId}_{suffix}"
+            let retryLabel = label "retry"
+            let interruptedLabel = label "interrupted"
+            let releaseLabel = label "release"
+            let completeLabel = label "complete"
+            let millionBits = System.BitConverter.DoubleToInt64Bits 1000000.0
+            Ok (
+                loadImm64 scratch millionBits
+                @ [ X86_64.MOVQ_from_gp (X86_64.XMM15, scratch)
+                    X86_64.MULSD (X86_64.XMM15, delayReg)
+                    X86_64.CVTTSD2SI (scratch, X86_64.XMM15)
+                    X86_64.CMP_imm (scratch, 0)
+                    X86_64.Jcc (X86_64.LE, completeLabel)
+                    X86_64.SUB_imm (X86_64.RSP, 32)
+                    X86_64.MOV_reg (X86_64.RAX, scratch)
+                    X86_64.CQO ]
+                @ loadImm64 X86_64.R10 1000000000L
+                @ [ X86_64.IDIV X86_64.R10
+                    X86_64.MOV_store (X86_64.RSP, 0, X86_64.RAX)
+                    X86_64.MOV_store (X86_64.RSP, 8, X86_64.RDX) ]
+                @ loadImm64 X86_64.R10 0L
+                @ [ X86_64.MOV_store (X86_64.RSP, 16, X86_64.R10)
+                    X86_64.MOV_store (X86_64.RSP, 24, X86_64.R10)
+                    X86_64.Label retryLabel
+                    X86_64.LEA (X86_64.RDI, X86_64.RSP, 0)
+                    X86_64.LEA (X86_64.RSI, X86_64.RSP, 16) ]
+                @ loadImm64 X86_64.RAX (int64 syscalls.Nanosleep)
+                @ [ X86_64.SYSCALL
+                    X86_64.CMP_imm (X86_64.RAX, -4)
+                    X86_64.Jcc (X86_64.EQ, interruptedLabel)
+                    X86_64.JMP releaseLabel
+                    X86_64.Label interruptedLabel
+                    X86_64.MOV_load (X86_64.R10, X86_64.RSP, 16)
+                    X86_64.MOV_store (X86_64.RSP, 0, X86_64.R10)
+                    X86_64.MOV_load (X86_64.R10, X86_64.RSP, 24)
+                    X86_64.MOV_store (X86_64.RSP, 8, X86_64.R10)
+                    X86_64.JMP retryLabel
+                    X86_64.Label releaseLabel
+                    X86_64.ADD_imm (X86_64.RSP, 32)
+                    X86_64.Label completeLabel ])
+        | _ -> Error "Sleep with virtual float register"
+
     | LIR.CliNative (dest, operation, _args) ->
         resolveReg dest
         |> Result.map (fun destReg ->
@@ -4295,7 +4346,7 @@ let private translateInstr
                    X86_64.MOV_store (destReg, 16, X86_64.R9)]
                 @ loadImm64 X86_64.RCX 1L
                 @ [X86_64.MOV_store (destReg, 24, X86_64.RCX)]
-            | LIR.GetEnv | LIR.CurrentUser | LIR.Kill | LIR.Sleep -> loadImm64 destReg 0L
+            | LIR.GetEnv | LIR.CurrentUser | LIR.Kill -> loadImm64 destReg 0L
             | LIR.SpawnProcess -> loadImm64 destReg 1L)
 
     | LIR.Madd (dest, mulLeft, mulRight, add) ->
@@ -4821,6 +4872,7 @@ let translateFunction
         | [] -> Ok (List.rev acc |> List.concat)
         | block :: rest ->
             let ctx : FuncCtx = {
+                FunctionName = func.Name
                 StackSize = func.StackSize
                 UsedCalleeSaved = func.UsedCalleeSaved
                 EnableLeakCheck = enableLeakCheck

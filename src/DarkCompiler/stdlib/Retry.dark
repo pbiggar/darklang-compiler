@@ -1,0 +1,29 @@
+// Stdlib.Retry.dark - Portable retry control flow matching the interpreter.
+
+module Stdlib.Retry
+
+let withBackoffLoop<'a>(maxAttempts: Int, attempt: Int, delayMs: Float, fn: (Unit) -> Stdlib.Result.Result<a, String>) : Stdlib.Result.Result<a, String> =
+    match fn(()) with
+    | Ok(result) -> Ok(result)
+    | Error(error) ->
+        if attempt >= maxAttempts then Error(error)
+        else
+            let _ = Stdlib.Cli.Posix.sleep(delayMs) in
+            Stdlib.Retry.withBackoffLoop<a>(maxAttempts, Stdlib.Int.add(attempt, 1I), Stdlib.Float.multiply(delayMs, 2.0), fn)
+
+// Retry up to maxAttempts times with a 100ms initial delay that doubles.
+let withBackoff<'a>(maxAttempts: Int, fn: (Unit) -> Stdlib.Result.Result<a, String>) : Stdlib.Result.Result<a, String> =
+    Stdlib.Retry.withBackoffLoop<a>(maxAttempts, 1I, 100.0, fn)
+
+let withFixedDelayLoop<'a>(maxAttempts: Int, attempt: Int, delayMs: Float, fn: (Unit) -> Stdlib.Result.Result<a, String>) : Stdlib.Result.Result<a, String> =
+    match fn(()) with
+    | Ok(result) -> Ok(result)
+    | Error(error) ->
+        if attempt >= maxAttempts then Error(error)
+        else
+            let _ = Stdlib.Cli.Posix.sleep(delayMs) in
+            Stdlib.Retry.withFixedDelayLoop<a>(maxAttempts, Stdlib.Int.add(attempt, 1I), delayMs, fn)
+
+// Retry up to maxAttempts times with delayMs only between attempts.
+let withFixedDelay<'a>(maxAttempts: Int, delayMs: Float, fn: (Unit) -> Stdlib.Result.Result<a, String>) : Stdlib.Result.Result<a, String> =
+    Stdlib.Retry.withFixedDelayLoop<a>(maxAttempts, 1I, delayMs, fn)

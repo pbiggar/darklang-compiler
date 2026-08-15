@@ -213,7 +213,6 @@ type CliOperation =
     | HostOS
     | GetEnv
     | Kill
-    | Sleep
     | GetPid
     | GetUid
     | CpuCount
@@ -290,6 +289,7 @@ type CExpr =
     | RandomInt64                             // Get 8 random bytes as Int64
     // DateTime intrinsics
     | DateTimeNow                             // Get the current UTC instant as 100ns Unix ticks
+    | Sleep of delayMs:Atom                   // Blocking typed native delay in milliseconds
     | CliNative of operation:CliOperation * args:Atom list
     // Float to String conversion
     | FloatToString of Atom                   // Convert Float to heap String

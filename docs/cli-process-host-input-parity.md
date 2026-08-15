@@ -46,6 +46,18 @@ process-handle and pending-terminal roots are allocator-independent runtime
 state. Backends construct normal managed Int/String/Result/record/tuple values,
 so ordinary reference counting owns their lifetimes.
 
+The sleep portion of this boundary was separately revalidated from compiler
+baseline HEAD `7e08aa752a123ba6094ce6f6aafac6dfd2c8a4a9` against the same exact
+darklang/dark revision above. `Stdlib.Cli.Posix.sleep` now calls the internal
+compiler-only `Stdlib.Cli.__sleep` intrinsic. Its Float millisecond argument is
+carried by a typed ANF/MIR/LIR sleep operation and lowered to blocking
+`nanosleep` on Linux ARM64, Linux x86_64, and macOS ARM64. The native timeout is
+normalized into seconds and nanoseconds, and interruption resumes with the
+remaining timeout. This replaces the compiler baseline's observable shell
+execution at `src/DarkCompiler/stdlib/CliPosix.dark:29-30`; it does not add a
+public compiler extension. The full revision-pinned comparison is in
+[option-result-retry-parity.md](option-result-retry-parity.md).
+
 Process implementations must close every descriptor on success and failure,
 retry interruptible operations where the interpreter does, preserve errno,
 drain stdout and stderr concurrently, normalize wait status, and force cleanup

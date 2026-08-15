@@ -353,6 +353,66 @@ let testGeneratedCodeEliminatesSelfMoves () : TestResult =
         else
             Ok ()
 
+/// Sleep is target-native on every supported ARM64 OS. Milliseconds are first
+/// converted to integral nanoseconds, then split into a normalized timespec;
+/// EINTR resumes from the kernel-provided remainder.
+let testSleepUsesNormalizedInterruptSafeNanosleep () : TestResult =
+    let program =
+        makeSimpleProgramWithVariants [LIR.Sleep (41, LIR.FPhysical LIR.D0)] Map.empty
+    let generate targetName targetConfig =
+        CodeGen.generateARM64 targetConfig program
+        |> Result.mapError (fun error -> $"{targetName} sleep lowering failed: {error}")
+    match generate "Linux ARM64" (ARM64.targetConfigFor Platform.LinuxARM64),
+          generate "macOS ARM64" (ARM64.targetConfigFor Platform.MacOSARM64) with
+    | Error error, _ | _, Error error -> Error error
+    | Ok linuxInstrs, Ok macInstrs ->
+        let hasNormalization =
+            linuxInstrs
+            |> List.exists (function
+                | ARM64Symbolic.FMUL (ARM64.D16, ARM64.D0, ARM64.D16) -> true
+                | _ -> false)
+            && linuxInstrs
+               |> List.exists (function
+                   | ARM64Symbolic.FCVTZS (ARM64.X9, ARM64.D16) -> true
+                   | _ -> false)
+            && linuxInstrs
+               |> List.exists (function
+                   | ARM64Symbolic.SDIV (ARM64.X10, ARM64.X9, ARM64.X12) -> true
+                   | _ -> false)
+            && linuxInstrs
+               |> List.exists (function
+                   | ARM64Symbolic.MSUB (ARM64.X11, ARM64.X10, ARM64.X12, ARM64.X9) -> true
+                   | _ -> false)
+        let hasLinuxSyscall =
+            linuxInstrs
+            |> List.windowed 2
+            |> List.exists (function
+                | [ ARM64Symbolic.MOVZ (ARM64.X8, number, 0)
+                    ARM64Symbolic.SVC 0us ] -> number = Platform.linuxARM64SyscallNumbers.Nanosleep
+                | _ -> false)
+        let hasMacSyscall =
+            macInstrs
+            |> List.windowed 2
+            |> List.exists (function
+                | [ ARM64Symbolic.MOVZ (ARM64.X16, number, 0)
+                    ARM64Symbolic.SVC 128us ] -> number = Platform.macOSARM64SyscallNumbers.Nanosleep
+                | _ -> false)
+        let retriesRemainder =
+            linuxInstrs
+            |> List.exists (function
+                | ARM64Symbolic.LDP (ARM64.X10, ARM64.X11, ARM64.SP, 16s) -> true
+                | _ -> false)
+            && macInstrs
+               |> List.exists (function
+                   | ARM64Symbolic.B_cond_label (ARM64.HS, _) -> true
+                   | _ -> false)
+            && macInstrs
+               |> List.exists (function
+                   | ARM64Symbolic.CMP_imm (ARM64.X0, 4us) -> true
+                   | _ -> false)
+        if hasNormalization && hasLinuxSyscall && hasMacSyscall && retriesRemainder then Ok ()
+        else Error "ARM64 sleep did not emit normalized interrupt-safe nanosleep lowering for both targets"
+
 let testPeepholeFusesBitClearSequence () : TestResult =
     let before = [
         ARM64Symbolic.MOVN (ARM64.X9, 0us, 0)
@@ -1507,6 +1567,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
     ("Generated ARM64 entry uses allocator transfers only", testGeneratedEntryUsesAllocatorTransfersOnly)
+    ("ARM64 Sleep normalizes timeout and retries nanosleep", testSleepUsesNormalizedInterruptSafeNanosleep)
     ("ARM64 peephole fuses bit-clear sequence", testPeepholeFusesBitClearSequence)
     ("ARM64 UInt64 runtime zero branches target digit handlers", testPrintUInt64RuntimeZeroBranches)
     ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)

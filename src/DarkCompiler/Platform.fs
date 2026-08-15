@@ -87,6 +87,7 @@ type SyscallNumbers = {
     Chmod: uint16     // Change file mode (or fchmodat on Linux with AT_FDCWD)
     Getrandom: uint16 // Get random bytes (getentropy on macOS, getrandom on Linux)
     Gettimeofday: uint16 // Get current time (gettimeofday on macOS, clock_gettime on Linux)
+    Nanosleep: uint16 // Blocking sleep with a normalized timespec
 }
 
 let macOSARM64SyscallNumbers : SyscallNumbers = {
@@ -102,6 +103,7 @@ let macOSARM64SyscallNumbers : SyscallNumbers = {
     Chmod = 15us
     Getrandom = 439us
     Gettimeofday = 116us
+    Nanosleep = 240us
 }
 
 let linuxARM64SyscallNumbers : SyscallNumbers = {
@@ -117,6 +119,7 @@ let linuxARM64SyscallNumbers : SyscallNumbers = {
     Chmod = 53us
     Getrandom = 278us
     Gettimeofday = 113us
+    Nanosleep = 101us
 }
 
 let linuxX86_64SyscallNumbers : SyscallNumbers = {
@@ -132,6 +135,7 @@ let linuxX86_64SyscallNumbers : SyscallNumbers = {
     Chmod = 90us
     Getrandom = 318us
     Gettimeofday = 228us  // clock_gettime
+    Nanosleep = 35us
 }
 
 /// Get syscall numbers for the given (OS, Arch) pair.

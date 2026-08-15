@@ -20,7 +20,6 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.HostOS -> LIR.HostOS
     | MIR.GetEnv -> LIR.GetEnv
     | MIR.Kill -> LIR.Kill
-    | MIR.Sleep -> LIR.Sleep
     | MIR.GetPid -> LIR.GetPid
     | MIR.GetUid -> LIR.GetUid
     | MIR.CpuCount -> LIR.CpuCount
@@ -1555,6 +1554,16 @@ let selectInstr
         let lirDest = vregToLIRReg dest
         Ok ([LIR.DateTimeNow lirDest], state)
 
+    | MIR.Sleep (effectId, dest, delayMs) ->
+        ensureInFRegister delayMs state
+        |> Result.map (fun (delayInstrs, delayReg, nextState) ->
+            (delayInstrs
+             @ [ LIR.SaveRegs ([], [])
+                 LIR.Sleep (effectId, delayReg)
+                 LIR.RestoreRegs ([], [])
+                 LIR.Mov (vregToLIRReg dest, LIR.Imm 0L) ],
+             nextState))
+
     | MIR.CliNative (dest, operation, args) ->
         Ok ([LIR.CliNative (vregToLIRReg dest, convertCliOperation operation, List.map convertOperand args)], state)
 
@@ -1776,6 +1785,8 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
         |> maxVRegIdFromOperand value
     | MIR.RandomInt64 dest
     | MIR.DateTimeNow dest -> maxVRegId dest currentMax
+    | MIR.Sleep (_, dest, delayMs) ->
+        currentMax |> maxVRegId dest |> maxVRegIdFromOperand delayMs
     | MIR.CliNative (dest, _, args) ->
         currentMax |> maxVRegId dest |> maxVRegIdsFromOperands args
     | MIR.Phi (dest, sources, _) ->

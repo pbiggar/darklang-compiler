@@ -741,6 +741,7 @@ let private foldRegUses folder state (instr: Instr) =
     | LoadFuncAddr _
     | RandomInt64 _
     | DateTimeNow _
+    | Sleep _
     | CoverageHit _ -> state
 
 /// Check if a register is read by an instruction.

@@ -218,6 +218,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FloatToString _ -> Some AST.TString
     | RandomInt64 -> Some AST.TInt64
     | DateTimeNow -> Some AST.TDateTime
+    | Sleep _ -> Some AST.TUnit
     | StdoutWrite _ -> Some AST.TUnit
     | StdinReadLine -> Some AST.TString
     | CliNative (operation, _) ->
@@ -225,7 +226,6 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | Execute | ProcessIO | TerminateProcess -> Some (AST.TRecord ("Stdlib.Cli.NativeOutput", []))
         | GetEnv | CurrentUser -> Some (AST.TSum ("Stdlib.Option.Option", [AST.TString]))
         | Kill -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TRecord ("Stdlib.Cli.NativePosixError", [])]))
-        | Sleep -> Some AST.TUnit
         | HostOS | GetPid | GetUid | CpuCount | SpawnProcess -> Some AST.TInt64
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
     | Call (funcName, args)

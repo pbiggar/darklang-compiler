@@ -153,22 +153,24 @@ let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option
     | _ -> None
 
 let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
-    let operation =
-        match funcName with
-        | "Stdlib.Cli.__execute" -> Some ANF.Execute
-        | "Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
-        | "Stdlib.Cli.__getenv" -> Some ANF.GetEnv
-        | "Stdlib.Cli.__kill" -> Some ANF.Kill
-        | "Stdlib.Cli.__sleep" -> Some ANF.Sleep
-        | "Stdlib.Cli.__getpid" -> Some ANF.GetPid
-        | "Stdlib.Cli.__getuid" -> Some ANF.GetUid
-        | "Stdlib.Cli.__cpuCount" -> Some ANF.CpuCount
-        | "Stdlib.Cli.__currentUser" -> Some ANF.CurrentUser
-        | "Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
-        | "Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
-        | "Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
-        | _ -> None
-    operation |> Option.map (fun op -> ANF.CliNative (op, args))
+    match funcName, args with
+    | "Stdlib.Cli.__sleep", [delayMs] -> Some (ANF.Sleep delayMs)
+    | _ ->
+        let operation =
+            match funcName with
+            | "Stdlib.Cli.__execute" -> Some ANF.Execute
+            | "Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
+            | "Stdlib.Cli.__getenv" -> Some ANF.GetEnv
+            | "Stdlib.Cli.__kill" -> Some ANF.Kill
+            | "Stdlib.Cli.__getpid" -> Some ANF.GetPid
+            | "Stdlib.Cli.__getuid" -> Some ANF.GetUid
+            | "Stdlib.Cli.__cpuCount" -> Some ANF.CpuCount
+            | "Stdlib.Cli.__currentUser" -> Some ANF.CurrentUser
+            | "Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
+            | "Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
+            | "Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
+            | _ -> None
+        operation |> Option.map (fun op -> ANF.CliNative (op, args))
 
 let private normalizeNullaryIntrinsicArgs (args: ANF.Atom list) : ANF.Atom list =
     match args with

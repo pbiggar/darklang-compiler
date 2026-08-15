@@ -2201,19 +2201,11 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 parseRecordLiteralFieldsWithTypeName fullName recordFieldsStart []
             | _ when isConstructor ->
                 let variantName = lastSegment
-                if (match afterQualified with | TLParen :: _ -> false | _ -> true)
-                   && canStartApplicationArg afterQualified
-                   && not (isRecordFieldBoundary afterQualified) then
-                    // Qualified constructor with interpreter-style payload:
-                    // Stdlib.Option.Option.Some 5L
-                    parsePrimaryBase afterQualified
-                    |> Result.bind (fun (payloadBase, afterPayloadBase) ->
-                        parsePostfix payloadBase afterPayloadBase
-                        |> Result.map (fun (payloadExpr, remaining) ->
-                            (Constructor (UnresolvedConstructor (Some typeName), variantName, Some payloadExpr), remaining)))
-                else
-                    // Qualified constructor without payload: Stdlib.Color.Red
-                    Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, None), afterQualified)
+                // Leave space application to parseApplication. This preserves
+                // normal left association: `f None None` is a two-argument call,
+                // while a leading `Some value` still applies value to Some.
+                // Parenthesized constructor syntax is handled by parsePostfix.
+                Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, None), afterQualified)
             | TLParen :: TRParen :: rest ->
                 // Qualified zero-arg call: Stdlib.Module.fn()
                 Ok (Call (fullName, NonEmptyList.singleton UnitLiteral), rest)
@@ -2273,17 +2265,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // Record literal with type name: Point { x = 1, y = 2 }
             parseRecordLiteralFieldsWithTypeName typeName rest []
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
-            // Constructor, optionally with interpreter-style payload: Some 5L
-            if (match rest with | TLParen :: _ -> false | _ -> true)
-               && canStartApplicationArg rest
-               && not (isRecordFieldBoundary rest) then
-                parsePrimaryBase rest
-                |> Result.bind (fun (payloadBaseExpr, afterPayloadBase) ->
-                    parsePostfix payloadBaseExpr afterPayloadBase
-                    |> Result.map (fun (payloadExpr, remaining) ->
-                        (Constructor (UnresolvedConstructor None, name, Some payloadExpr), remaining)))
-            else
-                Ok (Constructor (UnresolvedConstructor None, name, None), rest)
+            // Constructor payloads use the same left-associative application
+            // path as every other callable expression.
+            Ok (Constructor (UnresolvedConstructor None, name, None), rest)
         | TIdent name :: rest ->
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)

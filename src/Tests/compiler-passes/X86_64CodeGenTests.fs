@@ -324,6 +324,49 @@ let testDateTimeNowLowersTo100nsUnixTicks () : Result<unit, string> =
         if hasTicksPerSecond && hasNanosecondsPerTick && hasTickDivision then Ok ()
         else Error $"DateTimeNow did not lower to 100ns Unix ticks: {instrs}"
 
+let testSleepLowersToNormalizedInterruptSafeNanosleep () : Result<unit, string> =
+    let program = makeSimpleProgram [LIR.Sleep (41, LIR.FPhysical LIR.D0)] LIR.Ret
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error error -> Error $"Sleep x64 lowering failed: {error}"
+    | Ok instrs ->
+        let hasNormalization =
+            instrs
+            |> List.exists (function
+                | X86_64.MULSD (X86_64.XMM15, X86_64.XMM0) -> true
+                | _ -> false)
+            && instrs
+               |> List.exists (function
+                   | X86_64.CVTTSD2SI (X86_64.R11, X86_64.XMM15) -> true
+                   | _ -> false)
+            && instrs
+               |> List.exists (function
+                   | X86_64.IDIV X86_64.R10 -> true
+                   | _ -> false)
+        let hasSyscall =
+            instrs
+            |> List.windowed 2
+            |> List.exists (function
+                | [ X86_64.MOV_imm32 (X86_64.RAX, number); X86_64.SYSCALL ] ->
+                    number = int32 Platform.linuxX86_64SyscallNumbers.Nanosleep
+                | [ X86_64.MOV_imm (X86_64.RAX, number); X86_64.SYSCALL ] ->
+                    number = int64 Platform.linuxX86_64SyscallNumbers.Nanosleep
+                | _ -> false)
+        let retriesRemainder =
+            instrs
+            |> List.exists (function
+                | X86_64.CMP_imm (X86_64.RAX, -4) -> true
+                | _ -> false)
+            && instrs
+               |> List.exists (function
+                   | X86_64.MOV_load (X86_64.R10, X86_64.RSP, 16) -> true
+                   | _ -> false)
+            && instrs
+               |> List.exists (function
+                   | X86_64.MOV_load (X86_64.R10, X86_64.RSP, 24) -> true
+                   | _ -> false)
+        if hasNormalization && hasSyscall && retriesRemainder then Ok ()
+        else Error $"Sleep did not lower to normalized interrupt-safe x64 nanosleep: {instrs}"
+
 let private runInNamedFunction (name: string) (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     match makeSimpleProgram [LIR.Call (LIR.Physical LIR.X0, name, [])] LIR.Ret with
     | LIR.Program ([entryFunc], variants, records) ->
@@ -5239,6 +5282,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
     ("LIR DateTimeNow x64 lowering uses 100ns Unix ticks", testDateTimeNowLowersTo100nsUnixTicks)
+    ("LIR Sleep x64 lowering normalizes timeout and retries nanosleep", testSleepLowersToNormalizedInterruptSafeNanosleep)
     ("LIR conditional branch", testBranch)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)

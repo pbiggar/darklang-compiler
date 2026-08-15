@@ -351,6 +351,7 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | RefCountDecBlob a -> RefCountDecBlob (r a)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
+    | Sleep delayMs -> Sleep (r delayMs)
     | CliNative (operation, args) -> CliNative (operation, List.map r args)
     | FloatToString a -> FloatToString (r a)
     | RuntimeError message -> RuntimeError message

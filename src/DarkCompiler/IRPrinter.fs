@@ -189,6 +189,8 @@ let private prettyPrintANFCExpr = function
         "RandomInt64()"
     | ANF.DateTimeNow ->
         "DateTimeNow()"
+    | ANF.Sleep delayMs ->
+        $"Sleep({prettyPrintANFAtom delayMs})"
     | ANF.CliNative (operation, args) ->
         let argText = args |> commaSeparated prettyPrintANFAtom
         $"CliNative.{operation}({argText})"
@@ -405,6 +407,8 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"{prettyPrintMIRVReg dest} <- RandomInt64()"
     | MIR.DateTimeNow dest ->
         $"{prettyPrintMIRVReg dest} <- DateTimeNow()"
+    | MIR.Sleep (effectId, dest, delayMs) ->
+        $"{prettyPrintMIRVReg dest} <- Sleep#{effectId}({prettyPrintMIROperand delayMs})"
     | MIR.CliNative (dest, operation, args) ->
         let argText = args |> commaSeparated prettyPrintMIROperand
         $"{prettyPrintMIRVReg dest} <- CliNative.{operation}({argText})"
@@ -736,6 +740,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- RandomInt64()"
     | LIR.DateTimeNow dest ->
         $"{prettyPrintLIRReg dest} <- DateTimeNow()"
+    | LIR.Sleep (effectId, delayMs) ->
+        $"Sleep#{effectId}({prettyPrintLIRFReg delayMs})"
     | LIR.CliNative (dest, operation, args) ->
         let argText = args |> commaSeparated prettyPrintLIROperand
         $"{prettyPrintLIRReg dest} <- CliNative.{operation}({argText})"

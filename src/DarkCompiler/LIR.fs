@@ -71,7 +71,6 @@ type CliOperation =
     | HostOS
     | GetEnv
     | Kill
-    | Sleep
     | GetPid
     | GetUid
     | CpuCount
@@ -188,6 +187,7 @@ type Instr =
     | RefCountDecBlob of bytes:Operand
     | RandomInt64 of dest:Reg
     | DateTimeNow of dest:Reg
+    | Sleep of effectId:int * delayMs:FReg
     | CliNative of dest:Reg * operation:CliOperation * args:Operand list
     | FloatToString of dest:Reg * value:FReg
     | CoverageHit of exprId:int
