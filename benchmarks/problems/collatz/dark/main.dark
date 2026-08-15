@@ -20,4 +20,4 @@ let sumCollatzRange(i: Int64, limit: Int64, total: Int64) : Int64 =
     else sumCollatzRange(i + 1, limit, total + collatzSteps(i, 0))
 
 // Sum steps for numbers 1 to 100000
-sumCollatzRange(1, 100000, 0)
+Builtin.printLine(Stdlib.Int64.toString(sumCollatzRange(1, 100000, 0)))

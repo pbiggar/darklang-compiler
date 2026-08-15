@@ -11,4 +11,4 @@ let ackermann(m: Int64, n: Int64) : Int64 =
 
 // A(3, 12) = 32765
 // This creates millions of recursive calls
-ackermann(3, 12)
+Builtin.printLine(Stdlib.Int64.toString(ackermann(3, 12)))

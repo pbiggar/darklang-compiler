@@ -71,4 +71,4 @@ let seed2 = Stdlib.Tuple2.second<Int64, Int64>(result2) in
 let result3 = makeRandomFasta(n * 5, homoCum, seed2, 0, 0) in
 let c3 = Stdlib.Tuple2.first<Int64, Int64>(result3) in
 let total = (c1 + c2 + c3) % 1000000007 in
-total
+Builtin.printLine(Stdlib.Int64.toString(total))

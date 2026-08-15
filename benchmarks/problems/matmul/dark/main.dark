@@ -43,4 +43,4 @@ let matmulChecksum(n: Int64) : Int64 =
     let result = multiplyCells(a, b, n, 0, 0, Stdlib.Internal.HAMT.__empty<Int64, Int64>()) in
     checksumCells(result, n * n, 0, 0)
 
-matmulChecksum(100)
+Builtin.printLine(Stdlib.Int64.toString(matmulChecksum(100)))

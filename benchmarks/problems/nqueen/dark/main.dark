@@ -28,4 +28,4 @@ let nqueen(n: Int64) : Int64 =
     nqueenSolve(allOnes, 0, 0, 0, allOnes, 0)
 
 // N=13 gives reasonable runtime
-nqueen(13)
+Builtin.printLine(Stdlib.Int64.toString(nqueen(13)))

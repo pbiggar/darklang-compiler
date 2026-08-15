@@ -23,4 +23,4 @@ let countPrimes(n: Int64, count: Int64) : Int64 =
 
 // Count primes up to 10000
 // Expected: 1229 primes
-countPrimes(10000, 0)
+Builtin.printLine(Stdlib.Int64.toString(countPrimes(10000, 0)))

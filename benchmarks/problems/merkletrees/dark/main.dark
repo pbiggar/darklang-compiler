@@ -52,4 +52,4 @@ let benchmark(depth: Int64, iterations: Int64, i: Int64, checksum: Int64) : Int6
         let finalChecksum = if verified then (newChecksum + 1) % 1000000007 else newChecksum in
         benchmark(depth, iterations, i + 1, finalChecksum)
 
-benchmark(15, 50, 0, 0)
+Builtin.printLine(Stdlib.Int64.toString(benchmark(15, 50, 0, 0)))

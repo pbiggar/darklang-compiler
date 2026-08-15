@@ -20,4 +20,4 @@ let stressTest(depth: Int64, iterations: Int64, acc: Int64) : Int64 =
 
 // Construct and traverse 100 trees of depth 15.
 // Each complete binary tree of depth 15 has 2^16 - 1 = 65535 nodes
-stressTest(15, 100, 0)
+Builtin.printLine(Stdlib.Int64.toString(stressTest(15, 100, 0)))

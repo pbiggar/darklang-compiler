@@ -44,4 +44,4 @@ let checksum(arr: List<Int64>) : Int64 =
 
 let arr = generateList(5000, 42) in
 let sortedArr = quicksort(arr) in
-checksum(sortedArr)
+Builtin.printLine(Stdlib.Int64.toString(checksum(sortedArr)))

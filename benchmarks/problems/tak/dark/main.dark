@@ -13,4 +13,4 @@ let repeat(n: Int64, acc: Int64) : Int64 =
     if n <= 0 then acc
     else repeat(n - 1, tak(24, 16, 8))
 
-repeat(10, 0)
+Builtin.printLine(Stdlib.Int64.toString(repeat(10, 0)))

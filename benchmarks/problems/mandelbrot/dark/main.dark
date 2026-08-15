@@ -46,4 +46,4 @@ let countAll(startY: Int64, endY: Int64, size: Int64, maxIter: Int64, count: Int
         countAll(startY + 1, endY, size, maxIter, count + rowCount)
 
 // Full benchmark: size=200, maxIter=50
-countAll(0, 200, 200, 50, 0)
+Builtin.printLine(Stdlib.Int64.toString(countAll(0, 200, 200, 50, 0)))
