@@ -8397,13 +8397,45 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                     extractElements headPatterns initialListVar currentEnv [(initialListVar, initialListExpr)] [] vg3
                     |> Result.bind (fun (envAfterHeads, headBindings, finalTailVar, headCondAtoms, vg4) ->
-                        // Bind/check tail pattern
-                        let tailResult : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.Atom list * ANF.VarGen, string> =
+                        // Compile the tail after extracting the chained heads. Exact-list and
+                        // further-cons tails need their full checked lowering: a comparison-only
+                        // PList condition validates length but does not compare its elements.
+                        let tailBodyResult : Result<ANF.AExpr * (ANF.TempId * ANF.CExpr) list * ANF.Atom list * ANF.VarGen, string> =
                             match tailPattern with
+                            | AST.PList patterns ->
+                                compileListPatternWithChecks
+                                    patterns
+                                    (ANF.Var finalTailVar)
+                                    listType
+                                    envAfterHeads
+                                    body
+                                    elseExpr
+                                    vg4
+                                |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
+                            | AST.PListCons (nestedHeads, nestedTail) ->
+                                compileListConsPatternWithChecks
+                                    nestedHeads
+                                    nestedTail
+                                    (ANF.Var finalTailVar)
+                                    listType
+                                    envAfterHeads
+                                    body
+                                    elseExpr
+                                    vg4
+                                |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
                             | AST.PVar name ->
-                                Ok (Map.add name (finalTailVar, listType) envAfterHeads, [], [], vg4)
+                                toANF
+                                    body
+                                    vg4
+                                    (Map.add name (finalTailVar, listType) envAfterHeads)
+                                    typeReg
+                                    variantLookup
+                                    funcReg
+                                    moduleRegistry
+                                |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
                             | AST.PWildcard ->
-                                Ok (envAfterHeads, [], [], vg4)
+                                toANF body vg4 envAfterHeads typeReg variantLookup funcReg moduleRegistry
+                                |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
                             | _ ->
                                 let staticallyCannotMatch =
                                     patternStaticallyCannotMatchType tailPattern listType
@@ -8432,52 +8464,52 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         else
                                             Ok (envAfterHeads, [], vg5)
                                     nestedBindingsResult
-                                    |> Result.map (fun (tailEnv, nestedBindings, vg6) ->
-                                        (tailEnv, comparisonBindings @ nestedBindings, conditionAtoms, vg6)))
+                                    |> Result.bind (fun (tailEnv, nestedBindings, vg6) ->
+                                        toANF body vg6 tailEnv typeReg variantLookup funcReg moduleRegistry
+                                        |> Result.map (fun (tailBody, vg7) ->
+                                            (tailBody, comparisonBindings @ nestedBindings, conditionAtoms, vg7))))
 
-                        tailResult
-                        |> Result.bind (fun (finalEnv, tailBindings, tailCondAtoms, vg5) ->
+                        tailBodyResult
+                        |> Result.map (fun (tailBody, tailBindings, tailCondAtoms, vg5) ->
                             let allCondAtoms = headCondAtoms @ tailCondAtoms
-                            toANF body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
-                            |> Result.map (fun (bodyExpr, vg6) ->
-                                // Build pattern condition checks first; these checks may depend on
-                                // vars extracted by headBindings/tailBindings, so extraction wraps outside.
-                                let (guardedBody, vg7) =
-                                    match allCondAtoms with
-                                    | [] ->
-                                        (bodyExpr, vg6)
-                                    | checks ->
-                                        let rec buildCombinedChecks
-                                            (remaining: ANF.Atom list)
-                                            (accBindings: (ANF.TempId * ANF.CExpr) list)
-                                            (prevCond: ANF.Atom option)
-                                            (vg: ANF.VarGen)
-                                            : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
-                                            match remaining with
-                                            | [] ->
-                                                match prevCond with
-                                                | Some cond -> (cond, accBindings, vg)
-                                                | None -> (ANF.BoolLiteral true, accBindings, vg)
-                                            | condAtom :: rest ->
-                                                match prevCond with
-                                                | None ->
-                                                    buildCombinedChecks rest accBindings (Some condAtom) vg
-                                                | Some prevCondAtom ->
-                                                    let (combinedVar, vg1) = ANF.freshVar vg
-                                                    let combinedExpr = ANF.Prim (ANF.And, prevCondAtom, condAtom)
-                                                    buildCombinedChecks rest (accBindings @ [(combinedVar, combinedExpr)]) (Some (ANF.Var combinedVar)) vg1
-                                        let (combinedCondAtom, condBindings, vg7') = buildCombinedChecks checks [] None vg6
-                                        let checkedBody = ANF.If (combinedCondAtom, bodyExpr, elseExpr)
-                                        (wrapBindings condBindings checkedBody, vg7')
+                            // Build pattern condition checks first; these checks may depend on
+                            // vars extracted by headBindings/tailBindings, so extraction wraps outside.
+                            let (guardedBody, vg6) =
+                                match allCondAtoms with
+                                | [] ->
+                                    (tailBody, vg5)
+                                | checks ->
+                                    let rec buildCombinedChecks
+                                        (remaining: ANF.Atom list)
+                                        (accBindings: (ANF.TempId * ANF.CExpr) list)
+                                        (prevCond: ANF.Atom option)
+                                        (vg: ANF.VarGen)
+                                        : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
+                                        match remaining with
+                                        | [] ->
+                                            match prevCond with
+                                            | Some cond -> (cond, accBindings, vg)
+                                            | None -> (ANF.BoolLiteral true, accBindings, vg)
+                                        | condAtom :: rest ->
+                                            match prevCond with
+                                            | None ->
+                                                buildCombinedChecks rest accBindings (Some condAtom) vg
+                                            | Some prevCondAtom ->
+                                                let (combinedVar, vg1) = ANF.freshVar vg
+                                                let combinedExpr = ANF.Prim (ANF.And, prevCondAtom, condAtom)
+                                                buildCombinedChecks rest (accBindings @ [(combinedVar, combinedExpr)]) (Some (ANF.Var combinedVar)) vg1
+                                    let (combinedCondAtom, condBindings, vg6') = buildCombinedChecks checks [] None vg5
+                                    let checkedBody = ANF.If (combinedCondAtom, tailBody, elseExpr)
+                                    (wrapBindings condBindings checkedBody, vg6')
 
-                                // Apply tail/head extraction bindings (including comparison inputs) outside guard checks.
-                                let withExtractBindings = wrapBindings (headBindings @ tailBindings) guardedBody
+                            // Apply tail/head extraction bindings (including comparison inputs) outside guard checks.
+                            let withExtractBindings = wrapBindings (headBindings @ tailBindings) guardedBody
 
-                                // Check length condition first
-                                let ifExpr = ANF.If (ANF.Var lengthCheckVar, withExtractBindings, elseExpr)
-                                let withLengthCheck = ANF.Let (lengthCheckVar, lengthCheckExpr, ifExpr)
-                                let finalExpr = ANF.Let (lengthVar, lengthExpr, withLengthCheck)
-                                (finalExpr, vg7)))))
+                            // Check length condition first
+                            let ifExpr = ANF.If (ANF.Var lengthCheckVar, withExtractBindings, elseExpr)
+                            let withLengthCheck = ANF.Let (lengthCheckVar, lengthCheckExpr, ifExpr)
+                            let finalExpr = ANF.Let (lengthVar, lengthExpr, withLengthCheck)
+                            (finalExpr, vg6))))
 
             // Build OR of multiple pattern conditions for pattern grouping
             // Returns: combined condition atom, all bindings, updated vargen

@@ -4,11 +4,11 @@
   "profile": "routine",
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
-  "contract_sha256": "4883a0181a78f647027e25f38741c9878f2858fc21af25d29b93d32293becaf5",
-  "generated_at": "2026-08-14T23:55:14+00:00",
+  "contract_sha256": "367fbac8c4f6420951592af456195c7874d231b771326a90ff149b7d6ba8ab85",
+  "generated_at": "2026-08-15T01:21:49+00:00",
   "compiler": {
-    "commit": "58a58ecef904e3eff1290147e543013420edd603",
-    "subject": "Fuse list getAt defaults without Option allocation"
+    "commit": "1fdb9ef9b2d013a9bb34b38b56c05f736bae4e52",
+    "subject": "Align List language and module with interpreter"
   },
   "benchmarks": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 5304268103
+      "instructions": 4664674103
     },
     {
       "name": "factorial",
@@ -77,7 +77,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 79129381
+      "instructions": 79204301
     },
     {
       "name": "sum_to_n",

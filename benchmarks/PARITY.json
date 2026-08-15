@@ -39,12 +39,12 @@
     },
     "edigits": {
       "status": "comparable",
-      "dark_sha256": "b011056b63442abb6c96eb3db292d29654557d1adea8774bff384a21cdfbb193",
+      "dark_sha256": "713f442a90ac2b9f6aa3ecef049b667ea2cbdc306717da837b4125647ea91a84",
       "rust_sha256": "85867398ba1b93f90b0ae5b89ba9dcf4379dc900749e0502f956313900942692",
       "expected_sha256": "c8d53375bef88fcb61536103082d83aaf6b40906254b4c7f4dfe95a9cfdbee73",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "fe90b755fb098f92fcec2ab177b6675bc73fea7a628d0fadfb3a805a5c5315f1",
+        "dark_sha256": "c29048a5fab323aeb9aca5a38612cf8fdd51dc0e6c94343c8003ec81cbf12d88",
         "rust_sha256": "ccc699322e08ce05a250f6a751771abcba335a541ec88498016ff622c950215c",
         "expected_sha256": "2a62cf402cd3396aa00f55f892f4545f308f74d01c8caa0f2837b1982f821595"
       }
@@ -64,13 +64,13 @@
     "fannkuch": {
       "status": "reduced",
       "reason": "Rust correctly enumerates n=9; Dark correctly enumerates n=8 because the complete n=9 persistent traversal exhausts Dark's fixed heap.",
-      "dark_sha256": "0711d5f10953af3bd0622eceae9bdefa599681e708e5215f81a2985f6d7074d3",
+      "dark_sha256": "3ee0fa502ddc7bc7f9c50841fa41ec6cd523ce1c4a7655feae213acfbda10d13",
       "rust_sha256": "e2586d8b82f65066911e3d751b9a0796bed453f4689e2ca52996e4b5c20e4c4e",
       "expected_sha256": "f4ccd05b3271c386ee55d9876c7450012a3b361e5065c09dc22075e38b3cc35c",
       "dark_expected_sha256": "f14b4987904bcb5814e4459a057ed4d20f58a633152288a761214dcd28780b56",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "2cec346858805c641fbb0683fb103b1fd3683f0a3771cf9473b665b0cc1c4efe",
+        "dark_sha256": "2d0b1112fdcd9ec635b2be75e53472e625b446b8636a8ca06154308d84ab059e",
         "rust_sha256": "77782912b47d9bed07e1010bfe910511b877cd59c61121ffc3981f0d93d7c147",
         "expected_sha256": "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"
       }
@@ -213,24 +213,24 @@
     },
     "quicksort": {
       "status": "comparable",
-      "dark_sha256": "db3d0589c26ebc7c6422cb000bc9ecf0297071806fc2131771fe1e823ac87a35",
+      "dark_sha256": "84d03ca85e37b8e763b8473eb119fe84fd99da2864ca2513c0dcec4a381a98ac",
       "rust_sha256": "15504c9d232c1c00d5cd9336d6a774f3f8ea2ccfd56ef63921aaf0c51b8d8ef7",
       "expected_sha256": "bc4f78fbc740981df7158baabef7627dab090d2c21e1de1e20270297e530dcaf",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "b1088c56d83a12925b67628a7ebe55672f354142b83fa7925cdff5599b799b86",
+        "dark_sha256": "422e3df768d6c1fd7a739df2945a1fca892f850991ecb97dad782163a4691f50",
         "rust_sha256": "5f0e50df326603ef8cfec3c8fba106a9e3d44b34bfac19b393c1ab15fb5aa36d",
         "expected_sha256": "2c4403122e7ce6e257055d851e2991994c20de80637aa252e6d4a5460c2d1dea"
       }
     },
     "spectral_norm": {
       "status": "comparable",
-      "dark_sha256": "5b81c30e5c3910fc39667bb4ad613ea5d6371960a6003f1911ceba71332d1242",
+      "dark_sha256": "704fc3c3c30c52d6a35e52e359809475dc352a16f9dd1d9c2a8714875c65fb3c",
       "rust_sha256": "9e6db5e04d5420528804499658e2466a7a12f3369648d85b280af507a7144481",
       "expected_sha256": "add12a9ed9083e1b212cbe0738a5b4939e0409b75f24ac7241856d13d9f05394",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "36d2f02d5f4ec8ccb69a1bc456f6c1ac076280d7001e07f26ad8289569555da6",
+        "dark_sha256": "83a56c894d26f1a1f264c2dd4fd250d7d77b54c136752d40caecb841ddf72bdc",
         "rust_sha256": "63d63fc3584ba719efa4d088629dc67c021bf925e54a04d6c3160bdfd55bf373",
         "expected_sha256": "064416b2125c1d63bddcf8311160f0f36ec2fe6615cde0638b838a49643261a0"
       }

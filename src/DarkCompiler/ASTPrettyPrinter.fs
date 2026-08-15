@@ -331,8 +331,18 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         let items = patterns |> List.map (formatPattern syntax) |> String.concat separator
         $"[{items}]"
     | PListCons (head, tail) ->
+        let formatHeadPattern pattern =
+            let formatted = formatPattern syntax pattern
+            match syntax, pattern with
+            // Cons is right-associative. A cons used as a head therefore needs
+            // grouping or reparsing would flatten it into the outer chain.
+            | _, PListCons _ -> $"({formatted})"
+            // Interpreter constructor payloads are whitespace-delimited and parse a
+            // complete pattern, so grouping keeps the outer cons outside the payload.
+            | InterpreterSyntax, PConstructor (_, Some _) -> $"({formatted})"
+            | _ -> formatted
         head
-        |> List.map (formatPattern syntax)
+        |> List.map formatHeadPattern
         |> fun headParts -> headParts @ [formatPattern syntax tail]
         |> String.concat " :: "
 

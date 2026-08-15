@@ -4945,8 +4945,12 @@ let rec private checkExprWithParamNames
             // lambda/list literals in expected contexts reconcile type variables consistently.
             let firstExpectedType =
                 match expectedType with
-                | Some (TList expectedElemType) when not (containsTVar expectedElemType) ->
-                    Some expectedElemType
+                // A bare type variable must be inferred from the element. Passing it into
+                // expression checking would hide concrete requirements such as arithmetic.
+                | Some (TList (TVar _)) -> None
+                // Structured generic types still carry useful constraints. In particular,
+                // checking (String, a) contextually preserves the precise error at a bad key.
+                | Some (TList expectedElemType) -> Some expectedElemType
                 | _ -> None
             checkExpr first env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg firstExpectedType
             |> Result.bind (fun (elemType, first') ->

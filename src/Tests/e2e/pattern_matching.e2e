@@ -414,7 +414,7 @@ type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x 
 match [(1, 2)] with | [(1, x)] -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
 
 // Nested constructor pattern in list cons head
-type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | MySome(x) :: rest -> x | _ -> 0 = error="Nested pattern in list cons element not yet supported"
+type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | MySome(x) :: rest -> x | _ -> 0 = 1
 
 // Nested literal pattern inside tuple inside list cons
 match [(1, 2), (3, 4)] with | (1, x) :: rest -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"

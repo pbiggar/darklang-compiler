@@ -108,7 +108,18 @@ let private roundtripPlans (mode: SyntaxMode) (allowInternal: bool) : RoundtripP
 
 let private snippetsForTest (test: E2ETest) : Snippet list =
     let sourceSnippet =
-        [ { Label = "source"; Source = test.Source } ]
+        let intentionallyRejectedByParser =
+            test.ExpectCompileError
+            && (test.ExpectedErrorMessage
+                |> Option.exists (fun message ->
+                    message.StartsWith("Parse error:", StringComparison.Ordinal)))
+
+        // A parser-rejection E2E case has no source AST to roundtrip. It still belongs
+        // in the corpus as an executable negative syntax test, but is not a printer input.
+        if intentionallyRejectedByParser then
+            []
+        else
+            [ { Label = "source"; Source = test.Source } ]
 
     let expectedSnippet =
         match test.ExpectedValueExpr with
