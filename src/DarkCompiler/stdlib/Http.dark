@@ -10,7 +10,7 @@ let __parseQueryParam(param: String) : Stdlib.Option.Option<(String, String)> =
         match Stdlib.String.split(param, "=") with
         | [key, value] -> Some((key, value))
         | [key] -> Some((key, ""))
-        | [key, ...valueParts] -> Some((key, Stdlib.String.join(valueParts, "=")))
+        | key :: valueParts -> Some((key, Stdlib.String.join(valueParts, "=")))
         | [] -> None
 
 let __queryParamsToDict(
@@ -19,7 +19,7 @@ let __queryParamsToDict(
 ) : Dict<String> =
     match params with
     | [] -> result
-    | [param, ...rest] ->
+    | param :: rest ->
         let next =
             match Stdlib.Http.__parseQueryParam(param) with
             | None -> result
@@ -31,7 +31,7 @@ let parseQueryString(url: String) : Dict<String> =
     match Stdlib.String.split(url, "?") with
     | [] -> Stdlib.Dict.empty
     | [_] -> Stdlib.Dict.empty
-    | [_, ...queryParts] ->
+    | _ :: queryParts ->
         Stdlib.Http.__queryParamsToDict(
             Stdlib.String.split(Stdlib.String.join(queryParts, "?"), "&"),
             Stdlib.Dict.empty)
@@ -43,7 +43,7 @@ let __parseHeaderLine(line: String) : Stdlib.Option.Option<(String, String)> =
         match Stdlib.String.split(trimmed, ":") with
         | [] -> None
         | [_] -> None
-        | [name, ...valueParts] ->
+        | name :: valueParts ->
             Some((
                 Stdlib.String.trim(name),
                 Stdlib.String.trim(Stdlib.String.join(valueParts, ":"))))
@@ -54,7 +54,7 @@ let __headerLinesToDict(
 ) : Dict<String> =
     match lines with
     | [] -> result
-    | [line, ...rest] ->
+    | line :: rest ->
         let next =
             match Stdlib.Http.__parseHeaderLine(line) with
             | None -> result

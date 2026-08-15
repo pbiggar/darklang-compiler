@@ -10,7 +10,7 @@ let __queryParamPair(param: String) : (String, String) =
 let queryParams(req: Stdlib.Http.Request) : List<(String, String)> =
     match Stdlib.String.split(req.url, "?") with
     | [] -> []
-    | [_, ...queryParts] ->
+    | _ :: queryParts ->
         Stdlib.List.map<String, (String, String)>(
             Stdlib.String.split(Stdlib.String.join(queryParts, ""), "&"),
             Stdlib.Http.Request.__queryParamPair)

@@ -106,10 +106,10 @@ type private LayoutScanMode =
     | Quoted of escaped: bool
     | LineComment
 
-/// Preserve the interpreter formatter's indentation-separated list elements
-/// before lexing discards line boundaries. A list element begins two columns
-/// past its opening bracket; deeper indentation remains an application
-/// continuation. Explicit separators retain their existing meaning.
+/// Materialize the interpreter formatter's indentation-separated list
+/// elements before lexing discards source columns. Continuation lines are
+/// deliberately left unseparated, even when the preceding token is an
+/// identifier that could otherwise end an element.
 let private materializeIndentedListSeparators (input: string) : string =
     let markListContent layouts =
         match layouts with
@@ -129,11 +129,19 @@ let private materializeIndentedListSeparators (input: string) : string =
         match layouts, afterIndent, previousSignificant with
         | current :: _, next :: _, Some previous when
             current.HasContent
-            && indent = current.OpeningColumn + 2
+            // Elements may align with or to the left of the formatter's
+            // two-column indent. Deeper indentation continues the current
+            // application. An operator cannot finish the preceding element.
+            && indent <= current.OpeningColumn + 2
             && next <> ']'
-            && previous <> '['
-            && previous <> ';'
-            && previous <> ',' -> true
+            && (System.Char.IsLetterOrDigit previous
+                || previous = '_'
+                || previous = '`'
+                || previous = '"'
+                || previous = '\''
+                || previous = ')'
+                || previous = ']'
+                || previous = '}') -> true
         | _ -> false
 
     let rec scan mode column layouts previousSignificant reversed chars =
@@ -141,9 +149,17 @@ let private materializeIndentedListSeparators (input: string) : string =
         | _, [] ->
             reversed |> List.rev |> List.toArray |> System.String
         | LineComment, ('\r' :: '\n' :: rest) ->
-            scan Normal 0 layouts previousSignificant ('\n' :: '\r' :: reversed) rest
+            let indent, whitespace, afterIndent = takeIndent 0 [] rest
+            let needsSeparator = shouldSeparate layouts indent afterIndent previousSignificant
+            let output = ['\r'; '\n'] @ whitespace @ (if needsSeparator then [';'; ' '] else [])
+            let previous = if needsSeparator then Some ';' else previousSignificant
+            scan Normal indent layouts previous (appendOutput output reversed) afterIndent
         | LineComment, (('\n' | '\r') as newline) :: rest ->
-            scan Normal 0 layouts previousSignificant (newline :: reversed) rest
+            let indent, whitespace, afterIndent = takeIndent 0 [] rest
+            let needsSeparator = shouldSeparate layouts indent afterIndent previousSignificant
+            let output = newline :: (whitespace @ (if needsSeparator then [';'; ' '] else []))
+            let previous = if needsSeparator then Some ';' else previousSignificant
+            scan Normal indent layouts previous (appendOutput output reversed) afterIndent
         | LineComment, c :: rest ->
             scan LineComment (column + 1) layouts previousSignificant (c :: reversed) rest
         | Quoted escaped, c :: rest ->
@@ -190,63 +206,19 @@ let private materializeIndentedListSeparators (input: string) : string =
 
 /// Lexer: convert string to list of tokens
 let lex (input: string) : Result<Token list, string> =
-    let isDirectlyInsideList (tokensReversed: Token list) : bool =
-        let rec nearestUnclosedDelimiter closingDelimiters tokens =
-            match tokens with
-            | [] -> None
-            | TRBracket :: rest -> nearestUnclosedDelimiter (TRBracket :: closingDelimiters) rest
-            | TRParen :: rest -> nearestUnclosedDelimiter (TRParen :: closingDelimiters) rest
-            | TRBrace :: rest -> nearestUnclosedDelimiter (TRBrace :: closingDelimiters) rest
-            | TLBracket :: rest ->
-                match closingDelimiters with
-                | TRBracket :: remaining -> nearestUnclosedDelimiter remaining rest
-                | [] -> Some TLBracket
-                | _ -> None
-            | TLParen :: rest ->
-                match closingDelimiters with
-                | TRParen :: remaining -> nearestUnclosedDelimiter remaining rest
-                | [] -> Some TLParen
-                | _ -> None
-            | TLBrace :: rest ->
-                match closingDelimiters with
-                | TRBrace :: remaining -> nearestUnclosedDelimiter remaining rest
-                | [] -> Some TLBrace
-                | _ -> None
-            | _ :: rest -> nearestUnclosedDelimiter closingDelimiters rest
-
-        match nearestUnclosedDelimiter [] tokensReversed with
-        | Some TLBracket -> true
-        | _ -> false
-
-    let canEndListElement (tokensReversed: Token list) : bool =
-        match tokensReversed with
-        | (TInt64 _ | TInt128 _ | TBigInt _ | TInt8 _ | TInt16 _ | TInt32 _
-          | TUInt8 _ | TUInt16 _ | TUInt32 _ | TUInt64 _ | TUInt128 _
-          | TFloat _ | TStringLit _ | TCharLit _ | TInterpString _ | TTrue
-          | TFalse | TIdent _ | TRParen | TRBrace | TRBracket) :: _ -> true
-        | _ -> false
-
     let rec lexHelper (chars: char list) (acc: Token list) : Result<Token list, string> =
         match chars with
         | [] -> Ok (List.rev (TEOF :: acc))
-        | ((' ' | '\t' | '\n' | '\r') as firstWhitespace) :: rest ->
-            let rec skipWhitespace remaining sawNewline =
+        | (' ' | '\t' | '\n' | '\r') :: rest ->
+            let rec skipWhitespace remaining =
                 match remaining with
-                | ((' ' | '\t' | '\n' | '\r') as whitespace) :: tail ->
-                    skipWhitespace tail (sawNewline || whitespace = '\n' || whitespace = '\r')
-                | _ -> (remaining, sawNewline)
-            let (remaining, sawNewline) =
-                skipWhitespace rest (firstWhitespace = '\n' || firstWhitespace = '\r')
-            if sawNewline
-               && isDirectlyInsideList acc
-               && canEndListElement acc
-               && (match remaining with | (']' | ',' | ';' | '{') :: _ | [] -> false | _ -> true) then
-                lexHelper remaining (TSemicolon :: acc)
-            else
-                match remaining with
-                | '<' :: ('<' :: _ | '=' :: _) as remaining -> lexHelper remaining acc
-                | '<' :: remaining -> lexHelper remaining (TSpacedLt :: acc)
-                | remaining -> lexHelper remaining acc
+                | (' ' | '\t' | '\n' | '\r') :: tail -> skipWhitespace tail
+                | _ -> remaining
+            let remaining = skipWhitespace rest
+            match remaining with
+            | '<' :: ('<' :: _ | '=' :: _) as remaining -> lexHelper remaining acc
+            | '<' :: remaining -> lexHelper remaining (TSpacedLt :: acc)
+            | remaining -> lexHelper remaining acc
         | '+' :: '+' :: rest -> lexHelper rest (TPlusPlus :: acc)
         | '+' :: rest -> lexHelper rest (TPlus :: acc)
         | '-' :: '>' :: rest -> lexHelper rest (TArrow :: acc)
