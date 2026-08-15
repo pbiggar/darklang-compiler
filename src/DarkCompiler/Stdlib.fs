@@ -148,10 +148,12 @@ let packageCatalogModule : ModuleDef = {
 let rawMemoryIntrinsics : ModuleFunc list = [
     // __raw_alloc : (Int64) -> RawPtr - allocate raw bytes
     { Name = "__raw_alloc"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TRawPtr }
-    // __raw_free : (RawPtr) -> Unit - free raw memory
+    // __raw_free : (RawPtr) -> Unit - free an internal 8-byte raw cell
     { Name = "__raw_free"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TUnit }
     // __raw_get<v> : (RawPtr, Int64) -> v - read 8 bytes at offset, typed as v
     { Name = "__raw_get"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64]; ReturnType = TVar "v" }
+    // __raw_take<v> transfers a typed slot edge to the caller before it is cleared.
+    { Name = "__raw_take"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64]; ReturnType = TVar "v" }
     // __raw_write_word : (RawPtr, Int64, Int64) -> Unit - write 8 unmanaged bytes at offset
     { Name = "__raw_write_word"; TypeParams = []; ParamTypes = [TRawPtr; TInt64; TInt64]; ReturnType = TUnit }
     // __raw_get_byte : (RawPtr, Int64) -> Int64 - read 1 byte at offset, zero-extended
@@ -187,6 +189,9 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__blob_to_rawptr"; TypeParams = []; ParamTypes = [TBlob]; ReturnType = TRawPtr }
     // __rawptr_to_blob : (RawPtr) -> Blob - reinterpret initialized raw allocation as Blob
     { Name = "__rawptr_to_blob"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TBlob }
+    // Stream handles are opaque source values with a raw-pointer runtime representation.
+    { Name = "__stream_to_rawptr"; TypeParams = ["a"]; ParamTypes = [TStream(TVar "a")]; ReturnType = TRawPtr }
+    { Name = "__rawptr_to_stream"; TypeParams = ["a"]; ParamTypes = [TRawPtr]; ReturnType = TStream(TVar "a") }
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> : () -> Dict<k, v> - create empty dict (null pointer)

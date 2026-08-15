@@ -1159,6 +1159,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Duration.dark"
         "stdlib/Bytes.dark"
         "stdlib/Blob.dark"
+        "stdlib/Stream.dark"
         "stdlib/Html.dark"
         "stdlib/Http.dark"
         "stdlib/HttpRequest.dark"
@@ -1332,15 +1333,6 @@ let buildStdlibSpecializations
                     Context = updatedContext
             }
         else
-            let rec mapResult (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'b list, string> =
-                match items with
-                | [] -> Ok []
-                | x :: xs ->
-                    f x
-                    |> Result.bind (fun x' ->
-                        mapResult f xs
-                        |> Result.map (fun xs' -> x' :: xs'))
-
             AST_to_ANF.splitTopLevels stdlib.TypedAST
             |> Result.bind (fun (typeDefs, _functions, _expr) ->
                 let initiallyMaterializedFunctions =
@@ -1376,29 +1368,35 @@ let buildStdlibSpecializations
                         | AST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)
                     |> List.distinctBy (fun funcDef -> funcDef.Name)
-                let (registries, localRegistries, resolvedFunctions) =
-                    buildRegistriesForProgram
-                        stdlib.Context.Registries.ModuleRegistry
-                        stdlib.Context.Registries
-                        typeDefs
-                        materializedFunctions
-                let registries = {
-                    registries with
-                        TypeReg =
-                            Map.fold (fun acc k v -> Map.add k v acc) registries.TypeReg externalTypeReg
-                        VariantLookup =
-                            Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
-                }
-                let localReturnTypes = extractReturnTypes localRegistries.FuncReg
-
-                let replacedFunctionsResult =
-                    resolvedFunctions
-                    |> mapResult (AST_to_ANF.replaceTypeAppsInFuncWithRegistry combinedSpecRegistry)
-
-                replacedFunctionsResult
-                |> Result.bind (fun replacedFunctions ->
+                let specializationProgram =
+                    AST.Program (
+                        (typeDefs |> List.map AST.TypeDef)
+                        @ (materializedFunctions |> List.map AST.FunctionDef)
+                        @ [AST.Expression AST.UnitLiteral]
+                    )
+                prepareProgramForAnf
+                    (ReplaceTypeApps combinedSpecRegistry)
+                    stdlib.Context.Registries
+                    stdlib.Context.BaseFuncNames
+                    specializationProgram
+                |> Result.bind AST_to_ANF.splitTopLevels
+                |> Result.bind (fun (preparedTypeDefs, preparedFunctions, _expr) ->
+                    let (registries, localRegistries, resolvedFunctions) =
+                        buildRegistriesForProgram
+                            stdlib.Context.Registries.ModuleRegistry
+                            stdlib.Context.Registries
+                            preparedTypeDefs
+                            preparedFunctions
+                    let registries = {
+                        registries with
+                            TypeReg =
+                                Map.fold (fun acc k v -> Map.add k v acc) registries.TypeReg externalTypeReg
+                            VariantLookup =
+                                Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
+                    }
+                    let localReturnTypes = extractReturnTypes localRegistries.FuncReg
                     let varGen = ANF.VarGen 0
-                    AST_to_ANF.convertFunctions registries varGen replacedFunctions
+                    AST_to_ANF.convertFunctions registries varGen resolvedFunctions
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                         let sw = Stopwatch.StartNew()

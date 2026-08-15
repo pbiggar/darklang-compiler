@@ -68,6 +68,7 @@ let private prettyPrintANFUnaryOp = function
 
 let private prettyPrintANFRcKind = function
     | ANF.GenericHeap -> "generic"
+    | ANF.StreamHeap -> "stream"
     | ANF.TaggedList -> "list"
     | ANF.DictHeap -> "dict"
     | ANF.ClosureHeap -> "closure"
@@ -137,6 +138,9 @@ let private prettyPrintANFCExpr = function
         $"RawFree({prettyPrintANFAtom ptr})"
     | ANF.RawGet (ptr, byteOffset, valueType) ->
         let baseText = $"RawGet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
+        appendTypeSuffix valueType baseText
+    | ANF.RawTake (ptr, byteOffset, valueType) ->
+        let baseText = $"RawTake({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
         appendTypeSuffix valueType baseText
     | ANF.RawGetByte (ptr, byteOffset) ->
         $"RawGetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
@@ -270,6 +274,7 @@ let private prettyPrintMIRUnaryOp = function
 
 let private prettyPrintMIRRcKind = function
     | MIR.GenericHeap -> "generic"
+    | MIR.StreamHeap -> "stream"
     | MIR.TaggedList -> "list"
     | MIR.DictHeap -> "dict"
     | MIR.ClosureHeap -> "closure"
@@ -508,6 +513,7 @@ let private prettyPrintLIROperand = function
 
 let private prettyPrintLIRRcKind = function
     | LIR.GenericHeap -> "generic"
+    | LIR.StreamHeap -> "stream"
     | LIR.TaggedList -> "list"
     | LIR.DictHeap -> "dict"
     | LIR.ClosureHeap -> "closure"

@@ -53,6 +53,8 @@ let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegist
         |> List.fold mergeFixtureVariantRegistries Map.empty
     | AST.TList elemType ->
         inferFixtureVariantsFromType elemType
+    | AST.TStream elemType ->
+        inferFixtureVariantsFromType elemType
     | AST.TDict (keyType, valueType) ->
         mergeFixtureVariantRegistries (inferFixtureVariantsFromType keyType) (inferFixtureVariantsFromType valueType)
     | AST.TFunction (paramTypes, returnType) ->

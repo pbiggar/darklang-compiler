@@ -138,6 +138,9 @@ let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName:
     if funcName.StartsWith("__raw_get_") then
         funcName.Substring("__raw_get_".Length)
         |> tryParseMangled
+    elif funcName.StartsWith("__raw_take_") then
+        funcName.Substring("__raw_take_".Length)
+        |> tryParseMangled
     elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool
@@ -402,6 +405,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RawAlloc _ -> Some AST.TRawPtr  // Returns raw pointer
     | RawFree _ -> Some AST.TUnit  // Returns unit
     | RawGet (_, _, valueType) -> valueType
+    | RawTake (_, _, valueType) -> valueType
     | RawGetByte _ -> Some AST.TInt64  // Returns 1-byte value (zero-extended)
     | RawWriteWord _ -> Some AST.TUnit  // Returns unit
     | RawWriteByte _ -> Some AST.TUnit  // Returns unit
@@ -473,6 +477,7 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | IfValue _ -> true            // Selects one of two existing values; no ownership transfer
     | TupleGet _ -> true           // Extracts pointer from tuple/list - borrowed from parent
     | RawGet _ -> true             // RawGet reads existing memory; it does not transfer ownership
+    | RawTake _ -> false           // RawTake transfers the slot's existing ownership to the result
     | StringToRawPtr _ -> true     // RawPtr view is borrowed from the dynamic buffer
     | BlobToRawPtr _ -> true      // RawPtr view is borrowed from the dynamic buffer
     | DictToRawPtr _ -> true       // RawPtr view is borrowed from the tagged container
@@ -503,6 +508,8 @@ let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Typ
             AST.TEnumFields (List.map canonicalize fieldTypes)
         | AST.TList elemType ->
             AST.TList (canonicalize elemType)
+        | AST.TStream elemType ->
+            AST.TStream (canonicalize elemType)
         | AST.TDict (keyType, valueType) ->
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
@@ -530,6 +537,8 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
             AST.TEnumFields (List.map canonicalize fieldTypes)
         | AST.TList elemType ->
             AST.TList (canonicalize elemType)
+        | AST.TStream elemType ->
+            AST.TStream (canonicalize elemType)
         | AST.TDict (keyType, valueType) ->
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt

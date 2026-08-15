@@ -618,6 +618,13 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             | TGt :: remaining -> Ok (TList elemType, remaining)
             | TShr :: remaining -> Ok (TList elemType, TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type")
+    | TIdent "Stream" :: TLt :: rest ->
+        parseTypeWithContext typeParams rest
+        |> Result.bind (fun (elemType, afterElem) ->
+            match afterElem with
+            | TGt :: remaining -> Ok (TStream elemType, remaining)
+            | TShr :: remaining -> Ok (TStream elemType, TGt :: remaining)
+            | _ -> Error "Expected '>' after Stream element type")
     | TIdent "Dict" :: TLt :: rest ->
         // Public syntax is Dict<ValueType>. Two arguments are parsed only so
         // trusted compiler sources can retain the generic HAMT representation;
@@ -763,6 +770,13 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
             | TGt :: remaining -> withPossibleArrow (TList elemType) remaining
             | TShr :: remaining -> withPossibleArrow (TList elemType) (TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type in type argument")
+    | TIdent "Stream" :: TLt :: rest ->
+        parseTypeArgType rest
+        |> Result.bind (fun (elemType, afterElem) ->
+            match afterElem with
+            | TGt :: remaining -> withPossibleArrow (TStream elemType) remaining
+            | TShr :: remaining -> withPossibleArrow (TStream elemType) (TGt :: remaining)
+            | _ -> Error "Expected '>' after Stream element type in type argument")
     | TIdent "Dict" :: TLt :: rest ->
         // See parseTypeBase: public source validation rejects two arguments.
         parseTypeArgType rest

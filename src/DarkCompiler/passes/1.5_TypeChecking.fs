@@ -95,6 +95,7 @@ let rec typeToString (t: Type) : string =
         let argsStr = typeArgs |> List.map typeToString |> String.concat ", "
         $"{name}<{argsStr}>"
     | TList elemType -> $"List<{typeToString elemType}>"
+    | TStream elemType -> $"Stream<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
     | TRawPtr -> "RawPtr"  // Internal raw pointer type
     | TDict (_, valueType) -> $"Dict<{typeToString valueType}>"
@@ -559,6 +560,7 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
         | Some newName -> TVar newName
         | None -> t
     | TList elem -> TList (applyTypeVarRenaming subst elem)
+    | TStream elem -> TStream (applyTypeVarRenaming subst elem)
     | TDict (k, v) -> TDict (applyTypeVarRenaming subst k, applyTypeVarRenaming subst v)
     | TFunction (paramTypes, retType) ->
         TFunction (List.map (applyTypeVarRenaming subst) paramTypes, applyTypeVarRenaming subst retType)
@@ -696,6 +698,8 @@ let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (ty
         TRecord (name, List.map (applySubstWithSeen seen subst) typeArgs)
     | TList elemType ->
         TList (applySubstWithSeen seen subst elemType)
+    | TStream elemType ->
+        TStream (applySubstWithSeen seen subst elemType)
     | TSum (name, typeArgs) ->
         TSum (name, List.map (applySubstWithSeen seen subst) typeArgs)
     | TDict (keyType, valueType) ->
@@ -728,6 +732,8 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
     | TSum (_, typeArgs) ->
         typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | TList elemType ->
+        collectTypeVarsInType elemType acc
+    | TStream elemType ->
         collectTypeVarsInType elemType acc
     | TDict (keyType, valueType) ->
         let withKey = collectTypeVarsInType keyType acc
@@ -787,6 +793,8 @@ let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : T
         TEnumFields (List.map (resolveAliasTargetType aliasReg) fieldTypes)
     | TList elemType ->
         TList (resolveAliasTargetType aliasReg elemType)
+    | TStream elemType ->
+        TStream (resolveAliasTargetType aliasReg elemType)
     | TDict (keyType, valueType) ->
         TDict (resolveAliasTargetType aliasReg keyType, resolveAliasTargetType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
@@ -964,6 +972,8 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
         TEnumFields (List.map (resolveType aliasReg) fieldTypes)
     | TList elemType ->
         TList (resolveType aliasReg elemType)
+    | TStream elemType ->
+        TStream (resolveType aliasReg elemType)
     | TDict (keyType, valueType) ->
         TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
@@ -1000,6 +1010,8 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Typ
             TEnumFields (List.map canonicalize fieldTypes)
         | TList elemType ->
             TList (canonicalize elemType)
+        | TStream elemType ->
+            TStream (canonicalize elemType)
         | TDict (keyType, valueType) ->
             TDict (canonicalize keyType, canonicalize valueType)
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
@@ -1036,6 +1048,7 @@ let private canonicalizeDeclaredTypeRefs
         | TTuple elementTypes -> TTuple (List.map canonicalize elementTypes)
         | TEnumFields fieldTypes -> TEnumFields (List.map canonicalize fieldTypes)
         | TList elementType -> TList (canonicalize elementType)
+        | TStream elementType -> TStream (canonicalize elementType)
         | TDict (keyType, valueType) -> TDict (canonicalize keyType, canonicalize valueType)
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
@@ -1251,6 +1264,7 @@ let private equalityComparableType
                 List.forall recurse elementTypes
             | TList elementType ->
                 recurse elementType
+            | TStream _ -> true
             | TDict (keyType, valueType) ->
                 // Dict key admission remains owned by Dict. Comparison reuses
                 // the key semantics already selected for an admitted key type.
@@ -1305,6 +1319,7 @@ let private canonicalSortableType
             | TTuple elementTypes
             | TEnumFields elementTypes -> List.forall recurse elementTypes
             | TList elementType -> recurse elementType
+            | TStream _ -> false
             | TDict (TString, valueType) -> recurse valueType
             | TRecord (recordName, typeArgs) ->
                 match Map.tryFind recordName typeReg with
@@ -1383,6 +1398,9 @@ let rec private reconcileComparisonTypes
         | TList leftElement, TList rightElement ->
             reconcileComparisonTypes aliasReg leftElement rightElement
             |> Option.map TList
+        | TStream leftElement, TStream rightElement ->
+            reconcileComparisonTypes aliasReg leftElement rightElement
+            |> Option.map TStream
         | TDict (leftKey, leftValue), TDict (rightKey, rightValue) ->
             reconcileComparisonTypes aliasReg leftKey rightKey
             |> Option.bind (fun keyType ->
@@ -1671,6 +1689,11 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
         | TList actualElem -> matchTypes patternElem actualElem
         | TVar name -> Ok [(name, pattern)]  // Bind TVar to List type
         | _ -> Error $"Expected List<...>, got {typeToString actual}"
+    | TStream patternElem ->
+        match actual with
+        | TStream actualElem -> matchTypes patternElem actualElem
+        | TVar name -> Ok [(name, pattern)]
+        | _ -> Error $"Expected Stream<...>, got {typeToString actual}"
     | TRecord (name, patternArgs) ->
         match actual with
         | TRecord (n, actualArgs) when n = name ->
@@ -1765,6 +1788,7 @@ let rec containsTVar (typ: Type) : bool =
     match typ with
     | TVar _ -> true
     | TList elemType -> containsTVar elemType
+    | TStream elemType -> containsTVar elemType
     | TDict (keyType, valueType) -> containsTVar keyType || containsTVar valueType
     | TTuple elemTypes -> List.exists containsTVar elemTypes
     | TRecord (_, typeArgs) -> List.exists containsTVar typeArgs
@@ -6700,6 +6724,7 @@ let private resolveProgramNames
         | TTuple elementTypes -> ResultList.traverse recurse elementTypes |> Result.map TTuple
         | TEnumFields fieldTypes -> ResultList.traverse recurse fieldTypes |> Result.map TEnumFields
         | TList elementType -> recurse elementType |> Result.map TList
+        | TStream elementType -> recurse elementType |> Result.map TStream
         | TDict (keyType, valueType) ->
             recurse keyType
             |> Result.bind (fun key' -> recurse valueType |> Result.map (fun value' -> TDict (key', value')))
@@ -6978,6 +7003,7 @@ let private validateTopLevelTypeDeclarations
         | TTuple types
         | TEnumFields types -> validateAll types
         | TList element -> validateTypeReference owner element
+        | TStream element -> validateTypeReference owner element
         | TDict (key, value) -> validateAll [key; value]
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128

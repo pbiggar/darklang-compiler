@@ -238,7 +238,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.FileWriteFromPtr (path, ptr, length) -> max (maxTempIdInAtom path) (max (maxTempIdInAtom ptr) (maxTempIdInAtom length))
     | ANF.RawAlloc numBytes -> maxTempIdInAtom numBytes
     | ANF.RawFree ptr -> maxTempIdInAtom ptr
-    | ANF.RawGet (ptr, offset, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
+    | ANF.RawGet (ptr, offset, _)
+    | ANF.RawTake (ptr, offset, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawGetByte (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawWriteWord (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
     | ANF.RawWriteByte (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
@@ -351,6 +352,9 @@ let buildReturnTypeReg
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
     if funcName.StartsWith("__raw_get_") then
         Crash.crash $"ANF_to_MIR: monomorphized raw_get return type missing from registry: {funcName}"
+    elif funcName.StartsWith("__raw_take_") then
+        Crash.crash $"ANF_to_MIR: monomorphized raw_take return type missing from registry: {funcName}"
+    elif funcName.StartsWith("__stream_to_rawptr_") then Some AST.TRawPtr
     elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool
@@ -416,6 +420,7 @@ let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, s
 let private rcKindToMIR (kind: ANF.RcKind) : MIR.RcKind =
     match kind with
     | ANF.GenericHeap -> MIR.GenericHeap
+    | ANF.StreamHeap -> MIR.StreamHeap
     | ANF.TaggedList -> MIR.TaggedList
     | ANF.DictHeap -> MIR.DictHeap
     | ANF.ClosureHeap -> MIR.ClosureHeap
@@ -611,6 +616,7 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RawAlloc _ -> "RawAlloc"
     | ANF.RawFree _ -> "RawFree"
     | ANF.RawGet _ -> "RawGet"
+    | ANF.RawTake _ -> "RawTake"
     | ANF.RawGetByte _ -> "RawGetByte"
     | ANF.RawWriteWord _ -> "RawWriteWord"
     | ANF.RawWriteByte _ -> "RawWriteByte"
@@ -1142,6 +1148,12 @@ let rec convertExpr
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawFree ptrOp])
                 | ANF.RawGet (ptrAtom, offsetAtom, valueType) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.map (fun offsetOp ->
+                            [MIR.RawGet (destReg, ptrOp, offsetOp, valueType)]))
+                | ANF.RawTake (ptrAtom, offsetAtom, valueType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
@@ -1796,6 +1808,12 @@ and convertExprToOperand
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawFree ptrOp])
                 | ANF.RawGet (ptrAtom, offsetAtom, valueType) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.map (fun offsetOp ->
+                            [MIR.RawGet (destReg, ptrOp, offsetOp, valueType)]))
+                | ANF.RawTake (ptrAtom, offsetAtom, valueType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom

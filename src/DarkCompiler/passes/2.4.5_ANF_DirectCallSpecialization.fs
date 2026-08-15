@@ -80,6 +80,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | FileWriteText (left, right)
     | FileAppendText (left, right)
     | RawGet (left, right, _)
+    | RawTake (left, right, _)
     | RawPtrToDict (left, right, _)
     | RawPtrToList (left, right, _) -> analyzeMany [left; right] analysis
     | IfValue (condition, thenValue, elseValue) ->
@@ -236,6 +237,7 @@ let private rewriteCExpr
     | RawAlloc atom -> RawAlloc (rewrite atom)
     | RawFree atom -> RawFree (rewrite atom)
     | RawGet (ptr, offset, typ) -> RawGet (rewrite ptr, rewrite offset, typ)
+    | RawTake (ptr, offset, typ) -> RawTake (rewrite ptr, rewrite offset, typ)
     | RawGetByte (ptr, offset) -> RawGetByte (rewrite ptr, offset)
     | RawWriteWord (ptr, offset, value) -> RawWriteWord (rewrite ptr, rewrite offset, rewrite value)
     | RawWriteByte (ptr, offset, value) -> RawWriteByte (rewrite ptr, rewrite offset, rewrite value)

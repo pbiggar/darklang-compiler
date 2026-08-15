@@ -119,6 +119,7 @@ type UnaryOp =
 /// Reference-count operation kind
 type RcKind =
     | GenericHeap
+    | StreamHeap
     | TaggedList
     | DictHeap
     | ClosureHeap
@@ -132,6 +133,7 @@ type RcKind =
 type RcShape =
     | Immediate
     | FixedBlock of payloadSize:int * fieldShapes:RcShape list
+    | StreamRoot
     | BoxedSum of payloadSize:int * fieldShapes:(int * RcShape) list * variants:RcBoxedSumVariantShape list
     | RecursiveSumRef of sourceType:AST.Type
     | TaggedListShape of elementShape:RcShape
@@ -268,6 +270,7 @@ type CExpr =
     | RawAlloc of numBytes:Atom               // Allocate raw bytes (no header), returns RawPtr
     | RawFree of ptr:Atom                     // Manually free raw memory
     | RawGet of ptr:Atom * byteOffset:Atom * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
+    | RawTake of ptr:Atom * byteOffset:Atom * valueType:AST.Type option // Transfer a typed slot edge to the result
     | RawGetByte of ptr:Atom * byteOffset:Atom  // Read 1 byte at offset, returns Int64 (zero-extended)
     | RawWriteWord of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 unmanaged bytes at offset
     | RawWriteByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 unmanaged byte at offset
@@ -380,6 +383,7 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
         BoxedSum (16, [], [])
     | AST.TList elemType ->
         TaggedListShape (rcShapeOfType typeReg elemType)
+    | AST.TStream _ -> StreamRoot
     | AST.TDict (keyType, valueType) ->
         DictRoot (rcShapeOfType typeReg keyType, rcShapeOfType typeReg valueType)
     | AST.TString
@@ -406,6 +410,7 @@ let private collectTypeVarsInOrder (typ: AST.Type) : string list =
         | AST.TEnumFields fieldTypes -> fieldTypes |> List.collect collect
         | AST.TRecord (_, typeArgs) -> typeArgs |> List.collect collect
         | AST.TList elemType -> collect elemType
+        | AST.TStream elemType -> collect elemType
         | AST.TDict (keyType, valueType) -> collect keyType @ collect valueType
         | AST.TSum (_, typeArgs) -> typeArgs |> List.collect collect
         | AST.TFunction (paramTypes, returnType) ->
@@ -447,6 +452,8 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
         AST.TRecord (name, typeArgs |> List.map (applyRcShapeTypeSubstitution subst))
     | AST.TList elemType ->
         AST.TList (applyRcShapeTypeSubstitution subst elemType)
+    | AST.TStream elemType ->
+        AST.TStream (applyRcShapeTypeSubstitution subst elemType)
     | AST.TDict (keyType, valueType) ->
         AST.TDict (applyRcShapeTypeSubstitution subst keyType, applyRcShapeTypeSubstitution subst valueType)
     | AST.TSum (name, typeArgs) ->
@@ -540,6 +547,7 @@ let rcShapeOfTypeWithSums
                     Crash.crash $"rcShapeOfTypeWithSums: Sum type '{name}' not found in sumReg"
         | AST.TList elemType ->
             TaggedListShape (classify expandingSums elemType)
+        | AST.TStream _ -> StreamRoot
         | AST.TDict (keyType, valueType) ->
             DictRoot (classify expandingSums keyType, classify expandingSums valueType)
         | AST.TFunction _ ->
@@ -583,6 +591,7 @@ let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
     | DynamicString
     | DynamicBlob
     | FixedBlock _
+    | StreamRoot
     | BoxedSum _
     | RecursiveSumRef _
     | TaggedListShape _
@@ -595,6 +604,7 @@ let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
 let rcShapeIsRootManaged (shape: RcShape) : bool =
     match shape with
     | FixedBlock _
+    | StreamRoot
     | BoxedSum _
     | RecursiveSumRef _
     | TaggedListShape _
@@ -615,6 +625,7 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
     match shape with
     | FixedBlock (_, fieldShapes) ->
         fieldShapes |> List.exists rcShapeNeedsOwnedScopeRelease
+    | StreamRoot -> true
     | BoxedSum (_, fieldShapes, _) ->
         fieldShapes
         |> List.exists (fun (_, fieldShape) -> rcShapeNeedsOwnedScopeRelease fieldShape)
@@ -642,6 +653,7 @@ let rcShapeRootKind (shape: RcShape) : RcKind option =
     | BoxedSum _
     | RecursiveSumRef _ ->
         Some GenericHeap
+    | StreamRoot -> Some StreamHeap
     | TaggedListShape _ ->
         Some TaggedList
     | DictRoot _ ->
@@ -661,6 +673,7 @@ let rcShapePayloadSize (shape: RcShape) : int option =
     | FixedBlock (payloadSize, _)
     | BoxedSum (payloadSize, _, _) ->
         Some payloadSize
+    | StreamRoot -> Some 24
     | RecursiveSumRef _ ->
         Some 16
     | TaggedListShape _ ->
@@ -766,6 +779,8 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
         match rootShape with
         | FixedBlock (payloadSize, fieldShapes) ->
             FixedBlockPayloadRelease (payloadSize, fieldReleasePlans fieldShapes)
+        | StreamRoot ->
+            FixedBlockPayloadRelease (24, fieldReleasePlans [Immediate; ClosureShape []; ClosureShape []])
         | BoxedSum (payloadSize, fieldShapes, variants) ->
             let variantReleases =
                 variants

@@ -9,6 +9,7 @@ This document lists the language features currently supported by the Dark compil
 - Records with named fields: `type Point = { x: Int64, y: Int64 }`
 - Interpreter-compatible sum types (ADTs): `type Option<'a> = | None | Some of 'a`
 - Lists as linked lists: `List<T>` with literals `[1, 2, 3]`
+- Opaque lazy streams: `Stream<T>`, with identity equality and deterministic close
 - String-keyed Dict types: `Dict<V>`, with `Dict { key = value }` literals
 - Type aliases: `type Id = Int64`, `type Pair<'T> = (T, T)`
 - Generic type parameters and type application

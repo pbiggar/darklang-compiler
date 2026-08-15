@@ -213,8 +213,8 @@ timing remains the sole retained divergence for this surface. See the
 `Stdlib.printLines` now match the pinned interpreter's public behavior. The AOT
 compiler rejects mixed and distinct nominal equality operands during inference
 instead of evaluating them and raising an interpreter runtime error. RawPtr and
-RuntimeError are rejected compiler-internal categories. Interpreter DDB and
-Stream values have no compiled representation and remain unsupported.
+RuntimeError are rejected compiler-internal categories. Interpreter DDB values
+have no compiled representation and remain unsupported.
 
 The compiler's `Uuid = String` model is an extension, not parity with the
 interpreter's distinct DUuid value. Blob and function equality retain their
@@ -222,6 +222,15 @@ pinned identity rules. Explicit printing accepts String only and is independent
 of implicit final-result rendering; final Unit adds no text. See
 [comparison-parity.md](comparison-parity.md) and
 [cli-presentation-parity.md](cli-presentation-parity.md).
+
+### 3.7 Stream lifecycle
+
+The public Stream API and values match the pinned interpreter. The compiler
+adds deterministic last-owner close for abandoned handles and rejects invalid
+ordering during AOT type checking. It omits the interpreter's chunked byte
+fast path because `toBlob` through the existing Blob constructor is
+behaviorally equivalent. See the revision-pinned
+[Stream parity contract](stream-parity.md).
 
 ## 4. Tooling Differences
 

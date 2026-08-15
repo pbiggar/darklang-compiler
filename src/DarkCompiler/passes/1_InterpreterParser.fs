@@ -790,6 +790,13 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             | TGt :: remaining -> Ok (TList elemType, remaining)
             | TShr :: remaining -> Ok (TList elemType, TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type")
+    | TIdent "Stream" :: TLt :: rest ->
+        parseTypeWithContext typeParams rest
+        |> Result.bind (fun (elemType, afterElem) ->
+            match afterElem with
+            | TGt :: remaining -> Ok (TStream elemType, remaining)
+            | TShr :: remaining -> Ok (TStream elemType, TGt :: remaining)
+            | _ -> Error "Expected '>' after Stream element type")
     | TIdent "Dict" :: TLt :: rest ->
         // Dict type: Dict<KeyType, ValueType>
         parseTypeWithContext typeParams rest

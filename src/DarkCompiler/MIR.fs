@@ -64,6 +64,7 @@ type UnaryOp =
 /// Reference-count operation kind
 type RcKind =
     | GenericHeap
+    | StreamHeap
     | TaggedList
     | DictHeap
     | ClosureHeap

@@ -1,0 +1,15 @@
+// Public Stream parity: opaque typing, laziness, identity, infinite producers,
+// draining behavior, callback errors, and AOT rejection of ordering.
+
+let unfoldStep(value: Int64): Stdlib.Option.Option<(Int64, Int64)> = Some((value, value + 1))
+let streamFail(_value: Int64): Int64 = Builtin.testRuntimeError("stream callback failed")
+
+let stream = Stdlib.Stream.unfold(0, unfoldStep) in Stdlib.Stream.toList(Stdlib.Stream.take(stream, 5I)) = [0, 1, 2, 3, 4] // unfold remains lazy over an infinite producer
+let stream = Stdlib.Stream.fromList<Int64>([1, 2]) in let first = Stdlib.Stream.toList(stream) in let second = Stdlib.Stream.toList(stream) in (first, second) = ([1, 2], []) // draining is single-consumer and exhaustion is stable
+let stream = Stdlib.Stream.fromList<Int64>([]) in let _ = Stdlib.Stream.next(stream) in let again = Stdlib.Stream.next(stream) in let _ = Stdlib.Stream.close(stream) in again = None // exhausted next and close are stable
+let stream = Stdlib.Stream.fromList<Int64>([1]) in stream == stream = true // equality compares handle identity
+let left = Stdlib.Stream.fromList<Int64>([]) in let right = Stdlib.Stream.fromList<Int64>([]) in left == right = false // distinct handles are not equal
+let stream = Stdlib.Stream.fromList<Int64>([1]) in stream = stdout="<stream>\n" stderr="" // rendering is opaque and does not force the stream
+let stream = Stdlib.Stream.map(Stdlib.Stream.fromList<Int64>([1]), streamFail) in 0 = 0 // map construction does not invoke its callback
+let stream = Stdlib.Stream.map(Stdlib.Stream.fromList<Int64>([1]), streamFail) in Stdlib.Stream.next(stream) = error="Uncaught exception: stream callback failed" // callback error payload is preserved
+let stream = Stdlib.Stream.fromList<Int64>([]) in stream < stream = error="Cannot perform numeric operation on Stream<Int64> and Stream<Int64>" // ordering is rejected during AOT type checking

@@ -62,6 +62,7 @@ type Condition =
 /// Reference-count operation kind
 type RcKind =
     | GenericHeap
+    | StreamHeap
     | TaggedList
     | DictHeap
     | ClosureHeap

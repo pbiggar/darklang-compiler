@@ -20,7 +20,8 @@ The compiler currently has these managed or partially managed runtime shapes:
 | Dynamic strings | `[length:8][data][padding][refcount:8]` | Scoped RC, field retain/release, borrowed projection retain, literal sentinel skip |
 | Dynamic Blob | `[length:8][data][padding][refcount:8]` | Scoped RC, constructor/transform coverage, container retains/releases, and initial parity with strings |
 | Closures | `[func_ptr][captures...][refcount:8]` | Closure root RC and recursive capture release for the covered capture shapes |
-| Raw pointers | raw addresses | Unmanaged; `RawFree` policy remains deferred |
+| Streams | `[lifecycle][step closure][disposer closure][refcount:8]` | Stream-specific root RC; last release performs idempotent close, releases producer state/captures, and reuses the shell |
+| Raw pointers | raw addresses | Unmanaged except for the internal 8-byte producer-state cell, whose explicit `RawFree` balances accounting and reuses its size class |
 
 Primitive scalars are immediate and do not participate in RC.
 
@@ -95,9 +96,11 @@ does not always mean the memory is reusable:
 
 - fixed-size blocks and many list/dict node sizes can be routed through free
   lists
+- Stream shells and their 8-byte producer-state cells are reusable fixed-size
+  allocations; last-owner release shares the explicit-close finalizer
 - dynamic strings and Blobs currently balance leak accounting, while
   variable-size reuse remains a design decision
-- raw pointers are not automatically reclaimed
+- arbitrary raw pointers are not automatically reclaimed
 - `String`/`Blob`/`Dict`/`List -> RawPtr` intrinsics expose borrowed raw views;
   `RawPtr -> String`/`Blob` and `RawPtr -> Dict`/`List` retag initialized raw
   allocations as managed values with normal RC ownership rules

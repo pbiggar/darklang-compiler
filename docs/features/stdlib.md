@@ -31,6 +31,7 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.Tuple2/3` | Tuple operations |
 | `Stdlib.Dict` | Hash map (HAMT) |
 | `Stdlib.Blob` | Immutable binary values and public codecs |
+| `Stdlib.Stream` | Lazy single-consumer resource-backed streams |
 | `Stdlib.Bytes` | Legacy compiler-only Int64 bridge over Blob |
 | `Stdlib.Html` | Structural HTML nodes, serialization, attributes, and tag constructors |
 | `Stdlib.Http` | Structural requests/responses/cookies, parsers, and response helpers |
@@ -59,6 +60,9 @@ documented in
 Root equality and explicit output parity are documented in
 [comparison-parity.md](../comparison-parity.md) and
 [cli-presentation-parity.md](../cli-presentation-parity.md).
+
+The revision-pinned Stream API and lifecycle contract is documented in
+[stream-parity.md](../stream-parity.md).
 
 ## Implementation Types
 
@@ -206,6 +210,24 @@ Callbacks run at least once. Retry stops on the first `Ok` or once the current
 attempt reaches the maximum, returning the final callback result unchanged.
 Delays occur only between attempts; backoff starts at 100.0 ms and doubles,
 while fixed delay stays unchanged.
+
+## Stdlib.Stream
+
+```dark
+let fromList<'a>(items: List<'a>) : Stream<'a>
+let unfold<'state, 'a>(initial: 'state, step: 'state -> Option<('a, 'state)>) : Stream<'a>
+let next<'a>(stream: Stream<'a>) : Option<'a>
+let toList<'a>(stream: Stream<'a>) : List<'a>
+let toBlob(stream: Stream<UInt8>) : Blob
+let close<'a>(stream: Stream<'a>) : Unit
+let map<'a, 'b>(stream: Stream<'a>, fn: 'a -> 'b) : Stream<'b>
+let filter<'a>(stream: Stream<'a>, predicate: 'a -> Bool) : Stream<'a>
+let take<'a>(stream: Stream<'a>, count: Int) : Stream<'a>
+let concat<'a>(streams: List<Stream<'a>>) : Stream<'a>
+```
+
+All transformations are lazy and single-consumer. Exhaustion, explicit close,
+early termination, and last-owner release share an idempotent disposal path.
 
 ## Stdlib.File (Intrinsic)
 

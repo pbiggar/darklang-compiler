@@ -140,6 +140,7 @@ let private releasePrintedValueFromReg
         let lirKind =
             match kind with
             | ANF.GenericHeap -> LIR.GenericHeap
+            | ANF.StreamHeap -> LIR.StreamHeap
             | ANF.TaggedList -> LIR.TaggedList
             | ANF.DictHeap -> LIR.DictHeap
             | ANF.ClosureHeap -> LIR.ClosureHeap
@@ -1053,11 +1054,11 @@ let selectInstr
 
     | MIR.RefCountInc (addr, payloadSize, kind, sourceType) ->
         let lirAddr = vregToLIRReg addr
-        Ok ([LIR.RefCountInc (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
+        Ok ([LIR.RefCountInc (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.StreamHeap -> LIR.StreamHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
 
     | MIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
         let lirAddr = vregToLIRReg addr
-        Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
+        Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.StreamHeap -> LIR.StreamHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
 
     | MIR.Print (src, valueType) ->
         // Generate appropriate print instruction based on type
@@ -1075,6 +1076,8 @@ let selectInstr
             finishPrint (moveToX0 @ [LIR.PrintBool (LIR.Physical LIR.X0)])
         | AST.TDateTime ->
             Error "DateTime values must be rendered through Stdlib.DateTime.toString before print lowering"
+        | AST.TStream _ ->
+            Error "Stream values must be rendered opaquely before print lowering"
         | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 ->
             let lirSrc = convertOperand src

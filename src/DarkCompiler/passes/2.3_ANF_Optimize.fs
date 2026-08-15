@@ -479,6 +479,7 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | RawAlloc _ -> true  // Allocates memory
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
+    | RawTake _ -> true   // Ownership transfer; paired with clearing the source slot
     | RawGetByte _ -> false  // Pure memory read (byte)
     | RawWriteWord _ -> true    // Memory mutation
     | RawWriteByte _ -> true  // Memory mutation (byte)
@@ -566,6 +567,7 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RawAlloc numBytes -> addAtomUse numBytes uses
     | RawFree ptr -> addAtomUse ptr uses
     | RawGet (ptr, byteOffset, _) -> uses |> addAtomUse ptr |> addAtomUse byteOffset
+    | RawTake (ptr, byteOffset, _) -> uses |> addAtomUse ptr |> addAtomUse byteOffset
     | RawGetByte (ptr, byteOffset) -> uses |> addAtomUse ptr |> addAtomUse byteOffset
     | RawWriteWord (ptr, byteOffset, value) ->
         uses |> addAtomUse ptr |> addAtomUse byteOffset |> addAtomUse value
@@ -642,6 +644,7 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | FileWriteText (left, right)
     | FileAppendText (left, right)
     | RawGet (left, right, _)
+    | RawTake (left, right, _)
     | RawGetByte (left, right)
     | RawPtrToDict (left, right, _)
     | RawPtrToList (left, right, _) -> used left || used right
@@ -743,6 +746,7 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RawAlloc numBytes -> RawAlloc (s numBytes)
     | RawFree ptr -> RawFree (s ptr)
     | RawGet (ptr, byteOffset, valueType) -> RawGet (s ptr, s byteOffset, valueType)
+    | RawTake (ptr, byteOffset, valueType) -> RawTake (s ptr, s byteOffset, valueType)
     | RawGetByte (ptr, byteOffset) -> RawGetByte (s ptr, s byteOffset)
     | RawWriteWord (ptr, byteOffset, value) -> RawWriteWord (s ptr, s byteOffset, s value)
     | RawWriteByte (ptr, byteOffset, value) -> RawWriteByte (s ptr, s byteOffset, s value)

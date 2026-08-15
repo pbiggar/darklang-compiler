@@ -333,6 +333,7 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | RawAlloc numBytes -> RawAlloc (r numBytes)
     | RawFree ptr -> RawFree (r ptr)
     | RawGet (ptr, offset, valueType) -> RawGet (r ptr, r offset, valueType)
+    | RawTake (ptr, offset, valueType) -> RawTake (r ptr, r offset, valueType)
     | RawGetByte (ptr, offset) -> RawGetByte (r ptr, r offset)
     | RawWriteWord (ptr, offset, value) -> RawWriteWord (r ptr, r offset, r value)
     | RawWriteByte (ptr, offset, value) -> RawWriteByte (r ptr, r offset, r value)

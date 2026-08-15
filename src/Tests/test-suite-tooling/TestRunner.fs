@@ -225,6 +225,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "html.dark")
     let httpUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "http.dark")
+    let streamUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "stream.dark")
     let cliPathUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "cli-path.dark")
     let cliGlobUpstreamDarkPath =
@@ -266,6 +268,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            x509UpstreamDarkPath
            htmlUpstreamDarkPath
            httpUpstreamDarkPath
+           streamUpstreamDarkPath
            cliPathUpstreamDarkPath
            cliGlobUpstreamDarkPath
            cliProcessUpstreamDarkPath |]
@@ -299,6 +302,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            intUpstreamDarkPath
            htmlUpstreamDarkPath
            httpUpstreamDarkPath
+           streamUpstreamDarkPath
            cliPathUpstreamDarkPath
            cliGlobUpstreamDarkPath
            cliProcessUpstreamDarkPath |]

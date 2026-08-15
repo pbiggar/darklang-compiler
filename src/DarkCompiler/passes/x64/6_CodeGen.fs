@@ -674,6 +674,7 @@ let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_rc_dec_sum_s
 let private plannedDictRefCountDecHelperLabelPrefix = "__dark_dict_rc_dec_plan_"
 let private closureRefCountIncHelperLabel = "__dark_closure_rc_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
+let private streamRefCountDecHelperLabel = "__dark_stream_rc_dec_helper"
 
 type private SlotInitRootRetainTarget =
     | SlotInitListRootRetain
@@ -710,6 +711,7 @@ let private slotInitRootRetainTarget
                 | AST.TTuple _
                 | AST.TRecord _ -> Some (SlotInitGenericRootRetain payloadSize)
                 | _ -> None
+            | ANF.StreamRoot -> Some (SlotInitGenericRootRetain 24)
             | ANF.BoxedSum (payloadSize, _, _) ->
                 match valueType with
                 | AST.TSum _ -> Some (SlotInitGenericRootRetain payloadSize)
@@ -889,6 +891,8 @@ let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : s
             listRefCountDecDictHelperLabel
         | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
             listRefCountDecClosureHelperLabel
+        | ANF.RootRelease (_, ANF.StreamHeap, _) ->
+            plannedListDecHelperLabelForReleasePlan elementRelease
         | ANF.RootRelease (_, ANF.GenericHeap, _) ->
             plannedListDecHelperLabelForReleasePlan elementRelease
     | _ ->
@@ -1005,6 +1009,11 @@ let rec private genFieldReleases (ctx: FuncCtx) (fieldReleases: ANF.RcFieldRelea
                 genDictFieldRelease fieldOffset fieldReleasePlan
             | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
                 genClosureFieldRelease fieldOffset
+            | ANF.RootRelease (_, ANF.StreamHeap, _) ->
+                [X86_64.PUSH X86_64.RDX
+                 X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
+                 X86_64.CALL streamRefCountDecHelperLabel
+                 X86_64.POP X86_64.RDX]
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
                 genListFieldRelease fieldOffset fieldReleasePlan
             | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
@@ -1107,6 +1116,61 @@ and private genRefCountDecGenericWithPlan
 
 and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (metadata: ANF.RcMetadata option) : X86_64.Instr list =
     genRefCountDecGenericWithPlan ctx addrReg payloadSize (rcMetadataReleasePlan metadata)
+
+/// Stream roots have the generic fixed-block layout, but their close callback
+/// must run before the two owned callback closures are released. The lifecycle
+/// word makes this finalizer share close's idempotence boundary.
+let private genRefCountDecStream
+    (ctx: FuncCtx)
+    (addrReg: X86_64.Reg)
+    (metadata: ANF.RcMetadata option)
+    : X86_64.Instr list =
+    let skipLabel = freshLabel "stream_rc_dec_skip"
+    let noFreeLabel = freshLabel "stream_rc_dec_nofree"
+    let alreadyClosedLabel = freshLabel "stream_rc_dec_closed"
+    let fieldReleases = genFixedBlockFieldReleases ctx (rcMetadataReleasePlan metadata)
+    let savedRegs = [X86_64.RAX; X86_64.RDI; X86_64.RSI; X86_64.RDX; X86_64.RCX; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
+    let saves = savedRegs |> List.map X86_64.PUSH
+    let restores = savedRegs |> List.rev |> List.map X86_64.POP
+    [X86_64.TEST_reg (addrReg, addrReg)
+     X86_64.Jcc (X86_64.EQ, skipLabel)]
+    @ saves
+    @ [X86_64.MOV_reg (X86_64.RDX, addrReg)
+       X86_64.MOV_load (X86_64.RCX, X86_64.RDX, 24)
+       X86_64.SUB_imm (X86_64.RCX, 1)
+       X86_64.MOV_store (X86_64.RDX, 24, X86_64.RCX)
+       X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
+       X86_64.Jcc (X86_64.NE, noFreeLabel)
+       X86_64.MOV_load (X86_64.RCX, X86_64.RDX, 0)
+       X86_64.CMP_imm (X86_64.RCX, 5)
+       X86_64.Jcc (X86_64.EQ, alreadyClosedLabel)
+       X86_64.MOV_imm32 (X86_64.RCX, 5)
+       X86_64.MOV_store (X86_64.RDX, 0, X86_64.RCX)
+       X86_64.PUSH X86_64.RDX
+       X86_64.MOV_load (X86_64.RAX, X86_64.RDX, 16)
+       X86_64.MOV_load (X86_64.R10, X86_64.RAX, 0)
+       X86_64.MOV_imm32 (X86_64.RDI, 0)
+       X86_64.CALL_reg X86_64.R10
+       X86_64.POP X86_64.RDX
+       X86_64.Label alreadyClosedLabel]
+    @ fieldReleases
+    @ [X86_64.MOV_load (X86_64.RCX, freeListBase, 24)
+       X86_64.MOV_store (X86_64.RDX, 0, X86_64.RCX)
+       X86_64.MOV_store (freeListBase, 24, X86_64.RDX)]
+    @ genLeakCounterDec ctx
+    @ [X86_64.Label noFreeLabel]
+    @ restores
+    @ [X86_64.Label skipLabel]
+
+let private generateStreamRefCountDecHelper (ctx: FuncCtx) : X86_64.Instr list =
+    let metadata : ANF.RcMetadata = {
+        ReleasePlan =
+            Some (ANF.rcReleasePlanOfTypeWithSums ctx.RecordRegistry ctx.SumShapeRegistry (AST.TStream (AST.TVar "a")))
+        SourceType = Some (AST.TStream (AST.TVar "a"))
+    }
+    [X86_64.Label streamRefCountDecHelperLabel]
+    @ genRefCountDecStream ctx X86_64.RAX (Some metadata)
+    @ [X86_64.RET]
 
 let private generateRecursiveSumRefCountDecHelper
     (enableLeakCheck: bool)
@@ -1771,6 +1835,7 @@ let private generateDictRefCountDecHelper
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
     (releaseLeafClosureValue: bool)
+    (releaseLeafStreamValue: bool)
     (leafFixedBlockValueRelease: (int * ANF.RcReleasePlan) option)
     (enableLeakCheck: bool)
     (recordRegistry: LIR.RecordRegistry)
@@ -1904,6 +1969,7 @@ let private generateDictRefCountDecHelper
         let skipLeafListValueRelease = label $"skip_leaf_list_value_release_{suffix}"
         let skipLeafDictValueRelease = label $"skip_leaf_dict_value_release_{suffix}"
         let skipLeafClosureValueRelease = label $"skip_leaf_closure_value_release_{suffix}"
+        let skipLeafStreamValueRelease = label $"skip_leaf_stream_value_release_{suffix}"
         let skipLeafFixedBlockValueRelease = label $"skip_leaf_fixed_block_value_release_{suffix}"
         let skipLeafDynamicKeyRelease = label $"skip_leaf_dynamic_key_release_{suffix}"
         let skipLeafDynamicValueRelease = label $"skip_leaf_dynamic_value_release_{suffix}"
@@ -1923,6 +1989,11 @@ let private generateDictRefCountDecHelper
                 releaseManagedRootValueInstrs baseReg 8 closureRefCountDecHelperLabel skipLeafClosureValueRelease
             else
                 []
+        let streamValueInstrs =
+            if releaseLeafStreamValue then
+                releaseManagedRootValueInstrs baseReg 8 streamRefCountDecHelperLabel skipLeafStreamValueRelease
+            else
+                []
         let fixedBlockValueInstrs =
             match leafFixedBlockValueRelease with
             | Some (payloadSize, releasePlan) ->
@@ -1930,7 +2001,7 @@ let private generateDictRefCountDecHelper
             | None ->
                 []
 
-        releaseDynamicBufferKeyInstrs baseReg skipLeafDynamicKeyRelease @ releaseDynamicBufferValueInstrs baseReg skipLeafDynamicValueRelease @ listValueInstrs @ dictValueInstrs @ closureValueInstrs @ fixedBlockValueInstrs
+        releaseDynamicBufferKeyInstrs baseReg skipLeafDynamicKeyRelease @ releaseDynamicBufferValueInstrs baseReg skipLeafDynamicValueRelease @ listValueInstrs @ dictValueInstrs @ closureValueInstrs @ streamValueInstrs @ fixedBlockValueInstrs
 
     let hasPayloadRelease =
         releaseLeafDynamicKey
@@ -1938,6 +2009,7 @@ let private generateDictRefCountDecHelper
         || releaseLeafListValue
         || Option.isSome releaseLeafDictValueHelper
         || releaseLeafClosureValue
+        || releaseLeafStreamValue
         || Option.isSome leafFixedBlockValueRelease
 
     let releaseLeafValueInstrs =
@@ -2092,20 +2164,22 @@ let private generatePlannedDictRefCountDecHelper
             | ANF.DynamicBufferRelease _ -> true
             | other -> unsupported "key" other
 
-        let releaseLeafDynamicValue, releaseLeafListValue, releaseLeafDictValueHelper, releaseLeafClosureValue, leafFixedBlockValueRelease =
+        let releaseLeafDynamicValue, releaseLeafListValue, releaseLeafDictValueHelper, releaseLeafClosureValue, releaseLeafStreamValue, leafFixedBlockValueRelease =
             match valueRelease with
             | ANF.NoReleasePlan ->
-                false, false, None, false, None
+                false, false, None, false, false, None
             | ANF.DynamicBufferRelease _ ->
-                true, false, None, false, None
+                true, false, None, false, false, None
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
-                false, true, None, false, None
+                false, true, None, false, false, None
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                false, false, Some (dictDecHelperForReleasePlan valueRelease), false, None
+                false, false, Some (dictDecHelperForReleasePlan valueRelease), false, false, None
             | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
-                false, false, None, true, None
+                false, false, None, true, false, None
+            | ANF.RootRelease (_, ANF.StreamHeap, _) ->
+                false, false, None, false, true, None
             | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
-                false, false, None, false, Some (payloadSize, valueRelease)
+                false, false, None, false, false, Some (payloadSize, valueRelease)
             | other ->
                 unsupported "value" other
 
@@ -2116,6 +2190,7 @@ let private generatePlannedDictRefCountDecHelper
             releaseLeafListValue
             releaseLeafDictValueHelper
             releaseLeafClosureValue
+            releaseLeafStreamValue
             leafFixedBlockValueRelease
             enableLeakCheck
             recordRegistry
@@ -2308,6 +2383,8 @@ let private generateClosureRefCountDecHelper
                             Crash.crash $"generateClosureRefCountDecHelper: missing RC metadata for dict capture type {captureType}"
                     | AST.TFunction _ ->
                         releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel $"{index}_{captureIndex}_closure"
+                    | AST.TStream _ ->
+                        releaseHeapRootCapture fieldOffset streamRefCountDecHelperLabel $"{index}_{captureIndex}_stream"
                     | AST.TTuple _
                     | AST.TRecord _
                     | AST.TSum _ ->
@@ -3568,7 +3645,8 @@ let private translateInstr
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL closureRefCountIncHelperLabel]
                 @ restores
-            | LIR.GenericHeap ->
+            | LIR.GenericHeap
+            | LIR.StreamHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
     | LIR.RefCountDec (addr, payloadSize, kind, metadata) ->
@@ -3604,6 +3682,13 @@ let private translateInstr
                 let restores = saveRegs |> List.rev |> List.map X86_64.POP
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL closureRefCountDecHelperLabel]
+                @ restores
+            | LIR.StreamHeap ->
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10; scratch]
+                let saves = saveRegs |> List.map X86_64.PUSH
+                let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                saves
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL streamRefCountDecHelperLabel]
                 @ restores
             | LIR.GenericHeap ->
                 genRefCountDecGeneric ctx addrReg payloadSize metadata)
@@ -3999,7 +4084,7 @@ let private translateInstr
                      X86_64.AND_imm (temp1, -8)         // temp1 = aligned_size
                      // Need at least 16 bytes (8 payload + 8 refcount) for free list
                      X86_64.CMP_imm (temp1, 8)
-                     X86_64.Jcc (X86_64.LE, bumpLabel)
+                     X86_64.Jcc (X86_64.LT, bumpLabel)
                      X86_64.SUB_imm (temp1, 8)           // temp1 = payload_class
                      X86_64.CMP_imm (temp1, maxFreeListPayload)
                      X86_64.Jcc (X86_64.GT, bumpLabel)
@@ -4051,12 +4136,15 @@ let private translateInstr
                          X86_64.Jcc (X86_64.LE, okLabel)]
                     @ genOomJump ()
                     @ [X86_64.Label okLabel]
-                // NOTE: genLeakCounterInc should be added here when RefCountDec is enabled,
-                // so that alloc/free counts balance for the leak checker.
-                freeListCheck @ allocInstrs @ boundsCheck @ [X86_64.Label doneLabel]))
+                freeListCheck @ allocInstrs @ boundsCheck @ genLeakCounterInc ctx @ [X86_64.Label doneLabel]))
 
-    | LIR.RawFree _ ->
-        Ok []  // No-op (no free in bump allocator)
+    | LIR.RawFree ptr ->
+        resolveReg ptr
+        |> Result.map (fun ptrReg ->
+            [X86_64.MOV_load (scratch, freeListBase, 0)
+             X86_64.MOV_store (ptrReg, 0, scratch)
+             X86_64.MOV_store (freeListBase, 0, ptrReg)]
+            @ genLeakCounterDec ctx)
 
     | LIR.RawGet (dest, ptr, byteOffset) ->
         resolveReg dest |> Result.bind (fun d ->
@@ -5208,7 +5296,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                             (dictDecHelperForReleasePlan releasePlan)
                             withPlanRequirements.DictDecHelperLabels
             }
-        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+        | LIR.RefCountDec (_, _, (LIR.GenericHeap | LIR.StreamHeap), metadata) ->
             match rcMetadataReleasePlan metadata with
             | None ->
                 requirements
@@ -5505,51 +5593,58 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                || needsDictRcDecDynamicKeyDictValueHelper
                || needsDictRcDecTupleStringListDictValueHelper
                || needsDictRcDecDynamicKeyTupleStringListDictValueHelper
-               || not (Map.isEmpty neededPlannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false None enableLeakCheck recordRegistry sumShapeRegistry
+               || not (Map.isEmpty neededPlannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyHelper =
-            if needsDictRcDecDynamicKeyHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyHelperLabel true false false None false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyHelperLabel true false false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicValueHelper =
-            if needsDictRcDecDynamicValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicValueHelperLabel false true false None false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicValueHelperLabel false true false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyValueHelper =
-            if needsDictRcDecDynamicKeyValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyValueHelperLabel true true false None false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyValueHelperLabel true true false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyListValueHelper =
-            if needsDictRcDecDynamicKeyListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyListValueHelperLabel true false true None false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyListValueHelperLabel true false true None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyDictValueHelper =
-            if needsDictRcDecDynamicKeyDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictValueHelperLabel true false false (Some dictRefCountDecHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictValueHelperLabel true false false (Some dictRefCountDecHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyDictListValueHelper =
-            if needsDictRcDecDynamicKeyDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictListValueHelperLabel true false false (Some dictRefCountDecListValueHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictListValueHelperLabel true false false (Some dictRefCountDecListValueHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecListValueHelper =
-            if needsDictRcDecListValueHelper || needsDictRcDecDictListValueHelper || needsDictRcDecDynamicKeyDictListValueHelper || selectedListHelpersNeedDictListValueDecHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecListValueHelper || needsDictRcDecDictListValueHelper || needsDictRcDecDynamicKeyDictListValueHelper || selectedListHelpersNeedDictListValueDecHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDictValueHelper =
-            if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDictListValueHelper =
-            if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecTupleStringListValueHelper =
-            if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false (Some (16, dictTupleStringListValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false false (Some (16, dictTupleStringListValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecTupleStringListDictValueHelper =
-            if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyTupleStringListDictValueHelper =
-            if needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel true false false None false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel true false false None false false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecSumStringValueHelper =
-            if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let closureDecHelper =
-            if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper || plannedDictHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
-            else []
+            generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
         let closureIncHelper =
             if needsClosureRcIncHelper then generateClosureRefCountIncHelper closurePayloadSizes
             else []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ recursiveSumRcDecHelpers @ genOomHandler ())
+        let streamDecHelper =
+            generateStreamRefCountDecHelper {
+                StackSize = 0
+                UsedCalleeSaved = []
+                EnableLeakCheck = enableLeakCheck
+                RecordRegistry = recordRegistry
+                SumShapeRegistry = sumShapeRegistry
+            }
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveSumRcDecHelpers @ genOomHandler ())

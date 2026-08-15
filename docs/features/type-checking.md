@@ -30,6 +30,7 @@ type Type =
     | TRecord of string * Type list
     | TSum of string * Type list
     | TList of Type
+    | TStream of Type
     | TVar of string
     | TRawPtr
     | TDict of keyType:Type * valueType:Type
@@ -38,6 +39,10 @@ type Type =
 `Blob` is the sole binary type. Blob equality is admitted as handle identity;
 there is no `Bytes` type. `Stdlib.Bytes` is only a legacy function namespace
 whose binary parameters and results are typed `Blob`.
+
+`Stream<'a>` is opaque: it has no constructors or patterns, is never traversed
+by equality, and renders without forcing. Equality and inequality compare
+handle identity; ordering is rejected during AOT type checking.
 
 ## Type Registries
 

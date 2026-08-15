@@ -52,6 +52,7 @@ type Type =
     | TRecord of string * Type list   // record type by name with type args: Point<T>, Pair<A, B>, etc.
     | TSum of string * Type list      // sum type by name with type args: Result<Int64, String>
     | TList of Type                    // List<T> - polymorphic list type
+    | TStream of Type                  // Stream<T> - opaque, lazy, single-consumer handle
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
     | TRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
     // Native HAMT machinery retains both components. Public source syntax is

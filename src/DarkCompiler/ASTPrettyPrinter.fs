@@ -70,6 +70,7 @@ let rec private formatType (typ: Type) : string =
     | TRawPtr -> "RawPtr"
     | TVar name -> formatIdentifierSegment name
     | TList elemType -> $"List<{formatType elemType}>"
+    | TStream elemType -> $"Stream<{formatType elemType}>"
     | TDict (TString, valueType) -> $"Dict<{formatType valueType}>"
     | TDict (keyType, valueType) ->
         // Non-String keys can only originate in trusted compiler sources.

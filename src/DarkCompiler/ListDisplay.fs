@@ -33,6 +33,7 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TRecord _
     | AST.TSum _
     | AST.TList _
+    | AST.TStream _
     | AST.TVar _
     | AST.TRawPtr
     | AST.TDict _ -> None

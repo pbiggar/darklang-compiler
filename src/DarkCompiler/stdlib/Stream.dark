@@ -1,0 +1,212 @@
+// Stdlib.Stream.dark - Lazy single-consumer streams over an opaque native handle.
+//
+// Portable producers keep their concrete state in a typed owned cell. The
+// handle exposes only lifecycle transitions and callback invocation; source
+// programs cannot inspect either representation.
+
+module Stdlib.Stream
+
+let __STATE_READY() : Int64 = 0
+let __STATE_ADVANCING() : Int64 = 1
+let __STATE_CLOSE_REQUESTED() : Int64 = 2
+let __STATE_EXHAUSTED() : Int64 = 3
+let __STATE_FAILED() : Int64 = 4
+let __STATE_CLOSED() : Int64 = 5
+
+let __STATE_OFFSET() : Int64 = 0
+let __NEXT_OFFSET() : Int64 = 8
+let __CLOSE_OFFSET() : Int64 = 16
+let __REFCOUNT_OFFSET() : Int64 = 24
+let __HANDLE_SIZE() : Int64 = 32
+
+let __cellNew<'state>(initial: state) : RawPtr =
+    let cell = __raw_alloc(8) in
+    let _ = __raw_slot_init<state>(cell, 0, initial) in
+    cell
+
+let __cellGet<'state>(cell: RawPtr) : state =
+    __raw_get<state>(cell, 0)
+
+let __cellSet<'state>(cell: RawPtr, nextState: state) : Unit =
+    let previous = __raw_take<state>(cell, 0) in
+    let _ = __raw_write_word(cell, 0, 0) in
+    let _ = __raw_slot_init<state>(cell, 0, nextState) in
+    ()
+
+let __cellDispose<'state>(cell: RawPtr) : Unit =
+    let previous = __raw_take<state>(cell, 0) in
+    let _ = __raw_write_word(cell, 0, 0) in
+    let _ = __raw_free(cell) in
+    ()
+
+let __new<'a>(nextFn: (Unit) -> Stdlib.Option.Option<a>, closeFn: (Unit) -> Unit) : Stream<a> =
+    let ptr = __raw_alloc(Stdlib.Stream.__HANDLE_SIZE()) in
+    let _ = __raw_write_word(ptr, Stdlib.Stream.__STATE_OFFSET(), Stdlib.Stream.__STATE_READY()) in
+    let _ = __raw_slot_init<(Unit) -> Stdlib.Option.Option<a>>(ptr, Stdlib.Stream.__NEXT_OFFSET(), nextFn) in
+    let _ = __raw_slot_init<(Unit) -> Unit>(ptr, Stdlib.Stream.__CLOSE_OFFSET(), closeFn) in
+    // The raw-to-Stream cast is an ownership-producing typed alias. RC
+    // insertion retains that alias at the return boundary, so construction
+    // seeds the word at zero and hands the caller the first owning edge.
+    let _ = __raw_write_word(ptr, Stdlib.Stream.__REFCOUNT_OFFSET(), 0) in
+    __rawptr_to_stream<a>(ptr)
+
+let __closeReady<'a>(stream: Stream<a>, ptr: RawPtr) : Unit =
+    let _ = __raw_write_word(ptr, Stdlib.Stream.__STATE_OFFSET(), Stdlib.Stream.__STATE_CLOSED()) in
+    let closeFn = __raw_get<(Unit) -> Unit>(ptr, Stdlib.Stream.__CLOSE_OFFSET()) in
+    closeFn(())
+
+let close<'a>(stream: Stream<a>) : Unit =
+    let ptr = __stream_to_rawptr<a>(stream) in
+    let state = __raw_get<Int64>(ptr, Stdlib.Stream.__STATE_OFFSET()) in
+    if state == Stdlib.Stream.__STATE_READY() || state == Stdlib.Stream.__STATE_EXHAUSTED() || state == Stdlib.Stream.__STATE_FAILED() then
+        Stdlib.Stream.__closeReady<a>(stream, ptr)
+    else if state == Stdlib.Stream.__STATE_ADVANCING() then
+        __raw_write_word(ptr, Stdlib.Stream.__STATE_OFFSET(), Stdlib.Stream.__STATE_CLOSE_REQUESTED())
+    else ()
+
+let next<'a>(stream: Stream<a>) : Stdlib.Option.Option<a> =
+    let ptr = __stream_to_rawptr<a>(stream) in
+    let state = __raw_get<Int64>(ptr, Stdlib.Stream.__STATE_OFFSET()) in
+    if state == Stdlib.Stream.__STATE_READY() then
+        let _ = __raw_write_word(ptr, Stdlib.Stream.__STATE_OFFSET(), Stdlib.Stream.__STATE_ADVANCING()) in
+        let nextFn = __raw_get<(Unit) -> Stdlib.Option.Option<a>>(ptr, Stdlib.Stream.__NEXT_OFFSET()) in
+        let result = nextFn(()) in
+        let stateAfterCallback = __raw_get<Int64>(ptr, Stdlib.Stream.__STATE_OFFSET()) in
+        if stateAfterCallback == Stdlib.Stream.__STATE_CLOSE_REQUESTED() then
+            let _ = Stdlib.Stream.__closeReady<a>(stream, ptr) in
+            None
+        else
+            match result with
+            | None ->
+                let _ = __raw_write_word(ptr, Stdlib.Stream.__STATE_OFFSET(), Stdlib.Stream.__STATE_EXHAUSTED()) in
+                let _ = Stdlib.Stream.__closeReady<a>(stream, ptr) in
+                None
+            | Some(value) ->
+                let _ = __raw_write_word(ptr, Stdlib.Stream.__STATE_OFFSET(), Stdlib.Stream.__STATE_READY()) in
+                Some(value)
+    else if state == Stdlib.Stream.__STATE_ADVANCING() || state == Stdlib.Stream.__STATE_CLOSE_REQUESTED() then
+        Builtin.testRuntimeError("Stream.next cannot overlap or reenter an active pull")
+    else None
+
+let __producerNext<'producerState, 'output>(
+    cell: RawPtr,
+    step: (producerState) -> Stdlib.Option.Option<(output, producerState)>
+    ) : Stdlib.Option.Option<output> =
+    let current = Stdlib.Stream.__cellGet<producerState>(cell) in
+    match step(current) with
+    | None -> None
+    | Some(pair) ->
+        let (value, nextState) = pair in
+        let _ = Stdlib.Stream.__cellSet<producerState>(cell, nextState) in
+        Some(value)
+
+let __producerClose<'producerState>(cell: RawPtr, dispose: (producerState) -> Unit) : Unit =
+    let current = Stdlib.Stream.__cellGet<producerState>(cell) in
+    let _ = dispose(current) in
+    Stdlib.Stream.__cellDispose<producerState>(cell)
+
+let __fromProducer<'producerState, 'output>(
+    initial: producerState,
+    step: (producerState) -> Stdlib.Option.Option<(output, producerState)>,
+    dispose: (producerState) -> Unit
+    ) : Stream<output> =
+    let cell = Stdlib.Stream.__cellNew<producerState>(initial) in
+    let nextFn = fun _unit -> Stdlib.Stream.__producerNext<producerState, output>(cell, step) in
+    let closeFn = fun _unit -> Stdlib.Stream.__producerClose<producerState>(cell, dispose) in
+    Stdlib.Stream.__new<output>(nextFn, closeFn)
+
+let __ignoreDispose<'state>(_state: state) : Unit = ()
+
+let __fromListStep<'a>(remaining: List<a>) : Stdlib.Option.Option<(a, List<a>)> =
+    match remaining with
+    | [] -> None
+    | head :: tail -> Some((head, tail))
+
+let fromList<'a>(items: List<a>) : Stream<a> =
+    let step = fun remaining -> Stdlib.Stream.__fromListStep<a>(remaining) in
+    let dispose = fun _remaining -> () in
+    Stdlib.Stream.__fromProducer(items, step, dispose)
+
+let unfold<'state, 'a>(initial: state, step: (state) -> Stdlib.Option.Option<(a, state)>) : Stream<a> =
+    let dispose = fun _state -> () in
+    Stdlib.Stream.__fromProducer(initial, step, dispose)
+
+let __toList<'a>(stream: Stream<a>, acc: List<a>) : List<a> =
+    match Stdlib.Stream.next<a>(stream) with
+    | None -> Stdlib.List.reverse<a>(acc)
+    | Some(value) -> Stdlib.Stream.__toList<a>(stream, Stdlib.List.push<a>(acc, value))
+
+let toList<'a>(stream: Stream<a>) : List<a> =
+    Stdlib.Stream.__toList<a>(stream, [])
+
+let toBlob(stream: Stream<UInt8>) : Blob =
+    Stdlib.Blob.fromList(Stdlib.Stream.toList<UInt8>(stream))
+
+let __closeStream<'a>(stream: Stream<a>) : Unit =
+    Stdlib.Stream.close<a>(stream)
+
+let __mapStep<'a, 'b>(state: (Stream<a>, Unit), fn: (a) -> b) : Stdlib.Option.Option<(b, (Stream<a>, Unit))> =
+    let (source, marker) = state in
+    match Stdlib.Stream.next<a>(source) with
+    | None -> None
+    | Some(value) -> Some((fn(value), (source, marker)))
+
+let __closeStreamState<'a>(state: (Stream<a>, Unit)) : Unit =
+    let (source, marker) = state in
+    Stdlib.Stream.close<a>(source)
+
+let map<'a, 'b>(stream: Stream<a>, fn: (a) -> b) : Stream<b> =
+    let step = fun state -> Stdlib.Stream.__mapStep<a, b>(state, fn) in
+    let dispose = fun state -> Stdlib.Stream.__closeStreamState<a>(state) in
+    Stdlib.Stream.__fromProducer((stream, ()), step, dispose)
+
+let __filterStep<'a>(state: (Stream<a>, Unit), predicate: (a) -> Bool) : Stdlib.Option.Option<(a, (Stream<a>, Unit))> =
+    let (source, marker) = state in
+    match Stdlib.Stream.next<a>(source) with
+    | None -> None
+    | Some(value) ->
+        if predicate(value) then Some((value, (source, marker)))
+        else Stdlib.Stream.__filterStep<a>(state, predicate)
+
+let filter<'a>(stream: Stream<a>, predicate: (a) -> Bool) : Stream<a> =
+    let step = fun state -> Stdlib.Stream.__filterStep<a>(state, predicate) in
+    let dispose = fun state -> Stdlib.Stream.__closeStreamState<a>(state) in
+    Stdlib.Stream.__fromProducer((stream, ()), step, dispose)
+
+let __takeStep<'a>(state: (Stream<a>, Int)) : Stdlib.Option.Option<(a, (Stream<a>, Int))> =
+    let (source, remaining) = state in
+    if remaining <= 0I then None
+    else
+        match Stdlib.Stream.next<a>(source) with
+        | None -> None
+        | Some(value) -> Some((value, (source, remaining - 1I)))
+
+let __closeTakeState<'a>(state: (Stream<a>, Int)) : Unit =
+    let (source, remaining) = state in
+    Stdlib.Stream.close<a>(source)
+
+let take<'a>(stream: Stream<a>, count: Int) : Stream<a> =
+    let clamped = if count < 0I then 0I else count in
+    let step = fun state -> Stdlib.Stream.__takeStep<a>(state) in
+    let dispose = fun state -> Stdlib.Stream.__closeTakeState<a>(state) in
+    Stdlib.Stream.__fromProducer((stream, clamped), step, dispose)
+
+let __closeAll<'a>(streams: List<Stream<a>>) : Unit =
+    match streams with
+    | [] -> ()
+    | head :: tail ->
+        let _ = Stdlib.Stream.close<a>(head) in
+        Stdlib.Stream.__closeAll<a>(tail)
+
+let __concatStep<'a>(streams: List<Stream<a>>) : Stdlib.Option.Option<(a, List<Stream<a>>)> =
+    match streams with
+    | [] -> None
+    | head :: tail ->
+        match Stdlib.Stream.next<a>(head) with
+        | Some(value) -> Some((value, streams))
+        | None -> Stdlib.Stream.__concatStep<a>(tail)
+
+let concat<'a>(streams: List<Stream<a>>) : Stream<a> =
+    let step = fun remaining -> Stdlib.Stream.__concatStep<a>(remaining) in
+    let dispose = fun remaining -> Stdlib.Stream.__closeAll<a>(remaining) in
+    Stdlib.Stream.__fromProducer(streams, step, dispose)

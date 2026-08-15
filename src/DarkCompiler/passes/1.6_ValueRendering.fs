@@ -63,6 +63,7 @@ let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
         match typ with
         | TVar name -> Map.tryFind name subst |> Option.defaultValue typ
         | TList elemType -> TList (apply elemType)
+        | TStream elemType -> TStream (apply elemType)
         | TDict (keyType, valueType) -> TDict (apply keyType, apply valueType)
         | TFunction (paramTypes, returnType) -> TFunction (List.map apply paramTypes, apply returnType)
         | TTuple elemTypes -> TTuple (List.map apply elemTypes)
@@ -267,6 +268,8 @@ and private renderBody
                   makeCase PWildcard (concat [StringLiteral "["; call itemsName [value]; StringLiteral "]"]) ]
             )
         (body, nextState)
+    | TStream _ ->
+        (StringLiteral "<stream>", state)
     // An unconstrained Dict value can only be the polymorphic empty literal;
     // no value renderer is needed because there are no entries to inspect.
     | TDict (TString, TVar _) -> (StringLiteral "Dict { }", state)

@@ -113,6 +113,7 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TRecord (name, args) -> name + (if List.isEmpty args then "" else "<" + (args |> List.map typeToString |> String.concat ",") + ">")
     | AST.TSum (name, args) -> name + "<" + (args |> List.map typeToString |> String.concat ",") + ">"
     | AST.TList elemType -> "List<" + typeToString elemType + ">"
+    | AST.TStream elemType -> "Stream<" + typeToString elemType + ">"
     | AST.TDict (keyType, valueType) -> "Dict<" + typeToString keyType + "," + typeToString valueType + ">"
     | AST.TFunction (paramTypes, retType) ->
         "(" + (paramTypes |> List.map typeToString |> String.concat ",") + ")->" + typeToString retType
@@ -231,6 +232,8 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
             match tok with
             | "list" ->
                 parseType rest |> List.map (fun (elemT, rem) -> (AST.TList elemT, rem))
+            | "stream" ->
+                parseType rest |> List.map (fun (elemT, rem) -> (AST.TStream elemT, rem))
             | "dict" ->
                 parseType rest
                 |> List.collect (fun (keyT, rem1) ->
@@ -390,6 +393,9 @@ let tryRawMemoryIntrinsic
         // Preserve recovered value type so downstream RC/codegen can handle heap payloads correctly.
         let valueType = tryMonomorphizedValueType "__raw_get" name
         Some (ANF.RawGet (ptrAtom, offsetAtom, valueType))
+    | name, [ptrAtom; offsetAtom] when name = "__raw_take" || name.StartsWith("__raw_take_") ->
+        let valueType = tryMonomorphizedValueType "__raw_take" name
+        Some (ANF.RawTake (ptrAtom, offsetAtom, valueType))
     | "__raw_write_byte", [ptrAtom; offsetAtom; valueAtom] ->
         // Write single byte at offset
         Some (ANF.RawWriteByte (ptrAtom, offsetAtom, valueAtom))
@@ -429,6 +435,17 @@ let tryRawMemoryIntrinsic
         Some (ANF.BlobToRawPtr bytesAtom)
     | "__rawptr_to_blob", [ptrAtom] ->
         Some (ANF.RawPtrToBlob ptrAtom)
+    | name, [streamAtom] when name = "__stream_to_rawptr" || name.StartsWith("__stream_to_rawptr_") ->
+        Some (ANF.TypedAtom (streamAtom, AST.TRawPtr))
+    | name, [ptrAtom] when name = "__rawptr_to_stream" || name.StartsWith("__rawptr_to_stream_") ->
+        let streamType =
+            if name = "__rawptr_to_stream" then AST.TStream (AST.TVar "a")
+            else
+                let suffix = name.Substring("__rawptr_to_stream_".Length)
+                match tryParseMangledTypeForRawIntrinsic variantLookup suffix with
+                | Some elemType -> AST.TStream elemType
+                | None -> Crash.crash $"Could not recover Stream type from intrinsic '{name}'"
+        Some (ANF.TypedAtom (ptrAtom, streamType))
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> returns 0 (null pointer)
@@ -583,6 +600,8 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST
             AST.TEnumFields (List.map canonicalize fieldTypes)
         | AST.TList elemType ->
             AST.TList (canonicalize elemType)
+        | AST.TStream elemType ->
+            AST.TStream (canonicalize elemType)
         | AST.TDict (keyType, valueType) ->
             AST.TDict (canonicalize keyType, canonicalize valueType)
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
@@ -622,6 +641,8 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
         AST.TEnumFields (List.map (resolveAliasTypeForRegistry aliasReg) fieldTypes)
     | AST.TList elemType ->
         AST.TList (resolveAliasTypeForRegistry aliasReg elemType)
+    | AST.TStream elemType ->
+        AST.TStream (resolveAliasTypeForRegistry aliasReg elemType)
     | AST.TDict (keyType, valueType) ->
         AST.TDict (resolveAliasTypeForRegistry aliasReg keyType, resolveAliasTypeForRegistry aliasReg valueType)
     | AST.TFunction (paramTypes, returnType) ->
@@ -779,6 +800,7 @@ let rec typeToMangledName (t: AST.Type) : string =
         let argsStr = typeArgs |> List.map typeToMangledName |> String.concat "_"
         $"{name}_{argsStr}"
     | AST.TList elemType -> $"list_{typeToMangledName elemType}"
+    | AST.TStream elemType -> $"stream_{typeToMangledName elemType}"
     | AST.TDict (keyType, valueType) -> $"dict_{typeToMangledName keyType}_{typeToMangledName valueType}"
     | AST.TVar name -> mangleTypeVarName name  // Should not appear after monomorphization
     | AST.TRawPtr -> "rawptr"  // Internal raw pointer type
@@ -922,6 +944,8 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TEnumFields (List.map (applySubstToType subst) fieldTypes)
     | AST.TList elemType ->
         AST.TList (applySubstToType subst elemType)
+    | AST.TStream elemType ->
+        AST.TStream (applySubstToType subst elemType)
     | AST.TDict (keyType, valueType) ->
         AST.TDict (applySubstToType subst keyType, applySubstToType subst valueType)
     | AST.TSum (name, typeArgs) ->
@@ -955,6 +979,8 @@ let rec collectTypeVarsInType (typ: AST.Type) (acc: string list) : string list =
     | AST.TSum (_, typeArgs) ->
         typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | AST.TList elemType ->
+        collectTypeVarsInType elemType acc
+    | AST.TStream elemType ->
         collectTypeVarsInType elemType acc
     | AST.TDict (keyType, valueType) ->
         let withKey = collectTypeVarsInType keyType acc
@@ -1495,7 +1521,10 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
 let private isIntrinsicTypeAppName (funcName: string) : bool =
     match funcName with
     | "__raw_get"
+    | "__raw_take"
     | "__raw_slot_init"
+    | "__stream_to_rawptr"
+    | "__rawptr_to_stream"
     | "__empty_dict"
     | "__dict_is_null"
     | "__dict_get_tag"
@@ -4484,6 +4513,14 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         // incorrectly mark pattern-match branches as impossible.
                         let suffix = funcName.Substring("__raw_get_".Length)
                         tryParseMangledType variantLookup suffix
+                    elif funcName.StartsWith("__raw_take_") then
+                        let suffix = funcName.Substring("__raw_take_".Length)
+                        tryParseMangledType variantLookup suffix
+                    elif funcName.StartsWith("__stream_to_rawptr_") then
+                        Ok AST.TRawPtr
+                    elif funcName.StartsWith("__rawptr_to_stream_") then
+                        let suffix = funcName.Substring("__rawptr_to_stream_".Length)
+                        tryParseMangledType variantLookup suffix |> Result.map AST.TStream
                     elif funcName.StartsWith("__raw_slot_init_") then
                         // __raw_slot_init<T> returns Unit
                         Ok AST.TUnit
