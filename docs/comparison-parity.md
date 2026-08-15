@@ -1,30 +1,27 @@
 # Equality, ordering, and comparability parity
 
-This contract was revalidated from the public interpreter behavior at
-darklang/dark `04fbe9dcc995c6188757d583e273cbd30a3e2d3d` and the approved compiler
-evidence revision `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`. Implementation work and
-same-source native probes started from compiler HEAD
-`2e5690c6d16f4e6f261ffdc86f075e52766753c8`. DCB1 report commit `8a402797`
-was used only to locate candidates; every finding below was checked again at
-these revisions. Post-rebase integration, the complete executable matrix, and
-the native benchmark verification used compiler commit
-`069a096cc49f5388f0bdcab756cbb8eb0387538e` against the same pinned interpreter
-revision.
+The public prelude contract was revalidated between compiler starting HEAD
+`c609b56ce1ec488afc3146c585b6f45a2fcf22a8` and darklang/dark
+`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation comparison commit
+`ab81ead7f4b232b4ffa181d8ddb71e9381c510c8` was tested against that same exact
+interpreter revision. Compiler evidence revision
+`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, DCB1 report commit `8a402797`, and
+the previous parity document were starting evidence only; every retained
+prelude finding was checked again at the exact revisions above.
 
-At that compiler revision the focused comparison matrix passed 71/71 cases,
-the complete native suite passed 5928/5928 tests, and the routine benchmark
-profile matched all 19 audited instruction-count baselines. The profile's
-recorded aggregate performance ratio is 2.75x.
+At the implementation comparison commit the focused matrix passed 140/140
+cases. Performance is outside this contract unless it changes observable
+behavior.
 
-The executable matrix is `src/Tests/e2e/comparison-parity.e2e`. Its probes use
-only the interpreter spellings `==`, `!=`, `<`, `>`, `<=`, and `>=`.
-Comparison aliases are not part of the language surface.
+The executable matrix is `src/Tests/e2e/comparison-parity.e2e`. It covers the
+operators `==`, `!=`, `<`, `>`, `<=`, and `>=` plus the unversioned public
+`Stdlib.equals` and `Stdlib.notEquals` functions.
 
 ## Contract
 
 | Values | Equality | Ordering |
 | --- | --- | --- |
-| Unit, Boolean, character, string | Same type and same value | Rejected |
+| Unit, Boolean, character, string, DateTime | Same type and same value | Rejected |
 | Signed and unsigned integers, including 128-bit, and `Int` | Numeric equality within one identical numeric type | Numeric ordering within one identical numeric type |
 | Float | IEEE equality | IEEE ordering |
 | Tuple and list | Recursive and structural | Rejected |
@@ -34,6 +31,14 @@ Comparison aliases are not part of the language surface.
 | Function | Interpreter identity rules described below | Rejected |
 | Blob | Handle identity, recursively inside equality-capable containers | Rejected |
 | RawPtr, RuntimeError | Rejected by the compiler comparison type constraint | Rejected |
+
+`Stdlib.equals<'a>(left, right)` and `Stdlib.notEquals<'a>(left, right)` expose
+this exact contract. They are portable Dark definitions over the typed
+equality operator; `notEquals` is Boolean negation of `equals`. Concrete AOT
+specialization therefore reuses the operator's scalar operations, structural
+helpers, function comparators, Dict mapping comparison, and Blob identity. It
+does not inspect runtime tags and does not add a backend comparison path.
+Arguments are evaluated once each from left to right.
 
 Both operands must resolve through aliases to the same admissible type.
 Consequently mixed numeric widths, integer/float pairs, Char/String pairs,
@@ -77,9 +82,16 @@ failure. Invalid comparisons are never constant-folded into Boolean values.
 RawPtr is a compiler-only representation type and its intrinsic constructor is
 not available in user syntax; the type checker nevertheless rejects RawPtr
 comparison explicitly. RuntimeError is likewise an internal flow type rather
-than an equality value. These are documented compiler surface differences, not
-extensions to comparison behavior. Ahead-of-time rejection is the only
-intentional public behavior divergence retained here.
+than an equality value. The interpreter's DDB values compare through database
+reference equality and Streams compare handle identity; neither value category
+exists in compiled programs, so both are interpreter-only and unsupported.
+
+The interpreter's DUuid is a distinct scalar. The compiler currently declares
+`Uuid = String`, and its UUID helpers return String. Equality consequently uses
+String specialization rather than claiming distinct DUuid parity. This is an
+explicit compiler extension recorded in `docs/diff-value-search-parity.md`, not
+a new equality rule. Ahead-of-time rejection and the absent interpreter-only
+value categories are the intentional public boundary retained here.
 
 Performance differences are outside this contract unless they change an
 observable result.
@@ -113,3 +125,10 @@ Float conditions and architecture-specific integer conditions remain in the
 shared MIR-to-LIR pass and the ARM64/x64 backends. Focused executable evidence
 is in `src/Tests/e2e/comparison-parity.e2e`, alongside the existing
 `equality.e2e` and `interpreter_behavior_parity.e2e` suites.
+
+The root wrappers are `src/DarkCompiler/stdlib/NoModule.dark:3-11`, loaded at
+`CompilerLibrary.fs:1116-1118`. Separate stdlib specialization merges user
+record/sum metadata before materializing structural helpers at
+`CompilerLibrary.fs:1296-1378`; the indexed record view is built at
+`passes/1.5_TypeChecking.fs:1046-1058`. Public probes are at
+`comparison-parity.e2e:35-110,148-156`.

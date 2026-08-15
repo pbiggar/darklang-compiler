@@ -207,6 +207,22 @@ internal compiler-only typed execution boundary beneath public
 timing remains the sole retained divergence for this surface. See the
 [Option/Result/Retry parity matrix](option-result-retry-parity.md).
 
+### 3.6 Equality and explicit output prelude
+
+`Stdlib.equals`, `Stdlib.notEquals`, `Stdlib.print`, `Stdlib.printLine`, and
+`Stdlib.printLines` now match the pinned interpreter's public behavior. The AOT
+compiler rejects mixed and distinct nominal equality operands during inference
+instead of evaluating them and raising an interpreter runtime error. RawPtr and
+RuntimeError are rejected compiler-internal categories. Interpreter DDB and
+Stream values have no compiled representation and remain unsupported.
+
+The compiler's `Uuid = String` model is an extension, not parity with the
+interpreter's distinct DUuid value. Blob and function equality retain their
+pinned identity rules. Explicit printing accepts String only and is independent
+of implicit final-result rendering; final Unit adds no text. See
+[comparison-parity.md](comparison-parity.md) and
+[cli-presentation-parity.md](cli-presentation-parity.md).
+
 ## 4. Tooling Differences
 
 Acceptable differences due to compilation vs interpretation model.

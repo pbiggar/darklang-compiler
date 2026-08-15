@@ -1,4 +1,5 @@
-// CLI presentation parity at darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+// CLI presentation parity: compiler ab81ead7f4b232b4ffa181d8ddb71e9381c510c8
+// against darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 // All output cases are byte-exact so spaces, CR, ANSI escapes, and newlines matter.
 
 (Builtin.print "left"; Builtin.printLine "right"; ()) = stdout="leftright\n" stderr="" exact_bytes=true

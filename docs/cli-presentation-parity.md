@@ -1,19 +1,14 @@
 # CLI presentation parity
 
-This contract was revalidated from the public interpreter behavior at
-darklang/dark `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation and
-same-source native comparisons began from compiler HEAD
-`8025617cb935bb959308315a0b886228800d06fe`. DCB1 report commit `8a402797`
-and the then-current parity documents were discovery aids only; every retained
-claim below was checked again against that exact revision pair. Performance is
-outside this contract unless it changes observable behavior.
-
-The focused native comparison revision is compiler commit
-`9a83ab2ff25bfc6697e30fbe1c7a9db55e4d14ff`, still against interpreter
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. At that pair the presentation
-matrix passed 19/19, the color-focused matrix passed 33/33, and the affected
-String and integer matrices passed 699/699 and 1986/1986 respectively.
-Repository-wide verification and integration remain the worker's responsibility.
+The explicit printing prelude was revalidated between compiler starting HEAD
+`c609b56ce1ec488afc3146c585b6f45a2fcf22a8` and darklang/dark
+`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation comparison commit
+`ab81ead7f4b232b4ffa181d8ddb71e9381c510c8` was tested against that same exact
+interpreter revision. Compiler evidence revision
+`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, DCB1 report commit `8a402797`, and
+the previous parity document were discovery aids only. The focused matrix
+passed 30/30 at the implementation comparison commit. Performance is outside
+this contract unless it changes observable behavior.
 
 The pinned interpreter sources are
 `packages/darklang/stdlib/cli/log.dark` and
@@ -34,6 +29,9 @@ alternate screen, cursor cleanup, or terminal-width calculation.
 | --- | --- | --- | --- | --- |
 | `Builtin.print(String): Unit` | stdout; input UTF-8 bytes unchanged | none | `Unit`; ordered effect | Shared |
 | `Builtin.printLine(String): Unit` | stdout; input UTF-8 bytes followed by `0a` | exactly one LF | `Unit`; ordered effect | Shared |
+| `Stdlib.print(String): Unit` | forwards the supplied UTF-8 bytes to `Builtin.print` | none | `Unit`; ordered effect | Shared |
+| `Stdlib.printLine(String): Unit` | forwards the supplied UTF-8 bytes to `Builtin.printLine` | exactly one LF | `Unit`; ordered effect | Shared |
+| `Stdlib.printLines(List<String>): Unit` | invokes `Stdlib.printLine` once per element, head to tail | one LF per element | empty list has no effect; `Unit` | Shared |
 | `Builtin.stdinReadLine(Unit): String` | reads fd 0; accepts LF or CRLF and omits the terminator | none added | preserves unread bytes, returns a partial final line, and returns `""` at immediate EOF | Shared |
 | `UI.Color.esc(String, String): String` | `1b 5b`, code, `6d`, text, `1b 5b 30 6d` | none | wraps empty text too; an inner reset remains observable | Shared |
 | Color helpers | `red=31`, `green=32`, `yellow=33`, `blue=34`, `magenta=35`, `cyan=36`, `white=37`, `gray=90`, `bold=1`, `dim=2`, `italic=3`, `underline=4`, `strikethrough=9`, `bgRed=41`, `bgGreen=42`, `bgYellow=43`, `bgBlue=44` | none | return the wrapped string | Shared |
@@ -45,6 +43,12 @@ alternate screen, cursor cleanup, or terminal-width calculation.
 | `UI.Spinner.run<a>(String, Unit -> a): a` | stdout `message + "... "`, then the function, then green `done` | completion has exactly one LF | invokes once and returns the untouched result; failure or signal emits no fabricated completion | Shared |
 | `UI.Table.print(List<String>, List<List<String>>): Unit` | stdout bold header, hyphen separator, and rows; two spaces separate columns | one LF per emitted line | widths are maximum EGC counts; cells are right-padded, short rows use empty cells, surplus cells are ignored | Shared |
 | Final `Unit` | no automatic bytes | none | explicit effects remain visible; non-Unit results retain normal rendering | Shared |
+
+The public prelude accepts only String (or List<String>). It never renders an
+arbitrary value. Implicit final-result rendering is a separate compiler-driver
+stage: non-Unit final results use their typed renderer, while a final Unit is
+suppressed. Explicit output bytes are not re-rendered or followed by implicit
+Unit text.
 
 Writes use fd 1 and reads use fd 0. Native writes retry `EINTR` and continue
 after partial writes. Line reads are UTF-8 byte preserving, retain bytes after a
@@ -78,7 +82,10 @@ The typed intrinsic registry is
 print instructions and participate in optimization, liveness, allocation, and
 IR printing as ordered effects.
 
-The package load order is recorded at `CompilerLibrary.fs:1082-1087` and the
+The root presentation source is `stdlib/Print.dark:3-15`, loaded immediately
+after List at `CompilerLibrary.fs:1133-1136`. Its `printLines` composition uses
+the portable ordered recursion at `stdlib/List.dark:441-446`; no native list
+traversal was added. The package load order is recorded in `CompilerLibrary.fs` and the
 adapted sources are `stdlib/CliColor.dark`, `CliLog.dark`, `CliProgress.dark`,
 `CliPrompt.dark`, `CliSpinner.dark`, and `CliTable.dark`. EGC measurement is
 routed through `stdlib/String.dark:419`; signed selection parsing is aligned at
@@ -90,7 +97,10 @@ separate test path at `CompilerLibrary.fs:1860`.
 ## Revision-stamped probes
 
 The executable matrix is
-`src/Tests/e2e/interpreter/cli_presentation.e2e`. It uses the explicit
+`src/Tests/e2e/interpreter/cli_presentation.e2e`. Public prelude probes at
+lines 9-20 cover empty and Unicode strings, embedded/trailing newlines, empty
+and multi-element lists, mixed ordered writes, optimized and unoptimized
+execution, zero stderr, and final Unit suppression. The fixture uses the explicit
 closed-or-bytes stdin model and exact-byte output mode defined in
 `TestDSL/E2EFormat.fs:18-27`; comparison occurs without trimming in
 `Runners/E2ETestRunner.fs:992-1004`. The 18 pinned upstream color cases are

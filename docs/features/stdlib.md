@@ -56,6 +56,9 @@ cookie/JSON surface, is documented in
 The revision-pinned Option, Result, Retry, and native delay contract is
 documented in
 [option-result-retry-parity.md](../option-result-retry-parity.md).
+Root equality and explicit output parity are documented in
+[comparison-parity.md](../comparison-parity.md) and
+[cli-presentation-parity.md](../cli-presentation-parity.md).
 
 ## Implementation Types
 
@@ -96,6 +99,24 @@ let map<'a, 'b>(list: List<a>, fn: (a) -> b) : List<b> =
     | [] -> []
     | h :: t -> Stdlib.List.push<b>(Stdlib.List.map<a, b>(t, fn), fn(h))
 ```
+
+## Root prelude
+
+```dark
+module Stdlib
+
+let equals<'a>(left: a, right: a) : Bool
+let notEquals<'a>(left: a, right: a) : Bool
+let print(str: String) : Unit
+let printLine(str: String) : Unit
+let printLines(lines: List<String>) : Unit
+```
+
+Equality functions monomorphize over the compiler's existing typed structural
+equality plan. Printing remains String-only: `print` and `printLine` forward to
+the ordered native output effects, while `printLines` is portable Dark composed
+with head-to-tail `Stdlib.List.iter`. Final expression rendering remains a
+separate compiler stage and suppresses Unit.
 
 ## Stdlib.Int64
 
@@ -149,6 +170,9 @@ let andThen<'t, 'u>(opt: Option<t>, fn: (t) -> Option<u>) : Option<u>
 let and<'a, 'b>(option1: Option<a>, option2: Option<b>) : Option<b>
 let toList<'t>(opt: Option<t>) : List<t>
 ```
+
+`Stdlib.List.iter<'a>(list, fn)` invokes `fn` exactly once per element in
+head-to-tail order and returns Unit; the empty list performs no calls.
 
 ## Stdlib.Result
 

@@ -2,8 +2,9 @@
 //
 // Interpreter spelling and behavior were revalidated against darklang/dark
 // 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. The approved compiler evidence
-// revision is b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899; implementation started
-// from compiler HEAD 2e5690c6d16f4e6f261ffdc86f075e52766753c8.
+// revision is 51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3; this implementation started
+// from compiler HEAD c609b56ce1ec488afc3146c585b6f45a2fcf22a8 and was compared at
+// ab81ead7f4b232b4ffa181d8ddb71e9381c510c8.
 
 // Scalar equality truth tables.
 () == () = true
