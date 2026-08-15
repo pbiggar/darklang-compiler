@@ -5641,6 +5641,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             else []
         let streamDecHelper =
             generateStreamRefCountDecHelper {
+                FunctionName = streamRefCountDecHelperLabel
                 StackSize = 0
                 UsedCalleeSaved = []
                 EnableLeakCheck = enableLeakCheck
