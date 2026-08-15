@@ -3,8 +3,8 @@
 ## Revision baseline
 
 This contract was revalidated from compiler implementation commit
-`eca9bf66dae63b91f506978be26ba29eb6a864e5`, based on compiler `main` at
-`c10218d3d2e9f11c30ed6ebbdb02faf707fadccb`, and darklang/dark interpreter
+`8a33ccda12d38e41b6ffa7627363fa8f4ff7b238`, based on compiler `main` at
+`f8729846ea9012bceae1510d136f1a0ea1080b61`, and darklang/dark interpreter
 revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
 `8a402797` and compiler evidence revision
 `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` were navigation aids only; every
