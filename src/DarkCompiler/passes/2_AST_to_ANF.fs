@@ -59,6 +59,11 @@ let private materializeComparisonPlan (targetType: AST.Type) (args: AST.Expr lis
                     )
                 )
             )
+        | AST.TInt ->
+            AST.Call (
+                "Stdlib.Int.equals",
+                AST.NonEmptyList.fromList [leftExpr; rightExpr]
+            )
         | _ -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
     | _ -> Crash.crash "Comparison plan expected exactly two operands"
 
@@ -2751,6 +2756,8 @@ let private comparisonForCapturedValue
         AST.Call (TypeChecking.eqHelperName typ, exprArgsFromList [left; right])
     elif typ = AST.TString then
         AST.Call ("Stdlib.String.equals", exprArgsFromList [left; right])
+    elif typ = AST.TInt then
+        AST.Call ("Stdlib.Int.equals", exprArgsFromList [left; right])
     else
         AST.BinOp (AST.Eq, left, right)
 
@@ -4742,6 +4749,12 @@ let rec private letPatternAcceptsType
 /// typeReg maps record type names to field definitions
 /// variantLookup maps variant names to (type name, tag index)
 /// funcReg maps function names to their return types
+let private htmlVoidElementsExpr () : AST.Expr =
+    [ "area"; "base"; "br"; "col"; "command"; "embed"; "hr"; "img"
+      "input"; "keygen"; "link"; "meta"; "param"; "source"; "track"; "wbr" ]
+    |> List.map AST.StringLiteral
+    |> AST.ListLiteral
+
 let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
     | AST.DictLiteral (_, []) ->
@@ -4822,6 +4835,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         else if name = "Stdlib.Blob.empty" then
             // Blob.empty shares the immortal empty dynamic-buffer literal.
             Ok (ANF.Return (ANF.StringLiteral ""), varGen)
+        else if name = "Stdlib.Html.voidElements" then
+            toANF
+                (htmlVoidElementsExpr ())
+                varGen env typeReg variantLookup funcReg moduleRegistry
         else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
             toANF
                 (AST.RecordLiteral (
@@ -9049,6 +9066,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             Ok (ANF.FloatLiteral System.Double.NaN, [], varGen)
         else if name = "Stdlib.Blob.empty" then
             Ok (ANF.StringLiteral "", [], varGen)
+        else if name = "Stdlib.Html.voidElements" then
+            toAtom
+                (htmlVoidElementsExpr ())
+                varGen env typeReg variantLookup funcReg moduleRegistry
         else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
             toAtom
                 (AST.RecordLiteral (

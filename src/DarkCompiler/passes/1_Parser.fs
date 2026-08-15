@@ -1087,7 +1087,9 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                     | TRecord (potentialVariant, []) when
                         // A bare uppercase name is a nullary constructor. Primitive aliases
                         // have already parsed to their dedicated Type cases; named aliases
-                        // with type arguments remain unambiguous TRecord applications.
+                        // with type arguments and qualified type names remain unambiguous
+                        // aliases to existing types.
+                        not (potentialVariant.Contains(".")) &&
                         potentialVariant <> "Int64" && potentialVariant <> "Int32" && potentialVariant <> "Int16" && potentialVariant <> "Int8" &&
                         potentialVariant <> "UInt64" && potentialVariant <> "UInt32" && potentialVariant <> "UInt16" && potentialVariant <> "UInt8" &&
                         potentialVariant <> "Bool" && potentialVariant <> "String" && potentialVariant <> "Float" ->

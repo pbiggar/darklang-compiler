@@ -879,7 +879,7 @@ let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : s
         | ANF.DynamicBufferRelease _ ->
             listRefCountDecDynamicBufferHelperLabel
         | ANF.RecursiveRelease sourceType ->
-            recursiveSumRefCountDecHelperLabel sourceType
+            plannedListDecHelperLabelForReleasePlan (ANF.RecursiveRelease sourceType)
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
             listRefCountDecListHelperLabel
         | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
@@ -1168,6 +1168,7 @@ let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86
 type private ListLeafPayloadRelease =
     | NoLeafPayloadRelease
     | FixedBlockPlannedLeafPayload of payloadSize: int * releasePlan: ANF.RcReleasePlan
+    | RecursivePlannedLeafPayload of sourceType: AST.Type
     | ListLeafPayload
     | ClosureLeafPayload
     | DictLeafPayload
@@ -1335,6 +1336,16 @@ let private generateListRefCountDecHelperWith
             @ genRefCountDecGenericWithPlan helperCtx X86_64.R8 payloadSize (Some releasePlan)
             @ [X86_64.POP X86_64.RSI
                X86_64.POP X86_64.RDI]
+        | RecursivePlannedLeafPayload sourceType ->
+            [X86_64.PUSH X86_64.RDI
+             X86_64.PUSH X86_64.RSI
+             X86_64.PUSH X86_64.RCX
+             X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 0)
+             X86_64.CALL (recursiveSumRefCountDecHelperLabel sourceType)
+             X86_64.POP X86_64.RCX
+             X86_64.POP X86_64.RSI
+             X86_64.POP X86_64.RDI
+             X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)]
     [X86_64.Label helperLabel
      // Preserve callee-saved registers used to keep the current node stable
      // across payload-release helpers. Pending DFS work is pushed above them.
@@ -1534,6 +1545,8 @@ let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPaylo
         true
     | FixedBlockPlannedLeafPayload (_, releasePlan) ->
         rcReleasePlanContains (releasePlanIsRootKind ANF.DictHeap) releasePlan
+    | RecursivePlannedLeafPayload _ ->
+        false
     | DictListLeafPayload ->
         false
     | NoLeafPayloadRelease
@@ -1548,6 +1561,8 @@ let private listLeafPayloadNeedsDictListValueDecHelper (leafPayloadRelease: List
         true
     | FixedBlockPlannedLeafPayload (_, releasePlan) ->
         rcReleasePlanContains releasePlanIsDictWithListValue releasePlan
+    | RecursivePlannedLeafPayload _ ->
+        false
     | NoLeafPayloadRelease
     | ListLeafPayload
     | ClosureLeafPayload
@@ -1561,6 +1576,8 @@ let private listLeafPayloadNeedsClosureDecHelper (leafPayloadRelease: ListLeafPa
         true
     | FixedBlockPlannedLeafPayload (_, releasePlan) ->
         rcReleasePlanContains (releasePlanIsRootKind ANF.ClosureHeap) releasePlan
+    | RecursivePlannedLeafPayload _ ->
+        false
     | NoLeafPayloadRelease
     | ListLeafPayload
     | DictLeafPayload
@@ -1588,12 +1605,16 @@ let private generateNeededListRefCountDecHelpers
         |> Map.toList
         |> List.collect (fun (helperLabel, (payloadSize, releasePlan)) ->
             if Set.contains helperLabel neededListDecHelperLabels then
+                let leafPayloadRelease =
+                    match releasePlan with
+                    | ANF.RecursiveRelease sourceType -> RecursivePlannedLeafPayload sourceType
+                    | _ -> FixedBlockPlannedLeafPayload (payloadSize, releasePlan)
                 generateListRefCountDecHelperWith
                     helperLabel
                     enableLeakCheck
                     recordRegistry
                     sumShapeRegistry
-                    (FixedBlockPlannedLeafPayload (payloadSize, releasePlan))
+                    leafPayloadRelease
             else
                 [])
 
@@ -4968,6 +4989,12 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 |> Map.add
                     (plannedListDecHelperLabelForReleasePlan elementRelease)
                     (payloadSize, elementRelease)
+                |> mergePlannedListDecHelperMaps nestedHelpers
+            | ANF.RecursiveRelease _ ->
+                Map.empty
+                |> Map.add
+                    (plannedListDecHelperLabelForReleasePlan elementRelease)
+                    (8, elementRelease)
                 |> mergePlannedListDecHelperMaps nestedHelpers
             | _ ->
                 nestedHelpers

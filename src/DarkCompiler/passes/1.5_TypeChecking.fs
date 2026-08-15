@@ -1196,6 +1196,8 @@ let private buildEqExprForType
         makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
     | TString ->
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
+    | TInt ->
+        Call ("Stdlib.Int.equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TList elemType ->
         let resolvedElemType = resolveType aliasReg elemType
         makeInternalTypeApp (EqHelperDispatchTypeApp (TList resolvedElemType, leftExpr, rightExpr))
@@ -4936,7 +4938,7 @@ let rec private checkExprWithParamNames
         match elements with
         | [] ->
             // Empty list: use expected list type or keep a type variable
-            match expectedType with
+            match expectedType |> Option.map (resolveType aliasReg) with
             | Some (TList elemType) -> Ok (TList elemType, ListLiteral [])
             | Some other -> Error (TypeMismatch (other, TList (TVar "t"), "empty list"))
             | None -> Ok (TList (TVar "t"), ListLiteral [])
@@ -4944,7 +4946,7 @@ let rec private checkExprWithParamNames
             // Use expected list element type for the first element when available, so
             // lambda/list literals in expected contexts reconcile type variables consistently.
             let firstExpectedType =
-                match expectedType with
+                match expectedType |> Option.map (resolveType aliasReg) with
                 // A bare type variable must be inferred from the element. Passing it into
                 // expression checking would hide concrete requirements such as arithmetic.
                 | Some (TList (TVar _)) -> None
@@ -5441,6 +5443,9 @@ let rec private buildEqHelperExpr
 
     | _, TString ->
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
+
+    | _, TInt ->
+        Call ("Stdlib.Int.equals", NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TDict (TString, valueType) ->
         let entryType = TTuple [TString; resolveType aliasReg valueType]
@@ -6364,11 +6369,17 @@ let private checkFunctionDef
     let canonicalParams =
         funcDef.Params
         |> NonEmptyList.map (fun (name, typ) ->
-            (name, canonicalizeDeclaredTypeRefs typeReg variantLookup typ))
+            (name,
+             typ
+             |> canonicalizeDeclaredTypeRefs typeReg variantLookup
+             |> resolveType aliasReg
+             |> canonicalizeBareSumTypeRefs variantLookup))
 
     let canonicalReturnType =
         funcDef.ReturnType
         |> canonicalizeDeclaredTypeRefs typeReg variantLookup
+        |> resolveType aliasReg
+        |> canonicalizeBareSumTypeRefs variantLookup
 
     let canonicalFuncDef =
         { funcDef with
@@ -7155,17 +7166,6 @@ let private checkResolvedProgramInternal
     let programTypeReg =
         resolveAliasesInTypeRegistry declarationSummary.AliasReg declarationSummary.TypeReg
 
-    // Build environment with function signatures from THIS program
-    let programFuncEnv =
-        declarationSummary.FuncSigs
-        |> Map.map (fun _ (paramTypes, returnType) ->
-            TFunction (
-                paramTypes
-                |> List.map (canonicalizeDeclaredTypeRefs programTypeReg declarationSummary.VariantLookup),
-                returnType
-                |> canonicalizeDeclaredTypeRefs programTypeReg declarationSummary.VariantLookup
-            ))
-
     let programGenericFuncReg : GenericFuncRegistry = {
         Functions = declarationSummary.GenericFuncs
         RequireExplicitTypeArgsForBareCalls = requireExplicitTypeArgsForBareCalls
@@ -7204,6 +7204,33 @@ let private checkResolvedProgramInternal
              else
                  payloadType))
 
+    let programAliasReg =
+        declarationSummary.AliasReg
+        |> Map.map (fun _ (typeParams, targetType) ->
+            (typeParams, canonicalizeBareSumTypeRefs canonicalVariantLookup targetType))
+
+    let functionAliasReg =
+        match baseEnv with
+        | Some existingEnv ->
+            Map.fold
+                (fun aliases name alias -> Map.add name alias aliases)
+                existingEnv.AliasReg
+                programAliasReg
+        | None -> programAliasReg
+
+    // Function calls must expose the same canonical types as checked function
+    // bodies. In particular, interpreter fixtures commonly alias an external
+    // recursive sum and then return it from a small wrapper.
+    let programFuncEnv =
+        declarationSummary.FuncSigs
+        |> Map.map (fun _ (paramTypes, returnType) ->
+            let canonicalize typ =
+                typ
+                |> canonicalizeDeclaredTypeRefs programTypeReg canonicalVariantLookup
+                |> resolveType functionAliasReg
+                |> canonicalizeBareSumTypeRefs canonicalVariantLookup
+            TFunction (List.map canonicalize paramTypes, canonicalize returnType))
+
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
         TypeReg = programTypeReg
@@ -7213,7 +7240,7 @@ let private checkResolvedProgramInternal
         FuncParamNames = declarationSummary.FuncParamNames
         GenericFuncReg = programGenericFuncReg
         ModuleRegistry = moduleRegistry
-        AliasReg = declarationSummary.AliasReg
+        AliasReg = programAliasReg
         ResolutionEnv = programResolutionEnv
     }
 

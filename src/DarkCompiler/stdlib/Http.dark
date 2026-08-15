@@ -1,0 +1,131 @@
+// Stdlib.Http - canonical portable HTTP request, response, parser, and cookie values.
+
+module Stdlib.Http
+
+type Request = { url: String, headers: List<(String, String)>, body: Blob }
+
+let __parseQueryParam(param: String) : Stdlib.Option.Option<(String, String)> =
+    if param == "" then None
+    else
+        match Stdlib.String.split(param, "=") with
+        | [key, value] -> Some((key, value))
+        | [key] -> Some((key, ""))
+        | [key, ...valueParts] -> Some((key, Stdlib.String.join(valueParts, "=")))
+        | [] -> None
+
+let __queryParamsToDict(
+    params: List<String>,
+    result: Dict<String>
+) : Dict<String> =
+    match params with
+    | [] -> result
+    | [param, ...rest] ->
+        let next =
+            match Stdlib.Http.__parseQueryParam(param) with
+            | None -> result
+            | Some(pair) ->
+                Stdlib.Dict.setOverridingDuplicates<String>(result, pair.0, pair.1) in
+        Stdlib.Http.__queryParamsToDict(rest, next)
+
+let parseQueryString(url: String) : Dict<String> =
+    match Stdlib.String.split(url, "?") with
+    | [] -> Stdlib.Dict.empty
+    | [_] -> Stdlib.Dict.empty
+    | [_, ...queryParts] ->
+        Stdlib.Http.__queryParamsToDict(
+            Stdlib.String.split(Stdlib.String.join(queryParts, "?"), "&"),
+            Stdlib.Dict.empty)
+
+let __parseHeaderLine(line: String) : Stdlib.Option.Option<(String, String)> =
+    let trimmed = Stdlib.String.trim(line) in
+    if trimmed == "" then None
+    else
+        match Stdlib.String.split(trimmed, ":") with
+        | [] -> None
+        | [_] -> None
+        | [name, ...valueParts] ->
+            Some((
+                Stdlib.String.trim(name),
+                Stdlib.String.trim(Stdlib.String.join(valueParts, ":"))))
+
+let __headerLinesToDict(
+    lines: List<String>,
+    result: Dict<String>
+) : Dict<String> =
+    match lines with
+    | [] -> result
+    | [line, ...rest] ->
+        let next =
+            match Stdlib.Http.__parseHeaderLine(line) with
+            | None -> result
+            | Some(pair) ->
+                Stdlib.Dict.setOverridingDuplicates<String>(result, pair.0, pair.1) in
+        Stdlib.Http.__headerLinesToDict(rest, next)
+
+let parseHeaders(value: String) : Dict<String> =
+    let lines = Stdlib.String.split(Stdlib.String.replace(value, "\r\n", "\n"), "\n") in
+    Stdlib.Http.__headerLinesToDict(lines, Stdlib.Dict.empty)
+
+type Response = { statusCode: Int, headers: List<(String, String)>, body: Blob }
+
+let response(body: Blob, statusCode: Int) : Stdlib.Http.Response =
+    Stdlib.Http.Response { statusCode = statusCode, headers = [], body = body }
+
+let responseWithHeaders(
+    body: Blob,
+    headers: List<(String, String)>,
+    statusCode: Int
+) : Stdlib.Http.Response =
+    Stdlib.Http.Response { statusCode = statusCode, headers = headers, body = body }
+
+let success(body: Blob) : Stdlib.Http.Response =
+    Stdlib.Http.response(body, 200I)
+
+let responseWithHtml(body: String, statusCode: Int) : Stdlib.Http.Response =
+    Stdlib.Http.responseWithHeaders(
+        Stdlib.String.toBlob(body),
+        [("Content-Type", "text/html; charset=utf-8")],
+        statusCode)
+
+let responseWithText(text: String, statusCode: Int) : Stdlib.Http.Response =
+    Stdlib.Http.responseWithHeaders(
+        Stdlib.String.toBlob(text),
+        [("Content-Type", "text/plain; charset=utf-8")],
+        statusCode)
+
+let responseWithJson(json: String, statusCode: Int) : Stdlib.Http.Response =
+    Stdlib.Http.responseWithHeaders(
+        Stdlib.String.toBlob(json),
+        [("Content-Type", "application/json")],
+        statusCode)
+
+let redirectTo(url: String) : Stdlib.Http.Response =
+    Stdlib.Http.responseWithHeaders(
+        Stdlib.Blob.empty,
+        [("Location", url)],
+        302I)
+
+let badRequest(error: String) : Stdlib.Http.Response =
+    Stdlib.Http.response(Stdlib.String.toBlob(error), 400I)
+
+let notFound() : Stdlib.Http.Response =
+    Stdlib.Http.response(Stdlib.Blob.empty, 404I)
+
+let unauthorized() : Stdlib.Http.Response =
+    Stdlib.Http.response(Stdlib.Blob.empty, 401I)
+
+let forbidden() : Stdlib.Http.Response =
+    Stdlib.Http.response(Stdlib.Blob.empty, 403I)
+
+let serverError(error: String) : Stdlib.Http.Response =
+    Stdlib.Http.response(Stdlib.String.toBlob(error), 500I)
+
+type Cookie = {
+    expires: DateTime,
+    maxAge: Int,
+    domain: String,
+    path: String,
+    secure: Bool,
+    httpOnly: Bool,
+    sameSite: String
+}

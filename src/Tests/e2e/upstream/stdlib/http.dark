@@ -18,26 +18,23 @@
 //   Stdlib.Http.setCookie "myCookie" "myVal" { Fake = "fake"} = Builtin.Test.runtimeError "Keys must be `Expires`, `Max-Age`, `Domain`, `Path`, `Secure`, `HttpOnly`, and/or `SameSite`, but one of the keys was Fake"
 
 
-Stdlib.Http.badRequest_v0 "Your request resulted in an error" =
-  Stdlib.Http.Response
-    { statusCode = 400I
-      headers = []
-      body = Stdlib.String.toBlob "Your request resulted in an error" }
+(let response = Stdlib.Http.badRequest_v0 "Your request resulted in an error" in
+ (response.statusCode, response.headers, Stdlib.Blob.toString response.body)) =
+  (400I, [], Stdlib.Result.Result.Ok "Your request resulted in an error")
 
-Stdlib.Http.response (Stdlib.String.toBlob "test") 200I =
-  Stdlib.Http.Response
-    { statusCode = 200I
-      headers = []
-      body = Stdlib.String.toBlob "test" }
+(let response = Stdlib.Http.response (Stdlib.String.toBlob "test") 200I in
+ (response.statusCode, response.headers, Stdlib.Blob.toString response.body)) =
+  (200I, [], Stdlib.Result.Result.Ok "test")
 
-Stdlib.Http.responseWithHeaders
-  (Stdlib.String.toBlob "test")
-  [ ("Content-Type", "text/html; charset=utf-8") ]
-  200I =
-    Stdlib.Http.Response
-      { statusCode = 200I
-        headers = [ ("Content-Type", "text/html; charset=utf-8") ]
-        body = Stdlib.String.toBlob "test" }
+(let response =
+   Stdlib.Http.responseWithHeaders
+     (Stdlib.String.toBlob "test")
+     [ ("Content-Type", "text/html; charset=utf-8") ]
+     200I in
+ (response.statusCode, response.headers, Stdlib.Blob.toString response.body)) =
+  (200I,
+   [ ("Content-Type", "text/html; charset=utf-8") ],
+   Stdlib.Result.Result.Ok "test")
 
 Stdlib.Http.notFound () = Stdlib.Http.response Stdlib.Blob.empty 404I
 
@@ -45,26 +42,27 @@ Stdlib.Http.unauthorized () = Stdlib.Http.response Stdlib.Blob.empty 401I
 
 Stdlib.Http.forbidden () = Stdlib.Http.response Stdlib.Blob.empty 403I
 
-Stdlib.Http.success (Stdlib.String.toBlob "test") =
-  Stdlib.Http.response (Stdlib.String.toBlob "test") 200I
+(let response = Stdlib.Http.success (Stdlib.String.toBlob "test") in
+ (response.statusCode, response.headers, Stdlib.Blob.toString response.body)) =
+  (200I, [], Stdlib.Result.Result.Ok "test")
 
-Stdlib.Http.responseWithHtml "test" 200I =
-  Stdlib.Http.responseWithHeaders
-    (Stdlib.String.toBlob "test")
-    [ ("Content-Type", "text/html; charset=utf-8") ]
-    200I
+(let response = Stdlib.Http.responseWithHtml "test" 200I in
+ (response.statusCode, response.headers, Stdlib.Blob.toString response.body)) =
+  (200I,
+   [ ("Content-Type", "text/html; charset=utf-8") ],
+   Stdlib.Result.Result.Ok "test")
 
-Stdlib.Http.responseWithText "test" 200I =
-  Stdlib.Http.responseWithHeaders
-    (Stdlib.String.toBlob "test")
-    [ ("Content-Type", "text/plain; charset=utf-8") ]
-    200I
+(let response = Stdlib.Http.responseWithText "test" 200I in
+ (response.statusCode, response.headers, Stdlib.Blob.toString response.body)) =
+  (200I,
+   [ ("Content-Type", "text/plain; charset=utf-8") ],
+   Stdlib.Result.Result.Ok "test")
 
-Stdlib.Http.responseWithJson "test" 200I =
-  (Stdlib.Http.responseWithHeaders
-    (Stdlib.String.toBlob "test")
-    [ ("Content-Type", "application/json") ]
-    200I)
+(let response = Stdlib.Http.responseWithJson "test" 200I in
+ (response.statusCode, response.headers, Stdlib.Blob.toString response.body)) =
+  (200I,
+   [ ("Content-Type", "application/json") ],
+   Stdlib.Result.Result.Ok "test")
 
 (Stdlib.Http.redirectTo "") =
   Stdlib.Http.responseWithHeaders Stdlib.Blob.empty [ ("Location", "") ] 302I

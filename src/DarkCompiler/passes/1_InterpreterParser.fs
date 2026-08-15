@@ -99,6 +99,95 @@ and Token =
     | TTypeVar of string // apostrophe-prefixed type variable; apostrophe is syntax, not part of identity
     | TEOF
 
+type private ListLayout = { OpeningColumn: int; HasContent: bool }
+
+type private LayoutScanMode =
+    | Normal
+    | Quoted of escaped: bool
+    | LineComment
+
+/// Preserve the interpreter formatter's indentation-separated list elements
+/// before lexing discards line boundaries. A list element begins two columns
+/// past its opening bracket; deeper indentation remains an application
+/// continuation. Explicit separators retain their existing meaning.
+let private materializeIndentedListSeparators (input: string) : string =
+    let markListContent layouts =
+        match layouts with
+        | current :: rest -> { current with HasContent = true } :: rest
+        | [] -> []
+
+    let rec takeIndent count acc chars =
+        match chars with
+        | (' ' as c) :: rest -> takeIndent (count + 1) (c :: acc) rest
+        | ('\t' as c) :: rest -> takeIndent (count + 1) (c :: acc) rest
+        | _ -> (count, List.rev acc, chars)
+
+    let appendOutput output reversed =
+        output |> List.fold (fun acc c -> c :: acc) reversed
+
+    let shouldSeparate layouts indent afterIndent previousSignificant =
+        match layouts, afterIndent, previousSignificant with
+        | current :: _, next :: _, Some previous when
+            current.HasContent
+            && indent = current.OpeningColumn + 2
+            && next <> ']'
+            && previous <> '['
+            && previous <> ';'
+            && previous <> ',' -> true
+        | _ -> false
+
+    let rec scan mode column layouts previousSignificant reversed chars =
+        match mode, chars with
+        | _, [] ->
+            reversed |> List.rev |> List.toArray |> System.String
+        | LineComment, ('\r' :: '\n' :: rest) ->
+            scan Normal 0 layouts previousSignificant ('\n' :: '\r' :: reversed) rest
+        | LineComment, (('\n' | '\r') as newline) :: rest ->
+            scan Normal 0 layouts previousSignificant (newline :: reversed) rest
+        | LineComment, c :: rest ->
+            scan LineComment (column + 1) layouts previousSignificant (c :: reversed) rest
+        | Quoted escaped, c :: rest ->
+            let nextMode =
+                if escaped then Quoted false
+                elif c = '\\' then Quoted true
+                elif c = '"' then Normal
+                else Quoted false
+            let nextColumn = if c = '\n' || c = '\r' then 0 else column + 1
+            scan nextMode nextColumn layouts previousSignificant (c :: reversed) rest
+        | Normal, '/' :: '/' :: rest ->
+            scan LineComment (column + 2) layouts previousSignificant ('/' :: '/' :: reversed) rest
+        | Normal, '"' :: rest ->
+            scan (Quoted false) (column + 1) (markListContent layouts) (Some '"') ('"' :: reversed) rest
+        | Normal, '[' :: rest ->
+            let parentLayouts = markListContent layouts
+            let layouts = { OpeningColumn = column; HasContent = false } :: parentLayouts
+            scan Normal (column + 1) layouts (Some '[') ('[' :: reversed) rest
+        | Normal, ']' :: rest ->
+            let remainingLayouts =
+                match layouts with
+                | _ :: tail -> tail
+                | [] -> []
+            scan Normal (column + 1) remainingLayouts (Some ']') (']' :: reversed) rest
+        | Normal, ('\r' :: '\n' :: rest) ->
+            let indent, whitespace, afterIndent = takeIndent 0 [] rest
+            let needsSeparator = shouldSeparate layouts indent afterIndent previousSignificant
+            let output = ['\r'; '\n'] @ whitespace @ (if needsSeparator then [';'; ' '] else [])
+            let previous = if needsSeparator then Some ';' else previousSignificant
+            scan Normal indent layouts previous (appendOutput output reversed) afterIndent
+        | Normal, (('\n' | '\r') as newline) :: rest ->
+            let indent, whitespace, afterIndent = takeIndent 0 [] rest
+            let needsSeparator = shouldSeparate layouts indent afterIndent previousSignificant
+            let output = newline :: (whitespace @ (if needsSeparator then [';'; ' '] else []))
+            let previous = if needsSeparator then Some ';' else previousSignificant
+            scan Normal indent layouts previous (appendOutput output reversed) afterIndent
+        | Normal, c :: rest ->
+            let significant = not (c = ' ' || c = '\t')
+            let nextLayouts = if significant then markListContent layouts else layouts
+            let nextPrevious = if significant then Some c else previousSignificant
+            scan Normal (column + 1) nextLayouts nextPrevious (c :: reversed) rest
+
+    input |> Seq.toList |> scan Normal 0 [] None []
+
 /// Lexer: convert string to list of tokens
 let lex (input: string) : Result<Token list, string> =
     let isDirectlyInsideList (tokensReversed: Token list) : bool =
@@ -668,7 +757,10 @@ let lex (input: string) : Result<Token list, string> =
         | c :: _ ->
             Error $"Unexpected character: {c}"
 
-    input |> Seq.toList |> fun cs -> lexHelper cs []
+    input
+    |> materializeIndentedListSeparators
+    |> Seq.toList
+    |> fun cs -> lexHelper cs []
 
 /// Parse parenthesized type entries for function and tuple forms.
 /// Entries may be comma- or star-separated, and each entry can be a full type expression.

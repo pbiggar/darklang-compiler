@@ -684,7 +684,8 @@ let private analyzePreambleWithReducedFunctionSet
         let hasUnparsableTestSource =
             runnableTests
             |> List.exists (fun test ->
-                CompilerLibrary.parseProgram spec.SourceSyntax spec.AllowInternal test.Source
+                sourceToExecute spec.SourceSyntax spec.AllowInternal test
+                |> Result.bind (CompilerLibrary.parseProgram spec.SourceSyntax spec.AllowInternal)
                 |> Result.isError)
 
         let seedFunctions =
@@ -693,7 +694,8 @@ let private analyzePreambleWithReducedFunctionSet
             else
                 runnableTests
                 |> List.map (fun test ->
-                    CompilerLibrary.parseProgram spec.SourceSyntax spec.AllowInternal test.Source
+                    sourceToExecute spec.SourceSyntax spec.AllowInternal test
+                    |> Result.bind (CompilerLibrary.parseProgram spec.SourceSyntax spec.AllowInternal)
                     |> Result.map (collectProgramReferencedPreambleFuncs preambleFunctionNames))
                 |> List.choose Result.toOption
                 |> List.fold Set.union Set.empty

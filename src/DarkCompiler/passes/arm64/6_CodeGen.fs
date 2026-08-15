@@ -443,6 +443,27 @@ let private generateListRefCountDecHelperWith
         @ refcountUpdate
         @ [ARM64Symbolic.Label leafPayloadDone]
 
+    let releaseRecursivePayload (sourceType: AST.Type) =
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+            ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
+            ARM64Symbolic.BL (recursiveSumRefCountDecHelperLabel sourceType)
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+            ARM64Symbolic.Label leafPayloadDone
+        ]
+
     let leafListHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
         match releasePlan with
         | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease elementRelease) ->
@@ -456,7 +477,7 @@ let private generateListRefCountDecHelperWith
             | ANF.DynamicBufferRelease _ ->
                 listRefCountDecHelperLabel
             | ANF.RecursiveRelease sourceType ->
-                recursiveSumRefCountDecHelperLabel sourceType
+                plannedListDecHelperLabelForReleasePlan (ANF.RecursiveRelease sourceType)
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
                 listRefCountDecListHelperLabel
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
@@ -712,7 +733,10 @@ let private generateListRefCountDecHelperWith
 
     let releaseLeafPayload =
         match leafGenericPayloadSize, releaseLeafDynamicBufferPayload, releaseLeafListPayload, releaseLeafDictPayload, releaseLeafClosurePayload with
-        | None, false, false, false, false -> []
+        | None, false, false, false, false ->
+            match leafGenericReleasePlan with
+            | Some (ANF.RecursiveRelease sourceType) -> releaseRecursivePayload sourceType
+            | _ -> []
         | None, true, _, _, _ ->
             releaseDynamicBufferPayload
         | None, false, true, _, _ ->
@@ -1065,10 +1089,14 @@ let private generateNeededListRefCountDecHelpers
         |> Map.toList
         |> List.collect (fun (helperLabel, (payloadSize, releasePlan)) ->
             if Set.contains helperLabel neededHelperLabels then
+                let plannedPayloadSize =
+                    match releasePlan with
+                    | ANF.RecursiveRelease _ -> None
+                    | _ -> Some payloadSize
                 generateListRefCountDecHelperWith
                     helperLabel
                     ctx
-                    (Some payloadSize)
+                    plannedPayloadSize
                     (Some releasePlan)
                     false
                     false
@@ -1158,8 +1186,62 @@ let private generateRecursiveSumRefCountDecHelper
         match plan with
         | ANF.NoReleasePlan ->
             []
+        | ANF.DynamicBufferRelease _ ->
+            let doneLabel = label $"{path}_dynamic_done"
+            let leakRelease =
+                if ctx.Options.EnableLeakCheck then
+                    let labelRef = dataLabel leakCounterLabel
+                    [
+                        ARM64Symbolic.CBNZ (ARM64Symbolic.X1, doneLabel)
+                        ARM64Symbolic.ADRP (ARM64Symbolic.X17, labelRef)
+                        ARM64Symbolic.ADD_label (ARM64Symbolic.X17, ARM64Symbolic.X17, labelRef)
+                        ARM64Symbolic.LDR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+                        ARM64Symbolic.SUB_imm (ARM64Symbolic.X16, ARM64Symbolic.X16, 1us)
+                        ARM64Symbolic.STR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+                    ]
+                else
+                    []
+            [
+                ARM64Symbolic.CBZ (ARM64Symbolic.X0, doneLabel)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X27)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, doneLabel)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X28)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, doneLabel)
+                ARM64Symbolic.LDR (ARM64Symbolic.X1, ARM64Symbolic.X0, 0s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 7us)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 3us, 0)
+                ARM64Symbolic.LSR_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X2)
+                ARM64Symbolic.LSL_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X2)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X2, ARM64Symbolic.X0, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X2, ARM64Symbolic.X2, ARM64Symbolic.X1)
+                ARM64Symbolic.LDR (ARM64Symbolic.X1, ARM64Symbolic.X2, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X3, 0xFFFFus, 0)
+                ARM64Symbolic.MOVK (ARM64Symbolic.X3, 0xFFFFus, 16)
+                ARM64Symbolic.MOVK (ARM64Symbolic.X3, 0xFFFFus, 32)
+                ARM64Symbolic.MOVK (ARM64Symbolic.X3, 0x7FFFus, 48)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X1, ARM64Symbolic.X3)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, doneLabel)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X1, ARM64Symbolic.X2, 0s)
+            ]
+            @ leakRelease
+            @ [ARM64Symbolic.Label doneLabel]
         | ANF.RecursiveRelease recursiveType ->
             [ARM64Symbolic.BL (recursiveSumRefCountDecHelperLabel recursiveType)]
+        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease elementRelease) ->
+            let helper =
+                match elementRelease with
+                | ANF.NoReleasePlan -> listRefCountDecHelperLabel
+                | ANF.DynamicBufferRelease ANF.DynamicStringBuffer -> listRefCountDecStringHelperLabel
+                | ANF.DynamicBufferRelease ANF.DynamicBlobBuffer -> listRefCountDecBlobHelperLabel
+                | ANF.DynamicBufferRelease _ -> listRefCountDecHelperLabel
+                | ANF.RecursiveRelease recursiveType ->
+                    plannedListDecHelperLabelForReleasePlan (ANF.RecursiveRelease recursiveType)
+                | ANF.RootRelease (_, ANF.TaggedList, _) -> listRefCountDecListHelperLabel
+                | ANF.RootRelease (_, ANF.DictHeap, _) -> listRefCountDecDictHelperLabel
+                | ANF.RootRelease (_, ANF.ClosureHeap, _) -> listRefCountDecClosureHelperLabel
+                | ANF.RootRelease (_, ANF.GenericHeap, _) -> plannedListDecHelperLabelForReleasePlan elementRelease
+            [ARM64Symbolic.BL helper]
         | ANF.RootRelease (payloadSize, ANF.GenericHeap, payloadPlan) ->
             let doneLabel = label $"{path}_done"
             let payloadReleases = releasePayload path payloadPlan
@@ -1727,7 +1809,7 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
         | ANF.DynamicBufferRelease _ ->
             listRefCountDecHelperLabel
         | ANF.RecursiveRelease sourceType ->
-            recursiveSumRefCountDecHelperLabel sourceType
+            plannedListDecHelperLabelForReleasePlan (ANF.RecursiveRelease sourceType)
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
             listRefCountDecListHelperLabel
         | ANF.RootRelease (_, ANF.DictHeap, _) when releasePlanIsDictWithListValue elementRelease ->
@@ -7027,6 +7109,8 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
                 match collectPlannedListHelpers, elementRelease with
                 | true, ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
                     addPlannedListHelper payloadSize elementRelease summary
+                | true, ANF.RecursiveRelease _ ->
+                    addPlannedListHelper 8 elementRelease summary
                 | _ -> summary
             collectReleasePlanSummary
                 includeStaticRootDependencies

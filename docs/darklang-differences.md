@@ -191,6 +191,13 @@ and errors are aligned with the pinned interpreter. The remaining deliberate
 differences are the AOT compiler's earlier static rejection phase and direct
 UTC host-clock syscall boundary. See [temporal-parity.md](temporal-parity.md).
 
+### 3.4 Html and Http value modules
+
+The active Html and Http surface has no intentional semantic divergences from
+the pinned interpreter. `Html.s` is a compiler-only constructor extension;
+`Cookie` is data-only, and `responseWithJson` accepts an already serialized
+string. See the revision-pinned [Html/Http parity matrix](html-http-parity.md).
+
 ## 4. Tooling Differences
 
 Acceptable differences due to compilation vs interpretation model.

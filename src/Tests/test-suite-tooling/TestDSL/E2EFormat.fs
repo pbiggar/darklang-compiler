@@ -423,7 +423,11 @@ let private isIdentifierPathHead (afterEq: string) : bool =
     if trimmed.Length = 0 then
         false
     else
-        trimmed
+        let head =
+            trimmed.Split([| ' '; '\t'; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries)
+            |> Array.tryHead
+            |> Option.defaultValue ""
+        head
         |> Seq.forall (fun c -> Char.IsLetterOrDigit(c) || c = '_' || c = '.')
 
 let private hasClosingParenTest (s: string) : bool =

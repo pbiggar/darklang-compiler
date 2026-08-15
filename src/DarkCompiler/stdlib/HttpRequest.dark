@@ -1,0 +1,34 @@
+// Stdlib.Http.Request - frozen query accessors for canonical HTTP request values.
+
+module Stdlib.Http.Request
+
+let __queryParamPair(param: String) : (String, String) =
+    match Stdlib.String.split(param, "=") with
+    | [key, value] -> (key, value)
+    | _ -> (param, "")
+
+let queryParams(req: Stdlib.Http.Request) : List<(String, String)> =
+    match Stdlib.String.split(req.url, "?") with
+    | [] -> []
+    | [_, ...queryParts] ->
+        Stdlib.List.map<String, (String, String)>(
+            Stdlib.String.split(Stdlib.String.join(queryParts, ""), "&"),
+            Stdlib.Http.Request.__queryParamPair)
+
+let __matchingValue(
+    key: String,
+    pair: (String, String)
+) : Stdlib.Option.Option<String> =
+    if pair.0 == key then Some(pair.1) else None
+
+let queryParam(
+    req: Stdlib.Http.Request,
+    key: String
+) : Stdlib.Option.Option<String> =
+    let found = Stdlib.List.filterMap<(String, String), String>(
+        Stdlib.Http.Request.queryParams(req),
+        Stdlib.Http.Request.__matchingValue(key)) in
+    match found with
+    | [] -> None
+    | [value] -> Some(value)
+    | values -> Some(Stdlib.String.join(values, ","))

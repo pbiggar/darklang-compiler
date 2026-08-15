@@ -31,6 +31,8 @@ The stdlib provides built-in modules available to all Dark programs:
 | `Stdlib.Dict` | Hash map (HAMT) |
 | `Stdlib.Blob` | Immutable binary values and public codecs |
 | `Stdlib.Bytes` | Legacy compiler-only Int64 bridge over Blob |
+| `Stdlib.Html` | Structural HTML nodes, serialization, attributes, and tag constructors |
+| `Stdlib.Http` | Structural requests/responses/cookies, parsers, and response helpers |
 | `Stdlib.Char` | Character helpers |
 | `Stdlib.Crypto` | Hashing and HMAC helpers |
 | `Stdlib.Base64` | Base64 encoding and decoding |
@@ -47,6 +49,9 @@ The stdlib provides built-in modules available to all Dark programs:
 
 The revision-pinned DateTime representation, range, rounding, clock, parsing,
 and Duration contract is documented in [temporal-parity.md](../temporal-parity.md).
+The Html and Http value-module contract, including its Blob bridge and bounded
+cookie/JSON surface, is documented in
+[html-http-parity.md](../html-http-parity.md).
 
 ## Implementation Types
 

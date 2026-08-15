@@ -1,0 +1,179 @@
+// Stdlib.Html - canonical, portable HTML node construction and serialization.
+
+module Stdlib.Html
+
+type Attribute = List<(String, Stdlib.Option.Option<String>)>
+type Attributes = List<(String, Stdlib.Option.Option<String>)>
+
+type HtmlTag = {
+    name: String,
+    attrs: Stdlib.Html.Attributes,
+    children: List<Stdlib.Html.Node>
+}
+
+type Node = String of String | HtmlTag of Stdlib.Html.HtmlTag
+
+let escapeHtml(str: String) : String =
+    Stdlib.String.replace(
+        Stdlib.String.replace(
+            Stdlib.String.replace(
+                Stdlib.String.replace(
+                    Stdlib.String.replace(str, "&", "&amp;"),
+                    "<",
+                    "&lt;"),
+                ">",
+                "&gt;"),
+            "\"",
+            "&quot;"),
+        "'",
+        "&#x27;")
+
+let text(str: String) : Stdlib.Html.Node =
+    Stdlib.Html.Node.String(Stdlib.Html.escapeHtml(str))
+
+let stringNode(str: String) : Stdlib.Html.Node =
+    Stdlib.Html.Node.String(str)
+
+let htmlTagNode(
+    name: String,
+    attrs: Stdlib.Html.Attributes,
+    children: List<Stdlib.Html.Node>
+) : Stdlib.Html.Node =
+    Stdlib.Html.Node.HtmlTag(
+        Stdlib.Html.HtmlTag {
+            name = name,
+            attrs = attrs,
+            children = children
+        })
+
+let __attributeToString(attr: (String, Stdlib.Option.Option<String>)) : String =
+    match attr with
+    | (key, Some(value)) -> key ++ "=\"" ++ value ++ "\""
+    | (key, None) -> key
+
+let __attributesToString(attrs: Stdlib.Html.Attributes) : String =
+    Stdlib.String.join(
+        Stdlib.List.map<(String, Stdlib.Option.Option<String>), String>(
+            attrs,
+            Stdlib.Html.__attributeToString),
+        " ")
+
+let nodeToString(node: Stdlib.Html.Node) : String =
+    match node with
+    | String(str) -> str
+    | HtmlTag(tag) ->
+        let attributesText = Stdlib.Html.__attributesToString(tag.attrs) in
+        let startTag =
+            if attributesText == "" then "<" ++ tag.name ++ ">"
+            else "<" ++ tag.name ++ " " ++ attributesText ++ ">" in
+        if Stdlib.List.member<String>(Stdlib.Html.voidElements, tag.name) then
+            startTag
+        else
+            let childHtml =
+                Stdlib.String.join(
+                    Stdlib.List.map<Stdlib.Html.Node, String>(
+                        tag.children,
+                        Stdlib.Html.nodeToString),
+                    "") in
+            startTag ++ childHtml ++ "</" ++ tag.name ++ ">"
+
+let comment(value: String) : Stdlib.Html.Node =
+    Stdlib.Html.stringNode("<!-- " ++ value ++ " -->")
+
+let classes(classList: List<String>) : (String, Stdlib.Option.Option<String>) =
+    ("class", Some(Stdlib.String.join(classList, " ")))
+
+let __styleProperty(property: (String, String)) : String =
+    property.0 ++ ": " ++ property.1
+
+let style(properties: List<(String, String)>) : (String, Stdlib.Option.Option<String>) =
+    let rendered =
+        Stdlib.List.map<(String, String), String>(
+            properties,
+            Stdlib.Html.__styleProperty) in
+    ("style", Some(Stdlib.String.join(rendered, "; ")))
+
+let dataAttr(name: String, value: String) : (String, Stdlib.Option.Option<String>) =
+    ("data-" ++ name, Some(value))
+
+let __emptyAttributes() : Stdlib.Html.Attributes = []
+
+let br() : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("br", Stdlib.Html.__emptyAttributes(), [])
+let html(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("html", attrs, children)
+let body(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("body", attrs, children)
+let head(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("head", attrs, children)
+let title(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("title", attrs, children)
+let a(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("a", attrs, children)
+let div(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("div", attrs, children)
+let span(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("span", attrs, children)
+let h1(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("h1", attrs, children)
+let h2(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("h2", attrs, children)
+let h3(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("h3", attrs, children)
+let h4(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("h4", attrs, children)
+let h5(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("h5", attrs, children)
+let h6(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("h6", attrs, children)
+let p(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("p", attrs, children)
+let ul(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("ul", attrs, children)
+let ol(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("ol", attrs, children)
+let li(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("li", attrs, children)
+let table(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("table", attrs, children)
+let tr(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("tr", attrs, children)
+let td(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("td", attrs, children)
+let th(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("th", attrs, children)
+let tbody(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("tbody", attrs, children)
+let thead(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("thead", attrs, children)
+let tfoot(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("tfoot", attrs, children)
+let caption(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("caption", attrs, children)
+let colgroup(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("colgroup", attrs, children)
+let col(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("col", attrs, children)
+let button(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("button", attrs, children)
+let img(attrs: Stdlib.Html.Attributes) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("img", attrs, [])
+let svg(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("svg", attrs, children)
+let path(attrs: Stdlib.Html.Attributes) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("path", attrs, [])
+let meta(attrs: Stdlib.Html.Attributes) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("meta", attrs, [])
+let link(attrs: Stdlib.Html.Attributes) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("link", attrs, [])
+let script(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("script", attrs, children)
+let input(attrs: Stdlib.Html.Attributes) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("input", attrs, [])
+let label(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("label", attrs, children)
+let form(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("form", attrs, children)
+let section(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("section", attrs, children)
+let i(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("i", attrs, children)
+let code(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("code", attrs, children)
+let pre(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("pre", attrs, children)
+let nav(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("nav", attrs, children)
+let footer(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("footer", attrs, children)
+let article(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("article", attrs, children)
+let aside(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("aside", attrs, children)
+let header(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("header", attrs, children)
+let main(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("main", attrs, children)
+let figure(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("figure", attrs, children)
+let figcaption(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("figcaption", attrs, children)
+let video(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("video", attrs, children)
+let audio(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("audio", attrs, children)
+let picture(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("picture", attrs, children)
+let strong(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("strong", attrs, children)
+let em(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("em", attrs, children)
+let b(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("b", attrs, children)
+let u(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("u", attrs, children)
+let s(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("s", attrs, children)
+let small(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("small", attrs, children)
+let mark(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("mark", attrs, children)
+let del(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("del", attrs, children)
+let ins(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("ins", attrs, children)
+let dl(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("dl", attrs, children)
+let dt(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("dt", attrs, children)
+let dd(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("dd", attrs, children)
+let textarea(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("textarea", attrs, children)
+let select(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("select", attrs, children)
+let option(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("option", attrs, children)
+let fieldset(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("fieldset", attrs, children)
+let legend(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("legend", attrs, children)
+let details(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("details", attrs, children)
+let summary(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("summary", attrs, children)
+let dialog(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("dialog", attrs, children)
+
+let document(nodes: List<Stdlib.Html.Node>) : String =
+    "<!DOCTYPE html>" ++
+    Stdlib.String.join(
+        Stdlib.List.map<Stdlib.Html.Node, String>(nodes, Stdlib.Html.nodeToString),
+        "")

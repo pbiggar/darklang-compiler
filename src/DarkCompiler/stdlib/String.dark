@@ -590,6 +590,10 @@ let equals(s1: String, s2: String) : Bool =
     if len1 != len2 then false
     else Stdlib.String.__compareBytes(s1, 0, s2, 0, len1)
 
+// Encode the string's existing UTF-8 bytes into the canonical Blob layout.
+let toBlob(value: String) : Blob =
+    Stdlib.Blob.fromString(value)
+
 // Get first n bytes (alias for take)
 let first(s: String, n: Int64) : String =
     Stdlib.String.take(s, n)
