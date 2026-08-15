@@ -91,6 +91,7 @@ let private rawListAccessorFunctions () =
                     "Stdlib.Internal.SkewList.headUnsafe",
                     [elementType],
                     args [Var "__items"])
+            Recursion = None
         }
     let rawFieldType = TTuple [TString; rawJsonType]
     [ accessor rawHeadName rawJsonType
@@ -213,6 +214,7 @@ let rec private ensureSerializer (env: Env) typ state : Result<string * State, s
             Params = NonEmptyList.singleton ("__value", typ)
             ReturnType = TString
             Body = StringLiteral ""
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         serializeBody env typ (Var "__value") reserved
@@ -246,6 +248,7 @@ and private ensureListSerializer env elemType state =
             Params = NonEmptyList.singleton ("__items", typ)
             ReturnType = TString
             Body = StringLiteral ""
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         serializeCall env elemType (Var "__head") reserved
@@ -279,6 +282,7 @@ and private ensureDictSerializer env valueType state =
             Params = NonEmptyList.singleton ("__entries", listType)
             ReturnType = TString
             Body = StringLiteral ""
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         serializeCall env valueType (TupleAccess (Var "__entry", 1)) reserved
@@ -479,6 +483,7 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
             Params = NonEmptyList.fromList ["__raw", rawJsonType; "__path", pathType]
             ReturnType = resultType typ
             Body = RuntimeError "unfinished JSON decoder"
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         decodeBody env typ reserved
@@ -515,6 +520,7 @@ and private ensureListDecoder env elemType state =
             Params = NonEmptyList.fromList ["__raw_items", rawListType; "__path", pathType; "__index", TInt64]
             ReturnType = resultType (TList elemType)
             Body = RuntimeError "unfinished JSON list decoder"
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let itemPath =
@@ -563,6 +569,7 @@ and private ensureDictDecoder env valueType state =
                      "__dict", dictType]
             ReturnType = resultType dictType
             Body = RuntimeError "unfinished JSON dictionary decoder"
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let key = TupleAccess (Var "__entry", 0)
@@ -881,6 +888,8 @@ let rec private mapExpr rewrite expr =
         | BinOp (op, left, right) -> BinOp (op, recurse left, recurse right)
         | UnaryOp (op, inner) -> UnaryOp (op, recurse inner)
         | Let (pattern, value, body) -> Let (pattern, recurse value, recurse body)
+        | RecursiveLet (recursion, value, body) ->
+            RecursiveLet (recursion, recurse value, recurse body)
         | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
         | Sequence (first, next) -> Sequence (recurse first, recurse next)
         | Call (name, values) -> Call (name, NonEmptyList.map recurse values)
@@ -923,7 +932,7 @@ let rewriteProgram (env: TypeChecking.TypeCheckEnv) (Program topLevels) : Progra
                 match current with
                 | BinOp (_, a, b) | Sequence (a, b) -> capture b (capture a collected)
                 | UnaryOp (_, a) | TupleAccess (a, _) | RecordAccess (a, _) | BoundaryRender (_, a) -> capture a collected
-                | Let (_, a, b) -> capture b (capture a collected)
+                | Let (_, a, b) | RecursiveLet (_, a, b) -> capture b (capture a collected)
                 | If (a, b, c) -> capture c (capture b (capture a collected))
                 | Call (_, values) | TypeApp (_, _, values) -> NonEmptyList.toList values |> List.fold (fun s e -> capture e s) collected
                 | TupleLiteral values | ListLiteral values | Closure (_, values) -> List.fold (fun s e -> capture e s) collected values
