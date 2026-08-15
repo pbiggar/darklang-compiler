@@ -130,6 +130,7 @@ type private RcReleasePlanSummary = {
     DictDecHelperLabels: Set<string>
     PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
     NeedsClosureRcDecHelper: bool
+    NeedsStreamRcDecHelper: bool
 }
 
 /// Reference-count runtime helpers required by the program's LIR instructions.
@@ -142,6 +143,7 @@ type private RcHelperRequirements = {
     NeedsDictRcIncHelper: bool
     NeedsClosureRcIncHelper: bool
     NeedsClosureRcDecHelper: bool
+    NeedsStreamRcDecHelper: bool
     ReleasePlanSummaries: Map<bool * ANF.RcReleasePlan, RcReleasePlanSummary>
 }
 
@@ -1630,12 +1632,24 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
                         releaseDynamicCapture fieldOffset $"captures_{index}_{captureIndex}"
                     | _ ->
                         match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType with
-                        | Some (ANF.RootRelease (_, ANF.TaggedList, _) as releasePlan) ->
+                        | Some (ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease elementRelease)) ->
                             let helper =
-                                match releasePlan with
-                                | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease ANF.NoReleasePlan) ->
-                                    listRefCountDecHelperLabel
-                                | _ -> plannedListDecHelperLabelForReleasePlan releasePlan
+                                match elementRelease with
+                                | ANF.NoReleasePlan -> listRefCountDecHelperLabel
+                                | ANF.DynamicBufferRelease ANF.DynamicStringBuffer -> listRefCountDecStringHelperLabel
+                                | ANF.DynamicBufferRelease ANF.DynamicBlobBuffer -> listRefCountDecBlobHelperLabel
+                                | ANF.DynamicBufferRelease _ -> listRefCountDecHelperLabel
+                                | ANF.RecursiveRelease sourceType ->
+                                    plannedListDecHelperLabelForReleasePlan (ANF.RecursiveRelease sourceType)
+                                | ANF.RootRelease (_, ANF.TaggedList, _) -> listRefCountDecListHelperLabel
+                                | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
+                                    listRefCountDecDictListHelperLabel
+                                | ANF.RootRelease (_, ANF.DictHeap, _) -> listRefCountDecDictHelperLabel
+                                | ANF.RootRelease (_, ANF.ClosureHeap, _) -> listRefCountDecClosureHelperLabel
+                                | ANF.RootRelease (_, ANF.StreamHeap, _) ->
+                                    plannedListDecHelperLabelForReleasePlan elementRelease
+                                | ANF.RootRelease (_, ANF.GenericHeap, _) ->
+                                    plannedListDecHelperLabelForReleasePlan elementRelease
                             releaseManagedRootChildField ARM64Symbolic.X0 fieldOffset helper $"captures_{index}_{captureIndex}"
                         | Some (ANF.RootRelease (_, ANF.DictHeap, _)) ->
                             releaseManagedRootChildField ARM64Symbolic.X0 fieldOffset dictRefCountDecHelperLabel $"captures_{index}_{captureIndex}"
@@ -7176,6 +7190,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         DictDecHelperLabels = Set.empty
         PlannedDictDecHelpers = Map.empty
         NeedsClosureRcDecHelper = false
+        NeedsStreamRcDecHelper = false
     }
 
     let addPlannedListHelper
@@ -7221,6 +7236,8 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
             match releasePlan with
             | ANF.RootRelease (_, ANF.ClosureHeap, _) when collectClosureNeed ->
                 { summary with NeedsClosureRcDecHelper = true }
+            | ANF.RootRelease (_, ANF.StreamHeap, _) ->
+                { summary with NeedsStreamRcDecHelper = true }
             | _ -> summary
 
         match releasePlan with
@@ -7344,6 +7361,7 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
         NeedsDictRcIncHelper = false
         NeedsClosureRcIncHelper = false
         NeedsClosureRcDecHelper = false
+        NeedsStreamRcDecHelper = false
         ReleasePlanSummaries = Map.empty
     }
 
@@ -7444,9 +7462,14 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
                         NeedsClosureRcDecHelper =
                             withPlanRequirements.NeedsClosureRcDecHelper
                             || summary.NeedsClosureRcDecHelper
+                        NeedsStreamRcDecHelper =
+                            withPlanRequirements.NeedsStreamRcDecHelper
+                            || summary.NeedsStreamRcDecHelper
                 }
         | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) ->
             { requirements with NeedsClosureRcDecHelper = true }
+        | LIR.RefCountDec (_, _, LIR.StreamHeap, _) ->
+            { requirements with NeedsStreamRcDecHelper = true }
         | LIR.RefCountInc (_, _, LIR.TaggedList, _) ->
             { requirements with NeedsListRcIncHelper = true }
         | LIR.RefCountInc (_, _, LIR.DictHeap, _) ->
@@ -7783,6 +7806,9 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
     let needsClosureRcDecHelper =
         rcHelperRequirements.NeedsClosureRcDecHelper
 
+    let directlyNeedsStreamRcDecHelper =
+        rcHelperRequirements.NeedsStreamRcDecHelper
+
     ResultList.collectResults (convertFunction heapOverflowTrapBody ctx) sortedFunctions
     |> Result.map (fun allFunctionInstrs ->
         let listRcDecHelperLabelsFromDictHelpers =
@@ -7818,6 +7844,44 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
                     (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
                     releasePlan)
 
+        let selectedListHelpersNeedStreamDecHelper =
+            selectedPlannedListHelpersNeed
+                (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false)
+                selectedListRcDecHelperLabels
+
+        let plannedDictHelpersNeedStreamDecHelper =
+            plannedDictDecHelpers
+            |> Map.exists (fun _ releasePlan ->
+                rcReleasePlanContains
+                    (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false)
+                    releasePlan)
+
+        let selectedClosureHelpersNeedStreamDecHelper =
+            if needsClosureRcDecHelper
+               || selectedListHelpersNeedClosureDecHelper
+               || plannedDictHelpersNeedClosureDecHelper then
+                ctx.ClosureCaptureTypes
+                |> Map.exists (fun _ captureTypes ->
+                    captureTypes
+                    |> List.exists (fun captureType ->
+                        tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType
+                        |> Option.exists (rcReleasePlanContains
+                            (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false))))
+            else
+                false
+
+        let needsStreamRcDecHelper =
+            directlyNeedsStreamRcDecHelper
+            || selectedListHelpersNeedStreamDecHelper
+            || plannedDictHelpersNeedStreamDecHelper
+            || selectedClosureHelpersNeedStreamDecHelper
+
+        let emitClosureRcDecHelper =
+            needsClosureRcDecHelper
+            || selectedListHelpersNeedClosureDecHelper
+            || plannedDictHelpersNeedClosureDecHelper
+            || needsStreamRcDecHelper
+
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
@@ -7836,8 +7900,9 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
             @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false None false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
-            @ generateClosureRefCountDecHelper ctx
-        let streamRcHelpers = generateStreamRefCountDecHelper ctx
+            @ (if emitClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
+        let streamRcHelpers =
+            if needsStreamRcDecHelper then generateStreamRefCountDecHelper ctx else []
         let recursiveSumRcHelpers =
             programMetadata.Facts.RecursiveReleaseTypes
             |> Set.toList

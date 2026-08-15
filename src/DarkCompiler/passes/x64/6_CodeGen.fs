@@ -5021,6 +5021,7 @@ type private RcHelperRequirements = {
     NeedsDictRcIncHelper: bool
     NeedsClosureRcIncHelper: bool
     NeedsClosureRcDecHelper: bool
+    NeedsStreamRcDecHelper: bool
 }
 
 /// Translate a complete LIR program to x86-64 instructions
@@ -5124,7 +5125,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 plannedListDecHelpersInReleasePlan elementRelease
 
             match elementRelease with
-            | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
+            | ANF.RootRelease (payloadSize, (ANF.GenericHeap | ANF.StreamHeap), _) ->
                 Map.empty
                 |> Map.add
                     (plannedListDecHelperLabelForReleasePlan elementRelease)
@@ -5251,6 +5252,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         NeedsDictRcIncHelper = false
         NeedsClosureRcIncHelper = false
         NeedsClosureRcDecHelper = false
+        NeedsStreamRcDecHelper = false
     }
 
     let collectRcHelperRequirementsFromInstr requirements instr =
@@ -5296,29 +5298,39 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                             (dictDecHelperForReleasePlan releasePlan)
                             withPlanRequirements.DictDecHelperLabels
             }
-        | LIR.RefCountDec (_, _, (LIR.GenericHeap | LIR.StreamHeap), metadata) ->
-            match rcMetadataReleasePlan metadata with
-            | None ->
-                requirements
-            | Some releasePlan ->
-                let withPlanRequirements =
-                    collectReleasePlanRequirements releasePlan requirements
-                {
-                    withPlanRequirements with
-                        ListDecHelperLabels =
-                            Set.union
-                                withPlanRequirements.ListDecHelperLabels
-                                (listDecHelperLabelsInReleasePlan releasePlan)
-                        DictDecHelperLabels =
-                            Set.union
-                                withPlanRequirements.DictDecHelperLabels
-                                (dictDecHelperLabelsInReleasePlan releasePlan)
-                        NeedsClosureRcDecHelper =
-                            withPlanRequirements.NeedsClosureRcDecHelper
-                            || rcReleasePlanContains
-                                (releasePlanIsRootKind ANF.ClosureHeap)
-                                releasePlan
-                }
+        | LIR.RefCountDec (_, _, ((LIR.GenericHeap | LIR.StreamHeap) as kind), metadata) ->
+            let withReleasePlanRequirements =
+                match rcMetadataReleasePlan metadata with
+                | None ->
+                    requirements
+                | Some releasePlan ->
+                    let withPlanRequirements =
+                        collectReleasePlanRequirements releasePlan requirements
+                    {
+                        withPlanRequirements with
+                            ListDecHelperLabels =
+                                Set.union
+                                    withPlanRequirements.ListDecHelperLabels
+                                    (listDecHelperLabelsInReleasePlan releasePlan)
+                            DictDecHelperLabels =
+                                Set.union
+                                    withPlanRequirements.DictDecHelperLabels
+                                    (dictDecHelperLabelsInReleasePlan releasePlan)
+                            NeedsClosureRcDecHelper =
+                                withPlanRequirements.NeedsClosureRcDecHelper
+                                || rcReleasePlanContains
+                                    (releasePlanIsRootKind ANF.ClosureHeap)
+                                    releasePlan
+                            NeedsStreamRcDecHelper =
+                                withPlanRequirements.NeedsStreamRcDecHelper
+                                || rcReleasePlanContains
+                                    (releasePlanIsRootKind ANF.StreamHeap)
+                                    releasePlan
+                    }
+            if kind = LIR.StreamHeap then
+                { withReleasePlanRequirements with NeedsStreamRcDecHelper = true }
+            else
+                withReleasePlanRequirements
         | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) ->
             { requirements with NeedsClosureRcDecHelper = true }
         | LIR.RefCountInc (_, _, LIR.TaggedList, _) ->
@@ -5498,6 +5510,14 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         |> Map.exists (fun _ releasePlan ->
             rcReleasePlanContains (releasePlanIsRootKind ANF.ClosureHeap) releasePlan)
 
+    let selectedListHelpersNeedStreamDecHelper =
+        selectedPlannedListHelpersContain (releasePlanIsRootKind ANF.StreamHeap)
+
+    let plannedDictHelpersNeedStreamDecHelper =
+        neededPlannedDictDecHelpers
+        |> Map.exists (fun _ releasePlan ->
+            rcReleasePlanContains (releasePlanIsRootKind ANF.StreamHeap) releasePlan)
+
     let needsListRcIncHelper =
         instructionRcHelperRequirements.NeedsListRcIncHelper
 
@@ -5551,6 +5571,31 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
 
     let needsClosureRcDecHelper =
         instructionRcHelperRequirements.NeedsClosureRcDecHelper
+
+    let baseNeedsClosureRcDecHelper =
+        needsClosureRcDecHelper
+        || selectedListHelpersNeedClosureDecHelper
+        || plannedDictHelpersNeedClosureDecHelper
+
+    let selectedClosureHelpersNeedStreamDecHelper =
+        if baseNeedsClosureRcDecHelper then
+            closureCaptureTypes
+            |> Map.exists (fun _ captureTypes ->
+                captureTypes
+                |> List.exists (fun captureType ->
+                    tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType
+                    |> Option.exists (rcReleasePlanContains (releasePlanIsRootKind ANF.StreamHeap))))
+        else
+            false
+
+    let needsStreamRcDecHelper =
+        instructionRcHelperRequirements.NeedsStreamRcDecHelper
+        || selectedListHelpersNeedStreamDecHelper
+        || plannedDictHelpersNeedStreamDecHelper
+        || selectedClosureHelpersNeedStreamDecHelper
+
+    let emitClosureRcDecHelper =
+        baseNeedsClosureRcDecHelper || needsStreamRcDecHelper
 
     let closurePayloadSizes =
         Map.fold
@@ -5635,17 +5680,23 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let closureDecHelper =
-            generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
+            if emitClosureRcDecHelper then
+                generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
+            else
+                []
         let closureIncHelper =
             if needsClosureRcIncHelper then generateClosureRefCountIncHelper closurePayloadSizes
             else []
         let streamDecHelper =
-            generateStreamRefCountDecHelper {
-                FunctionName = streamRefCountDecHelperLabel
-                StackSize = 0
-                UsedCalleeSaved = []
-                EnableLeakCheck = enableLeakCheck
-                RecordRegistry = recordRegistry
-                SumShapeRegistry = sumShapeRegistry
-            }
+            if needsStreamRcDecHelper then
+                generateStreamRefCountDecHelper {
+                    FunctionName = streamRefCountDecHelperLabel
+                    StackSize = 0
+                    UsedCalleeSaved = []
+                    EnableLeakCheck = enableLeakCheck
+                    RecordRegistry = recordRegistry
+                    SumShapeRegistry = sumShapeRegistry
+                }
+            else
+                []
         allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveSumRcDecHelpers @ genOomHandler ())
