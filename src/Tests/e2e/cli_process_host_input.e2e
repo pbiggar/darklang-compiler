@@ -17,13 +17,13 @@ let outcome = Stdlib.Cli.execute("printf 'stdout'; printf 'stderr' >&2; exit 7")
 
 let outcome = Stdlib.Cli.execute("printf 'x\\n\\n'") in outcome.stdout = "x\n\n"
 
-let outcome = Stdlib.Cli.execute("head -c 100000 /dev/zero; head -c 100000 /dev/zero >&2") in (Stdlib.String.length(outcome.stdout), Stdlib.String.length(outcome.stderr)) = (100000, 100000)
+let outcome = Stdlib.Cli.execute("head -c 100000 /dev/zero; head -c 100000 /dev/zero >&2") in (Stdlib.String.length(outcome.stdout), Stdlib.String.length(outcome.stderr)) = (100000I, 100000I)
 
 let key = Stdlib.Cli.Stdin.KeyRead.KeyRead { key = Stdlib.Cli.Stdin.Key.Key.A, modifiers = Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = true, ctrl = true, shift = true }, keyChar = "A", repeat = 2I } in Stdlib.Cli.Stdin.KeyRead.toString(key) = stdout="\"ALT+CTRL+SHIFT+A\"\n" stderr=""
 
 let key = Stdlib.Cli.Stdin.readKey() in (Stdlib.Cli.Stdin.Key.toString(key.key), key.keyChar, key.repeat) = ("Escape", "", 1I)
 
-match Stdlib.Cli.Env.get("PATH") with | Some(path) -> Stdlib.String.length(path) > 0 | None -> false = true
+match Stdlib.Cli.Env.get("PATH") with | Some(path) -> Stdlib.String.length(path) > 0I | None -> false = true
 
 match Stdlib.Cli.Process.runIn("/", "pwd", []) with | Ok(output) -> Stdlib.String.trimEnd(output.stdout) | Error(error) -> error.message = "/"
 
@@ -39,6 +39,6 @@ let handle = Stdlib.Cli.Process.spawn("") in let result = Stdlib.Cli.Process.com
 
 match Stdlib.Cli.Host.getRuntimeHost() with | Ok(_) -> true | Error(_) -> false = true
 
-match (Stdlib.Cli.Sys.hostname(), Stdlib.Cli.Sys.os(), Stdlib.Cli.Sys.arch()) with | (Ok(hostname), Ok(os), Ok(arch)) -> Stdlib.String.length(hostname) > 0 && Stdlib.String.length(os) > 0 && Stdlib.String.length(arch) > 0 | _ -> false = true
+match (Stdlib.Cli.Sys.hostname(), Stdlib.Cli.Sys.os(), Stdlib.Cli.Sys.arch()) with | (Ok(hostname), Ok(os), Ok(arch)) -> Stdlib.String.length(hostname) > 0I && Stdlib.String.length(os) > 0I && Stdlib.String.length(arch) > 0I | _ -> false = true
 
-match Stdlib.Cli.Sys.currentUser() with | Some(user) -> Stdlib.String.length(user) > 0 | None -> false = true
+match Stdlib.Cli.Sys.currentUser() with | Some(user) -> Stdlib.String.length(user) > 0I | None -> false = true

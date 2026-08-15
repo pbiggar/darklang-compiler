@@ -3,82 +3,94 @@
 
 module Unicode.Data
 
-let __canonicalDecompositionLookupGroup1(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table04.__canonicalDecompositionChunk4(), 0, key, 6, 19, valueIndex) with
+let __canonicalDecompositionLookupGroup0(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table00.__canonicalDecompositionChunk0(), 0, key, 6, 19, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table05.__canonicalDecompositionChunk5(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table01.__canonicalDecompositionChunk1(), 0, key, 6, 19, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table06.__canonicalDecompositionChunk6(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table02.__canonicalDecompositionChunk2(), 0, key, 6, 19, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table07.__canonicalDecompositionChunk7(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table03.__canonicalDecompositionChunk3(), 0, key, 6, 19, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
-let __uppercaseLookupGroup2(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table62.__uppercaseChunk8(), 0, key, 6, 25, valueIndex) with
+let contextualCasing() : List<(Int64, List<Int64>, List<Int64>, List<Int64>, String)> =
+    [
+        (931, [962], [931], [931], "Final_Sigma"),
+        (775, [775], [], [], "lt After_Soft_Dotted"),
+        (73, [105, 775], [73], [73], "lt More_Above"),
+        (74, [106, 775], [74], [74], "lt More_Above"),
+        (302, [303, 775], [302], [302], "lt More_Above"),
+        (204, [105, 775, 768], [204], [204], "lt"),
+        (205, [105, 775, 769], [205], [205], "lt"),
+        (296, [105, 775, 771], [296], [296], "lt"),
+        (304, [105], [304], [304], "tr"),
+        (304, [105], [304], [304], "az"),
+        (775, [], [775], [775], "tr After_I"),
+        (775, [], [775], [775], "az After_I"),
+        (73, [305], [73], [73], "tr Not_Before_Dot"),
+        (73, [305], [73], [73], "az Not_Before_Dot"),
+        (105, [105], [304], [304], "tr"),
+        (105, [105], [304], [304], "az")
+    ]
+
+let __generalCategoryLookupGroup3(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table27.__generalCategoryChunk12(), 0, codepoint, 14) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table63.__uppercaseChunk9(), 0, key, 6, 25, valueIndex) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table28.__generalCategoryChunk13(), 0, codepoint, 14) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table00.__uppercaseChunk10(), 0, key, 6, 25, valueIndex) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table29.__generalCategoryChunk14(), 0, codepoint, 14) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table01.__uppercaseChunk11(), 0, key, 6, 25, valueIndex) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table30.__generalCategoryChunk15(), 0, codepoint, 14) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
-let __lowercaseLookupGroup0(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table03.__lowercaseChunk0(), 0, key, 6, 19, valueIndex) with
+let __generalCategoryLookupGroup1(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table19.__generalCategoryChunk4(), 0, codepoint, 14) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table04.__lowercaseChunk1(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table20.__generalCategoryChunk5(), 0, codepoint, 14) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table05.__lowercaseChunk2(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table21.__generalCategoryChunk6(), 0, codepoint, 14) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table06.__lowercaseChunk3(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table22.__generalCategoryChunk7(), 0, codepoint, 14) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
-let __graphemeBreakLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table29.__graphemeBreakChunk0(), 0, codepoint, 14) with
+let __lowercaseLookup(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lowercaseLookupGroup0(key, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table30.__graphemeBreakChunk1(), 0, codepoint, 14) with
+        match Unicode.Data.__lowercaseLookupGroup1(key, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table31.__graphemeBreakChunk2(), 0, codepoint, 14) with
-            | Some(value) -> Some(value)
-            | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table32.__graphemeBreakChunk3(), 0, codepoint, 14) with
-                | Some(value) -> Some(value)
-                | None ->
-                    None
-
-let __graphemeBreakLookupGroup2(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table37.__graphemeBreakChunk8(), 0, codepoint, 14) with
-    | Some(value) -> Some(value)
-    | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table38.__graphemeBreakChunk9(), 0, codepoint, 14) with
-        | Some(value) -> Some(value)
-        | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table39.__graphemeBreakChunk10(), 0, codepoint, 14) with
+            match Unicode.Data.__lowercaseLookupGroup2(key, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
                 None
 
-let __hex(data: String, index: Int64, remaining: Int64, acc: Int64) : Int64 =
-    if remaining == 0 then acc
-    else Unicode.Data.__hex(data, index + 1, remaining - 1, acc * 16 + Unicode.Data.__hexDigit(Stdlib.String.getByteAt(data, index)))
+let __canonicalDecompositionLookupGroup4(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table16.__canonicalDecompositionChunk16(), 0, key, 6, 19, valueIndex) with
+    | Some(value) -> Some(value)
+    | None ->
+        None
 
-let lookupGeneralCategory(codepoint: Int64) : Unicode.Data.GeneralCategory = Unicode.Data.__categoryFromCode(Stdlib.Option.withDefault<Int64>(Unicode.Data.__generalCategoryLookup(codepoint), 29))
-type GraphemeBreak = Other | CR | LF | Control | Extend | ZWJ | RegionalIndicator | Prepend | SpacingMark | L | V | T | LV | LVT
-let unicodeVersion() : String = "17.0.0"
+let __hexDigit(byte: Int64) : Int64 =
+    if byte >= 48 && byte <= 57 then byte - 48
+    else if byte >= 65 && byte <= 70 then byte - 55
+    else Builtin.testRuntimeError("Invalid generated Unicode data")
+
+type GeneralCategory = Lu | Ll | Lt | Lm | Lo | Mn | Mc | Me | Nd | Nl | No | Pc | Pd | Ps | Pe | Pi | Pf | Po | Sm | Sc | Sk | So | Zs | Zl | Zp | Cc | Cf | Cs | Co | Cn
+
+let isWhiteSpace(codepoint: Int64) : Bool = Stdlib.Option.isSome<Int64>(Unicode.Data.__whiteSpaceLookup(codepoint))

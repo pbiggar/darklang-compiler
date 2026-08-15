@@ -61,31 +61,34 @@ let sourceHashes() : List<(String, String)> =
         ("emoji-data.txt", "2cb2bb9455cda83e8481541ecf5b6dfda66a3bb89efa3fa7c5297eccf607b72b")
     ]
 
-let __graphemeBreakLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__graphemeBreakLookupGroup0(codepoint) with
-    | Some(value) -> Some(value)
-    | None ->
-        match Unicode.Data.__graphemeBreakLookupGroup1(codepoint) with
-        | Some(value) -> Some(value)
-        | None ->
-            match Unicode.Data.__graphemeBreakLookupGroup2(codepoint) with
-            | Some(value) -> Some(value)
-            | None ->
-                None
+let tableCounts() : List<(String, Int64)> =
+    [
+        ("canonicalCompositions", 965),
+        ("canonicalDecompositions", 2081),
+        ("caseIgnorableRanges", 464),
+        ("casedRanges", 158),
+        ("combiningClassRanges", 403),
+        ("compositionExclusions", 81),
+        ("contextualCasingMappings", 16),
+        ("extendedPictographicRanges", 451),
+        ("generalCategoryRanges", 3409),
+        ("graphemeBreakRanges", 1386),
+        ("indicConjunctRanges", 473),
+        ("lowercaseMappings", 1488),
+        ("uppercaseMappings", 1580),
+        ("whiteSpaceRanges", 11)
+    ]
 
-let __canonicalCompositionLookup(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__canonicalCompositionLookupGroup0(key, valueIndex) with
-    | Some(value) -> Some(value)
-    | None ->
-        match Unicode.Data.__canonicalCompositionLookupGroup1(key, valueIndex) with
-        | Some(value) -> Some(value)
-        | None ->
-            None
-
-let __casedLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__casedLookupGroup0(codepoint) with
+let __whiteSpaceLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table42.__whiteSpaceChunk0(), 0, codepoint, 14) with
     | Some(value) -> Some(value)
     | None ->
         None
 
-let lookupCanonicalComposition(key: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__canonicalCompositionLookup(key, 0)
+let __whiteSpaceLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__whiteSpaceLookupGroup0(codepoint) with
+    | Some(value) -> Some(value)
+    | None ->
+        None
+
+let lookupUppercaseAt(codepoint: Int64, index: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__uppercaseLookup(codepoint, index)

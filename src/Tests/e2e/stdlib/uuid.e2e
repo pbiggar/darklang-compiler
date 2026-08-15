@@ -7,7 +7,7 @@
 // ===================================================================
 
 // UUID length is 36 characters (8-4-4-4-12 with hyphens)
-Stdlib.String.length(Stdlib.Uuid.generate()) = 36
+Stdlib.String.length(Stdlib.Uuid.generate()) = 36I
 
 // Multiple calls return different UUIDs (probabilistic)
 (Stdlib.Uuid.generate() != Stdlib.Uuid.generate()) = true

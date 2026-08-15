@@ -43,7 +43,6 @@ let testRcShapeClassifiesPrimitivesAsImmediate () : TestResult =
         AST.TUInt128
         AST.TBool
         AST.TFloat64
-        AST.TChar
         AST.TUnit
         AST.TRuntimeError
         AST.TVar "a"
@@ -71,6 +70,7 @@ let testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks () : TestResult =
 let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
     let samples = [
         (AST.TString, DynamicString)
+        (AST.TChar, DynamicString)
         (AST.TBlob, DynamicBlob)
         (AST.TRawPtr, RawUnmanaged)
         (AST.TFunction ([AST.TInt64], AST.TString), ClosureShape [])

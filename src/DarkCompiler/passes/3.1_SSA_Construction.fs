@@ -26,6 +26,10 @@ type private VRegIndex = {
     WordCount: int
 }
 
+type private PhiTypeEvidence =
+    | KnownPhiType of AST.Type
+    | ConflictingPhiTypes
+
 let private buildLabelIndex (cfg: CFG) : LabelIndex =
     let labels = cfg.Blocks |> Map.keys |> Seq.toArray
     let indexOf =
@@ -564,6 +568,22 @@ let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liv
     let paramTypeMap =
         List.zip funcParams paramTypes
         |> Map.ofList
+    // IfValue lowering defines both incoming arms with typed moves. Preserve
+    // that type on the SSA phi so floating-point joins stay in FP registers.
+    let localMoveTypeMap : Map<VReg, PhiTypeEvidence> =
+        cfg.Blocks
+        |> Map.fold (fun types _ block ->
+            block.Instrs
+            |> List.fold (fun types instr ->
+                match instr with
+                | Mov (dest, _, Some valueType) ->
+                    match Map.tryFind dest types with
+                    | None -> Map.add dest (KnownPhiType valueType) types
+                    | Some (KnownPhiType existing) when existing = valueType -> types
+                    | Some _ -> Map.add dest ConflictingPhiTypes types
+                | _ -> types
+            ) types
+        ) Map.empty
     // Get all definitions from instructions in the CFG
     let instrDefs = getAllDefs cfg
 
@@ -605,8 +625,13 @@ let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liv
                             let blockPreds = Map.tryFind dfBlock preds |> Option.defaultValue []
                             // Create phi with placeholder sources (will be renamed later)
                             let phiSources = blockPreds |> List.map (fun p -> (Register vreg, p))
-                            // Look up type for this vreg (if it's a parameter)
-                            let valueType = Map.tryFind vreg paramTypeMap
+                            let valueType =
+                                match Map.tryFind vreg paramTypeMap with
+                                | Some parameterType -> Some parameterType
+                                | None ->
+                                    match Map.tryFind vreg localMoveTypeMap with
+                                    | Some (KnownPhiType localType) -> Some localType
+                                    | Some ConflictingPhiTypes | None -> None
                             let phiInstr = Phi (vreg, phiSources, valueType)
 
                             // Add to block (at the beginning)

@@ -145,8 +145,16 @@ let codepointLength(value: String) : Int64 =
 let toGraphemes(value: String) : List<String> =
     Unicode.segmentUtf8(value, 0, [], "", [])
 
+let __asciiGraphemeLengthAt(value: String, index: Int64, count: Int64, previous: Int64) : Int64 =
+    if index >= Stdlib.String.__byteLength(value) then count
+    else
+        let byte = Stdlib.String.getByteAt(value, index) in
+        let nextCount = if byte == 10 && previous == 13 then count else count + 1 in
+        Stdlib.String.__asciiGraphemeLengthAt(value, index + 1, nextCount, byte)
+
 let graphemeLength(value: String) : Int64 =
-    Stdlib.Internal.SkewList.length<String>(Stdlib.String.toGraphemes(value))
+    if Stdlib.String.__isAscii(value) then Stdlib.String.__asciiGraphemeLengthAt(value, 0, 0, -1)
+    else Unicode.graphemeCountUtf8(value, 0, [], 0)
 
 let length(value: String) : Int =
     Stdlib.Int.fromInt64(Stdlib.String.graphemeLength(value))
@@ -166,8 +174,20 @@ let toList(value: String) : List<Char> =
 let fromList(lst: List<Char>) : String =
     Unicode.normalizeValid(Stdlib.String.__joinChars(lst, ""))
 
+let __isAsciiAt(value: String, index: Int64, length: Int64) : Bool =
+    if index >= length then true
+    else if Stdlib.String.getByteAt(value, index) >= 128 then false
+    else Stdlib.String.__isAsciiAt(value, index + 1, length)
+
+let __isAscii(value: String) : Bool =
+    Stdlib.String.__isAsciiAt(value, 0, Stdlib.String.__byteLength(value))
+
 let __appendNormalized(left: String, right: String) : String =
-    Unicode.normalizeValid(__string_concat_raw(left, right))
+    let combined = __string_concat_raw(left, right) in
+    // ASCII is closed under NFC, so avoid decoding and rebuilding the entire
+    // accumulated string in the overwhelmingly common concatenation path.
+    if Stdlib.String.__isAscii(left) && Stdlib.String.__isAscii(right) then combined
+    else Unicode.normalizeValid(combined)
 
 let __joinChars(chars: List<Char>, acc: String) : String =
     match chars with
@@ -236,10 +256,13 @@ let dropLast(value: String, count: Int) : String =
     else Stdlib.String.slice(value, zero, length - count)
 
 let head(value: String) : Stdlib.Option.Option<Char> =
-    Stdlib.List.head<Char>(Stdlib.String.toList(value))
+    if Stdlib.String.isEmpty(value) then None
+    else Some(Stdlib.String.__asChar(Stdlib.String.first(value, Stdlib.Int.fromInt64(1))))
 
 let charAt(value: String, index: Int) : Stdlib.Option.Option<Char> =
-    Stdlib.List.getAt<Char>(Stdlib.String.toList(value), index)
+    let zero = Stdlib.Int.fromInt64(0) in
+    if index < zero || index >= Stdlib.String.length(value) then None
+    else Some(Stdlib.String.__asChar(Stdlib.String.slice(value, index, index + Stdlib.Int.fromInt64(1))))
 
 let map(value: String, fn: (Char) -> Char) : String =
     Stdlib.String.fromList(Stdlib.List.map<Char, Char>(Stdlib.String.toList(value), fn))

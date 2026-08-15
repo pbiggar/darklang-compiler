@@ -207,18 +207,18 @@ Stdlib.String.endsWith("", "a") = false
 // =============================================================================
 
 // Basic indexOf
-Stdlib.String.indexOf("hello world", "hello") = Stdlib.Option.Option.Some(0)
-Stdlib.String.indexOf("hello world", "world") = Stdlib.Option.Option.Some(6)
-Stdlib.String.indexOf("hello world", "o") = Stdlib.Option.Option.Some(4)
-Stdlib.String.indexOf("hello world", "o w") = Stdlib.Option.Option.Some(4)
+Stdlib.String.indexOf("hello world", "hello") = Stdlib.Option.Option.Some(0I)
+Stdlib.String.indexOf("hello world", "world") = Stdlib.Option.Option.Some(6I)
+Stdlib.String.indexOf("hello world", "o") = Stdlib.Option.Option.Some(4I)
+Stdlib.String.indexOf("hello world", "o w") = Stdlib.Option.Option.Some(4I)
 
 // Not found
 Stdlib.String.indexOf("hello world", "xyz") = Stdlib.Option.Option.None
 Stdlib.String.indexOf("abc", "d") = Stdlib.Option.Option.None
 
 // Empty string search
-Stdlib.String.indexOf("hello", "") = Stdlib.Option.Option.Some(0)
-Stdlib.String.indexOf("", "") = Stdlib.Option.Option.Some(0)
+Stdlib.String.indexOf("hello", "") = Stdlib.Option.Option.Some(0I)
+Stdlib.String.indexOf("", "") = Stdlib.Option.Option.Some(0I)
 
 // =============================================================================
 // Stdlib.String.contains Tests
@@ -240,21 +240,21 @@ Stdlib.String.contains("", "a") = false
 // =============================================================================
 
 // Basic slice (start, end exclusive)
-Stdlib.String.slice("hello world", 0, 5) = "hello"
-Stdlib.String.slice("hello world", 6, 11) = "world"
-Stdlib.String.slice("hello world", 0, 11) = "hello world"
+Stdlib.String.slice("hello world", 0I, 5I) = "hello"
+Stdlib.String.slice("hello world", 6I, 11I) = "world"
+Stdlib.String.slice("hello world", 0I, 11I) = "hello world"
 
 // Slice from middle
-Stdlib.String.slice("abcdef", 2, 5) = "cde"
+Stdlib.String.slice("abcdef", 2I, 5I) = "cde"
 
 // Empty result
-Stdlib.String.slice("hello", 0, 0) = ""
-Stdlib.String.slice("hello", 5, 5) = ""
+Stdlib.String.slice("hello", 0I, 0I) = ""
+Stdlib.String.slice("hello", 5I, 5I) = ""
 
 // Clamping behavior
-Stdlib.String.slice("hello", 0, 100) = "hello"
-Stdlib.String.slice("hello", 10, 15) = ""
-Stdlib.String.slice("hello", 4, 2) = ""
+Stdlib.String.slice("hello", 0I, 100I) = "hello"
+Stdlib.String.slice("hello", 10I, 15I) = ""
+Stdlib.String.slice("hello", 4I, 2I) = ""
 
 // =============================================================================
 // Stdlib.String.take and drop Tests

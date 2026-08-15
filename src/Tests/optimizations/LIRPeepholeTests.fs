@@ -259,6 +259,44 @@ let testBooleanNotBranchSwapsSuccessors () : TestResult =
     else
         Error $"Expected Boolean negation branch to swap successors, got: {optimized}"
 
+let testConditionalBranchKeepsBooleanUsedInSuccessor () : TestResult =
+    let entry = Label "entry"
+    let trueLabel = Label "true"
+    let falseLabel = Label "false"
+    let condition = Virtual 1
+    let entryBlock : BasicBlock = {
+        Label = entry
+        Instrs = [
+            Cmp (Virtual 2, Reg (Virtual 3))
+            Cset (condition, LT)
+        ]
+        Terminator = Branch (condition, trueLabel, falseLabel)
+    }
+    let trueBlock : BasicBlock = {
+        Label = trueLabel
+        Instrs = [PrintBool condition]
+        Terminator = Ret
+    }
+    let falseBlock : BasicBlock = {
+        Label = falseLabel
+        Instrs = []
+        Terminator = Ret
+    }
+    let cfg : CFG = {
+        Entry = entry
+        Blocks =
+            [ (entry, entryBlock)
+              (trueLabel, trueBlock)
+              (falseLabel, falseBlock) ]
+            |> Map.ofList
+    }
+
+    match optimizeCFG cfg |> fun optimized -> Map.tryFind entry optimized.Blocks with
+    | None -> Error "Expected optimization to preserve the entry block"
+    | Some optimizedEntry when optimizedEntry = entryBlock -> Ok ()
+    | Some optimizedEntry ->
+        Error $"Expected successor-visible Boolean to stay materialized, got: {optimizedEntry}"
+
 let testOptimizeCFGRejectsMissingSuccessorLabel () : TestResult =
     let entry = Label "entry"
     let missing = Label "missing"
@@ -291,5 +329,6 @@ let tests = [
     ("LIR peephole keeps MUL/SUB temporary used by later print", testMulSubFusionKeepsLiveTempForPrint)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
     ("LIR peephole swaps Boolean negation branch successors", testBooleanNotBranchSwapsSuccessors)
+    ("LIR peephole keeps branch Boolean used by a successor", testConditionalBranchKeepsBooleanUsedInSuccessor)
     ("LIR peephole rejects missing successor labels", testOptimizeCFGRejectsMissingSuccessorLabel)
 ]

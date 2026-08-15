@@ -78,11 +78,11 @@ let combiningClass(codepoint: Int64) : Int64 =
 
 let __lookupGraphemeRange(codepoint: Int64, ranges: List<(Int64, Int64, Unicode.Data.GraphemeBreak)>) : Unicode.Data.GraphemeBreak =
     match ranges with
-    | [] -> Unicode.Data.GraphemeBreak.Other
+    | [] -> Unicode.Data.GraphemeBreak.GBOther
     | range :: rest ->
         let start_ = Stdlib.Tuple3.first<Int64, Int64, Unicode.Data.GraphemeBreak>(range) in
         let end_ = Stdlib.Tuple3.second<Int64, Int64, Unicode.Data.GraphemeBreak>(range) in
-        if codepoint < start_ then Unicode.Data.GraphemeBreak.Other
+        if codepoint < start_ then Unicode.Data.GraphemeBreak.GBOther
         else if codepoint <= end_ then Stdlib.Tuple3.third<Int64, Int64, Unicode.Data.GraphemeBreak>(range)
         else Unicode.__lookupGraphemeRange(codepoint, rest)
 
@@ -240,16 +240,16 @@ let normalizeValid(value: String) : String =
     | Error(_) -> Builtin.testRuntimeError("Invalid UTF-8 string")
 
 let __isControlProperty(property: Unicode.Data.GraphemeBreak) : Bool =
-    property == Unicode.Data.GraphemeBreak.CR ||
-    property == Unicode.Data.GraphemeBreak.LF ||
-    property == Unicode.Data.GraphemeBreak.Control
+    property == Unicode.Data.GraphemeBreak.GBCR ||
+    property == Unicode.Data.GraphemeBreak.GBLF ||
+    property == Unicode.Data.GraphemeBreak.GBControl
 
 let __emojiBeforeZwj(previous: List<Int64>) : Bool =
     match previous with
     | [] -> false
     | head :: rest ->
         match Unicode.graphemeBreak(head) with
-        | Extend -> Unicode.__emojiBeforeZwj(rest)
+        | GBExtend -> Unicode.__emojiBeforeZwj(rest)
         | _ -> Unicode.isExtendedPictographic(head)
 
 let __indicBefore(previous: List<Int64>, sawLinker: Bool) : Bool =
@@ -258,8 +258,8 @@ let __indicBefore(previous: List<Int64>, sawLinker: Bool) : Bool =
     | head :: rest ->
         match Unicode.indicConjunctBreak(head) with
         | InCBExtend -> Unicode.__indicBefore(rest, sawLinker)
-        | Linker -> Unicode.__indicBefore(rest, true)
-        | Consonant -> sawLinker
+        | InCBLinker -> Unicode.__indicBefore(rest, true)
+        | InCBConsonant -> sawLinker
         | InCBNone -> false
 
 let __regionalCount(previous: List<Int64>, count: Int64) : Int64 =
@@ -267,7 +267,7 @@ let __regionalCount(previous: List<Int64>, count: Int64) : Int64 =
     | [] -> count
     | head :: rest ->
         match Unicode.graphemeBreak(head) with
-        | RegionalIndicator -> Unicode.__regionalCount(rest, count + 1)
+        | GBRegionalIndicator -> Unicode.__regionalCount(rest, count + 1)
         | _ -> count
 
 let __shouldBreak(previous: List<Int64>, codepoint: Int64) : Bool =
@@ -277,21 +277,21 @@ let __shouldBreak(previous: List<Int64>, codepoint: Int64) : Bool =
         let left = Unicode.graphemeBreak(prior) in
         let right = Unicode.graphemeBreak(codepoint) in
         let hangulJoin =
-            (left == Unicode.Data.GraphemeBreak.L &&
-                (right == Unicode.Data.GraphemeBreak.L || right == Unicode.Data.GraphemeBreak.V ||
-                 right == Unicode.Data.GraphemeBreak.LV || right == Unicode.Data.GraphemeBreak.LVT)) ||
-            ((left == Unicode.Data.GraphemeBreak.LV || left == Unicode.Data.GraphemeBreak.V) &&
-                (right == Unicode.Data.GraphemeBreak.V || right == Unicode.Data.GraphemeBreak.T)) ||
-            ((left == Unicode.Data.GraphemeBreak.LVT || left == Unicode.Data.GraphemeBreak.T) &&
-                right == Unicode.Data.GraphemeBreak.T) in
-        if left == Unicode.Data.GraphemeBreak.CR && right == Unicode.Data.GraphemeBreak.LF then false
+            (left == Unicode.Data.GraphemeBreak.GBL &&
+                (right == Unicode.Data.GraphemeBreak.GBL || right == Unicode.Data.GraphemeBreak.GBV ||
+                 right == Unicode.Data.GraphemeBreak.GBLV || right == Unicode.Data.GraphemeBreak.GBLVT)) ||
+            ((left == Unicode.Data.GraphemeBreak.GBLV || left == Unicode.Data.GraphemeBreak.GBV) &&
+                (right == Unicode.Data.GraphemeBreak.GBV || right == Unicode.Data.GraphemeBreak.GBT)) ||
+            ((left == Unicode.Data.GraphemeBreak.GBLVT || left == Unicode.Data.GraphemeBreak.GBT) &&
+                right == Unicode.Data.GraphemeBreak.GBT) in
+        if left == Unicode.Data.GraphemeBreak.GBCR && right == Unicode.Data.GraphemeBreak.GBLF then false
         else if Unicode.__isControlProperty(left) || Unicode.__isControlProperty(right) then true
         else if hangulJoin then false
-        else if right == Unicode.Data.GraphemeBreak.Extend || right == Unicode.Data.GraphemeBreak.ZWJ || right == Unicode.Data.GraphemeBreak.SpacingMark then false
-        else if left == Unicode.Data.GraphemeBreak.Prepend then false
-        else if left == Unicode.Data.GraphemeBreak.ZWJ && Unicode.isExtendedPictographic(codepoint) && Unicode.__emojiBeforeZwj(beforePrior) then false
-        else if Unicode.indicConjunctBreak(codepoint) == Unicode.Data.IndicConjunctBreak.Consonant && Unicode.__indicBefore(previous, false) then false
-        else if left == Unicode.Data.GraphemeBreak.RegionalIndicator && right == Unicode.Data.GraphemeBreak.RegionalIndicator then
+        else if right == Unicode.Data.GraphemeBreak.GBExtend || right == Unicode.Data.GraphemeBreak.GBZWJ || right == Unicode.Data.GraphemeBreak.GBSpacingMark then false
+        else if left == Unicode.Data.GraphemeBreak.GBPrepend then false
+        else if left == Unicode.Data.GraphemeBreak.GBZWJ && Unicode.isExtendedPictographic(codepoint) && Unicode.__emojiBeforeZwj(beforePrior) then false
+        else if Unicode.indicConjunctBreak(codepoint) == Unicode.Data.IndicConjunctBreak.InCBConsonant && Unicode.__indicBefore(previous, false) then false
+        else if left == Unicode.Data.GraphemeBreak.GBRegionalIndicator && right == Unicode.Data.GraphemeBreak.GBRegionalIndicator then
             Unicode.__regionalCount(previous, 0) % 2 == 0
         else true
 
@@ -303,7 +303,7 @@ let segmentCodepoints(codepoints: List<Int64>, previous: List<Int64>, current: S
     | codepoint :: rest ->
         let scalar = Stdlib.String.__fromCodepointsRaw([codepoint]) in
         if Unicode.__shouldBreak(previous, codepoint) then
-            Unicode.segmentCodepoints(rest, Stdlib.List.push<Int64>(previous, codepoint), scalar, Stdlib.List.push<String>(result, current))
+            Unicode.segmentCodepoints(rest, [codepoint], scalar, Stdlib.List.push<String>(result, current))
         else
             Unicode.segmentCodepoints(rest, Stdlib.List.push<Int64>(previous, codepoint), if current == "" then scalar else current ++ scalar, result)
 
@@ -319,9 +319,25 @@ let segmentUtf8(value: String, index: Int64, previous: List<Int64>, current: Str
             let width = Stdlib.Tuple2.second<Int64, Int64>(decoded) in
             let scalar = Stdlib.String.__byteSlice(value, index, index + width) in
             if Unicode.__shouldBreak(previous, codepoint) then
-                Unicode.segmentUtf8(value, index + width, Stdlib.List.push<Int64>(previous, codepoint), scalar, Stdlib.List.push<String>(result, current))
+                Unicode.segmentUtf8(value, index + width, [codepoint], scalar, Stdlib.List.push<String>(result, current))
             else
                 Unicode.segmentUtf8(value, index + width, Stdlib.List.push<Int64>(previous, codepoint), if current == "" then scalar else current ++ scalar, result)
+
+let graphemeCountUtf8(value: String, index: Int64, previous: List<Int64>, count: Int64) : Int64 =
+    if index == Stdlib.String.__byteLength(value) then count
+    else
+        match Unicode.decodeAt(value, index) with
+        | Error(_) -> Builtin.testRuntimeError("Invalid UTF-8 string")
+        | Ok(decoded) ->
+            let codepoint = Stdlib.Tuple2.first<Int64, Int64>(decoded) in
+            let width = Stdlib.Tuple2.second<Int64, Int64>(decoded) in
+            match previous with
+            | [] -> Unicode.graphemeCountUtf8(value, index + width, [codepoint], count + 1)
+            | _ ->
+                if Unicode.__shouldBreak(previous, codepoint) then
+                    Unicode.graphemeCountUtf8(value, index + width, [codepoint], count + 1)
+                else
+                    Unicode.graphemeCountUtf8(value, index + width, Stdlib.List.push<Int64>(previous, codepoint), count)
 
 let __mappingFromValues(first: Stdlib.Option.Option<Int64>, second: Stdlib.Option.Option<Int64>, third: Stdlib.Option.Option<Int64>, fallback: Int64) : List<Int64> =
     match first with

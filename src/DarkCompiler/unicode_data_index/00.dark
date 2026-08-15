@@ -77,9 +77,9 @@ let __casedLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
             None
 
 let __indicFromCode(value: Int64) : Unicode.Data.IndicConjunctBreak =
-    if value == 1 then Unicode.Data.IndicConjunctBreak.Consonant
+    if value == 1 then Unicode.Data.IndicConjunctBreak.InCBConsonant
     else if value == 2 then Unicode.Data.IndicConjunctBreak.InCBExtend
-    else if value == 3 then Unicode.Data.IndicConjunctBreak.Linker
+    else if value == 3 then Unicode.Data.IndicConjunctBreak.InCBLinker
     else Unicode.Data.IndicConjunctBreak.InCBNone
 
 let __caseIgnorableLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
@@ -88,4 +88,5 @@ let __caseIgnorableLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
     | None ->
         None
 
-let lookupCanonicalDecompositionAt(codepoint: Int64, index: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__canonicalDecompositionLookup(codepoint, index)
+type GraphemeBreak = GBOther | GBCR | GBLF | GBControl | GBExtend | GBZWJ | GBRegionalIndicator | GBPrepend | GBSpacingMark | GBL | GBV | GBT | GBLV | GBLVT
+let unicodeVersion() : String = "17.0.0"

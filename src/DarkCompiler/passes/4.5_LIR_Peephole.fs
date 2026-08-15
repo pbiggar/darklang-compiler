@@ -773,6 +773,29 @@ let private regUsedAfter (lastUses: Map<Reg, int>) (index: int) (reg: Reg) : boo
 let isRegUsedInInstrs (reg: Reg) (instrs: Instr list) : bool =
     instrs |> List.exists (regUsedInInstr reg)
 
+let private foldTerminatorRegUses folder state (terminator: Terminator) =
+    match terminator with
+    | Branch (reg, _, _)
+    | BranchZero (reg, _, _)
+    | BranchBitZero (reg, _, _, _)
+    | BranchBitNonZero (reg, _, _, _) -> folder state reg
+    | Ret
+    | Jump _
+    | CondBranch _ -> state
+
+let private cfgRegUseCounts (cfg: CFG) : Map<Reg, int> =
+    let addUse counts reg =
+        let count = Map.tryFind reg counts |> Option.defaultValue 0
+        Map.add reg (count + 1) counts
+
+    cfg.Blocks
+    |> Map.fold (fun counts _ block ->
+        let instructionUses =
+            block.Instrs
+            |> List.fold (fun acc instr -> foldRegUses addUse acc instr) counts
+        foldTerminatorRegUses addUse instructionUses block.Terminator
+    ) Map.empty
+
 /// Check if a value is suitable for multiply-by-constant strength reduction
 /// Returns Some (shift, isAdd) where:
 ///   isAdd=true: n = 2^shift + 1 (e.g., 3=2+1, 5=4+1, 9=8+1)
@@ -919,15 +942,22 @@ let tryFuseMulSub (instrs: Instr list) : Instr list =
 /// Try to fuse Cset + Branch into CondBranch
 /// Pattern: last instruction is Cset dest, cond; terminator is Branch dest, trueL, falseL
 /// Result: remove Cset, replace Branch with CondBranch cond, trueL, falseL
-let tryFuseCondBranch (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) option =
+let tryFuseCondBranch
+    (regUseCounts: Map<Reg, int>)
+    (instrs: Instr list)
+    (terminator: Terminator)
+    : (Instr list * Terminator) option =
     match terminator with
     | Branch (condReg, trueLabel, falseLabel) ->
         // Check if last instruction is Cset writing to condReg
         match List.tryLast instrs with
         | Some (Cset (dest, cond)) when sameReg dest condReg ->
-            // Check that condReg is not used elsewhere in the block (except the Cset and Branch)
+            // Removing Cset is valid only when this terminator is the Boolean's
+            // sole read. Virtual registers are function-scoped, so a successor
+            // may retain the comparison result even when this block does not.
             let otherInstrs = instrs |> List.take (List.length instrs - 1)
-            if not (isRegUsedInInstrs condReg otherInstrs) then
+            let useCount = Map.tryFind condReg regUseCounts |> Option.defaultValue 1
+            if useCount = 1 && not (isRegUsedInInstrs condReg otherInstrs) then
                 // Fuse: remove Cset and replace Branch with CondBranch
                 Some (otherInstrs, CondBranch (cond, trueLabel, falseLabel))
             else
@@ -1017,7 +1047,10 @@ let applyAndBitBranchFusion (instrs: Instr list) (terminator: Terminator) : (Ins
     | None -> (instrs, terminator)
 
 /// Optimize a basic block (returns whether anything changed)
-let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
+let private optimizeBlockWithRegUseCounts
+    (regUseCounts: Map<Reg, int>)
+    (block: BasicBlock)
+    : BasicBlock * bool =
     let instrs' = optimizeInstrs block.Instrs
     let instrsCopyCleaned = removeRedundantFloatingCopyBackMoves instrs'
     // Apply multiply-by-constant strength reduction (Mov + Mul → Lsl + Add/Sub)
@@ -1035,7 +1068,7 @@ let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
 
     // Try to fuse Cset + Branch into CondBranch
     let (instrs''', terminator') =
-        match tryFuseCondBranch instrsBeforeCondBranch terminatorBeforeCondBranch with
+        match tryFuseCondBranch regUseCounts instrsBeforeCondBranch terminatorBeforeCondBranch with
         | Some (fusedInstrs, fusedTerminator) ->
             // After fusing Cset + Branch → CondBranch, try to fuse CMP #0 + CondBranch → CBZ/CBNZ
             match tryFuseCmpZeroBranch fusedInstrs fusedTerminator with
@@ -1056,15 +1089,19 @@ let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
     let block' = { block with Instrs = finalInstrs; Terminator = finalTerminator }
     (block', block' <> block)
 
+let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
+    optimizeBlockWithRegUseCounts Map.empty block
+
 /// Optimize a CFG in a single pass (returns whether anything changed)
 let private optimizeCFGOnce
     (cfg: CFG)
     (domCache: DominatorCache option)
     : CFG * bool * DominatorCache option =
+    let regUseCounts = cfgRegUseCounts cfg
     let (blocks', changed) =
         cfg.Blocks
         |> Map.fold (fun (acc, ch) label block ->
-            let (block', blockChanged) = optimizeBlock block
+            let (block', blockChanged) = optimizeBlockWithRegUseCounts regUseCounts block
             (Map.add label block' acc, ch || blockChanged)
         ) (Map.empty, false)
     let cfg' = { cfg with Blocks = blocks' }

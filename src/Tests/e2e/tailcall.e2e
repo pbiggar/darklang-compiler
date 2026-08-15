@@ -211,8 +211,9 @@ let myCompare(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
         else myCompare(s1, i + 1, s2, j + 1, count - 1)
 
 let myStartsWith2(s: String, prefix: String) : Bool =
-    let sLen = Stdlib.String.length(s) in
-    let prefixLen = Stdlib.String.length(prefix) in
+    // These ASCII-only extension probes have one byte per codepoint.
+    let sLen = Stdlib.String.codepointLength(s) in
+    let prefixLen = Stdlib.String.codepointLength(prefix) in
     if prefixLen > sLen then false
     else myCompare(s, 0, prefix, 0, prefixLen)
 
@@ -227,8 +228,9 @@ let myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool 
         else myCompare2(s1, i + 1, s2, j + 1, count - 1)
 
 let myStartsWith2Fail(s: String, prefix: String) : Bool =
-    let sLen = Stdlib.String.length(s) in
-    let prefixLen = Stdlib.String.length(prefix) in
+    // These ASCII-only extension probes have one byte per codepoint.
+    let sLen = Stdlib.String.codepointLength(s) in
+    let prefixLen = Stdlib.String.codepointLength(prefix) in
     if prefixLen > sLen then false
     else myCompare2(s, 0, prefix, 0, prefixLen)
 

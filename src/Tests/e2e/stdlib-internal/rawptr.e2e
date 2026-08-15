@@ -1,7 +1,7 @@
 // Raw pointer internals (stdlib-only)
 // These tests rely on internal runtime helpers.
 
-let __stringRefcount(s: String): Int64 = let len = Stdlib.String.length(s) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__string_to_rawptr(s), 8 + dataSize)
+let __stringRefcount(s: String): Int64 = let len = Stdlib.String.__byteLength(s) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__string_to_rawptr(s), 8 + dataSize)
 let dynamicString(s: String): String = s ++ "b"
 
 // Raw float load should preserve float type through if-join

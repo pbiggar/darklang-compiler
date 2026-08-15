@@ -2384,6 +2384,13 @@ const_fold_string_concat
 return "darklang"
 
 ---NAME---
+const_fold_string_concat_preserves_nfc
+---INPUT---
+"e" ++ "\u0301"
+---EXPECTED---
+return "é"
+
+---NAME---
 identity_string_concat_empty_left
 ---INPUT---
 let f(x: String) : String = "" ++ x

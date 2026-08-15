@@ -894,7 +894,7 @@ let rec convertExpr
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
-                        let builder' = {
+                        let builderWithBlocks = {
                             builderWithCoverage with
                                 Blocks = builderWithCoverage.Blocks
                                          |> Map.add currentLabel currentBlock
@@ -902,6 +902,13 @@ let rec convertExpr
                                          |> Map.add elseLabel elseBlock
                                 LabelGen = labelGen3
                         }
+                        let (ANF.TempId destId) = tempId
+                        let builder' =
+                            if resultType = AST.TFloat64 then
+                                { builderWithBlocks with
+                                    FloatRegs = Set.add destId builderWithBlocks.FloatRegs }
+                            else
+                                builderWithBlocks
 
                         // Continue with rest in join block (no instructions yet)
                         convertExpr rest joinLabel [] builder')))
@@ -1554,7 +1561,7 @@ and convertExprToOperand
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
-                        let builder' = {
+                        let builderWithBlocks = {
                             builder with
                                 Blocks = builder.Blocks
                                          |> Map.add startLabel startBlock
@@ -1562,6 +1569,13 @@ and convertExprToOperand
                                          |> Map.add elseLabel elseBlock
                                 LabelGen = labelGen3
                         }
+                        let (ANF.TempId destId) = tempId
+                        let builder' =
+                            if resultType = AST.TFloat64 then
+                                { builderWithBlocks with
+                                    FloatRegs = Set.add destId builderWithBlocks.FloatRegs }
+                            else
+                                builderWithBlocks
 
                         // Continue with rest in join block (no instructions yet)
                         convertExprToOperand rest joinLabel [] builder')))

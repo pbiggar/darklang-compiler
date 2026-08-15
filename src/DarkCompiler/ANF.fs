@@ -354,7 +354,6 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TUInt128
     | AST.TBool
     | AST.TFloat64
-    | AST.TChar
     | AST.TDateTime
     | AST.TUnit
     | AST.TRuntimeError
@@ -387,6 +386,7 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TDict (keyType, valueType) ->
         DictRoot (rcShapeOfType typeReg keyType, rcShapeOfType typeReg valueType)
     | AST.TString
+    | AST.TChar
     | AST.TInt ->
         DynamicString
     | AST.TBlob ->
@@ -553,6 +553,7 @@ let rcShapeOfTypeWithSums
         | AST.TFunction _ ->
             ClosureShape []
         | AST.TString
+        | AST.TChar
         | AST.TInt ->
             DynamicString
         | AST.TBlob ->
@@ -571,7 +572,6 @@ let rcShapeOfTypeWithSums
         | AST.TUInt128
         | AST.TBool
         | AST.TFloat64
-        | AST.TChar
         | AST.TDateTime
         | AST.TUnit
         | AST.TRuntimeError

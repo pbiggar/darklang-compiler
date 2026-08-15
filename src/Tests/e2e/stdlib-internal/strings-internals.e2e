@@ -1,12 +1,12 @@
 // String internals (stdlib-only)
-// Helper functions used by Stdlib.String.
+// Internal string primitives and the shared Unicode casing layer.
 
-Stdlib.String.__isLowercase(97) = true
-Stdlib.String.__isLowercase(122) = true
-Stdlib.String.__isLowercase(65) = false
-Stdlib.String.__isUppercase(65) = true
-Stdlib.String.__isUppercase(90) = true
-Stdlib.String.__isUppercase(97) = false
+Stdlib.Char.isLowercase('a') = true
+Stdlib.Char.isLowercase('z') = true
+Stdlib.Char.isLowercase('A') = false
+Stdlib.Char.isUppercase('A') = true
+Stdlib.Char.isUppercase('Z') = true
+Stdlib.Char.isUppercase('a') = false
 
 __string_hash("") = -3750763034362895579
 __string_hash("hello") = -6615550055289275125
