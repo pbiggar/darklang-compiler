@@ -95,8 +95,11 @@ let private compile
         Context = CompilerLibrary.StdlibOnly stdlib
         Mode = CompilerLibrary.FullProgram
         SourceSyntax = CompilerLibrary.CompilerSyntax
-        Source = source
-        SourceFile = "ValueSearchCatalogTests.dark"
+        Sources =
+            AST.NonEmptyList.singleton
+                { CompilerLibrary.SourceUnit.Name = "ValueSearchCatalogTests.dark"
+                  Purpose = NameSyntax.SourceUnitPurpose.Executable
+                  Source = source }
         AllowInternal = false
         Verbosity = 0
         Options = CompilerLibrary.defaultOptions
@@ -140,7 +143,7 @@ let testCatalogParity (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
             match branch with
             | [value] -> value.path == "Other.Nested.branchValue" && value.value.errno == 8I
             | _ -> false in
-        allMatches && nestedMatches && deepMatches && otherMatches && branchMatches
+        Builtin.printLine(Stdlib.Bool.toString(allMatches && nestedMatches && deepMatches && otherMatches && branchMatches))
         """
     let report = compile stdlib parityCatalog source
     match report.Result with
@@ -168,7 +171,7 @@ let testCatalogRejectsIllTypedAvailableValue
                 (CompilerLibrary.Available (AST.StringLiteral "not an Error"))
         ]
     let source =
-        "Darklang.Stdlib.ValueSearch.findByType<Stdlib.Cli.Posix.Error>(\"branch-main\", \"\", Darklang.LanguageTools.ProgramTypes.Hash.Hash(\"type-error\"))"
+        "let ignored = Darklang.Stdlib.ValueSearch.findByType<Stdlib.Cli.Posix.Error>(\"branch-main\", \"\", Darklang.LanguageTools.ProgramTypes.Hash.Hash(\"type-error\")) in ()"
     let report = compile stdlib catalog source
     match report.Result with
     | Error error when error.Contains("Package value catalog validation failed") -> Ok ()

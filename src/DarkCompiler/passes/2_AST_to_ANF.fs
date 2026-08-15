@@ -10208,6 +10208,17 @@ type Registries = {
 }
 
 /// Split program into type defs, function defs, and a single expression
+let splitDeclarations (program: AST.Program) : Result<AST.TypeDef list * AST.FunctionDef list, string> =
+    let (AST.Program topLevels) = program
+    let expressions = topLevels |> List.filter (function AST.Expression _ -> true | _ -> false)
+    if List.isEmpty expressions then
+        Ok (
+            topLevels |> List.choose (function AST.TypeDef definition -> Some definition | _ -> None),
+            topLevels |> List.choose (function AST.FunctionDef definition -> Some definition | _ -> None)
+        )
+    else
+        Error $"Declaration-only program must not contain entry expressions; found {expressions.Length}"
+
 let splitTopLevels (program: AST.Program) : Result<AST.TypeDef list * AST.FunctionDef list * AST.Expr, string> =
     let (AST.Program topLevels) = program
     let typeDefs =

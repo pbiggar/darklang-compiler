@@ -244,13 +244,16 @@ let private expectDeclarationError (program: Program) (expectedMessage: string) 
     | Error err -> Error $"Expected '{expectedMessage}', got: {typeErrorToString err}"
     | Ok _ -> Error $"Expected declaration error: {expectedMessage}"
 
-let testDuplicateNominalTypeDeclarationRejected () : TestResult =
-    Program [
+let testDuplicateNominalTypeDeclarationUsesLastOverlay () : TestResult =
+    let program = Program [
         TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "A"; Payload = None }]))
         TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "B"; Payload = None }]))
-        Expression UnitLiteral
+        Expression (Constructor (UnresolvedConstructor (Some "DuplicateNominalTc"), "B", None))
     ]
-    |> fun program -> expectDeclarationError program "Duplicate type declaration: DuplicateNominalTc"
+    match checkInterpreterProgram program with
+    | Ok (TSum ("DuplicateNominalTc", []), _) -> Ok ()
+    | Ok (typ, _) -> Error $"Expected overlaid nominal type, got: {typeToString typ}"
+    | Error error -> Error $"Expected last nominal declaration to win, got: {typeErrorToString error}"
 
 let testDuplicateConstructorDeclarationRejected () : TestResult =
     Program [
@@ -335,7 +338,7 @@ let tests = [
     ("Negation", testNegation)
     ("Nested operations", testNestedOperations)
     ("Complex expression", testComplexExpression)
-    ("Duplicate nominal type declaration rejected", testDuplicateNominalTypeDeclarationRejected)
+    ("Duplicate nominal type declaration uses last overlay", testDuplicateNominalTypeDeclarationUsesLastOverlay)
     ("Duplicate constructor declaration rejected", testDuplicateConstructorDeclarationRejected)
     ("Duplicate and undeclared type parameters rejected", testDuplicateAndUndeclaredTypeParametersRejected)
     ("Empty nominal declarations rejected", testEmptyNominalDeclarationsRejected)

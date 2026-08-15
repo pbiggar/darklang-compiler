@@ -45,11 +45,60 @@ type SourceDeclaration =
     | SourceFunction of Identifier * FunctionDef
     | SourceType of Identifier * TypeDef
     | SourceValue of Identifier * Expr
+    | SourceNestedModule of QualifiedName * ParsedSource
     | SourceExpression of Expr
 
-type ParsedSource =
+and ParsedSource =
     | SourceDeclarations of NonEmptyList<SourceDeclaration>
     | SourceModule of QualifiedName * ParsedSource
+
+/// Why a caller supplied a source unit. Only executable units may contribute
+/// an entry expression; library and package units are declarations-only.
+[<RequireQualifiedAccess>]
+type SourceUnitPurpose =
+    | Executable
+    | Library
+    | Package
+
+/// Stable caller-supplied identity for an independently parsed source unit.
+[<StructuralEquality; StructuralComparison>]
+type SourceUnitName = private SourceUnitName of string
+
+let sourceUnitName (name: string) : Result<SourceUnitName, string> =
+    if System.String.IsNullOrWhiteSpace name then Error "Source unit name must not be empty"
+    else Ok (SourceUnitName name)
+
+let sourceUnitNameText (SourceUnitName name) : string = name
+
+type ParsedSourceUnit = {
+    Name: SourceUnitName
+    Purpose: SourceUnitPurpose
+    Source: ParsedSource
+}
+
+/// A source-accurate program. Unit and declaration order are observable and
+/// retained until whole-program validation has selected an entry.
+type SourceProgram = SourceProgram of NonEmptyList<ParsedSourceUnit>
+
+type EntryCandidate = {
+    SourceUnit: SourceUnitName
+    ModulePath: QualifiedName list
+    DeclarationIndex: int
+    Expression: Expr
+}
+
+/// Executable program after whole-program entry validation. The entry is not
+/// optional, so backend entry synthesis cannot invent a fallback.
+type ValidatedExecutableProgram = private {
+    SourceProgram: SourceProgram
+    Entry: EntryCandidate
+}
+
+let validatedSourceProgram (program: ValidatedExecutableProgram) : SourceProgram =
+    program.SourceProgram
+
+let validatedEntry (program: ValidatedExecutableProgram) : EntryCandidate =
+    program.Entry
 
 let isStartCharacter (character: char) : bool =
     System.Char.IsLetter character || character = '_'
@@ -229,6 +278,64 @@ let tryExtractModuleHeader (source: string) : (QualifiedName * string) option =
 let wrapModules (modules: QualifiedName list) (source: ParsedSource) : ParsedSource =
     List.foldBack (fun moduleName body -> SourceModule (moduleName, body)) modules source
 
+let private entryCandidatesInUnit (unit': ParsedSourceUnit) : EntryCandidate list =
+    let rec collect modulePath nextIndex parsed =
+        match parsed with
+        | SourceModule (moduleName, body) -> collect (modulePath @ [moduleName]) nextIndex body
+        | SourceDeclarations declarations ->
+            declarations
+            |> NonEmptyList.toList
+            |> List.fold (fun (index, entries) declaration ->
+                match declaration with
+                | SourceExpression expression ->
+                    (index + 1,
+                     entries @
+                        [{ SourceUnit = unit'.Name
+                           ModulePath = modulePath
+                           DeclarationIndex = index
+                           Expression = expression }])
+                | SourceNestedModule (moduleName, body) ->
+                    let (next, nestedEntries) = collect (modulePath @ [moduleName]) (index + 1) body
+                    (next, entries @ nestedEntries)
+                | SourceFunction _ | SourceType _ | SourceValue _ -> (index + 1, entries)) (nextIndex, [])
+    collect [] 0 unit'.Source |> snd
+
+let sourceUnits (SourceProgram units) : ParsedSourceUnit list = NonEmptyList.toList units
+
+let createSourceProgram (units: NonEmptyList<ParsedSourceUnit>) : SourceProgram = SourceProgram units
+
+/// Select exactly one executable entry after checking every unit. Entries in
+/// dependency units are always errors, even when an executable entry exists.
+let validateExecutableProgram (program: SourceProgram) : Result<ValidatedExecutableProgram, string> =
+    let units = sourceUnits program
+    let invalidDependencyEntry =
+        units
+        |> List.tryPick (fun unit' ->
+            match unit'.Purpose, entryCandidatesInUnit unit' with
+            | SourceUnitPurpose.Executable, _ | _, [] -> None
+            | purpose, entries ->
+                Some
+                    $"Source unit '{sourceUnitNameText unit'.Name}' has {entries.Length} executable entry expression(s), but {purpose} units must contain declarations only")
+    match invalidDependencyEntry with
+    | Some error -> Error error
+    | None ->
+        let entries =
+            units
+            |> List.collect (fun unit' ->
+                match unit'.Purpose with
+                | SourceUnitPurpose.Executable -> entryCandidatesInUnit unit'
+                | SourceUnitPurpose.Library | SourceUnitPurpose.Package -> [])
+        match entries with
+        | [entry] -> Ok { SourceProgram = program; Entry = entry }
+        | [] -> Error "Executable program must contain exactly one entry expression; found 0"
+        | _ -> Error $"Executable program must contain exactly one entry expression; found {entries.Length}"
+
+/// Validate a declaration-only composition without manufacturing an entry.
+let validateDeclarationProgram (program: SourceProgram) : Result<SourceProgram, string> =
+    match sourceUnits program |> List.collect entryCandidatesInUnit with
+    | [] -> Ok program
+    | entries -> Error $"Declaration-only program must not contain entry expressions; found {entries.Length}"
+
 let normalizeSource (source: ParsedSource) : Result<Program, string> =
     let nameAtPrefix prefix identifier =
         match prefix with
@@ -257,6 +364,14 @@ let normalizeSource (source: ParsedSource) : Result<Program, string> =
                     declarationsToProgram (TypeDef normalized :: acc) rest
                 | SourceExpression expression :: rest ->
                     declarationsToProgram (Expression expression :: acc) rest
+                | SourceNestedModule (moduleName, body) :: rest ->
+                    let nestedPrefix =
+                        prefix
+                        |> Option.map (fun outer -> concat outer moduleName)
+                        |> Option.defaultValue moduleName
+                    normalize (Some nestedPrefix) body
+                    |> Result.bind (fun (Program nestedItems) ->
+                        declarationsToProgram (List.rev nestedItems @ acc) rest)
                 | SourceValue _ :: _ ->
                     Error "Top-level value declarations are parsed but native execution is not supported"
             declarations |> NonEmptyList.toList |> declarationsToProgram []

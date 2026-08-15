@@ -3,7 +3,7 @@
 
 // The compiler E2E value oracle uses language equality. Compare decoded byte
 // lists so the upstream vectors coexist with Blob's identity equality.
-def base64DecodeForParity(value: String) : Stdlib.Result.Result<List<UInt8>, String> =
+let base64DecodeForParity(value: String) : Stdlib.Result.Result<List<UInt8>, String> =
   match Stdlib.Base64.decode value with
   | Ok blob -> Ok(Stdlib.Blob.toList blob)
   | Error error -> Error(error)

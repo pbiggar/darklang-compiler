@@ -926,6 +926,63 @@ let testTopLevelValueHasParsedShapeBeforeAotBoundary () : TestResult =
         | other -> Error $"Unexpected parsed value declaration: {other}"
     | other -> Error $"Unexpected value parse/normalization results: {other}"
 
+let private parsedUnit name purpose source : Result<NameSyntax.ParsedSourceUnit, string> =
+    NameSyntax.sourceUnitName name
+    |> Result.bind (fun unitName ->
+        InterpreterParser.parseSourceString false source
+        |> Result.map (fun parsed ->
+            { NameSyntax.ParsedSourceUnit.Name = unitName
+              Purpose = purpose
+              Source = parsed }))
+
+let testSourceProgramPreservesUnitOrderAndPurpose () : TestResult =
+    match
+        parsedUnit "dependency.dark" NameSyntax.SourceUnitPurpose.Library "let helper(x: Int64) : Int64 = x",
+        parsedUnit "app.dark" NameSyntax.SourceUnitPurpose.Executable "helper 42L"
+    with
+    | Ok dependency, Ok executable ->
+        let program =
+            NameSyntax.createSourceProgram
+                (NonEmptyList.fromList [dependency; executable])
+        match NameSyntax.sourceUnits program, NameSyntax.validateExecutableProgram program with
+        | [first; second], Ok validated
+            when NameSyntax.sourceUnitNameText first.Name = "dependency.dark"
+                 && first.Purpose = NameSyntax.SourceUnitPurpose.Library
+                 && NameSyntax.sourceUnitNameText second.Name = "app.dark"
+                 && NameSyntax.sourceUnitNameText (NameSyntax.validatedEntry validated).SourceUnit = "app.dark" -> Ok ()
+        | other -> Error $"Unexpected composed source program: {other}"
+    | Error error, _ | _, Error error -> Error error
+
+let testSourceProgramRejectsEntryInDependencyUnit () : TestResult =
+    match parsedUnit "dependency.dark" NameSyntax.SourceUnitPurpose.Package "42L" with
+    | Error error -> Error error
+    | Ok dependency ->
+        let program = NameSyntax.createSourceProgram (NonEmptyList.singleton dependency)
+        match NameSyntax.validateExecutableProgram program with
+        | Error error when error.Contains("must contain declarations only") -> Ok ()
+        | other -> Error $"Expected dependency-entry rejection, got: {other}"
+
+let testSourceProgramRequiresExactlyOneEntry () : TestResult =
+    match
+        parsedUnit "one.dark" NameSyntax.SourceUnitPurpose.Executable "1L",
+        parsedUnit "two.dark" NameSyntax.SourceUnitPurpose.Executable "2L"
+    with
+    | Ok one, Ok two ->
+        let program = NameSyntax.createSourceProgram (NonEmptyList.fromList [one; two])
+        match NameSyntax.validateExecutableProgram program with
+        | Error error when error.Contains("exactly one") && error.EndsWith("found 2") -> Ok ()
+        | other -> Error $"Expected multiple-entry rejection, got: {other}"
+    | Error error, _ | _, Error error -> Error error
+
+let testDeclarationProgramNeedsNoDummyEntry () : TestResult =
+    match parsedUnit "library.dark" NameSyntax.SourceUnitPurpose.Library "let id(x: Int64) : Int64 = x" with
+    | Error error -> Error error
+    | Ok library ->
+        let program = NameSyntax.createSourceProgram (NonEmptyList.singleton library)
+        match NameSyntax.validateDeclarationProgram program with
+        | Ok _ -> Ok ()
+        | Error error -> Error $"Declaration-only program should validate: {error}"
+
 let tests = [
     ("compiler library interpreter parse", testCompilerLibraryParseInterpreterSyntax)
     ("parse interpreter lambda/application", testParseInterpreterLambdaApplication)
@@ -989,4 +1046,8 @@ let tests = [
     ("blank identifiers use an explicit typed shape", testBlankIdentifierHasExplicitTypedShape)
     ("module blocks normalize at explicit boundary", testModuleBlockNormalizesAtExplicitBoundary)
     ("top-level values reach the explicit AOT boundary", testTopLevelValueHasParsedShapeBeforeAotBoundary)
+    ("source program preserves unit order and purpose", testSourceProgramPreservesUnitOrderAndPurpose)
+    ("source program rejects dependency entries", testSourceProgramRejectsEntryInDependencyUnit)
+    ("source program requires exactly one entry", testSourceProgramRequiresExactlyOneEntry)
+    ("declaration program needs no dummy entry", testDeclarationProgramNeedsNoDummyEntry)
 ]

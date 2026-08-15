@@ -824,13 +824,20 @@ type PackageValueCatalog = PackageValueCatalog of PackageValueCatalogEntry list
 
 let emptyPackageValueCatalog : PackageValueCatalog = PackageValueCatalog []
 
+/// One independently parsed source unit. Ordering is caller-owned and is
+/// preserved when declaration overlays are composed.
+type SourceUnit = {
+    Name: string
+    Purpose: NameSyntax.SourceUnitPurpose
+    Source: string
+}
+
 /// Request for compiling source code
 type CompileRequest = {
     Context: CompileContext
     Mode: CompileMode
     SourceSyntax: SourceSyntax
-    Source: string
-    SourceFile: string
+    Sources: AST.NonEmptyList<SourceUnit>
     AllowInternal: bool
     Verbosity: int
     Options: CompilerOptions
@@ -963,6 +970,54 @@ let private buildRegistriesForProgram
     let mergedRegistries = AST_to_ANF.mergeRegistries baseRegistries localRegistries
     (mergedRegistries, localRegistries, resolvedFunctions)
 
+type private DeclarationConversion = {
+    Functions: ANF.Function list
+    Registries: AST_to_ANF.Registries
+    LocalReturnTypes: Map<string, AST.Type>
+}
+
+let private splitDeclarations
+    (AST.Program topLevels)
+    : Result<AST.TypeDef list * AST.FunctionDef list, string> =
+    let expressions =
+        topLevels |> List.choose (function AST.Expression expression -> Some expression | _ -> None)
+    if not (List.isEmpty expressions) then
+        Error $"Declaration-only program must not contain entry expressions; found {expressions.Length}"
+    else
+        Ok (
+            topLevels |> List.choose (function AST.TypeDef definition -> Some definition | _ -> None),
+            topLevels |> List.choose (function AST.FunctionDef definition -> Some definition | _ -> None)
+        )
+
+let private convertTypedDeclarations
+    (baseContext: PipelineContext option)
+    (monomorphization: MonomorphizationMode)
+    (typedProgram: AST.Program)
+    : Result<DeclarationConversion, string> =
+    let moduleRegistry =
+        baseContext
+        |> Option.map (fun context -> context.Registries.ModuleRegistry)
+        |> Option.defaultWith Stdlib.buildModuleRegistry
+    let baseRegistries =
+        baseContext
+        |> Option.map (fun context -> context.Registries)
+        |> Option.defaultValue (emptyRegistries moduleRegistry)
+    let baseFuncNames =
+        baseContext
+        |> Option.map (fun context -> context.BaseFuncNames)
+        |> Option.defaultValue (buildBaseFuncNames baseRegistries)
+    prepareProgramForAnf monomorphization baseRegistries baseFuncNames typedProgram
+    |> Result.bind (fun liftedProgram ->
+        splitDeclarations liftedProgram
+        |> Result.bind (fun (typeDefs, functions) ->
+            let (registries, localRegistries, resolvedFunctions) =
+                buildRegistriesForProgram moduleRegistry baseRegistries typeDefs functions
+            AST_to_ANF.convertFunctions registries (ANF.VarGen 0) resolvedFunctions
+            |> Result.map (fun (anfFunctions, _) ->
+                { Functions = anfFunctions
+                  Registries = registries
+                  LocalReturnTypes = extractReturnTypes localRegistries.FuncReg })))
+
 let private convertTypedProgramToConversionResult
     (moduleRegistry: AST.ModuleRegistry)
     (typedProgram: AST.Program)
@@ -1061,14 +1116,9 @@ let analyzePreamble
     (stdlib: StdlibResult)
     (preamble: string)
     : Result<PreambleAnalysis, string> =
-    let preambleTerminator =
-        match sourceSyntax with
-        | CompilerSyntax -> "0"
-        | InterpreterSyntax -> "0L"
-    let preambleSource = preamble + $"\n{preambleTerminator}"
     (match sourceSyntax with
-     | CompilerSyntax -> Parser.parseString allowInternal preambleSource
-     | InterpreterSyntax -> InterpreterParser.parseString allowInternal preambleSource)
+     | CompilerSyntax -> Parser.parseString allowInternal preamble
+     | InterpreterSyntax -> InterpreterParser.parseString allowInternal preamble)
     |> Result.mapError (fun err -> $"Preamble parse error: {err}")
     |> Result.bind (fun preambleAst ->
         checkSyntheticPreambleWithBaseEnvForSyntax
@@ -1283,11 +1333,7 @@ let buildStdlibWithTrace
     | Error e ->
         Error e
     | Ok stdlibAst ->
-        // Add dummy main expression for type checking (stdlib has no main)
-        let (AST.Program items) = stdlibAst
-        let withMain = AST.Program (items @ [AST.Expression AST.UnitLiteral])
-
-        match TypeChecking.checkProgramWithEnv withMain with
+        match TypeChecking.checkDeclarationProgramWithEnv stdlibAst with
         | Error e ->
             let msg = TypeChecking.typeErrorToString e
             Error msg
@@ -1296,21 +1342,20 @@ let buildStdlibWithTrace
             let genericFuncDefs = AST_to_ANF.extractGenericFuncDefs typedStdlib
             // Build module registry once (reused across all compilations)
             let moduleRegistry = Stdlib.buildModuleRegistry ()
-            match convertTypedProgramToConversionResult moduleRegistry typedStdlib with
+            match
+                convertTypedDeclarations
+                    None
+                    (Monomorphize None)
+                    typedStdlib
+            with
             | Error e ->
                 Error e
             | Ok anfResult ->
                 let sw = Stopwatch.StartNew()
-                let registries : AST_to_ANF.Registries = {
-                    TypeReg = anfResult.TypeReg
-                    VariantLookup = anfResult.VariantLookup
-                    FuncReg = anfResult.FuncReg
-                    FuncParams = anfResult.FuncParams
-                    ModuleRegistry = anfResult.ModuleRegistry
-                }
+                let registries = anfResult.Registries
                 let returnTypes = extractReturnTypes registries.FuncReg
                 let context = buildContext target typeCheckEnv genericFuncDefs Map.empty registries returnTypes
-                let (ANF.Program (stdlibFunctions, _)) = anfResult.Program
+                let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                 match buildAnf 0 stdlibOptions sw registries Map.empty stdlibFunctions false passTimingRecorder with
                 | Error e ->
@@ -1406,8 +1451,8 @@ let buildStdlibSpecializations
                     Context = updatedContext
             }
         else
-            AST_to_ANF.splitTopLevels stdlib.TypedAST
-            |> Result.bind (fun (typeDefs, _functions, _expr) ->
+            AST_to_ANF.splitDeclarations stdlib.TypedAST
+            |> Result.bind (fun (typeDefs, _functions) ->
                 let initiallyMaterializedFunctions =
                     newSpecializedFuncs
                     |> List.collect (fun funcDef ->
@@ -1445,15 +1490,14 @@ let buildStdlibSpecializations
                     AST.Program (
                         (typeDefs |> List.map AST.TypeDef)
                         @ (materializedFunctions |> List.map AST.FunctionDef)
-                        @ [AST.Expression AST.UnitLiteral]
                     )
                 prepareProgramForAnf
                     (ReplaceTypeApps combinedSpecRegistry)
                     stdlib.Context.Registries
                     stdlib.Context.BaseFuncNames
                     specializationProgram
-                |> Result.bind AST_to_ANF.splitTopLevels
-                |> Result.bind (fun (preparedTypeDefs, preparedFunctions, _expr) ->
+                |> Result.bind AST_to_ANF.splitDeclarations
+                |> Result.bind (fun (preparedTypeDefs, preparedFunctions) ->
                     let (registries, localRegistries, resolvedFunctions) =
                         buildRegistriesForProgram
                             stdlib.Context.Registries.ModuleRegistry
@@ -1463,7 +1507,10 @@ let buildStdlibSpecializations
                     let registries = {
                         registries with
                             TypeReg =
-                                Map.fold (fun acc k v -> Map.add k v acc) registries.TypeReg externalTypeReg
+                                Map.fold
+                                    (fun acc k (v: TypeChecking.RecordTypeInfo) -> Map.add k v.Fields acc)
+                                    registries.TypeReg
+                                    externalIndexedTypeReg
                             VariantLookup =
                                 Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
                     }
@@ -1550,6 +1597,7 @@ type private UserCompileLabels = {
 
 type private UserCompilePlan = {
     AllowInternal: bool
+    Mode: CompileMode
     SourceSyntax: SourceSyntax
     Verbosity: int
     Options: CompilerOptions
@@ -1564,8 +1612,7 @@ type private UserCompilePlan = {
     EmitFunctionEvents: bool
     TreeShakeUserFunctions: bool
     Labels: UserCompileLabels
-    SourceFile: string
-    Source: string
+    Sources: AST.NonEmptyList<SourceUnit>
 }
 
 /// Parse source text into AST using a selected Darklang syntax
@@ -1577,6 +1624,69 @@ let parseProgram
     match sourceSyntax with
     | CompilerSyntax -> Parser.parseString allowInternal source
     | InterpreterSyntax -> InterpreterParser.parseString allowInternal source
+
+let private parseSourceTree
+    (sourceSyntax: SourceSyntax)
+    (allowInternal: bool)
+    (source: string)
+    : Result<NameSyntax.ParsedSource, string> =
+    match sourceSyntax with
+    | CompilerSyntax -> Parser.parseSourceString allowInternal source
+    | InterpreterSyntax -> InterpreterParser.parseSourceString allowInternal source
+
+let private applyDeclarationOverlays (topLevels: AST.TopLevel list) : AST.TopLevel list =
+    let declarationKey topLevel =
+        match topLevel with
+        | AST.FunctionDef definition -> Some ("function", definition.Name)
+        | AST.TypeDef (AST.RecordDef (name, _, _))
+        | AST.TypeDef (AST.SumTypeDef (name, _, _))
+        | AST.TypeDef (AST.TypeAlias (name, _, _)) -> Some ("type", name)
+        | AST.Expression _ -> None
+    let winningIndices =
+        topLevels
+        |> List.indexed
+        |> List.choose (fun (index, topLevel) ->
+            declarationKey topLevel |> Option.map (fun key -> (key, index)))
+        |> Map.ofList
+    topLevels
+    |> List.indexed
+    |> List.choose (fun (index, topLevel) ->
+        declarationKey topLevel
+        |> Option.map (fun key -> if Map.tryFind key winningIndices = Some index then Some topLevel else None)
+        |> Option.defaultValue (Some topLevel))
+
+/// Parse every source unit independently and validate entry ownership before
+/// crossing into the expression-oriented lowering AST.
+let parseSourceProgram
+    (sourceSyntax: SourceSyntax)
+    (allowInternal: bool)
+    (sources: AST.NonEmptyList<SourceUnit>)
+    : Result<NameSyntax.ValidatedExecutableProgram * AST.Program, string> =
+    let rec parseUnits remaining parsedUnits loweredTopLevels =
+        match remaining with
+        | [] ->
+            let sourceProgram =
+                parsedUnits
+                |> List.rev
+                |> AST.NonEmptyList.fromList
+                |> NameSyntax.createSourceProgram
+            NameSyntax.validateExecutableProgram sourceProgram
+            |> Result.map (fun validated ->
+                let composedTopLevels = List.rev loweredTopLevels |> List.collect id
+                (validated, AST.Program (applyDeclarationOverlays composedTopLevels)))
+        | sourceUnit :: rest ->
+            NameSyntax.sourceUnitName sourceUnit.Name
+            |> Result.bind (fun name ->
+                parseSourceTree sourceSyntax allowInternal sourceUnit.Source
+                |> Result.bind (fun parsed ->
+                    parseProgram sourceSyntax allowInternal sourceUnit.Source
+                    |> Result.bind (fun (AST.Program topLevels) ->
+                        let parsedUnit : NameSyntax.ParsedSourceUnit =
+                            { Name = name
+                              Purpose = sourceUnit.Purpose
+                              Source = parsed }
+                        parseUnits rest (parsedUnit :: parsedUnits) (topLevels :: loweredTopLevels))))
+    parseUnits (AST.NonEmptyList.toList sources) [] []
 
 let private packageHashType =
     AST.TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])
@@ -1830,9 +1940,8 @@ let private materializePackageValueCatalog
             let syntheticProgram =
                 AST.Program (
                     (generatedFunctions |> List.map AST.FunctionDef)
-                    @ [AST.Expression AST.UnitLiteral]
                 )
-            TypeChecking.checkProgramWithBaseEnvAndSettings
+            TypeChecking.checkDeclarationProgramWithBaseEnvAndSettings
                 baseContext.TypeCheckEnv
                 false
                 warningSettings
@@ -1840,11 +1949,8 @@ let private materializePackageValueCatalog
             |> Result.mapError (fun error ->
                 $"Package value catalog validation failed: {TypeChecking.typeErrorToString error}")
             |> Result.map (fun (_, AST.Program generatedTopLevels, _) ->
-                let generatedDefinitions =
-                    generatedTopLevels
-                    |> List.filter (function AST.Expression _ -> false | _ -> true)
                 let (AST.Program userTopLevels) = typedProgram
-                AST.Program (generatedDefinitions @ userTopLevels)))
+                AST.Program (generatedTopLevels @ userTopLevels)))
 
 /// Compile a user/test program against a prebuilt stdlib/preamble context
 let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
@@ -1853,7 +1959,9 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
         try
             // Pass 1: Parse user code only
             if plan.Verbosity >= 1 then println plan.Labels.Parse
-            let parseResult = parseProgram plan.SourceSyntax plan.AllowInternal plan.Source
+            let parseResult =
+                parseSourceProgram plan.SourceSyntax plan.AllowInternal plan.Sources
+                |> Result.map snd
             let parseTime = sw.Elapsed.TotalMilliseconds
             recordPassTiming plan.PassTimingRecorder "Parse" parseTime
             if plan.Verbosity >= 2 then
@@ -1879,10 +1987,17 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                 match typeCheckResult with
                 | Error typeErr -> Error (TypeChecking.typeErrorToString typeErr)
+                | Ok (programType, _, _) when
+                    plan.Mode = FullProgram
+                    && programType <> AST.TUnit
+                    && programType <> AST.TInt64
+                    && programType <> AST.TInt ->
+                    Error
+                        $"File entry expression must return Unit, Int, or Int64; got {TypeChecking.typeToString programType}"
                 | Ok (programType, typedUserAst, _userEnv) ->
                     let renderedUserAst, boundaryProgramType =
-                        if programType = AST.TUnit then
-                            (typedUserAst, AST.TUnit)
+                        if plan.Mode = FullProgram || programType = AST.TUnit then
+                            (typedUserAst, programType)
                         else
                             (ValueRendering.rewriteProgram
                                 plan.BaseContext.Registries.TypeReg
@@ -1950,7 +2065,12 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         | Ok (anfFunctions, typeMap) ->
                             if plan.Verbosity >= 1 then println "  [2.6/7] Print Insertion..."
                             let printStart = sw.Elapsed.TotalMilliseconds
-                            match PrintInsertion.insertPrintInEntry "_start" boundaryProgramType anfFunctions with
+                            let printResult =
+                                match plan.Mode with
+                                | FullProgram -> Ok anfFunctions
+                                | TestExpression ->
+                                    PrintInsertion.insertPrintInEntry "_start" boundaryProgramType anfFunctions
+                            match printResult with
                             | Error err -> Error $"Print insertion error: {err}"
                             | Ok printedFunctions ->
                                 let printElapsed = sw.Elapsed.TotalMilliseconds - printStart
@@ -2102,15 +2222,13 @@ let buildPreambleContext
         }
         Ok (stdlib, emptyContext)
     else
-        // Parse preamble with dummy expression (parser requires a main expression)
-        let preambleSource = preamble + "\n0"
-        match Parser.parseString allowInternal preambleSource with
+        match Parser.parseString allowInternal preamble with
         | Error err ->
             let msg = $"Preamble parse error: {err}"
             Error msg
         | Ok preambleAst ->
             // Type-check preamble with stdlib context
-            match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv preambleAst with
+            match TypeChecking.checkDeclarationProgramWithBaseEnv stdlib.Context.TypeCheckEnv preambleAst with
             | Error typeErr ->
                 let msg = $"Preamble type error: {TypeChecking.typeErrorToString typeErr}"
                 Error msg
@@ -2121,17 +2239,22 @@ let buildPreambleContext
                 let mergedGenericDefs = Map.fold (fun acc k v -> Map.add k v acc) stdlib.Context.GenericFuncDefs preambleGenericDefs
 
                 // Convert preamble to ANF (mono → inline → lift → ANF)
-                match convertTypedProgramToUserOnly stdlib.Context typedPreambleAst with
+                match
+                    convertTypedDeclarations
+                        (Some stdlib.Context)
+                        (Monomorphize (Some stdlib.Context.GenericFuncDefs))
+                        typedPreambleAst
+                with
                 | Error err ->
                     let msg = $"Preamble ANF conversion error: {err}"
                     Error msg
                 | Ok preambleUserOnly ->
                     let preambleRegistries : AST_to_ANF.Registries = {
-                        TypeReg = preambleUserOnly.TypeReg
-                        VariantLookup = preambleUserOnly.VariantLookup
-                        FuncReg = preambleUserOnly.FuncReg
-                        FuncParams = preambleUserOnly.FuncParams
-                        ModuleRegistry = preambleUserOnly.ModuleRegistry
+                        TypeReg = preambleUserOnly.Registries.TypeReg
+                        VariantLookup = preambleUserOnly.Registries.VariantLookup
+                        FuncReg = preambleUserOnly.Registries.FuncReg
+                        FuncParams = preambleUserOnly.Registries.FuncParams
+                        ModuleRegistry = preambleUserOnly.Registries.ModuleRegistry
                     }
                     let preambleOptions = defaultOptions
                     let sw = Stopwatch.StartNew()
@@ -2139,7 +2262,7 @@ let buildPreambleContext
                         mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
                     let pipelineContext =
                         buildContext stdlib.Context.Target preambleTypeCheckEnv mergedGenericDefs Map.empty preambleRegistries preambleReturnTypes
-                    match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions false passTimingRecorder with
+                    match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.Functions false passTimingRecorder with
                     | Error err ->
                         let rcPrefix = "Reference count insertion error: "
                         let msg =
@@ -2223,25 +2346,19 @@ let buildPreambleContextFromAnalysis
             specializedAndOriginalTopLevels
     let programWithSpecializations = AST.Program materializedTopLevels
 
-    convertTypedProgramToUserOnlyWithMode
-        stdlib.Context
+    convertTypedDeclarations
+        (Some stdlib.Context)
         (ReplaceTypeApps combinedSpecRegistry)
         programWithSpecializations
     |> Result.bind (fun preambleUserOnly ->
-        let preambleRegistries : AST_to_ANF.Registries = {
-            TypeReg = preambleUserOnly.TypeReg
-            VariantLookup = preambleUserOnly.VariantLookup
-            FuncReg = preambleUserOnly.FuncReg
-            FuncParams = preambleUserOnly.FuncParams
-            ModuleRegistry = preambleUserOnly.ModuleRegistry
-        }
+        let preambleRegistries = preambleUserOnly.Registries
         let preambleOptions = defaultOptions
         let sw = Stopwatch.StartNew()
         let preambleReturnTypes =
             mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
         let pipelineContext =
             buildContext stdlib.Context.Target analysis.TypeCheckEnv mergedGenericDefs combinedSpecRegistry preambleRegistries preambleReturnTypes
-        match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.UserFunctions false passTimingRecorder with
+        match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.Functions false passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
             let msg =
@@ -2329,6 +2446,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
 
     {
         AllowInternal = request.AllowInternal
+        Mode = request.Mode
         SourceSyntax = request.SourceSyntax
         Verbosity = request.Verbosity
         Options = request.Options
@@ -2343,8 +2461,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
         EmitFunctionEvents = emitFunctionEvents
         TreeShakeUserFunctions = treeShakeUserFunctions
         Labels = labelsForMode request.Mode
-        SourceFile = request.SourceFile
-        Source = request.Source
+        Sources = request.Sources
     }
 
 /// Compile source code to binary (in-memory, no file I/O)

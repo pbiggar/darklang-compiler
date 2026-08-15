@@ -6593,9 +6593,26 @@ let private declarationResolutionEnvironment
             [qualifiedName]
         else
             [qualifiedName; versionedName]
+    let declarationKey topLevel =
+        match topLevel with
+        | FunctionDef funcDef -> Some ("function", funcDef.Name)
+        | TypeDef (RecordDef (name, _, _))
+        | TypeDef (SumTypeDef (name, _, _))
+        | TypeDef (TypeAlias (name, _, _)) -> Some ("type", name)
+        | Expression _ -> None
+    let winningDeclarationIndices =
+        topLevels
+        |> List.indexed
+        |> List.choose (fun (index, topLevel) ->
+            declarationKey topLevel |> Option.map (fun key -> (key, index)))
+        |> Map.ofList
     let sourceCandidates =
         topLevels
         |> List.indexed
+        |> List.filter (fun (index, topLevel) ->
+            declarationKey topLevel
+            |> Option.map (fun key -> Map.tryFind key winningDeclarationIndices = Some index)
+            |> Option.defaultValue true)
         |> List.collect (fun (declarationIndex, topLevel) ->
             let declarationId name = $"source:{declarationIndex}:{name}"
             match topLevel with
@@ -6960,6 +6977,9 @@ let private validateTopLevelTypeDeclarations
         |> List.choose (function
             | TypeDef typeDef -> Some typeDef
             | _ -> None)
+        |> List.rev
+        |> List.distinctBy typeDefName
+        |> List.rev
 
     let baseTypeArities =
         match baseEnv with
@@ -7137,9 +7157,36 @@ let private summarizeTopLevelDeclarations
     let typeDefs =
         topLevels
         |> List.choose (function | TypeDef typeDef -> Some typeDef | _ -> None)
+        |> List.rev
+        |> List.distinctBy typeDefName
+        |> List.rev
     let collidingCaseNames = collidingConstructorCaseNames typeDefs
 
-    topLevels
+    let winningIndices =
+        topLevels
+        |> List.indexed
+        |> List.choose (fun (index, topLevel) ->
+            match topLevel with
+            | FunctionDef definition -> Some (("function", definition.Name), index)
+            | TypeDef definition -> Some (("type", typeDefName definition), index)
+            | Expression _ -> None)
+        |> Map.ofList
+
+    let declarationsToSummarize =
+        topLevels
+        |> List.indexed
+        |> List.choose (fun (index, topLevel) ->
+            let key =
+                match topLevel with
+                | FunctionDef definition -> Some ("function", definition.Name)
+                | TypeDef definition -> Some ("type", typeDefName definition)
+                | Expression _ -> None
+            match key with
+            | None -> Some topLevel
+            | Some declarationKey when Map.tryFind declarationKey winningIndices = Some index -> Some topLevel
+            | Some _ -> None)
+
+    declarationsToSummarize
     |> List.fold (fun summary topLevel ->
         match topLevel with
         | TypeDef (RecordDef (name, _typeParams, fields)) ->
@@ -7188,6 +7235,7 @@ let private checkResolvedProgramInternal
     (baseEnv: TypeCheckEnv option)
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
+    (requireEntry: bool)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
     let (Program topLevels) = program
@@ -7381,24 +7429,21 @@ let private checkResolvedProgramInternal
         |> Result.bind (fun () ->
             let topLevelsWithEqHelpers =
                 materializeEqHelpersInTopLevels mergedAliasReg typeReg variantLookup topLevels'
-            // Find the type of the main expression (if any)
-            let mainExprType = topLevelsWithTypes |> List.tryPick (function (Some t, Expression _) -> Some t | _ -> None)
-            match mainExprType with
-            | Some typ ->
-                // We have a main expression with its type - no need to re-check
-                Ok (typ, Program topLevelsWithEqHelpers, typeCheckEnv)
-            | None ->
-                // No main expression - just functions
-                // For now, require a "main" function with signature () -> int
-                match Map.tryFind "main" declarationSummary.FuncSigs with
-                | Some ([], TInt64) -> Ok (TInt64, Program topLevelsWithEqHelpers, typeCheckEnv)
-                | Some _ -> Error (GenericError "main function must have signature () -> int")
-                | None -> Error (GenericError "Program must have either a main expression or a main() : int function")))
+            let entryTypes =
+                topLevelsWithTypes
+                |> List.choose (function (Some typ, Expression _) -> Some typ | _ -> None)
+            match requireEntry, entryTypes with
+            | true, [typ] -> Ok (typ, Program topLevelsWithEqHelpers, typeCheckEnv)
+            | true, [] -> Error (GenericError "Executable program must contain exactly one entry expression; found 0")
+            | true, entries -> Error (GenericError $"Executable program must contain exactly one entry expression; found {entries.Length}")
+            | false, [] -> Ok (TUnit, Program topLevelsWithEqHelpers, typeCheckEnv)
+            | false, entries -> Error (GenericError $"Declaration-only program must not contain entry expressions; found {entries.Length}")))
 
 let private checkProgramInternal
     (baseEnv: TypeCheckEnv option)
     (requireExplicitTypeArgsForBareCalls: bool)
     (validateDeclarations: bool)
+    (requireEntry: bool)
     (warningSettings: WarningSettings)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
@@ -7424,32 +7469,42 @@ let private checkProgramInternal
     declarationValidation
     |> Result.bind (fun () ->
         resolveProgramNames resolutionEnv program)
-    |> Result.bind (checkResolvedProgramInternal baseEnv requireExplicitTypeArgsForBareCalls warningSettings)
+    |> Result.bind (checkResolvedProgramInternal baseEnv requireExplicitTypeArgsForBareCalls warningSettings requireEntry)
 
 /// Type-check a program
 /// Returns the type of the main expression and the transformed program
 /// The transformed program has Call nodes converted to TypeApp where type inference was applied
 let checkProgram (program: Program) : Result<Type * Program, TypeError> =
-    checkProgramInternal None false true AST.defaultWarningSettings program
+    checkProgramInternal None false true true AST.defaultWarningSettings program
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
 
 /// Type-check the public interpreter syntax policy without a base environment.
 /// Used by focused declaration tests and tools that already parsed an isolated
 /// interpreter program.
 let checkInterpreterProgram (program: Program) : Result<Type * Program, TypeError> =
-    checkProgramInternal None true true AST.defaultWarningSettings program
+    checkProgramInternal None true true true AST.defaultWarningSettings program
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
 
 /// Type-check a program and return the type checking environment
 /// Use this when you need to reuse the environment (e.g., for stdlib caching)
 let checkProgramWithEnv (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal None false true AST.defaultWarningSettings program
+    checkProgramInternal None false true true AST.defaultWarningSettings program
+
+/// Type-check a declaration-only program without synthesizing an expression.
+let checkDeclarationProgramWithEnv (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
+    checkProgramInternal None false true false AST.defaultWarningSettings program
 
 /// Type-check a program with a pre-populated base environment (for separate compilation)
 /// The program's definitions are merged with the base environment, allowing lookups
 /// of types/functions from both the base (e.g., stdlib) and the program (e.g., user code)
 let checkProgramWithBaseEnv (baseEnv: TypeCheckEnv) (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal (Some baseEnv) false true AST.defaultWarningSettings program
+    checkProgramInternal (Some baseEnv) false true true AST.defaultWarningSettings program
+
+let checkDeclarationProgramWithBaseEnv
+    (baseEnv: TypeCheckEnv)
+    (program: Program)
+    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    checkProgramInternal (Some baseEnv) false true false AST.defaultWarningSettings program
 
 /// Type-check a program with a pre-populated base environment, generic-call policy override,
 /// and warning compatibility settings from the compiler driver.
@@ -7459,7 +7514,15 @@ let checkProgramWithBaseEnvAndSettings
     (warningSettings: WarningSettings)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls true warningSettings program
+    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls true true warningSettings program
+
+let checkDeclarationProgramWithBaseEnvAndSettings
+    (baseEnv: TypeCheckEnv)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: Program)
+    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls true false warningSettings program
 
 /// Analyze a synthetic preamble assembled from otherwise independent tests.
 /// Such preambles can repeat declarations that never coexist in a source
@@ -7471,4 +7534,4 @@ let checkSyntheticPreambleWithBaseEnvAndSettings
     (warningSettings: WarningSettings)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls false warningSettings program
+    checkProgramInternal (Some baseEnv) requireExplicitTypeArgsForBareCalls false false warningSettings program

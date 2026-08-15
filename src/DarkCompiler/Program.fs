@@ -402,10 +402,15 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
         | Ok stdlib ->
             let request : CompilerLibrary.CompileRequest = {
                 Context = CompilerLibrary.StdlibOnly stdlib
-                Mode = CompilerLibrary.CompileMode.FullProgram
+                Mode =
+                    if cliOpts.IsExpression then CompilerLibrary.CompileMode.TestExpression
+                    else CompilerLibrary.CompileMode.FullProgram
                 SourceSyntax = cliOpts.SourceSyntax
-                Source = source
-                SourceFile = sourceFile
+                Sources =
+                    AST.NonEmptyList.singleton
+                        { CompilerLibrary.SourceUnit.Name = sourceFile
+                          Purpose = NameSyntax.SourceUnitPurpose.Executable
+                          Source = source }
                 AllowInternal = cliOpts.AllowInternal
                 Verbosity = verbosityToInt verbosity
                 Options = options
@@ -462,10 +467,15 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
             | Ok stdlib ->
                 let request : CompilerLibrary.CompileRequest = {
                     Context = CompilerLibrary.StdlibOnly stdlib
-                    Mode = CompilerLibrary.CompileMode.FullProgram
+                    Mode =
+                        if cliOpts.IsExpression then CompilerLibrary.CompileMode.TestExpression
+                        else CompilerLibrary.CompileMode.FullProgram
                     SourceSyntax = cliOpts.SourceSyntax
-                    Source = source
-                    SourceFile = sourceFile
+                    Sources =
+                        AST.NonEmptyList.singleton
+                            { CompilerLibrary.SourceUnit.Name = sourceFile
+                              Purpose = NameSyntax.SourceUnitPurpose.Executable
+                              Source = source }
                     AllowInternal = cliOpts.AllowInternal
                     Verbosity = verbosityToInt verbosity
                     Options = options

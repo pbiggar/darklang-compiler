@@ -53,7 +53,8 @@ Candidates at the same winning precedence are sorted by rendered identity.
 | `Case` | constructor pattern | cases in several types | scrutinee type selects identity | parity |
 | `T` | type | one user type identity | user type | parity |
 | `A.T` | type | exact qualified user type | user type | parity |
-| any valid form | any context | two distinct equal-precedence identities | ambiguous, ordered identities | parity classification |
+| repeated declaration | same category and qualified location | source-order overlay | last declaration wins | parity |
+| any valid form | any context | two distinct equal-precedence identities not related by overlay | ambiguous, ordered identities | parity classification |
 | any valid form | any context | no category-valid candidate | structured unresolved error | parity classification |
 | empty segment such as `A..f` | any context | n/a | structured invalid-name error | parity classification |
 
@@ -83,8 +84,9 @@ name`, and `Ambiguous <context> reference`.
 - The compiler's native `File`, `Path`, `Platform`, `Random`, raw-memory, and
   related intrinsic catalog remains a compiler-only extension. Each entry is an
   explicit `CompilerExtension` candidate under its full registered spelling.
-- Both parser modes accept module headers and blocks, then flatten their typed
-  paths at the explicit parser-to-AST normalization boundary. The compiler does
+- Both parser modes accept module headers and blocks and retain their typed
+  paths through source-unit composition, then lower them to deterministic
+  qualified backend symbols. The compiler does
   not load content-addressed packages. Imported compilation environments model
   the same precedence boundary, but package hashes and dependency traversal
   remain an intentional, documented program-model divergence.

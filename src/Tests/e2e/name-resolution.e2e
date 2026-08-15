@@ -9,8 +9,8 @@ Float.sqrt(4.0) = error="Unresolved callable name: Float.sqrt"
 // Lexical callable values shadow a same-spelled top-level function.
 let shadowed(x: Int64): Int64 = x + 10 let shadowed = fun x -> x + 20 in shadowed(1) = 21
 
-// Equal-precedence duplicate declarations are deterministic ambiguities.
-let duplicated(x: Int64): Int64 = x + 1 let duplicated(x: Int64): Int64 = x + 2 duplicated(1) = error="Ambiguous callable reference 'duplicated': function duplicated"
+// Interpreter overlays are deterministic: the last same-category declaration wins.
+let duplicated(x: Int64): Int64 = x + 1 let duplicated(x: Int64): Int64 = x + 2 duplicated(1) = 3
 
 // Constructors from distinct user types do not acquire an order-dependent winner.
 type FirstChoice = SharedChoice | FirstOnly

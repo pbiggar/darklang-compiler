@@ -589,21 +589,7 @@ let private parsePreambleAsProgram
     (allowInternal: bool)
     (preamble: string)
     : Result<Program, string> =
-    let preambleTerminator =
-        match sourceSyntax with
-        | CompilerLibrary.CompilerSyntax -> "0"
-        | CompilerLibrary.InterpreterSyntax -> "0L"
-
-    let preambleSource =
-        match sourceSyntax with
-        | CompilerLibrary.CompilerSyntax ->
-            preamble + $"\n{preambleTerminator}"
-        | CompilerLibrary.InterpreterSyntax ->
-            // Interpreter syntax supports `;` as a top-level separator. Add it
-            // before the synthetic terminator so a trailing identifier body like
-            // `= x` does not absorb the terminator as an application argument.
-            preamble + $"\n;\n{preambleTerminator}"
-    CompilerLibrary.parseProgram sourceSyntax allowInternal preambleSource
+    CompilerLibrary.parseProgram sourceSyntax allowInternal preamble
 
 let private countLeadingSpaces (lineText: string) : int =
     lineText
@@ -708,8 +694,7 @@ let private analyzePreambleWithReducedFunctionSet
         let reducedTopLevels =
             reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
 
-        let reducedProgram =
-            Program (reducedTopLevels @ [Expression (Int64Literal 0L)])
+        let reducedProgram = Program reducedTopLevels
 
         TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
             stdlib.Context.TypeCheckEnv
@@ -754,7 +739,7 @@ let private collectSpecsFromTests
     : Result<Set<SpecKey> * TypeRegistry * VariantLookup, string> =
     let registriesFromTypedProgram (typedAst: Program) : TypeRegistry * VariantLookup =
         match AST_to_ANF.splitTopLevels typedAst with
-        | Ok (typeDefs, functions, _expr) ->
+        | Ok (typeDefs, functions, _entry) ->
             let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
             let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
             let registries = AST_to_ANF.buildRegistries Map.empty typeDefs aliasReg resolvedFunctions
@@ -819,8 +804,8 @@ let private buildPreamblePlan
                 match analysisOpt with
                 | None -> (Map.empty, Map.empty)
                 | Some analysis ->
-                    match AST_to_ANF.splitTopLevels analysis.TypedAST with
-                    | Ok (typeDefs, functions, _expr) ->
+                    match AST_to_ANF.splitDeclarations analysis.TypedAST with
+                    | Ok (typeDefs, functions) ->
                         let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
                         let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
                         let registries = AST_to_ANF.buildRegistries Map.empty typeDefs aliasReg resolvedFunctions
@@ -1066,21 +1051,6 @@ let private compileAndRun
         | Error err ->
             Ran (-1, "", $"Execution failed: {err}", compileReport.CompileTime, TimeSpan.Zero)
 
-let private combinePreambleWithTestSource
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
-    (preamble: string)
-    (source: string)
-    : string =
-    if String.IsNullOrWhiteSpace preamble then
-        source
-    else
-        match sourceSyntax with
-        | CompilerLibrary.CompilerSyntax ->
-            preamble + "\n" + source
-        | CompilerLibrary.InterpreterSyntax ->
-            // Keep a hard top-level separator between preamble and test expression.
-            preamble + "\n;\n" + source
-
 let private tryBuildReducedPreambleForTest
     (sourceSyntax: CompilerLibrary.SourceSyntax)
     (allowInternal: bool)
@@ -1142,8 +1112,11 @@ let runE2ETestWithPreambleContext
             Context = CompilerLibrary.StdlibWithPreamble (stdlib, preambleCtx)
             Mode = CompilerLibrary.CompileMode.TestExpression
             SourceSyntax = sourceSyntax
-            Source = source
-            SourceFile = test.SourceFile
+            Sources =
+                NonEmptyList.singleton
+                    { CompilerLibrary.SourceUnit.Name = test.SourceFile
+                      Purpose = NameSyntax.SourceUnitPurpose.Executable
+                      Source = source }
             AllowInternal = allowInternal
             Verbosity = 0
             Options = options
@@ -1167,13 +1140,18 @@ let runE2ETestWithPreambleContext
             let fallbackPreamble =
                 tryBuildReducedPreambleForTest sourceSyntax allowInternal test.Preamble source
                 |> Option.defaultValue test.Preamble
-            let fallbackSource = combinePreambleWithTestSource sourceSyntax fallbackPreamble source
             let fallbackRequest : CompilerLibrary.CompileRequest = {
                 Context = CompilerLibrary.StdlibOnly stdlib
                 Mode = CompilerLibrary.CompileMode.FullProgram
                 SourceSyntax = sourceSyntax
-                Source = fallbackSource
-                SourceFile = test.SourceFile
+                Sources =
+                    NonEmptyList.fromList
+                        [{ CompilerLibrary.SourceUnit.Name = $"{test.SourceFile}:preamble"
+                           Purpose = NameSyntax.SourceUnitPurpose.Library
+                           Source = fallbackPreamble }
+                         { CompilerLibrary.SourceUnit.Name = test.SourceFile
+                           Purpose = NameSyntax.SourceUnitPurpose.Executable
+                           Source = source }]
                 AllowInternal = allowInternal
                 Verbosity = 0
                 Options = options

@@ -378,6 +378,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let buildUnitTests (stdlib: CompilerLibrary.StdlibResult) : UnitTestSuite array = [|
         { Name = "Platform Tests"; Tests = PlatformTests.tests }
         { Name = "ValueSearch Catalog Tests"; Tests = ValueSearchCatalogTests.tests stdlib }
+        { Name = "Program Structure Tests"; Tests = ProgramStructureTests.tests stdlib }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }
         { Name = "ANF to MIR Tests"; Tests = ANFToMIRTests.tests }
