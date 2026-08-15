@@ -1245,7 +1245,7 @@ let private validateJsonTargetType
                         variants
                         |> List.choose (fun (_, _, payload) -> Option.map (applySubst subst) payload)
                         |> validateAll
-            | TFunction _ | TBlob | TRawPtr | TRuntimeError | TVar _ | TDict _ -> unsupported typ
+            | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TDict _ -> unsupported typ
     validate Set.empty targetType
 
 /// Every concrete compound comparable type has one equality entry point.

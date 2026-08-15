@@ -40,3 +40,5 @@ jsonParityError<JsonParityChoice>(Stdlib.Json.parse<JsonParityChoice>("{\"JsonPa
 jsonParityError<List<JsonParityPerson>>(Stdlib.Json.parse<List<JsonParityPerson>>("[{\"Name\":\"Ada\",\"Age\":\"old\"}]")) = "Can't parse JSON `\"old\"` as type `Int64` at path: `root[0].Age`"
 Stdlib.Json.parse<Int64>("not-json") = Stdlib.Result.Result.Error(Stdlib.Json.ParseError.ParseError.NotJson)
 Stdlib.Json.serialize<(Int64) -> Int64>(fun value -> value) = error="Unsupported type in JSON"
+Stdlib.Json.serialize<Stream<Int64>>(Stdlib.Stream.fromList<Int64>([])) = error="Unsupported type in JSON"
+Stdlib.Json.parse<Stream<Int64>>("[]") = error="Unsupported type in JSON"

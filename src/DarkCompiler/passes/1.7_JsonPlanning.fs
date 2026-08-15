@@ -137,6 +137,7 @@ let rec private typeReference typ =
         constructor owner "TTuple" (tuplePayload [typeReference first; typeReference second; ListLiteral (List.map typeReference rest)])
     | TFunction (parameters, result) ->
         constructor owner "TFn" (tuplePayload [ListLiteral (List.map typeReference parameters); typeReference result])
+    | TStream elementType -> custom "Stdlib.Stream.Stream" [elementType]
     | TRecord (name, typeArgs)
     | TSum (name, typeArgs) -> custom name typeArgs
     | TVar name -> unary "TVariable" (StringLiteral name)
@@ -407,7 +408,7 @@ and private serializeBody env typ value state : Result<Expr * State, string> =
                                 loop rest next (makeCase (PConstructor (variant.Name, Some (PVar payloadName))) body :: acc))
                 loop (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
                 |> Result.map (fun (cases, nextState) -> (Match (value, cases), nextState)))
-    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TVar _ | TEnumFields _
+    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TEnumFields _
     | TDict _ ->
         Error
             $"Unsupported type in JSON: {TypeChecking.typeToString typ}. Some types are not supported in Json serialization"
@@ -845,7 +846,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                               objectBody
                           makeCase PWildcard failure ]),
                      nextState)))
-    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TVar _ | TEnumFields _ | TDict _ ->
+    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TEnumFields _ | TDict _ ->
         Error $"Unsupported type in JSON: {TypeChecking.typeToString typ}. Some types are not supported in Json serialization"
 
 let private sumRegistry (variantLookup: TypeChecking.VariantLookup) =
