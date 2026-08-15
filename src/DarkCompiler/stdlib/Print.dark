@@ -1,0 +1,15 @@
+// Stdlib.Print.dark - Explicit String-only stdout helpers shared with Darklang.
+
+module Stdlib
+
+let print(str: String) : Unit =
+    let _ = Builtin.print(str) in
+    ()
+
+let printLine(str: String) : Unit =
+    let _ = Builtin.printLine(str) in
+    ()
+
+let printLines(lines: List<String>) : Unit =
+    let _ = Stdlib.List.iter<String>(lines, Stdlib.printLine) in
+    ()

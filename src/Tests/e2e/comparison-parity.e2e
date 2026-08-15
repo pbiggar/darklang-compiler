@@ -29,6 +29,32 @@ Builtin.testNan_v0 != Builtin.testNan_v0 = true
 "dark" == "dark" = true
 "dark" != "lang" = true
 
+// The public polymorphic prelude shares the typed equality plan used by the
+// operators. Cover every scalar admitted by both runtimes, including the
+// compiler's String-backed Uuid representation.
+Stdlib.equals<Unit>((), ()) = true
+Stdlib.notEquals<Bool>(true, false) = true
+Stdlib.equals<Int8>(1y, 1y) = true
+Stdlib.notEquals<Int16>(1s, 2s) = true
+Stdlib.equals<Int32>(1l, 1l) = true
+Stdlib.notEquals<Int64>(1L, 2L) = true
+Stdlib.equals<Int128>(1Q, 1Q) = true
+Stdlib.notEquals<Int>(1I, 2I) = true
+Stdlib.equals<UInt8>(1uy, 1uy) = true
+Stdlib.notEquals<UInt16>(1us, 2us) = true
+Stdlib.equals<UInt32>(1ul, 1ul) = true
+Stdlib.notEquals<UInt64>(1UL, 2UL) = true
+Stdlib.equals<UInt128>(1Z, 1Z) = true
+Stdlib.equals<Float>(1.5, 1.5) = true
+Stdlib.equals<Float>(Builtin.testNan_v0, Builtin.testNan_v0) = false
+Stdlib.notEquals<Float>(Builtin.testNan_v0, Builtin.testNan_v0) = true
+Stdlib.equals<Float>(0.0, -0.0) = true
+Stdlib.equals<Char>('a', 'a') = true
+Stdlib.notEquals<String>("dark", "lang") = true
+Stdlib.equals<String>(Builtin.unwrap(Stdlib.Uuid.parse_v0("01234567-89ab-cdef-0123-456789abcdef")), Builtin.unwrap(Stdlib.Uuid.parse_v0("01234567-89ab-cdef-0123-456789abcdef"))) = true
+let comparisonDate = Builtin.unwrap(Stdlib.DateTime.parse("2021-07-28T22:42:36Z")) in Stdlib.equals<DateTime>(comparisonDate, comparisonDate) = true
+Stdlib.notEquals<DateTime>(Builtin.unwrap(Stdlib.DateTime.parse("2021-07-28T22:42:36Z")), Builtin.unwrap(Stdlib.DateTime.parse("2019-07-28T22:42:36Z"))) = true
+
 // Same nominal type plus recursive contents determine structural equality.
 (1, [2, 3], (true, "x")) == (1, [2, 3], (true, "x")) = true
 (1, [2, 3], (true, "x")) != (1, [2, 4], (true, "x")) = true
@@ -37,6 +63,10 @@ type ComparisonRecord = { name: String, values: List<(Int64, Bool)> }
 type ComparisonBox = ComparisonBox of List<(Int64, String)>
 ComparisonBox([(1, "one"), (2, "two")]) == ComparisonBox([(1, "one"), (2, "two")]) = true
 ComparisonBox([(1, "one"), (2, "two")]) != ComparisonBox([(1, "one"), (3, "three")]) = true
+Stdlib.equals<(Int64, List<(String, Bool)>)>((1L, [("x", true)]), (1L, [("x", true)])) = true
+Stdlib.notEquals<List<(Int64, List<String>)>>([(1L, ["x", "y"])], [(1L, ["x", "z"])]) = true
+Stdlib.equals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
+Stdlib.notEquals<ComparisonBox>(ComparisonBox([(1, "one")]), ComparisonBox([(2, "two")])) = true
 
 // A typed comparison plan survives substitution and specialization.
 let comparisonGenericEquals<'a>(left: a, right: a): Bool = left == right
@@ -48,6 +78,8 @@ comparisonGenericEquals<ComparisonRecord>(ComparisonRecord { name = "r", values 
 Dict { a = 1; b = 2 } == Dict { b = 2; a = 1 } = true
 comparisonGenericEquals<Dict<List<Int64>>>(Dict { a = [1, 2]; b = [3] }, Dict { b = [3]; a = [1, 2] }) = true
 Dict { a = 1 } != Dict { a = 2 } = true
+Stdlib.equals<Dict<List<Int64>>>(Dict { a = [1, 2]; b = [3] }, Dict { b = [3]; a = [1, 2] }) = true
+Stdlib.notEquals<Dict<List<Int64>>>(Dict { a = [1, 2] }, Dict { a = [1, 3] }) = true
 
 // Lambda identity is its source expression and deliberately ignores captures.
 let comparisonMakeLambda(captured: Int64): (Int64) -> Int64 =
@@ -68,6 +100,14 @@ let comparisonSub(left: Int64, right: Int64): Int64 = left - right
 let comparisonFirst<'a>(left: a, right: a): a = left
 [comparisonFirst<Int64>(1L)] == [comparisonFirst<Int64>(1L)] = true
 (let left = [comparisonAdd(1L)] in let right = [comparisonAdd(1L)] in comparisonGenericEquals<List<(Int64) -> Int64>>(left, right)) = true
+Stdlib.equals<(Int64) -> Int64>(comparisonAdd(1L), comparisonAdd(1L)) = true
+Stdlib.notEquals<(Int64) -> Int64>(comparisonAdd(1L), comparisonSub(1L)) = true
+Stdlib.equals<(Int64) -> Int64>(comparisonMakeLambda(1L), comparisonMakeLambda(2L)) = true
+Stdlib.notEquals<(Int64) -> Int64>((fun value -> value), (fun value -> value)) = true
+
+// Calls evaluate both arguments exactly once, from left to right.
+let comparisonTraceValue(label: String, value: Int64): Int64 = let _ = Builtin.print(label) in value
+Stdlib.equals<Int64>(comparisonTraceValue("L", 1L), comparisonTraceValue("R", 1L)) = stdout="LRtrue\n" stderr="" exact_bytes=true
 
 // Numeric ordering covers every width; 128-bit values are numeric, not lexical.
 -2y < 1y = true
@@ -105,3 +145,12 @@ true < false = error="Cannot perform numeric operation on Bool and Bool"
 1L < 1.0 = error="Cannot perform numeric operation on Int64 and Float"
 Stdlib.Bytes.create(0) != Stdlib.Bytes.create(0) = true
 let blob = Stdlib.Bytes.create(0) in blob == blob = true
+Stdlib.equals<Blob>(Stdlib.Bytes.create(0), Stdlib.Bytes.create(0)) = false
+let publicBlob = Stdlib.Bytes.create(0) in Stdlib.equals<Blob>(publicBlob, publicBlob) = true
+Stdlib.notEquals<Blob>(Stdlib.Bytes.create(0), Stdlib.Bytes.create(0)) = true
+
+// Public wrapper calls retain the compiler's intentional AOT mismatch timing.
+Stdlib.equals('a', "a") = error="Type variable a$0 has conflicting inferences: Char vs String"
+Stdlib.notEquals(1L, 1.0) = error="Type mismatch in float literal: expected Int64, got Float"
+Stdlib.equals(ComparisonOnlyA, ComparisonOnlyB) = error="Type mismatch in constructor ComparisonOnlyA: expected a$0, got ComparisonNominalA"
+Stdlib.notEquals(ComparisonRecordA { value = 1 }, ComparisonRecordB { value = 1 }) = error="Type mismatch in record literal: expected ComparisonRecordA, got ComparisonRecordB"

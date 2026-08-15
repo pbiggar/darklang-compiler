@@ -1043,7 +1043,10 @@ let private canonicalizeDeclaredTypeRefs
 
     canonicalize typ
 
-let private canonicalizeTypeRegistry
+/// Build the indexed record metadata used by checking and generated helpers.
+/// Separate-compilation callers use this for user records referenced by a
+/// concrete stdlib specialization.
+let indexTypeRegistry
     (variantLookup: VariantLookup)
     (typeReg: TypeRegistry)
     : IndexedTypeRegistry =
@@ -7234,7 +7237,7 @@ let private checkResolvedProgramInternal
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
         TypeReg = programTypeReg
-        IndexedTypeReg = canonicalizeTypeRegistry canonicalVariantLookup programTypeReg
+        IndexedTypeReg = indexTypeRegistry canonicalVariantLookup programTypeReg
         VariantLookup = canonicalVariantLookup
         FuncEnv = programFuncEnv
         FuncParamNames = declarationSummary.FuncParamNames

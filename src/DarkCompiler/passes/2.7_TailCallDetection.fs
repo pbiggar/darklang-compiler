@@ -269,11 +269,16 @@ let rec detectTailCalls
 
 /// Detect tail calls in a function
 let detectTailCallsInFunction (func: Function) : Function =
-    // Function body is always in tail position
-    let paramIds = func.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
-    let ownedParams = leadingRetainedParams paramIds func.Body
-    let body' = detectTailCalls func.Name func.TypedParams ownedParams Set.empty true Map.empty func.Body
-    { func with Body = body' }
+    // The process entrypoint has no caller return address. A sibling tail branch
+    // from _start would make the callee's Ret jump through an invalid address.
+    if func.Name = "_start" then
+        func
+    else
+        // Function body is always in tail position
+        let paramIds = func.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
+        let ownedParams = leadingRetainedParams paramIds func.Body
+        let body' = detectTailCalls func.Name func.TypedParams ownedParams Set.empty true Map.empty func.Body
+        { func with Body = body' }
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =

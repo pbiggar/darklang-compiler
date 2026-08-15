@@ -1114,6 +1114,7 @@ let private loadDarkFileAllowInternal (filename: string) : Result<AST.Program, s
 let private loadStdlib () : Result<AST.Program, string> =
     let stdlibFiles = [
         "stdlib/Types.dark"
+        "stdlib/NoModule.dark"
         "stdlib/Int8.dark"
         "stdlib/Int16.dark"
         "stdlib/Int32.dark"
@@ -1131,6 +1132,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Option.dark"
         "stdlib/ListSortByComparatorHelpers.dark"
         "stdlib/List.dark"
+        "stdlib/Print.dark"
         "stdlib/Fun.dark"
         "stdlib/Float.dark"
         "stdlib/CliPosix.dark"
@@ -1301,6 +1303,18 @@ let buildStdlibSpecializations
     if Set.isEmpty specs then
         Ok stdlib
     else
+        let materializationVariantLookup =
+            Map.fold
+                (fun acc name variant -> Map.add name variant acc)
+                stdlib.Context.TypeCheckEnv.VariantLookup
+                externalVariantLookup
+        let externalIndexedTypeReg =
+            TypeChecking.indexTypeRegistry materializationVariantLookup externalTypeReg
+        let materializationTypeReg =
+            Map.fold
+                (fun acc name typeInfo -> Map.add name typeInfo acc)
+                stdlib.Context.TypeCheckEnv.IndexedTypeReg
+                externalIndexedTypeReg
         let specialization = AST_to_ANF.specializeFromSpecs stdlib.Context.GenericFuncDefs specs
         let initialCombinedSpecRegistry = mergeSpecRegistries stdlib.Context.SpecRegistry specialization.SpecRegistry
         let existingNames =
@@ -1332,17 +1346,11 @@ let buildStdlibSpecializations
                 let initiallyMaterializedFunctions =
                     newSpecializedFuncs
                     |> List.collect (fun funcDef ->
-                        let materialize =
-                            if funcDef.Name.StartsWith("Stdlib.List.__groupContainsKey")
-                               || funcDef.Name.StartsWith("Stdlib.List.__appendToGroup") then
-                                TypeChecking.materializeEqHelpersInTopLevels
-                            else
-                                TypeChecking.materializeCompareHelpersInTopLevels
                         [AST.FunctionDef funcDef]
-                        |> materialize
+                        |> TypeChecking.materializeEqHelpersInTopLevels
                             stdlib.Context.TypeCheckEnv.AliasReg
-                            stdlib.Context.TypeCheckEnv.IndexedTypeReg
-                            stdlib.Context.TypeCheckEnv.VariantLookup)
+                            materializationTypeReg
+                            materializationVariantLookup)
                     |> List.choose (function
                         | AST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)
@@ -1360,10 +1368,10 @@ let buildStdlibSpecializations
                     (helperSpecialization.SpecializedFuncs @ initiallyMaterializedFunctions)
                     |> List.filter (fun f -> not (Set.contains f.Name existingNames))
                     |> List.map AST.FunctionDef
-                    |> TypeChecking.materializeCompareHelpersInTopLevels
+                    |> TypeChecking.materializeEqHelpersInTopLevels
                         stdlib.Context.TypeCheckEnv.AliasReg
-                        stdlib.Context.TypeCheckEnv.IndexedTypeReg
-                        stdlib.Context.TypeCheckEnv.VariantLookup
+                        materializationTypeReg
+                        materializationVariantLookup
                     |> List.choose (function
                         | AST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)

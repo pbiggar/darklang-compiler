@@ -1,0 +1,11 @@
+// Stdlib.NoModule.dark - Root polymorphic helpers shared with Darklang.
+
+module Stdlib
+
+/// Returns true when both values are structurally equal.
+let equals<'a>(left: a, right: a) : Bool =
+    left == right
+
+/// Returns true when both values are not structurally equal.
+let notEquals<'a>(left: a, right: a) : Bool =
+    !Stdlib.equals<'a>(left, right)
