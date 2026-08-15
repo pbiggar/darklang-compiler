@@ -366,7 +366,11 @@ and private renderBody
                 LPVariable shortName,
                 short,
                 If (
-                    BinOp (Lte, call "Stdlib.String.length" [Var shortName], Int64Literal 80L),
+                    BinOp (
+                        Lte,
+                        call "Stdlib.String.length" [Var shortName],
+                        BigIntLiteral (System.Numerics.BigInteger 80)
+                    ),
                     Var shortName,
                     long
                 )
