@@ -7,15 +7,22 @@ build_tests() {
     local script_dir="$1"
     local configfile="$2"
     local build_label="${3:-Building...}"
+    # Bound peak memory in shared worktrees and leave no reusable MSBuild nodes.
+    local build_args=(
+        --verbosity quiet
+        -m:1
+        /nodeReuse:false
+        --disable-build-servers
+    )
 
     echo "$build_label"
     if [ -n "$configfile" ]; then
-        if ! timeout 120 dotnet build --verbosity quiet --configfile "$configfile" 2>&1; then
+        if ! timeout 120 dotnet build "${build_args[@]}" --configfile "$configfile" 2>&1; then
             echo "Build failed!"
             return 1
         fi
     else
-        if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
+        if ! timeout 120 dotnet build "${build_args[@]}" 2>&1; then
             echo "Build failed!"
             return 1
         fi
