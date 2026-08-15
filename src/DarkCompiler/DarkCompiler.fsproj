@@ -27,6 +27,7 @@
     <Compile Include="passes/1_InterpreterParser.fs" />
     <Compile Include="passes/1.5_TypeChecking.fs" />
     <Compile Include="passes/1.6_ValueRendering.fs" />
+    <Compile Include="passes/1.7_JsonPlanning.fs" />
 
     <!-- Pass 2: AST -> ANF -->
     <Compile Include="ANF.fs" />

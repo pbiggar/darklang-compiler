@@ -2258,6 +2258,13 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     Ok (Var fullName, TLt :: typeArgsStart)
             | _ when fullName = "Stdlib.Dict.empty" ->
                 Ok (DictLiteral (TVar "dictValue", []), afterQualified)
+            | _ when fullName = "Stdlib.AltJson.Builder.empty" ->
+                Ok (ListLiteral [], afterQualified)
+            | _ when fullName = "Darklang.SCM.Branch.mainBranchId" ->
+                // Json.ParseError.toString retains this public compatibility
+                // parameter, but AOT type names are resolved from compiler
+                // metadata and do not consult a branch.
+                Ok (StringLiteral "00000000-0000-0000-0000-000000000000", afterQualified)
             | _ ->
                 // Qualified variable reference (function as value)
                 Ok (Var fullName, afterQualified)

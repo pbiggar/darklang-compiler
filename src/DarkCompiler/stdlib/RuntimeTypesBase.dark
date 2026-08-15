@@ -1,0 +1,7 @@
+// RuntimeTypesBase.dark - names and name-resolution metadata used by runtime type references.
+
+module Darklang.LanguageTools.RuntimeTypes
+
+type NameResolutionError = NotFound | InvalidName
+
+type NameResolution<'a> = { originalName: List<String>, resolved: Stdlib.Result.Result<a, Darklang.LanguageTools.RuntimeTypes.NameResolutionError> }

@@ -1,0 +1,9 @@
+// AltJsonParseError.dark - public structural JSON parse failures.
+
+module Stdlib.AltJson.ParseError
+
+type ParseError = | NotJson
+
+let toString(error: Stdlib.AltJson.ParseError.ParseError) : String =
+    match error with
+    | NotJson -> "Not JSON"

@@ -366,6 +366,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
             match tryGetType ctx tid with
             | Some (AST.TTuple elemTypes) when index < List.length elemTypes ->
                 Some (List.item index elemTypes)
+            | Some (AST.TEnumFields fieldTypes) when index < List.length fieldTypes ->
+                Some (List.item index fieldTypes)
             | Some (AST.TRecord (typeName, _)) ->
                 // Record fields - look up field type
                 match Map.tryFind typeName ctx.TypeReg with
@@ -1266,46 +1268,67 @@ let rec insertRCWithAnalysis
                 else
                     returnDecs
 
-            let tupleIncTargets =
-                match cexpr with
-                | TupleAlloc elems ->
-                    elems
-                    |> List.fold (fun acc atom ->
-                        match atom with
-                        | Var tid ->
-                            match tryGetType ctx tid with
-                            | Some t when shapeNeedsBorrowedRetain ctx t ->
-                                (tid, t) :: acc
+            let allocationIncTargets =
+                let compoundAllocationTargets =
+                    match cexpr with
+                    | TupleAlloc elems ->
+                        elems
+                        |> List.fold (fun acc atom ->
+                            match atom with
+                            | Var tid ->
+                                match tryGetType ctxWithTypes tid with
+                                | Some t when shapeNeedsBorrowedRetain ctx t ->
+                                    (tid, t) :: acc
+                                | _ -> acc
                             | _ -> acc
-                        | _ -> acc
-                    ) []
-                    |> List.rev
-                | RecordAlloc (_, fields)
-                | RecordClone (_, _, fields) ->
-                    fields
-                    |> List.fold (fun acc atom ->
-                        match atom with
-                        | Var tid ->
-                            match tryGetType ctx tid with
-                            | Some t when shapeNeedsBorrowedRetain ctx t ->
-                                (tid, t) :: acc
+                        ) []
+                        |> List.rev
+                    | RecordAlloc (_, fields)
+                    | RecordClone (_, _, fields) ->
+                        fields
+                        |> List.fold (fun acc atom ->
+                            match atom with
+                            | Var tid ->
+                                match tryGetType ctx tid with
+                                | Some t when shapeNeedsBorrowedRetain ctx t ->
+                                    (tid, t) :: acc
+                                | _ -> acc
                             | _ -> acc
-                        | _ -> acc
-                    ) []
-                    |> List.rev
-                | ClosureAlloc (_, captures) ->
-                    captures
-                    |> List.fold (fun acc atom ->
-                        match atom with
-                        | Var tid ->
-                            match tryGetType ctx tid with
-                            | Some t when shapeNeedsBorrowedRetain ctx t ->
-                                (tid, t) :: acc
+                        ) []
+                        |> List.rev
+                    | ClosureAlloc (_, captures) ->
+                        captures
+                        |> List.fold (fun acc atom ->
+                            match atom with
+                            | Var tid ->
+                                match tryGetType ctxWithTypes tid with
+                                | Some t when shapeNeedsBorrowedRetain ctx t ->
+                                    (tid, t) :: acc
+                                | _ -> acc
                             | _ -> acc
-                        | _ -> acc
-                    ) []
-                    |> List.rev
-                | _ -> []
+                        ) []
+                        |> List.rev
+                    | _ -> []
+                let erasedSkewListElementTargets =
+                    match cexpr with
+                    | Call (funcName, [_; Var valueTemp])
+                    | TailCall (funcName, [_; Var valueTemp]) when
+                        funcName = "Stdlib.Internal.SkewList.push_i64"
+                        || funcName = "Stdlib.Internal.SkewList.pushBack_i64" ->
+                        let transfersImmediateOwnedValue =
+                            match frames with
+                            | previous :: _ when previous.TempId = valueTemp ->
+                                not (isBorrowingExpr previous.CExpr)
+                            | _ ->
+                                false
+                        match transfersImmediateOwnedValue, tryGetType ctxWithTypes valueTemp with
+                        | false, Some valueType when shapeNeedsBorrowedRetain ctx valueType ->
+                            [ valueTemp, valueType ]
+                        | _ ->
+                            []
+                    | _ ->
+                        []
+                compoundAllocationTargets @ erasedSkewListElementTargets
 
             let returnInc =
                 let retainedTypeFromAtom (atom: Atom) : AST.Type option =
@@ -1376,7 +1399,7 @@ let rec insertRCWithAnalysis
             let frame = {
                 TempId = tempId
                 CExpr = cexpr
-                TupleIncTargets = tupleIncTargets
+                TupleIncTargets = allocationIncTargets
                 ReturnInc = returnInc
                 BranchDec =
                     if bindingNeedsShapeAutomaticDec ctx cexpr inferredType

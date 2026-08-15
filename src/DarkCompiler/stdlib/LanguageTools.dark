@@ -1,0 +1,7 @@
+// LanguageTools.dark - portable public aliases and enums used by JSON fixtures.
+
+module Darklang.LanguageTools
+
+type ID = Int64
+
+type Sign = Positive | Negative

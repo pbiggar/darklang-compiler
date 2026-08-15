@@ -1,0 +1,11 @@
+// JsonPathPart.dark - typed JSON path segment representation and rendering.
+
+module Stdlib.Json.ParseError.JsonPath.Part
+
+type Part = Root | Index of Int | Field of String
+
+let toString(part: Stdlib.Json.ParseError.JsonPath.Part.Part) : String =
+    match part with
+    | Root -> "root"
+    | Field(name) -> "." ++ name
+    | Index(index) -> "[" ++ Stdlib.Int.toString(index) ++ "]"

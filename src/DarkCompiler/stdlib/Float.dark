@@ -2,7 +2,7 @@
 
 module Stdlib.Float
 
-type ParseError = BadFormat
+type ParseError = | BadFormat
 
 let add(a: Float, b: Float) : Float = a + b
 let multiply(a: Float, b: Float) : Float = a * b

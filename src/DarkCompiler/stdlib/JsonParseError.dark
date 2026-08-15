@@ -1,0 +1,47 @@
+// JsonParseError.dark - canonical typed JSON conversion failures and rendering.
+
+module Stdlib.Json.ParseError
+
+type ParseError =
+    CantMatchWithType of Darklang.LanguageTools.RuntimeTypes.TypeReference * String * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+    | EnumExtraField of rawJson: String * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+    | EnumMissingField of Darklang.LanguageTools.RuntimeTypes.TypeReference * index: Int * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+    | EnumInvalidCasename of Darklang.LanguageTools.RuntimeTypes.TypeReference * caseName: String * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+    | EnumTooManyCases of Darklang.LanguageTools.RuntimeTypes.TypeReference * cases: List<String> * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+    | RecordDuplicateField of fieldName: String * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+    | RecordMissingField of fieldName: String * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+    | NotJson
+
+let __quotedCases(cases: List<String>) : List<String> =
+    Stdlib.List.map<String, String>(cases, fun caseName -> "`" ++ caseName ++ "`")
+
+let toString(branchId: String, error: Stdlib.Json.ParseError.ParseError) : String =
+    let ignoredBranchId = branchId in
+    match error with
+    | CantMatchWithType(typ, json, path) ->
+        let renderedType = Darklang.LanguageTools.RuntimeTypes.typeReferenceToString(typ) in
+        let renderedPath = Stdlib.Json.ParseError.JsonPath.toString(path) in
+        "Can't parse JSON `" ++ json ++ "` as type `" ++ renderedType ++ "` at path: `" ++ renderedPath ++ "`"
+    | EnumExtraField(rawJson, path) ->
+        let renderedPath = Stdlib.Json.ParseError.JsonPath.toString(path) in
+        "Can't parse JSON due to an extra argument `" ++ rawJson ++ "` at path: `" ++ renderedPath ++ "`"
+    | EnumMissingField(typ, index, path) ->
+        let renderedType = Darklang.LanguageTools.RuntimeTypes.typeReferenceToString(typ) in
+        let renderedPath = Stdlib.Json.ParseError.JsonPath.toString(path) in
+        "Can't parse JSON because argument " ++ Stdlib.Int.toString(index) ++ " (`" ++ renderedType ++ "`) is missing at path: `" ++ renderedPath ++ "`"
+    | EnumInvalidCasename(typ, caseName, path) ->
+        let renderedType = Darklang.LanguageTools.RuntimeTypes.typeReferenceToString(typ) in
+        let renderedPath = Stdlib.Json.ParseError.JsonPath.toString(path) in
+        "Can't parse JSON as `" ++ caseName ++ "` is not a known case of type `" ++ renderedType ++ "` at path: `" ++ renderedPath ++ "`"
+    | EnumTooManyCases(typ, cases, path) ->
+        let renderedType = Darklang.LanguageTools.RuntimeTypes.typeReferenceToString(typ) in
+        let renderedCases = Stdlib.String.join(Stdlib.Json.ParseError.__quotedCases(cases), ", ") in
+        let renderedPath = Stdlib.Json.ParseError.JsonPath.toString(path) in
+        "Can't parse JSON with multiple fields (" ++ renderedCases ++ ") as type `" ++ renderedType ++ "` at path: `" ++ renderedPath ++ "`"
+    | RecordMissingField(fieldName, path) ->
+        let renderedPath = Stdlib.Json.ParseError.JsonPath.toString(path) in
+        "Can't parse JSON because `" ++ fieldName ++ "` field is not provided at path: `" ++ renderedPath ++ "`"
+    | RecordDuplicateField(fieldName, path) ->
+        let renderedPath = Stdlib.Json.ParseError.JsonPath.toString(path) in
+        "Can't parse JSON because `" ++ fieldName ++ "` is defined more than once at path: `" ++ renderedPath ++ "`"
+    | NotJson -> "Not JSON"

@@ -1,0 +1,16 @@
+// JsonPath.dark - typed JSON path representation and root-to-leaf rendering.
+
+module Stdlib.Json.ParseError.JsonPath
+
+type JsonPath = List<Stdlib.Json.ParseError.JsonPath.Part.Part>
+
+let __partsToStrings(parts: List<Stdlib.Json.ParseError.JsonPath.Part.Part>) : List<String> =
+    Stdlib.List.map<Stdlib.Json.ParseError.JsonPath.Part.Part, String>(
+        parts,
+        fun part -> Stdlib.Json.ParseError.JsonPath.Part.toString(part))
+
+let toString(path: Stdlib.Json.ParseError.JsonPath.JsonPath) : String =
+    Stdlib.String.join(
+        Stdlib.Json.ParseError.JsonPath.__partsToStrings(
+            Stdlib.List.reverse<Stdlib.Json.ParseError.JsonPath.Part.Part>(path)),
+        "")

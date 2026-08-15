@@ -945,10 +945,16 @@ let private didValueEqualityPass (run: E2ERun) : bool =
 
 let private evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
     if test.ExpectCompileError then
-        let gotError = exitCodeFromRun run <> 0
-        if not gotError then
+        let signalExitCode =
+            match run with
+            | Ran (exitCode, _, _, _, _) when exitCode >= 128 -> Some exitCode
+            | _ -> None
+        match signalExitCode with
+        | Some exitCode ->
+            failRun run $"Expected a compiler or language error, but the generated program terminated by signal (exit {exitCode})"
+        | None when exitCodeFromRun run = 0 ->
             failRun run "Expected compilation error but compilation succeeded"
-        else
+        | None ->
             match test.ExpectedErrorMessage with
             | Some expectedMsg ->
                 let output = stderrFromRun run
@@ -962,7 +968,9 @@ let private evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
         if didValueEqualityPass run then
             Ok run
         else
-            failRun run "Value mismatch"
+            let stderr = stderrFromRun run
+            let detail = if String.IsNullOrWhiteSpace stderr then "" else $"\n{stderr.Trim()}"
+            failRun run $"Value mismatch{detail}"
     else
         let stdoutMatches =
             match test.ExpectedStdout with

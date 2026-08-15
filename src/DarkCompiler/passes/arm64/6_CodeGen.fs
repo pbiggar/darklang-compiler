@@ -5435,7 +5435,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
                             fieldReleases
                             |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
-                                releaseFieldPlanFrom addrReg fieldOffset fieldReleasePlan)
+                                releaseFieldPlanFrom ARM64Symbolic.X11 fieldOffset fieldReleasePlan)
                         | _ ->
                             [])
                     |> Option.defaultValue []
@@ -5450,7 +5450,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                         if List.length variants = 1 && not callerOwnsSinglePayloadSum then
                             []
                         else
-                            releaseBoxedSumVariantFieldsFrom addrReg variants
+                            releaseBoxedSumVariantFieldsFrom ARM64Symbolic.X11 variants
                     | _ ->
                         []
 
@@ -5458,22 +5458,46 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     fixedBlockFieldReleaseInstrs
                     @ releaseSumPayloadInstrs
 
-                // Field-release helpers use X12-X15 as scratch registers. The
-                // allocated source register can itself be one of those registers,
-                // so keep the generic block root on the stack until all owned
-                // fields have been released. Free-list insertion must always use
-                // the untagged generic root, never a managed child loaded from it.
+                // Field-release helpers use X10-X15 as scratch registers. Keep a
+                // source allocated in that range in X11 while traversing, and
+                // reload the generic root from the stack before free-list insertion.
+                // Sources in X0-X9 remain directly addressable, which avoids an
+                // unnecessary move and preserves the established instruction shape.
                 let stableFieldReleaseInstrs =
                     if List.isEmpty fieldReleaseInstrs then
                         []
                     else
+                        let stableBaseReg =
+                            if List.contains
+                                   addrReg
+                                   [ ARM64Symbolic.X10; ARM64Symbolic.X11; ARM64Symbolic.X12
+                                     ARM64Symbolic.X13; ARM64Symbolic.X14; ARM64Symbolic.X15 ] then
+                                ARM64Symbolic.X11
+                            else
+                                addrReg
+                        let releases =
+                            releasePlan
+                            |> Option.map (function
+                                | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                                    fieldReleases
+                                    |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                                        releaseFieldPlanFrom stableBaseReg fieldOffset fieldReleasePlan)
+                                | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants)) ->
+                                    releaseBoxedSumVariantFieldsFrom stableBaseReg variants
+                                | _ ->
+                                    [])
+                            |> Option.defaultValue []
                         [
-                            ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us)
-                            ARM64Symbolic.STR (addrReg, ARM64Symbolic.SP, 0s)
+                            ARM64Symbolic.STP_pre (addrReg, ARM64Symbolic.X11, ARM64Symbolic.SP, -16s)
                         ]
-                        @ fieldReleaseInstrs
+                        @ (if stableBaseReg = ARM64Symbolic.X11 && addrReg <> ARM64Symbolic.X11 then
+                               [ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, addrReg)]
+                           else
+                               [])
+                        @ releases
                         @ [
                             ARM64Symbolic.LDR (addrReg, ARM64Symbolic.SP, 0s)
+                            ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.SP, 8s)
                             ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us)
                         ]
 

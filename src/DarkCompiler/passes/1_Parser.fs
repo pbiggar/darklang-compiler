@@ -579,7 +579,8 @@ let rec parseFunctionTypeParams (typeParams: Set<string>) (tokens: Token list) (
             match remaining with
             | TRParen :: rest -> Ok (List.rev (ty :: acc), rest)
             | TComma :: rest -> parseFunctionTypeParams typeParams rest (ty :: acc)
-            | _ -> Error "Expected ',' or ')' in function type parameters")
+            | TStar :: rest -> parseFunctionTypeParams typeParams rest (ty :: acc)
+            | _ -> Error "Expected ',', '*', or ')' in function type parameters")
 
 /// Base type parser (no function types - used to parse function type components)
 and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
@@ -706,7 +707,32 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
 
 /// Parse a type annotation with context for type parameters in scope
 and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
+    let asFunctionParamTypes (typ: Type) : Type list =
+        match typ with
+        | TTuple elements -> elements
+        | _ -> [typ]
+
+    let rec parseTupleTail (acc: Type list) (remaining: Token list) : Result<Type * Token list, string> =
+        match remaining with
+        | TStar :: rest ->
+            parseTypeBase typeParams rest
+            |> Result.bind (fun (nextType, afterNext) ->
+                parseTupleTail (nextType :: acc) afterNext)
+        | _ ->
+            match List.rev acc with
+            | [single] -> Ok (single, remaining)
+            | elements -> Ok (TTuple elements, remaining)
+
     parseTypeBase typeParams tokens
+    |> Result.bind (fun (firstType, remaining) ->
+        parseTupleTail [firstType] remaining
+        |> Result.bind (fun (parsedType, afterType) ->
+            match afterType with
+            | TArrow :: returnRest ->
+                parseTypeWithContext typeParams returnRest
+                |> Result.map (fun (returnType, remaining') ->
+                    (TFunction (asFunctionParamTypes parsedType, returnType), remaining'))
+            | _ -> Ok (parsedType, afterType)))
 
 /// Parse a type annotation (no type parameters in scope)
 let parseType (tokens: Token list) : Result<Type * Token list, string> =
@@ -963,7 +989,15 @@ let private parseVariantPayloadType (tokens: Token list) : Result<Type * Token l
             List.rev acc
 
     let normalizedTokens = stripLabels true tokens []
+    let parenthesized =
+        match normalizedTokens with
+        | TLParen :: _ -> true
+        | _ -> false
     parseType normalizedTokens
+    |> Result.map (fun (payloadType, remaining) ->
+        match parenthesized, payloadType with
+        | false, TTuple fields -> (TEnumFields fields, remaining)
+        | _ -> (payloadType, remaining))
 
 let private parseVariantPayloadTypeWithContext
     (typeParamSet: Set<string>)
@@ -981,7 +1015,15 @@ let private parseVariantPayloadTypeWithContext
             List.rev acc
 
     let normalizedTokens = stripLabels true tokens []
+    let parenthesized =
+        match normalizedTokens with
+        | TLParen :: _ -> true
+        | _ -> false
     parseTypeWithContext typeParamSet normalizedTokens
+    |> Result.map (fun (payloadType, remaining) ->
+        match parenthesized, payloadType with
+        | false, TTuple fields -> (TEnumFields fields, remaining)
+        | _ -> (payloadType, remaining))
 
 let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
     match tokens with
@@ -1102,24 +1144,14 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                         // e.g., type Unit2 = Unit2 defines a sum type with variant Unit2
                         let variant = { Name = potentialVariant; Payload = None }
                         Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
-                    | TRecord (potentialVariant, []) when
-                        // A bare uppercase name is a nullary constructor. Primitive aliases
-                        // have already parsed to their dedicated Type cases; named aliases
-                        // with type arguments and qualified type names remain unambiguous
-                        // aliases to existing types.
-                        not (potentialVariant.Contains(".")) &&
-                        potentialVariant <> "Int64" && potentialVariant <> "Int32" && potentialVariant <> "Int16" && potentialVariant <> "Int8" &&
-                        potentialVariant <> "UInt64" && potentialVariant <> "UInt32" && potentialVariant <> "UInt16" && potentialVariant <> "UInt8" &&
-                        potentialVariant <> "Bool" && potentialVariant <> "String" && potentialVariant <> "Float" ->
-                        let variant = { Name = potentialVariant; Payload = None }
-                        Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
                     | _ ->
                         // Type alias for:
                         // - Primitive types (parsed as TInt64, TString, etc. directly by parseType)
                         // - Generic types (TSum with type args, TList)
                         // - Tuple types (TTuple)
                         // - Function types (TFunction)
-                        // - User types with remaining tokens (assumed to be alias to existing type)
+                        // - Named user types. A one-case enum uses the canonical
+                        //   leading-bar spelling (`type T = | Case`).
                         Ok (TypeAlias (typeName, typeParams, targetType), remaining)
                 | Error _ ->
                     Error "Expected type expression after '=' in type alias or variant name"
@@ -1347,12 +1379,20 @@ and parsePatternBase (tokens: Token list) : Result<Pattern * Token list, string>
         parseListPattern rest []
     | TIdent name :: TLParen :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
         // Constructor with payload pattern: Some(x)
-        parsePattern rest
-        |> Result.bind (fun (payloadPattern, remaining) ->
-            match remaining with
-            | TRParen :: rest' ->
-                Ok (PConstructor (name, Some payloadPattern), rest')
-            | _ -> Error "Expected ')' after constructor pattern payload")
+        let rec parsePayloadFields toks acc =
+            parsePattern toks
+            |> Result.bind (fun (payloadPattern, remaining) ->
+                match remaining with
+                | TComma :: more -> parsePayloadFields more (payloadPattern :: acc)
+                | TRParen :: rest' ->
+                    let fields = List.rev (payloadPattern :: acc)
+                    let payload =
+                        match fields with
+                        | [single] -> single
+                        | _ -> PTuple fields
+                    Ok (PConstructor (name, Some payload), rest')
+                | _ -> Error "Expected ',' or ')' after constructor pattern payload")
+        parsePayloadFields rest []
     | TIdent typeName :: TLBrace :: _ when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
         Error "Record patterns are not supported"
     | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
@@ -1940,12 +1980,14 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 // Qualified constructor with payload: Stdlib.Result.Result.Ok(5)
                 // Split into type name and variant name
                 let variantName = lastSegment
-                parseExpr argsStart
-                |> Result.bind (fun (payloadExpr, remaining) ->
-                    match remaining with
-                    | TRParen :: rest' ->
-                        Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, Some payloadExpr), rest')
-                    | _ -> Error "Expected ')' after constructor payload")
+                parseCallArgs argsStart []
+                |> Result.map (fun (constructorArgs, remaining) ->
+                    let fields = NonEmptyList.toList constructorArgs
+                    let payload =
+                        match fields with
+                        | [single] -> single
+                        | _ -> TupleLiteral fields
+                    (Constructor (UnresolvedConstructor (Some typeName), variantName, Some payload), remaining))
             | _ when isConstructor && (match afterQualified with TLt :: _ -> false | _ -> true) ->
                 // Qualified constructor without payload: Stdlib.Color.Red
                 let variantName = lastSegment
@@ -1991,6 +2033,13 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     (Call (fullName, args), remaining))
             | _ when fullName = "Stdlib.Dict.empty" ->
                 Ok (DictLiteral (TVar "dictValue", []), afterQualified)
+            | _ when fullName = "Stdlib.AltJson.Builder.empty" ->
+                Ok (ListLiteral [], afterQualified)
+            | _ when fullName = "Darklang.SCM.Branch.mainBranchId" ->
+                // Json.ParseError.toString retains this public compatibility
+                // parameter, but AOT type names are resolved from compiler
+                // metadata and do not consult a branch.
+                Ok (StringLiteral "00000000-0000-0000-0000-000000000000", afterQualified)
             | _ ->
                 // Qualified variable reference (function as value)
                 Ok (Var fullName, afterQualified)
@@ -2073,12 +2122,14 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 (Call (name, args), remaining))
         | TIdent name :: TLParen :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor with payload: Constructor(payload)
-            parseExpr rest
-            |> Result.bind (fun (payloadExpr, remaining) ->
-                match remaining with
-                | TRParen :: rest' ->
-                    Ok (Constructor (UnresolvedConstructor None, name, Some payloadExpr), rest')
-                | _ -> Error "Expected ')' after constructor payload")
+            parseCallArgs rest []
+            |> Result.map (fun (constructorArgs, remaining) ->
+                let fields = NonEmptyList.toList constructorArgs
+                let payload =
+                    match fields with
+                    | [single] -> single
+                    | _ -> TupleLiteral fields
+                (Constructor (UnresolvedConstructor None, name, Some payload), remaining))
         | TIdent typeName :: TLt :: typeArgsStart when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             match parseTypeArgs typeArgsStart [] with
             | Ok (typeArgs, TLBrace :: recordFieldsStart) ->

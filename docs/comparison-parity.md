@@ -9,6 +9,9 @@ interpreter revision. Compiler evidence revision
 the previous parity document were starting evidence only; every retained
 prelude finding was checked again at the exact revisions above.
 
+JSON's separate serialization and parsing parity boundary is documented in
+[`features/json-parity.md`](features/json-parity.md).
+
 At the implementation comparison commit the focused matrix passed 140/140
 cases. Performance is outside this contract unless it changes observable
 behavior.

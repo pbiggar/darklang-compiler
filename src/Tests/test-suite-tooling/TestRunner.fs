@@ -219,6 +219,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "math.dark")
     let floatUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "float.dark")
+    let altJsonUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "alt-json.dark")
+    let jsonUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "json.dark")
     let int64UpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "ints", "int64.dark")
     let intUpstreamDarkPath =
@@ -275,6 +279,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            resultUpstreamDarkPath
            mathUpstreamDarkPath
            floatUpstreamDarkPath
+           altJsonUpstreamDarkPath
+           jsonUpstreamDarkPath
            int64UpstreamDarkPath
            intUpstreamDarkPath
            blobUpstreamDarkPath
@@ -318,6 +324,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            resultUpstreamDarkPath
            mathUpstreamDarkPath
            floatUpstreamDarkPath
+           altJsonUpstreamDarkPath
+           jsonUpstreamDarkPath
            int64UpstreamDarkPath
            intUpstreamDarkPath
            htmlUpstreamDarkPath
@@ -349,7 +357,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let includeUpstreamDarkPathsForE2E =
         match filter with
         | None -> defaultUpstreamDarkPaths
-        | Some _ -> filterUpstreamDarkPaths upstreamDarkPaths
+        | Some _ ->
+            let pathMatches = filterUpstreamDarkPaths upstreamDarkPaths
+            // A filter may name an expression rather than its source file.
+            // Load the enabled upstream inventory so matchesE2EFilter below can
+            // select those expression names instead of incorrectly reporting 0/0.
+            if Array.isEmpty pathMatches then upstreamDarkPaths else pathMatches
 
     let includeUpstreamDarkPathsForRoundtrip =
         if roundtripAllDark then

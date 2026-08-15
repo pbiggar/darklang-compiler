@@ -654,6 +654,7 @@ type TypeCheckEnv = {
     FuncEnv: TypeEnv
     FuncParamNames: FuncParamNameRegistry
     GenericFuncReg: GenericFuncRegistry
+    GenericFuncDefs: Map<string, FunctionDef>
     ModuleRegistry: ModuleRegistry
     AliasReg: AliasRegistry
     ResolutionEnv: NameResolution.ResolutionEnvironment
@@ -675,6 +676,7 @@ let mergeTypeCheckEnv (baseEnv: TypeCheckEnv) (overlay: TypeCheckEnv) : TypeChec
                 baseEnv.GenericFuncReg.RequireExplicitTypeArgsForBareCalls
                 || overlay.GenericFuncReg.RequireExplicitTypeArgsForBareCalls
         }
+        GenericFuncDefs = mergeMap baseEnv.GenericFuncDefs overlay.GenericFuncDefs
         ModuleRegistry = baseEnv.ModuleRegistry  // Module registry is constant, use base
         AliasReg = mergeMap baseEnv.AliasReg overlay.AliasReg
         ResolutionEnv = NameResolution.merge baseEnv.ResolutionEnv overlay.ResolutionEnv
@@ -684,7 +686,9 @@ let mergeTypeCheckEnv (baseEnv: TypeCheckEnv) (overlay: TypeCheckEnv) : TypeChec
 /// If the name is an alias, recursively resolve to the underlying type name
 let rec resolveTypeName (aliasReg: AliasRegistry) (typeName: string) : string =
     match Map.tryFind typeName aliasReg with
-    | Some ([], TRecord (targetName, _)) -> resolveTypeName aliasReg targetName
+    // A name-only projection cannot preserve instantiated target arguments.
+    // Leave those aliases to resolveAliasTargetType, which carries substitution.
+    | Some ([], TRecord (targetName, [])) -> resolveTypeName aliasReg targetName
     | _ -> typeName
 
 /// Apply a substitution to a type, replacing type variables with concrete types
@@ -1168,9 +1172,85 @@ let private sumTypeHasPayload (variantLookup: VariantLookup) (sumTypeName: strin
     |> Map.exists (fun _ (variantTypeName, _, _, payloadTypeOpt) ->
         variantTypeName = sumTypeName && payloadTypeOpt.IsSome)
 
+/// Parsed source names are initially represented as TRecord. Canonicalize
+/// names owned by the variant registry before constructing equality plans.
+let rec private canonicalEqualityType (variantLookup: VariantLookup) (typ: Type) : Type =
+    let canonical = canonicalEqualityType variantLookup
+    match typ with
+    | TRecord (name, typeArgs) when
+        variantLookup |> Map.exists (fun _ (owner, _, _, _) -> owner = name) ->
+        TSum (name, List.map canonical typeArgs)
+    | TRecord (name, typeArgs) -> TRecord (name, List.map canonical typeArgs)
+    | TSum (name, typeArgs) -> TSum (name, List.map canonical typeArgs)
+    | TTuple elementTypes -> TTuple (List.map canonical elementTypes)
+    // Multi-field enum payloads use the tuple runtime representation and must
+    // receive the same structural comparison plan as source tuples.
+    | TEnumFields fieldTypes -> TTuple (List.map canonical fieldTypes)
+    | TList elementType -> TList (canonical elementType)
+    | TDict (keyType, valueType) -> TDict (canonical keyType, canonical valueType)
+    | TFunction (parameterTypes, returnType) ->
+        TFunction (List.map canonical parameterTypes, canonical returnType)
+    | _ -> typ
+
+/// Json conversion is fully planned at compile time. Reject shapes for which
+/// no plan can exist here, before specialization can turn them into runtime
+/// control flow.
+let private validateJsonTargetType
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (variantLookup: VariantLookup)
+    (targetType: Type)
+    : Result<unit, TypeError> =
+    let unsupported typ =
+        Error (
+            GenericError
+                $"Unsupported type in JSON: {typeToString typ}. Some types are not supported in Json serialization"
+        )
+    let rec validate visited typ =
+        let typ = resolveType aliasReg typ |> canonicalEqualityType variantLookup
+        let identity = typeToString typ
+        if Set.contains identity visited then Ok ()
+        else
+            let visited = Set.add identity visited
+            let validateAll types =
+                types
+                |> List.fold (fun result item -> result |> Result.bind (fun () -> validate visited item)) (Ok ())
+            match typ with
+            | TUnit | TBool | TInt8 | TUInt8 | TInt16 | TUInt16 | TInt32 | TUInt32
+            | TInt64 | TUInt64 | TInt128 | TUInt128 | TInt | TFloat64 | TChar | TString | TDateTime -> Ok ()
+            | TRecord ("Uuid", []) -> Ok ()
+            | TTuple types | TEnumFields types -> validateAll types
+            | TList inner -> validate visited inner
+            | TDict (TString, inner) -> validate visited inner
+            | TRecord (name, typeArgs) ->
+                match Map.tryFind name typeReg with
+                | None -> unsupported typ
+                | Some info ->
+                    match buildSubstitution info.TypeParams typeArgs with
+                    | Error _ -> unsupported typ
+                    | Ok subst -> info.Fields |> List.map (snd >> applySubst subst) |> validateAll
+            | TSum (name, typeArgs) ->
+                let variants =
+                    variantLookup
+                    |> Map.toList
+                    |> List.choose (fun (_, (owner, typeParams, tag, payload)) ->
+                        if owner = name then Some (typeParams, tag, payload) else None)
+                    |> List.distinctBy (fun (_, tag, _) -> tag)
+                match variants with
+                | [] -> unsupported typ
+                | (typeParams, _, _) :: _ ->
+                    match buildSubstitution typeParams typeArgs with
+                    | Error _ -> unsupported typ
+                    | Ok subst ->
+                        variants
+                        |> List.choose (fun (_, _, payload) -> Option.map (applySubst subst) payload)
+                        |> validateAll
+            | TFunction _ | TBlob | TRawPtr | TRuntimeError | TVar _ | TDict _ -> unsupported typ
+    validate Set.empty targetType
+
 /// Every concrete compound comparable type has one equality entry point.
 let rec needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: Type) : bool =
-    match typ with
+    match canonicalEqualityType variantLookup typ with
     | TFunction _ | TList _ | TDict _ | TTuple _ | TRecord _ -> true
     | TSum (sumTypeName, _) -> sumTypeHasPayload variantLookup sumTypeName
     | _ -> false
@@ -1226,7 +1306,7 @@ let private buildEqExprForType
     (leftExpr: Expr)
     (rightExpr: Expr)
     : Expr =
-    let resolvedType = resolveType aliasReg typ
+    let resolvedType = typ |> resolveType aliasReg |> canonicalEqualityType variantLookup
     match resolvedType with
     | TVar _ ->
         // A generic comparison cannot select a representation-level operation
@@ -1295,6 +1375,10 @@ let private equalityComparableType
                 recurse keyType && recurse valueType
             | TRecord (recordName, typeArgs) ->
                 match Map.tryFind recordName typeReg with
+                | None when
+                    variantLookup
+                    |> Map.exists (fun _ (ownerName, _, _, _) -> ownerName = recordName) ->
+                    comparable seen (TSum (recordName, typeArgs))
                 | None -> false
                 | Some recordInfo ->
                     match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
@@ -1835,7 +1919,20 @@ let typesCompatible (expected: Type) (actual: Type) : bool =
 let typesCompatibleWithAliases (aliasReg: AliasRegistry) (expected: Type) (actual: Type) : bool =
     let resolvedExpected = resolveType aliasReg expected
     let resolvedActual = resolveType aliasReg actual
+    let rec nominalComparisonType typ =
+        match typ with
+        | TSum (name, typeArgs)
+        | TRecord (name, typeArgs) -> TRecord (name, List.map nominalComparisonType typeArgs)
+        | TFunction (parameters, result) ->
+            TFunction (List.map nominalComparisonType parameters, nominalComparisonType result)
+        | TTuple types -> TTuple (List.map nominalComparisonType types)
+        | TEnumFields types -> TEnumFields (List.map nominalComparisonType types)
+        | TList inner -> TList (nominalComparisonType inner)
+        | TDict (keyType, valueType) ->
+            TDict (nominalComparisonType keyType, nominalComparisonType valueType)
+        | other -> other
     typesCompatible resolvedExpected resolvedActual
+    || typesCompatible (nominalComparisonType resolvedExpected) (nominalComparisonType resolvedActual)
 
 /// Consolidate bindings, checking for conflicts where the same type variable
 /// is bound to different types. Returns a map from type var name to concrete type.
@@ -1880,7 +1977,29 @@ let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type
     let t1' = aliasReg |> Option.map (fun reg -> resolveType reg t1) |> Option.defaultValue t1
     let t2' = aliasReg |> Option.map (fun reg -> resolveType reg t2) |> Option.defaultValue t2
 
-    if t1' = t2' then
+    // Alias declarations are collected before constructor lookup has
+    // canonicalized a bare nominal reference from TRecord to TSum. Treat the
+    // two internal spellings as equivalent when their fully-qualified names
+    // and arguments agree. A source program cannot declare a record and sum
+    // with the same fully-qualified name, so this does not erase a meaningful
+    // nominal distinction.
+    let rec nominalComparisonType (typ: Type) : Type =
+        match typ with
+        | TSum (name, typeArgs)
+        | TRecord (name, typeArgs) ->
+            TRecord (name, List.map nominalComparisonType typeArgs)
+        | TFunction (parameterTypes, returnType) ->
+            TFunction (
+                List.map nominalComparisonType parameterTypes,
+                nominalComparisonType returnType)
+        | TTuple elementTypes -> TTuple (List.map nominalComparisonType elementTypes)
+        | TEnumFields fieldTypes -> TEnumFields (List.map nominalComparisonType fieldTypes)
+        | TList elementType -> TList (nominalComparisonType elementType)
+        | TDict (keyType, valueType) ->
+            TDict (nominalComparisonType keyType, nominalComparisonType valueType)
+        | other -> other
+
+    if nominalComparisonType t1' = nominalComparisonType t2' then
         Some t1'
     elif t1' = TRuntimeError then
         Some t2'
@@ -3582,6 +3701,11 @@ let rec private checkExprWithParamNames
                         |> List.map (canonicalizeBareSumTypeRefs variantLookup)
 
                     validateCanonicalSortableCall aliasReg typeReg variantLookup resolvedFuncName typeArgs
+                    |> Result.bind (fun () ->
+                        match resolvedFuncName, typeArgs with
+                        | ("Stdlib.Json.serialize" | "Stdlib.Json.parse"), [targetType] ->
+                            validateJsonTargetType aliasReg typeReg variantLookup targetType
+                        | _ -> Ok ())
                     |> Result.bind (fun () -> buildSubstitution typeParams typeArgs |> Result.mapError GenericError)
                     |> Result.bind (fun subst ->
                         // 4. Apply substitution to get concrete types
@@ -3629,7 +3753,7 @@ let rec private checkExprWithParamNames
                                             err)
                                     |> Result.bind (fun (argType, arg') ->
                                         // Use typesCompatible to allow type variables to unify with concrete types
-                                        if typesCompatible paramT argType then
+                                        if typesCompatibleWithAliases aliasReg paramT argType then
                                             checkProvidedArgs restArgs restParams (paramIndex + 1) (arg' :: accArgs)
                                         else
                                             Error (
@@ -3688,7 +3812,7 @@ let rec private checkExprWithParamNames
                                             err)
                                     |> Result.bind (fun (argType, arg') ->
                                         // Use typesCompatible to allow type variables to unify with concrete types
-                                        if typesCompatible paramT argType then
+                                        if typesCompatibleWithAliases aliasReg paramT argType then
                                             checkArgsWithTypes restArgs restParams (paramIndex + 1) (arg' :: accArgs)
                                         else
                                             Error (
@@ -3708,7 +3832,7 @@ let rec private checkExprWithParamNames
                                 // 7. Return the concrete return type (using resolved name)
                                 // Use typesCompatible to allow type variables to unify with concrete types
                                 match expectedType with
-                                | Some expected when not (typesCompatible expected concreteReturnType) ->
+                                | Some expected when not (typesCompatibleWithAliases aliasReg expected concreteReturnType) ->
                                     Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                                 | _ ->
                                     Ok (
@@ -4534,6 +4658,8 @@ let rec private checkExprWithParamNames
                     match resolvedPatternType with
                     | TTuple elementTypes when List.length patterns = List.length elementTypes ->
                         collectTupleBindingsWithTypes elementTypes
+                    | TEnumFields elementTypes when List.length patterns = List.length elementTypes ->
+                        collectTupleBindingsWithTypes elementTypes
                     | TVar tupleTypeVar ->
                         let unresolvedElementTypes =
                             patterns
@@ -4542,6 +4668,9 @@ let rec private checkExprWithParamNames
                     | TTuple _ ->
                         // Tuple arity mismatch in pattern should be treated as a non-match.
                         // Match lowering emits a false condition for this pattern shape.
+                        Ok []
+                    | TEnumFields _ ->
+                        // As above, a field-count mismatch is a non-matching enum case.
                         Ok []
                     | _ ->
                         if isRuntimeErrorType resolvedPatternType then
@@ -5531,7 +5660,7 @@ let rec private buildEqHelperExpr
     (leftExpr: Expr)
     (rightExpr: Expr)
     : Expr =
-    let resolvedType = resolveType aliasReg typ
+    let resolvedType = typ |> resolveType aliasReg |> canonicalEqualityType variantLookup
 
     match (mode, resolvedType) with
     | UseHelperCall, helperType when needsEqHelperForResolvedType variantLookup helperType ->
@@ -5957,10 +6086,10 @@ let private collectDirectEqHelperDeps
     (typ: Type)
     : Type list =
     let addIfHelperType (candidate: Type) : Type option =
-        let resolved = resolveType aliasReg candidate
+        let resolved = candidate |> resolveType aliasReg |> canonicalEqualityType variantLookup
         if needsEqHelperForResolvedType variantLookup resolved then Some resolved else None
 
-    let resolvedType = resolveType aliasReg typ
+    let resolvedType = typ |> resolveType aliasReg |> canonicalEqualityType variantLookup
     let deps =
         match resolvedType with
         | TList elemType ->
@@ -6013,9 +6142,9 @@ let rec private ensureEqHelperForType
     (typ: Type)
     (state: EqHelperGenerationState)
     : EqHelperGenerationState =
-    let resolvedType = resolveType aliasReg typ
+    let resolvedType = typ |> resolveType aliasReg |> canonicalEqualityType variantLookup
     let rec referencesKnownNominals candidate =
-        match resolveType aliasReg candidate with
+        match candidate |> resolveType aliasReg |> canonicalEqualityType variantLookup with
         | TRecord (name, typeArgs) ->
             Map.containsKey name typeReg && List.forall referencesKnownNominals typeArgs
         | TSum (name, typeArgs) ->
@@ -6604,7 +6733,32 @@ let private checkFunctionDef
             && not (containsTVar resolvedBodyType)
             && typesCompatibleWithAliases aliasReg resolvedReturnType resolvedBodyType
 
-        if resolvedReturnType = resolvedBodyType || allowGenericReturnSpecialization then
+        let rec nominallyIdentical left right =
+            match left, right with
+            | TSum (leftName, leftArgs), TRecord (rightName, rightArgs)
+            | TRecord (leftName, leftArgs), TSum (rightName, rightArgs)
+                when leftName = rightName && List.length leftArgs = List.length rightArgs ->
+                List.forall2 nominallyIdentical leftArgs rightArgs
+            | TSum (leftName, leftArgs), TSum (rightName, rightArgs)
+            | TRecord (leftName, leftArgs), TRecord (rightName, rightArgs)
+                when leftName = rightName && List.length leftArgs = List.length rightArgs ->
+                List.forall2 nominallyIdentical leftArgs rightArgs
+            | TFunction (leftParams, leftReturn), TFunction (rightParams, rightReturn)
+                when List.length leftParams = List.length rightParams ->
+                List.forall2 nominallyIdentical leftParams rightParams
+                && nominallyIdentical leftReturn rightReturn
+            | TTuple leftTypes, TTuple rightTypes
+            | TEnumFields leftTypes, TEnumFields rightTypes
+                when List.length leftTypes = List.length rightTypes ->
+                List.forall2 nominallyIdentical leftTypes rightTypes
+            | TList leftType, TList rightType -> nominallyIdentical leftType rightType
+            | TDict (leftKey, leftValue), TDict (rightKey, rightValue) ->
+                nominallyIdentical leftKey rightKey
+                && nominallyIdentical leftValue rightValue
+            | _ -> left = right
+
+        if nominallyIdentical resolvedReturnType resolvedBodyType
+           || allowGenericReturnSpecialization then
             let monomorphicType =
                 TFunction (
                     canonicalParams |> NonEmptyList.toList |> List.map snd,
@@ -6996,6 +7150,8 @@ let private resolveRecursiveDeclarationGroups (topLevels: TopLevel list) : TopLe
 
 let private resolveProgramNames
     (resolutionEnv: NameResolution.ResolutionEnvironment)
+    (aliasReg: AliasRegistry)
+    (recordTypeNames: Set<string>)
     (program: Program)
     : Result<Program, TypeError> =
     let resolveName context localNames spelling =
@@ -7018,10 +7174,23 @@ let private resolveProgramNames
             resolveName NameResolution.ResolutionContext.Type Set.empty name
             |> Result.bind (fun resolvedName ->
                 ResultList.traverse recurse typeArgs
-                |> Result.map (makeType resolvedName))
+                |> Result.bind (fun resolvedArgs ->
+                    match resolvedName, Map.tryFind resolvedName aliasReg with
+                    // Json planning needs these aliases' semantic identity.
+                    | ("DateTime" | "Uuid"), _ -> Ok (makeType resolvedName resolvedArgs)
+                    | _, Some (typeParams, target) when List.length typeParams = List.length resolvedArgs ->
+                        let subst = List.zip typeParams resolvedArgs |> Map.ofList
+                        target |> applySubst subst |> recurse
+                    | _ -> Ok (makeType resolvedName resolvedArgs)))
         match typ with
         | TRecord (name, typeArgs) -> resolveNamed (fun n args -> TRecord (n, args)) name typeArgs
-        | TSum (name, typeArgs) -> resolveNamed (fun n args -> TSum (n, args)) name typeArgs
+        | TSum (name, typeArgs) ->
+            resolveNamed
+                (fun n args ->
+                    if Set.contains n recordTypeNames then TRecord (n, args)
+                    else TSum (n, args))
+                name
+                typeArgs
         | TFunction (parameterTypes, returnType) ->
             ResultList.traverse recurse parameterTypes
             |> Result.bind (fun parameters' -> recurse returnType |> Result.map (fun ret -> TFunction (parameters', ret)))
@@ -7095,7 +7264,13 @@ let private resolveProgramNames
             let spelling =
                 match constructorReferenceTypeName constructorReference with
                 | None -> variantName
-                | Some typeName -> $"{typeName}.{variantName}"
+                | Some typeName ->
+                    let rec canonicalOwner owner =
+                        match Map.tryFind owner aliasReg with
+                        | Some ([], TRecord (target, []))
+                        | Some ([], TSum (target, [])) -> canonicalOwner target
+                        | _ -> owner
+                    $"{canonicalOwner typeName}.{variantName}"
             match resolveName NameResolution.ResolutionContext.Constructor localNames spelling with
             | Ok resolvedName -> resolvedConstructor resolvedName
             | Error (ResolutionFailure (NameResolution.AmbiguousReference (_, _, identities)))
@@ -7710,6 +7885,8 @@ let private checkResolvedProgramInternal
         FuncEnv = programFuncEnv
         FuncParamNames = declarationSummary.FuncParamNames
         GenericFuncReg = programGenericFuncReg
+        // Checked bodies are installed after the function-definition pass.
+        GenericFuncDefs = Map.empty
         ModuleRegistry = moduleRegistry
         AliasReg = programAliasReg
         ResolutionEnv = programResolutionEnv
@@ -7816,6 +7993,12 @@ let private checkResolvedProgramInternal
                             | Some targetName -> Error (PolymorphicRecursion targetName)
                             | None -> Ok ())) (Ok ())
 
+        let checkedGenericFuncDefs =
+            Map.fold
+                (fun defs name funcDef -> Map.add name funcDef defs)
+                typeCheckEnv.GenericFuncDefs
+                localGenericFuncDefs
+
         let localExplicitSpecs =
             topLevels'
             |> List.map (function
@@ -7826,10 +8009,10 @@ let private checkResolvedProgramInternal
                 | _ ->
                     Set.empty)
             |> List.fold Set.union Set.empty
-            |> Set.filter (fun (funcName, _typeArgs) -> Map.containsKey funcName localGenericFuncDefs)
+            |> Set.filter (fun (funcName, _typeArgs) -> Map.containsKey funcName checkedGenericFuncDefs)
 
         let validateLocalSpecialization (funcName, typeArgs) =
-            match Map.tryFind funcName localGenericFuncDefs with
+            match Map.tryFind funcName checkedGenericFuncDefs with
             | None ->
                 Ok ()
             | Some funcDef ->
@@ -7858,16 +8041,18 @@ let private checkResolvedProgramInternal
         validateMonomorphicRecursiveReferences ()
         |> Result.bind (fun () -> validateAllSpecializations localExplicitSpecs)
         |> Result.bind (fun () ->
+            let checkedTypeCheckEnv =
+                { typeCheckEnv with GenericFuncDefs = checkedGenericFuncDefs }
             let topLevelsWithEqHelpers =
                 materializeEqHelpersInTopLevels mergedAliasReg typeReg variantLookup topLevels'
             let entryTypes =
                 topLevelsWithTypes
                 |> List.choose (function (Some typ, Expression _) -> Some typ | _ -> None)
             match requireEntry, entryTypes with
-            | true, [typ] -> Ok (typ, Program topLevelsWithEqHelpers, typeCheckEnv)
+            | true, [typ] -> Ok (typ, Program topLevelsWithEqHelpers, checkedTypeCheckEnv)
             | true, [] -> Error (GenericError "Executable program must contain exactly one entry expression; found 0")
             | true, entries -> Error (GenericError $"Executable program must contain exactly one entry expression; found {entries.Length}")
-            | false, [] -> Ok (TUnit, Program topLevelsWithEqHelpers, typeCheckEnv)
+            | false, [] -> Ok (TUnit, Program topLevelsWithEqHelpers, checkedTypeCheckEnv)
             | false, entries -> Error (GenericError $"Declaration-only program must not contain entry expressions; found {entries.Length}")))
 
 let private checkProgramInternal
@@ -7899,7 +8084,33 @@ let private checkProgramInternal
 
     declarationValidation
     |> Result.bind (fun () ->
-        resolveProgramNames resolutionEnv program)
+        let winningTypeDefs =
+            topLevels
+            |> List.choose (function
+                | TypeDef typeDef -> Some typeDef
+                | _ -> None)
+            |> List.rev
+            |> List.distinctBy typeDefName
+            |> List.rev
+        let localAliases =
+            winningTypeDefs
+            |> List.choose (function
+                | TypeAlias (name, typeParams, target) -> Some (name, (typeParams, target))
+                | _ -> None)
+            |> Map.ofList
+        let aliases =
+            match baseEnv with
+            | Some existing -> Map.fold (fun acc name value -> Map.add name value acc) existing.AliasReg localAliases
+            | None -> localAliases
+        let localRecordTypeNames =
+            winningTypeDefs
+            |> List.choose (function RecordDef (name, _, _) -> Some name | _ -> None)
+            |> Set.ofList
+        let recordTypeNames =
+            match baseEnv with
+            | Some existing -> Set.union localRecordTypeNames (existing.IndexedTypeReg |> Map.keys |> Set.ofSeq)
+            | None -> localRecordTypeNames
+        resolveProgramNames resolutionEnv aliases recordTypeNames program)
     |> Result.bind (checkResolvedProgramInternal baseEnv requireExplicitTypeArgsForBareCalls warningSettings requireEntry)
 
 /// Type-check a program

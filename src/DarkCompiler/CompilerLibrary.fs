@@ -324,6 +324,12 @@ let private lowerToAllocatedLir
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
+    // Function-affinity batches still call helpers compiled in sibling batches.
+    // Keep the complete AOT return-type plan available while lowering each one.
+    let allReturnTypes =
+        functions
+        |> List.fold (fun acc fn -> Map.add fn.Name fn.ReturnType acc) externalReturnTypes
+
     let functionOrder = functions |> List.map (fun f -> f.Name)
     let allReturnTypes =
         functions
@@ -1046,6 +1052,32 @@ let private convertTypedProgramToUserOnlyWithMode
     (monomorphization: MonomorphizationMode)
     (typedProgram: AST.Program)
     : Result<AST_to_ANF.UserOnlyResult, string> =
+    // Late AOT plans (notably Json) may introduce concrete calls to generic
+    // stdlib functions after the suite preamble registry was built. Materialize
+    // just those missing specializations into the user compilation unit.
+    let (typedProgram, monomorphization) =
+        let addMissing baseRegistry rebuildMode =
+            let requested = collectLocalSpecs baseContext.GenericFuncDefs typedProgram
+            let missing =
+                requested
+                |> Set.filter (fun key -> not (Map.containsKey key baseRegistry))
+            if Set.isEmpty missing then
+                (typedProgram, rebuildMode baseRegistry)
+            else
+                let specialization =
+                    AST_to_ANF.specializeFromSpecs baseContext.GenericFuncDefs missing
+                let combinedRegistry =
+                    mergeSpecRegistries baseRegistry specialization.SpecRegistry
+                let newFunctions =
+                    specialization.SpecializedFuncs
+                    |> List.filter (fun fn -> not (Set.contains fn.Name baseContext.BaseFuncNames))
+                    |> List.map AST.FunctionDef
+                let (AST.Program items) = typedProgram
+                (AST.Program (newFunctions @ items), rebuildMode combinedRegistry)
+        match monomorphization with
+        | ReplaceTypeApps registry -> addMissing registry ReplaceTypeApps
+        | SpecializeLocalAndReplace registry -> addMissing registry SpecializeLocalAndReplace
+        | Monomorphize _ -> (typedProgram, monomorphization)
     let baseFuncNames = baseContext.BaseFuncNames
     prepareProgramForAnf monomorphization baseContext.Registries baseFuncNames typedProgram
     |> Result.bind (fun liftedProgram ->
@@ -1277,7 +1309,9 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Diff.dark"
         "stdlib/ProgramTypes.dark"
         "stdlib/RuntimeTypes.dark"
+        "stdlib/RuntimeTypesBase.dark"
         "stdlib/RuntimeFQTypeName.dark"
+        "stdlib/RuntimeTypeReference.dark"
         "stdlib/RuntimeValueType.dark"
         "stdlib/RuntimeValueTypeSupport.dark"
         "stdlib/PackageManager.dark"
@@ -1317,6 +1351,15 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/CliStdinModifiers.dark"
         "stdlib/CliStdinKeyRead.dark"
         "stdlib/CliStdinRead.dark"
+        "stdlib/AltJsonParseError.dark"
+        "stdlib/AltJson.dark"
+        "stdlib/AltJsonHelpers.dark"
+        "stdlib/AltJsonBuilder.dark"
+        "stdlib/LanguageTools.dark"
+        "stdlib/JsonPathPart.dark"
+        "stdlib/JsonPath.dark"
+        "stdlib/JsonParseError.dark"
+        "stdlib/Json.dark"
     ]
     let mergeFile (acc: AST.TopLevel list) (filename: string) : Result<AST.TopLevel list, string> =
         match loadDarkFileAllowInternal filename with
@@ -2004,17 +2047,21 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     Error
                         $"File entry expression must return Unit, Int, or Int64; got {TypeChecking.typeToString programType}"
                 | Ok (programType, typedUserAst, userEnv) ->
+                    let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
+                    let plannedProgramType = TypeChecking.resolveType userEnv.AliasReg programType
                     let renderedUserAst, boundaryProgramType =
-                        if plan.Mode = FullProgram || programType = AST.TUnit then
-                            (typedUserAst, programType)
+                        if plan.Mode = FullProgram then
+                            (plannedUserAst, plannedProgramType)
+                        else if plannedProgramType = AST.TUnit then
+                            (plannedUserAst, AST.TUnit)
                         else
                             (ValueRendering.rewriteProgram
                                 (AST_to_ANF.recordFieldsRegistry plan.BaseContext.Registries.TypeReg)
                                 userEnv.IndexedTypeReg
                                 plan.BaseContext.Registries.VariantLookup
                                 plan.BaseContext.Registries.FuncReg
-                                programType
-                                typedUserAst,
+                                plannedProgramType
+                                plannedUserAst,
                              AST.TString)
                     if plan.Verbosity >= 3 then
                         println $"Program type: {TypeChecking.typeToString programType}"
@@ -2707,17 +2754,19 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
         match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv userAst with
         | Error typeErr -> Error (TypeChecking.typeErrorToString typeErr)
         | Ok (programType, typedUserAst, userEnv) ->
+            let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
+            let plannedProgramType = TypeChecking.resolveType userEnv.AliasReg programType
             let renderedUserAst, boundaryProgramType =
-                if programType = AST.TUnit then
-                    (typedUserAst, AST.TUnit)
+                if plannedProgramType = AST.TUnit then
+                    (plannedUserAst, AST.TUnit)
                 else
                     (ValueRendering.rewriteProgram
                         (AST_to_ANF.recordFieldsRegistry stdlib.Context.Registries.TypeReg)
                         userEnv.IndexedTypeReg
                         stdlib.Context.Registries.VariantLookup
                         stdlib.Context.Registries.FuncReg
-                        programType
-                        typedUserAst,
+                        plannedProgramType
+                        plannedUserAst,
                      AST.TString)
             // Convert to ANF
             match convertTypedProgramToUserOnly stdlib.Context renderedUserAst with

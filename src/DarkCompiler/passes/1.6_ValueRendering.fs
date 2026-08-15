@@ -118,11 +118,27 @@ let private escapedString (quote: string) (value: Expr) : Expr =
 let private makeCase (pattern: Pattern) (body: Expr) : MatchCase =
     { Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }
 
+let rec private canonicalRenderType (env: RenderEnv) (typ: Type) : Type =
+    let canonical = canonicalRenderType env
+    match typ with
+    | TRecord (name, typeArgs) when Map.containsKey name env.Sums ->
+        TSum (name, List.map canonical typeArgs)
+    | TRecord (name, typeArgs) -> TRecord (name, List.map canonical typeArgs)
+    | TSum (name, typeArgs) -> TSum (name, List.map canonical typeArgs)
+    | TTuple elementTypes -> TTuple (List.map canonical elementTypes)
+    | TEnumFields fieldTypes -> TEnumFields (List.map canonical fieldTypes)
+    | TList elementType -> TList (canonical elementType)
+    | TDict (keyType, valueType) -> TDict (canonical keyType, canonical valueType)
+    | TFunction (parameterTypes, returnType) ->
+        TFunction (List.map canonical parameterTypes, canonical returnType)
+    | _ -> typ
+
 let rec private ensureRenderer
     (env: RenderEnv)
     (typ: Type)
     (state: RenderState)
     : string * RenderState =
+    let typ = canonicalRenderType env typ
     let name = rendererName typ
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)

@@ -387,6 +387,7 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TEnumFields fieldTypes ->
         let fieldShapes = fieldTypes |> List.map (rcShapeOfType typeReg)
         FixedBlock (List.length fieldTypes * 8, fieldShapes)
+    | AST.TRecord ("Uuid", []) -> DynamicString
     | AST.TRecord (name, _) ->
         match Map.tryFind name typeReg with
         | Some fields ->
@@ -532,6 +533,9 @@ let rcShapeOfTypeWithSums
             FixedBlock (List.length elemTypes * 8, elemTypes |> List.map (classify expandingSums))
         | AST.TEnumFields fieldTypes ->
             FixedBlock (List.length fieldTypes * 8, fieldTypes |> List.map (classify expandingSums))
+        // Uuid retains nominal identity for JSON planning, but its native
+        // ownership is still that of its underlying String representation.
+        | AST.TRecord ("Uuid", []) -> DynamicString
         | AST.TRecord (name, typeArgs) ->
             match Map.tryFind name typeReg with
             | Some fields ->
@@ -545,6 +549,11 @@ let rcShapeOfTypeWithSums
                     |> List.map (fun (_, fieldType) ->
                         fieldType |> applyRcShapeTypeSubstitution subst |> classify expandingSums)
                 FixedBlock ((List.length fields + 1) * 8, Immediate :: fieldShapes)
+            | None when Map.containsKey name sumReg ->
+                // Bare nominal references are parsed before constructor
+                // metadata is available. Classify the equivalent internal sum
+                // spelling here so recursive JSON trees retain correctly.
+                classify expandingSums (AST.TSum (name, typeArgs))
             | None ->
                 Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
         | AST.TSum (name, typeArgs) ->
@@ -578,6 +587,8 @@ let rcShapeOfTypeWithSums
                         BoxedSum (16, fieldShapes, variantShapes)
                     else
                         Immediate
+                | None when Map.containsKey name typeReg ->
+                    classify expandingSums (AST.TRecord (name, typeArgs))
                 | None ->
                     Crash.crash $"rcShapeOfTypeWithSums: Sum type '{name}' not found in sumReg"
         | AST.TList elemType ->

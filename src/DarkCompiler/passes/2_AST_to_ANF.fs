@@ -80,6 +80,18 @@ let private tryFindVariant
     | Some constructorTypeName ->
         Map.tryFind $"{constructorTypeName}.{variantName}" variantLookup
 
+let private tryFindVariantForType
+    (variantName: string)
+    (sourceType: AST.Type)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * AST.Type option) option =
+    match sourceType with
+    | AST.TSum (typeName, _)
+    | AST.TRecord (typeName, _) ->
+        Map.tryFind $"{typeName}.{variantName}" variantLookup
+        |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
+    | _ -> Map.tryFind variantName variantLookup
+
 let private int128ToCanonicalString (value: System.Int128) : string =
     value.ToString(System.Globalization.CultureInfo.InvariantCulture)
 
@@ -556,6 +568,26 @@ let recordTypeParamsRegistry (typeReg: TypeRegistry) : Map<string, string list> 
     typeReg |> Map.map (fun _ info -> info.TypeParams)
 
 let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcSumShapeRegistry =
+    let sumTypeNames =
+        variantLookup
+        |> Map.toList
+        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
+        |> Set.ofList
+
+    let rec canonicalizePayloadType typ =
+        match typ with
+        | AST.TRecord (name, []) when Set.contains name sumTypeNames -> AST.TSum (name, [])
+        | AST.TRecord (name, typeArgs) -> AST.TRecord (name, List.map canonicalizePayloadType typeArgs)
+        | AST.TSum (name, typeArgs) -> AST.TSum (name, List.map canonicalizePayloadType typeArgs)
+        | AST.TFunction (paramTypes, returnType) ->
+            AST.TFunction (List.map canonicalizePayloadType paramTypes, canonicalizePayloadType returnType)
+        | AST.TTuple elementTypes -> AST.TTuple (List.map canonicalizePayloadType elementTypes)
+        | AST.TEnumFields fieldTypes -> AST.TEnumFields (List.map canonicalizePayloadType fieldTypes)
+        | AST.TList elementType -> AST.TList (canonicalizePayloadType elementType)
+        | AST.TDict (keyType, valueType) ->
+            AST.TDict (canonicalizePayloadType keyType, canonicalizePayloadType valueType)
+        | _ -> typ
+
     let addVariant
         (acc: Map<string, string list * (int * AST.Type option) list>)
         (_variantName: string, (typeName, typeParams, tag, payloadType))
@@ -573,7 +605,9 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcS
         { ANF.TypeParams = typeParams
           ANF.Payloads =
             variants
-            |> List.sortBy fst }
+            |> List.sortBy fst
+            |> List.map (fun (tag, payload) ->
+                (tag, Option.map canonicalizePayloadType payload)) }
 
     variantLookup
     |> Map.toList
@@ -587,6 +621,22 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcS
 
 /// Function registry - maps function names to their FULL function types (TFunction)
 type FunctionRegistry = Map<string, AST.Type>
+
+let private listHeadUnsafeFunction
+    (funcReg: FunctionRegistry)
+    (elementType: AST.Type)
+    : string =
+    let rawJsonType = AST.TSum ("Stdlib.AltJson.InternalRawJson", [])
+    let jsonAccessor =
+        match elementType with
+        | typ when typ = rawJsonType -> Some "__dark_json_raw_head"
+        | AST.TTuple [AST.TString; typ] when typ = rawJsonType ->
+            Some "__dark_json_raw_field_head"
+        | _ -> None
+    match jsonAccessor with
+    | Some name when Map.containsKey name funcReg -> name
+    | _ when elementType = AST.TFloat64 -> "Stdlib.List.__headUnsafeFloat"
+    | _ -> "Stdlib.Internal.SkewList.headUnsafe_i64"
 
 /// Alias registry - maps type alias names to their type params and target types
 /// For simple record aliases: "Vec" -> ([], TRecord "Point")
@@ -6209,16 +6259,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
             // Check if the TYPE that a variant belongs to has any variant with a payload
             // This determines if values are heap-allocated or simple integers
-            let tryFindPatternVariant (sourceType: AST.Type) (variantName: string) =
-                match sourceType with
-                | AST.TSum (typeName, _)
-                | AST.TRecord (typeName, _) ->
-                    tryFindVariant (AST.resolvedConstructorReference typeName) variantName variantLookup
-                    |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
-                | _ -> Map.tryFind variantName variantLookup
+            let tryPatternVariant variantName =
+                tryFindVariantForType variantName scrutType variantLookup
 
-            let typeHasAnyPayload (sourceType: AST.Type) (variantName: string) : bool =
-                match tryFindPatternVariant sourceType variantName with
+            let typeHasAnyPayload (variantName: string) : bool =
+                match tryPatternVariant variantName with
                 | Some (typeName, _, _, _) ->
                     variantLookup
                     |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
@@ -6316,7 +6361,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     match payloadPattern with
                     | None -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                     | Some innerPattern ->
-                        match tryFindPatternVariant scrutType constructorName with
+                        match tryFindVariantForType constructorName scrutType variantLookup with
                         | Some (_, _, _, None) ->
                             // Constructor arity mismatch behaves as non-matching.
                             // Do not introduce payload bindings in this branch body.
@@ -6410,6 +6455,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let elemTypes =
                                 match sourceType with
                                 | AST.TTuple types when List.length types = List.length innerPatterns -> types
+                                | AST.TEnumFields types when List.length types = List.length innerPatterns -> types
                                 | _ -> unknownElemTypes
 
                             collectFromTuple innerPatterns elemTypes 0 env bindings vg
@@ -6426,7 +6472,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | _ -> typ
 
                             let resolvePayloadType (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type option, string> =
-                                match tryFindPatternVariant scrutineeType constructorName with
+                                match tryFindVariantForType constructorName scrutineeType variantLookup with
                                 | Some (_, typeParams, _, Some payloadTypeTemplate) ->
                                     let payloadType =
                                         match scrutineeType with
@@ -6476,7 +6522,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | p :: rest ->
                                     // Lists are SkewLists - use headUnsafe/tail to extract
                                     let (headVar, vg1) = ANF.freshVar vg
-                                    let headExpr = ANF.Call ("Stdlib.Internal.SkewList.headUnsafe_i64", [currentList])
+                                    let headExpr = ANF.Call (listHeadUnsafeFunction funcReg elemType, [currentList])
                                     let headBinding = (headVar, headExpr)
                                     collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
@@ -6506,7 +6552,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | p :: rest ->
                                     // Lists are SkewLists - use headUnsafe/tail to extract
                                     let (rawHeadVar, vg1) = ANF.freshVar vg
-                                    let rawHeadExpr = ANF.Call ("Stdlib.Internal.SkewList.headUnsafe_i64", [currentList])
+                                    let rawHeadExpr = ANF.Call (listHeadUnsafeFunction funcReg elemType, [currentList])
                                     let rawHeadBinding = (rawHeadVar, rawHeadExpr)
                                     // Wrap with TypedAtom to preserve correct element type in TypeMap
                                     let (headVar, vg1') = ANF.freshVar vg1
@@ -6562,7 +6608,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let tupleElemTypesResult =
                             match tupleType with
                             | AST.TTuple types when List.length types >= List.length tupPats -> Ok types
+                            | AST.TEnumFields types when List.length types >= List.length tupPats -> Ok types
                             | AST.TTuple types ->
+                                Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
+                            | AST.TEnumFields types ->
                                 Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
                             | _ ->
                                 Error $"Tuple pattern expects tuple elements, got {typeToString tupleType}"
@@ -6654,10 +6703,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     else
                         // Traverse exact-list patterns through the representation API.
                         let listType = AST.TList elemType
-                        let headFuncName =
-                            match elemType with
-                            | AST.TFloat64 -> "Stdlib.List.__headUnsafeFloat"
-                            | _ -> "Stdlib.Internal.SkewList.headUnsafe_i64"
+                        let headFuncName = listHeadUnsafeFunction funcReg elemType
                         let rec extractElements (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                             match pats with
                             | [] -> Ok (env, bindings, vg)
@@ -6723,7 +6769,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         | pat :: rest ->
                             // Extract head using SkewList.headUnsafe_i64
                             let (rawHeadVar, vg1) = ANF.freshVar vg
-                            let rawHeadExpr = ANF.Call ("Stdlib.Internal.SkewList.headUnsafe_i64", [listAtom])
+                            let rawHeadExpr = ANF.Call (listHeadUnsafeFunction funcReg elemType, [listAtom])
                             let rawHeadBinding = (rawHeadVar, rawHeadExpr)
                             // Wrap with TypedAtom to preserve correct element type in TypeMap
                             let (headVar, vg1') = ANF.freshVar vg1
@@ -6910,7 +6956,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let elemTypes =
                             match sourceType with
                             | AST.TTuple types when List.length types = List.length innerPatterns -> types
+                            | AST.TEnumFields types when List.length types = List.length innerPatterns -> types
                             | AST.TTuple types ->
+                                Crash.crash
+                                    $"collectBindings(PTuple): expected {List.length innerPatterns} tuple elements, got {List.length types}"
+                            | AST.TEnumFields types ->
                                 Crash.crash
                                     $"collectBindings(PTuple): expected {List.length innerPatterns} tuple elements, got {List.length types}"
                             | _ ->
@@ -6943,7 +6993,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             | _ -> typ
 
                         let resolvePayloadType (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type option, string> =
-                            match Map.tryFind constructorName variantLookup with
+                            match tryFindVariantForType constructorName scrutineeType variantLookup with
                             | Some (_, typeParams, _, Some payloadTypeTemplate) ->
                                 let payloadType =
                                     match scrutineeType with
@@ -7007,7 +7057,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | p :: rest ->
                                     // Lists are SkewLists - use headUnsafe/tail to extract
                                     let (headVar, vg1) = ANF.freshVar vg
-                                    let headExpr = ANF.Call ("Stdlib.Internal.SkewList.headUnsafe_i64", [currentList])
+                                    let headExpr = ANF.Call (listHeadUnsafeFunction funcReg elemType, [currentList])
                                     let headBinding = (headVar, headExpr)
                                     collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
@@ -7048,7 +7098,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | p :: rest ->
                                     // Lists are SkewLists - use headUnsafe/tail to extract
                                     let (headVar, vg1) = ANF.freshVar vg
-                                    let headExpr = ANF.Call ("Stdlib.Internal.SkewList.headUnsafe_i64", [currentList])
+                                    let headExpr = ANF.Call (listHeadUnsafeFunction funcReg elemType, [currentList])
                                     let headBinding = (headVar, headExpr)
                                     collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
@@ -7166,7 +7216,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.FloatLiteral f)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PConstructor (variantName, payloadPattern) ->
-                    match tryFindPatternVariant scrutType variantName with
+                    match tryPatternVariant variantName with
                     | Some (_, _, tag, variantPayloadType) ->
                         let arityMismatch =
                             match payloadPattern, variantPayloadType with
@@ -7179,7 +7229,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let (cmpVar, vg1) = ANF.freshVar vg
                             let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
                             Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-                        elif typeHasAnyPayload scrutType variantName then
+                        elif typeHasAnyPayload variantName then
                             // Mixed or payload-carrying sum type: tag is stored in heap at index 0.
                             let (tagVar, vg1) = ANF.freshVar vg
                             let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
@@ -7328,7 +7378,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 (constructorName: string)
                 (scrutineeType: AST.Type)
                 : AST.Type option option =
-                match Map.tryFind constructorName variantLookup with
+                match tryFindVariantForType constructorName scrutineeType variantLookup with
                 | None -> None
                 | Some (sumTypeName, typeParams, _, payloadTypeTemplateOpt) ->
                     let payloadTypeOpt =
@@ -7366,20 +7416,28 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     match sourceType with
                     | AST.TVar _
                     | AST.TRuntimeError -> false
-                    | AST.TSum (sumTypeName, _) ->
-                        match Map.tryFind constructorName variantLookup with
-                        | Some (constructorSumTypeName, _, _, _) when constructorSumTypeName <> sumTypeName ->
-                            true
-                        | Some _ ->
-                            match resolvePayloadTypeForStaticPatternCheck constructorName sourceType with
-                            | Some payloadTypeOpt ->
-                                match payloadPatternOpt, payloadTypeOpt with
-                                | None, None -> false
-                                | Some payloadPattern, Some payloadType ->
-                                    patternStaticallyCannotMatchType payloadPattern payloadType
-                                | _ -> true
-                            | None -> false
-                        | None -> false
+                    | AST.TSum (_, typeArgs)
+                    | AST.TRecord (_, typeArgs) ->
+                        match tryFindVariantForType constructorName sourceType variantLookup with
+                        | None -> true
+                        | Some (_, typeParams, _, payloadTypeOpt) ->
+                            match payloadPatternOpt, payloadTypeOpt with
+                            | None, None -> false
+                            | Some innerPattern, Some payloadType ->
+                                let subst =
+                                    if List.length typeParams = List.length typeArgs then
+                                        List.zip typeParams typeArgs |> Map.ofList
+                                    else
+                                        Map.empty
+                                let concretePayloadType =
+                                    payloadType
+                                    |> applySubstToType subst
+                                    |> canonicalizeBareSumTypeRefs variantLookup
+                                    |> function
+                                        | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
+                                        | other -> other
+                                patternStaticallyCannotMatchType innerPattern concretePayloadType
+                            | _ -> true
                     | _ -> true
                 | AST.PList innerPatterns ->
                     match sourceType with
@@ -7496,7 +7554,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                         | _ -> typ
                     let resolvePayloadType (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type option, string> =
-                        match Map.tryFind constructorName variantLookup with
+                        match tryFindVariantForType constructorName scrutineeType variantLookup with
                         | Some (_, typeParams, _, Some payloadTypeTemplate) ->
                             let payloadType =
                                 match scrutineeType with
@@ -7543,10 +7601,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             Error $"PList nested binding expects list source type, got {typeToString sourceType}"
                     elemTypeResult
                     |> Result.bind (fun elemType ->
-                        let headFuncName =
-                            match elemType with
-                            | AST.TFloat64 -> "Stdlib.List.__headUnsafeFloat"
-                            | _ -> "Stdlib.Internal.SkewList.headUnsafe_i64"
+                        let headFuncName = listHeadUnsafeFunction funcReg elemType
                         let rec loop
                             (remaining: AST.Pattern list)
                             (currentList: ANF.Atom)
@@ -7580,10 +7635,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             Error $"PListCons nested binding expects list source type, got {typeToString sourceType}"
                     elemTypeResult
                     |> Result.bind (fun elemType ->
-                        let headFuncName =
-                            match elemType with
-                            | AST.TFloat64 -> "Stdlib.List.__headUnsafeFloat"
-                            | _ -> "Stdlib.Internal.SkewList.headUnsafe_i64"
+                        let headFuncName = listHeadUnsafeFunction funcReg elemType
                         let rec collectHeads
                             (remaining: AST.Pattern list)
                             (currentList: ANF.Atom)
@@ -7652,7 +7704,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let tupleElemTypesResult =
                             match tupleType with
                             | AST.TTuple types when List.length types >= List.length tupPats -> Ok types
+                            | AST.TEnumFields types when List.length types >= List.length tupPats -> Ok types
                             | AST.TTuple types ->
+                                Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
+                            | AST.TEnumFields types ->
                                 Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
                             | _ ->
                                 Error $"Tuple pattern expects tuple elements, got {typeToString tupleType}"
@@ -8329,10 +8384,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         | pat :: rest ->
                             // Call head to get current element
                             let (headResultVar, vg1) = ANF.freshVar vg
-                            let headCallName =
-                                match elemType with
-                                | AST.TFloat64 -> "Stdlib.List.__headUnsafeFloat"
-                                | _ -> "Stdlib.Internal.SkewList.headUnsafe_i64"
+                            let headCallName = listHeadUnsafeFunction funcReg elemType
                             let headCallExpr = ANF.Call (headCallName, [ANF.Var currentListVar])
                             // Call tail to get rest
                             let (tailResultVar, vg2) = ANF.freshVar vg1
@@ -8662,7 +8714,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 match remaining with
                 | [] ->
                     // No cases left - shouldn't happen if we have wildcard/var
-                    Error "Non-exhaustive pattern match"
+                    Error $"Non-exhaustive pattern match for {typeToString scrutType}"
                 | mc :: rest when not (List.isEmpty mc.Patterns.Tail) ->
                     // Desugar grouped patterns (`p1 | p2 -> body`) into sequential single-pattern
                     // cases so bindings come from the pattern that actually matched.

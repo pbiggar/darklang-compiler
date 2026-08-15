@@ -486,6 +486,7 @@ let private directCallReturnType (builder: CFGBuilder) (funcName: string) : AST.
     | None ->
         match tryGetIntrinsicReturnType funcName with
         | Some t -> t
+        | None when funcName.StartsWith("__dark_eq_") -> AST.TBool
         | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
 
 let private tupleGetDestType
@@ -972,13 +973,7 @@ let rec convertExpr
                 | ANF.Call (funcName, args)
                 | ANF.BorrowedCall (funcName, args) ->
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType =
-                        match Map.tryFind funcName builder.ReturnTypeReg with
-                        | Some t -> t
-                        | None ->
-                            match tryGetIntrinsicReturnType funcName with
-                            | Some t -> t
-                            | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
+                    let returnType = directCallReturnType builder funcName
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1030,13 +1025,7 @@ let rec convertExpr
                     // Non-self-recursive tail call (self-recursive handled specially above)
                     // Emits TailCall instruction with full epilogue + branch
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType =
-                        match Map.tryFind funcName builder.ReturnTypeReg with
-                        | Some t -> t
-                        | None ->
-                            match tryGetIntrinsicReturnType funcName with
-                            | Some t -> t
-                            | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
+                    let returnType = directCallReturnType builder funcName
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1666,13 +1655,7 @@ and convertExprToOperand
                 | ANF.Call (funcName, args)
                 | ANF.BorrowedCall (funcName, args) ->
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType =
-                        match Map.tryFind funcName builder.ReturnTypeReg with
-                        | Some t -> t
-                        | None ->
-                            match tryGetIntrinsicReturnType funcName with
-                            | Some t -> t
-                            | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
+                    let returnType = directCallReturnType builder funcName
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1724,13 +1707,7 @@ and convertExprToOperand
                     // Non-self-recursive tail call (self-recursive handled specially above)
                     // Emits TailCall instruction with full epilogue + branch
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType =
-                        match Map.tryFind funcName builder.ReturnTypeReg with
-                        | Some t -> t
-                        | None ->
-                            match tryGetIntrinsicReturnType funcName with
-                            | Some t -> t
-                            | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
+                    let returnType = directCallReturnType builder funcName
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
