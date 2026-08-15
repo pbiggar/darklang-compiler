@@ -1251,6 +1251,11 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                                                 Params = NonEmptyList.fromList allParameters
                                                 ReturnType = returnType
                                                 Body = body
+                                                Recursion =
+                                                    Some (RecursiveBindingCandidate {
+                                                        SourceName = name
+                                                        Kind = TopLevelFunctionMember
+                                                    })
                                             }
                                             (funcDef, remaining''))
                                     | _ -> Error "Expected '=' after function return type")
@@ -1287,6 +1292,11 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                                         Params = NonEmptyList.fromList allParameters
                                         ReturnType = returnType
                                         Body = body
+                                        Recursion =
+                                            Some (RecursiveBindingCandidate {
+                                                SourceName = name
+                                                Kind = TopLevelFunctionMember
+                                            })
                                     }
                                     (funcDef, remaining''))
                             | _ -> Error "Expected '=' after function return type")
@@ -1672,7 +1682,16 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             let lambdaParameters =
                 funcDef.Params
                 |> NonEmptyList.map (fun (name, typ) -> typedLambdaVariable name typ)
-            (Let (LPVariable funcDef.Name, Lambda (lambdaParameters, Some funcDef.ReturnType, funcDef.Body), body), remainingAfterBody)
+            let recursion =
+                RecursiveBindingCandidate {
+                    SourceName = funcDef.Name
+                    Kind = NamedLocalFunctionMember
+                }
+            (RecursiveLet (
+                recursion,
+                Lambda (lambdaParameters, Some funcDef.ReturnType, funcDef.Body),
+                body
+             ), remainingAfterBody)
 
         let betterSplit
             (currentBest: (Expr * Token list) option)
@@ -1680,12 +1699,10 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             : (Expr * Token list) option =
             match currentBest with
             | None -> Some candidate
-            | Some (_, bestRemaining) ->
-                let (_, candidateRemaining) = candidate
-                if List.length candidateRemaining < List.length bestRemaining then
-                    Some candidate
-                else
-                    currentBest
+            // The first complete function/body split is the lexical declaration
+            // boundary. Preferring a later split makes an earlier nested
+            // function absorb following sibling declarations into its body.
+            | Some _ -> currentBest
 
         let rec trySplits
             (functionTokensRev: Token list)
@@ -1699,7 +1716,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | None -> Error "Expected expression"
             | nextToken :: restTokens ->
                 let candidateFunctionTokens = List.rev (nextToken :: functionTokensRev)
-                let updatedBest =
+                let parsedCandidate =
                     match parseFunctionDef candidateFunctionTokens parseExpr with
                     | Ok (funcDef, []) ->
                         let bodyTokens =
@@ -1709,14 +1726,20 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
 
                         match parseExpr bodyTokens with
                         | Ok (body, remainingAfterBody) ->
-                            buildNestedFunctionLet funcDef body remainingAfterBody
-                            |> betterSplit bestCandidate
+                            Some (buildNestedFunctionLet funcDef body remainingAfterBody)
                         | Error _ ->
-                            bestCandidate
+                            None
                     | _ ->
-                        bestCandidate
+                        None
 
-                trySplits (nextToken :: functionTokensRev) restTokens updatedBest
+                let updatedBest =
+                    match parsedCandidate with
+                    | Some candidate -> betterSplit bestCandidate candidate
+                    | None -> bestCandidate
+
+                match restTokens, parsedCandidate with
+                | TIn :: _, Some explicitBoundary -> Ok explicitBoundary
+                | _ -> trySplits (nextToken :: functionTokensRev) restTokens updatedBest
 
         trySplits [] functionTokens None
 
@@ -1735,7 +1758,19 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             parseLetPattern rest
             |> Result.bind (fun (pattern, remaining) ->
                 let buildLetExpression (value: Expr) (body: Expr) (remaining'': Token list) =
-                    (Let (pattern, value, body), remaining'')
+                    let expression =
+                        match pattern, value with
+                        | LPVariable name, Lambda _ ->
+                            RecursiveLet (
+                                RecursiveBindingCandidate {
+                                    SourceName = name
+                                    Kind = DirectLambdaValueMember
+                                },
+                                value,
+                                body
+                            )
+                        | _ -> Let (pattern, value, body)
+                    (expression, remaining'')
                 match remaining with
                 | TEquals :: rest' ->
                     let tryParseWithoutInFallback () : Result<Expr * Token list, string> =
@@ -2760,6 +2795,10 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
             |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
         |> Result.bind (fun () -> validateExpr value)
         |> Result.bind (fun () -> validateExpr body)
+    | RecursiveLet (recursion, value, body) ->
+        validateNoInternalIdentifier (recursiveBindingName recursion)
+        |> Result.bind (fun () -> validateExpr value)
+        |> Result.bind (fun () -> validateExpr body)
     | Var name -> validateNoInternalIdentifier name
     | Call (funcName, args) ->
         validateNoInternalIdentifier funcName
@@ -2883,12 +2922,60 @@ let private validatePublicDictTypeArity (tokens: Token list) : Result<unit, stri
     validate tokens
 
 /// Parse a string directly to AST
+let private insertNestedFunctionLayoutSeparators (input: string) : string =
+    let lines = input.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n') |> Array.toList
+    let leadingSpaces (line: string) = line.Length - line.TrimStart().Length
+    let tryNestedFunctionIndent (line: string) : int option =
+        let letIndex = line.IndexOf("let ", System.StringComparison.Ordinal)
+        if letIndex <= 0 then None
+        else
+            let afterLet = line.Substring(letIndex + 4).TrimStart()
+            let nameEnd = afterLet.IndexOfAny([|' '; '('; '<'|])
+            if nameEnd < 0 then None
+            else
+                let afterName = afterLet.Substring(nameEnd).TrimStart()
+                if afterName.StartsWith("(") || afterName.StartsWith("<") then Some letIndex
+                else None
+
+    let rec closeCompletedLayouts (indent: int) (active: int list) (prefix: string) =
+        match active with
+        | declarationIndent :: rest when indent <= declarationIndent ->
+            closeCompletedLayouts indent rest (prefix + "in ")
+        | _ -> (active, prefix)
+
+    let rec loop (active: int list) (remaining: string list) (acc: string list) =
+        match remaining with
+        | [] -> acc |> List.rev |> String.concat "\n"
+        | line :: rest when line.Trim() = "" || line.TrimStart().StartsWith("//") ->
+            loop active rest (line :: acc)
+        | line :: rest ->
+            let indent = leadingSpaces line
+            let (remainingActive, prefix) = closeCompletedLayouts indent active ""
+            let rewritten =
+                if prefix = "" then line
+                else line.Substring(0, indent) + prefix + line.Substring(indent)
+            let nextActive =
+                match tryNestedFunctionIndent rewritten with
+                | Some declarationIndent ->
+                    let lexicalIndent = if prefix = "" then declarationIndent else indent
+                    lexicalIndent :: remainingActive
+                | None -> remainingActive
+            let activeAfterExplicitIn =
+                if rewritten.TrimEnd().EndsWith(" in", System.StringComparison.Ordinal) then
+                    match nextActive with
+                    | _ :: outer -> outer
+                    | [] -> []
+                else nextActive
+            loop activeAfterExplicitIn rest (rewritten :: acc)
+    loop [] lines []
+
 let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.ParsedSource, string> =
     let rec extractModules source modules =
         match NameSyntax.tryExtractModuleHeader source with
         | Some (moduleName, body) -> extractModules body (moduleName :: modules)
         | None -> (List.rev modules, source)
     let (sourceModules, sourceBody) = extractModules input []
+    let sourceBody = insertNestedFunctionLayoutSeparators sourceBody
     lex sourceBody
     |> Result.bind (fun tokens ->
         if allowInternal then parse tokens

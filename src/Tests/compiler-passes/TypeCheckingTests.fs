@@ -73,6 +73,8 @@ let rec countMatches (expr: Expr) : int =
             [inner]
         | Let (_, value, body) ->
             [value; body]
+        | RecursiveLet (_, value, body) ->
+            [value; body]
         | If (cond, thenBranch, elseBranch) ->
             [cond; thenBranch; elseBranch]
         | Sequence (first, next) ->
@@ -189,6 +191,7 @@ let testRecordAccessRejectsInvalidRecordArity () : TestResult =
             Params = NonEmptyList.singleton ("box", TRecord ("ArityBoxTc", [TInt64; TBool]))
             ReturnType = TInt64
             Body = RecordAccess (Var "box", "value")
+            Recursion = None
         }
 
     let program = Program [recordDef; funcDef]
@@ -325,6 +328,38 @@ let testConstructorIdentityCollisionRejected () : TestResult =
             program
             "Constructor identity collision 1236: CollisionType151Tc.CollisionCaseTc, CollisionType155Tc.CollisionCaseTc"
 
+let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
+    let source =
+        "let groupEven(n: Int64) : Int64 = if n == 0 then 1 else groupOdd(n - 1) "
+        + "let groupOdd(n: Int64) : Int64 = if n == 0 then 0 else groupEven(n - 1) "
+        + "let completed(n: Int64) : Int64 = n + 1 completed(1)"
+    Parser.parseString false source
+    |> Result.mapError (fun error -> $"Recursive group parse failed: {error}")
+    |> Result.bind (fun program ->
+        checkProgram program
+        |> Result.mapError (fun error -> $"Recursive group type check failed: {typeErrorToString error}"))
+    |> Result.bind (fun (_, Program topLevels) ->
+        let recursionByName =
+            topLevels
+            |> List.choose (function
+                | FunctionDef func ->
+                    match func.Recursion with
+                    | Some (TypedRecursiveBinding typed) -> Some (func.Name, typed.Resolved)
+                    | _ -> None
+                | _ -> None)
+            |> Map.ofList
+        match Map.tryFind "groupEven" recursionByName,
+              Map.tryFind "groupOdd" recursionByName,
+              Map.tryFind "completed" recursionByName with
+        | Some evenMember, Some oddMember, Some completedMember
+            when evenMember.Group = oddMember.Group
+                 && evenMember.Group <> completedMember.Group
+                 && evenMember.Availability = MutualRecursiveMember
+                 && oddMember.Availability = MutualRecursiveMember
+                 && completedMember.Availability = CompletedGroupMember
+                 && [evenMember.GroupIndex; oddMember.GroupIndex] = [0; 1] -> Ok ()
+        | actual -> Error $"Unexpected recursive group identities: {actual}")
+
 let tests = [
     ("Integer literal", testInt64Literal)
     ("Int128 literal", testInt128Literal)
@@ -344,6 +379,7 @@ let tests = [
     ("Empty nominal declarations rejected", testEmptyNominalDeclarationsRejected)
     ("Invalid declaration type references rejected", testInvalidDeclarationTypeReferencesRejected)
     ("Constructor identity collision rejected", testConstructorIdentityCollisionRejected)
+    ("Recursive groups receive stable typed identities", testRecursiveGroupsReceiveStableTypedIdentities)
 ]
 
 /// Run all type checking unit tests

@@ -217,6 +217,129 @@ type BinderStructure =
     | LetBinderPatterns of LetPattern list
     | MatchBinderPattern of Pattern
 
+/// Stable semantic identities assigned at the parsed-program boundary. The
+/// representation is private so source spellings cannot be used as identities.
+[<StructuralEquality; StructuralComparison>]
+type BindingId = private BindingId of int list
+
+[<StructuralEquality; StructuralComparison>]
+type ScopeBoundaryId = private ScopeBoundaryId of int list
+
+[<StructuralEquality; StructuralComparison>]
+type RecursiveGroupId = private RecursiveGroupId of int list
+
+[<StructuralEquality; StructuralComparison>]
+type RecursiveMemberId = private RecursiveMemberId of int list
+
+let bindingId path = BindingId path
+let scopeBoundaryId path = ScopeBoundaryId path
+let recursiveGroupId path = RecursiveGroupId path
+let recursiveMemberId path = RecursiveMemberId path
+let singletonRecursiveGroupId (RecursiveMemberId path) = RecursiveGroupId (1 :: path)
+
+type RecursiveMemberKind =
+    | TopLevelFunctionMember
+    | NamedLocalFunctionMember
+    | DirectLambdaValueMember
+
+type RecursiveAvailability =
+    | OrdinaryBinding
+    | SelfRecursiveMember
+    | MutualRecursiveMember
+    | CompletedGroupMember
+    | ImportedGroupMember
+
+type RecursiveDependencyKind =
+    | DelayedCallableDependency
+    | EagerValueDependency
+    | TypeAliasDependency
+
+/// Parser-only evidence that a declaration is eligible for recursive
+/// resolution. `NameSyntax.normalizeSource` replaces this with a parsed member.
+type RecursiveCandidate = {
+    SourceName: string
+    Kind: RecursiveMemberKind
+}
+
+type ParsedRecursiveMember = {
+    Binding: BindingId
+    Boundary: ScopeBoundaryId
+    Member: RecursiveMemberId
+    SourceName: string
+    Kind: RecursiveMemberKind
+}
+
+type ResolvedRecursiveMember = {
+    Parsed: ParsedRecursiveMember
+    Group: RecursiveGroupId
+    GroupIndex: int
+    Availability: RecursiveAvailability
+}
+
+type TypedRecursiveMember = {
+    Resolved: ResolvedRecursiveMember
+    MonomorphicType: Type
+}
+
+type LoweredRecursiveMember = {
+    Typed: TypedRecursiveMember
+    EnvironmentIndex: int
+}
+
+/// Every materialized group is nonempty by construction.
+type ParsedRecursiveGroup = {
+    Boundary: ScopeBoundaryId
+    Members: NonEmptyList<ParsedRecursiveMember>
+}
+
+type ResolvedRecursiveGroup = {
+    Group: RecursiveGroupId
+    Members: NonEmptyList<ResolvedRecursiveMember>
+}
+
+type TypedRecursiveGroup = {
+    Group: RecursiveGroupId
+    Members: NonEmptyList<TypedRecursiveMember>
+}
+
+type LoweredRecursiveGroup = {
+    Group: RecursiveGroupId
+    Members: NonEmptyList<LoweredRecursiveMember>
+}
+
+type RecursiveBindingInfo =
+    | RecursiveBindingCandidate of RecursiveCandidate
+    | ParsedRecursiveBinding of ParsedRecursiveMember
+    | ResolvedRecursiveBinding of ResolvedRecursiveMember
+    | TypedRecursiveBinding of TypedRecursiveMember
+
+let recursiveBindingName info =
+    match info with
+    | RecursiveBindingCandidate candidate -> candidate.SourceName
+    | ParsedRecursiveBinding parsed -> parsed.SourceName
+    | ResolvedRecursiveBinding resolved -> resolved.Parsed.SourceName
+    | TypedRecursiveBinding typed -> typed.Resolved.Parsed.SourceName
+
+let recursiveBindingKind info =
+    match info with
+    | RecursiveBindingCandidate candidate -> candidate.Kind
+    | ParsedRecursiveBinding parsed -> parsed.Kind
+    | ResolvedRecursiveBinding resolved -> resolved.Parsed.Kind
+    | TypedRecursiveBinding typed -> typed.Resolved.Parsed.Kind
+
+let recursiveBindingId info =
+    match info with
+    | ParsedRecursiveBinding parsed -> Some parsed.Binding
+    | ResolvedRecursiveBinding resolved -> Some resolved.Parsed.Binding
+    | TypedRecursiveBinding typed -> Some typed.Resolved.Parsed.Binding
+    | RecursiveBindingCandidate _ -> None
+
+let recursiveBindingAvailability info =
+    match info with
+    | ResolvedRecursiveBinding resolved -> Some resolved.Availability
+    | TypedRecursiveBinding typed -> Some typed.Resolved.Availability
+    | RecursiveBindingCandidate _ | ParsedRecursiveBinding _ -> None
+
 /// Validate one complete binder structure before any of its names enter scope.
 /// The returned list preserves source order and never contains ignored names.
 let validateBinders (structure: BinderStructure) : Result<string list, string> =
@@ -282,6 +405,7 @@ and Expr =
     | BinOp of BinOp * Expr * Expr
     | UnaryOp of UnaryOp * Expr
     | Let of pattern:LetPattern * value:Expr * body:Expr  // Atomic non-recursive binding
+    | RecursiveLet of recursion:RecursiveBindingInfo * value:Expr * body:Expr
     | Var of string  // Variable reference
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
     | Sequence of first:Expr * next:Expr  // Statement sequence: first must produce Unit; next supplies the value
@@ -319,6 +443,7 @@ type FunctionDef = {
     Params: NonEmptyList<(string * Type)>  // Parameter names with REQUIRED type annotations
     ReturnType: Type                  // REQUIRED return type annotation
     Body: Expr
+    Recursion: RecursiveBindingInfo option
 }
 
 /// Variant in a sum type, optionally carrying one payload type.

@@ -53,8 +53,13 @@ type TypeError =
     | InvalidOperation of op:string * types:Type list
     | IncompatibleEqualityOperands of left:Type * right:Type
     | IncompatibleOrderingOperands of left:Type * right:Type
+    | PolymorphicRecursion of memberName:string
     | ResolutionFailure of NameResolution.ResolutionError
     | GenericError of string
+
+type private AliasVisitState =
+    | AliasVisiting
+    | AliasValidated
 
 /// Pretty-print a type for error messages
 let rec typeToString (t: Type) : string =
@@ -120,6 +125,8 @@ let typeErrorToString (err: TypeError) : string =
         $"Cannot perform equality check on {typeToString left} and {typeToString right}"
     | IncompatibleOrderingOperands (left, right) ->
         $"Cannot perform numeric operation on {typeToString left} and {typeToString right}"
+    | PolymorphicRecursion memberName ->
+        $"Polymorphic recursion is not supported inside recursive group member: {memberName}"
     | ResolutionFailure error ->
         NameResolution.errorToString error
     | GenericError msg ->
@@ -215,6 +222,11 @@ let rec private substituteInterpolationLiteral (name: string) (literal: Expr) (e
         let body' =
             if letPatternBindings pattern |> List.contains name then body else recurse body
         Let (pattern, recurse value, body')
+    | RecursiveLet (recursion, value, body) ->
+        if recursiveBindingName recursion = name then
+            RecursiveLet (recursion, value, body)
+        else
+            RecursiveLet (recursion, recurse value, recurse body)
     | Lambda (parameters, returnAnnotation, body) when
         parameters
         |> NonEmptyList.toList
@@ -876,6 +888,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         UnaryOp (op, applySubstToExpr subst inner)
     | Let (pattern, value, body) ->
         Let (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
+    | RecursiveLet (recursion, value, body) ->
+        RecursiveLet (recursion, applySubstToExpr subst value, applySubstToExpr subst body)
     | If (cond, thenBr, elseBr) ->
         If (applySubstToExpr subst cond, applySubstToExpr subst thenBr, applySubstToExpr subst elseBr)
     | Sequence (first, next) ->
@@ -1516,6 +1530,10 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         let names = letPatternBindings pattern |> Set.ofList
         let bodyFree = collectFreeVars body (Set.union names bound)
         Set.union valueFree bodyFree
+    | RecursiveLet (recursion, value, body) ->
+        let name = recursiveBindingName recursion
+        let recursiveBound = Set.add name bound
+        Set.union (collectFreeVars value recursiveBound) (collectFreeVars body recursiveBound)
     | If (cond, thenBranch, elseBranch) ->
         let condFree = collectFreeVars cond bound
         let thenFree = collectFreeVars thenBranch bound
@@ -2014,6 +2032,11 @@ let rec private checkExprWithParamNames
             | Some args -> Some args
             | None when letPatternShadows pattern -> None
             | None -> tryFindCallArguments targetName body
+        | RecursiveLet (recursion, value, body) ->
+            match tryFindCallArguments targetName value with
+            | Some args -> Some args
+            | None when recursiveBindingName recursion = targetName -> None
+            | None -> tryFindCallArguments targetName body
         | Lambda (parameters, returnAnnotation, body) ->
             let shadowed =
                 parameters
@@ -2105,6 +2128,11 @@ let rec private checkExprWithParamNames
             tryFindFunctionValueExpectation targetName value
             |> Option.orElseWith (fun () ->
                 if letPatternBindings pattern |> List.contains targetName then None
+                else tryFindFunctionValueExpectation targetName body)
+        | RecursiveLet (recursion, value, body) ->
+            tryFindFunctionValueExpectation targetName value
+            |> Option.orElseWith (fun () ->
+                if recursiveBindingName recursion = targetName then None
                 else tryFindFunctionValueExpectation targetName body)
         | Lambda (parameters, _, body) ->
             let shadows =
@@ -2749,6 +2777,71 @@ let rec private checkExprWithParamNames
                     | Some expected when expected <> innerType ->
                         Error (TypeMismatch (expected, innerType, "result of ~~~"))
                     | _ -> Ok (innerType, UnaryOp (op, inner')))
+
+    | RecursiveLet (recursion, value, body) ->
+        let name = recursiveBindingName recursion
+        let availability = recursiveBindingAvailability recursion |> Option.defaultValue SelfRecursiveMember
+        let continuationExpectation =
+            match value with
+            | Lambda (parameters, _, _) ->
+                tryFindFunctionValueExpectation name body
+                |> Option.orElseWith (fun () ->
+                    tryFindCallArguments name body
+                    |> Option.bind (inferFunctionExpectationFromArguments (parameters |> NonEmptyList.length)))
+            | _ -> None
+        let provisionalType =
+            match value with
+            | Lambda (parameters, returnAnnotation, _) ->
+                let expectedParameters, expectedReturn =
+                    match continuationExpectation with
+                    | Some (TFunction (parameterTypes, returnType)) -> (parameterTypes, Some returnType)
+                    | _ -> ([], None)
+                let parameterTypes =
+                    parameters
+                    |> NonEmptyList.toList
+                    |> List.mapi (fun index parameter ->
+                        parameter.InferredType
+                        |> Option.orElse parameter.SourceAnnotation
+                        |> Option.orElseWith (fun () -> List.tryItem index expectedParameters)
+                        |> Option.defaultValue (TVar $"recursiveParameter{index}"))
+                TFunction (
+                    parameterTypes,
+                    returnAnnotation
+                    |> Option.orElse expectedReturn
+                    |> Option.defaultValue (TVar "recursiveReturn")
+                )
+            | _ ->
+                Crash.crash "RecursiveLet must contain a lambda value"
+        let valueEnvironment =
+            match availability with
+            | SelfRecursiveMember | MutualRecursiveMember -> Map.add name provisionalType env
+            | OrdinaryBinding | CompletedGroupMember | ImportedGroupMember -> env
+        checkExpr value valueEnvironment typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some provisionalType)
+        |> Result.bind (fun (valueType, value') ->
+            let valueType =
+                match valueType, value' with
+                | TFunction (_, returnType), Lambda (parameters, _, _) ->
+                    let inferredParameters =
+                        parameters
+                        |> NonEmptyList.toList
+                        |> List.map (fun parameter ->
+                            parameter.InferredType
+                            |> Option.orElse parameter.SourceAnnotation
+                            |> Option.defaultValue (TVar "underdeterminedRecursiveParameter"))
+                    TFunction (inferredParameters, returnType)
+                | _ -> valueType
+            let typedRecursion =
+                match recursion with
+                | ResolvedRecursiveBinding resolved ->
+                    TypedRecursiveBinding { Resolved = resolved; MonomorphicType = valueType }
+                | TypedRecursiveBinding typed ->
+                    TypedRecursiveBinding { typed with MonomorphicType = valueType }
+                | RecursiveBindingCandidate _ | ParsedRecursiveBinding _ ->
+                    Crash.crash "Recursive binding reached type checking before name resolution"
+            let bodyEnvironment = Map.add name valueType env
+            checkExpr body bodyEnvironment typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType
+            |> Result.map (fun (bodyType, body') ->
+                (bodyType, RecursiveLet (typedRecursion, value', body'))))
 
     | Let (pattern, value, body) ->
         // The RHS is checked in the incoming environment. Only a completely
@@ -5097,6 +5190,8 @@ let rec private checkExprWithParamNames
                 let afterValue = collect None value constraints
                 if letPatternBindings pattern |> List.exists (fun name -> Set.contains name parameterNames) then afterValue
                 else collect expected continuation afterValue
+            | RecursiveLet (_, value, continuation) ->
+                constraints |> collect None value |> collect expected continuation
             | Lambda (nestedParameters, _, nestedBody) ->
                 let shadows =
                     nestedParameters
@@ -5930,6 +6025,7 @@ let rec private ensureEqHelperForType
                 Params = NonEmptyList.fromList [ (leftParam, resolvedType); (rightParam, resolvedType) ]
                 ReturnType = TBool
                 Body = helperBody
+                Recursion = None
             }
 
             {
@@ -6016,6 +6112,7 @@ let rec private ensureCompareHelperForType
                     resolvedType
                     (Var leftParam)
                     (Var rightParam)
+            Recursion = None
         }
         {
             InProgress = Set.remove helper stateWithDeps.InProgress
@@ -6037,6 +6134,7 @@ let rec private collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (exp
     | BinOp (_, left, right) -> Set.union (recurse left) (recurse right)
     | UnaryOp (_, inner) -> recurse inner
     | Let (_, value, body) -> Set.union (recurse value) (recurse body)
+    | RecursiveLet (_, value, body) -> Set.union (recurse value) (recurse body)
     | If (condition, thenBranch, elseBranch) ->
         Set.union (recurse condition) (Set.union (recurse thenBranch) (recurse elseBranch))
     | Sequence (first, next) -> Set.union (recurse first) (recurse next)
@@ -6098,6 +6196,8 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
     | UnaryOp (_, inner) ->
         collectEqHelperTypesFromExpr aliasReg inner
     | Let (_, value, body) ->
+        Set.union (collectEqHelperTypesFromExpr aliasReg value) (collectEqHelperTypesFromExpr aliasReg body)
+    | RecursiveLet (_, value, body) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg value) (collectEqHelperTypesFromExpr aliasReg body)
     | If (cond, thenBranch, elseBranch) ->
         Set.union
@@ -6190,6 +6290,8 @@ let rec private materializeHelperCallsInExpr
         UnaryOp (op, recurse inner)
     | Let (name, value, body) ->
         Let (name, recurse value, recurse body)
+    | RecursiveLet (recursion, value, body) ->
+        RecursiveLet (recursion, recurse value, recurse body)
     | If (cond, thenBranch, elseBranch) ->
         If (recurse cond, recurse thenBranch, recurse elseBranch)
     | Sequence (first, next) ->
@@ -6462,7 +6564,19 @@ let private checkFunctionDef
             && typesCompatibleWithAliases aliasReg resolvedReturnType resolvedBodyType
 
         if resolvedReturnType = resolvedBodyType || allowGenericReturnSpecialization then
-            Ok { canonicalFuncDef with Body = body' }
+            let monomorphicType =
+                TFunction (
+                    canonicalParams |> NonEmptyList.toList |> List.map snd,
+                    canonicalReturnType
+                )
+            let typedRecursion =
+                match canonicalFuncDef.Recursion with
+                | Some (ResolvedRecursiveBinding resolved) ->
+                    Some (TypedRecursiveBinding { Resolved = resolved; MonomorphicType = monomorphicType })
+                | Some (TypedRecursiveBinding typed) ->
+                    Some (TypedRecursiveBinding { typed with MonomorphicType = monomorphicType })
+                | other -> other
+            Ok { canonicalFuncDef with Body = body'; Recursion = typedRecursion }
         else
             Error (TypeMismatch (canonicalReturnType, bodyType, $"function {funcDef.Name} body")))
 
@@ -6496,6 +6610,8 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
     | UnaryOp (_, inner) ->
         collectTypeAppSpecs inner
     | Let (_, value, body) ->
+        Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
+    | RecursiveLet (_, value, body) ->
         Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
     | If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeAppSpecs cond) (Set.union (collectTypeAppSpecs thenBranch) (collectTypeAppSpecs elseBranch))
@@ -6707,6 +6823,135 @@ let private declarationResolutionEnvironment
     NameResolution.empty
     |> NameResolution.addCandidates (sourceCandidates @ intrinsicCandidates @ stdlibValueCandidates @ builtinCandidates)
 
+/// Collect resolved callable dependencies for declaration grouping. Local
+/// availability has already been decided by name resolution, so only canonical
+/// package names can become declaration-graph edges here.
+let rec private collectDeclarationCalls (expr: Expr) : Set<string> =
+    let combine expressions =
+        expressions
+        |> List.map collectDeclarationCalls
+        |> List.fold Set.union Set.empty
+    match expr with
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
+    | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
+    | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
+    | Var _ | FuncRef _ | RuntimeError _ -> Set.empty
+    | BoundaryRender (_, value) | UnaryOp (_, value) | TupleAccess (value, _)
+    | RecordAccess (value, _) -> collectDeclarationCalls value
+    | BinOp (_, left, right) | Sequence (left, right)
+    | Let (_, left, right) | RecursiveLet (_, left, right) -> combine [left; right]
+    | If (condition, thenBranch, elseBranch) -> combine [condition; thenBranch; elseBranch]
+    | Call (name, args) | TypeApp (name, _, args) ->
+        Set.add name (combine (NonEmptyList.toList args))
+    | TupleLiteral values | ListLiteral values -> combine values
+    | DictLiteral (_, entries) | RecordLiteral (_, entries) -> entries |> List.map snd |> combine
+    | RecordUpdate (record, fields) -> combine (record :: (fields |> List.map snd))
+    | Constructor (_, _, payload) ->
+        payload |> Option.map collectDeclarationCalls |> Option.defaultValue Set.empty
+    | Match (scrutinee, cases) ->
+        let caseCalls =
+            cases
+            |> List.collect (fun case -> case.Body :: (case.Guard |> Option.toList))
+            |> combine
+        Set.union (collectDeclarationCalls scrutinee) caseCalls
+    | Lambda (_, _, body) -> collectDeclarationCalls body
+    | Apply (func, args) | IndirectApply (func, args) ->
+        combine (func :: NonEmptyList.toList args)
+    | Closure (name, captures) -> Set.add name (combine captures)
+    | InterpolatedString parts ->
+        parts
+        |> List.choose (function StringExpr value -> Some value | StringText _ -> None)
+        |> combine
+
+/// Partition one declaration boundary into deterministic strongly connected
+/// components. The implementation uses mutual reachability instead of a
+/// mutable Tarjan stack; source order determines group and member order.
+let private resolveRecursiveDeclarationGroups (topLevels: TopLevel list) : TopLevel list =
+    let functions : FunctionDef list =
+        topLevels
+        |> List.choose (function FunctionDef func -> Some func | _ -> None)
+    let functionNames = functions |> List.map _.Name |> Set.ofList
+    let graph =
+        functions
+        |> List.map (fun func ->
+            (func.Name, Set.intersect functionNames (collectDeclarationCalls func.Body)))
+        |> Map.ofList
+
+    let reachableFrom root =
+        let rec visit pending visited =
+            match pending with
+            | [] -> visited
+            | name :: rest when Set.contains name visited -> visit rest visited
+            | name :: rest ->
+                let next = Map.tryFind name graph |> Option.defaultValue Set.empty |> Set.toList
+                visit (next @ rest) (Set.add name visited)
+        let first = Map.tryFind root graph |> Option.defaultValue Set.empty |> Set.toList
+        visit first Set.empty
+
+    let reachability =
+        functions
+        |> List.map (fun func -> (func.Name, reachableFrom func.Name))
+        |> Map.ofList
+
+    let mutuallyReachable left right =
+        Map.find left reachability |> Set.contains right
+        && Map.find right reachability |> Set.contains left
+
+    let rec formGroups
+        (ordinal: int)
+        (remaining: FunctionDef list)
+        (acc: ResolvedRecursiveGroup list)
+        : ResolvedRecursiveGroup list =
+        match remaining with
+        | [] -> List.rev acc
+        | first :: rest ->
+            let (sameGroup, laterGroups) =
+                rest |> List.partition (fun candidate -> mutuallyReachable first.Name candidate.Name)
+            let members = first :: sameGroup
+            let groupId = recursiveGroupId [0; ordinal]
+            let availability =
+                if not (List.isEmpty sameGroup) then MutualRecursiveMember
+                elif Map.find first.Name graph |> Set.contains first.Name then SelfRecursiveMember
+                else CompletedGroupMember
+            let resolvedMembers : ResolvedRecursiveMember list =
+                members
+                |> List.indexed
+                |> List.choose (fun (groupIndex, func) ->
+                    match func.Recursion with
+                    | Some (ParsedRecursiveBinding parsed) ->
+                        Some {
+                            Parsed = parsed
+                            Group = groupId
+                            GroupIndex = groupIndex
+                            Availability = availability
+                        }
+                    | Some (ResolvedRecursiveBinding resolved) -> Some resolved
+                    | Some (TypedRecursiveBinding typed) -> Some typed.Resolved
+                    | Some (RecursiveBindingCandidate _) | None -> None)
+            match NonEmptyList.tryFromList resolvedMembers with
+            | Some nonempty ->
+                let group : ResolvedRecursiveGroup = { Group = groupId; Members = nonempty }
+                formGroups (ordinal + 1) laterGroups (group :: acc)
+            | None -> formGroups (ordinal + 1) laterGroups acc
+
+    let groups : ResolvedRecursiveGroup list = formGroups 0 functions []
+    let resolvedByName : Map<string, ResolvedRecursiveMember> =
+        groups
+        |> List.collect (fun group ->
+            group.Members
+            |> NonEmptyList.toList
+            |> List.map (fun groupMember -> (groupMember.Parsed.SourceName, groupMember)))
+        |> Map.ofList
+
+    topLevels
+    |> List.map (function
+        | FunctionDef func ->
+            match Map.tryFind func.Name resolvedByName with
+            | Some recursion -> FunctionDef { func with Recursion = Some (ResolvedRecursiveBinding recursion) }
+            | None -> FunctionDef func
+        | other -> other)
+
 let private resolveProgramNames
     (resolutionEnv: NameResolution.ResolutionEnvironment)
     (program: Program)
@@ -6845,6 +7090,52 @@ let private resolveProgramNames
                 let bindings = letPatternBindings pattern |> Set.ofList
                 resolveExpr (Set.union localNames bindings) body
                 |> Result.map (fun body' -> Let (pattern, value', body')))
+        | RecursiveLet (recursion, value, body) ->
+            let name = recursiveBindingName recursion
+            let kind = recursiveBindingKind recursion
+            let parsed =
+                match recursion with
+                | ParsedRecursiveBinding parsed -> parsed
+                | ResolvedRecursiveBinding resolved -> resolved.Parsed
+                | TypedRecursiveBinding typed -> typed.Resolved.Parsed
+                | RecursiveBindingCandidate _ ->
+                    Crash.crash "Recursive candidate was not assigned a parsed identity"
+            let parameterShadowsSelf =
+                match value with
+                | Lambda (parameters, _, _) ->
+                    parameters
+                    |> NonEmptyList.toList
+                    |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
+                    |> List.contains name
+                | _ -> false
+            let outerLocalCollision = Set.contains name localNames
+            let packageCollision =
+                match NameResolution.resolve NameResolution.ResolutionContext.Callable name resolutionEnv with
+                | Ok _ -> true
+                | Error _ -> false
+            if kind = NamedLocalFunctionMember && (outerLocalCollision || packageCollision) then
+                Error (GenericError $"Nested function name '{name}' is ambiguous with an existing function or value")
+            else
+                let availability =
+                    if outerLocalCollision || parameterShadowsSelf then OrdinaryBinding
+                    else SelfRecursiveMember
+                let valueLocals =
+                    match availability with
+                    | SelfRecursiveMember -> Set.add name localNames
+                    | OrdinaryBinding -> localNames
+                    | MutualRecursiveMember | CompletedGroupMember | ImportedGroupMember ->
+                        Crash.crash "Local recursive candidate received a non-local availability"
+                resolveExpr valueLocals value
+                |> Result.bind (fun value' ->
+                    resolveExpr (Set.add name localNames) body
+                    |> Result.map (fun body' ->
+                        let resolved = {
+                            Parsed = parsed
+                            Group = singletonRecursiveGroupId parsed.Member
+                            GroupIndex = 0
+                            Availability = availability
+                        }
+                        RecursiveLet (ResolvedRecursiveBinding resolved, value', body')))
         | Lambda (parameters, returnAnnotation, body) ->
             let resolveOptionalType = function
                 | None -> Ok None
@@ -6945,12 +7236,24 @@ let private resolveProgramNames
                 |> Result.bind (fun returnType' ->
                     let locals = parameters' |> List.map fst |> Set.ofList
                     resolveExpr locals funcDef.Body
-                    |> Result.map (fun body' -> FunctionDef { funcDef with Params = NonEmptyList.fromList parameters'; ReturnType = returnType'; Body = body' })))
+                    |> Result.map (fun body' ->
+                        let recursion' =
+                            match funcDef.Recursion with
+                            | Some (ParsedRecursiveBinding parsed) ->
+                                Some (ParsedRecursiveBinding { parsed with SourceName = funcDef.Name })
+                            | other -> other
+                        FunctionDef
+                            { funcDef with
+                                Params = NonEmptyList.fromList parameters'
+                                ReturnType = returnType'
+                                Body = body'
+                                Recursion = recursion' })))
         | TypeDef typeDef -> resolveTypeDef typeDef |> Result.map TypeDef
         | Expression expr -> resolveExpr Set.empty expr |> Result.map Expression
 
     let (Program topLevels) = program
-    ResultList.traverse resolveTopLevel topLevels |> Result.map Program
+    ResultList.traverse resolveTopLevel topLevels
+    |> Result.map (resolveRecursiveDeclarationGroups >> Program)
 
 let private typeDefName (typeDef: TypeDef) : string =
     match typeDef with
@@ -7034,6 +7337,52 @@ let private validateTopLevelTypeDeclarations
         |> List.map typeDefName
         |> List.countBy id
         |> List.tryPick (fun (name, count) -> if count > 1 then Some name else None)
+
+    let validateAliasCycles () : Result<unit, TypeError> =
+        let aliasNames =
+            typeDefs
+            |> List.choose (function TypeAlias (name, _, _) -> Some name | _ -> None)
+            |> Set.ofList
+        let rec referencedAliases typ =
+            let combine types =
+                types
+                |> List.map referencedAliases
+                |> List.fold Set.union Set.empty
+            match typ with
+            | TRecord (name, args) | TSum (name, args) ->
+                let nested = combine args
+                if Set.contains name aliasNames then Set.add name nested else nested
+            | TFunction (parameters, result) -> combine (result :: parameters)
+            | TTuple types | TEnumFields types -> combine types
+            | TList element -> referencedAliases element
+            | TDict (key, value) -> combine [key; value]
+            | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+            | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+            | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit
+            | TRuntimeError | TRawPtr -> Set.empty
+        let graph =
+            typeDefs
+            |> List.choose (function
+                | TypeAlias (name, _, target) -> Some (name, referencedAliases target)
+                | _ -> None)
+            |> Map.ofList
+        let rec visit name states =
+            match Map.tryFind name states with
+            | Some AliasValidated -> Ok states
+            | Some AliasVisiting ->
+                Error (GenericError $"Invalid recursive type alias cycle involving: {name}")
+            | None ->
+                let visiting = Map.add name AliasVisiting states
+                Map.find name graph
+                |> Set.toList
+                |> List.fold (fun result dependency ->
+                    result |> Result.bind (visit dependency)) (Ok visiting)
+                |> Result.map (Map.add name AliasValidated)
+        graph
+        |> Map.toList
+        |> List.map fst
+        |> List.fold (fun result name -> result |> Result.bind (visit name)) (Ok Map.empty)
+        |> Result.map (fun _ -> ())
 
     match duplicateTypeName with
     | Some name ->
@@ -7138,7 +7487,7 @@ let private validateTopLevelTypeDeclarations
                     |> Result.bind (fun () -> declarationResult)
                     |> Result.bind (fun () -> validate rest)
 
-        validate typeDefs
+        validateAliasCycles () |> Result.bind (fun () -> validate typeDefs)
 
 /// Build all declaration registries after validation and name resolution have
 /// established unique nominal type and constructor identities.
@@ -7269,17 +7618,11 @@ let private checkResolvedProgramInternal
     let canonicalVariantLookup =
         recordVariantLookup
         |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
-            let isCatalogBoundaryType =
-                typeName.StartsWith("Darklang.LanguageTools.ProgramTypes.")
-                || typeName.StartsWith("Darklang.LanguageTools.RuntimeTypes.")
             (typeName,
              typeParams,
              tag,
-             if isCatalogBoundaryType then
-                 payloadType
-                 |> Option.map (canonicalizeBareSumTypeRefs recordVariantLookup)
-             else
-                 payloadType))
+             payloadType
+             |> Option.map (canonicalizeBareSumTypeRefs recordVariantLookup)))
 
     let programAliasReg =
         declarationSummary.AliasReg
@@ -7386,6 +7729,42 @@ let private checkResolvedProgramInternal
                     None)
             |> Map.ofList
 
+        let recursiveGroupsByMember =
+            topLevels'
+            |> List.choose (function
+                | FunctionDef funcDef ->
+                    match funcDef.Recursion with
+                    | Some (TypedRecursiveBinding typed) ->
+                        Some (funcDef.Name, typed.Resolved.Group)
+                    | Some (ResolvedRecursiveBinding resolved) ->
+                        Some (funcDef.Name, resolved.Group)
+                    | _ -> None
+                | _ -> None)
+            |> Map.ofList
+
+        let validateMonomorphicRecursiveReferences () =
+            topLevels'
+            |> List.choose (function FunctionDef funcDef -> Some funcDef | _ -> None)
+            |> List.fold (fun result funcDef ->
+                result
+                |> Result.bind (fun () ->
+                    match Map.tryFind funcDef.Name recursiveGroupsByMember with
+                    | None -> Ok ()
+                    | Some currentGroup ->
+                        collectTypeAppSpecs funcDef.Body
+                        |> Set.toList
+                        |> List.tryPick (fun (targetName, typeArgs) ->
+                            match Map.tryFind targetName recursiveGroupsByMember,
+                                  Map.tryFind targetName localGenericFuncDefs with
+                            | Some targetGroup, Some targetDef when targetGroup = currentGroup ->
+                                let groupAssumption = targetDef.TypeParams |> List.map TVar
+                                if typeArgs = groupAssumption then None
+                                else Some targetName
+                            | _ -> None)
+                        |> function
+                            | Some targetName -> Error (PolymorphicRecursion targetName)
+                            | None -> Ok ())) (Ok ())
+
         let localExplicitSpecs =
             topLevels'
             |> List.map (function
@@ -7425,7 +7804,8 @@ let private checkResolvedProgramInternal
                     acc |> Result.bind (fun () -> validateLocalSpecialization spec))
                 (Ok ())
 
-        validateAllSpecializations localExplicitSpecs
+        validateMonomorphicRecursiveReferences ()
+        |> Result.bind (fun () -> validateAllSpecializations localExplicitSpecs)
         |> Result.bind (fun () ->
             let topLevelsWithEqHelpers =
                 materializeEqHelpersInTopLevels mergedAliasReg typeReg variantLookup topLevels'

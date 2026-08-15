@@ -1,0 +1,70 @@
+// Recursive binding parity corpus.
+//
+// Same-source classification is recorded in docs/recursion-parity.md for
+// compiler b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899 and interpreter
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+// Canonical top-level self recursion and two-/three-member dependency groups.
+let parityFactorial(n: Int64) : Int64 = if n <= 1L then 1L else n * parityFactorial(n - 1L)
+
+let parityEven(n: Int64) : Bool = if n == 0L then true else parityOdd(n - 1L)
+let parityOdd(n: Int64) : Bool = if n == 0L then false else parityEven(n - 1L)
+
+let parityFirst(n: Int64) : Int64 = if n == 0L then 1L else paritySecond(n - 1L)
+let paritySecond(n: Int64) : Int64 = if n == 0L then 2L else parityThird(n - 1L)
+let parityThird(n: Int64) : Int64 = if n == 0L then 3L else parityFirst(n - 1L)
+
+parityFactorial 5L = 120L
+parityEven 8L = true
+parityFirst 3L = 1L
+
+// Named local function sugar is self-recursive and retains annotations.
+((let localFactorial (n: Int64) : Int64 =
+   if n <= 1L then 1L else n * (localFactorial (n - 1L))
+ localFactorial 5L)) = 120L
+
+// A directly lambda-bound value is self-recursive when the new binder is the
+// occurrence resolved in the lambda body.
+((let localCountdown = fun n -> if n <= 0L then 0L else localCountdown (n - 1L)
+ localCountdown 100L)) = 0L
+
+// Ordinary RHS evaluation remains nonrecursive and sees an outer binding.
+((let f = 1L
+ let f = (fun x -> f + x)
+ f 5L)) = 6L
+
+// A parameter with the binding's name wins over singleton self availability.
+((let x = (fun x -> x * 2L)
+ x 3L)) = 6L
+
+// Earlier local functions are normal captures; later locals are unavailable.
+((let double (x: Int64) : Int64 = x * 2L
+ let quadruple (x: Int64) : Int64 = double (double x)
+ quadruple 3L)) = 12L
+
+((let forwardEven (n: Int64) : Bool =
+   if n == 0L then true else forwardOdd (n - 1L) in
+ let forwardOdd (n: Int64) : Bool =
+   if n == 0L then false else forwardEven (n - 1L) in
+ forwardEven 4L)) = error="Unresolved callable name: forwardOdd"
+
+// A source package function with the same visible name makes nested self
+// selection ambiguous instead of choosing by spelling.
+let collidingSumDown(x: Int64) : Int64 = x + 100L
+
+((let collidingSumDown (n: Int64) : Int64 =
+   if n <= 0L then 0L else n + (collidingSumDown (n - 1L)) in
+ collidingSumDown 3L)) = error="Nested function name 'collidingSumDown' is ambiguous"
+
+// A completed top-level group may be referenced from a later independent group.
+let completedDouble(x: Int64) : Int64 = x * 2L
+let laterQuadruple(x: Int64) : Int64 = (completedDouble x) * 2L
+
+laterQuadruple 3L = 12L
+
+// Qualified imported references remain outside source recursion groups.
+Stdlib.Int64.add 4L 1L = 5L
+
+// Ordinary values do not acquire recursive scope. Value-annotation rejection
+// is parser-only and lives in syntax/recursion.syntax.
+((let eagerCycle = eagerCycle in eagerCycle)) = error="Unresolved value name: eagerCycle"

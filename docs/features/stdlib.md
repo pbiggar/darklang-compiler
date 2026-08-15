@@ -245,11 +245,11 @@ These generate syscall sequences (open, read/write, close).
 ## Stdlib.Cli
 
 ```dark
-def Stdlib.Cli.execute(command: String) : Stdlib.Cli.ExecutionOutcome
-def Stdlib.Cli.Process.run(program: String, args: List<String>) : Result<Output, Posix.Error>
-def Stdlib.Cli.OS.getOS() : Result<OS, String>
-def Stdlib.Cli.Stdin.readKey() : KeyRead
-def Stdlib.Cli.Posix.sleep(delayMs: Float) : Unit
+let Stdlib.Cli.execute(command: String) : Stdlib.Cli.ExecutionOutcome
+let Stdlib.Cli.Process.run(program: String, args: List<String>) : Result<Output, Posix.Error>
+let Stdlib.Cli.OS.getOS() : Result<OS, String>
+let Stdlib.Cli.Stdin.readKey() : KeyRead
+let Stdlib.Cli.Posix.sleep(delayMs: Float) : Unit
 ```
 
 Portable helpers are Dark source; typed CLI operations lower through

@@ -522,10 +522,42 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
                 | _ -> None)
         if annotatedParameters |> List.forall Option.isSome then
             let paramsText = annotatedParameters |> List.choose id |> String.concat " "
-            $"let {formatIdentifierSegment name} {paramsText} : {formatType returnType} = {formatExpr syntax functionBody}\n{formatExpr syntax body}"
+            $"let {formatIdentifierSegment name} {paramsText} : {formatType returnType} = {formatExpr syntax functionBody} in {formatExpr syntax body}"
         else
             let lambda = Lambda (parameters, Some returnType, functionBody)
             $"let {formatLetPattern (LPVariable name)} = {formatExpr syntax lambda} in {formatExpr syntax body}"
+    | RecursiveLet (recursion, Lambda (parameters, Some returnType, functionBody), body)
+        when recursiveBindingKind recursion = NamedLocalFunctionMember ->
+        let annotatedParameters =
+            parameters
+            |> NonEmptyList.toList
+            |> List.map (fun parameter ->
+                match parameter.Pattern, parameter.SourceAnnotation with
+                | LPVariable parameterName, Some parameterType ->
+                    Some $"({formatIdentifierSegment parameterName}: {formatType parameterType})"
+                | _ -> None)
+        let name = recursiveBindingName recursion
+        if annotatedParameters |> List.forall Option.isSome then
+            match syntax with
+            | InterpreterSyntax ->
+                let paramsText = annotatedParameters |> List.choose id |> String.concat " "
+                $"(let {formatIdentifierSegment name} {paramsText} : {formatType returnType} = {formatExpr syntax functionBody} in {formatExpr syntax body})"
+            | CompilerSyntax ->
+                let paramsText =
+                    parameters
+                    |> NonEmptyList.toList
+                    |> List.choose (fun parameter ->
+                        match parameter.Pattern, parameter.SourceAnnotation with
+                        | LPVariable parameterName, Some parameterType ->
+                            Some $"{formatIdentifierSegment parameterName}: {formatType parameterType}"
+                        | _ -> None)
+                    |> String.concat ", "
+                $"(let {formatIdentifierSegment name}({paramsText}) : {formatType returnType} = {formatExpr syntax functionBody} in {formatExpr syntax body})"
+        else
+            let lambda = Lambda (parameters, Some returnType, functionBody)
+            $"let {formatIdentifierSegment name} = {formatExpr syntax lambda} in {formatExpr syntax body}"
+    | RecursiveLet (recursion, value, body) ->
+        $"let {formatIdentifierSegment (recursiveBindingName recursion)} = {formatExpr syntax value} in {formatExpr syntax body}"
     | Let (pattern, value, body) ->
         $"let {formatLetPattern pattern} = {formatExpr syntax value} in {formatExpr syntax body}"
     | Var name -> formatIdentifierPath name

@@ -335,6 +335,99 @@ let validateDeclarationProgram (program: SourceProgram) : Result<SourceProgram, 
     match sourceUnits program |> List.collect entryCandidatesInUnit with
     | [] -> Ok program
     | entries -> Error $"Declaration-only program must not contain entry expressions; found {entries.Length}"
+/// Assign stable structural identities after parsing, while declaration and
+/// lexical boundaries are still explicit. Later passes may change group IDs,
+/// but never recreate binding/member identity from a spelling.
+let private assignParsedRecursiveIdentities (Program topLevels) : Program =
+    let parsedMember boundary path (candidate: RecursiveCandidate) : RecursiveBindingInfo =
+        ParsedRecursiveBinding {
+            Binding = bindingId path
+            Boundary = scopeBoundaryId boundary
+            Member = recursiveMemberId path
+            SourceName = candidate.SourceName
+            Kind = candidate.Kind
+        }
+
+    let rec assignExpr boundary path expr =
+        let child index value = assignExpr boundary (path @ [index]) value
+        let mapArgs start args =
+            args
+            |> NonEmptyList.toList
+            |> List.mapi (fun index value -> child (start + index) value)
+            |> NonEmptyList.fromList
+        match expr with
+        | RecursiveLet (RecursiveBindingCandidate candidate, value, body) ->
+            let nestedBoundary = path
+            RecursiveLet (
+                parsedMember boundary path candidate,
+                assignExpr nestedBoundary (path @ [0]) value,
+                assignExpr nestedBoundary (path @ [1]) body
+            )
+        | RecursiveLet (recursion, value, body) ->
+            RecursiveLet (recursion, child 0 value, child 1 body)
+        | Let (pattern, value, body) -> Let (pattern, child 0 value, child 1 body)
+        | BoundaryRender (renderer, value) -> BoundaryRender (renderer, child 0 value)
+        | BinOp (op, left, right) -> BinOp (op, child 0 left, child 1 right)
+        | UnaryOp (op, value) -> UnaryOp (op, child 0 value)
+        | If (condition, thenBranch, elseBranch) ->
+            If (child 0 condition, child 1 thenBranch, child 2 elseBranch)
+        | Sequence (first, next) -> Sequence (child 0 first, child 1 next)
+        | Call (name, args) -> Call (name, mapArgs 0 args)
+        | TypeApp (name, types, args) -> TypeApp (name, types, mapArgs 0 args)
+        | TupleLiteral values -> TupleLiteral (values |> List.mapi child)
+        | TupleAccess (tuple, index) -> TupleAccess (child 0 tuple, index)
+        | DictLiteral (typ, entries) ->
+            DictLiteral (typ, entries |> List.mapi (fun index (key, value) -> (key, child index value)))
+        | RecordLiteral (name, fields) ->
+            RecordLiteral (name, fields |> List.mapi (fun index (field, value) -> (field, child index value)))
+        | RecordUpdate (record, fields) ->
+            RecordUpdate (child 0 record, fields |> List.mapi (fun index (field, value) -> (field, child (index + 1) value)))
+        | RecordAccess (record, field) -> RecordAccess (child 0 record, field)
+        | Constructor (reference, name, payload) -> Constructor (reference, name, payload |> Option.map (child 0))
+        | Match (scrutinee, cases) ->
+            Match (
+                child 0 scrutinee,
+                cases
+                |> List.mapi (fun caseIndex case ->
+                    let casePath = path @ [caseIndex + 1]
+                    { case with
+                        Guard = case.Guard |> Option.map (assignExpr casePath (casePath @ [0]))
+                        Body = assignExpr casePath (casePath @ [1]) case.Body })
+            )
+        | ListLiteral values -> ListLiteral (values |> List.mapi child)
+        | Lambda (parameters, returnAnnotation, body) ->
+            let lambdaBoundary = path
+            Lambda (parameters, returnAnnotation, assignExpr lambdaBoundary (path @ [0]) body)
+        | Apply (func, args) -> Apply (child 0 func, mapArgs 1 args)
+        | IndirectApply (func, args) -> IndirectApply (child 0 func, mapArgs 1 args)
+        | Closure (name, captures) -> Closure (name, captures |> List.mapi child)
+        | InterpolatedString parts ->
+            InterpolatedString (
+                parts
+                |> List.mapi (fun index part ->
+                    match part with
+                    | StringText _ -> part
+                    | StringExpr value -> StringExpr (child index value))
+            )
+        | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
+        | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
+        | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+        | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
+        | Var _ | FuncRef _ | RuntimeError _ -> expr
+
+    let assignTopLevel index topLevel =
+        let path = [index]
+        match topLevel with
+        | FunctionDef funcDef ->
+            let recursion =
+                match funcDef.Recursion with
+                | Some (RecursiveBindingCandidate candidate) -> Some (parsedMember [] path candidate)
+                | other -> other
+            FunctionDef { funcDef with Body = assignExpr path (path @ [0]) funcDef.Body; Recursion = recursion }
+        | Expression expr -> Expression (assignExpr path (path @ [0]) expr)
+        | TypeDef _ -> topLevel
+
+    Program (topLevels |> List.mapi assignTopLevel)
 
 let normalizeSource (source: ParsedSource) : Result<Program, string> =
     let nameAtPrefix prefix identifier =
@@ -375,4 +468,4 @@ let normalizeSource (source: ParsedSource) : Result<Program, string> =
                 | SourceValue _ :: _ ->
                     Error "Top-level value declarations are parsed but native execution is not supported"
             declarations |> NonEmptyList.toList |> declarationsToProgram []
-    normalize None source
+    normalize None source |> Result.map assignParsedRecursiveIdentities

@@ -70,6 +70,7 @@ let private convertTypedProgram (typedAst: AST.Program) : Result<AST_to_ANF.Conv
                 |> Result.map (fun (anfExpr, _) ->
                     {
                         Program = ANF.Program (anfFuncs, anfExpr)
+                        RecursiveMembers = registries.RecursiveMembers
                         TypeReg = registries.TypeReg
                         VariantLookup = registries.VariantLookup
                         FuncReg = registries.FuncReg

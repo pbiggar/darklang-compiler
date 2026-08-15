@@ -1,5 +1,8 @@
 # Binding parity
 
+Recursive binding scope and declaration groups are covered by the focused
+[recursion parity matrix](recursion-parity.md).
+
 This comparison was revalidated against compiler revision
 `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and
 `darklang/dark` interpreter revision

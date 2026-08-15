@@ -1,5 +1,8 @@
 # Architecture
 
+Recursive declaration identity, grouping, and interpreter parity are specified
+in [recursion-parity.md](recursion-parity.md).
+
 Name resolution is a semantic boundary between parsing and ordinary type
 checking. See [Name resolution parity](name-resolution.md) for the identity
 model, context precedence, diagnostics, and pinned interpreter evidence.

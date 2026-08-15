@@ -1206,6 +1206,11 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                                                 Params = NonEmptyList.fromList allParameters
                                                 ReturnType = returnType
                                                 Body = body
+                                                Recursion =
+                                                    Some (RecursiveBindingCandidate {
+                                                        SourceName = name
+                                                        Kind = TopLevelFunctionMember
+                                                    })
                                             }
                                             (funcDef, remaining''))
                                     | _ -> Error "Expected '=' after function return type")
@@ -1242,6 +1247,11 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                                         Params = NonEmptyList.fromList allParameters
                                         ReturnType = returnType
                                         Body = body
+                                        Recursion =
+                                            Some (RecursiveBindingCandidate {
+                                                SourceName = name
+                                                Kind = TopLevelFunctionMember
+                                            })
                                     }
                                     (funcDef, remaining''))
                             | _ -> Error "Expected '=' after function return type")
@@ -1520,8 +1530,34 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             else
                 Ok (List.rev acc, toks)
 
+    and parseNestedFunctionLet (functionTokens: Token list) : Result<Expr * Token list, string> =
+        parseFunctionDef functionTokens parseExpr
+        |> Result.bind (fun (funcDef, remaining) ->
+            match remaining with
+            | TIn :: bodyTokens ->
+                parseExpr bodyTokens
+                |> Result.map (fun (body, remainingAfterBody) ->
+                    let parameters =
+                        funcDef.Params
+                        |> NonEmptyList.map (fun (name, typ) -> typedLambdaVariable name typ)
+                    let recursion =
+                        RecursiveBindingCandidate {
+                            SourceName = funcDef.Name
+                            Kind = NamedLocalFunctionMember
+                        }
+                    (RecursiveLet (
+                        recursion,
+                        Lambda (parameters, Some funcDef.ReturnType, funcDef.Body),
+                        body
+                     ), remainingAfterBody))
+            | _ -> Error "Named local function declaration requires 'in'")
+
     and parseExpr (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
+        | TLet :: TIdent firstName :: TLParen :: rest ->
+            parseNestedFunctionLet (TFunctionDeclaration :: TIdent firstName :: TLParen :: rest)
+        | TLet :: TIdent firstName :: TLt :: rest ->
+            parseNestedFunctionLet (TFunctionDeclaration :: TIdent firstName :: TLt :: rest)
         | TLet :: rest ->
             // Parse: let pattern = value in body
             // Supports simple let (let x = ...) and pattern matching (let (a, b) = ...)
@@ -1534,10 +1570,36 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                         match remaining' with
                         | TIn :: rest'' ->
                             parseExpr rest''
-                            |> Result.map (fun (body, remaining'') -> (Let (pattern, value, body), remaining''))
+                            |> Result.map (fun (body, remaining'') ->
+                                let expression =
+                                    match pattern, value with
+                                    | LPVariable name, Lambda _ ->
+                                        RecursiveLet (
+                                            RecursiveBindingCandidate {
+                                                SourceName = name
+                                                Kind = DirectLambdaValueMember
+                                            },
+                                            value,
+                                            body
+                                        )
+                                    | _ -> Let (pattern, value, body)
+                                (expression, remaining''))
                         | _ ->
                             parseExpr remaining'
-                            |> Result.map (fun (body, remaining'') -> (Let (pattern, value, body), remaining'')))
+                            |> Result.map (fun (body, remaining'') ->
+                                let expression =
+                                    match pattern, value with
+                                    | LPVariable name, Lambda _ ->
+                                        RecursiveLet (
+                                            RecursiveBindingCandidate {
+                                                SourceName = name
+                                                Kind = DirectLambdaValueMember
+                                            },
+                                            value,
+                                            body
+                                        )
+                                    | _ -> Let (pattern, value, body)
+                                (expression, remaining'')))
                 | _ -> Error "Expected '=' after let binding pattern")
         | TIf :: rest ->
             // Parse: if cond then thenBranch [elif cond then branch ...] [else elseBranch]
@@ -2406,6 +2468,10 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         |> Result.bind (fun names ->
             names
             |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
+        |> Result.bind (fun () -> validateExpr value)
+        |> Result.bind (fun () -> validateExpr body)
+    | RecursiveLet (recursion, value, body) ->
+        validateNoInternalIdentifier (recursiveBindingName recursion)
         |> Result.bind (fun () -> validateExpr value)
         |> Result.bind (fun () -> validateExpr body)
     | Var name -> validateNoInternalIdentifier name

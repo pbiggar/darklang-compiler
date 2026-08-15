@@ -121,6 +121,7 @@ let rec private ensureRenderer
             Params = NonEmptyList.singleton ("__value", typ)
             ReturnType = TString
             Body = StringLiteral ""
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let (body, withDependencies) = renderBody env typ (Var "__value") reserved
@@ -165,6 +166,7 @@ and private ensureListItemsRenderer
             Params = NonEmptyList.singleton ("__items", listType)
             ReturnType = TString
             Body = StringLiteral ""
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let (renderedHead, withElemRenderer) = renderCall env elemType (Var "__head") reserved
@@ -202,6 +204,7 @@ and private ensureDictItemsRenderer
             Params = NonEmptyList.singleton ("__entries", listType)
             ReturnType = TString
             Body = StringLiteral ""
+            Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let entryValue = TupleAccess (Var "__entry", 1)

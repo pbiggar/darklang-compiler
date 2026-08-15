@@ -1,5 +1,8 @@
 # Tail Call Optimization (TCO)
 
+Completion-sensitive interpreter parity and identity-safe recursive ownership
+are recorded in [recursion-parity.md](../recursion-parity.md).
+
 This document explains how the Dark compiler handles tail call optimization.
 
 ## Overview

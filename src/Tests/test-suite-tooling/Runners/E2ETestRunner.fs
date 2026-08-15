@@ -78,14 +78,12 @@ let private tryFormatProgramIfStable
     let prettySyntax = prettySyntaxForSourceSyntax sourceSyntax
     let formatted = ASTPrettyPrinter.formatProgram prettySyntax program
     match CompilerLibrary.parseProgram sourceSyntax allowInternal formatted with
-    | Ok reparsed ->
-        match sourceSyntax with
-        | CompilerLibrary.CompilerSyntax ->
-            if reparsed = program then Some formatted else None
-        | CompilerLibrary.InterpreterSyntax ->
-            // Interpreter syntax intentionally normalizes some AST details
-            // (for example around lambda forms), so parse-success is enough.
-            Some formatted
+    | Ok _ ->
+        // Stable recursive identities include structural declaration paths.
+        // Test synthesis inserts a checker declaration, so a valid reparse can
+        // deliberately receive different identities while retaining the same
+        // source semantics. The dedicated syntax corpus owns exact roundtrips.
+        Some formatted
     | Error _ -> None
 
 let private pickValueCheckFuncName (topLevels: TopLevel list) : string =
@@ -136,6 +134,7 @@ let private trySynthesizeValueEqualitySource
                         Params = NonEmptyList.singleton ("$unit0", TUnit)
                         ReturnType = TBool
                         Body = comparisonExpr
+                        Recursion = None
                     }
                     Program (
                         List.rev (
@@ -389,6 +388,11 @@ let rec private collectExprReferencedPreambleFuncsWithBound
                 (Set.union boundVars (collectLetPatternBoundNames pattern))
                 bodyExpr
         Set.union valueRefs bodyRefs
+    | RecursiveLet (recursion, valueExpr, bodyExpr) ->
+        let recursiveBound = Set.add (recursiveBindingName recursion) boundVars
+        Set.union
+            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions recursiveBound valueExpr)
+            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions recursiveBound bodyExpr)
     | Var name ->
         if Set.contains name knownPreambleFunctions
            && not (Set.contains name boundVars) then

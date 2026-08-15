@@ -196,6 +196,7 @@ let isCallExpr (cexpr: CExpr) : bool =
 /// is in tail position (its result is directly returned).
 let rec detectTailCalls
     (currentFuncName: string)
+    (isCurrentMember: string -> bool)
     (typedParams: TypedParam list)
     (ownedParams: Set<TempId>)
     (releasedTemps: Set<TempId>)
@@ -218,7 +219,7 @@ let rec detectTailCalls
             let (movableDecs, remainingBody) = collectMovableDecPrefix aliasRoots tailArgTemps body
             let transferredBody =
                 match tailCall with
-                | TailCall (targetFunc, _) when targetFunc = currentFuncName ->
+                | TailCall (targetFunc, _) when isCurrentMember targetFunc ->
                     tryTransferOwnedSelfTailArgument
                         aliasRoots
                         ownedParams
@@ -240,7 +241,7 @@ let rec detectTailCalls
                 let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
                 let body' =
                     detectTailCalls
-                        currentFuncName typedParams ownedParams releasedTemps inTailPosition aliasRoots' body
+                        currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots' body
                 Let (tempId, cexpr, body')
         else
             // Not a tail call - recurse into body
@@ -256,19 +257,22 @@ let rec detectTailCalls
                     releasedTemps
             let body' =
                 detectTailCalls
-                    currentFuncName typedParams ownedParams releasedTemps' inTailPosition aliasRoots' body
+                    currentFuncName isCurrentMember typedParams ownedParams releasedTemps' inTailPosition aliasRoots' body
             Let (tempId, cexpr, body')
 
     | If (cond, thenBranch, elseBranch) ->
         // If expression: both branches are in tail position if If is
         let thenBranch' =
-            detectTailCalls currentFuncName typedParams ownedParams releasedTemps inTailPosition aliasRoots thenBranch
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots thenBranch
         let elseBranch' =
-            detectTailCalls currentFuncName typedParams ownedParams releasedTemps inTailPosition aliasRoots elseBranch
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots elseBranch
         If (cond, thenBranch', elseBranch')
 
 /// Detect tail calls in a function
-let detectTailCallsInFunction (func: Function) : Function =
+let private detectTailCallsInFunctionWithRegistry
+    (recursiveMembers: Map<string, AST.LoweredRecursiveMember>)
+    (func: Function)
+    : Function =
     // The process entrypoint has no caller return address. A sibling tail branch
     // from _start would make the callee's Ret jump through an invalid address.
     if func.Name = "_start" then
@@ -277,8 +281,19 @@ let detectTailCallsInFunction (func: Function) : Function =
         // Function body is always in tail position
         let paramIds = func.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
         let ownedParams = leadingRetainedParams paramIds func.Body
-        let body' = detectTailCalls func.Name func.TypedParams ownedParams Set.empty true Map.empty func.Body
+        let isCurrentMember targetName =
+            match Map.tryFind func.Name recursiveMembers, Map.tryFind targetName recursiveMembers with
+            | Some currentMember, Some targetMember ->
+                currentMember.Typed.Resolved.Parsed.Binding = targetMember.Typed.Resolved.Parsed.Binding
+            | None, None -> targetName = func.Name
+            | _ -> false
+        let body' =
+            detectTailCalls
+                func.Name isCurrentMember func.TypedParams ownedParams Set.empty true Map.empty func.Body
         { func with Body = body' }
+
+let detectTailCallsInFunction (func: Function) : Function =
+    detectTailCallsInFunctionWithRegistry Map.empty func
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
@@ -286,3 +301,13 @@ let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
     // (DeadCodeElimination.fs was not recognizing TailCall as a function call)
     let (ANF.Program (functions, main)) = program
     ANF.Program (functions |> List.map detectTailCallsInFunction, main)
+
+let detectTailCallsInProgramWithRecursion
+    (recursiveMembers: Map<string, AST.LoweredRecursiveMember>)
+    (program: ANF.Program)
+    : ANF.Program =
+    let (ANF.Program (functions, main)) = program
+    ANF.Program (
+        functions |> List.map (detectTailCallsInFunctionWithRegistry recursiveMembers),
+        main
+    )

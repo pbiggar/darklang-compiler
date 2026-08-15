@@ -15,7 +15,8 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
           TypeParams = ["t"]
           Params = NonEmptyList.singleton ("x", TVar "t")
           ReturnType = TVar "t"
-          Body = Var "x" }
+          Body = Var "x"
+          Recursion = None }
 
     let program =
         Program [
@@ -58,7 +59,8 @@ let testSpecializeFromSpecs () : TestResult =
           TypeParams = ["t"]
           Params = NonEmptyList.singleton ("x", TVar "t")
           ReturnType = TVar "t"
-          Body = Var "x" }
+          Body = Var "x"
+          Recursion = None }
 
     let genericDefs : GenericFuncDefs = Map.ofList [ ("id", funcDef) ]
     let initialSpecs : Set<SpecKey> = Set.ofList [ ("id", [TInt64]) ]

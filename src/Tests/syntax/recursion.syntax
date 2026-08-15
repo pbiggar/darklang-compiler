@@ -1,0 +1,47 @@
+// Recursive declaration candidates must survive both public parser paths.
+
+---NAME---
+compiler canonical self recursion
+---PARSE-AS---
+compiler
+---SOURCE---
+let factorial(n: Int64) : Int64 = if n <= 1 then 1 else n * factorial(n - 1)
+factorial(5)
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+interpreter canonical self recursion
+---PARSE-AS---
+interpreter
+---SOURCE---
+let factorial (n: Int64) : Int64 = if n <= 1L then 1L else n * factorial (n - 1L)
+factorial 5L
+---ROUNDTRIP-AS---
+interpreter
+
+---NAME---
+interpreter named local recursive candidate retains annotations
+---PARSE-AS---
+interpreter
+---SOURCE---
+(let factorial (n: Int64) : Int64 = if n <= 1L then 1L else n * factorial (n - 1L)
+ factorial 5L)
+
+---NAME---
+direct lambda binding recursive candidate
+---PARSE-AS---
+interpreter
+---SOURCE---
+let countdown = fun n -> if n <= 0L then 0L else countdown (n - 1L) in countdown 5L
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+ordinary value annotation is not a recursive declaration
+---PARSE-AS---
+interpreter
+---SOURCE---
+let value : Int64 = 1L in value
+---EXPECT-ERROR---
+Expected '=' after let binding pattern

@@ -1,0 +1,19 @@
+// Recursive declaration groups remain monomorphic while active.
+let polyRecurse<'a>(x: a) : Int64 = polyRecurse<List<a>>([x]) polyRecurse<Int64>(1) = error="Polymorphic recursion is not supported inside recursive group member: polyRecurse"
+
+// A completed generic group can be instantiated independently at many types.
+let completedIdentity<'a>(x: a) : a = x
+
+(completedIdentity<Int64>(1) == 1) && (completedIdentity<String>("ok") == "ok") = true
+
+// Alias-only cycles reject, while nominal recursive ADTs are valid.
+type RecursiveAliasA<'a> = RecursiveAliasB<a> type RecursiveAliasB<'a> = RecursiveAliasA<a> 0 = error="Invalid recursive type alias cycle involving"
+
+type RecursiveTree = RecursiveLeaf of Int64 | RecursiveBranch of RecursiveTree
+
+match RecursiveBranch(RecursiveLeaf(1)) with | RecursiveBranch(inner) -> 1 | _ -> 0 = 1
+
+// Native tail recursion must complete beyond the interpreter's stack depth.
+let recursionParityTail(n: Int64, acc: Int64) : Int64 = if n <= 0 then acc else recursionParityTail(n - 1, acc + 1)
+
+recursionParityTail(1000000, 0) = 1000000

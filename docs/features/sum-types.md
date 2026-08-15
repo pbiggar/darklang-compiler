@@ -58,7 +58,7 @@ OneTuple.OneTuple((1L, "one"))
 
 Both parser modes reject the removed compiler declaration dialect: omitted
 leading bars, qualified declaration names, bare declaration type parameters,
-and `def` declarations. Public declarations use the interpreter spellings
+and legacy function declarations. Public declarations use the interpreter spellings
 shown above.
 
 ## Declaration and resolution model

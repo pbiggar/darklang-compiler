@@ -1123,6 +1123,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.UnaryOp (op, applySubstToExpr subst inner)
     | AST.Let (pattern, value, body) ->
         AST.Let (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
+    | AST.RecursiveLet (recursion, value, body) ->
+        AST.RecursiveLet (recursion, applySubstToExpr subst value, applySubstToExpr subst body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (applySubstToExpr subst cond, applySubstToExpr subst thenBranch, applySubstToExpr subst elseBranch)
     | AST.Sequence (first, next) ->
@@ -1244,7 +1246,8 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
       TypeParams = []  // Specialized function has no type parameters
       Params = specializedParams
       ReturnType = specializedReturnType
-      Body = specializedBody }
+      Body = specializedBody
+      Recursion = funcDef.Recursion }
 
 /// Collect all TypeApp call sites from an expression
 let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
@@ -1259,6 +1262,8 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     | AST.UnaryOp (_, inner) ->
         collectTypeApps inner
     | AST.Let (_, value, body) ->
+        Set.union (collectTypeApps value) (collectTypeApps body)
+    | AST.RecursiveLet (_, value, body) ->
         Set.union (collectTypeApps value) (collectTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         Set.union (collectTypeApps cond) (Set.union (collectTypeApps thenBranch) (collectTypeApps elseBranch))
@@ -1349,6 +1354,7 @@ let rec collectCalledFunctions (expr: AST.Expr) : Set<string> =
     | AST.BinOp (_, left, right)
     | AST.Sequence (left, right) -> combine [left; right]
     | AST.Let (_, value, body) -> combine [value; body]
+    | AST.RecursiveLet (_, value, body) -> combine [value; body]
     | AST.If (condition, thenBranch, elseBranch) ->
         combine [condition; thenBranch; elseBranch]
     | AST.Call (name, args)
@@ -1433,6 +1439,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.UnaryOp (op, replaceTypeApps inner)
     | AST.Let (pattern, value, body) ->
         AST.Let (pattern, replaceTypeApps value, replaceTypeApps body)
+    | AST.RecursiveLet (recursion, value, body) ->
+        AST.RecursiveLet (recursion, replaceTypeApps value, replaceTypeApps body)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (replaceTypeApps cond, replaceTypeApps thenBranch, replaceTypeApps elseBranch)
     | AST.Sequence (first, next) ->
@@ -1590,6 +1598,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
             replace value
             |> Result.bind (fun value' ->
                 replace body |> Result.map (fun body' -> AST.Let (pattern, value', body')))
+        | AST.RecursiveLet (recursion, value, body) ->
+            replace value
+            |> Result.bind (fun value' ->
+                replace body |> Result.map (fun body' -> AST.RecursiveLet (recursion, value', body')))
         | AST.If (cond, thenBranch, elseBranch) ->
             replace cond
             |> Result.bind (fun cond' ->
@@ -1813,6 +1825,10 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: AST.Progr
             || exprNeedsLambdaLowering
                 (Set.union bound (AST.letPatternBindings pattern |> Set.ofList))
                 body
+        | AST.RecursiveLet (recursion, value, body) ->
+            let recursiveBound = Set.add (AST.recursiveBindingName recursion) bound
+            exprNeedsLambdaLowering recursiveBound value
+            || exprNeedsLambdaLowering recursiveBound body
         | AST.If (cond, thenBranch, elseBranch) ->
             exprNeedsLambdaLowering bound cond
             || exprNeedsLambdaLowering bound thenBranch
@@ -1897,6 +1913,9 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
         varOccursInExpr name value
         || (not (AST.letPatternBindings pattern |> List.contains name)
             && varOccursInExpr name body)
+    | AST.RecursiveLet (recursion, value, body) ->
+        if AST.recursiveBindingName recursion = name then false
+        else varOccursInExpr name value || varOccursInExpr name body
     | AST.If (cond, thenBranch, elseBranch) ->
         varOccursInExpr name cond || varOccursInExpr name thenBranch || varOccursInExpr name elseBranch
     | AST.Sequence (first, next) ->
@@ -1969,6 +1988,9 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
             | _ -> childEnv
         let body' = inlineLambdas body lambdaEnv'
         AST.Let (pattern, value', body')
+    | AST.RecursiveLet (recursion, value, body) ->
+        let childEnv = Map.remove (AST.recursiveBindingName recursion) lambdaEnv
+        AST.RecursiveLet (recursion, inlineLambdas value childEnv, inlineLambdas body childEnv)
     | AST.If (cond, thenBranch, elseBranch) ->
         AST.If (inlineLambdas cond lambdaEnv, inlineLambdas thenBranch lambdaEnv, inlineLambdas elseBranch lambdaEnv)
     | AST.Sequence (first, next) ->
@@ -2108,6 +2130,7 @@ type LiftState = {
     GenericFuncDefs: Map<string, string list * AST.Type>  // Function name -> (TypeParams, ReturnType) for TypeApp substitution
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
+    RecursiveSelf: (AST.BindingId * AST.Type * AST.TypedRecursiveMember) option
 }
 
 let private liftedNameExists (state: LiftState) (name: string) : bool =
@@ -2220,6 +2243,9 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         let bodyVars =
             freeVars body (Set.union bound (AST.letPatternBindings pattern |> Set.ofList))
         Set.union valueVars bodyVars
+    | AST.RecursiveLet (recursion, value, body) ->
+        let recursiveBound = Set.add (AST.recursiveBindingName recursion) bound
+        Set.union (freeVars value recursiveBound) (freeVars body recursiveBound)
     | AST.If (cond, thenBr, elseBr) ->
         Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
     | AST.Sequence (first, next) ->
@@ -2419,6 +2445,16 @@ let rec simpleInferType
                 letPatternBindingTypes pattern typ
                 |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) typeEnv
             | None -> typeEnv
+        simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
+    | AST.RecursiveLet (recursion, value, body) ->
+        let valueType =
+            match recursion with
+            | AST.TypedRecursiveBinding typed -> Some typed.MonomorphicType
+            | _ -> simpleInferType value typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
+        let typeEnv' =
+            valueType
+            |> Option.map (fun typ -> Map.add (AST.recursiveBindingName recursion) typ typeEnv)
+            |> Option.defaultValue typeEnv
         simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
     | AST.TupleLiteral elements ->
         // Recursively infer types of tuple elements
@@ -2756,6 +2792,7 @@ let private planLambdaComparison
         let parameterSet = parameterNames |> Set.ofList
         let captures =
             freeVars body parameterSet
+            |> Set.filter (fun name -> not (Option.isSome state.RecursiveSelf && name = "__closure"))
             |> Set.filter (fun name -> Map.containsKey name state.TypeEnv)
             |> Set.toList
         let rec collectTypes remaining acc =
@@ -2831,7 +2868,115 @@ let private makeClosureComparator
                 ]
         ReturnType = AST.TBool
         Body = body
+        Recursion = None
     }
+
+/// Replace references already resolved to a singleton recursive binder with
+/// the closure value passed to its lifted code. This creates no closure-to-self
+/// capture edge: the operational closure parameter is reused directly.
+let rec private rewriteRecursiveSelfReferences (selfName: string) (expr: AST.Expr) : AST.Expr =
+    let recurse = rewriteRecursiveSelfReferences selfName
+    let mapArgs = AST.NonEmptyList.map recurse
+    let patternShadows pattern = AST.letPatternBindings pattern |> List.contains selfName
+    match expr with
+    | AST.Var name when name = selfName -> AST.Var "__closure"
+    | AST.Call (name, args) when name = selfName -> AST.Apply (AST.Var "__closure", mapArgs args)
+    | AST.FuncRef name when name = selfName -> AST.Var "__closure"
+    | AST.Let (pattern, value, body) ->
+        AST.Let (pattern, recurse value, if patternShadows pattern then body else recurse body)
+    | AST.RecursiveLet (recursion, value, body) when AST.recursiveBindingName recursion = selfName ->
+        match AST.recursiveBindingAvailability recursion with
+        | Some AST.OrdinaryBinding -> AST.RecursiveLet (recursion, recurse value, body)
+        | _ -> expr
+    | AST.RecursiveLet (recursion, value, body) ->
+        AST.RecursiveLet (recursion, recurse value, recurse body)
+    | AST.Lambda (parameters, returnAnnotation, body) ->
+        let shadows =
+            parameters
+            |> AST.NonEmptyList.toList
+            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> List.contains selfName
+        AST.Lambda (parameters, returnAnnotation, if shadows then body else recurse body)
+    | AST.Match (scrutinee, cases) ->
+        let cases' =
+            cases
+            |> List.map (fun case ->
+                let shadows =
+                    case.Patterns
+                    |> AST.NonEmptyList.toList
+                    |> List.collect (fun pattern ->
+                        AST.validateBinders (AST.MatchBinderPattern pattern)
+                        |> Result.defaultValue [])
+                    |> List.contains selfName
+                if shadows then case
+                else { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body })
+        AST.Match (recurse scrutinee, cases')
+    | AST.BoundaryRender (renderer, value) -> AST.BoundaryRender (renderer, recurse value)
+    | AST.BinOp (op, left, right) -> AST.BinOp (op, recurse left, recurse right)
+    | AST.UnaryOp (op, value) -> AST.UnaryOp (op, recurse value)
+    | AST.If (condition, thenBranch, elseBranch) -> AST.If (recurse condition, recurse thenBranch, recurse elseBranch)
+    | AST.Sequence (first, next) -> AST.Sequence (recurse first, recurse next)
+    | AST.Call (name, args) -> AST.Call (name, mapArgs args)
+    | AST.TypeApp (name, types, args) -> AST.TypeApp (name, types, mapArgs args)
+    | AST.TupleLiteral values -> AST.TupleLiteral (List.map recurse values)
+    | AST.TupleAccess (tuple, index) -> AST.TupleAccess (recurse tuple, index)
+    | AST.DictLiteral (typ, entries) -> AST.DictLiteral (typ, entries |> List.map (fun (key, value) -> (key, recurse value)))
+    | AST.RecordLiteral (name, fields) -> AST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | AST.RecordUpdate (record, fields) -> AST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | AST.RecordAccess (record, field) -> AST.RecordAccess (recurse record, field)
+    | AST.Constructor (reference, name, payload) -> AST.Constructor (reference, name, Option.map recurse payload)
+    | AST.ListLiteral values -> AST.ListLiteral (List.map recurse values)
+    | AST.Apply (func, args) -> AST.Apply (recurse func, mapArgs args)
+    | AST.IndirectApply (func, args) -> AST.IndirectApply (recurse func, mapArgs args)
+    | AST.Closure (name, captures) -> AST.Closure (name, List.map recurse captures)
+    | AST.InterpolatedString parts ->
+        AST.InterpolatedString (parts |> List.map (function AST.StringText _ as text -> text | AST.StringExpr value -> AST.StringExpr (recurse value)))
+    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _
+    | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
+    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _
+    | AST.UInt64Literal _ | AST.UInt128Literal _ | AST.BoolLiteral _
+    | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
+    | AST.Var _ | AST.FuncRef _ | AST.RuntimeError _ -> expr
+
+/// Once the lifted member has a code identity, recursive closure calls become
+/// direct calls with the existing group environment as their first argument.
+let rec private rewriteLiftedSelfCalls (liftedName: string) (expr: AST.Expr) : AST.Expr =
+    let recurse = rewriteLiftedSelfCalls liftedName
+    let mapArgs = AST.NonEmptyList.map recurse
+    match expr with
+    | AST.Apply (AST.Var "__closure", args) ->
+        AST.Call (liftedName, AST.NonEmptyList.cons (AST.Var "__closure") (mapArgs args))
+    | AST.BoundaryRender (renderer, value) -> AST.BoundaryRender (renderer, recurse value)
+    | AST.BinOp (op, left, right) -> AST.BinOp (op, recurse left, recurse right)
+    | AST.UnaryOp (op, value) -> AST.UnaryOp (op, recurse value)
+    | AST.Let (pattern, value, body) -> AST.Let (pattern, recurse value, recurse body)
+    | AST.RecursiveLet (recursion, value, body) -> AST.RecursiveLet (recursion, recurse value, recurse body)
+    | AST.If (condition, thenBranch, elseBranch) -> AST.If (recurse condition, recurse thenBranch, recurse elseBranch)
+    | AST.Sequence (first, next) -> AST.Sequence (recurse first, recurse next)
+    | AST.Call (name, args) -> AST.Call (name, mapArgs args)
+    | AST.TypeApp (name, types, args) -> AST.TypeApp (name, types, mapArgs args)
+    | AST.TupleLiteral values -> AST.TupleLiteral (List.map recurse values)
+    | AST.TupleAccess (tuple, index) -> AST.TupleAccess (recurse tuple, index)
+    | AST.DictLiteral (typ, entries) -> AST.DictLiteral (typ, entries |> List.map (fun (key, value) -> (key, recurse value)))
+    | AST.RecordLiteral (name, fields) -> AST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | AST.RecordUpdate (record, fields) -> AST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | AST.RecordAccess (record, field) -> AST.RecordAccess (recurse record, field)
+    | AST.Constructor (reference, name, payload) -> AST.Constructor (reference, name, Option.map recurse payload)
+    | AST.Match (scrutinee, cases) ->
+        AST.Match (recurse scrutinee, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
+    | AST.ListLiteral values -> AST.ListLiteral (List.map recurse values)
+    | AST.Lambda (parameters, returnAnnotation, body) -> AST.Lambda (parameters, returnAnnotation, recurse body)
+    | AST.Apply (func, args) -> AST.Apply (recurse func, mapArgs args)
+    | AST.IndirectApply (func, args) -> AST.IndirectApply (recurse func, mapArgs args)
+    | AST.Closure (name, captures) -> AST.Closure (name, List.map recurse captures)
+    | AST.InterpolatedString parts ->
+        AST.InterpolatedString (parts |> List.map (function AST.StringText _ as text -> text | AST.StringExpr value -> AST.StringExpr (recurse value)))
+    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _
+    | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
+    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _
+    | AST.UInt64Literal _ | AST.UInt128Literal _ | AST.BoolLiteral _
+    | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
+    | AST.Var _ | AST.FuncRef _ | AST.RuntimeError _ -> expr
 
 /// Lift lambdas in an expression, returning (transformed expr, new state)
 let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr * LiftState, string> =
@@ -2870,6 +3015,47 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                 // removing by text would lose an outer binding after shadowing.
                 let state2' = { state2 with TypeEnv = state.TypeEnv }
                 (AST.Let (pattern, value', body'), state2')))
+    | AST.RecursiveLet (recursion, value, body) ->
+        let name = AST.recursiveBindingName recursion
+        match AST.recursiveBindingAvailability recursion with
+        | Some AST.OrdinaryBinding ->
+            liftLambdasInExpr (AST.Let (AST.LPVariable name, value, body)) state
+        | Some AST.SelfRecursiveMember ->
+            let valueType =
+                match recursion with
+                | AST.TypedRecursiveBinding typed -> typed.MonomorphicType
+                | _ -> Crash.crash "RecursiveLet reached lambda lifting without a typed member"
+            let rewrittenValue =
+                match value with
+                | AST.Lambda (parameters, returnAnnotation, lambdaBody) ->
+                    AST.Lambda (parameters, returnAnnotation, rewriteRecursiveSelfReferences name lambdaBody)
+                | _ -> Crash.crash "RecursiveLet reached lambda lifting with a non-lambda value"
+            let recursiveState =
+                match recursion, AST.recursiveBindingId recursion with
+                | AST.TypedRecursiveBinding typed, Some bindingId ->
+                    { state with
+                        TypeEnv = Map.add "__closure" valueType state.TypeEnv
+                        RecursiveSelf = Some (bindingId, valueType, typed) }
+                | _ -> Crash.crash "Typed recursive binding has no binding identity"
+            liftLambdasInExpr rewrittenValue recursiveState
+            |> Result.bind (fun (value', state1) ->
+                let continuationState =
+                    { state1 with
+                        TypeEnv = Map.add name valueType state.TypeEnv
+                        RecursiveSelf = state.RecursiveSelf }
+                liftLambdasInExpr body continuationState
+                |> Result.map (fun (body', state2) ->
+                    let restored =
+                        { state2 with
+                            TypeEnv = state.TypeEnv
+                            RecursiveSelf = state.RecursiveSelf }
+                    (AST.Let (AST.LPVariable name, value', body'), restored)))
+        | Some AST.MutualRecursiveMember
+        | Some AST.CompletedGroupMember
+        | Some AST.ImportedGroupMember ->
+            Error "Local RecursiveLet has invalid group availability"
+        | None ->
+            Error "Local RecursiveLet has not been resolved"
     | AST.If (cond, thenBr, elseBr) ->
         liftLambdasInExpr cond state
         |> Result.bind (fun (cond', state1) ->
@@ -2965,6 +3151,10 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                     AST.TInt64 :: (metadataTypes @ plan.CaptureTypes)
                 let closureParam = ("__closure", AST.TTuple closureTupleTypes)
                 let (loweredParameters, loweredBody) = lowerLambdaParameters parameters plan.Body
+                let loweredBody =
+                    match state.RecursiveSelf with
+                    | Some _ -> rewriteLiftedSelfCalls funcName loweredBody
+                    | None -> loweredBody
                 let captureOffset = if Option.isSome comparisonInfo then 2 else 1
 
                 // Build body that extracts captures from closure tuple
@@ -2993,6 +3183,9 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                         Params = paramsFromList "lifted lambda" (closureParam :: loweredParameters)
                         ReturnType = returnType
                         Body = bodyWithExtractions
+                        Recursion =
+                            state.RecursiveSelf
+                            |> Option.map (fun (_, _, typed) -> AST.TypedRecursiveBinding typed)
                     }
                     let comparisonDef =
                         comparisonInfo
@@ -3021,6 +3214,7 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                         GenericFuncDefs = state1.GenericFuncDefs
                         TypeReg = state1.TypeReg
                         VariantLookup = state1.VariantLookup
+                        RecursiveSelf = state.RecursiveSelf
                     }
                     let closureCaptures =
                         match comparisonInfo with
@@ -3121,6 +3315,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                                 Params = paramsFromList "lifted argument lambda" (closureParam :: loweredParameters)
                                 ReturnType = returnType
                                 Body = bodyWithExtractions
+                                Recursion = None
                             }
                             let comparisonDef =
                                 comparisonInfo
@@ -3149,6 +3344,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                                 GenericFuncDefs = state1.GenericFuncDefs
                                 TypeReg = state1.TypeReg
                                 VariantLookup = state1.VariantLookup
+                                RecursiveSelf = state.RecursiveSelf
                             }
                             let closureCaptures =
                                 match comparisonInfo with
@@ -3178,6 +3374,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                         Params = paramsFromList "liftLambdasInArgs:wrapperDef" (closureParam :: wrapperParams)
                         ReturnType = origReturnType
                         Body = wrapperBody
+                        Recursion = None
                     }
                     let comparisonDef =
                         makeClosureComparator comparisonName [] false state.VariantLookup
@@ -3196,6 +3393,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                         GenericFuncDefs = state.GenericFuncDefs
                         TypeReg = state.TypeReg
                         VariantLookup = state.VariantLookup
+                        RecursiveSelf = state.RecursiveSelf
                     }
                     let closure =
                         AST.Closure (
@@ -3320,6 +3518,7 @@ let generateFuncWrapper
             Params = paramsFromList "generateFuncWrapper" (closureParam :: parameters)
             ReturnType = returnType
             Body = wrapperBody
+            Recursion = None
         }
         let comparisonDef =
             makeClosureComparator
@@ -3349,6 +3548,7 @@ let rec private containsIndirectApply (expr: AST.Expr) : bool =
     | AST.BinOp (_, left, right) -> containsIndirectApply left || containsIndirectApply right
     | AST.UnaryOp (_, inner) -> containsIndirectApply inner
     | AST.Let (_, value, body) -> containsIndirectApply value || containsIndirectApply body
+    | AST.RecursiveLet (_, value, body) -> containsIndirectApply value || containsIndirectApply body
     | AST.If (condition, thenBranch, elseBranch) ->
         containsIndirectApply condition
         || containsIndirectApply thenBranch
@@ -3542,6 +3742,7 @@ let rec liftLambdasInProgram
         GenericFuncDefs = genericFuncDefs
         TypeReg = mergedTypeReg
         VariantLookup = mergedVariantLookup
+        RecursiveSelf = None
     }
 
     let rec processTopLevels (remaining: AST.TopLevel list) (state: LiftState) (acc: AST.TopLevel list) : Result<AST.TopLevel list * LiftState, string> =
@@ -3602,6 +3803,9 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
         | AST.Let (pattern, value, body) ->
             let bodyBound = Set.union bound (AST.letPatternBindings pattern |> Set.ofList)
             collect bound value @ collect bodyBound body
+        | AST.RecursiveLet (recursion, value, body) ->
+            let recursiveBound = Set.add (AST.recursiveBindingName recursion) bound
+            collect recursiveBound value @ collect recursiveBound body
         | AST.If (condition, thenBranch, elseBranch) ->
             collectChildren [condition; thenBranch; elseBranch]
         | AST.Sequence (first, next) | AST.BinOp (_, first, next) ->
@@ -3677,6 +3881,9 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
         | AST.Let (pattern, value, body) ->
             let bodyBound = Set.union bound (AST.letPatternBindings pattern |> Set.ofList)
             AST.Let (pattern, replace bound value, replace bodyBound body)
+        | AST.RecursiveLet (recursion, value, body) ->
+            let recursiveBound = Set.add (AST.recursiveBindingName recursion) bound
+            AST.RecursiveLet (recursion, replace recursiveBound value, replace recursiveBound body)
         | AST.If (condition, thenBranch, elseBranch) ->
             AST.If (replace bound condition, replace bound thenBranch, replace bound elseBranch)
         | AST.Sequence (first, next) -> AST.Sequence (replace bound first, replace bound next)
@@ -4160,6 +4367,20 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 letPatternBindingTypes pattern valueType
                 |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) typeEnv
             inferType body typeEnv' typeReg variantLookup funcReg moduleRegistry)
+    | AST.RecursiveLet (recursion, value, body) ->
+        let valueTypeResult =
+            match recursion with
+            | AST.TypedRecursiveBinding typed -> Ok typed.MonomorphicType
+            | _ -> inferType value typeEnv typeReg variantLookup funcReg moduleRegistry
+        valueTypeResult
+        |> Result.bind (fun valueType ->
+            inferType
+                body
+                (Map.add (AST.recursiveBindingName recursion) valueType typeEnv)
+                typeReg
+                variantLookup
+                funcReg
+                moduleRegistry)
     | AST.If (_, thenExpr, elseExpr) ->
         let inferBranchType (branchExpr: AST.Expr) : Result<AST.Type, string> =
             inferType branchExpr typeEnv typeReg variantLookup funcReg moduleRegistry
@@ -4798,6 +5019,7 @@ let private htmlVoidElementsExpr () : AST.Expr =
 
 let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
+    | AST.RecursiveLet _ -> Error "RecursiveLet must be lowered during lambda lifting"
     | AST.DictLiteral (_, []) ->
         Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
     | AST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
@@ -9046,6 +9268,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
+    | AST.RecursiveLet _ -> Error "RecursiveLet must be lowered during lambda lifting"
     | AST.DictLiteral (_, []) ->
         Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
     | AST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
@@ -10178,6 +10401,7 @@ let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: Ty
 /// Result type that includes registries needed for later passes
 type ConversionResult = {
     Program: ANF.Program
+    RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
     FuncReg: FunctionRegistry
@@ -10196,6 +10420,7 @@ type UserOnlyResult = {
     LocalReturnTypes: Map<string, AST.Type>
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
+    RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
 }
 
 /// Registry bundle used during ANF conversion
@@ -10205,7 +10430,26 @@ type Registries = {
     FuncReg: FunctionRegistry
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
+    RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
 }
+
+/// Retain semantic recursive identities alongside lowered ANF. Native symbol
+/// strings remain presentation keys; recursive ownership and group layout are
+/// recovered exclusively from this registry.
+let loweredRecursiveMemberRegistry
+    (functions: AST.FunctionDef list)
+    : Map<string, AST.LoweredRecursiveMember> =
+    functions
+    |> List.choose (fun func ->
+        match func.Recursion with
+        | Some (AST.TypedRecursiveBinding typed) ->
+            Some (
+                func.Name,
+                ({ Typed = typed; EnvironmentIndex = typed.Resolved.GroupIndex }
+                    : AST.LoweredRecursiveMember)
+            )
+        | _ -> None)
+    |> Map.ofList
 
 /// Split program into type defs, function defs, and a single expression
 let splitDeclarations (program: AST.Program) : Result<AST.TypeDef list * AST.FunctionDef list, string> =
@@ -10294,17 +10538,11 @@ let buildRegistries
     let variantLookup : VariantLookup =
         rawVariantLookup
         |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
-            let isCatalogBoundaryType =
-                typeName.StartsWith("Darklang.LanguageTools.ProgramTypes.")
-                || typeName.StartsWith("Darklang.LanguageTools.RuntimeTypes.")
             (typeName,
              typeParams,
              tag,
-             if isCatalogBoundaryType then
-                 payloadType
-                 |> Option.map (canonicalizeBareSumTypeRefs rawVariantLookup)
-             else
-                 payloadType))
+             payloadType
+             |> Option.map (canonicalizeBareSumTypeRefs rawVariantLookup)))
 
     let typeReg =
         typeRegBase
@@ -10345,6 +10583,7 @@ let buildRegistries
         FuncReg = funcReg
         FuncParams = funcParams
         ModuleRegistry = moduleRegistry
+        RecursiveMembers = loweredRecursiveMemberRegistry functions
     }
 
 /// Merge registries with overlay taking precedence (module registry stays from base)
@@ -10356,6 +10595,7 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry
+        RecursiveMembers = mergeMaps baseRegs.RecursiveMembers overlay.RecursiveMembers
     }
 
 /// Convert functions to ANF, returning updated VarGen

@@ -436,6 +436,7 @@ let private buildConversionResult
     : AST_to_ANF.ConversionResult =
     {
         Program = program
+        RecursiveMembers = registries.RecursiveMembers
         TypeReg = registries.TypeReg
         VariantLookup = registries.VariantLookup
         FuncReg = registries.FuncReg
@@ -542,6 +543,7 @@ let private applyTco
     (verbosity: int)
     (options: CompilerOptions)
     (sw: Stopwatch)
+    (recursiveMembers: Map<string, AST.LoweredRecursiveMember>)
     (functions: ANF.Function list)
     (passTimingRecorder: PassTimingRecorder option)
     : ANF.Function list =
@@ -552,7 +554,7 @@ let private applyTco
         if options.DisableTCO then
             anfProgram
         else
-            TailCallDetection.detectTailCallsInProgram anfProgram
+            TailCallDetection.detectTailCallsInProgramWithRecursion recursiveMembers anfProgram
     let tcoElapsed = sw.Elapsed.TotalMilliseconds - tcoStart
     recordPassTiming passTimingRecorder "Tail Call Detection" tcoElapsed
     if verbosity >= 2 then
@@ -867,6 +869,7 @@ let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Re
         FuncReg = Map.empty
         FuncParams = Map.empty
         ModuleRegistry = moduleRegistry
+        RecursiveMembers = Map.empty
     }
 
 let private liftLambdasWithBase
@@ -1064,6 +1067,7 @@ let private convertTypedProgramToUserOnlyWithMode
                         LocalReturnTypes = localReturnTypes
                         FuncParams = registries.FuncParams
                         ModuleRegistry = registries.ModuleRegistry
+                        RecursiveMembers = registries.RecursiveMembers
                     }))))
 
 let private convertTypedProgramToUserOnly
@@ -1361,7 +1365,7 @@ let buildStdlibWithTrace
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, typeMap) ->
-                    let tcoFunctions = applyTco 0 stdlibOptions sw anfFunctions passTimingRecorder
+                    let tcoFunctions = applyTco 0 stdlibOptions sw registries.RecursiveMembers anfFunctions passTimingRecorder
                     let stdlibFuncMap =
                         tcoFunctions
                         |> List.map (fun f -> f.Name, f)
@@ -1522,7 +1526,7 @@ let buildStdlibSpecializations
                         let sw = Stopwatch.StartNew()
                         buildAnf 0 stdlibOptions sw registries Map.empty anfFuncs false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, typeMap) ->
-                            let tcoFunctions = applyTco 0 stdlibOptions sw anfFunctions passTimingRecorder
+                            let tcoFunctions = applyTco 0 stdlibOptions sw registries.RecursiveMembers anfFunctions passTimingRecorder
                             let newAnfFuncMap =
                                 tcoFunctions
                                 |> List.map (fun f -> f.Name, f)
@@ -1757,6 +1761,7 @@ let private catalogFunction
         Params = AST.NonEmptyList.fromList parameters
         ReturnType = returnType
         Body = body
+        Recursion = None
     }
 
 let private collectProgramSpecs (program: AST.Program) : Set<AST_to_ANF.SpecKey> =
@@ -2049,6 +2054,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             FuncReg = userOnly.FuncReg
                             FuncParams = userOnly.FuncParams
                             ModuleRegistry = userOnly.ModuleRegistry
+                            RecursiveMembers = userOnly.RecursiveMembers
                         }
                         let anfResult =
                             buildAnf
@@ -2082,7 +2088,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     let printProgram = ANF.Program (printedFunctions, ANF.Return ANF.UnitLiteral)
                                     printANFProgram "=== ANF (after Print insertion) ===" printProgram
 
-                                let tcoFunctions = applyTco plan.Verbosity plan.Options sw printedFunctions plan.PassTimingRecorder
+                                let tcoFunctions = applyTco plan.Verbosity plan.Options sw userRegistries.RecursiveMembers printedFunctions plan.PassTimingRecorder
                                 let externalReturnTypes =
                                     mergeReturnTypes plan.BaseContext.ReturnTypes userOnly.LocalReturnTypes
                                 let userLirResult =
@@ -2249,13 +2255,7 @@ let buildPreambleContext
                     let msg = $"Preamble ANF conversion error: {err}"
                     Error msg
                 | Ok preambleUserOnly ->
-                    let preambleRegistries : AST_to_ANF.Registries = {
-                        TypeReg = preambleUserOnly.Registries.TypeReg
-                        VariantLookup = preambleUserOnly.Registries.VariantLookup
-                        FuncReg = preambleUserOnly.Registries.FuncReg
-                        FuncParams = preambleUserOnly.Registries.FuncParams
-                        ModuleRegistry = preambleUserOnly.Registries.ModuleRegistry
-                    }
+                    let preambleRegistries = preambleUserOnly.Registries
                     let preambleOptions = defaultOptions
                     let sw = Stopwatch.StartNew()
                     let preambleReturnTypes =
@@ -2273,7 +2273,7 @@ let buildPreambleContext
                                 $"Preamble {err}"
                         Error msg
                     | Ok (preambleFunctions, typeMap) ->
-                        let tcoFunctions = applyTco 0 preambleOptions sw preambleFunctions passTimingRecorder
+                        let tcoFunctions = applyTco 0 preambleOptions sw preambleRegistries.RecursiveMembers preambleFunctions passTimingRecorder
                         let preambleExternalReturnTypes = preambleReturnTypes
                         match lowerToAllocatedLir
                             stdlib.Context.Target
@@ -2369,7 +2369,7 @@ let buildPreambleContextFromAnalysis
                     $"Preamble {err}"
             Error msg
         | Ok (preambleFunctions, typeMap) ->
-            let tcoFunctions = applyTco 0 preambleOptions sw preambleFunctions passTimingRecorder
+            let tcoFunctions = applyTco 0 preambleOptions sw preambleRegistries.RecursiveMembers preambleFunctions passTimingRecorder
             let preambleExternalReturnTypes = preambleReturnTypes
             match lowerToAllocatedLir
                 stdlib.Context.Target
@@ -2722,6 +2722,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     FuncReg = userOnly.FuncReg
                     FuncParams = userOnly.FuncParams
                     ModuleRegistry = userOnly.ModuleRegistry
+                    RecursiveMembers = userOnly.RecursiveMembers
                 }
                 match buildAnf 0 coverageOptions sw userRegistries Map.empty (entryFunction :: userOnly.UserFunctions) false None with
                 | Error err -> Error err
@@ -2729,7 +2730,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     match PrintInsertion.insertPrintInEntry "_start" boundaryProgramType userFunctions with
                     | Error err -> Error $"Print insertion error: {err}"
                     | Ok printedFunctions ->
-                        let tcoFunctions = applyTco 0 coverageOptions sw printedFunctions None
+                        let tcoFunctions = applyTco 0 coverageOptions sw userRegistries.RecursiveMembers printedFunctions None
                         let reachableStdlibNames =
                             ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph tcoFunctions
                         Ok reachableStdlibNames

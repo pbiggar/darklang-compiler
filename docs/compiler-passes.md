@@ -1,5 +1,9 @@
 # Compiler Passes
 
+See [recursion-parity.md](recursion-parity.md) for the recursive identity and
+group invariants carried through parsing, typing, ANF lowering, and tail-call
+detection.
+
 Before expression typing, pass 1.5 builds a canonical immutable symbol
 inventory and resolves value, callable, constructor, pattern, and type names.
 The checked AST contains canonical identity spellings; pass 2 performs exact

@@ -26,7 +26,8 @@ let testParseInterpreterLambdaApplication () : TestResult =
     | Error err -> Error $"Interpreter parser failed: {err}"
     | Ok (Program [Expression expr]) ->
         match expr with
-        | Let (LPVariable "inc", Lambda (parameters, returnAnnotation, body), Call ("inc", callArgs)) ->
+        | RecursiveLet (recursion, Lambda (parameters, returnAnnotation, body), Call ("inc", callArgs))
+            when recursiveBindingKind recursion = DirectLambdaValueMember ->
             let paramNames =
                 parameters
                 |> NonEmptyList.toList
@@ -53,7 +54,8 @@ let testParseInterpreterNestedFunctionAfterLetBinding () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on nested function after let binding: {err}"
-    | Ok (Program [Expression (Let (LPVariable "limit", Int64Literal 10L, Let (LPVariable "sumUpTo", Lambda (parameters, returnAnnotation, body), Call ("sumUpTo", callArgs))))]) ->
+    | Ok (Program [Expression (Let (LPVariable "limit", Int64Literal 10L, RecursiveLet (recursion, Lambda (parameters, returnAnnotation, body), Call ("sumUpTo", callArgs))))])
+        when recursiveBindingKind recursion = NamedLocalFunctionMember ->
         match NonEmptyList.toList parameters, body, NonEmptyList.toList callArgs with
         | [{ Pattern = LPVariable "i"; SourceAnnotation = Some AST.TInt64 }], If (BinOp (Gt, Var "i", Var "limit"), Int64Literal 0L, BinOp (Add, Var "i", Call ("sumUpTo", recursiveArgs))), [Int64Literal 1L] ->
             match NonEmptyList.toList recursiveArgs with

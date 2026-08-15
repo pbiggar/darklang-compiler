@@ -118,6 +118,7 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
         Params = AST.NonEmptyList.singleton ("$unit0", AST.TUnit)
         ReturnType = AST.TInt64
         Body = AST.Int64Literal 1L
+        Recursion = None
     }
     let funcReg : FunctionRegistry =
         Map.ofList [ ("syntheticNullary", AST.TFunction ([], AST.TInt64)) ]
