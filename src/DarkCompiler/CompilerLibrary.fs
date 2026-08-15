@@ -1516,9 +1516,9 @@ let buildStdlibSpecializations
                         registries with
                             TypeReg =
                                 Map.fold
-                                    (fun acc k (v: TypeChecking.RecordTypeInfo) -> Map.add k v.Fields acc)
+                                    (fun acc name recordInfo -> Map.add name recordInfo acc)
                                     registries.TypeReg
-                                    externalIndexedTypeReg
+                                    externalTypeReg
                             VariantLookup =
                                 Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
                     }
