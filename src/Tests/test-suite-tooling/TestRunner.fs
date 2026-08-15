@@ -165,6 +165,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "language", "apply", "eapply.dark")
     let aliasesUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "language", "custom-data", "aliases.dark")
+    let recordsUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "language", "custom-data", "records.dark")
+    let recordFieldAccessUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "language", "custom-data", "record-field-acess.dark")
     let einfixUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "language", "apply", "einfix.dark")
     let eandUpstreamDarkPath =
@@ -244,6 +248,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            ematchUpstreamDarkPath
            eapplyUpstreamDarkPath
            aliasesUpstreamDarkPath
+           recordsUpstreamDarkPath
+           recordFieldAccessUpstreamDarkPath
            einfixUpstreamDarkPath
            eandUpstreamDarkPath
            eorUpstreamDarkPath
@@ -286,6 +292,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            ematchUpstreamDarkPath
            eapplyUpstreamDarkPath
            aliasesUpstreamDarkPath
+           recordsUpstreamDarkPath
+           recordFieldAccessUpstreamDarkPath
            einfixUpstreamDarkPath
            eandUpstreamDarkPath
            eorUpstreamDarkPath
@@ -523,6 +531,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
             [
                 ("src/Tests/e2e/upstream/language/apply/eapply.dark", Set.ofList [ 1; 4; 7; 10; 62; 63; 64; 65; 66; 67; 68; 69; 70; 71; 72; 73; 75; 76; 78; 79; 83; 84; 88; 92; 93; 95; 96; 98; 100; 102; 106; 108; 133; 134; 136; 139 ])
                 ("src/Tests/e2e/upstream/language/custom-data/aliases.dark", Set.ofList [ 6; 9; 15; 16; 19; 89; 91; 108 ])
+                ("src/Tests/e2e/upstream/language/custom-data/records.dark", Set.ofList [ 6; 8; 15; 23; 47; 49; 58; 65; 68; 72; 76; 80; 84 ])
+                ("src/Tests/e2e/upstream/language/custom-data/record-field-acess.dark", Set.singleton 3)
                 ("src/Tests/e2e/upstream/language/flow-control/epipe.dark", Set.ofList [ 3; 4; 7; 27; 53; 93; 96; 102 ])
                 ("src/Tests/e2e/upstream/language/derror.dark", Set.ofList [ 14; 20 ])
                 ("src/Tests/e2e/upstream/stdlib/list.dark", Set.ofList [ 1; 3; 5; 6; 8; 9; 12; 15; 16; 17; 18; 25; 26; 27; 28; 29; 31; 32; 33; 34; 35; 36; 39; 40; 41; 42; 43; 44; 45; 46; 47; 48; 49; 50; 51; 54; 93; 99; 100; 111; 112; 114; 115; 116; 118; 119; 120; 121; 122; 123; 124; 127; 132; 133; 144; 145; 146; 147; 149; 151; 152; 155; 158; 163; 166; 176; 182; 185; 188; 190; 195; 196; 203; 204; 205; 208; 213; 215; 218; 229; 230; 232; 233; 235; 236; 239; 240; 241; 242; 243; 244; 245; 246; 247; 248; 249; 252; 253; 254; 256; 257; 259; 260; 261; 265; 270; 274; 277; 287; 289; 290; 292; 293; 294; 295; 296; 297; 298; 303; 308; 309; 310; 311; 312; 314; 315; 316; 317; 321; 324; 339; 342; 351; 354; 357; 360; 363; 364; 365; 367; 368; 369; 370; 371; 372; 373; 378 ])

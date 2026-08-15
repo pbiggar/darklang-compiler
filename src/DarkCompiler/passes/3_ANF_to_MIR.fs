@@ -214,6 +214,9 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.TupleAlloc atoms ->
         maxTempIdInAtoms atoms
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
+    | ANF.RecordAlloc (_, fields) -> maxTempIdInAtoms fields
+    | ANF.RecordGet (_, record, _) -> maxTempIdInAtom record
+    | ANF.RecordClone (_, record, fields) -> maxTempIdWithAtoms record fields
     | ANF.StringConcat (left, right) ->
         max (maxTempIdInAtom left) (maxTempIdInAtom right)
     | ANF.RefCountInc (atom, _, _, _) -> maxTempIdInAtom atom
@@ -544,6 +547,11 @@ let private inferSimpleCExprDestType
     | ANF.ClosureCall (closure, _) -> Some (closureCallReturnType builder tempId closure)
     | ANF.TupleGet (ANF.Var tupleId, index) ->
         tupleGetDestType builder tempId tupleGetAliasType tupleId index
+    | ANF.RecordAlloc (descriptor, _)
+    | ANF.RecordClone (descriptor, _, _) ->
+        Some (AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs))
+    | ANF.RecordGet (descriptor, _, index) ->
+        descriptor.Fields |> List.tryItem index |> Option.map snd
     | ANF.StringToRawPtr _
     | ANF.BlobToRawPtr _
     | ANF.DictToRawPtr _
@@ -592,6 +600,9 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.ClosureTailCall _ -> "ClosureTailCall"
     | ANF.TupleAlloc _ -> "TupleAlloc"
     | ANF.TupleGet _ -> "TupleGet"
+    | ANF.RecordAlloc (descriptor, _) -> System.String.Concat("RecordAlloc ", descriptor.RuntimeTypeName)
+    | ANF.RecordGet (descriptor, _, _) -> System.String.Concat("RecordGet ", descriptor.RuntimeTypeName)
+    | ANF.RecordClone (descriptor, _, _) -> System.String.Concat("RecordClone ", descriptor.RuntimeTypeName)
     | ANF.StringConcat _ -> "StringConcat"
     | ANF.RefCountInc _ -> "RefCountInc"
     | ANF.RefCountDec _ -> "RefCountDec"
@@ -845,6 +856,7 @@ let rec convertExpr
         let tupleGetAliasType =
             match cexpr, rest with
             | ANF.TupleGet _, ANF.Let (_, ANF.TypedAtom (ANF.Var sourceId, aliasType), _)
+            | ANF.RecordGet _, ANF.Let (_, ANF.TypedAtom (ANF.Var sourceId, aliasType), _)
                 when sourceId = tempId -> Some aliasType
             | _ -> None
 
@@ -1081,6 +1093,32 @@ let rec convertExpr
                         Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]
                     | _ ->
                         Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
+                | ANF.RecordAlloc (descriptor, fields)
+                | ANF.RecordClone (descriptor, _, fields) ->
+                    let allocInstr = MIR.HeapAlloc (destReg, (List.length fields + 1) * 8)
+                    let identityInstr =
+                        MIR.HeapStore (destReg, 0, MIR.Int64Const descriptor.Identity, None)
+                    fields
+                    |> List.mapi (fun index field -> (index, field))
+                    |> List.map (fun (index, field) ->
+                        let fieldType = atomType builder field
+                        let valueType = if fieldType = AST.TFloat64 then Some AST.TFloat64 else None
+                        atomToOperand builder field
+                        |> Result.map (fun operand ->
+                            MIR.HeapStore (destReg, (index + 1) * 8, operand, valueType)))
+                    |> sequenceResults
+                    |> Result.map (fun stores -> allocInstr :: identityInstr :: stores)
+                | ANF.RecordGet (_, recordAtom, index) ->
+                    match recordAtom with
+                    | ANF.Var tid ->
+                        let recordReg = tempToVReg tid
+                        let loadType =
+                            match destType with
+                            | Some AST.TFloat64 -> Some AST.TFloat64
+                            | _ -> None
+                        Ok [MIR.HeapLoad (destReg, recordReg, (index + 1) * 8, loadType)]
+                    | _ ->
+                        Error "Internal error: Record access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"
@@ -1521,6 +1559,7 @@ and convertExprToOperand
         let tupleGetAliasType =
             match cexpr, rest with
             | ANF.TupleGet _, ANF.Let (_, ANF.TypedAtom (ANF.Var sourceId, aliasType), _)
+            | ANF.RecordGet _, ANF.Let (_, ANF.TypedAtom (ANF.Var sourceId, aliasType), _)
                 when sourceId = tempId -> Some aliasType
             | _ -> None
 
@@ -1748,6 +1787,32 @@ and convertExprToOperand
                         Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]
                     | _ ->
                         Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
+                | ANF.RecordAlloc (descriptor, fields)
+                | ANF.RecordClone (descriptor, _, fields) ->
+                    let allocInstr = MIR.HeapAlloc (destReg, (List.length fields + 1) * 8)
+                    let identityInstr =
+                        MIR.HeapStore (destReg, 0, MIR.Int64Const descriptor.Identity, None)
+                    fields
+                    |> List.mapi (fun index field -> (index, field))
+                    |> List.map (fun (index, field) ->
+                        let fieldType = atomType builder field
+                        let valueType = if fieldType = AST.TFloat64 then Some AST.TFloat64 else None
+                        atomToOperand builder field
+                        |> Result.map (fun operand ->
+                            MIR.HeapStore (destReg, (index + 1) * 8, operand, valueType)))
+                    |> sequenceResults
+                    |> Result.map (fun stores -> allocInstr :: identityInstr :: stores)
+                | ANF.RecordGet (_, recordAtom, index) ->
+                    match recordAtom with
+                    | ANF.Var tid ->
+                        let recordReg = tempToVReg tid
+                        let loadType =
+                            match destType with
+                            | Some AST.TFloat64 -> Some AST.TFloat64
+                            | _ -> None
+                        Ok [MIR.HeapLoad (destReg, recordReg, (index + 1) * 8, loadType)]
+                    | _ ->
+                        Error "Internal error: Record access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"

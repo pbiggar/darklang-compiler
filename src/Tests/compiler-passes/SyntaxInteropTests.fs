@@ -826,7 +826,7 @@ let testInterpreterParserParsesQualifiedRecordLiteral () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on qualified record literal: {err}"
-    | Ok (Program [Expression (RecordLiteral ("Foo.Bar", fields))]) ->
+    | Ok (Program [Expression (RecordLiteral (reference, fields))]) when reference.SourceTypeName = "Foo.Bar" ->
         let expected = [("name", StringLiteral "a"); ("type", Int64Literal 1L)]
         if fields = expected then
             Ok ()

@@ -314,16 +314,6 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
     | PTuple patterns ->
         let parts = patterns |> List.map (formatPattern syntax) |> String.concat ", "
         $"({parts})"
-    | PRecord (typeName, fields) ->
-        let fieldsText =
-            fields
-            |> List.map (fun (name, fieldPattern) ->
-                $"{formatIdentifierSegment name} = {formatPattern syntax fieldPattern}")
-            |> String.concat ", "
-        if typeName = "" then
-            $"{{ {fieldsText} }}"
-        else
-            $"{formatIdentifierPath typeName} {{ {fieldsText} }}"
     | PList patterns ->
         let separator =
             match syntax with
@@ -621,16 +611,21 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
                 $"{keyText} = {formatExpr syntax value}")
             |> String.concat "; "
         $"Dict {{ {fieldsText} }}"
-    | RecordLiteral (typeName, fields) ->
+    | RecordLiteral (reference, fields) ->
         let fieldsText =
             fields
             |> List.map (fun (name, value) ->
                 $"{formatIdentifierSegment name} = {formatExpr syntax value}")
             |> String.concat ", "
-        if typeName = "" then
-            $"{{ {fieldsText} }}"
-        else
-            $"{formatIdentifierPath typeName} {{ {fieldsText} }}"
+        let typeArgsText =
+            match reference.TypeArgs with
+            | [] -> ""
+            | typeArgs ->
+                typeArgs
+                |> List.map formatType
+                |> String.concat ", "
+                |> fun args -> $"<{args}>"
+        $"{formatIdentifierPath reference.SourceTypeName}{typeArgsText} {{ {fieldsText} }}"
     | RecordUpdate (recordExpr, updates) ->
         let recordText = formatExpr syntax recordExpr
         let updatesText =

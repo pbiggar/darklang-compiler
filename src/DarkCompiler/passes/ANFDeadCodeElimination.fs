@@ -43,6 +43,10 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
         extractFromAtom cond @ extractFromAtom thenVal @ extractFromAtom elseVal
     | ANF.TupleAlloc atoms -> extractFromAtoms atoms
     | ANF.TupleGet (tuple, _) -> extractFromAtom tuple
+    | ANF.RecordAlloc (_, fields) -> extractFromAtoms fields
+    | ANF.RecordGet (_, record, _) -> extractFromAtom record
+    | ANF.RecordClone (_, record, fields) ->
+        extractFromAtom record @ extractFromAtoms fields
     | ANF.StringConcat (left, right) ->
         extractFromAtom left @ extractFromAtom right
     | ANF.CliNative (_, args) -> extractFromAtoms args

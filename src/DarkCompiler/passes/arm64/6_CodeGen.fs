@@ -172,7 +172,13 @@ let private slotInitRootRetainTarget
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
             None
         | _ ->
-            Some (ANF.rcShapeOfTypeWithSums recordRegistry sumShapeRegistry typ)
+            Some (
+                ANF.rcShapeOfTypeWithSums
+                    recordRegistry
+                    (ANF.inferredRecordTypeParamsRegistry recordRegistry)
+                    sumShapeRegistry
+                    typ
+            )
 
     shapeOfKnownType valueType
     |> Option.bind (function
@@ -5155,75 +5161,93 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             let leakDec = generateLeakCounterDec ctx
             let tupleDecPath =
                 let releaseListFieldFromHelper (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (helperLabel: string) : ARM64Symbolic.Instr list =
+                    let fieldReg =
+                        if baseReg = ARM64Symbolic.X12 then ARM64Symbolic.X16 else ARM64Symbolic.X12
                     let callInstrs = [
-                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -128s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                         ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
                         ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                         ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
-                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.STP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
+                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, fieldReg)
                         ARM64Symbolic.BL helperLabel
+                        ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
-                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 128s)
                     ]
                     [
-                        ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
-                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
+                        ARM64Symbolic.LDR (fieldReg, baseReg, int16 fieldOffset)
+                        ARM64Symbolic.CBZ_offset (fieldReg, List.length callInstrs + 1)
                     ] @ callInstrs
 
                 let releaseListFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
                     releaseListFieldFromHelper baseReg fieldOffset (listDecHelperForReleasePlan fieldReleasePlan)
 
                 let releaseDictFieldFromHelper (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (helperLabel: string) : ARM64Symbolic.Instr list =
+                    let fieldReg =
+                        if baseReg = ARM64Symbolic.X12 then ARM64Symbolic.X16 else ARM64Symbolic.X12
                     let callInstrs = [
-                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -128s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                         ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
                         ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                         ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
-                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.STP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
+                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, fieldReg)
                         ARM64Symbolic.BL helperLabel
+                        ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
-                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 128s)
                     ]
                     [
-                        ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
-                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
+                        ARM64Symbolic.LDR (fieldReg, baseReg, int16 fieldOffset)
+                        ARM64Symbolic.CBZ_offset (fieldReg, List.length callInstrs + 1)
                     ] @ callInstrs
 
                 let releaseDictFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
                     releaseDictFieldFromHelper baseReg fieldOffset (dictDecHelperForReleasePlan fieldReleasePlan)
 
                 let releaseClosureFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    let fieldReg =
+                        if baseReg = ARM64Symbolic.X12 then ARM64Symbolic.X16 else ARM64Symbolic.X12
                     let callInstrs = [
-                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -128s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                         ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
                         ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                         ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
-                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.STP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
+                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, fieldReg)
                         ARM64Symbolic.BL closureRefCountDecHelperLabel
+                        ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
-                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 128s)
                     ]
                     [
-                        ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
-                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
+                        ARM64Symbolic.LDR (fieldReg, baseReg, int16 fieldOffset)
+                        ARM64Symbolic.CBZ_offset (fieldReg, List.length callInstrs + 1)
                     ] @ callInstrs
 
                 let releaseDynamicBufferFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
@@ -6366,14 +6390,16 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 Ok (loadStringLiteralPointer ARM64Symbolic.X8 ""
                 @ loadStringLiteralPointer ARM64Symbolic.X9 errorMessage
                 @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X28)
-                   ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 32us)
+                   ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 40us)]
+                @ loadImmediate ARM64Symbolic.X10 (ANF.recordRuntimeIdentity "Stdlib.Cli.NativeOutput" [])
+                @ [ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 0s)
                    ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 0us, 0)
                    ARM64Symbolic.MVN (ARM64Symbolic.X10, ARM64Symbolic.X10)
-                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 0s)
-                   ARM64Symbolic.STR (ARM64Symbolic.X8, destReg, 8s)
-                   ARM64Symbolic.STR (ARM64Symbolic.X9, destReg, 16s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 8s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X8, destReg, 16s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X9, destReg, 24s)
                    ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
-                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 24s)])
+                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 32s)])
             | LIR.GetEnv | LIR.CurrentUser | LIR.Kill ->
                 Ok [ARM64Symbolic.MOVZ (destReg, 0us, 0)]
             | LIR.SpawnProcess ->
@@ -6711,12 +6737,14 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
     @ finalizeString ARM64Symbolic.X20 ARM64Symbolic.X22
     @ finalizeString ARM64Symbolic.X21 ARM64Symbolic.X23
     @ [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X28)
-       ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 32us)
-       ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X0, 0s)
-       ARM64Symbolic.STR (ARM64Symbolic.X20, ARM64Symbolic.X0, 8s)
-       ARM64Symbolic.STR (ARM64Symbolic.X21, ARM64Symbolic.X0, 16s)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 40us)]
+    @ loadImmediate ARM64Symbolic.X10 (ANF.recordRuntimeIdentity "Stdlib.Cli.NativeOutput" [])
+    @ [ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s)
+       ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X0, 8s)
+       ARM64Symbolic.STR (ARM64Symbolic.X20, ARM64Symbolic.X0, 16s)
+       ARM64Symbolic.STR (ARM64Symbolic.X21, ARM64Symbolic.X0, 24s)
        ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
-       ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X0, 24s)
+       ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X0, 32s)
        ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 96us)
        ARM64Symbolic.LDP_post (ARM64Symbolic.X23, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
        ARM64Symbolic.LDP_post (ARM64Symbolic.X21, ARM64Symbolic.X22, ARM64Symbolic.SP, 16s)

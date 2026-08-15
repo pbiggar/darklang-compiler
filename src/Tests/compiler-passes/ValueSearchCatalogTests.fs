@@ -26,7 +26,7 @@ let private location branches owner modules name : CompilerLibrary.CatalogPackag
 
 let private errorValue (errno: int) (message: string) =
     AST.RecordLiteral (
-        "Stdlib.Cli.Posix.Error",
+        AST.unresolvedRecordReference "Stdlib.Cli.Posix.Error" [],
         [
             ("errno", AST.BigIntLiteral (BigInteger errno))
             ("message", AST.StringLiteral message)

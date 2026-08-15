@@ -79,7 +79,8 @@ let private convertTypedProgram (typedAst: AST.Program) : Result<AST_to_ANF.Conv
                     }))))
 
 let private optimizeContextFromConversionResult (convResult: AST_to_ANF.ConversionResult) : ANF_Optimize.OptimizeContext =
-    { TypeReg = convResult.TypeReg
+    { TypeReg = AST_to_ANF.recordFieldsRegistry convResult.TypeReg
+      RecordTypeParams = AST_to_ANF.recordTypeParamsRegistry convResult.TypeReg
       SumShapeReg = AST_to_ANF.rcSumShapeRegistryFromVariantLookup convResult.VariantLookup }
 
 /// Normalize IR output for comparison
@@ -185,7 +186,7 @@ let getOptimizedMIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
                     let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg false externalReturnTypes with
+                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup (AST_to_ANF.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction
@@ -228,7 +229,7 @@ let getOptimizedLIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
                     let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg false externalReturnTypes with
+                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup (AST_to_ANF.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction and optimization

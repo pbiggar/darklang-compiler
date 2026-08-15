@@ -45,6 +45,7 @@ type OptimizeOptions = {
 /// Type metadata needed for ownership-sensitive optimizer decisions.
 type OptimizeContext = {
     TypeReg: Map<string, (string * AST.Type) list>
+    RecordTypeParams: Map<string, string list>
     SumShapeReg: RcSumShapeRegistry
 }
 
@@ -422,7 +423,7 @@ let foldUnaryOp (op: UnaryOp) (src: Atom) : CExpr option =
 
 let private typeNeedsTypedAtomDceProtection (context: OptimizeContext) (typ: AST.Type) : bool =
     typ
-    |> rcShapeOfTypeWithSums context.TypeReg context.SumShapeReg
+    |> rcShapeOfTypeWithSums context.TypeReg context.RecordTypeParams context.SumShapeReg
     |> rcShapeNeedsOwnedScopeRelease
 
 /// Projection bindings carry borrowing information into RC insertion, so only
@@ -454,6 +455,9 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | IfValue _ -> false
     | TupleAlloc _ -> false
     | TupleGet _ -> false
+    | RecordAlloc _ -> false
+    | RecordGet _ -> false
+    | RecordClone _ -> false
     // These have side effects
     | Call _ -> true
     | BorrowedCall _ -> true
@@ -550,6 +554,10 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
         uses |> addAtomUse closure |> addAtomUses args
     | TupleAlloc elems -> addAtomUses elems uses
     | TupleGet (tuple, _) -> addAtomUse tuple uses
+    | RecordAlloc (_, fields) -> addAtomUses fields uses
+    | RecordGet (_, record, _) -> addAtomUse record uses
+    | RecordClone (_, record, fields) ->
+        uses |> addAtomUse record |> addAtomUses fields
     | StringConcat (left, right) -> uses |> addAtomUse left |> addAtomUse right
     | RefCountInc (atom, _, _, _) -> addAtomUse atom uses
     | RefCountDec (atom, _, _, _) -> addAtomUse atom uses
@@ -611,6 +619,7 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | TypedAtom (atom, _)
     | UnaryPrim (_, atom)
     | TupleGet (atom, _)
+    | RecordGet (_, atom, _)
     | RefCountInc (atom, _, _, _)
     | RefCountDec (atom, _, _, _)
     | Print (atom, _)
@@ -658,7 +667,9 @@ let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | BorrowedCall (_, atoms)
     | TailCall (_, atoms)
     | ClosureAlloc (_, atoms)
-    | TupleAlloc atoms -> anyUsed atoms
+    | TupleAlloc atoms
+    | RecordAlloc (_, atoms) -> anyUsed atoms
+    | RecordClone (_, record, fields) -> used record || anyUsed fields
     | CliNative (_, atoms) -> anyUsed atoms
     | IndirectCall (first, rest)
     | IndirectTailCall (first, rest)
@@ -730,6 +741,12 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
         let elems' = substAtoms env elems
         if obj.ReferenceEquals (elems', elems) then cexpr else TupleAlloc elems'
     | TupleGet (tuple, idx) -> TupleGet (s tuple, idx)
+    | RecordAlloc (descriptor, fields) ->
+        let fields' = substAtoms env fields
+        if obj.ReferenceEquals (fields', fields) then cexpr else RecordAlloc (descriptor, fields')
+    | RecordGet (descriptor, record, idx) -> RecordGet (descriptor, s record, idx)
+    | RecordClone (descriptor, record, fields) ->
+        RecordClone (descriptor, s record, substAtoms env fields)
     | StringConcat (left, right) -> StringConcat (s left, s right)
     | RefCountInc (atom, size, kind, sourceType) -> RefCountInc (s atom, size, kind, sourceType)
     | RefCountDec (atom, size, kind, sourceType) -> RefCountDec (s atom, size, kind, sourceType)

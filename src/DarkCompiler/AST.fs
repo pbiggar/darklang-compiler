@@ -59,6 +59,20 @@ type Type =
     // String-keyed and renders only the value component as Dict<Value>.
     | TDict of keyType:Type * valueType:Type
 
+/// Nominal identity carried by record construction from parsing onward.
+/// SourceTypeName preserves an alias spelling for diagnostics, while
+/// ResolvedTypeName is filled with the canonical declaration identity during
+/// name/type resolution. TypeArgs always follows declaration parameter order,
+/// including parameters that do not occur in any field.
+type RecordReference = {
+    SourceTypeName: string
+    ResolvedTypeName: string
+    TypeArgs: Type list
+}
+
+let unresolvedRecordReference (sourceTypeName: string) (typeArgs: Type list) : RecordReference =
+    { SourceTypeName = sourceTypeName; ResolvedTypeName = sourceTypeName; TypeArgs = typeArgs }
+
 /// A source constructor reference before or after nominal resolution.
 /// `None` is the genuinely unqualified form; no empty-name sentinel is used.
 type ConstructorReference =
@@ -165,7 +179,6 @@ type Pattern =
     | PChar of string                                      // 'x'
     | PFloat of float                                      // 3.14
     | PTuple of Pattern list                               // (a, b, c)
-    | PRecord of typeName:string * fields:(string * Pattern) list  // { x = a, y = b }
     | PList of Pattern list                                // [a, b, c] - exact length match
     | PListCons of head:Pattern list * tail:Pattern        // a :: b :: t - head elements + rest
 
@@ -349,7 +362,6 @@ let validateBinders (structure: BinderStructure) : Result<string list, string> =
         | PConstructor (_, payload) ->
             payload |> Option.map matchPatternBindings |> Option.defaultValue []
         | PTuple patterns | PList patterns -> patterns |> List.collect matchPatternBindings
-        | PRecord (_, fields) -> fields |> List.collect (snd >> matchPatternBindings)
         | PListCons (heads, tail) ->
             (heads |> List.collect matchPatternBindings) @ matchPatternBindings tail
         | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _
@@ -414,7 +426,7 @@ and Expr =
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
     | DictLiteral of valueType:Type * entries:(string * Expr) list  // Dict { key = value; ... }
-    | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
+    | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
     | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
     | Constructor of reference:ConstructorReference * variantName:string * payload:Expr option

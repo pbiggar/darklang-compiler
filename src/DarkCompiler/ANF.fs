@@ -223,6 +223,25 @@ type CliOperation =
     | ProcessIO
     | TerminateProcess
 
+/// Immutable nominal metadata attached to every record allocation. The native
+/// value stores Identity in its first payload word; the remaining metadata is
+/// carried through lowering for field layout, diagnostics, and rendering.
+type RecordDescriptor = {
+    SourceTypeName: string
+    RuntimeTypeName: string
+    TypeArgs: AST.Type list
+    Fields: (string * AST.Type) list
+    Identity: int64
+}
+
+let recordRuntimeIdentity (runtimeTypeName: string) (typeArgs: AST.Type list) : int64 =
+    let text = $"{runtimeTypeName}<{typeArgs}>"
+    text
+    |> Seq.fold
+        (fun hash character -> (hash ^^^ uint64 (int character)) * 1099511628211UL)
+        14695981039346656037UL
+    |> int64
+
 /// Complex expressions (produce values)
 type CExpr =
     | Atom of Atom
@@ -240,6 +259,9 @@ type CExpr =
     | ClosureTailCall of closure:Atom * args:Atom list  // Tail call through closure (BR instruction)
     | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
     | TupleGet of tuple:Atom * index:int        // Get tuple element: t.0
+    | RecordAlloc of descriptor:RecordDescriptor * fields:Atom list
+    | RecordGet of descriptor:RecordDescriptor * record:Atom * index:int
+    | RecordClone of descriptor:RecordDescriptor * record:Atom * fields:Atom list
     // String operations (heap-allocating)
     | StringConcat of left:Atom * right:Atom    // Concatenate strings: s1 ++ s2
     // Reference counting operations
@@ -371,7 +393,8 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
             let fieldShapes =
                 fields
                 |> List.map (fun (_, fieldType) -> rcShapeOfType typeReg fieldType)
-            FixedBlock (List.length fields * 8, fieldShapes)
+            // Slot zero is the immutable nominal descriptor identity.
+            FixedBlock ((List.length fields + 1) * 8, Immediate :: fieldShapes)
         | None ->
             Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
     | AST.TSum (_, []) ->
@@ -397,7 +420,9 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
         RawUnmanaged
 
 let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.Type list) : Map<string, AST.Type> =
-    if List.length typeParams = List.length typeArgs then
+    if List.isEmpty typeParams then
+        Map.empty
+    elif List.length typeParams = List.length typeArgs then
         List.zip typeParams typeArgs |> Map.ofList
     else
         Crash.crash $"rcShapeOfTypeWithSums: sum type argument mismatch: params={typeParams.Length}, args={typeArgs.Length}"
@@ -437,6 +462,15 @@ let private collectTypeVarsInOrder (typ: AST.Type) : string list =
         | AST.TRuntimeError ->
             []
     collect typ |> List.distinct
+
+let inferredRecordTypeParamsRegistry
+    (typeReg: Map<string, (string * AST.Type) list>)
+    : Map<string, string list> =
+    typeReg
+    |> Map.map (fun _ fields ->
+        fields
+        |> List.collect (fun (_, fieldType) -> collectTypeVarsInOrder fieldType)
+        |> List.distinct)
 
 let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
     match typ with
@@ -488,6 +522,7 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
 /// Classify a source type using record metadata and optional named-sum metadata.
 let rcShapeOfTypeWithSums
     (typeReg: Map<string, (string * AST.Type) list>)
+    (recordTypeParams: Map<string, string list>)
     (sumReg: RcSumShapeRegistry)
     (t: AST.Type)
     : RcShape =
@@ -501,15 +536,15 @@ let rcShapeOfTypeWithSums
             match Map.tryFind name typeReg with
             | Some fields ->
                 let typeParams =
-                    fields
-                    |> List.collect (fun (_, fieldType) -> collectTypeVarsInOrder fieldType)
-                    |> List.distinct
+                    match Map.tryFind name recordTypeParams with
+                    | Some declared -> declared
+                    | None -> Crash.crash $"rcShapeOfTypeWithSums: Record metadata '{name}' not found"
                 let subst = rcShapeTypeSubstitution typeParams typeArgs
                 let fieldShapes =
                     fields
                     |> List.map (fun (_, fieldType) ->
                         fieldType |> applyRcShapeTypeSubstitution subst |> classify expandingSums)
-                FixedBlock (List.length fields * 8, fieldShapes)
+                FixedBlock ((List.length fields + 1) * 8, Immediate :: fieldShapes)
             | None ->
                 Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
         | AST.TSum (name, typeArgs) ->
@@ -827,7 +862,9 @@ let rec rcReleasePlanOfTypeWithSums
     (sumReg: RcSumShapeRegistry)
     (t: AST.Type)
     : RcReleasePlan =
-    t |> rcShapeOfTypeWithSums typeReg sumReg |> rcShapeReleasePlan
+    t
+    |> rcShapeOfTypeWithSums typeReg (inferredRecordTypeParamsRegistry typeReg) sumReg
+    |> rcShapeReleasePlan
 
 /// Collect the concrete recursive sum roots referenced by a finite release plan.
 let rec recursiveReleaseTypes (releasePlan: RcReleasePlan) : Set<AST.Type> =

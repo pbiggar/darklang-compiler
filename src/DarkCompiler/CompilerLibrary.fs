@@ -343,7 +343,7 @@ let private lowerToAllocatedLir
                     typeMap
                     registries.FuncParams
                     registries.VariantLookup
-                    registries.TypeReg
+                    (AST_to_ANF.recordFieldsRegistry registries.TypeReg)
                     options.EnableCoverage
                     allReturnTypes
             match mirResult with
@@ -474,7 +474,8 @@ let private buildAnf
         printANFProgram "=== ANF (before optimization) ===" anfProgram
     let anfOptStart = sw.Elapsed.TotalMilliseconds
     let anfOptimizeContext : ANF_Optimize.OptimizeContext =
-        { TypeReg = registries.TypeReg
+        { TypeReg = AST_to_ANF.recordFieldsRegistry registries.TypeReg
+          RecordTypeParams = AST_to_ANF.recordTypeParamsRegistry registries.TypeReg
           SumShapeReg = AST_to_ANF.rcSumShapeRegistryFromVariantLookup registries.VariantLookup }
     let anfOptimized =
         if shouldRunANFOptimize anfOptions then
@@ -1432,7 +1433,10 @@ let buildStdlibSpecializations
                 stdlib.Context.TypeCheckEnv.VariantLookup
                 externalVariantLookup
         let externalIndexedTypeReg =
-            TypeChecking.indexTypeRegistry materializationVariantLookup externalTypeReg
+            TypeChecking.indexTypeRegistry
+                materializationVariantLookup
+                (AST_to_ANF.recordTypeParamsRegistry externalTypeReg)
+                (AST_to_ANF.recordFieldsRegistry externalTypeReg)
         let materializationTypeReg =
             Map.fold
                 (fun acc name typeInfo -> Map.add name typeInfo acc)
@@ -1878,7 +1882,7 @@ let private materializePackageValueCatalog
                     []
             let locationExpr (location: CatalogPackageLocation) =
                 AST.RecordLiteral (
-                    "Darklang.LanguageTools.ProgramTypes.PackageLocation",
+                    AST.unresolvedRecordReference "Darklang.LanguageTools.ProgramTypes.PackageLocation" [],
                     [
                         ("owner", AST.StringLiteral location.Owner)
                         ("modules", location.Modules |> List.map AST.StringLiteral |> AST.ListLiteral)
@@ -1999,13 +2003,14 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     && programType <> AST.TInt ->
                     Error
                         $"File entry expression must return Unit, Int, or Int64; got {TypeChecking.typeToString programType}"
-                | Ok (programType, typedUserAst, _userEnv) ->
+                | Ok (programType, typedUserAst, userEnv) ->
                     let renderedUserAst, boundaryProgramType =
                         if plan.Mode = FullProgram || programType = AST.TUnit then
                             (typedUserAst, programType)
                         else
                             (ValueRendering.rewriteProgram
-                                plan.BaseContext.Registries.TypeReg
+                                (AST_to_ANF.recordFieldsRegistry plan.BaseContext.Registries.TypeReg)
+                                userEnv.IndexedTypeReg
                                 plan.BaseContext.Registries.VariantLookup
                                 plan.BaseContext.Registries.FuncReg
                                 programType
@@ -2177,7 +2182,12 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 |> List.sortBy (fun variant -> variant.Tag)
                                             (typeName, { LIR.TypeParams = typeParams; LIR.Variants = lirVariants }))
                                         |> Map.ofList
-                                    let allocatedProgram = LIR.Program (allFuncs, lirVariantRegistry, userRegistries.TypeReg)
+                                    let allocatedProgram =
+                                        LIR.Program (
+                                            allFuncs,
+                                            lirVariantRegistry,
+                                            AST_to_ANF.recordFieldsRegistry userRegistries.TypeReg
+                                        )
                                     if shouldDumpIR plan.Verbosity plan.Options.DumpLIR then
                                         printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 
@@ -2696,13 +2706,14 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
         // Type check with stdlib environment
         match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv userAst with
         | Error typeErr -> Error (TypeChecking.typeErrorToString typeErr)
-        | Ok (programType, typedUserAst, _) ->
+        | Ok (programType, typedUserAst, userEnv) ->
             let renderedUserAst, boundaryProgramType =
                 if programType = AST.TUnit then
                     (typedUserAst, AST.TUnit)
                 else
                     (ValueRendering.rewriteProgram
-                        stdlib.Context.Registries.TypeReg
+                        (AST_to_ANF.recordFieldsRegistry stdlib.Context.Registries.TypeReg)
+                        userEnv.IndexedTypeReg
                         stdlib.Context.Registries.VariantLookup
                         stdlib.Context.Registries.FuncReg
                         programType

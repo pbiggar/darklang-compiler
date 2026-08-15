@@ -693,7 +693,13 @@ let private slotInitRootRetainTarget
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
             None
         | _ ->
-            Some (ANF.rcShapeOfTypeWithSums recordRegistry sumShapeRegistry typ)
+            Some (
+                ANF.rcShapeOfTypeWithSums
+                    recordRegistry
+                    (ANF.inferredRecordTypeParamsRegistry recordRegistry)
+                    sumShapeRegistry
+                    typ
+            )
 
     shapeOfKnownType valueType
     |> Option.bind (function
@@ -4427,13 +4433,15 @@ let private translateInstr
                     | _ -> "native CLI operation unavailable"
                 emitStringLiteral X86_64.R8 ""
                 @ emitStringLiteral X86_64.R9 errorMessage
-                @ [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, 32)]
+                @ [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, 40)]
+                @ loadImm64 X86_64.RCX (ANF.recordRuntimeIdentity "Stdlib.Cli.NativeOutput" [])
+                @ [X86_64.MOV_store (destReg, 0, X86_64.RCX)]
                 @ loadImm64 X86_64.RCX -1L
-                @ [X86_64.MOV_store (destReg, 0, X86_64.RCX)
-                   X86_64.MOV_store (destReg, 8, X86_64.R8)
-                   X86_64.MOV_store (destReg, 16, X86_64.R9)]
+                @ [X86_64.MOV_store (destReg, 8, X86_64.RCX)
+                   X86_64.MOV_store (destReg, 16, X86_64.R8)
+                   X86_64.MOV_store (destReg, 24, X86_64.R9)]
                 @ loadImm64 X86_64.RCX 1L
-                @ [X86_64.MOV_store (destReg, 24, X86_64.RCX)]
+                @ [X86_64.MOV_store (destReg, 32, X86_64.RCX)]
             | LIR.GetEnv | LIR.CurrentUser | LIR.Kill -> loadImm64 destReg 0L
             | LIR.SpawnProcess -> loadImm64 destReg 1L)
 

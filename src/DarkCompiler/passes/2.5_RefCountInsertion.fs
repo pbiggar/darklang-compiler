@@ -351,6 +351,14 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                     | Some t -> t
                     | None -> Crash.crash $"RefCountInsertion: Type not found for function {funcName} in TupleAlloc")
         Some (AST.TTuple elemTypes)
+    | RecordAlloc (descriptor, _) ->
+        Some (AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs))
+    | RecordClone (descriptor, _, _) ->
+        Some (AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs))
+    | RecordGet (descriptor, _, index) ->
+        descriptor.Fields
+        |> List.tryItem index
+        |> Option.map snd
     | TupleGet (tupleAtom, index) ->
         // Get element type from tuple type
         match tupleAtom with
@@ -361,8 +369,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
             | Some (AST.TRecord (typeName, _)) ->
                 // Record fields - look up field type
                 match Map.tryFind typeName ctx.TypeReg with
-                | Some fields when index < List.length fields ->
-                    Some (snd (List.item index fields))
+                | Some recordInfo when index < List.length recordInfo.Fields ->
+                    Some (snd (List.item index recordInfo.Fields))
                 | _ -> None
             | Some (AST.TList elemType) ->
                 // List Cons cells are (tag, head, tail) - index 1 is head, index 2 is tail
@@ -476,6 +484,7 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     match cexpr with
     | IfValue _ -> true            // Selects one of two existing values; no ownership transfer
     | TupleGet _ -> true           // Extracts pointer from tuple/list - borrowed from parent
+    | RecordGet _ -> true          // Record projections borrow from the owning record
     | RawGet _ -> true             // RawGet reads existing memory; it does not transfer ownership
     | RawTake _ -> false           // RawTake transfers the slot's existing ownership to the result
     | StringToRawPtr _ -> true     // RawPtr view is borrowed from the dynamic buffer
@@ -552,7 +561,10 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
 let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
     typ
     |> canonicalRcTypeForShape ctx
-    |> rcShapeOfTypeWithSums ctx.TypeReg ctx.SumShapeReg
+    |> rcShapeOfTypeWithSums
+        (recordFieldsRegistry ctx.TypeReg)
+        (recordTypeParamsRegistry ctx.TypeReg)
+        ctx.SumShapeReg
 
 let private rcMetadataForType (ctx: TypeContext) (typ: AST.Type) : RcMetadata =
     let canonicalType = canonicalRcSourceType ctx typ
@@ -1216,8 +1228,8 @@ let rec insertRCWithAnalysis
                     let isSingleListDictRecord (name: string) : bool =
                         ctx.TypeReg
                         |> Map.tryFind name
-                        |> Option.map (fun fields ->
-                            match fields |> List.map snd with
+                        |> Option.map (fun recordInfo ->
+                            match recordInfo.Fields |> List.map snd with
                             | [ AST.TList (AST.TDict _) ] -> true
                             | _ -> false)
                         |> Option.defaultValue false
@@ -1258,6 +1270,19 @@ let rec insertRCWithAnalysis
                 match cexpr with
                 | TupleAlloc elems ->
                     elems
+                    |> List.fold (fun acc atom ->
+                        match atom with
+                        | Var tid ->
+                            match tryGetType ctx tid with
+                            | Some t when shapeNeedsBorrowedRetain ctx t ->
+                                (tid, t) :: acc
+                            | _ -> acc
+                        | _ -> acc
+                    ) []
+                    |> List.rev
+                | RecordAlloc (_, fields)
+                | RecordClone (_, _, fields) ->
+                    fields
                     |> List.fold (fun acc atom ->
                         match atom with
                         | Var tid ->
@@ -1310,7 +1335,8 @@ let rec insertRCWithAnalysis
                         loop Set.empty sourceId
 
                     match currentFuncName, cexpr with
-                    | Some funcName, TupleGet (Var sourceId, _) ->
+                    | Some funcName, TupleGet (Var sourceId, _)
+                    | Some funcName, RecordGet (_, Var sourceId, _) ->
                         sourceParentIsOwnedLocal sourceId
                         && isTempUsedAsSelfTailCallArg funcName tempId bodyInfo
                     | _ ->

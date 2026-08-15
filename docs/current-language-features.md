@@ -48,7 +48,7 @@ This document lists the language features currently supported by the Dark compil
 - Literal patterns: `42`, `true`, `"hello"`, `()`
 - Variable and wildcard patterns: `x`, `_`
 - Tuple patterns: `(a, b)`, `(x, _, z)`
-- Record patterns: `Point { x = a, y = b }` (type name required)
+- Record values are matched by binding the whole value and using named field access; record destructuring patterns are unsupported
 - ADT constructor patterns: `Some(n)`, `None`
 - List patterns with exact-length and right-associative cons matching: `[]`, `[a, b]`, `h :: t`
 

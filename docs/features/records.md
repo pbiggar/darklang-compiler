@@ -1,176 +1,118 @@
 # Records
 
-This document describes how the Dark compiler handles record types.
+Records are nominal, immutable product types with named fields. Their public
+behavior follows darklang/dark revision
+`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
 
-## Overview
+## Grammar
 
-Records are named product types with labeled fields. They provide structured
-data with named access, compiled to positional tuples at runtime.
-
-## Syntax
-
-### Definition
-```dark
-type Point = { x: Int64, y: Int64 }
-
-type Person = { name: String, age: Int64, active: Bool }
-```
-
-### Construction
-```dark
-let p = Point { x = 10, y = 20 }
-let person = Person { name = "Alice", age = 30, active = true }
-```
-
-### Field Access
-```dark
-p.x        // 10
-person.age // 30
-```
-
-### Record Update
-```dark
-let p2 = { p with x = 100 }  // Point { x = 100, y = 20 }
-```
-
-## Runtime Representation
-
-Records are compiled to tuples with fields in definition order:
+Declarations name the record and may declare ordered type parameters:
 
 ```dark
-type Point = { x: Int64, y: Int64 }
-Point { x = 10, y = 20 }
+type Point = { x: Int64; y: Int64 }
+type Box<'a> = { value: 'a }
 ```
 
-Becomes:
-```
-[10, 20, refcount]  -- heap-allocated tuple
-```
-
-Memory layout:
-```
-Offset 0:   Field 0 (x) - 8 bytes
-Offset 8:   Field 1 (y) - 8 bytes
-Offset 16:  Refcount - 8 bytes
-```
-
-## Type Registry
-
-The type checker maintains a registry of record types:
-
-```fsharp
-type TypeRegistry = Map<string, (string * Type) list>
-// "Point" -> [("x", TInt64); ("y", TInt64)]
-```
-
-This maps record names to ordered lists of (fieldName, fieldType) pairs.
-
-## Compilation
-
-### Record Literal
-
-In `2_AST_to_ANF.fs`, `AST.RecordLiteral` compiles to:
-
-```fsharp
-| AST.RecordLiteral (typeName, fields) ->
-    // Reorder fields to match definition order
-    // Compile each field value
-    // Create TupleAlloc with field values
-```
-
-Fields in the literal can be in any order; the compiler reorders them
-to match the type definition.
-
-### Field Access
-
-`AST.RecordAccess` compiles to `TupleGet`:
-
-```fsharp
-| AST.RecordAccess (record, fieldName) ->
-    // Look up field index in TypeRegistry
-    // Generate TupleGet (record, index)
-```
-
-### Record Update
-
-`AST.RecordUpdate` creates a new record with some fields changed:
-
-```fsharp
-| AST.RecordUpdate (record, updates) ->
-    // Copy unchanged fields from original
-    // Replace updated fields with new values
-    // Create new TupleAlloc
-```
-
-## Pattern Matching
-
-Records can be destructured in patterns:
+Declarations and constructions accept commas, semicolons, or newlines between
+fields. A declaration must contain at least one field. Construction always has
+a type name and may carry explicit type arguments:
 
 ```dark
-match p with
-| Point { x = a, y = b } -> a + b
+Point { x = 1, y = 2 }
+Package.Box<String> { value = "kept" }
 ```
 
-Compiles to extracting each field by index:
-```
-let a = TupleGet(p, 0) in
-let b = TupleGet(p, 1) in
-a + b
-```
+Anonymous literals, obsolete declaration/literal spellings, and record
+patterns are rejected. Records can be matched by binding the whole value and
+then using field access.
 
-## Nested Records
-
-Records can contain other records:
+Postfix access composes normally (`outer.inner.value`). An update has at least
+one field:
 
 ```dark
-type Line = { start: Point, end_: Point }
-
-let line = Line { start = Point { x = 0, y = 0 }, end_ = Point { x = 10, y = 10 } }
-line.start.x  // 0
+{ point with x = 3; y = 4 }
 ```
 
-Each nested record is a separate heap allocation.
+## Identity and metadata
 
-## Reference Counting
+The compiler resolves every record reference to a qualified nominal type name
+and an ordered list of concrete type arguments. Aliases resolve to the same
+runtime nominal identity; source spelling is retained in typed record
+references where it is available. Distinct declarations are never compatible
+merely because their fields have the same shape.
 
-Records are heap-allocated and reference-counted:
+Record metadata preserves the nominal name, declared type parameters
+(including phantoms), declaration-order fields and slots, first-declared field
+lookup, and ordinal-name presentation order. Generic substitution always uses
+declared parameter order. Explicit arguments require exact arity; omitted
+arguments are inferred by the AOT checker from fields and the expected type.
 
-- construction initializes the trailing refcount to 1
-- owned record temporaries are released at scope exit unless returned
-- borrowed record projections returned from a function are retained before
-  parent cleanup
-- record fields participate in `RcShape`/`RcReleasePlan` analysis, so managed
-  fields are retained and released by representation shape instead of by
-  record-specific special cases
-- covered managed field shapes include dynamic strings and bytes, lists, dict
-  roots, closures, nested fixed blocks, boxed sums, and selected nested sums
-- literal strings stored in record fields use sentinel refcounts and are skipped
-  by dynamic-buffer release
+## Validation and evaluation
 
-Record updates create new records (immutable semantics).
+Construction distinguishes duplicate source fields, missing fields, unknown
+fields, empty normalized keys, and field type mismatches. Duplicate declaration
+names follow the interpreter's first-declared lookup behavior. A valid
+construction evaluates each initializer exactly once from left to right, then
+places values into declaration-order native slots.
 
-The generic record-list payload path now uses planned helpers derived from
-`RcReleasePlan` on both ARM64 and x64. Future recursive record cleanup should
-extend shape-plan execution rather than rebuilding record-specific helper
-matrices. See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
-for the current remaining coverage and backend parity work.
+An update evaluates its base once and update expressions once from left to
+right. Duplicate update names are allowed and the last value wins. Unknown or
+empty names and wrong value types are rejected. Untouched fields and resolved
+type arguments are preserved.
 
-## Implementation Files
+Access is type-directed through nominal metadata. Empty names, missing fields,
+and non-record receivers are diagnosed at the earliest sound AOT boundary.
+
+## Runtime layout and ownership
+
+A record is a reference-counted fixed block:
+
+```text
+slot 0       stable nominal descriptor identity
+slot 1..N    fields in declaration order
+trailer      reference count (managed by the allocator)
+```
+
+The immutable compiler descriptor carries source and resolved names, concrete
+type arguments, field-name-to-slot metadata, and presentation order. ANF has
+distinct record allocation, projection, and clone operations, lowered to the
+shared fixed-block heap instructions with the descriptor included in all
+offsets and sizes. Tuples remain a separate representation.
+
+Ownership shapes mark the descriptor immediate and recursively retain/release
+concretely substituted fields. Nested records and managed generic fields are
+therefore handled on ARM64 and x86-64 without treating tuples as records.
+
+## Equality and rendering
+
+The AOT checker admits equality only between compatible nominal types.
+Generated helpers project the same named fields and apply recursive equality;
+aliases of one resolved declaration compare as that declaration. The runtime
+descriptor prevents records from being confused with tuple payloads.
+
+Rendering uses the resolved qualified name and concrete generic arguments.
+Fields are recursively rendered in ordinal key order as `field: value`. Values
+within the interpreter's 80-character threshold use one line; longer values
+use an indented field-per-line layout.
+
+## Intentional compiler differences
+
+The interpreter can discover some invalid access/update situations while
+evaluating. The compiler reports the equivalent error during parsing or type
+checking when the invalidity is statically known. AOT monomorphization and
+ownership planning do not add record syntax or structural compatibility.
+
+## Key files
 
 | File | Purpose |
-|------|---------|
-| `src/DarkCompiler/AST.fs` | `TRecord`, record definitions, record patterns, literals, updates, and field access |
-| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | record type registry, field resolution, and typed record access/update validation |
-| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | record lowering to tuple-like fixed blocks and field projections |
-| `src/DarkCompiler/passes/2.5_RefCountInsertion.fs` | record lifetime insertion through `RcShape` decisions |
-| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 fixed-block record allocation and release-plan execution |
-| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 fixed-block record allocation and release-plan execution |
+| --- | --- |
+| `src/DarkCompiler/AST.fs` | nominal record references and public expressions |
+| `src/DarkCompiler/passes/1_Parser.fs` | compiler-syntax grammar |
+| `src/DarkCompiler/passes/1_InterpreterParser.fs` | interpreter-syntax grammar |
+| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | metadata, substitution, validation |
+| `src/DarkCompiler/passes/1.6_ValueRendering.fs` | record rendering |
+| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | record allocation, clone, and projection |
+| `src/DarkCompiler/ANF.fs` | descriptors and ownership shapes |
+| `src/Tests/e2e/records.e2e` | public behavior regressions |
 
-## Differences from Tuples
-
-| Aspect | Records | Tuples |
-|--------|---------|--------|
-| Access | Named (`.field`) | Positional (`.0`, `.1`) |
-| Definition | Explicit type | Inline |
-| Reordering | Any order in literal | Must match order |
-| Runtime | Same (positional) | Same (positional) |
+See [record parity](../record-parity.md) for revision-stamped evidence.

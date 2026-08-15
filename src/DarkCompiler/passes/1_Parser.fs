@@ -926,15 +926,18 @@ let rec parseRecordFieldsWithContext
     : Result<(string * Type) list * Token list, string> =
     match tokens with
     | TRBrace :: rest ->
-        // End of fields
-        Ok (List.rev acc, rest)
+        match acc with
+        | [] -> Error "Record type declarations require at least one field"
+        | _ -> Ok (List.rev acc, rest)
     | TIdent name :: TColon :: rest ->
         parseTypeWithContext typeParams rest
         |> Result.bind (fun (ty, remaining) ->
             match remaining with
-            | TComma :: rest' ->
+            | (TComma | TSemicolon) :: rest' ->
                 // More fields
                 parseRecordFieldsWithContext typeParams rest' ((name, ty) :: acc)
+            | TIdent _ :: TColon :: _ ->
+                parseRecordFieldsWithContext typeParams remaining ((name, ty) :: acc)
             | TRBrace :: rest' ->
                 // End of fields
                 Ok (List.rev ((name, ty) :: acc), rest')
@@ -1350,9 +1353,8 @@ and parsePatternBase (tokens: Token list) : Result<Pattern * Token list, string>
             | TRParen :: rest' ->
                 Ok (PConstructor (name, Some payloadPattern), rest')
             | _ -> Error "Expected ')' after constructor pattern payload")
-    | TIdent typeName :: TLBrace :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
-        // Record pattern with type name: Point { x = a, y = b }
-        parseRecordPatternWithTypeName typeName rest []
+    | TIdent typeName :: TLBrace :: _ when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
+        Error "Record patterns are not supported"
     | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
         // Constructor pattern without payload: Red, None
         Ok (PConstructor (name, None), rest)
@@ -1375,28 +1377,6 @@ and parseTuplePattern (tokens: Token list) (acc: Pattern list) : Result<Pattern 
             // More elements
             parseTuplePattern rest (pat :: acc)
         | _ -> Error "Expected ',' or ')' in tuple pattern")
-
-and parseRecordPatternWithTypeName (typeName: string) (tokens: Token list) (acc: (string * Pattern) list) : Result<Pattern * Token list, string> =
-    // Parse record pattern with explicit type name: TypeName { field = pattern, ... }
-    match tokens with
-    | TRBrace :: rest ->
-        // Empty record or end of fields
-        let fields = List.rev acc
-        Ok (PRecord (typeName, fields), rest)
-    | TIdent fieldName :: TEquals :: rest ->
-        parsePattern rest
-        |> Result.bind (fun (pat, remaining) ->
-            let field = (fieldName, pat)
-            match remaining with
-            | TRBrace :: rest' ->
-                // End of record pattern
-                let fields = List.rev (field :: acc)
-                Ok (PRecord (typeName, fields), rest')
-            | TComma :: rest' ->
-                // More fields
-                parseRecordPatternWithTypeName typeName rest' (field :: acc)
-            | _ -> Error "Expected ',' or '}' in record pattern")
-    | _ -> Error "Expected field name in record pattern"
 
 and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern * Token list, string> =
     match tokens with
@@ -1955,7 +1935,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             match afterQualified with
             | TLBrace :: recordFieldsStart when isConstructor ->
                 // Qualified record literal: Module.TypeName { field = value, ... }
-                parseRecordLiteralFieldsWithTypeName fullName recordFieldsStart []
+                parseRecordLiteralFieldsWithTypeName (unresolvedRecordReference fullName []) recordFieldsStart []
             | TLParen :: argsStart when isConstructor ->
                 // Qualified constructor with payload: Stdlib.Result.Result.Ok(5)
                 // Split into type name and variant name
@@ -1966,37 +1946,44 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     | TRParen :: rest' ->
                         Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, Some payloadExpr), rest')
                     | _ -> Error "Expected ')' after constructor payload")
-            | _ when isConstructor ->
+            | _ when isConstructor && (match afterQualified with TLt :: _ -> false | _ -> true) ->
                 // Qualified constructor without payload: Stdlib.Color.Red
                 let variantName = lastSegment
                 Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, None), afterQualified)
             | TLt :: typeArgsStart ->
-                // Qualified generic function call: Stdlib.List.length<t>(args)
-                let looksLikeTypeArgs tokens =
-                    match parseTypeArgs tokens [] with
-                    | Ok (_, afterTypes) ->
-                        match afterTypes with
-                        | TLParen :: _ -> true
-                        | _ when canStartSpaceApplicationArg afterTypes -> true
-                        | _ -> false
-                    | Error _ -> false
-                if looksLikeTypeArgs typeArgsStart then
-                    parseTypeArgs typeArgsStart []
-                    |> Result.bind (fun (typeArgs, afterTypes) ->
-                        match afterTypes with
-                        | TLParen :: argsStart ->
-                            parseCallArgs argsStart []
-                            |> Result.map (fun (args, remaining) ->
-                                (TypeApp (fullName, typeArgs, args), remaining))
-                        | _ when canStartSpaceApplicationArg afterTypes ->
-                            parseSpaceApplicationArgs afterTypes []
-                            |> Result.map (fun (args, remaining) ->
-                                (TypeApp (fullName, typeArgs, NonEmptyList.fromList args), remaining))
-                        | _ ->
-                            Error $"Expected '(' or space-applied argument after type arguments in generic call to {fullName}")
-                else
-                    // Not type args, treat as variable reference and leave < for comparison
-                    Ok (Var fullName, TLt :: typeArgsStart)
+                match parseTypeArgs typeArgsStart [] with
+                | Ok (typeArgs, TLBrace :: recordFieldsStart) when isConstructor ->
+                    parseRecordLiteralFieldsWithTypeName
+                        (unresolvedRecordReference fullName typeArgs)
+                        recordFieldsStart
+                        []
+                | parsedTypeArgs ->
+                    // Qualified generic function call: Stdlib.List.length<t>(args)
+                    let looksLikeTypeArgs =
+                        match parsedTypeArgs with
+                        | Ok (_, afterTypes) ->
+                            match afterTypes with
+                            | TLParen :: _ -> true
+                            | _ when canStartSpaceApplicationArg afterTypes -> true
+                            | _ -> false
+                        | Error _ -> false
+                    if looksLikeTypeArgs then
+                        parsedTypeArgs
+                        |> Result.bind (fun (typeArgs, afterTypes) ->
+                            match afterTypes with
+                            | TLParen :: argsStart ->
+                                parseCallArgs argsStart []
+                                |> Result.map (fun (args, remaining) ->
+                                    (TypeApp (fullName, typeArgs, args), remaining))
+                            | _ when canStartSpaceApplicationArg afterTypes ->
+                                parseSpaceApplicationArgs afterTypes []
+                                |> Result.map (fun (args, remaining) ->
+                                    (TypeApp (fullName, typeArgs, NonEmptyList.fromList args), remaining))
+                            | _ ->
+                                Error $"Expected '(' or space-applied argument after type arguments in generic call to {fullName}")
+                    else
+                        // Not type args, treat as variable reference and leave < for comparison
+                        Ok (Var fullName, TLt :: typeArgsStart)
             | TLParen :: argsStart ->
                 // Qualified function call: Stdlib.Int64.add(args)
                 parseCallArgs argsStart []
@@ -2094,8 +2081,11 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Error "Expected ')' after constructor payload")
         | TIdent typeName :: TLt :: typeArgsStart when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             match parseTypeArgs typeArgsStart [] with
-            | Ok (_, TLBrace :: recordFieldsStart) ->
-                parseRecordLiteralFieldsWithTypeName typeName recordFieldsStart []
+            | Ok (typeArgs, TLBrace :: recordFieldsStart) ->
+                parseRecordLiteralFieldsWithTypeName
+                    (unresolvedRecordReference typeName typeArgs)
+                    recordFieldsStart
+                    []
             | Ok _ ->
                 Error $"Expected record literal after type arguments for '{typeName}'"
             | Error _ ->
@@ -2104,7 +2094,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             parseDictLiteralFields rest []
         | TIdent typeName :: TLBrace :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             // Record literal with type name: Point { x = 1, y = 2 }
-            parseRecordLiteralFieldsWithTypeName typeName rest []
+            parseRecordLiteralFieldsWithTypeName (unresolvedRecordReference typeName []) rest []
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor without payload (enum variant)
             Ok (Constructor (UnresolvedConstructor None, name, None), rest)
@@ -2182,10 +2172,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // - anonymous record literal: { field = value, ... }
             // - record update: { recordExpr with field = value, ... }
             match rest with
-            | TRBrace :: _ ->
-                parseRecordLiteralFieldsWithTypeName "" rest []
+            | TRBrace :: _
             | TIdent _ :: TEquals :: _ ->
-                parseRecordLiteralFieldsWithTypeName "" rest []
+                Error "Anonymous records are not supported; use a named record type"
             | _ ->
                 parseExpr rest
                 |> Result.bind (fun (recordExpr, afterExpr) ->
@@ -2215,22 +2204,24 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 Ok (TupleLiteral elements, rest)
             | _ -> Error "Expected ',' or ')' in tuple literal")
 
-    and parseRecordLiteralFieldsWithTypeName (typeName: string) (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
+    and parseRecordLiteralFieldsWithTypeName (reference: RecordReference) (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
         // Parse record literal fields with explicit type name: TypeName { name = expr, ... }
         match toks with
         | TRBrace :: rest ->
             // Empty record or end of fields
-            Ok (RecordLiteral (typeName, List.rev acc), rest)
+            Ok (RecordLiteral (reference, List.rev acc), rest)
         | TIdent fieldName :: TEquals :: rest ->
             parseExpr rest
             |> Result.bind (fun (value, remaining) ->
                 match remaining with
-                | TComma :: rest' ->
+                | (TComma | TSemicolon) :: rest' ->
                     // More fields
-                    parseRecordLiteralFieldsWithTypeName typeName rest' ((fieldName, value) :: acc)
+                    parseRecordLiteralFieldsWithTypeName reference rest' ((fieldName, value) :: acc)
+                | TIdent _ :: TEquals :: _ ->
+                    parseRecordLiteralFieldsWithTypeName reference remaining ((fieldName, value) :: acc)
                 | TRBrace :: rest' ->
                     // End of record
-                    Ok (RecordLiteral (typeName, List.rev ((fieldName, value) :: acc)), rest')
+                    Ok (RecordLiteral (reference, List.rev ((fieldName, value) :: acc)), rest')
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
 
@@ -2255,15 +2246,18 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         // Parse record update fields: field = expr, field = expr, ... }
         match toks with
         | TRBrace :: rest ->
-            // End of fields
-            Ok (List.rev acc, rest)
+            match acc with
+            | [] -> Error "Record updates require at least one record update field"
+            | _ -> Ok (List.rev acc, rest)
         | TIdent fieldName :: TEquals :: rest ->
             parseExpr rest
             |> Result.bind (fun (value, remaining) ->
                 match remaining with
-                | TComma :: rest' ->
+                | (TComma | TSemicolon) :: rest' ->
                     // More fields
                     parseRecordUpdateFields rest' ((fieldName, value) :: acc)
+                | TIdent _ :: TEquals :: _ ->
+                    parseRecordUpdateFields remaining ((fieldName, value) :: acc)
                 | TRBrace :: rest' ->
                     // End of record update
                     Ok (List.rev ((fieldName, value) :: acc), rest')
@@ -2432,9 +2426,6 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
     | PTuple patterns ->
         patterns
         |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
-    | PRecord (_, fields) ->
-        fields
-        |> List.fold (fun acc (_, p) -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
     | PList patterns ->
         patterns
         |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())

@@ -539,8 +539,21 @@ let private unwrapErrorPayloadToString (expr: AST.Expr) : string option =
     | AST.CharLiteral s -> Some s
     | _ -> None
 
-/// Type registry - maps record type names to their field definitions
-type TypeRegistry = Map<string, (string * AST.Type) list>
+/// Record metadata retained through lowering. Declared parameter order cannot
+/// be reconstructed from fields because parameters may be phantom.
+type RecordTypeInfo = {
+    TypeParams: string list
+    Fields: (string * AST.Type) list
+}
+
+/// Type registry - maps nominal record identities to declared metadata.
+type TypeRegistry = Map<string, RecordTypeInfo>
+
+let recordFieldsRegistry (typeReg: TypeRegistry) : Map<string, (string * AST.Type) list> =
+    typeReg |> Map.map (fun _ info -> info.Fields)
+
+let recordTypeParamsRegistry (typeReg: TypeRegistry) : Map<string, string list> =
+    typeReg |> Map.map (fun _ info -> info.TypeParams)
 
 let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcSumShapeRegistry =
     let addVariant
@@ -614,6 +627,33 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST
 
     canonicalize typ
 
+let private canonicalizeNamedTypeRefs
+    (recordNames: Set<string>)
+    (variantLookup: VariantLookup)
+    (typ: AST.Type)
+    : AST.Type =
+    let sumNames =
+        variantLookup
+        |> Map.values
+        |> Seq.map (fun (typeName, _, _, _) -> typeName)
+        |> Set.ofSeq
+    let rec canonicalize current =
+        match current with
+        | AST.TSum (name, args) when Set.contains name recordNames && not (Set.contains name sumNames) ->
+            AST.TRecord (name, List.map canonicalize args)
+        | AST.TRecord (name, args) when Set.contains name sumNames ->
+            AST.TSum (name, List.map canonicalize args)
+        | AST.TRecord (name, args) -> AST.TRecord (name, List.map canonicalize args)
+        | AST.TSum (name, args) -> AST.TSum (name, List.map canonicalize args)
+        | AST.TFunction (args, result) ->
+            AST.TFunction (List.map canonicalize args, canonicalize result)
+        | AST.TTuple elements -> AST.TTuple (List.map canonicalize elements)
+        | AST.TEnumFields fields -> AST.TEnumFields (List.map canonicalize fields)
+        | AST.TList element -> AST.TList (canonicalize element)
+        | AST.TDict (key, value) -> AST.TDict (canonicalize key, canonicalize value)
+        | _ -> current
+    canonicalize typ
+
 /// Resolve a type name through the alias registry
 /// If the name is an alias for a record type, returns the resolved record name
 /// Otherwise returns the original name
@@ -685,7 +725,8 @@ let private resolveRegistryFields (aliasReg: AliasRegistry) (fields: (string * A
 let expandTypeRegWithAliases (typeReg: TypeRegistry) (aliasReg: AliasRegistry) : TypeRegistry =
     let resolvedTypeReg =
         typeReg
-        |> Map.map (fun _ fields -> resolveRegistryFields aliasReg fields)
+        |> Map.map (fun _ info ->
+            { info with Fields = resolveRegistryFields aliasReg info.Fields })
 
     aliasReg
     |> Map.fold (fun accReg aliasName (typeParams, targetType) ->
@@ -693,7 +734,8 @@ let expandTypeRegWithAliases (typeReg: TypeRegistry) (aliasReg: AliasRegistry) :
         | [], AST.TRecord (targetName, _) ->
             let resolvedName = resolveRecordTypeName aliasReg targetName
             match Map.tryFind resolvedName resolvedTypeReg with
-            | Some fields -> Map.add aliasName fields accReg
+            | Some targetInfo ->
+                Map.add aliasName { targetInfo with TypeParams = typeParams } accReg
             | None -> accReg  // Target not found, skip
         | _ -> accReg  // Not a non-generic record alias, skip
     ) resolvedTypeReg
@@ -962,51 +1004,47 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
     | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
         typ  // Concrete types are unchanged
 
-/// Collect type variable names in first-seen order.
-let rec collectTypeVarsInType (typ: AST.Type) (acc: string list) : string list =
-    let add name =
-        if List.contains name acc then acc else acc @ [name]
+/// Native record layouts have one keyed slot per field. When a declaration
+/// repeats a name, the interpreter's head-first lookup makes the first
+/// declaration authoritative and the later declarations do not add slots.
+let private firstDeclaredRecordFields
+    (fields: (string * AST.Type) list)
+    : (string * AST.Type) list =
+    fields
+    |> List.fold (fun (seen, retainedRev) ((name, _) as field) ->
+        if Set.contains name seen then (seen, retainedRev)
+        else (Set.add name seen, field :: retainedRev)) (Set.empty, [])
+    |> snd
+    |> List.rev
 
-    match typ with
-    | AST.TVar name -> add name
-    | AST.TFunction (paramTypes, returnType) ->
-        let withParams = paramTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-        collectTypeVarsInType returnType withParams
-    | AST.TTuple elemTypes ->
-        elemTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | AST.TEnumFields fieldTypes ->
-        fieldTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | AST.TRecord (_, typeArgs) ->
-        typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | AST.TSum (_, typeArgs) ->
-        typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | AST.TList elemType ->
-        collectTypeVarsInType elemType acc
-    | AST.TStream elemType ->
-        collectTypeVarsInType elemType acc
-    | AST.TDict (keyType, valueType) ->
-        let withKey = collectTypeVarsInType keyType acc
-        collectTypeVarsInType valueType withKey
-    | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
-    | AST.TInt128
-    | AST.TInt
-    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
-    | AST.TUInt128
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
-        acc
-
-/// Infer record type parameter order from field type variables.
-/// This relies on first occurrence order of type variables in field types.
-let inferRecordTypeParamsFromFields (fields: (string * AST.Type) list) : string list =
-    fields |> List.fold (fun acc (_, fieldType) -> collectTypeVarsInType fieldType acc) []
-
-/// Build a substitution for generic record fields from concrete type arguments.
-let buildRecordFieldSubst (fields: (string * AST.Type) list) (typeArgs: AST.Type list) : Substitution option =
-    let typeParams = inferRecordTypeParamsFromFields fields
-    if List.length typeParams = List.length typeArgs then
-        Some (List.zip typeParams typeArgs |> Map.ofList)
+let private buildDeclaredRecordFieldSubst
+    (recordInfo: RecordTypeInfo)
+    (typeArgs: AST.Type list)
+    : Substitution option =
+    if List.length recordInfo.TypeParams = List.length typeArgs then
+        Some (List.zip recordInfo.TypeParams typeArgs |> Map.ofList)
     else
         None
+
+let private recordDescriptor
+    (reference: AST.RecordReference)
+    (recordInfo: RecordTypeInfo)
+    : ANF.RecordDescriptor =
+    let fields = recordInfo.Fields
+    let concreteFields =
+        match buildDeclaredRecordFieldSubst recordInfo reference.TypeArgs with
+        | Some subst ->
+            fields
+            |> List.map (fun (name, fieldType) ->
+                (name, applySubstToType subst fieldType))
+        | None -> fields
+    {
+        SourceTypeName = reference.SourceTypeName
+        RuntimeTypeName = reference.ResolvedTypeName
+        TypeArgs = reference.TypeArgs
+        Fields = concreteFields
+        Identity = ANF.recordRuntimeIdentity reference.ResolvedTypeName reference.TypeArgs
+    }
 
 /// Match a type pattern (may contain type variables) against a concrete type.
 let rec matchTypePattern (pattern: AST.Type) (actual: AST.Type) : Result<(string * AST.Type) list, string> =
@@ -1147,8 +1185,11 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
             applySubstToType subst valueType,
             entries |> List.map (fun (key, value) -> (key, applySubstToExpr subst value))
         )
-    | AST.RecordLiteral (typeName, fields) ->
-        AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields)
+    | AST.RecordLiteral (reference, fields) ->
+        AST.RecordLiteral (
+            { reference with TypeArgs = List.map (applySubstToType subst) reference.TypeArgs },
+            List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields
+        )
     | AST.RecordUpdate (record, updates) ->
         AST.RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
     | AST.RecordAccess (record, fieldName) ->
@@ -1218,9 +1259,11 @@ let rec resolveAliasType (aliasReg: AliasRegistry) (typ: AST.Type) : AST.Type =
 
 let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistry) : TypeRegistry =
     typeReg
-    |> Map.map (fun _ fields ->
-        fields
-        |> List.map (fun (fieldName, fieldType) -> (fieldName, resolveAliasType aliasReg fieldType)))
+    |> Map.map (fun _ info ->
+        { info with
+            Fields =
+                info.Fields
+                |> List.map (fun (fieldName, fieldType) -> (fieldName, resolveAliasType aliasReg fieldType)) })
 
 /// Resolve type aliases within function signatures
 let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: AST.FunctionDef) : AST.FunctionDef =
@@ -2174,16 +2217,6 @@ let rec private matchPatternBindingTypes
             |> List.fold (fun current (innerPattern, elementType) ->
                 merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
         | _ -> Map.empty
-    | AST.PRecord (typeName, fieldPatterns) ->
-        match Map.tryFind typeName typeReg with
-        | Some fields ->
-            fieldPatterns
-            |> List.fold (fun current (fieldName, fieldPattern) ->
-                match fields |> List.tryFind (fun (name, _) -> name = fieldName) with
-                | Some (_, fieldType) ->
-                    merge current (matchPatternBindingTypes typeReg variantLookup fieldPattern fieldType)
-                | None -> current) Map.empty
-        | None -> Map.empty
     | AST.PConstructor (variantName, payloadPattern) ->
         match Map.tryFind variantName variantLookup, payloadPattern with
         | Some (typeName, typeParameters, _, Some payloadType), Some innerPattern ->
@@ -2367,15 +2400,6 @@ let rec simpleInferType
                 List.zip innerPats elemTypes
                 |> List.fold (fun acc (pat, typ) -> mergeBindings acc (extractPatternBindings pat typ)) Map.empty
             | _ -> Map.empty
-        | AST.PRecord (typeName, fieldPats) ->
-            match Map.tryFind typeName typeReg with
-            | Some fields ->
-                fieldPats
-                |> List.fold (fun acc (fieldName, pat) ->
-                    match fields |> List.tryFind (fun (name, _) -> name = fieldName) with
-                    | Some (_, fieldType) -> mergeBindings acc (extractPatternBindings pat fieldType)
-                    | None -> acc) Map.empty
-            | None -> Map.empty
         | AST.PConstructor (variantName, payloadPat) ->
             match Map.tryFind variantName variantLookup, payloadPat with
             | Some (typeName, typeParams, _, Some payloadType), Some pat ->
@@ -2475,21 +2499,19 @@ let rec simpleInferType
         | _ -> None
     | AST.DictLiteral (valueType, _) ->
         Some (AST.TDict (AST.TString, valueType))
-    | AST.RecordLiteral (typeName, fields) ->
-        if typeName = "" then
-            None
-        else
+    | AST.RecordLiteral (reference, fields) ->
+            let typeName = reference.ResolvedTypeName
             match Map.tryFind typeName typeReg with
             | None ->
                 Some (AST.TRecord (typeName, []))
-            | Some expectedFields ->
+            | Some recordInfo ->
                 let expectedFields =
-                    expectedFields
+                    recordInfo.Fields
                     |> List.map (fun (fieldName, fieldType) ->
                         (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
 
                 let fieldMap = Map.ofList fields
-                let typeParams = inferRecordTypeParamsFromFields expectedFields
+                let typeParams = recordInfo.TypeParams
                 let rec inferBindings remaining acc =
                     match remaining with
                     | [] -> Some acc
@@ -2515,18 +2537,20 @@ let rec simpleInferType
                         Some (AST.TRecord (typeName, []))
                     | Ok subst ->
                         let typeArgs =
-                            typeParams
-                            |> List.map (fun name -> Map.tryFind name subst |> Option.defaultValue (AST.TVar name))
+                            if List.isEmpty reference.TypeArgs then
+                                typeParams
+                                |> List.map (fun name -> Map.tryFind name subst |> Option.defaultValue (AST.TVar name))
+                            else reference.TypeArgs
                         Some (AST.TRecord (typeName, typeArgs))
     | AST.RecordAccess (recordExpr, fieldName) ->
         match simpleInferType recordExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some (AST.TRecord (typeName, typeArgs)) ->
             match Map.tryFind typeName typeReg with
-            | Some fields ->
-                fields
+            | Some recordInfo ->
+                recordInfo.Fields
                 |> List.tryFind (fun (name, _) -> name = fieldName)
                 |> Option.map (fun (_, fieldTypePattern) ->
-                    match buildRecordFieldSubst fields typeArgs with
+                    match buildDeclaredRecordFieldSubst recordInfo typeArgs with
                     | Some subst -> applySubstToType subst fieldTypePattern
                     | None -> fieldTypePattern)
             | None -> None
@@ -3599,7 +3623,8 @@ let rec liftLambdasInProgram
     let typeRegBase : TypeRegistry =
         topLevels
         |> List.choose (function
-            | AST.TypeDef (AST.RecordDef (name, _typeParams, fields)) -> Some (name, fields)
+            | AST.TypeDef (AST.RecordDef (name, typeParams, fields)) ->
+                Some (name, { TypeParams = typeParams; Fields = firstDeclaredRecordFields fields })
             | _ -> None)
         |> Map.ofList
 
@@ -3657,6 +3682,16 @@ let rec liftLambdasInProgram
                  |> Option.map (canonicalizeBareSumTypeRefs rawMergedVariantLookup)
              else
                  payloadType))
+    let canonicalMergedTypeReg =
+        let recordNames = mergedTypeReg |> Map.keys |> Set.ofSeq
+        mergedTypeReg
+        |> Map.map (fun _ info ->
+            { info with
+                Fields =
+                    info.Fields
+                    |> List.map (fun (fieldName, fieldType) ->
+                        (fieldName,
+                         canonicalizeNamedTypeRefs recordNames mergedVariantLookup fieldType)) })
 
     // First pass: collect all function definitions and their parameters
     let userFuncParams : Map<string, (string * AST.Type) list> =
@@ -3740,7 +3775,7 @@ let rec liftLambdasInProgram
         FuncParams = funcParams
         FuncReturnTypes = funcReturnTypes
         GenericFuncDefs = genericFuncDefs
-        TypeReg = mergedTypeReg
+        TypeReg = canonicalMergedTypeReg
         VariantLookup = mergedVariantLookup
         RecursiveSelf = None
     }
@@ -4108,14 +4143,22 @@ let rec generateStructuralEquality
         | None ->
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
-        | Some fields ->
+        | Some recordInfo ->
+            let descriptor =
+                recordDescriptor
+                    {
+                        SourceTypeName = typeName
+                        ResolvedTypeName = typeName
+                        TypeArgs = typeArgs
+                    }
+                    recordInfo
             let concreteFields =
-                match buildRecordFieldSubst fields typeArgs with
+                match buildDeclaredRecordFieldSubst recordInfo typeArgs with
                 | Some subst ->
-                    fields
+                    recordInfo.Fields
                     |> List.map (fun (name, fieldType) -> (name, applySubstToType subst fieldType))
                 | None ->
-                    fields
+                    recordInfo.Fields
 
             let rec compareFields
                 (index: int)
@@ -4129,9 +4172,9 @@ let rec generateStructuralEquality
                     finalizeBindings accResult accBindingsRev vg
                 | (_, fieldType) :: restFields ->
                     let (leftFieldVar, vg1) = ANF.freshVar vg
-                    let leftGet = ANF.TupleGet (leftAtom, index)
+                    let leftGet = ANF.RecordGet (descriptor, leftAtom, index)
                     let (rightFieldVar, vg2) = ANF.freshVar vg1
-                    let rightGet = ANF.TupleGet (rightAtom, index)
+                    let rightGet = ANF.RecordGet (descriptor, rightAtom, index)
                     let withFieldBindingsRev =
                         addForwardBindingsToRev
                             accBindingsRev
@@ -4234,35 +4277,19 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                     | None -> Error $"Cannot infer type: undefined variable '{name}'"
     | AST.DictLiteral (valueType, _) ->
         Ok (AST.TDict (AST.TString, valueType))
-    | AST.RecordLiteral (typeName, fields) ->
-        if typeName = "" then
-            // Anonymous record literal - try to find matching type by field names
-            let literalFieldNames = fields |> List.map fst |> Set.ofList
-            let matchingTypes =
-                typeReg
-                |> Map.toList
-                |> List.filter (fun (_, typeFields) ->
-                    let typeFieldNames = typeFields |> List.map fst |> Set.ofList
-                    typeFieldNames = literalFieldNames)
-                |> List.map fst
-            match matchingTypes with
-            | [singleMatch] -> Ok (AST.TRecord (singleMatch, []))
-            | [] -> Error "Cannot infer type: no record type matches the field names"
-            | matches ->
-                let names = String.concat ", " matches
-                Error $"Ambiguous record literal: matches multiple types: {names}"
-        else
+    | AST.RecordLiteral (reference, fields) ->
+            let typeName = reference.ResolvedTypeName
             match Map.tryFind typeName typeReg with
             | None ->
                 Error $"Unknown record type: {typeName}"
-            | Some expectedFields ->
+            | Some recordInfo ->
                 let expectedFields =
-                    expectedFields
+                    recordInfo.Fields
                     |> List.map (fun (fieldName, fieldType) ->
                         (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
 
                 let fieldMap = Map.ofList fields
-                let typeParams = inferRecordTypeParamsFromFields expectedFields
+                let typeParams = recordInfo.TypeParams
 
                 let rec inferBindings
                     (remainingFields: (string * AST.Type) list)
@@ -4288,9 +4315,11 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 |> Result.bind consolidateTypeBindings
                 |> Result.map (fun subst ->
                     let typeArgs =
-                        typeParams
-                        |> List.map (fun typeParam ->
-                            Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
+                        if List.isEmpty reference.TypeArgs then
+                            typeParams
+                            |> List.map (fun typeParam ->
+                                Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
+                        else reference.TypeArgs
                     AST.TRecord (typeName, typeArgs))
     | AST.RecordUpdate (recordExpr, _) ->
         // Record update returns the same type as the record being updated
@@ -4301,11 +4330,11 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             match recordType with
             | AST.TRecord (typeName, typeArgs) ->
                 match Map.tryFind typeName typeReg with
-                | Some fields ->
-                    match List.tryFind (fun (name, _) -> name = fieldName) fields with
+                | Some recordInfo ->
+                    match List.tryFind (fun (name, _) -> name = fieldName) recordInfo.Fields with
                     | Some (_, fieldTypePattern) ->
                         let fieldType =
-                            match buildRecordFieldSubst fields typeArgs with
+                            match buildDeclaredRecordFieldSubst recordInfo typeArgs with
                             | Some subst -> applySubstToType subst fieldTypePattern
                             | None -> fieldTypePattern
                         Ok fieldType
@@ -4535,42 +4564,6 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 | _ ->
                     // Non-matching tuple patterns must not introduce bindings with fabricated types.
                     // Type checking treats these as non-matching alternatives.
-                    Map.empty
-            | AST.PRecord (patternRecordName, fieldPats) ->
-                let collectRecordFieldBindings (fieldTypeForName: string -> AST.Type) : Map<string, AST.Type> =
-                    fieldPats
-                    |> List.fold (fun acc (fieldName, pat) ->
-                        let fieldType = fieldTypeForName fieldName
-                        Map.fold
-                            (fun m k v -> Map.add k v m)
-                            acc
-                            (extractPatternBindings pat fieldType))
-                        Map.empty
-
-                match scrutType with
-                | AST.TRecord (scrutRecordName, _) ->
-                    // Preserve concrete field types from the matched record.
-                    // Falling back to Int64 here causes downstream mis-lowering (e.g. string == uses pointer eq).
-                    let recordFields =
-                        match Map.tryFind scrutRecordName typeReg, Map.tryFind patternRecordName typeReg with
-                        | Some fields, _ -> fields
-                        | None, Some fields -> fields
-                        | None, None ->
-                            Crash.crash $"PRecord pattern could not find record type '{scrutRecordName}' (pattern: '{patternRecordName}')"
-
-                    collectRecordFieldBindings (fun fieldName ->
-                        match List.tryFind (fun (name, _) -> name = fieldName) recordFields with
-                        | Some (_, typ) -> typ
-                        | None -> Crash.crash $"PRecord pattern field '{fieldName}' not found on record '{patternRecordName}'")
-                | AST.TVar recordTypeVar ->
-                    // Keep unresolved record field types unresolved instead of defaulting to Int64.
-                    collectRecordFieldBindings (fun fieldName -> AST.TVar $"__record_field_{recordTypeVar}_{fieldName}")
-                | AST.TRuntimeError ->
-                    collectRecordFieldBindings (fun fieldName -> AST.TVar $"__record_field_runtime_error_{fieldName}")
-                | _ ->
-                    // Grouped alternatives may include impossible record branches
-                    // (for example `(x, 2) | MyRecord { x = x }`). Treat those
-                    // as contributing no bindings rather than crashing.
                     Map.empty
             | AST.PConstructor (variantName, payloadPat) ->
                 match payloadPat with
@@ -5105,7 +5098,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
             toANF
                 (AST.RecordLiteral (
-                    "Darklang.LanguageTools.PackageManager.PickContext",
+                    AST.unresolvedRecordReference "Darklang.LanguageTools.PackageManager.PickContext" [],
                     [("currentModule", AST.ListLiteral [])]
                 ))
                 varGen env typeReg variantLookup funcReg moduleRegistry
@@ -5749,16 +5742,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
             (exprWithBindings, varGen2))
 
-    | AST.RecordLiteral (typeName, fields) ->
+    | AST.RecordLiteral (reference, fields) ->
+        let typeName = reference.ResolvedTypeName
         // Evaluate fields in source order, then place their already-computed atoms
         // into the record's declaration-order layout.
         let fieldOrder =
-            if typeName = "" then
-                fields |> List.map fst  // Use literal order for anonymous records
-            else
-                match Map.tryFind typeName typeReg with
-                | Some typeFields -> typeFields |> List.map fst
-                | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
+            match Map.tryFind typeName typeReg with
+            | Some recordInfo -> recordInfo.Fields |> List.map fst
+            | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
 
         let rec convertFields remaining vg acc =
             match remaining with
@@ -5782,7 +5773,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | None -> Crash.crash $"Record literal '{typeName}' is missing field '{fieldName}' after type checking")
             let (resultVar, varGen2) = ANF.freshVar varGen1
             let allocation =
-                ANF.Let (resultVar, ANF.TupleAlloc orderedAtoms, ANF.Return (ANF.Var resultVar))
+                ANF.Let (
+                    resultVar,
+                    ANF.RecordAlloc (recordDescriptor reference (Map.find typeName typeReg), orderedAtoms),
+                    ANF.Return (ANF.Var resultVar)
+                )
             let withSourceOrderEvaluation =
                 convertedFields
                 |> List.map (fun (_, setupExpr, _) -> setupExpr)
@@ -5794,9 +5789,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
-            | AST.TRecord (typeName, _) ->
+            | AST.TRecord (typeName, typeArgs) ->
                 match Map.tryFind typeName typeReg with
-                | Some typeFields ->
+                | Some recordInfo ->
+                    let typeFields = recordInfo.Fields
                     toANFBoundAtom recordExpr varGen env typeReg variantLookup funcReg moduleRegistry
                     |> Result.bind (fun (recordSetup, recordAtom, varGen1) ->
                         let rec convertUpdates remaining vg acc =
@@ -5823,14 +5819,37 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     | None ->
                                         let (fieldVar, vg') = ANF.freshVar vg
                                         (ANF.Var fieldVar :: atoms,
-                                         (fieldVar, ANF.TupleGet (recordAtom, index)) :: bindings,
+                                         (
+                                             fieldVar,
+                                             ANF.RecordGet (
+                                                 recordDescriptor
+                                                     {
+                                                         SourceTypeName = typeName
+                                                         ResolvedTypeName = typeName
+                                                         TypeArgs = typeArgs
+                                                     }
+                                                     recordInfo,
+                                                 recordAtom,
+                                                 index
+                                             )
+                                         ) :: bindings,
                                          vg')) ([], [], varGen2)
 
                             let (resultVar, varGen4) = ANF.freshVar varGen3
                             let allocation =
                                 ANF.Let (
                                     resultVar,
-                                    ANF.TupleAlloc (List.rev fieldAtoms),
+                                    ANF.RecordClone (
+                                        recordDescriptor
+                                            {
+                                                SourceTypeName = typeName
+                                                ResolvedTypeName = typeName
+                                                TypeArgs = typeArgs
+                                            }
+                                            recordInfo,
+                                        recordAtom,
+                                        List.rev fieldAtoms
+                                    ),
                                     ANF.Return (ANF.Var resultVar)
                                 )
                             let withProjections = wrapBindings (List.rev projectionBindings) allocation
@@ -5846,22 +5865,33 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 Error "Cannot use record update syntax on non-record type")
 
     | AST.RecordAccess (recordExpr, fieldName) ->
-        // Records are compiled like tuples - field access becomes TupleGet
-        // Use type-directed lookup: infer the record type, then find field index
+        // Projection is type-directed so the nominal descriptor and keyed slot
+        // always agree, including after aliases and generic substitution.
         let typeEnv = typeEnvFromVarEnv env
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
-            | AST.TRecord (typeName, _) ->
+            | AST.TRecord (typeName, typeArgs) ->
                 // Look up field index in the specific record type
                 match Map.tryFind typeName typeReg with
-                | Some fields ->
-                    match List.tryFindIndex (fun (name, _) -> name = fieldName) fields with
+                | Some recordInfo ->
+                    match List.tryFindIndex (fun (name, _) -> name = fieldName) recordInfo.Fields with
                     | Some index ->
                         toAtom recordExpr varGen env typeReg variantLookup funcReg moduleRegistry
                         |> Result.map (fun (recordAtom, recordBindings, varGen1) ->
                             let (resultVar, varGen2) = ANF.freshVar varGen1
-                            let getExpr = ANF.TupleGet (recordAtom, index)
+                            let getExpr =
+                                ANF.RecordGet (
+                                    recordDescriptor
+                                        {
+                                            SourceTypeName = typeName
+                                            ResolvedTypeName = typeName
+                                            TypeArgs = typeArgs
+                                        }
+                                        recordInfo,
+                                    recordAtom,
+                                    index
+                                )
                             let finalExpr = ANF.Let (resultVar, getExpr, ANF.Return (ANF.Var resultVar))
                             let exprWithBindings = wrapBindings recordBindings finalExpr
                             (exprWithBindings, varGen2))
@@ -6431,52 +6461,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                             env
                                             (payloadBinding :: bindings)
                                             vg1)
-                        | AST.PRecord (_, fieldPatterns) ->
-                            let fieldInfosResult : Result<(int * AST.Type) list, string> =
-                                match sourceType with
-                                | AST.TRecord (recordName, _) ->
-                                    match Map.tryFind recordName typeReg with
-                                    | Some fields ->
-                                        fieldPatterns
-                                        |> List.fold (fun acc (fieldName, _) ->
-                                            acc
-                                            |> Result.bind (fun infos ->
-                                                match fields |> List.tryFindIndex (fun (name, _) -> name = fieldName) with
-                                                | Some idx -> Ok (infos @ [(idx, fields |> List.item idx |> snd)])
-                                                | None -> Error $"Unknown field '{fieldName}' on record type '{recordName}'"))
-                                            (Ok [])
-                                    | None ->
-                                        Error $"Unknown record type: {recordName}"
-                                | AST.TVar sourceTypeVar ->
-                                    // Preserve unresolved field types when record shape is unknown.
-                                    fieldPatterns
-                                    |> List.mapi (fun idx _ -> (idx, AST.TVar $"__record_field_{sourceTypeVar}_{idx}"))
-                                    |> Ok
-                                | _ ->
-                                    Error $"Record pattern used on non-record type {typeToString sourceType}"
-                            fieldInfosResult
-                            |> Result.bind (fun fieldInfos ->
-                                // Extract each field and recursively collect bindings
-                                let rec collectFromRecord (fields: (string * AST.Pattern) list) (fieldInfos: (int * AST.Type) list) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
-                                    match fields, fieldInfos with
-                                    | [], _ -> Ok (env, bindings, vg)
-                                    | (_, p) :: rest, (fieldIdx, t) :: restInfos ->
-                                        let (fieldVar, vg1) = ANF.freshVar vg
-                                        let fieldExpr = ANF.TupleGet (sourceAtom, fieldIdx)
-                                        let fieldBinding = (fieldVar, fieldExpr)
-                                        collectPatternBindings p (ANF.Var fieldVar) t env (fieldBinding :: bindings) vg1
-                                        |> Result.bind (fun (env', bindings', vg') ->
-                                            collectFromRecord rest restInfos env' bindings' vg')
-                                    | (_, p) :: rest, [] ->
-                                        let (fieldVar, vg1) = ANF.freshVar vg
-                                        let fieldIdx = List.length fieldPatterns - List.length rest - 1
-                                        let fieldExpr = ANF.TupleGet (sourceAtom, fieldIdx)
-                                        let fieldBinding = (fieldVar, fieldExpr)
-                                        let unresolvedFieldType = AST.TVar $"__record_field_missing_{fieldIdx}"
-                                        collectPatternBindings p (ANF.Var fieldVar) unresolvedFieldType env (fieldBinding :: bindings) vg1
-                                        |> Result.bind (fun (env', bindings', vg') ->
-                                            collectFromRecord rest [] env' bindings' vg')
-                                collectFromRecord fieldPatterns fieldInfos env bindings vg)
                         | AST.PList innerPatterns ->
                             // Extract element type from list type
                             let elemType =
@@ -6547,100 +6531,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings (List.rev bindings) bodyExpr
                             (finalExpr, vg2)))
-                | AST.PRecord (_, fieldPatterns) ->
-                    // Extract field types from record type
-                    let fieldInfosResult : Result<(int * AST.Type) list, string> =
-                        match scrutType with
-                        | AST.TRecord (recordName, _) ->
-                            match Map.tryFind recordName typeReg with
-                            | Some fields ->
-                                fieldPatterns
-                                |> List.fold (fun acc (fieldName, _) ->
-                                    acc
-                                    |> Result.bind (fun infos ->
-                                        match fields |> List.tryFindIndex (fun (name, _) -> name = fieldName) with
-                                        | Some idx -> Ok (infos @ [(idx, fields |> List.item idx |> snd)])
-                                        | None -> Error $"Unknown field '{fieldName}' on record type '{recordName}'"))
-                                    (Ok [])
-                            | None ->
-                                Error $"Unknown record type: {recordName}"
-                        | AST.TVar sourceTypeVar ->
-                            fieldPatterns
-                            |> List.mapi (fun idx _ -> (idx, AST.TVar $"__record_field_{sourceTypeVar}_{idx}"))
-                            |> Ok
-                        | AST.TRuntimeError ->
-                            fieldPatterns
-                            |> List.mapi (fun idx _ -> (idx, AST.TVar $"__record_field_runtime_error_{idx}"))
-                            |> Ok
-                        | _ ->
-                            Error $"Record pattern used on non-record type {typeToString scrutType}"
-                    // Extract each field and bind pattern variables
-                    let rec collectRecordBindings (fields: (string * AST.Pattern) list) (fieldInfos: (int * AST.Type) list) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
-                        match fields, fieldInfos with
-                        | [], _ -> Ok (env, bindings, vg)
-                        | (_, pat) :: rest, (fieldIdx, t) :: restInfos ->
-                            let (fieldVar, vg1) = ANF.freshVar vg
-                            let fieldExpr = ANF.TupleGet (scrutAtom, fieldIdx)
-                            let binding = (fieldVar, fieldExpr)
-                            match pat with
-                            | AST.PVar name ->
-                                let newEnv = Map.add name (fieldVar, t) env
-                                collectRecordBindings rest restInfos newEnv (bindings @ [binding]) vg1
-                            | AST.PWildcard ->
-                                collectRecordBindings rest restInfos env bindings vg1
-                            | AST.PInt64 _ | AST.PInt128Literal _
-                            | AST.PInt8Literal _
-                            | AST.PInt16Literal _
-                            | AST.PInt32Literal _
-                            | AST.PUInt8Literal _
-                            | AST.PUInt16Literal _
-                            | AST.PUInt32Literal _
-                            | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                            | AST.PUnit
-                            | AST.PBool _
-                            | AST.PString _ | AST.PChar _ | AST.PFloat _ ->
-                                collectRecordBindings rest restInfos env (bindings @ [binding]) vg1
-                            | AST.PConstructor _
-                            | AST.PTuple _ | AST.PRecord _
-                            | AST.PList _ | AST.PListCons _ ->
-                                Error $"Nested pattern in record field not yet supported: {pat}"
-                        | (_, pat) :: rest, [] ->
-                            // Fallback
-                            let (fieldVar, vg1) = ANF.freshVar vg
-                            let fieldIdx = List.length fieldPatterns - List.length rest - 1
-                            let fieldExpr = ANF.TupleGet (scrutAtom, fieldIdx)
-                            let binding = (fieldVar, fieldExpr)
-                            let unresolvedFieldType = AST.TVar $"__record_field_missing_{fieldIdx}"
-                            match pat with
-                            | AST.PVar name ->
-                                let newEnv = Map.add name (fieldVar, unresolvedFieldType) env
-                                collectRecordBindings rest [] newEnv (bindings @ [binding]) vg1
-                            | AST.PWildcard ->
-                                collectRecordBindings rest [] env bindings vg1
-                            | AST.PInt64 _ | AST.PInt128Literal _
-                            | AST.PInt8Literal _
-                            | AST.PInt16Literal _
-                            | AST.PInt32Literal _
-                            | AST.PUInt8Literal _
-                            | AST.PUInt16Literal _
-                            | AST.PUInt32Literal _
-                            | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                            | AST.PUnit
-                            | AST.PBool _
-                            | AST.PString _ | AST.PChar _ | AST.PFloat _ ->
-                                collectRecordBindings rest [] env (bindings @ [binding]) vg1
-                            | AST.PConstructor _
-                            | AST.PTuple _ | AST.PRecord _
-                            | AST.PList _ | AST.PListCons _ ->
-                                Error $"Nested pattern in record field not yet supported: {pat}"
-                    fieldInfosResult
-                    |> Result.bind (fun fieldInfos ->
-                        collectRecordBindings fieldPatterns fieldInfos currentEnv [] vg)
-                    |> Result.bind (fun (newEnv, bindings, vg1) ->
-                        toANF body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
-                        |> Result.map (fun (bodyExpr, vg2) ->
-                            let finalExpr = wrapBindings bindings bodyExpr
-                            (finalExpr, vg2)))
                 | AST.PList patterns ->
                     // Extract list elements from SkewList structure
                     // SkewList layout:
@@ -6704,7 +6594,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | AST.PUnit
                                 | AST.PConstructor _
                                 | AST.PBool _
-                                | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                                | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
                                 | AST.PList _ | AST.PListCons _ ->
                                     Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
@@ -6909,7 +6799,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         | AST.PUnit
                                         | AST.PConstructor _
                                         | AST.PBool _
-                                        | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                                        | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
                                         | AST.PList _ | AST.PListCons _ ->
                                             Error $"Nested pattern in tuple element not yet supported: {tupPat}"
                                 collectTupleBindings innerPatterns tupleElemTypes (ANF.Var headVar) 0 env allBaseBindings vg2'
@@ -6927,7 +6817,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             | AST.PUnit
                             | AST.PConstructor _
                             | AST.PBool _
-                            | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PRecord _
+                            | AST.PString _ | AST.PChar _ | AST.PFloat _
                             | AST.PList _ | AST.PListCons _ ->
                                 Error $"Nested pattern in list cons element not yet supported: {pat}"
                     collectListConsBindings headPatterns scrutAtom currentEnv [] vg
@@ -6987,11 +6877,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                              |> List.exists (fun headPat ->
                                  patternDefinitelyCannotMatchType headPat elemType))
                             || patternDefinitelyCannotMatchType tailPattern patType
-                        | AST.TVar _ -> false
-                        | _ -> true
-                    | AST.PRecord _ ->
-                        match patType with
-                        | AST.TRecord _ -> false
                         | AST.TVar _ -> false
                         | _ -> true
                     | _ -> false
@@ -7096,39 +6981,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         env
                                         ((payloadVar, payloadExpr) :: bindings)
                                         vg1)
-                    | AST.PRecord (_, fieldPatterns) ->
-                        let fieldInfosResult =
-                            match sourceType with
-                            | AST.TRecord (recordName, _) ->
-                                match Map.tryFind recordName typeReg with
-                                | Some fields ->
-                                    fieldPatterns
-                                    |> List.fold (fun acc (fieldName, _) ->
-                                        acc
-                                        |> Result.bind (fun infos ->
-                                            match fields |> List.tryFindIndex (fun (name, _) -> name = fieldName) with
-                                            | Some idx -> Ok (infos @ [(idx, fields |> List.item idx |> snd)])
-                                            | None -> Error $"collectBindings(PRecord): unknown field '{fieldName}' on record type '{recordName}'"))
-                                        (Ok [])
-                                | None ->
-                                    Error $"collectBindings(PRecord): unknown record type '{recordName}'"
-                            | _ ->
-                                Error
-                                    $"collectBindings(PRecord): expected record source type, got {typeToString sourceType}"
-                        let rec collectFromRecord fields fieldInfos env bindings vg =
-                            match fields, fieldInfos with
-                            | [], _ -> Ok (env, bindings, vg)
-                            | (_, p) :: rest, (fieldIdx, t) :: restInfos ->
-                                let (fieldVar, vg1) = ANF.freshVar vg
-                                let fieldExpr = ANF.TupleGet (sourceAtom, fieldIdx)
-                                collectBindings p (ANF.Var fieldVar) t env ((fieldVar, fieldExpr) :: bindings) vg1
-                                |> Result.bind (fun (env', bindings', vg') ->
-                                    collectFromRecord rest restInfos env' bindings' vg')
-                            | (_, _) :: _, [] ->
-                                Error "collectBindings(PRecord): missing field type"
-                        fieldInfosResult
-                        |> Result.bind (fun fieldInfos ->
-                            collectFromRecord fieldPatterns fieldInfos env bindings vg)
                     | AST.PList innerPatterns ->
                         let elemTypeResult =
                             match sourceType with
@@ -7408,57 +7260,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     // Add this comparison
                                     buildTupleComparisons rest (index + 1) vg2 (newBindings @ condBindings) (accConditions @ [cond]))
                     buildTupleComparisons innerPatterns 0 vg [] []
-                | AST.PRecord (recordName, fieldPatterns) ->
-                    // Record patterns with literals need to compare each field
-                    let fieldInfos =
-                        match Map.tryFind recordName typeReg with
-                        | Some recordFields ->
-                            fieldPatterns
-                            |> List.map (fun (fieldName, pat) ->
-                                match recordFields |> List.tryFindIndex (fun (name, _) -> name = fieldName) with
-                                | Some idx -> Ok (idx, pat)
-                                | None -> Error $"Unknown field '{fieldName}' on record type '{recordName}'")
-                            |> List.fold (fun acc item ->
-                                acc
-                                |> Result.bind (fun infos ->
-                                    item |> Result.map (fun info -> infos @ [info])))
-                                (Ok [])
-                        | None ->
-                            fieldPatterns
-                            |> List.mapi (fun idx (_, pat) -> (idx, pat))
-                            |> Ok
-
-                    let rec buildRecordComparisons (fields: (int * AST.Pattern) list) (vg: ANF.VarGen) (accBindings: (ANF.TempId * ANF.CExpr) list) (accConditions: ANF.Atom list) =
-                        match fields with
-                        | [] ->
-                            if List.isEmpty accConditions then
-                                Ok None
-                            else
-                                let rec andAll (conds: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
-                                    match conds with
-                                    | [] -> Error "Empty conditions list"
-                                    | [single] -> Ok (single, bindings, vg)
-                                    | first :: rest ->
-                                        andAll rest vg bindings
-                                        |> Result.map (fun (restResult, restBindings, vg1) ->
-                                            let (andVar, vg2) = ANF.freshVar vg1
-                                            let andExpr = ANF.Prim (ANF.And, first, restResult)
-                                            (ANF.Var andVar, restBindings @ [(andVar, andExpr)], vg2))
-                                andAll accConditions vg accBindings
-                                |> Result.map (fun (result, bindings, vg') -> Some (result, bindings, vg'))
-                        | (fieldIndex, p) :: rest ->
-                            let (elemVar, vg1) = ANF.freshVar vg
-                            let elemLoad = ANF.TupleGet (scrutAtom, fieldIndex)
-                            let newBindings = accBindings @ [(elemVar, elemLoad)]
-                            buildPatternComparison p (ANF.Var elemVar) vg1
-                            |> Result.bind (fun compResult ->
-                                match compResult with
-                                | None -> buildRecordComparisons rest vg1 newBindings accConditions
-                                | Some (cond, condBindings, vg2) ->
-                                    buildRecordComparisons rest vg2 (newBindings @ condBindings) (accConditions @ [cond]))
-                    fieldInfos
-                    |> Result.bind (fun infos ->
-                        buildRecordComparisons infos vg [] [])
                 | AST.PList patterns ->
                     // Exact list patterns compare the cached skew-list length.
                     let patternLen = List.length patterns
@@ -7499,8 +7300,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.PVar _ -> true
                 | AST.PTuple patterns ->
                     patterns |> List.exists patternBindsVariables
-                | AST.PRecord (_, fieldPatterns) ->
-                    fieldPatterns |> List.exists (snd >> patternBindsVariables)
                 | AST.PConstructor (_, payloadPattern) ->
                     payloadPattern |> Option.exists patternBindsVariables
                 | AST.PList patterns ->
@@ -7560,12 +7359,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             List.zip innerPatterns elemTypes
                             |> List.exists (fun (innerPattern, elemType) ->
                                 patternStaticallyCannotMatchType innerPattern elemType)
-                    | AST.TVar _
-                    | AST.TRuntimeError -> false
-                    | _ -> true
-                | AST.PRecord _ ->
-                    match sourceType with
-                    | AST.TRecord _
                     | AST.TVar _
                     | AST.TRuntimeError -> false
                     | _ -> true
@@ -7691,55 +7484,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     loop rest (idx + 1) env' bindings' vg')
 
                         loop (List.zip patterns elemTypes) 0 env bindings vg
-                | AST.PRecord (recordName, fieldPatterns) ->
-                    let fieldInfosResult : Result<(int * AST.Type) list, string> =
-                        match sourceType with
-                        | AST.TRecord (_, _) ->
-                            match Map.tryFind recordName typeReg with
-                            | Some fields ->
-                                fieldPatterns
-                                |> List.fold (fun acc (fieldName, _) ->
-                                    acc
-                                    |> Result.bind (fun infos ->
-                                        match fields |> List.tryFindIndex (fun (name, _) -> name = fieldName) with
-                                        | Some idx -> Ok (infos @ [(idx, fields |> List.item idx |> snd)])
-                                        | None -> Error $"Unknown field '{fieldName}' on record type '{recordName}'"))
-                                    (Ok [])
-                            | None ->
-                                Error $"Unknown record type: {recordName}"
-                        | AST.TVar sourceTypeVar ->
-                            // Preserve unresolved field types when record shape is unknown.
-                            fieldPatterns
-                            |> List.mapi (fun idx _ -> (idx, AST.TVar $"__record_field_{sourceTypeVar}_{idx}"))
-                            |> Ok
-                        | _ ->
-                            Error $"Record pattern used on non-record type {typeToString sourceType}"
-                    fieldInfosResult
-                    |> Result.bind (fun fieldInfos ->
-                        let rec loop
-                            (remaining: (string * AST.Pattern) list)
-                            (fieldInfos: (int * AST.Type) list)
-                            (currentEnv: VarEnv)
-                            (currentBindings: (ANF.TempId * ANF.CExpr) list)
-                            (currentVg: ANF.VarGen)
-                            : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
-                            match remaining, fieldInfos with
-                            | [], _ -> Ok (currentEnv, currentBindings, currentVg)
-                            | (_, pat) :: rest, (idx, fieldType) :: restInfos ->
-                                let (fieldVar, vg1) = ANF.freshVar currentVg
-                                let fieldExpr = ANF.TupleGet (sourceAtom, idx)
-                                collectNestedPatternBindings pat (ANF.Var fieldVar) fieldType currentEnv (currentBindings @ [(fieldVar, fieldExpr)]) vg1
-                                |> Result.bind (fun (env', bindings', vg') ->
-                                    loop rest restInfos env' bindings' vg')
-                            | (_, pat) :: rest, [] ->
-                                let (fieldVar, vg1) = ANF.freshVar currentVg
-                                let idx = List.length fieldPatterns - List.length rest - 1
-                                let fieldExpr = ANF.TupleGet (sourceAtom, idx)
-                                let unresolvedFieldType = AST.TVar $"__record_field_missing_{idx}"
-                                collectNestedPatternBindings pat (ANF.Var fieldVar) unresolvedFieldType currentEnv (currentBindings @ [(fieldVar, fieldExpr)]) vg1
-                                |> Result.bind (fun (env', bindings', vg') ->
-                                    loop rest [] env' bindings' vg')
-                        loop fieldPatterns fieldInfos env bindings vg)
                 | AST.PConstructor (constructorName, payloadPattern) ->
                     let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                         match typ with
@@ -7943,7 +7687,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | AST.PUnit
                                 | AST.PConstructor _
                                 | AST.PBool _
-                                | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                                | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
                                 | AST.PList _ | AST.PListCons _ ->
                                     Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
@@ -9337,7 +9081,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
             toAtom
                 (AST.RecordLiteral (
-                    "Darklang.LanguageTools.PackageManager.PickContext",
+                    AST.unresolvedRecordReference "Darklang.LanguageTools.PackageManager.PickContext" [],
                     [("currentModule", AST.ListLiteral [])]
                 ))
                 varGen env typeReg variantLookup funcReg moduleRegistry
@@ -9754,16 +9498,14 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let allBindings = tupleBindings @ [(tempVar, getCExpr)]
             (ANF.Var tempVar, allBindings, varGen2))
 
-    | AST.RecordLiteral (typeName, fields) ->
+    | AST.RecordLiteral (reference, fields) ->
+        let typeName = reference.ResolvedTypeName
         // Evaluate field expressions in source order, independently of the
         // declaration-order tuple layout used for the record value.
         let fieldOrder =
-            if typeName = "" then
-                fields |> List.map fst
-            else
-                match Map.tryFind typeName typeReg with
-                | Some typeFields -> typeFields |> List.map fst
-                | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
+            match Map.tryFind typeName typeReg with
+            | Some recordInfo -> recordInfo.Fields |> List.map fst
+            | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
 
         let rec convertFields remaining vg acc =
             match remaining with
@@ -9789,7 +9531,12 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 convertedFields |> List.collect (fun (_, _, bindings) -> bindings)
             let (tempVar, varGen2) = ANF.freshVar varGen1
             (ANF.Var tempVar,
-             sourceBindings @ [(tempVar, ANF.TupleAlloc orderedAtoms)],
+             sourceBindings
+             @ [(tempVar,
+                 ANF.RecordAlloc (
+                    recordDescriptor reference (Map.find typeName typeReg),
+                    orderedAtoms
+                 ))],
              varGen2))
 
     | AST.RecordUpdate (recordExpr, updates) ->
@@ -9799,9 +9546,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
-            | AST.TRecord (typeName, _) ->
+            | AST.TRecord (typeName, typeArgs) ->
                 match Map.tryFind typeName typeReg with
-                | Some typeFields ->
+                | Some recordInfo ->
+                    let typeFields = recordInfo.Fields
                     toAtom recordExpr varGen env typeReg variantLookup funcReg moduleRegistry
                     |> Result.bind (fun (recordAtom, recordBindings, varGen1) ->
                         let rec convertUpdates remaining vg acc =
@@ -9829,35 +9577,73 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                                     | None ->
                                         let (fieldVar, vg') = ANF.freshVar vg
                                         (ANF.Var fieldVar :: atoms,
-                                         bindings @ [(fieldVar, ANF.TupleGet (recordAtom, index))],
+                                         bindings
+                                         @ [(
+                                             fieldVar,
+                                             ANF.RecordGet (
+                                                 recordDescriptor
+                                                     {
+                                                         SourceTypeName = typeName
+                                                         ResolvedTypeName = typeName
+                                                         TypeArgs = typeArgs
+                                                     }
+                                                     recordInfo,
+                                                 recordAtom,
+                                                 index
+                                             )
+                                         )],
                                          vg')) ([], [], varGen2)
                             let (resultVar, varGen4) = ANF.freshVar varGen3
                             (ANF.Var resultVar,
                              recordBindings
                              @ updateBindings
                              @ projectionBindings
-                             @ [(resultVar, ANF.TupleAlloc (List.rev fieldAtoms))],
+                             @ [(
+                                 resultVar,
+                                 ANF.RecordClone (
+                                     recordDescriptor
+                                         {
+                                             SourceTypeName = typeName
+                                             ResolvedTypeName = typeName
+                                             TypeArgs = typeArgs
+                                         }
+                                         recordInfo,
+                                     recordAtom,
+                                     List.rev fieldAtoms
+                                 )
+                             )],
                              varGen4)))
                 | None -> Error $"Unknown record type: {typeName}"
             | _ -> Error "Cannot use record update syntax on non-record type")
 
     | AST.RecordAccess (recordExpr, fieldName) ->
-        // Records are compiled like tuples - field access becomes TupleGet
-        // Use type-directed lookup: infer the record type, then find field index
+        // Projection is type-directed so the nominal descriptor and keyed slot
+        // always agree, including after aliases and generic substitution.
         let typeEnv = typeEnvFromVarEnv env
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
-            | AST.TRecord (typeName, _) ->
+            | AST.TRecord (typeName, typeArgs) ->
                 // Look up field index in the specific record type
                 match Map.tryFind typeName typeReg with
-                | Some fields ->
-                    match List.tryFindIndex (fun (name, _) -> name = fieldName) fields with
+                | Some recordInfo ->
+                    match List.tryFindIndex (fun (name, _) -> name = fieldName) recordInfo.Fields with
                     | Some index ->
                         toAtom recordExpr varGen env typeReg variantLookup funcReg moduleRegistry
                         |> Result.bind (fun (recordAtom, recordBindings, varGen1) ->
                             let (tempVar, varGen2) = ANF.freshVar varGen1
-                            let getCExpr = ANF.TupleGet (recordAtom, index)
+                            let getCExpr =
+                                ANF.RecordGet (
+                                    recordDescriptor
+                                        {
+                                            SourceTypeName = typeName
+                                            ResolvedTypeName = typeName
+                                            TypeArgs = typeArgs
+                                        }
+                                        recordInfo,
+                                    recordAtom,
+                                    index
+                                )
                             let allBindings = recordBindings @ [(tempVar, getCExpr)]
                             Ok (ANF.Var tempVar, allBindings, varGen2))
                     | None ->
@@ -10509,7 +10295,8 @@ let buildRegistries
     let typeRegBase : TypeRegistry =
         typeDefs
         |> List.choose (function
-            | AST.RecordDef (name, _typeParams, fields) -> Some (name, fields)
+            | AST.RecordDef (name, typeParams, fields) ->
+                Some (name, { TypeParams = typeParams; Fields = firstDeclaredRecordFields fields })
             | _ -> None)
         |> Map.ofList
 
@@ -10548,10 +10335,16 @@ let buildRegistries
         typeRegBase
         |> resolveAliasesInTypeRegistry aliasReg
         |> fun reg -> expandTypeRegWithAliases reg aliasReg
-        |> Map.map (fun _ fields ->
-            fields
-            |> List.map (fun (fieldName, fieldType) ->
-                (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType)))
+        |> Map.map (fun _ info ->
+            { info with
+                Fields =
+                    info.Fields
+                    |> List.map (fun (fieldName, fieldType) ->
+                        (fieldName,
+                         canonicalizeNamedTypeRefs
+                            (typeRegBase |> Map.keys |> Set.ofSeq)
+                            variantLookup
+                            fieldType)) })
 
     let funcReg : FunctionRegistry =
         functions

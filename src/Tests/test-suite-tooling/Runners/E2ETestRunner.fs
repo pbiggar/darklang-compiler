@@ -293,11 +293,6 @@ let rec private collectPatternBoundNames (pattern: Pattern) : Set<string> =
         patterns
         |> List.map collectPatternBoundNames
         |> List.fold Set.union Set.empty
-    | PRecord (_, fields) ->
-        fields
-        |> List.map snd
-        |> List.map collectPatternBoundNames
-        |> List.fold Set.union Set.empty
     | PList patterns ->
         patterns
         |> List.map collectPatternBoundNames
@@ -740,8 +735,10 @@ let private collectSpecsFromTests
     (sourceSyntax: CompilerLibrary.SourceSyntax)
     (typeCheckEnv: TypeCheckEnv)
     (tests: E2ETest list)
-    : Result<Set<SpecKey> * TypeRegistry * VariantLookup, string> =
-    let registriesFromTypedProgram (typedAst: Program) : TypeRegistry * VariantLookup =
+    : Result<Set<SpecKey> * AST_to_ANF.TypeRegistry * VariantLookup, string> =
+    let registriesFromTypedProgram
+        (typedAst: Program)
+        : AST_to_ANF.TypeRegistry * VariantLookup =
         match AST_to_ANF.splitTopLevels typedAst with
         | Ok (typeDefs, functions, _entry) ->
             let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
@@ -789,7 +786,7 @@ let private buildPreamblePlan
     (stdlib: CompilerLibrary.StdlibResult)
     (spec: PreambleBuildSpec)
     (tests: E2ETest list)
-    : Result<PreamblePlan * Set<SpecKey> * TypeRegistry * VariantLookup, string> =
+    : Result<PreamblePlan * Set<SpecKey> * AST_to_ANF.TypeRegistry * VariantLookup, string> =
     let analysisResult = analyzePreambleForPlan stdlib spec tests
 
     analysisResult

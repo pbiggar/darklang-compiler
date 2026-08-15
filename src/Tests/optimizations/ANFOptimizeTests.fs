@@ -25,6 +25,7 @@ let private optimizeMain (context: ANF_Optimize.OptimizeContext) (expr: AExpr) :
 
 let private markerContext : ANF_Optimize.OptimizeContext =
     { TypeReg = Map.empty
+      RecordTypeParams = Map.empty
       SumShapeReg =
         Map.ofList [
             ("Marker",

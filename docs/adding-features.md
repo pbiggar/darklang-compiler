@@ -259,7 +259,8 @@ Records are straightforward - just define in Dark:
 type Point = { x: Int64, y: Int64 }
 ```
 
-The compiler handles field access, pattern matching, and construction automatically.
+The compiler handles nominal field access and construction automatically.
+Record destructuring patterns are intentionally unsupported.
 
 ### Sum Type (Algebraic Data Type)
 

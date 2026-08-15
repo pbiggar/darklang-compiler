@@ -62,7 +62,7 @@ let testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks () : TestResult =
     let recordShape = rcShapeOfType typeReg (AST.TRecord ("Pair", []))
 
     match tupleShape, recordShape with
-    | FixedBlock (24, [Immediate; DynamicString; Immediate]), FixedBlock (16, [Immediate; DynamicString]) ->
+    | FixedBlock (24, [Immediate; DynamicString; Immediate]), FixedBlock (24, [Immediate; Immediate; DynamicString]) ->
         Ok ()
     | _ ->
         Error $"Unexpected fixed-block shapes. tuple={tupleShape}; record={recordShape}"
@@ -111,16 +111,17 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
         AST.TSum ("Packet", []),
             BoxedSum (
                 16,
-                [(8, FixedBlock (8, [DynamicString])); (8, DynamicBlob)],
+                [(8, FixedBlock (16, [Immediate; DynamicString])); (8, DynamicBlob)],
                 [
-                    { Tag = 0; FieldShapes = [(8, FixedBlock (8, [DynamicString]))] }
+                    { Tag = 0; FieldShapes = [(8, FixedBlock (16, [Immediate; DynamicString]))] }
                     { Tag = 1; FieldShapes = [(8, DynamicBlob)] }
                 ])
     ]
 
-    match samples |> List.tryFind (fun (typ, expected) -> rcShapeOfTypeWithSums typeReg variantReg typ <> expected) with
+    let recordTypeParams = inferredRecordTypeParamsRegistry typeReg
+    match samples |> List.tryFind (fun (typ, expected) -> rcShapeOfTypeWithSums typeReg recordTypeParams variantReg typ <> expected) with
     | Some (typ, expected) ->
-        Error $"Expected variant-aware shape for {typ} to be {expected}, got {rcShapeOfTypeWithSums typeReg variantReg typ}"
+        Error $"Expected variant-aware shape for {typ} to be {expected}, got {rcShapeOfTypeWithSums typeReg recordTypeParams variantReg typ}"
     | None ->
         Ok ()
 
@@ -392,13 +393,13 @@ let testRcReleasePlanOfTypeUsesRecordMetadata () : TestResult =
 
     let expected =
         RootRelease (
-            24,
+            32,
             GenericHeap,
             FixedBlockPayloadRelease (
-                24,
+                32,
                 [
-                    FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                    FieldRelease (16, DynamicBufferRelease DynamicBlobBuffer)
+                    FieldRelease (16, DynamicBufferRelease DynamicStringBuffer)
+                    FieldRelease (24, DynamicBufferRelease DynamicBlobBuffer)
                 ]))
 
     let actual = rcReleasePlanOfType typeReg (AST.TRecord ("Packet", []))
@@ -465,13 +466,13 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                         FieldRelease (
                             8,
                             RootRelease (
-                                16,
+                                24,
                                 GenericHeap,
                                 FixedBlockPayloadRelease (
-                                    16,
+                                    24,
                                     [
-                                        FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
-                                        FieldRelease (8, DynamicBufferRelease DynamicBlobBuffer)
+                                        FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                                        FieldRelease (16, DynamicBufferRelease DynamicBlobBuffer)
                                     ])))
                     ; FieldRelease (
                         8,
@@ -488,13 +489,13 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                                 FieldRelease (
                                     8,
                                     RootRelease (
-                                        16,
+                                        24,
                                         GenericHeap,
                                         FixedBlockPayloadRelease (
-                                            16,
+                                            24,
                                             [
-                                                FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
-                                                FieldRelease (8, DynamicBufferRelease DynamicBlobBuffer)
+                                                FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                                                FieldRelease (16, DynamicBufferRelease DynamicBlobBuffer)
                                             ])))
                             ]
                     }
@@ -579,7 +580,7 @@ let testRcShapeRequiresRecordMetadata () : TestResult =
 
 let testRcShapeWithSumsRequiresSumMetadata () : TestResult =
     try
-        let _ = rcShapeOfTypeWithSums Map.empty Map.empty (AST.TSum ("MissingSumMetadata", []))
+        let _ = rcShapeOfTypeWithSums Map.empty Map.empty Map.empty (AST.TSum ("MissingSumMetadata", []))
         Error "Expected missing sum metadata to fail before ownership decisions can fall back to generic boxed sums"
     with
     | ex when ex.Message.Contains("MissingSumMetadata") ->

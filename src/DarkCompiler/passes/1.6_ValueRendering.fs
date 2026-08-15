@@ -19,8 +19,13 @@ type private SumInfo = {
     Variants: SumVariant list
 }
 
+type private RecordInfo = {
+    TypeParams: string list
+    Fields: (string * Type) list
+}
+
 type private RenderEnv = {
-    Records: Map<string, (string * Type) list>
+    Records: Map<string, RecordInfo>
     Sums: Map<string, SumInfo>
     NamedFunctions: Set<string>
 }
@@ -28,6 +33,14 @@ type private RenderEnv = {
 type private RenderState = {
     Functions: Map<string, FunctionDef>
 }
+
+let private firstDeclaredRecordFields (fields: (string * Type) list) : (string * Type) list =
+    fields
+    |> List.fold (fun (seen, retainedRev) ((name, _) as field) ->
+        if Set.contains name seen then (seen, retainedRev)
+        else (Set.add name seen, field :: retainedRev)) (Set.empty, [])
+    |> snd
+    |> List.rev
 
 let private args (values: Expr list) : NonEmptyList<Expr> =
     NonEmptyList.fromList values
@@ -304,9 +317,9 @@ and private renderBody
         match Map.tryFind typeName env.Records with
         | None ->
             Crash.crash $"Missing record metadata for value renderer: {typeName}"
-        | Some fields ->
-            let typeParams =
-                fields
+        | Some recordInfo ->
+            let fallbackTypeParams =
+                recordInfo.Fields
                 |> List.collect (fun (_, fieldType) ->
                     let rec collect typ =
                         match typ with
@@ -320,8 +333,11 @@ and private renderBody
                         | _ -> []
                     collect fieldType)
                 |> List.distinct
+            let typeParams =
+                if List.isEmpty recordInfo.TypeParams then fallbackTypeParams
+                else recordInfo.TypeParams
             let subst = typeSubstitution typeParams typeArgs
-            let sortedFields = fields |> List.sortBy fst
+            let sortedFields = recordInfo.Fields |> List.sortBy fst
             let rec renderFields remaining currentState acc =
                 match remaining with
                 | [] -> (List.rev acc, currentState)
@@ -330,14 +346,31 @@ and private renderBody
                     let (rendered, nextState) = renderCall env concreteType (RecordAccess (value, fieldName)) currentState
                     renderFields rest nextState ((fieldName, rendered) :: acc)
             let (renderedFields, nextState) = renderFields sortedFields state []
-            let parts =
+            let shortParts =
                 renderedFields
                 |> List.mapi (fun index (fieldName, rendered) ->
                     let prefix = if index = 0 then "" else ", "
                     [StringLiteral $"{prefix}{fieldName}: "; rendered])
                 |> List.concat
             let typeText = TypeChecking.typeToString typ
-            (concat (StringLiteral $"{typeText} {{ " :: parts @ [StringLiteral " }"]), nextState)
+            let short = concat (StringLiteral $"{typeText} {{ " :: shortParts @ [StringLiteral " }"])
+            let longParts =
+                renderedFields
+                |> List.mapi (fun index (fieldName, rendered) ->
+                    let prefix = if index = 0 then "" else ",\n  "
+                    [StringLiteral $"{prefix}{fieldName}: "; rendered])
+                |> List.concat
+            let long = concat (StringLiteral $"{typeText} {{\n  " :: longParts @ [StringLiteral "\n}"])
+            let shortName = "__record_short"
+            (Let (
+                LPVariable shortName,
+                short,
+                If (
+                    BinOp (Lte, call "Stdlib.String.length" [Var shortName], Int64Literal 80L),
+                    Var shortName,
+                    long
+                )
+             ), nextState)
     | TSum (typeName, typeArgs) ->
         match Map.tryFind typeName env.Sums with
         | None -> Crash.crash $"Missing sum metadata for value renderer: {typeName}"
@@ -415,6 +448,7 @@ let private sumRegistryFromVariants
 
 let rewriteProgram
     (baseRecords: Map<string, (string * Type) list>)
+    (recordMetadata: TypeChecking.IndexedTypeRegistry)
     (baseVariants: Map<string, string * string list * int * Type option>)
     (baseFunctions: Map<string, Type>)
     (programType: Type)
@@ -423,10 +457,30 @@ let rewriteProgram
     let localRecords =
         topLevels
         |> List.choose (function
-            | TypeDef (RecordDef (name, _, fields)) -> Some (name, fields)
+            | TypeDef (RecordDef (name, typeParams, fields)) ->
+                Some (name, { TypeParams = typeParams; Fields = firstDeclaredRecordFields fields })
             | _ -> None)
         |> Map.ofList
-    let records = Map.fold (fun acc name fields -> Map.add name fields acc) baseRecords localRecords
+    let baseRecordInfo =
+        baseRecords
+        |> Map.map (fun name fields ->
+            {
+                TypeParams =
+                    recordMetadata
+                    |> Map.tryFind name
+                    |> Option.map (fun info -> info.TypeParams)
+                    |> Option.defaultValue []
+                Fields = firstDeclaredRecordFields fields
+            })
+    let allCheckedRecordInfo =
+        recordMetadata
+        |> Map.map (fun _ (info: TypeChecking.RecordTypeInfo) ->
+            ({ TypeParams = info.TypeParams; Fields = info.Fields }: RecordInfo))
+    let records =
+        baseRecordInfo
+        |> Map.fold (fun acc name info -> Map.add name info acc) allCheckedRecordInfo
+        |> fun checkedRecords ->
+            Map.fold (fun acc name info -> Map.add name info acc) checkedRecords localRecords
 
     let baseSums = sumRegistryFromVariants baseVariants
     let localSums =

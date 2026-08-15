@@ -130,7 +130,12 @@ let private releasePrintedValueFromReg
         recordRegistry
         |> Map.map (fun _typeName fields ->
             fields |> List.map (fun field -> field.Name, field.Type))
-    let shape = ANF.rcShapeOfTypeWithSums anfRecordRegistry (rcSumShapeRegistryFromVariantRegistry variantRegistry) typ
+    let shape =
+        ANF.rcShapeOfTypeWithSums
+            anfRecordRegistry
+            (ANF.inferredRecordTypeParamsRegistry anfRecordRegistry)
+            (rcSumShapeRegistryFromVariantRegistry variantRegistry)
+            typ
     match ANF.rcShapeReleaseOperation shape with
     | Some ANF.DynamicStringBuffer ->
         [LIR.RefCountDecString (LIR.Reg reg)]

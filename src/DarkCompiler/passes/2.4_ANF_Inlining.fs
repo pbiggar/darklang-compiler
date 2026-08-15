@@ -311,6 +311,10 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | ClosureTailCall (closure, args) -> ClosureTailCall (r closure, List.map r args)
     | TupleAlloc elems -> TupleAlloc (List.map r elems)
     | TupleGet (tuple, idx) -> TupleGet (r tuple, idx)
+    | RecordAlloc (descriptor, fields) -> RecordAlloc (descriptor, List.map r fields)
+    | RecordGet (descriptor, record, idx) -> RecordGet (descriptor, r record, idx)
+    | RecordClone (descriptor, record, fields) ->
+        RecordClone (descriptor, r record, List.map r fields)
     | StringConcat (left, right) -> StringConcat (r left, r right)
     | RefCountInc (a, size, kind, sourceType) -> RefCountInc (r a, size, kind, sourceType)
     | RefCountDec (a, size, kind, sourceType) -> RefCountDec (r a, size, kind, sourceType)

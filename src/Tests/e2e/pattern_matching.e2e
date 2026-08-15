@@ -200,42 +200,42 @@ match (5, 5) with | (5, 5) -> 1 | _ -> 0 = 1
 type Point = { x: Int64, y: Int64 }
 
 // Simple record extraction
-match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = 30
+match Point { x = 10, y = 20 } with | p -> p.x + p.y = 30
 
 // Record with one field extracted
-match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = 5
+match Point { x = 5, y = 10 } with | p -> p.x = 5
 
 // Record second field only
-match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = 15
+match Point { x = 5, y = 15 } with | p -> p.y = 15
 
 // Record from variable
-let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = 25
+let p = Point { x = 3, y = 4 } in match p with | value -> value.x * value.x + value.y * value.y = 25
 
 // Three-field record
 type Vec3 = { x: Int64, y: Int64, z: Int64 }
 
-match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = 6
+match Vec3 { x = 1, y = 2, z = 3 } with | v -> v.x + v.y + v.z = 6
 
 // Record pattern with subtraction to verify correct field index ordering (kills mutation #62)
-match Point { x = 100, y = 37 } with | Point { x = a, y = b } -> a - b = 63
+match Point { x = 100, y = 37 } with | p -> p.x - p.y = 63
 
 // Three-field record with subtraction to verify field index ordering
-match Vec3 { x = 100, y = 40, z = 7 } with | Vec3 { x = a, y = b, z = c } -> a - b - c = 53
+match Vec3 { x = 100, y = 40, z = 7 } with | v -> v.x - v.y - v.z = 53
 
 // Record pattern with guard clause to verify field index ordering (kills mutation #67)
 // This tests the extractAndCompileBodyWithGuard.collectFromRecord code path
-match Point { x = 100, y = 37 } with | Point { x = a, y = b } when b < a -> b - a | _ -> 999 = -63
+match Point { x = 100, y = 37 } with | p when p.y < p.x -> p.y - p.x | _ -> 999 = -63
 
 // Three-field record with guard to verify all field indices are correct
-match Vec3 { x = 100, y = 40, z = 7 } with | Vec3 { x = a, y = b, z = c } when c < b -> a - b - c | _ -> 999 = 53
+match Vec3 { x = 100, y = 40, z = 7 } with | v when v.z < v.y -> v.x - v.y - v.z | _ -> 999 = 53
 
 // Record pattern with wildcard followed by field extraction (kills mutation #73)
 // Tests that fieldIdx is correctly incremented after wildcard patterns
-match Vec3 { x = 100, y = 40, z = 7 } with | Vec3 { x = _, y = b, z = c } -> b - c = 33
+match Vec3 { x = 100, y = 40, z = 7 } with | v -> v.y - v.z = 33
 
 // Record pattern with field extraction, wildcard, then another extraction (kills mutation #74)
 // Tests that fieldIdx is correctly incremented when wildcard appears between extractions
-match Vec3 { x = 100, y = 40, z = 7 } with | Vec3 { x = a, y = _, z = c } -> a - c = 93
+match Vec3 { x = 100, y = 40, z = 7 } with | v -> v.x - v.z = 93
 
 // === Nested ADT Patterns ===
 
@@ -323,10 +323,10 @@ match (true, false) with | (a, _) -> match a with | true -> 1 | false -> 0 = 1
 // Note: Point already defined above
 
 // Complex arithmetic with record fields
-let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> (a + b) * (a - b) = -7
+let p = Point { x = 3, y = 4 } in match p with | value -> (value.x + value.y) * (value.x - value.y) = -7
 
 // Manhattan distance style
-match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> if a > b then a else b = 4
+match Point { x = 3, y = 4 } with | p -> if p.x > p.y then p.x else p.y = 4
 
 // === Wild Nested Combinations ===
 
@@ -378,17 +378,6 @@ match (1, 2) with | (x, 0) | ([x], _) -> x | _ -> 99 = 99
 // The impossible `(x, _, _)` alternative should contribute no type bindings, so `x` stays Stdlib.String.
 (match ("a" ++ "b", 1) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = true
 
-// Record-pattern alternatives that cannot match the scrutinee type must fall through, even with guards.
-// Regression: this grouped case previously matched via incorrect TInt64 fallback record bindings.
-type GuardedRecordGroup = { x: Int64 }
-match ("a" ++ "b", 1) with | ("z", 0) -> 10 | (x, 2) | GuardedRecordGroup { x = x } when true -> 20 | _ -> 30 = 30
-
-// Impossible grouped record alternatives must not be lowered with TInt64 field defaults.
-// Regression: this failed ANF conversion by compiling `x` as Int64 in the impossible record branch.
-type GroupedRecordPerson = { name: String }
-type GroupedRecordImpossible = { x: Int64 }
-match (GroupedRecordPerson { name = "a" ++ "b" }, 1) with | (x, 2) | GroupedRecordImpossible { x = x } -> x.name == ("a" ++ "b") | _ -> false = false
-
 // Integer literal pattern on non-int scrutinee should be rejected
 match true with | 1 -> 42 | _ -> 0 = error="Cannot match Bool value true with an Int64 pattern"
 
@@ -399,13 +388,8 @@ match 42 with | h :: t -> h | _ -> 0 = error="Cannot match Int64 value 42 with a
 
 // === Nested pattern tests ===
 
-// Nested literal pattern in record field
-type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | Point { x = 5, y = n } -> n = 10
-
-// Unsupported nested patterns should be rejected rather than silently generating incorrect code.
-
-// Nested tuple pattern in record field
-type PointPair = { a: (Int64, Int64), b: Int64 } match PointPair { a = (1, 2), b = 3 } with | PointPair { a = (x, y), b = z } -> x + y + z = error="Nested pattern in record field not yet supported"
+// Record values use variable matches plus access; record destructuring is not public syntax.
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | p when p.x == 5 -> p.y | _ -> 0 = 10
 
 // Nested constructor pattern in list element
 type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x | _ -> 0 = error="Nested pattern in list element not yet supported"
@@ -451,10 +435,6 @@ let x = match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))] in
 // Nested list-cons heads must not default unresolved inner element types to TInt64.
 // Regression: this produced 3.0 instead of 4.0 by lowering `a`/`b` as Int64 in ANF.
 let x = match false with | true -> [] | false -> [[1.5, 2.5], [3.0]] in match x with | (a :: b :: inner) :: y :: rest -> a + b | _ -> 0.0 = 4.0
-
-// Nested record pattern in a tuple should not silently bind Int64 when the tuple element is not a record.
-// Regression: this used to default to TInt64 and then execute as if the pattern were valid.
-type Person = { name: String } match (Person { name = "ok" }, 0) with | (y, Unknown { name = x }) -> x | _ -> 1 = error="Unresolved type name: Unknown"
 
 // Tuple arity mismatch inside constructor payload list pattern must not default missing tuple slots to Stdlib.Int64.
 // Regression: this previously matched and evaluated the branch body instead of surfacing the tuple arity issue.
@@ -534,8 +514,8 @@ let a = [1, 2] in let b = [] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 
 // Both empty lists
 let a = [] in let b = [] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | _ -> 99 = 0
 
-// Record pattern binding should preserve String type (regression for inferType fallback to Int64)
-type PersonEq = { name: String } let p = PersonEq { name = "a" ++ "b" } in let extracted = match p with | PersonEq { name = n } -> n in extracted == ("a" ++ "b") = true
+// Record field access after a variable match preserves the field's String type.
+type PersonEq = { name: String } let p = PersonEq { name = "a" ++ "b" } in let extracted = match p with | value -> value.name in extracted == ("a" ++ "b") = true
 
 // Full pattern with list cons
 let a = [1, 2] in let b = [3, 4] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | (x :: xs, y :: ys) -> x + y | _ -> 99 = 4

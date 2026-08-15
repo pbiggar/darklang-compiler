@@ -34,7 +34,6 @@ type Pattern =
     | PChar of string
     | PFloat of float
     | PTuple of Pattern list
-    | PRecord of typeName:string * fields:(string * Pattern) list
     | PList of Pattern list
     | PListCons of head:Pattern list * tail:Pattern
 ```
@@ -112,15 +111,8 @@ Grouped alternatives are desugared into sequential single-pattern cases during
 ANF lowering. Statically impossible alternatives must be dropped before body
 compilation; otherwise unreachable branches can still trigger spurious errors.
 
-The same applies to record alternatives: when the scrutinee is statically
-non-record, guarded and unguarded record alternatives in grouped cases must
-fall through as non-matches. Lowering must not fabricate record field bindings
-with `Int64` defaults.
-
-Nested record destructuring inside tuple patterns follows the same rule. If a
-tuple slot is statically non-record, record field extraction must report a type
-error (`Record pattern used on non-record type ...`) instead of inventing
-record field bindings with `Int64`.
+Record destructuring is not part of the public pattern grammar. Bind the whole
+record with a variable pattern and use named access in the guard or body.
 
 List alternatives in grouped patterns follow the same rule. For example,
 `match 42 with | 0 | [_] -> ...` must not crash while extracting bindings for

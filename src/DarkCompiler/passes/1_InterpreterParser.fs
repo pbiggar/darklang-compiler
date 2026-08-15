@@ -1004,8 +1004,9 @@ let rec parseRecordFieldsWithContext
     : Result<(string * Type) list * Token list, string> =
     match tokens with
     | TRBrace :: rest ->
-        // End of fields
-        Ok (List.rev acc, rest)
+        match acc with
+        | [] -> Error "Record type declarations require at least one field"
+        | _ -> Ok (List.rev acc, rest)
     | TIdent name :: TColon :: rest ->
         parseTypeWithContext typeParams rest
         |> Result.bind (fun (ty, remaining) ->
@@ -1403,9 +1404,8 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         | TLBracket :: rest ->
             // List pattern: [a, b, c] or []
             parseListPattern rest []
-        | TIdent typeName :: TLBrace :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
-            // Record pattern with type name: Point { x = a, y = b }
-            parseRecordPatternWithTypeName typeName rest []
+        | TIdent typeName :: TLBrace :: _ when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
+            Error "Record patterns are not supported"
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor pattern, optionally with interpreter-style payload: Some x
             if canStartPatternPayload rest then
@@ -1458,28 +1458,6 @@ and parseTuplePattern (tokens: Token list) (acc: Pattern list) : Result<Pattern 
             // More elements
             parseTuplePattern rest (pat :: acc)
         | _ -> Error "Expected ',' or ')' in tuple pattern")
-
-and parseRecordPatternWithTypeName (typeName: string) (tokens: Token list) (acc: (string * Pattern) list) : Result<Pattern * Token list, string> =
-    // Parse record pattern with explicit type name: TypeName { field = pattern, ... }
-    match tokens with
-    | TRBrace :: rest ->
-        // Empty record or end of fields
-        let fields = List.rev acc
-        Ok (PRecord (typeName, fields), rest)
-    | TIdent fieldName :: TEquals :: rest ->
-        parsePattern rest
-        |> Result.bind (fun (pat, remaining) ->
-            let field = (fieldName, pat)
-            match remaining with
-            | TRBrace :: rest' ->
-                // End of record pattern
-                let fields = List.rev (field :: acc)
-                Ok (PRecord (typeName, fields), rest')
-            | (TComma | TSemicolon) :: rest' ->
-                // More fields
-                parseRecordPatternWithTypeName typeName rest' (field :: acc)
-            | _ -> Error "Expected ',' or '}' in record pattern")
-    | _ -> Error "Expected field name in record pattern"
 
 and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern * Token list, string> =
     match tokens with
@@ -2241,7 +2219,17 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             match afterQualified with
             | TLBrace :: recordFieldsStart when isConstructor ->
                 // Qualified record literal: Module.TypeName { field = value, ... }
-                parseRecordLiteralFieldsWithTypeName fullName recordFieldsStart []
+                parseRecordLiteralFieldsWithTypeName (unresolvedRecordReference fullName []) recordFieldsStart []
+            | TLt :: typeArgsStart when isConstructor ->
+                match parseTypeArgs typeArgsStart [] with
+                | Ok (typeArgs, TLBrace :: recordFieldsStart) ->
+                    parseRecordLiteralFieldsWithTypeName
+                        (unresolvedRecordReference fullName typeArgs)
+                        recordFieldsStart
+                        []
+                | Ok _ ->
+                    Error $"Expected record literal after type arguments for '{fullName}'"
+                | Error error -> Error error
             | _ when isConstructor ->
                 let variantName = lastSegment
                 // Leave space application to parseApplication. This preserves
@@ -2296,8 +2284,11 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 Ok (Var name, TLt :: rest)
         | TIdent typeName :: TLt :: typeArgsStart when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             match parseTypeArgs typeArgsStart [] with
-            | Ok (_, TLBrace :: recordFieldsStart) ->
-                parseRecordLiteralFieldsWithTypeName typeName recordFieldsStart []
+            | Ok (typeArgs, TLBrace :: recordFieldsStart) ->
+                parseRecordLiteralFieldsWithTypeName
+                    (unresolvedRecordReference typeName typeArgs)
+                    recordFieldsStart
+                    []
             | Ok _ ->
                 Error $"Expected record literal after type arguments for '{typeName}'"
             | Error _ ->
@@ -2306,7 +2297,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             parseDictLiteralFields rest []
         | TIdent typeName :: TLBrace :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             // Record literal with type name: Point { x = 1, y = 2 }
-            parseRecordLiteralFieldsWithTypeName typeName rest []
+            parseRecordLiteralFieldsWithTypeName (unresolvedRecordReference typeName []) rest []
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor payloads use the same left-associative application
             // path as every other callable expression.
@@ -2433,10 +2424,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // - anonymous record literal: { field = value, ... }
             // - record update: { recordExpr with field = value, ... }
             match rest with
-            | TRBrace :: _ ->
-                parseRecordLiteralFieldsWithTypeName "" rest []
+            | TRBrace :: _
             | TIdent _ :: TEquals :: _ ->
-                parseRecordLiteralFieldsWithTypeName "" rest []
+                Error "Anonymous records are not supported; use a named record type"
             | _ ->
                 // Parse as record update syntax.
                 parseExpr rest
@@ -2467,25 +2457,25 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 Ok (TupleLiteral elements, rest)
             | _ -> Error "Expected ',' or ')' in tuple literal")
 
-    and parseRecordLiteralFieldsWithTypeName (typeName: string) (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
+    and parseRecordLiteralFieldsWithTypeName (reference: RecordReference) (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
         // Parse record literal fields with explicit type name: TypeName { name = expr, ... }
         match toks with
         | TRBrace :: rest ->
             // Empty record or end of fields
-            Ok (RecordLiteral (typeName, List.rev acc), rest)
+            Ok (RecordLiteral (reference, List.rev acc), rest)
         | TIdent fieldName :: TEquals :: rest ->
             parseExpr rest
             |> Result.bind (fun (value, remaining) ->
                 match remaining with
                 | (TComma | TSemicolon) :: rest' ->
                     // More fields
-                    parseRecordLiteralFieldsWithTypeName typeName rest' ((fieldName, value) :: acc)
+                    parseRecordLiteralFieldsWithTypeName reference rest' ((fieldName, value) :: acc)
                 | TIdent _ :: TEquals :: _ ->
                     // Support newline-delimited field lists in upstream interpreter syntax.
-                    parseRecordLiteralFieldsWithTypeName typeName remaining ((fieldName, value) :: acc)
+                    parseRecordLiteralFieldsWithTypeName reference remaining ((fieldName, value) :: acc)
                 | TRBrace :: rest' ->
                     // End of record
-                    Ok (RecordLiteral (typeName, List.rev ((fieldName, value) :: acc)), rest')
+                    Ok (RecordLiteral (reference, List.rev ((fieldName, value) :: acc)), rest')
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
 
@@ -2510,8 +2500,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         // Parse record update fields: field = expr, field = expr, ... }
         match toks with
         | TRBrace :: rest ->
-            // End of fields
-            Ok (List.rev acc, rest)
+            match acc with
+            | [] -> Error "Record updates require at least one record update field"
+            | _ -> Ok (List.rev acc, rest)
         | TIdent fieldName :: TEquals :: rest ->
             parseExpr rest
             |> Result.bind (fun (value, remaining) ->
@@ -2757,9 +2748,6 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
     | PTuple patterns ->
         patterns
         |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
-    | PRecord (_, fields) ->
-        fields
-        |> List.fold (fun acc (_, p) -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
     | PList patterns ->
         patterns
         |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())

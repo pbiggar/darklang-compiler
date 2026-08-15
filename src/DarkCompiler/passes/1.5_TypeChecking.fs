@@ -755,16 +755,18 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
     | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
         acc
 
-/// Infer record type parameter order from field type variables.
-/// This relies on first occurrence order of type variables in field types.
-let inferRecordTypeParamsFromFields (fields: (string * Type) list) : string list =
-    fields |> List.fold (fun acc (_, fieldType) -> collectTypeVarsInType fieldType acc) []
-
-let private recordTypeInfo (fields: (string * Type) list) : RecordTypeInfo =
+let private recordTypeInfo (typeParams: string list) (fields: (string * Type) list) : RecordTypeInfo =
+    let (firstDeclaredFieldsRev, firstDeclaredFieldTypes) =
+        fields
+        |> List.fold (fun (orderedFields, fieldTypes) ((name, fieldType) as field) ->
+            if Map.containsKey name fieldTypes then
+                (orderedFields, fieldTypes)
+            else
+                (field :: orderedFields, Map.add name fieldType fieldTypes)) ([], Map.empty)
     {
-        Fields = fields
-        FieldTypes = Map.ofList fields
-        TypeParams = inferRecordTypeParamsFromFields fields
+        Fields = List.rev firstDeclaredFieldsRev
+        FieldTypes = firstDeclaredFieldTypes
+        TypeParams = typeParams
     }
 
 let private buildRecordFieldSubstitutionFromParams
@@ -778,9 +780,6 @@ let private buildRecordFieldSubstitutionFromParams
         Ok (List.zip typeParams typeArgs |> Map.ofList)
 
 /// Build a substitution for generic record fields from concrete type arguments.
-let buildRecordFieldSubstitution (fields: (string * Type) list) (typeArgs: Type list) : Result<Substitution, string> =
-    buildRecordFieldSubstitutionFromParams (inferRecordTypeParamsFromFields fields) typeArgs
-
 let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : Type =
     match typ with
     | TRecord (name, typeArgs) ->
@@ -837,17 +836,21 @@ let private tryResolveGenericRecordAliasFields
     | _ ->
         None
 
-let private tryResolveRecordLiteralFields
+let private tryResolveRecordLiteralInfo
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
-    (typeName: string)
-    : (string * (string * Type) list) option =
-    let resolvedTypeName = resolveTypeName aliasReg typeName
-    match Map.tryFind resolvedTypeName typeReg with
-    | Some info ->
-        Some (resolvedTypeName, info.Fields)
-    | None ->
-        tryResolveGenericRecordAliasFields aliasReg typeReg typeName
+    (reference: RecordReference)
+    : (string * Type list * RecordTypeInfo) option =
+    match
+        resolveAliasTargetType
+            aliasReg
+            (TRecord (reference.SourceTypeName, reference.TypeArgs))
+    with
+    | TRecord (resolvedTypeName, aliasTypeArgs)
+    | TSum (resolvedTypeName, aliasTypeArgs) ->
+        Map.tryFind resolvedTypeName typeReg
+        |> Option.map (fun info -> (resolvedTypeName, aliasTypeArgs, info))
+    | _ -> None
 
 /// Build a substitution from type parameters and type arguments
 let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<Substitution, string> =
@@ -905,8 +908,11 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         TupleAccess (applySubstToExpr subst tuple, index)
     | DictLiteral (valueType, entries) ->
         DictLiteral (applySubst subst valueType, entries |> List.map (fun (key, value) -> (key, applySubstToExpr subst value)))
-    | RecordLiteral (typeName, fields) ->
-        RecordLiteral (typeName, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields)
+    | RecordLiteral (reference, fields) ->
+        RecordLiteral (
+            { reference with TypeArgs = List.map (applySubst subst) reference.TypeArgs },
+            List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields
+        )
     | RecordUpdate (record, updates) ->
         RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
     | RecordAccess (record, fieldName) ->
@@ -1075,14 +1081,18 @@ let private canonicalizeDeclaredTypeRefs
 /// concrete stdlib specialization.
 let indexTypeRegistry
     (variantLookup: VariantLookup)
+    (recordTypeParams: Map<string, string list>)
     (typeReg: TypeRegistry)
     : IndexedTypeRegistry =
     typeReg
-    |> Map.map (fun _ fields ->
+    |> Map.map (fun typeName fields ->
         fields
         |> List.map (fun (fieldName, fieldType) ->
-            (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
-        |> recordTypeInfo)
+            (fieldName, canonicalizeDeclaredTypeRefs typeReg variantLookup fieldType))
+        |> recordTypeInfo
+            (match Map.tryFind typeName recordTypeParams with
+             | Some declared -> declared
+             | None -> Crash.crash $"Missing declared record parameters for '{typeName}'"))
 
 /// Compare two types for equality, resolving type aliases first
 /// This allows "Vec" and "Point" to be considered equal when Vec aliases Point
@@ -1637,8 +1647,6 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
     | PConstructor (_, Some payload) -> collectPatternBindings payload
     | PTuple patterns ->
         patterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
-    | PRecord (_, fields) ->
-        fields |> List.map (fun (_, p) -> collectPatternBindings p) |> List.fold Set.union Set.empty
     | PList patterns ->
         patterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
     | PListCons (headPatterns, tailPattern) ->
@@ -3950,22 +3958,58 @@ let rec private checkExprWithParamNames
             | other ->
                 Error (GenericError $"Cannot access .{index} on non-tuple type {typeToString other}"))
 
-    | RecordLiteral (typeName, fields) ->
+    | RecordLiteral (reference, fields) ->
+        let typeName = reference.SourceTypeName
         // Type name is required (parser enforces this, but check for safety)
         if typeName = "" then
             Error (GenericError "Record literal requires type name: use 'TypeName { field = value, ... }'")
         else
-            match tryResolveRecordLiteralFields aliasReg typeReg typeName with
+            let normalizedFields =
+                fields
+                |> List.map (fun (name, value) ->
+                    (if name = "___" then "" else name), value)
+            let invalidEmptyField = normalizedFields |> List.tryFind (fst >> (=) "")
+            let duplicateField =
+                normalizedFields
+                |> List.map fst
+                |> List.countBy id
+                |> List.tryPick (fun (name, count) -> if count > 1 then Some name else None)
+            match invalidEmptyField, duplicateField with
+            | Some _, _ -> Error (GenericError "Empty key in record creation")
+            | _, Some duplicate -> Error (GenericError $"Duplicate field `{duplicate}`")
+            | None, None ->
+            match tryResolveRecordLiteralInfo aliasReg typeReg reference with
             | None ->
                 Error (GenericError $"Unknown record type: {typeName}")
-            | Some (resolvedTypeName, expectedFields) ->
+            | Some (resolvedTypeName, aliasTypeArgs, recordInfo) ->
+                let explicitArityError =
+                    if List.isEmpty reference.TypeArgs then None
+                    else
+                        let sourceArity =
+                            match Map.tryFind reference.SourceTypeName aliasReg with
+                            | Some (parameters, _) -> List.length parameters
+                            | None -> List.length recordInfo.TypeParams
+                        if sourceArity = List.length reference.TypeArgs then None
+                        else Some $"Record type argument arity mismatch: expected {sourceArity}, got {List.length reference.TypeArgs}"
+                match explicitArityError with
+                | Some message -> Error (GenericError message)
+                | None ->
+                let initialTypeArgs =
+                    if List.length aliasTypeArgs = List.length recordInfo.TypeParams then aliasTypeArgs
+                    else []
+                let initialSubstitution =
+                    match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams initialTypeArgs with
+                    | Ok substitution -> substitution
+                    | Error _ -> Map.empty
                 let expectedFields =
-                    expectedFields
+                    recordInfo.Fields
                     |> List.map (fun (fieldName, fieldType) ->
-                        (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+                        (fieldName,
+                         fieldType
+                         |> applySubst initialSubstitution))
 
                 // Check that all fields are present and have correct types
-                let fieldMap = Map.ofList fields
+                let fieldMap = Map.ofList normalizedFields
 
                 // Check for missing fields
                 let missingFields =
@@ -3980,7 +4024,7 @@ let rec private checkExprWithParamNames
                     // Check for extra fields
                     let expectedFieldNames = expectedFields |> List.map fst |> Set.ofList
                     let extraFields =
-                        fields
+                        normalizedFields
                         |> List.filter (fun (fname, _) -> not (Set.contains fname expectedFieldNames))
                         |> List.map fst
 
@@ -3990,7 +4034,11 @@ let rec private checkExprWithParamNames
                     else
                         // Type check each field in source order. Record layout order is
                         // applied during lowering, after every initializer has run.
-                        let expectedFieldTypes = Map.ofList expectedFields
+                        let expectedFieldTypes =
+                            expectedFields
+                            |> List.fold (fun lookup (fieldName, fieldType) ->
+                                if Map.containsKey fieldName lookup then lookup
+                                else Map.add fieldName fieldType lookup) Map.empty
 
                         let rec checkFieldsInOrder
                             (remaining: (string * Expr) list)
@@ -4046,26 +4094,44 @@ let rec private checkExprWithParamNames
                                 | None ->
                                     Crash.crash $"Record field '{fname}' disappeared after validation"
 
-                        checkFieldsInOrder fields [] []
+                        checkFieldsInOrder normalizedFields [] []
                         |> Result.bind (fun (fields', rawBindings) ->
                             match consolidateBindings rawBindings with
                             | Error msg ->
                                 Error (GenericError $"Incompatible generic record field types: {msg}")
                             | Ok subst ->
-                                let inferredTypeParams = inferRecordTypeParamsFromFields expectedFields
                                 let inferredTypeArgs =
-                                    inferredTypeParams
-                                    |> List.map (fun name -> Map.tryFind name subst |> Option.defaultValue (TVar name))
+                                    match initialTypeArgs with
+                                    | args when List.length args = List.length recordInfo.TypeParams ->
+                                        args |> List.map (applySubst subst)
+                                    | _ ->
+                                        recordInfo.TypeParams
+                                        |> List.map (fun name -> Map.tryFind name subst |> Option.defaultValue (TVar name))
+                                let inferredTypeArgs =
+                                    match expectedType with
+                                    | Some expected ->
+                                        match resolveType aliasReg expected with
+                                        | TRecord (expectedName, expectedArgs)
+                                            when resolveTypeName aliasReg expectedName = resolvedTypeName
+                                                 && List.length expectedArgs = List.length recordInfo.TypeParams ->
+                                            expectedArgs
+                                        | _ -> inferredTypeArgs
+                                    | None -> inferredTypeArgs
                                 let inferredRecordType = TRecord (resolvedTypeName, inferredTypeArgs)
+                                let resolvedReference = {
+                                    SourceTypeName = reference.SourceTypeName
+                                    ResolvedTypeName = resolvedTypeName
+                                    TypeArgs = inferredTypeArgs
+                                }
 
                                 match expectedType with
                                 | Some expected ->
                                     if typesCompatibleWithAliases aliasReg expected inferredRecordType then
-                                        Ok (inferredRecordType, RecordLiteral (resolvedTypeName, fields'))
+                                        Ok (inferredRecordType, RecordLiteral (resolvedReference, fields'))
                                     else
                                         Error (TypeMismatch (expected, inferredRecordType, "record literal"))
                                 | None ->
-                                    Ok (inferredRecordType, RecordLiteral (resolvedTypeName, fields')))
+                                    Ok (inferredRecordType, RecordLiteral (resolvedReference, fields')))
 
     | RecordUpdate (recordExpr, updates) ->
         // Check the record expression to get its type
@@ -4079,46 +4145,54 @@ let rec private checkExprWithParamNames
                 | None ->
                     Error (GenericError $"Unknown record type: {typeName}")
                 | Some recordInfo ->
-                    let expectedFields = recordInfo.Fields
-
-                    let subst =
-                        match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
-                        | Ok s -> s
-                        | Error _ -> Map.empty
-
-                    // Check for unknown fields in update
-                    let unknownFields =
+                    let normalizedUpdates =
                         updates
-                        |> List.filter (fun (fname, _) -> not (Map.containsKey fname recordInfo.FieldTypes))
-                        |> List.map fst
+                        |> List.map (fun (name, value) ->
+                            (if name = "___" then "" else name), value)
 
-                    if not (List.isEmpty unknownFields) then
-                        let unknownStr = String.concat ", " unknownFields
-                        Error (GenericError $"Unknown fields in record update: {unknownStr}")
-                    else
-                        // Type check each update field
-                        let rec checkUpdates remaining accUpdates =
-                            match remaining with
-                            | [] -> Ok (List.rev accUpdates)
-                            | (fname, updateExpr) :: rest ->
-                                match Map.tryFind fname recordInfo.FieldTypes with
-                                | Some fieldTypePattern ->
-                                    let expectedFieldType = applySubst subst fieldTypePattern
-                                    checkExpr updateExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some expectedFieldType)
-                                    |> Result.bind (fun (actualType, updateExpr') ->
-                                        if typesCompatibleWithAliases aliasReg expectedFieldType actualType then
-                                            checkUpdates rest ((fname, updateExpr') :: accUpdates)
-                                        else
-                                            Error (TypeMismatch (expectedFieldType, actualType, $"field {fname} in record update")))
-                                | None ->
-                                    Error (GenericError $"Field {fname} not found in record type {typeName}")
+                    match normalizedUpdates |> List.tryFind (fst >> (=) "") with
+                    | Some _ -> Error (GenericError "Empty key in record update")
+                    | None ->
+                    match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                    | Error message -> Error (GenericError message)
+                    | Ok subst ->
+                        // Update expressions remain in source order. Duplicate names
+                        // are intentionally accepted and the lowering uses the last value.
+                        let unknownFields =
+                            normalizedUpdates
+                            |> List.filter (fun (fname, _) -> not (Map.containsKey fname recordInfo.FieldTypes))
+                            |> List.map fst
 
-                        checkUpdates updates []
-                        |> Result.map (fun updates' -> (TRecord (resolvedTypeName, typeArgs), RecordUpdate (recordExpr', updates')))
+                        if not (List.isEmpty unknownFields) then
+                            let unknownStr = String.concat ", " unknownFields
+                            Error (GenericError $"Unknown fields in record update: {unknownStr}")
+                        else
+                            let rec checkUpdates remaining accUpdates =
+                                match remaining with
+                                | [] -> Ok (List.rev accUpdates)
+                                | (fname, updateExpr) :: rest ->
+                                    match Map.tryFind fname recordInfo.FieldTypes with
+                                    | Some fieldTypePattern ->
+                                        let expectedFieldType = applySubst subst fieldTypePattern
+                                        checkExpr updateExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some expectedFieldType)
+                                        |> Result.bind (fun (actualType, updateExpr') ->
+                                            if typesCompatibleWithAliases aliasReg expectedFieldType actualType then
+                                                checkUpdates rest ((fname, updateExpr') :: accUpdates)
+                                            else
+                                                Error (TypeMismatch (expectedFieldType, actualType, $"field {fname} in record update")))
+                                    | None ->
+                                        Crash.crash $"Validated record update field '{fname}' disappeared"
+
+                            checkUpdates normalizedUpdates []
+                            |> Result.map (fun updates' -> (TRecord (resolvedTypeName, typeArgs), RecordUpdate (recordExpr', updates')))
             | other ->
                 Error (GenericError $"Cannot use record update syntax on non-record type {typeToString other}"))
 
     | RecordAccess (recordExpr, fieldName) ->
+        let fieldName = if fieldName = "___" then "" else fieldName
+        if fieldName = "" then
+            Error (GenericError "Field name is empty")
+        else
         // Check the record expression
         checkExpr recordExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
         |> Result.bind (fun (recordType, recordExpr') ->
@@ -4132,7 +4206,7 @@ let rec private checkExprWithParamNames
                 | Some recordInfo ->
                     match Map.tryFind fieldName recordInfo.FieldTypes with
                     | None ->
-                        Error (GenericError $"Record type {typeName} has no field '{fieldName}'")
+                        Error (GenericError $"Tried to access field '{fieldName}' but record type {typeName} has no such field")
                     | Some fieldTypePattern ->
                         match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                         | Error msg ->
@@ -4144,7 +4218,7 @@ let rec private checkExprWithParamNames
                                 Error (TypeMismatch (expected, fieldType, $"field access .{fieldName}"))
                             | _ -> Ok (fieldType, RecordAccess (recordExpr', fieldName))
             | other ->
-                Error (GenericError $"Cannot access .{fieldName} on non-record type {typeToString other}"))
+                Error (GenericError $"Attempting to access field '{fieldName}' on non-record type {typeToString other}"))
 
     | Constructor (constructorReference, variantName, payload) ->
         // Look up the variant to find its type and expected payload
@@ -4440,9 +4514,6 @@ let rec private checkExprWithParamNames
                         | PTuple nestedPatterns
                         | PList nestedPatterns ->
                             nestedPatterns |> List.exists containsVariableBinding
-                        | PRecord (_, fieldPatterns) ->
-                            fieldPatterns
-                            |> List.exists (fun (_, fieldPattern) -> containsVariableBinding fieldPattern)
                         | PListCons (headPatterns, tailPattern) ->
                             List.exists containsVariableBinding headPatterns
                             || containsVariableBinding tailPattern
@@ -4488,34 +4559,6 @@ let rec private checkExprWithParamNames
                             let message =
                                 $"Cannot match {typeToString resolvedPatternType} value {valueText} with a Tuple pattern"
                             Error (GenericError message)
-                | PRecord (_, fieldPatterns) ->
-                    match patternType with
-                    | TRecord (recordName, recordTypeArgs) ->
-                        // Resolve type alias before looking up in typeReg
-                        let resolvedRecordName = resolveTypeName aliasReg recordName
-                        match Map.tryFind resolvedRecordName typeReg with
-                        | Some recordInfo ->
-                            let subst =
-                                match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams recordTypeArgs with
-                                | Ok s -> s
-                                | Error _ -> Map.empty
-                            fieldPatterns
-                            |> List.map (fun (fieldName, pat) ->
-                                match Map.tryFind fieldName recordInfo.FieldTypes with
-                                | Some fieldType ->
-                                    let concreteFieldType = applySubst subst fieldType
-                                    extractPatternBindings
-                                        pat
-                                        concreteFieldType
-                                        allowNoMatchForKnownListLengthMismatch
-                                | None -> Error (GenericError $"Unknown field in pattern: {fieldName}"))
-                            |> List.fold (fun acc res ->
-                                match acc, res with
-                                | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
-                                | Error e, _ -> Error e
-                                | _, Error e -> Error e) (Ok [])
-                        | None -> Error (GenericError $"Unknown record type: {recordName}")
-                    | _ -> Error (GenericError "Record pattern used on non-record type")
                 | PList patterns ->
                     let resolvedPatternType = resolveType aliasReg patternType
                     match resolvedPatternType with
@@ -4697,8 +4740,6 @@ let rec private checkExprWithParamNames
                 | PTuple patterns
                 | PList patterns ->
                     patterns |> List.collect patternBindingNames
-                | PRecord (_, fieldPatterns) ->
-                    fieldPatterns |> List.collect (fun (_, fieldPattern) -> patternBindingNames fieldPattern)
                 | PListCons (headPatterns, tailPattern) ->
                     (headPatterns |> List.collect patternBindingNames) @ patternBindingNames tailPattern
 
@@ -5609,15 +5650,15 @@ let rec private buildEqHelperExpr
             let rightRecordVar = "__dark_eq_helper_record_right"
             let fieldComparisons =
                 concreteFields
-                |> List.mapi (fun index (_, fieldType) ->
+                |> List.map (fun (fieldName, fieldType) ->
                     buildEqHelperExpr
                         aliasReg
                         typeReg
                         variantLookup
                         UseHelperCall
                         fieldType
-                        (TupleAccess (Var leftRecordVar, index))
-                        (TupleAccess (Var rightRecordVar, index)))
+                        (RecordAccess (Var leftRecordVar, fieldName))
+                        (RecordAccess (Var rightRecordVar, fieldName)))
             Let (LPVariable leftRecordVar, leftExpr, Let (LPVariable rightRecordVar, rightExpr, chainAndExpr fieldComparisons))
 
     | ExpandCurrent, TSum (sumTypeName, sumTypeArgs) ->
@@ -6669,6 +6710,7 @@ let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
 /// Registries derivable directly from a program's top-level declarations.
 type private TopLevelDeclarationSummary = {
     TypeReg: TypeRegistry
+    RecordTypeParams: Map<string, string list>
     AliasReg: AliasRegistry
     VariantLookup: VariantLookup
     FuncSigs: Map<string, Type list * Type>
@@ -6998,7 +7040,6 @@ let private resolveProgramNames
         match pattern with
         | PVar name -> Set.singleton name
         | PConstructor (_, payload) -> payload |> Option.map patternBoundNames |> Option.defaultValue Set.empty
-        | PRecord (_, fields) -> fields |> List.map (snd >> patternBoundNames) |> Set.unionMany
         | PTuple patterns | PList patterns -> patterns |> List.map patternBoundNames |> Set.unionMany
         | PListCons (heads, tail) -> Set.union (heads |> List.map patternBoundNames |> Set.unionMany) (patternBoundNames tail)
         | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _ | PInt16Literal _
@@ -7016,12 +7057,6 @@ let private resolveProgramNames
             |> Option.map recurse
             |> ResultList.sequenceOption
             |> Result.map (fun payload' -> PConstructor (name, payload'))
-        | PRecord (typeName, fields) ->
-            resolveName NameResolution.ResolutionContext.Type localNames typeName
-            |> Result.bind (fun resolvedTypeName ->
-                fields
-                |> ResultList.traverse (fun (field, fieldPattern) -> recurse fieldPattern |> Result.map (fun p -> (field, p)))
-                |> Result.map (fun fields' -> PRecord (resolvedTypeName, fields')))
         | PTuple patterns -> ResultList.traverse recurse patterns |> Result.map PTuple
         | PList patterns -> ResultList.traverse recurse patterns |> Result.map PList
         | PListCons (heads, tail) ->
@@ -7175,14 +7210,20 @@ let private resolveProgramNames
                             |> Result.map (fun body' ->
                                 { Patterns = NonEmptyList.fromList patterns'; Guard = guard'; Body = body' }))))
                 |> Result.map (fun cases' -> Match (scrutinee', cases')))
-        | RecordLiteral (typeName, fields) ->
-            let resolvedTypeNameResult =
-                if typeName = "" then Ok "" else resolveName NameResolution.ResolutionContext.Type localNames typeName
-            resolvedTypeNameResult
+        | RecordLiteral (reference, fields) ->
+            resolveName NameResolution.ResolutionContext.Type localNames reference.SourceTypeName
             |> Result.bind (fun resolvedTypeName ->
-                fields
-                |> ResultList.traverse (fun (field, value) -> recurse value |> Result.map (fun value' -> (field, value')))
-                |> Result.map (fun fields' -> RecordLiteral (resolvedTypeName, fields')))
+                ResultList.traverse resolveTypeRefs reference.TypeArgs
+                |> Result.bind (fun typeArgs ->
+                    fields
+                    |> ResultList.traverse (fun (field, value) -> recurse value |> Result.map (fun value' -> (field, value')))
+                    |> Result.map (fun fields' ->
+                        RecordLiteral (
+                            { SourceTypeName = resolvedTypeName
+                              ResolvedTypeName = resolvedTypeName
+                              TypeArgs = typeArgs },
+                            fields'
+                        ))))
         | DictLiteral (valueType, entries) ->
             entries
             |> ResultList.traverse (fun (key, value) -> recurse value |> Result.map (fun value' -> (key, value')))
@@ -7463,15 +7504,9 @@ let private validateTopLevelTypeDeclarations
                         match typeDef with
                         | RecordDef (_, _, []) ->
                             Error (GenericError $"Record declaration must contain at least one field: {typeName}")
-                        | RecordDef (_, _, fields) ->
-                            fields
-                            |> List.map fst
-                            |> List.countBy id
-                            |> List.tryPick (fun (name, count) -> if count > 1 then Some name else None)
-                            |> function
-                                | Some fieldName ->
-                                    Error (GenericError $"Duplicate record field declaration: {typeName}.{fieldName}")
-                                | None -> Ok ()
+                        // The interpreter preserves duplicate declarations and
+                        // resolves lookup against the first declaration.
+                        | RecordDef _ -> Ok ()
                         | SumTypeDef (_, _, []) ->
                             Error (GenericError $"Enum declaration must contain at least one case: {typeName}")
                         | SumTypeDef (_, _, variants) ->
@@ -7497,6 +7532,7 @@ let private summarizeTopLevelDeclarations
     : TopLevelDeclarationSummary =
     let empty : TopLevelDeclarationSummary = {
         TypeReg = Map.empty
+        RecordTypeParams = Map.empty
         AliasReg = Map.empty
         VariantLookup = Map.empty
         FuncSigs = Map.empty
@@ -7539,8 +7575,10 @@ let private summarizeTopLevelDeclarations
     declarationsToSummarize
     |> List.fold (fun summary topLevel ->
         match topLevel with
-        | TypeDef (RecordDef (name, _typeParams, fields)) ->
-            { summary with TypeReg = Map.add name fields summary.TypeReg }
+        | TypeDef (RecordDef (name, typeParams, fields)) ->
+            { summary with
+                TypeReg = Map.add name fields summary.TypeReg
+                RecordTypeParams = Map.add name typeParams summary.RecordTypeParams }
         | TypeDef (TypeAlias (name, typeParams, targetType)) ->
             { summary with AliasReg = Map.add name (typeParams, targetType) summary.AliasReg }
         | TypeDef (SumTypeDef (typeName, typeParams, variants)) ->
@@ -7625,6 +7663,14 @@ let private checkResolvedProgramInternal
              payloadType
              |> Option.map (canonicalizeBareSumTypeRefs recordVariantLookup)))
 
+    let canonicalProgramTypeReg =
+        programTypeReg
+        |> Map.map (fun _ fields ->
+            fields
+            |> List.map (fun (fieldName, fieldType) ->
+                (fieldName,
+                 canonicalizeDeclaredTypeRefs programTypeReg canonicalVariantLookup fieldType)))
+
     let programAliasReg =
         declarationSummary.AliasReg
         |> Map.map (fun _ (typeParams, targetType) ->
@@ -7647,15 +7693,19 @@ let private checkResolvedProgramInternal
         |> Map.map (fun _ (paramTypes, returnType) ->
             let canonicalize typ =
                 typ
-                |> canonicalizeDeclaredTypeRefs programTypeReg canonicalVariantLookup
+                |> canonicalizeDeclaredTypeRefs canonicalProgramTypeReg canonicalVariantLookup
                 |> resolveType functionAliasReg
                 |> canonicalizeBareSumTypeRefs canonicalVariantLookup
             TFunction (List.map canonicalize paramTypes, canonicalize returnType))
 
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
-        TypeReg = programTypeReg
-        IndexedTypeReg = indexTypeRegistry canonicalVariantLookup programTypeReg
+        TypeReg = canonicalProgramTypeReg
+        IndexedTypeReg =
+            indexTypeRegistry
+                canonicalVariantLookup
+                declarationSummary.RecordTypeParams
+                canonicalProgramTypeReg
         VariantLookup = canonicalVariantLookup
         FuncEnv = programFuncEnv
         FuncParamNames = declarationSummary.FuncParamNames

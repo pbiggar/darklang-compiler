@@ -5,8 +5,8 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.x = 10
 
 type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.y = 20
 
-// Record patterns should read fields by record definition order, not pattern field order.
-type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in match p with | Point { y = 20, x = 10 } -> 1 | _ -> 0 = 1
+// Records remain matchable through a variable followed by field access.
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in match p with | value -> if value.y == 20 && value.x == 10 then 1 else 0 = 1
 
 // Record with arithmetic on fields
 type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 3 } in p.x + p.y = 8
@@ -143,3 +143,63 @@ let v = Vec3 { x = 10, y = 20, z = 30 } in { v with z = 5 }.x + { v with z = 5 }
 // Record update where variable only appears in the update part
 type Point = { x: Int64, y: Int64 }
 let ``val`` = 100 in { Point { x = 1, y = 2 } with x = ``val`` }.x = 100
+
+// Canonical validation, generic identity, nesting, ordering, and rendering.
+type PhantomRecord<'unused> = { value: Int64 }
+PhantomRecord<String> { value = 7 } = stdout="PhantomRecord<String> { value: 7 }\n" stderr=""
+
+type MixedPhantomRecord<'unused, 'value> = { value: 'value }
+MixedPhantomRecord<Int64, String> { value = "managed" } = stdout="MixedPhantomRecord<Int64, String> { value: \"managed\" }\n" stderr=""
+
+type GenericInner<'a> = { value: a }
+type GenericOuter<'a> = { inner: GenericInner<a> }
+let outer = GenericOuter<String> { inner = GenericInner<String> { value = "nested" } } in outer.inner.value = "nested"
+
+type GenericInner<'a> = { value: a }
+type GenericOuter<'a> = { inner: GenericInner<a> }
+let outer = GenericOuter<String> { inner = GenericInner<String> { value = "before" } } in { outer with inner = { outer.inner with value = "after" } }.inner.value = "after"
+
+type AliasRecord<'a> = { value: a }
+type AliasRecordView<'a> = AliasRecord<'a>
+AliasRecordView<String> { value = "alias" } == AliasRecord<String> { value = "alias" } = true
+
+type OrderedPresentation = { z: Int64; a: String }
+OrderedPresentation { z = 2; a = "first" } = stdout="OrderedPresentation { a: \"first\", z: 2 }\n" stderr=""
+
+type DuplicateDeclarationField = { value: Int64; value: String }
+DuplicateDeclarationField { value = 7 }.value = 7
+
+type DuplicateConstruction = { value: Int64 }
+DuplicateConstruction { value = 1; value = 2 } = error="Duplicate field `value`"
+
+type MissingConstruction = { first: Int64; second: Int64 }
+MissingConstruction { first = 1 } = error="Missing fields in record literal: second"
+
+type UnknownConstruction = { value: Int64 }
+UnknownConstruction { value = 1; other = 2 } = error="Unknown fields in record literal: other"
+
+type EmptyConstructionKey = { value: Int64 }
+EmptyConstructionKey { ___ = 1 } = error="Empty key in record creation"
+
+type ExplicitArity<'a> = { value: a }
+ExplicitArity<Int64, String> { value = 1 } = error="Record type argument arity mismatch: expected 1, got 2"
+
+type UpdateLastWins = { value: Int64; untouched: String }
+let original = UpdateLastWins { value = 1; untouched = "kept" } in let updated = { original with value = 2; value = 3 } in updated.value = 3
+
+type InvalidUpdate = { value: Int64 }
+let original = InvalidUpdate { value = 1 } in { original with other = 2 } = error="Unknown fields in record update: other"
+
+type InvalidUpdate = { value: Int64 }
+let original = InvalidUpdate { value = 1 } in { original with ___ = 2 } = error="Empty key in record update"
+
+type AccessDiagnostics = { value: Int64 }
+let record = AccessDiagnostics { value = 1 } in record.___ = error="Field name is empty"
+
+type AccessDiagnostics = { value: Int64 }
+let record = AccessDiagnostics { value = 1 } in record.other = error="Tried to access field 'other' but record type AccessDiagnostics has no such field"
+
+let nonRecord = 1 in nonRecord.value = error="Attempting to access field 'value' on non-record type Int64"
+
+type LongRenderedRecord = { alpha: String; beta: String }
+LongRenderedRecord { alpha = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"; beta = "abcdefghijklmnopqrstuvwxyz" } = stdout="LongRenderedRecord {\n  alpha: \"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\",\n  beta: \"abcdefghijklmnopqrstuvwxyz\"\n}\n" stderr=""

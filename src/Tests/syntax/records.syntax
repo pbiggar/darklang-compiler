@@ -1,0 +1,127 @@
+// Canonical record grammar shared by both public parser entry paths.
+
+---NAME---
+compiler accepts canonical record separators
+---PARSE-AS---
+compiler
+---SOURCE---
+type Mixed = {
+  first: Int64;
+  second: String,
+  third: Bool
+}
+Mixed {
+  third = true;
+  first = 1,
+  second = "two"
+}
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+interpreter accepts canonical record separators
+---PARSE-AS---
+interpreter
+---SOURCE---
+type Mixed = {
+  first: Int64;
+  second: String,
+  third: Bool
+}
+Mixed {
+  third = true;
+  first = 1,
+  second = "two"
+}
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+compiler accepts qualified generic record construction
+---PARSE-AS---
+compiler
+---SOURCE---
+Package.Box<String> { value = "kept" }
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+interpreter accepts qualified generic record construction
+---PARSE-AS---
+interpreter
+---SOURCE---
+Package.Box<String> { value = "kept" }
+---ROUNDTRIP-AS---
+compiler, interpreter
+
+---NAME---
+compiler rejects anonymous record literal
+---PARSE-AS---
+compiler
+---SOURCE---
+{ value = 1 }
+---EXPECT-ERROR---
+Anonymous records are not supported
+
+---NAME---
+interpreter rejects anonymous record literal
+---PARSE-AS---
+interpreter
+---SOURCE---
+{ value = 1 }
+---EXPECT-ERROR---
+Anonymous records are not supported
+
+---NAME---
+compiler rejects empty record update
+---PARSE-AS---
+compiler
+---SOURCE---
+{ value with }
+---EXPECT-ERROR---
+at least one record update field
+
+---NAME---
+interpreter rejects empty record update
+---PARSE-AS---
+interpreter
+---SOURCE---
+{ value with }
+---EXPECT-ERROR---
+at least one record update field
+
+---NAME---
+compiler rejects empty record declaration
+---PARSE-AS---
+compiler
+---SOURCE---
+type Empty = {}
+---EXPECT-ERROR---
+Record type declarations require at least one field
+
+---NAME---
+interpreter rejects empty record declaration
+---PARSE-AS---
+interpreter
+---SOURCE---
+type Empty = {}
+---EXPECT-ERROR---
+Record type declarations require at least one field
+
+---NAME---
+compiler rejects record pattern
+---PARSE-AS---
+compiler
+---SOURCE---
+match value with | Point { x = x } -> x | _ -> 0
+---EXPECT-ERROR---
+Record patterns are not supported
+
+---NAME---
+interpreter rejects record pattern
+---PARSE-AS---
+interpreter
+---SOURCE---
+match value with | Point { x = x } -> x | _ -> 0
+---EXPECT-ERROR---
+Record patterns are not supported

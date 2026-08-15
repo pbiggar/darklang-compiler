@@ -97,8 +97,11 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
         { analysis with IndirectTargets = Set.add name analysis.IndirectTargets }
         |> analyzeMany captures
     | TupleAlloc atoms -> analyzeMany atoms analysis
+    | RecordAlloc (_, atoms) -> analyzeMany atoms analysis
+    | RecordClone (_, record, fields) -> analyzeMany (record :: fields) analysis
     | CliNative (_, args) -> analyzeMany args analysis
     | TupleGet (tuple, _) -> analyze tuple analysis
+    | RecordGet (_, record, _) -> analyze record analysis
     | FileWriteFromPtr (path, ptr, length) -> analyzeMany [path; ptr; length] analysis
     | RawWriteWord (ptr, offset, value)
     | RawWriteByte (ptr, offset, value) -> analyzeMany [ptr; offset; value] analysis
@@ -215,6 +218,10 @@ let private rewriteCExpr
     | ClosureTailCall (closure, args) -> ClosureTailCall (rewrite closure, rewriteMany args)
     | TupleAlloc atoms -> TupleAlloc (rewriteMany atoms)
     | TupleGet (tuple, index) -> TupleGet (rewrite tuple, index)
+    | RecordAlloc (descriptor, fields) -> RecordAlloc (descriptor, rewriteMany fields)
+    | RecordGet (descriptor, record, index) -> RecordGet (descriptor, rewrite record, index)
+    | RecordClone (descriptor, record, fields) ->
+        RecordClone (descriptor, rewrite record, rewriteMany fields)
     | StringConcat (left, right) -> StringConcat (rewrite left, rewrite right)
     | RefCountInc (atom, size, kind, metadata) -> RefCountInc (rewrite atom, size, kind, metadata)
     | RefCountDec (atom, size, kind, metadata) -> RefCountDec (rewrite atom, size, kind, metadata)
