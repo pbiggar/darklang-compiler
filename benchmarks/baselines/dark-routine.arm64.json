@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "3662376c639f80762e5f9672675eed03667cedd6b77b005bf3f624a7708f03db",
-  "generated_at": "2026-08-15T08:45:41+00:00",
+  "generated_at": "2026-08-15T11:10:52+00:00",
   "compiler": {
-    "commit": "3a755ce9e001330e30aaf4905fbd7a69ee0f82c0",
-    "subject": "Bound test-build memory usage"
+    "commit": "0d8fa52f363fd0bb880f45bca80a0dae93b44a74",
+    "subject": "Refresh JSON parity record integration baseline"
   },
   "benchmarks": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "name": "binary_trees",
-      "instructions": 649092188
+      "instructions": 649092988
     },
     {
       "name": "collatz",
@@ -57,7 +57,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 1193502272
+      "instructions": 1394002414
     },
     {
       "name": "nqueen",
@@ -77,7 +77,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 74939657
+      "instructions": 74939665
     },
     {
       "name": "sum_to_n",
