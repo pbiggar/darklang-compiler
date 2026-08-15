@@ -5,87 +5,87 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "367fbac8c4f6420951592af456195c7874d231b771326a90ff149b7d6ba8ab85",
-  "generated_at": "2026-08-15T02:34:48+00:00",
+  "generated_at": "2026-08-15T07:46:18+00:00",
   "compiler": {
-    "commit": "153d9588152ac5ba7b98ce8d699eacea1abc3b0e",
-    "subject": "Eliminate redundant ARM64 entry parameter copies"
+    "commit": "671ab160ef4fb2de3829ee251285e09733e8c1e8",
+    "subject": "Keep NFC-safe formatting on raw concat"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 10019035996
+      "instructions": 10019035954
     },
     {
       "name": "binary_trees",
-      "instructions": 649092194
+      "instructions": 649092132
     },
     {
       "name": "collatz",
-      "instructions": 81143046
+      "instructions": 81142974
     },
     {
       "name": "edigits",
-      "instructions": 4528733711
+      "instructions": 4528733649
     },
     {
       "name": "factorial",
-      "instructions": 64094
+      "instructions": 63912
     },
     {
       "name": "fasta",
-      "instructions": 514839089
+      "instructions": 514839007
     },
     {
       "name": "fib",
-      "instructions": 418050947
+      "instructions": 418050885
     },
     {
       "name": "leibniz",
-      "instructions": 850001482
+      "instructions": 850001400
     },
     {
       "name": "mandelbrot",
-      "instructions": 17459510
+      "instructions": 17459468
     },
     {
       "name": "matmul",
-      "instructions": 1968521113
+      "instructions": 1968521021
     },
     {
       "name": "merkletrees",
-      "instructions": 389936193
+      "instructions": 389936111
     },
     {
       "name": "nbody",
-      "instructions": 1193502228
+      "instructions": 1193502216
     },
     {
       "name": "nqueen",
-      "instructions": 221668085
+      "instructions": 221668043
     },
     {
       "name": "pisum",
-      "instructions": 95371
+      "instructions": 95249
     },
     {
       "name": "primes",
-      "instructions": 2045919
+      "instructions": 2045887
     },
     {
       "name": "quicksort",
-      "instructions": 222570011
+      "instructions": 222569929
     },
     {
       "name": "spectral_norm",
-      "instructions": 74939493
+      "instructions": 74939601
     },
     {
       "name": "sum_to_n",
-      "instructions": 71833
+      "instructions": 71761
     },
     {
       "name": "tak",
-      "instructions": 52360530
+      "instructions": 52360528
     }
   ]
 }

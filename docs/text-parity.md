@@ -100,9 +100,23 @@ malformed String or Char values.
   registered in `TestRunner.fs`. The String fixture has only harness adaptations:
   its interpreter side-effect callback assertion is omitted, `newline()` uses
   the compiler's existing spelling, and the unrelated, unavailable `Slugify`
-module cases remain outside this approved text-parity scope. Focused results
-  are recorded in the implementing commit message. Repository-wide testing and
-  routine benchmarking are intentionally left to the integration worker.
+  module cases remain outside this approved text-parity scope. Focused results
+  are recorded in the implementing commit message.
+
+## Integration verification
+
+The completed implementation was rebased onto `main@9b6c27d0a52c313774ef5a05b78447cf0015c353`.
+Its final source commit is
+`C@671ab160ef4fb2de3829ee251285e09733e8c1e8`; the exact integration HEAD used
+for the post-rebase comparisons was
+`C@5515cc67bfe4c5918940b7b3d47d1027c259bcb0`. At that revision:
+
+- `bin/Tests/Debug/net10.0/Tests --ai` passed 7,760/7,760 tests.
+- `python3 scripts/generate_unicode_tables.py --check` passed against the
+  pinned Unicode 17.0.0 inputs.
+- `./benchmarks/run_benchmarks.sh --verify routine` completed all 19 ARM64
+  workloads with no failures and an exact current/baseline geometric ratio of
+  1.000000. The displayed Dark/Rust performance ratio remained 2.25x.
 
 The compiler's intentional AOT boundary is also preserved: a type-invalid call
 fails during compilation and reports the inferred type, whereas the interpreter
