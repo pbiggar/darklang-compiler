@@ -38,7 +38,12 @@ let private call (name: string) (values: Expr list) : Expr =
 let private concat (parts: Expr list) : Expr =
     match parts with
     | [] -> StringLiteral ""
-    | first :: rest -> List.fold (fun acc part -> BinOp (StringConcat, acc, part)) first rest
+    | first :: rest ->
+        // Every renderer fragment has an ASCII delimiter at each join: quotes,
+        // punctuation, separators, or the edge of a canonical numeric value.
+        // Those boundaries cannot compose under NFC, so retain the native raw
+        // concat used before public StringConcat acquired normalization.
+        List.fold (fun acc part -> call "__string_concat_raw" [acc; part]) first rest
 
 let private stableHash (value: string) : uint64 =
     value

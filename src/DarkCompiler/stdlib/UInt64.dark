@@ -87,9 +87,10 @@ let toString(n: UInt64) : String =
     if (n >> 63UL) == 1UL then
         let quotient = (n >> 1UL) / 5UL in
         let remainder = n - (quotient * 10UL) in
-        Stdlib.UInt64.toString(quotient) ++ Stdlib.UInt64.__digitToString(remainder)
+        // Decimal fragments are ASCII and therefore already closed under NFC.
+        __string_concat_raw(Stdlib.UInt64.toString(quotient), Stdlib.UInt64.__digitToString(remainder))
     else if n < 10UL then Stdlib.UInt64.__digitToString(n)
-    else Stdlib.UInt64.toString(n / 10UL) ++ Stdlib.UInt64.__digitToString(n % 10UL)
+    else __string_concat_raw(Stdlib.UInt64.toString(n / 10UL), Stdlib.UInt64.__digitToString(n % 10UL))
 
 // Check if integer is even
 let isEven(n: UInt64) : Bool =

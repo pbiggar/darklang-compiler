@@ -100,10 +100,14 @@ let toString(n: Int64) : String =
     if n < 0 then
         if n < -9 then
             let quotient = n / 10 in
-            Stdlib.Int64.toString(quotient) ++ Stdlib.Int64.__digitToString(0 - (n - (quotient * 10)))
-        else "-" ++ Stdlib.Int64.__digitToString(0 - n)
+            // Decimal fragments are ASCII and therefore already closed under NFC.
+            __string_concat_raw(Stdlib.Int64.toString(quotient), Stdlib.Int64.__digitToString(0 - (n - (quotient * 10))))
+        else __string_concat_raw("-", Stdlib.Int64.__digitToString(0 - n))
     else if n < 10 then Stdlib.Int64.__digitToString(n)
-    else Stdlib.Int64.toString(n / 10) ++ Stdlib.Int64.__digitToString(n % 10)
+    else
+        let quotient = n / 10 in
+        let remainder = n - (quotient * 10) in
+        __string_concat_raw(Stdlib.Int64.toString(quotient), Stdlib.Int64.__digitToString(remainder))
 
 // Check if integer is even
 let isEven(n: Int64) : Bool =
