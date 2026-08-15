@@ -105,11 +105,14 @@ let rec private typeReference typ =
         let originalName =
             name.Split('.') |> Array.toList |> List.map StringLiteral |> ListLiteral
         let hash = constructor "Darklang.LanguageTools.RuntimeTypes.Hash" "Hash" (Some (StringLiteral ""))
+        let fqNameType = TSum ("Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName", [])
         let fqName = constructor "Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName" "Package" (Some hash)
         let resolved = ok fqName
         let resolution =
             RecordLiteral (
-                "Darklang.LanguageTools.RuntimeTypes.NameResolution",
+                unresolvedRecordReference
+                    "Darklang.LanguageTools.RuntimeTypes.NameResolution"
+                    [fqNameType],
                 ["originalName", originalName; "resolved", resolved])
         constructor owner "TCustomType" (tuplePayload [resolution; ListLiteral (List.map typeReference typeArgs)])
     match typ with
@@ -762,7 +765,16 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 let fields = recordInfo.Fields
                 let rec build remaining current decodedFields =
                     match remaining with
-                    | [] -> Ok (ok (RecordLiteral (typeName, List.rev decodedFields)), current)
+                    | [] ->
+                        Ok (
+                            ok (
+                                RecordLiteral (
+                                    unresolvedRecordReference typeName typeArgs,
+                                    List.rev decodedFields
+                                )
+                            ),
+                            current
+                        )
                     | (fieldName, fieldType) :: rest ->
                         let concrete = applySubstitution subst fieldType |> resolveJsonType env
                         let matches = call "Stdlib.Json.__matchingFields" [StringLiteral fieldName; Var "__object_fields"]
