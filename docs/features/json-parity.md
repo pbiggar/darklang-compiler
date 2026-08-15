@@ -3,8 +3,8 @@
 ## Revision baseline
 
 This contract was revalidated from compiler implementation commit
-`1675d4a29b37c43f24d3c143912cdf254b8cd01f`, based on compiler `main` at
-`a78567efd773de86265e55a54445ddf5a5a8911c`, and darklang/dark interpreter
+`e530b802c9ca86337a378b1f8245f35869d1af46`, based on compiler `main` at
+`9b6c27d0a52c313774ef5a05b78447cf0015c353`, and darklang/dark interpreter
 revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
 `8a402797` and compiler evidence revision
 `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` were navigation aids only; every
@@ -103,8 +103,8 @@ is intentionally unused by native code.
 
 ## Intentional AOT differences
 
-Function, Bytes/Blob, RawPtr, RuntimeError, unresolved variables, non-String
-Dict keys, and other unsupported runtime shapes are rejected during type
+Function, Stream, Bytes/Blob, RawPtr, RuntimeError, unresolved variables,
+non-String Dict keys, and other unsupported runtime shapes are rejected during type
 checking. The interpreter can reach corresponding failures at runtime; earlier
 AOT diagnostic timing is intentional and prevents runtime type dispatch.
 
