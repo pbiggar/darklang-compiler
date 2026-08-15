@@ -256,15 +256,15 @@ let __parseValue(source: String, index: Int64, length: Int64) : Stdlib.AltJson.I
     if start < 0 || start >= length then Stdlib.AltJson.InternalParseValueResult.InvalidValue
     else
         let byte = Stdlib.String.getByteAt(source, start) in
-        if byte == 110 && start + 4 <= length && Stdlib.String.slice(source, start, start + 4) == "null" then
+        if byte == 110 && start + 4 <= length && Stdlib.String.__byteSlice(source, start, start + 4) == "null" then
             Stdlib.AltJson.InternalParseValueResult.ParsedValue(
                 Stdlib.AltJson.InternalRawJson.RawNull("null"),
                 start + 4)
-        else if byte == 116 && start + 4 <= length && Stdlib.String.slice(source, start, start + 4) == "true" then
+        else if byte == 116 && start + 4 <= length && Stdlib.String.__byteSlice(source, start, start + 4) == "true" then
             Stdlib.AltJson.InternalParseValueResult.ParsedValue(
                 Stdlib.AltJson.InternalRawJson.RawBool(true, "true"),
                 start + 4)
-        else if byte == 102 && start + 5 <= length && Stdlib.String.slice(source, start, start + 5) == "false" then
+        else if byte == 102 && start + 5 <= length && Stdlib.String.__byteSlice(source, start, start + 5) == "false" then
             Stdlib.AltJson.InternalParseValueResult.ParsedValue(
                 Stdlib.AltJson.InternalRawJson.RawBool(false, "false"),
                 start + 5)
@@ -272,35 +272,35 @@ let __parseValue(source: String, index: Int64, length: Int64) : Stdlib.AltJson.I
             match Stdlib.AltJson.__parseString(source, start, length) with
             | ParsedString(value, afterValue) ->
                 Stdlib.AltJson.InternalParseValueResult.ParsedValue(
-                    Stdlib.AltJson.InternalRawJson.RawString(value, Stdlib.String.slice(source, start, afterValue)),
+                    Stdlib.AltJson.InternalRawJson.RawString(value, Stdlib.String.__byteSlice(source, start, afterValue)),
                     afterValue)
             | InvalidString -> Stdlib.AltJson.InternalParseValueResult.InvalidValue
         else if byte == 91 then
             match Stdlib.AltJson.__parseArrayItems(source, start + 1, length, []) with
             | ParsedList(values, afterValue) ->
                 Stdlib.AltJson.InternalParseValueResult.ParsedValue(
-                    Stdlib.AltJson.InternalRawJson.RawArray(values, Stdlib.String.slice(source, start, afterValue)),
+                    Stdlib.AltJson.InternalRawJson.RawArray(values, Stdlib.String.__byteSlice(source, start, afterValue)),
                     afterValue)
             | InvalidList -> Stdlib.AltJson.InternalParseValueResult.InvalidValue
         else if byte == 123 then
             match Stdlib.AltJson.__parseObjectFields(source, start + 1, length, []) with
             | ParsedFields(fields, afterValue) ->
                 Stdlib.AltJson.InternalParseValueResult.ParsedValue(
-                    Stdlib.AltJson.InternalRawJson.RawObject(fields, Stdlib.String.slice(source, start, afterValue)),
+                    Stdlib.AltJson.InternalRawJson.RawObject(fields, Stdlib.String.__byteSlice(source, start, afterValue)),
                     afterValue)
             | InvalidFields -> Stdlib.AltJson.InternalParseValueResult.InvalidValue
         else if byte == 45 || (byte >= 48 && byte <= 57) then
             let afterValue = Stdlib.AltJson.__scanNumber(source, start, length) in
             if afterValue < 0 then Stdlib.AltJson.InternalParseValueResult.InvalidValue
             else
-                let lexeme = Stdlib.String.slice(source, start, afterValue) in
+                let lexeme = Stdlib.String.__byteSlice(source, start, afterValue) in
                 Stdlib.AltJson.InternalParseValueResult.ParsedValue(
                     Stdlib.AltJson.InternalRawJson.RawNumber(lexeme, lexeme),
                     afterValue)
         else Stdlib.AltJson.InternalParseValueResult.InvalidValue
 
 let __parseRaw(source: String) : Stdlib.Result.Result<Stdlib.AltJson.InternalRawJson, Stdlib.AltJson.ParseError.ParseError> =
-    let length = Stdlib.String.length(source) in
+    let length = Stdlib.String.__byteLength(source) in
     match Stdlib.AltJson.__parseValue(source, 0, length) with
     | ParsedValue(value, afterValue) ->
         let endIndex = Stdlib.AltJson.__skipTrivia(source, afterValue, length) in
@@ -323,7 +323,7 @@ let __pow10(exponent: Int64, acc: Float) : Float =
     else Stdlib.AltJson.__pow10(exponent + 1, acc / 10.0)
 
 let __findNumberMarker(text: String, index: Int64, markerA: Int64, markerB: Int64) : Int64 =
-    if index >= Stdlib.String.length(text) then -1
+    if index >= Stdlib.String.__byteLength(text) then -1
     else
         let byte = Stdlib.String.getByteAt(text, index) in
         if byte == markerA || byte == markerB then index
@@ -395,7 +395,7 @@ let __applyNumberSign(text: String, value: Stdlib.Option.Option<Float>) : Stdlib
         else Stdlib.Option.Option.Some(parsed)
 
 let __numberToFloat(text: String) : Stdlib.Option.Option<Float> =
-    let length = Stdlib.String.length(text) in
+    let length = Stdlib.String.__byteLength(text) in
     let start = if Stdlib.String.getByteAt(text, 0) == 45 then 1 else 0 in
     let exponentMarker = Stdlib.AltJson.__findNumberMarker(text, start, 101, 69) in
     let mantissaEnd = if exponentMarker < 0 then length else exponentMarker in
@@ -404,8 +404,8 @@ let __numberToFloat(text: String) : Stdlib.Option.Option<Float> =
     let fractionStart = if dot < 0 || dot > mantissaEnd then mantissaEnd else dot + 1 in
     let fractionDigits = mantissaEnd - fractionStart in
     let digits =
-        Stdlib.String.slice(text, start, integerEnd) ++
-        Stdlib.String.slice(text, fractionStart, mantissaEnd) in
+        Stdlib.String.__byteSlice(text, start, integerEnd) ++
+        Stdlib.String.__byteSlice(text, fractionStart, mantissaEnd) in
     let exponentStart0 = if exponentMarker < 0 then length else exponentMarker + 1 in
     let exponentNegative = exponentStart0 < length && Stdlib.String.getByteAt(text, exponentStart0) == 45 in
     let exponentStart =
@@ -510,7 +510,7 @@ let __escapeStringAt(value: String, index: Int64, length: Int64, acc: String) : 
             let codepoint = Stdlib.Tuple2.first<Int64, Int64>(decoded) in
             let consumed = Stdlib.Tuple2.second<Int64, Int64>(decoded) in
             let escaped =
-                if codepoint <= 65535 then Stdlib.String.slice(value, index, index + consumed)
+                if codepoint <= 65535 then Stdlib.String.__byteSlice(value, index, index + consumed)
                 else
                     let supplementary = codepoint - 65536 in
                     let high = 55296 + (supplementary >> 10) in
@@ -523,11 +523,12 @@ let __escapeStringAt(value: String, index: Int64, length: Int64, acc: String) : 
                 acc ++ escaped)
 
 let __quote(value: String) : String =
-    "\"" ++ Stdlib.AltJson.__escapeStringAt(value, 0, Stdlib.String.length(value), "") ++ "\""
+    "\"" ++ Stdlib.AltJson.__escapeStringAt(value, 0, Stdlib.String.__byteLength(value), "") ++ "\""
 
 let __formatNumber(value: Float) : String =
     let rendered = Stdlib.Float.toString(value) in
-    if Stdlib.String.endsWith(rendered, ".0") then Stdlib.String.dropLast(rendered, 2)
+    if Stdlib.String.endsWith(rendered, ".0") then
+        Stdlib.String.__byteSlice(rendered, 0, Stdlib.String.__byteLength(rendered) - 2)
     else rendered
 
 let __formatArray(values: List<Stdlib.AltJson.Json>, first: Bool) : String =

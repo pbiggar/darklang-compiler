@@ -13,6 +13,13 @@ let __byteLength(value: String) : Int64 =
 let getByteAt(value: String, index: Int64) : Int64 =
     __raw_get_byte(__string_to_rawptr(value), index + 8)
 
+// JSON traversal needs both the decoded scalar and its source byte width.
+// String values are UTF-8-valid by construction, so failure is unreachable.
+let __decodeUtf8At(value: String, index: Int64) : (Int64, Int64) =
+    match Unicode.decodeAt(value, index) with
+    | Ok(decoded) -> decoded
+    | Error(_) -> Builtin.testRuntimeError("Invalid UTF-8 string")
+
 let __copyBytesToPtr(source: String, sourceStart: Int64, destination: RawPtr, destinationStart: Int64, count: Int64) : Unit =
     if count <= 0 then ()
     else
