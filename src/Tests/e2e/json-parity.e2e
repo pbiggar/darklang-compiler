@@ -1,5 +1,5 @@
 // Focused executable JSON parity matrix.
-// Compared at compiler eea41e63169a499d88d9504adc7aa83ab741e07e and
+// Compared at compiler eca9bf66dae63b91f506978be26ba29eb6a864e5 and
 // darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
 type JsonParityPerson = { Name: String, Age: Int64 }
