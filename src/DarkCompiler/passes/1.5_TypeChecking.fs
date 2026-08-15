@@ -7354,7 +7354,8 @@ let private validateTopLevelTypeDeclarations
                 if Set.contains name aliasNames then Set.add name nested else nested
             | TFunction (parameters, result) -> combine (result :: parameters)
             | TTuple types | TEnumFields types -> combine types
-            | TList element -> referencedAliases element
+            | TList element
+            | TStream element -> referencedAliases element
             | TDict (key, value) -> combine [key; value]
             | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
