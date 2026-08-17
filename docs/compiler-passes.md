@@ -21,6 +21,7 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2    | AST → ANF               | `passes/2_AST_to_ANF.fs`                                    | AST → ANF                                     |
 | 2.3  | ANF optimizations       | `passes/2.3_ANF_Optimize.fs`                                | ANF → ANF                                     |
 | 2.4  | ANF inlining            | `passes/2.4_ANF_Inlining.fs`                                | ANF → ANF                                     |
+| 2.4.4 | Known closure specialization | `passes/2.4.4_ANF_HigherOrderSpecialization.fs`       | ANF → ANF                                     |
 | 2.5  | Ref count insertion     | `passes/2.5_RefCountInsertion.fs`                           | ANF + memory ops                              |
 | 2.6  | Print insertion         | `passes/2.6_PrintInsertion.fs`                              | ANF → ANF                                     |
 | 2.7  | Tail call detection     | `passes/2.7_TailCallDetection.fs`                           | ANF → ANF                                     |
@@ -152,6 +153,20 @@ Output: let t0 = 2 * 3 in
 ### Responsibilities
 - **Inline small functions**: Reduce call overhead when safe
 - **Preserve semantics**: Respect evaluation order and side effects
+
+---
+
+## Pass 2.4.4: Known Closure Specialization (`2.4.4_ANF_HigherOrderSpecialization.fs`)
+
+**Input**: Inlined ANF
+**Output**: ANF with selected higher-order helpers specialized
+
+### Responsibilities
+
+- **Recognize static closure arguments**: Find direct helper calls that receive a locally allocated closure with known target and captures
+- **Clone, do not replace**: Create helper and predicate clones for known calls while retaining the generic closure path for unknown function values
+- **Pass captures directly**: Replace the closure argument with ordinary capture parameters and lower `ClosureCall` to a direct call
+- **Bound transformation size**: Skip large helpers/targets and limit the total number of specialized helper/target pairs
 
 ---
 

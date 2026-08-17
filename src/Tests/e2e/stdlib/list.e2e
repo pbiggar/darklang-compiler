@@ -58,6 +58,7 @@ let add = Stdlib.Int64.add in match Stdlib.List.map([1, 2, 3], fun x -> add(x, 1
 // ===================================================================
 
 Stdlib.List.length(Stdlib.List.filter([1, 2, 3, 4, 5], fun x -> x > 2)) = 3I
+let filterThreshold = 3 in match Stdlib.List.filter([1, 2, 3, 4, 5], fun x -> x < filterThreshold) with | [a, b] -> a * 10 + b | _ -> 0 = 12
 // ===================================================================
 // Stdlib.List.fold - Reduce list with accumulator
 // ===================================================================

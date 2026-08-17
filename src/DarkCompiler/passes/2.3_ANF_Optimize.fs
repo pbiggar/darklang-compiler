@@ -523,12 +523,12 @@ let private addAtomUse (atom: Atom) (uses: Set<TempId>) : Set<TempId> =
 let private addAtomUses (atoms: Atom list) (uses: Set<TempId>) : Set<TempId> =
     List.fold (fun uses atom -> addAtomUse atom uses) uses atoms
 
-let private atomUsesTemp (tid: TempId) (atom: Atom) : bool =
+let atomUsesTemp (tid: TempId) (atom: Atom) : bool =
     match atom with
     | Var usedTid -> usedTid = tid
     | _ -> false
 
-let private atomsUseTemp (tid: TempId) (atoms: Atom list) : bool =
+let atomsUseTemp (tid: TempId) (atoms: Atom list) : bool =
     List.exists (atomUsesTemp tid) atoms
 
 /// Add every TempId used by a CExpr to an existing liveness set.
@@ -610,7 +610,7 @@ let private addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RuntimeErrorString atom -> addAtomUse atom uses
 
 /// Test whether a CExpr uses a TempId without constructing a liveness set.
-let private cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
+let cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     let used = atomUsesTemp tid
     let anyUsed = atomsUseTemp tid
 

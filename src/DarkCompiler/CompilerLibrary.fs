@@ -506,14 +506,30 @@ let private buildAnf
                 ANF_Inlining.defaultConfig
                 externalInlineCandidates
                 anfOptimized
+
+    if verbosity >= 1 && specializeInternalSignatures then
+        println "  [2.4.4/7] ANF Higher-Order Specialization..."
+    let higherOrderStart = sw.Elapsed.TotalMilliseconds
+    let anfKnownHigherOrder =
+        if options.DisableInlining || not specializeInternalSignatures then
+            anfInlined
+        else
+            ANF_HigherOrderSpecialization.specializeProgram anfInlined
+    let higherOrderElapsed = sw.Elapsed.TotalMilliseconds - higherOrderStart
+    if specializeInternalSignatures then
+        recordPassTiming passTimingRecorder "ANF Higher-Order Specialization" higherOrderElapsed
+    if verbosity >= 2 && specializeInternalSignatures then
+        let t = System.Math.Round(higherOrderElapsed, 1)
+        println $"        {t}ms"
+
     if verbosity >= 1 && specializeInternalSignatures then
         println "  [2.4.5/7] ANF Direct-Call Specialization..."
     let specializationStart = sw.Elapsed.TotalMilliseconds
     let anfSpecialized =
         if options.DisableInlining || not specializeInternalSignatures then
-            anfInlined
+            anfKnownHigherOrder
         else
-            ANF_DirectCallSpecialization.specializeProgram anfInlined
+            ANF_DirectCallSpecialization.specializeProgram anfKnownHigherOrder
     let specializationElapsed = sw.Elapsed.TotalMilliseconds - specializationStart
     if specializeInternalSignatures then
         recordPassTiming passTimingRecorder "ANF Direct-Call Specialization" specializationElapsed

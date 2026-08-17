@@ -101,6 +101,7 @@
     <Compile Include="optimizations/ANFOptimizeTests.fs" />
     <Compile Include="optimizations/ANFInliningTests.fs" />
     <Compile Include="optimizations/ANFDirectCallSpecializationTests.fs" />
+    <Compile Include="optimizations/ANFHigherOrderSpecializationTests.fs" />
 
     <!-- Test Runner (must be last) -->
     <Compile Include="test-suite-tooling/TestRunner.fs" />
