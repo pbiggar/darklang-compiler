@@ -10,3 +10,16 @@ This agent should optimize the compile-time performance of compiler passes. Take
   workload that exposed the opportunity. Raw samples belong in an artifact.
 - DCB owns final repository-wide tests and benchmark verification; the agent
   does not duplicate or repeatedly time those broad gates.
+
+## Workflow-Discovery Evidence
+
+- The registered inventory found 493 relevant locations, led by pass timing
+  orchestration and the ANF, MIR, LIR, and register-allocation passes.
+- Representative SSA history contains retained, rejected, and restarted
+  experiments around repeated summaries, queues, operand folds, phi prefixes,
+  and traversal fusion. Future work must search this history before proposing a
+  structurally equivalent optimization.
+- The full-size edigits SSA Construction report is the current workload
+  baseline. Its 6,035,750 input tokens, 77 commands, and 125,038 command-output
+  bytes motivate bounded tooling and artifact-backed output rather than an
+  unbounded manual investigation.
