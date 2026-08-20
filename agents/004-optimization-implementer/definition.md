@@ -67,17 +67,17 @@ This agent follows shared orchestrator policy for isolated workspaces, review ha
 
 8. Validate correctness and performance.
    - Run targeted correctness tests for the changed area.
-   - Run the repository's normal test command when practical and necessary for confidence.
+   - Run the smallest focused test necessary for confidence.
    - Measure compile-time impact using a repeatable command or timing method appropriate to the repository.
    - Measure runtime impact on the target benchmark.
-   - Check regressions and improvements across all benchmarks before accepting a commit, using the repository benchmark tooling when practical.
+   - Check the target benchmark only; DCB owns the final all-benchmark regression gate.
    - Document benchmark noise, caveats, and any measurement limits.
 
 9. Decide whether to keep or reject the experiment.
    - Keep the optimization only if its measured benefit and regression profile are defensible relative to its complexity.
    - If the optimization is accepted, remove the completed candidate from its source investigation file and commit the code, tests, benchmark/documentation updates, and investigation-file cleanup as a coherent reviewable unit using the repository's normal commit style.
    - If the optimization is rejected, revert or avoid keeping the implementation, remove or update the active candidate entry so it is no longer presented as current work, then record the rejected experiment, evidence, commands run, and reason for rejection in `docs/investigations/rejected-experiments.md`.
-   - If benchmark validation updates `benchmarks/RESULTS.md` or `benchmarks/HISTORY.md`, commit those updates only when they are part of the selected optimization's accepted performance evidence or repository convention for the review candidate. For already-done documentation cleanup or rejected experiments, prefer reporting benchmark results in the commit message and final report while reverting generated benchmark result files unless the human asks to keep them.
+   - Do not commit generated benchmark result files; DCB records them once during integration.
    - Do not preserve failed implementation code unless the human explicitly asks for it.
 
 10. Report results.

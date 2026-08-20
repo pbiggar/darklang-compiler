@@ -44,13 +44,11 @@ For the selected optimization:
 1. Confirm the current behavior and the missing or incomplete optimization pattern.
 2. Add focused IR before/after regression tests for the transformation.
 3. Implement the optimization in the smallest appropriate location.
-4. Run the full test suite.
-5. Run relevant benchmarks.
-6. Run the routine benchmark profile before the proposed change report is complete.
-7. Report the measured benchmark improvement or loss from the routine benchmark run, including the performance ratio from `benchmarks/RESULTS.md`.
-8. Add or identify a benchmark when existing benchmarks do not exercise the optimized pattern. Treat any benchmark created by this agent as temporary diagnostic evidence: keep it untracked and do not commit it.
-9. Update `docs/classic-optimizations.md` for the selected optimization.
-10. Commit the implementation, tests, and backlog update together as one coherent reviewable unit in the isolated workspace used for implementation work. Exclude agent-created benchmark files from the commit.
+4. Run the focused regression test and one relevant benchmark workload when performance could change.
+5. Leave repository-wide tests and the routine benchmark profile to DCB's final verification gate.
+6. Add or identify a benchmark when existing benchmarks do not exercise the optimized pattern. Treat any benchmark created by this agent as temporary diagnostic evidence: keep it untracked and do not commit it.
+7. Update `docs/classic-optimizations.md` for the selected optimization.
+8. Commit the implementation, tests, and backlog update together as one coherent reviewable unit in the isolated workspace used for implementation work. Exclude agent-created benchmark files from the commit.
 
 ## Scope Boundaries
 

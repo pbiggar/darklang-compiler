@@ -47,7 +47,8 @@ Alternatives may be included when useful, but they are optional.
 
 ## Validation
 
-For source or test changes, full `./run-tests --ai` is the default validation.
+For source or test changes, run the smallest existing focused test that covers
+the changed surface. DCB owns final repository-wide tests.
 
 Very small code-quality fixes may skip adding a new test when the change is already exercised by existing coverage, the approval request or review explains that coverage, and full validation is run against the changed surface. This exception is only for narrow maintainability fixes that do not add behavior, remove behavior, or change a contract.
 

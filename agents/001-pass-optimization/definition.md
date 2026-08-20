@@ -55,15 +55,16 @@ Before using parsed timings for selection or success claims, validate the parser
 - Normalize display-only spelling differences such as Unicode arrows versus `->` before aggregating timings.
 - Reject the measurement as unreliable if expected stage/timing pairs are absent or if any parsed pass label cannot be mapped to a known compiler pass label or display label from `CompilerLibrary.fs`.
 
-Use repeated measurements rather than a single run:
+Use a small repeated focused measurement rather than a single run:
 
-- Establish a selected-pass timing baseline with 10 `-vv` runs before making the retained optimization.
-- Measure each retained candidate with 10 comparable `-vv` runs.
+- Establish a selected-pass timing baseline with one warmup and 3 `-vv` measurements before making the retained optimization.
+- Measure each retained candidate with one warmup and 3 comparable `-vv` measurements.
 - Compare medians for the selected pass, and treat the change as successful only when the selected-pass timing improvement is statistically obvious relative to observed noise.
 
-When a pass is selected from benchmark compile-time evidence, collect pass timing across every benchmark program before and after the retained change. Do not limit timing evidence to the benchmark that first exposed the candidate. Report the selected pass's before/after timing delta for each benchmark program, and call out any benchmark whose selected-pass timing regressed even if the median across the suite improved.
-
-Also collect total compilation timing for each benchmark in the suite before and after the retained change. Report the before/after timing delta for every benchmark's compilation, even when the selected-pass timing is the primary success signal, so reviewers can see whether the improvement is local, broad, or offset by other compiler work.
+When a pass is selected from benchmark compile-time evidence, measure the one
+workload that exposed the candidate. DCB owns the broad benchmark gate after the
+candidate is committed. Keep raw timing samples in `.dcb/tool-artifacts/` and
+put only medians and material regressions on stdout.
 
 Use the same benchmark command lines, environment, inputs, and build mode for before and after measurements unless there is a documented reason to change them.
 
@@ -73,28 +74,25 @@ Do not claim success from a single favorable timing result.
 
 Wall-clock compile time may be reported as secondary context, especially to catch whole-compiler regressions, but it is not the primary success signal for this agent.
 
-Record before/after test-suite wall-clock timing with 10 runs when the optimization is intended to reduce compile-time cost. Report the raw timings, medians, and median delta as a regression guard and reporting aid, not as a substitute for selected-pass timing.
+Do not run repeated full-test-suite timing. DCB owns final repository-wide tests
+and benchmarks. Present a pass optimization as review-ready when its focused
+median-of-3 evidence is clear and its focused correctness check passes.
 
-Do not present a pass optimization as review-ready unless every retained optimization has median-of-10 before/after compile-time evidence, full benchmark-suite selected-pass timing evidence when benchmark evidence drove selection, and overall test-suite median-of-10 before/after wall-clock evidence.
-
-Do not present a benchmark-driven pass optimization as review-ready unless the review evidence also outlines before/after total compilation timing for each benchmark in the benchmark suite.
-
-Each retained optimization needs its own compile-time evidence. If an attempt keeps multiple production changes because each contributes to the compile-time improvement, measure and report each retained optimization separately or split the attempt into separate review candidates. Do not use the final combined before/after measurement as a substitute for showing the median-of-10 delta for each retained optimization.
+Each retained optimization needs its own focused compile-time evidence. If an attempt keeps multiple production changes, measure them separately or split the attempt into separate review candidates.
 
 The review evidence must include a compact timing table with one row per retained optimization:
 
 - The optimization name or changed hot path.
 - The exact command line or benchmark input used for the before/after pass timing.
-- The before median, after median, absolute delta, and percent delta from 10 comparable pass-timing runs.
-- The overall test-suite wall-clock before median, after median, absolute delta, and percent delta from 10 comparable `./run-tests --ai` runs.
+- The before median, after median, absolute delta, and percent delta from 3 comparable pass-timing runs after warmup.
 
 ## Optimization Workflow
 
 1. Inspect the selected pass and its callers, data structures, and nearby tests.
 2. Add temporary micro-profiling or timing if needed to identify the hot path inside the pass.
-3. Run the selected-pass baseline measurement 10 times before making optimization changes.
+3. Warm up once, then run the selected-pass baseline measurement 3 times before making optimization changes.
 4. Implement one candidate improvement at a time.
-5. Measure each retained candidate 10 times using the same command line as the baseline.
+5. Warm up once, then measure each retained candidate 3 times using the same command line as the baseline.
 6. Keep a candidate only if it clearly improves selected-pass `-vv` timing and does not harm correctness or benchmark behavior.
 7. Remove temporary profiling and exploratory instrumentation before the final commit.
 8. Run validation appropriate to the changed compiler surface.
@@ -129,19 +127,18 @@ The final report must include:
 - The selected compiler pass.
 - The evidence that made it a candidate.
 - The benchmark or compile command lines used.
-- Baseline timing numbers and median from 10 comparable runs.
-- After-change timing numbers and median from 10 comparable runs.
-- Compile-time timing difference for each retained optimization, using median-of-10 before/after measurements.
-- Full benchmark suite selected-pass before/after timing deltas for every benchmark program when benchmark compile-time evidence drove selection.
-- Full benchmark suite total compilation before/after timing deltas for every benchmark program when benchmark compile-time evidence drove selection.
-- Before/after overall test-suite wall-clock raw timings, medians, and median delta from 10 runs when the change targets compile-time performance.
+- Baseline and after-change median from 3 comparable focused measurements after warmup.
+- Compile-time timing difference for each retained optimization.
+- The artifact path containing raw samples.
 - The observed performance problem.
 - Candidate solutions attempted.
 - The retained solution and why it was chosen.
 - Correctness and benchmark validation commands and results.
 - Any residual risk or unresolved uncertainty.
 
-If code changes are committed, the commit message should include the same essential performance evidence: benchmark command lines, full benchmark-suite before/after numbers when benchmark timing drove selection, test-suite timing deltas for compile-time optimizations, the problem found, attempted solutions, and why the retained solution was chosen.
+If code changes are committed, the commit message should include the focused
+command, before/after medians, problem found, retained solution, and why it was
+chosen. DCB records broad-gate evidence separately.
 
 ## Collaboration Boundaries
 

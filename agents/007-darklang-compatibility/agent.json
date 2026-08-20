@@ -5,5 +5,14 @@
   "autonomyLevel": "initial-design",
   "enabled": true,
   "purpose": "Find and fix one real syntax or semantic difference between this compiler and the official Darklang interpreter.",
-  "summary": "This always-learning agent starts from the Darklang diff playbook and focuses on one interpreter compatibility gap at a time."
+  "summary": "This always-learning agent starts from the Darklang diff playbook and focuses on one interpreter compatibility gap at a time.",
+  "tools": [
+    {
+      "name": "darklang-compatibility-inventory",
+      "command": "scripts/agent-tool darklang-compatibility inventory",
+      "purpose": "Produce a concise ranked inventory for this agent; retain full matches in the reported artifact.",
+      "role": "inventory",
+      "maxOutputBytes": 4096
+    }
+  ]
 }

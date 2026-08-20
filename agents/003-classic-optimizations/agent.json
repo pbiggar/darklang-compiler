@@ -5,5 +5,14 @@
   "autonomyLevel": "BoundedAutonomous",
   "enabled": true,
   "purpose": "Implementing classic optimizations",
-  "summary": "This always-learning agent is currently guided: one testing turn at a time, with human review before changes are applied."
+  "summary": "This always-learning agent is currently guided: one testing turn at a time, with human review before changes are applied.",
+  "tools": [
+    {
+      "name": "classic-optimizations-inventory",
+      "command": "scripts/agent-tool classic-optimizations inventory",
+      "purpose": "Produce a concise ranked inventory for this agent; retain full matches in the reported artifact.",
+      "role": "inventory",
+      "maxOutputBytes": 4096
+    }
+  ]
 }

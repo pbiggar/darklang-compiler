@@ -18,7 +18,7 @@ Use the ordered upstream file list in `playbooks/enable-upstream-dark-tests.md` 
 4. Ensure the target file is actually executed by the test runner for this iteration.
 5. Run the filtered target file test and reject `0/0` as success.
 6. If the enabled test fails, fix compiler, runtime, parser, stdlib, or runner behavior so the upstream contract passes.
-7. Run the full test suite after the focused file passes.
+7. Stop after the focused file passes; DCB owns the final full test suite.
 8. Record only durable reusable lessons in repository documentation when the iteration teaches something future iterations need.
 
 ## Boundaries

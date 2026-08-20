@@ -4,6 +4,15 @@
   "name": "Upstream Test Refresher",
   "autonomyLevel": "Guided",
   "enabled": true,
-  "purpose": "Refresh the local upstream Dark execution test snapshot and reapply this repository\u0027s intentional local deltas.",
-  "summary": "This always-learning agent starts from the upstream test refresh playbook and maintains repeatable upstream test synchronization."
+  "purpose": "Refresh the local upstream Dark execution test snapshot and reapply this repository's intentional local deltas.",
+  "summary": "This always-learning agent starts from the upstream test refresh playbook and maintains repeatable upstream test synchronization.",
+  "tools": [
+    {
+      "name": "upstream-test-refresher-inventory",
+      "command": "scripts/agent-tool upstream-test-refresher inventory",
+      "purpose": "Produce a concise ranked inventory for this agent; retain full matches in the reported artifact.",
+      "role": "inventory",
+      "maxOutputBytes": 4096
+    }
+  ]
 }

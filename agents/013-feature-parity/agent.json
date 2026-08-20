@@ -5,5 +5,14 @@
   "autonomyLevel": "InitialDesign",
   "enabled": true,
   "purpose": "Making the compiler language feature parity with the interpreter",
-  "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve."
+  "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve.",
+  "tools": [
+    {
+      "name": "feature-parity-inventory",
+      "command": "scripts/agent-tool feature-parity inventory",
+      "purpose": "Produce a concise ranked inventory for this agent; retain full matches in the reported artifact.",
+      "role": "inventory",
+      "maxOutputBytes": 4096
+    }
+  ]
 }

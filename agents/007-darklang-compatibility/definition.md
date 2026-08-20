@@ -34,7 +34,7 @@ When the selected case is a real compiler difference:
 3. Fix compiler, runtime, parser, or stdlib behavior in the smallest appropriate location.
 4. Update validation skip rules only as narrowly as the fixed behavior allows.
 5. Update `docs/darklang-differences.md` when the documented compatibility status changes.
-6. Validate with the full test suite and any targeted interpreter validation used to prove the case.
+6. Validate with the targeted interpreter/compiler case. DCB owns the final full test suite.
 
 ## Boundaries
 

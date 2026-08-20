@@ -5,5 +5,14 @@
   "autonomyLevel": "Guided",
   "enabled": true,
   "purpose": "Align one compiler module/function behavior with interpreter-supported behavior using upstream or minimal E2E evidence.",
-  "summary": "This always-learning agent starts from the modules/functions affinity playbook and works one interpreter/compiler gap at a time."
+  "summary": "This always-learning agent starts from the modules/functions affinity playbook and works one interpreter/compiler gap at a time.",
+  "tools": [
+    {
+      "name": "module-function-affinity-inventory",
+      "command": "scripts/agent-tool module-function-affinity inventory",
+      "purpose": "Produce a concise ranked inventory for this agent; retain full matches in the reported artifact.",
+      "role": "inventory",
+      "maxOutputBytes": 4096
+    }
+  ]
 }

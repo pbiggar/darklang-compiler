@@ -24,7 +24,7 @@ It should not change compiler behavior unless a refreshed upstream test proves a
 6. Update test-runner wiring and allowlists only as needed for the refreshed snapshot.
 7. Regenerate the expected local delta patch.
 8. Verify the regenerated diff report is clean against the expected patch.
-9. Run the full test suite.
+9. Run the focused upstream diff and runner check; DCB owns the final full suite.
 10. Report all touched areas, rejects resolved, validation, and any upstream changes that require follow-up.
 
 If the refreshed upstream snapshot, reapplied local delta, regenerated patch, and runner wiring are all unchanged, report the run as a no-op refresh verification. Do not create an empty implementation candidate solely to satisfy review mechanics; include the upstream source checked, diff-report result, test result, and the fact that no repository files changed.

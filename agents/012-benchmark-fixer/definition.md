@@ -46,14 +46,14 @@ Prefer targets where the canonical benchmark algorithm and workload are clear en
 
 Before presenting a candidate as review-ready, read and follow `docs/verification.md`.
 
-Required verification for a benchmark parity candidate:
+Required agent verification for a benchmark parity candidate:
 
-- Run `./run-tests --ai`.
-- Run the complete routine profile with `./benchmarks/run_benchmarks.sh routine`.
-- Inspect benchmark output for failures and performance regressions.
+- Run the smallest focused test covering the changed compiler/runtime surface.
+- Run only the selected benchmark workload and emit its decision summary.
+- Leave repository-wide tests and the routine profile to DCB's final gate.
 - Inspect the final benchmark source against the intended algorithm and reference implementations, and explain why it remains the obvious implementation rather than a compiler-specific workaround.
-- Report the performance ratio from the `benchmarks/RESULTS.md` table header when routine benchmarks complete.
-- Include changed benchmark result files and status docs in the sandbox commit when they changed.
+- Keep full output in `.dcb/tool-artifacts/`; report only the selected workload's material result.
+- Do not commit generated benchmark result or status files.
 
 If verification fails, fix the underlying issue or report the candidate as not review-ready. A candidate with unresolved test failures, benchmark failures, benchmark regressions, unclear failure ownership, or required definition changes does not count as successful.
 
@@ -65,8 +65,7 @@ When a sandbox candidate is ready, provide a concise review summary with:
 - what changed and why
 - how the benchmark retains the obvious implementation and which compiler/runtime optimization addresses any performance issue it exposed
 - files changed
-- verification outcomes, including full tests and routine benchmarks
-- performance ratio from `benchmarks/RESULTS.md`
+- focused verification outcome and selected-workload performance evidence
 - residual risks or follow-up parity gaps
 
 If the trial shows that this definition needs improvement, include the concrete definition/context change in the same sandbox candidate so the learning appears in the review diff.
