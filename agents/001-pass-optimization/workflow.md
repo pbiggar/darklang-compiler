@@ -8,6 +8,9 @@ attempt is a bounded experiment: its valid outcome is either one measured,
 review-ready candidate or a documented negative result with all exploratory
 changes removed.
 
+Every discovery and tool-building shell command, including a multi-part
+command, must cap its combined visible output below 4096 bytes.
+
 This contract is grounded in the current 493-match inventory and representative
 SSA work: definition-summary reuse (`8f76577b93`), reachability queue removal
 (`b8bf0a5467`), the restarted operand-folding analysis (`75e9bbabd3`), and the
