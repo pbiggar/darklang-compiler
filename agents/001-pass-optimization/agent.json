@@ -3,6 +3,7 @@
   "slug": "pass-optimization",
   "name": "Pass Optimization",
   "autonomyLevel": "BoundedAutonomous",
+  "lifecyclePhase": "workflow-discovery",
   "enabled": true,
   "purpose": "Optimize compiler pass compile-time performance by selecting, benchmarking, profiling, and improving one pass at a time.",
   "summary": "This always-learning agent is currently guided: one testing turn at a time, with human review before changes are applied.",
