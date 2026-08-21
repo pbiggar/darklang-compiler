@@ -4898,30 +4898,28 @@ let private buildSkewListLiteral
         (tag: int64)
         (ptrVar: ANF.TempId)
         (vg: ANF.VarGen)
-        (bindings: (ANF.TempId * ANF.CExpr) list)
+        (bindingsRev: (ANF.TempId * ANF.CExpr) list)
         : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
         let (taggedRawVar, vg1) = ANF.freshVar vg
         let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 tag))
         let (taggedVar, vg2) = ANF.freshVar vg1
         let typedExpr = ANF.TypedAtom (ANF.Var taggedRawVar, listType)
-        (ANF.Var taggedVar, bindings @ [(taggedRawVar, tagExpr); (taggedVar, typedExpr)], vg2)
+        (ANF.Var taggedVar, (taggedVar, typedExpr) :: (taggedRawVar, tagExpr) :: bindingsRev, vg2)
 
     let allocLeaf
         (value: ANF.Atom)
         (valueType: AST.Type)
         (vg: ANF.VarGen)
-        (bindings: (ANF.TempId * ANF.CExpr) list)
+        (bindingsRev: (ANF.TempId * ANF.CExpr) list)
         : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
         let (ptrVar, vg1) = ANF.freshVar vg
         let (valueVar, vg2) = ANF.freshVar vg1
         let (rcVar, vg3) = ANF.freshVar vg2
         let nextBindings =
-            bindings
-            @ [
-                ptrVar, ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L))
-                valueVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), value, valueType)
-                rcVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L))
-              ]
+            (rcVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L)))
+            :: (valueVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), value, valueType))
+            :: (ptrVar, ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L)))
+            :: bindingsRev
         tagRawPtr 2L ptrVar vg3 nextBindings
 
     let allocNode
@@ -4930,7 +4928,7 @@ let private buildSkewListLiteral
         (left: ANF.Atom)
         (right: ANF.Atom)
         (vg: ANF.VarGen)
-        (bindings: (ANF.TempId * ANF.CExpr) list)
+        (bindingsRev: (ANF.TempId * ANF.CExpr) list)
         : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
         let (ptrVar, vg1) = ANF.freshVar vg
         let (valueVar, vg2) = ANF.freshVar vg1
@@ -4938,14 +4936,12 @@ let private buildSkewListLiteral
         let (rightVar, vg4) = ANF.freshVar vg3
         let (rcVar, vg5) = ANF.freshVar vg4
         let nextBindings =
-            bindings
-            @ [
-                ptrVar, ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 32L))
-                valueVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), value, valueType)
-                leftVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), left, listType)
-                rightVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), right, listType)
-                rcVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 1L))
-              ]
+            (rcVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 1L)))
+            :: (rightVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), right, listType))
+            :: (leftVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), left, listType))
+            :: (valueVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), value, valueType))
+            :: (ptrVar, ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 32L)))
+            :: bindingsRev
         tagRawPtr 3L ptrVar vg5 nextBindings
 
     let allocDigit
@@ -4954,7 +4950,7 @@ let private buildSkewListLiteral
         (tree: ANF.Atom)
         (rest: ANF.Atom)
         (vg: ANF.VarGen)
-        (bindings: (ANF.TempId * ANF.CExpr) list)
+        (bindingsRev: (ANF.TempId * ANF.CExpr) list)
         : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
         let (ptrVar, vg1) = ANF.freshVar vg
         let (weightVar, vg2) = ANF.freshVar vg1
@@ -4963,15 +4959,13 @@ let private buildSkewListLiteral
         let (restVar, vg5) = ANF.freshVar vg4
         let (rcVar, vg6) = ANF.freshVar vg5
         let nextBindings =
-            bindings
-            @ [
-                ptrVar, ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 40L))
-                weightVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), ANF.IntLiteral (ANF.Int64 (int64 weight)))
-                lengthVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 (int64 length)))
-                treeVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), tree, listType)
-                restVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), rest, listType)
-                rcVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 32L), ANF.IntLiteral (ANF.Int64 1L))
-              ]
+            (rcVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 32L), ANF.IntLiteral (ANF.Int64 1L)))
+            :: (restVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), rest, listType))
+            :: (treeVar, ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), tree, listType))
+            :: (lengthVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 (int64 length))))
+            :: (weightVar, ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), ANF.IntLiteral (ANF.Int64 (int64 weight))))
+            :: (ptrVar, ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 40L)))
+            :: bindingsRev
         tagRawPtr 1L ptrVar vg6 nextBindings
 
     let rec buildTrees
@@ -5004,9 +4998,9 @@ let private buildSkewListLiteral
             let (digit, bindings2, vg2) = allocDigit weight length tree restAtom vg1 bindings1
             (digit, length, bindings2, vg2)
 
-    let (trees, treeBindings, treeVarGen) = buildTrees elements varGen initialBindings
+    let (trees, treeBindings, treeVarGen) = buildTrees elements varGen (List.rev initialBindings)
     let (root, _, bindings, finalVarGen) = buildDigits trees treeVarGen treeBindings
-    (root, bindings, finalVarGen)
+    (root, List.rev bindings, finalVarGen)
 
 /// Prepare every projection for one binding before its continuation is
 /// lowered. The type checker has already proved the complete unit/tuple shape.
