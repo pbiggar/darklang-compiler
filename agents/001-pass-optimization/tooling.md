@@ -62,6 +62,8 @@ samples, hashes, and output are in the ignored artifact
 
 ## Baseline And Acceptance Gates
 
+Lifecycle setup commands must redirect full evidence before inspection and cap combined visible output with `head -c 4000`; future setup corrections must reuse the compact `.dcb/STATUS.md` handoff rather than reread tool sources.
+
 The prior full-size edigits SSA investigation used 77 commands, 125,038 stdout
 bytes, approximately 31,260 stdout tokens at four bytes/token, 6,035,750 input
 tokens, and 36,876 output tokens in its reported model telemetry. The new tools
