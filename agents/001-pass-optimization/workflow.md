@@ -111,22 +111,26 @@ absolute and percentage deltas, fingerprints, focused and broad validation,
 benchmark ratio, rationale, and residual risk. A rejection reports the same
 identity and measurement fields plus its stop reason and proof of cleanup.
 
-## Tool-Building Inventory
+## Registered Operational Tools
 
-The next phase must build these repository-backed roles behind
-`scripts/agent-tool pass-optimization`:
+Run the repository-backed commands registered in `agent.json`:
 
-1. `inventory`: upgrade the existing static search to discover timing labels
-   from `CompilerLibrary.fs`, run or ingest full-size `-vv` samples, validate
-   stage/timing adjacency, rank recognized passes, and retain raw output.
-2. `inspect --pass PASS --benchmark PATH`: read the pass, timing caller, focused
-   tests, documentation, commit/rejection history, and bounded structural hot
-   spots. It must not edit or infer a default pass or benchmark.
-3. `verify --pass PASS --benchmark PATH --baseline REF --candidate REF`: create
-   isolated inputs, enforce the sampling limits, compute medians and pooled MAD,
-   compare executable bytes and normalized IR, run explicitly named focused
-   checks, and return `retain`, `reject`, or `invalid`. It must not run broad
-   gates or modify the active worktree.
+1. `inventory --benchmark PATH` compiles one explicit repository-local input,
+   validates the source-backed pass map and adjacent `-vv` pairs, ranks at most
+   ten passes, and retains compiler output and the generated binary.
+2. `inspect --pass PASS --benchmark PATH` reads the exact mapped pass, timing
+   caller, bounded tests/documentation, and at most 20 history entries. It
+   reports at most three structural hypotheses and never edits.
+3. `verify --pass PASS --benchmark PATH --baseline REF --candidate REF --ir
+   {anf,mir,lir} --focused-check executable` resolves commits, creates two
+   isolated worktrees, performs exactly one warmup plus three samples per
+   revision, fingerprints binaries and normalized requested IR, executes both
+   outputs, and returns `retain` or `reject`. Broad gates remain outside it.
 
-All roles require explicit flags, return nonzero for invalid evidence, cap
-stdout at 4096 bytes, and retain complete evidence below `.dcb/tool-artifacts/`.
+Every role accepts a repository-local file no larger than 2 MiB, uses child
+timeouts no longer than 600 seconds, fails closed on unknown passes/stages or
+missing evidence, prints one JSON object no larger than 4096 bytes, and reports
+an ignored `.dcb/tool-artifacts/pass-optimization-*` directory containing the
+complete bounded evidence. Exit 2 means invalid arguments, exit 3 means invalid
+evidence or a failed/timed-out child command, and exit 4 means an internal or
+summary-bound failure. A valid measured rejection exits zero.

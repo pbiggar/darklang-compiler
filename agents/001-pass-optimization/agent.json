@@ -3,16 +3,30 @@
   "slug": "pass-optimization",
   "name": "Pass Optimization",
   "autonomyLevel": "BoundedAutonomous",
-  "lifecyclePhase": "tool-building",
+  "lifecyclePhase": "operational",
   "enabled": true,
   "purpose": "Optimize compiler pass compile-time performance by selecting, benchmarking, profiling, and improving one pass at a time.",
-  "summary": "This bounded-autonomous agent has a measured one-pass optimization workflow and is ready to build deterministic inventory, inspection, and focused-verification tools.",
+  "summary": "This bounded-autonomous agent uses measured, artifact-backed inventory, inspection, and focused verification to select and test one compiler-pass optimization at a time.",
   "tools": [
     {
       "name": "pass-optimization-inventory",
-      "command": "scripts/agent-tool pass-optimization inventory",
-      "purpose": "Produce a concise ranked inventory for this agent; retain full matches in the reported artifact.",
+      "command": "python3 agents/001-pass-optimization/tools/pass_optimization.py inventory",
+      "purpose": "Compile one explicit bounded benchmark, strictly parse adjacent -vv timings, and rank recognized passes.",
       "role": "inventory",
+      "maxOutputBytes": 4096
+    },
+    {
+      "name": "pass-optimization-inspect",
+      "command": "python3 agents/001-pass-optimization/tools/pass_optimization.py inspect",
+      "purpose": "Inspect one explicit pass and workload using bounded source, test, documentation, and history evidence.",
+      "role": "inspect",
+      "maxOutputBytes": 4096
+    },
+    {
+      "name": "pass-optimization-verify",
+      "command": "python3 agents/001-pass-optimization/tools/pass_optimization.py verify",
+      "purpose": "Measure explicit revisions in isolated worktrees and decide retain or reject from timing and correctness evidence.",
+      "role": "verify",
       "maxOutputBytes": 4096
     }
   ]
