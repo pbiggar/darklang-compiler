@@ -114,7 +114,48 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
     else
         Ok ()
 
+let testOwnedTransferDeclinesMismatchedArity () : TestResult =
+    let p0 = TempId 0
+    let retainTmp = TempId 1
+    let releaseTmp = TempId 2
+    let callTmp = TempId 3
+    let cleanupTmp = TempId 4
+    let tupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let tupleMetadata =
+        {
+            ReleasePlan = Some (rcReleasePlanOfType Map.empty tupleType)
+            SourceType = Some tupleType
+        }
+    let refCountDec atom = RefCountDec (atom, 16, GenericHeap, Some tupleMetadata)
+
+    let caller : Function = {
+        Name = "caller"
+        TypedParams = [{ Id = p0; Type = tupleType }]
+        ReturnType = tupleType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                retainTmp,
+                RefCountInc (Var p0, 16, GenericHeap, Some tupleMetadata),
+                Let (
+                    releaseTmp,
+                    refCountDec (Var p0),
+                    Let (
+                        callTmp,
+                        Call ("caller", [Var p0; IntLiteral (Int64 1L); IntLiteral (Int64 2L)]),
+                        Let (cleanupTmp, refCountDec (Var p0), Return (Var callTmp))
+                    )
+                )
+            )
+    }
+
+    let transformed = detectTailCallsInFunction caller
+    match transformed.Body with
+    | Let (_, _, Let (_, _, Let (_, Call ("caller", _), _))) -> Ok ()
+    | _ -> Error "Mismatched-arity owned transfer should preserve the ordinary call cleanup path"
+
 let tests = [
     ("non-self tailcall moves dec before tailcall", testNonSelfTailCallMovesDecBeforeTailCall)
     ("indirect tailcall moves dec before tailcall", testIndirectTailCallMovesDecBeforeTailCall)
+    ("owned transfer declines mismatched arity", testOwnedTransferDeclinesMismatchedArity)
 ]

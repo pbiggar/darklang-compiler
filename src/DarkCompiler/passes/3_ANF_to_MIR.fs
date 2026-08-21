@@ -397,12 +397,11 @@ type CFGBuilder = {
 
 /// Lookup a TempId by raw integer id, checking extra types for newly created regs
 let private tryFindTypeById (builder: CFGBuilder) (id: int) : AST.Type option =
-    if id >= 0 && id <= builder.SourceTempIdMax && id < builder.TypeById.Length then
-        match builder.TypeById.[id] with
-        | Some t -> Some t
-        | None -> Map.tryFind (ANF.TempId id) builder.ExtraTypeMap
-    else
-        Map.tryFind (ANF.TempId id) builder.ExtraTypeMap
+    match Map.tryFind (ANF.TempId id) builder.ExtraTypeMap with
+    | Some typ -> Some typ
+    | None when id >= 0 && id <= builder.SourceTempIdMax && id < builder.TypeById.Length ->
+        builder.TypeById.[id]
+    | None -> None
 
 /// Lookup a TempId, checking extra types for newly created regs
 let private tryFindType (builder: CFGBuilder) (tempId: ANF.TempId) : AST.Type option =
@@ -566,6 +565,8 @@ let private inferSimpleCExprDestType
     | ANF.FloatAbs _
     | ANF.FloatNeg _
     | ANF.Int64ToFloat _ -> Some AST.TFloat64
+    | ANF.FloatToInt64 _ -> Some AST.TInt64
+    | ANF.FloatToBits _ -> Some AST.TUInt64
     | _ -> None
 
 /// Get the type of an MIR operand (for generating type-specific instructions)
@@ -1309,12 +1310,18 @@ let rec convertExpr
                 let newInstrsRev = appendInstrsRev (coverageInstrs @ instrs) currentInstrsRev
                 // Update FloatRegs if this dest is a float
                 let (MIR.VReg destId) = destReg
+                let builderWithType =
+                    match destType with
+                    | Some typ ->
+                        { builderWithClosure with
+                            ExtraTypeMap = Map.add tempId typ builderWithClosure.ExtraTypeMap }
+                    | None -> builderWithClosure
                 let builder' =
                     match destType with
                     | Some AST.TFloat64 ->
-                        { builderWithClosure with FloatRegs = Set.add destId builderWithClosure.FloatRegs }
+                        { builderWithType with FloatRegs = Set.add destId builderWithType.FloatRegs }
                     | _ ->
-                        builderWithClosure
+                        builderWithType
                 convertExpr rest currentLabel newInstrsRev builder'
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
@@ -1987,12 +1994,18 @@ and convertExprToOperand
                     | _ -> builder
                 // Update FloatRegs if this dest is a float
                 let (MIR.VReg destId) = destReg
+                let builderWithType =
+                    match destType with
+                    | Some typ ->
+                        { builderWithClosure with
+                            ExtraTypeMap = Map.add tempId typ builderWithClosure.ExtraTypeMap }
+                    | None -> builderWithClosure
                 let builder' =
                     match destType with
                     | Some AST.TFloat64 ->
-                        { builderWithClosure with FloatRegs = Set.add destId builderWithClosure.FloatRegs }
+                        { builderWithType with FloatRegs = Set.add destId builderWithType.FloatRegs }
                     | _ ->
-                        builderWithClosure
+                        builderWithType
                 let newInstrsRev = appendInstrsRev instrs startInstrsRev
                 convertExprToOperand rest startLabel newInstrsRev builder'
 
@@ -2152,13 +2165,17 @@ let convertANFFunction
         let regGen = MIR.RegGen (maxId + 1)
 
         // Create initial builder
+        let functionParamTypes =
+            anfFunc.TypedParams
+            |> List.fold (fun types param -> Map.add param.Id param.Type types) Map.empty
+
         let initialBuilder = {
             RegGen = regGen
             LabelGen = MIR.initialLabelGen
             Blocks = Map.empty
             TypeById = typeById
             SourceTempIdMax = maxId
-            ExtraTypeMap = Map.empty
+            ExtraTypeMap = functionParamTypes
             TypeReg = typeReg
             ReturnTypeReg = returnTypeReg
             FuncName = anfFunc.Name

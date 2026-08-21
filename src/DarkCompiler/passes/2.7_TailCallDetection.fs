@@ -168,19 +168,26 @@ let private tryTransferOwnedSelfTailArgument
     | TailCall (_, args), Let (_, RefCountDec (Var cleanupTemp, _, _, _), Return (Var returnTemp))
         when returnTemp = callTempId ->
         let cleanupRoot = canonicalTempId aliasRoots cleanupTemp
-        let matchingOwnedParams =
-            List.zip typedParams args
-            |> List.choose (fun (param, arg) ->
-                match arg with
-                | Var argTemp
-                    when canonicalTempId aliasRoots argTemp = cleanupRoot
-                         && Set.contains param.Id ownedParams
-                         && Set.contains (canonicalTempId aliasRoots param.Id) releasedTemps ->
-                    Some param.Id
-                | _ ->
-                    None)
-        match matchingOwnedParams with
-        | [_] -> Some (Return (Var callTempId))
+        let rec matchingOwnedParams
+            (paramsRemaining: TypedParam list)
+            (argsRemaining: Atom list)
+            : TempId list option =
+            match paramsRemaining, argsRemaining with
+            | [], [] -> Some []
+            | param :: paramsRest, arg :: argsRest ->
+                matchingOwnedParams paramsRest argsRest
+                |> Option.map (fun matches ->
+                    match arg with
+                    | Var argTemp
+                        when canonicalTempId aliasRoots argTemp = cleanupRoot
+                             && Set.contains param.Id ownedParams
+                             && Set.contains (canonicalTempId aliasRoots param.Id) releasedTemps ->
+                        param.Id :: matches
+                    | _ ->
+                        matches)
+            | _ -> None
+        match matchingOwnedParams typedParams args with
+        | Some [_] -> Some (Return (Var callTempId))
         | _ -> None
     | _ ->
         None

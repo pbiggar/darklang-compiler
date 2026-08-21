@@ -6,7 +6,7 @@
 
 module Stdlib.Int
 
-type ParseError = BadFormat
+type ParseError = | BadFormat
 
 // Representation-view helpers retained as compiler extensions.
 let __text(value: Int) : String = Stdlib.Internal.Integer.__text(value)
