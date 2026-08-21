@@ -4,6 +4,7 @@
   "name": "Upstream Test Refresher",
   "autonomyLevel": "Guided",
   "enabled": true,
+  "lifecyclePhase": "workflow-discovery",
   "purpose": "Refresh the local upstream Dark execution test snapshot and reapply this repository's intentional local deltas.",
   "summary": "This always-learning agent starts from the upstream test refresh playbook and maintains repeatable upstream test synchronization.",
   "tools": [

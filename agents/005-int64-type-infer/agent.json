@@ -4,6 +4,7 @@
   "name": "Int64 type infer",
   "autonomyLevel": "Guided",
   "enabled": true,
+  "lifecyclePhase": "workflow-discovery",
   "purpose": "Fixing invalid type inference default use",
   "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve.",
   "tools": [

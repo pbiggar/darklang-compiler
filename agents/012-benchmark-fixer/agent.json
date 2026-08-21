@@ -4,6 +4,7 @@
   "name": "Benchmark fixer",
   "autonomyLevel": "Guided",
   "enabled": true,
+  "lifecyclePhase": "workflow-discovery",
   "purpose": "Achieving benchmark parity with obvious implementations and compiler optimizations",
   "summary": "Selects one benchmark parity gap, preserves its straightforward implementation and workload, and fixes exposed compiler or runtime performance issues instead of working around them in benchmark code.",
   "tools": [

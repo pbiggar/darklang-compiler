@@ -4,6 +4,7 @@
   "name": "Bad code finder",
   "autonomyLevel": "ExpandedGuided",
   "enabled": true,
+  "lifecyclePhase": "workflow-discovery",
   "purpose": "Finding bad code in the compiler",
   "summary": "This always-learning agent is currently in initial design, creating and testing its first usable operating instructions.",
   "tools": [

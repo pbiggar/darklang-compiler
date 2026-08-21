@@ -4,6 +4,7 @@
   "name": "Classic Optimizations",
   "autonomyLevel": "BoundedAutonomous",
   "enabled": true,
+  "lifecyclePhase": "workflow-discovery",
   "purpose": "Implementing classic optimizations",
   "summary": "This always-learning agent is currently guided: one testing turn at a time, with human review before changes are applied.",
   "tools": [

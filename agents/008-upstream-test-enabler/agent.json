@@ -4,6 +4,7 @@
   "name": "Upstream Test Enabler",
   "autonomyLevel": "initial-design",
   "enabled": true,
+  "lifecyclePhase": "workflow-discovery",
   "purpose": "Enable one skipped upstream Dark test at a time while preserving upstream semantics and proving the enabled test executes.",
   "summary": "This always-learning agent starts from the upstream test enablement playbook and turns skipped upstream cases into passing compiler coverage.",
   "tools": [
