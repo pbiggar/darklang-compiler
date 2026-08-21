@@ -1,0 +1,24 @@
+// Stdlib.UInt128.dark - unsigned 128-bit operations over canonical Int buffers.
+
+module Stdlib.UInt128
+
+type ParseError = | BadFormat | OutOfRange
+
+let __asInt(value: UInt128) : Int = __uint128_to_int(value)
+let __fromInt(value: Int) : UInt128 = __int_to_uint128(value)
+let __width() : Int = Stdlib.Int.__value("340282366920938463463374607431768211456")
+let __normalize(value: Int) : UInt128 = Stdlib.UInt128.__fromInt(Stdlib.Int.mod_v0(value, Stdlib.UInt128.__width()))
+let add(a: UInt128, b: UInt128) : UInt128 = Stdlib.UInt128.__normalize(Stdlib.Int.add(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b)))
+let subtract(a: UInt128, b: UInt128) : UInt128 = Stdlib.UInt128.__normalize(Stdlib.Int.subtract(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b)))
+let multiply(a: UInt128, b: UInt128) : UInt128 = Stdlib.UInt128.__normalize(Stdlib.Int.multiply(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b)))
+let greaterThan(a: UInt128, b: UInt128) : Bool = Stdlib.Int.greaterThan(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b))
+let greaterThanOrEqualTo(a: UInt128, b: UInt128) : Bool = Stdlib.Int.greaterThanOrEqualTo(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b))
+let lessThan(a: UInt128, b: UInt128) : Bool = Stdlib.Int.lessThan(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b))
+let lessThanOrEqualTo(a: UInt128, b: UInt128) : Bool = Stdlib.Int.lessThanOrEqualTo(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b))
+let divide(a: UInt128, b: UInt128) : UInt128 = Stdlib.UInt128.__normalize(Stdlib.Int.divide(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b)))
+let modulus(a: UInt128, b: UInt128) : UInt128 = Stdlib.UInt128.__fromInt(Stdlib.Int.mod_v0(Stdlib.UInt128.__asInt(a), Stdlib.UInt128.__asInt(b)))
+let sum(values: List<UInt128>) : UInt128 = Stdlib.List.fold<UInt128, UInt128>(values, 0Z, fun total value -> Stdlib.UInt128.add(total, value))
+let max(a: UInt128, b: UInt128) : UInt128 = if Stdlib.UInt128.greaterThan(a, b) then a else b
+let min(a: UInt128, b: UInt128) : UInt128 = if Stdlib.UInt128.lessThan(a, b) then a else b
+let clamp(value: UInt128, limitA: UInt128, limitB: UInt128) : UInt128 = Stdlib.UInt128.max(Stdlib.UInt128.min(limitA, limitB), Stdlib.UInt128.min(Stdlib.UInt128.max(limitA, limitB), value))
+let toString(value: UInt128) : String = Stdlib.Int.toString(Stdlib.UInt128.__asInt(value))

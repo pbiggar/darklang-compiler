@@ -280,7 +280,8 @@ and private renderBody
     | TUInt32 -> (call "Stdlib.UInt32.toString" [value], state)
     | TUInt64 -> (call "Stdlib.UInt64.toString" [value], state)
     // The current compiler stores supported 128-bit results as canonical decimal strings.
-    | TInt128 | TUInt128 -> (value, state)
+    | TInt128 -> (call "Stdlib.Int128.toString" [value], state)
+    | TUInt128 -> (call "Stdlib.UInt128.toString" [value], state)
     | TFloat64 -> (call "Stdlib.Float.toString" [value], state)
     | TString -> (escapedString "\"" value, state)
     | TChar -> (escapedString "'" value, state)

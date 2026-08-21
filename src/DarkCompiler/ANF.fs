@@ -606,12 +606,10 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TInt16
     | AST.TInt32
     | AST.TInt64
-    | AST.TInt128
     | AST.TUInt8
     | AST.TUInt16
     | AST.TUInt32
     | AST.TUInt64
-    | AST.TUInt128
     | AST.TBool
     | AST.TFloat64
     | AST.TDateTime
@@ -619,6 +617,13 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TRuntimeError
     | AST.TVar _ ->
         Immediate
+    // Int, Int128 and UInt128 use canonical decimal dynamic buffers.  Their
+    // typed conversion views are ownership-neutral, but values themselves
+    // participate in RC exactly like String at every aggregate boundary.
+    | AST.TInt
+    | AST.TInt128
+    | AST.TUInt128 ->
+        DynamicString
     | AST.TTuple elemTypes ->
         let fieldShapes = elemTypes |> List.map (rcShapeOfType typeReg)
         FixedBlock (List.length elemTypes * 8, fieldShapes)

@@ -6,7 +6,7 @@
 
 module Stdlib.Int
 
-type ParseError = BadFormat | UnsupportedIntParseError
+type ParseError = | BadFormat
 
 let __text(value: Int) : String = __int_to_string(value)
 
@@ -149,6 +149,9 @@ let negate(value: Int) : Int =
     else if Stdlib.Int.__isNegativeText(text) then Stdlib.Int.__value(Stdlib.String.__byteDrop(text, 1L))
     else Stdlib.Int.__value("-" ++ text)
 
+let absoluteValue(value: Int) : Int =
+    if Stdlib.Int.lessThan(value, Stdlib.Int.__value("0")) then Stdlib.Int.negate(value) else value
+
 let subtract(a: Int, b: Int) : Int = Stdlib.Int.add(a, Stdlib.Int.negate(b))
 
 let __multiplyMagnitudeByDigitAt(value: String, index: Int64, digit: Int64, carry: Int64, acc: String) : String =
@@ -235,6 +238,8 @@ let remainder(a: Int, b: Int) : Stdlib.Result.Result<Int, String> =
         let remainder = Stdlib.Tuple2.second<String, String>(result) in
         Ok(Stdlib.Int.__value(Stdlib.Int.__withSign(Stdlib.Int.__isNegativeText(at), remainder)))
 
+// `mod` is tokenized by the compiler parser as `mod_v0`; retain that internal
+// spelling while exposing the source-level `Int.mod` API.
 let mod_v0(value: Int, modulus: Int) : Int =
     if Stdlib.Int.equals(modulus, Stdlib.Int.__value("0")) then
         Builtin.testRuntimeError("Cannot evaluate modulus against 0")
@@ -244,6 +249,15 @@ let mod_v0(value: Int, modulus: Int) : Int =
         match Stdlib.Int.remainder(value, modulus) with
         | Error(message) -> Builtin.testRuntimeError(message)
         | Ok(result) -> if Stdlib.Int.lessThan(result, Stdlib.Int.__value("0")) then Stdlib.Int.add(result, modulus) else result
+
+let sum(values: List<Int>) : Int =
+    Stdlib.List.fold<Int, Int>(values, Stdlib.Int.__value("0"), fun total value -> Stdlib.Int.add(total, value))
+
+let max(a: Int, b: Int) : Int = if Stdlib.Int.greaterThan(a, b) then a else b
+let min(a: Int, b: Int) : Int = if Stdlib.Int.lessThan(a, b) then a else b
+
+let clamp(value: Int, limitA: Int, limitB: Int) : Int =
+    Stdlib.Int.max(Stdlib.Int.min(limitA, limitB), Stdlib.Int.min(Stdlib.Int.max(limitA, limitB), value))
 
 let __isOddMagnitude(value: String) : Bool =
     let last = Stdlib.String.getByteAt(value, Stdlib.String.__byteLength(value) - 1L) - 48L in
