@@ -1,5 +1,6 @@
 // Dict parity tests pinned to darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
-// The compiler comparison point for this work is c97f99a1c953b4e6739daafc05934f98924e139f.
+// The compiler comparison point for this work is 51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3.
+// Worktree 1be107c38e12f41c7524c4e83d0cc953ce875346 retains this Dict boundary unchanged.
 
 // Public typing is String-keyed and exposes exactly one value type parameter.
 let dictIdentity<'a>(dict: Dict<a>): Dict<a> = dict dictIdentity<Int64>(Dict { answer = 42 }) = Dict { answer = 42 }

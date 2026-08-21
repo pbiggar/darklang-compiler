@@ -7,8 +7,13 @@ HAMT that implements it.
 
 The public contract was revalidated against these exact revisions:
 
-- compiler comparison point: `c97f99a1c953b4e6739daafc05934f98924e139f`
+- compiler comparison point: `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`
 - darklang/dark interpreter: `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
+- current revalidation worktree: `1be107c38e12f41c7524c4e83d0cc953ce875346`
+  (no Dict, private HAMT, or intrinsic-registration boundary changes since the
+  compiler comparison point)
+- retained source evidence is the compiler comparison revision itself
+  (`Dict.dark`, `__HAMT.dark`, and `Stdlib.fs:150-166`)
 - DCB1 report `8a402797` was starting evidence only; retained findings were
   checked again against the revisions above.
 
