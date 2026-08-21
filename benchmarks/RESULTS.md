@@ -2,12 +2,12 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-08-15T11:10:52+00:00
+**Snapshot timestamp:** 2026-08-21T22:51:08+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 1)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `3662376c639f80762e5f9672675eed03667cedd6b77b005bf3f624a7708f03db`
-**Compiler commit:** `0d8fa52f363fd0bb880f45bca80a0dae93b44a74` - Refresh JSON parity record integration baseline
+**Compiler commit:** `7764b50c67f3a49b27978e3ad1d778703f738666` - Add bounded known-closure specialization
 
 | Benchmark     |           Dark (2.27x) |          Rust |
 |---------------|------------------------|---------------|
@@ -26,7 +26,7 @@ Best-known compatible routine-profile Dark performance vs audited Rust reference
 | nqueen        |    221,668,099 (1.58x) |   139,988,273 |
 | pisum         |         95,305 (0.00x) |    50,258,602 |
 | primes        |      2,045,943 (1.51x) |     1,358,980 |
-| quicksort     |    222,569,985 (33.9x) |     6,574,976 |
+| quicksort     |    221,163,784 (33.6x) |     6,574,976 |
 | spectral_norm |     74,939,665 (14.1x) |     5,297,561 |
 | sum_to_n      |         71,817 (0.28x) |       257,603 |
 | tak           |     52,360,584 (1.55x) |    33,730,191 |
