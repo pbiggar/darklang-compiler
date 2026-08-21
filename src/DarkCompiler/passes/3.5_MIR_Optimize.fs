@@ -1004,13 +1004,139 @@ let private isHoistableInstrWithEffectFreeCalls
 let isHoistableInstr (instr: Instr) : bool =
     isHoistableInstrWithEffectFreeCalls Set.empty instr
 
+/// Create preheaders only for reducible loops whose direct invariant work can use one.
+///
+/// A header entered from several edges cannot receive LICM output directly: any
+/// hoisted definition would not dominate all entries.  This normalizes those entry
+/// edges to one block and preserves SSA by merging each header phi's outside values
+/// in a new preheader phi.  Existing simple preheaders are deliberately unchanged.
+let private canonicalizeLoopPreheaders
+    (effectFreeFunctions: Set<string>)
+    (cfg: CFG)
+    : CFG * bool =
+    let labelName (Label name) = name
+    let freshPreheaderLabel (cfg': CFG) (Label headerName) =
+        let rec choose index =
+            let suffix = if index = 0 then "preheader" else $"preheader_{index}"
+            let candidate = Label $"{headerName}_{suffix}"
+            if Map.containsKey candidate cfg'.Blocks then choose (index + 1) else candidate
+        choose 0
+
+    let rewriteTarget header preheader terminator =
+        match terminator with
+        | Jump target when target = header -> Jump preheader
+        | Branch (condition, trueLabel, falseLabel) ->
+            let trueLabel' = if trueLabel = header then preheader else trueLabel
+            let falseLabel' = if falseLabel = header then preheader else falseLabel
+            Branch (condition, trueLabel', falseLabel')
+        | _ -> terminator
+
+    let loops = findNaturalLoops cfg
+    loops
+    |> Map.toList
+    |> List.sortBy (fun (header, loopBlocks) -> (Set.count loopBlocks, labelName header))
+    |> List.fold (fun (cfgAcc, changedAcc) (header, loopBlocks) ->
+        let predecessors = buildPredecessors cfgAcc
+        let outsidePreds =
+            Map.tryFind header predecessors
+            |> Option.defaultValue []
+            |> List.filter (fun pred -> not (Set.contains pred loopBlocks))
+            |> List.distinct
+            |> List.sortBy labelName
+
+        let hasSimplePreheader =
+            match outsidePreds with
+            | [preheader] ->
+                match Map.tryFind preheader cfgAcc.Blocks with
+                | Some { Terminator = Jump target } when target = header -> true
+                | _ -> false
+            | _ -> false
+
+        let loopDefs =
+            loopBlocks
+            |> Set.fold (fun defs label ->
+                match Map.tryFind label cfgAcc.Blocks with
+                | Some block ->
+                    block.Instrs
+                    |> List.fold (fun defs' instr ->
+                        match getInstrDest instr with
+                        | Some dest -> Set.add dest defs'
+                        | None -> defs') defs
+                | None -> defs) Set.empty
+
+        let nestedLoopBlocks =
+            loops
+            |> Map.fold (fun nestedBlocks nestedHeader nestedLoop ->
+                if nestedHeader <> header && Set.isSubset nestedLoop loopBlocks then
+                    Set.union nestedBlocks nestedLoop
+                else
+                    nestedBlocks) Set.empty
+
+        let hasDirectInvariant =
+            Set.difference loopBlocks nestedLoopBlocks
+            |> Set.exists (fun label ->
+                match Map.tryFind label cfgAcc.Blocks with
+                | Some block ->
+                    block.Instrs
+                    |> List.exists (fun instr ->
+                        match getInstrDest instr with
+                        | Some _ ->
+                            isHoistableInstrWithEffectFreeCalls effectFreeFunctions instr
+                            && (getInstrUses instr |> Set.forall (fun usedRegister -> not (Set.contains usedRegister loopDefs)))
+                        | None -> false)
+                | None -> false)
+
+        if List.isEmpty outsidePreds || hasSimplePreheader || not hasDirectInvariant then
+            (cfgAcc, changedAcc)
+        else
+            match Map.tryFind header cfgAcc.Blocks with
+            | None -> (cfgAcc, changedAcc)
+            | Some headerBlock ->
+                let preheader = freshPreheaderLabel cfgAcc header
+                let nextRegister = nextRegisterId cfgAcc
+                let (preheaderPhisRev, headerInstrsRev, _) =
+                    headerBlock.Instrs
+                    |> List.fold (fun (prePhis, rewritten, registerId) instr ->
+                        match instr with
+                        | Phi (dest, sources, valueType) ->
+                            let outsideSources =
+                                sources |> List.filter (fun (_, source) -> List.contains source outsidePreds)
+                            let insideSources =
+                                sources |> List.filter (fun (_, source) -> not (List.contains source outsidePreds))
+                            match outsideSources with
+                            | [] -> (prePhis, instr :: rewritten, registerId)
+                            | _ ->
+                                let merged = VReg registerId
+                                let prePhi = Phi (merged, outsideSources, valueType)
+                                let rewrittenPhi = Phi (dest, (Register merged, preheader) :: insideSources, valueType)
+                                (prePhi :: prePhis, rewrittenPhi :: rewritten, registerId + 1)
+                        | _ -> (prePhis, instr :: rewritten, registerId)) ([], [], nextRegister)
+                let preheaderBlock = {
+                    Label = preheader
+                    Instrs = List.rev preheaderPhisRev
+                    Terminator = Jump header
+                }
+                let blocks =
+                    cfgAcc.Blocks
+                    |> Map.map (fun label block ->
+                        if List.contains label outsidePreds then
+                            { block with Terminator = rewriteTarget header preheader block.Terminator }
+                        elif label = header then
+                            { block with Instrs = List.rev headerInstrsRev }
+                        else
+                            block)
+                    |> Map.add preheader preheaderBlock
+                ({ cfgAcc with Blocks = blocks }, true)
+    ) (cfg, false)
+
 /// Apply loop-invariant code motion for loops with a simple preheader.
 let private applyLoopInvariantCodeMotionWithEffectFreeCalls
     (effectFreeFunctions: Set<string>)
     (cfg: CFG)
     : CFG * bool =
-    let loops = findNaturalLoops cfg
-    let preds = buildPredecessors cfg
+    let (cfgWithPreheaders, canonicalized) = canonicalizeLoopPreheaders effectFreeFunctions cfg
+    let loops = findNaturalLoops cfgWithPreheaders
+    let preds = buildPredecessors cfgWithPreheaders
     let labelName (Label name) = name
     let buildCopyMapForLicm (cfg': CFG) : Map<VReg, VReg> =
         let phiDests =
@@ -1240,7 +1366,7 @@ let private applyLoopInvariantCodeMotionWithEffectFreeCalls
                     )
 
                 ({ cfgAcc with Blocks = blocks' }, true)
-    ) (cfg, false)
+    ) (cfgWithPreheaders, canonicalized)
 
 let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
     applyLoopInvariantCodeMotionWithEffectFreeCalls Set.empty cfg

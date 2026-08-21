@@ -849,6 +849,104 @@ let testSelfComparisonFoldingRequiresSameRegister () : TestResult =
     | [] -> Ok ()
     | first :: _ -> Error $"Expected comparison of distinct registers to stay unfolded, but {first}"
 
+let testLicmCanonicalizesMultipleLoopEntries () : TestResult =
+    let entry = Label "entry"
+    let left = Label "left"
+    let right = Label "right"
+    let header = Label "header"
+    let latch = Label "latch"
+    let exit = Label "exit"
+    let preheader = Label "header_preheader"
+    let cfg = {
+        Entry = entry
+        Blocks = Map.ofList [
+            (entry, basicBlock entry [] (Branch (Register (VReg 0), left, right)))
+            (left, basicBlock left [] (Jump header))
+            (right, basicBlock right [] (Jump header))
+            (header, basicBlock header [
+                Phi (VReg 2, [(Register (VReg 1), left); (Register (VReg 1), right); (Register (VReg 4), latch)], Some AST.TInt64)
+                BinOp (VReg 3, Mul, Register (VReg 0), Register (VReg 1), AST.TInt64)
+            ] (Branch (Register (VReg 5), latch, exit)))
+            (latch, basicBlock latch [] (Jump header))
+            (exit, basicBlock exit [] (Ret (Register (VReg 3))))
+        ]
+    }
+    let (optimized, changed) = applyLoopInvariantCodeMotion cfg
+    match Map.tryFind preheader optimized.Blocks, Map.tryFind header optimized.Blocks with
+    | Some preheaderBlock, Some headerBlock ->
+        let entriesRewritten =
+            [left; right]
+            |> List.forall (fun label ->
+                match Map.tryFind label optimized.Blocks with
+                | Some block -> block.Terminator = Jump preheader
+                | None -> false)
+        let phiRewritten =
+            match headerBlock.Instrs with
+            | Phi (_, [(Register preheaderValue, source); (Register (VReg 4), latchSource)], _) :: rest ->
+                source = preheader
+                && latchSource = latch
+                && preheaderBlock.Instrs = [Phi (preheaderValue, [(Register (VReg 1), left); (Register (VReg 1), right)], Some AST.TInt64); BinOp (VReg 3, Mul, Register (VReg 0), Register (VReg 1), AST.TInt64)]
+                && not (rest |> List.contains (BinOp (VReg 3, Mul, Register (VReg 0), Register (VReg 1), AST.TInt64)))
+            | _ -> false
+        if changed && entriesRewritten && phiRewritten then Ok ()
+        else Error "Expected multiple loop entries to merge through a deterministic preheader and hoist the invariant multiply"
+    | _ -> Error "Expected a dedicated preheader and preserved loop header"
+
+let testLicmRetainsExistingLoopPreheader () : TestResult =
+    let entry = Label "entry"
+    let preheader = Label "preheader"
+    let header = Label "header"
+    let latch = Label "latch"
+    let exit = Label "exit"
+    let invariant = BinOp (VReg 2, Mul, Register (VReg 0), Register (VReg 1), AST.TInt64)
+    let cfg = {
+        Entry = entry
+        Blocks = Map.ofList [
+            (entry, basicBlock entry [] (Jump preheader))
+            (preheader, basicBlock preheader [] (Jump header))
+            (header, basicBlock header [invariant] (Branch (Register (VReg 3), latch, exit)))
+            (latch, basicBlock latch [] (Jump header))
+            (exit, basicBlock exit [] (Ret (Register (VReg 2))))
+        ]
+    }
+    let (optimized, changed) = applyLoopInvariantCodeMotion cfg
+    match Map.tryFind preheader optimized.Blocks, Map.tryFind header optimized.Blocks with
+    | Some preheaderBlock, Some headerBlock when changed && preheaderBlock.Instrs = [invariant] && headerBlock.Instrs = [] -> Ok ()
+    | _ -> Error "Expected the existing preheader to be retained and used for LICM"
+
+let testLicmCanonicalizesNestedLoopEntry () : TestResult =
+    let entry = Label "entry"
+    let left = Label "left"
+    let right = Label "right"
+    let outerHeader = Label "outer_header"
+    let innerHeader = Label "inner_header"
+    let innerLatch = Label "inner_latch"
+    let outerLatch = Label "outer_latch"
+    let outerExit = Label "outer_exit"
+    let innerPreheader = Label "inner_header_preheader"
+    let invariant = BinOp (VReg 3, Mul, Register (VReg 0), Register (VReg 1), AST.TInt64)
+    let cfg = {
+        Entry = entry
+        Blocks = Map.ofList [
+            (entry, basicBlock entry [] (Branch (Register (VReg 5), left, right)))
+            (left, basicBlock left [] (Jump outerHeader))
+            (right, basicBlock right [] (Jump outerHeader))
+            (outerHeader, basicBlock outerHeader [] (Branch (Register (VReg 2), innerHeader, outerExit)))
+            (innerHeader, basicBlock innerHeader [invariant] (Branch (Register (VReg 4), innerLatch, outerLatch)))
+            (innerLatch, basicBlock innerLatch [] (Jump innerHeader))
+            (outerLatch, basicBlock outerLatch [] (Jump outerHeader))
+            (outerExit, basicBlock outerExit [] (Ret (Register (VReg 3))))
+        ]
+    }
+    let (optimized, changed) = applyLoopInvariantCodeMotion cfg
+    match Map.tryFind innerPreheader optimized.Blocks, Map.tryFind outerHeader optimized.Blocks, Map.tryFind innerHeader optimized.Blocks with
+    | Some preheaderBlock, Some outerHeaderBlock, Some innerHeaderBlock
+        when changed
+             && outerHeaderBlock.Terminator = Branch (Register (VReg 2), innerPreheader, outerExit)
+             && preheaderBlock.Instrs = [invariant]
+             && innerHeaderBlock.Instrs = [] -> Ok ()
+    | _ -> Error "Expected nested-loop entry canonicalization to preserve the outer loop and hoist the inner invariant"
+
 let tests = [
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
     ("MIR CSE reuses dominating binary and unary expressions", testCseReusesDominatingExpressions)
@@ -868,4 +966,7 @@ let tests = [
     ("MIR redundant successor branch trims removed phi edge", testRedundantSuccessorBranchTrimsRemovedPhiEdge)
     ("MIR self-comparison folding requires concrete safe type", testSelfComparisonFoldingRequiresConcreteSafeType)
     ("MIR self-comparison folding requires same register", testSelfComparisonFoldingRequiresSameRegister)
+    ("MIR LICM canonicalizes multiple loop entries", testLicmCanonicalizesMultipleLoopEntries)
+    ("MIR LICM retains existing loop preheader", testLicmRetainsExistingLoopPreheader)
+    ("MIR LICM canonicalizes nested loop entry", testLicmCanonicalizesNestedLoopEntry)
 ]
