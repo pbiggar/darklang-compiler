@@ -4,6 +4,8 @@
 
 module Stdlib.Int64
 
+type ParseError = BadFormat | OutOfRange
+
 // Stdlib.Int64 - Integer operations
 
 let add(a: Int64, b: Int64) : Int64 = a + b
@@ -13,29 +15,42 @@ let subtract(a: Int64, b: Int64) : Int64 = a - b
 
 let multiply(a: Int64, b: Int64) : Int64 = a * b
 
-let divide(a: Int64, b: Int64) : Int64 = a / b
+let divide(a: Int64, b: Int64) : Int64 =
+    if b == 0L then Builtin.testRuntimeError("Cannot divide by 0")
+    else if a == -9223372036854775808L && b == -1L then -9223372036854775808L
+    else a / b
 
 let sub(a: Int64, b: Int64) : Int64 = a - b
 
 let mul(a: Int64, b: Int64) : Int64 = a * b
 
-let div(a: Int64, b: Int64) : Int64 = a / b
+let div(a: Int64, b: Int64) : Int64 = Stdlib.Int64.divide(a, b)
 
 let max(a: Int64, b: Int64) : Int64 = if a > b then a else b
 
 let min(a: Int64, b: Int64) : Int64 = if a < b then a else b
 
-let mod(a: Int64, b: Int64) : Int64 = a % b
+let mod(a: Int64, b: Int64) : Int64 =
+    if b == 0L then Builtin.testRuntimeError("Cannot evaluate modulus against 0")
+    else if b < 0L then Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+    else a % b
+let remainder(a: Int64, b: Int64) : Stdlib.Result.Result<Int64, String> =
+    if b == 0L then Error("Cannot divide by 0")
+    else if b == -1L then Ok(0L)
+    else Ok(a - ((a / b) * b))
 
-let absoluteValue(a: Int64) : Int64 = if a < 0L then 0L - a else a
+let absoluteValue(a: Int64) : Int64 = if a < 0 then 0 - a else a
 
-let negate(a: Int64) : Int64 = 0L - a
+let negate(a: Int64) : Int64 = 0 - a
 
+let __powerLoop(base: Int64, exponent: Int64, result: Int64) : Int64 =
+    if exponent == 0L then result
+    else
+        let next = if (exponent % 2L) == 1L then result * base else result in
+        Stdlib.Int64.__powerLoop(base * base, exponent / 2L, next)
 let power(base: Int64, exponent: Int64) : Int64 =
     if exponent < 0L then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
-    else if exponent == 0L then 1L
-    else if exponent == 1L then base
-    else base * Stdlib.Int64.power(base, exponent - 1L)
+    else Stdlib.Int64.__powerLoop(base, exponent, 1L)
 
 let clamp(value: Int64, limitA: Int64, limitB: Int64) : Int64 =
     let lower = Stdlib.Int64.min(limitA, limitB) in
@@ -55,7 +70,7 @@ let bitwiseAnd(a: Int64, b: Int64) : Int64 = a & b
 
 let bitwiseOr(a: Int64, b: Int64) : Int64 = a ||| b
 
-let bitwiseXor(a: Int64, b: Int64) : Int64 = a ^ b
+let bitwiseXor(a: Int64, b: Int64) : Int64 = (a ||| b) & ~~~(a & b)
 
 let shiftLeft(a: Int64, shift: Int64) : Int64 = a << shift
 
@@ -71,52 +86,80 @@ let popcount(x: Int64) : Int64 =
     // 0x3333333333333333 = 3689348814741910323
     // 0x0F0F0F0F0F0F0F0F = 1085102592571150095
     // 0x0101010101010101 = 72340172838076673
-    let mask1 = 6148914691236517205L in
-    let mask2 = 3689348814741910323L in
-    let mask3 = 1085102592571150095L in
-    let mult = 72340172838076673L in
-    let x = x - ((x >> 1L) & mask1) in
-    let x = (x & mask2) + ((x >> 2L) & mask2) in
-    let x = (x + (x >> 4L)) & mask3 in
-    (x * mult) >> 56L
+    let mask1 = 6148914691236517205 in
+    let mask2 = 3689348814741910323 in
+    let mask3 = 1085102592571150095 in
+    let mult = 72340172838076673 in
+    let x = x - ((x >> 1) & mask1) in
+    let x = (x & mask2) + ((x >> 2) & mask2) in
+    let x = (x + (x >> 4)) & mask3 in
+    (x * mult) >> 56
 
 // Convert a single digit (0-9) to its string representation
 let __digitToString(n: Int64) : String =
     match n with
-    | 0L -> "0"
-    | 1L -> "1"
-    | 2L -> "2"
-    | 3L -> "3"
-    | 4L -> "4"
-    | 5L -> "5"
-    | 6L -> "6"
-    | 7L -> "7"
-    | 8L -> "8"
-    | 9L -> "9"
+    | 0 -> "0"
+    | 1 -> "1"
+    | 2 -> "2"
+    | 3 -> "3"
+    | 4 -> "4"
+    | 5 -> "5"
+    | 6 -> "6"
+    | 7 -> "7"
+    | 8 -> "8"
+    | 9 -> "9"
     | _ -> Builtin.testRuntimeError("Stdlib.Int64.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
 let toString(n: Int64) : String =
-    if n < 0L then
-        if n < -9L then
-            let quotient = n / 10L in
+    if n < 0 then
+        if n < -9 then
+            let quotient = n / 10 in
             // Decimal fragments are ASCII and therefore already closed under NFC.
-            __string_concat_raw(Stdlib.Int64.toString(quotient), Stdlib.Int64.__digitToString(0L - (n - (quotient * 10L))))
-        else __string_concat_raw("-", Stdlib.Int64.__digitToString(0L - n))
-    else if n < 10L then Stdlib.Int64.__digitToString(n)
+            __string_concat_raw(Stdlib.Int64.toString(quotient), Stdlib.Int64.__digitToString(0 - (n - (quotient * 10))))
+        else __string_concat_raw("-", Stdlib.Int64.__digitToString(0 - n))
+    else if n < 10 then Stdlib.Int64.__digitToString(n)
     else
-        let quotient = n / 10L in
-        let remainder = n - (quotient * 10L) in
+        let quotient = n / 10 in
+        let remainder = n - (quotient * 10) in
         __string_concat_raw(Stdlib.Int64.toString(quotient), Stdlib.Int64.__digitToString(remainder))
 
 // Check if integer is even
 let isEven(n: Int64) : Bool =
-    (n % 2L) == 0L
+    (n % 2) == 0
 
 // Check if integer is odd
 let isOdd(n: Int64) : Bool =
-    (n % 2L) != 0L
+    (n % 2) != 0
 
 // Sum all integers in a list
 let sum(list: List<Int64>) : Int64 =
-    Stdlib.List.fold<Int64, Int64>(list, 0L, fun acc x -> acc + x)
+    Stdlib.List.fold<Int64, Int64>(list, 0, fun acc x -> acc + x)
+
+let __fromIntUnchecked(value: Int) : Int64 =
+    match Stdlib.Int.toInt64(value) with
+    | Some(result) -> result
+    | None -> Builtin.testRuntimeError("Internal Int64 conversion invariant failed")
+let random(start: Int64, finish: Int64) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromInt64(start), Stdlib.Int.fromInt64(finish)))
+let toFloat(value: Int64) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromInt64(value))
+let sqrt(value: Int64) : Float = Stdlib.Float.sqrt(Stdlib.Int64.toFloat(value))
+let parse(value: String) : Stdlib.Result.Result<Int64, Stdlib.Int64.ParseError> =
+    match Stdlib.Int.parse(value) with
+    | Error(_) -> Error(Stdlib.Int64.ParseError.BadFormat)
+    | Ok(parsed) ->
+        match Stdlib.Int.toInt64(parsed) with
+        | None -> Error(Stdlib.Int64.ParseError.OutOfRange)
+        | Some(result) -> Ok(result)
+let fromFloat(value: Float) : Int64 =
+    match Stdlib.Int.toInt64(Stdlib.Int.fromFloat(value)) with
+    | Some(result) -> result
+    | None -> Builtin.testRuntimeError("Encountered out-of-range value for type of Int64")
+let fromInt8(value: Int8) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromInt8(value))
+let fromUInt8(value: UInt8) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromUInt8(value))
+let fromInt16(value: Int16) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromInt16(value))
+let fromUInt16(value: UInt16) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromUInt16(value))
+let fromInt32(value: Int32) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromInt32(value))
+let fromUInt32(value: UInt32) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromUInt32(value))
+let fromUInt64(value: UInt64) : Stdlib.Option.Option<Int64> = Stdlib.Int.toInt64(Stdlib.Int.fromUInt64(value))
+let fromInt128(value: Int128) : Stdlib.Option.Option<Int64> = Stdlib.Int.toInt64(Stdlib.Int.fromInt128(value))
+let fromUInt128(value: UInt128) : Stdlib.Option.Option<Int64> = Stdlib.Int.toInt64(Stdlib.Int.fromUInt128(value))

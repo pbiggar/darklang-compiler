@@ -4,30 +4,37 @@
 
 module Stdlib.UInt32
 
+type ParseError = BadFormat | OutOfRange
+
 // Stdlib.UInt32 - Integer operations
 
 let add(a: UInt32, b: UInt32) : UInt32 = a + b
 
 let sub(a: UInt32, b: UInt32) : UInt32 = a - b
+let subtract(a: UInt32, b: UInt32) : UInt32 = a - b
 
 let mul(a: UInt32, b: UInt32) : UInt32 = a * b
+let multiply(a: UInt32, b: UInt32) : UInt32 = a * b
 
-let div(a: UInt32, b: UInt32) : UInt32 = a / b
+let divide(a: UInt32, b: UInt32) : UInt32 = if b == 0ul then Builtin.testRuntimeError("Cannot divide by 0") else a / b
+let div(a: UInt32, b: UInt32) : UInt32 = Stdlib.UInt32.divide(a, b)
 
 let max(a: UInt32, b: UInt32) : UInt32 = if a > b then a else b
 
 let min(a: UInt32, b: UInt32) : UInt32 = if a < b then a else b
 
-let mod(a: UInt32, b: UInt32) : UInt32 = a % b
+let mod(a: UInt32, b: UInt32) : UInt32 = if b == 0ul then Builtin.testRuntimeError("Cannot evaluate modulus against 0") else a % b
 
 let absoluteValue(a: UInt32) : UInt32 = a
 
 let negate(a: UInt32) : UInt32 = 0ul - a
 
-let power(base: UInt32, exponent: UInt32) : UInt32 =
-    if exponent == 0ul then 1ul
-    else if exponent == 1ul then base
-    else base * Stdlib.UInt32.power(base, exponent - 1ul)
+let __powerLoop(base: UInt32, exponent: UInt32, result: UInt32) : UInt32 =
+    if exponent == 0ul then result
+    else
+        let next = if (exponent % 2ul) == 1ul then result * base else result in
+        Stdlib.UInt32.__powerLoop(base * base, exponent / 2ul, next)
+let power(base: UInt32, exponent: UInt32) : UInt32 = Stdlib.UInt32.__powerLoop(base, exponent, 1ul)
 
 let clamp(value: UInt32, limitA: UInt32, limitB: UInt32) : UInt32 =
     let lower = Stdlib.UInt32.min(limitA, limitB) in
@@ -47,7 +54,7 @@ let bitwiseAnd(a: UInt32, b: UInt32) : UInt32 = a & b
 
 let bitwiseOr(a: UInt32, b: UInt32) : UInt32 = a ||| b
 
-let bitwiseXor(a: UInt32, b: UInt32) : UInt32 = a ^ b
+let bitwiseXor(a: UInt32, b: UInt32) : UInt32 = (a ||| b) & ~~~(a & b)
 
 let shiftLeft(a: UInt32, shift: UInt32) : UInt32 = a << shift
 
@@ -100,3 +107,27 @@ let isOdd(n: UInt32) : Bool =
 // Sum all integers in a list
 let sum(list: List<UInt32>) : UInt32 =
     Stdlib.List.fold<UInt32, UInt32>(list, 0ul, fun acc x -> acc + x)
+
+let __fromIntUnchecked(value: Int) : UInt32 =
+    match Stdlib.Int.toUInt32(value) with
+    | Some(result) -> result
+    | None -> Builtin.testRuntimeError("Internal UInt32 conversion invariant failed")
+let random(start: UInt32, finish: UInt32) : UInt32 = Stdlib.UInt32.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromUInt32(start), Stdlib.Int.fromUInt32(finish)))
+let toFloat(value: UInt32) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromUInt32(value))
+let sqrt(value: UInt32) : Float = Stdlib.Float.sqrt(Stdlib.UInt32.toFloat(value))
+let parse(value: String) : Stdlib.Result.Result<UInt32, Stdlib.UInt32.ParseError> =
+    match Stdlib.Int.parse(value) with
+    | Error(_) -> Error(Stdlib.UInt32.ParseError.BadFormat)
+    | Ok(parsed) ->
+        match Stdlib.Int.toUInt32(parsed) with
+        | None -> Error(Stdlib.UInt32.ParseError.OutOfRange)
+        | Some(result) -> Ok(result)
+let fromInt8(value: Int8) : Stdlib.Option.Option<UInt32> = Stdlib.Int.toUInt32(Stdlib.Int.fromInt8(value))
+let fromUInt8(value: UInt8) : UInt32 = Stdlib.UInt32.__fromIntUnchecked(Stdlib.Int.fromUInt8(value))
+let fromInt16(value: Int16) : Stdlib.Option.Option<UInt32> = Stdlib.Int.toUInt32(Stdlib.Int.fromInt16(value))
+let fromUInt16(value: UInt16) : UInt32 = Stdlib.UInt32.__fromIntUnchecked(Stdlib.Int.fromUInt16(value))
+let fromInt32(value: Int32) : Stdlib.Option.Option<UInt32> = Stdlib.Int.toUInt32(Stdlib.Int.fromInt32(value))
+let fromInt64(value: Int64) : Stdlib.Option.Option<UInt32> = Stdlib.Int.toUInt32(Stdlib.Int.fromInt64(value))
+let fromUInt64(value: UInt64) : Stdlib.Option.Option<UInt32> = Stdlib.Int.toUInt32(Stdlib.Int.fromUInt64(value))
+let fromInt128(value: Int128) : Stdlib.Option.Option<UInt32> = Stdlib.Int.toUInt32(Stdlib.Int.fromInt128(value))
+let fromUInt128(value: UInt128) : Stdlib.Option.Option<UInt32> = Stdlib.Int.toUInt32(Stdlib.Int.fromUInt128(value))

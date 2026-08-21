@@ -100,8 +100,10 @@ type Instr =
     | OR_reg of dest:Reg * src:Reg
     | SHL_imm of dest:Reg * shift:int                     // Shift left by immediate
     | SHR_imm of dest:Reg * shift:int                     // Logical shift right by immediate
+    | SAR_imm of dest:Reg * shift:int                     // Arithmetic shift right by immediate
     | SHL_cl of dest:Reg                                  // Shift left by CL register
     | SHR_cl of dest:Reg                                  // Logical shift right by CL register
+    | SAR_cl of dest:Reg                                  // Arithmetic shift right by CL register
     // Byte-level memory
     | MOV_store_byte of baseAddr:Reg * offset:int32 * src:Reg  // MOV [base + offset], src8
     | MOV_load_byte of dest:Reg * baseAddr:Reg * offset:int32  // MOVZX dest, byte [base + offset]

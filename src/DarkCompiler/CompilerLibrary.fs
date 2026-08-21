@@ -1363,6 +1363,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Int16.dark"
         "stdlib/Int32.dark"
         "stdlib/Int64.dark"
+        "stdlib/__Integer.dark"
         "stdlib/Int.dark"
         "stdlib/Int128.dark"
         "stdlib/UInt8.dark"

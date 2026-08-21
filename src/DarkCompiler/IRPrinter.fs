@@ -569,10 +569,14 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Lsl({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
     | LIR.Lsr (dest, src, shift) ->
         $"{prettyPrintLIRReg dest} <- Lsr({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
+    | LIR.Asr (dest, src, shift) ->
+        $"{prettyPrintLIRReg dest} <- Asr({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
     | LIR.Lsl_imm (dest, src, shift) ->
         $"{prettyPrintLIRReg dest} <- Lsl_imm({prettyPrintLIRReg src}, #{shift})"
     | LIR.Lsr_imm (dest, src, shift) ->
         $"{prettyPrintLIRReg dest} <- Lsr_imm({prettyPrintLIRReg src}, #{shift})"
+    | LIR.Asr_imm (dest, src, shift) ->
+        $"{prettyPrintLIRReg dest} <- Asr_imm({prettyPrintLIRReg src}, #{shift})"
     | LIR.Mvn (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mvn({prettyPrintLIRReg src})"
     | LIR.Sxtb (dest, src) ->

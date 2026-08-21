@@ -843,6 +843,19 @@ let private didValueEqualityPass (run: E2ERun) : bool =
             |> Array.tryLast
         lastStdoutLine = Some "true"
 
+// Interpreter execution fixtures spell a returned Result.Error as `error=...`.
+// Native execution renders the value instead of converting it to a process
+// failure, so recognize that canonical Result presentation at this boundary.
+let private isRenderedResultError (expectedMessage: string option) (run: E2ERun) : bool =
+    if exitCodeFromRun run <> 0 then
+        false
+    else
+        let output = stdoutFromRun run
+        output.Contains(".Error(")
+        && (match expectedMessage with
+            | None -> true
+            | Some message -> output.Contains(message))
+
 let private evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
     if test.ExpectCompileError then
         let signalExitCode =
@@ -852,12 +865,13 @@ let private evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
         match signalExitCode with
         | Some exitCode ->
             failRun run $"Expected a compiler or language error, but the generated program terminated by signal (exit {exitCode})"
-        | None when exitCodeFromRun run = 0 ->
+        | None when exitCodeFromRun run = 0 && not (isRenderedResultError test.ExpectedErrorMessage run) ->
             failRun run "Expected compilation error but compilation succeeded"
         | None ->
             match test.ExpectedErrorMessage with
             | Some expectedMsg ->
-                let output = stderrFromRun run
+                let output =
+                    if exitCodeFromRun run = 0 then stdoutFromRun run else stderrFromRun run
                 if output.Contains(expectedMsg) then
                     Ok run
                 else

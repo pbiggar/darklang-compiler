@@ -35,12 +35,10 @@ let testRcShapeClassifiesPrimitivesAsImmediate () : TestResult =
         AST.TInt16
         AST.TInt32
         AST.TInt64
-        AST.TInt128
         AST.TUInt8
         AST.TUInt16
         AST.TUInt32
         AST.TUInt64
-        AST.TUInt128
         AST.TBool
         AST.TFloat64
         AST.TUnit
@@ -51,6 +49,13 @@ let testRcShapeClassifiesPrimitivesAsImmediate () : TestResult =
     match primitiveTypes |> List.tryFind (fun typ -> rcShapeOfType Map.empty typ <> Immediate) with
     | None -> Ok ()
     | Some typ -> Error $"Expected primitive type {typ} to classify as Immediate"
+
+let testRcShapeClassifiesManagedIntegerBuffers () : TestResult =
+    let managedIntegerTypes = [AST.TInt; AST.TInt128; AST.TUInt128]
+
+    match managedIntegerTypes |> List.tryFind (fun typ -> rcShapeOfType Map.empty typ <> DynamicString) with
+    | None -> Ok ()
+    | Some typ -> Error $"Expected integer buffer type {typ} to classify as DynamicString"
 
 let testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks () : TestResult =
     let typeReg =
@@ -1665,6 +1670,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
 let tests = [
     ("RcShape supports structural construction and equality", testRcShapeConstructionAndEquality)
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
+    ("RcShape classifies managed integer buffers", testRcShapeClassifiesManagedIntegerBuffers)
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
     ("RcShape classifies sums with variant metadata", testRcShapeClassifiesSumsWithVariantMetadata)

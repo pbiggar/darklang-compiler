@@ -11,3 +11,11 @@ let testSetExpectedExceptionCount(_count: Int64) : Unit =
 // Legacy DarkInternal helper used by upstream tests.
 let darkInternalInfraSchedulingRuleList() : Unit =
     Builtin.testRuntimeError("Unknown error")
+
+// Current interpreter integer probes call these primitive comparison names.
+// The compiler keeps their typed behavior while implementing them portably.
+let uint64GreaterThanOrEqualTo(a: UInt64, b: UInt64) : Bool =
+    Stdlib.UInt64.greaterThanOrEqualTo(a, b)
+
+let uint64LessThanOrEqualTo(a: UInt64, b: UInt64) : Bool =
+    Stdlib.UInt64.lessThanOrEqualTo(a, b)

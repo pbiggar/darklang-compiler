@@ -4,30 +4,57 @@
 
 module Stdlib.Int8
 
+type ParseError = BadFormat | OutOfRange
+
 // Stdlib.Int8 - Integer operations
 
 let add(a: Int8, b: Int8) : Int8 = a + b
 
 let sub(a: Int8, b: Int8) : Int8 = a - b
 
+let subtract(a: Int8, b: Int8) : Int8 = a - b
+
 let mul(a: Int8, b: Int8) : Int8 = a * b
 
-let div(a: Int8, b: Int8) : Int8 = a / b
+let multiply(a: Int8, b: Int8) : Int8 = a * b
+
+let divide(a: Int8, b: Int8) : Int8 =
+    if b == 0y then Builtin.testRuntimeError("Cannot divide by 0")
+    else if a == -128y && b == -1y then -128y
+    else a / b
+
+let div(a: Int8, b: Int8) : Int8 = Stdlib.Int8.divide(a, b)
 
 let max(a: Int8, b: Int8) : Int8 = if a > b then a else b
 
 let min(a: Int8, b: Int8) : Int8 = if a < b then a else b
 
-let mod(a: Int8, b: Int8) : Int8 = a % b
+let mod(a: Int8, b: Int8) : Int8 =
+    if b == 0y then Builtin.testRuntimeError("Cannot evaluate modulus against 0")
+    else if b < 0y then Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+    else a % b
+
+let remainder(a: Int8, b: Int8) : Stdlib.Result.Result<Int8, String> =
+    if b == 0y then Error("Cannot divide by 0")
+    else if b == -1y then Ok(0y)
+    else Ok(a - ((a / b) * b))
 
 let absoluteValue(a: Int8) : Int8 = if a < 0y then 0y - a else a
 
 let negate(a: Int8) : Int8 = 0y - a
 
 let power(base: Int8, exponent: Int8) : Int8 =
-    if exponent == 0y then 1y
-    else if exponent == 1y then base
-    else base * Stdlib.Int8.power(base, exponent - 1y)
+    if exponent < 0y then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
+    else
+        let result =
+            Stdlib.Internal.Integer.wrapSigned(
+                Stdlib.Internal.Integer.power(
+                    Stdlib.Internal.Integer.fromInt8(base),
+                    Stdlib.Internal.Integer.fromInt8(exponent)),
+                8L) in
+        match Stdlib.Internal.Integer.toInt8(result) with
+        | Some(value) -> value
+        | None -> Builtin.testRuntimeError("Internal Int8 power normalization invariant failed")
 
 let clamp(value: Int8, limitA: Int8, limitB: Int8) : Int8 =
     let lower = Stdlib.Int8.min(limitA, limitB) in
@@ -47,7 +74,7 @@ let bitwiseAnd(a: Int8, b: Int8) : Int8 = a & b
 
 let bitwiseOr(a: Int8, b: Int8) : Int8 = a ||| b
 
-let bitwiseXor(a: Int8, b: Int8) : Int8 = a ^ b
+let bitwiseXor(a: Int8, b: Int8) : Int8 = (a ||| b) & ~~~(a & b)
 
 let shiftLeft(a: Int8, shift: Int8) : Int8 = a << shift
 
@@ -102,3 +129,30 @@ let isOdd(n: Int8) : Bool =
 // Sum all integers in a list
 let sum(list: List<Int8>) : Int8 =
     Stdlib.List.fold<Int8, Int8>(list, 0y, fun acc x -> acc + x)
+
+let __fromIntUnchecked(value: Int) : Int8 =
+    match Stdlib.Int.toInt8(value) with
+    | Some(result) -> result
+    | None -> Builtin.testRuntimeError("Internal Int8 conversion invariant failed")
+
+let random(start: Int8, finish: Int8) : Int8 =
+    Stdlib.Int8.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromInt8(start), Stdlib.Int.fromInt8(finish)))
+let toFloat(value: Int8) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromInt8(value))
+let sqrt(value: Int8) : Float = Stdlib.Float.sqrt(Stdlib.Int8.toFloat(value))
+let parse(value: String) : Stdlib.Result.Result<Int8, Stdlib.Int8.ParseError> =
+    match Stdlib.Int.parse(value) with
+    | Error(_) -> Error(Stdlib.Int8.ParseError.BadFormat)
+    | Ok(parsed) ->
+        match Stdlib.Int.toInt8(parsed) with
+        | None -> Error(Stdlib.Int8.ParseError.OutOfRange)
+        | Some(result) -> Ok(result)
+
+let fromUInt8(value: UInt8) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromUInt8(value))
+let fromInt16(value: Int16) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromInt16(value))
+let fromUInt16(value: UInt16) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromUInt16(value))
+let fromInt32(value: Int32) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromInt32(value))
+let fromUInt32(value: UInt32) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromUInt32(value))
+let fromInt64(value: Int64) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromInt64(value))
+let fromUInt64(value: UInt64) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromUInt64(value))
+let fromInt128(value: Int128) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromInt128(value))
+let fromUInt128(value: UInt128) : Stdlib.Option.Option<Int8> = Stdlib.Int.toInt8(Stdlib.Int.fromUInt128(value))

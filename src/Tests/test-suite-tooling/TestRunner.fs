@@ -278,10 +278,20 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "alt-json.dark")
     let jsonUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "json.dark")
-    let int64UpstreamDarkPath =
-        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "ints", "int64.dark")
-    let intUpstreamDarkPath =
-        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "ints", "int.dark")
+    let integerUpstreamDarkPaths =
+        [| "int.dark"
+           "int8.dark"
+           "uint8.dark"
+           "int16.dark"
+           "uint16.dark"
+           "int32.dark"
+           "uint32.dark"
+           "int64.dark"
+           "uint64.dark"
+           "int128.dark"
+           "uint128.dark" |]
+        |> Array.map (fun filename ->
+            Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "ints", filename))
     let blobUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "bytes.dark")
     let base64UpstreamDarkPath =
@@ -336,8 +346,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            floatUpstreamDarkPath
            altJsonUpstreamDarkPath
            jsonUpstreamDarkPath
-           int64UpstreamDarkPath
-           intUpstreamDarkPath
+           yield! integerUpstreamDarkPaths
            blobUpstreamDarkPath
            base64UpstreamDarkPath
            cryptoUpstreamDarkPath
@@ -381,8 +390,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            floatUpstreamDarkPath
            altJsonUpstreamDarkPath
            jsonUpstreamDarkPath
-           int64UpstreamDarkPath
-           intUpstreamDarkPath
+           yield! integerUpstreamDarkPaths
            htmlUpstreamDarkPath
            httpUpstreamDarkPath
            streamUpstreamDarkPath

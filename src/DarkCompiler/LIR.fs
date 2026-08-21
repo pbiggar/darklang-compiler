@@ -104,8 +104,10 @@ type Instr =
     | Eor of dest:Reg * left:Reg * right:Reg
     | Lsl of dest:Reg * src:Reg * shift:Reg
     | Lsr of dest:Reg * src:Reg * shift:Reg
+    | Asr of dest:Reg * src:Reg * shift:Reg
     | Lsl_imm of dest:Reg * src:Reg * shift:int
     | Lsr_imm of dest:Reg * src:Reg * shift:int
+    | Asr_imm of dest:Reg * src:Reg * shift:int
     | Mvn of dest:Reg * src:Reg
     | Sxtb of dest:Reg * src:Reg
     | Sxth of dest:Reg * src:Reg

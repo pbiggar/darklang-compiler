@@ -278,8 +278,10 @@ let isPureLoopInstr (instr: Instr) : bool =
     | Eor _
     | Lsl _
     | Lsr _
+    | Asr _
     | Lsl_imm _
     | Lsr_imm _
+    | Asr_imm _
     | Mvn _
     | Sxtb _
     | Sxth _
@@ -654,6 +656,7 @@ let private foldRegUses folder state (instr: Instr) =
     | Eor (_, left, right)
     | Lsl (_, left, right)
     | Lsr (_, left, right)
+    | Asr (_, left, right)
     | RawGet (_, left, right)
     | RawGetByte (_, left, right) ->
         folder (folder state left) right
@@ -670,6 +673,7 @@ let private foldRegUses folder state (instr: Instr) =
     | And_imm (_, src, _)
     | Lsl_imm (_, src, _)
     | Lsr_imm (_, src, _)
+    | Asr_imm (_, src, _)
     | Mvn (_, src)
     | Sxtb (_, src)
     | Sxth (_, src)

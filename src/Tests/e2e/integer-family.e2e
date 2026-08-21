@@ -1,0 +1,32 @@
+// Integer-family parity and managed-ownership regression tests.
+
+// Canonical signed and unsigned 128-bit wrapping boundaries.
+Stdlib.Int128.add(170141183460469231731687303715884105726Q, 4Q) = -170141183460469231731687303715884105726Q
+Stdlib.UInt128.add(340282366920938463463374607431768211455Z, 1Z) = 0Z
+
+// Managed decimal buffers survive aggregates, branches, sums, and closures.
+let value = Stdlib.Int.power(2I, 100I) in let pair = (value, value + 1I) in pair.0 = 1267650600228229401496703205376I
+let values = [170141183460469231731687303715884105727Q, -1Q] in Stdlib.List.length<Int128>(values) = 2I
+let value = 340282366920938463463374607431768211455Z in let selected = if true then Some(value) else None in selected = Some(340282366920938463463374607431768211455Z)
+let captured = Stdlib.Int.power(2I, 100I) in (fun offset -> captured + offset)(1I) = 1267650600228229401496703205377I
+type IntegerOwnerBox = { arbitrary: Int, signed128: Int128, unsigned128: UInt128 } let box = IntegerOwnerBox { arbitrary = Stdlib.Int.power(2I, 100I), signed128 = -170141183460469231731687303715884105728Q, unsigned128 = 340282366920938463463374607431768211455Z } in box.signed128 = -170141183460469231731687303715884105728Q
+
+// Inclusive, order-independent randomness, including equal and full-width bounds.
+Stdlib.Int.random(999999999999999999999999I, 999999999999999999999999I) = 999999999999999999999999I
+Stdlib.Int8.random(12y, 12y) = 12y
+let value = Stdlib.Int64.random(-9223372036854775808L, 9223372036854775807L) in value >= -9223372036854775808L && value <= 9223372036854775807L = true
+let value = Stdlib.UInt64.random(18446744073709551615UL, 0UL) in value <= 18446744073709551615UL = true
+
+// Float rounding and checked-conversion boundaries.
+Stdlib.Int128.toFloat(170141183460469231731687303715884105727Q) = 170141183460469231731687303715884105727.0
+Stdlib.UInt128.toFloat(340282366920938463463374607431768211455Z) = 340282366920938463463374607431768211455.0
+Stdlib.Int8.fromInt128(127Q) = Some(127y)
+Stdlib.Int8.fromInt128(128Q) = None
+Stdlib.UInt64.fromUInt128(18446744073709551615Z) = Some(18446744073709551615UL)
+Stdlib.UInt64.fromUInt128(18446744073709551616Z) = None
+
+// Canonical Result and exact runtime-failure shapes.
+Stdlib.Int.remainder(5I, 0I) = Error("Cannot divide by 0")
+Stdlib.Int128.remainder(5Q, 0Q) = Error("Cannot divide by 0")
+Stdlib.Int64.divide(1L, 0L) = error="Cannot divide by 0"
+Stdlib.Int64.mod(1L, -1L) = error="Cannot evaluate modulus against a negative number"

@@ -4,31 +4,49 @@
 
 module Stdlib.Int32
 
+type ParseError = BadFormat | OutOfRange
+
 // Stdlib.Int32 - Integer operations
 
 let add(a: Int32, b: Int32) : Int32 = a + b
 
 let sub(a: Int32, b: Int32) : Int32 = a - b
+let subtract(a: Int32, b: Int32) : Int32 = a - b
 
 let mul(a: Int32, b: Int32) : Int32 = a * b
+let multiply(a: Int32, b: Int32) : Int32 = a * b
 
-let div(a: Int32, b: Int32) : Int32 = a / b
+let divide(a: Int32, b: Int32) : Int32 =
+    if b == 0l then Builtin.testRuntimeError("Cannot divide by 0")
+    else if a == -2147483648l && b == -1l then -2147483648l
+    else a / b
+let div(a: Int32, b: Int32) : Int32 = Stdlib.Int32.divide(a, b)
 
 let max(a: Int32, b: Int32) : Int32 = if a > b then a else b
 
 let min(a: Int32, b: Int32) : Int32 = if a < b then a else b
 
-let mod(a: Int32, b: Int32) : Int32 = a % b
+let mod(a: Int32, b: Int32) : Int32 =
+    if b == 0l then Builtin.testRuntimeError("Cannot evaluate modulus against 0")
+    else if b < 0l then Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+    else a % b
+let remainder(a: Int32, b: Int32) : Stdlib.Result.Result<Int32, String> =
+    if b == 0l then Error("Cannot divide by 0")
+    else if b == -1l then Ok(0l)
+    else Ok(a - ((a / b) * b))
 
 let absoluteValue(a: Int32) : Int32 = if a < 0l then 0l - a else a
 
 let negate(a: Int32) : Int32 = 0l - a
 
+let __powerLoop(base: Int32, exponent: Int32, result: Int32) : Int32 =
+    if exponent == 0l then result
+    else
+        let next = if (exponent % 2l) == 1l then result * base else result in
+        Stdlib.Int32.__powerLoop(base * base, exponent / 2l, next)
 let power(base: Int32, exponent: Int32) : Int32 =
     if exponent < 0l then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
-    else if exponent == 0l then 1l
-    else if exponent == 1l then base
-    else base * Stdlib.Int32.power(base, exponent - 1l)
+    else Stdlib.Int32.__powerLoop(base, exponent, 1l)
 
 let clamp(value: Int32, limitA: Int32, limitB: Int32) : Int32 =
     let lower = Stdlib.Int32.min(limitA, limitB) in
@@ -48,7 +66,7 @@ let bitwiseAnd(a: Int32, b: Int32) : Int32 = a & b
 
 let bitwiseOr(a: Int32, b: Int32) : Int32 = a ||| b
 
-let bitwiseXor(a: Int32, b: Int32) : Int32 = a ^ b
+let bitwiseXor(a: Int32, b: Int32) : Int32 = (a ||| b) & ~~~(a & b)
 
 let shiftLeft(a: Int32, shift: Int32) : Int32 = a << shift
 
@@ -106,3 +124,27 @@ let isOdd(n: Int32) : Bool =
 // Sum all integers in a list
 let sum(list: List<Int32>) : Int32 =
     Stdlib.List.fold<Int32, Int32>(list, 0l, fun acc x -> acc + x)
+
+let __fromIntUnchecked(value: Int) : Int32 =
+    match Stdlib.Int.toInt32(value) with
+    | Some(result) -> result
+    | None -> Builtin.testRuntimeError("Internal Int32 conversion invariant failed")
+let random(start: Int32, finish: Int32) : Int32 = Stdlib.Int32.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromInt32(start), Stdlib.Int.fromInt32(finish)))
+let toFloat(value: Int32) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromInt32(value))
+let sqrt(value: Int32) : Float = Stdlib.Float.sqrt(Stdlib.Int32.toFloat(value))
+let parse(value: String) : Stdlib.Result.Result<Int32, Stdlib.Int32.ParseError> =
+    match Stdlib.Int.parse(value) with
+    | Error(_) -> Error(Stdlib.Int32.ParseError.BadFormat)
+    | Ok(parsed) ->
+        match Stdlib.Int.toInt32(parsed) with
+        | None -> Error(Stdlib.Int32.ParseError.OutOfRange)
+        | Some(result) -> Ok(result)
+let fromInt8(value: Int8) : Int32 = Stdlib.Int32.__fromIntUnchecked(Stdlib.Int.fromInt8(value))
+let fromUInt8(value: UInt8) : Int32 = Stdlib.Int32.__fromIntUnchecked(Stdlib.Int.fromUInt8(value))
+let fromInt16(value: Int16) : Int32 = Stdlib.Int32.__fromIntUnchecked(Stdlib.Int.fromInt16(value))
+let fromUInt16(value: UInt16) : Int32 = Stdlib.Int32.__fromIntUnchecked(Stdlib.Int.fromUInt16(value))
+let fromUInt32(value: UInt32) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32(Stdlib.Int.fromUInt32(value))
+let fromInt64(value: Int64) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32(Stdlib.Int.fromInt64(value))
+let fromUInt64(value: UInt64) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32(Stdlib.Int.fromUInt64(value))
+let fromInt128(value: Int128) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32(Stdlib.Int.fromInt128(value))
+let fromUInt128(value: UInt128) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32(Stdlib.Int.fromUInt128(value))

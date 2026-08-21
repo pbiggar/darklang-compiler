@@ -133,8 +133,10 @@ type Instr =
     | EOR_reg of dest:Reg * src1:Reg * src2:Reg
     | LSL_reg of dest:Reg * src:Reg * shift:Reg
     | LSR_reg of dest:Reg * src:Reg * shift:Reg
+    | ASR_reg of dest:Reg * src:Reg * shift:Reg
     | LSL_imm of dest:Reg * src:Reg * shift:int
     | LSR_imm of dest:Reg * src:Reg * shift:int
+    | ASR_imm of dest:Reg * src:Reg * shift:int
     | MVN of dest:Reg * src:Reg
     | MOV_reg of dest:Reg * src:Reg
     | STRB of src:Reg * addr:Reg * offset:int
@@ -232,8 +234,10 @@ let ofARM64 (instr: ARM64.Instr) : Instr =
     | ARM64.EOR_reg (dest, src1, src2) -> EOR_reg (dest, src1, src2)
     | ARM64.LSL_reg (dest, src, shift) -> LSL_reg (dest, src, shift)
     | ARM64.LSR_reg (dest, src, shift) -> LSR_reg (dest, src, shift)
+    | ARM64.ASR_reg (dest, src, shift) -> ASR_reg (dest, src, shift)
     | ARM64.LSL_imm (dest, src, shift) -> LSL_imm (dest, src, shift)
     | ARM64.LSR_imm (dest, src, shift) -> LSR_imm (dest, src, shift)
+    | ARM64.ASR_imm (dest, src, shift) -> ASR_imm (dest, src, shift)
     | ARM64.MVN (dest, src) -> MVN (dest, src)
     | ARM64.MOV_reg (dest, src) -> MOV_reg (dest, src)
     | ARM64.STRB (src, addr, offset) -> STRB (src, addr, offset)

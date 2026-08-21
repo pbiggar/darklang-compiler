@@ -31,8 +31,11 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
 
 open ResultList
 
-let moduloNegativeDivisorErrorMessage =
-    "Error when executing Script. Call-stack:\nCall stack (last call at bottom):\n\nScript error: Cannot evaluate modulus against a negative number"
+type IntegerErrorLabels = {
+    DivideByZero: LIR.Label
+    ModuloByZero: LIR.Label
+    ModuloNegativeDivisor: LIR.Label
+}
 
 /// Convert MIR.VReg to LIR.Reg (virtual)
 let vregToLIRReg (MIR.VReg id) : LIR.Reg = LIR.Virtual id
@@ -244,22 +247,17 @@ let shouldCheckNegativeDivisor (operandType: AST.Type) : bool =
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 -> true
     | _ -> false
 
-let shouldCheckNegativeModuloDivisor
-    (functionName: string)
-    (operandType: AST.Type)
-    (divisor: MIR.Operand)
-    : bool =
-    shouldCheckNegativeDivisor operandType
-    && not (
-        // Int64.toString's decimal divisor is the fixed literal 10. Its inferred
-        // MIR type can otherwise depend on unrelated generic-specialization order.
-        functionName = "Stdlib.Int64.toString"
-        && divisor = MIR.Int64Const 10L)
-
 let isUnsignedIntegerType (operandType: AST.Type) : bool =
     match operandType with
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> true
     | _ -> false
+
+let shiftCountMask (operandType: AST.Type) : int64 =
+    match operandType with
+    | AST.TInt8 | AST.TInt16 | AST.TInt32
+    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 -> 31L
+    | AST.TInt64 | AST.TUInt64 -> 63L
+    | _ -> 63L
 
 let comparisonCondition (operandType: AST.Type) (op: MIR.BinOp) : LIR.Condition =
     let unsigned = isUnsignedIntegerType operandType
@@ -298,23 +296,17 @@ let buildIntegerModuloParts
                  @ truncInstrs,
                  stateAfterQuot)
             else
-                let (xorReg, stateAfterXor) = freshTempReg stateAfterQuot
-                let (remNonZeroReg, stateAfterRemNonZero) = freshTempReg stateAfterXor
-                let (signMismatchReg, stateAfterSignMismatch) = freshTempReg stateAfterRemNonZero
-                let (adjustFlagReg, stateAfterAdjustFlag) = freshTempReg stateAfterSignMismatch
-                let (adjustReg, nextState) = freshTempReg stateAfterAdjustFlag
+                // The modulus contract has already established a positive
+                // divisor. Convert the truncating hardware remainder to a
+                // Euclidean one by adding divisor & signMask(remainder). The
+                // quotient register is dead after MSUB, so reuse it as scratch.
                 ([LIR.Sdiv (quotReg, leftReg, rightReg);
                   LIR.Msub (destReg, quotReg, rightReg, leftReg);
-                  LIR.Cmp (destReg, LIR.Imm 0L);
-                  LIR.Cset (remNonZeroReg, LIR.NE);
-                  LIR.Eor (xorReg, destReg, rightReg);
-                  LIR.Cmp (xorReg, LIR.Imm 0L);
-                  LIR.Cset (signMismatchReg, LIR.LT);
-                  LIR.And (adjustFlagReg, remNonZeroReg, signMismatchReg);
-                  LIR.Mul (adjustReg, adjustFlagReg, rightReg);
-                  LIR.Add (destReg, destReg, LIR.Reg adjustReg)]
+                  LIR.Asr_imm (quotReg, destReg, 63);
+                  LIR.And (quotReg, rightReg, quotReg);
+                  LIR.Add (destReg, destReg, LIR.Reg quotReg)]
                  @ truncInstrs,
-                 nextState)
+                 stateAfterQuot)
         Ok (leftInstrs @ rightInstrs, rightReg, modInstrs, nextState)
 
 let buildFloatArgMoves
@@ -611,13 +603,15 @@ let selectInstr
                 | Ok (leftInstrs, leftReg, stateAfterLeft) ->
                     // Check if shift amount is a constant (0-63)
                     match right with
-                    | MIR.Int64Const n when n >= 0L && n < 64L ->
-                        Ok (leftInstrs @ [LIR.Lsl_imm (lirDest, leftReg, int n)] @ truncInstrs, stateAfterLeft)
+                    | MIR.Int64Const n ->
+                        let masked = n &&& shiftCountMask operandType
+                        Ok (leftInstrs @ [LIR.Lsl_imm (lirDest, leftReg, int masked)] @ truncInstrs, stateAfterLeft)
                     | _ ->
                         match ensureInRegister right stateAfterLeft with
                         | Error err -> Error err
-                        | Ok (rightInstrs, rightReg, nextState) ->
-                            Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)] @ truncInstrs, nextState)
+                        | Ok (rightInstrs, rightReg, stateAfterRight) ->
+                            let (maskedReg, nextState) = freshTempReg stateAfterRight
+                            Ok (leftInstrs @ rightInstrs @ [LIR.And_imm (maskedReg, rightReg, shiftCountMask operandType); LIR.Lsl (lirDest, leftReg, maskedReg)] @ truncInstrs, nextState)
 
             | MIR.Shr ->
                 match ensureInRegister left state with
@@ -625,13 +619,21 @@ let selectInstr
                 | Ok (leftInstrs, leftReg, stateAfterLeft) ->
                     // Check if shift amount is a constant (0-63)
                     match right with
-                    | MIR.Int64Const n when n >= 0L && n < 64L ->
-                        Ok (leftInstrs @ [LIR.Lsr_imm (lirDest, leftReg, int n)] @ truncInstrs, stateAfterLeft)
+                    | MIR.Int64Const n ->
+                        let masked = int (n &&& shiftCountMask operandType)
+                        let shiftInstr =
+                            if isUnsignedIntegerType operandType then LIR.Lsr_imm (lirDest, leftReg, masked)
+                            else LIR.Asr_imm (lirDest, leftReg, masked)
+                        Ok (leftInstrs @ [shiftInstr] @ truncInstrs, stateAfterLeft)
                     | _ ->
                         match ensureInRegister right stateAfterLeft with
                         | Error err -> Error err
-                        | Ok (rightInstrs, rightReg, nextState) ->
-                            Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)] @ truncInstrs, nextState)
+                        | Ok (rightInstrs, rightReg, stateAfterRight) ->
+                            let (maskedReg, nextState) = freshTempReg stateAfterRight
+                            let shiftInstr =
+                                if isUnsignedIntegerType operandType then LIR.Lsr (lirDest, leftReg, maskedReg)
+                                else LIR.Asr (lirDest, leftReg, maskedReg)
+                            Ok (leftInstrs @ rightInstrs @ [LIR.And_imm (maskedReg, rightReg, shiftCountMask operandType); shiftInstr] @ truncInstrs, nextState)
 
             | MIR.BitAnd ->
                 match ensureInRegister left state with
@@ -1832,21 +1834,21 @@ let initTempState (mirFunc: MIR.Function) : TempState =
     { NextRegId = maxRegId + 1
       NextFRegId = maxFRegId + 1 }
 
-let moduloNegativeDivisorErrorBlock (label: LIR.Label) : LIR.BasicBlock =
+let integerErrorBlock (label: LIR.Label) (message: string) : LIR.BasicBlock =
     {
         Label = label
-        Instrs = [LIR.PrintString moduloNegativeDivisorErrorMessage]
+        Instrs = [LIR.RuntimeError message]
         Terminator = LIR.Ret
     }
 
 let selectBlocksWithModuloChecks
-    (functionName: string)
+    (_functionName: string)
     (block: MIR.BasicBlock)
     (variantRegistry: MIR.VariantRegistry)
     (recordRegistry: MIR.RecordRegistry)
     (returnType: AST.Type)
     (floatRegs: Set<int>)
-    (errorLabel: LIR.Label)
+    (errorLabels: IntegerErrorLabels)
     (state: TempState)
     : Result<LIR.BasicBlock list * LIR.Label * TempState, string> =
     let (MIR.Label baseLabel) = block.Label
@@ -1855,24 +1857,93 @@ let selectBlocksWithModuloChecks
         | [] -> Ok (blocksRev, counter, currentLabel, currentInstrsRev, currentState)
         | instr :: rest ->
             match instr with
+            // A statically non-zero divisor needs no runtime guard. Besides
+            // removing a redundant branch, this preserves the constant as a
+            // loop invariant for later optimization passes.
+            | MIR.BinOp (_, MIR.Div, _, MIR.Int64Const divisor, operandType)
+                when operandType <> AST.TFloat64 && divisor <> 0L ->
+                match selectInstr instr variantRegistry recordRegistry floatRegs currentState with
+                | Error err -> Error err
+                | Ok (lirInstrs, nextState) ->
+                    let nextInstrsRev =
+                        lirInstrs
+                        |> List.fold (fun instrsRev lirInstr -> lirInstr :: instrsRev) currentInstrsRev
+                    loop rest counter currentLabel nextInstrsRev blocksRev nextState
+            | MIR.BinOp (_, MIR.Div, _, right, operandType)
+                when operandType <> AST.TFloat64 ->
+                match ensureInRegister right currentState with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg, stateAfterRight) ->
+                    match selectInstr instr variantRegistry recordRegistry floatRegs stateAfterRight with
+                    | Error err -> Error err
+                    | Ok (divInstrs, nextState) ->
+                        let nextLabel = LIR.Label $"{baseLabel}_div_cont_{counter}"
+                        let checkBlock : LIR.BasicBlock =
+                            {
+                                Label = currentLabel
+                                Instrs =
+                                    List.rev currentInstrsRev
+                                    @ rightInstrs
+                                    @ [LIR.Cmp (rightReg, LIR.Imm 0L)]
+                                Terminator =
+                                    LIR.CondBranch (LIR.EQ, errorLabels.DivideByZero, nextLabel)
+                            }
+                        loop rest (counter + 1) nextLabel (List.rev divInstrs) (checkBlock :: blocksRev) nextState
+            // Constant divisors that satisfy the public modulus contract do
+            // not need a runtime guard.
+            | MIR.BinOp (_, MIR.Mod, _, MIR.Int64Const divisor, operandType)
+                when operandType <> AST.TFloat64
+                     && ((isUnsignedIntegerType operandType && divisor <> 0L)
+                         || (shouldCheckNegativeDivisor operandType && divisor > 0L)) ->
+                match selectInstr instr variantRegistry recordRegistry floatRegs currentState with
+                | Error err -> Error err
+                | Ok (lirInstrs, nextState) ->
+                    let nextInstrsRev =
+                        lirInstrs
+                        |> List.fold (fun instrsRev lirInstr -> lirInstr :: instrsRev) currentInstrsRev
+                    loop rest counter currentLabel nextInstrsRev blocksRev nextState
             | MIR.BinOp (dest, MIR.Mod, left, right, operandType)
-                when shouldCheckNegativeModuloDivisor functionName operandType right ->
+                when operandType <> AST.TFloat64 ->
                 let lirDest = vregToLIRReg dest
                 match buildIntegerModuloParts lirDest left right operandType currentState with
                 | Error err -> Error err
                 | Ok (loadInstrs, rightReg, modInstrs, nextState) ->
                     let nextLabel = LIR.Label $"{baseLabel}_mod_cont_{counter}"
-                    let checkInstrs =
-                        List.rev currentInstrsRev
-                        @ loadInstrs
-                        @ [LIR.Cmp (rightReg, LIR.Imm 0L)]
-                    let checkBlock : LIR.BasicBlock =
+                    let negativeCheckNeeded =
+                        shouldCheckNegativeDivisor operandType
+                    let invalidLabel = LIR.Label $"{baseLabel}_mod_invalid_{counter}"
+                    let zeroCheckBlock : LIR.BasicBlock =
                         {
                             Label = currentLabel
-                            Instrs = checkInstrs
-                            Terminator = LIR.CondBranch (LIR.LT, errorLabel, nextLabel)
+                            Instrs =
+                                List.rev currentInstrsRev
+                                @ loadInstrs
+                                @ [LIR.Cmp (rightReg, LIR.Imm 0L)]
+                            Terminator =
+                                if negativeCheckNeeded then
+                                    LIR.CondBranch (LIR.LE, invalidLabel, nextLabel)
+                                else
+                                    LIR.CondBranch (LIR.EQ, errorLabels.ModuloByZero, nextLabel)
                         }
-                    loop rest (counter + 1) nextLabel (List.rev modInstrs) (checkBlock :: blocksRev) nextState
+                    let checkBlocksRev =
+                        if negativeCheckNeeded then
+                            // The hot path uses one comparison and branch. Only
+                            // the cold invalid path distinguishes the canonical
+                            // zero and negative-divisor error messages.
+                            let invalidCheckBlock : LIR.BasicBlock =
+                                {
+                                    Label = invalidLabel
+                                    Instrs = [LIR.Cmp (rightReg, LIR.Imm 0L)]
+                                    Terminator =
+                                        LIR.CondBranch (
+                                            LIR.EQ,
+                                            errorLabels.ModuloByZero,
+                                            errorLabels.ModuloNegativeDivisor)
+                                }
+                            invalidCheckBlock :: zeroCheckBlock :: blocksRev
+                        else
+                            zeroCheckBlock :: blocksRev
+                    loop rest (counter + 1) nextLabel (List.rev modInstrs) checkBlocksRev nextState
             | _ ->
                 match selectInstr instr variantRegistry recordRegistry floatRegs currentState with
                 | Error err -> Error err
@@ -1904,7 +1975,7 @@ let selectCFG
     (recordRegistry: MIR.RecordRegistry)
     (returnType: AST.Type)
     (floatRegs: Set<int>)
-    (errorLabel: LIR.Label)
+    (errorLabels: IntegerErrorLabels)
     (state: TempState)
     : Result<LIR.CFG, string> =
     let lirEntry = convertLabel cfg.Entry
@@ -1917,7 +1988,7 @@ let selectCFG
         match remaining with
         | [] -> Ok (List.rev blocksAcc |> List.concat, labelMapAcc |> Map.ofList, currentState)
         | (_label, block) :: rest ->
-            match selectBlocksWithModuloChecks functionName block variantRegistry recordRegistry returnType floatRegs errorLabel currentState with
+            match selectBlocksWithModuloChecks functionName block variantRegistry recordRegistry returnType floatRegs errorLabels currentState with
             | Error err -> Error err
             | Ok (lirBlocks, finalLabel, nextState) ->
                 let originalLabel = convertLabel block.Label
@@ -1926,28 +1997,27 @@ let selectCFG
     match buildBlocks blockList state [] [] with
     | Error err -> Error err
     | Ok (lirBlocks, labelMap, _finalState) ->
-        let needsErrorBlock =
+        let referencedLabels =
             lirBlocks
-            |> List.exists (fun block ->
+            |> List.collect (fun block ->
                 match block.Terminator with
-                | LIR.Branch (_, trueLabel, falseLabel) ->
-                    trueLabel = errorLabel || falseLabel = errorLabel
-                | LIR.BranchZero (_, zeroLabel, nonZeroLabel) ->
-                    zeroLabel = errorLabel || nonZeroLabel = errorLabel
-                | LIR.BranchBitZero (_, _, zeroLabel, nonZeroLabel) ->
-                    zeroLabel = errorLabel || nonZeroLabel = errorLabel
-                | LIR.BranchBitNonZero (_, _, nonZeroLabel, zeroLabel) ->
-                    zeroLabel = errorLabel || nonZeroLabel = errorLabel
-                | LIR.CondBranch (_, trueLabel, falseLabel) ->
-                    trueLabel = errorLabel || falseLabel = errorLabel
-                | LIR.Jump label ->
-                    label = errorLabel
-                | LIR.Ret -> false)
+                | LIR.Branch (_, trueLabel, falseLabel)
+                | LIR.BranchZero (_, trueLabel, falseLabel)
+                | LIR.BranchBitZero (_, _, trueLabel, falseLabel)
+                | LIR.BranchBitNonZero (_, _, trueLabel, falseLabel)
+                | LIR.CondBranch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
+                | LIR.Jump label -> [label]
+                | LIR.Ret -> [])
+            |> Set.ofList
+        let possibleErrorBlocks =
+            [ (errorLabels.DivideByZero, "Cannot divide by 0")
+              (errorLabels.ModuloByZero, "Cannot evaluate modulus against 0")
+              (errorLabels.ModuloNegativeDivisor, "Cannot evaluate modulus against a negative number") ]
         let blocksWithError =
-            if needsErrorBlock then
-                lirBlocks @ [moduloNegativeDivisorErrorBlock errorLabel]
-            else
-                lirBlocks
+            possibleErrorBlocks
+            |> List.filter (fun (label, _) -> Set.contains label referencedLabels)
+            |> List.map (fun (label, message) -> integerErrorBlock label message)
+            |> List.append lirBlocks
         let hasDuplicate =
             blocksWithError
             |> List.countBy (fun block -> block.Label)
@@ -2062,9 +2132,14 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
 
     // Convert each MIR function to LIR
     let convertFunc (mirFunc: MIR.Function) : Result<LIR.Function, string> =
-        let errorLabel = LIR.Label $"__modulo_negative_divisor_error_{mirFunc.Name}"
+        let errorLabels =
+            {
+                DivideByZero = LIR.Label $"__divide_by_zero_error_{mirFunc.Name}"
+                ModuloByZero = LIR.Label $"__modulo_by_zero_error_{mirFunc.Name}"
+                ModuloNegativeDivisor = LIR.Label $"__modulo_negative_divisor_error_{mirFunc.Name}"
+            }
         let tempState = initTempState mirFunc
-        match selectCFG mirFunc.Name mirFunc.CFG variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs errorLabel tempState with
+        match selectCFG mirFunc.Name mirFunc.CFG variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs errorLabels tempState with
         | Error err -> Error err
         | Ok lirCFG ->
             // Convert MIR TypedParams to LIR TypedLIRParams

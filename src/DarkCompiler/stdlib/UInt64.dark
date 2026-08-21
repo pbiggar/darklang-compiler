@@ -4,30 +4,37 @@
 
 module Stdlib.UInt64
 
+type ParseError = BadFormat | OutOfRange
+
 // Stdlib.UInt64 - Integer operations
 
 let add(a: UInt64, b: UInt64) : UInt64 = a + b
 
 let sub(a: UInt64, b: UInt64) : UInt64 = a - b
+let subtract(a: UInt64, b: UInt64) : UInt64 = a - b
 
 let mul(a: UInt64, b: UInt64) : UInt64 = a * b
+let multiply(a: UInt64, b: UInt64) : UInt64 = a * b
 
-let div(a: UInt64, b: UInt64) : UInt64 = a / b
+let divide(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.testRuntimeError("Cannot divide by 0") else a / b
+let div(a: UInt64, b: UInt64) : UInt64 = Stdlib.UInt64.divide(a, b)
 
 let max(a: UInt64, b: UInt64) : UInt64 = if a > b then a else b
 
 let min(a: UInt64, b: UInt64) : UInt64 = if a < b then a else b
 
-let mod(a: UInt64, b: UInt64) : UInt64 = a % b
+let mod(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.testRuntimeError("Cannot evaluate modulus against 0") else a % b
 
 let absoluteValue(a: UInt64) : UInt64 = a
 
 let negate(a: UInt64) : UInt64 = 0UL - a
 
-let power(base: UInt64, exponent: UInt64) : UInt64 =
-    if exponent == 0UL then 1UL
-    else if exponent == 1UL then base
-    else base * Stdlib.UInt64.power(base, exponent - 1UL)
+let __powerLoop(base: UInt64, exponent: UInt64, result: UInt64) : UInt64 =
+    if exponent == 0UL then result
+    else
+        let next = if (exponent % 2UL) == 1UL then result * base else result in
+        Stdlib.UInt64.__powerLoop(base * base, exponent / 2UL, next)
+let power(base: UInt64, exponent: UInt64) : UInt64 = Stdlib.UInt64.__powerLoop(base, exponent, 1UL)
 
 let clamp(value: UInt64, limitA: UInt64, limitB: UInt64) : UInt64 =
     let lower = Stdlib.UInt64.min(limitA, limitB) in
@@ -47,7 +54,7 @@ let bitwiseAnd(a: UInt64, b: UInt64) : UInt64 = a & b
 
 let bitwiseOr(a: UInt64, b: UInt64) : UInt64 = a ||| b
 
-let bitwiseXor(a: UInt64, b: UInt64) : UInt64 = a ^ b
+let bitwiseXor(a: UInt64, b: UInt64) : UInt64 = (a ||| b) & ~~~(a & b)
 
 let shiftLeft(a: UInt64, shift: UInt64) : UInt64 = a << shift
 
@@ -103,3 +110,28 @@ let isOdd(n: UInt64) : Bool =
 // Sum all integers in a list
 let sum(list: List<UInt64>) : UInt64 =
     Stdlib.List.fold<UInt64, UInt64>(list, 0UL, fun acc x -> acc + x)
+
+let __fromIntUnchecked(value: Int) : UInt64 =
+    match Stdlib.Int.toUInt64(value) with
+    | Some(result) -> result
+    | None -> Builtin.testRuntimeError("Internal UInt64 conversion invariant failed")
+let random(start: UInt64, finish: UInt64) : UInt64 = Stdlib.UInt64.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromUInt64(start), Stdlib.Int.fromUInt64(finish)))
+let toFloat(value: UInt64) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromUInt64(value))
+let sqrt(value: UInt64) : Float = Stdlib.Float.sqrt(Stdlib.UInt64.toFloat(value))
+let fromFloat(value: Float) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64(Stdlib.Float.round(value))
+let parse(value: String) : Stdlib.Result.Result<UInt64, Stdlib.UInt64.ParseError> =
+    match Stdlib.Int.parse(value) with
+    | Error(_) -> Error(Stdlib.UInt64.ParseError.BadFormat)
+    | Ok(parsed) ->
+        match Stdlib.Int.toUInt64(parsed) with
+        | None -> Error(Stdlib.UInt64.ParseError.OutOfRange)
+        | Some(result) -> Ok(result)
+let fromInt8(value: Int8) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64(Stdlib.Int.fromInt8(value))
+let fromUInt8(value: UInt8) : UInt64 = Stdlib.UInt64.__fromIntUnchecked(Stdlib.Int.fromUInt8(value))
+let fromInt16(value: Int16) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64(Stdlib.Int.fromInt16(value))
+let fromUInt16(value: UInt16) : UInt64 = Stdlib.UInt64.__fromIntUnchecked(Stdlib.Int.fromUInt16(value))
+let fromInt32(value: Int32) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64(Stdlib.Int.fromInt32(value))
+let fromUInt32(value: UInt32) : UInt64 = Stdlib.UInt64.__fromIntUnchecked(Stdlib.Int.fromUInt32(value))
+let fromInt64(value: Int64) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64(Stdlib.Int.fromInt64(value))
+let fromInt128(value: Int128) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64(Stdlib.Int.fromInt128(value))
+let fromUInt128(value: UInt128) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64(Stdlib.Int.fromUInt128(value))

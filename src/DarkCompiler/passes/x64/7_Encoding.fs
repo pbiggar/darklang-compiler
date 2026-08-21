@@ -314,6 +314,10 @@ let encodeInstruction (instr: Instr) : byte array =
         let (destEnc, destExt) = regEncoding dest
         Array.concat [| rex true false false destExt; [| 0xC1uy; modRM 3 5 destEnc |]; imm8Bytes shift |]
 
+    | SAR_imm (dest, shift) ->
+        let (destEnc, destExt) = regEncoding dest
+        Array.concat [| rex true false false destExt; [| 0xC1uy; modRM 3 7 destEnc |]; imm8Bytes shift |]
+
     | SHL_cl dest ->
         // REX.W + D3 /4 (SHL r/m64, CL)
         let (destEnc, destExt) = regEncoding dest
@@ -323,6 +327,10 @@ let encodeInstruction (instr: Instr) : byte array =
         // REX.W + D3 /5 (SHR r/m64, CL)
         let (destEnc, destExt) = regEncoding dest
         Array.concat [| rex true false false destExt; [| 0xD3uy; modRM 3 5 destEnc |] |]
+
+    | SAR_cl dest ->
+        let (destEnc, destExt) = regEncoding dest
+        Array.concat [| rex true false false destExt; [| 0xD3uy; modRM 3 7 destEnc |] |]
 
     // --- Byte-level memory ---
 

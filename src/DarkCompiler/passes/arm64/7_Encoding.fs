@@ -580,6 +580,15 @@ let private encodeSymbolicWord (instr: ARM64Symbolic.Instr) : ARM64.MachineCode 
         let rd = encodeReg dest
         sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
 
+    | ARM64Symbolic.ASR_reg (dest, src, shift) ->
+        let sf = 1u <<< 31
+        let op = 0b11010110u <<< 21
+        let rm = (encodeReg shift) <<< 16
+        let fixedBits = 0b001010u <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        sf ||| op ||| rm ||| fixedBits ||| rn ||| rd
+
     | ARM64Symbolic.LSL_imm (dest, src, shift) ->
         // LSL Rd, Rn, #shift is alias for UBFM Rd, Rn, #(64-shift), #(63-shift)
         // UBFM: sf=1 opc=10 100110 N=1 immr(6) imms(6) Rn(5) Rd(5)
@@ -602,6 +611,18 @@ let private encodeSymbolicWord (instr: ARM64Symbolic.Instr) : ARM64.MachineCode 
         let n = 1u <<< 22  // N=1 for 64-bit
         let immr = (uint32 (shift &&& 63)) <<< 16
         let imms = 63u <<< 10  // imms = 63 for LSR
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd
+
+    | ARM64Symbolic.ASR_imm (dest, src, shift) ->
+        // ASR is the SBFM alias with immr=shift and imms=63.
+        let sf = 1u <<< 31
+        let opc = 0u <<< 29
+        let op = 0b100110u <<< 23
+        let n = 1u <<< 22
+        let immr = (uint32 (shift &&& 63)) <<< 16
+        let imms = 63u <<< 10
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
         sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd

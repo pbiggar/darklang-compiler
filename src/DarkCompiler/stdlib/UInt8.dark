@@ -4,30 +4,37 @@
 
 module Stdlib.UInt8
 
+type ParseError = BadFormat | OutOfRange
+
 // Stdlib.UInt8 - Integer operations
 
 let add(a: UInt8, b: UInt8) : UInt8 = a + b
 
 let sub(a: UInt8, b: UInt8) : UInt8 = a - b
+let subtract(a: UInt8, b: UInt8) : UInt8 = a - b
 
 let mul(a: UInt8, b: UInt8) : UInt8 = a * b
+let multiply(a: UInt8, b: UInt8) : UInt8 = a * b
 
-let div(a: UInt8, b: UInt8) : UInt8 = a / b
+let divide(a: UInt8, b: UInt8) : UInt8 = if b == 0uy then Builtin.testRuntimeError("Cannot divide by 0") else a / b
+let div(a: UInt8, b: UInt8) : UInt8 = Stdlib.UInt8.divide(a, b)
 
 let max(a: UInt8, b: UInt8) : UInt8 = if a > b then a else b
 
 let min(a: UInt8, b: UInt8) : UInt8 = if a < b then a else b
 
-let mod(a: UInt8, b: UInt8) : UInt8 = a % b
+let mod(a: UInt8, b: UInt8) : UInt8 = if b == 0uy then Builtin.testRuntimeError("Cannot evaluate modulus against 0") else a % b
 
 let absoluteValue(a: UInt8) : UInt8 = a
 
 let negate(a: UInt8) : UInt8 = 0uy - a
 
-let power(base: UInt8, exponent: UInt8) : UInt8 =
-    if exponent == 0uy then 1uy
-    else if exponent == 1uy then base
-    else base * Stdlib.UInt8.power(base, exponent - 1uy)
+let __powerLoop(base: UInt8, exponent: UInt8, result: UInt8) : UInt8 =
+    if exponent == 0uy then result
+    else
+        let next = if (exponent % 2uy) == 1uy then result * base else result in
+        Stdlib.UInt8.__powerLoop(base * base, exponent / 2uy, next)
+let power(base: UInt8, exponent: UInt8) : UInt8 = Stdlib.UInt8.__powerLoop(base, exponent, 1uy)
 
 let clamp(value: UInt8, limitA: UInt8, limitB: UInt8) : UInt8 =
     let lower = Stdlib.UInt8.min(limitA, limitB) in
@@ -47,7 +54,7 @@ let bitwiseAnd(a: UInt8, b: UInt8) : UInt8 = a & b
 
 let bitwiseOr(a: UInt8, b: UInt8) : UInt8 = a ||| b
 
-let bitwiseXor(a: UInt8, b: UInt8) : UInt8 = a ^ b
+let bitwiseXor(a: UInt8, b: UInt8) : UInt8 = (a ||| b) & ~~~(a & b)
 
 let shiftLeft(a: UInt8, shift: UInt8) : UInt8 = a << shift
 
@@ -97,3 +104,27 @@ let isOdd(n: UInt8) : Bool =
 // Sum all integers in a list
 let sum(list: List<UInt8>) : UInt8 =
     Stdlib.List.fold<UInt8, UInt8>(list, 0uy, fun acc x -> acc + x)
+
+let __fromIntUnchecked(value: Int) : UInt8 =
+    match Stdlib.Int.toUInt8(value) with
+    | Some(result) -> result
+    | None -> Builtin.testRuntimeError("Internal UInt8 conversion invariant failed")
+let random(start: UInt8, finish: UInt8) : UInt8 = Stdlib.UInt8.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromUInt8(start), Stdlib.Int.fromUInt8(finish)))
+let toFloat(value: UInt8) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromUInt8(value))
+let sqrt(value: UInt8) : Float = Stdlib.Float.sqrt(Stdlib.UInt8.toFloat(value))
+let parse(value: String) : Stdlib.Result.Result<UInt8, Stdlib.UInt8.ParseError> =
+    match Stdlib.Int.parse(value) with
+    | Error(_) -> Error(Stdlib.UInt8.ParseError.BadFormat)
+    | Ok(parsed) ->
+        match Stdlib.Int.toUInt8(parsed) with
+        | None -> Error(Stdlib.UInt8.ParseError.OutOfRange)
+        | Some(result) -> Ok(result)
+let fromInt8(value: Int8) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromInt8(value))
+let fromInt16(value: Int16) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromInt16(value))
+let fromUInt16(value: UInt16) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromUInt16(value))
+let fromInt32(value: Int32) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromInt32(value))
+let fromUInt32(value: UInt32) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromUInt32(value))
+let fromInt64(value: Int64) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromInt64(value))
+let fromUInt64(value: UInt64) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromUInt64(value))
+let fromInt128(value: Int128) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromInt128(value))
+let fromUInt128(value: UInt128) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8(Stdlib.Int.fromUInt128(value))

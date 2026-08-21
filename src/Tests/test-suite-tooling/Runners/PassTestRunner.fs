@@ -228,10 +228,14 @@ let prettyPrintARM64Instr = function
         $"LSL_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
     | ARM64Symbolic.LSR_reg (dest, src, shift) ->
         $"LSR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
+    | ARM64Symbolic.ASR_reg (dest, src, shift) ->
+        $"ASR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
     | ARM64Symbolic.LSL_imm (dest, src, shift) ->
         $"LSL_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, #{shift})"
     | ARM64Symbolic.LSR_imm (dest, src, shift) ->
         $"LSR_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, #{shift})"
+    | ARM64Symbolic.ASR_imm (dest, src, shift) ->
+        $"ASR_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, #{shift})"
     | ARM64Symbolic.MVN (dest, src) ->
         $"MVN({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64Symbolic.SXTB (dest, src) ->

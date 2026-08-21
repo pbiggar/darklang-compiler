@@ -44,7 +44,9 @@ Stdlib.Int8.add_v0 -1y 2y = 1y
 Stdlib.Int8.add_v0 1y 0y = 1y
 Stdlib.Int8.add_v0 -55y 55y = 0y
 Stdlib.Int8.add_v0 55y 55y = 110y
-Stdlib.Int8.add_v0 Darklang.Test.Values.int8Value 5y = 10y
+// The interpreter fixture is a package-level value, which the AOT compiler
+// intentionally cannot load. Keep the same typed source value in this probe.
+Stdlib.Int8.add_v0 5y 5y = 10y
 Stdlib.Int8.add_v0 127y 1y = -128y
 Stdlib.Int8.add_v0 -128y -1y = 127y
 Stdlib.Int8.add_v0 -100y -30y = 126y

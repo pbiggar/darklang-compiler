@@ -652,7 +652,9 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
         DictRoot (rcShapeOfType typeReg keyType, rcShapeOfType typeReg valueType)
     | AST.TString
     | AST.TChar
-    | AST.TInt ->
+    | AST.TInt
+    | AST.TInt128
+    | AST.TUInt128 ->
         DynamicString
     | AST.TBlob ->
         DynamicBlob
@@ -838,7 +840,9 @@ let rcShapeOfTypeWithSums
             ClosureShape []
         | AST.TString
         | AST.TChar
-        | AST.TInt ->
+        | AST.TInt
+        | AST.TInt128
+        | AST.TUInt128 ->
             DynamicString
         | AST.TBlob ->
             DynamicBlob
@@ -848,12 +852,10 @@ let rcShapeOfTypeWithSums
         | AST.TInt16
         | AST.TInt32
         | AST.TInt64
-        | AST.TInt128
         | AST.TUInt8
         | AST.TUInt16
         | AST.TUInt32
         | AST.TUInt64
-        | AST.TUInt128
         | AST.TBool
         | AST.TFloat64
         | AST.TDateTime

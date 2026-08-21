@@ -3771,6 +3771,14 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 lirRegToARM64Reg shift
                 |> Result.map (fun shiftReg -> [ARM64Symbolic.LSR_reg (destReg, srcReg, shiftReg)])))
 
+    | LIR.Asr (dest, src, shift) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.bind (fun srcReg ->
+                lirRegToARM64Reg shift
+                |> Result.map (fun shiftReg -> [ARM64Symbolic.ASR_reg (destReg, srcReg, shiftReg)])))
+
     | LIR.Lsl_imm (dest, src, shift) ->
         lirRegToARM64Reg dest
         |> Result.bind (fun destReg ->
@@ -3782,6 +3790,12 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         |> Result.bind (fun destReg ->
             lirRegToARM64Reg src
             |> Result.map (fun srcReg -> [ARM64Symbolic.LSR_imm (destReg, srcReg, shift)]))
+
+    | LIR.Asr_imm (dest, src, shift) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64Symbolic.ASR_imm (destReg, srcReg, shift)]))
 
     | LIR.Mvn (dest, src) ->
         lirRegToARM64Reg dest
@@ -7131,6 +7145,7 @@ let private registerLifetimeStep
     | ARM64Symbolic.AND_imm (dest, src, _)
     | ARM64Symbolic.LSL_imm (dest, src, _)
     | ARM64Symbolic.LSR_imm (dest, src, _)
+    | ARM64Symbolic.ASR_imm (dest, src, _)
     | ARM64Symbolic.ADD_label (dest, src, _) ->
         classify [src] [dest]
     | ARM64Symbolic.MVN (dest, src)
@@ -7153,7 +7168,8 @@ let private registerLifetimeStep
     | ARM64Symbolic.ORR_reg (dest, src1, src2)
     | ARM64Symbolic.EOR_reg (dest, src1, src2)
     | ARM64Symbolic.LSL_reg (dest, src1, src2)
-    | ARM64Symbolic.LSR_reg (dest, src1, src2) ->
+    | ARM64Symbolic.LSR_reg (dest, src1, src2)
+    | ARM64Symbolic.ASR_reg (dest, src1, src2) ->
         classify [src1; src2] [dest]
     | ARM64Symbolic.ADD_shifted (dest, src1, src2, _)
     | ARM64Symbolic.SUB_shifted (dest, src1, src2, _) ->

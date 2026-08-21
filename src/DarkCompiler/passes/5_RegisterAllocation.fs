@@ -448,9 +448,9 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         (regToVReg left |> Option.toList) @ (operandToVReg right |> Option.toList)
     | LIR.Mul (_, left, right) | LIR.Sdiv (_, left, right) | LIR.Udiv (_, left, right)
     | LIR.And (_, left, right) | LIR.Orr (_, left, right) | LIR.Eor (_, left, right)
-    | LIR.Lsl (_, left, right) | LIR.Lsr (_, left, right) ->
+    | LIR.Lsl (_, left, right) | LIR.Lsr (_, left, right) | LIR.Asr (_, left, right) ->
         (regToVReg left |> Option.toList) @ (regToVReg right |> Option.toList)
-    | LIR.Lsl_imm (_, src, _) | LIR.Lsr_imm (_, src, _) | LIR.And_imm (_, src, _) ->
+    | LIR.Lsl_imm (_, src, _) | LIR.Lsr_imm (_, src, _) | LIR.Asr_imm (_, src, _) | LIR.And_imm (_, src, _) ->
         regToVReg src |> Option.toList
     | LIR.Msub (_, mulLeft, mulRight, sub) ->
         (regToVReg mulLeft |> Option.toList)
@@ -600,7 +600,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.Mul (dest, _, _) | LIR.Sdiv (dest, _, _) | LIR.Udiv (dest, _, _) | LIR.Msub (dest, _, _, _) | LIR.Madd (dest, _, _, _) -> regToVReg dest
     | LIR.Cset (dest, _) -> regToVReg dest
     | LIR.And (dest, _, _) | LIR.And_imm (dest, _, _) | LIR.Orr (dest, _, _) | LIR.Eor (dest, _, _)
-    | LIR.Lsl (dest, _, _) | LIR.Lsr (dest, _, _) | LIR.Lsl_imm (dest, _, _) | LIR.Lsr_imm (dest, _, _) -> regToVReg dest
+    | LIR.Lsl (dest, _, _) | LIR.Lsr (dest, _, _) | LIR.Asr (dest, _, _)
+    | LIR.Lsl_imm (dest, _, _) | LIR.Lsr_imm (dest, _, _) | LIR.Asr_imm (dest, _, _) -> regToVReg dest
     | LIR.Mvn (dest, _) -> regToVReg dest
     | LIR.Sxtb (dest, _) | LIR.Sxth (dest, _) | LIR.Sxtw (dest, _)
     | LIR.Uxtb (dest, _) | LIR.Uxth (dest, _) | LIR.Uxtw (dest, _) -> regToVReg dest
@@ -2614,6 +2615,16 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | _ -> []
         srcLoads @ shiftLoads @ [lsrInstr] @ storeInstrs
 
+    | LIR.Asr (dest, src, shift) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let ((srcReg, srcLoads), (shiftReg, shiftLoads)) = loadSpilledPair arch mapping src shift destReg
+        let asrInstr = LIR.Asr (destReg, srcReg, shiftReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ shiftLoads @ [asrInstr] @ storeInstrs
+
     | LIR.Lsl_imm (dest, src, shift) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
@@ -2633,6 +2644,16 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         srcLoads @ [lsrInstr] @ storeInstrs
+
+    | LIR.Asr_imm (dest, src, shift) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let asrInstr = LIR.Asr_imm (destReg, srcReg, shift)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [asrInstr] @ storeInstrs
 
     | LIR.Mvn (dest, src) ->
         let (destReg, destAlloc) = applyToReg mapping dest

@@ -4128,23 +4128,36 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
 /// Arbitrary-precision Int values use canonical decimal-string storage. Route
 /// operations through the pure Int stdlib implementation instead of native
 /// machine-word primitives.
-let private intFunctionForBinOp (op: AST.BinOp) : string option =
-    match op with
-    | AST.Add -> Some "Stdlib.Int.add"
-    | AST.Sub -> Some "Stdlib.Int.subtract"
-    | AST.Mul -> Some "Stdlib.Int.multiply"
-    | AST.Div -> Some "Stdlib.Int.divide"
-    | AST.Mod -> Some "Stdlib.Int.mod_v0"
-    | AST.Shl -> Some "Stdlib.Int.shiftLeft"
-    | AST.Shr -> Some "Stdlib.Int.shiftRight"
-    | AST.BitAnd -> Some "Stdlib.Int.bitwiseAnd"
-    | AST.BitOr -> Some "Stdlib.Int.bitwiseOr"
-    | AST.BitXor -> Some "Stdlib.Int.power"
-    | AST.Lt -> Some "Stdlib.Int.lessThan"
-    | AST.Gt -> Some "Stdlib.Int.greaterThan"
-    | AST.Lte -> Some "Stdlib.Int.lessThanOrEqualTo"
-    | AST.Gte -> Some "Stdlib.Int.greaterThanOrEqualTo"
-    | AST.Eq | AST.Neq | AST.And | AST.Or | AST.StringConcat -> None
+let private integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : string option =
+    let moduleName =
+        match operandType with
+        | AST.TInt -> Some "Stdlib.Int"
+        | AST.TInt128 -> Some "Stdlib.Int128"
+        | AST.TUInt128 -> Some "Stdlib.UInt128"
+        | _ -> None
+    let functionName =
+        match op, operandType with
+        | AST.Add, _ -> Some "add"
+        | AST.Sub, _ -> Some "subtract"
+        | AST.Mul, _ -> Some "multiply"
+        | AST.Div, _ -> Some "divide"
+        | AST.Mod, _ -> Some "mod"
+        | AST.Shl, _ -> Some "shiftLeft"
+        | AST.Shr, _ -> Some "shiftRight"
+        | AST.BitAnd, _ -> Some "bitwiseAnd"
+        | AST.BitOr, _ -> Some "bitwiseOr"
+        // The compiler's historical arbitrary-width spelling uses ^ for power.
+        // Fixed-width and 128-bit ^ remain the bitwise-XOR extension.
+        | AST.BitXor, AST.TInt -> Some "power"
+        | AST.BitXor, _ -> Some "bitwiseXor"
+        | AST.Lt, _ -> Some "lessThan"
+        | AST.Gt, _ -> Some "greaterThan"
+        | AST.Lte, _ -> Some "lessThanOrEqualTo"
+        | AST.Gte, _ -> Some "greaterThanOrEqualTo"
+        | AST.Eq, _ | AST.Neq, _ | AST.And, _ | AST.Or, _ | AST.StringConcat, _ -> None
+    match moduleName, functionName with
+    | Some moduleName, Some functionName -> Some $"{moduleName}.{functionName}"
+    | _ -> None
 
 /// Convert AST.UnaryOp to ANF.UnaryOp
 let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
@@ -5369,6 +5382,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 toANF
                     (AST.BinOp (AST.Sub, AST.BigIntLiteral System.Numerics.BigInteger.Zero, innerExpr))
                     varGen env typeReg variantLookup funcReg moduleRegistry
+            | AST.TInt128 ->
+                toANF (AST.BinOp (AST.Sub, AST.Int128Literal System.Int128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
             | AST.TInt32 ->
                 let zeroExpr = AST.Int32Literal 0l
                 toANF (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
@@ -5390,6 +5405,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             | AST.TUInt8 ->
                 let zeroExpr = AST.UInt8Literal 0uy
                 toANF (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
+            | AST.TUInt128 ->
+                toANF (AST.BinOp (AST.Sub, AST.UInt128Literal System.UInt128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
             | _ ->
                 Error $"Negation requires numeric operand, got {innerType}")
 
@@ -5414,10 +5431,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 let cexpr =
-                    if innerType = AST.TInt then
-                        ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
-                    else
-                        ANF.UnaryPrim (ANF.BitNot, innerAtom)
+                    match innerType with
+                    | AST.TInt -> ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
+                    | AST.TInt128 -> ANF.Call ("Stdlib.Int128.bitwiseNot", [innerAtom])
+                    | AST.TUInt128 -> ANF.Call ("Stdlib.UInt128.bitwiseNot", [innerAtom])
+                    | _ -> ANF.UnaryPrim (ANF.BitNot, innerAtom)
                 let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
                 (wrapBindings innerBindings finalExpr, varGen2)))
 
@@ -5480,9 +5498,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | AST.And | AST.Or ->
                         let (tempVar, varGen3) = ANF.freshVar varGen2
                         let cexpr =
-                            match inferType left typeEnv typeReg variantLookup funcReg moduleRegistry,
-                                  intFunctionForBinOp op with
-                            | Ok AST.TInt, Some funcName -> ANF.Call (funcName, [leftAtom; rightAtom])
+                            match inferType left typeEnv typeReg variantLookup funcReg moduleRegistry with
+                            | Ok operandType ->
+                                match integerFunctionForBinOp operandType op with
+                                | Some funcName -> ANF.Call (funcName, [leftAtom; rightAtom])
+                                | None -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                             | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                         Ok (ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar)), varGen3)
 
@@ -9385,6 +9405,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 toAtom
                     (AST.BinOp (AST.Sub, AST.BigIntLiteral System.Numerics.BigInteger.Zero, innerExpr))
                     varGen env typeReg variantLookup funcReg moduleRegistry
+            | AST.TInt128 ->
+                toAtom (AST.BinOp (AST.Sub, AST.Int128Literal System.Int128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
             | AST.TInt32 ->
                 let zeroExpr = AST.Int32Literal 0l
                 toAtom (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
@@ -9406,6 +9428,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             | AST.TUInt8 ->
                 let zeroExpr = AST.UInt8Literal 0uy
                 toAtom (AST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
+            | AST.TUInt128 ->
+                toAtom (AST.BinOp (AST.Sub, AST.UInt128Literal System.UInt128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
             | _ ->
                 Error $"Negation requires numeric operand, got {innerType}")
 
@@ -9428,10 +9452,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 let cexpr =
-                    if innerType = AST.TInt then
-                        ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
-                    else
-                        ANF.UnaryPrim (ANF.BitNot, innerAtom)
+                    match innerType with
+                    | AST.TInt -> ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
+                    | AST.TInt128 -> ANF.Call ("Stdlib.Int128.bitwiseNot", [innerAtom])
+                    | AST.TUInt128 -> ANF.Call ("Stdlib.UInt128.bitwiseNot", [innerAtom])
+                    | _ -> ANF.UnaryPrim (ANF.BitNot, innerAtom)
                 (ANF.Var tempVar, innerBindings @ [(tempVar, cexpr)], varGen2)))
 
     | AST.BinOp (op, left, right) ->
@@ -9494,9 +9519,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 | AST.And | AST.Or ->
                     let (tempVar, varGen3) = ANF.freshVar varGen2
                     let cexpr =
-                        match inferType left typeEnv typeReg variantLookup funcReg moduleRegistry,
-                              intFunctionForBinOp op with
-                        | Ok AST.TInt, Some funcName -> ANF.Call (funcName, [leftAtom; rightAtom])
+                        match inferType left typeEnv typeReg variantLookup funcReg moduleRegistry with
+                        | Ok operandType ->
+                            match integerFunctionForBinOp operandType op with
+                            | Some funcName -> ANF.Call (funcName, [leftAtom; rightAtom])
+                            | None -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                         | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                     let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
                     Ok (ANF.Var tempVar, allBindings, varGen3)))

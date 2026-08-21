@@ -38,8 +38,10 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.Eor _
     | LIR.Lsl _
     | LIR.Lsr _
+    | LIR.Asr _
     | LIR.Lsl_imm _
     | LIR.Lsr_imm _
+    | LIR.Asr_imm _
     | LIR.Mvn _
     | LIR.Sxtb _
     | LIR.Sxth _

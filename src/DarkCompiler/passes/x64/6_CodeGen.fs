@@ -2829,6 +2829,10 @@ let private translateInstr
         resolveReg dest |> Result.bind (fun d -> resolveReg src |> Result.map (fun s ->
             (if d <> s then [X86_64.MOV_reg (d, s)] else []) @ [X86_64.SHR_imm (d, shift)]))
 
+    | LIR.Asr_imm (dest, src, shift) ->
+        resolveReg dest |> Result.bind (fun d -> resolveReg src |> Result.map (fun s ->
+            (if d <> s then [X86_64.MOV_reg (d, s)] else []) @ [X86_64.SAR_imm (d, shift)]))
+
     | LIR.Mvn (dest, src) ->
         resolveReg dest |> Result.bind (fun d -> resolveReg src |> Result.map (fun s ->
             (if d <> s then [X86_64.MOV_reg (d, s)] else []) @ [X86_64.NOT d]))
@@ -4029,6 +4033,30 @@ let private translateInstr
                     @ (if d <> s then [X86_64.MOV_reg (d, s)] else [])
                     @ (if shReg <> X86_64.RCX then [X86_64.MOV_reg (X86_64.RCX, shReg)] else [])
                     @ [X86_64.SHR_cl d]
+                    @ restore)))
+
+    | LIR.Asr (dest, src, shift) ->
+        resolveReg dest |> Result.bind (fun d -> resolveReg src |> Result.bind (fun s ->
+            resolveReg shift |> Result.map (fun shReg ->
+                let needSaveRCX = shReg <> X86_64.RCX && d <> X86_64.RCX
+                let save = if needSaveRCX then [X86_64.PUSH X86_64.RCX] else []
+                let restore = if needSaveRCX then [X86_64.POP X86_64.RCX] else []
+                if d = shReg && d <> s then
+                    save
+                    @ [X86_64.MOV_reg (scratch, s)]
+                    @ (if shReg <> X86_64.RCX then [X86_64.MOV_reg (X86_64.RCX, shReg)] else [])
+                    @ [X86_64.MOV_reg (d, scratch); X86_64.SAR_cl d]
+                    @ restore
+                elif d = X86_64.RCX && shReg <> X86_64.RCX then
+                    [X86_64.MOV_reg (scratch, s)
+                     X86_64.MOV_reg (X86_64.RCX, shReg)
+                     X86_64.SAR_cl scratch
+                     X86_64.MOV_reg (X86_64.RCX, scratch)]
+                else
+                    save
+                    @ (if d <> s then [X86_64.MOV_reg (d, s)] else [])
+                    @ (if shReg <> X86_64.RCX then [X86_64.MOV_reg (X86_64.RCX, shReg)] else [])
+                    @ [X86_64.SAR_cl d]
                     @ restore)))
 
     | LIR.Uxth (dest, src) ->

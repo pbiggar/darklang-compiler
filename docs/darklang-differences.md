@@ -265,7 +265,7 @@ Features in compiler not in interpreter. These are skipped during validation.
 
 | Feature | Skip Reason | Description |
 |---------|-------------|-------------|
-| Integer division | `extension:integer_division` | `/` operator works on integers (Darklang requires `Int64.divide`) |
+| Integer operator spellings | `extension:integer_operators` | Compiler syntax retains `/` for integer division; `^` is `Int` power and fixed-width/128-bit XOR. The named parity functions remain canonical. |
 | Internal functions | `internal:helper_function` | Functions like `__digitToString`, `__findFrom` are implementation helpers |
 | SkewList/HAMT | `internal:data_structure` | `Stdlib.Internal.SkewList` and `Stdlib.Internal.HAMT` are internal implementations |
 
@@ -294,11 +294,10 @@ Features implemented in this compiler that should be added to the Darklang inter
 
 | Feature | Skip Reason | Functions |
 |---------|-------------|-----------|
-| Bitwise operators | `semantic:bitwise` | `<<`, `>>`, `&`, `\|`, `^`, `~` |
 | Boolean not | `semantic:boolean_not` | `!` |
 | Random | `stdlib:random` | `Random.int64` |
 | Byte operations | `stdlib:byte_ops` | `String.getByteAt` |
-| Int64 math | `stdlib:int64_math` | `Int64.sub`, `Int64.mul`, `Int64.div`, `Int64.isEven`, `Int64.isOdd` |
+| Integer conveniences | `stdlib:integer_extensions` | `sub`, `mul`, `div`, `popcount`, `isEven`, `isOdd`, Int `compare`/`equals`, and unsigned signed-style helpers |
 | Float operations | `stdlib:float_ops` | `Float.toBits`, `Float.toInt`, `Float.abs` |
 | Math conveniences | `stdlib:math_extensions` | `Math.e`, `Math.abs`, `Math.sqrt`, and Int64-returning `Math.truncate`, `floor`, `ceiling`, `round` |
 | List functions | `stdlib:missing` | `List.take`, `List.drop` |
@@ -306,3 +305,5 @@ Features implemented in this compiler that should be added to the Darklang inter
 
 Float/Math parity behavior, the shortest-formatting divergence, and retained
 extensions are revision-pinned in [float-math-parity.md](float-math-parity.md).
+The complete integer classification is revision-pinned in
+[integer-parity.md](integer-parity.md).
