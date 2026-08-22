@@ -1792,13 +1792,27 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TMatch :: rest ->
             // Parse: match scrutinee with | p1 -> e1 | p2 -> e2
             parseExpr rest
-            |> Result.bind (fun (scrutinee, remaining) ->
-                match remaining with
-                | TWith :: rest' ->
-                    parseCases None rest' []
-                    |> Result.map (fun (cases, remaining') ->
-                        (Match (scrutinee, cases), remaining'))
-                | _ -> Error "Expected 'with' after match scrutinee")
+            |> Result.bind (fun (firstScrutinee, remaining) ->
+                let rec parseBareTupleTail acc tokens =
+                    match tokens with
+                    | TComma :: tail ->
+                        parseExpr tail
+                        |> Result.bind (fun (next, afterNext) ->
+                            parseBareTupleTail (next :: acc) afterNext)
+                    | _ -> Ok (List.rev acc, tokens)
+
+                parseBareTupleTail [firstScrutinee] remaining
+                |> Result.bind (fun (scrutinees, afterScrutinee) ->
+                    let scrutinee =
+                        match scrutinees with
+                        | [single] -> single
+                        | _ -> TupleLiteral scrutinees
+                    match afterScrutinee with
+                    | TWith :: rest' ->
+                        parseCases None rest' []
+                        |> Result.map (fun (cases, remaining') ->
+                            (Match (scrutinee, cases), remaining'))
+                    | _ -> Error "Expected 'with' after match scrutinee"))
         | _ ->
             parsePipe toks
 

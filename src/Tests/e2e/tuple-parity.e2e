@@ -1,0 +1,16 @@
+// Tuple parity regression contract. Compared against compiler evidence
+// b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899 and darklang/dark
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d; current HEAD f7c14a00174ae2af806686daca2b7a65b08ae71a.
+
+() = ()
+(42) = 42
+(1,) = error="Parse error: Expected expression"
+(1, true, "three") = stdout="(1, true, \"three\")\n" stderr=""
+((1, "two"), (true, (3.0, 4))) = stdout="((1, \"two\"), (true, (3.0, 4)))\n" stderr=""
+let tupleParityIdentity(value: (Int64 * String * (Bool * Float))) : (Int64 * String * (Bool * Float)) = value tupleParityIdentity((1, "two", (true, 3.0))) = (1, "two", (true, 3.0))
+let ((a, (b, c)), d) = ((1, (2, 3)), 4) in a + b + c + d = 10
+match ((1, 2), Some((3, 4))) with | ((1, x), Some((y, 4))) -> x + y | _ -> 0 = 5
+match (1, 2) with | (_, _, _) -> 99 | _ -> 0 = 0
+match 1, 2 with | (a, b) -> a + b | _ -> 0 = 3
+((1, "two"), [3, 4]) == ((1, "two"), [3, 4]) = true
+let tupleParityTrace(label: String, value: Int64) : Int64 = let _ = Builtin.print(label) in value let (a, b, c) = (tupleParityTrace("a", 1), tupleParityTrace("b", 2), tupleParityTrace("c", 3)) in a + b + c = stdout="abc6\n" stderr="" exact_bytes=true

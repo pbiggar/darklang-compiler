@@ -1850,13 +1850,27 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TMatch :: rest ->
             // Parse: match scrutinee with | p1 -> e1 | p2 -> e2
             parseExpr rest
-            |> Result.bind (fun (scrutinee, remaining) ->
-                match remaining with
-                | TWith :: rest' ->
-                    parseCases rest' []
-                    |> Result.map (fun (cases, remaining') ->
-                        (Match (scrutinee, cases), remaining'))
-                | _ -> Error "Expected 'with' after match scrutinee")
+            |> Result.bind (fun (firstScrutinee, remaining) ->
+                let rec parseBareTupleTail acc tokens =
+                    match tokens with
+                    | TComma :: tail ->
+                        parseExpr tail
+                        |> Result.bind (fun (next, afterNext) ->
+                            parseBareTupleTail (next :: acc) afterNext)
+                    | _ -> Ok (List.rev acc, tokens)
+
+                parseBareTupleTail [firstScrutinee] remaining
+                |> Result.bind (fun (scrutinees, afterScrutinee) ->
+                    let scrutinee =
+                        match scrutinees with
+                        | [single] -> single
+                        | _ -> TupleLiteral scrutinees
+                    match afterScrutinee with
+                    | TWith :: rest' ->
+                        parseCases rest' []
+                        |> Result.map (fun (cases, remaining') ->
+                            (Match (scrutinee, cases), remaining'))
+                    | _ -> Error "Expected 'with' after match scrutinee"))
         | _ ->
             parsePipe toks
 
@@ -2545,21 +2559,11 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Error "Expected ';', ',', or ']' in list literal")
 
     and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
-        // Handle postfix operations: tuple access (.0, .1), field access (.fieldName),
-        // and optional parenthesized call arguments.
+        // Numeric tuple projection is an internal compiler operation. Public source
+        // uses destructuring or the Tuple2/Tuple3 APIs; record fields remain public.
         match toks with
-        | TDot :: TBigInt index :: rest ->
-            if index > bigint System.Int32.MaxValue then
-                Error "Tuple index is too large"
-            else
-                let accessExpr = TupleAccess (expr, int index)
-                parsePostfix accessExpr rest
-        | TDot :: TInt64 index :: rest ->
-            if index < 0L then
-                Error "Tuple index cannot be negative"
-            else
-                let accessExpr = TupleAccess (expr, int index)
-                parsePostfix accessExpr rest
+        | TDot :: (TBigInt _ | TInt64 _) :: _ ->
+            Error "Numeric tuple access is not supported; use destructuring or Stdlib.Tuple2/Stdlib.Tuple3"
         | TDot :: TIdent fieldName :: rest ->
             // Record field access
             let accessExpr = RecordAccess (expr, fieldName)
@@ -2705,31 +2709,12 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // Parse expression
             parseExpr toks
             |> Result.bind (fun (expr, remaining) ->
-                // Support bare tuple syntax at top level: `1L, 2L, 3L`.
-                // Commas inside other contexts (calls/records/lists) are already
-                // consumed before we reach this point.
-                let rec parseTupleTail (tupleItemsRev: Expr list) (toks': Token list) : Result<Expr * Token list, string> =
-                    match toks' with
-                    | TComma :: rest ->
-                        parseExpr rest
-                        |> Result.bind (fun (nextExpr, remaining') ->
-                            parseTupleTail (nextExpr :: tupleItemsRev) remaining')
-                    | _ ->
-                        let finalExpr =
-                            match tupleItemsRev with
-                            | [] -> expr
-                            | _ -> TupleLiteral (expr :: List.rev tupleItemsRev)
-                        Ok (finalExpr, toks')
-
-                parseTupleTail [] remaining
-                |> Result.bind (fun (finalExpr, remaining') ->
-                    match remaining' with
+                match remaining with
                     | TEOF :: [] ->
                         // Single expression program
-                        Ok (NameSyntax.SourceDeclarations (NonEmptyList.fromList (List.rev (NameSyntax.SourceExpression finalExpr :: acc))))
+                        Ok (NameSyntax.SourceDeclarations (NonEmptyList.fromList (List.rev (NameSyntax.SourceExpression expr :: acc))))
                     | _ ->
-                        // More top-level definitions after expression not allowed for now
-                        Error "Unexpected tokens after expression (only function definitions can be followed by more definitions)"))
+                        Error "Unexpected tokens after expression (only function definitions can be followed by more definitions)")
 
     parseTopLevels tokens []
 

@@ -800,16 +800,24 @@ let testInterpreterParserDoesNotCrossRecordFieldBoundaryWithQualifiedConstructor
     | Ok other ->
         Error $"Unexpected AST for qualified-constructor record-field boundary case: {other}"
 
-let testInterpreterParserParsesBareTupleExpression () : TestResult =
+let testInterpreterParserRejectsBareTupleExpression () : TestResult =
     let source = "1L, 2L, 3L"
     match InterpreterParser.parseString false source with
-    | Error err -> Error $"Interpreter parser failed on bare tuple expression: {err}"
-    | Ok (Program [Expression (TupleLiteral [Int64Literal 1L; Int64Literal 2L; Int64Literal 3L])]) ->
-        Ok ()
-    | Ok (Program [Expression expr]) ->
-        Error $"Unexpected AST for bare tuple expression: {expr}"
-    | Ok other ->
-        Error $"Expected single expression program, got: {other}"
+    | Error _ -> Ok ()
+    | Ok _ -> Error "Interpreter parser accepted a bare tuple expression outside a match scrutinee"
+
+let testInterpreterTupleSyntaxBoundaries () : TestResult =
+    let rejectedSources = [ "(1L,)"; "let pair = (1L, 2L) in pair.0" ]
+    let rejected =
+        rejectedSources
+        |> List.forall (fun source ->
+            match InterpreterParser.parseString false source with
+            | Error _ -> true
+            | Ok _ -> false)
+    match InterpreterParser.parseString false "match 1L, 2L with | (a, b) -> a" with
+    | Ok _ when rejected -> Ok ()
+    | Ok _ -> Error "Interpreter parser accepted singleton/projection tuple syntax"
+    | Error err -> Error $"Interpreter parser rejected bare match tuple scrutinee: {err}"
 
 let testInterpreterParserParsesPipeOperatorSections () : TestResult =
     let source = "5L |> (*) 2L |> (<) 40L"
@@ -1037,7 +1045,8 @@ let tests = [
     ("parse backtick identifiers", testInterpreterParserParsesBacktickIdentifiers)
     ("record field boundary blocks space application", testInterpreterParserDoesNotCrossRecordFieldBoundaryWithApplication)
     ("record field boundary blocks qualified constructor payload", testInterpreterParserDoesNotCrossRecordFieldBoundaryWithQualifiedConstructor)
-    ("parse bare tuple expression", testInterpreterParserParsesBareTupleExpression)
+    ("reject bare tuple expression", testInterpreterParserRejectsBareTupleExpression)
+    ("interpreter tuple syntax boundaries", testInterpreterTupleSyntaxBoundaries)
     ("parse pipe operator sections", testInterpreterParserParsesPipeOperatorSections)
     ("parse qualified record literal", testInterpreterParserParsesQualifiedRecordLiteral)
     ("parse constructor over-application chain", testInterpreterParserParsesConstructorOverApplicationChain)
