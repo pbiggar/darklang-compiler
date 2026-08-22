@@ -24,6 +24,16 @@ let unrollBoundary(i: Int64, limit: Int64, acc: Int64) : Int64 =
 
 unrollBoundary(9223372036854775806L, 9223372036854775807L, 0L) = 9223372036854775806L
 
+// Derived affine induction values use the same wrapping Int64 operations as
+// recomputing a * i + b in each iteration.
+let affineOverflow(i: Int64, n: Int64, a: Int64, total: Int64) : Int64 =
+    if i >= n then total
+    else
+        let value = a * i + 1 in
+        affineOverflow(i + 1, n, a, total + value)
+
+affineOverflow(2, 4, 9223372036854775807, 0) = 9223372036854775805
+
 // A statically bounded scalar loop can expand without changing wrapping
 // multiplication or bitwise semantics.
 let boundedHashLoop(h: Int64, data: Int64, i: Int64) : Int64 =

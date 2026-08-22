@@ -613,12 +613,12 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk extension of existing LIR constant hoisting that removes repeated floating-point constant materialization from pure loop bodies.
 - Notes: Implemented for virtual-register `FLoad` instructions in pure natural loops with a unique preheader in `src/DarkCompiler/passes/4.5_LIR_Peephole.fs`. Covered by the `licm_hoist_loop_float_constant` before/after LIR snapshot in `src/Tests/optimization/lir.opt`. Routine benchmarks improved `pisum` from 55,014,671 to 50,015,171 instructions (9.1%) and `mandelbrot` from 21,791,658 to 20,790,992 instructions (4.6%); the aggregate Dark ratio improved from 7.84x to 7.78x versus Rust.
 
-### Canonical affine induction strength reduction
+### Affine induction strength reduction
 
-- Optimization name: Canonical affine induction strength reduction
+- Optimization name: Affine induction strength reduction
 - Taxonomy category: Loop optimization
-- Priority/rationale: Carrying `2 * i + 1` as a derived induction value removes its repeated shift and addition from a hot `i + 1` loop.
-- Notes: Implemented in MIR for a deliberately narrow two-block, single-backedge `Int64` loop. The preheader computes the initial affine value, a header phi carries it, and the latch advances it by two after its last use. The `derived_induction_affine_shift` MIR snapshot covers the exact before/after shape. The ARM64 quick Leibniz workload improves from 1,000,143 to 900,145 instructions (10.0%); the other quick workloads are unchanged relative to the same current-main build.
+- Priority/rationale: Carrying loop-invariant `a * i + b` values removes a repeated multiply and affine add/subtract from every hot `i + 1` iteration.
+- Notes: Implemented in MIR for a deliberately narrow two-block, single-backedge `Int64` loop. The preheader computes the initial affine value using the incoming values of invariant phis, a header phi carries it, and the latch advances it by `a` after its last use. The `derived_induction_affine_*` MIR snapshots cover positive, negative, overflow, reused-value, and noncanonical-step shapes; `tailcall.e2e` covers wrapping execution. The existing ARM64 quick Leibniz result remains 1,000,143 to 900,145 instructions (10.0%) for the canonical form; the generalized form has a deterministic MIR reduction of one multiply per iteration.
 
 ### Factor-two canonical counted-loop unrolling
 
