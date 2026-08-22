@@ -141,7 +141,7 @@ during AOT type checking.
 ### Non-Exhaustive Example
 ```dark
 match opt with
-| Some(x) -> x   // Error: non-exhaustive, missing None
+| Some(x) -> x   // Runtime failure when the value is None
 ```
 
 The exhaustiveness check is implemented via `patternAlwaysMatches`:
@@ -166,6 +166,36 @@ match n with
 ```
 
 Guards are evaluated after pattern match but before body execution.
+
+## Interpreter Parity Boundary
+
+The source comparison evidence is compiler
+`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and interpreter
+`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`; the implementation was
+revalidated at compiler HEAD `e3d84235c70f01425e4a0f66104ea4a5851d6f6b`.
+
+The public grammar accepts unit, literal, variable, wildcard, tuple, exact
+list, cons, constructor, nested, guarded, and grouped-alternative patterns.
+Alternatives are parsed as the patterns following one case bar and before its
+`when` or `->`; each alternative must bind exactly the same usable names.
+Repeated usable names in one pattern are rejected, while names beginning with
+`_` are ignored bindings. Record matching binds the whole record (then uses
+field access); record destructuring and ellipsis/rest record syntax are not
+public patterns.
+
+The scrutinee is evaluated once. Cases, alternatives, and nested structural
+tests run left to right. A successful structural match introduces its bindings
+only for that arm's guard and body. The Boolean guard runs once after those
+bindings are available; a false guard falls through. Only the first eligible
+body executes. If no arm succeeds, the runtime failure is
+`Non-exhaustive match: No matching case found for value <value> in match expression`.
+
+The compiler deliberately retains one AOT-only timing divergence: all arms are
+type checked, including arms which the interpreter would not reach. Invalid
+patterns, duplicate bindings, alternative binding-set differences, and
+non-Boolean guards therefore diagnose during compilation rather than becoming
+runtime decisions. This is an intentional compiler extension in diagnostic
+timing, not an additional runtime pattern form.
 
 ## Tuple Pattern Compilation
 

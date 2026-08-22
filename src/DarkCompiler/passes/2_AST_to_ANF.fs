@@ -7816,14 +7816,30 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 let withBindings = wrapBindings bindings bodyExpr
                                 let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
                                 (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg6))
-                        | AST.PTuple innerPatterns ->
-                            extractTupleBindings innerPatterns valueAtom elemType 0 currentEnv bindings vg5'  // Pass tuple type
-                            |> Result.bind (fun (newEnv, newBindings, vg6) ->
-                                toANF body vg6 newEnv typeReg variantLookup funcReg moduleRegistry
-                                |> Result.map (fun (bodyExpr, vg7) ->
-                                    let withBindings = wrapBindings newBindings bodyExpr
-                                    let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
-                                    (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg7)))
+                        | (AST.PTuple _ as nestedPattern)
+                        | (AST.PConstructor _ as nestedPattern)
+                        | (AST.PList _ as nestedPattern)
+                        | (AST.PListCons _ as nestedPattern) ->
+                            // Structural comparison must run before extracting binders so a
+                            // failed nested pattern cannot leak its bindings into this arm.
+                            buildPatternComparison nestedPattern valueAtom vg5'
+                            |> Result.bind (fun comparison ->
+                                let (conditionOpt, comparisonBindings, vg6) =
+                                    match comparison with
+                                    | None -> (None, [], vg5')
+                                    | Some (condition, bindings', vg') -> (Some condition, bindings', vg')
+                                collectNestedPatternBindings nestedPattern valueAtom elemType currentEnv [] vg6
+                                |> Result.bind (fun (newEnv, nestedBindings, vg7) ->
+                                    toANF body vg7 newEnv typeReg variantLookup funcReg moduleRegistry
+                                    |> Result.map (fun (bodyExpr, vg8) ->
+                                        let extractedBody = wrapBindings nestedBindings bodyExpr
+                                        let matchedBody =
+                                            match conditionOpt with
+                                            | None -> extractedBody
+                                            | Some condition -> ANF.If (condition, extractedBody, elseExpr)
+                                        let withBindings = wrapBindings (bindings @ comparisonBindings) matchedBody
+                                        let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
+                                        (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg8))))
                         | AST.PInt64 n -> compileLiteralPattern (ANF.Int64 n)
                         | AST.PInt128Literal n -> compileStringLiteralPattern (int128ToCanonicalString n)
                         | AST.PInt8Literal n -> compileLiteralPattern (ANF.Int8 n)
@@ -7834,8 +7850,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         | AST.PUInt32Literal n -> compileLiteralPattern (ANF.UInt32 n)
                         | AST.PUInt64Literal n -> compileLiteralPattern (ANF.UInt64 n)
                         | AST.PUInt128Literal n -> compileStringLiteralPattern (uint128ToCanonicalString n)
-                        | AST.PConstructor _ | AST.PList _ | AST.PListCons _ ->
-                            Error "Nested pattern in list element not yet supported"
                         | _ ->
                             Error $"Unsupported pattern in single-element list: {pat}"
                     else
@@ -7899,10 +7913,41 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     extractElements rest (idx + 1) newEnv newBindings condAtoms vg2'
                                 | AST.PWildcard ->
                                     extractElements rest (idx + 1) env newBindings condAtoms vg2'
-                                | AST.PTuple innerPatterns ->
-                                    extractTupleBindings innerPatterns (ANF.Var valueVar) elemType 0 env newBindings vg2'  // Pass tuple type
-                                    |> Result.bind (fun (tupEnv, tupBindings, vg3) ->
-                                        extractElements rest (idx + 1) tupEnv tupBindings condAtoms vg3)
+                                | (AST.PTuple _ as nestedPattern)
+                                | (AST.PList _ as nestedPattern)
+                                | (AST.PListCons _ as nestedPattern)
+                                | (AST.PConstructor _ as nestedPattern) ->
+                                    let staticallyCannotMatch = patternStaticallyCannotMatchType nestedPattern elemType
+                                    let comparisonResult =
+                                        if staticallyCannotMatch then
+                                            let (condition, bindings', vg3) = makeFalsePatternCondition vg2'
+                                            Ok (Some (condition, bindings', vg3))
+                                        else
+                                            buildPatternComparison nestedPattern (ANF.Var valueVar) vg2'
+                                    comparisonResult
+                                    |> Result.bind (fun comparison ->
+                                        let (conditionOpt, comparisonBindings, vg3) =
+                                            match comparison with
+                                            | None -> (None, [], vg2')
+                                            | Some (condition, bindings', vg') -> (Some condition, bindings', vg')
+                                        let nestedBindingsResult =
+                                            if patternBindsVariables nestedPattern && not staticallyCannotMatch then
+                                                collectNestedPatternBindings nestedPattern (ANF.Var valueVar) elemType env [] vg3
+                                            else
+                                                Ok (env, [], vg3)
+                                        nestedBindingsResult
+                                        |> Result.bind (fun (envAfterPattern, nestedBindings, vg4) ->
+                                            let nextConditions =
+                                                match conditionOpt with
+                                                | None -> condAtoms
+                                                | Some condition -> condAtoms @ [condition]
+                                            extractElements
+                                                rest
+                                                (idx + 1)
+                                                envAfterPattern
+                                                (newBindings @ comparisonBindings @ nestedBindings)
+                                                nextConditions
+                                                vg4))
                                 | (AST.PInt64 _ as pat)
                                 | (AST.PInt8Literal _ as pat)
                                 | (AST.PInt16Literal _ as pat)
@@ -7931,33 +7976,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         ANF.Call ("__string_eq", [ANF.Var valueVar; ANF.StringLiteral (uint128ToCanonicalString n)])
                                     let bindingsWithLiteral = newBindings @ [(litCheckVar, litCheckExpr)]
                                     extractElements rest (idx + 1) env bindingsWithLiteral (condAtoms @ [ANF.Var litCheckVar]) vg3
-                                | AST.PList _ | AST.PListCons _ | AST.PConstructor _ ->
-                                    let staticallyCannotMatch = patternStaticallyCannotMatchType pat elemType
-                                    let cmpResult =
-                                        if staticallyCannotMatch then
-                                            let (condAtom, bindings', vg3) = makeFalsePatternCondition vg2'
-                                            Ok (Some (condAtom, bindings', vg3))
-                                        else
-                                            buildPatternComparison pat (ANF.Var valueVar) vg2'
-                                    cmpResult
-                                    |> Result.bind (fun cmpOpt ->
-                                        let (cmpCondOpt, cmpBindings, vg3) =
-                                            match cmpOpt with
-                                            | None -> (None, [], vg2')
-                                            | Some (condAtom, bindings', vg') -> (Some condAtom, bindings', vg')
-                                        let nestedBindingsResult =
-                                            if patternBindsVariables pat && not staticallyCannotMatch then
-                                                collectNestedPatternBindings pat (ANF.Var valueVar) elemType env [] vg3
-                                            else
-                                                Ok (env, [], vg3)
-                                        nestedBindingsResult
-                                        |> Result.bind (fun (envAfterPat, nestedBindings, vg4) ->
-                                            let condAtoms' =
-                                                match cmpCondOpt with
-                                                | None -> condAtoms
-                                                | Some condAtom -> condAtoms @ [condAtom]
-                                            let newBindingsWithPat = newBindings @ cmpBindings @ nestedBindings
-                                            extractElements rest (idx + 1) envAfterPat newBindingsWithPat condAtoms' vg4))
                                 | _ ->
                                     Error $"Unsupported pattern in list element: {pat}"
 
@@ -8178,14 +8196,33 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             match singleHeadPattern with
                             | AST.PVar name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
                             | AST.PWildcard -> Ok (currentEnv, [], vg3', None)
-                            | AST.PTuple innerPatterns ->
-                                match tupleHeadPatternType elemType innerPatterns with
-                                | Some tupleType ->
-                                    extractTupleBindings innerPatterns typedHeadAtom tupleType 0 currentEnv [] vg3'
-                                    |> Result.map (fun (env, bindings, vg') -> (env, bindings, vg', None))
-                                | None ->
-                                    let (guardVar, vg4) = ANF.freshVar vg3'
-                                    Ok (currentEnv, [], vg4, Some (guardVar, ANF.Atom (ANF.BoolLiteral false)))
+                            | (AST.PTuple _ as nestedPattern)
+                            | (AST.PConstructor _ as nestedPattern)
+                            | (AST.PList _ as nestedPattern)
+                            | (AST.PListCons _ as nestedPattern) ->
+                                let staticallyCannotMatch = patternStaticallyCannotMatchType nestedPattern elemType
+                                let comparisonResult =
+                                    if staticallyCannotMatch then
+                                        let (condition, bindings, vg4) = makeFalsePatternCondition vg3'
+                                        Ok (Some (condition, bindings, vg4))
+                                    else
+                                        buildPatternComparison nestedPattern typedHeadAtom vg3'
+                                comparisonResult
+                                |> Result.bind (fun comparison ->
+                                    let (guardOpt, comparisonBindings, vg4) =
+                                        match comparison with
+                                        | None -> (None, [], vg3')
+                                        | Some (condition, bindings, vg') ->
+                                            let (guardVar, vg'') = ANF.freshVar vg'
+                                            (Some (guardVar, ANF.Atom condition), bindings, vg'')
+                                    let nestedBindingsResult =
+                                        if patternBindsVariables nestedPattern && not staticallyCannotMatch then
+                                            collectNestedPatternBindings nestedPattern typedHeadAtom elemType currentEnv [] vg4
+                                        else
+                                            Ok (currentEnv, [], vg4)
+                                    nestedBindingsResult
+                                    |> Result.map (fun (env, nestedBindings, vg5) ->
+                                        (env, comparisonBindings @ nestedBindings, vg5, guardOpt)))
                             | (AST.PInt64 _ as pat)
                             | (AST.PInt8Literal _ as pat)
                             | (AST.PInt16Literal _ as pat)
@@ -8212,8 +8249,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 let guardExpr =
                                     ANF.Call ("__string_eq", [ANF.Var typedHeadVar; ANF.StringLiteral (uint128ToCanonicalString n)])
                                 Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
-                            | AST.PConstructor _ ->
-                                Error "Nested pattern in list cons element not yet supported"
                             | _ -> Error $"Unsupported head pattern in list cons: {singleHeadPattern}"
 
                         headEnvResult
@@ -8228,7 +8263,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.bind (fun (finalEnv, vg5) ->
                                 toANF body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
                                 |> Result.map (fun (bodyExpr, vg6) ->
-                                    let withTupleBindings = wrapBindings tupleBindings bodyExpr
+                                    let withTupleBindings = bodyExpr
                                     let withTypedTail = ANF.Let (tailVar, tailExpr, withTupleBindings)
                                     let withTail = ANF.Let (rawTailVar, rawTailExpr, withTypedTail)
                                     // If there's a guard (literal pattern), add check AFTER head bindings
@@ -8239,8 +8274,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                             // headBindingsWithType -> guardVar -> if guard then body else elseExpr
                                             let ifGuard = ANF.If (ANF.Var guardVar, withTail, elseExpr)
                                             let withGuardBinding = ANF.Let (guardVar, guardExpr, ifGuard)
-                                            wrapBindings headBindingsWithType withGuardBinding
-                                        | None -> wrapBindings headBindingsWithType withTail
+                                            wrapBindings headBindingsWithType (wrapBindings tupleBindings withGuardBinding)
+                                        | None -> wrapBindings headBindingsWithType (wrapBindings tupleBindings withTail)
                                     (withGuard, vg6))))
 
                     // Compile the DEEP branch: node at offset 16 (prefix[0])
@@ -8270,14 +8305,33 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             match singleHeadPattern with
                             | AST.PVar name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
                             | AST.PWildcard -> Ok (currentEnv, [], vg3', None)
-                            | AST.PTuple innerPatterns ->
-                                match tupleHeadPatternType elemType innerPatterns with
-                                | Some tupleType ->
-                                    extractTupleBindings innerPatterns typedHeadAtom tupleType 0 currentEnv [] vg3'
-                                    |> Result.map (fun (env, bindings, vg') -> (env, bindings, vg', None))
-                                | None ->
-                                    let (guardVar, vg4) = ANF.freshVar vg3'
-                                    Ok (currentEnv, [], vg4, Some (guardVar, ANF.Atom (ANF.BoolLiteral false)))
+                            | (AST.PTuple _ as nestedPattern)
+                            | (AST.PConstructor _ as nestedPattern)
+                            | (AST.PList _ as nestedPattern)
+                            | (AST.PListCons _ as nestedPattern) ->
+                                let staticallyCannotMatch = patternStaticallyCannotMatchType nestedPattern elemType
+                                let comparisonResult =
+                                    if staticallyCannotMatch then
+                                        let (condition, bindings, vg4) = makeFalsePatternCondition vg3'
+                                        Ok (Some (condition, bindings, vg4))
+                                    else
+                                        buildPatternComparison nestedPattern typedHeadAtom vg3'
+                                comparisonResult
+                                |> Result.bind (fun comparison ->
+                                    let (guardOpt, comparisonBindings, vg4) =
+                                        match comparison with
+                                        | None -> (None, [], vg3')
+                                        | Some (condition, bindings, vg') ->
+                                            let (guardVar, vg'') = ANF.freshVar vg'
+                                            (Some (guardVar, ANF.Atom condition), bindings, vg'')
+                                    let nestedBindingsResult =
+                                        if patternBindsVariables nestedPattern && not staticallyCannotMatch then
+                                            collectNestedPatternBindings nestedPattern typedHeadAtom elemType currentEnv [] vg4
+                                        else
+                                            Ok (currentEnv, [], vg4)
+                                    nestedBindingsResult
+                                    |> Result.map (fun (env, nestedBindings, vg5) ->
+                                        (env, comparisonBindings @ nestedBindings, vg5, guardOpt)))
                             | (AST.PInt64 _ as pat)
                             | (AST.PInt8Literal _ as pat)
                             | (AST.PInt16Literal _ as pat)
@@ -8304,8 +8358,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 let guardExpr =
                                     ANF.Call ("__string_eq", [ANF.Var typedHeadVar; ANF.StringLiteral (uint128ToCanonicalString n)])
                                 Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
-                            | AST.PConstructor _ ->
-                                Error "Nested pattern in list cons element not yet supported"
                             | _ -> Error $"Unsupported head pattern in list cons: {singleHeadPattern}"
 
                         headEnvResult
@@ -8320,7 +8372,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.bind (fun (finalEnv, vg5) ->
                                 toANF body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
                                 |> Result.map (fun (bodyExpr, vg6) ->
-                                    let withTupleBindings = wrapBindings tupleBindings bodyExpr
+                                    let withTupleBindings = bodyExpr
                                     let withTailBinding = wrapBindings tailBindings withTupleBindings
                                     // If there's a guard (literal pattern), add check AFTER head bindings
                                     // because guardExpr uses headVar which is defined in headBindingsWithType
@@ -8330,8 +8382,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                             // headBindingsWithType -> guardVar -> if guard then body else elseExpr
                                             let ifGuard = ANF.If (ANF.Var guardVar, withTailBinding, elseExpr)
                                             let withGuardBinding = ANF.Let (guardVar, guardExpr, ifGuard)
-                                            wrapBindings headBindingsWithType withGuardBinding
-                                        | None -> wrapBindings headBindingsWithType withTailBinding
+                                            wrapBindings headBindingsWithType (wrapBindings tupleBindings withGuardBinding)
+                                        | None -> wrapBindings headBindingsWithType (wrapBindings tupleBindings withTailBinding)
                                     (withGuard, vg6))))
 
                     // Build the combined expression with branching

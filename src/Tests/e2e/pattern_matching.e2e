@@ -356,9 +356,8 @@ match (5 > 3) && (2 < 4) with | true -> 1 | false -> 0 = 1
 match (1 > 10) || (10 > 1) with | true -> 42 | false -> 0 = 42
 
 // === Non-exhaustive pattern match test ===
-// A 3-element list matched against [a, b] pattern with no wildcard is non-exhaustive
-// This should produce a compile error
-match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive"
+// A non-matching exact list pattern fails at runtime with the unmatched value.
+match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive match: No matching case found for value [1, 2, 3] in match expression"
 
 // Duplicate bindings in a single pattern should be rejected by type checking.
 match (1, 2) with | (x, x) -> x | _ -> 0 = error="Duplicate binding 'x' in the same pattern"
@@ -392,16 +391,16 @@ match 42 with | h :: t -> h | _ -> 0 = error="Cannot match Int64 value 42 with a
 type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | p when p.x == 5 -> p.y | _ -> 0 = 10
 
 // Nested constructor pattern in list element
-type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x | _ -> 0 = error="Nested pattern in list element not yet supported"
+type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x | _ -> 0 = 1
 
 // Nested literal pattern inside tuple inside list
-match [(1, 2)] with | [(1, x)] -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
+match [(1, 2)] with | [(1, x)] -> x | _ -> 0 = 2
 
 // Nested constructor pattern in list cons head
 type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | MySome(x) :: rest -> x | _ -> 0 = 1
 
 // Nested literal pattern inside tuple inside list cons
-match [(1, 2), (3, 4)] with | (1, x) :: rest -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
+match [(1, 2), (3, 4)] with | (1, x) :: rest -> x | _ -> 0 = 2
 
 // === Literal patterns in lists (now supported) ===
 // These test that literal patterns in list elements work correctly
