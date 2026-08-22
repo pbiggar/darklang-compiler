@@ -870,71 +870,6 @@ let private collectVRegIdsFromFacts (classifiedBlocks: ClassifiedBlock array) : 
             | None -> acc) acc
     ) []
 
-/// Compute liveness using bitsets for the dataflow fixed point
-let private computeLivenessBitsFromFacts
-    (blockIndex: BlockIndex)
-    (classifiedBlocks: ClassifiedBlock array)
-    (extraIds: int list)
-    : VRegDomain * BlockLiveness array =
-    let domain = buildVRegDomain (collectVRegIdsFromFacts classifiedBlocks @ extraIds)
-    let emptyBits = bitsetEmpty domain.WordCount
-
-    let genKillBits =
-        Array.init classifiedBlocks.Length (fun idx ->
-            computeGenKillFromFacts domain classifiedBlocks.[idx])
-
-    let phiUsesBits = collectPhiUsesByPred domain blockIndex classifiedBlocks
-
-    let liveness = Array.init classifiedBlocks.Length (fun _ -> { LiveIn = emptyBits; LiveOut = emptyBits })
-
-    let phiUsesForEdge (succIdx: int) (predIdx: int) : BitSet =
-        match phiUsesBits.[succIdx] |> List.tryFind (fun (idx, _) -> idx = predIdx) with
-        | Some (_, bits) -> bits
-        | None -> emptyBits
-
-    let mutable changed = true
-    while changed do
-        changed <- false
-        for blockIdx in 0 .. classifiedBlocks.Length - 1 do
-            let block = classifiedBlocks.[blockIdx].Block
-            let (gen, kill) = genKillBits.[blockIdx]
-            let oldLiveness = liveness.[blockIdx]
-
-            let successors = getSuccessors block.Terminator
-            // Keep zero/one inputs borrowed, then update the first combined result in
-            // place so branching phi edges do not allocate a new bitset per union.
-            let mutable liveOutAccumulator = NoUnionBits
-            for succLabel in successors do
-                match tryBlockIndex blockIndex succLabel with
-                | Some succIdx ->
-                    liveOutAccumulator <-
-                        bitsetAccumulateUnion liveOutAccumulator liveness.[succIdx].LiveIn
-                    liveOutAccumulator <-
-                        bitsetAccumulateUnion liveOutAccumulator (phiUsesForEdge succIdx blockIdx)
-                | None -> ()
-            let newLiveOut = bitsetFinishUnion emptyBits liveOutAccumulator
-
-            let newLiveIn = bitsetUnion gen (bitsetDiff newLiveOut kill)
-
-            if not (bitsetEqual newLiveIn oldLiveness.LiveIn) || not (bitsetEqual newLiveOut oldLiveness.LiveOut) then
-                changed <- true
-                liveness.[blockIdx] <- { LiveIn = newLiveIn; LiveOut = newLiveOut }
-
-    (domain, liveness)
-
-let private computeLivenessBitsRaw
-    (blockIndex: BlockIndex)
-    (blocks: LIR.BasicBlock array)
-    (extraIds: int list)
-    : VRegDomain * BlockLiveness array =
-    computeLivenessBitsFromFacts blockIndex (classifyBlocks blocks) extraIds
-
-/// Compute liveness using bitsets for the dataflow fixed point
-let computeLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiveness array =
-    let (blockIndex, blocks) = buildBlockIndex cfg
-    let (domain, liveness) = computeLivenessBitsRaw blockIndex blocks []
-    (domain, blockIndex, liveness)
-
 /// Compute float GEN and KILL sets for a basic block
 /// GEN = float variables used before being defined
 /// KILL = float variables defined
@@ -979,56 +914,82 @@ let private collectFVRegIdsFromFacts (classifiedBlocks: ClassifiedBlock array) :
 let private collectFVRegIds (blocks: LIR.BasicBlock array) : int list =
     blocks |> classifyBlocks |> collectFVRegIdsFromFacts
 
-/// Compute float liveness using bitsets for the dataflow fixed point
-let private computeFloatLivenessBitsFromFacts
+/// Compute integer and float liveness in one backward CFG fixed point.
+/// The two domains remain distinct, so allocation receives the exact same live
+/// sets as independent solvers, while CFG successors and edge lookups are shared.
+let private computeCombinedLivenessBitsFromFacts
     (blockIndex: BlockIndex)
     (classifiedBlocks: ClassifiedBlock array)
-    (extraIds: int list)
-    : VRegDomain * BlockLiveness array =
-    let domain = buildVRegDomain (collectFVRegIdsFromFacts classifiedBlocks @ extraIds)
-    let emptyBits = bitsetEmpty domain.WordCount
-
-    let genKillBits =
+    (intExtraIds: int list)
+    (floatExtraIds: int list)
+    : VRegDomain * BlockLiveness array * VRegDomain * BlockLiveness array =
+    let intDomain = buildVRegDomain (collectVRegIdsFromFacts classifiedBlocks @ intExtraIds)
+    let floatDomain = buildVRegDomain (collectFVRegIdsFromFacts classifiedBlocks @ floatExtraIds)
+    let emptyIntBits = bitsetEmpty intDomain.WordCount
+    let emptyFloatBits = bitsetEmpty floatDomain.WordCount
+    let intGenKillBits =
         Array.init classifiedBlocks.Length (fun idx ->
-            computeFloatGenKillFromFacts domain classifiedBlocks.[idx])
-
-    let fphiUsesBits = collectFPhiUsesByPred domain blockIndex classifiedBlocks
-
-    let liveness = Array.init classifiedBlocks.Length (fun _ -> { LiveIn = emptyBits; LiveOut = emptyBits })
-
-    let fphiUsesForEdge (succIdx: int) (predIdx: int) : BitSet =
-        match fphiUsesBits.[succIdx] |> List.tryFind (fun (idx, _) -> idx = predIdx) with
+            computeGenKillFromFacts intDomain classifiedBlocks.[idx])
+    let floatGenKillBits =
+        Array.init classifiedBlocks.Length (fun idx ->
+            computeFloatGenKillFromFacts floatDomain classifiedBlocks.[idx])
+    let intPhiUsesBits = collectPhiUsesByPred intDomain blockIndex classifiedBlocks
+    let floatPhiUsesBits = collectFPhiUsesByPred floatDomain blockIndex classifiedBlocks
+    let intLiveness = Array.init classifiedBlocks.Length (fun _ -> { LiveIn = emptyIntBits; LiveOut = emptyIntBits })
+    let floatLiveness = Array.init classifiedBlocks.Length (fun _ -> { LiveIn = emptyFloatBits; LiveOut = emptyFloatBits })
+    let phiUsesForEdge (phiUses: (int * BitSet) list array) (emptyBits: BitSet) (succIdx: int) (predIdx: int) : BitSet =
+        match phiUses.[succIdx] |> List.tryFind (fun (idx, _) -> idx = predIdx) with
         | Some (_, bits) -> bits
         | None -> emptyBits
-
     let mutable changed = true
     while changed do
         changed <- false
         for blockIdx in 0 .. classifiedBlocks.Length - 1 do
             let block = classifiedBlocks.[blockIdx].Block
-            let (gen, kill) = genKillBits.[blockIdx]
-            let oldLiveness = liveness.[blockIdx]
-
             let successors = getSuccessors block.Terminator
-            // Use the same borrowed/owned accumulator for floating-point phi edges.
-            let mutable liveOutAccumulator = NoUnionBits
+            let mutable intLiveOutAccumulator = NoUnionBits
+            let mutable floatLiveOutAccumulator = NoUnionBits
             for succLabel in successors do
                 match tryBlockIndex blockIndex succLabel with
                 | Some succIdx ->
-                    liveOutAccumulator <-
-                        bitsetAccumulateUnion liveOutAccumulator liveness.[succIdx].LiveIn
-                    liveOutAccumulator <-
-                        bitsetAccumulateUnion liveOutAccumulator (fphiUsesForEdge succIdx blockIdx)
+                    intLiveOutAccumulator <- bitsetAccumulateUnion intLiveOutAccumulator intLiveness.[succIdx].LiveIn
+                    intLiveOutAccumulator <- bitsetAccumulateUnion intLiveOutAccumulator (phiUsesForEdge intPhiUsesBits emptyIntBits succIdx blockIdx)
+                    floatLiveOutAccumulator <- bitsetAccumulateUnion floatLiveOutAccumulator floatLiveness.[succIdx].LiveIn
+                    floatLiveOutAccumulator <- bitsetAccumulateUnion floatLiveOutAccumulator (phiUsesForEdge floatPhiUsesBits emptyFloatBits succIdx blockIdx)
                 | None -> ()
-            let newLiveOut = bitsetFinishUnion emptyBits liveOutAccumulator
-
-            let newLiveIn = bitsetUnion gen (bitsetDiff newLiveOut kill)
-
-            if not (bitsetEqual newLiveIn oldLiveness.LiveIn) || not (bitsetEqual newLiveOut oldLiveness.LiveOut) then
+            let (intGen, intKill) = intGenKillBits.[blockIdx]
+            let oldIntLiveness = intLiveness.[blockIdx]
+            let newIntLiveOut = bitsetFinishUnion emptyIntBits intLiveOutAccumulator
+            let newIntLiveIn = bitsetUnion intGen (bitsetDiff newIntLiveOut intKill)
+            let (floatGen, floatKill) = floatGenKillBits.[blockIdx]
+            let oldFloatLiveness = floatLiveness.[blockIdx]
+            let newFloatLiveOut = bitsetFinishUnion emptyFloatBits floatLiveOutAccumulator
+            let newFloatLiveIn = bitsetUnion floatGen (bitsetDiff newFloatLiveOut floatKill)
+            if not (bitsetEqual newIntLiveIn oldIntLiveness.LiveIn) || not (bitsetEqual newIntLiveOut oldIntLiveness.LiveOut) then
                 changed <- true
-                liveness.[blockIdx] <- { LiveIn = newLiveIn; LiveOut = newLiveOut }
+                intLiveness.[blockIdx] <- { LiveIn = newIntLiveIn; LiveOut = newIntLiveOut }
+            if not (bitsetEqual newFloatLiveIn oldFloatLiveness.LiveIn) || not (bitsetEqual newFloatLiveOut oldFloatLiveness.LiveOut) then
+                changed <- true
+                floatLiveness.[blockIdx] <- { LiveIn = newFloatLiveIn; LiveOut = newFloatLiveOut }
 
+    (intDomain, intLiveness, floatDomain, floatLiveness)
+
+let private computeLivenessBitsFromFacts blockIndex classifiedBlocks extraIds =
+    let (domain, liveness, _, _) = computeCombinedLivenessBitsFromFacts blockIndex classifiedBlocks extraIds []
     (domain, liveness)
+
+let private computeFloatLivenessBitsFromFacts blockIndex classifiedBlocks extraIds =
+    let (_, _, domain, liveness) = computeCombinedLivenessBitsFromFacts blockIndex classifiedBlocks [] extraIds
+    (domain, liveness)
+
+let private computeLivenessBitsRaw blockIndex blocks extraIds =
+    computeLivenessBitsFromFacts blockIndex (classifyBlocks blocks) extraIds
+
+/// Compute liveness using bitsets for the dataflow fixed point.
+let computeLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiveness array =
+    let (blockIndex, blocks) = buildBlockIndex cfg
+    let (domain, liveness) = computeLivenessBitsRaw blockIndex blocks []
+    (domain, blockIndex, liveness)
 
 let private computeFloatLivenessBitsRaw
     (blockIndex: BlockIndex)
@@ -3907,13 +3868,17 @@ let private allocateRegistersInternal
 
     let (blockIndex, blocks) = buildBlockIndex func.CFG
 
-    // Step 1: Classify instructions once, then compute liveness (include int params in domain)
-    let ((classifiedBlocks, domain, livenessBits), timings) =
+    // Step 1: Classify instructions once, then solve both liveness domains together.
+    let ((classifiedBlocks, domain, livenessBits, floatDomain, floatLiveness), timings) =
         timePhase swOpt "RegAlloc: Liveness" [] (fun () ->
             let classifiedBlocks = classifyBlocks blocks
-            let (domain, livenessBits) =
-                computeLivenessBitsFromFacts blockIndex classifiedBlocks intParamVRegIds
-            (classifiedBlocks, domain, livenessBits))
+            let (domain, livenessBits, floatDomain, floatLiveness) =
+                computeCombinedLivenessBitsFromFacts
+                    blockIndex
+                    classifiedBlocks
+                    intParamVRegIds
+                    floatParamFVirtualIds
+            (classifiedBlocks, domain, livenessBits, floatDomain, floatLiveness))
     let intParamBits = bitsetFromList domain intParamVRegIds
 
     // Step 2: Build interference graph
@@ -3984,11 +3949,8 @@ let private allocateRegistersInternal
 
     // Step 3b: Parameter info already computed (needed for float allocation and param moves)
 
-    // Step 3c: Run float register allocation
-    // Include float param FVirtuals so they get allocated even if not used in CFG
-    let ((floatDomain, floatLiveness), timings) =
-        timePhase swOpt "RegAlloc: Float Liveness" timings (fun () ->
-            computeFloatLivenessBitsFromFacts blockIndex classifiedBlocks floatParamFVirtualIds)
+    // Step 3c: Run float register allocation. Its liveness was solved with the
+    // integer domain above, including float parameters absent from the CFG.
     let floatParamBits = bitsetFromList floatDomain floatParamFVirtualIds
     let (floatAllocation, timings) =
         timePhase swOpt "RegAlloc: Float Allocation" timings (fun () ->
