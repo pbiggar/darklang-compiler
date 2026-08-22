@@ -1,3 +1,7 @@
-// Types.dark - Root aliases for runtime-backed public scalar types.
+// Types.dark - Root public types which have no module of their own.
+//
+// Uuid is an ordinary single-case Dark sum. Its UInt128 payload gives UUID
+// values a nominal boundary from String while retaining all normal sum-type
+// behavior for equality, containers, closures, and Result values.
 
-type Uuid = String
+type Uuid = UUID of UInt128

@@ -133,7 +133,7 @@ let rec private typeReference typ =
     | TChar -> nullary "TChar"
     | TString -> nullary "TString"
     | TBlob -> nullary "TBlob"
-    | TRecord ("Uuid", []) -> nullary "TUuid"
+    | TSum ("Uuid", []) -> nullary "TUuid"
     | TDateTime -> nullary "TDateTime"
     | TList elementType -> unary "TList" (typeReference elementType)
     | TDict (TString, valueType) -> unary "TDict" (typeReference valueType)
@@ -325,7 +325,7 @@ and private serializeBody env typ value state : Result<Expr * State, string> =
     | TInt128 | TUInt128 -> Ok (value, state)
     | TFloat64 -> Ok (call "Stdlib.Json.__serializeFloat" [value], state)
     | TString | TChar -> Ok (call "Stdlib.AltJson.__quote" [value], state)
-    | TRecord ("Uuid", []) -> Ok (call "Stdlib.AltJson.__quote" [value], state)
+    | TSum ("Uuid", []) -> Ok (call "Stdlib.AltJson.__quote" [call "Stdlib.Uuid.toString" [value]], state)
     | TDateTime ->
         Ok (call "Stdlib.AltJson.__quote" [call "Stdlib.DateTime.toString" [value]], state)
     | TTuple elementTypes ->
@@ -725,10 +725,10 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 If (BinOp (Eq, Var "__text", StringLiteral "Infinity"), ok (FloatLiteral System.Double.PositiveInfinity),
                     If (BinOp (Eq, Var "__text", StringLiteral "-Infinity"), ok (FloatLiteral System.Double.NegativeInfinity), failure)))
         Ok (Match (Var "__raw", [makeCase (PConstructor ("RawNumber", Some (PTuple [PVar "__lexeme"; PWildcard]))) fromNumber; makeCase (PConstructor ("RawString", Some (PTuple [PVar "__text"; PWildcard]))) fromString; makeCase PWildcard failure]), state)
-    | TRecord ("Uuid", []) ->
+    | TSum ("Uuid", []) ->
         let parsed =
             Match (
-                call "Stdlib.Uuid.parse_v0" [Var "__text"],
+                call "Stdlib.Uuid.parse" [Var "__text"],
                 [makeCase (PConstructor ("Ok", Some (PVar "__value"))) (ok (Var "__value")); makeCase PWildcard failure])
         Ok (Match (Var "__raw", [makeCase (PConstructor ("RawString", Some (PTuple [PVar "__text"; PWildcard]))) parsed; makeCase PWildcard failure]), state)
     | TDateTime ->

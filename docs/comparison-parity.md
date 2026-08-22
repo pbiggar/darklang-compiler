@@ -89,12 +89,16 @@ than an equality value. The interpreter's DDB values compare through database
 reference equality and Streams compare handle identity; neither value category
 exists in compiled programs, so both are interpreter-only and unsupported.
 
-The interpreter's DUuid is a distinct scalar. The compiler currently declares
-`Uuid = String`, and its UUID helpers return String. Equality consequently uses
-String specialization rather than claiming distinct DUuid parity. This is an
-explicit compiler extension recorded in `docs/diff-value-search-parity.md`, not
-a new equality rule. Ahead-of-time rejection and the absent interpreter-only
-value categories are the intentional public boundary retained here.
+UUID parity was revalidated at compiler `e3d84235c70f01425e4a0f66104ea4a5851d6f6b`
+against darklang/dark `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
+(`packages/darklang/stdlib/uuid.dark` and
+`backend/testfiles/execution/stdlib/uuid.dark`). The interpreter's DUuid is represented in the compiler as the ordinary Dark
+newtype `Uuid = UUID(UInt128)`. Canonical parsing and formatting are defined in
+`Stdlib.Uuid`; ordinary sum equality supplies structural UUID equality. The
+historic String parser remains only at `Stdlib.Uuid.Compatibility.parse_v0` as
+a documented compiler compatibility extension, not as the canonical API.
+Ahead-of-time rejection and the absent interpreter-only value categories are
+the intentional public boundary retained here.
 
 Performance differences are outside this contract unless they change an
 observable result.

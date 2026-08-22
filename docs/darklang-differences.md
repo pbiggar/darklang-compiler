@@ -217,10 +217,12 @@ instead of evaluating them and raising an interpreter runtime error. RawPtr and
 RuntimeError are rejected compiler-internal categories. Interpreter DDB values
 have no compiled representation and remain unsupported.
 
-The compiler's `Uuid = String` model is an extension, not parity with the
-interpreter's distinct DUuid value. Blob and function equality retain their
-pinned identity rules. Explicit printing accepts String only and is independent
-of implicit final-result rendering; final Unit adds no text. See
+Uuid now uses the ordinary `UUID(UInt128)` newtype and the canonical
+interpreter-compatible `Stdlib.Uuid` API. The legacy String parser is retained
+only as `Stdlib.Uuid.Compatibility.parse_v0`, a compiler compatibility
+extension. Blob and function equality retain their pinned identity rules.
+Explicit printing accepts String only and is independent of implicit
+final-result rendering; final Unit adds no text. See
 [comparison-parity.md](comparison-parity.md) and
 [cli-presentation-parity.md](cli-presentation-parity.md).
 

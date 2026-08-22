@@ -124,11 +124,11 @@ module Equals =
   ((Stdlib.DateTime.parse "2019-07-28T22:42:37Z")
    != (Stdlib.DateTime.parse "2019-07-28T22:42:36Z")) = true
 
-  (Stdlib.Uuid.parse_v0 "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
-   == Stdlib.Uuid.parse_v0 "3700adbc-7a46-4ff4-81d3-45afb03f6e2d") = true
+  (Stdlib.Uuid.parse "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+   == Stdlib.Uuid.parse "3700adbc-7a46-4ff4-81d3-45afb03f6e2d") = true
 
-  (Stdlib.Uuid.parse_v0 "3700adbc-7a46-4ff4-81d3-45afb03f6e2e"
-   != Stdlib.Uuid.parse_v0 "3700adbc-7a46-4ff4-81d3-45afb03f6e2d") = true
+  (Stdlib.Uuid.parse "3700adbc-7a46-4ff4-81d3-45afb03f6e2e"
+   != Stdlib.Uuid.parse "3700adbc-7a46-4ff4-81d3-45afb03f6e2d") = true
 
   // TODO revisit these
   //(fun x -> y) = (fun x -> y)

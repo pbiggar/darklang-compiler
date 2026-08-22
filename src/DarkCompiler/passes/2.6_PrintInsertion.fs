@@ -95,6 +95,13 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             let callExpr = Call ("Stdlib.DateTime.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
+        | AST.TSum ("Uuid", []) ->
+            // UUID is an ordinary sum, but public output is its canonical text.
+            let (strTmp, varGen1) = freshVar varGen
+            let (printTmp, varGen2) = freshVar varGen1
+            let callExpr = Call ("Stdlib.Uuid.toString", [atom])
+            let printExpr = Print (Var strTmp, AST.TString)
+            (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | _ ->
             // Non-list types: simple print
             let (printTmp, varGen') = freshVar varGen

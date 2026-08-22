@@ -1322,6 +1322,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/Dict.dark"
         "stdlib/__HAMT.dark"
         "stdlib/Uuid.dark"
+        "stdlib/UuidCompatibility.dark"
         "stdlib/Diff.dark"
         "stdlib/ProgramTypes.dark"
         "stdlib/RuntimeTypes.dark"

@@ -387,7 +387,6 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TEnumFields fieldTypes ->
         let fieldShapes = fieldTypes |> List.map (rcShapeOfType typeReg)
         FixedBlock (List.length fieldTypes * 8, fieldShapes)
-    | AST.TRecord ("Uuid", []) -> DynamicString
     | AST.TRecord (name, _) ->
         match Map.tryFind name typeReg with
         | Some fields ->
@@ -533,9 +532,6 @@ let rcShapeOfTypeWithSums
             FixedBlock (List.length elemTypes * 8, elemTypes |> List.map (classify expandingSums))
         | AST.TEnumFields fieldTypes ->
             FixedBlock (List.length fieldTypes * 8, fieldTypes |> List.map (classify expandingSums))
-        // Uuid retains nominal identity for JSON planning, but its native
-        // ownership is still that of its underlying String representation.
-        | AST.TRecord ("Uuid", []) -> DynamicString
         | AST.TRecord (name, typeArgs) ->
             match Map.tryFind name typeReg with
             | Some fields ->

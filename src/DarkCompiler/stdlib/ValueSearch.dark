@@ -39,7 +39,7 @@ let __filterValues<'value>(branchId: String, namespaceParts: List<String>, value
             else remaining
         | None -> remaining
 
-// Uuid is a String alias in the compiler's AOT type model.
+// Uuid is an ordinary UUID(UInt128) newtype in the compiler's AOT type model.
 let findByType<'value>(branchId: String, targetNamespace: String, targetTypeHash: Darklang.LanguageTools.ProgramTypes.Hash) : List<Darklang.Stdlib.ValueSearch.FoundValue<value>> =
     let namespaceParts = Darklang.Stdlib.ValueSearch.parseNamespace(targetNamespace) in
     let runtimeHash = Darklang.LanguageTools.RuntimeTypes.Hash.Hash(Darklang.LanguageTools.ProgramTypes.hashToString(targetTypeHash)) in

@@ -893,7 +893,7 @@ module DateTime =
 
 module Uuid =
   let uuid (s: String) : Uuid =
-    (Stdlib.Uuid.parse_v0 s) |> Builtin.unwrap
+    (Stdlib.Uuid.parse s) |> Builtin.unwrap
 
   // empty
   Stdlib.Json.serialize<Uuid> (uuid "00000000-0000-0000-0000-000000000000") = "\"00000000-0000-0000-0000-000000000000\""

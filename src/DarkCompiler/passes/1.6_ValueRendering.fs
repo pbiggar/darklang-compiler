@@ -391,6 +391,7 @@ and private renderBody
                     long
                 )
              ), nextState)
+    | TSum ("Uuid", []) -> (call "Stdlib.Uuid.toString" [value], state)
     | TSum (typeName, typeArgs) ->
         match Map.tryFind typeName env.Sums with
         | None -> Crash.crash $"Missing sum metadata for value renderer: {typeName}"

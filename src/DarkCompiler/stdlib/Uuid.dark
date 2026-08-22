@@ -4,38 +4,96 @@
 
 module Stdlib.Uuid
 
-// Stdlib.Uuid - UUID v4 generation
-// ============================================================================
+// The canonical surface mirrors darklang/dark at
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. UUID is represented by the
+// root UUID(UInt128) sum rather than by a String alias.
 
-type ParseError = BadFormat | UnsupportedUuidParseError
-
-let toString(uuid: String) : String = uuid
-
-let toString_v0(uuid: String) : String = Stdlib.Uuid.toString(uuid)
+type ParseError = | BadFormat
 
 let __isHexByte(byte: Int64) : Bool =
     (byte >= 48 && byte <= 57) ||
     (byte >= 65 && byte <= 70) ||
     (byte >= 97 && byte <= 102)
 
-let __hasValidFormatAt(s: String, index: Int64) : Bool =
-    if index == 36 then
+let __hasHexAt(s: String, index: Int64, count: Int64) : Bool =
+    if count == 0 then
         true
     else
         let byte = Stdlib.String.getByteAt(s, index) in
-        if index == 8 || index == 13 || index == 18 || index == 23 then
-            byte == 45 && Stdlib.Uuid.__hasValidFormatAt(s, index + 1)
-        else
-            Stdlib.Uuid.__isHexByte(byte) && Stdlib.Uuid.__hasValidFormatAt(s, index + 1)
+        Stdlib.Uuid.__isHexByte(byte) && Stdlib.Uuid.__hasHexAt(s, index + 1, count - 1)
 
-let parse_v0(s: String) : Stdlib.Result.Result<String, Stdlib.Uuid.ParseError> =
-    if Stdlib.String.__byteLength(s) == 36 then
-        if Stdlib.Uuid.__hasValidFormatAt(s, 0) then
-            Ok(s)
-        else
-            Error(Stdlib.Uuid.ParseError.BadFormat)
+let __isHyphenated(s: String) : Bool =
+    Stdlib.String.__byteLength(s) == 36 &&
+    Stdlib.String.getByteAt(s, 8) == 45 &&
+    Stdlib.String.getByteAt(s, 13) == 45 &&
+    Stdlib.String.getByteAt(s, 18) == 45 &&
+    Stdlib.String.getByteAt(s, 23) == 45 &&
+    Stdlib.Uuid.__hasHexAt(s, 0, 8) &&
+    Stdlib.Uuid.__hasHexAt(s, 9, 4) &&
+    Stdlib.Uuid.__hasHexAt(s, 14, 4) &&
+    Stdlib.Uuid.__hasHexAt(s, 19, 4) &&
+    Stdlib.Uuid.__hasHexAt(s, 24, 12)
+
+let __hyphenatedDigits(s: String) : String =
+    Stdlib.String.__byteSlice(s, 0, 8) ++
+    Stdlib.String.__byteSlice(s, 9, 13) ++
+    Stdlib.String.__byteSlice(s, 14, 18) ++
+    Stdlib.String.__byteSlice(s, 19, 23) ++
+    Stdlib.String.__byteSlice(s, 24, 36)
+
+let __isX(s: String) : Bool =
+    Stdlib.String.__byteLength(s) == 68 &&
+    Stdlib.String.__byteSlice(s, 0, 3) == "{0x" &&
+    Stdlib.String.getByteAt(s, 11) == 44 &&
+    Stdlib.String.__byteSlice(s, 12, 14) == "0x" &&
+    Stdlib.String.getByteAt(s, 18) == 44 &&
+    Stdlib.String.__byteSlice(s, 19, 21) == "0x" &&
+    Stdlib.String.__byteSlice(s, 25, 29) == ",{0x" &&
+    Stdlib.String.getByteAt(s, 66) == 125 && Stdlib.String.getByteAt(s, 67) == 125 &&
+    Stdlib.Uuid.__hasHexAt(s, 3, 8) && Stdlib.Uuid.__hasHexAt(s, 14, 4) && Stdlib.Uuid.__hasHexAt(s, 21, 4) &&
+    Stdlib.Uuid.__hasHexAt(s, 29, 2) && Stdlib.String.getByteAt(s, 31) == 44 &&
+    Stdlib.String.__byteSlice(s, 32, 34) == "0x" && Stdlib.Uuid.__hasHexAt(s, 34, 2) && Stdlib.String.getByteAt(s, 36) == 44 &&
+    Stdlib.String.__byteSlice(s, 37, 39) == "0x" && Stdlib.Uuid.__hasHexAt(s, 39, 2) && Stdlib.String.getByteAt(s, 41) == 44 &&
+    Stdlib.String.__byteSlice(s, 42, 44) == "0x" && Stdlib.Uuid.__hasHexAt(s, 44, 2) && Stdlib.String.getByteAt(s, 46) == 44 &&
+    Stdlib.String.__byteSlice(s, 47, 49) == "0x" && Stdlib.Uuid.__hasHexAt(s, 49, 2) && Stdlib.String.getByteAt(s, 51) == 44 &&
+    Stdlib.String.__byteSlice(s, 52, 54) == "0x" && Stdlib.Uuid.__hasHexAt(s, 54, 2) && Stdlib.String.getByteAt(s, 56) == 44 &&
+    Stdlib.String.__byteSlice(s, 57, 59) == "0x" && Stdlib.Uuid.__hasHexAt(s, 59, 2) && Stdlib.String.getByteAt(s, 61) == 44 &&
+    Stdlib.String.__byteSlice(s, 62, 64) == "0x" && Stdlib.Uuid.__hasHexAt(s, 64, 2)
+
+let __xDigits(s: String) : String =
+    Stdlib.String.__byteSlice(s, 3, 11) ++ Stdlib.String.__byteSlice(s, 14, 18) ++ Stdlib.String.__byteSlice(s, 21, 25) ++
+    Stdlib.String.__byteSlice(s, 29, 31) ++ Stdlib.String.__byteSlice(s, 34, 36) ++ Stdlib.String.__byteSlice(s, 39, 41) ++
+    Stdlib.String.__byteSlice(s, 44, 46) ++ Stdlib.String.__byteSlice(s, 49, 51) ++ Stdlib.String.__byteSlice(s, 54, 56) ++
+    Stdlib.String.__byteSlice(s, 59, 61) ++ Stdlib.String.__byteSlice(s, 64, 66)
+
+let __hexDigit(byte: Int64) : Int =
+    if byte >= 48 && byte <= 57 then Stdlib.Int.fromInt64(byte - 48)
+    else if byte >= 65 && byte <= 70 then Stdlib.Int.fromInt64(byte - 55)
+    else Stdlib.Int.fromInt64(byte - 87)
+
+let __hexToIntAt(digits: String, index: Int64, value: Int) : Int =
+    if index == 32 then value
     else
-        Error(Stdlib.Uuid.ParseError.BadFormat)
+        Stdlib.Uuid.__hexToIntAt(
+            digits,
+            index + 1,
+            Stdlib.Int.add(Stdlib.Int.multiply(value, 16I), Stdlib.Uuid.__hexDigit(Stdlib.String.getByteAt(digits, index))) )
+
+let __parseDigits(digits: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
+    match Stdlib.Int.toUInt128(Stdlib.Uuid.__hexToIntAt(digits, 0, 0I)) with
+    | Some(value) -> Ok(UUID(value))
+    | None -> Builtin.testRuntimeError("UUID hex value exceeded UInt128")
+
+let parse(value: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
+    let s = Stdlib.String.trim(value) in
+    let length = Stdlib.String.__byteLength(s) in
+    if length == 32 && Stdlib.Uuid.__hasHexAt(s, 0, 32) then Stdlib.Uuid.__parseDigits(s)
+    else if Stdlib.Uuid.__isHyphenated(s) then Stdlib.Uuid.__parseDigits(Stdlib.Uuid.__hyphenatedDigits(s))
+    else if length == 38 && ((Stdlib.String.getByteAt(s, 0) == 123 && Stdlib.String.getByteAt(s, 37) == 125) || (Stdlib.String.getByteAt(s, 0) == 40 && Stdlib.String.getByteAt(s, 37) == 41)) then
+        let inner = Stdlib.String.__byteSlice(s, 1, 37) in
+        if Stdlib.Uuid.__isHyphenated(inner) then Stdlib.Uuid.__parseDigits(Stdlib.Uuid.__hyphenatedDigits(inner)) else Error(Stdlib.Uuid.ParseError.BadFormat)
+    else if Stdlib.Uuid.__isX(s) then Stdlib.Uuid.__parseDigits(Stdlib.Uuid.__xDigits(s))
+    else Error(Stdlib.Uuid.ParseError.BadFormat)
 
 // Helper: convert nibble (0-15) to hex char
 let __nibbleToHex(n: Int64) : String =
@@ -53,9 +111,32 @@ let __byteToHex(value: Int64, shift: Int64) : String =
     let lo = byte & 15 in
     Stdlib.Uuid.__nibbleToHex(hi) ++ Stdlib.Uuid.__nibbleToHex(lo)
 
+let __intToHex(value: Int, acc: String) : String =
+    if Stdlib.Int.equals(value, 0I) then acc
+    else
+        match Stdlib.Int.remainder(value, 16I) with
+        | Ok(remainder) ->
+            match Stdlib.Int.toInt64(remainder) with
+            | Some(nibble) -> Stdlib.Uuid.__intToHex(Stdlib.Int.divide(value, 16I), Stdlib.Uuid.__nibbleToHex(nibble) ++ acc)
+            | None -> Builtin.testRuntimeError("UUID remainder was not an Int64")
+        | Error(message) -> Builtin.testRuntimeError(message)
+
+let __padHex(value: String) : String =
+    let remaining = 32 - Stdlib.String.__byteLength(value) in
+    if remaining == 0 then value else Stdlib.String.repeat("0", Stdlib.Int.fromInt64(remaining)) ++ value
+
+/// Stringify UUID values as 8-4-4-4-12 lower-case hexadecimal digits.
+let toString(uuid: Uuid) : String =
+    match uuid with
+    | UUID(value) ->
+        let hex = Stdlib.Uuid.__padHex(Stdlib.Uuid.__intToHex(Stdlib.Int.fromUInt128(value), "")) in
+        Stdlib.String.__byteSlice(hex, 0, 8) ++ "-" ++ Stdlib.String.__byteSlice(hex, 8, 12) ++ "-" ++
+        Stdlib.String.__byteSlice(hex, 12, 16) ++ "-" ++ Stdlib.String.__byteSlice(hex, 16, 20) ++ "-" ++
+        Stdlib.String.__byteSlice(hex, 20, 32)
+
 // Generate UUID v4: xxxxxxxx-xxxx-4xxx-Nxxx-xxxxxxxxxxxx
 // where N is 8, 9, a, or b (variant bits)
-let generate() : String =
+let generate() : Uuid =
     let high = Stdlib.Random.int64() in
     let low = Stdlib.Random.int64() in
     // Set version (4) in byte 6: clear upper nibble, set to 4
@@ -69,7 +150,7 @@ let generate() : String =
     let lowWithVariant = (low & 4611686018427387903) ^ (-9223372036854775808) in
     // Format: 8-4-4-4-12 hex chars
     // bytes 0-3 (bits 32-63 of high)
-    Stdlib.Uuid.__byteToHex(highWithVersion, 56) ++
+    let text = Stdlib.Uuid.__byteToHex(highWithVersion, 56) ++
     Stdlib.Uuid.__byteToHex(highWithVersion, 48) ++
     Stdlib.Uuid.__byteToHex(highWithVersion, 40) ++
     Stdlib.Uuid.__byteToHex(highWithVersion, 32) ++ "-" ++
@@ -88,6 +169,9 @@ let generate() : String =
     Stdlib.Uuid.__byteToHex(lowWithVariant, 24) ++
     Stdlib.Uuid.__byteToHex(lowWithVariant, 16) ++
     Stdlib.Uuid.__byteToHex(lowWithVariant, 8) ++
-    Stdlib.Uuid.__byteToHex(lowWithVariant, 0)
+    Stdlib.Uuid.__byteToHex(lowWithVariant, 0) in
+    match Stdlib.Uuid.parse(text) with
+    | Ok(uuid) -> uuid
+    | Error(_) -> Builtin.testRuntimeError("Generated UUID was not canonical")
 
 // =============================================================================

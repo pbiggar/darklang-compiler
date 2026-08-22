@@ -1218,7 +1218,7 @@ let private validateJsonTargetType
             match typ with
             | TUnit | TBool | TInt8 | TUInt8 | TInt16 | TUInt16 | TInt32 | TUInt32
             | TInt64 | TUInt64 | TInt128 | TUInt128 | TInt | TFloat64 | TChar | TString | TDateTime -> Ok ()
-            | TRecord ("Uuid", []) -> Ok ()
+            | TSum ("Uuid", []) -> Ok ()
             | TTuple types | TEnumFields types -> validateAll types
             | TList inner -> validate visited inner
             | TDict (TString, inner) -> validate visited inner

@@ -1,13 +1,35 @@
 // Stdlib.Uuid Tests
 //
-// Tests for UUID v4 generation
+// Canonical UUIDs are the ordinary UUID(UInt128) newtype. These cases mirror
+// the pinned interpreter's public parse/format behavior and exercise the
+// compiler's ordinary sum representation through its public boundaries.
 
-// ===================================================================
-// Stdlib.Uuid.generate - Generate UUID v4 string
-// ===================================================================
+// Accepted Guid spellings normalize to lower-case hyphenated text.
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("3700adbc7a464ff481d345afb03f6e2d"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse(" {3700adbc-7a46-4ff4-81d3-45afb03f6e2d} "))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("(3700adbc-7a46-4ff4-81d3-45afb03f6e2d)"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0x3700adbc,0x7a46,0x4ff4,{0x81,0xd3,0x45,0xaf,0xb0,0x3f,0x6e,0x2d}}"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
 
-// UUID length is 36 characters (8-4-4-4-12 with hyphens)
-Stdlib.String.length(Stdlib.Uuid.generate()) = 36I
+// Invalid input has the sole canonical public error case.
+Stdlib.Uuid.parse("not a uuid") = Error(Stdlib.Uuid.ParseError.BadFormat)
+Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2") = Error(Stdlib.Uuid.ParseError.BadFormat)
 
-// Multiple calls return different UUIDs (probabilistic)
-(Stdlib.Uuid.generate() != Stdlib.Uuid.generate()) = true
+// The UUID wrapper is distinct from String and compares structurally.
+Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) == Builtin.unwrap(Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2d")) = true
+Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) != Builtin.unwrap(Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2e")) = true
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in [uuid] = [uuid]
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in let record = { uuid = uuid } in record.uuid = uuid
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in Ok(uuid) = Ok(uuid)
+
+// JSON and visible result rendering share the canonical formatter.
+Stdlib.Json.serialize<Uuid>(Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D"))) = "\"3700adbc-7a46-4ff4-81d3-45afb03f6e2d\""
+Stdlib.Json.parse<Uuid>("\"3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D\"") = Ok(Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")))
+Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) = stdout="3700adbc-7a46-4ff4-81d3-45afb03f6e2d\n"
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in (uuid, [uuid]) = stdout="(3700adbc-7a46-4ff4-81d3-45afb03f6e2d, [3700adbc-7a46-4ff4-81d3-45afb03f6e2d])\n"
+
+// v4 output is a UUID value whose canonical spelling has RFC-4122 bits.
+Stdlib.String.getByteAt(Stdlib.Uuid.toString(Stdlib.Uuid.generate()), 14) == 52
+
+// The old String parser is intentionally isolated from canonical Uuid.
+Stdlib.Uuid.Compatibility.parse_v0("3700adbc-7a46-4ff4-81d3-45afb03f6e2d") = Ok("3700adbc-7a46-4ff4-81d3-45afb03f6e2d")
