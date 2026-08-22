@@ -1,6 +1,6 @@
 // Tuple parity regression contract. Compared against compiler evidence
 // b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899 and darklang/dark
-// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d; current HEAD f7c14a00174ae2af806686daca2b7a65b08ae71a.
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d; current HEAD 478068ace62f49718ecfeeb77b8f8bbad5a3e318.
 
 () = ()
 (42) = 42

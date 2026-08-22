@@ -1,7 +1,7 @@
 # Tuple parity
 
 This parity check records compiler HEAD
-`f7c14a00174ae2af806686daca2b7a65b08ae71a`, approved compiler evidence
+`478068ace62f49718ecfeeb77b8f8bbad5a3e318`, approved compiler evidence
 `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`, and darklang/dark revision
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
 `8a402797ccccda0ca47b516b356ae1de4d670038` was used only as a lead and its
@@ -29,8 +29,8 @@ that left-to-right order. Bare comma tuples are accepted only as match
 scrutinees. Interpreter syntax rejects numeric projection; callers use
 destructuring or `Stdlib.Tuple2`/`Stdlib.Tuple3`.
 
-The legacy compiler syntax retains numeric projection as a documented
-compiler-only compatibility extension while maintained compiler-mode fixtures
-are migrated independently. It is not part of interpreter-syntax parity.
+The legacy compiler parser retains numeric projection only as a documented
+compiler-only compatibility extension for existing compiler-mode fixtures; the
+interpreter parser rejects it. It is not part of interpreter-syntax parity.
 Internal `TupleAccess`/native slot projection remains an AOT-only typed lowering
-operation, not public source syntax.
+operation, not public interpreter source syntax.
