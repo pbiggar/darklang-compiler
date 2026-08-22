@@ -4274,13 +4274,25 @@ let rec generateStructuralEquality
             let (payloadEqVar, vg6) = ANF.freshVar vg5
             let (resultVar, vg7) = ANF.freshVar vg6
 
+            // UInt128 values are represented by canonical decimal strings in
+            // ANF. UUID is a nominal single-case sum over UInt128, so its
+            // payload needs content equality rather than pointer equality.
+            // Other sums retain the established primitive payload comparison;
+            // multi-variant, heterogeneous payload dispatch is a separate
+            // structural-equality design boundary.
+            let payloadComparison =
+                if typeName = "Uuid" then
+                    ANF.Call ("__string_eq", [ANF.Var leftPayloadVar; ANF.Var rightPayloadVar])
+                else
+                    ANF.Prim (ANF.Eq, ANF.Var leftPayloadVar, ANF.Var rightPayloadVar)
+
             let bindings = [
                 (leftTagVar, ANF.TupleGet (leftAtom, 0))
                 (rightTagVar, ANF.TupleGet (rightAtom, 0))
                 (tagEqVar, ANF.Prim (ANF.Eq, ANF.Var leftTagVar, ANF.Var rightTagVar))
                 (leftPayloadVar, ANF.TupleGet (leftAtom, 1))
                 (rightPayloadVar, ANF.TupleGet (rightAtom, 1))
-                (payloadEqVar, ANF.Prim (ANF.Eq, ANF.Var leftPayloadVar, ANF.Var rightPayloadVar))
+                (payloadEqVar, payloadComparison)
                 (resultVar, ANF.Prim (ANF.And, ANF.Var tagEqVar, ANF.Var payloadEqVar))
             ]
             (bindings, ANF.Var resultVar, vg7)

@@ -10,26 +10,28 @@ Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("3700adbc7a464ff481d345afb
 Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse(" {3700adbc-7a46-4ff4-81d3-45afb03f6e2d} "))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
 Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("(3700adbc-7a46-4ff4-81d3-45afb03f6e2d)"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
 Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0x3700adbc,0x7a46,0x4ff4,{0x81,0xd3,0x45,0xaf,0xb0,0x3f,0x6e,0x2d}}"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0X3700ADBC,0X7A46,0X4FF4,{0X81,0XD3,0X45,0XAF,0XB0,0X3F,0X6E,0X2D}}"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
 
 // Invalid input has the sole canonical public error case.
 Stdlib.Uuid.parse("not a uuid") = Error(Stdlib.Uuid.ParseError.BadFormat)
 Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2") = Error(Stdlib.Uuid.ParseError.BadFormat)
 
 // The UUID wrapper is distinct from String and compares structurally.
-Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) == Builtin.unwrap(Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2d")) = true
-Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) != Builtin.unwrap(Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2e")) = true
-let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in [uuid] = [uuid]
-let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in let record = { uuid = uuid } in record.uuid = uuid
-let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in Ok(uuid) = Ok(uuid)
+let left = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in let right = Builtin.unwrap(Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2d")) in if left == right then 0 else 1 = stdout="0\n"
+let left = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in let right = Builtin.unwrap(Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2e")) in if left != right then 0 else 1 = stdout="0\n"
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in [uuid] == [uuid] = true
+type UuidRecord = { uuid: Uuid }
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in let record = UuidRecord { uuid = uuid } in record.uuid == uuid = true
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in Ok(uuid) == Ok(uuid) = true
 
 // JSON and visible result rendering share the canonical formatter.
 Stdlib.Json.serialize<Uuid>(Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D"))) = "\"3700adbc-7a46-4ff4-81d3-45afb03f6e2d\""
-Stdlib.Json.parse<Uuid>("\"3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D\"") = Ok(Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")))
+let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in Stdlib.Json.parse<Uuid>("\"3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D\"") == Ok(uuid) = true
 Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) = stdout="3700adbc-7a46-4ff4-81d3-45afb03f6e2d\n"
 let uuid = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in (uuid, [uuid]) = stdout="(3700adbc-7a46-4ff4-81d3-45afb03f6e2d, [3700adbc-7a46-4ff4-81d3-45afb03f6e2d])\n"
 
 // v4 output is a UUID value whose canonical spelling has RFC-4122 bits.
-Stdlib.String.getByteAt(Stdlib.Uuid.toString(Stdlib.Uuid.generate()), 14) == 52
+Stdlib.String.getByteAt(Stdlib.Uuid.toString(Stdlib.Uuid.generate()), 14) == 52 = true
 
 // The old String parser is intentionally isolated from canonical Uuid.
 Stdlib.Uuid.Compatibility.parse_v0("3700adbc-7a46-4ff4-81d3-45afb03f6e2d") = Ok("3700adbc-7a46-4ff4-81d3-45afb03f6e2d")

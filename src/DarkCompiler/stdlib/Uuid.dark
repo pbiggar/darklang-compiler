@@ -15,6 +15,12 @@ let __isHexByte(byte: Int64) : Bool =
     (byte >= 65 && byte <= 70) ||
     (byte >= 97 && byte <= 102)
 
+// System.Guid.TryParse, the pinned interpreter implementation, recognizes
+// the X-format marker case-insensitively.
+let __hasHexPrefixAt(s: String, index: Int64) : Bool =
+    Stdlib.String.getByteAt(s, index) == 48 &&
+    (Stdlib.String.getByteAt(s, index + 1) == 120 || Stdlib.String.getByteAt(s, index + 1) == 88)
+
 let __hasHexAt(s: String, index: Int64, count: Int64) : Bool =
     if count == 0 then
         true
@@ -43,22 +49,22 @@ let __hyphenatedDigits(s: String) : String =
 
 let __isX(s: String) : Bool =
     Stdlib.String.__byteLength(s) == 68 &&
-    Stdlib.String.__byteSlice(s, 0, 3) == "{0x" &&
+    Stdlib.String.getByteAt(s, 0) == 123 && Stdlib.Uuid.__hasHexPrefixAt(s, 1) &&
     Stdlib.String.getByteAt(s, 11) == 44 &&
-    Stdlib.String.__byteSlice(s, 12, 14) == "0x" &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 12) &&
     Stdlib.String.getByteAt(s, 18) == 44 &&
-    Stdlib.String.__byteSlice(s, 19, 21) == "0x" &&
-    Stdlib.String.__byteSlice(s, 25, 29) == ",{0x" &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 19) &&
+    Stdlib.String.getByteAt(s, 25) == 44 && Stdlib.String.getByteAt(s, 26) == 123 && Stdlib.Uuid.__hasHexPrefixAt(s, 27) &&
     Stdlib.String.getByteAt(s, 66) == 125 && Stdlib.String.getByteAt(s, 67) == 125 &&
     Stdlib.Uuid.__hasHexAt(s, 3, 8) && Stdlib.Uuid.__hasHexAt(s, 14, 4) && Stdlib.Uuid.__hasHexAt(s, 21, 4) &&
     Stdlib.Uuid.__hasHexAt(s, 29, 2) && Stdlib.String.getByteAt(s, 31) == 44 &&
-    Stdlib.String.__byteSlice(s, 32, 34) == "0x" && Stdlib.Uuid.__hasHexAt(s, 34, 2) && Stdlib.String.getByteAt(s, 36) == 44 &&
-    Stdlib.String.__byteSlice(s, 37, 39) == "0x" && Stdlib.Uuid.__hasHexAt(s, 39, 2) && Stdlib.String.getByteAt(s, 41) == 44 &&
-    Stdlib.String.__byteSlice(s, 42, 44) == "0x" && Stdlib.Uuid.__hasHexAt(s, 44, 2) && Stdlib.String.getByteAt(s, 46) == 44 &&
-    Stdlib.String.__byteSlice(s, 47, 49) == "0x" && Stdlib.Uuid.__hasHexAt(s, 49, 2) && Stdlib.String.getByteAt(s, 51) == 44 &&
-    Stdlib.String.__byteSlice(s, 52, 54) == "0x" && Stdlib.Uuid.__hasHexAt(s, 54, 2) && Stdlib.String.getByteAt(s, 56) == 44 &&
-    Stdlib.String.__byteSlice(s, 57, 59) == "0x" && Stdlib.Uuid.__hasHexAt(s, 59, 2) && Stdlib.String.getByteAt(s, 61) == 44 &&
-    Stdlib.String.__byteSlice(s, 62, 64) == "0x" && Stdlib.Uuid.__hasHexAt(s, 64, 2)
+    Stdlib.Uuid.__hasHexPrefixAt(s, 32) && Stdlib.Uuid.__hasHexAt(s, 34, 2) && Stdlib.String.getByteAt(s, 36) == 44 &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 37) && Stdlib.Uuid.__hasHexAt(s, 39, 2) && Stdlib.String.getByteAt(s, 41) == 44 &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 42) && Stdlib.Uuid.__hasHexAt(s, 44, 2) && Stdlib.String.getByteAt(s, 46) == 44 &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 47) && Stdlib.Uuid.__hasHexAt(s, 49, 2) && Stdlib.String.getByteAt(s, 51) == 44 &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 52) && Stdlib.Uuid.__hasHexAt(s, 54, 2) && Stdlib.String.getByteAt(s, 56) == 44 &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 57) && Stdlib.Uuid.__hasHexAt(s, 59, 2) && Stdlib.String.getByteAt(s, 61) == 44 &&
+    Stdlib.Uuid.__hasHexPrefixAt(s, 62) && Stdlib.Uuid.__hasHexAt(s, 64, 2)
 
 let __xDigits(s: String) : String =
     Stdlib.String.__byteSlice(s, 3, 11) ++ Stdlib.String.__byteSlice(s, 14, 18) ++ Stdlib.String.__byteSlice(s, 21, 25) ++

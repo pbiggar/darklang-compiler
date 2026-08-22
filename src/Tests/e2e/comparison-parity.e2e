@@ -32,7 +32,7 @@ Builtin.testNan_v0 != Builtin.testNan_v0 = true
 
 // The public polymorphic prelude shares the typed equality plan used by the
 // operators. Cover every scalar admitted by both runtimes, including the
-// compiler's String-backed Uuid representation.
+// compiler's distinct Uuid representation.
 Stdlib.equals<Unit>((), ()) = true
 Stdlib.notEquals<Bool>(true, false) = true
 Stdlib.equals<Int8>(1y, 1y) = true
@@ -52,7 +52,7 @@ Stdlib.notEquals<Float>(Builtin.testNan_v0, Builtin.testNan_v0) = true
 Stdlib.equals<Float>(0.0, -0.0) = true
 Stdlib.equals<Char>('a', 'a') = true
 Stdlib.notEquals<String>("dark", "lang") = true
-Stdlib.equals<String>(Builtin.unwrap(Stdlib.Uuid.parse_v0("01234567-89ab-cdef-0123-456789abcdef")), Builtin.unwrap(Stdlib.Uuid.parse_v0("01234567-89ab-cdef-0123-456789abcdef"))) = true
+let comparisonUuid = Builtin.unwrap(Stdlib.Uuid.parse("01234567-89ab-cdef-0123-456789abcdef")) in Stdlib.equals<Uuid>(comparisonUuid, comparisonUuid) = true
 let comparisonDate = Builtin.unwrap(Stdlib.DateTime.parse("2021-07-28T22:42:36Z")) in Stdlib.equals<DateTime>(comparisonDate, comparisonDate) = true
 Stdlib.notEquals<DateTime>(Builtin.unwrap(Stdlib.DateTime.parse("2021-07-28T22:42:36Z")), Builtin.unwrap(Stdlib.DateTime.parse("2019-07-28T22:42:36Z"))) = true
 

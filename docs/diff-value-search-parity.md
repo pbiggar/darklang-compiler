@@ -116,6 +116,8 @@ case preserves the interpreter's canonical two-field declaration. The private
 hash/empty-argument matcher and the recursive replacement for the interpreter's
 generic `filterMap` are compiler-source adaptations only; they preserve the
 public type identities, ordering, and failure behavior. The copied
-`findByType` source spells its branch identifier as `String` because this
-compiler models `Uuid` as a `String` alias; it does not create a distinct
-runtime identity or behavior.
+`findByType` source spells its branch identifier as `String` because branch
+identifiers are textual in this compiler adaptation. UUID values themselves
+are distinct `Uuid = UUID(UInt128)` values; canonical parsing, formatting,
+equality, JSON serialization, and result rendering are handled by the Uuid
+parity implementation.
