@@ -33,6 +33,32 @@ let testLayoutFollowsFalseAndJumpSuccessors () : TestResult =
         if labels = expected then Ok ()
         else Error $"Expected deterministic fallthrough layout {expected}, got {labels}"
 
+let testLayoutLeavesMissingSuccessorValidationToConsumers () : TestResult =
+    let entry = LIR.Label "entry"
+    let missing = LIR.Label "missing"
+    let entryBlock : LIR.BasicBlock = {
+        Label = entry
+        Instrs = []
+        Terminator = LIR.Jump missing
+    }
+    let cfg : LIR.CFG = { Entry = entry; Blocks = Map.ofList [entry, entryBlock] }
+
+    match LIR.layoutBlocks cfg with
+    | Ok [block] when block.Label = entry -> Ok ()
+    | Ok blocks -> Error $"Expected only the entry block, got {blocks |> List.map (fun block -> block.Label)}"
+    | Error e -> Error $"Layout preempted consumer validation of a missing successor: {e}"
+
+let testLayoutReportsMissingEntryBlock () : TestResult =
+    let entry = LIR.Label "entry"
+    let cfg : LIR.CFG = { Entry = entry; Blocks = Map.empty }
+
+    match LIR.layoutBlocks cfg with
+    | Error e when e.Contains "missing entry block" -> Ok ()
+    | Error e -> Error $"Expected missing entry block error, got '{e}'"
+    | Ok _ -> Error "Expected layout to reject a missing entry block"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("LIR layout follows false and jump successor chains", testLayoutFollowsFalseAndJumpSuccessors)
+    ("LIR layout leaves missing successor validation to consumers", testLayoutLeavesMissingSuccessorValidationToConsumers)
+    ("LIR layout reports missing entry block", testLayoutReportsMissingEntryBlock)
 ]

@@ -240,12 +240,17 @@ let layoutBlocks (cfg: CFG) : Result<BasicBlock list, string> =
                 let visited = Set.add label visited
                 let reversedBlocks = block :: reversedBlocks
                 match preferredSuccessor block.Terminator with
-                | Some successor when not (Set.contains successor visited) ->
+                // Layout orders the blocks it is given; malformed successor
+                // references remain the consumer's responsibility so layout
+                // does not mask a more specific backend diagnostic.
+                | Some successor when
+                    not (Set.contains successor visited)
+                    && Map.containsKey successor cfg.Blocks ->
                     followChain visited reversedBlocks successor
                 | _ -> Ok (visited, reversedBlocks)
 
     match Map.tryFind cfg.Entry cfg.Blocks with
-    | None -> Error $"LIR layout: CFG entry block {cfg.Entry} is missing"
+    | None -> Error $"LIR layout: CFG missing entry block {cfg.Entry}"
     | Some _ ->
         followChain Set.empty [] cfg.Entry
         |> Result.bind (fun (initialVisited, initialBlocks) ->
