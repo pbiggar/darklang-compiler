@@ -6898,9 +6898,10 @@ let convertFunction
 
         // Parameter stack stores and parallel register moves are already the first
         // instructions in the allocated CFG entry block.
-        // Combine: function label + CLI init + prologue + heap init + CFG body + epilogue label + epilogue
-        // All Ret terminators jump to the epilogue label
-        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ heapOverflowTrap @ epilogueLabelInstr @ epilogue)
+        // Keep the epilogue immediately after the CFG so its final Ret terminator
+        // can fall through. The terminating epilogue makes the overflow trap a
+        // cold out-of-line block reached only by explicit allocation branches.
+        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ epilogueLabelInstr @ epilogue @ heapOverflowTrap)
 
 type private RegisterLifetimeStep =
     | Unrelated

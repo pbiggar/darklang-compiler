@@ -122,16 +122,16 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let entry = LIR.Label "arm64_layout_entry"
     let trueBlock = LIR.Label "arm64_layout_true"
     let falseBlock = LIR.Label "arm64_layout_false"
-    let block label terminator : LIR.BasicBlock = { Label = label; Instrs = []; Terminator = terminator }
+    let block label instrs terminator : LIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = terminator }
     let func : LIR.Function = {
         Name = "arm64_layout"
         TypedParams = []
         CFG = {
             Entry = entry
             Blocks = Map.ofList [
-                entry, block entry (LIR.Branch (LIR.Physical LIR.X0, trueBlock, falseBlock))
-                trueBlock, block trueBlock LIR.Ret
-                falseBlock, block falseBlock LIR.Ret
+                entry, block entry [] (LIR.Branch (LIR.Physical LIR.X0, trueBlock, falseBlock))
+                trueBlock, block trueBlock [] LIR.Ret
+                falseBlock, block falseBlock [LIR.HeapAlloc (LIR.Physical LIR.X1, 8)] LIR.Ret
             ]
         }
         StackSize = 0
@@ -148,9 +148,15 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     | Ok instrs ->
         let falseJump = ARM64Symbolic.B_label "arm64_layout_false"
         let epilogueJumps = instrs |> List.filter ((=) (ARM64Symbolic.B_label "_epilogue_arm64_layout")) |> List.length
+        let epilogueIndex = instrs |> List.tryFindIndex ((=) (ARM64Symbolic.Label "_epilogue_arm64_layout"))
+        let overflowIndex = instrs |> List.tryFindIndex ((=) (ARM64Symbolic.Label "__heap_oom_arm64_layout"))
         if List.contains falseJump instrs then Error "ARM64 emitted a jump to the immediately following false block"
         elif epilogueJumps <> 1 then Error $"ARM64 emitted {epilogueJumps} jumps to the epilogue; expected one before the final fallthrough"
-        else Ok ()
+        else
+            match epilogueIndex, overflowIndex with
+            | Some epilogue, Some overflow when epilogue < overflow -> Ok ()
+            | Some epilogue, Some overflow -> Error $"ARM64 heap-overflow trap at {overflow} blocks final return fallthrough to epilogue at {epilogue}"
+            | _ -> Error "ARM64 allocation fixture did not emit both epilogue and heap-overflow labels"
 
 let private makeEmptyFunction
     (name: string)

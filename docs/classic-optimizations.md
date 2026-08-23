@@ -627,7 +627,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: CFG fallthrough block placement
 - Taxonomy category: Control-flow simplification
 - Priority/rationale: Deterministic successor-chain layout makes a conditional false edge and direct jumps fall through, removing avoidable backend branches without profile data.
-- Notes: Implemented in `LIR.layoutBlocks` and both native code generators. Entry remains first; chains prefer the false successor of conditional terminators and the target of direct jumps, with remaining chains begun in label order. LIR layout and ARM64/x64 generated-code tests retain the focused proof that a three-block branch removes its false-edge jump and the final return-to-epilogue jump.
+- Notes: Implemented in `LIR.layoutBlocks` and both native code generators. Entry remains first; chains prefer the false successor of conditional terminators and the target of direct jumps, with remaining chains begun in label order. LIR layout and ARM64/x64 generated-code tests retain the focused proof that a three-block branch removes its false-edge jump and the final return-to-epilogue jump. ARM64 keeps the shared allocation-overflow trap after the terminating epilogue so allocation-using functions preserve that final fallthrough without entering the cold error path.
 
 ### Linear basic-block merging
 
