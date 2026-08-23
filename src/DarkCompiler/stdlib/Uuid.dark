@@ -197,9 +197,6 @@ let generate() : Uuid =
     let lowWithVariant = (low & 4611686018427387903L) ^ (-9223372036854775808L) in
     // Format: 8-4-4-4-12 hex chars
     // bytes 0-3 (bits 32-63 of high)
-    Stdlib.Uuid.__byteToHex(highWithVersion, 56L) ++
-    Stdlib.Uuid.__byteToHex(highWithVersion, 48L) ++
-    Stdlib.Uuid.__byteToHex(highWithVersion, 40L) ++
     let text = Stdlib.Uuid.__byteToHex(highWithVersion, 56L) ++
     Stdlib.Uuid.__byteToHex(highWithVersion, 48L) ++
     Stdlib.Uuid.__byteToHex(highWithVersion, 40L) ++
