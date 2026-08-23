@@ -37,6 +37,10 @@ type InliningConfig = {
     MaxBoundedLoopIterations: int
     /// Maximum primitive bindings introduced by one bounded-loop expansion
     MaxBoundedLoopExpansion: int
+    /// Maximum body size for a tuple-return call whose every element is projected immediately
+    MaxProjectedTupleInlineSize: int
+    /// Maximum projected-tuple calls expanded in one caller
+    MaxProjectedTupleInlineSites: int
 }
 
 /// Default inlining configuration
@@ -46,6 +50,8 @@ let defaultConfig = {
     MaxExternalInlineSites = 8
     MaxBoundedLoopIterations = 8
     MaxBoundedLoopExpansion = 48
+    MaxProjectedTupleInlineSize = 64
+    MaxProjectedTupleInlineSites = 12
 }
 
 /// Information about a function for inlining decisions
@@ -506,6 +512,79 @@ let inlineCallBody (info: FunctionInfo) (args: Atom list) (varGen: VarGen)
 
     (bodyWithLiteralBindings, varGen'')
 
+/// Return the elements of a tuple allocated solely to form a function result.
+/// Such a tuple has no observable identity before its caller projects it.
+let rec private returnedTupleElements (expr: AExpr) : Atom list option =
+    match expr with
+    | Let (tupleId, TupleAlloc elements, Return (Var returnedId)) when tupleId = returnedId ->
+        Some elements
+    | Let (_, _, body) -> returnedTupleElements body
+    | Return _
+    | If _ -> None
+
+/// Replace immediate, exhaustive projections of an inlined tuple result with
+/// direct bindings to its elements. The explicit bindings preserve ANF order.
+let private bindProjectedTupleResult
+    (resultId: TempId)
+    (elements: Atom list)
+    (continuation: AExpr)
+    : AExpr option =
+    let expectedIndexes = [0 .. List.length elements - 1]
+    let rec collect projections remaining =
+        match remaining with
+        | Let (projectionId, TupleGet (Var tupleId, index), body) when tupleId = resultId ->
+            collect ((projectionId, index) :: projections) body
+        | _ -> (List.rev projections, remaining)
+    let (projections, rest) = collect [] continuation
+    let indexes = projections |> List.map snd
+    if List.sort indexes <> expectedIndexes || List.length projections <> List.length elements then
+        None
+    else
+        let elementByIndex = List.zip expectedIndexes elements |> Map.ofList
+        List.foldBack (fun (projectionId, index) body ->
+            match Map.tryFind index elementByIndex with
+            | Some element -> Let (projectionId, Atom element, body)
+            | None -> Crash.crash "ANF_Inlining: exhaustive tuple projection index disappeared") projections rest
+        |> Some
+
+/// Substitute a returned tuple allocation with its projection continuation.
+let rec private substituteProjectedTupleReturn
+    (resultId: TempId)
+    (continuation: AExpr)
+    (expr: AExpr)
+    : AExpr option =
+    match expr with
+    | Let (tupleId, TupleAlloc elements, Return (Var returnedId)) when tupleId = returnedId ->
+        bindProjectedTupleResult resultId elements continuation
+    | Let (id, cexpr, body) ->
+        substituteProjectedTupleReturn resultId continuation body
+        |> Option.map (fun body' -> Let (id, cexpr, body'))
+    | Return _
+    | If _ -> None
+
+let private isProjectedTupleInlineCandidate (info: FunctionInfo) (config: InliningConfig) : bool =
+    info.Size <= config.MaxProjectedTupleInlineSize
+    && not info.IsRecursive
+    && not info.HasClosures
+    && not info.HasTailCalls
+    && Option.isSome (returnedTupleElements info.Func.Body)
+
+let rec private countProjectedTupleCalls
+    (funcs: Map<string, FunctionInfo>)
+    (expr: AExpr)
+    : int =
+    match expr with
+    | Let (_, Call (name, _), body) ->
+        let thisCall =
+            match Map.tryFind name funcs with
+            | Some info when Option.isSome (returnedTupleElements info.Func.Body) -> 1
+            | _ -> 0
+        thisCall + countProjectedTupleCalls funcs body
+    | Let (_, _, body) -> countProjectedTupleCalls funcs body
+    | Return _ -> 0
+    | If (_, thenBranch, elseBranch) ->
+        countProjectedTupleCalls funcs thenBranch + countProjectedTupleCalls funcs elseBranch
+
 type private BoundedRecursiveLoop = {
     InductionParam: TempId
     Bound: int64
@@ -695,6 +774,22 @@ let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
             | None ->
                 let (body', varGen') = inlineInExpr funcs config depth varGen body
                 (Let (tid, Call (funcName, args), body'), varGen')
+        | Some info
+            when isProjectedTupleInlineCandidate info config
+                 && countProjectedTupleCalls funcs expr <= config.MaxProjectedTupleInlineSites ->
+            // This is deliberately narrower than ordinary inlining: the
+            // function's only aggregate result must be consumed immediately
+            // by exhaustive projections. Replacing those projections with the
+            // returned elements preserves evaluation order and avoids forming
+            // the otherwise non-escaping tuple, while the site cap bounds code
+            // growth in callers such as nbody's unrolled pair-update step.
+            let (body', varGen') = inlineInExpr funcs config depth varGen body
+            let (inlinedBody, varGen'') = inlineCallBody info args varGen'
+            match substituteProjectedTupleReturn tid body' inlinedBody with
+            | Some specialized ->
+                inlineInExpr funcs config (depth + 1) varGen'' specialized
+            | None ->
+                (Let (tid, Call (funcName, args), body'), varGen'')
         | Some info when shouldInline info config depth ->
             // Only calls inside the callee body increase nesting depth. The
             // continuation remains at the caller's depth, so independent

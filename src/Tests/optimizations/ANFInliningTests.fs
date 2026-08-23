@@ -431,6 +431,45 @@ let testSequentialCallsDoNotConsumeInlineDepth () : TestResult =
     else
         Error $"Expected all sequential calls to inline, but found {remainingCalls}"
 
+let testImmediateTupleProjectionsInlineLargeProducer () : TestResult =
+    let param = { Id = TempId 0; Type = AST.TInt64 }
+    let rec bindings remaining previousId =
+        if remaining = 0 then
+            Let (
+                TempId 30,
+                TupleAlloc [Var previousId; Var param.Id],
+                Return (Var (TempId 30))
+            )
+        else
+            let nextId = TempId (10 + remaining)
+            Let (nextId, Prim (Add, Var previousId, intAtom 1L), bindings (remaining - 1) nextId)
+    let producer =
+        { Name = "largePair"
+          TypedParams = [param]
+          ReturnType = AST.TTuple [AST.TInt64; AST.TInt64]
+          ReturnOwnership = OwnedReturn
+          Body = bindings 21 param.Id }
+    let main =
+        Let (
+            TempId 40,
+            Call ("largePair", [intAtom 1L]),
+            Let (
+                TempId 41,
+                TupleGet (Var (TempId 40), 0),
+                Let (
+                    TempId 42,
+                    TupleGet (Var (TempId 40), 1),
+                    Return (Var (TempId 42))
+                )
+            )
+        )
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramDefault (Program ([producer], main))
+    if containsCall "largePair" inlinedMain then
+        Error "Expected an immediately projected tuple result to inline across the call boundary"
+    else
+        Ok ()
+
 let tests = [
     ("Inlining literal args removes call", testInliningWithLiteralArgumentsRemovesCall)
     ("Inlining literal args binds literal TempId", testInliningWithLiteralArgumentsBindsTemp)
@@ -445,4 +484,5 @@ let tests = [
     ("Bounded recursive loops honor iteration limit", testBoundedRecursiveLoopHonorsIterationLimit)
     ("Bounded recursive loops honor expansion limit", testBoundedRecursiveLoopHonorsExpansionLimit)
     ("Sequential calls do not consume inline depth", testSequentialCallsDoNotConsumeInlineDepth)
+    ("Immediate tuple projections inline large producer", testImmediateTupleProjectionsInlineLargeProducer)
 ]

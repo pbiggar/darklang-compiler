@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "1b03683abfad94c4640c3e1ea843ca087c47281c1104818fb22c1df5bff63ee3",
-  "generated_at": "2026-08-25T14:47:59+00:00",
+  "generated_at": "2026-08-25T22:24:01+00:00",
   "compiler": {
-    "commit": "223d93cdf11cfc5379f614b11e5fdb1546aaa481",
-    "subject": "Preserve backend diagnostics during LIR layout"
+    "commit": "0136ba27d67f554a95900bb841920fbdd85bfcf6",
+    "subject": "Scalarize immediately projected tuple call results"
   },
   "benchmarks": [
     {
@@ -57,7 +57,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 1388002378
+      "instructions": 1074002348
     },
     {
       "name": "nqueen",
