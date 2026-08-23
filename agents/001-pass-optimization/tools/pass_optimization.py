@@ -24,7 +24,7 @@ MAX_TARGET_BYTES = 2 * 1024 * 1024
 MAX_CAPTURE_BYTES = 16 * 1024 * 1024
 
 PASS_FILES = {
-    "Parse": "src/DarkCompiler/passes/1_Parser.fs",
+    "Parse": "src/DarkCompiler/passes/1_InterpreterParser.fs",
     "Type Checking": "src/DarkCompiler/passes/1.5_TypeChecking.fs",
     "AST -> ANF": "src/DarkCompiler/passes/2_AST_to_ANF.fs",
     "ANF Optimizations": "src/DarkCompiler/passes/2.3_ANF_Optimize.fs",
