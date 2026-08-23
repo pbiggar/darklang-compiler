@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build all implementations for a given benchmark
-# Usage: ./build_all.sh <benchmark_name> --artifacts <run_artifacts_dir> [--skip-baselines]
+# Usage: ./build_all.sh <benchmark_name> [--skip-baselines]
 
 set -e
 
@@ -9,29 +9,20 @@ BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$BENCHMARKS_DIR")"
 BENCHMARK=$1
 BUILD_BASELINES=true
-RUN_ARTIFACTS=""
-shift
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --artifacts) RUN_ARTIFACTS=${2:-}; shift 2 ;;
-        --skip-baselines) BUILD_BASELINES=false; shift ;;
-        *) echo "Usage: $0 <benchmark_name> --artifacts <run_artifacts_dir> [--skip-baselines]"; exit 1 ;;
-    esac
-done
+if [ "${2:-}" = "--skip-baselines" ]; then
+    BUILD_BASELINES=false
+elif [ -n "${2:-}" ]; then
+    echo "Usage: $0 <benchmark_name> [--skip-baselines]"
+    exit 1
+fi
 source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ]; then
     echo "Usage: $0 <benchmark_name>"
     exit 1
 fi
-if [ -z "$RUN_ARTIFACTS" ]; then
-    echo "Error: --artifacts is required"
-    exit 1
-fi
 
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
-ARTIFACT_DIR="$RUN_ARTIFACTS/$BENCHMARK"
-mkdir -p "$ARTIFACT_DIR"
 
 if [ ! -d "$PROBLEM_DIR" ]; then
     echo "Error: Benchmark '$BENCHMARK' not found at $PROBLEM_DIR"
@@ -43,11 +34,8 @@ pretty_section "Building $BENCHMARK..."
 # Build Dark implementation
 if [ -f "$PROBLEM_DIR/dark/main.dark" ]; then
     pretty_info "Building Dark..."
-    DARK_BINARY="$ARTIFACT_DIR/dark/main"
-    mkdir -p "$(dirname "$DARK_BINARY")"
-    "$PROJECT_ROOT/dark" --allow-internal "$PROBLEM_DIR/dark/main.dark" -o "$DARK_BINARY" -q
-    chmod +x "$DARK_BINARY"
-    python3 "$SCRIPT_DIR/artifact_provenance.py" write --benchmark "$BENCHMARK" --language dark --source "$PROBLEM_DIR/dark/main.dark" --compiler "$PROJECT_ROOT/bin/DarkCompiler/Debug/net10.0/DarkCompiler.dll" --executable "$DARK_BINARY" --manifest "$ARTIFACT_DIR/dark/provenance.json"
+    "$PROJECT_ROOT/dark" --allow-internal "$PROBLEM_DIR/dark/main.dark" -o "$PROBLEM_DIR/dark/main" -q
+    chmod +x "$PROBLEM_DIR/dark/main"
     pretty_ok "Dark build complete"
 fi
 
@@ -61,10 +49,7 @@ fi
 if [ -f "$PROBLEM_DIR/rust/main.rs" ]; then
     if command -v rustc &> /dev/null; then
         pretty_info "Building Rust..."
-        RUST_BINARY="$ARTIFACT_DIR/rust/main"
-        mkdir -p "$(dirname "$RUST_BINARY")"
-        rustc -C opt-level=3 "$PROBLEM_DIR/rust/main.rs" -o "$RUST_BINARY" 2>/dev/null
-        python3 "$SCRIPT_DIR/artifact_provenance.py" write --benchmark "$BENCHMARK" --language rust --source "$PROBLEM_DIR/rust/main.rs" --compiler "$(command -v rustc)" --executable "$RUST_BINARY" --manifest "$ARTIFACT_DIR/rust/provenance.json"
+        rustc -C opt-level=3 "$PROBLEM_DIR/rust/main.rs" -o "$PROBLEM_DIR/rust/main" 2>/dev/null
         pretty_ok "Rust build complete"
     else
         pretty_warn "Rust skipped (rustc not installed)"

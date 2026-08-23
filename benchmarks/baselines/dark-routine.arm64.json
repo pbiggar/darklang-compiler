@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "3662376c639f80762e5f9672675eed03667cedd6b77b005bf3f624a7708f03db",
-  "generated_at": "2026-08-21T22:51:08+00:00",
+  "generated_at": "2026-08-23T03:09:12+00:00",
   "compiler": {
-    "commit": "7764b50c67f3a49b27978e3ad1d778703f738666",
-    "subject": "Add bounded known-closure specialization"
+    "commit": "79a1101e1c422824de80032e0977cb9b70d1bfce",
+    "subject": "Check pisum review changes"
   },
   "benchmarks": [
     {

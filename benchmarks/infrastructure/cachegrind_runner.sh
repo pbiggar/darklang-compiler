@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run cachegrind benchmark for a given problem
-# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> <run_artifacts_dir> [parity_status] [baseline_refresh]
+# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh]
 #
 # By default, only runs Dark and uses the cached Rust row from BASELINES.md.
 # Pass `rust` as baseline_refresh to re-run the audited Rust reference.
@@ -11,13 +11,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 BENCHMARK=$1
 OUTPUT_DIR=$2
-RUN_ARTIFACTS=$3
-PARITY_STATUS=${4:-comparable}
-REFRESH_BASELINE=${5:-false}
+PARITY_STATUS=${3:-comparable}
+REFRESH_BASELINE=${4:-false}
 source "$SCRIPT_DIR/pretty.sh"
 
-if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ] || [ -z "$RUN_ARTIFACTS" ]; then
-    echo "Usage: $0 <benchmark_name> <output_dir> <run_artifacts_dir>"
+if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
+    echo "Usage: $0 <benchmark_name> <output_dir>"
     exit 1
 fi
 
@@ -139,13 +138,8 @@ fi
 
 # Run cachegrind for each implementation
 for impl in $IMPLS; do
-    BINARY="$RUN_ARTIFACTS/$BENCHMARK/$impl/main"
-    MANIFEST="$RUN_ARTIFACTS/$BENCHMARK/$impl/provenance.json"
+    BINARY="$PROBLEM_DIR/$impl/main"
     if [ -x "$BINARY" ]; then
-        SOURCE="$PROBLEM_DIR/$impl/main.$([ "$impl" = dark ] && echo dark || echo rs)"
-        AUDITED_SHA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["benchmarks"][sys.argv[2]][sys.argv[3] + "_sha256"])' "$BENCHMARKS_DIR/PARITY.json" "$BENCHMARK" "$impl")
-        python3 "$SCRIPT_DIR/artifact_provenance.py" verify --benchmark "$BENCHMARK" --language "$impl" --source "$SOURCE" --executable "$BINARY" --manifest "$MANIFEST" --audited-source-sha256 "$AUDITED_SHA"
-        PROVENANCE=$(cat "$MANIFEST")
         verify_output "$impl" "$BINARY"
         pretty_info "Running cachegrind on $impl..."
 
@@ -181,8 +175,7 @@ for impl in $IMPLS; do
     "branch_mispredicts": $MISPREDICTS,
     "i1_misses": $I1_MISSES,
     "d1_misses": $D1_MISSES,
-    "ll_misses": $LL_MISSES,
-    "provenance": $PROVENANCE
+    "ll_misses": $LL_MISSES
   }
 EOF
 

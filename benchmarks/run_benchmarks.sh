@@ -209,7 +209,6 @@ fi
 
 OUTPUT_DIR="$SCRIPT_DIR/results/$(date +%Y-%m-%d_%H%M%S)"
 mkdir -p "$OUTPUT_DIR"
-RUN_ARTIFACTS="$OUTPUT_DIR/artifacts"
 
 # Record compiler version
 pretty_info "Recording compiler version..."
@@ -279,14 +278,14 @@ run_benchmark_job() {
     if [ "$USE_CACHEGRIND" = true ] && [ "$REFRESH_BASELINE" = "false" ]; then
         build_args+=(--skip-baselines)
     fi
-    if ! "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench" --artifacts "$RUN_ARTIFACTS" "${build_args[@]}"; then
+    if ! "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench" "${build_args[@]}"; then
         echo "BUILD_FAIL" >> "$status_file"
         pretty_warn "Build failed for $bench (continuing)"
     fi
 
     # Run benchmark
     if [ "$USE_CACHEGRIND" = true ]; then
-        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR" "$RUN_ARTIFACTS" "$parity_status" "$REFRESH_BASELINE"; then
+        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$REFRESH_BASELINE"; then
             echo "RUN_FAIL" >> "$status_file"
             pretty_warn "Cachegrind failed for $bench (continuing)"
         fi

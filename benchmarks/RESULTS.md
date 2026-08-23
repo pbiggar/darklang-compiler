@@ -2,12 +2,12 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-08-21T22:51:08+00:00
+**Snapshot timestamp:** 2026-08-23T03:09:12+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 1)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `3662376c639f80762e5f9672675eed03667cedd6b77b005bf3f624a7708f03db`
-**Compiler commit:** `7764b50c67f3a49b27978e3ad1d778703f738666` - Add bounded known-closure specialization
+**Compiler commit:** `79a1101e1c422824de80032e0977cb9b70d1bfce` - Check pisum review changes
 
 | Benchmark     |           Dark (2.27x) |          Rust |
 |---------------|------------------------|---------------|
