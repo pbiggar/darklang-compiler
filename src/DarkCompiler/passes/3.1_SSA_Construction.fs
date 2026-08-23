@@ -1060,8 +1060,37 @@ let renameBlock (state: RenamingState) (block: BasicBlock) : BasicBlock * Renami
 
     ({ block with Instrs = List.rev instrs'; Terminator = term' }, state')
 
-/// Update phi sources for successors
-let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: RenamingState) : CFG =
+type PhiSourceUpdates = Map<Label * Label * VReg, Operand>
+
+/// Apply deferred predecessor-specific source versions without disturbing the
+/// instruction or predecessor order established during phi insertion.
+let applyPhiSourceUpdates (updates: PhiSourceUpdates) (block: BasicBlock) : BasicBlock =
+    let instrs =
+        block.Instrs
+        |> List.map (fun instr ->
+            match instr with
+            | Phi (dest, sources, valueType) ->
+                let sources' =
+                    sources
+                    |> List.map (fun (source, fromLabel) ->
+                        match source with
+                        | Register sourceReg ->
+                            match Map.tryFind (block.Label, fromLabel, sourceReg) updates with
+                            | Some renamedSource -> (renamedSource, fromLabel)
+                            | None -> (source, fromLabel)
+                        | _ -> (source, fromLabel))
+                Phi (dest, sources', valueType)
+            | other -> other)
+    { block with Instrs = instrs }
+
+/// Record the renamed values supplied by one predecessor. Applying these
+/// records after the dominator walk avoids rebuilding successor blocks and the
+/// persistent CFG map once per incoming edge.
+let private collectPhiSourceUpdatesForSuccessors
+    (cfg: CFG)
+    (currentLabel: Label)
+    (state: RenamingState)
+    : ((Label * Label * VReg) * Operand) list =
     let block = requireBlock "updating successor phi sources" cfg.Blocks currentLabel
 
     // Get successor labels from terminator
@@ -1071,30 +1100,23 @@ let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: Renam
         | Jump target -> [target]
         | Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
 
-    // For each successor, update phi nodes that come from currentLabel
+    // Each source is keyed by successor, predecessor, and original register.
+    // Phi insertion creates register sources; non-register sources are retained
+    // unchanged by applyPhiSourceUpdates.
     terminatorSuccessors
-    |> List.fold (fun cfg' succLabel ->
-        let succBlock = requireBlock "updating successor phi sources" cfg'.Blocks succLabel
-        let instrs' =
-            succBlock.Instrs
-            |> List.map (fun instr ->
-                match instr with
-                | Phi (dest, sources, valueType) ->
-                    // Update the source that comes from currentLabel
-                    let sources' =
-                        sources
-                        |> List.map (fun (op, fromLabel) ->
-                            if fromLabel = currentLabel then
-                                (renameOperand state op, fromLabel)
-                            else
-                                (op, fromLabel)
-                        )
-                    Phi (dest, sources', valueType)
-                | other -> other
-            )
-        let succBlock' = { succBlock with Instrs = instrs' }
-        { cfg' with Blocks = Map.add succLabel succBlock' cfg'.Blocks }
-    ) cfg
+    |> List.collect (fun succLabel ->
+        let succBlock = requireBlock "collecting successor phi sources" cfg.Blocks succLabel
+        succBlock.Instrs
+        |> List.collect (fun instr ->
+            match instr with
+            | Phi (_, sources, _) ->
+                sources
+                |> List.choose (fun (source, fromLabel) ->
+                    match source with
+                    | Register sourceReg when fromLabel = currentLabel ->
+                        Some ((succLabel, currentLabel, sourceReg), renameOperand state source)
+                    | _ -> None)
+            | _ -> []))
 
 /// Build dominator tree children
 let buildDomTree (idoms: Dominators) : Map<Label, Label list> =
@@ -1125,29 +1147,34 @@ let renameCFG (cfg: CFG) (idoms: Dominators) (floatRegs: Set<int>) (paramRegs: V
     let domTree = buildDomTree idoms
 
     // DFS traversal of dominator tree
-    // Returns (cfg, state) where state has updated NextVersion for siblings
-    let rec visit (label: Label) (state: RenamingState) (cfg': CFG) : CFG * RenamingState =
-        let block = requireBlock "renaming CFG block" cfg'.Blocks label
+    // Renamed blocks and phi updates are accumulated as lists and materialized
+    // once after traversal, while state carries NextVersion across siblings.
+    let rec visit
+        (label: Label)
+        (state: RenamingState)
+        (renamedBlocks: (Label * BasicBlock) list)
+        (phiUpdates: ((Label * Label * VReg) * Operand) list)
+        : (Label * BasicBlock) list * ((Label * Label * VReg) * Operand) list * RenamingState =
+        let block = requireBlock "renaming CFG block" cfg.Blocks label
 
         // Rename this block
         let (block', state') = renameBlock state block
-        let cfg'' = { cfg' with Blocks = Map.add label block' cfg'.Blocks }
-
-        // Update phi sources in successors
-        let cfg''' = updatePhiSourcesForSuccessors cfg'' label state'
+        let renamedBlocks' = (label, block') :: renamedBlocks
+        let blockPhiUpdates = collectPhiSourceUpdatesForSuccessors cfg label state'
+        let phiUpdates' =
+            blockPhiUpdates |> List.fold (fun updates update -> update :: updates) phiUpdates
 
         // Visit children in dominator tree
         // Thread the state through to preserve NextVersion across siblings
         let children = Map.tryFind label domTree |> Option.defaultValue []
-        let (cfg'''', finalState) =
+        let (finalBlocks, finalPhiUpdates, finalState) =
             children
-            |> List.fold (fun (c, s) child ->
+            |> List.fold (fun (blocks, updates, s) child ->
                 // Each child inherits current versions from state', but uses s.NextVersion
                 // Also inherit FloatRegs to accumulate all float VRegs
                 let childState = { state' with NextVersion = s.NextVersion; FloatRegs = s.FloatRegs }
-                let (c', s') = visit child childState c
-                (c', s')
-            ) (cfg''', state')
+                visit child childState blocks updates
+            ) (renamedBlocks', phiUpdates', state')
 
         // Pop versions for backtracking (restore CurrentVersion/VersionStack from before this block)
         // but keep the NextVersion and FloatRegs from children
@@ -1156,11 +1183,22 @@ let renameCFG (cfg: CFG) (idoms: Dominators) (floatRegs: Set<int>) (paramRegs: V
                 NextVersion = finalState.NextVersion
                 FloatRegs = finalState.FloatRegs }
 
-        (cfg'''', stateAfterPop)
+        (finalBlocks, finalPhiUpdates, stateAfterPop)
 
     // Start from entry with initial state based on CFG's existing VRegs
     let initialState = createInitialRenamingState cfg floatRegs paramRegs
-    let (resultCfg, finalState) = visit cfg.Entry initialState cfg
+    let (renamedBlocks, phiUpdateEntries, finalState) = visit cfg.Entry initialState [] []
+    let renamedByLabel = renamedBlocks |> Map.ofList
+    let phiUpdates = phiUpdateEntries |> Map.ofList
+    let finalBlocks =
+        cfg.Blocks
+        |> Map.map (fun label originalBlock ->
+            let renamedBlock =
+                match Map.tryFind label renamedByLabel with
+                | Some block -> block
+                | None -> originalBlock
+            applyPhiSourceUpdates phiUpdates renamedBlock)
+    let resultCfg = { cfg with Blocks = finalBlocks }
     (resultCfg, finalState.FloatRegs)
 
 /// Convert a function to SSA form

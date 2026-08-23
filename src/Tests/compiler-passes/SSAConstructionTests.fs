@@ -144,8 +144,36 @@ let testSSAVersionsStartAboveParameterRegisters () : TestResult =
     | Some block -> Error $"Expected converted entry block to start with RawAlloc, got {block.Instrs}"
     | None -> Error "Expected converted CFG to contain its entry block"
 
+let testDeferredPhiUpdatesPreserveInstructionAndSourceOrder () : TestResult =
+    let left = label "left"
+    let right = label "right"
+    let join = label "join"
+    let first = vreg 1
+    let second = vreg 2
+    let block =
+        makeBlock
+            join
+            [ Phi (vreg 3, [(Register first, right); (Register first, left)], Some AST.TInt64)
+              Phi (vreg 4, [(Register second, left); (Register second, right)], Some AST.TInt64)
+              BinOp (vreg 5, Add, Register (vreg 3), Register (vreg 4), AST.TInt64) ]
+            (Ret (Register (vreg 5)))
+    let updates =
+        [ ((join, left, first), Register (vreg 101))
+          ((join, right, first), Register (vreg 102))
+          ((join, left, second), Register (vreg 201))
+          ((join, right, second), Register (vreg 202)) ]
+        |> Map.ofList
+    let expectedInstrs =
+        [ Phi (vreg 3, [(Register (vreg 102), right); (Register (vreg 101), left)], Some AST.TInt64)
+          Phi (vreg 4, [(Register (vreg 201), left); (Register (vreg 202), right)], Some AST.TInt64)
+          BinOp (vreg 5, Add, Register (vreg 3), Register (vreg 4), AST.TInt64) ]
+    let updated = applyPhiSourceUpdates updates block
+    if updated.Instrs = expectedInstrs then Ok ()
+    else Error $"Expected deferred phi updates to preserve order, got {updated.Instrs}"
+
 let tests = [
     ("getBlockUses covers every operand position", testGetBlockUsesCoversEveryOperandPosition)
     ("computeLiveness reports missing successor block", testComputeLivenessReportsMissingSuccessorBlock)
     ("SSA versions start above parameter registers", testSSAVersionsStartAboveParameterRegisters)
+    ("deferred phi updates preserve instruction and source order", testDeferredPhiUpdatesPreserveInstructionAndSourceOrder)
 ]
