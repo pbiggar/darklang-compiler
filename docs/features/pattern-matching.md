@@ -129,9 +129,9 @@ the private skew-list operations.
 
 ## Exhaustiveness Checking
 
-The compiler lowers an exhausted match to the standard nonexhaustive-match
-runtime failure. Statically invalid pattern/type combinations are rejected
-during AOT type checking.
+The compiler rejects a non-exhaustive match during AOT type checking. A
+well-typed program therefore never lowers a user match to a runtime
+non-exhaustive failure.
 
 ### Exhaustive Patterns
 - Wildcard `_` or variable `x` in final position
@@ -141,7 +141,7 @@ during AOT type checking.
 ### Non-Exhaustive Example
 ```dark
 match opt with
-| Some(x) -> x   // Runtime failure when the value is None
+| Some(x) -> x   // Compile error: non-exhaustive match
 ```
 
 The exhaustiveness check is implemented via `patternAlwaysMatches`:
@@ -172,7 +172,7 @@ Guards are evaluated after pattern match but before body execution.
 The source comparison evidence is compiler
 `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and interpreter
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`; the implementation was
-revalidated at compiler HEAD `e3d84235c70f01425e4a0f66104ea4a5851d6f6b`.
+revalidated at compiler HEAD `6c4e32f2d39235f726a5acdce571e6943c6d4068`.
 
 The public grammar accepts unit, literal, variable, wildcard, tuple, exact
 list, cons, constructor, nested, guarded, and grouped-alternative patterns.
@@ -187,15 +187,17 @@ The scrutinee is evaluated once. Cases, alternatives, and nested structural
 tests run left to right. A successful structural match introduces its bindings
 only for that arm's guard and body. The Boolean guard runs once after those
 bindings are available; a false guard falls through. Only the first eligible
-body executes. If no arm succeeds, the runtime failure is
-`Non-exhaustive match: No matching case found for value <value> in match expression`.
+body executes. The interpreter reports a rendered-value runtime failure if no
+arm succeeds. The compiler intentionally diverges here: it rejects such a
+match before lowering, so pattern matching cannot produce a runtime error.
 
 The compiler deliberately retains one AOT-only timing divergence: all arms are
 type checked, including arms which the interpreter would not reach. Invalid
 patterns, duplicate bindings, alternative binding-set differences, and
-non-Boolean guards therefore diagnose during compilation rather than becoming
-runtime decisions. This is an intentional compiler extension in diagnostic
-timing, not an additional runtime pattern form.
+non-Boolean guards and non-exhaustive matches therefore diagnose during
+compilation rather than becoming runtime decisions. This is an intentional
+compiler extension in diagnostic timing, not an additional runtime pattern
+form.
 
 ## Tuple Pattern Compilation
 
