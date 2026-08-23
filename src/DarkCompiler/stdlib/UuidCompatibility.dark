@@ -1,0 +1,26 @@
+// UuidCompatibility.dark - explicitly isolated compiler compatibility surface.
+//
+// This module is not part of the canonical interpreter-compatible Stdlib.Uuid
+// API. It retains the former String-returning parser for source compatibility;
+// new code must use Stdlib.Uuid.parse, which returns the distinct Uuid value.
+
+module Stdlib.Uuid.Compatibility
+
+// UnsupportedUuidParseError preserves the legacy error type's public shape.
+// parse_v0 validates the legacy hyphenated spelling, so its only runtime error
+// is BadFormat; it never substitutes for canonical Uuid.parse.
+type ParseError = | BadFormat | UnsupportedUuidParseError
+
+let __isHexByte(byte: Int64) : Bool =
+    (byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 70) || (byte >= 97 && byte <= 102)
+
+let __hasValidFormatAt(s: String, index: Int64) : Bool =
+    if index == 36 then true
+    else
+        let byte = Stdlib.String.getByteAt(s, index) in
+        if index == 8 || index == 13 || index == 18 || index == 23 then byte == 45 && Stdlib.Uuid.Compatibility.__hasValidFormatAt(s, index + 1)
+        else Stdlib.Uuid.Compatibility.__isHexByte(byte) && Stdlib.Uuid.Compatibility.__hasValidFormatAt(s, index + 1)
+
+let parse_v0(s: String) : Stdlib.Result.Result<String, Stdlib.Uuid.Compatibility.ParseError> =
+    if Stdlib.String.__byteLength(s) == 36 && Stdlib.Uuid.Compatibility.__hasValidFormatAt(s, 0) then Ok(s)
+    else Error(Stdlib.Uuid.Compatibility.ParseError.BadFormat)

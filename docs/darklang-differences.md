@@ -218,8 +218,11 @@ RuntimeError are rejected compiler-internal categories. Interpreter DDB values
 have no compiled representation and remain unsupported.
 
 Uuid now uses the ordinary `UUID(UInt128)` newtype and the canonical
-interpreter-compatible `Stdlib.Uuid` API, without a compiler-only legacy
-parser. Blob and function equality retain their pinned identity rules.
+interpreter-compatible `Stdlib.Uuid` API. Its historic String-returning parser
+is retained only as the explicitly separate compiler compatibility extension
+`Stdlib.Uuid.Compatibility.parse_v0`, including its legacy
+`UnsupportedUuidParseError`; it is not canonical Uuid behavior. Blob and
+function equality retain their pinned identity rules.
 Explicit printing accepts String only and is independent of implicit
 final-result rendering; final Unit adds no text. See
 [comparison-parity.md](comparison-parity.md) and
