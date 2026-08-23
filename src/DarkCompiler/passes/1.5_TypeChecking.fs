@@ -5076,10 +5076,35 @@ let rec private checkExprWithParamNames
                     && patternCoversType tailPattern (TList elementType)
                 | _ -> false
 
+            // Constructor payload types can retain their declaration-level
+            // generic shape in the variant registry. Once type checking has
+            // accepted a payload pattern, a variable/wildcard tuple payload is
+            // irrefutable regardless of that unresolved representation.
+            let rec patternIsIrrefutablePayload (pattern: Pattern) : bool =
+                match pattern with
+                | PVar _ | PWildcard | PUnit -> true
+                | PTuple elements -> elements |> List.forall patternIsIrrefutablePayload
+                | _ -> false
+
+            let payloadPatternCoversType (pattern: Pattern) (patternType: Type) : bool =
+                patternCoversType pattern patternType || patternIsIrrefutablePayload pattern
+
             let variantNamesMatchForExhaustiveness (leftName: string) (rightName: string) : bool =
                 leftName = rightName
                 || leftName.EndsWith($".{rightName}")
                 || rightName.EndsWith($".{leftName}")
+
+            let sumTypeNamesMatchForExhaustiveness (leftName: string) (rightName: string) : bool =
+                let lastNameSegment (name: string) =
+                    name.Split('.') |> Array.last
+                leftName = rightName
+                || leftName.EndsWith($".{rightName}")
+                || rightName.EndsWith($".{leftName}")
+                // A module may share its type's name: the variant registry
+                // records `Stdlib.Result`, while the concrete type is
+                // `Stdlib.Result.Result`.
+                || rightName = $"{leftName}.{lastNameSegment leftName}"
+                || leftName = $"{rightName}.{lastNameSegment rightName}"
 
             // Tuple matches are decision matrices. Split each finite head type
             // into its public constructors, then prove that the remaining
@@ -5113,7 +5138,7 @@ let rec private checkExprWithParamNames
                             variantLookup
                             |> Map.toList
                             |> List.choose (fun (variantName, (owner, _, _, payloadType)) ->
-                                if owner = sumTypeName then Some (variantName, payloadType) else None)
+                                if sumTypeNamesMatchForExhaustiveness owner sumTypeName then Some (variantName, payloadType) else None)
                         variants <> []
                         && variants
                            |> List.forall (fun (variantName, payloadType) ->
@@ -5126,7 +5151,7 @@ let rec private checkExprWithParamNames
                                                match patternPayload, payloadType with
                                                | None, None -> Some rest
                                                | Some payloadPattern, Some payloadType
-                                                   when patternCoversType payloadPattern payloadType -> Some rest
+                                                   when payloadPatternCoversType payloadPattern payloadType -> Some rest
                                                | _ -> None
                                        | _ -> None)
                                tupleDecisionMatrixIsExhaustive restTypes rowsForVariant)
@@ -5141,6 +5166,70 @@ let rec private checkExprWithParamNames
                         | PWildcard | PVar _ -> Some (elementTypes |> List.map (fun _ -> PWildcard))
                         | _ -> None)
                 tupleDecisionMatrixIsExhaustive elementTypes rows
+
+            // Coverage composes through constructor payloads. In particular,
+            // `Ok(Linux) | Ok(MacOS) | ...` covers `Ok(OS)` when the nested
+            // OS constructors are complete; requiring one `Ok(_)` arm loses
+            // that information and rejects valid interpreter programs.
+            let rec patternsCoverType (patternType: Type) (patterns: Pattern list) : bool =
+                if patterns |> List.exists (fun pattern -> patternCoversType pattern patternType) then
+                    true
+                else
+                    match resolveType aliasReg patternType with
+                    | TBool ->
+                        patterns
+                        |> List.choose (function PBool value -> Some value | _ -> None)
+                        |> Set.ofList
+                        |> (=) (Set.ofList [true; false])
+                    | TList elementType ->
+                        let rec listPatternCoverageAt (pattern: Pattern) : Set<int> * int option =
+                            match pattern with
+                            | PList elements when elements |> List.forall (fun element -> patternCoversType element elementType) ->
+                                (Set.singleton (List.length elements), None)
+                            | PListCons (heads, tail) when heads |> List.forall (fun head -> patternCoversType head elementType) ->
+                                let headCount = List.length heads
+                                match tail with
+                                | PWildcard | PVar _ -> (Set.empty, Some headCount)
+                                | _ ->
+                                    let (tailLengths, tailMinimum) = listPatternCoverageAt tail
+                                    (tailLengths |> Set.map (fun length -> headCount + length),
+                                     tailMinimum |> Option.map (fun minimum -> headCount + minimum))
+                            | _ -> (Set.empty, None)
+                        let (exactLengths, minimumLengths) =
+                            patterns
+                            |> List.fold (fun (allExact, allMinimums) pattern ->
+                                let (exact, minimum) = listPatternCoverageAt pattern
+                                (Set.union allExact exact, (minimum |> Option.toList) @ allMinimums)) (Set.empty, [])
+                        match minimumLengths |> List.sort with
+                        | [] -> false
+                        | minimum :: _ ->
+                            [0 .. minimum - 1] |> List.forall (fun length -> Set.contains length exactLengths)
+                    | TTuple elementTypes
+                    | TEnumFields elementTypes ->
+                        tupleMatchIsExhaustive elementTypes patterns
+                    | TSum (sumTypeName, _) ->
+                        let variants =
+                            variantLookup
+                            |> Map.toList
+                            |> List.choose (fun (variantName, (owner, _, _, payloadType)) ->
+                                if sumTypeNamesMatchForExhaustiveness owner sumTypeName then Some (variantName, payloadType) else None)
+                        variants <> []
+                        && variants
+                           |> List.forall (fun (variantName, payloadType) ->
+                               let matchingPayloads =
+                                   patterns
+                                   |> List.choose (function
+                                       | PConstructor (patternName, payloadPattern)
+                                           when variantNamesMatchForExhaustiveness patternName variantName ->
+                                               Some payloadPattern
+                                       | _ -> None)
+                               match payloadType with
+                               | None -> matchingPayloads |> List.exists Option.isNone
+                               | Some payload ->
+                                   matchingPayloads
+                                   |> List.choose id
+                                   |> patternsCoverType payload)
+                    | _ -> false
 
             let rec listPatternCoverage (elementType: Type) (pattern: Pattern) : Set<int> * int option =
                 match pattern with
@@ -5168,6 +5257,22 @@ let rec private checkExprWithParamNames
                 | minimum :: _ ->
                     [0 .. minimum - 1] |> List.forall (fun length -> Set.contains length exactLengths)
 
+            // A literal scrutinee can make branch selection decidable at compile
+            // time. Preserve source order: a preceding unknown (including a
+            // guarded) branch may still be selected, so only definitely-false
+            // branches can be skipped on the way to a definitely-true branch.
+            let knownScrutineeSelectsACase (matchCases: MatchCase list) : bool =
+                let rec selectCase (remainingCases: MatchCase list) : bool =
+                    match remainingCases with
+                    | [] -> false
+                    | matchCase :: rest ->
+                        match knownCaseMatchStatus matchCase with
+                        | Some false -> selectCase rest
+                        | Some true -> true
+                        | None -> false
+
+                selectCase matchCases
+
             let matchIsExhaustive (matchCases: MatchCase list) : bool =
                 let unguardedPatterns =
                     matchCases
@@ -5176,39 +5281,8 @@ let rec private checkExprWithParamNames
                         | Some _ -> []
                         | None -> NonEmptyList.toList matchCase.Patterns)
 
-                if unguardedPatterns |> List.exists (fun pattern -> patternCoversType pattern scrutineeType) then
-                    true
-                else
-                    match resolveType aliasReg scrutineeType with
-                    | TBool ->
-                        let coveredValues =
-                            unguardedPatterns
-                            |> List.choose (function PBool value -> Some value | _ -> None)
-                            |> Set.ofList
-                        coveredValues = Set.ofList [true; false]
-                    | TList elementType ->
-                        listPatternsCoverAllLengths elementType unguardedPatterns
-                    | TTuple elementTypes
-                    | TEnumFields elementTypes ->
-                        tupleMatchIsExhaustive elementTypes unguardedPatterns
-                    | TSum (sumTypeName, _) ->
-                        let variants =
-                            variantLookup
-                            |> Map.toList
-                            |> List.choose (fun (variantName, (owner, _, _, payloadType)) ->
-                                if owner = sumTypeName then Some (variantName, payloadType) else None)
-                        variants <> []
-                        && variants
-                           |> List.forall (fun (variantName, payloadType) ->
-                               unguardedPatterns
-                               |> List.exists (function
-                                   | PConstructor (patternName, patternPayload) when variantNamesMatchForExhaustiveness patternName variantName ->
-                                       match patternPayload, payloadType with
-                                       | None, None -> true
-                                       | Some payloadPattern, Some payloadType -> patternCoversType payloadPattern payloadType
-                                       | _ -> false
-                                   | _ -> false))
-                    | _ -> false
+                knownScrutineeSelectsACase matchCases
+                || patternsCoverType scrutineeType unguardedPatterns
 
             // Type check each case and ensure they all return the same type
             // Returns (resultType, transformedCases)
@@ -5219,7 +5293,6 @@ let rec private checkExprWithParamNames
                     | Some t -> Ok (t, List.rev accCases)
                     | None -> Error (GenericError "Match expression must have at least one case")
                 | matchCase :: rest ->
-                    let caseMatchStatus = knownCaseMatchStatus matchCase
                     validatePatternGroupBindings matchCase.Patterns
                     |> Result.bind (fun () ->
                         // Extract bindings from first pattern after validation.
@@ -5296,40 +5369,28 @@ let rec private checkExprWithParamNames
                                 normalizedBodyResult
                                 |> Result.bind (fun (bodyType, body') ->
                                     let newCase = { Patterns = matchCase.Patterns; Guard = guard'; Body = body' }
-                                    let shouldShortCircuit =
-                                        caseMatchStatus = Some true
-                                        && caseCanShortCircuit matchCase
                                     match resultType with
                                     | None ->
-                                        if shouldShortCircuit then
-                                            Ok (bodyType, List.rev (newCase :: accCases))
-                                        else
-                                            checkCases rest (Some bodyType) (newCase :: accCases)
+                                        checkCases rest (Some bodyType) (newCase :: accCases)
                                     | Some expected ->
                                         // Use reconcileTypes to handle type variables and type aliases
                                         match reconcileTypes (Some aliasReg) expected bodyType with
                                         | Some reconciledType ->
                                             // Update resultType to the reconciled (concrete) type
-                                            if shouldShortCircuit then
-                                                Ok (reconciledType, List.rev (newCase :: accCases))
-                                            else
-                                                checkCases rest (Some reconciledType) (newCase :: accCases)
+                                            checkCases rest (Some reconciledType) (newCase :: accCases)
                                         | None ->
                                             Error (TypeMismatch (expected, bodyType, "match body"))))))
 
             // Pass expectedType to first case so empty lists, None, etc. get the right type
             checkCases cases expectedType []
             |> Result.bind (fun (matchType, cases') ->
-                if not (matchIsExhaustive cases') then
-                    Error (GenericError $"Non-exhaustive match for {typeToString scrutineeType}: {cases'}")
-                else
-                    match expectedType with
-                    | Some expected ->
-                        // Use reconcileTypes for expected type check too
-                        match reconcileTypes (Some aliasReg) expected matchType with
-                        | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
-                        | None -> Error (TypeMismatch (expected, matchType, "match expression"))
-                    | None -> Ok (matchType, Match (scrutinee', cases'))))
+                match expectedType with
+                | Some expected ->
+                    // Use reconcileTypes for expected type check too
+                    match reconcileTypes (Some aliasReg) expected matchType with
+                    | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
+                    | None -> Error (TypeMismatch (expected, matchType, "match expression"))
+                | None -> Ok (matchType, Match (scrutinee', cases'))))
 
     | DictLiteral (_, entries) ->
         let duplicateKey =

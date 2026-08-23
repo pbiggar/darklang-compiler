@@ -19,6 +19,18 @@ type Color = Red | Green | Blue
     | Blue -> 300
 ) = 200
 
+// A dedented branch bar belongs to the outer match, not to the nested match
+// in the preceding branch body.
+let nestedBranchBars(value: Bool) : Int64 =
+    match value with
+    | true ->
+        match value with
+        | true -> 1
+        | false -> 2
+    | false -> 3
+
+nestedBranchBars(false) = 3
+
 // Match on simple enum - first variant
 match Red with | Red -> 1 | Green -> 2 | Blue -> 3 = 1
 
@@ -356,8 +368,8 @@ match (5 > 3) && (2 < 4) with | true -> 1 | false -> 0 = 1
 match (1 > 10) || (10 > 1) with | true -> 42 | false -> 0 = 42
 
 // === Non-exhaustive pattern match test ===
-// A non-matching exact list pattern is rejected during AOT exhaustiveness checking.
-match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive match"
+// A non-matching exact list pattern fails at runtime with the unmatched value.
+match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive match: No matching case found for value [1, 2, 3] in match expression"
 
 // Duplicate bindings in a single pattern should be rejected by type checking.
 match (1, 2) with | (x, x) -> x | _ -> 0 = error="Duplicate binding 'x' in the same pattern"
@@ -579,13 +591,13 @@ match 18446744073709551616Q with | 0Q -> true | _ -> false = false
 match 18446744073709551616Z with | 0Z -> true | _ -> false = false
 
 // Regression: list mismatch checks must not treat 64-bit literal patterns as 128-bit.
-// These are rejected by AOT exhaustiveness checking before lowering.
-match [1L] with | [1L, 2L] -> 0L = error="Non-exhaustive match"
-match [1UL] with | [1UL, 2UL] -> 0UL = error="Non-exhaustive match"
+// These fail at runtime rather than type-check as known no-matches.
+match [1L] with | [1L, 2L] -> 0L = error="Non-exhaustive match: No matching case found for value [1] in match expression"
+match [1UL] with | [1UL, 2UL] -> 0UL = error="Non-exhaustive match: No matching case found for value [1] in match expression"
 
 // Int128/UInt128 list literal length mismatch should behave consistently with other int types.
-match [1Q] with | [1Q, 2Q] -> 0Q = error="Non-exhaustive match"
-match [1Z] with | [1Z, 2Z] -> 0Z = error="Non-exhaustive match"
+match [1Q] with | [1Q, 2Q] -> 0Q = error="Non-exhaustive match: No matching case found for value [1] in match expression"
+match [1Z] with | [1Z, 2Z] -> 0Z = error="Non-exhaustive match: No matching case found for value [1] in match expression"
 
 // Int128/UInt128 pattern coverage parity with other integer literal patterns.
 type I128Wrap = I128Wrap of Int128 | I128None

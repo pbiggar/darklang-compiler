@@ -65,7 +65,7 @@ and Token =
     | TDot         // . (tuple/record access)
     | TLBrace      // { (record literal)
     | TRBrace      // } (record literal)
-    | TBar         // | (sum type variant separator / pattern separator)
+    | TBar of int option // |, with indentation when it begins a source line
     | TOf          // of (sum type payload)
     | TMatch       // match (pattern matching)
     | TWith        // with (pattern matching)
@@ -108,6 +108,20 @@ let rec lex (input: string) : Result<Token list, string> =
 
     let substring (startPosition: int) (endPosition: int) : string =
         input.Substring(startPosition, endPosition - startPosition)
+
+    let barIndentation (position: int) : int option =
+        let rec lineStart index =
+            if index <= 0 || input[index - 1] = '\n' || input[index - 1] = '\r' then
+                index
+            else
+                lineStart (index - 1)
+
+        let start = lineStart position
+        let prefix = substring start position
+        if prefix |> Seq.forall (fun c -> c = ' ' || c = '\t') then
+            Some (prefix |> Seq.sumBy (fun c -> if c = '\t' then 4 else 1))
+        else
+            None
 
     let isDirectlyInsideList (tokensReversed: Token list) : bool =
         let rec nearestUnclosedDelimiter closingDelimiters tokens =
@@ -288,7 +302,7 @@ let rec lex (input: string) : Result<Token list, string> =
                 lexHelper (position + 3) (TBitOr :: acc)
             | '|' when hasChar position 1 '|' -> lexHelper (position + 2) (TOr :: acc)
             | '|' when hasChar position 1 '>' -> lexHelper (position + 2) (TPipe :: acc)
-            | '|' -> lexHelper (position + 1) (TBar :: acc)
+            | '|' -> lexHelper (position + 1) (TBar (barIndentation position) :: acc)
             | '`' when hasChar position 1 '`' ->
                 NameSyntax.scanQuoted input position
                 |> Result.bind (fun (identifier, remaining) ->
@@ -1057,7 +1071,7 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
         |> Result.bind (fun (payloadType, afterType) ->
             let variant = { Name = variantName; Payload = Some payloadType }
             match afterType with
-            | TBar :: rest' ->
+            | TBar _ :: rest' ->
                 // More variants
                 parseVariants rest' (variant :: acc)
             | _ ->
@@ -1067,7 +1081,7 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
         // Simple enum variant (no payload)
         let variant = { Name = variantName; Payload = None }
         match rest with
-        | TBar :: rest' ->
+        | TBar _ :: rest' ->
             // More variants
             parseVariants rest' (variant :: acc)
         | _ ->
@@ -1086,7 +1100,7 @@ let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) 
         |> Result.bind (fun (payloadType, afterType) ->
             let variant = { Name = variantName; Payload = Some payloadType }
             match afterType with
-            | TBar :: rest' ->
+            | TBar _ :: rest' ->
                 // More variants
                 parseVariantsWithContext typeParams rest' (variant :: acc)
             | _ ->
@@ -1096,7 +1110,7 @@ let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) 
         // Simple enum variant (no payload)
         let variant = { Name = variantName; Payload = None }
         match rest with
-        | TBar :: rest' ->
+        | TBar _ :: rest' ->
             // More variants
             parseVariantsWithContext typeParams rest' (variant :: acc)
         | _ ->
@@ -1119,7 +1133,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 parseRecordFieldsWithContext typeParamSet bodyRest []
                 |> Result.map (fun (fields, remaining) ->
                     (RecordDef (typeName, typeParams, fields), remaining))
-            | TEquals :: TBar :: bodyRest ->
+            | TEquals :: TBar _ :: bodyRest ->
                 // Canonical sum syntax permits a leading bar, including for a
                 // single no-payload variant where alias syntax is ambiguous.
                 parseVariantsWithContext typeParams bodyRest []
@@ -1132,7 +1146,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 |> Result.bind (fun (payloadType, afterType) ->
                     let firstVariant = { Name = variantName; Payload = Some payloadType }
                     match afterType with
-                    | TBar :: rest' ->
+                    | TBar _ :: rest' ->
                         // More variants
                         parseVariantsWithContext typeParams rest' [firstVariant]
                         |> Result.map (fun (variants, remaining) ->
@@ -1140,7 +1154,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                     | _ ->
                         // Single variant sum type
                         Ok (SumTypeDef (typeName, typeParams, [firstVariant]), afterType))
-            | TEquals :: TIdent variantName :: TBar :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
+            | TEquals :: TIdent variantName :: TBar _ :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
                 // Sum type with multiple variants: type Name = Variant1 | Variant2 | ...
                 let firstVariant = { Name = variantName; Payload = None }
                 parseVariantsWithContext typeParams bodyRest [firstVariant]
@@ -1491,12 +1505,12 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
     // Parse patterns until we see TWhen or TArrow
     let rec parsePatterns (toks: Token list) (acc: Pattern list) : Result<Pattern list * Token list, string> =
         match toks with
-        | TBar :: rest ->
+        | TBar _ :: rest ->
             parsePattern rest
             |> Result.bind (fun (pattern, remaining) ->
                 // Check what comes next
                 match remaining with
-                | TBar :: _ ->
+                | TBar _ :: _ ->
                     // Another pattern in the group
                     parsePatterns remaining (pattern :: acc)
                 | TWhen :: _ | TArrow :: _ ->
@@ -1560,15 +1574,38 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | _ -> false
 
     /// Parse multiple cases for pattern matching: | p1 -> e1 | p2 -> e2 ...
-    let rec parseCases (toks: Token list) (acc: MatchCase list) : Result<MatchCase list * Token list, string> =
+    /// A line-leading bar closes a nested match when it is less indented than
+    /// that nested match's first case bar. This preserves the public
+    /// indentation-based syntax for unparenthesized nested matches.
+    let rec parseCases
+        (caseIndent: int option)
+        (toks: Token list)
+        (acc: MatchCase list)
+        : Result<MatchCase list * Token list, string> =
         match toks with
-        | TBar :: _ ->
-            // Another case
-            parseCase toks parseExpr
-            |> Result.bind (fun (case, remaining) ->
-                parseCases remaining (case :: acc))
+        | TBar barIndent :: _ ->
+            let currentIndent =
+                match caseIndent with
+                | Some indent -> Some indent
+                | None -> barIndent
+            let closesNestedMatch =
+                match currentIndent, barIndent with
+                // Upstream sources occasionally align a continuation bar two
+                // spaces left of its first sibling. A full indentation level
+                // is four columns, so only a complete dedent closes the
+                // nested match.
+                | Some expected, Some actual -> actual + 4 <= expected
+                | _ -> false
+            if closesNestedMatch then
+                if List.isEmpty acc then
+                    Error "Match expression must have at least one case"
+                else
+                    Ok (List.rev acc, toks)
+            else
+                parseCase toks parseExpr
+                |> Result.bind (fun (case, remaining) ->
+                    parseCases currentIndent remaining (case :: acc))
         | _ ->
-            // End of cases
             if List.isEmpty acc then
                 Error "Match expression must have at least one case"
             else
@@ -1683,7 +1720,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             |> Result.bind (fun (scrutinee, remaining) ->
                 match remaining with
                 | TWith :: rest' ->
-                    parseCases rest' []
+                    parseCases None rest' []
                     |> Result.map (fun (cases, remaining') ->
                         (Match (scrutinee, cases), remaining'))
                 | _ -> Error "Expected 'with' after match scrutinee")
