@@ -267,6 +267,11 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         match syntax with
         | CompilerSyntax -> $"{formatIdentifierPath name}({payloadText})"
         | InterpreterSyntax -> $"{formatIdentifierPath name} {payloadText}"
+    | POr alternatives ->
+        alternatives
+        |> NonEmptyList.toList
+        |> List.map (formatPattern syntax)
+        |> String.concat " | "
     | PInt64 n ->
         match syntax with
         | CompilerSyntax -> $"{n}"

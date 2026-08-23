@@ -1348,6 +1348,27 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         | _ ->
             Ok (headPattern, remaining))
 
+/// Parse a recursive alternative pattern. Match-case parsing deliberately uses
+/// `parsePattern` directly because its leading bars delimit cases; grouped
+/// alternatives inside parentheses and constructor fields use this function.
+and parsePatternOr (tokens: Token list) : Result<Pattern * Token list, string> =
+    let rec parseAlternatives acc remaining =
+        match remaining with
+        | TBar _ :: rest ->
+            parsePattern rest
+            |> Result.bind (fun (pattern, afterPattern) ->
+                parseAlternatives (pattern :: acc) afterPattern)
+        | _ ->
+            match List.rev acc with
+            | [] -> Error "Alternative pattern must contain at least one pattern"
+            | first :: rest -> Ok (POr { Head = first; Tail = rest }, remaining)
+
+    parsePattern tokens
+    |> Result.bind (fun (first, remaining) ->
+        match remaining with
+        | TBar _ :: _ -> parseAlternatives [first] remaining
+        | _ -> Ok (first, remaining))
+
 and parsePatternBase (tokens: Token list) : Result<Pattern * Token list, string> =
     match tokens with
     | TUnderscore :: rest ->
@@ -1418,7 +1439,7 @@ and parsePatternBase (tokens: Token list) : Result<Pattern * Token list, string>
     | TIdent name :: TLParen :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
         // Constructor with payload pattern: Some(x)
         let rec parsePayloadFields toks acc =
-            parsePattern toks
+            parsePatternOr toks
             |> Result.bind (fun (payloadPattern, remaining) ->
                 match remaining with
                 | TComma :: more -> parsePayloadFields more (payloadPattern :: acc)
@@ -1442,7 +1463,7 @@ and parsePatternBase (tokens: Token list) : Result<Pattern * Token list, string>
     | _ -> Error "Expected pattern (_, variable, literal, or constructor)"
 
 and parseTuplePattern (tokens: Token list) (acc: Pattern list) : Result<Pattern * Token list, string> =
-    parsePattern tokens
+    parsePatternOr tokens
     |> Result.bind (fun (pat, remaining) ->
         match remaining with
         | TRParen :: rest ->
@@ -1502,20 +1523,74 @@ let rec parseLetPattern (tokens: Token list) : Result<LetPattern * Token list, s
 /// Parse a single case: | pat1 | pat2 when guard -> expr
 /// Supports multiple patterns (pattern grouping) and optional guard clause
 let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<MatchCase * Token list, string> =
+    let rec expandPatternAlternatives (pattern: Pattern) : Pattern list =
+        let cartesian patterns =
+            patterns
+            |> List.fold (fun combinations alternatives ->
+                combinations
+                |> List.collect (fun prefix ->
+                    alternatives |> List.map (fun alternative -> prefix @ [alternative]))) [[]]
+
+        match pattern with
+        | POr alternatives ->
+            alternatives
+            |> NonEmptyList.toList
+            |> List.collect expandPatternAlternatives
+        | PConstructor (name, Some payload) ->
+            expandPatternAlternatives payload
+            |> List.map (fun expanded -> PConstructor (name, Some expanded))
+        | PTuple elements ->
+            elements
+            |> List.map expandPatternAlternatives
+            |> cartesian
+            |> List.map PTuple
+        | PList elements ->
+            elements
+            |> List.map expandPatternAlternatives
+            |> cartesian
+            |> List.map PList
+        | PListCons (heads, tail) ->
+            let expandedParts =
+                (heads |> List.map expandPatternAlternatives)
+                @ [expandPatternAlternatives tail]
+            expandedParts
+            |> cartesian
+            |> List.map (fun parts ->
+                match List.rev parts with
+                | tailPattern :: reversedHeads -> PListCons (List.rev reversedHeads, tailPattern)
+                | [] -> Crash.crash "List-cons alternative expansion requires a tail pattern")
+        | _ -> [pattern]
+
+    let parseCasePattern tokens =
+        let rec parseTupleTail acc remaining =
+            match remaining with
+            | TComma :: rest ->
+                parsePattern rest
+                |> Result.bind (fun (next, afterNext) ->
+                    parseTupleTail (next :: acc) afterNext)
+            | _ -> Ok (PTuple (List.rev acc), remaining)
+
+        parsePattern tokens
+        |> Result.bind (fun (first, remaining) ->
+            match remaining with
+            | TComma :: _ -> parseTupleTail [first] remaining
+            | _ -> Ok (first, remaining))
+
     // Parse patterns until we see TWhen or TArrow
     let rec parsePatterns (toks: Token list) (acc: Pattern list) : Result<Pattern list * Token list, string> =
         match toks with
         | TBar _ :: rest ->
-            parsePattern rest
+            parseCasePattern rest
             |> Result.bind (fun (pattern, remaining) ->
+                let expandedPatterns = expandPatternAlternatives pattern
                 // Check what comes next
                 match remaining with
                 | TBar _ :: _ ->
                     // Another pattern in the group
-                    parsePatterns remaining (pattern :: acc)
+                    parsePatterns remaining ((List.rev expandedPatterns) @ acc)
                 | TWhen :: _ | TArrow :: _ ->
                     // End of patterns, followed by guard or body
-                    Ok (List.rev (pattern :: acc), remaining)
+                    Ok (List.rev ((List.rev expandedPatterns) @ acc), remaining)
                 | _ -> Error "Expected '|', 'when', or '->' after pattern")
         | _ -> Error "Expected '|' before pattern"
 
@@ -2545,6 +2620,10 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
         let headResult =
             head |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
         Result.bind (fun () -> validatePattern tail) headResult
+    | POr alternatives ->
+        alternatives
+        |> NonEmptyList.toList
+        |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
     | PUnit
     | PWildcard
     | PInt64 _

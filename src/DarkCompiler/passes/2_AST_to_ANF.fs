@@ -2254,6 +2254,8 @@ let rec private matchPatternBindingTypes
     : Map<string, AST.Type> =
     let merge left right = Map.fold (fun current name typ -> Map.add name typ current) left right
     match pattern with
+    | AST.POr alternatives ->
+        matchPatternBindingTypes typeReg variantLookup (AST.NonEmptyList.head alternatives) scrutineeType
     | AST.PVar name -> Map.ofList [(name, scrutineeType)]
     | AST.PWildcard | AST.PUnit | AST.PInt64 _ | AST.PInt128Literal _
     | AST.PInt8Literal _ | AST.PInt16Literal _ | AST.PInt32Literal _
@@ -2429,6 +2431,8 @@ let rec simpleInferType
 
     let rec extractPatternBindings (pattern: AST.Pattern) (scrutType: AST.Type) : Map<string, AST.Type> =
         match pattern with
+        | AST.POr alternatives ->
+            extractPatternBindings (AST.NonEmptyList.head alternatives) scrutType
         | AST.PVar name -> Map.ofList [(name, scrutType)]
         | AST.PWildcard -> Map.empty
         | AST.PInt64 _ | AST.PInt128Literal _
@@ -4586,6 +4590,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         // Helper to extract pattern variable names and infer their types
         let rec extractPatternBindings (pattern: AST.Pattern) (scrutType: AST.Type) : Map<string, AST.Type> =
             match pattern with
+            | AST.POr alternatives ->
+                extractPatternBindings (AST.NonEmptyList.head alternatives) scrutType
             | AST.PVar name -> Map.ofList [(name, scrutType)]
             | AST.PWildcard -> Map.empty
             | AST.PInt64 _ | AST.PInt128Literal _
@@ -6330,6 +6336,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // scrutType is the type of the scrutinee, used to determine correct types for pattern variables
             let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match pattern with
+                | AST.POr alternatives ->
+                    extractAndCompileBody (AST.NonEmptyList.head alternatives) body scrutAtom scrutType currentEnv vg
                 | AST.PUnit -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                 | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                 | AST.PInt64 _ | AST.PInt128Literal _
@@ -6399,6 +6407,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     // sourceType is the type of the source being matched, used to get correct element types
                     let rec collectPatternBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match pat with
+                        | AST.POr alternatives ->
+                            collectPatternBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
                         | AST.PInt64 _ | AST.PInt128Literal _
                         | AST.PInt8Literal _
                         | AST.PInt16Literal _
@@ -6640,7 +6650,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | AST.PConstructor _
                                 | AST.PBool _
                                 | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
-                                | AST.PList _ | AST.PListCons _ ->
+                                | AST.PList _ | AST.PListCons _ | AST.POr _ ->
                                     Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
                     let patternLen = List.length patterns
@@ -6842,7 +6852,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         | AST.PConstructor _
                                         | AST.PBool _
                                         | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
-                                        | AST.PList _ | AST.PListCons _ ->
+                                        | AST.PList _ | AST.PListCons _ | AST.POr _ ->
                                             Error $"Nested pattern in tuple element not yet supported: {tupPat}"
                                 collectTupleBindings innerPatterns tupleElemTypes (ANF.Var headVar) 0 env allBaseBindings vg2'
                                 |> Result.bind (fun (newEnv, newBindings, vg3) ->
@@ -6860,7 +6870,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             | AST.PConstructor _
                             | AST.PBool _
                             | AST.PString _ | AST.PChar _ | AST.PFloat _
-                            | AST.PList _ | AST.PListCons _ ->
+                            | AST.PList _ | AST.PListCons _ | AST.POr _ ->
                                 Error $"Nested pattern in list cons element not yet supported: {pat}"
                     collectListConsBindings headPatterns scrutAtom currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, tailAtom, vg1) ->
@@ -6921,12 +6931,19 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             || patternDefinitelyCannotMatchType tailPattern patType
                         | AST.TVar _ -> false
                         | _ -> true
+                    | AST.POr alternatives ->
+                        alternatives
+                        |> AST.NonEmptyList.toList
+                        |> List.forall (fun alternative ->
+                            patternDefinitelyCannotMatchType alternative patType)
                     | _ -> false
 
                 // Helper to collect pattern variable bindings (simplified version for common patterns)
                 // sourceType is the type of the source being matched
                 let rec collectBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                     match pat with
+                    | AST.POr alternatives ->
+                        collectBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
                     | AST.PInt64 _ | AST.PInt128Literal _
                     | AST.PInt8Literal _
                     | AST.PInt16Literal _
@@ -7126,6 +7143,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Build comparison expression for a pattern
             let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
                 match pattern with
+                | AST.POr alternatives ->
+                    buildPatternComparison (AST.NonEmptyList.head alternatives) scrutAtom vg
                 | AST.PUnit -> Ok None  // Unit pattern always matches unit type
                 | AST.PWildcard -> Ok None
                 | AST.PVar _ -> Ok None
@@ -7475,6 +7494,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 (vg: ANF.VarGen)
                 : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match pattern with
+                | AST.POr alternatives ->
+                    collectNestedPatternBindings
+                        (AST.NonEmptyList.head alternatives)
+                        sourceAtom
+                        sourceType
+                        env
+                        bindings
+                        vg
                 | AST.PInt64 _ | AST.PInt128Literal _
                 | AST.PInt8Literal _
                 | AST.PInt16Literal _
@@ -7739,7 +7766,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 | AST.PConstructor _
                                 | AST.PBool _
                                 | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
-                                | AST.PList _ | AST.PListCons _ ->
+                                | AST.PList _ | AST.PListCons _ | AST.POr _ ->
                                     Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
                     if patternLen = 0 then

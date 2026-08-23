@@ -36,6 +36,7 @@ type Pattern =
     | PTuple of Pattern list
     | PList of Pattern list
     | PListCons of head:Pattern list * tail:Pattern
+    | POr of Pattern NonEmptyList
 ```
 
 ## Match Compilation
@@ -169,19 +170,42 @@ Guards are evaluated after pattern match but before body execution.
 
 ## Interpreter Parity Boundary
 
-The source comparison evidence is compiler
-`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and interpreter
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`; the implementation was
-revalidated at compiler HEAD `6c4e32f2d39235f726a5acdce571e6943c6d4068`.
+The source comparison evidence is compiler HEAD
+`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and darklang/dark HEAD
+`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The integration revalidation
+which found the nested-alternative and bare-tuple gaps started from compiler
+HEAD `67359e1eaa4f17e686c64ba8ce1d645c56863fef`. DCB1 report commit
+`8a402797ccccda0ca47b516b356ae1de4d670038` was used only as an inventory
+lead; every finding retained here was checked again against those exact source
+revisions.
 
-The public grammar accepts unit, literal, variable, wildcard, tuple, exact
-list, cons, constructor, nested, guarded, and grouped-alternative patterns.
-Alternatives are parsed as the patterns following one case bar and before its
-`when` or `->`; each alternative must bind exactly the same usable names.
+Pinned interpreter evidence is in
+`backend/src/LibExecution/ProgramTypes.fs:271` (the recursive pattern union),
+`backend/src/LibParser/Parser.fs:936` (or-pattern precedence),
+`backend/src/LibParser/Parser.fs:953` (bare tuple patterns),
+`backend/src/LibParser/Validation.fs:147` (duplicate and alternative-binding
+validation), `backend/src/LibExecution/Interpreter.fs:541` (left-to-right
+alternatives with failed-binding rollback),
+`backend/src/LibExecution/ProgramTypesToRuntimeTypes.fs:1009` (pattern then
+guard then body decision order), and `backend/src/LibExecution/Interpreter.fs:1961`
+plus `packages/darklang/prettyPrinter/runtimeError.dark:253` (observable
+non-exhaustive failure). Current compiler anchors are `AST.fs:162`,
+`passes/1_Parser.fs:1312`, `passes/1.5_TypeChecking.fs:4535`, and
+`passes/2_AST_to_ANF.fs:7148` and `:8782`. Line numbers name the pinned/audited
+trees above and may move in later revisions.
+
+The public grammar accepts unit, literal, variable, wildcard, parenthesized or
+bare tuple, exact list, cons, constructor, nested, guarded, and recursive
+alternative patterns. Nested alternatives are expanded in source order into
+sequential arm alternatives before type checking; the Cartesian expansion of
+tuple/list/constructor children preserves interpreter precedence and makes the
+successfully matched alternative supply the guard and body bindings. Each
+alternative must bind exactly the same usable names.
 Repeated usable names in one pattern are rejected, while names beginning with
-`_` are ignored bindings. Record matching binds the whole record (then uses
-field access); record destructuring and ellipsis/rest record syntax are not
-public patterns.
+`_` are ignored by duplicate and alternative binding-set validation (but bind
+normally within the alternative that contains them). Record matching binds the
+whole record (then uses field access); record destructuring and ellipsis/rest
+record syntax are not public patterns.
 
 The scrutinee is evaluated once. Cases, alternatives, and nested structural
 tests run left to right. A successful structural match introduces its bindings
@@ -189,6 +213,12 @@ only for that arm's guard and body. The Boolean guard runs once after those
 bindings are available; a false guard falls through. Only the first eligible
 body executes. If no arm succeeds, the runtime failure is
 `Non-exhaustive match: No matching case found for value <value> in match expression`.
+
+No compiler-only pattern form is retained in the public parity grammar. Record
+destructuring was removed; compiler-syntax comma separators in list patterns
+remain a syntax-mode alias, not a distinct pattern form. Arbitrary-precision
+`Int` literals and multi-field enum payload representation remain contained in
+their value/type owners.
 
 The compiler deliberately retains one AOT-only timing divergence: all arms are
 type checked, including arms which the interpreter would not reach. Invalid

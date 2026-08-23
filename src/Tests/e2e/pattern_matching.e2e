@@ -159,6 +159,9 @@ match false with | false -> 99 | true -> 1 = 99
 // Simple 2-tuple extraction
 match (1, 2) with | (a, b) -> a + b = 3
 
+// The interpreter's public match grammar also permits a bare tuple pattern.
+match (1, 2) with | a, b -> a + b = 3
+
 // 3-tuple extraction
 match (10, 20, 30) with | (a, b, c) -> a + b + c = 60
 
@@ -377,6 +380,10 @@ match (1, 2) with | (x, x) -> x | _ -> 0 = error="Duplicate binding 'x' in the s
 // Pattern groups must bind the same names in every alternative.
 match (1, 2) with | (x, _) | (_, _) -> x | _ -> 0 = error="Pattern matches require all branches to provide the same variables - expected [x], got []"
 
+// Underscore-prefixed names bind locally but do not participate in the
+// alternative binding-set check, matching interpreter validation.
+match 1 with | _left | _right -> 1 = 1
+
 // Grouped list-pattern alternatives on non-list scrutinees must compile as non-matches.
 // Regression: lowering previously hit a TInt64 fallback and crashed during MIR conversion.
 match 42 with | 0 | [_] -> 1 | _ -> 99 = 99
@@ -407,6 +414,13 @@ type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x 
 
 // Nested literal pattern inside tuple inside list
 match [(1, 2)] with | [(1, x)] -> x | _ -> 0 = 2
+
+// Parenthesized alternatives are recursive patterns in the interpreter grammar.
+// The first matching alternative supplies the bindings to the guard and body.
+match (2, 3) with | ((1 | 2), x) -> x | _ -> 0 = 3
+
+// A failed alternative must not leak its partial binding into the guard.
+match (0, 7) with | ((x, 0) | (0, x)) when x == 7 -> x | _ -> 0 = 7
 
 // Nested constructor pattern in list cons head
 type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | MySome(x) :: rest -> x | _ -> 0 = 1

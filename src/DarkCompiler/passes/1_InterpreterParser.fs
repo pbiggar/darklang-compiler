@@ -2762,6 +2762,10 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
         let headResult =
             head |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
         Result.bind (fun () -> validatePattern tail) headResult
+    | POr alternatives ->
+        alternatives
+        |> NonEmptyList.toList
+        |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
     | PUnit
     | PWildcard
     | PInt64 _

@@ -181,6 +181,7 @@ type Pattern =
     | PTuple of Pattern list                               // (a, b, c)
     | PList of Pattern list                                // [a, b, c] - exact length match
     | PListCons of head:Pattern list * tail:Pattern        // a :: b :: t - head elements + rest
+    | POr of Pattern NonEmptyList                          // p1 | p2 - left-to-right alternatives
 
 /// The deliberately restricted pattern language shared by non-recursive lets
 /// and lambda parameters. Match-only patterns cannot be represented here.
@@ -364,6 +365,8 @@ let validateBinders (structure: BinderStructure) : Result<string list, string> =
         | PTuple patterns | PList patterns -> patterns |> List.collect matchPatternBindings
         | PListCons (heads, tail) ->
             (heads |> List.collect matchPatternBindings) @ matchPatternBindings tail
+        | POr alternatives ->
+            alternatives |> NonEmptyList.head |> matchPatternBindings
         | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _
         | PInt16Literal _ | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _
         | PUInt32Literal _ | PUInt64Literal _ | PUInt128Literal _ | PBool _

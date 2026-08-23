@@ -1737,6 +1737,8 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
         let headBindings = headPatterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
         let tailBindings = collectPatternBindings tailPattern
         Set.union headBindings tailBindings
+    | POr alternatives ->
+        alternatives |> NonEmptyList.head |> collectPatternBindings
 
 // =============================================================================
 // Type Inference for Generic Function Calls
@@ -4577,6 +4579,22 @@ let rec private checkExprWithParamNames
                         Error (GenericError message)
 
                 match pattern with
+                | POr alternatives ->
+                    alternatives
+                    |> NonEmptyList.toList
+                    |> ResultList.traverse (fun alternative ->
+                        extractPatternBindings alternative patternType allowNoMatchForKnownListLengthMismatch)
+                    |> Result.map NonEmptyList.fromList
+                    |> Result.bind (fun alternativeBindings ->
+                        let first = NonEmptyList.head alternativeBindings
+                        let expectedNames = first |> List.map fst |> Set.ofList
+                        let bindingsAgree =
+                            alternativeBindings
+                            |> NonEmptyList.toList
+                            |> List.forall (fun bindings ->
+                                bindings |> List.map fst |> Set.ofList |> (=) expectedNames)
+                        if bindingsAgree then Ok first
+                        else Error (GenericError "Every branch of an or-pattern must bind the same names"))
                 | PUnit -> ensureLiteralType TUnit
                 | PWildcard -> Ok []
                 | PInt64 _ -> ensureLiteralType TInt64
@@ -4871,6 +4889,8 @@ let rec private checkExprWithParamNames
                     patterns |> List.collect patternBindingNames
                 | PListCons (headPatterns, tailPattern) ->
                     (headPatterns |> List.collect patternBindingNames) @ patternBindingNames tailPattern
+                | POr alternatives ->
+                    alternatives |> NonEmptyList.head |> patternBindingNames
 
             let duplicatePatternBindings (pattern: Pattern) : string list =
                 patternBindingNames pattern
@@ -4894,7 +4914,10 @@ let rec private checkExprWithParamNames
                         match validateBinders (MatchBinderPattern pattern) with
                         | Error message -> Error (GenericError message)
                         | Ok _ ->
-                            let bindings = collectPatternBindings pattern
+                            let bindings =
+                                collectPatternBindings pattern
+                                |> Set.filter (fun name ->
+                                    name <> "" && not (name.StartsWith "_"))
                             match expectedBindings with
                             | None -> loop rest (Some bindings)
                             | Some expected when expected = bindings ->
@@ -7427,6 +7450,7 @@ let private resolveProgramNames
         | PConstructor (_, payload) -> payload |> Option.map patternBoundNames |> Option.defaultValue Set.empty
         | PTuple patterns | PList patterns -> patterns |> List.map patternBoundNames |> Set.unionMany
         | PListCons (heads, tail) -> Set.union (heads |> List.map patternBoundNames |> Set.unionMany) (patternBoundNames tail)
+        | POr alternatives -> alternatives |> NonEmptyList.head |> patternBoundNames
         | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _ | PInt16Literal _
         | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _ | PUInt32Literal _ | PUInt64Literal _
         | PUInt128Literal _ | PBool _ | PString _ | PChar _ | PFloat _ -> Set.empty
@@ -7447,6 +7471,11 @@ let private resolveProgramNames
         | PListCons (heads, tail) ->
             ResultList.traverse recurse heads
             |> Result.bind (fun heads' -> recurse tail |> Result.map (fun tail' -> PListCons (heads', tail')))
+        | POr alternatives ->
+            alternatives
+            |> NonEmptyList.toList
+            |> ResultList.traverse recurse
+            |> Result.map (NonEmptyList.fromList >> POr)
         | _ -> Ok pattern
 
     let rec resolveExpr localNames expr =
