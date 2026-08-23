@@ -4,11 +4,11 @@
   "profile": "routine",
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
-  "contract_sha256": "3662376c639f80762e5f9672675eed03667cedd6b77b005bf3f624a7708f03db",
-  "generated_at": "2026-08-23T03:09:12+00:00",
+  "contract_sha256": "1b03683abfad94c4640c3e1ea843ca087c47281c1104818fb22c1df5bff63ee3",
+  "generated_at": "2026-08-23T14:34:32+00:00",
   "compiler": {
-    "commit": "79a1101e1c422824de80032e0977cb9b70d1bfce",
-    "subject": "Check pisum review changes"
+    "commit": "cd01e5b5da94852d7342346baeaf7c60305126f8",
+    "subject": "Document comparable pisum benchmark result"
   },
   "benchmarks": [
     {
@@ -65,7 +65,7 @@
     },
     {
       "name": "pisum",
-      "instructions": 55014671
+      "instructions": 45016783
     },
     {
       "name": "primes",

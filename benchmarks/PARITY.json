@@ -189,12 +189,12 @@
     },
     "pisum": {
       "status": "comparable",
-      "dark_sha256": "2b9d7a8796707bf7c6023472ffd171c70b0c40c5135e89dc70120f81e5e93b17",
+      "dark_sha256": "4020595f11ff53d49fd2cfd126d8b3b4474a295790d74365108c279d5db7d327",
       "rust_sha256": "c1ec07d118d5785b5f343f40b2852d99e60b7c5e0636647cd2b2c59fda053760",
       "expected_sha256": "e505f2503a6803a81a0d03a895082eebd81b6c0979db7c770c901158b321d877",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "e1d08d5382a2a0237dca0754912839e78e1706204736df74755096fcb762fc92",
+        "dark_sha256": "1126f0af46f60cfbcf326d45242a699117bff5e44d7d27471c7aacf7b67e80d5",
         "rust_sha256": "1a02ab034c36fe66e7fafb30703ee101073ac0ac801971161b999b16d2462dc6",
         "expected_sha256": "563f7df9fe06db97f41a1441f9c6ba59621d8a7c1f7059d171a63d2f1e411b4c"
       }

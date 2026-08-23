@@ -113,8 +113,9 @@ remain reduced or blocked as documented above.
 - Rust sources remain the original reference workloads and are built with the
   original `rustc -C opt-level=3` command. Fairness changes are made in Dark or
   by excluding a pair, not by reshaping Rust.
-- The Dark pisum translation returns the last of 500 rounds and squares each
-  integer before converting it to float, matching the Rust source shape.
+- The Dark pisum translation returns the last of 500 rounds, squares each
+  integer before converting it to float, and carries a result-dependent exact
+  zero into the next round so effect-free call hoisting cannot erase 499 rounds.
 - The Dark edigits translation uses one decimal digit per list element and the
   same 1,000-digit, ten-iteration fixed-point algorithm as Rust.
 - Dark matmul materializes the complete product before its checksum pass, as
