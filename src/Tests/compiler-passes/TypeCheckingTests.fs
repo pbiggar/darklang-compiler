@@ -330,9 +330,9 @@ let testConstructorIdentityCollisionRejected () : TestResult =
 
 let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
     let source =
-        "let groupEven(n: Int64) : Int64 = if n == 0 then 1 else groupOdd(n - 1) "
-        + "let groupOdd(n: Int64) : Int64 = if n == 0 then 0 else groupEven(n - 1) "
-        + "let completed(n: Int64) : Int64 = n + 1 completed(1)"
+        "let groupEven(n: Int64) : Int64 = if n == 0L then 1L else groupOdd(n - 1L) "
+        + "let groupOdd(n: Int64) : Int64 = if n == 0L then 0L else groupEven(n - 1L) "
+        + "let completed(n: Int64) : Int64 = n + 1L completed(1L)"
     InterpreterParser.parseString false source
     |> Result.mapError (fun error -> $"Recursive group parse failed: {error}")
     |> Result.bind (fun program ->

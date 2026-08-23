@@ -15,73 +15,73 @@
 
 // Test bit 0 extraction (power-of-2 mask = 1)
 let testBit0(x: Int64) : Int64 =
-  if (x & 1) == 0 then 0 else 1
-testBit0(0) = 0
-testBit0(1) = 1
-testBit0(2) = 0
-testBit0(3) = 1
-testBit0(254) = 0
-testBit0(255) = 1
+  if (x & 1L) == 0L then 0L else 1L
+testBit0(0L) = 0L
+testBit0(1L) = 1L
+testBit0(2L) = 0L
+testBit0(3L) = 1L
+testBit0(254L) = 0L
+testBit0(255L) = 1L
 
 // Test bit 1 extraction (power-of-2 mask = 2)
 let testBit1(x: Int64) : Int64 =
-  if (x & 2) == 0 then 0 else 1
-testBit1(0) = 0
-testBit1(1) = 0
-testBit1(2) = 1
-testBit1(3) = 1
-testBit1(4) = 0
-testBit1(5) = 0
-testBit1(6) = 1
-testBit1(7) = 1
+  if (x & 2L) == 0L then 0L else 1L
+testBit1(0L) = 0L
+testBit1(1L) = 0L
+testBit1(2L) = 1L
+testBit1(3L) = 1L
+testBit1(4L) = 0L
+testBit1(5L) = 0L
+testBit1(6L) = 1L
+testBit1(7L) = 1L
 
 // Test bit 2 extraction (power-of-2 mask = 4)
 let testBit2(x: Int64) : Int64 =
-  if (x & 4) == 0 then 0 else 1
-testBit2(0) = 0
-testBit2(3) = 0
-testBit2(4) = 1
-testBit2(7) = 1
-testBit2(8) = 0
-testBit2(12) = 1
+  if (x & 4L) == 0L then 0L else 1L
+testBit2(0L) = 0L
+testBit2(3L) = 0L
+testBit2(4L) = 1L
+testBit2(7L) = 1L
+testBit2(8L) = 0L
+testBit2(12L) = 1L
 
 // Test bit 3 extraction (power-of-2 mask = 8)
 let testBit3(x: Int64) : Int64 =
-  if (x & 8) == 0 then 0 else 1
-testBit3(0) = 0
-testBit3(7) = 0
-testBit3(8) = 1
-testBit3(15) = 1
-testBit3(16) = 0
-testBit3(24) = 1
+  if (x & 8L) == 0L then 0L else 1L
+testBit3(0L) = 0L
+testBit3(7L) = 0L
+testBit3(8L) = 1L
+testBit3(15L) = 1L
+testBit3(16L) = 0L
+testBit3(24L) = 1L
 
 // Test bit 4 extraction (power-of-2 mask = 16)
 let testBit4(x: Int64) : Int64 =
-  if (x & 16) == 0 then 0 else 1
-testBit4(0) = 0
-testBit4(15) = 0
-testBit4(16) = 1
-testBit4(31) = 1
-testBit4(32) = 0
-testBit4(48) = 1
+  if (x & 16L) == 0L then 0L else 1L
+testBit4(0L) = 0L
+testBit4(15L) = 0L
+testBit4(16L) = 1L
+testBit4(31L) = 1L
+testBit4(32L) = 0L
+testBit4(48L) = 1L
 
 // Test higher bit positions
 let testBit7(x: Int64) : Int64 =
-  if (x & 128) == 0 then 0 else 1
-testBit7(0) = 0
-testBit7(127) = 0
-testBit7(128) = 1
-testBit7(255) = 1
-testBit7(256) = 0
+  if (x & 128L) == 0L then 0L else 1L
+testBit7(0L) = 0L
+testBit7(127L) = 0L
+testBit7(128L) = 1L
+testBit7(255L) = 1L
+testBit7(256L) = 0L
 
 // Test bit 8 (mask = 256)
 let testBit8(x: Int64) : Int64 =
-  if (x & 256) == 0 then 0 else 1
-testBit8(0) = 0
-testBit8(255) = 0
-testBit8(256) = 1
-testBit8(511) = 1
-testBit8(512) = 0
+  if (x & 256L) == 0L then 0L else 1L
+testBit8(0L) = 0L
+testBit8(255L) = 0L
+testBit8(256L) = 1L
+testBit8(511L) = 1L
+testBit8(512L) = 0L
 
 // ===================================================================
 // Combined Bit Operations
@@ -91,19 +91,19 @@ testBit8(512) = 0
 
 // Extract multiple bits and combine them
 let extractBits(x: Int64) : Int64 =
-  let b0 = if (x & 1) == 0 then 0 else 1 in
-  let b1 = if (x & 2) == 0 then 0 else 2 in
-  let b2 = if (x & 4) == 0 then 0 else 4 in
+  let b0 = if (x & 1L) == 0L then 0L else 1L in
+  let b1 = if (x & 2L) == 0L then 0L else 2L in
+  let b2 = if (x & 4L) == 0L then 0L else 4L in
   b0 + b1 + b2
 
-extractBits(0) = 0
-extractBits(1) = 1
-extractBits(2) = 2
-extractBits(3) = 3
-extractBits(4) = 4
-extractBits(5) = 5
-extractBits(6) = 6
-extractBits(7) = 7
+extractBits(0L) = 0L
+extractBits(1L) = 1L
+extractBits(2L) = 2L
+extractBits(3L) = 3L
+extractBits(4L) = 4L
+extractBits(5L) = 5L
+extractBits(6L) = 6L
+extractBits(7L) = 7L
 
 // ===================================================================
 // LICM with Bit Operations
@@ -112,20 +112,20 @@ extractBits(7) = 7
 // optimization passes together.
 
 let loopWithBitTest(mask: Int64, n: Int64, acc: Int64) : Int64 =
-  if n <= 0 then acc
+  if n <= 0L then acc
   else
     // Loop-invariant bit test on mask
-    let hasBit = if (mask & 4) == 0 then 0 else 10 in
-    loopWithBitTest(mask, n - 1, acc + hasBit)
+    let hasBit = if (mask & 4L) == 0L then 0L else 10L in
+    loopWithBitTest(mask, n - 1L, acc + hasBit)
 
 // mask=4 has bit 2 set, so hasBit=10, 5 iterations = 50
-loopWithBitTest(4, 5, 0) = 50
+loopWithBitTest(4L, 5L, 0L) = 50L
 // mask=3 doesn't have bit 2 set, so hasBit=0, 5 iterations = 0
-loopWithBitTest(3, 5, 0) = 0
+loopWithBitTest(3L, 5L, 0L) = 0L
 // mask=7 has bit 2 set, so hasBit=10, 3 iterations = 30
-loopWithBitTest(7, 3, 0) = 30
+loopWithBitTest(7L, 3L, 0L) = 30L
 // mask=0 doesn't have bit 2 set
-loopWithBitTest(0, 10, 0) = 0
+loopWithBitTest(0L, 10L, 0L) = 0L
 
 // ===================================================================
 // Multiply-by-Constant Strength Reduction Tests
@@ -141,33 +141,33 @@ loopWithBitTest(0, 10, 0) = 0
 // Multiply by 7 (2^3 - 1 = 8 - 1)
 // Correct: x * 7 = (x << 3) - x = 8x - x = 7x
 // If mutated to +: (x << 3) + x = 8x + x = 9x (WRONG)
-let mulBy7(x: Int64) : Int64 = x * 7
-mulBy7(1) = 7
-mulBy7(2) = 14
-mulBy7(3) = 21
-mulBy7(10) = 70
-mulBy7(100) = 700
+let mulBy7(x: Int64) : Int64 = x * 7L
+mulBy7(1L) = 7L
+mulBy7(2L) = 14L
+mulBy7(3L) = 21L
+mulBy7(10L) = 70L
+mulBy7(100L) = 700L
 
 // Multiply by 15 (2^4 - 1 = 16 - 1)
-let mulBy15(x: Int64) : Int64 = x * 15
-mulBy15(1) = 15
-mulBy15(2) = 30
-mulBy15(3) = 45
-mulBy15(10) = 150
+let mulBy15(x: Int64) : Int64 = x * 15L
+mulBy15(1L) = 15L
+mulBy15(2L) = 30L
+mulBy15(3L) = 45L
+mulBy15(10L) = 150L
 
 // Multiply by 31 (2^5 - 1 = 32 - 1)
-let mulBy31(x: Int64) : Int64 = x * 31
-mulBy31(1) = 31
-mulBy31(2) = 62
-mulBy31(3) = 93
-mulBy31(10) = 310
+let mulBy31(x: Int64) : Int64 = x * 31L
+mulBy31(1L) = 31L
+mulBy31(2L) = 62L
+mulBy31(3L) = 93L
+mulBy31(10L) = 310L
 
 // Multiply by 63 (2^6 - 1 = 64 - 1)
-let mulBy63(x: Int64) : Int64 = x * 63
-mulBy63(1) = 63
-mulBy63(2) = 126
-mulBy63(3) = 189
-mulBy63(10) = 630
+let mulBy63(x: Int64) : Int64 = x * 63L
+mulBy63(1L) = 63L
+mulBy63(2L) = 126L
+mulBy63(3L) = 189L
+mulBy63(10L) = 630L
 
 // ===================================================================
 // isPowerOf2 Tests (Mutation #176)
@@ -188,27 +188,27 @@ mulBy63(10) = 630
 // Power-of-2 mask values that trigger TBZ/TBNZ when isPowerOf2 works
 // These masks are: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024
 let checkPowerOf2Mask1(x: Int64) : Int64 =
-  if (x & 1) != 0 then 1 else 0
-checkPowerOf2Mask1(0) = 0
-checkPowerOf2Mask1(1) = 1
-checkPowerOf2Mask1(2) = 0
-checkPowerOf2Mask1(3) = 1
+  if (x & 1L) != 0L then 1L else 0L
+checkPowerOf2Mask1(0L) = 0L
+checkPowerOf2Mask1(1L) = 1L
+checkPowerOf2Mask1(2L) = 0L
+checkPowerOf2Mask1(3L) = 1L
 
 let checkPowerOf2Mask512(x: Int64) : Int64 =
-  if (x & 512) != 0 then 1 else 0
-checkPowerOf2Mask512(0) = 0
-checkPowerOf2Mask512(511) = 0
-checkPowerOf2Mask512(512) = 1
-checkPowerOf2Mask512(1023) = 1
-checkPowerOf2Mask512(1024) = 0
+  if (x & 512L) != 0L then 1L else 0L
+checkPowerOf2Mask512(0L) = 0L
+checkPowerOf2Mask512(511L) = 0L
+checkPowerOf2Mask512(512L) = 1L
+checkPowerOf2Mask512(1023L) = 1L
+checkPowerOf2Mask512(1024L) = 0L
 
 let checkPowerOf2Mask1024(x: Int64) : Int64 =
-  if (x & 1024) != 0 then 1 else 0
-checkPowerOf2Mask1024(0) = 0
-checkPowerOf2Mask1024(1023) = 0
-checkPowerOf2Mask1024(1024) = 1
-checkPowerOf2Mask1024(2047) = 1
-checkPowerOf2Mask1024(2048) = 0
+  if (x & 1024L) != 0L then 1L else 0L
+checkPowerOf2Mask1024(0L) = 0L
+checkPowerOf2Mask1024(1023L) = 0L
+checkPowerOf2Mask1024(1024L) = 1L
+checkPowerOf2Mask1024(2047L) = 1L
+checkPowerOf2Mask1024(2048L) = 0L
 
 // ===================================================================
 // Mutation #177 Tests - LOGIC_AND in multiply-by-constant guard
@@ -233,43 +233,43 @@ checkPowerOf2Mask1024(2048) = 0
 
 // Test multiply by same constant on both sides - this should NOT use
 // strength reduction because both operands are the same constant
-let squareConst7() : Int64 = 7 * 7
-squareConst7() = 49
+let squareConst7() : Int64 = 7L * 7L
+squareConst7() = 49L
 
-let squareConst15() : Int64 = 15 * 15
-squareConst15() = 225
+let squareConst15() : Int64 = 15L * 15L
+squareConst15() = 225L
 
-let squareConst31() : Int64 = 31 * 31
-squareConst31() = 961
+let squareConst31() : Int64 = 31L * 31L
+squareConst31() = 961L
 
 // Test that nested expressions with strength-reduction constants work correctly
 // These create more complex patterns that could confuse a buggy optimizer
-let nestedMul7(x: Int64) : Int64 = (x * 7) * 7
-nestedMul7(1) = 49
-nestedMul7(2) = 98
-nestedMul7(3) = 147
+let nestedMul7(x: Int64) : Int64 = (x * 7L) * 7L
+nestedMul7(1L) = 49L
+nestedMul7(2L) = 98L
+nestedMul7(3L) = 147L
 
-let nestedMul15(x: Int64) : Int64 = (x * 15) * 15
-nestedMul15(1) = 225
-nestedMul15(2) = 450
-nestedMul15(3) = 675
+let nestedMul15(x: Int64) : Int64 = (x * 15L) * 15L
+nestedMul15(1L) = 225L
+nestedMul15(2L) = 450L
+nestedMul15(3L) = 675L
 
 // Test multiply where both operands come from the same expression
 // This creates a scenario where registers might be reused
 let selfMulPattern(x: Int64) : Int64 =
-  let y = x + 1 in
-  let z = y * 7 in  // strength reduction: (y << 3) - y
+  let y = x + 1L in
+  let z = y * 7L in  // strength reduction: (y << 3) - y
   z * z             // should NOT use strength reduction here
-selfMulPattern(1) = 196   // (1+1)*7 = 14, 14*14 = 196
-selfMulPattern(2) = 441   // (2+1)*7 = 21, 21*21 = 441
+selfMulPattern(1L) = 196L   // (1+1)*7 = 14, 14*14 = 196
+selfMulPattern(2L) = 441L   // (2+1)*7 = 21, 21*21 = 441
 
 // Test mixing strength-reducible and non-reducible multiplies
 let mixedMul(x: Int64) : Int64 =
-  let a = x * 7 in    // strength reducible
-  let b = x * 11 in   // NOT strength reducible (11 is not 2^n ± 1)
+  let a = x * 7L in    // strength reducible
+  let b = x * 11L in   // NOT strength reducible (11 is not 2^n ± 1)
   a + b
-mixedMul(1) = 18      // 7 + 11 = 18
-mixedMul(10) = 180    // 70 + 110 = 180
+mixedMul(1L) = 18L      // 7 + 11 = 18
+mixedMul(10L) = 180L    // 70 + 110 = 180
 
 // ===================================================================
 // Mutation #178 Tests - LOGIC_AND in commutative multiply-by-constant guard
@@ -296,36 +296,36 @@ mixedMul(10) = 180    // 70 + 110 = 180
 // wrong results because the optimizer incorrectly applies the 7 optimization.
 
 let testMutation178_separateConstant(x: Int64, y: Int64) : Int64 =
-  let seven = 7 in        // Creates: Mov tempReg, 7
+  let seven = 7L in        // Creates: Mov tempReg, 7
   let result = x * y in   // Creates: Mul dest, xReg, yReg (neither is tempReg!)
   result + seven          // Use seven so it's not optimized away
 
 // With correct code:   x * y + 7 = 2*3 + 7 = 13
 // With mutation:       y * 7 + 7 = 3*7 + 7 = 28 (WRONG - applies 7 optimization to x*y)
-testMutation178_separateConstant(2, 3) = 13
-testMutation178_separateConstant(5, 4) = 27    // 5*4 + 7 = 27
-testMutation178_separateConstant(10, 10) = 107 // 10*10 + 7 = 107
+testMutation178_separateConstant(2L, 3L) = 13L
+testMutation178_separateConstant(5L, 4L) = 27L    // 5*4 + 7 = 27
+testMutation178_separateConstant(10L, 10L) = 107L // 10*10 + 7 = 107
 
 // Additional test with different strength-reduction constants
 let testMutation178_with15(x: Int64, y: Int64) : Int64 =
-  let fifteen = 15 in     // Creates: Mov tempReg, 15
+  let fifteen = 15L in     // Creates: Mov tempReg, 15
   let result = x * y in   // Creates: Mul dest, xReg, yReg
   result + fifteen
 
 // With correct code:   x * y + 15 = 3*4 + 15 = 27
 // With mutation:       y * 15 + 15 = 4*15 + 15 = 75 (WRONG)
-testMutation178_with15(3, 4) = 27
-testMutation178_with15(2, 5) = 25    // 2*5 + 15 = 25
+testMutation178_with15(3L, 4L) = 27L
+testMutation178_with15(2L, 5L) = 25L    // 2*5 + 15 = 25
 
 // Test where x == y to ensure we're testing the right path
 let testMutation178_sameArgs(x: Int64) : Int64 =
-  let seven = 7 in
+  let seven = 7L in
   let result = x * x in   // Square, not multiply by 7!
   result + seven
 
-testMutation178_sameArgs(3) = 16     // 3*3 + 7 = 16
-testMutation178_sameArgs(5) = 32     // 5*5 + 7 = 32
-testMutation178_sameArgs(10) = 107   // 10*10 + 7 = 107
+testMutation178_sameArgs(3L) = 16L     // 3*3 + 7 = 16
+testMutation178_sameArgs(5L) = 32L     // 5*5 + 7 = 32
+testMutation178_sameArgs(10L) = 107L   // 10*10 + 7 = 107
 
 // ===================================================================
 // Mutation #179 Tests - LOGIC_AND in MUL+ADD fusion guard
@@ -359,19 +359,19 @@ let testMutation179_independentMulAdd(a: Int64, b: Int64, x: Int64, y: Int64) : 
 
 // With correct code:   (x + y) + (a * b) = (3 + 4) + (2 * 5) = 7 + 10 = 17
 // With mutation:       (a*b + y) + (a * b) = (10 + 4) + 10 = 24 (WRONG)
-testMutation179_independentMulAdd(2, 5, 3, 4) = 17
-testMutation179_independentMulAdd(3, 7, 10, 20) = 51    // (10+20) + (3*7) = 30 + 21 = 51
-testMutation179_independentMulAdd(1, 1, 100, 200) = 301 // (100+200) + (1*1) = 300 + 1 = 301
+testMutation179_independentMulAdd(2L, 5L, 3L, 4L) = 17L
+testMutation179_independentMulAdd(3L, 7L, 10L, 20L) = 51L    // (10+20) + (3*7) = 30 + 21 = 51
+testMutation179_independentMulAdd(1L, 1L, 100L, 200L) = 301L // (100+200) + (1*1) = 300 + 1 = 301
 
 // Additional test with larger values to make the difference more obvious
 let testMutation179_largeValues(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
   let product = a * b in
   let sum = x + y in
-  sum * 2 + product      // Use both results
+  sum * 2L + product      // Use both results
 
 // With correct code:   (x + y) * 2 + (a * b) = (5 + 3) * 2 + (4 * 6) = 16 + 24 = 40
-testMutation179_largeValues(4, 6, 5, 3) = 40
-testMutation179_largeValues(10, 10, 1, 2) = 106  // (1+2)*2 + 10*10 = 6 + 100 = 106
+testMutation179_largeValues(4L, 6L, 5L, 3L) = 40L
+testMutation179_largeValues(10L, 10L, 1L, 2L) = 106L  // (1+2)*2 + 10*10 = 6 + 100 = 106
 
 // Test where the MUL result is used elsewhere but not in the immediate ADD
 let testMutation179_delayedUse(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
@@ -380,5 +380,5 @@ let testMutation179_delayedUse(a: Int64, b: Int64, x: Int64, y: Int64) : Int64 =
   let add2 = add1 + mul1 in // Now use both
   add2
 
-testMutation179_delayedUse(2, 3, 10, 20) = 36   // (10+20) + (2*3) = 30 + 6 = 36
-testMutation179_delayedUse(5, 5, 7, 8) = 40     // (7+8) + (5*5) = 15 + 25 = 40
+testMutation179_delayedUse(2L, 3L, 10L, 20L) = 36L   // (10+20) + (2*3) = 30 + 6 = 36
+testMutation179_delayedUse(5L, 5L, 7L, 8L) = 40L     // (7+8) + (5*5) = 15 + 25 = 40

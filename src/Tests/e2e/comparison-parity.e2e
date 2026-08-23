@@ -57,36 +57,36 @@ let comparisonDate = Builtin.unwrap(Stdlib.DateTime.parse("2021-07-28T22:42:36Z"
 Stdlib.notEquals<DateTime>(Builtin.unwrap(Stdlib.DateTime.parse("2021-07-28T22:42:36Z")), Builtin.unwrap(Stdlib.DateTime.parse("2019-07-28T22:42:36Z"))) = true
 
 // Same nominal type plus recursive contents determine structural equality.
-(1, [2, 3], (true, "x")) == (1, [2, 3], (true, "x")) = true
-(1, [2, 3], (true, "x")) != (1, [2, 4], (true, "x")) = true
-type ComparisonRecord = { name: String, values: List<(Int64 * Bool)> }
-(ComparisonRecord { name = "r", values = [(1, true), (2, false)] } == ComparisonRecord { name = "r", values = [(1, true), (2, false)] }) = true
-type ComparisonBox = ComparisonBox of List<(Int64 * String)>
-ComparisonBox([(1, "one"), (2, "two")]) == ComparisonBox([(1, "one"), (2, "two")]) = true
-ComparisonBox([(1, "one"), (2, "two")]) != ComparisonBox([(1, "one"), (3, "three")]) = true
-Stdlib.equals<(Int64 * List<(String * Bool)>)>((1L, [("x", true)]), (1L, [("x", true)])) = true
-Stdlib.notEquals<List<(Int64 * List<String>)>>([(1L, ["x", "y"])], [(1L, ["x", "z"])]) = true
-Stdlib.equals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
-Stdlib.notEquals<ComparisonBox>(ComparisonBox([(1, "one")]), ComparisonBox([(2, "two")])) = true
+(1L, [2L, 3L], (true, "x")) == (1L, [2L, 3L], (true, "x")) = true
+(1L, [2L, 3L], (true, "x")) != (1L, [2L, 4L], (true, "x")) = true
+type ComparisonRecord = { name: String, values: List<(Int64, Bool)> }
+(ComparisonRecord { name = "r", values = [(1L, true), (2L, false)] } == ComparisonRecord { name = "r", values = [(1L, true), (2L, false)] }) = true
+type ComparisonBox = ComparisonBox of List<(Int64, String)>
+ComparisonBox([(1L, "one"), (2L, "two")]) == ComparisonBox([(1L, "one"), (2L, "two")]) = true
+ComparisonBox([(1L, "one"), (2L, "two")]) != ComparisonBox([(1L, "one"), (3L, "three")]) = true
+Stdlib.equals<(Int64, List<(String, Bool)>)>((1L, [("x", true)]), (1L, [("x", true)])) = true
+Stdlib.notEquals<List<(Int64, List<String>)>>([(1L, ["x", "y"])], [(1L, ["x", "z"])]) = true
+Stdlib.equals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1L, true)] }, ComparisonRecord { name = "r", values = [(1L, true)] }) = true
+Stdlib.notEquals<ComparisonBox>(ComparisonBox([(1L, "one")]), ComparisonBox([(2L, "two")])) = true
 
 // A typed comparison plan survives substitution and specialization.
 let comparisonGenericEquals<'a>(left: a, right: a): Bool = left == right
-comparisonGenericEquals<List<Int64>>([1, 2, 3], [1, 2, 3]) = true
-comparisonGenericEquals<List<(Int64 * String)>>([(1, "one")], [(1, "one")]) = true
-comparisonGenericEquals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
+comparisonGenericEquals<List<Int64>>([1L, 2L, 3L], [1L, 2L, 3L]) = true
+comparisonGenericEquals<List<(Int64, String)>>([(1L, "one")], [(1L, "one")]) = true
+comparisonGenericEquals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1L, true)] }, ComparisonRecord { name = "r", values = [(1L, true)] }) = true
 
 // Dict equality compares mappings, independently of insertion order and shape.
-Dict { a = 1; b = 2 } == Dict { b = 2; a = 1 } = true
-comparisonGenericEquals<Dict<List<Int64>>>(Dict { a = [1, 2]; b = [3] }, Dict { b = [3]; a = [1, 2] }) = true
-Dict { a = 1 } != Dict { a = 2 } = true
-Stdlib.equals<Dict<List<Int64>>>(Dict { a = [1, 2]; b = [3] }, Dict { b = [3]; a = [1, 2] }) = true
-Stdlib.notEquals<Dict<List<Int64>>>(Dict { a = [1, 2] }, Dict { a = [1, 3] }) = true
+Dict { a = 1L; b = 2L } == Dict { b = 2L; a = 1L } = true
+comparisonGenericEquals<Dict<List<Int64>>>(Dict { a = [1L, 2L]; b = [3L] }, Dict { b = [3L]; a = [1L, 2L] }) = true
+Dict { a = 1L } != Dict { a = 2L } = true
+Stdlib.equals<Dict<List<Int64>>>(Dict { a = [1L, 2L]; b = [3L] }, Dict { b = [3L]; a = [1L, 2L] }) = true
+Stdlib.notEquals<Dict<List<Int64>>>(Dict { a = [1L, 2L] }, Dict { a = [1L, 3L] }) = true
 
 // Lambda identity is its source expression and deliberately ignores captures.
 let comparisonMakeLambda(captured: Int64): (Int64) -> Int64 =
   fun value -> value + captured
-comparisonMakeLambda(1) == comparisonMakeLambda(2) = true
-[comparisonMakeLambda(1)] == [comparisonMakeLambda(2)] = true
+comparisonMakeLambda(1L) == comparisonMakeLambda(2L) = true
+[comparisonMakeLambda(1L)] == [comparisonMakeLambda(2L)] = true
 (fun value -> value) == (fun value -> value) = false
 
 // Named functions include resolved identity, specialization, and applied args.
@@ -140,18 +140,18 @@ type ComparisonNominalB = ComparisonOnlyB | ComparisonOtherB
 ComparisonOnlyA == ComparisonOnlyB = error="Cannot perform equality check on ComparisonNominalA and ComparisonNominalB"
 type ComparisonRecordA = { value: Int64 }
 type ComparisonRecordB = { value: Int64 }
-(ComparisonRecordA { value = 1 } == ComparisonRecordB { value = 1 }) = error="Cannot perform equality check on ComparisonRecordA and ComparisonRecordB"
+(ComparisonRecordA { value = 1L } == ComparisonRecordB { value = 1L }) = error="Cannot perform equality check on ComparisonRecordA and ComparisonRecordB"
 true < false = error="Cannot perform numeric operation on Bool and Bool"
 "a" >= "b" = error="Cannot perform numeric operation on String and String"
 1L < 1.0 = error="Cannot perform numeric operation on Int64 and Float"
-Stdlib.Bytes.create(0) != Stdlib.Bytes.create(0) = true
-let blob = Stdlib.Bytes.create(0) in blob == blob = true
-Stdlib.equals<Blob>(Stdlib.Bytes.create(0), Stdlib.Bytes.create(0)) = false
-let publicBlob = Stdlib.Bytes.create(0) in Stdlib.equals<Blob>(publicBlob, publicBlob) = true
-Stdlib.notEquals<Blob>(Stdlib.Bytes.create(0), Stdlib.Bytes.create(0)) = true
+Stdlib.Bytes.create(0L) != Stdlib.Bytes.create(0L) = true
+let blob = Stdlib.Bytes.create(0L) in blob == blob = true
+Stdlib.equals<Blob>(Stdlib.Bytes.create(0L), Stdlib.Bytes.create(0L)) = false
+let publicBlob = Stdlib.Bytes.create(0L) in Stdlib.equals<Blob>(publicBlob, publicBlob) = true
+Stdlib.notEquals<Blob>(Stdlib.Bytes.create(0L), Stdlib.Bytes.create(0L)) = true
 
 // Public wrapper calls retain the compiler's intentional AOT mismatch timing.
 Stdlib.equals('a', "a") = error="Type variable a$0 has conflicting inferences: Char vs String"
 Stdlib.notEquals(1L, 1.0) = error="Type mismatch in float literal: expected Int64, got Float"
 Stdlib.equals(ComparisonOnlyA, ComparisonOnlyB) = error="Type mismatch in constructor ComparisonOnlyA: expected a$0, got ComparisonNominalA"
-Stdlib.notEquals(ComparisonRecordA { value = 1 }, ComparisonRecordB { value = 1 }) = error="Type mismatch in record literal: expected ComparisonRecordA, got ComparisonRecordB"
+Stdlib.notEquals(ComparisonRecordA { value = 1L }, ComparisonRecordB { value = 1L }) = error="Type mismatch in record literal: expected ComparisonRecordA, got ComparisonRecordB"

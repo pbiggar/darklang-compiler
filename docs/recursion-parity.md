@@ -50,7 +50,7 @@ nonempty records. `RecursiveMemberKind`, `RecursiveAvailability`, and
 members, completed/imported groups, eager edges, and alias edges from being
 encoded by names or magic strings.
 
-Both parser paths preserve top-level function, named local-function, and direct
+The canonical parser preserves top-level function, named local-function, and direct
 lambda-binding candidates. `NameSyntax.assignParsedRecursiveIdentities`
 assigns stable structural identities and lexical boundaries. Name resolution
 predeclares sibling package functions, resolves bodies, builds the resolved
@@ -85,7 +85,7 @@ not public recursion syntax.
 
 ## Source anchors
 
-- Parsing: `passes/1_Parser.fs` and `passes/1_InterpreterParser.fs`
+- Parsing: `passes/1_InterpreterParser.fs`
 - Stable parsed identities: `NameSyntax.fs`
 - Resolution, SCCs, monomorphic checking, and diagnostics:
   `passes/1.5_TypeChecking.fs`

@@ -81,10 +81,10 @@ name`, and `Ambiguous <context> reference`.
 
 ## Extensions and intentional divergences
 
-- Compiler implementation names are omitted from the source-resolution
-  environment. Private raw-memory and lowering helpers are available only while
-  compiling the stdlib itself.
-- Both parser modes accept module headers and blocks and retain their typed
+- The compiler's native `File`, `Path`, `Platform`, `Random`, raw-memory, and
+  related intrinsic catalog remains a compiler-only extension. Each entry is an
+  explicit `CompilerExtension` candidate under its full registered spelling.
+- The canonical parser accepts module headers and blocks and retains their typed
   paths through source-unit composition, then lower them to deterministic
   qualified backend symbols. The compiler does
   not load content-addressed packages. Imported compilation environments model

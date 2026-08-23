@@ -2,6 +2,6 @@
 //
 // Internal functions and modules (prefixed with __) should not be callable from user code.
 
-__raw_alloc(8) = error="Internal identifier not allowed in user code: __raw_alloc"
+__raw_alloc(8L) = error="Internal identifier not allowed in user code: __raw_alloc"
 Stdlib.Internal.HAMT.__getTag(Dict { }) = error="Internal identifier not allowed in user code: Stdlib.Internal.HAMT.__getTag"
 Stdlib.Internal.SkewList.empty<Int64>() = error="Internal identifier not allowed in user code: Stdlib.Internal.SkewList.empty"

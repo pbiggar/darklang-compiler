@@ -9,7 +9,7 @@ Stdlib.List.isEmpty_v0 [ 1L ] = false
 Stdlib.List.isEmpty_v0 [] = true
 
 
-Stdlib.List.map [ 1L; 2L ] (fun x -> x + 1L) = [ 2L; 3L ]
+Stdlib.List.map<Int64, Int64> [ 1L; 2L ] (fun x -> x + 1L) = [ 2L; 3L ]
 
 
 Stdlib.List.append_v0 [ 1L; 2L; 3L ] [ 4L; 5L; 6L ] = [ 1L; 2L; 3L; 4L; 5L; 6L ]
@@ -22,13 +22,13 @@ Stdlib.List.append_v0 [] [] = []
 [1; 2.3] = error="Cannot add a Float (2.3) to a list of Stdlib.Int32. Failed at index 1."
 [(1,10); 10; (3,30)] = error="Cannot add an Int32 (10) to a list of (Int32 * Int32). Failed at index 1."
 [(1,10); (2,20); (3,30,40)] = error="Cannot add an (Int32 * Int32 * Int32) ((3, 30, 40)) to a list of (Int32 * Int32). Failed at index 2."
-Stdlib.List.all_v0 [] (fun item -> item < 3L) = true
+Stdlib.List.all_v0<Int64> [] (fun item -> item < 3L) = true
 Stdlib.List.all_v0 [ 2L ] (fun item -> item < 3L) = true
 Stdlib.List.all_v0 [ 1L; 2L ] (fun item -> item < 3L) = true
 Stdlib.List.all_v0 [ 4L ] (fun item -> item < 3L) = false
 Stdlib.List.all_v0 [ 1L; 4L ] (fun item -> item < 3L) = false
 
-Stdlib.List.any_v0 [] (fun item -> item < 3L) = false
+Stdlib.List.any_v0<Int64> [] (fun item -> item < 3L) = false
 Stdlib.List.any_v0 [ 2L ] (fun item -> item < 3L) = true
 Stdlib.List.any_v0 [ 4L ] (fun item -> item < 3L) = false
 Stdlib.List.any_v0 [ 1L; 2L ] (fun item -> item < 3L) = true
@@ -160,7 +160,7 @@ module Head =
 module IndexedMap =
   Stdlib.List.indexedMap_v0 [ 3L; 2L; 1L ] (fun i v -> v - (Builtin.unwrap (Stdlib.Int.toInt64 i))) = [ 3L; 1L; -1L ]
   Stdlib.List.indexedMap_v0 [] (fun i v -> v - (Builtin.unwrap (Stdlib.Int.toInt64 i))) = []
-  Stdlib.List.indexedMap_v0 [ 3L; 2L; 1L ] (fun i v -> i) = [ 0I; 1I; 2I ]
+  Stdlib.List.indexedMap_v0<Int64, Int> [ 3L; 2L; 1L ] (fun i v -> i) = [ 0I; 1I; 2I ]
 
 module Interleave =
   Stdlib.List.interleave_v0 [ 1L; 2L; 3L ] [ 4L; 5L; 6L ] = [ 1L; 4L; 2L; 5L; 3L; 6L ]
@@ -185,24 +185,24 @@ module Last =
   Stdlib.List.last [] = Stdlib.Option.Option.None
 
 module Map =
-  Stdlib.List.map_v0 (Stdlib.List.range_v0 1I 5I) (fun x -> x + 1I) = [ 2I; 3I; 4I; 5I; 6I ]
+  Stdlib.List.map_v0<Int, Int> (Stdlib.List.range_v0 1I 5I) (fun x -> x + 1I) = [ 2I; 3I; 4I; 5I; 6I ]
 
-  Stdlib.List.map_v0 [ 1L; 2L; 3L ] (fun x ->
+  Stdlib.List.map_v0<Int64, Bool> [ 1L; 2L; 3L ] (fun x ->
     Stdlib.Bool.and_v0
       (Stdlib.Int64.greaterThanOrEqualTo_v0 x 0L)
       (Stdlib.Int64.lessThanOrEqualTo_v0 x 4L)) = [ true; true; true ]
 
-  Stdlib.List.map_v0 [ 1L; 2L ] (fun x -> x + 1L) = [ 2L; 3L ]
-  Stdlib.List.map_v0 [] (fun x -> x + 1L) = []
+  Stdlib.List.map_v0<Int64, Int64> [ 1L; 2L ] (fun x -> x + 1L) = [ 2L; 3L ]
+  Stdlib.List.map_v0<Int64, Int64> [] (fun x -> x + 1L) = []
 
 
 Stdlib.List.map2_v0 [ 10L; 20L; 30L ] [ 1L; 2L; 3L ] (fun a b -> a - b) = Stdlib.Option.Option.Some [ 9L; 18L; 27L ]
 Stdlib.List.map2_v0 [ 10L; 20L ] [ 1L; 2L; 3L ] (fun a b -> a - b) = Stdlib.Option.Option.None
 Stdlib.List.map2_v0 [] [] (fun a b -> a - b) = Stdlib.Option.Option.Some []
 
-Stdlib.List.map2shortest_v0 [ 10L; 20L; 30L ] [ 1L; 2L; 3L ] (fun a b -> a - b) = [ 9L; 18L; 27L ]
-Stdlib.List.map2shortest_v0 [ 10L; 20L ] [ 1L; 2L; 3L ] (fun a b -> a - b) = [ 9L; 18L ]
-Stdlib.List.map2shortest_v0 [] [ 1L; 2L; 3L ] (fun a b -> a - b) = []
+Stdlib.List.map2shortest_v0<Int64, Int64, Int64> [ 10L; 20L; 30L ] [ 1L; 2L; 3L ] (fun a b -> a - b) = [ 9L; 18L; 27L ]
+Stdlib.List.map2shortest_v0<Int64, Int64, Int64> [ 10L; 20L ] [ 1L; 2L; 3L ] (fun a b -> a - b) = [ 9L; 18L ]
+Stdlib.List.map2shortest_v0<Int64, Int64, Int64> [] [ 1L; 2L; 3L ] (fun a b -> a - b) = []
 Stdlib.List.map2shortest_v0 [ 1L; 2L; 3L ] [] (fun a b -> a - b) = []
 
 Stdlib.List.member_v0 [ 1L; 2L; 3L ] 2L = true
@@ -253,8 +253,8 @@ Stdlib.List.reverse_v0 [ "a"; "b"; "c"; "d" ] = [ "d"; "c"; "b"; "a" ]
 Stdlib.List.reverse_v0 [ 5L; 4L; 3L; 2L; 1L ] = [ 1L; 2L; 3L; 4L; 5L ]
 Stdlib.List.reverse_v0 [] = []
 
-Stdlib.List.sortBy_v0 [ 6L; 2L; 8L; 3L ] (fun x -> 0L - x) = [ 8L; 6L; 3L; 2L ]
-Stdlib.List.sortBy_v0 [] (fun x -> 0L - x) = []
+Stdlib.List.sortBy_v0<Int64, Int64> [ 6L; 2L; 8L; 3L ] (fun x -> 0L - x) = [ 8L; 6L; 3L; 2L ]
+Stdlib.List.sortBy_v0<Int64, Int64> [] (fun x -> 0L - x) = []
 
 Stdlib.List.sort_v0 [ "6"; "2"; "8"; "3" ] = [ "2"; "3"; "6"; "8" ]
 Stdlib.List.sort_v0 [ 6L; 2L; 8L; 3L ] = [ 2L; 3L; 6L; 8L ]
@@ -271,7 +271,7 @@ Stdlib.List.sortByComparator_v0 [ 3L; 1L; 2L ] (fun a b ->
   if Stdlib.Int64.lessThan_v0 a b then -1I else 1I) = Stdlib.Result.Result.Ok
   [ 1L; 2L; 3L ]
 
-Stdlib.List.sortByComparator_v0 [] (fun a b ->
+Stdlib.List.sortByComparator_v0<Int64> [] (fun a b ->
   if Stdlib.Int64.lessThan_v0 a b then -1I else 1I) = Stdlib.Result.Result.Ok []
 
 Stdlib.List.sortByComparator_v0
@@ -305,11 +305,11 @@ Stdlib.List.takeWhile_v0 [ 1L; 5L; 2L; 2L ] (fun item -> item < 3L) = [ 1L ]
 Stdlib.List.takeWhile_v0 [] (fun item -> item < 3L) = []
 
 // it isn't specified which is the right value to keep when there are duplicates
-Stdlib.List.uniqueBy_v0 [ 1L; 2L; 3L; 4L ] (fun x -> Stdlib.Int64.divide_v0 x 2L) = [ 1L; 2L; 4L ]
-Stdlib.List.uniqueBy_v0 [ 1L; 2L; 3L; 4L ] (fun x -> x) = [ 1L; 2L; 3L; 4L ]
-Stdlib.List.uniqueBy_v0 [ 1L; 1L; 1L; 1L ] (fun x -> x) = [ 1L ]
-Stdlib.List.uniqueBy_v0 [ 7L; 42L; 7L; 2L; 10L ] (fun x -> x) = [ 2L; 7L; 10L; 42L ]
-Stdlib.List.uniqueBy_v0 [] (fun x -> x) = []
+Stdlib.List.uniqueBy_v0<Int64, Int64> [ 1L; 2L; 3L; 4L ] (fun x -> Stdlib.Int64.divide_v0 x 2L) = [ 1L; 2L; 4L ]
+Stdlib.List.uniqueBy_v0<Int64, Int64> [ 1L; 2L; 3L; 4L ] (fun x -> x) = [ 1L; 2L; 3L; 4L ]
+Stdlib.List.uniqueBy_v0<Int64, Int64> [ 1L; 1L; 1L; 1L ] (fun x -> x) = [ 1L ]
+Stdlib.List.uniqueBy_v0<Int64, Int64> [ 7L; 42L; 7L; 2L; 10L ] (fun x -> x) = [ 2L; 7L; 10L; 42L ]
+Stdlib.List.uniqueBy_v0<Int64, Int64> [] (fun x -> x) = []
 Stdlib.List.uniqueBy_v0 [ 6L; 2.0 ] (fun x -> x) = error="Cannot add a Float (2.0) to a list of Stdlib.Int64. Failed at index 1."
 Stdlib.List.unique_v0 [ 1L; 2L; 3L; 4L ] = [ 1L; 2L; 3L; 4L ]
 Stdlib.List.unique_v0 [ 1L; 1L; 1L; 1L ] = [ 1L ]
@@ -336,10 +336,10 @@ module Zipping =
   Stdlib.List.zip_v0 [] [] = Stdlib.Option.Option.Some []
   Stdlib.List.zip_v0 [ Builtin.testRuntimeError "msg" ] [ Some "" ] = error="Uncaught exception: msg"
 module GroupByWithKey =
-  Stdlib.List.groupByWithKey_v0 [ 1L; 2L; 3L; 4L; 5L ] (fun x ->
+  Stdlib.List.groupByWithKey_v0<Int64, Int64> [ 1L; 2L; 3L; 4L; 5L ] (fun x ->
     Stdlib.Int64.mod_v0 x 2L) = [ (1L, [ 1L; 3L; 5L ]); (0L, [ 2L; 4L ]) ]
 
-  Stdlib.List.groupByWithKey_v0 [ 1L; 2L; 3L; 4L; 5L ] (fun x ->
+  Stdlib.List.groupByWithKey_v0<Int64, Int64> [ 1L; 2L; 3L; 4L; 5L ] (fun x ->
     Stdlib.Int64.mod_v0 x 2L) = [ (1L, [ 1L; 3L; 5L ]); (0L, [ 2L; 4L ]) ]
 
   Stdlib.List.groupByWithKey_v0
@@ -348,16 +348,16 @@ module GroupByWithKey =
                                                ("b", [ "banana" ])
                                                ("g", [ "grape" ]) ]
 
-  Stdlib.List.groupByWithKey_v0 [ 'a'; 'b'; 'c'; 'a'; 'b' ] (fun c -> c) =
+  Stdlib.List.groupByWithKey_v0<Char, Char> [ 'a'; 'b'; 'c'; 'a'; 'b' ] (fun c -> c) =
     [ ('a', [ 'a'; 'a' ]); ('b', [ 'b'; 'b' ]); ('c', [ 'c' ]) ]
 
-  Stdlib.List.groupByWithKey_v0 [ 1L; 2L; 3L; 4L; 5L ] (fun x -> Stdlib.Int64.mod_v0 x 2L == 0L) =
+  Stdlib.List.groupByWithKey_v0<Int64, Bool> [ 1L; 2L; 3L; 4L; 5L ] (fun x -> Stdlib.Int64.mod_v0 x 2L == 0L) =
     [ (false, [ 1L; 3L; 5L ]); (true, [ 2L; 4L ]) ]
 
-  Stdlib.List.groupByWithKey_v0 [ 1L; 2L; 3L; 4L; 5L ] (fun x -> ((Stdlib.Int64.mod_v0 x 2L), "test")) =
+  Stdlib.List.groupByWithKey_v0<Int64, (Int64, String)> [ 1L; 2L; 3L; 4L; 5L ] (fun x -> ((Stdlib.Int64.mod_v0 x 2L), "test")) =
     [ ((1L, "test"), [ 1L; 3L; 5L ]); ((0L, "test"), [ 2L; 4L ]) ]
 
-  Stdlib.List.groupByWithKey_v0 [] (fun x -> x) = []
+  Stdlib.List.groupByWithKey_v0<Int64, Int64> [] (fun x -> x) = []
 
 
 Stdlib.List.dropLast [ 1L; 2L; 3L; 4L; 5L ] = [ 1L; 2L; 3L; 4L ]

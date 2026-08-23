@@ -5,6 +5,6 @@ module Stdlib.Cli.OS
 type OS = Linux | MacOS | Windows
 
 let getOS() : Stdlib.Result.Result<Stdlib.Cli.OS.OS, String> =
-    if Stdlib.Cli.__hostOSCode() == 1 then Ok(Stdlib.Cli.OS.OS.Linux)
-    else if Stdlib.Cli.__hostOSCode() == 2 then Ok(Stdlib.Cli.OS.OS.MacOS)
+    if Stdlib.Cli.__hostOSCode() == 1L then Ok(Stdlib.Cli.OS.OS.Linux)
+    else if Stdlib.Cli.__hostOSCode() == 2L then Ok(Stdlib.Cli.OS.OS.MacOS)
     else Error("Unsupported operating system")

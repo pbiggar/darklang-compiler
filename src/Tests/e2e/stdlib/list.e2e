@@ -9,82 +9,82 @@
 // Stdlib.List.singleton - Create a single-element list
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.singleton(42)) = 1I
-match Stdlib.List.singleton(5) with | [x] -> x | _ -> 0 = 5
+Stdlib.List.length(Stdlib.List.singleton(42L)) = 1I
+match Stdlib.List.singleton(5L) with | [x] -> x | _ -> 0L = 5L
 
 // ===================================================================
 // List append syntax
 // ===================================================================
 
-let rest = [3, 4, 5] in Stdlib.List.length([1, 2] @ rest) = 5I
-Stdlib.List.length<Int64>([1] @ []) = 1I
-let tail = [2, 3] in match [1] @ tail with | [a, b, c] -> a + b + c | _ -> 0 = 6
+let rest = [3L, 4L, 5L] in Stdlib.List.length([1L, 2L] @ rest) = 5I
+Stdlib.List.length<Int64>([1L] @ []) = 1I
+let tail = [2L, 3L] in match [1L] @ tail with | [a, b, c] -> a + b + c | _ -> 0L = 6L
 
 // ===================================================================
 // Stdlib.List.push - Add element to front of list
 // ===================================================================
 
-match Stdlib.List.push([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
-Stdlib.List.length(Stdlib.List.push([1, 2], 0)) = 3I
+match Stdlib.List.push([2L, 3L], 1L) with | [a, b, c] -> a | _ -> 0L = 1L
+Stdlib.List.length(Stdlib.List.push([1L, 2L], 0L)) = 3I
 // ===================================================================
 // Stdlib.List.append - Concatenate two lists
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.append([1, 2, 3], [4, 5, 6])) = 6I
-match Stdlib.List.append([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
+Stdlib.List.length(Stdlib.List.append([1L, 2L, 3L], [4L, 5L, 6L])) = 6I
+match Stdlib.List.append([1L, 2L], [3L, 4L]) with | [a, b, c, d] -> a + b + c + d | _ -> 0L = 10L
 
 // ===================================================================
 // Stdlib.List.pushBack - Add element to end of list
 // ===================================================================
 
-match Stdlib.List.pushBack([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3
+match Stdlib.List.pushBack([1L, 2L], 3L) with | [a, b, c] -> c | _ -> 0L = 3L
 
 // ===================================================================
 // Stdlib.List.reverse - Reverse a list
 // ===================================================================
 
-match Stdlib.List.reverse([1, 2, 3]) with | [a, b, c] -> a | _ -> 0 = 3
+match Stdlib.List.reverse([1L, 2L, 3L]) with | [a, b, c] -> a | _ -> 0L = 3L
 
 // ===================================================================
 // Stdlib.List.map - Apply a function to each element
 // ===================================================================
 
-match Stdlib.List.map([1, 2, 3], fun x -> x + 1) with | [a, b, c] -> a + b + c | _ -> 0 = 9
-Stdlib.List.length(Stdlib.List.map([1, 2, 3, 4], fun x -> x * 2)) = 4I
-let add = Stdlib.Int64.add in match Stdlib.List.map([1, 2, 3], fun x -> add(x, 1)) with | [a, b, c] -> a + b + c | _ -> 0 = 9
+match Stdlib.List.map<Int64, Int64>([1L, 2L, 3L], fun x -> x + 1L) with | [a, b, c] -> a + b + c | _ -> 0L = 9L
+Stdlib.List.length(Stdlib.List.map<Int64, Int64>([1L, 2L, 3L, 4L], fun x -> x * 2L)) = 4I
+let add = Stdlib.Int64.add in match Stdlib.List.map<Int64, Int64>([1L, 2L, 3L], fun x -> add(x, 1L)) with | [a, b, c] -> a + b + c | _ -> 0L = 9L
 
 // ===================================================================
 // Stdlib.List.filter - Keep elements that match predicate
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.filter([1, 2, 3, 4, 5], fun x -> x > 2)) = 3I
-let filterThreshold = 3 in match Stdlib.List.filter([1, 2, 3, 4, 5], fun x -> x < filterThreshold) with | [a, b] -> a * 10 + b | _ -> 0 = 12
+Stdlib.List.length(Stdlib.List.filter<Int64>([1L, 2L, 3L, 4L, 5L], fun x -> x > 2L)) = 3I
+let filterThreshold = 3L in match Stdlib.List.filter<Int64>([1L, 2L, 3L, 4L, 5L], fun x -> x < filterThreshold) with | [a, b] -> a * 10L + b | _ -> 0L = 12L
 // ===================================================================
 // Stdlib.List.fold - Reduce list with accumulator
 // ===================================================================
 
-Stdlib.List.fold([1, 2, 3, 4, 5], 0, fun acc x -> acc + x) = 15
-Stdlib.List.fold([1, 2, 3, 4], 1, fun acc x -> acc * x) = 24
+Stdlib.List.fold([1L, 2L, 3L, 4L, 5L], 0L, fun acc x -> acc + x) = 15L
+Stdlib.List.fold([1L, 2L, 3L, 4L], 1L, fun acc x -> acc * x) = 24L
 
 // ===================================================================
 // Stdlib.List.drop - Drop first n elements
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.drop([1, 2, 3, 4, 5], 2I)) = 3I
-Stdlib.List.length(Stdlib.List.drop([1, 2, 3], 0I)) = 3I
-Stdlib.List.length(Stdlib.List.drop([1, 2, 3], 10I)) = 0I
+Stdlib.List.length(Stdlib.List.drop([1L, 2L, 3L, 4L, 5L], 2I)) = 3I
+Stdlib.List.length(Stdlib.List.drop([1L, 2L, 3L], 0I)) = 3I
+Stdlib.List.length(Stdlib.List.drop([1L, 2L, 3L], 10I)) = 0I
 // ===================================================================
 // Stdlib.List.take - Take first n elements
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.take([1, 2, 3, 4, 5], 3I)) = 3I
-Stdlib.List.length(Stdlib.List.take([1, 2, 3], 0I)) = 0I
-Stdlib.List.length(Stdlib.List.take([1, 2], 10I)) = 2I
+Stdlib.List.length(Stdlib.List.take([1L, 2L, 3L, 4L, 5L], 3I)) = 3I
+Stdlib.List.length(Stdlib.List.take([1L, 2L, 3L], 0I)) = 0I
+Stdlib.List.length(Stdlib.List.take([1L, 2L], 10I)) = 2I
 // ===================================================================
 // Stdlib.List.head - Get first element or None
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.head([1, 2, 3]), 0) = 1
+Stdlib.Option.withDefault(Stdlib.List.head([1L, 2L, 3L]), 0L) = 1L
 Stdlib.Option.isNone<Int64>(Stdlib.List.head<Int64>([])) = true
 
 // ===================================================================
@@ -92,23 +92,25 @@ Stdlib.Option.isNone<Int64>(Stdlib.List.head<Int64>([])) = true
 // ===================================================================
 
 // NOTE: Needs type params because empty list default doesn't constrain type
-Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(Stdlib.List.tail([1, 2, 3]), [])) = 2I
+Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(Stdlib.List.tail([1L, 2L, 3L]), [])) = 2I
 Stdlib.Option.isNone<List<Int64>>(Stdlib.List.tail<Int64>([])) = true
-match Stdlib.List.tail([1, 2, 3]) with | Some(t) -> Stdlib.List.length(t) | None -> 0I = 2I
-Stdlib.List.tail([1, 2, 3]) = Some([2, 3])
+match Stdlib.List.tail([1L, 2L, 3L]) with | Some(t) -> Stdlib.List.length(t) | None -> 0I = 2I
+Stdlib.List.tail([1L, 2L, 3L]) = Some([2L, 3L])
 
 // ===================================================================
 // Stdlib.List.getAt - Get element at index
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30], 0I), 0) = 10
-Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30], 2I), 0) = 30
-Stdlib.Option.isNone<Int64>(Stdlib.List.getAt<Int64>([1, 2, 3], 10I)) = true
+Stdlib.Option.withDefault(Stdlib.List.getAt([10L, 20L, 30L], 0I), 0L) = 10L
+Stdlib.Option.withDefault(Stdlib.List.getAt([10L, 20L, 30L], 2I), 0L) = 30L
+Stdlib.Option.isNone<Int64>(Stdlib.List.getAt<Int64>([1L, 2L, 3L], 10I)) = true
 
 // Stdlib.List.getAtOrDefault returns the element without allocating an Option.
-Stdlib.List.getAtOrDefault<Int64>([10, 20, 30], 1, 99) = 20
-Stdlib.List.getAtOrDefault<Int64>([10, 20, 30], -1, 99) = 99
-Stdlib.List.getAtOrDefault<Int64>([10, 20, 30], 3, 99) = 99
+Stdlib.List.getAtOrDefault<Int64>([10L, 20L, 30L], 1L, 99L) = 20L
+Stdlib.List.getAtOrDefault<Int64>([10L, 20L, 30L], -1L, 99L) = 99L
+Stdlib.List.getAtOrDefault<Int64>([10L, 20L, 30L], 3L, 99L) = 99L
+let selected = Stdlib.List.getAtOrDefault<Float>([-0.0], 0L, 1.0) in Stdlib.Float.toBits(selected) = 9223372036854775808UL
+let fallback = Stdlib.List.getAtOrDefault<Float>([1.0], 1L, -0.0) in Stdlib.Float.toBits(fallback) = 9223372036854775808UL
 
 // Regression test: Stdlib.List.getAt<Float> should correctly extract Float from Option
 // NOTE: Float list storage works (FpToGp converts Float bits to GP for RawSlotInit),
@@ -120,41 +122,41 @@ Stdlib.List.getAtOrDefault<Int64>([10, 20, 30], 3, 99) = 99
 // Stdlib.List.findFirst - Find first element matching predicate
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.findFirst([1, 2, 3, 4], fun x -> x > 2), 0) = 3
-Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], fun x -> x > 10)) = true
+Stdlib.Option.withDefault(Stdlib.List.findFirst<Int64>([1L, 2L, 3L, 4L], fun x -> x > 2L), 0L) = 3L
+Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1L, 2L, 3L], fun x -> x > 10L)) = true
 
 // ===================================================================
 // Stdlib.List.all - Check if all elements satisfy predicate
 // ===================================================================
 
-Stdlib.List.all([1, 2, 3], fun x -> x > 0) = true
-Stdlib.List.all([1, 2, 3], fun x -> x > 2) = false
-Stdlib.List.all<Int64>([], fun x -> x > 0) = true
+Stdlib.List.all([1L, 2L, 3L], fun x -> x > 0L) = true
+Stdlib.List.all([1L, 2L, 3L], fun x -> x > 2L) = false
+Stdlib.List.all<Int64>([], fun x -> x > 0L) = true
 
 // ===================================================================
 // Stdlib.List.any - Check if any element satisfies predicate
 // ===================================================================
 
-Stdlib.List.any([1, 2, 3], fun x -> x > 2) = true
-Stdlib.List.any([1, 2, 3], fun x -> x > 10) = false
-Stdlib.List.any<Int64>([], fun x -> x > 0) = false
+Stdlib.List.any([1L, 2L, 3L], fun x -> x > 2L) = true
+Stdlib.List.any([1L, 2L, 3L], fun x -> x > 10L) = false
+Stdlib.List.any<Int64>([], fun x -> x > 0L) = false
 
 // ===================================================================
 // Stdlib.List.last - Get last element or None
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.last([1, 2, 3]), 0) = 3
-Stdlib.Option.withDefault(Stdlib.List.last([42]), 0) = 42
+Stdlib.Option.withDefault(Stdlib.List.last([1L, 2L, 3L]), 0L) = 3L
+Stdlib.Option.withDefault(Stdlib.List.last([42L]), 0L) = 42L
 Stdlib.Option.isNone<Int64>(Stdlib.List.last<Int64>([])) = true
 
 // ===================================================================
 // Stdlib.List.dropLast - Remove last element
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.dropLast([1, 2, 3, 4, 5])) = 4I
-Stdlib.List.length(Stdlib.List.dropLast([1])) = 0I
+Stdlib.List.length(Stdlib.List.dropLast([1L, 2L, 3L, 4L, 5L])) = 4I
+Stdlib.List.length(Stdlib.List.dropLast([1L])) = 0I
 Stdlib.List.length(Stdlib.List.dropLast<Int64>([])) = 0I
-match Stdlib.List.dropLast([1, 2, 3]) with | [a, b] -> a + b | _ -> 0 = 3
+match Stdlib.List.dropLast([1L, 2L, 3L]) with | [a, b] -> a + b | _ -> 0L = 3L
 
 // ===================================================================
 // Stdlib.List.range - Generate list of integers
@@ -169,29 +171,29 @@ match Stdlib.List.range(1I, 3I) with | [a, b, c] -> a + b + c | _ -> 0I = 6I
 // Stdlib.List.repeat - Repeat value n times
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.repeatUnsafe(5I, 42)) = 5I
-Stdlib.List.length(Stdlib.List.repeatUnsafe(0I, 1)) = 0I
-match Stdlib.List.repeatUnsafe(3I, 7) with | [a, b, c] -> a + b + c | _ -> 0 = 21
+Stdlib.List.length(Stdlib.List.repeatUnsafe(5I, 42L)) = 5I
+Stdlib.List.length(Stdlib.List.repeatUnsafe(0I, 1L)) = 0I
+match Stdlib.List.repeatUnsafe(3I, 7L) with | [a, b, c] -> a + b + c | _ -> 0L = 21L
 
 // ===================================================================
 // Stdlib.List.indexedMap - Map with index
 // ===================================================================
 
 // Sum of index + value for [10, 20, 30] = (0+10) + (1+20) + (2+30) = 63
-Stdlib.List.fold(Stdlib.List.indexedMap([10, 20, 30], fun i x -> Stdlib.Int64.add(x, Builtin.unwrap(Stdlib.Int.toInt64(i)))), 0, fun acc x -> acc + x) = 63
-Stdlib.List.length(Stdlib.List.indexedMap([1, 2, 3, 4], fun i x -> x)) = 4I
+Stdlib.List.fold(Stdlib.List.indexedMap<Int64, Int64>([10L, 20L, 30L], fun i x -> let index = Builtin.unwrap(Stdlib.Int.toInt64(i)) in Stdlib.Int64.add(x, index)), 0L, fun acc x -> acc + x) = 63L
+Stdlib.List.length(Stdlib.List.indexedMap<Int64, Int64>([1L, 2L, 3L, 4L], fun i x -> x)) = 4I
 // ===================================================================
 // Stdlib.List.partition - Split list by predicate
 // ===================================================================
 
-match Stdlib.List.partition([1, 2, 3, 4, 5], fun x -> x > 2) with | (trues, falses) -> Stdlib.List.length(trues) | _ -> 0I = 3I
-match Stdlib.List.partition([1, 2, 3, 4, 5], fun x -> x > 2) with | (trues, falses) -> Stdlib.List.length(falses) | _ -> 0I = 2I
+match Stdlib.List.partition([1L, 2L, 3L, 4L, 5L], fun x -> x > 2L) with | (trues, falses) -> Stdlib.List.length(trues) | _ -> 0I = 3I
+match Stdlib.List.partition([1L, 2L, 3L, 4L, 5L], fun x -> x > 2L) with | (trues, falses) -> Stdlib.List.length(falses) | _ -> 0I = 2I
 // ===================================================================
 // Stdlib.List.all - Check if all satisfy predicate (alias for forAll)
 // ===================================================================
 
-Stdlib.List.all([1, 2, 3], fun x -> x > 0) = true
-Stdlib.List.all([1, 2, 3], fun x -> x > 2) = false
+Stdlib.List.all([1L, 2L, 3L], fun x -> x > 0L) = true
+Stdlib.List.all([1L, 2L, 3L], fun x -> x > 2L) = false
 
 // ===================================================================
 // List memory reclamation regression

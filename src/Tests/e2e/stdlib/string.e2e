@@ -57,7 +57,7 @@ Stdlib.String.prepend("🧟‍♀️🧟‍♂️", "🧟‍♂️") = "🧟‍�
 // Stdlib.String.newline - Returns newline character
 // ===================================================================
 
-Stdlib.String.newline() = Stdlib.String.fromCodepoints([10])
+Stdlib.String.newline() = Stdlib.String.fromCodepoints([10L])
 
 // ===================================================================
 // Stdlib.String.length - Extended grapheme cluster count
@@ -216,29 +216,29 @@ Stdlib.String.slice("hello", 5I, 5I) = ""
 // Stdlib.String.substring - Extract substring by start and end index
 // ===================================================================
 
-Stdlib.String.substring("hello", 0, 2) = "he"
-Stdlib.String.substring("hello", 1, 4) = "ell"
-Stdlib.String.substring("hello", 0, 5) = "hello"
+Stdlib.String.substring("hello", 0L, 2L) = "he"
+Stdlib.String.substring("hello", 1L, 4L) = "ell"
+Stdlib.String.substring("hello", 0L, 5L) = "hello"
 
 // ===================================================================
 // Stdlib.String.take - Take first n bytes
 // ===================================================================
 
-Stdlib.String.take("hello", 3) = "hel"
-Stdlib.String.take("hello", 0) = ""
-Stdlib.String.take("hello", 5) = "hello"
-Stdlib.String.take("hello", 10) = "hello"
-Stdlib.String.take("", 5) = ""
+Stdlib.String.take("hello", 3L) = "hel"
+Stdlib.String.take("hello", 0L) = ""
+Stdlib.String.take("hello", 5L) = "hello"
+Stdlib.String.take("hello", 10L) = "hello"
+Stdlib.String.take("", 5L) = ""
 
 // ===================================================================
 // Stdlib.String.drop - Drop first n bytes
 // ===================================================================
 
-Stdlib.String.drop("hello", 2) = "llo"
-Stdlib.String.drop("hello", 0) = "hello"
-Stdlib.String.drop("hello", 5) = ""
-Stdlib.String.drop("hello", 10) = ""
-Stdlib.String.drop("", 5) = ""
+Stdlib.String.drop("hello", 2L) = "llo"
+Stdlib.String.drop("hello", 0L) = "hello"
+Stdlib.String.drop("hello", 5L) = ""
+Stdlib.String.drop("hello", 10L) = ""
+Stdlib.String.drop("", 5L) = ""
 
 // ===================================================================
 // Stdlib.String.trim - Remove leading and trailing whitespace
@@ -423,41 +423,41 @@ Stdlib.String.equals("Hello", "hello") = false
 // Stdlib.String.codepointLength - Count Unicode codepoints
 // ===================================================================
 
-Stdlib.String.codepointLength("hello") = 5
-Stdlib.String.codepointLength("") = 0
-Stdlib.String.codepointLength("żółw") = 4
-Stdlib.String.codepointLength("😄") = 1
+Stdlib.String.codepointLength("hello") = 5L
+Stdlib.String.codepointLength("") = 0L
+Stdlib.String.codepointLength("żółw") = 4L
+Stdlib.String.codepointLength("😄") = 1L
 
 // ===================================================================
 // Stdlib.String.graphemeLength - Count grapheme clusters
 // ===================================================================
 
-Stdlib.String.graphemeLength("hello") = 5
-Stdlib.String.graphemeLength("") = 0
-Stdlib.String.graphemeLength("😄") = 1
-Stdlib.String.graphemeLength("abcdef") = 6
-Stdlib.String.graphemeLength("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿") = 6
-Stdlib.String.graphemeLength("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = 5
-Stdlib.String.graphemeLength("﷽﷽﷽﷽﷽") = 5
-Stdlib.String.graphemeLength("👱👱🏻👱🏼👱🏽👱🏾👱🏿") = 6
-Stdlib.String.graphemeLength("🧟‍♀️🧟‍♂️") = 2
-Stdlib.String.graphemeLength("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷") = 4
+Stdlib.String.graphemeLength("hello") = 5L
+Stdlib.String.graphemeLength("") = 0L
+Stdlib.String.graphemeLength("😄") = 1L
+Stdlib.String.graphemeLength("abcdef") = 6L
+Stdlib.String.graphemeLength("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿") = 6L
+Stdlib.String.graphemeLength("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = 5L
+Stdlib.String.graphemeLength("﷽﷽﷽﷽﷽") = 5L
+Stdlib.String.graphemeLength("👱👱🏻👱🏼👱🏽👱🏾👱🏿") = 6L
+Stdlib.String.graphemeLength("🧟‍♀️🧟‍♂️") = 2L
+Stdlib.String.graphemeLength("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷") = 4L
 
 // ===================================================================
 // Stdlib.String.toCodepoints - Convert to list of codepoints
 // ===================================================================
 
-Stdlib.String.toCodepoints("abc") = [97, 98, 99]
+Stdlib.String.toCodepoints("abc") = [97L, 98L, 99L]
 Stdlib.String.toCodepoints("") = []
-Stdlib.String.toCodepoints("Hi") = [72, 105]
+Stdlib.String.toCodepoints("Hi") = [72L, 105L]
 
 // ===================================================================
 // Stdlib.String.fromCodepoints - Create string from codepoints
 // ===================================================================
 
-Stdlib.String.fromCodepoints([97, 98, 99]) = "abc"
+Stdlib.String.fromCodepoints([97L, 98L, 99L]) = "abc"
 Stdlib.String.fromCodepoints([]) = ""
-Stdlib.String.fromCodepoints([72, 105]) = "Hi"
+Stdlib.String.fromCodepoints([72L, 105L]) = "Hi"
 
 // ===================================================================
 // Stdlib.String.toGraphemes - Split into grapheme clusters

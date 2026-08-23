@@ -19,8 +19,8 @@ HEAD. Compiler history is reproducible with `git show <revision>:<path>`.
 
 ## Source map
 
-Compiler ownership is split between the [compiler parser](../src/DarkCompiler/passes/1_Parser.fs),
-[interpreter-syntax parser](../src/DarkCompiler/passes/1_InterpreterParser.fs),
+Compiler ownership is split between the canonical
+[parser](../src/DarkCompiler/passes/1_InterpreterParser.fs),
 [type checker](../src/DarkCompiler/passes/1.5_TypeChecking.fs), and
 [AST-to-ANF lowering](../src/DarkCompiler/passes/2_AST_to_ANF.fs). The ANF `If`
 is converted to a typed shared result register and CFG join in
@@ -48,7 +48,7 @@ same compiler source exercised through the full language pipeline.
 | Area | Pinned interpreter behavior | Compiler behavior | Classification | Probe |
 |---|---|---|---|---|
 | Conditional syntax | `if … then …`, optional `else`, `elif`, and `else if` | Same shapes; `elif` lowers to nested `If` and a missing `else` supplies Unit | matched | [`conditional_sequence_parity.e2e`](../src/Tests/e2e/conditional_sequence_parity.e2e), lines 4-5; `testConditionalSequenceSameSourceShape` |
-| Rejected conditional syntax | Missing `then` is a parse error | Same precise parse error after `if` or `elif` | matched | `testConditionalSyntaxErrorsMatch` in [`SyntaxInteropTests.fs`](../src/Tests/compiler-passes/SyntaxInteropTests.fs) |
+| Rejected conditional syntax | Missing `then` is a parse error | Same precise parse error after `if` or `elif` | matched | syntax fixtures and the E2E corpus parse contract |
 | Condition type | A non-Boolean condition fails when `JumpByIfFalse` executes | The type checker requires `Bool`, so an otherwise identical failure occurs during compilation | intentional timing divergence: static compiler | E2E condition-type case |
 | Branch result types | Branches may have different runtime value types; only the selected value is produced | Both branches are recursively unified before lowering; heterogeneous arms are rejected | intentional type-system divergence: static compiler | E2E string/Int64 rejection and nested/inferred-list cases |
 | Nested conditionals | Nested `EIf` values use nested selected control flow | Recursive type checking and nested CFG joins preserve the unified result type | matched, subject to static typing above | E2E nested scalar and inferred-list cases |
@@ -65,17 +65,15 @@ Repository-wide searches of the parser productions and language sources found no
 compiler-only conditional source form to migrate. Optional `else`, `else if`, and
 `elif` are all interpreter-supported at the pinned revision.
 
-The interpreter-syntax parser did contain a compiler-only representation: a
+The canonical parser formerly contained a compiler-only representation: a
 parenthesized statement followed by a trailing `let` was encoded as a wildcard
 `Match`. That production has been migrated to the explicit `Sequence` AST case,
 and its parser regression now asserts that shape. No standard-library, fixture,
 example, or documentation expression depended on the wildcard-match encoding.
 
-The compiler parser intentionally exposes only the shared parenthesized
-semicolon form. General indentation-sensitive statement blocks remain owned by
-the broader interpreter/offside parser area, not by conditional or sequence
-evaluation. This is a residual syntax-surface difference, not an evaluation or
-failure-timing difference.
+The compiler consumes the interpreter-compatible grammar through this single
+parser. Parenthesized semicolon sequences and layout-sensitive statement blocks
+therefore share one parsing path before type checking and lowering.
 
 ## Probe coverage
 

@@ -13,11 +13,11 @@ Pinned interpreter evidence is `backend/src/LibParser/Lexer.fs:477-501,
 108-111,172-174,224-281`. Compiler evidence began at
 `src/DarkCompiler/passes/1_Parser.fs:92,165-217,504-1382,1706-2086` in the
 pinned compiler. The implemented contract is centralized in
-`src/DarkCompiler/NameSyntax.fs` and used by both compiler entry parsers.
+`src/DarkCompiler/NameSyntax.fs` and used by the canonical compiler parser.
 
 ## Revalidated matrix
 
-“Same” means both current compiler parser modes match the pinned interpreter.
+“Same” means the current compiler parser matches the pinned interpreter.
 AST spellings are the explicit normalization boundary consumed by the existing
 resolver; `NameSyntax.QualifiedName` remains segment-aware until that boundary.
 
@@ -45,7 +45,7 @@ resolver; `NameSyntax.QualifiedName` remains segment-aware until that boundary.
 | keyword prefix (`lettuce`) | Same single identifier | ordinary identifier | `names.syntax` | none |
 | glued number (`123abc`, `1.5abc`, `12l3`) | Same rejection as one unit | no number/name split | compiler/interpreter syntax probes | numeric defaults are out of scope |
 | adjacent `Name<T>` | Same generic interpretation | name plus type arguments | generic and apostrophe call tests | none |
-| spaced or comment-separated `Name < T` | Same comparison interpretation | `TSpacedLt`, lowered as comparison | spaced and comment-separated declaration-generic rejection in both parser modes | comments preserve the non-adjacent boundary |
+| spaced or comment-separated `Name < T` | Same comparison interpretation | `TSpacedLt`, lowered as comparison | spaced and comment-separated declaration-generic rejection in syntax fixtures | comments preserve the non-adjacent boundary |
 | `let f`, `val x`, module header/block | All declaration starters recognized | module path typed, functions/types normalized | module and `val` boundary probes | top-level value execution is absent |
 | `def f`, `let A.f`, declaration `<a>` | Same rejection as legacy syntax | no alias | explicit rejection cases | none |
 

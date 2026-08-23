@@ -5,105 +5,105 @@
 // =====================================================
 
 // Test 1: Simple constant
-42 = 42
+42L = 42L
 
 // Test 2: Arithmetic
-10 + 32 = 42
+10L + 32L = 42L
 
 // Test 3: Let binding
-let x = 10 in let y = 32 in x + y = 42
+let x = 10L in let y = 32L in x + y = 42L
 
 // Test 4: Negation
--42 = -42
+-42L = -42L
 
 // Test 5: If expression (true branch)
-if 5 > 3 then 42 else 0 = 42
+if 5L > 3L then 42L else 0L = 42L
 
 // Test 6: If expression (false branch)
-if 1 > 10 then 0 else 42 = 42
+if 1L > 10L then 0L else 42L = 42L
 
 // Test 7: Multiplication
-let a = 6 in let b = 7 in a * b = 42
+let a = 6L in let b = 7L in a * b = 42L
 
 // Test 8: Comparison returning int
-if 10 == 10 then 1 else 0 = 1
+if 10L == 10L then 1L else 0L = 1L
 
 // Test 9: Boolean and
-if true && false then 0 else 42 = 42
+if true && false then 0L else 42L = 42L
 
 // Test 10: Nested if
-if true then if false then 0 else 42 else 0 = 42
+if true then if false then 0L else 42L else 0L = 42L
 
 // =====================================================
 // Function Calls
 // =====================================================
 
 // Test 11: Simple function call - double
-let double(x: Int64) : Int64 = x + x double(21) = 42
+let double(x: Int64) : Int64 = x + x; double(21L) = 42L
 
 // Test 11b: Unit-argument call sugar
-let unitIdentity(u: Unit) : Int64 = 42 unitIdentity() = 42
+let unitIdentity(u: Unit) : Int64 = 42L unitIdentity() = 42L
 
 // Test 12: Function with two parameters
-let add(a: Int64, b: Int64) : Int64 = a + b add(20, 22) = 42
+let add(a: Int64, b: Int64) : Int64 = a + b; add(20L, 22L) = 42L
 
 // Test 13: Function with three parameters
-let sum3(a: Int64, b: Int64, c: Int64) : Int64 = a + b + c sum3(10, 12, 20) = 42
+let sum3(a: Int64, b: Int64, c: Int64) : Int64 = a + b + c; sum3(10L, 12L, 20L) = 42L
 
 // Test 14: Function with let binding in body
-let compute(x: Int64, y: Int64) : Int64 = let sum = x + y in sum * 2 compute(10, 11) = 42
+let compute(x: Int64, y: Int64) : Int64 = let sum = x + y in sum * 2L compute(10L, 11L) = 42L
 
 // Test 15: Function with if expression
-let max(a: Int64, b: Int64) : Int64 = if a > b then a else b max(42, 10) = 42
+let max(a: Int64, b: Int64) : Int64 = if a > b then a else b; max(42L, 10L) = 42L
 
 // Test 16: Multiple function calls in expression
-let inc(x: Int64) : Int64 = x + 1 inc(inc(40)) = 42
+let inc(x: Int64) : Int64 = x + 1L inc(inc(40L)) = 42L
 
 // Test 17: Function with complex body
-let calculate(x: Int64, y: Int64, z: Int64) : Int64 = let sum = x + y in let product = sum * z in product - 1 calculate(2, 3, 9) = 44
+let calculate(x: Int64, y: Int64, z: Int64) : Int64 = let sum = x + y in let product = sum * z in product - 1L calculate(2L, 3L, 9L) = 44L
 
 // Test 18: Function returning comparison result as int
-let isPositive(x: Int64) : Int64 = if x > 0 then 1 else 0 isPositive(42) = 1
+let isPositive(x: Int64) : Int64 = if x > 0L then 1L else 0L isPositive(42L) = 1L
 
 // Test 19: Calling function multiple times
-let triple(x: Int64) : Int64 = x * 3 triple(7) + triple(7) = 42
+let triple(x: Int64) : Int64 = x * 3L triple(7L) + triple(7L) = 42L
 
 // Test 20: Four parameter function
-let sum4(a: Int64, b: Int64, c: Int64, d: Int64) : Int64 = a + b + c + d sum4(10, 11, 12, 9) = 42
+let sum4(a: Int64, b: Int64, c: Int64, d: Int64) : Int64 = a + b + c + d; sum4(10L, 11L, 12L, 9L) = 42L
 
 // =====================================================
 // Recursive Functions
 // =====================================================
 
 // Test 21: Factorial - classic recursion
-let factorial(n: Int64) : Int64 = if n <= 1 then 1 else n * factorial(n - 1) factorial(5) = 120
+let factorial(n: Int64) : Int64 = if n <= 1L then 1L else n * factorial(n - 1L); factorial(5L) = 120L
 
 // Test 22: Fibonacci - double recursion
-let fib(n: Int64) : Int64 = if n <= 1 then n else fib(n - 1) + fib(n - 2) fib(10) = 55
+let fib(n: Int64) : Int64 = if n <= 1L then n else fib(n - 1L) + fib(n - 2L); fib(10L) = 55L
 
 // Test 23: GCD - two parameter recursion
-let gcd(a: Int64, b: Int64) : Int64 = if b == 0 then a else gcd(b, a - (a / b) * b) gcd(48, 18) = 6
+let gcd(a: Int64, b: Int64) : Int64 = if b == 0L then a else gcd(b, a - (a / b) * b); gcd(48L, 18L) = 6L
 
 // Test 24: Sum from 1 to N
-let sumTo(n: Int64) : Int64 = if n <= 0 then 0 else n + sumTo(n - 1) sumTo(10) = 55
+let sumTo(n: Int64) : Int64 = if n <= 0L then 0L else n + sumTo(n - 1L); sumTo(10L) = 55L
 
 // Test 25: Power function (x^n)
-let power(x: Int64, n: Int64) : Int64 = if n == 0 then 1 else x * power(x, n - 1) power(2, 6) = 64
+let power(x: Int64, n: Int64) : Int64 = if n == 0L then 1L else x * power(x, n - 1L); power(2L, 6L) = 64L
 
 // Test 26: Countdown (tests deep recursion with simple function)
-let countdown(n: Int64) : Int64 = if n <= 0 then 0 else countdown(n - 1) countdown(100) = 0
+let countdown(n: Int64) : Int64 = if n <= 0L then 0L else countdown(n - 1L); countdown(100L) = 0L
 
 // Test 27: Even check via recursion
-let isEven(n: Int64) : Int64 = if n == 0 then 1 else if n == 1 then 0 else isEven(n - 2) isEven(42) = 1
+let isEven(n: Int64) : Int64 = if n == 0L then 1L else if n == 1L then 0L else isEven(n - 2L); isEven(42L) = 1L
 
 // Test 28: Factorial of 6
-let fact(n: Int64) : Int64 = if n <= 1 then 1 else n * fact(n - 1) fact(6) = 720
+let fact(n: Int64) : Int64 = if n <= 1L then 1L else n * fact(n - 1L); fact(6L) = 720L
 
 // Test 29: Recursive with let binding
-let recWithLet(n: Int64) : Int64 = if n <= 0 then 0 else let prev = recWithLet(n - 1) in n + prev recWithLet(5) = 15
+let recWithLet(n: Int64) : Int64 = if n <= 0L then 0L else let prev = recWithLet(n - 1L) in n + prev; recWithLet(5L) = 15L
 
 // Test 30: Ackermann-like (simplified)
-let ack(m: Int64, n: Int64) : Int64 = if m == 0 then n + 1 else if n == 0 then ack(m - 1, 1) else ack(m - 1, ack(m, n - 1)) ack(2, 3) = 9
+let ack(m: Int64, n: Int64) : Int64 = if m == 0L then n + 1L else if n == 0L then ack(m - 1L, 1L) else ack(m - 1L, ack(m, n - 1L)); ack(2L, 3L) = 9L
 
 // =====================================================
 // Multiple Function Calls in Single Expression
@@ -113,19 +113,19 @@ let ack(m: Int64, n: Int64) : Int64 = if m == 0 then n + 1 else if n == 0 then a
 // SaveRegs/RestoreRegs stack offset corruption.
 
 // Test 31: Three function calls - direct sum
-let f(x: Int64) : Int64 = x * 2 f(1) + f(2) + f(3) = 12
+let f(x: Int64) : Int64 = x * 2L f(1L) + f(2L) + f(3L) = 12L
 
 // Test 32: Four function calls
-let g(x: Int64) : Int64 = x + 1 g(1) + g(2) + g(3) + g(4) = 14
+let g(x: Int64) : Int64 = x + 1L g(1L) + g(2L) + g(3L) + g(4L) = 14L
 
 // Test 33: Tribonacci - triple recursive call
-let trib(n: Int64) : Int64 = if n <= 0 then 0 else if n == 1 then 1 else if n == 2 then 1 else trib(n - 1) + trib(n - 2) + trib(n - 3) trib(7) = 24
+let trib(n: Int64) : Int64 = if n <= 0L then 0L else if n == 1L then 1L else if n == 2L then 1L else trib(n - 1L) + trib(n - 2L) + trib(n - 3L); trib(7L) = 24L
 
 // Test 34: Three calls with different functions
-let add1(x: Int64) : Int64 = x + 1 let add2(x: Int64) : Int64 = x + 2 let add3(x: Int64) : Int64 = x + 3 add1(10) + add2(10) + add3(10) = 36
+let add1(x: Int64) : Int64 = x + 1L let add2(x: Int64) : Int64 = x + 2L let add3(x: Int64) : Int64 = x + 3L add1(10L) + add2(10L) + add3(10L) = 36L
 
 // Test 35: Three calls using let bindings
-let h(x: Int64) : Int64 = x * 2 let a = h(1) in let b = h(2) in let c = h(3) in a + b + c = 12
+let h(x: Int64) : Int64 = x * 2L let a = h(1L) in let b = h(2L) in let c = h(3L) in a + b + c = 12L
 
 // =====================================================
 // Mutual Recursion
@@ -134,42 +134,42 @@ let h(x: Int64) : Int64 = x * 2 let a = h(1) in let b = h(2) in let c = h(3) in 
 
 // Test 36-38: Classic isEven/isOdd mutual recursion
 let isEven(n: Int64): Int64 =
-    if n == 0 then 1
-    else isOdd(n - 1)
+    if n == 0L then 1L
+    else isOdd(n - 1L)
 
 let isOdd(n: Int64): Int64 =
-    if n == 0 then 0
-    else isEven(n - 1)
+    if n == 0L then 0L
+    else isEven(n - 1L)
 
-isEven(4) = 1  // isEven(4) should be true
-isOdd(5) = 1   // isOdd returns true (1) for odd numbers
-isEven(3) = 0  // isEven returns false (0) for odd numbers
+isEven(4L) = 1L  // isEven(4) should be true
+isOdd(5L) = 1L   // isOdd returns true (1) for odd numbers
+isEven(3L) = 0L  // isEven returns false (0) for odd numbers
 
 // Test 39-40: Three-way mutual recursion
 let funcA(n: Int64): Int64 =
-    if n <= 0 then 1
-    else funcB(n - 1)
+    if n <= 0L then 1L
+    else funcB(n - 1L)
 
 let funcB(n: Int64): Int64 =
-    if n <= 0 then 2
-    else funcC(n - 1)
+    if n <= 0L then 2L
+    else funcC(n - 1L)
 
 let funcC(n: Int64): Int64 =
-    if n <= 0 then 3
-    else funcA(n - 1)
+    if n <= 0L then 3L
+    else funcA(n - 1L)
 
-funcA(3) = 1  // Three-way mutual recursion
-funcB(2) = 1  // Start from funcB
+funcA(3L) = 1L  // Three-way mutual recursion
+funcB(2L) = 1L  // Start from funcB
 
 // Test 41: Forward reference - funcX calls funcY defined after it
 let funcX(n: Int64): Int64 =
-    if n <= 0 then 100
-    else funcY(n - 1) + 1
+    if n <= 0L then 100L
+    else funcY(n - 1L) + 1L
 
 let funcY(n: Int64): Int64 =
-    n * 2
+    n * 2L
 
-funcX(5) = 9
+funcX(5L) = 9L
 
 // =====================================================
 // Return Type Fixpoint Computation (mutation #162)
@@ -186,25 +186,25 @@ funcX(5) = 9
 // Each function's return type depends on the callee's return type being computed first.
 
 let chain4(n: Int64): Int64 =
-    if n <= 0 then 1000 else n + chain4(n - 1)
+    if n <= 0L then 1000L else n + chain4(n - 1L)
 
 let chain3(n: Int64): Int64 =
-    if n <= 0 then chain4(5) else n + chain3(n - 1)
+    if n <= 0L then chain4(5L) else n + chain3(n - 1L)
 
 let chain2(n: Int64): Int64 =
-    if n <= 0 then chain3(5) else n + chain2(n - 1)
+    if n <= 0L then chain3(5L) else n + chain2(n - 1L)
 
 let chain1(n: Int64): Int64 =
-    if n <= 0 then chain2(5) else n + chain1(n - 1)
+    if n <= 0L then chain2(5L) else n + chain1(n - 1L)
 
 // chain4(5) = 5+4+3+2+1+1000 = 1015
-chain4(5) = 1015
+chain4(5L) = 1015L
 // chain3(0) = chain4(5) = 1015
 // chain3(5) = 5+4+3+2+1+chain4(5) = 15+1015 = 1030
-chain3(5) = 1030
+chain3(5L) = 1030L
 // chain2(0) = chain3(5) = 1030
 // chain2(5) = 5+4+3+2+1+chain3(5) = 15+1030 = 1045
-chain2(5) = 1045
+chain2(5L) = 1045L
 // chain1(0) = chain2(5) = 1045
 // chain1(5) = 5+4+3+2+1+chain2(5) = 15+1045 = 1060
-chain1(5) = 1060
+chain1(5L) = 1060L

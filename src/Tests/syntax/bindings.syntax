@@ -3,12 +3,12 @@
 ---NAME---
 compiler accepts public let without in
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let x = 5
 x + 1
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 interpreter accepts public let without in
@@ -18,16 +18,16 @@ interpreter
 let x = 5
 x + 1
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 compiler accepts nested tuple let pattern
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let ((a, _), (b, ())) = ((1, 2), (3, ())) in a + b
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 interpreter accepts nested tuple let pattern
@@ -36,16 +36,16 @@ interpreter
 ---SOURCE---
 let ((a, _), (b, ())) = ((1, 2), (3, ())) in a + b
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 compiler accepts public lambda binders
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 fun ((a, _), b) -> a + b
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 interpreter accepts public lambda binders
@@ -54,12 +54,12 @@ interpreter
 ---SOURCE---
 fun ((a, _), b) -> a + b
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 compiler rejects literal let pattern
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let 5 = 5 in 6
 ---EXPECT-ERROR---
@@ -77,7 +77,7 @@ Expected a let binding pattern
 ---NAME---
 compiler rejects constructor let pattern
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let Some(x) = value in x
 ---EXPECT-ERROR---
@@ -95,7 +95,7 @@ Expected a let binding pattern
 ---NAME---
 compiler rejects typed lambda binder
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 fun (x: Int64) -> x
 ---EXPECT-ERROR---
@@ -113,7 +113,7 @@ Lambda parameter annotations are not supported
 ---NAME---
 compiler rejects fat arrow lambda
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 (x: Int64) => x
 ---EXPECT-ERROR---
@@ -141,7 +141,7 @@ interpreter
 ---NAME---
 compiler rejects duplicate let binders
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let (x, x) = (1, 2) in x
 ---EXPECT-ERROR---
@@ -159,7 +159,7 @@ Duplicate binding 'x' in the same pattern
 ---NAME---
 compiler rejects duplicates across lambda parameters
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 fun x (x, y) -> x + y
 ---EXPECT-ERROR---

@@ -1,25 +1,25 @@
 // Integer type checking tests
 
 // Integer literals
-42 : int
-0 : int
-255 : int
--10 : int
+42L : int
+0L : int
+255L : int
+-10L : int
 
 // Arithmetic operations
-2 + 3 : int
-10 - 5 : int
-7 * 6 : int
-20 / 4 : int
+2L + 3L : int
+10L - 5L : int
+7L * 6L : int
+20L / 4L : int
 
 // Negation
--42 : int
--(5 + 3) : int
+-42L : int
+-(5L + 3L) : int
 
 // Nested operations
-2 + 3 * 4 : int  // precedence
-(2 + 3) * 4 : int
-10 + 20 - 5 : int
+2L + 3L * 4L : int  // precedence
+(2L + 3L) * 4L : int
+10L + 20L - 5L : int
 
 // Complex expressions
-(10 + 20) * (30 - 15) / 2 : int
+(10L + 20L) * (30L - 15L) / 2L : int

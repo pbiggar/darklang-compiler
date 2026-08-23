@@ -4,7 +4,7 @@ let userFn () : Int64 = 6L
 ([] |> Stdlib.List.push_v0 2L) = [ 2L ]
 
 // nested function
-([] |> Stdlib.List.push_v0 (Stdlib.Int64.add_v0 1L (Stdlib.Int64.add_v0 1L 3L))) = [ 5L ]
+([] |> Stdlib.List.push_v0<Int64> (Stdlib.Int64.add_v0 1L (Stdlib.Int64.add_v0 1L 3L))) = [ 5L ]
 
 ([] |> Stdlib.List.push_v0 (Stdlib.Int64.add_v0 1L ((+) 1L 3L))) = [ 5L ]
 
@@ -52,7 +52,7 @@ type MyEnum = | A of Int64 * Int64 * Int64
 
 (let x = Stdlib.Option.Option.Some 3L
 
- x |> Stdlib.Option.map (fun a -> a) |> Stdlib.Option.map (fun a -> a + 1L)) =
+ x |> Stdlib.Option.map<Int64, Int64> (fun a -> a) |> Stdlib.Option.map<Int64, Int64> (fun a -> a + 1L)) =
   Stdlib.Option.Option.Some 4L
 
 (let x = fun x -> Stdlib.Option.map x (fun a -> a)

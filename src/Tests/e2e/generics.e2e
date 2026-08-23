@@ -5,107 +5,107 @@
 // =====================================================
 
 // Generic identity function with int
-let identity<'t>(x: t) : t = x identity(42) = 42
+let identity<'t>(x: t) : t = x; identity<Int64>(42L) = 42L
 
 // Identity with bool
-let id<'t>(x: t) : t = x id(true) = true
+let id<'t>(x: t) : t = x; id<Bool>(true) = true
 
 // Identity with different int value
-let ident<'t>(x: t) : t = x ident(100) = 100
+let ident<'t>(x: t) : t = x; ident<Int64>(100L) = 100L
 
 // =====================================================
 // Multiple Instantiations
 // =====================================================
 
 // Using identity with different types in same expression
-let myid<'t>(x: t) : t = x myid(40) + myid(2) = 42
+let myid<'t>(x: t) : t = x; myid<Int64>(40L) + myid<Int64>(2L) = 42L
 
 // =====================================================
 // Generic Functions with Expressions
 // =====================================================
 
 // Generic function that uses its parameter
-let return_it<'t>(value: t) : t = value return_it(42) = 42
+let return_it<'t>(value: t) : t = value; return_it<Int64>(42L) = 42L
 
-let ret<'t>(v: t) : t = v ret(false) = false
+let ret<'t>(v: t) : t = v; ret<Bool>(false) = false
 
 // =====================================================
 // Generic with Operations on Result
 // =====================================================
 
 // Use generic result in arithmetic
-let i<'t>(x: t) : t = x i(6) * i(7) = 42
+let i<'t>(x: t) : t = x; i<Int64>(6L) * i<Int64>(7L) = 42L
 
-let j<'t>(x: t) : t = x j(10) + 32 = 42
+let j<'t>(x: t) : t = x; j<Int64>(10L) + 32L = 42L
 
 // =====================================================
 // Generic with Let Bindings
 // =====================================================
 
 // Use generic in let binding
-let k<'t>(x: t) : t = x let x = k(21) in x * 2 = 42
+let k<'t>(x: t) : t = x let x = k<Int64>(21L) in x * 2L = 42L
 
-let l<'t>(x: t) : t = x let a = l(10) in let b = l(32) in a + b = 42
+let l<'t>(x: t) : t = x let a = l<Int64>(10L) in let b = l<Int64>(32L) in a + b = 42L
 
 // =====================================================
 // Type Inference at Call Sites
 // =====================================================
 
 // Basic inference - int inferred from argument
-let inf_id<'t>(x: t) : t = x inf_id(42) = 42
+let inf_id<'t>(x: t) : t = x; inf_id<Int64>(42L) = 42L
 
 // Bool inference
-let inf_bool<'t>(x: t) : t = x inf_bool(true) = true
+let inf_bool<'t>(x: t) : t = x; inf_bool<Bool>(true) = true
 
 // Inference with different int value
-let inf_int2<'t>(x: t) : t = x inf_int2(100) = 100
+let inf_int2<'t>(x: t) : t = x; inf_int2<Int64>(100L) = 100L
 
 // Multiple calls with inference in expression
-let inf_mult<'t>(x: t) : t = x inf_mult(40) + inf_mult(2) = 42
+let inf_mult<'t>(x: t) : t = x; inf_mult<Int64>(40L) + inf_mult<Int64>(2L) = 42L
 
 // Inference with operations on result
-let inf_op<'t>(x: t) : t = x inf_op(6) * inf_op(7) = 42
+let inf_op<'t>(x: t) : t = x; inf_op<Int64>(6L) * inf_op<Int64>(7L) = 42L
 
 // Inference with let binding
-let inf_let<'t>(x: t) : t = x let y = inf_let(21) in y * 2 = 42
+let inf_let<'t>(x: t) : t = x let y = inf_let<Int64>(21L) in y * 2L = 42L
 
 // Mixed explicit and inferred - explicit still works
-let mixed<'t>(x: t) : t = x mixed(20) + mixed(22) = 42
+let mixed<'t>(x: t) : t = x; mixed<Int64>(20L) + mixed<Int64>(22L) = 42L
 
 // Inference with bool in conditional
-let inf_cond<'t>(x: t) : t = x if inf_cond(true) then 42 else 0 = 42
+let inf_cond<'t>(x: t) : t = x if inf_cond<Bool>(true) then 42L else 0L = 42L
 
 // =====================================================
 // Multiple Type Parameters
 // =====================================================
 
 // Two type parameters - return first
-let first<'a, 'b>(a: a, b: b) : a = a first(42, true) = 42
+let first<'a, 'b>(a: a, b: b) : a = a; first<Int64, Bool>(42L, true) = 42L
 
 // Two type parameters - return second
-let second<'a, 'b>(a: a, b: b) : b = b second(42, true) = true
+let second<'a, 'b>(a: a, b: b) : b = b; second<Int64, Bool>(42L, true) = true
 
 // Three type parameters
-let pick1<'a, 'b, 'c>(a: a, b: b, c: c) : a = a pick1(42, false, 99) = 42
+let pick1<'a, 'b, 'c>(a: a, b: b, c: c) : a = a; pick1<Int64, Bool, Int64>(42L, false, 99L) = 42L
 
-let pick2<'a, 'b, 'c>(a: a, b: b, c: c) : b = b pick2(99, true, 99) = true
+let pick2<'a, 'b, 'c>(a: a, b: b, c: c) : b = b; pick2<Int64, Bool, Int64>(99L, true, 99L) = true
 
-let pick3<'a, 'b, 'c>(a: a, b: b, c: c) : c = c pick3(99, false, 42) = 42
+let pick3<'a, 'b, 'c>(a: a, b: b, c: c) : c = c; pick3<Int64, Bool, Int64>(99L, false, 42L) = 42L
 
 // Type inference with multiple type parameters
-let fst<'a, 'b>(a: a, b: b) : a = a fst(10, true) = 10
+let fst<'a, 'b>(a: a, b: b) : a = a; fst<Int64, Bool>(10L, true) = 10L
 
-let snd<'a, 'b>(a: a, b: b) : b = b snd(10, false) = false
+let snd<'a, 'b>(a: a, b: b) : b = b; snd<Int64, Bool>(10L, false) = false
 
 // Inference with three parameters
-let get1<'a, 'b, 'c>(a: a, b: b, c: c) : a = a get1(42, true, false) = 42
+let get1<'a, 'b, 'c>(a: a, b: b, c: c) : a = a; get1<Int64, Bool, Bool>(42L, true, false) = 42L
 
-let get2<'a, 'b, 'c>(a: a, b: b, c: c) : b = b get2(99, true, false) = true
+let get2<'a, 'b, 'c>(a: a, b: b, c: c) : b = b; get2<Int64, Bool, Bool>(99L, true, false) = true
 
-let get3<'a, 'b, 'c>(a: a, b: b, c: c) : c = c get3(99, true, false) = false
+let get3<'a, 'b, 'c>(a: a, b: b, c: c) : c = c; get3<Int64, Bool, Bool>(99L, true, false) = false
 
 // Multiple params with same type
-let both_int<'a, 'b>(a: a, b: b) : a = a both_int(42, 99) = 42
+let both_int<'a, 'b>(a: a, b: b) : a = a; both_int<Int64, Int64>(42L, 99L) = 42L
 
 // Use result in expression
 // Sum payloads with multiple type parameters should preserve float results
@@ -113,67 +113,67 @@ type Result2<'t, 'e> = Ok2 of t | Err2 of e
 let doubleOk(r: Result2<Float, Int64>) : Float = match r with | Ok2(v) -> v + v | Err2(_) -> 0.0
 doubleOk(Ok2(2.5)) = 5.0
 
-let fst2<'a, 'b>(a: a, b: b) : a = a fst2(40, true) + 2 = 42
+let fst2<'a, 'b>(a: a, b: b) : a = a; fst2<Int64, Bool>(40L, true) + 2L = 42L
 
 // Multiple params in let binding
-let getfst<'a, 'b>(a: a, b: b) : a = a let x = getfst(21, false) in x * 2 = 42
+let getfst<'a, 'b>(a: a, b: b) : a = a let x = getfst<Int64, Bool>(21L, false) in x * 2L = 42L
 
 // Missing type argument inference (unused type parameter)
-let phantom<'a, 'b>(x: a) : a = x phantom(1) = 1
+let phantom<'a, 'b>(x: a) : a = x; phantom<Int64, Bool>(1L) = 1L
 
 // =====================================================
 // Generic Type Unification in If Expressions
 // =====================================================
 
 // If with generic Option - Some on then, None on else
-type Option1<'t> = None1 | Some1 of t match (if true then Some1(42) else None1) with | Some1(x) -> x | None1 -> 0 = 42
+type Option1<'t> = None1 | Some1 of t match (if true then Some1(42L) else None1) with | Some1(x) -> x | None1 -> 0L = 42L
 
 // If with generic Option - None on then, Some on else
-type Option2<'t> = None2 | Some2 of t match (if false then None2 else Some2(99)) with | Some2(x) -> x | None2 -> 0 = 99
+type Option2<'t> = None2 | Some2 of t match (if false then None2 else Some2(99L)) with | Some2(x) -> x | None2 -> 0L = 99L
 
 // If with generic Option - variable holding None
-type Option3<'t> = None3 | Some3 of t let n = None3 in match (if true then Some3(55) else n) with | Some3(x) -> x | None3 -> 0 = 55
+type Option3<'t> = None3 | Some3 of t let n = None3 in match (if true then Some3(55L) else n) with | Some3(x) -> x | None3 -> 0L = 55L
 
 // If with generic Result type
 // NOTE: Using Int64 for error type. String fails in the test suite
 // but works in manual execution. Needs investigation.
-type Result1<'t, 'e> = Ok1 of t | Err1 of e match (if true then Ok1(42) else Err1(99)) with | Ok1(x) -> x | Err1(_) -> 0 = 42
+type Result1<'t, 'e> = Ok1 of t | Err1 of e match (if true then Ok1(42L) else Err1(99L)) with | Ok1(x) -> x | Err1(_) -> 0L = 42L
 
 // Nested if with generic types
-type Option4<'t> = None4 | Some4 of t match (if true then (if false then None4 else Some4(42)) else None4) with | Some4(x) -> x | None4 -> 0 = 42
+type Option4<'t> = None4 | Some4 of t match (if true then (if false then None4 else Some4(42L)) else None4) with | Some4(x) -> x | None4 -> 0L = 42L
 
 // =====================================================
 // Lambda Capturing Generic Function Results (Explicit TypeApp)
 // =====================================================
 
 // Lambda captures result of explicit TypeApp - tests TypeApp return type instantiation (c4d-zts)
-let gen_capture_explicit<'t>(x: t) : t = x let captured = gen_capture_explicit<Int64>(42) in (fun y -> captured + y)(10) = 52
+let gen_capture_explicit<'t>(x: t) : t = x let captured = gen_capture_explicit<Int64>(42L) in (fun y -> captured + y)(10L) = 52L
 
 // Lambda captures TypeApp result used in stored closure
-let gen_store_explicit<'t>(x: t) : t = x let ``val`` = gen_store_explicit<Int64>(100) in let f = fun x -> ``val`` + x in f(5) = 105
+let gen_store_explicit<'t>(x: t) : t = x let ``val`` = gen_store_explicit<Int64>(100L) in let f = fun x -> ``val`` + x in f(5L) = 105L
 
 // Multiple type params with explicit TypeApp - capture first result
-let gen_fst_explicit<'a, 'b>(x: a, y: b) : a = x let r = gen_fst_explicit<Int64, Bool>(20, true) in (fun z -> r + z)(22) = 42
+let gen_fst_explicit<'a, 'b>(x: a, y: b) : a = x let r = gen_fst_explicit<Int64, Bool>(20L, true) in (fun z -> r + z)(22L) = 42L
 
 // Capture Bool result from explicit TypeApp - exposes TVar default bug (c4d-zts)
-let gen_bool<'t>(x: t) : t = x let flag = gen_bool<Bool>(true) in (fun y -> if flag then y else 0)(42) = 42
+let gen_bool<'t>(x: t) : t = x let flag = gen_bool<Bool>(true) in (fun y -> if flag then y else 0L)(42L) = 42L
 
 // Capture String result from explicit TypeApp - exposes TVar default bug (c4d-zts)
-let gen_string<'t>(x: t) : t = x let s = gen_string<String>("hello") in (fun x -> if s == "hello" then x else 0)(42) = 42
+let gen_string<'t>(x: t) : t = x let s = gen_string<String>("hello") in (fun x -> if s == "hello" then x else 0L)(42L) = 42L
 
 // TypeApp call inside lambda with captured outer value (c4d-zts)
-let gen_inner<'t>(x: t) : t = x let outer = 10 in (fun x -> gen_inner<Int64>(outer) + x)(32) = 42
+let gen_inner<'t>(x: t) : t = x let outer = 10L in (fun x -> gen_inner<Int64>(outer) + x)(32L) = 42L
 
 // =====================================================
 // Tuple Types as Type Arguments (3+ elements)
 // =====================================================
 
 // 3-element tuple type as generic type argument - tests parseTypeArgType tuple validation
-let tuple3_id<'t>(x: t) : t = x let (first, second, third) = tuple3_id<(Int64 * Int64 * Int64)>((1, 2, 3)) in first + second + third = 6
+let tuple3_id<'t>(x: t) : t = x; let tuple = (1L, 2L, 3L) in (tuple3_id<(Int64, Int64, Int64)> tuple).0 + (tuple3_id<(Int64, Int64, Int64)> tuple).1 + (tuple3_id<(Int64, Int64, Int64)> tuple).2 = 6L
 
 // Match scrutinee from explicit TypeApp preserves payload type (string equality)
 let gen_match_string<'t>(x: t) : t = x
-match gen_match_string<String>("hello") with | s -> if s == ("he" ++ "llo") then 1 else 0 = 1
+match gen_match_string<String>("hello") with | s -> if s == ("he" ++ "llo") then 1L else 0L = 1L
 
 // =====================================================
 // Mutation #131: Generic Pattern Variable Type Substitution
@@ -189,22 +189,22 @@ match gen_match_string<String>("hello") with | s -> if s == ("he" ++ "llo") then
 type GenOpt<'t> = GenNone | GenSome of t
 
 // Match on GenSome with Int64 payload - tests type substitution in pattern binding
-match GenSome(42) with | GenSome(x) -> x + 8 | GenNone -> 0 = 50
+match GenSome(42L) with | GenSome(x) -> x + 8L | GenNone -> 0L = 50L
 
 // Match on GenSome with nested arithmetic to verify correct type inference
-match GenSome(10) with | GenSome(x) -> x * x + x | GenNone -> 0 = 110
+match GenSome(10L) with | GenSome(x) -> x * x + x | GenNone -> 0L = 110L
 
 // Generic Result-like type with two type parameters
 type GenRes<'t, 'e> = GenOk of t | GenErr of e
 
 // Match with multiple type params - verify type substitution for both params
-match GenOk(7) with | GenOk(x) -> x * 6 | GenErr(e) -> 0 = 42
+match GenOk(7L) with | GenOk(x) -> x * 6L | GenErr(e) -> 0L = 42L
 
 // Match on error branch to verify second type param substitution (using Int64 error to avoid string comparison)
-match GenErr(99) with | GenOk(x) -> x | GenErr(e) -> if e == 99 then 42 else 0 = 42
+match GenErr(99L) with | GenOk(x) -> x | GenErr(e) -> if e == 99L then 42L else 0L = 42L
 
 // Nested generic types - GenOpt containing GenRes
-match GenSome(GenOk(21)) with | GenSome(inner) -> match inner with | GenOk(v) -> v * 2 | GenErr(_) -> 0 | GenNone -> 0 = 42
+match GenSome(GenOk(21L)) with | GenSome(inner) -> match inner with | GenOk(v) -> v * 2L | GenErr(_) -> 0L | GenNone -> 0L = 42L
 
 // =====================================================
 // Mutation #218: consolidateBindings TVar preference order
@@ -223,25 +223,25 @@ match GenSome(GenOk(21)) with | GenSome(inner) -> match inner with | GenOk(v) ->
 // Generic function with explicit type application that exercises binding consolidation
 // The identity function is specialized with explicit type, then used with concrete value
 let genId218<'t>(x: t) : t = x
-genId218<Int64>(42) + 8 = 50
+genId218<Int64>(42L) + 8L = 50L
 
 // Generic wrapper that exercises type bindings with List
 let wrapList218<'t>(x: t) : List<t> = [x]
-match wrapList218(42) with | [v] -> v | _ -> 0 = 42
+match wrapList218<Int64>(42L) with | [v] -> v | _ -> 0L = 42L
 
 // Type inference with generic Option - binding TVar to concrete type via pattern match
 type Opt218<'t> = None218 | Some218 of t
 let unwrapOpt218<'t>(opt: Opt218<t>, default: t) : t = match opt with | Some218(v) -> v | None218 -> default
-unwrapOpt218(Some218(42), 0) = 42
+unwrapOpt218<Int64>(Some218(42L), 0L) = 42L
 
 // Two type parameters with different concrete types
-let pair218<'a, 'b>(x: a, y: b) : (a * b) = (x, y)
-let p = pair218(42, true) in let (first, _) = p in first = 42
+let pair218<'a, 'b>(x: a, y: b) : (a, b) = (x, y)
+let p = pair218<Int64, Bool>(42L, true) in p.0 = 42L
 
 // Type inference where TVar is bound from multiple sources (argument and return)
 let returnFirst218<'a, 'b>(x: a, y: b) : a = x
-returnFirst218(50, "ignored") - 8 = 42
+returnFirst218<Int64, String>(50L, "ignored") - 8L = 42L
 
 // Generic function body must satisfy declared return type for all type params.
 // This should fail because `x` has type `t`, but return type is unrelated `u`.
-let badReturn<'t, 'u>(x: t): u = x badReturn<Int64, String>(42) = error="Type mismatch in function badReturn body"
+let badReturn<'t, 'u>(x: t): u = x; badReturn<Int64, String>(42L) = error="Type mismatch in function badReturn body"

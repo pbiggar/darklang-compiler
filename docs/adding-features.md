@@ -34,7 +34,7 @@ type BinOp =
     // ...
 ```
 
-### Step 2: Lexer (`src/DarkCompiler/passes/1_Parser.fs`)
+### Step 2: Lexer (`src/DarkCompiler/passes/1_InterpreterParser.fs`)
 
 Add a token type and lexer case:
 
@@ -47,7 +47,7 @@ type Token =
 | '%' -> (TPercent, rest)
 ```
 
-### Step 3: Parser (`src/DarkCompiler/passes/1_Parser.fs`)
+### Step 3: Parser (`src/DarkCompiler/passes/1_InterpreterParser.fs`)
 
 Add operator precedence and parsing. For `%`, it has same precedence as `*` and `/`:
 

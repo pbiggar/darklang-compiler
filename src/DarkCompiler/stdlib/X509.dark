@@ -2,32 +2,32 @@
 
 module Stdlib.X509
 
-let __readLengthBytes(blob: Blob, index: Int64, remaining: Int64, acc: Int64) : Stdlib.Option.Option<(Int64 * Int64)> =
-    if remaining == 0 then Some((index, acc))
+let __readLengthBytes(blob: Blob, index: Int64, remaining: Int64, acc: Int64) : Stdlib.Option.Option<(Int64, Int64)> =
+    if remaining == 0L then Some((index, acc))
     else if index >= Stdlib.Bytes.length(blob) then None
     else
         let byte = Stdlib.Bytes.get(blob, index) in
         let blobLength = Stdlib.Bytes.length(blob) in
         if acc > blobLength then None
-        else Stdlib.X509.__readLengthBytes(blob, index + 1, remaining - 1, acc * 256 + byte)
+        else Stdlib.X509.__readLengthBytes(blob, index + 1L, remaining - 1L, acc * 256L + byte)
 
 // Returns (content offset, content length, end offset).
-let __tlv(blob: Blob, offset: Int64) : Stdlib.Option.Option<(Int64 * Int64 * Int64)> =
+let __tlv(blob: Blob, offset: Int64) : Stdlib.Option.Option<(Int64, Int64, Int64)> =
     let blobLength = Stdlib.Bytes.length(blob) in
-    if offset < 0 || offset + 2 > blobLength then None
+    if offset < 0L || offset + 2L > blobLength then None
     else
-        let firstLength = Stdlib.Bytes.get(blob, offset + 1) in
+        let firstLength = Stdlib.Bytes.get(blob, offset + 1L) in
         let parsed =
-            if firstLength < 128 then Some((offset + 2, firstLength))
+            if firstLength < 128L then Some((offset + 2L, firstLength))
             else
-                let byteCount = firstLength & 127 in
-                if byteCount == 0 || byteCount > 8 then None
-                else Stdlib.X509.__readLengthBytes(blob, offset + 2, byteCount, 0) in
+                let byteCount = firstLength & 127L in
+                if byteCount == 0L || byteCount > 8L then None
+                else Stdlib.X509.__readLengthBytes(blob, offset + 2L, byteCount, 0L) in
         match parsed with
         | None -> None
         | Some((contentOffset, contentLength)) ->
             let endOffset = contentOffset + contentLength in
-            if contentLength < 0 || endOffset < contentOffset || endOffset > blobLength then None
+            if contentLength < 0L || endOffset < contentOffset || endOffset > blobLength then None
             else Some((contentOffset, contentLength, endOffset))
 
 let __skip(blob: Blob, offset: Int64) : Stdlib.Option.Option<Int64> =
@@ -36,21 +36,21 @@ let __skip(blob: Blob, offset: Int64) : Stdlib.Option.Option<Int64> =
     | Some((_contentOffset, _contentLength, endOffset)) -> Some(endOffset)
 
 let __skipFields(blob: Blob, offset: Int64, remaining: Int64) : Stdlib.Option.Option<Int64> =
-    if remaining == 0 then Some(offset)
+    if remaining == 0L then Some(offset)
     else
         match Stdlib.X509.__skip(blob, offset) with
         | None -> None
-        | Some(next) -> Stdlib.X509.__skipFields(blob, next, remaining - 1)
+        | Some(next) -> Stdlib.X509.__skipFields(blob, next, remaining - 1L)
 
 let __subjectPublicKeyInfo(certificate: Blob) : Stdlib.Option.Option<Blob> =
-    if Stdlib.Bytes.length(certificate) < 2 || Stdlib.Bytes.get(certificate, 0) != 48 then None
+    if Stdlib.Bytes.length(certificate) < 2L || Stdlib.Bytes.get(certificate, 0L) != 48L then None
     else
-        match Stdlib.X509.__tlv(certificate, 0) with
+        match Stdlib.X509.__tlv(certificate, 0L) with
         | None -> None
         | Some((certificateContent, _certificateLength, certificateEnd)) ->
             if certificateEnd != Stdlib.Bytes.length(certificate)
                || certificateContent >= certificateEnd
-               || Stdlib.Bytes.get(certificate, certificateContent) != 48 then None
+               || Stdlib.Bytes.get(certificate, certificateContent) != 48L then None
             else
                 match Stdlib.X509.__tlv(certificate, certificateContent) with
                 | None -> None
@@ -58,17 +58,17 @@ let __subjectPublicKeyInfo(certificate: Blob) : Stdlib.Option.Option<Blob> =
                     if tbsEnd > certificateEnd then None
                     else
                         let fieldsStart =
-                            if tbsContent < tbsEnd && Stdlib.Bytes.get(certificate, tbsContent) == 160 then
+                            if tbsContent < tbsEnd && Stdlib.Bytes.get(certificate, tbsContent) == 160L then
                                 Stdlib.X509.__skip(certificate, tbsContent)
                             else Some(tbsContent) in
                         match fieldsStart with
                         | None -> None
                         | Some(firstField) ->
                             // serial, signature, issuer, validity, subject
-                            match Stdlib.X509.__skipFields(certificate, firstField, 5) with
+                            match Stdlib.X509.__skipFields(certificate, firstField, 5L) with
                             | None -> None
                             | Some(spkiStart) ->
-                                if spkiStart >= tbsEnd || Stdlib.Bytes.get(certificate, spkiStart) != 48 then None
+                                if spkiStart >= tbsEnd || Stdlib.Bytes.get(certificate, spkiStart) != 48L then None
                                 else
                                     match Stdlib.X509.__tlv(certificate, spkiStart) with
                                     | None -> None
@@ -85,12 +85,12 @@ let __subjectPublicKeyInfo(certificate: Blob) : Stdlib.Option.Option<Blob> =
 let __pemLines(base64: String, offset: Int64, acc: String) : String =
     if offset >= Stdlib.String.__byteLength(base64) then acc
     else
-        let end_ = Stdlib.Int64.min(offset + 64, Stdlib.String.__byteLength(base64)) in
+        let end_ = Stdlib.Int64.min(offset + 64L, Stdlib.String.__byteLength(base64)) in
         Stdlib.X509.__pemLines(base64, end_, acc ++ Stdlib.String.__byteSlice(base64, offset, end_) ++ "\n")
 
 let __publicKeyPem(spki: Blob) : String =
     "-----BEGIN PUBLIC KEY-----\n" ++
-    Stdlib.X509.__pemLines(Stdlib.Base64.encode(spki), 0, "") ++
+    Stdlib.X509.__pemLines(Stdlib.Base64.encode(spki), 0L, "") ++
     "-----END PUBLIC KEY-----\n"
 
 let pemCertificatePublicKey(pemCertificate: String) : Stdlib.Result.Result<String, String> =

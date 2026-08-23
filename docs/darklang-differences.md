@@ -35,7 +35,7 @@ converts from compiler syntax to interpreter syntax.
 
 | Feature | Compiler | Interpreter | Conversion |
 |---------|----------|-------------|------------|
-| Integer literals | Default syntax: `5` is `Int64`; interpreter syntax: `5` is `Int` | `5` is `Int` | Select the matching parser mode |
+| Integer literals | `5` is `Int`; `5L` is `Int64`; explicit `5I` is also accepted | `5` is `Int`; `5L` is `Int64` | Remove the compiler-only `I` suffix when needed |
 | Sized integers | `1y`, `1s`, `1l` | Not supported | Int8, Int16, Int32 suffixes |
 | Unsigned integers | `1uy`, `1us`, `1ul` | Not supported | UInt8, UInt16, UInt32 suffixes |
 | List separators | `[1, 2]` | `[1L; 2L]` | Comma to semicolon |
@@ -46,17 +46,12 @@ converts from compiler syntax to interpreter syntax.
 
 ### 1.1 Integer Literals
 
-The compiler's interpreter-syntax parser matches current Dark: an unsuffixed
-literal such as `5` is arbitrary-precision `Int`, while `5L` is `Int64`. The
-default compiler syntax retains its historical bare-`Int64` meaning. The `I`
-suffix explicitly selects `Int` in either compiler parser and is a
-compiler-only spelling.
+The compiler's canonical parser matches current Dark: an unsuffixed literal
+such as `5` is arbitrary-precision `Int`, while `5L` is `Int64`. The `I` suffix
+also explicitly selects `Int` and is a compiler-only spelling.
 
 ```
-# Default compiler syntax
-1 + 2 = 3
-
-# Current/interpreter syntax
+# Canonical syntax
 darklang-interpreter eval "1 + 2"
 # Returns: 3
 ```

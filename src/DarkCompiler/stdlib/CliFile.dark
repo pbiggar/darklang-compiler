@@ -9,13 +9,13 @@ let __segmentMatchesNoStar(pattern: String, path: String, patternIndex: Int64, p
     if patternIndex == patternLength then pathIndex == pathLength
     else
         let patternByte = Stdlib.String.getByteAt(pattern, patternIndex) in
-        if patternByte == 63 then
+        if patternByte == 63L then
             pathIndex < pathLength
-            && Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex + 1, pathIndex + 1)
+            && Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex + 1L, pathIndex + 1L)
         else
             pathIndex < pathLength
             && patternByte == Stdlib.String.getByteAt(path, pathIndex)
-            && Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex + 1, pathIndex + 1)
+            && Stdlib.Cli.File.__segmentMatchesNoStar(pattern, path, patternIndex + 1L, pathIndex + 1L)
 
 let __chunkMatchesAt(chunk: String, path: String, chunkIndex: Int64, pathIndex: Int64) : Bool =
     if chunkIndex == Stdlib.String.__byteLength(chunk) then true
@@ -23,13 +23,13 @@ let __chunkMatchesAt(chunk: String, path: String, chunkIndex: Int64, pathIndex: 
     else
         let chunkByte = Stdlib.String.getByteAt(chunk, chunkIndex) in
         let pathByte = Stdlib.String.getByteAt(path, pathIndex) in
-        (chunkByte == 63 || chunkByte == pathByte)
-        && Stdlib.Cli.File.__chunkMatchesAt(chunk, path, chunkIndex + 1, pathIndex + 1)
+        (chunkByte == 63L || chunkByte == pathByte)
+        && Stdlib.Cli.File.__chunkMatchesAt(chunk, path, chunkIndex + 1L, pathIndex + 1L)
 
 let __findChunk(chunk: String, path: String, pathIndex: Int64) : Int64 =
-    if pathIndex + Stdlib.String.__byteLength(chunk) > Stdlib.String.__byteLength(path) then -1
-    else if Stdlib.Cli.File.__chunkMatchesAt(chunk ++ "", path ++ "", 0, pathIndex) then pathIndex
-    else Stdlib.Cli.File.__findChunk(chunk, path, pathIndex + 1)
+    if pathIndex + Stdlib.String.__byteLength(chunk) > Stdlib.String.__byteLength(path) then -1L
+    else if Stdlib.Cli.File.__chunkMatchesAt(chunk ++ "", path ++ "", 0L, pathIndex) then pathIndex
+    else Stdlib.Cli.File.__findChunk(chunk, path, pathIndex + 1L)
 
 let __allEmpty(parts: List<String>) : Bool =
     match parts with
@@ -45,9 +45,9 @@ let __matchStarParts(parts: List<String>, path: String, pathIndex: Int64, anchor
         else
             let found =
                 if anchoredStart then
-                    if Stdlib.Cli.File.__chunkMatchesAt(part ++ "", path ++ "", 0, pathIndex) then pathIndex else -1
+                    if Stdlib.Cli.File.__chunkMatchesAt(part ++ "", path ++ "", 0L, pathIndex) then pathIndex else -1L
                 else Stdlib.Cli.File.__findChunk(part ++ "", path ++ "", pathIndex) in
-            if found < 0 then false
+            if found < 0L then false
             else
                 let nextIndex = found + Stdlib.String.__byteLength(part) in
                 if Stdlib.Cli.File.__allEmpty(rest) then
@@ -88,5 +88,5 @@ let globMatchSegments(patternSegments: List<String>, pathSegments: List<String>)
             match pathSegments with
             | [] -> false
             | pathHead :: pathTail ->
-                Stdlib.Cli.File.__segmentMatches(patternHead, pathHead, 0, 0)
+                Stdlib.Cli.File.__segmentMatches(patternHead, pathHead, 0L, 0L)
                 && Stdlib.Cli.File.globMatchSegments(patternTail, pathTail)

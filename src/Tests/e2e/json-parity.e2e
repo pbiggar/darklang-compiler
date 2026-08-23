@@ -15,24 +15,24 @@ Stdlib.Json.serialize<Unit>(()) = "null"
 Stdlib.Json.parse<Bool>(" true ") = Stdlib.Result.Result.Ok(true)
 Stdlib.Json.serialize<String>("snowman ☃ and quote \"") = "\"snowman ☃ and quote \\\"\""
 Stdlib.Json.parse<Char>("\"👩‍👩‍👧‍👦\"") = Stdlib.Result.Result.Ok('👩‍👩‍👧‍👦')
-Stdlib.Json.parse<Int64>("1e2") = Stdlib.Result.Result.Ok(100)
+Stdlib.Json.parse<Int64>("1e2") = Stdlib.Result.Result.Ok(100L)
 Stdlib.Json.serialize<Float>(1e20) = "1E+20"
 Stdlib.Json.serialize<Float>(1e-5) = "1E-05"
 jsonParityError<Int64>(Stdlib.Json.parse<Int64>("1.2")) = "Can't parse JSON `1.2` as type `Int64` at path: `root`"
-Stdlib.Json.serialize<List<Int64>>([1, 2, 3]) = "[1,2,3]"
-Stdlib.Json.parse<(Int64 * String)>("[42,\"answer\"]") = Stdlib.Result.Result.Ok((42, "answer"))
+Stdlib.Json.serialize<List<Int64>>([1L, 2L, 3L]) = "[1,2,3]"
+Stdlib.Json.parse<(Int64, String)>("[42,\"answer\"]") = Stdlib.Result.Result.Ok((42L, "answer"))
 Stdlib.Json.serialize<Dict<String>>(Dict { b = "two", a = "one" }) = "{\"a\":\"one\",\"b\":\"two\"}"
 Stdlib.Json.parse<Dict<String>>("{\"a\":\"one\",\"b\":\"two\"}") = Stdlib.Result.Result.Ok(Dict { a = "one", b = "two" })
-Stdlib.Json.serialize<List<(Dict<String> * Stdlib.Option.Option<Int64>)>>([(Stdlib.Dict.singleton("a", "b"), Stdlib.Option.Option.Some(1))]) = "[[{\"a\":\"b\"},{\"Some\":[1]}]]"
-Stdlib.Json.serialize<Stdlib.Result.Result<List<(Dict<String> * Stdlib.Option.Option<Int64>)>, String>>(Stdlib.Result.Result.Ok([(Stdlib.Dict.singleton("a", "b"), Stdlib.Option.Option.Some(1)), (Stdlib.Dict.singleton("c", "d"), Stdlib.Option.Option.None)])) = "{\"Ok\":[[[{\"a\":\"b\"},{\"Some\":[1]}],[{\"c\":\"d\"},{\"None\":[]}]]]}"
-Stdlib.Json.serialize<JsonParityPerson>(JsonParityPerson { Name = "Ada", Age = 36 }) = "{\"Age\":36,\"Name\":\"Ada\"}"
-Stdlib.Json.parse<JsonParityPerson>("{\"Name\":\"Ada\",\"Age\":36,\"extra\":true}") = Stdlib.Result.Result.Ok(JsonParityPerson { Name = "Ada", Age = 36 })
-Stdlib.Json.parse<JsonParityAlias>("{\"Name\":\"Ada\",\"Age\":36}") = Stdlib.Result.Result.Ok(JsonParityPerson { Name = "Ada", Age = 36 })
+Stdlib.Json.serialize<List<(Dict<String>, Stdlib.Option.Option<Int64>)>>([(Stdlib.Dict.singleton("a", "b"), Stdlib.Option.Option.Some(1L))]) = "[[{\"a\":\"b\"},{\"Some\":[1]}]]"
+Stdlib.Json.serialize<Stdlib.Result.Result<List<(Dict<String>, Stdlib.Option.Option<Int64>)>, String>>(Stdlib.Result.Result.Ok([(Stdlib.Dict.singleton("a", "b"), Stdlib.Option.Option.Some(1L)), (Stdlib.Dict.singleton("c", "d"), Stdlib.Option.Option.None)])) = "{\"Ok\":[[[{\"a\":\"b\"},{\"Some\":[1]}],[{\"c\":\"d\"},{\"None\":[]}]]]}"
+Stdlib.Json.serialize<JsonParityPerson>(JsonParityPerson { Name = "Ada", Age = 36L }) = "{\"Age\":36,\"Name\":\"Ada\"}"
+Stdlib.Json.parse<JsonParityPerson>("{\"Name\":\"Ada\",\"Age\":36,\"extra\":true}") = Stdlib.Result.Result.Ok(JsonParityPerson { Name = "Ada", Age = 36L })
+Stdlib.Json.parse<JsonParityAlias>("{\"Name\":\"Ada\",\"Age\":36}") = Stdlib.Result.Result.Ok(JsonParityPerson { Name = "Ada", Age = 36L })
 jsonParityError<JsonParityPerson>(Stdlib.Json.parse<JsonParityPerson>("{\"Age\":36}")) = "Can't parse JSON because `Name` field is not provided at path: `root`"
 jsonParityError<JsonParityPerson>(Stdlib.Json.parse<JsonParityPerson>("{\"Name\":\"Ada\",\"Age\":1,\"Age\":2}")) = "Can't parse JSON because `Age` is defined more than once at path: `root`"
-Stdlib.Json.serialize<JsonParityChoice>(JsonParityChoice.JsonParityYes("because", 7)) = "{\"JsonParityYes\":[\"because\",7]}"
+Stdlib.Json.serialize<JsonParityChoice>(JsonParityChoice.JsonParityYes("because", 7L)) = "{\"JsonParityYes\":[\"because\",7]}"
 Stdlib.Json.parse<JsonParityChoice>("{\"JsonParityNo\":[]}") = Stdlib.Result.Result.Ok(JsonParityChoice.JsonParityNo)
-Stdlib.Json.parse<JsonParityChoice>("{\"JsonParityYes\":[\"because\",7]}") = Stdlib.Result.Result.Ok(JsonParityChoice.JsonParityYes("because", 7))
+Stdlib.Json.parse<JsonParityChoice>("{\"JsonParityYes\":[\"because\",7]}") = Stdlib.Result.Result.Ok(JsonParityChoice.JsonParityYes("because", 7L))
 jsonParityError<JsonParityChoice>(Stdlib.Json.parse<JsonParityChoice>("{\"JsonParityYes\":[\"because\"]}")) = "Can't parse JSON because argument 1 (`Int64`) is missing at path: `root.JsonParityYes`"
 jsonParityError<JsonParityChoice>(Stdlib.Json.parse<JsonParityChoice>("{\"JsonParityYes\":[\"because\",7,2.0]}")) = "Can't parse JSON due to an extra argument `2.0` at path: `root.JsonParityYes[2]`"
 jsonParityError<JsonParityChoice>(Stdlib.Json.parse<JsonParityChoice>("{\"Wrong\":[]}")) = "Can't parse JSON as `Wrong` is not a known case of type `JsonParityChoice` at path: `root`"

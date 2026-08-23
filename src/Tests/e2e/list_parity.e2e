@@ -2,7 +2,7 @@ Stdlib.List.length<Int64>(Stdlib.List.empty) = 0I
 Stdlib.List.length<Int64>(Stdlib.List.empty_v0) = 0I
 Stdlib.List.length([1L, 2L, 3L]) = 3I
 Stdlib.List.findFirstIndex([10L, 20L, 30L], fun value -> value == 20L) = Some(1I)
-Stdlib.List.indexedMap([3L, 2L, 1L], fun index value -> index) = [0I, 1I, 2I]
+Stdlib.List.indexedMap<Int64, Int>([3L, 2L, 1L], fun index value -> index) = [0I, 1I, 2I]
 Stdlib.List.getAt([1L, 2L, 3L], -1I) = None
 Stdlib.List.getAt([1L, 2L, 3L], 1I) = Some(2L)
 Stdlib.List.getAt([1L, 2L, 3L], 9223372036854775808I) = None
@@ -18,10 +18,10 @@ Stdlib.List.take([1L, 2L, 3L], 2147483648I) = [1L, 2L, 3L]
 Stdlib.List.drop([1L, 2L, 3L], -1I) = [1L, 2L, 3L]
 Stdlib.List.drop([1L, 2L, 3L], 2147483648I) = []
 
-Stdlib.List.map2shortestHelper([1L, 2L], [10L, 20L, 30L], fun a b -> a + b, []) = [11L, 22L]
-Stdlib.List.map2shortest([1L, 2L], [10L, 20L, 30L], fun a b -> a + b) = [11L, 22L]
-Stdlib.List.groupByWithKey([1L, 2L, 3L, 4L, 5L], fun x -> x % 2L) = [(1L, [1L, 3L, 5L]), (0L, [2L, 4L])]
-Stdlib.List.groupByWithKey(["apple", "ant", "bee"], fun value -> Stdlib.String.slice(value, 0I, 1I)) = [("a", ["apple", "ant"]), ("b", ["bee"])]
+Stdlib.List.map2shortestHelper<Int64, Int64, Int64>([1L, 2L], [10L, 20L, 30L], fun a b -> a + b, []) = [11L, 22L]
+Stdlib.List.map2shortest<Int64, Int64, Int64>([1L, 2L], [10L, 20L, 30L], fun a b -> a + b) = [11L, 22L]
+Stdlib.List.groupByWithKey<Int64, Int64>([1L, 2L, 3L, 4L, 5L], fun x -> x % 2L) = [(1L, [1L, 3L, 5L]), (0L, [2L, 4L])]
+Stdlib.List.groupByWithKey<String, String>(["apple", "ant", "bee"], fun value -> Stdlib.String.take(value, 1L)) = [("a", ["apple", "ant"]), ("b", ["bee"])]
 
 Stdlib.List.iter([1L, 2L, 3L], fun x -> let ignored = if x == 2L then Builtin.testRuntimeError("iter-second") else () in ()) = error="Uncaught exception: iter-second"
 Stdlib.List.iter<Int64>([], fun _ -> ()) = ()
@@ -40,16 +40,16 @@ Stdlib.List.sort([[2L], [], [1L, 3L], [1L, 2L]]) = [[], [1L, 2L], [1L, 3L], [2L]
 Stdlib.List.sort([(2L, "a"), (1L, "z"), (1L, "a")]) = [(1L, "a"), (1L, "z"), (2L, "a")]
 Stdlib.List.sort([Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = true, ctrl = false, shift = false }, Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = false, ctrl = true, shift = false }, Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = false, ctrl = false, shift = true }]) = [Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = false, ctrl = false, shift = true }, Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = false, ctrl = true, shift = false }, Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = true, ctrl = false, shift = false }]
 Stdlib.List.sort([Some(2L), None, Some(1L)]) = [None, Some(1L), Some(2L)]
-Stdlib.List.sortBy([6L, 2L, 8L, 3L], fun x -> 0L - x) = [8L, 6L, 3L, 2L]
+Stdlib.List.sortBy<Int64, Int64>([6L, 2L, 8L, 3L], fun x -> 0L - x) = [8L, 6L, 3L, 2L]
 Stdlib.List.unique([7L, 42L, 7L, 2L, 10L]) = [2L, 7L, 10L, 42L]
-Stdlib.List.uniqueBy([1L, 2L, 3L, 4L], fun x -> x / 2L) = [1L, 2L, 4L]
+Stdlib.List.uniqueBy<Int64, Int64>([1L, 2L, 3L, 4L], fun x -> x / 2L) = [1L, 2L, 4L]
 
 Stdlib.List.SortByComparatorHelpers.validate(fun a b -> 3I, 1L, 2L) = Error("Expected comparator function to return -1, 0, or 1, but it returned 3")
 Stdlib.List.SortByComparatorHelpers.splitList([1L, 2L, 3L, 4L, 5L]) = ([1L, 3L, 5L], [2L, 4L])
 Stdlib.List.SortByComparatorHelpers.merge<Int64>(fun a b -> if a < b then -1I else if a > b then 1I else 0I, [1L, 3L], [2L, 4L]) = Ok([1L, 2L, 3L, 4L])
 Stdlib.List.SortByComparatorHelpers.mergeSort<Int64>(fun a b -> if a < b then -1I else if a > b then 1I else 0I, [3L, 1L, 2L]) = Ok([1L, 2L, 3L])
 Stdlib.List.sortByComparator([3L, 1L, 2L], fun a b -> if a < b then -1I else if a > b then 1I else 0I) = Ok([1L, 2L, 3L])
-Stdlib.List.sortByComparator([(1L, "first"), (1L, "second"), (0L, "zero")], fun a b -> let (aKey, _) = a in let (bKey, _) = b in if aKey < bKey then -1I else if aKey > bKey then 1I else 0I) = Ok([(0L, "zero"), (1L, "first"), (1L, "second")])
+Stdlib.List.sortByComparator([(1L, "first"), (1L, "second"), (0L, "zero")], fun a b -> if a.0 < b.0 then -1I else if a.0 > b.0 then 1I else 0I) = Ok([(0L, "zero"), (1L, "first"), (1L, "second")])
 Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 2I) = Error("Expected comparator function to return -1, 0, or 1, but it returned 2")
 Stdlib.List.sortByComparator([3L, 1L, 2L], fun a b -> if a == 3L && b == 2L then 2I else if a < b then -1I else if a > b then 1I else 0I) = Error("Expected comparator function to return -1, 0, or 1, but it returned 2")
 Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 0L) = error="Type mismatch"

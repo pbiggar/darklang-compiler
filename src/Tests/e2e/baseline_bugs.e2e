@@ -18,7 +18,7 @@ float4(1.0, 2.0, 3.0, 4.0) = 10.0
 // 6 float params (tests D0-D5)
 let float6(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) : Float = a + b + c + d + e + f
 
-Stdlib.Float.round(float6(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)) = 21I
+Stdlib.Float.toInt(float6(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)) = 21L
 
 // 8 float params - stress all D0-D7
 // Note: Using explicit let bindings to avoid register allocation issues with chained additions
@@ -31,17 +31,17 @@ let float8(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float,
   let t6 = t5 + g in
   t6 + h
 
-Stdlib.Float.round(float8(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0)) = 36I
+Stdlib.Float.toInt(float8(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0)) = 36L
 
 // Float in recursive function (live across calls)
-let floatRecurse(n: Int64, acc: Float) : Float = if n <= 0 then acc else floatRecurse(n - 1, acc + 1.0)
+let floatRecurse(n: Int64, acc: Float) : Float = if n <= 0L then acc else floatRecurse(n - 1L, acc + 1.0)
 
-Stdlib.Float.round(floatRecurse(10, 0.0)) = 10I
+Stdlib.Float.toInt(floatRecurse(10L, 0.0)) = 10L
 
 // Nested float operations
 let floatNested(x: Float) : Float = let a = x + 1.0 in let b = a + 2.0 in let c = b + 3.0 in a + b + c
 
-Stdlib.Float.round(floatNested(0.0)) = 10I
+Stdlib.Float.toInt(floatNested(0.0)) = 10L
 
 
 // ===================================================================
@@ -49,72 +49,72 @@ Stdlib.Float.round(floatNested(0.0)) = 10I
 // ===================================================================
 
 // 2-way swap (simple cycle)
-let swap2(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a else swap2(b, a, n - 1)
+let swap2(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0L then a else swap2(b, a, n - 1L)
 
-swap2(1, 2, 1) = 2
-swap2(1, 2, 2) = 1
+swap2(1L, 2L, 1L) = 2L
+swap2(1L, 2L, 2L) = 1L
 
 // 3-way rotation (3-cycle)
-let rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate3(b, c, a, n - 1)
+let rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 = if n <= 0L then a else rotate3(b, c, a, n - 1L)
 
-rotate3(1, 2, 3, 1) = 2
-rotate3(1, 2, 3, 3) = 1
+rotate3(1L, 2L, 3L, 1L) = 2L
+rotate3(1L, 2L, 3L, 3L) = 1L
 
 // 4-way rotation (4-cycle)
-let rotate4(a: Int64, b: Int64, c: Int64, d: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate4(b, c, d, a, n - 1)
+let rotate4(a: Int64, b: Int64, c: Int64, d: Int64, n: Int64) : Int64 = if n <= 0L then a else rotate4(b, c, d, a, n - 1L)
 
-rotate4(1, 2, 3, 4, 1) = 2
-rotate4(1, 2, 3, 4, 4) = 1
+rotate4(1L, 2L, 3L, 4L, 1L) = 2L
+rotate4(1L, 2L, 3L, 4L, 4L) = 1L
 
 // Float rotation (tests FP register parallel moves)
-let rotateFloat2(a: Float, b: Float, n: Int64) : Float = if n <= 0 then a else rotateFloat2(b, a, n - 1)
+let rotateFloat2(a: Float, b: Float, n: Int64) : Float = if n <= 0L then a else rotateFloat2(b, a, n - 1L)
 
-Stdlib.Float.round(rotateFloat2(1.0, 2.0, 1) * 10.0) = 20I
-Stdlib.Float.round(rotateFloat2(1.0, 2.0, 2) * 10.0) = 10I
+Stdlib.Float.toInt(rotateFloat2(1.0, 2.0, 1L) * 10.0) = 20L
+Stdlib.Float.toInt(rotateFloat2(1.0, 2.0, 2L) * 10.0) = 10L
 
 // 3-way Float rotation (tests 3-cycle in FArgMoves)
-let rotateFloat3(a: Float, b: Float, c: Float, n: Int64) : Float = if n <= 0 then a else rotateFloat3(b, c, a, n - 1)
+let rotateFloat3(a: Float, b: Float, c: Float, n: Int64) : Float = if n <= 0L then a else rotateFloat3(b, c, a, n - 1L)
 
-Stdlib.Float.round(rotateFloat3(1.0, 2.0, 3.0, 0)) = 1I
-Stdlib.Float.round(rotateFloat3(1.0, 2.0, 3.0, 1)) = 2I
-Stdlib.Float.round(rotateFloat3(1.0, 2.0, 3.0, 2)) = 3I
-Stdlib.Float.round(rotateFloat3(1.0, 2.0, 3.0, 3)) = 1I
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 0L)) = 1L
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 1L)) = 2L
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 2L)) = 3L
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 3L)) = 1L
 
 // 4-way Float rotation (tests 4-cycle in FArgMoves)
-let rotateFloat4(a: Float, b: Float, c: Float, d: Float, n: Int64) : Float = if n <= 0 then a else rotateFloat4(b, c, d, a, n - 1)
+let rotateFloat4(a: Float, b: Float, c: Float, d: Float, n: Int64) : Float = if n <= 0L then a else rotateFloat4(b, c, d, a, n - 1L)
 
-Stdlib.Float.round(rotateFloat4(1.0, 2.0, 3.0, 4.0, 0)) = 1I
-Stdlib.Float.round(rotateFloat4(1.0, 2.0, 3.0, 4.0, 1)) = 2I
-Stdlib.Float.round(rotateFloat4(1.0, 2.0, 3.0, 4.0, 4)) = 1I
+Stdlib.Float.toInt(rotateFloat4(1.0, 2.0, 3.0, 4.0, 0L)) = 1L
+Stdlib.Float.toInt(rotateFloat4(1.0, 2.0, 3.0, 4.0, 1L)) = 2L
+Stdlib.Float.toInt(rotateFloat4(1.0, 2.0, 3.0, 4.0, 4L)) = 1L
 
 // Self-cycle (no-op move, X0 <- X0)
-let selfCycle(x: Int64, n: Int64) : Int64 = if n <= 0 then x else selfCycle(x, n - 1)
+let selfCycle(x: Int64, n: Int64) : Int64 = if n <= 0L then x else selfCycle(x, n - 1L)
 
-selfCycle(42, 10) = 42
+selfCycle(42L, 10L) = 42L
 
 
 // ===================================================================
 // Reference Counting / Heap Tests
 // ===================================================================
 
-// Simple tuple destructuring
-let t = (10, 20, 30) in let (a, b, c) = t in a + b + c = 60
+// Simple tuple access
+let t = (10L, 20L, 30L) in t.0 + t.1 + t.2 = 60L
 
-// Nested tuple destructuring
-let outer = ((1, 2), (3, 4)) in let ((a, b), (c, d)) = outer in a + b + c + d = 10
+// Nested tuple - use parentheses for chained tuple access (outer.0.0 not supported)
+let outer = ((1L, 2L), (3L, 4L)) in (outer.0).0 + (outer.0).1 + (outer.1).0 + (outer.1).1 = 10L
 
 // Alias chain (transitive)
-let a = (1, 2) in let b = a in let c = b in let d = c in let (first, second) = d in first + second = 3
+let a = (1L, 2L) in let b = a in let c = b in let d = c in d.0 + d.1 = 3L
 
 // Heap value returned from function
-let makePair(x: Int64) : (Int64 * Int64) = (x, x + 1)
+let makePair(x: Int64) : (Int64, Int64) = (x, x + 1L)
 
-let p = makePair(10) in let (first, second) = p in first + second = 21
+let p = makePair(10L) in p.0 + p.1 = 21L
 
 // Heap value not returned (should be freed)
-let heapNoReturn(n: Int64) : Int64 = let t = (n, n + 1) in let (first, second) = t in first + second
+let heapNoReturn(n: Int64) : Int64 = let t = (n, n + 1L) in t.0 + t.1
 
-heapNoReturn(5) = 11
+heapNoReturn(5L) = 11L
 
 
 // ===================================================================
@@ -122,19 +122,19 @@ heapNoReturn(5) = 11
 // ===================================================================
 
 // Addition with large immediate
-5000 + 1 = 5001
+5000L + 1L = 5001L
 
 // Subtraction with large immediate
-10000 - 1 = 9999
+10000L - 1L = 9999L
 
 // Large multiplication
-8192 * 2 = 16384
+8192L * 2L = 16384L
 
 // Very large constant
-let x = 1000000 in x + 1 = 1000001
+let x = 1000000L in x + 1L = 1000001L
 
 // Large values in branches
-if 5000 > 4000 then 1 else 0 = 1
+if 5000L > 4000L then 1L else 0L = 1L
 
 
 // ===================================================================
@@ -142,36 +142,36 @@ if 5000 > 4000 then 1 else 0 = 1
 // ===================================================================
 
 // Mixed int and float in tail call
-let mixedTail(x: Int64, f: Float, n: Int64) : Float = if n <= 0 then Stdlib.Int64.toFloat(x) + f else mixedTail(x + 1, f + 1.0, n - 1)
+let mixedTail(x: Int64, f: Float, n: Int64) : Int64 = if n <= 0L then x + Stdlib.Float.toInt(f) else mixedTail(x + 1L, f + 1.0, n - 1L)
 
-mixedTail(0, 0.0, 5) = 10.0
+mixedTail(0L, 0.0, 5L) = 10L
 
 // Mixed integer and float parameters use separate calling-convention register banks
 let mixedNineArgs(a: Int64, b: Int64, c: Int64, d: Int64, e: Float, f: Float, g: Float, h: Float, i: Float) : Float =
   e + f + g + h + i
 
-Stdlib.Float.round(mixedNineArgs(1, 2, 3, 4, 1.0, 2.0, 3.0, 4.0, 5.0)) = 15I
+Stdlib.Float.toInt(mixedNineArgs(1L, 2L, 3L, 4L, 1.0, 2.0, 3.0, 4.0, 5.0)) = 15L
 
 // Mixed GP/FP rotation (tests independent GP and FP parallel moves)
 let mixedRotate(x: Int64, f: Float, y: Int64, g: Float, n: Int64) : Int64 =
-  if n <= 0 then x + y else mixedRotate(y, g, x, f, n - 1)
+  if n <= 0L then x + y else mixedRotate(y, g, x, f, n - 1L)
 
-mixedRotate(1, 2.0, 3, 4.0, 0) = 4
-mixedRotate(1, 2.0, 3, 4.0, 1) = 4
-mixedRotate(1, 2.0, 3, 4.0, 2) = 4
+mixedRotate(1L, 2.0, 3L, 4.0, 0L) = 4L
+mixedRotate(1L, 2.0, 3L, 4.0, 1L) = 4L
+mixedRotate(1L, 2.0, 3L, 4.0, 2L) = 4L
 
 // Mixed rotation returning float
 let mixedRotateFloat(x: Int64, f: Float, y: Int64, g: Float, n: Int64) : Float =
-  if n <= 0 then f + g else mixedRotateFloat(y, g, x, f, n - 1)
+  if n <= 0L then f + g else mixedRotateFloat(y, g, x, f, n - 1L)
 
-Stdlib.Float.round(mixedRotateFloat(1, 2.0, 3, 4.0, 0)) = 6I
-Stdlib.Float.round(mixedRotateFloat(1, 2.0, 3, 4.0, 1)) = 6I
-Stdlib.Float.round(mixedRotateFloat(1, 2.0, 3, 4.0, 2)) = 6I
+Stdlib.Float.toInt(mixedRotateFloat(1L, 2.0, 3L, 4.0, 0L)) = 6L
+Stdlib.Float.toInt(mixedRotateFloat(1L, 2.0, 3L, 4.0, 1L)) = 6L
+Stdlib.Float.toInt(mixedRotateFloat(1L, 2.0, 3L, 4.0, 2L)) = 6L
 
 // Deeply nested let bindings
-let a = 1 in let b = a + 1 in let c = b + 1 in let d = c + 1 in let e = d + 1 in a + b + c + d + e = 15
+let a = 1L in let b = a + 1L in let c = b + 1L in let d = c + 1L in let e = d + 1L in a + b + c + d + e = 15L
 
 // Boolean short-circuit in complex expression
-if (1 < 2 && 3 > 4) then 1 else 0 = 0
-if (1 < 2 || 3 > 4) then 1 else 0 = 1
-if (5 > 3 && 2 < 4 && 1 != 0) then 1 else 0 = 1
+if (1L < 2L && 3L > 4L) then 1L else 0L = 0L
+if (1L < 2L || 3L > 4L) then 1L else 0L = 1L
+if (5L > 3L && 2L < 4L && 1L != 0L) then 1L else 0L = 1L

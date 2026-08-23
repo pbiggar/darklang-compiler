@@ -5,6 +5,6 @@
 // Stdlib.Fun.identity - Returns its argument unchanged
 // ===================================================================
 
-Stdlib.Fun.identity(42) = 42
+Stdlib.Fun.identity(42L) = 42L
 Stdlib.Fun.identity(true) = true
 Stdlib.Fun.identity("dark") = "dark"

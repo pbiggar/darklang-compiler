@@ -15,7 +15,7 @@ type Bool2 = False2 | True2 False2 = False2
 type Bool2 = False2 | True2 True2 = True2
 
 // Single variant enum
-type Unit2 = Unit2 Unit2 = Unit2
+type Unit2 = | Unit2; Unit2 = Unit2
 
 // Enum in let binding
 type Color = Red | Green | Blue let c = Red in c = Red

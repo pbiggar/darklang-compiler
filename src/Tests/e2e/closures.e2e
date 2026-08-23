@@ -5,153 +5,153 @@
 // =====================================================
 
 // Simple lambda with one parameter
-(fun x -> x + 1)(5) = 6
+(fun x -> x + 1L)(5L) = 6L
 
 // Lambda with two parameters
-(fun x y -> x + y)(10, 20) = 30
+(fun x y -> x + y)(10L, 20L) = 30L
 
 // Lambda with multiplication
-(fun x y -> x * y)(6, 7) = 42
+(fun x y -> x * y)(6L, 7L) = 42L
 
 // Lambda returning parameter directly
-(fun x -> x)(42) = 42
+(fun x -> x)(42L) = 42L
 
 // Lambda with three parameters
-(fun a b c -> a + b + c)(1, 2, 3) = 6
+(fun a b c -> a + b + c)(1L, 2L, 3L) = 6L
 
 // Lambda with subtraction
-(fun x y -> x - y)(50, 8) = 42
+(fun x y -> x - y)(50L, 8L) = 42L
 
 // Lambda with division
-(fun x y -> x / y)(84, 2) = 42
+(fun x y -> x / y)(84L, 2L) = 42L
 
 // Lambda with complex expression
-(fun x -> x * 2 + x)(14) = 42
+(fun x -> x * 2L + x)(14L) = 42L
 
 // =====================================================
 // Lambda with Captured Variables
 // =====================================================
 
 // Capture single variable
-let y = 10 in (fun x -> x + y)(5) = 15
+let y = 10L in (fun x -> x + y)(5L) = 15L
 
 // Capture in multiplication
-let factor = 7 in (fun x -> x * factor)(6) = 42
+let factor = 7L in (fun x -> x * factor)(6L) = 42L
 
 // Capture multiple variables
-let a = 1 in let b = 2 in (fun x -> a + b + x)(39) = 42
+let a = 1L in let b = 2L in (fun x -> a + b + x)(39L) = 42L
 
 // Capture and use in subtraction
-let offset = 8 in (fun x -> x - offset)(50) = 42
+let offset = 8L in (fun x -> x - offset)(50L) = 42L
 
 // Nested let with capture
-let outer = 10 in let inner = 20 in (fun x -> outer + inner + x)(12) = 42
+let outer = 10L in let inner = 20L in (fun x -> outer + inner + x)(12L) = 42L
 
 // Capture computed value
-let base = 20 in let bonus = base * 2 in (fun x -> x + bonus)(2) = 42
+let base = 20L in let bonus = base * 2L in (fun x -> x + bonus)(2L) = 42L
 
 // Capture inferred string from conditional
-let flag = true in let word = if flag then "hi" else "bye" in (fun x -> word ++ "!")(0) = "hi!"// capture conditional string
+let flag = true in let word = if flag then "hi" else "bye" in (fun x -> word ++ "!")(0L) = "hi!"// capture conditional string
 
 // =====================================================
 // Lambda with Booleans
 // =====================================================
 
 // Lambda returning bool
-(fun x -> x > 0)(5) = true
+(fun x -> x > 0L)(5L) = true
 
 // Lambda with comparison
-(fun x y -> x == y)(42, 42) = true
+(fun x y -> x == y)(42L, 42L) = true
 
 // Lambda with captured comparison
-let threshold = 10 in (fun x -> x >= threshold)(42) = true
+let threshold = 10L in (fun x -> x >= threshold)(42L) = true
 
 // =====================================================
 // Lambda in Expression Context
 // =====================================================
 
 // Lambda result in arithmetic
-(fun x -> x * 2)(20) + 2 = 42
+(fun x -> x * 2L)(20L) + 2L = 42L
 
 // Lambda as operand
-1 + (fun x -> x)(41) = 42
+1L + (fun x -> x)(41L) = 42L
 
 // Multiple lambda applications
-(fun x -> x + 1)(20) + (fun y -> y)(21) = 42
+(fun x -> x + 1L)(20L) + (fun y -> y)(21L) = 42L
 
 // Lambda in conditional test
-if (fun x -> x > 0)(5) then 42 else 0 = 42
+if (fun x -> x > 0L)(5L) then 42L else 0L = 42L
 
 // Lambda in let binding value
-let result = (fun x -> x * 2)(21) in result = 42
+let result = (fun x -> x * 2L)(21L) in result = 42L
 
 // =====================================================
 // Nested Lambdas
 // =====================================================
 
 // Outer captures, inner uses
-let y = 10 in (fun x -> (fun z -> x + y + z)(2))(30) = 42
+let y = 10L in (fun x -> (fun z -> x + y + z)(2L))(30L) = 42L
 
 // Chain of immediate applications
-(fun x -> (fun y -> x + y)(10))(32) = 42
+(fun x -> (fun y -> x + y)(10L))(32L) = 42L
 
 // Immediate curried lambda application (Mutation #121)
 // Tests that desugaAll correctly handles matching argument counts.
 // The mutation (<> -> =) would cause correct calls to be treated as errors.
-(fun x -> fun y -> x + y)(10)(32) = 42
+(fun x -> fun y -> x + y)(10L)(32L) = 42L
 
 // =====================================================
 // Edge Cases
 // =====================================================
 
 // Lambda with zero (identity-ish)
-(fun x -> x + 0)(42) = 42
+(fun x -> x + 0L)(42L) = 42L
 
 // Lambda with one parameter used multiple times
-(fun x -> x + x + x)(14) = 42
+(fun x -> x + x + x)(14L) = 42L
 
 // Capture shadowed by parameter
-let x = 100 in (fun x -> x + 2)(40) = 42
+let x = 100L in (fun x -> x + 2L)(40L) = 42L
 
 // =====================================================
 // First-Class Functions (stored in variables)
 // =====================================================
 
 // Simple lambda stored in variable
-let f = fun x -> x + 1 in f(5) = 6
+let f = fun x -> x + 1L in f(5L) = 6L
 
 // Two-parameter lambda in variable
-let add = fun x y -> x + y in add(10, 32) = 42
+let add = fun x y -> x + y in add(10L, 32L) = 42L
 
 // Lambda with capture stored in variable
-let factor = 6 in let mul = fun x -> x * factor in mul(7) = 42
+let factor = 6L in let mul = fun x -> x * factor in mul(7L) = 42L
 
 // Multiple calls to same stored lambda
-let double = fun x -> x * 2 in double(10) + double(11) = 42
+let double = fun x -> x * 2L in double(10L) + double(11L) = 42L
 
 // Stored lambda with subtraction
-let sub = fun x y -> x - y in sub(50, 8) = 42
+let sub = fun x y -> x - y in sub(50L, 8L) = 42L
 
 // Lambda stored then used with captured values
-let base = 10 in let addBase = fun x -> x + base in addBase(32) = 42
+let base = 10L in let addBase = fun x -> x + base in addBase(32L) = 42L
 
 // Multiple lambdas stored in separate variables
-let inc = fun x -> x + 1 in let dec = fun x -> x - 1 in inc(20) + dec(22) = 42
+let inc = fun x -> x + 1L in let dec = fun x -> x - 1L in inc(20L) + dec(22L) = 42L
 
 // Nested captures with stored lambda
-let a = 5 in let b = 10 in let sum = fun x -> a + b + x in sum(27) = 42
+let a = 5L in let b = 10L in let sum = fun x -> a + b + x in sum(27L) = 42L
 
 // Stored lambda returning bool
-let isPositive = fun x -> x > 0 in isPositive(42) = true
+let isPositive = fun x -> x > 0L in isPositive(42L) = true
 
 // Lambda used in conditional after storage
-let check = fun x -> x > 0 in if check(5) then 42 else 0 = 42
+let check = fun x -> x > 0L in if check(5L) then 42L else 0L = 42L
 
 // Multiple uses of same lambda with different args
-let triple = fun x -> x * 3 in triple(10) + triple(4) = 42
+let triple = fun x -> x * 3L in triple(10L) + triple(4L) = 42L
 
 // Lambda in arithmetic context after storage
-let sq = fun x -> x * x in sq(6) + 6 = 42
+let sq = fun x -> x * x in sq(6L) + 6L = 42L
 
 // =====================================================
 // Closures Capturing Float Values
@@ -184,13 +184,13 @@ let a = "one" in let b = "two" in (fun x -> a ++ " " ++ b ++ " " ++ x)("three") 
 // =====================================================
 
 // Capture tuple, access elements
-let t = (10, 20) in (fun x -> let (first, second) = t in first + second + x)(5) = 35
+let t = (10L, 20L) in (fun x -> t.0 + t.1 + x)(5L) = 35L
 
 // Capture 3-tuple
-let t = (1, 2, 3) in (fun x -> let (first, second, third) = t in first + second + third + x)(4) = 10
+let t = (1L, 2L, 3L) in (fun x -> t.0 + t.1 + t.2 + x)(4L) = 10L
 
 // Capture tuple, use in arithmetic
-let pair = (5, 3) in (fun x -> let (first, second) = pair in (first - second) * x)(7) = 14
+let pair = (5L, 3L) in (fun x -> (pair.0 - pair.1) * x)(7L) = 14L
 
 // =====================================================
 // Closures Capturing Records
@@ -198,11 +198,11 @@ let pair = (5, 3) in (fun x -> let (first, second) = pair in (first - second) * 
 
 // Capture record, access field
 type Point = { x: Int64, y: Int64 }
-let p = Point { x = 3, y = 4 } in (fun n -> p.x + p.y + n)(3) = 10
+let p = Point { x = 3L, y = 4L } in (fun n -> p.x + p.y + n)(3L) = 10L
 
 // Capture record, use both fields
 type Vec = { dx: Int64, dy: Int64 }
-let v = Vec { dx = 5, dy = 10 } in (fun scale -> v.dx * scale + v.dy)(2) = 20
+let v = Vec { dx = 5L, dy = 10L } in (fun scale -> v.dx * scale + v.dy)(2L) = 20L
 
 // =====================================================
 // Closures Capturing Sum Types
@@ -210,34 +210,34 @@ let v = Vec { dx = 5, dy = 10 } in (fun scale -> v.dx * scale + v.dy)(2) = 20
 
 // Capture Option-like value
 type Opt = None2 | Some2 of Int64
-let opt = Some2(42) in (fun x -> match opt with | Some2(v) -> v + x | None2 -> 0)(8) = 50
-let opt = None2 in (fun x -> match opt with | Some2(v) -> v + x | None2 -> x)(8) = 8
+let opt = Some2(42L) in (fun x -> match opt with | Some2(v) -> v + x | None2 -> 0L)(8L) = 50L
+let opt = None2 in (fun x -> match opt with | Some2(v) -> v + x | None2 -> x)(8L) = 8L
 
 // =====================================================
 // Many Captures (Testing Capture Slot Limits)
 // =====================================================
 
 // 5 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in (fun x -> a + b + c + d + e + x)(5) = 20
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in (fun x -> a + b + c + d + e + x)(5L) = 20L
 
 // 6 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in (fun x -> a + b + c + d + e + f + x)(4) = 25
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in (fun x -> a + b + c + d + e + f + x)(4L) = 25L
 
 // 7 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in (fun x -> a + b + c + d + e + f + g + x)(8) = 36
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in (fun x -> a + b + c + d + e + f + g + x)(8L) = 36L
 
 // 8 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in (fun x -> a + b + c + d + e + f + g + h + x)(1) = 37
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in (fun x -> a + b + c + d + e + f + g + h + x)(1L) = 37L
 
 // =====================================================
 // Mixed Type Captures
 // =====================================================
 
 // Capture int and float
-let i = 10 in let f = 2.5 in (fun x -> Stdlib.Int64.toFloat(i + x) + f)(5) = 17.5
+let i = 10L in let f = 2.5 in (fun x -> Stdlib.Int64.toFloat(i + x) + f)(5L) = 17.5
 
 // Capture bool and int
-let flag = true in let n = 42 in (fun x -> if flag then n + x else 0)(8) = 50
+let flag = true in let n = 42L in (fun x -> if flag then n + x else 0L)(8L) = 50L
 
 // =====================================================
 // Closure Inlining Edge Case (Mutation #41)
@@ -252,13 +252,13 @@ let flag = true in let n = 42 in (fun x -> if flag then n + x else 0)(8) = 50
 // regardless of whether they are inlined or not.
 
 // Function that takes a closure and calls it with a computed value
-let applyWithOffset(f: (Int64) -> Int64, base: Int64): Int64 = let y = base + 1 in f(y)
+let applyWithOffset(f: (Int64) -> Int64, base: Int64): Int64 = let y = base + 1L in f(y)
 
 // Basic closure test with applyWithOffset
-let addTen = fun x -> x + 10 in applyWithOffset(addTen, 4) = 15
+let addTen = fun x -> x + 10L in applyWithOffset(addTen, 4L) = 15L
 
 // Multiple closures with different captures
-let addFive = fun x -> x + 5 in let addTwenty = fun x -> x + 20 in applyWithOffset(addFive, 10) + applyWithOffset(addTwenty, 7) = 44
+let addFive = fun x -> x + 5L in let addTwenty = fun x -> x + 20L in applyWithOffset(addFive, 10L) + applyWithOffset(addTwenty, 7L) = 44L
 
 // =====================================================
 // Closure in If Branch Edge Case (Mutation #42)
@@ -272,12 +272,12 @@ let addFive = fun x -> x + 5 in let addTwenty = fun x -> x + 20 in applyWithOffs
 // correctness requirement. Closures work correctly when inlined.
 
 // Closure in then-branch only (single-line to avoid preamble build issue)
-let ifWithClosureInThen(flag: Bool, ``val``: Int64): Int64 = if flag then let f = fun n -> n + ``val`` in f(10) else ``val`` * 2 ifWithClosureInThen(true, 5) = 15
-let ifWithClosureInThen(flag: Bool, ``val``: Int64): Int64 = if flag then let f = fun n -> n + ``val`` in f(10) else ``val`` * 2 ifWithClosureInThen(false, 5) = 10
+let ifWithClosureInThen(flag: Bool, ``val``: Int64): Int64 = if flag then let f = fun n -> n + ``val`` in f(10L) else ``val`` * 2L ifWithClosureInThen(true, 5L) = 15L
+let ifWithClosureInThen(flag: Bool, ``val``: Int64): Int64 = if flag then let f = fun n -> n + ``val`` in f(10L) else ``val`` * 2L ifWithClosureInThen(false, 5L) = 10L
 
 // Closure in else-branch only
-let ifWithClosureInElse(flag: Bool, ``val``: Int64): Int64 = if flag then ``val`` * 3 else let g = fun n -> n * ``val`` in g(4) ifWithClosureInElse(true, 7) = 21
-let ifWithClosureInElse(flag: Bool, ``val``: Int64): Int64 = if flag then ``val`` * 3 else let g = fun n -> n * ``val`` in g(4) ifWithClosureInElse(false, 7) = 28
+let ifWithClosureInElse(flag: Bool, ``val``: Int64): Int64 = if flag then ``val`` * 3L else let g = fun n -> n * ``val`` in g(4L); ifWithClosureInElse(true, 7L) = 21L
+let ifWithClosureInElse(flag: Bool, ``val``: Int64): Int64 = if flag then ``val`` * 3L else let g = fun n -> n * ``val`` in g(4L); ifWithClosureInElse(false, 7L) = 28L
 
 // =====================================================
 // Lambda Lifting Counter Increment (Mutation #49)
@@ -290,7 +290,7 @@ let ifWithClosureInElse(flag: Bool, ``val``: Int64): Int64 = if flag then ``val`
 // Combine lambda in expression position with lambda as function argument
 // The interleaving of different lambda lifting paths should use unique names
 let applyLambda(f: (Int64) -> Int64, x: Int64): Int64 = f(x)
-let exprLambda1 = fun x -> x + 1 in let argResult = applyLambda(fun y -> y * 2, 10) in let exprLambda2 = fun z -> z + 3 in exprLambda1(5) + argResult + exprLambda2(2) = 31
+let exprLambda1 = fun x -> x + 1L in let argResult = applyLambda(fun y -> y * 2L, 10L) in let exprLambda2 = fun z -> z + 3L in exprLambda1(5L) + argResult + exprLambda2(2L) = 31L
 
 // =====================================================
 // Multiple Lambdas as Function Arguments (Mutation #51)
@@ -301,11 +301,11 @@ let exprLambda1 = fun x -> x + 1 in let argResult = applyLambda(fun y -> y * 2, 
 
 // Two lambdas as consecutive function arguments - each should get unique name
 let applyTwo(f: (Int64) -> Int64, g: (Int64) -> Int64, x: Int64): Int64 = f(x) + g(x)
-applyTwo(fun a -> a + 1, fun b -> b * 2, 10) = 31
+applyTwo(fun a -> a + 1L, fun b -> b * 2L, 10L) = 31L
 
 // Three lambdas as arguments - tests counter incrementing through multiple args
 let applyThree(f: (Int64) -> Int64, g: (Int64) -> Int64, h: (Int64) -> Int64, x: Int64): Int64 = f(x) + g(x) + h(x)
-applyThree(fun a -> a + 1, fun b -> b * 2, fun c -> c - 5, 10) = 36
+applyThree(fun a -> a + 1L, fun b -> b * 2L, fun c -> c - 5L, 10L) = 36L
 
 // =====================================================
 // Partial Application in Lambda Body (Mutation #112)
@@ -323,7 +323,7 @@ applyThree(fun a -> a + 1, fun b -> b * 2, fun c -> c - 5, 10) = 36
 // Function variable partially applied inside lambda
 // Here 'f' is bound as a variable with type (Int64, Int64) -> Int64
 // The lambda fun x -> f(x) partially applies f, returning (Int64) -> Int64
-let partialAdd(a: Int64, b: Int64): Int64 = a + b let makeAdder = fun x -> partialAdd(x) in let addFive = makeAdder(5) in addFive(3) = 8
+let partialAdd(a: Int64, b: Int64): Int64 = a + b let makeAdder = fun x -> partialAdd(x) in let addFive = makeAdder(5L) in addFive(3L) = 8L
 
 // =====================================================
 // Apply Partial Application in Lambda Body (Mutation #113)
@@ -342,7 +342,7 @@ let partialAdd(a: Int64, b: Int64): Int64 = a + b let makeAdder = fun x -> parti
 // We create a 3-parameter lambda and partially apply it inside another lambda.
 // The outer lambda captures the 3-param function and calls it with just one arg,
 // returning a partially applied function.
-let partialAddThree(a: Int64, b: Int64, c: Int64): Int64 = a + b + c let makePartial = fun x -> partialAddThree(x) in let partial = makePartial(10) in partial(20, 12) = 42
+let partialAddThree(a: Int64, b: Int64, c: Int64): Int64 = a + b + c let makePartial = fun x -> partialAddThree(x) in let partial = makePartial(10L) in partial(20L, 12L) = 42L
 
 // =====================================================
 // Lambda in Nested Let Body (Mutation #122)
@@ -362,7 +362,7 @@ let applyWith122(fn: (Int64) -> Int64, x: Int64): Int64 = fn(x)
 
 // The key structure: let f = lambda in let y = <not using f> in <use f in body>
 // With mutation, the check skips body because y <> f is false under mutated condition
-let f = fun x -> x + 10 in let y = 5 in applyWith122(f, y) = 15
+let f = fun x -> x + 10L in let y = 5L in applyWith122(f, y) = 15L
 
 // =====================================================
 // Lambda Used in Nested Let Value (Mutation #133)
@@ -380,10 +380,10 @@ let f = fun x -> x + 10 in let y = 5 in applyWith122(f, y) = 15
 // the dead lambda elimination would remove the f binding.
 
 // Lambda used in nested let's value but not in its body
-let f = fun x -> x + 10 in let y = f(5) in y = 15
+let f = fun x -> x + 10L in let y = f(5L) in y = 15L
 
 // Additional test: nested let value uses lambda, body just returns the computed value
-let g = fun a -> a * 2 in let result = g(21) in result = 42
+let g = fun a -> a * 2L in let result = g(21L) in result = 42L
 
 // =====================================================
 // Lambda Used Only in Else Branch of If (Mutation #134)
@@ -402,13 +402,13 @@ let g = fun a -> a * 2 in let result = g(21) in result = 42
 // Mutated: returns false because f is not in thenBranch (needs both with &&)
 
 // Lambda used only in else-branch - tests second || in If check
-let f = fun x -> x + 10 in if false then 0 else f(5) = 15
+let f = fun x -> x + 10L in if false then 0L else f(5L) = 15L
 
 // Additional test with true condition to ensure then-branch works too
-let g = fun x -> x * 2 in if true then g(21) else 0 = 42
+let g = fun x -> x * 2L in if true then g(21L) else 0L = 42L
 
 // Lambda used only in else-branch with complex condition
-let h = fun x -> x + 100 in if 1 > 2 then 0 else h(42) = 142
+let h = fun x -> x + 100L in if 1L > 2L then 0L else h(42L) = 142L
 
 // =====================================================
 // Closure Returning Float with Arithmetic (Mutation #171)
@@ -430,7 +430,7 @@ let h = fun x -> x + 100 in if 1 > 2 then 0 else h(42) = 142
 // incorrectly inferred as Int64 instead of Float64, causing wrong output.
 
 // Closure that returns a Float, then add a float literal to the result
-let toFloat = fun x -> Stdlib.Int64.toFloat(x) in let result = toFloat(5) + 1.0 in result = 6.0
+let toFloat = fun x -> Stdlib.Int64.toFloat(x) in let result = toFloat(5L) + 1.0 in result = 6.0
 
 // =====================================================
 // Closure Call with Multiple Float Literal Arguments (Mutation #182)
@@ -491,11 +491,11 @@ let tailCallClosure5F(f: (Float, Float, Float, Float, Float) -> Float, a: Float,
 let sum5f = fun a b c d e -> a + b + c + d + e in tailCallClosure5F(sum5f, 1.0, 2.0, 3.0, 4.0, 5.0) = 15.0
 
 // Devirtualized non-escaping closures preserve generated-code behavior.
-let increment = fun x -> x + 1 in increment(41) = 42
+let increment = fun x -> x + 1L in increment(41L) = 42L
 
-let offset = 40 in let addOffset = fun x -> x + offset in addOffset(2) = 42
+let offset = 40L in let addOffset = fun x -> x + offset in addOffset(2L) = 42L
 
-let makeIncrementForEscape() : (Int64) -> Int64 = let increment = fun x -> x + 1 in increment
-let escapedIncrement = makeIncrementForEscape() in escapedIncrement(41) = 42
+let makeIncrementForEscape() : (Int64) -> Int64 = let increment = fun x -> x + 1L in increment
+let escapedIncrement = makeIncrementForEscape() in escapedIncrement(41L) = 42L
 
-let incrementTwice = fun x -> x + 1 in let once = incrementTwice(40) in incrementTwice(once) = 42
+let incrementTwice = fun x -> x + 1L in let once = incrementTwice(40L) in incrementTwice(once) = 42L

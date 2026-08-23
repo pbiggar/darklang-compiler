@@ -4,12 +4,12 @@
 let leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float =
     if i >= n then sum * 4.0
     else
-        let term = sign / Stdlib.Int64.toFloat(2 * i + 1) in
-        leibnizLoop(i + 1, n, sum + term, Stdlib.Float.negate(sign))
+        let term = sign / Stdlib.Int64.toFloat(2L * i + 1L) in
+        leibnizLoop(i + 1L, n, sum + term, Stdlib.Float.negate(sign))
 
 let leibnizPi(n: Int64) : Float =
-    leibnizLoop(0, n, 0.0, 1.0)
+    leibnizLoop(0L, n, 0.0, 1.0)
 
 // Use 100 million iterations for timing
 // Output as integer (multiply by large factor for precision)
-Builtin.printLine(Stdlib.Int64.toString(Stdlib.Float.toInt(leibnizPi(100000000) * 100000000.0)))
+Builtin.printLine(Stdlib.Int64.toString(Stdlib.Float.toInt(leibnizPi(100000000L) * 100000000.0)))

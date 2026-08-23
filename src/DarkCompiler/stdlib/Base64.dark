@@ -12,43 +12,43 @@ module Stdlib.Base64
 // Encoding lookup table (6-bit value -> character)
 let __encodeChar(n: Int64) : String =
     match n with
-    | 0 -> "A" | 1 -> "B" | 2 -> "C" | 3 -> "D" | 4 -> "E" | 5 -> "F"
-    | 6 -> "G" | 7 -> "H" | 8 -> "I" | 9 -> "J" | 10 -> "K" | 11 -> "L"
-    | 12 -> "M" | 13 -> "N" | 14 -> "O" | 15 -> "P" | 16 -> "Q" | 17 -> "R"
-    | 18 -> "S" | 19 -> "T" | 20 -> "U" | 21 -> "V" | 22 -> "W" | 23 -> "X"
-    | 24 -> "Y" | 25 -> "Z" | 26 -> "a" | 27 -> "b" | 28 -> "c" | 29 -> "d"
-    | 30 -> "e" | 31 -> "f" | 32 -> "g" | 33 -> "h" | 34 -> "i" | 35 -> "j"
-    | 36 -> "k" | 37 -> "l" | 38 -> "m" | 39 -> "n" | 40 -> "o" | 41 -> "p"
-    | 42 -> "q" | 43 -> "r" | 44 -> "s" | 45 -> "t" | 46 -> "u" | 47 -> "v"
-    | 48 -> "w" | 49 -> "x" | 50 -> "y" | 51 -> "z" | 52 -> "0" | 53 -> "1"
-    | 54 -> "2" | 55 -> "3" | 56 -> "4" | 57 -> "5" | 58 -> "6" | 59 -> "7"
-    | 60 -> "8" | 61 -> "9" | 62 -> "+" | 63 -> "/"
+    | 0L -> "A" | 1L -> "B" | 2L -> "C" | 3L -> "D" | 4L -> "E" | 5L -> "F"
+    | 6L -> "G" | 7L -> "H" | 8L -> "I" | 9L -> "J" | 10L -> "K" | 11L -> "L"
+    | 12L -> "M" | 13L -> "N" | 14L -> "O" | 15L -> "P" | 16L -> "Q" | 17L -> "R"
+    | 18L -> "S" | 19L -> "T" | 20L -> "U" | 21L -> "V" | 22L -> "W" | 23L -> "X"
+    | 24L -> "Y" | 25L -> "Z" | 26L -> "a" | 27L -> "b" | 28L -> "c" | 29L -> "d"
+    | 30L -> "e" | 31L -> "f" | 32L -> "g" | 33L -> "h" | 34L -> "i" | 35L -> "j"
+    | 36L -> "k" | 37L -> "l" | 38L -> "m" | 39L -> "n" | 40L -> "o" | 41L -> "p"
+    | 42L -> "q" | 43L -> "r" | 44L -> "s" | 45L -> "t" | 46L -> "u" | 47L -> "v"
+    | 48L -> "w" | 49L -> "x" | 50L -> "y" | 51L -> "z" | 52L -> "0" | 53L -> "1"
+    | 54L -> "2" | 55L -> "3" | 56L -> "4" | 57L -> "5" | 58L -> "6" | 59L -> "7"
+    | 60L -> "8" | 61L -> "9" | 62L -> "+" | 63L -> "/"
     | _ -> ""
 
 // URL-safe encoding (uses - and _ instead of + and /)
 let __encodeCharUrl(n: Int64) : String =
-    if n == 62 then "-"
-    else if n == 63 then "_"
+    if n == 62L then "-"
+    else if n == 63L then "_"
     else Stdlib.Base64.__encodeChar(n)
 
 // Decode lookup table (character -> 6-bit value, returns -1 for invalid)
 let __decodeChar(c: Int64) : Int64 =
-    if c >= 65 && c <= 90 then c - 65      // A-Z -> 0-25
-    else if c >= 97 && c <= 122 then c - 71  // a-z -> 26-51
-    else if c >= 48 && c <= 57 then c + 4    // 0-9 -> 52-61
-    else if c == 43 then 62                   // + -> 62
-    else if c == 47 then 63                   // / -> 63
-    else if c == 45 then 62                   // - -> 62 (URL-safe)
-    else if c == 95 then 63                   // _ -> 63 (URL-safe)
-    else if c == 61 then -2                   // = -> padding
-    else -1                                   // Invalid
+    if c >= 65L && c <= 90L then c - 65L      // A-Z -> 0-25
+    else if c >= 97L && c <= 122L then c - 71L  // a-z -> 26-51
+    else if c >= 48L && c <= 57L then c + 4L    // 0-9 -> 52-61
+    else if c == 43L then 62L                   // + -> 62
+    else if c == 47L then 63L                   // / -> 63
+    else if c == 45L then 62L                   // - -> 62 (URL-safe)
+    else if c == 95L then 63L                   // _ -> 63 (URL-safe)
+    else if c == 61L then -2L                   // = -> padding
+    else -1L                                   // Invalid
 
 // Encode 3 bytes to 4 base64 characters
 let __encode3Bytes(b0: Int64, b1: Int64, b2: Int64, urlSafe: Bool) : String =
-    let c0 = (b0 >> 2) & 63 in
-    let c1 = ((b0 & 3) << 4) ^ ((b1 >> 4) & 15) in
-    let c2 = ((b1 & 15) << 2) ^ ((b2 >> 6) & 3) in
-    let c3 = b2 & 63 in
+    let c0 = (b0 >> 2L) & 63L in
+    let c1 = ((b0 & 3L) << 4L) ^ ((b1 >> 4L) & 15L) in
+    let c2 = ((b1 & 15L) << 2L) ^ ((b2 >> 6L) & 3L) in
+    let c3 = b2 & 63L in
     if urlSafe then
         Stdlib.Base64.__encodeCharUrl(c0) ++
         Stdlib.Base64.__encodeCharUrl(c1) ++
@@ -62,9 +62,9 @@ let __encode3Bytes(b0: Int64, b1: Int64, b2: Int64, urlSafe: Bool) : String =
 
 // Encode 2 bytes to 3 base64 characters + 1 padding
 let __encode2Bytes(b0: Int64, b1: Int64, urlSafe: Bool) : String =
-    let c0 = (b0 >> 2) & 63 in
-    let c1 = ((b0 & 3) << 4) ^ ((b1 >> 4) & 15) in
-    let c2 = (b1 & 15) << 2 in
+    let c0 = (b0 >> 2L) & 63L in
+    let c1 = ((b0 & 3L) << 4L) ^ ((b1 >> 4L) & 15L) in
+    let c2 = (b1 & 15L) << 2L in
     if urlSafe then
         Stdlib.Base64.__encodeCharUrl(c0) ++
         Stdlib.Base64.__encodeCharUrl(c1) ++
@@ -76,8 +76,8 @@ let __encode2Bytes(b0: Int64, b1: Int64, urlSafe: Bool) : String =
 
 // Encode 1 byte to 2 base64 characters + 2 padding
 let __encode1Byte(b0: Int64, urlSafe: Bool) : String =
-    let c0 = (b0 >> 2) & 63 in
-    let c1 = (b0 & 3) << 4 in
+    let c0 = (b0 >> 2L) & 63L in
+    let c1 = (b0 & 3L) << 4L in
     if urlSafe then
         Stdlib.Base64.__encodeCharUrl(c0) ++
         Stdlib.Base64.__encodeCharUrl(c1) ++ "=="
@@ -88,17 +88,17 @@ let __encode1Byte(b0: Int64, urlSafe: Bool) : String =
 // Encode bytes to base64 helper
 let __encodeHelper(b: Blob, index: Int64, len: Int64, urlSafe: Bool, acc: String) : String =
     let remaining = len - index in
-    if remaining <= 0 then
+    if remaining <= 0L then
         acc
-    else if remaining >= 3 then
+    else if remaining >= 3L then
         let b0 = Stdlib.Bytes.get(b, index) in
-        let b1 = Stdlib.Bytes.get(b, index + 1) in
-        let b2 = Stdlib.Bytes.get(b, index + 2) in
+        let b1 = Stdlib.Bytes.get(b, index + 1L) in
+        let b2 = Stdlib.Bytes.get(b, index + 2L) in
         let chunk = Stdlib.Base64.__encode3Bytes(b0, b1, b2, urlSafe) in
-        Stdlib.Base64.__encodeHelper(b, index + 3, len, urlSafe, acc ++ chunk)
-    else if remaining == 2 then
+        Stdlib.Base64.__encodeHelper(b, index + 3L, len, urlSafe, acc ++ chunk)
+    else if remaining == 2L then
         let b0 = Stdlib.Bytes.get(b, index) in
-        let b1 = Stdlib.Bytes.get(b, index + 1) in
+        let b1 = Stdlib.Bytes.get(b, index + 1L) in
         acc ++ Stdlib.Base64.__encode2Bytes(b0, b1, urlSafe)
     else
         let b0 = Stdlib.Bytes.get(b, index) in
@@ -106,11 +106,11 @@ let __encodeHelper(b: Blob, index: Int64, len: Int64, urlSafe: Bool, acc: String
 
 // Encode bytes to standard base64 string
 let encode(bytes: Blob) : String =
-    Stdlib.Base64.__encodeHelper(bytes, 0, Stdlib.Bytes.length(bytes), false, "")
+    Stdlib.Base64.__encodeHelper(bytes, 0L, Stdlib.Bytes.length(bytes), false, "")
 
 // Encode bytes to URL-safe base64 string
 let urlEncode(bytes: Blob) : String =
-    Stdlib.Base64.__encodeHelper(bytes, 0, Stdlib.Bytes.length(bytes), true, "")
+    Stdlib.Base64.__encodeHelper(bytes, 0L, Stdlib.Bytes.length(bytes), true, "")
 
 // Decode 4 base64 characters to up to 3 bytes
 // Returns (bytes list, error flag)
@@ -120,37 +120,37 @@ let __decode4Chars(c0: Int64, c1: Int64, c2: Int64, c3: Int64) : (List<Int64> * 
     let v2 = Stdlib.Base64.__decodeChar(c2) in
     let v3 = Stdlib.Base64.__decodeChar(c3) in
     // Padding is only valid as the final one or two characters.
-    if v0 == -1 || v1 == -1 || v2 == -1 || v3 == -1 ||
-       v0 == -2 || v1 == -2 || (v2 == -2 && v3 != -2) then
+    if v0 == -1L || v1 == -1L || v2 == -1L || v3 == -1L ||
+       v0 == -2L || v1 == -2L || (v2 == -2L && v3 != -2L) then
         ([], true)
-    else if v2 == -2 then
+    else if v2 == -2L then
         // Two padding chars - 1 output byte
-        let b0 = ((v0 << 2) ^ (v1 >> 4)) & 255 in
+        let b0 = ((v0 << 2L) ^ (v1 >> 4L)) & 255L in
         ([b0], false)
-    else if v3 == -2 then
+    else if v3 == -2L then
         // One padding char - 2 output bytes
-        let b0 = ((v0 << 2) ^ (v1 >> 4)) & 255 in
-        let b1 = ((v1 << 4) ^ (v2 >> 2)) & 255 in
+        let b0 = ((v0 << 2L) ^ (v1 >> 4L)) & 255L in
+        let b1 = ((v1 << 4L) ^ (v2 >> 2L)) & 255L in
         ([b0, b1], false)
     else
         // No padding - 3 output bytes
-        let b0 = ((v0 << 2) ^ (v1 >> 4)) & 255 in
-        let b1 = ((v1 << 4) ^ (v2 >> 2)) & 255 in
-        let b2 = ((v2 << 6) ^ v3) & 255 in
+        let b0 = ((v0 << 2L) ^ (v1 >> 4L)) & 255L in
+        let b1 = ((v1 << 4L) ^ (v2 >> 2L)) & 255L in
+        let b2 = ((v2 << 6L) ^ v3) & 255L in
         ([b0, b1, b2], false)
 
 // Decode base64 helper
 let __decodeHelper(s: String, index: Int64, len: Int64, acc: List<Int64>) : Stdlib.Result.Result<List<Int64>, String> =
     if index >= len then
         Ok(Stdlib.List.reverse<Int64>(acc))
-    else if index + 4 > len then
+    else if index + 4L > len then
         Error("Not a valid base64 string")
     else
         let c0 = Stdlib.String.getByteAt(s, index) in
-        let c1 = Stdlib.String.getByteAt(s, index + 1) in
-        let c2 = Stdlib.String.getByteAt(s, index + 2) in
-        let c3 = Stdlib.String.getByteAt(s, index + 3) in
-        if (c2 == 61 || c3 == 61) && index + 4 != len then
+        let c1 = Stdlib.String.getByteAt(s, index + 1L) in
+        let c2 = Stdlib.String.getByteAt(s, index + 2L) in
+        let c3 = Stdlib.String.getByteAt(s, index + 3L) in
+        if (c2 == 61L || c3 == 61L) && index + 4L != len then
             Error("Not a valid base64 string")
         else
           let result = Stdlib.Base64.__decode4Chars(c0, c1, c2, c3) in
@@ -159,7 +159,7 @@ let __decodeHelper(s: String, index: Int64, len: Int64, acc: List<Int64>) : Stdl
         | (bytes, false) ->
             // Prepend bytes to accumulator (in reverse order since we'll reverse at end)
             let newAcc = Stdlib.Base64.__prependReversed(bytes, acc) in
-            Stdlib.Base64.__decodeHelper(s, index + 4, len, newAcc)
+            Stdlib.Base64.__decodeHelper(s, index + 4L, len, newAcc)
 
 // Helper to prepend a list in reverse order
 let __prependReversed(bytes: List<Int64>, acc: List<Int64>) : List<Int64> =
@@ -170,18 +170,18 @@ let __prependReversed(bytes: List<Int64>, acc: List<Int64>) : List<Int64> =
 // Decode base64 string to bytes
 let decode(s: String) : Stdlib.Result.Result<Blob, String> =
     let len = Stdlib.String.__byteLength(s) in
-    let remainder = len % 4 in
-    if len == 0 then
-        Ok(Stdlib.Bytes.create(0))
-    else if remainder == 1 then
+    let remainder = len % 4L in
+    if len == 0L then
+        Ok(Stdlib.Bytes.create(0L))
+    else if remainder == 1L then
         Error("Not a valid base64 string")
     else
         // Base64 permits the final two- or three-character group to omit padding.
         let padded =
-            if remainder == 2 then s ++ "=="
-            else if remainder == 3 then s ++ "="
+            if remainder == 2L then s ++ "=="
+            else if remainder == 3L then s ++ "="
             else s in
-        match Stdlib.Base64.__decodeHelper(padded, 0, Stdlib.String.__byteLength(padded), []) with
+        match Stdlib.Base64.__decodeHelper(padded, 0L, Stdlib.String.__byteLength(padded), []) with
         | Ok(byteList) -> Ok(Stdlib.Bytes.fromList(byteList))
         | Error(_) -> Error("Not a valid base64 string")
 

@@ -4,61 +4,61 @@
 module Unicode.Data
 
 let __canonicalDecompositionLookupGroup2(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table08.__canonicalDecompositionChunk8(), 0, key, 6, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table08.__canonicalDecompositionChunk8(), 0L, key, 6L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table09.__canonicalDecompositionChunk9(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table09.__canonicalDecompositionChunk9(), 0L, key, 6L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table10.__canonicalDecompositionChunk10(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table10.__canonicalDecompositionChunk10(), 0L, key, 6L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table11.__canonicalDecompositionChunk11(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table11.__canonicalDecompositionChunk11(), 0L, key, 6L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __uppercaseLookupGroup2(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table62.__uppercaseChunk8(), 0, key, 6, 25, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table62.__uppercaseChunk8(), 0L, key, 6L, 25L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table63.__uppercaseChunk9(), 0, key, 6, 25, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table63.__uppercaseChunk9(), 0L, key, 6L, 25L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table00.__uppercaseChunk10(), 0, key, 6, 25, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table00.__uppercaseChunk10(), 0L, key, 6L, 25L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table01.__uppercaseChunk11(), 0, key, 6, 25, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table01.__uppercaseChunk11(), 0L, key, 6L, 25L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __lowercaseLookupGroup0(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table03.__lowercaseChunk0(), 0, key, 6, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table03.__lowercaseChunk0(), 0L, key, 6L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table04.__lowercaseChunk1(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table04.__lowercaseChunk1(), 0L, key, 6L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table05.__lowercaseChunk2(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table05.__lowercaseChunk2(), 0L, key, 6L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table06.__lowercaseChunk3(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table06.__lowercaseChunk3(), 0L, key, 6L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __combiningClassLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table25.__combiningClassChunk0(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table25.__combiningClassChunk0(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table26.__combiningClassChunk1(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table26.__combiningClassChunk1(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table27.__combiningClassChunk2(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table27.__combiningClassChunk2(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table28.__combiningClassChunk3(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table28.__combiningClassChunk3(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
@@ -66,14 +66,14 @@ let __combiningClassLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64>
 let __lookupRangeIn(data: String, index: Int64, codepoint: Int64, recordWidth: Int64) : Stdlib.Option.Option<Int64> =
     if index >= Stdlib.String.__byteLength(data) then None
     else
-        let start_ = Unicode.Data.__hex(data, index, 6, 0) in
-        let end_ = Unicode.Data.__hex(data, index + 6, 6, 0) in
+        let start_ = Unicode.Data.__hex(data, index, 6L, 0L) in
+        let end_ = Unicode.Data.__hex(data, index + 6L, 6L, 0L) in
         if codepoint < start_ then None
-        else if codepoint <= end_ then Some(Unicode.Data.__hex(data, index + 12, 2, 0))
+        else if codepoint <= end_ then Some(Unicode.Data.__hex(data, index + 12L, 2L, 0L))
         else Unicode.Data.__lookupRangeIn(data, index + recordWidth, codepoint, recordWidth)
 
 let __uppercaseLookupGroup3(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table02.__uppercaseChunk12(), 0, key, 6, 25, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table02.__uppercaseChunk12(), 0L, key, 6L, 25L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
         None

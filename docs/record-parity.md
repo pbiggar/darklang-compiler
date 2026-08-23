@@ -13,7 +13,7 @@ differences are excluded.
 
 | Contract | Compiler evidence | Pinned interpreter evidence | Result |
 | --- | --- | --- | --- |
-| Grammar | both `passes/1_Parser.fs` entry paths | `LibParser/Parser.fs:1634-1644,1945-1970,2063-2077,2245-2399,2760-2805` | Named/qualified/generic construction, mixed separators, non-empty declarations/updates; anonymous literals rejected |
+| Grammar | canonical `passes/1_InterpreterParser.fs` entry path | `LibParser/Parser.fs:1634-1644,1945-1970,2063-2077,2245-2399,2760-2805` | Named/qualified/generic construction, mixed separators, non-empty declarations/updates; anonymous literals rejected |
 | Expression identity | `AST.fs` formerly stored only a string and dropped literal arguments | `LibExecution/ProgramTypes.fs:479-493` | Explicit source name, resolved name, and ordered arguments |
 | Declaration metadata | `passes/1.5_TypeChecking.fs` formerly inferred parameters and used a last-wins map | `ProgramTypes.fs:594-610`; `RuntimeTypes.fs:1503-1513` | Declared/phantom parameters and order retained; first-declared lookup |
 | Construction | type-checker record literal and `passes/2_AST_to_ANF.fs` | `LibTypeChecker/TypeChecker.fs:1093-1246`; `ProgramTypesToRuntimeTypes.fs:1077-1102` | Duplicate/missing/unknown/empty/type validation and source-order evaluation |

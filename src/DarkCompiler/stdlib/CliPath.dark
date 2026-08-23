@@ -4,8 +4,8 @@
 module Stdlib.Cli.Path
 
 let stripTrailing(path: String) : String =
-    if Stdlib.String.__byteLength(path) > 1 && Stdlib.String.endsWith(path, "/") then
-        Stdlib.Cli.Path.stripTrailing(Stdlib.String.__byteTake(path, Stdlib.String.__byteLength(path) - 1))
+    if Stdlib.String.__byteLength(path) > 1L && Stdlib.String.endsWith(path, "/") then
+        Stdlib.Cli.Path.stripTrailing(Stdlib.String.__byteTake(path, Stdlib.String.__byteLength(path) - 1L))
     else path
 
 let __join(parts: List<String>, acc: String) : String =
@@ -24,41 +24,41 @@ let join(parts: List<String>) : String =
 
 let __lastSeparator(path: String, index: Int64, found: Int64) : Int64 =
     if index >= Stdlib.String.__byteLength(path) then found
-    else if Stdlib.String.getByteAt(path, index) == 47 then
-        Stdlib.Cli.Path.__lastSeparator(path, index + 1, index)
+    else if Stdlib.String.getByteAt(path, index) == 47L then
+        Stdlib.Cli.Path.__lastSeparator(path, index + 1L, index)
     else
-        Stdlib.Cli.Path.__lastSeparator(path, index + 1, found)
+        Stdlib.Cli.Path.__lastSeparator(path, index + 1L, found)
 
 let __lastDot(path: String, index: Int64, found: Int64) : Int64 =
     if index >= Stdlib.String.__byteLength(path) then found
-    else if Stdlib.String.getByteAt(path, index) == 46 then
-        Stdlib.Cli.Path.__lastDot(path, index + 1, index)
+    else if Stdlib.String.getByteAt(path, index) == 46L then
+        Stdlib.Cli.Path.__lastDot(path, index + 1L, index)
     else
-        Stdlib.Cli.Path.__lastDot(path, index + 1, found)
+        Stdlib.Cli.Path.__lastDot(path, index + 1L, found)
 
 let parent(path: String) : String =
     let p = Stdlib.Cli.Path.stripTrailing(path) in
-    let separator = Stdlib.Cli.Path.__lastSeparator(p, 0, -1) in
-    if separator == 0 then "/"
-    else if separator > 0 then Stdlib.String.__byteSlice(p, 0, separator)
+    let separator = Stdlib.Cli.Path.__lastSeparator(p, 0L, -1L) in
+    if separator == 0L then "/"
+    else if separator > 0L then Stdlib.String.__byteSlice(p, 0L, separator)
     else "."
 
 let basename(path: String) : String =
     let p = Stdlib.Cli.Path.stripTrailing(path) in
-    let separator = Stdlib.Cli.Path.__lastSeparator(p, 0, -1) in
-    if separator >= 0 then Stdlib.String.__byteDrop(p, separator + 1)
+    let separator = Stdlib.Cli.Path.__lastSeparator(p, 0L, -1L) in
+    if separator >= 0L then Stdlib.String.__byteDrop(p, separator + 1L)
     else p
 
 let extension(path: String) : Stdlib.Option.Option<String> =
     let name = Stdlib.Cli.Path.basename(path) in
-    let dot = Stdlib.Cli.Path.__lastDot(name, 0, -1) in
-    if dot > 0 then Some(Stdlib.String.__byteDrop(name, dot)) else None
+    let dot = Stdlib.Cli.Path.__lastDot(name, 0L, -1L) in
+    if dot > 0L then Some(Stdlib.String.__byteDrop(name, dot)) else None
 
 let withExtension(path: String, extension: String) : String =
     let dir = Stdlib.Cli.Path.parent(path) in
     let name = Stdlib.Cli.Path.basename(path) in
-    let dot = Stdlib.Cli.Path.__lastDot(name, 0, -1) in
-    let stem = if dot > 0 then Stdlib.String.__byteSlice(name, 0, dot) else name in
+    let dot = Stdlib.Cli.Path.__lastDot(name, 0L, -1L) in
+    let stem = if dot > 0L then Stdlib.String.__byteSlice(name, 0L, dot) else name in
     let newName = stem ++ extension in
     if dir == "." then newName else Stdlib.Cli.Path.join([dir, newName])
 

@@ -62,6 +62,7 @@
     <Compile Include="test-suite-tooling-tests/E2EFormatTests.fs" />
 
     <!-- Compiler pass tests (shared) -->
+    <Compile Include="compiler-passes/ParserTests.fs" />
     <Compile Include="compiler-passes/PlatformTests.fs" />
     <Compile Include="compiler-passes/ProgramCliTests.fs" />
     <Compile Include="compiler-passes/ValueSearchCatalogTests.fs" />

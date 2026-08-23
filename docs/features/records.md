@@ -107,8 +107,7 @@ ownership planning do not add record syntax or structural compatibility.
 | File | Purpose |
 | --- | --- |
 | `src/DarkCompiler/AST.fs` | nominal record references and public expressions |
-| `src/DarkCompiler/passes/1_Parser.fs` | compiler-syntax grammar |
-| `src/DarkCompiler/passes/1_InterpreterParser.fs` | interpreter-syntax grammar |
+| `src/DarkCompiler/passes/1_InterpreterParser.fs` | canonical interpreter-compatible grammar |
 | `src/DarkCompiler/passes/1.5_TypeChecking.fs` | metadata, substitution, validation |
 | `src/DarkCompiler/passes/1.6_ValueRendering.fs` | record rendering |
 | `src/DarkCompiler/passes/2_AST_to_ANF.fs` | record allocation, clone, and projection |

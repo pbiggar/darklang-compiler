@@ -10,9 +10,9 @@ let getAtOrDefault(list: List<Int64>, index: Int64, default_: Int64) : Int64 =
 
 let quicksort(arr: List<Int64>) : List<Int64> =
     let len = Stdlib.Internal.SkewList.length<Int64>(arr) in
-    if len <= 1 then arr
+    if len <= 1L then arr
     else
-        let pivot = getAtOrDefault(arr, len / 2, 0) in
+        let pivot = getAtOrDefault(arr, len / 2L, 0L) in
         let left = Stdlib.List.filter<Int64>(arr, fun x -> x < pivot) in
         let middle = Stdlib.List.filter<Int64>(arr, fun x -> x == pivot) in
         let right = Stdlib.List.filter<Int64>(arr, fun x -> x > pivot) in
@@ -22,11 +22,11 @@ let quicksort(arr: List<Int64>) : List<Int64> =
 
 // Generate pseudo-random list using LCG
 let generateListHelper(n: Int64, x: Int64, acc: List<Int64>) : List<Int64> =
-    if n <= 0 then Stdlib.List.reverse<Int64>(acc)
+    if n <= 0L then Stdlib.List.reverse<Int64>(acc)
     else
-        let nextX = (x * 1103515245 + 12345) % 2147483648 in
-        let value = nextX % 10000 in
-        generateListHelper(n - 1, nextX, Stdlib.List.push<Int64>(acc, value))
+        let nextX = (x * 1103515245L + 12345L) % 2147483648L in
+        let value = nextX % 10000L in
+        generateListHelper(n - 1L, nextX, Stdlib.List.push<Int64>(acc, value))
 
 let generateList(n: Int64, seed: Int64) : List<Int64> =
     generateListHelper(n, seed, [])
@@ -36,12 +36,12 @@ let checksumHelper(arr: List<Int64>, index: Int64, acc: Int64) : Int64 =
     match arr with
     | [] -> acc
     | h :: t ->
-        let newAcc = (acc + (h * (index + 1)) % 1000000007) % 1000000007 in
-        checksumHelper(t, index + 1, newAcc)
+        let newAcc = (acc + (h * (index + 1L)) % 1000000007L) % 1000000007L in
+        checksumHelper(t, index + 1L, newAcc)
 
 let checksum(arr: List<Int64>) : Int64 =
-    checksumHelper(arr, 0, 0)
+    checksumHelper(arr, 0L, 0L)
 
-let arr = generateList(5000, 42) in
+let arr = generateList(5000L, 42L) in
 let sortedArr = quicksort(arr) in
 Builtin.printLine(Stdlib.Int64.toString(checksum(sortedArr)))

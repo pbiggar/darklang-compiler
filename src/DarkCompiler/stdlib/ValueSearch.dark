@@ -7,7 +7,7 @@ type FoundValue<'a> =
       value: a }
 
 let parseNamespace(targetNamespace: String) : List<String> =
-    if Stdlib.String.__byteLength(targetNamespace) == 0 then []
+    if Stdlib.String.__byteLength(targetNamespace) == 0L then []
     else Stdlib.String.split(targetNamespace, ".")
 
 let isValueInNamespace(namespaceParts: List<String>, valuePath: List<String>) : Bool =

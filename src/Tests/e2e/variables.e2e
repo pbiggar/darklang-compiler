@@ -13,19 +13,19 @@
 // ===================================================================
 
 // Simple let binding
-let x = 5 in x = 5
+let x = 5L in x = 5L
 
 // Let binding with arithmetic
-let x = 10 in x + 5 = 15
-let x = 20 in x - 7 = 13
-let x = 6 in x * 3 = 18
-let x = 15 in x / 3 = 5
+let x = 10L in x + 5L = 15L
+let x = 20L in x - 7L = 13L
+let x = 6L in x * 3L = 18L
+let x = 15L in x / 3L = 5L
 
 // Let binding used multiple times
-let x = 4 in x + x = 8
-let x = 3 in x * x = 9
-let x = 10 in x - x = 0
-let x = 5 in x / x = 1
+let x = 4L in x + x = 8L
+let x = 3L in x * x = 9L
+let x = 10L in x - x = 0L
+let x = 5L in x / x = 1L
 
 
 // ===================================================================
@@ -33,15 +33,15 @@ let x = 5 in x / x = 1
 // ===================================================================
 
 // Sequential let bindings
-let x = 2 in let y = 3 in x + y = 5
-let x = 10 in let y = 4 in x - y = 6
-let x = 5 in let y = 7 in x * y = 35
-let x = 20 in let y = 4 in x / y = 5
+let x = 2L in let y = 3L in x + y = 5L
+let x = 10L in let y = 4L in x - y = 6L
+let x = 5L in let y = 7L in x * y = 35L
+let x = 20L in let y = 4L in x / y = 5L
 
 // Multiple variables in expressions
-let x = 1 in let y = 2 in let z = 3 in x + y + z = 6
-let a = 10 in let b = 5 in let c = 2 in a - b - c = 3
-let x = 2 in let y = 3 in let z = 4 in x * y * z = 24
+let x = 1L in let y = 2L in let z = 3L in x + y + z = 6L
+let a = 10L in let b = 5L in let c = 2L in a - b - c = 3L
+let x = 2L in let y = 3L in let z = 4L in x * y * z = 24L
 
 
 // ===================================================================
@@ -49,18 +49,18 @@ let x = 2 in let y = 3 in let z = 4 in x * y * z = 24
 // ===================================================================
 
 // Simple shadowing
-let x = 5 in let x = 10 in x = 10
-let x = 1 in let x = 2 in let x = 3 in x = 3
+let x = 5L in let x = 10L in x = 10L
+let x = 1L in let x = 2L in let x = 3L in x = 3L
 
 // Shadowing with arithmetic
-let x = 5 in let x = x + 1 in x = 6
-let x = 10 in let x = x * 2 in x = 20
-let x = 8 in let x = x - 3 in x = 5
-let x = 12 in let x = x / 2 in x = 6
+let x = 5L in let x = x + 1L in x = 6L
+let x = 10L in let x = x * 2L in x = 20L
+let x = 8L in let x = x - 3L in x = 5L
+let x = 12L in let x = x / 2L in x = 6L
 
 // Multiple shadowing
-let x = 1 in let x = x + 1 in let x = x + 1 in x = 3
-let x = 2 in let x = x * 2 in let x = x * 2 in x = 8
+let x = 1L in let x = x + 1L in let x = x + 1L in x = 3L
+let x = 2L in let x = x * 2L in let x = x * 2L in x = 8L
 
 
 // ===================================================================
@@ -68,26 +68,26 @@ let x = 2 in let x = x * 2 in let x = x * 2 in x = 8
 // ===================================================================
 
 // Let binding in left operand
-(let x = 5 in x) + 3 = 8
-(let x = 10 in x) - 4 = 6
-(let x = 6 in x) * 2 = 12
-(let x = 20 in x) / 4 = 5
+(let x = 5L in x) + 3L = 8L
+(let x = 10L in x) - 4L = 6L
+(let x = 6L in x) * 2L = 12L
+(let x = 20L in x) / 4L = 5L
 
 // Let binding in right operand
-3 + (let x = 5 in x) = 8
-10 - (let x = 4 in x) = 6
-2 * (let x = 6 in x) = 12
-20 / (let x = 4 in x) = 5
+3L + (let x = 5L in x) = 8L
+10L - (let x = 4L in x) = 6L
+2L * (let x = 6L in x) = 12L
+20L / (let x = 4L in x) = 5L
 
 // Let bindings in both operands
-(let x = 3 in x) + (let y = 4 in y) = 7
-(let x = 10 in x) - (let y = 3 in y) = 7
-(let x = 5 in x) * (let y = 4 in y) = 20
-(let x = 24 in x) / (let y = 6 in y) = 4
+(let x = 3L in x) + (let y = 4L in y) = 7L
+(let x = 10L in x) - (let y = 3L in y) = 7L
+(let x = 5L in x) * (let y = 4L in y) = 20L
+(let x = 24L in x) / (let y = 6L in y) = 4L
 
 // Nested let bindings with multiple variables
-(let x = 2 in let y = 3 in x + y) + 1 = 6
-(let x = 10 in let y = 5 in x - y) * 2 = 10
+(let x = 2L in let y = 3L in x + y) + 1L = 6L
+(let x = 10L in let y = 5L in x - y) * 2L = 10L
 
 
 // ===================================================================
@@ -95,22 +95,22 @@ let x = 2 in let x = x * 2 in let x = x * 2 in x = 8
 // ===================================================================
 
 // Let binding with complex value expression
-let x = 2 + 3 in x = 5
-let x = 10 - 4 in x = 6
-let x = 3 * 4 in x = 12
-let x = 20 / 5 in x = 4
-let x = 2 + (3 * 4) in x = 14
-let x = (2 + 3) * 4 in x = 20
+let x = 2L + 3L in x = 5L
+let x = 10L - 4L in x = 6L
+let x = 3L * 4L in x = 12L
+let x = 20L / 5L in x = 4L
+let x = 2L + (3L * 4L) in x = 14L
+let x = (2L + 3L) * 4L in x = 20L
 
 // Let binding with complex body expression
-let x = 5 in x + (2 * 3) = 11
-let x = 10 in (x + 2) * 3 = 36
-let x = 4 in (x * x) + x = 20
+let x = 5L in x + (2L * 3L) = 11L
+let x = 10L in (x + 2L) * 3L = 36L
+let x = 4L in (x * x) + x = 20L
 
 // Multiple variables with complex expressions
-let x = 2 + 3 in let y = 4 * 5 in x + y = 25
-let x = 10 - 2 in let y = 3 + 1 in x * y = 32
-let x = (2 + 3) * 2 in let y = 20 / 4 in x + y = 15
+let x = 2L + 3L in let y = 4L * 5L in x + y = 25L
+let x = 10L - 2L in let y = 3L + 1L in x * y = 32L
+let x = (2L + 3L) * 2L in let y = 20L / 4L in x + y = 15L
 
 
 // ===================================================================
@@ -118,22 +118,22 @@ let x = (2 + 3) * 2 in let y = 20 / 4 in x + y = 15
 // ===================================================================
 
 // Zero values
-let x = 0 in x = 0
-let x = 0 in x + 5 = 5
-let x = 0 in 5 + x = 5
-let x = 5 in let y = 0 in x + y = 5
+let x = 0L in x = 0L
+let x = 0L in x + 5L = 5L
+let x = 0L in 5L + x = 5L
+let x = 5L in let y = 0L in x + y = 5L
 
 // Negative values
-let x = -5 in x = -5
-let x = -10 in x + 15 = 5
-let x = 10 in x + -5 = 5
-let x = -3 in let y = -4 in x + y = -7
+let x = -5L in x = -5L
+let x = -10L in x + 15L = 5L
+let x = 10L in x + -5L = 5L
+let x = -3L in let y = -4L in x + y = -7L
 
 // Large values
-let x = 1000000 in x = 1000000
-let x = 9223372036854775807 in x = 9223372036854775807
-let x = -9223372036854775808 in x = -9223372036854775808
+let x = 1000000L in x = 1000000L
+let x = 9223372036854775807L in x = 9223372036854775807L
+let x = -9223372036854775808L in x = -9223372036854775808L
 
 // Long variable names
-let variable_name_with_underscores = 42 in variable_name_with_underscores = 42
-let x123 = 456 in x123 = 456
+let variable_name_with_underscores = 42L in variable_name_with_underscores = 42L
+let x123 = 456L in x123 = 456L

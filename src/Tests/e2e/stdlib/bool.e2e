@@ -28,8 +28,8 @@ Stdlib.Bool.and(false, true) = false
 Stdlib.Bool.and(false, false) = false
 
 // With expressions
-Stdlib.Bool.and(8 >= 5, 6 <= 8) = true
-Stdlib.Bool.and(1 > 5, 2 < 8) = false
+Stdlib.Bool.and(8L >= 5L, 6L <= 8L) = true
+Stdlib.Bool.and(1L > 5L, 2L < 8L) = false
 
 // ===================================================================
 // Stdlib.Bool.or - Returns true if either a or b is true

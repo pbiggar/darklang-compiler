@@ -9,24 +9,24 @@
 // ===================================================================
 
 // 1-4 let bindings: should use registers only (X1-X10)
-let x = 1 in x = 1
-let x = 1 in let y = 2 in x + y = 3
-let x = 1 in let y = 2 in let z = 3 in x + y + z = 6
-let x = 1 in let y = 2 in let z = 3 in let w = 4 in x + y + z + w = 10
+let x = 1L in x = 1L
+let x = 1L in let y = 2L in x + y = 3L
+let x = 1L in let y = 2L in let z = 3L in x + y + z = 6L
+let x = 1L in let y = 2L in let z = 3L in let w = 4L in x + y + z + w = 10L
 
 // 5+ let bindings: triggers spilling
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in a + b + c + d + e = 15
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in a + b + c + d + e + f = 21
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in a + b + c + d + e + f + g = 28
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in a + b + c + d + e = 15L
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in a + b + c + d + e + f = 21L
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in a + b + c + d + e + f + g = 28L
 
 // 8+ let bindings: more spilling
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in a + b + c + d + e + f + g + h = 36
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in a + b + c + d + e + f + g + h = 36L
 
 // 10 let bindings: at capacity
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in a + b + c + d + e + f + g + h + i + j = 55
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in a + b + c + d + e + f + g + h + i + j = 55L
 
 // 12 let bindings: needs callee-saved or spilling
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in a + b + c + d + e + f + g + h + i + j + k + l = 78
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in let k = 11L in let l = 12L in a + b + c + d + e + f + g + h + i + j + k + l = 78L
 
 
 // ===================================================================
@@ -35,22 +35,22 @@ let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in le
 // ===================================================================
 
 // 4 lets + pattern match (works - no spilling needed)
-let x = 1 in let y = 2 in let z = 3 in let w = 4 in match [7, 8] with | [a, b] -> a + b | _ -> 99 = 15
+let x = 1L in let y = 2L in let z = 3L in let w = 4L in match [7L, 8L] with | [a, b] -> a + b | _ -> 99L = 15L
 
 // 5 lets + pattern match with operation (works)
-let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a + b | _ -> 99 = 15
+let x = 1L in let y = 2L in let z = 3L in let w = 4L in let v = 5L in match [7L, 8L] with | [a, b] -> a + b | _ -> 99L = 15L
 
 // 5 lets + pattern match with direct return of first extracted element
-let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a | _ -> 99 = 7
+let x = 1L in let y = 2L in let z = 3L in let w = 4L in let v = 5L in match [7L, 8L] with | [a, b] -> a | _ -> 99L = 7L
 
 // 5 lets + pattern match with direct return of second extracted element
-let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> b | _ -> 99 = 8
+let x = 1L in let y = 2L in let z = 3L in let w = 4L in let v = 5L in match [7L, 8L] with | [a, b] -> b | _ -> 99L = 8L
 
 // 5 lets + pattern match with constant return
-let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> 42 | _ -> 99 = 42
+let x = 1L in let y = 2L in let z = 3L in let w = 4L in let v = 5L in match [7L, 8L] with | [a, b] -> 42L | _ -> 99L = 42L
 
 // 5 lets + pattern match with a + 0 (works - forces operation)
-let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a + 0 | _ -> 99 = 7
+let x = 1L in let y = 2L in let z = 3L in let w = 4L in let v = 5L in match [7L, 8L] with | [a, b] -> a + 0L | _ -> 99L = 7L
 
 
 // ===================================================================
@@ -58,15 +58,15 @@ let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] wi
 // ===================================================================
 
 // Values defined before branch must be available after
-let x = 42 in if true then x else 0 = 42
-let x = 42 in if false then 0 else x = 42
+let x = 42L in if true then x else 0L = 42L
+let x = 42L in if false then 0L else x = 42L
 
 // Multiple values across branches
-let x = 10 in let y = 20 in if true then x + y else 0 = 30
-let x = 10 in let y = 20 in if false then 0 else x + y = 30
+let x = 10L in let y = 20L in if true then x + y else 0L = 30L
+let x = 10L in let y = 20L in if false then 0L else x + y = 30L
 
 // Nested conditions with value preservation
-let x = 5 in if x > 0 then if x > 3 then x else 0 else 0 = 5
+let x = 5L in if x > 0L then if x > 3L then x else 0L else 0L = 5L
 
 
 // ===================================================================
@@ -74,13 +74,13 @@ let x = 5 in if x > 0 then if x > 3 then x else 0 else 0 = 5
 // ===================================================================
 
 // Match on integer with values from outer scope
-let x = 100 in match 1 with | 1 -> x | _ -> 0 = 100
+let x = 100L in match 1L with | 1L -> x | _ -> 0L = 100L
 
 // Match on tuple with outer scope values
-let x = 10 in match (1, 2) with | (a, b) -> x + a + b = 13
+let x = 10L in match (1L, 2L) with | (a, b) -> x + a + b = 13L
 
 // ADT match with outer scope values
-type MyOption = MyNone | MySome of Int64 let x = 100 in match MySome(42) with | MySome(n) -> x + n | MyNone -> 0 = 142
+type MyOption = MyNone | MySome of Int64 let x = 100L in match MySome(42L) with | MySome(n) -> x + n | MyNone -> 0L = 142L
 
 
 // ===================================================================
@@ -88,13 +88,13 @@ type MyOption = MyNone | MySome of Int64 let x = 100 in match MySome(42) with | 
 // ===================================================================
 
 // Many live values across branches
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in if a > 0 then a + b + c + d + e else 0 = 15
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in if a > 0L then a + b + c + d + e else 0L = 15L
 
 // Nested matches with many outer values
-let x = 1 in let y = 2 in let z = 3 in match true with | true -> match false with | false -> x + y + z | true -> 0 | false -> 0 = 6
+let x = 1L in let y = 2L in let z = 3L in match true with | true -> match false with | false -> x + y + z | true -> 0L | false -> 0L = 6L
 
 // Many values through multiple match levels
-let a = 10 in let b = 20 in match 1 with | 1 -> let c = 30 in a + b + c | _ -> 0 = 60
+let a = 10L in let b = 20L in match 1L with | 1L -> let c = 30L in a + b + c | _ -> 0L = 60L
 
 
 // ===================================================================
@@ -102,13 +102,13 @@ let a = 10 in let b = 20 in match 1 with | 1 -> let c = 30 in a + b + c | _ -> 0
 // ===================================================================
 
 // Spilled value used multiple times
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in k + k = 22
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in let k = 11L in k + k = 22L
 
 // Multiple spilled values used together
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in k + l = 23
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in let k = 11L in let l = 12L in k + l = 23L
 
 // Early and late values used together
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in a + l = 13
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in let k = 11L in let l = 12L in a + l = 13L
 
 
 // ===================================================================
@@ -116,7 +116,7 @@ let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in le
 // ===================================================================
 
 // Float argument must survive a call that can clobber float regs
-let floatAcrossCall(r: Float) : Float = let list = [1, 2, 3] in let _ = Stdlib.List.length<Int64>(list) in r + 1.0
+let floatAcrossCall(r: Float) : Float = let list = [1L, 2L, 3L] in let _ = Stdlib.List.length<Int64>(list) in r + 1.0
 floatAcrossCall(2.0) = 3.0
 
 
@@ -127,12 +127,12 @@ floatAcrossCall(2.0) = 3.0
 // Multiple variables live across several instructions - tests proper globalIdx incrementing
 // If globalIdx were decremented instead of incremented, intervals would be inverted
 // causing variables to appear non-overlapping when they actually overlap
-let a = 100 in let b = a + 1 in let c = b + 1 in let d = c + 1 in let e = d + 1 in a + e = 204
+let a = 100L in let b = a + 1L in let c = b + 1L in let d = c + 1L in let e = d + 1L in a + e = 204L
 
 // Terminator position globalIdx test - variables used in conditionals
 // If terminator globalIdx were decremented instead of incremented, the variable used
 // in the condition would have an incorrect live interval
-let x = 10 in let y = 20 in let z = 30 in let w = 40 in let v = 50 in let u = 60 in let t = 70 in let cond = x > 5 in if cond then x + y + z + w + v + u + t else 0 = 280
+let x = 10L in let y = 20L in let z = 30L in let w = 40L in let v = 50L in let u = 60L in let t = 70L in let cond = x > 5L in if cond then x + y + z + w + v + u + t else 0L = 280L
 
 
 // ===================================================================
@@ -144,14 +144,14 @@ let x = 10 in let y = 20 in let z = 30 in let w = 40 in let v = 50 in let u = 60
 // If mutation changes + to -, alignment would be wrong causing memory corruption.
 
 // Single spilled value - needs 16-byte aligned stack (not 0)
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in let m = 13 in a + b + c + d + e + f + g + h + i + j + k + l + m = 91
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in let k = 11L in let l = 12L in let m = 13L in a + b + c + d + e + f + g + h + i + j + k + l + m = 91L
 
 // Multiple spilled values with specific stack sizes that exercise alignment edge cases
 // 14 values: tests stack allocation with multiple spills
-let a1 = 1 in let b1 = 2 in let c1 = 3 in let d1 = 4 in let e1 = 5 in let f1 = 6 in let g1 = 7 in let h1 = 8 in let i1 = 9 in let j1 = 10 in let k1 = 11 in let l1 = 12 in let m1 = 13 in let n1 = 14 in a1 + b1 + c1 + d1 + e1 + f1 + g1 + h1 + i1 + j1 + k1 + l1 + m1 + n1 = 105
+let a1 = 1L in let b1 = 2L in let c1 = 3L in let d1 = 4L in let e1 = 5L in let f1 = 6L in let g1 = 7L in let h1 = 8L in let i1 = 9L in let j1 = 10L in let k1 = 11L in let l1 = 12L in let m1 = 13L in let n1 = 14L in a1 + b1 + c1 + d1 + e1 + f1 + g1 + h1 + i1 + j1 + k1 + l1 + m1 + n1 = 105L
 
 // 15 values: more pressure on alignment
-let v1 = 1 in let v2 = 2 in let v3 = 3 in let v4 = 4 in let v5 = 5 in let v6 = 6 in let v7 = 7 in let v8 = 8 in let v9 = 9 in let v10 = 10 in let v11 = 11 in let v12 = 12 in let v13 = 13 in let v14 = 14 in let v15 = 15 in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 = 120
+let v1 = 1L in let v2 = 2L in let v3 = 3L in let v4 = 4L in let v5 = 5L in let v6 = 6L in let v7 = 7L in let v8 = 8L in let v9 = 9L in let v10 = 10L in let v11 = 11L in let v12 = 12L in let v13 = 13L in let v14 = 14L in let v15 = 15L in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 = 120L
 
 
 // ===================================================================
@@ -160,10 +160,10 @@ let v1 = 1 in let v2 = 2 in let v3 = 3 in let v4 = 4 in let v5 = 5 in let v6 = 6
 
 // Modulo lowering inserts a check block, which must not break phi predecessor labels.
 let modLoop(a: Int64, b: Int64) : Int64 =
-    if b == 0 then a
+    if b == 0L then a
     else modLoop(b, a % b)
 
-modLoop(48, 18) = 6
+modLoop(48L, 18L) = 6L
 
 
 // ===================================================================
@@ -177,16 +177,16 @@ modLoop(48, 18) = 6
 
 // Multiple variables live at conditional branch terminator
 // Variables a,b,c,d,e are all live at the if condition check
-let a = 10 in let b = 20 in let c = 30 in let d = 40 in let e = 50 in if a > 0 then b + c + d + e else a = 140
+let a = 10L in let b = 20L in let c = 30L in let d = 40L in let e = 50L in if a > 0L then b + c + d + e else a = 140L
 
 // Many variables live at nested conditionals
-let x1 = 1 in let x2 = 2 in let x3 = 3 in let x4 = 4 in let x5 = 5 in let x6 = 6 in if x1 > 0 then if x2 > 0 then x3 + x4 + x5 + x6 else 0 else 0 = 18
+let x1 = 1L in let x2 = 2L in let x3 = 3L in let x4 = 4L in let x5 = 5L in let x6 = 6L in if x1 > 0L then if x2 > 0L then x3 + x4 + x5 + x6 else 0L else 0L = 18L
 
 // Pattern match with multiple outer variables live at terminator
-let p1 = 100 in let p2 = 200 in let p3 = 300 in let p4 = 400 in match 1 with | 1 -> p1 + p2 + p3 + p4 | _ -> 0 = 1000
+let p1 = 100L in let p2 = 200L in let p3 = 300L in let p4 = 400L in match 1L with | 1L -> p1 + p2 + p3 + p4 | _ -> 0L = 1000L
 
 // Variables used in both branches require interference edges
-let m = 5 in let n = 10 in let o = 15 in let p = 20 in if true then m + n else o + p = 15
+let m = 5L in let n = 10L in let o = 15L in let p = 20L in if true then m + n else o + p = 15L
 
 
 // ===================================================================
@@ -200,13 +200,13 @@ let m = 5 in let n = 10 in let o = 15 in let p = 20 in if true then m + n else o
 
 // High register pressure with phi nodes from conditional branches
 // Creates phi nodes when variable 'result' is defined differently in each branch
-let v1 = 1 in let v2 = 2 in let v3 = 3 in let v4 = 4 in let v5 = 5 in let v6 = 6 in let v7 = 7 in let v8 = 8 in let v9 = 9 in let v10 = 10 in let v11 = 11 in let v12 = 12 in let result = if v1 > 0 then v1 + v2 + v3 + v4 + v5 + v6 else v7 + v8 + v9 + v10 + v11 + v12 in result = 21
+let v1 = 1L in let v2 = 2L in let v3 = 3L in let v4 = 4L in let v5 = 5L in let v6 = 6L in let v7 = 7L in let v8 = 8L in let v9 = 9L in let v10 = 10L in let v11 = 11L in let v12 = 12L in let result = if v1 > 0L then v1 + v2 + v3 + v4 + v5 + v6 else v7 + v8 + v9 + v10 + v11 + v12 in result = 21L
 
 // Nested conditionals with phi coalescing under register pressure
-let a1 = 1 in let a2 = 2 in let a3 = 3 in let a4 = 4 in let a5 = 5 in let a6 = 6 in let a7 = 7 in let a8 = 8 in let a9 = 9 in let a10 = 10 in let inner = if a1 > 0 then (if a2 > 0 then a3 + a4 else a5 + a6) else a7 + a8 in inner + a9 + a10 = 26
+let a1 = 1L in let a2 = 2L in let a3 = 3L in let a4 = 4L in let a5 = 5L in let a6 = 6L in let a7 = 7L in let a8 = 8L in let a9 = 9L in let a10 = 10L in let inner = if a1 > 0L then (if a2 > 0L then a3 + a4 else a5 + a6) else a7 + a8 in inner + a9 + a10 = 26L
 
 // Multiple phi nodes merged at control flow join with high pressure
-let x1 = 10 in let x2 = 20 in let x3 = 30 in let x4 = 40 in let x5 = 50 in let x6 = 60 in let x7 = 70 in let x8 = 80 in let x9 = 90 in let x10 = 100 in let x11 = 110 in let x12 = 120 in let choice = if x1 < 50 then x2 + x3 else x4 + x5 in choice + x6 + x7 + x8 + x9 + x10 + x11 + x12 = 680
+let x1 = 10L in let x2 = 20L in let x3 = 30L in let x4 = 40L in let x5 = 50L in let x6 = 60L in let x7 = 70L in let x8 = 80L in let x9 = 90L in let x10 = 100L in let x11 = 110L in let x12 = 120L in let choice = if x1 < 50L then x2 + x3 else x4 + x5 in choice + x6 + x7 + x8 + x9 + x10 + x11 + x12 = 680L
 
 
 // ===================================================================
@@ -221,14 +221,14 @@ let x1 = 10 in let x2 = 20 in let x3 = 30 in let x4 = 40 in let x5 = 50 in let x
 
 // Force multiple spills by having more live variables than allocatable registers (15)
 // Each variable has a distinct value so corruption would be detectable
-let s1 = 1 in let s2 = 2 in let s3 = 3 in let s4 = 4 in let s5 = 5 in let s6 = 6 in let s7 = 7 in let s8 = 8 in let s9 = 9 in let s10 = 10 in let s11 = 11 in let s12 = 12 in let s13 = 13 in let s14 = 14 in let s15 = 15 in let s16 = 16 in let s17 = 17 in s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10 + s11 + s12 + s13 + s14 + s15 + s16 + s17 = 153
+let s1 = 1L in let s2 = 2L in let s3 = 3L in let s4 = 4L in let s5 = 5L in let s6 = 6L in let s7 = 7L in let s8 = 8L in let s9 = 9L in let s10 = 10L in let s11 = 11L in let s12 = 12L in let s13 = 13L in let s14 = 14L in let s15 = 15L in let s16 = 16L in let s17 = 17L in s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10 + s11 + s12 + s13 + s14 + s15 + s16 + s17 = 153L
 
 // 18 variables: ensures at least 3 spills that use separate stack slots
-let t1 = 100 in let t2 = 200 in let t3 = 300 in let t4 = 400 in let t5 = 500 in let t6 = 600 in let t7 = 700 in let t8 = 800 in let t9 = 900 in let t10 = 1000 in let t11 = 1100 in let t12 = 1200 in let t13 = 1300 in let t14 = 1400 in let t15 = 1500 in let t16 = 1600 in let t17 = 1700 in let t18 = 1800 in t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 = 17100
+let t1 = 100L in let t2 = 200L in let t3 = 300L in let t4 = 400L in let t5 = 500L in let t6 = 600L in let t7 = 700L in let t8 = 800L in let t9 = 900L in let t10 = 1000L in let t11 = 1100L in let t12 = 1200L in let t13 = 1300L in let t14 = 1400L in let t15 = 1500L in let t16 = 1600L in let t17 = 1700L in let t18 = 1800L in t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 = 17100L
 
 // 20 variables: more spills to thoroughly test stack slot allocation
 // Uses prime numbers to ensure any value corruption is detectable
-let p1 = 2 in let p2 = 3 in let p3 = 5 in let p4 = 7 in let p5 = 11 in let p6 = 13 in let p7 = 17 in let p8 = 19 in let p9 = 23 in let p10 = 29 in let p11 = 31 in let p12 = 37 in let p13 = 41 in let p14 = 43 in let p15 = 47 in let p16 = 53 in let p17 = 59 in let p18 = 61 in let p19 = 67 in let p20 = 71 in p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9 + p10 + p11 + p12 + p13 + p14 + p15 + p16 + p17 + p18 + p19 + p20 = 639
+let p1 = 2L in let p2 = 3L in let p3 = 5L in let p4 = 7L in let p5 = 11L in let p6 = 13L in let p7 = 17L in let p8 = 19L in let p9 = 23L in let p10 = 29L in let p11 = 31L in let p12 = 37L in let p13 = 41L in let p14 = 43L in let p15 = 47L in let p16 = 53L in let p17 = 59L in let p18 = 61L in let p19 = 67L in let p20 = 71L in p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9 + p10 + p11 + p12 + p13 + p14 + p15 + p16 + p17 + p18 + p19 + p20 = 639L
 
 
 // ===================================================================
@@ -244,10 +244,10 @@ let p1 = 2 in let p2 = 3 in let p3 = 5 in let p4 = 7 in let p5 = 11 in let p6 = 
 
 // 22 variables: forces 7+ spills with distinct values
 // Tests that each spilled variable gets a unique, non-overlapping stack slot
-let q1 = 1000 in let q2 = 2000 in let q3 = 3000 in let q4 = 4000 in let q5 = 5000 in let q6 = 6000 in let q7 = 7000 in let q8 = 8000 in let q9 = 9000 in let q10 = 10000 in let q11 = 11000 in let q12 = 12000 in let q13 = 13000 in let q14 = 14000 in let q15 = 15000 in let q16 = 16000 in let q17 = 17000 in let q18 = 18000 in let q19 = 19000 in let q20 = 20000 in let q21 = 21000 in let q22 = 22000 in q1 + q2 + q3 + q4 + q5 + q6 + q7 + q8 + q9 + q10 + q11 + q12 + q13 + q14 + q15 + q16 + q17 + q18 + q19 + q20 + q21 + q22 = 253000
+let q1 = 1000L in let q2 = 2000L in let q3 = 3000L in let q4 = 4000L in let q5 = 5000L in let q6 = 6000L in let q7 = 7000L in let q8 = 8000L in let q9 = 9000L in let q10 = 10000L in let q11 = 11000L in let q12 = 12000L in let q13 = 13000L in let q14 = 14000L in let q15 = 15000L in let q16 = 16000L in let q17 = 17000L in let q18 = 18000L in let q19 = 19000L in let q20 = 20000L in let q21 = 21000L in let q22 = 22000L in q1 + q2 + q3 + q4 + q5 + q6 + q7 + q8 + q9 + q10 + q11 + q12 + q13 + q14 + q15 + q16 + q17 + q18 + q19 + q20 + q21 + q22 = 253000L
 
 // Test with interleaved access patterns - spilled values accessed in different order than defined
-let r1 = 11 in let r2 = 22 in let r3 = 33 in let r4 = 44 in let r5 = 55 in let r6 = 66 in let r7 = 77 in let r8 = 88 in let r9 = 99 in let r10 = 110 in let r11 = 121 in let r12 = 132 in let r13 = 143 in let r14 = 154 in let r15 = 165 in let r16 = 176 in let r17 = 187 in let r18 = 198 in let r19 = 209 in let r20 = 220 in r20 + r1 + r19 + r2 + r18 + r3 + r17 + r4 + r16 + r5 + r15 + r6 + r14 + r7 + r13 + r8 + r12 + r9 + r11 + r10 = 2310
+let r1 = 11L in let r2 = 22L in let r3 = 33L in let r4 = 44L in let r5 = 55L in let r6 = 66L in let r7 = 77L in let r8 = 88L in let r9 = 99L in let r10 = 110L in let r11 = 121L in let r12 = 132L in let r13 = 143L in let r14 = 154L in let r15 = 165L in let r16 = 176L in let r17 = 187L in let r18 = 198L in let r19 = 209L in let r20 = 220L in r20 + r1 + r19 + r2 + r18 + r3 + r17 + r4 + r16 + r5 + r15 + r6 + r14 + r7 + r13 + r8 + r12 + r9 + r11 + r10 = 2310L
 
 
 // ===================================================================
@@ -264,11 +264,11 @@ let r1 = 11 in let r2 = 22 in let r3 = 33 in let r4 = 44 in let r5 = 55 in let r
 
 // Force multiple spills with early variables used late (forces eviction pattern)
 // Variables defined early but used at end require their registers across the computation
-let early1 = 1 in let early2 = 2 in let early3 = 3 in let early4 = 4 in let early5 = 5 in let early6 = 6 in let early7 = 7 in let early8 = 8 in let early9 = 9 in let early10 = 10 in let early11 = 11 in let early12 = 12 in let early13 = 13 in let early14 = 14 in let early15 = 15 in let late1 = 100 in let late2 = 200 in let late3 = 300 in early1 + early2 + early3 + early4 + early5 + early6 + early7 + early8 + early9 + early10 + early11 + early12 + early13 + early14 + early15 + late1 + late2 + late3 = 720
+let early1 = 1L in let early2 = 2L in let early3 = 3L in let early4 = 4L in let early5 = 5L in let early6 = 6L in let early7 = 7L in let early8 = 8L in let early9 = 9L in let early10 = 10L in let early11 = 11L in let early12 = 12L in let early13 = 13L in let early14 = 14L in let early15 = 15L in let late1 = 100L in let late2 = 200L in let late3 = 300L in early1 + early2 + early3 + early4 + early5 + early6 + early7 + early8 + early9 + early10 + early11 + early12 + early13 + early14 + early15 + late1 + late2 + late3 = 720L
 
 // Test with interleaved lifetimes - some variables needed early, some late
 // This creates overlapping live ranges that stress the eviction logic
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in let m = 13 in let n = 14 in let o = 15 in let p = 16 in let sum1 = a + c + e + g + i + k + m + o in let sum2 = b + d + f + h + j + l + n + p in sum1 + sum2 = 136
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in let k = 11L in let l = 12L in let m = 13L in let n = 14L in let o = 15L in let p = 16L in let sum1 = a + c + e + g + i + k + m + o in let sum2 = b + d + f + h + j + l + n + p in sum1 + sum2 = 136L
 
 
 // ===================================================================
@@ -290,11 +290,11 @@ let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in le
 
 // Force stack alignment with exactly 17 bytes needed (1 spill beyond threshold)
 // Should align to 16 (not 0 if mutation applied)
-let x1 = 1 in let x2 = 2 in let x3 = 3 in let x4 = 4 in let x5 = 5 in let x6 = 6 in let x7 = 7 in let x8 = 8 in let x9 = 9 in let x10 = 10 in let x11 = 11 in let x12 = 12 in let x13 = 13 in let x14 = 14 in let x15 = 15 in let x16 = 16 in x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16 = 136
+let x1 = 1L in let x2 = 2L in let x3 = 3L in let x4 = 4L in let x5 = 5L in let x6 = 6L in let x7 = 7L in let x8 = 8L in let x9 = 9L in let x10 = 10L in let x11 = 11L in let x12 = 12L in let x13 = 13L in let x14 = 14L in let x15 = 15L in let x16 = 16L in x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16 = 136L
 
 // Test 24 variables to ensure stack is properly aligned to 32+ bytes
 // This tests the multiplication part of the alignment formula
-let z1 = 1 in let z2 = 2 in let z3 = 3 in let z4 = 4 in let z5 = 5 in let z6 = 6 in let z7 = 7 in let z8 = 8 in let z9 = 9 in let z10 = 10 in let z11 = 11 in let z12 = 12 in let z13 = 13 in let z14 = 14 in let z15 = 15 in let z16 = 16 in let z17 = 17 in let z18 = 18 in let z19 = 19 in let z20 = 20 in let z21 = 21 in let z22 = 22 in let z23 = 23 in let z24 = 24 in z1 + z2 + z3 + z4 + z5 + z6 + z7 + z8 + z9 + z10 + z11 + z12 + z13 + z14 + z15 + z16 + z17 + z18 + z19 + z20 + z21 + z22 + z23 + z24 = 300
+let z1 = 1L in let z2 = 2L in let z3 = 3L in let z4 = 4L in let z5 = 5L in let z6 = 6L in let z7 = 7L in let z8 = 8L in let z9 = 9L in let z10 = 10L in let z11 = 11L in let z12 = 12L in let z13 = 13L in let z14 = 14L in let z15 = 15L in let z16 = 16L in let z17 = 17L in let z18 = 18L in let z19 = 19L in let z20 = 20L in let z21 = 21L in let z22 = 22L in let z23 = 23L in let z24 = 24L in z1 + z2 + z3 + z4 + z5 + z6 + z7 + z8 + z9 + z10 + z11 + z12 + z13 + z14 + z15 + z16 + z17 + z18 + z19 + z20 + z21 + z22 + z23 + z24 = 300L
 
 
 // ===================================================================
@@ -317,12 +317,12 @@ let z1 = 1 in let z2 = 2 in let z3 = 3 in let z4 = 4 in let z5 = 5 in let z6 = 6
 
 // Test with 20 variables requiring stack spills
 // The division is crucial: (160 + 15) / 16 = 10 vs (160 + 15) * 16 = 2800
-let m1 = 1 in let m2 = 2 in let m3 = 3 in let m4 = 4 in let m5 = 5 in let m6 = 6 in let m7 = 7 in let m8 = 8 in let m9 = 9 in let m10 = 10 in let m11 = 11 in let m12 = 12 in let m13 = 13 in let m14 = 14 in let m15 = 15 in let m16 = 16 in let m17 = 17 in let m18 = 18 in let m19 = 19 in let m20 = 20 in m1 + m2 + m3 + m4 + m5 + m6 + m7 + m8 + m9 + m10 + m11 + m12 + m13 + m14 + m15 + m16 + m17 + m18 + m19 + m20 = 210
+let m1 = 1L in let m2 = 2L in let m3 = 3L in let m4 = 4L in let m5 = 5L in let m6 = 6L in let m7 = 7L in let m8 = 8L in let m9 = 9L in let m10 = 10L in let m11 = 11L in let m12 = 12L in let m13 = 13L in let m14 = 14L in let m15 = 15L in let m16 = 16L in let m17 = 17L in let m18 = 18L in let m19 = 19L in let m20 = 20L in m1 + m2 + m3 + m4 + m5 + m6 + m7 + m8 + m9 + m10 + m11 + m12 + m13 + m14 + m15 + m16 + m17 + m18 + m19 + m20 = 210L
 
 // Test with recursive function that requires spilling across many frames
 // A wrong stack size calculation would quickly overflow the stack
-let sumSpilled(n: Int64) : Int64 = if n <= 0 then 0 else let a = n in let b = n + 1 in let c = n + 2 in let d = n + 3 in let e = n + 4 in let f = n + 5 in let g = n + 6 in let h = n + 7 in let i = n + 8 in let j = n + 9 in let k = n + 10 in let l = n + 11 in let m = n + 12 in let sum = a + b + c + d + e + f + g + h + i + j + k + l + m in sum + sumSpilled(n - 1)
-sumSpilled(10) = 1495
+let sumSpilled(n: Int64) : Int64 = if n <= 0L then 0L else let a = n in let b = n + 1L in let c = n + 2L in let d = n + 3L in let e = n + 4L in let f = n + 5L in let g = n + 6L in let h = n + 7L in let i = n + 8L in let j = n + 9L in let k = n + 10L in let l = n + 11L in let m = n + 12L in let sum = a + b + c + d + e + f + g + h + i + j + k + l + m in sum + sumSpilled(n - 1L)
+sumSpilled(10L) = 1495L
 
 
 // ===================================================================
@@ -342,13 +342,13 @@ sumSpilled(10) = 1495
 
 // Test overlapping live intervals with high register pressure
 // Variables defined early that are used late must coexist with variables defined in between
-let first = 1 in let second = 2 in let third = 3 in let fourth = 4 in let fifth = 5 in let sixth = 6 in let seventh = 7 in let eighth = 8 in let ninth = 9 in let tenth = 10 in let eleventh = 11 in let twelfth = 12 in let thirteenth = 13 in let fourteenth = 14 in let fifteenth = 15 in first + second + third + fourth + fifth + sixth + seventh + eighth + ninth + tenth + eleventh + twelfth + thirteenth + fourteenth + fifteenth = 120
+let first = 1L in let second = 2L in let third = 3L in let fourth = 4L in let fifth = 5L in let sixth = 6L in let seventh = 7L in let eighth = 8L in let ninth = 9L in let tenth = 10L in let eleventh = 11L in let twelfth = 12L in let thirteenth = 13L in let fourteenth = 14L in let fifteenth = 15L in first + second + third + fourth + fifth + sixth + seventh + eighth + ninth + tenth + eleventh + twelfth + thirteenth + fourteenth + fifteenth = 120L
 
 // Long-lived variable spanning many instructions with intervening computations
-let longLived = 999 in let t1 = 1 + 1 in let t2 = t1 + 1 in let t3 = t2 + 1 in let t4 = t3 + 1 in let t5 = t4 + 1 in let t6 = t5 + 1 in let t7 = t6 + 1 in let t8 = t7 + 1 in let t9 = t8 + 1 in let t10 = t9 + 1 in let t11 = t10 + 1 in let t12 = t11 + 1 in longLived + t12 = 1012
+let longLived = 999L in let t1 = 1L + 1L in let t2 = t1 + 1L in let t3 = t2 + 1L in let t4 = t3 + 1L in let t5 = t4 + 1L in let t6 = t5 + 1L in let t7 = t6 + 1L in let t8 = t7 + 1L in let t9 = t8 + 1L in let t10 = t9 + 1L in let t11 = t10 + 1L in let t12 = t11 + 1L in longLived + t12 = 1012L
 
 // Multiple long-lived variables that all overlap with many short-lived ones
-let long1 = 100 in let long2 = 200 in let long3 = 300 in let s1 = 1 in let s2 = 2 in let s3 = 3 in let s4 = 4 in let s5 = 5 in let s6 = 6 in let s7 = 7 in let s8 = 8 in let s9 = 9 in let s10 = 10 in let s11 = 11 in let s12 = 12 in long1 + long2 + long3 + s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10 + s11 + s12 = 678
+let long1 = 100L in let long2 = 200L in let long3 = 300L in let s1 = 1L in let s2 = 2L in let s3 = 3L in let s4 = 4L in let s5 = 5L in let s6 = 6L in let s7 = 7L in let s8 = 8L in let s9 = 9L in let s10 = 10L in let s11 = 11L in let s12 = 12L in long1 + long2 + long3 + s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10 + s11 + s12 = 678L
 
 
 // ===================================================================
@@ -370,10 +370,10 @@ let long1 = 100 in let long2 = 200 in let long3 = 300 in let s1 = 1 in let s2 = 
 // These tests ensure maxColor tracking works correctly for assigned colors.
 
 // High register pressure to exercise color assignment maxColor tracking
-let c1 = 1 in let c2 = 2 in let c3 = 3 in let c4 = 4 in let c5 = 5 in let c6 = 6 in let c7 = 7 in let c8 = 8 in let c9 = 9 in let c10 = 10 in let c11 = 11 in let c12 = 12 in let c13 = 13 in let c14 = 14 in let c15 = 15 in c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10 + c11 + c12 + c13 + c14 + c15 = 120
+let c1 = 1L in let c2 = 2L in let c3 = 3L in let c4 = 4L in let c5 = 5L in let c6 = 6L in let c7 = 7L in let c8 = 8L in let c9 = 9L in let c10 = 10L in let c11 = 11L in let c12 = 12L in let c13 = 13L in let c14 = 14L in let c15 = 15L in c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10 + c11 + c12 + c13 + c14 + c15 = 120L
 
 // Test with phi coalescing to exercise preferredColors maxColor update (line 1004)
-let phi1 = if true then 100 else 200 in let phi2 = if true then 10 else 20 in let phi3 = if true then 1 else 2 in phi1 + phi2 + phi3 = 111
+let phi1 = if true then 100L else 200L in let phi2 = if true then 10L else 20L in let phi3 = if true then 1L else 2L in phi1 + phi2 + phi3 = 111L
 
 
 // ===================================================================
@@ -395,16 +395,16 @@ let phi1 = if true then 100 else 200 in let phi2 = if true then 10 else 20 in le
 // to ensure the allocation itself works correctly.
 
 // Simple case: single variable gets color 0
-let single = 42 in single = 42
+let single = 42L in single = 42L
 
 // Variables without phi relationships (no preferred colors) go through for-loop
-let a = 1 in let b = 2 in let c = 3 in a + b + c = 6
+let a = 1L in let b = 2L in let c = 3L in a + b + c = 6L
 
 // High pressure without phi coalescing - all through for-loop path
-let n1 = 1 in let n2 = 2 in let n3 = 3 in let n4 = 4 in let n5 = 5 in let n6 = 6 in let n7 = 7 in let n8 = 8 in let n9 = 9 in let n10 = 10 in n1 + n2 + n3 + n4 + n5 + n6 + n7 + n8 + n9 + n10 = 55
+let n1 = 1L in let n2 = 2L in let n3 = 3L in let n4 = 4L in let n5 = 5L in let n6 = 6L in let n7 = 7L in let n8 = 8L in let n9 = 9L in let n10 = 10L in n1 + n2 + n3 + n4 + n5 + n6 + n7 + n8 + n9 + n10 = 55L
 
 // Maximum register usage without spills - exercises full color range
-let w1 = 1 in let w2 = 2 in let w3 = 3 in let w4 = 4 in let w5 = 5 in let w6 = 6 in let w7 = 7 in let w8 = 8 in let w9 = 9 in let w10 = 10 in let w11 = 11 in let w12 = 12 in let w13 = 13 in let w14 = 14 in let w15 = 15 in w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8 + w9 + w10 + w11 + w12 + w13 + w14 + w15 = 120
+let w1 = 1L in let w2 = 2L in let w3 = 3L in let w4 = 4L in let w5 = 5L in let w6 = 6L in let w7 = 7L in let w8 = 8L in let w9 = 9L in let w10 = 10L in let w11 = 11L in let w12 = 12L in let w13 = 13L in let w14 = 14L in let w15 = 15L in w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8 + w9 + w10 + w11 + w12 + w13 + w14 + w15 = 120L
 
 
 // ===================================================================
@@ -429,16 +429,16 @@ let w1 = 1 in let w2 = 2 in let w3 = 3 in let w4 = 4 in let w5 = 5 in let w6 = 6
 // to ensure phi coalescing allocation works correctly.
 
 // Phi coalescing with conditional - exercises colorVertexWithPartners
-let phiResult = if true then 42 else 0 in phiResult = 42
+let phiResult = if true then 42L else 0L in phiResult = 42L
 
 // Multiple phi nodes with high register pressure - deferred vertices colored together
-let p1 = 1 in let p2 = 2 in let p3 = 3 in let p4 = 4 in let p5 = 5 in let p6 = 6 in let p7 = 7 in let p8 = 8 in let joined = if p1 > 0 then p2 + p3 + p4 else p5 + p6 + p7 in joined + p8 = 17
+let p1 = 1L in let p2 = 2L in let p3 = 3L in let p4 = 4L in let p5 = 5L in let p6 = 6L in let p7 = 7L in let p8 = 8L in let joined = if p1 > 0L then p2 + p3 + p4 else p5 + p6 + p7 in joined + p8 = 17L
 
 // Nested conditionals create multiple phi nodes needing colorVertexWithPartners
-let x = 10 in let y = 20 in let z = 30 in let outer = if x > 0 then (let inner = if y > 0 then x + y else x - y in inner) else z in outer + z = 60
+let x = 10L in let y = 20L in let z = 30L in let outer = if x > 0L then (let inner = if y > 0L then x + y else x - y in inner) else z in outer + z = 60L
 
 // High pressure with many variables live across phi coalescing points
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in let m = if a > 0 then b + c + d + e + f else g + h + i + j + k + l in m = 20
+let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L in let g = 7L in let h = 8L in let i = 9L in let j = 10L in let k = 11L in let l = 12L in let m = if a > 0L then b + c + d + e + f else g + h + i + j + k + l in m = 20L
 
 
 // ===================================================================
@@ -462,13 +462,13 @@ let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in le
 
 // Multiple phi nodes from nested conditionals - tests preference collection
 // Each conditional creates a phi node; phi partners should prefer same color
-let phiPref1 = 10 in let phiPref2 = 20 in let phiPref3 = 30 in let phiPref4 = 40 in let phiPref5 = 50 in let phiPref6 = 60 in let phiPref7 = 70 in let phiPref8 = 80 in let phiPref9 = 90 in let phiPref10 = 100 in let result1 = if phiPref1 > 5 then phiPref2 else phiPref3 in let result2 = if phiPref4 > 35 then phiPref5 else phiPref6 in let result3 = if phiPref7 > 65 then phiPref8 else phiPref9 in result1 + result2 + result3 + phiPref10 = 250
+let phiPref1 = 10L in let phiPref2 = 20L in let phiPref3 = 30L in let phiPref4 = 40L in let phiPref5 = 50L in let phiPref6 = 60L in let phiPref7 = 70L in let phiPref8 = 80L in let phiPref9 = 90L in let phiPref10 = 100L in let result1 = if phiPref1 > 5L then phiPref2 else phiPref3 in let result2 = if phiPref4 > 35L then phiPref5 else phiPref6 in let result3 = if phiPref7 > 65L then phiPref8 else phiPref9 in result1 + result2 + result3 + phiPref10 = 250L
 
 // Chain of phi nodes - tests that preferences are bidirectional (v1->v2 and v2->v1)
-let chainA = 1 in let chainB = 2 in let chainC = 3 in let chainD = 4 in let chainE = 5 in let chainF = 6 in let chainG = 7 in let chainH = 8 in let chainI = 9 in let chainJ = 10 in let chainK = 11 in let chainL = 12 in let phi1 = if chainA > 0 then chainB else chainC in let phi2 = if phi1 > 1 then chainD else chainE in let phi3 = if phi2 > 2 then chainF else chainG in phi3 + chainH + chainI + chainJ + chainK + chainL = 56
+let chainA = 1L in let chainB = 2L in let chainC = 3L in let chainD = 4L in let chainE = 5L in let chainF = 6L in let chainG = 7L in let chainH = 8L in let chainI = 9L in let chainJ = 10L in let chainK = 11L in let chainL = 12L in let phi1 = if chainA > 0L then chainB else chainC in let phi2 = if phi1 > 1L then chainD else chainE in let phi3 = if phi2 > 2L then chainF else chainG in phi3 + chainH + chainI + chainJ + chainK + chainL = 56L
 
 // Phi with same source used in multiple branches - degenerate case for preferences
-let srcA = 100 in let srcB = 200 in let srcC = 300 in let srcD = 400 in let srcE = 500 in let srcF = 600 in let srcG = 700 in let srcH = 800 in let srcI = 900 in let srcJ = 1000 in let phiSame = if srcA > 50 then srcB else srcB in phiSame + srcC + srcD + srcE + srcF + srcG + srcH + srcI + srcJ = 5400
+let srcA = 100L in let srcB = 200L in let srcC = 300L in let srcD = 400L in let srcE = 500L in let srcF = 600L in let srcG = 700L in let srcH = 800L in let srcI = 900L in let srcJ = 1000L in let phiSame = if srcA > 50L then srcB else srcB in phiSame + srcC + srcD + srcE + srcF + srcG + srcH + srcI + srcJ = 5400L
 
 
 // ===================================================================
@@ -494,11 +494,11 @@ let srcA = 100 in let srcB = 200 in let srcC = 300 in let srcD = 400 in let srcE
 // through the chordal graph coloring approach.
 
 // Many variables with interleaved lifetimes - tests spill/eviction correctness
-let ev1 = 1 in let ev2 = 2 in let ev3 = 3 in let ev4 = 4 in let ev5 = 5 in let ev6 = 6 in let ev7 = 7 in let ev8 = 8 in let ev9 = 9 in let ev10 = 10 in let ev11 = 11 in let ev12 = 12 in let ev13 = 13 in let ev14 = 14 in let ev15 = 15 in let ev16 = 16 in let ev17 = 17 in let ev18 = 18 in ev1 + ev2 + ev3 + ev4 + ev5 + ev6 + ev7 + ev8 + ev9 + ev10 + ev11 + ev12 + ev13 + ev14 + ev15 + ev16 + ev17 + ev18 = 171
+let ev1 = 1L in let ev2 = 2L in let ev3 = 3L in let ev4 = 4L in let ev5 = 5L in let ev6 = 6L in let ev7 = 7L in let ev8 = 8L in let ev9 = 9L in let ev10 = 10L in let ev11 = 11L in let ev12 = 12L in let ev13 = 13L in let ev14 = 14L in let ev15 = 15L in let ev16 = 16L in let ev17 = 17L in let ev18 = 18L in ev1 + ev2 + ev3 + ev4 + ev5 + ev6 + ev7 + ev8 + ev9 + ev10 + ev11 + ev12 + ev13 + ev14 + ev15 + ev16 + ev17 + ev18 = 171L
 
 // Early variables used late while many intermediate variables exist
 // This pattern would trigger eviction in linear scan if it were used
-let first1 = 100 in let first2 = 200 in let mid1 = 1 in let mid2 = 2 in let mid3 = 3 in let mid4 = 4 in let mid5 = 5 in let mid6 = 6 in let mid7 = 7 in let mid8 = 8 in let mid9 = 9 in let mid10 = 10 in let mid11 = 11 in let mid12 = 12 in let mid13 = 13 in let mid14 = 14 in first1 + first2 + mid1 + mid2 + mid3 + mid4 + mid5 + mid6 + mid7 + mid8 + mid9 + mid10 + mid11 + mid12 + mid13 + mid14 = 405
+let first1 = 100L in let first2 = 200L in let mid1 = 1L in let mid2 = 2L in let mid3 = 3L in let mid4 = 4L in let mid5 = 5L in let mid6 = 6L in let mid7 = 7L in let mid8 = 8L in let mid9 = 9L in let mid10 = 10L in let mid11 = 11L in let mid12 = 12L in let mid13 = 13L in let mid14 = 14L in first1 + first2 + mid1 + mid2 + mid3 + mid4 + mid5 + mid6 + mid7 + mid8 + mid9 + mid10 + mid11 + mid12 + mid13 + mid14 = 405L
 
 
 // ===================================================================
@@ -521,14 +521,14 @@ let first1 = 100 in let first2 = 200 in let mid1 = 1 in let mid2 = 2 in let mid3
 
 // Multiple phi nodes with high register pressure - tests deferred vertex handling
 // Each conditional creates phi nodes that get deferred until partners are colored
-let d1 = 1 in let d2 = 2 in let d3 = 3 in let d4 = 4 in let d5 = 5 in let d6 = 6 in let d7 = 7 in let d8 = 8 in let d9 = 9 in let d10 = 10 in let d11 = 11 in let d12 = 12 in let phi1 = if d1 > 0 then d2 + d3 else d4 + d5 in let phi2 = if d6 > 3 then d7 + d8 else d9 + d10 in phi1 + phi2 + d11 + d12 = 43
+let d1 = 1L in let d2 = 2L in let d3 = 3L in let d4 = 4L in let d5 = 5L in let d6 = 6L in let d7 = 7L in let d8 = 8L in let d9 = 9L in let d10 = 10L in let d11 = 11L in let d12 = 12L in let phi1 = if d1 > 0L then d2 + d3 else d4 + d5 in let phi2 = if d6 > 3L then d7 + d8 else d9 + d10 in phi1 + phi2 + d11 + d12 = 43L
 
 // Nested conditionals creating deferred phi chains - exercises second-pass ordering
-let n1 = 10 in let n2 = 20 in let n3 = 30 in let n4 = 40 in let n5 = 50 in let n6 = 60 in let n7 = 70 in let n8 = 80 in let n9 = 90 in let n10 = 100 in let outer = if n1 > 5 then (if n2 > 10 then n3 + n4 else n5 + n6) else (if n7 > 35 then n8 + n9 else n10) in outer + n1 + n2 = 100
+let n1 = 10L in let n2 = 20L in let n3 = 30L in let n4 = 40L in let n5 = 50L in let n6 = 60L in let n7 = 70L in let n8 = 80L in let n9 = 90L in let n10 = 100L in let outer = if n1 > 5L then (if n2 > 10L then n3 + n4 else n5 + n6) else (if n7 > 35L then n8 + n9 else n10) in outer + n1 + n2 = 100L
 
 // High pressure with spills AND deferred vertices - tests mutation boundary
 // Some variables get spilled, others deferred; mutation would reprocess spilled ones
-let sp1 = 1 in let sp2 = 2 in let sp3 = 3 in let sp4 = 4 in let sp5 = 5 in let sp6 = 6 in let sp7 = 7 in let sp8 = 8 in let sp9 = 9 in let sp10 = 10 in let sp11 = 11 in let sp12 = 12 in let sp13 = 13 in let sp14 = 14 in let sp15 = 15 in let sp16 = 16 in let sp17 = 17 in let sp18 = 18 in let phiSp = if sp1 > 0 then sp2 + sp3 + sp4 + sp5 + sp6 + sp7 + sp8 + sp9 else sp10 + sp11 + sp12 + sp13 + sp14 + sp15 + sp16 + sp17 in phiSp + sp18 = 62
+let sp1 = 1L in let sp2 = 2L in let sp3 = 3L in let sp4 = 4L in let sp5 = 5L in let sp6 = 6L in let sp7 = 7L in let sp8 = 8L in let sp9 = 9L in let sp10 = 10L in let sp11 = 11L in let sp12 = 12L in let sp13 = 13L in let sp14 = 14L in let sp15 = 15L in let sp16 = 16L in let sp17 = 17L in let sp18 = 18L in let phiSp = if sp1 > 0L then sp2 + sp3 + sp4 + sp5 + sp6 + sp7 + sp8 + sp9 else sp10 + sp11 + sp12 + sp13 + sp14 + sp15 + sp16 + sp17 in phiSp + sp18 = 62L
 
 
 // ===================================================================
@@ -539,14 +539,14 @@ let sp1 = 1 in let sp2 = 2 in let sp3 = 3 in let sp4 = 4 in let sp5 = 5 in let s
 // to verify that integer and floating-point liveness is captured at SaveRegs.
 
 // Integer liveness across function calls - exercises int instruction liveness
-let intLive1 = 10 in let intLive2 = 20 in let intLive3 = 30 in let _ = Stdlib.List.length<Int64>([1, 2, 3]) in intLive1 + intLive2 + intLive3 = 60
+let intLive1 = 10L in let intLive2 = 20L in let intLive3 = 30L in let _ = Stdlib.List.length<Int64>([1L, 2L, 3L]) in intLive1 + intLive2 + intLive3 = 60L
 
 // Float liveness across function calls - exercises float instruction liveness
-let floatLiveTest(x: Float) : Float = let f1 = 1.0 in let f2 = 2.0 in let f3 = 3.0 in let _ = Stdlib.List.length<Int64>([1, 2]) in x + f1 + f2 + f3
+let floatLiveTest(x: Float) : Float = let f1 = 1.0 in let f2 = 2.0 in let f3 = 3.0 in let _ = Stdlib.List.length<Int64>([1L, 2L]) in x + f1 + f2 + f3
 floatLiveTest(10.0) = 16.0
 
 // Mixed int and float liveness across the same call site
-let mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 200 in let mixFloat = mixedHelper(5.0) in mixFloat + Stdlib.Int64.toFloat(mixInt1 + mixInt2) = 306.0
+let mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100L in let mixInt2 = 200L in let mixFloat = mixedHelper(5.0) in Stdlib.Float.toInt(mixFloat) + mixInt1 + mixInt2 = 306L
 
 
 // ===================================================================
@@ -573,13 +573,13 @@ let mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 2
 
 // Function with high register pressure that needs callee-saved registers
 // Forces the use of callee-saved registers X19-X27 for values across calls
-let calleeSavedTest(n: Int64) : Int64 = let a = n + 1 in let b = n + 2 in let c = n + 3 in let d = n + 4 in let e = n + 5 in let f = n + 6 in let g = n + 7 in let h = n + 8 in let i = n + 9 in let j = n + 10 in let k = n + 11 in let l = n + 12 in let m = n + 13 in let _ = Stdlib.List.length<Int64>([1, 2]) in a + b + c + d + e + f + g + h + i + j + k + l + m
-calleeSavedTest(0) = 91
+let calleeSavedTest(n: Int64) : Int64 = let a = n + 1L in let b = n + 2L in let c = n + 3L in let d = n + 4L in let e = n + 5L in let f = n + 6L in let g = n + 7L in let h = n + 8L in let i = n + 9L in let j = n + 10L in let k = n + 11L in let l = n + 12L in let m = n + 13L in let _ = Stdlib.List.length<Int64>([1L, 2L]) in a + b + c + d + e + f + g + h + i + j + k + l + m
+calleeSavedTest(0L) = 91L
 
 // Recursive function with many live variables across recursive call
 // This exercises the callee-saved save/restore for values preserved across calls
-let recursiveCalleeSaved(n: Int64) : Int64 = if n <= 0 then 0 else let v1 = n in let v2 = n + 1 in let v3 = n + 2 in let v4 = n + 3 in let v5 = n + 4 in let v6 = n + 5 in let v7 = n + 6 in let v8 = n + 7 in let v9 = n + 8 in let v10 = n + 9 in let v11 = n + 10 in let v12 = n + 11 in let v13 = n + 12 in let rest = recursiveCalleeSaved(n - 1) in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + rest
-recursiveCalleeSaved(5) = 585
+let recursiveCalleeSaved(n: Int64) : Int64 = if n <= 0L then 0L else let v1 = n in let v2 = n + 1L in let v3 = n + 2L in let v4 = n + 3L in let v5 = n + 4L in let v6 = n + 5L in let v7 = n + 6L in let v8 = n + 7L in let v9 = n + 8L in let v10 = n + 9L in let v11 = n + 10L in let v12 = n + 11L in let v13 = n + 12L in let rest = recursiveCalleeSaved(n - 1L) in v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + rest
+recursiveCalleeSaved(5L) = 585L
 
 
 // ===================================================================
@@ -608,57 +608,57 @@ let identity263(x: Int64) : Int64 = x
 // If the second register of a pair (e.g., X2) is the one holding 42 but X1 is not live,
 // the mutation would corrupt the save/restore.
 let singleValueAcrossCall263(n: Int64) : Int64 =
-    let value = n + 100 in
-    let _ = identity263(0) in
+    let value = n + 100L in
+    let _ = identity263(0L) in
     value
 
-singleValueAcrossCall263(42) = 142
+singleValueAcrossCall263(42L) = 142L
 
 // Test with two values where one is used before call, one after
 // This creates asymmetric liveness to hit the (false, true) branch
 let asymmetricLiveness263(a: Int64, b: Int64) : Int64 =
-    let first = a + 1 in
-    let second = b + 1 in
+    let first = a + 1L in
+    let second = b + 1L in
     let _ = identity263(first) in
     second
 
-asymmetricLiveness263(10, 20) = 21
+asymmetricLiveness263(10L, 20L) = 21L
 
 // Test with specific odd count of values to maximize chance of hitting (false, true)
 // 3 values live across call - could result in X1+X2 pair saving, then X3 alone
 // OR X1 alone with X2+X3 not paired, etc.
 let threeValuesAcrossCall263(x: Int64) : Int64 =
-    let a = x + 1 in
-    let b = x + 2 in
-    let c = x + 3 in
-    let _ = identity263(0) in
+    let a = x + 1L in
+    let b = x + 2L in
+    let c = x + 3L in
+    let _ = identity263(0L) in
     a + b + c
 
-threeValuesAcrossCall263(10) = 36
+threeValuesAcrossCall263(10L) = 36L
 
 // Test with 5 values - odd count increases chance of unpaired second register
 let fiveValuesAcrossCall263(x: Int64) : Int64 =
-    let v1 = x + 1 in
-    let v2 = x + 2 in
-    let v3 = x + 3 in
-    let v4 = x + 4 in
-    let v5 = x + 5 in
-    let _ = identity263(0) in
+    let v1 = x + 1L in
+    let v2 = x + 2L in
+    let v3 = x + 3L in
+    let v4 = x + 4L in
+    let v5 = x + 5L in
+    let _ = identity263(0L) in
     v1 + v2 + v3 + v4 + v5
 
-fiveValuesAcrossCall263(10) = 65
+fiveValuesAcrossCall263(10L) = 65L
 
 // Chain of calls to stress test SaveRegs/RestoreRegs with various register sets
 let chainCalls263(n: Int64) : Int64 =
-    let a = n + 10 in
-    let _ = identity263(0) in
-    let b = a + 20 in
-    let _ = identity263(0) in
-    let c = b + 30 in
-    let _ = identity263(0) in
+    let a = n + 10L in
+    let _ = identity263(0L) in
+    let b = a + 20L in
+    let _ = identity263(0L) in
+    let c = b + 30L in
+    let _ = identity263(0L) in
     c
 
-chainCalls263(5) = 65
+chainCalls263(5L) = 65L
 
 
 // ===================================================================
@@ -686,7 +686,7 @@ let identityInt265(x: Int64) : Int64 = x
 // This puts a float in D0 (or another register), and should test save/restore
 let singleFloatAcrossCall265(f: Float) : Float =
     let value = f + 100.0 in
-    let _ = identityInt265(0) in
+    let _ = identityInt265(0L) in
     value
 
 singleFloatAcrossCall265(42.0) = 142.0
@@ -697,7 +697,7 @@ let threeFloatsAcrossCall265(x: Float) : Float =
     let a = x + 1.0 in
     let b = x + 2.0 in
     let c = x + 3.0 in
-    let _ = identityInt265(0) in
+    let _ = identityInt265(0L) in
     a + b + c
 
 threeFloatsAcrossCall265(10.0) = 36.0
@@ -709,7 +709,7 @@ let fiveFloatsAcrossCall265(x: Float) : Float =
     let v3 = x + 3.0 in
     let v4 = x + 4.0 in
     let v5 = x + 5.0 in
-    let _ = identityInt265(0) in
+    let _ = identityInt265(0L) in
     v1 + v2 + v3 + v4 + v5
 
 fiveFloatsAcrossCall265(10.0) = 65.0
@@ -727,11 +727,11 @@ asymmetricFloatLiveness265(10.0, 20.0) = 21.0
 // Chain of calls with floats to stress test SaveRegs/RestoreRegs
 let chainFloatCalls265(n: Float) : Float =
     let a = n + 10.0 in
-    let _ = identityInt265(0) in
+    let _ = identityInt265(0L) in
     let b = a + 20.0 in
-    let _ = identityInt265(0) in
+    let _ = identityInt265(0L) in
     let c = b + 30.0 in
-    let _ = identityInt265(0) in
+    let _ = identityInt265(0L) in
     c
 
 chainFloatCalls265(5.0) = 65.0
@@ -745,7 +745,7 @@ let sevenFloatsAcrossCall265(x: Float) : Float =
     let v5 = x + 5.0 in
     let v6 = x + 6.0 in
     let v7 = x + 7.0 in
-    let _ = identityInt265(0) in
+    let _ = identityInt265(0L) in
     v1 + v2 + v3 + v4 + v5 + v6 + v7
 
 sevenFloatsAcrossCall265(10.0) = 98.0

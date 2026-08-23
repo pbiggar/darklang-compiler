@@ -1,22 +1,22 @@
 // Focused syntax acceptance, formatting, rejection, and roundtrip regressions.
 
 ---NAME---
-format compiler syntax as interpreter syntax
+canonical Int syntax formats explicitly
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let x = 5 in Stdlib.Int64.add(x, 1)
 ---FORMAT-AS---
 interpreter
 ---EXPECTED---
-let x = 5L in Stdlib.Int64.add x 1L
+let x = 5I in Stdlib.Int64.add x 1I
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 interpreter formatting parenthesizes nested call arguments
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 Builtin.unwrap(Stdlib.List.head(xs))
 ---FORMAT-AS---
@@ -27,17 +27,17 @@ Builtin.unwrap (Stdlib.List.head xs)
 interpreter
 
 ---NAME---
-format interpreter syntax as compiler syntax
+explicit Int64 syntax remains explicit
 ---PARSE-AS---
 interpreter
 ---SOURCE---
 let x = 5L in Stdlib.Int64.add x 1L
 ---FORMAT-AS---
-compiler
+interpreter
 ---EXPECTED---
-let x = 5 in Stdlib.Int64.add(x, 1)
+let x = 5L in Stdlib.Int64.add x 1L
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 constructor application survives both pretty-printers
@@ -46,7 +46,7 @@ interpreter
 ---SOURCE---
 3L |> Stdlib.Result.Result.Ok
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 compiler formatter escapes keyword field names
@@ -56,16 +56,16 @@ interpreter
 type Sample = { ``true``: Bool; ``false``: Bool }
 Sample { ``true`` = true; ``false`` = false }
 ---ROUNDTRIP-AS---
-compiler
+interpreter
 
 ---NAME---
 compiler formatter escapes literal interpolation braces
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 $"literal \{ brace \}"
 ---ROUNDTRIP-AS---
-compiler
+interpreter
 
 ---NAME---
 interpreter rejects compiler lambda syntax
@@ -79,7 +79,7 @@ does not use '=>'
 ---NAME---
 public Dict type rejects a key type argument
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let badDictArity(dict: Dict<String, Int64>): Int64 = 0
 ---EXPECT-ERROR---

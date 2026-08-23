@@ -26,8 +26,8 @@ let select(question: String, choices: List<String>) : String =
         let _ = Builtin.printLine(Stdlib.Cli.UI.Color.red("Please enter a number")) in
         Stdlib.Cli.UI.Prompt.select(question, choices)
     else
-        let n = Stdlib.Result.withDefault<Int, Stdlib.Int.ParseError>(parsed, Stdlib.Int.fromInt64(0)) in
-        let index = Stdlib.Int.subtract(n, Stdlib.Int.fromInt64(1)) in
+        let n = Stdlib.Result.withDefault<Int, Stdlib.Int.ParseError>(parsed, Stdlib.Int.fromInt64(0L)) in
+        let index = Stdlib.Int.subtract(n, Stdlib.Int.fromInt64(1L)) in
         match Stdlib.List.getAt<String>(choices, index) with
         | Some(choice) -> choice
         | None ->

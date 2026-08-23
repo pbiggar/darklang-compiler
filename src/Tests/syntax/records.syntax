@@ -3,7 +3,7 @@
 ---NAME---
 compiler accepts canonical record separators
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 type Mixed = {
   first: Int64;
@@ -16,7 +16,7 @@ Mixed {
   second = "two"
 }
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 interpreter accepts canonical record separators
@@ -34,16 +34,16 @@ Mixed {
   second = "two"
 }
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 compiler accepts qualified generic record construction
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 Package.Box<String> { value = "kept" }
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 interpreter accepts qualified generic record construction
@@ -52,12 +52,12 @@ interpreter
 ---SOURCE---
 Package.Box<String> { value = "kept" }
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 compiler rejects anonymous record literal
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 { value = 1 }
 ---EXPECT-ERROR---
@@ -75,7 +75,7 @@ Anonymous records are not supported
 ---NAME---
 compiler rejects empty record update
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 { value with }
 ---EXPECT-ERROR---
@@ -93,7 +93,7 @@ at least one record update field
 ---NAME---
 compiler rejects empty record declaration
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 type Empty = {}
 ---EXPECT-ERROR---
@@ -111,7 +111,7 @@ Record type declarations require at least one field
 ---NAME---
 compiler rejects record pattern
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 match value with | Point { x = x } -> x | _ -> 0
 ---EXPECT-ERROR---

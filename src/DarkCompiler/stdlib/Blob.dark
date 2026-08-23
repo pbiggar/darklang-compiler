@@ -21,15 +21,15 @@ let length(blob: Blob) : Int =
     Stdlib.Int.fromInt64(Stdlib.Bytes.length(blob))
 
 let __toList(blob: Blob, index: Int64, acc: List<UInt8>) : List<UInt8> =
-    if index < 0 then acc
+    if index < 0L then acc
     else
         Stdlib.Blob.__toList(
             blob,
-            index - 1,
+            index - 1L,
             Stdlib.List.push<UInt8>(acc, Stdlib.Blob.__int64ToUInt8(Stdlib.Bytes.get(blob, index))))
 
 let toList(blob: Blob) : List<UInt8> =
-    Stdlib.Blob.__toList(blob, Stdlib.Bytes.length(blob) - 1, [])
+    Stdlib.Blob.__toList(blob, Stdlib.Bytes.length(blob) - 1L, [])
 
 let __fromList(bytes: List<UInt8>, acc: List<Int64>) : Blob =
     match bytes with
@@ -42,19 +42,19 @@ let fromList(bytes: List<UInt8>) : Blob =
 
 let __appendBlob(blob: Blob, index: Int64, acc: List<Int64>) : List<Int64> =
     if index >= Stdlib.Bytes.length(blob) then acc
-    else Stdlib.Blob.__appendBlob(blob, index + 1, Stdlib.List.push<Int64>(acc, Stdlib.Bytes.get(blob, index)))
+    else Stdlib.Blob.__appendBlob(blob, index + 1L, Stdlib.List.push<Int64>(acc, Stdlib.Bytes.get(blob, index)))
 
 let __concat(blobs: List<Blob>, acc: List<Int64>) : Blob =
     match blobs with
     | [] -> Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc))
     | blob :: rest ->
-        Stdlib.Blob.__concat(rest, Stdlib.Blob.__appendBlob(blob, 0, acc))
+        Stdlib.Blob.__concat(rest, Stdlib.Blob.__appendBlob(blob, 0L, acc))
 
 let concat(blobs: List<Blob>) : Blob =
     Stdlib.Blob.__concat(blobs, [])
 
 let slice(blob: Blob, start: Int, length: Int) : Blob =
-    let zero = Stdlib.Int.fromInt64(0) in
+    let zero = Stdlib.Int.fromInt64(0L) in
     let blobLength = Stdlib.Blob.length(blob) in
     let safeStart = if start < zero then zero else if start > blobLength then blobLength else start in
     let remaining = blobLength - safeStart in
@@ -68,25 +68,25 @@ let toHex(blob: Blob) : String =
     Stdlib.Bytes.hexEncode(blob)
 
 let __hexValue(byte: Int64) : Int64 =
-    if byte >= 48 && byte <= 57 then byte - 48
-    else if byte >= 65 && byte <= 70 then byte - 55
-    else if byte >= 97 && byte <= 102 then byte - 87
-    else -1
+    if byte >= 48L && byte <= 57L then byte - 48L
+    else if byte >= 65L && byte <= 70L then byte - 55L
+    else if byte >= 97L && byte <= 102L then byte - 87L
+    else -1L
 
 let __fromHex(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Result<Blob, String> =
     if index >= Stdlib.String.__byteLength(value) then
         Ok(Stdlib.Bytes.fromList(Stdlib.List.reverse<Int64>(acc)))
     else
         let high = Stdlib.Blob.__hexValue(Stdlib.String.getByteAt(value, index)) in
-        let low = Stdlib.Blob.__hexValue(Stdlib.String.getByteAt(value, index + 1)) in
-        if high < 0 || low < 0 then
+        let low = Stdlib.Blob.__hexValue(Stdlib.String.getByteAt(value, index + 1L)) in
+        if high < 0L || low < 0L then
             Error("Invalid hex string: The input is not a valid hex string as it contains a non-hex character.")
-        else Stdlib.Blob.__fromHex(value, index + 2, Stdlib.List.push<Int64>(acc, high * 16 + low))
+        else Stdlib.Blob.__fromHex(value, index + 2L, Stdlib.List.push<Int64>(acc, high * 16L + low))
 
 let fromHex(value: String) : Stdlib.Result.Result<Blob, String> =
-    if Stdlib.String.__byteLength(value) % 2 != 0 then
+    if Stdlib.String.__byteLength(value) % 2L != 0L then
         Error("Invalid hex string: The input is not a valid hex string as its length is not a multiple of 2.")
-    else Stdlib.Blob.__fromHex(value, 0, [])
+    else Stdlib.Blob.__fromHex(value, 0L, [])
 
 let toBase64(blob: Blob) : String =
     Stdlib.Base64.encode(blob)
@@ -108,26 +108,26 @@ let fromBase64(value: String) : Stdlib.Result.Result<Blob, String> =
     // padding before Convert-style whitespace removal.
     let alphabetNormalized =
         Stdlib.String.replace(Stdlib.String.replace(value, "-", "+"), "_", "/") in
-    let remainder = Stdlib.String.__byteLength(alphabetNormalized) % 4 in
+    let remainder = Stdlib.String.__byteLength(alphabetNormalized) % 4L in
     let padded =
-        if remainder == 2 then alphabetNormalized ++ "=="
-        else if remainder == 3 then alphabetNormalized ++ "="
+        if remainder == 2L then alphabetNormalized ++ "=="
+        else if remainder == 3L then alphabetNormalized ++ "="
         else alphabetNormalized in
     let normalized = Stdlib.Blob.__removeBase64Whitespace(padded) in
-    match Stdlib.Base64.__decodeHelper(normalized, 0, Stdlib.String.__byteLength(normalized), []) with
+    match Stdlib.Base64.__decodeHelper(normalized, 0L, Stdlib.String.__byteLength(normalized), []) with
     | Ok(bytes) -> Ok(Stdlib.Bytes.fromList(bytes))
     | Error(_) ->
         Error("Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.")
 
 let __stringBytes(value: String, index: Int64, acc: List<Int64>) : List<Int64> =
     if index >= Stdlib.String.__byteLength(value) then Stdlib.List.reverse<Int64>(acc)
-    else Stdlib.Blob.__stringBytes(value, index + 1, Stdlib.List.push<Int64>(acc, Stdlib.String.getByteAt(value, index)))
+    else Stdlib.Blob.__stringBytes(value, index + 1L, Stdlib.List.push<Int64>(acc, Stdlib.String.getByteAt(value, index)))
 
 let fromString(value: String) : Blob =
-    Stdlib.Bytes.fromList(Stdlib.Blob.__stringBytes(value, 0, []))
+    Stdlib.Bytes.fromList(Stdlib.Blob.__stringBytes(value, 0L, []))
 
 let __isContinuation(byte: Int64) : Bool =
-    byte >= 128 && byte <= 191
+    byte >= 128L && byte <= 191L
 
 let __invalidUtf8(byte: Int64, index: Int64) : String =
     "Invalid UTF-8: Unable to translate bytes [" ++
@@ -138,48 +138,48 @@ let __invalidUtf8(byte: Int64, index: Int64) : String =
 
 // Returns the first invalid byte index, or -1 when the complete Blob is valid UTF-8.
 let __validateUtf8(blob: Blob, index: Int64, length: Int64) : Int64 =
-    if index >= length then -1
+    if index >= length then -1L
     else
         let b0 = Stdlib.Bytes.get(blob, index) in
-        if b0 <= 127 then Stdlib.Blob.__validateUtf8(blob, index + 1, length)
-        else if b0 >= 194 && b0 <= 223 then
-            if index + 1 >= length || !Stdlib.Blob.__isContinuation(Stdlib.Bytes.get(blob, index + 1)) then index
-            else Stdlib.Blob.__validateUtf8(blob, index + 2, length)
-        else if b0 >= 224 && b0 <= 239 then
-            if index + 2 >= length then index
+        if b0 <= 127L then Stdlib.Blob.__validateUtf8(blob, index + 1L, length)
+        else if b0 >= 194L && b0 <= 223L then
+            if index + 1L >= length || !Stdlib.Blob.__isContinuation(Stdlib.Bytes.get(blob, index + 1L)) then index
+            else Stdlib.Blob.__validateUtf8(blob, index + 2L, length)
+        else if b0 >= 224L && b0 <= 239L then
+            if index + 2L >= length then index
             else
-                let b1 = Stdlib.Bytes.get(blob, index + 1) in
-                let b2 = Stdlib.Bytes.get(blob, index + 2) in
+                let b1 = Stdlib.Bytes.get(blob, index + 1L) in
+                let b2 = Stdlib.Bytes.get(blob, index + 2L) in
                 if !Stdlib.Blob.__isContinuation(b1) || !Stdlib.Blob.__isContinuation(b2) then index
-                else if b0 == 224 && b1 < 160 then index
-                else if b0 == 237 && b1 >= 160 then index
-                else Stdlib.Blob.__validateUtf8(blob, index + 3, length)
-        else if b0 >= 240 && b0 <= 244 then
-            if index + 3 >= length then index
+                else if b0 == 224L && b1 < 160L then index
+                else if b0 == 237L && b1 >= 160L then index
+                else Stdlib.Blob.__validateUtf8(blob, index + 3L, length)
+        else if b0 >= 240L && b0 <= 244L then
+            if index + 3L >= length then index
             else
-                let b1 = Stdlib.Bytes.get(blob, index + 1) in
-                let b2 = Stdlib.Bytes.get(blob, index + 2) in
-                let b3 = Stdlib.Bytes.get(blob, index + 3) in
+                let b1 = Stdlib.Bytes.get(blob, index + 1L) in
+                let b2 = Stdlib.Bytes.get(blob, index + 2L) in
+                let b3 = Stdlib.Bytes.get(blob, index + 3L) in
                 if !Stdlib.Blob.__isContinuation(b1)
                    || !Stdlib.Blob.__isContinuation(b2)
                    || !Stdlib.Blob.__isContinuation(b3) then index
-                else if b0 == 240 && b1 < 144 then index
-                else if b0 == 244 && b1 >= 144 then index
-                else Stdlib.Blob.__validateUtf8(blob, index + 4, length)
+                else if b0 == 240L && b1 < 144L then index
+                else if b0 == 244L && b1 >= 144L then index
+                else Stdlib.Blob.__validateUtf8(blob, index + 4L, length)
         else index
 
 let __copyToString(blob: Blob) : String =
     let length = Stdlib.Bytes.length(blob) in
-    if length == 0 then ""
+    if length == 0L then ""
     else
         let dataSize = Stdlib.Bytes.__alignedDataSize(length) in
-        let ptr = __raw_alloc(16 + dataSize) in
-        let _ = __raw_write_word(ptr, 0, length) in
-        let _ = Stdlib.Bytes.__copyLoop(__blob_to_rawptr(blob), ptr, 8, length) in
-        let _ = __raw_write_word(ptr, 8 + dataSize, 1) in
+        let ptr = __raw_alloc(16L + dataSize) in
+        let _ = __raw_write_word(ptr, 0L, length) in
+        let _ = Stdlib.Bytes.__copyLoop(__blob_to_rawptr(blob), ptr, 8L, length) in
+        let _ = __raw_write_word(ptr, 8L + dataSize, 1L) in
         __rawptr_to_string(ptr)
 
 let toString(blob: Blob) : Stdlib.Result.Result<String, String> =
-    let invalidIndex = Stdlib.Blob.__validateUtf8(blob, 0, Stdlib.Bytes.length(blob)) in
-    if invalidIndex < 0 then Ok(Stdlib.Blob.__copyToString(blob))
+    let invalidIndex = Stdlib.Blob.__validateUtf8(blob, 0L, Stdlib.Bytes.length(blob)) in
+    if invalidIndex < 0L then Ok(Stdlib.Blob.__copyToString(blob))
     else Error(Stdlib.Blob.__invalidUtf8(Stdlib.Bytes.get(blob, invalidIndex), invalidIndex))

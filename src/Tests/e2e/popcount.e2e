@@ -2,42 +2,42 @@
 // popcount(x) counts the number of set bits (1s) in x
 
 // Zero has no set bits
-Stdlib.Int64.popcount(0) = 0
-Stdlib.Int64.popcount(1) = 1
-Stdlib.Int64.popcount(2) = 1
-Stdlib.Int64.popcount(3) = 2
+Stdlib.Int64.popcount(0L) = 0L
+Stdlib.Int64.popcount(1L) = 1L
+Stdlib.Int64.popcount(2L) = 1L
+Stdlib.Int64.popcount(3L) = 2L
 
 // Powers of 2 have exactly one bit set
-Stdlib.Int64.popcount(4) = 1
-Stdlib.Int64.popcount(8) = 1
-Stdlib.Int64.popcount(16) = 1
-Stdlib.Int64.popcount(32) = 1
-Stdlib.Int64.popcount(64) = 1
-Stdlib.Int64.popcount(128) = 1
-Stdlib.Int64.popcount(256) = 1
+Stdlib.Int64.popcount(4L) = 1L
+Stdlib.Int64.popcount(8L) = 1L
+Stdlib.Int64.popcount(16L) = 1L
+Stdlib.Int64.popcount(32L) = 1L
+Stdlib.Int64.popcount(64L) = 1L
+Stdlib.Int64.popcount(128L) = 1L
+Stdlib.Int64.popcount(256L) = 1L
 
 // All bits set in various byte patterns
-Stdlib.Int64.popcount(255) = 8
-Stdlib.Int64.popcount(65535) = 16
+Stdlib.Int64.popcount(255L) = 8L
+Stdlib.Int64.popcount(65535L) = 16L
 
 // Some specific values
-Stdlib.Int64.popcount(7) = 3
-Stdlib.Int64.popcount(15) = 4
-Stdlib.Int64.popcount(31) = 5
-Stdlib.Int64.popcount(63) = 6
-Stdlib.Int64.popcount(127) = 7
+Stdlib.Int64.popcount(7L) = 3L
+Stdlib.Int64.popcount(15L) = 4L
+Stdlib.Int64.popcount(31L) = 5L
+Stdlib.Int64.popcount(63L) = 6L
+Stdlib.Int64.popcount(127L) = 7L
 
 // Alternating bits
-Stdlib.Int64.popcount(170) = 4
-Stdlib.Int64.popcount(85) = 4
+Stdlib.Int64.popcount(170L) = 4L
+Stdlib.Int64.popcount(85L) = 4L
 
 // Larger numbers
-Stdlib.Int64.popcount(1000) = 6
-Stdlib.Int64.popcount(12345) = 6
-Stdlib.Int64.popcount(65536) = 1
-Stdlib.Int64.popcount(1048575) = 20
+Stdlib.Int64.popcount(1000L) = 6L
+Stdlib.Int64.popcount(12345L) = 6L
+Stdlib.Int64.popcount(65536L) = 1L
+Stdlib.Int64.popcount(1048575L) = 20L
 
 // Negative Int64 values count two's-complement set bits
-Stdlib.Int64.popcount(-1) = 64
-Stdlib.Int64.popcount(-2) = 63
-Stdlib.Int64.popcount(-9223372036854775808) = 1
+Stdlib.Int64.popcount(-1L) = 64L
+Stdlib.Int64.popcount(-2L) = 63L
+Stdlib.Int64.popcount(-9223372036854775808L) = 1L

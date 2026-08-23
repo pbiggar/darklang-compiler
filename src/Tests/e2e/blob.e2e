@@ -39,3 +39,9 @@ Stdlib.Base64.decode("Z g==") = Error("Not a valid base64 string")
 Stdlib.Blob.fromBase64("Z g") = Error("Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.")
 
 Stdlib.Blob.fromBase64("Z===") = Error("Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.")
+
+Stdlib.Blob.toHex(Stdlib.Bytes.create(9L)) = "000000000000000000"
+
+Stdlib.Blob.toHex(Stdlib.Bytes.set(Stdlib.Blob.fromList([0uy]), 0L, 511L)) = "FF"
+
+let b = Stdlib.Blob.fromList([7uy]) in Stdlib.Bytes.set(b, 1L, 9L) == b = true

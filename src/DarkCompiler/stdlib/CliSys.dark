@@ -22,4 +22,4 @@ let os() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys
 let arch() : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Sys.__uname("-m")
 let cpuCount() : Int = Stdlib.Int.fromInt64(Stdlib.Cli.__cpuCount())
 let currentPid() : Int = Stdlib.Int.fromInt64(Stdlib.Cli.__getpid())
-let isRoot() : Bool = Stdlib.Cli.__getuid() == 0
+let isRoot() : Bool = Stdlib.Cli.__getuid() == 0L

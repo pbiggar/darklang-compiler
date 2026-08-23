@@ -3,27 +3,27 @@
 
 // Option.and selects its second input only when the first is Some, including
 // when the payload types differ.
-Stdlib.Option.and<Int64, Int64>(Some(6), Some(5)) = Some(5)
-Stdlib.Option.and<Int64, Int64>(Some(6), None) = None
-Stdlib.Option.and<Int64, Int64>(None, Some(5)) = None
+Stdlib.Option.and<Int64, Int64>(Some(6L), Some(5L)) = Some(5L)
+Stdlib.Option.and<Int64, Int64>(Some(6L), None) = None
+Stdlib.Option.and<Int64, Int64>(None, Some(5L)) = None
 Stdlib.Option.and<Int64, Int64>(None, None) = None
-Stdlib.Option.and<String, Int64>(Some("ignored"), Some(42)) = Some(42)
+Stdlib.Option.and<String, Int64>(Some("ignored"), Some(42L)) = Some(42L)
 
 // Result.and and Result.or preserve the selected input and its exact payload.
-Stdlib.Result.and<Int64, String>(Ok(1), Ok(2)) = Ok(2)
-Stdlib.Result.and<Int64, String>(Ok(1), Error("second")) = Error("second")
-Stdlib.Result.and<Int64, String>(Error("first"), Ok(2)) = Error("first")
+Stdlib.Result.and<Int64, String>(Ok(1L), Ok(2L)) = Ok(2L)
+Stdlib.Result.and<Int64, String>(Ok(1L), Error("second")) = Error("second")
+Stdlib.Result.and<Int64, String>(Error("first"), Ok(2L)) = Error("first")
 Stdlib.Result.and<Int64, String>(Error("first"), Error("second")) = Error("first")
-Stdlib.Result.or<Int64, String>(Ok(1), Ok(2)) = Ok(1)
-Stdlib.Result.or<Int64, String>(Ok(1), Error("second")) = Ok(1)
-Stdlib.Result.or<Int64, String>(Error("first"), Ok(2)) = Ok(2)
+Stdlib.Result.or<Int64, String>(Ok(1L), Ok(2L)) = Ok(1L)
+Stdlib.Result.or<Int64, String>(Ok(1L), Error("second")) = Ok(1L)
+Stdlib.Result.or<Int64, String>(Error("first"), Ok(2L)) = Ok(2L)
 Stdlib.Result.or<Int64, String>(Error("first"), Error("second")) = Error("second")
 
 // Interpreter application lowering evaluates arguments eagerly from left to
 // right even when selection makes one payload irrelevant.
-let optionAndFirst(): Stdlib.Option.Option<Int64> = let _ = Builtin.print("1") in None let optionAndSecond(): Stdlib.Option.Option<Int64> = let _ = Builtin.print("2") in Some(2) let _ = Stdlib.Option.and<Int64, Int64>(optionAndFirst(), optionAndSecond()) in 0 = stdout="120\n" stderr="" exact_bytes=true
-let resultAndFirst(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("1") in Error("first") let resultAndSecond(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("2") in Ok(2) let _ = Stdlib.Result.and<Int64, String>(resultAndFirst(), resultAndSecond()) in 0 = stdout="120\n" stderr="" exact_bytes=true
-let resultOrFirst(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("1") in Ok(1) let resultOrSecond(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("2") in Error("second") let _ = Stdlib.Result.or<Int64, String>(resultOrFirst(), resultOrSecond()) in 0 = stdout="120\n" stderr="" exact_bytes=true
+let optionAndFirst(): Stdlib.Option.Option<Int64> = let _ = Builtin.print("1") in None let optionAndSecond(): Stdlib.Option.Option<Int64> = let _ = Builtin.print("2") in Some(2L) let _ = Stdlib.Option.and<Int64, Int64>(optionAndFirst(), optionAndSecond()) in 0L = stdout="120\n" stderr="" exact_bytes=true
+let resultAndFirst(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("1") in Error("first") let resultAndSecond(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("2") in Ok(2L) let _ = Stdlib.Result.and<Int64, String>(resultAndFirst(), resultAndSecond()) in 0L = stdout="120\n" stderr="" exact_bytes=true
+let resultOrFirst(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("1") in Ok(1L) let resultOrSecond(): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print("2") in Error("second") let _ = Stdlib.Result.or<Int64, String>(resultOrFirst(), resultOrSecond()) in 0L = stdout="120\n" stderr="" exact_bytes=true
 
 // Retry callbacks run at least once, return the final callback payload
 // unchanged, and never sleep after success or terminal failure.

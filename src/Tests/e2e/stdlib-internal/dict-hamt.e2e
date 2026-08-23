@@ -7,8 +7,8 @@
 // instantiations of the same helper.
 let dictWithGenericKey<'t>(key: t, value: Int64): Dict<t, Int64> =
     Stdlib.Internal.HAMT.__setOverwriting<t, Int64>(Stdlib.Internal.HAMT.__empty<t, Int64>(), key, value)
-Stdlib.Internal.HAMT.__getOrDefault<Int64, Int64>(dictWithGenericKey<Int64>(42, 100), 42, -1) = 100
-Stdlib.Internal.HAMT.__getOrDefault<String, Int64>(dictWithGenericKey<String>("hello", 200), "hello", -1) = 200
+Stdlib.Internal.HAMT.__getOrDefault<Int64, Int64>(dictWithGenericKey<Int64>(42L, 100L), 42L, -1L) = 100L
+Stdlib.Internal.HAMT.__getOrDefault<String, Int64>(dictWithGenericKey<String>("hello", 200L), "hello", -1L) = 200L
 
 let emptyInt(): Dict<Int64, Int64> = Stdlib.Internal.HAMT.__empty<Int64, Int64>()
 let setInt(d: Dict<Int64, Int64>, k: Int64, v: Int64): Dict<Int64, Int64> = Stdlib.Internal.HAMT.__setOverwriting(d, k, v)
@@ -24,56 +24,56 @@ let removeStr(d: Dict<String, Int64>, k: String): Dict<String, Int64> = Stdlib.I
 let getOrDefaultStr(d: Dict<String, Int64>, k: String, default: Int64): Int64 = Stdlib.Option.withDefault(getStr(d, k), default)
 
 // Empty dict is 0 (null pointer)
-Stdlib.Internal.HAMT.__size(emptyInt()) = 0
+Stdlib.Internal.HAMT.__size(emptyInt()) = 0L
 
 // Get from empty dict returns None
-isNoneInt(getInt(emptyInt(), 42)) = true
+isNoneInt(getInt(emptyInt(), 42L)) = true
 
 // Set and get single value
-getOrDefault(setInt(emptyInt(), 1, 100), 1, -1) = 100
+getOrDefault(setInt(emptyInt(), 1L, 100L), 1L, -1L) = 100L
 
 // Get non-existent key from non-empty dict returns None
-isNoneInt(getInt(setInt(emptyInt(), 1, 100), 2)) = true
+isNoneInt(getInt(setInt(emptyInt(), 1L, 100L), 2L)) = true
 
 // Set multiple values
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in getOrDefault(d2, 1, -1) = 100
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in getOrDefault(d2, 2, -1) = 200
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = setInt(d1, 2L, 200L) in getOrDefault(d2, 1L, -1L) = 100L
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = setInt(d1, 2L, 200L) in getOrDefault(d2, 2L, -1L) = 200L
 
 // Update existing key
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 1, 999) in getOrDefault(d2, 1, -1) = 999
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = setInt(d1, 1L, 999L) in getOrDefault(d2, 1L, -1L) = 999L
 
 // Three values
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in getOrDefault(d3, 1, -1) = 10
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in getOrDefault(d3, 2, -1) = 20
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in getOrDefault(d3, 3, -1) = 30
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in let d3 = setInt(d2, 3L, 30L) in getOrDefault(d3, 1L, -1L) = 10L
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in let d3 = setInt(d2, 3L, 30L) in getOrDefault(d3, 2L, -1L) = 20L
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in let d3 = setInt(d2, 3L, 30L) in getOrDefault(d3, 3L, -1L) = 30L
 
 // Keys with same hash chunk at level 0 (testing internal node expansion)
 // Keys 0 and 64 have the same 6-bit chunk at level 0 (both are 0 & 63 = 0)
-let d1 = setInt(emptyInt(), 0, 1000) in let d2 = setInt(d1, 64, 2000) in getOrDefault(d2, 0, -1) = 1000
-let d1 = setInt(emptyInt(), 0, 1000) in let d2 = setInt(d1, 64, 2000) in getOrDefault(d2, 64, -1) = 2000
+let d1 = setInt(emptyInt(), 0L, 1000L) in let d2 = setInt(d1, 64L, 2000L) in getOrDefault(d2, 0L, -1L) = 1000L
+let d1 = setInt(emptyInt(), 0L, 1000L) in let d2 = setInt(d1, 64L, 2000L) in getOrDefault(d2, 64L, -1L) = 2000L
 
 // ========== Stdlib.Internal.HAMT.__remove tests ==========
 
 // Remove from single-entry dict
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in isNoneInt(getInt(d2, 1)) = true
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = removeInt(d1, 1L) in isNoneInt(getInt(d2, 1L)) = true
 
 // Remove non-existent key (dict unchanged)
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 999) in getOrDefault(d2, 1, -1) = 100
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = removeInt(d1, 999L) in getOrDefault(d2, 1L, -1L) = 100L
 
 // Remove one key, other keys remain
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in getOrDefault(d4, 1, -1) = 100
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = true
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in getOrDefault(d4, 3, -1) = 300
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = setInt(d1, 2L, 200L) in let d3 = setInt(d2, 3L, 300L) in let d4 = removeInt(d3, 2L) in getOrDefault(d4, 1L, -1L) = 100L
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = setInt(d1, 2L, 200L) in let d3 = setInt(d2, 3L, 300L) in let d4 = removeInt(d3, 2L) in isNoneInt(getInt(d4, 2L)) = true
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = setInt(d1, 2L, 200L) in let d3 = setInt(d2, 3L, 300L) in let d4 = removeInt(d3, 2L) in getOrDefault(d4, 3L, -1L) = 300L
 
 // Immutability: original dict unchanged after remove
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in getOrDefault(d1, 1, -1) = 100
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = removeInt(d1, 1L) in getOrDefault(d1, 1L, -1L) = 100L
 
 // Remove all keys one by one
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 1)) = true
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = true
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in let d3 = removeInt(d2, 1L) in let d4 = removeInt(d3, 2L) in isNoneInt(getInt(d4, 1L)) = true
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in let d3 = removeInt(d2, 1L) in let d4 = removeInt(d3, 2L) in isNoneInt(getInt(d4, 2L)) = true
 
 // Remove from empty dict (no-op)
-isNoneInt(getInt(removeInt(emptyInt(), 1), 1)) = true
+isNoneInt(getInt(removeInt(emptyInt(), 1L), 1L)) = true
 
 // ========== String-keyed Dict tests ==========
 
@@ -81,94 +81,94 @@ isNoneInt(getInt(removeInt(emptyInt(), 1), 1)) = true
 isNoneInt(getStr(emptyStr(), "hello")) = true
 
 // Set and get single string key
-getOrDefaultStr(setStr(emptyStr(), "hello", 100), "hello", -1) = 100
+getOrDefaultStr(setStr(emptyStr(), "hello", 100L), "hello", -1L) = 100L
 
 // Get non-existent string key from non-empty dict
-isNoneInt(getStr(setStr(emptyStr(), "hello", 100), "world")) = true
+isNoneInt(getStr(setStr(emptyStr(), "hello", 100L), "world")) = true
 
 // Set multiple string keys
-let d1 = setStr(emptyStr(), "one", 1) in let d2 = setStr(d1, "two", 2) in getOrDefaultStr(d2, "one", -1) = 1
-let d1 = setStr(emptyStr(), "one", 1) in let d2 = setStr(d1, "two", 2) in getOrDefaultStr(d2, "two", -1) = 2
+let d1 = setStr(emptyStr(), "one", 1L) in let d2 = setStr(d1, "two", 2L) in getOrDefaultStr(d2, "one", -1L) = 1L
+let d1 = setStr(emptyStr(), "one", 1L) in let d2 = setStr(d1, "two", 2L) in getOrDefaultStr(d2, "two", -1L) = 2L
 
 // Update existing string key
-let d1 = setStr(emptyStr(), "key", 100) in let d2 = setStr(d1, "key", 999) in getOrDefaultStr(d2, "key", -1) = 999
+let d1 = setStr(emptyStr(), "key", 100L) in let d2 = setStr(d1, "key", 999L) in getOrDefaultStr(d2, "key", -1L) = 999L
 
 // Three string keys
-let d1 = setStr(emptyStr(), "a", 10) in let d2 = setStr(d1, "b", 20) in let d3 = setStr(d2, "c", 30) in getOrDefaultStr(d3, "a", -1) = 10
-let d1 = setStr(emptyStr(), "a", 10) in let d2 = setStr(d1, "b", 20) in let d3 = setStr(d2, "c", 30) in getOrDefaultStr(d3, "b", -1) = 20
-let d1 = setStr(emptyStr(), "a", 10) in let d2 = setStr(d1, "b", 20) in let d3 = setStr(d2, "c", 30) in getOrDefaultStr(d3, "c", -1) = 30
+let d1 = setStr(emptyStr(), "a", 10L) in let d2 = setStr(d1, "b", 20L) in let d3 = setStr(d2, "c", 30L) in getOrDefaultStr(d3, "a", -1L) = 10L
+let d1 = setStr(emptyStr(), "a", 10L) in let d2 = setStr(d1, "b", 20L) in let d3 = setStr(d2, "c", 30L) in getOrDefaultStr(d3, "b", -1L) = 20L
+let d1 = setStr(emptyStr(), "a", 10L) in let d2 = setStr(d1, "b", 20L) in let d3 = setStr(d2, "c", 30L) in getOrDefaultStr(d3, "c", -1L) = 30L
 
 // ========== String Dict remove tests ==========
 
 // Remove from single-entry dict
-let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "key") in isNoneInt(getStr(d2, "key")) = true
+let d1 = setStr(emptyStr(), "key", 100L) in let d2 = removeStr(d1, "key") in isNoneInt(getStr(d2, "key")) = true
 
 // Remove non-existent key (dict unchanged)
-let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "other") in getOrDefaultStr(d2, "key", -1) = 100
+let d1 = setStr(emptyStr(), "key", 100L) in let d2 = removeStr(d1, "other") in getOrDefaultStr(d2, "key", -1L) = 100L
 
 // Remove one key, other keys remain
-let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "a", -1) = 100
-let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in isNoneInt(getStr(d4, "b")) = true
-let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "c", -1) = 300
+let d1 = setStr(emptyStr(), "a", 100L) in let d2 = setStr(d1, "b", 200L) in let d3 = setStr(d2, "c", 300L) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "a", -1L) = 100L
+let d1 = setStr(emptyStr(), "a", 100L) in let d2 = setStr(d1, "b", 200L) in let d3 = setStr(d2, "c", 300L) in let d4 = removeStr(d3, "b") in isNoneInt(getStr(d4, "b")) = true
+let d1 = setStr(emptyStr(), "a", 100L) in let d2 = setStr(d1, "b", 200L) in let d3 = setStr(d2, "c", 300L) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "c", -1L) = 300L
 
 // Immutability: original dict unchanged after remove
-let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "key") in getOrDefaultStr(d1, "key", -1) = 100
+let d1 = setStr(emptyStr(), "key", 100L) in let d2 = removeStr(d1, "key") in getOrDefaultStr(d1, "key", -1L) = 100L
 
 // Empty string as key
-getOrDefaultStr(setStr(emptyStr(), "", 42), "", -1) = 42
+getOrDefaultStr(setStr(emptyStr(), "", 42L), "", -1L) = 42L
 
 // Edge case: keys that differ only in length
-let d1 = setStr(emptyStr(), "ab", 1) in let d2 = setStr(d1, "abc", 2) in getOrDefaultStr(d2, "ab", -1) = 1
-let d1 = setStr(emptyStr(), "ab", 1) in let d2 = setStr(d1, "abc", 2) in getOrDefaultStr(d2, "abc", -1) = 2
+let d1 = setStr(emptyStr(), "ab", 1L) in let d2 = setStr(d1, "abc", 2L) in getOrDefaultStr(d2, "ab", -1L) = 1L
+let d1 = setStr(emptyStr(), "ab", 1L) in let d2 = setStr(d1, "abc", 2L) in getOrDefaultStr(d2, "abc", -1L) = 2L
 
 // ========== Dict utility functions ==========
 
 // isEmpty tests
 Stdlib.Internal.HAMT.__isEmpty(emptyInt()) = true
-Stdlib.Internal.HAMT.__isEmpty(setInt(emptyInt(), 1, 100)) = false
+Stdlib.Internal.HAMT.__isEmpty(setInt(emptyInt(), 1L, 100L)) = false
 
 // member tests (int-keyed)
-Stdlib.Internal.HAMT.__contains(emptyInt(), 1) = false
-Stdlib.Internal.HAMT.__contains(setInt(emptyInt(), 1, 100), 1) = true
-Stdlib.Internal.HAMT.__contains(setInt(emptyInt(), 1, 100), 2) = false
+Stdlib.Internal.HAMT.__contains(emptyInt(), 1L) = false
+Stdlib.Internal.HAMT.__contains(setInt(emptyInt(), 1L, 100L), 1L) = true
+Stdlib.Internal.HAMT.__contains(setInt(emptyInt(), 1L, 100L), 2L) = false
 
 // member tests (string-keyed)
 Stdlib.Internal.HAMT.__contains(emptyStr(), "hello") = false
-Stdlib.Internal.HAMT.__contains(setStr(emptyStr(), "hello", 100), "hello") = true
-Stdlib.Internal.HAMT.__contains(setStr(emptyStr(), "hello", 100), "world") = false
+Stdlib.Internal.HAMT.__contains(setStr(emptyStr(), "hello", 100L), "hello") = true
+Stdlib.Internal.HAMT.__contains(setStr(emptyStr(), "hello", 100L), "world") = false
 
 // size tests
-Stdlib.Internal.HAMT.__size(emptyInt()) = 0
-Stdlib.Internal.HAMT.__size(setInt(emptyInt(), 1, 100)) = 1
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in Stdlib.Internal.HAMT.__size(d2) = 2
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in Stdlib.Internal.HAMT.__size(d3) = 3
+Stdlib.Internal.HAMT.__size(emptyInt()) = 0L
+Stdlib.Internal.HAMT.__size(setInt(emptyInt(), 1L, 100L)) = 1L
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in Stdlib.Internal.HAMT.__size(d2) = 2L
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in let d3 = setInt(d2, 3L, 30L) in Stdlib.Internal.HAMT.__size(d3) = 3L
 
 // size with string keys
-Stdlib.Internal.HAMT.__size(setStr(emptyStr(), "a", 1)) = 1
-let d1 = setStr(emptyStr(), "a", 1) in let d2 = setStr(d1, "b", 2) in Stdlib.Internal.HAMT.__size(d2) = 2
+Stdlib.Internal.HAMT.__size(setStr(emptyStr(), "a", 1L)) = 1L
+let d1 = setStr(emptyStr(), "a", 1L) in let d2 = setStr(d1, "b", 2L) in Stdlib.Internal.HAMT.__size(d2) = 2L
 
 // ========== Dict enumeration (Int64-keyed) ==========
 
 // keys tests
 Stdlib.List.length(Stdlib.Internal.HAMT.__keys(emptyInt())) = 0I
-Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setInt(emptyInt(), 1, 100))) = 1I
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2I
+Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setInt(emptyInt(), 1L, 100L))) = 1I
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2I
 
 // values tests
 Stdlib.List.length(Stdlib.Internal.HAMT.__values(emptyInt())) = 0I
-Stdlib.List.length(Stdlib.Internal.HAMT.__values(setInt(emptyInt(), 1, 100))) = 1I
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 2I
+Stdlib.List.length(Stdlib.Internal.HAMT.__values(setInt(emptyInt(), 1L, 100L))) = 1I
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 2I
 
 // ========== Dict enumeration (String-keyed) ==========
 
 // keys tests
 Stdlib.List.length(Stdlib.Internal.HAMT.__keys(emptyStr())) = 0I
-Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setStr(emptyStr(), "a", 100))) = 1I
-let d = setStr(setStr(emptyStr(), "a", 10), "b", 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2I
+Stdlib.List.length(Stdlib.Internal.HAMT.__keys(setStr(emptyStr(), "a", 100L))) = 1I
+let d = setStr(setStr(emptyStr(), "a", 10L), "b", 20L) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 2I
 
 // values tests
 Stdlib.List.length(Stdlib.Internal.HAMT.__values(emptyStr())) = 0I
-Stdlib.List.length(Stdlib.Internal.HAMT.__values(setStr(emptyStr(), "a", 100))) = 1I
+Stdlib.List.length(Stdlib.Internal.HAMT.__values(setStr(emptyStr(), "a", 100L))) = 1I
 
 // ========== Stdlib.Internal.HAMT.__entries tests ==========
 
@@ -176,60 +176,60 @@ Stdlib.List.length(Stdlib.Internal.HAMT.__values(setStr(emptyStr(), "a", 100))) 
 Stdlib.List.length(Stdlib.Internal.HAMT.__entries(emptyInt())) = 0I
 
 // entries on single-entry dict
-Stdlib.List.length(Stdlib.Internal.HAMT.__entries(setInt(emptyInt(), 1, 100))) = 1I
+Stdlib.List.length(Stdlib.Internal.HAMT.__entries(setInt(emptyInt(), 1L, 100L))) = 1I
 
 // entries on two-entry dict
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 2I
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 2I
 
 // ========== Stdlib.Internal.HAMT.__fold tests ==========
 
 // fold to sum values
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Internal.HAMT.__fold(d, 0, fun acc k v -> acc + v) = 30
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.Internal.HAMT.__fold(d, 0L, fun acc k v -> acc + v) = 30L
 
 // fold to sum keys
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Internal.HAMT.__fold(d, 0, fun acc k v -> acc + k) = 3
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.Internal.HAMT.__fold(d, 0L, fun acc k v -> acc + k) = 3L
 
 // fold on empty dict
-Stdlib.Internal.HAMT.__fold(emptyInt(), 100, fun acc k v -> acc + v) = 100
+Stdlib.Internal.HAMT.__fold(emptyInt(), 100L, fun acc k v -> acc + v) = 100L
 
 // ========== Stdlib.Internal.HAMT.__map tests ==========
 
 // map to double values
-let d = setInt(emptyInt(), 1, 10) in let d2 = Stdlib.Internal.HAMT.__map(d, fun k v -> v * 2) in getOrDefault(d2, 1, -1) = 20
+let d = setInt(emptyInt(), 1L, 10L) in let d2 = Stdlib.Internal.HAMT.__map<Int64, Int64, Int64>(d, fun k v -> v * 2L) in getOrDefault(d2, 1L, -1L) = 20L
 
 // map preserves structure
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__map(d, fun k v -> v + k)) = 2
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__map<Int64, Int64, Int64>(d, fun k v -> v + k)) = 2L
 
 // map on empty dict
-Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__map(emptyInt(), fun k v -> v * 2)) = true
+Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__map<Int64, Int64, Int64>(emptyInt(), fun k v -> v * 2L)) = true
 
 // ========== Stdlib.Internal.HAMT.__filter tests ==========
 
 // filter to keep values > 15
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__filter(d, fun k v -> v > 15)) = 1
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__filter<Int64, Int64>(d, fun k v -> v > 15L)) = 1L
 
 // filter on empty dict
-Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__filter(emptyInt(), fun k v -> v > 0)) = true
+Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__filter<Int64, Int64>(emptyInt(), fun k v -> v > 0L)) = true
 
 // filter to keep all
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__filter(d, fun k v -> true)) = 2
+let d = setInt(setInt(emptyInt(), 1L, 10L), 2L, 20L) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__filter<Int64, Int64>(d, fun k v -> true)) = 2L
 
 // filter to keep none
-Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__filter(setInt(emptyInt(), 1, 10), fun k v -> false)) = true
+Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__filter<Int64, Int64>(setInt(emptyInt(), 1L, 10L), fun k v -> false)) = true
 
 // ========== Stdlib.Internal.HAMT.__merge tests ==========
 
 // merge empty dicts
-Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__merge(emptyInt(), emptyInt())) = true
+Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__merge<Int64, Int64>(emptyInt(), emptyInt())) = true
 
 // merge into empty
-Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__merge(emptyInt(), setInt(emptyInt(), 1, 10))) = 1
+Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__merge<Int64, Int64>(emptyInt(), setInt(emptyInt(), 1L, 10L))) = 1L
 
 // merge with overlapping keys (second wins)
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(emptyInt(), 1, 999) in getOrDefault(Stdlib.Internal.HAMT.__merge(d1, d2), 1, -1) = 999
+let d1 = setInt(emptyInt(), 1L, 100L) in let d2 = setInt(emptyInt(), 1L, 999L) in getOrDefault(Stdlib.Internal.HAMT.__merge<Int64, Int64>(d1, d2), 1L, -1L) = 999L
 
 // merge disjoint dicts
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(emptyInt(), 2, 20) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__merge(d1, d2)) = 2
+let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(emptyInt(), 2L, 20L) in Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__merge<Int64, Int64>(d1, d2)) = 2L
 
 // ========== Stdlib.Internal.HAMT.__fromListOverwriting tests ==========
 
@@ -237,46 +237,46 @@ let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(emptyInt(), 2, 20) in Stdl
 Stdlib.Internal.HAMT.__isEmpty(Stdlib.Internal.HAMT.__fromListOverwriting([])) = true
 
 // fromList single
-Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__fromListOverwriting([(1, 100)])) = 1
+Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__fromListOverwriting([(1L, 100L)])) = 1L
 
 // Mutation #130: Test that Stdlib.Internal.HAMT.__fromListOverwriting with non-empty list is not optimized to Stdlib.Internal.HAMT.__empty
 // This catches the bug where && becomes || in the Stdlib.Internal.HAMT.__fromListOverwriting empty-list optimization condition
-Stdlib.Internal.HAMT.__getOrDefault(Stdlib.Internal.HAMT.__fromListOverwriting([(42, 999)]), 42, -1) = 999
+Stdlib.Internal.HAMT.__getOrDefault(Stdlib.Internal.HAMT.__fromListOverwriting([(42L, 999L)]), 42L, -1L) = 999L
 
 // fromList multiple
-Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__fromListOverwriting([(1, 10), (2, 20), (3, 30)])) = 3
+Stdlib.Internal.HAMT.__size(Stdlib.Internal.HAMT.__fromListOverwriting([(1L, 10L), (2L, 20L), (3L, 30L)])) = 3L
 
 // fromList get value
-getOrDefault(Stdlib.Internal.HAMT.__fromListOverwriting([(1, 42), (2, 99)]), 1, -1) = 42
+getOrDefault(Stdlib.Internal.HAMT.__fromListOverwriting([(1L, 42L), (2L, 99L)]), 1L, -1L) = 42L
 
 // ========== Stdlib.Internal.HAMT.__getOrDefault tests ==========
 
 // getOrDefault on existing key
-Stdlib.Internal.HAMT.__getOrDefault(setInt(emptyInt(), 1, 42), 1, -1) = 42
+Stdlib.Internal.HAMT.__getOrDefault(setInt(emptyInt(), 1L, 42L), 1L, -1L) = 42L
 
 // getOrDefault on missing key
-Stdlib.Internal.HAMT.__getOrDefault(emptyInt(), 1, -1) = -1
+Stdlib.Internal.HAMT.__getOrDefault(emptyInt(), 1L, -1L) = -1L
 
 // The direct-default traversal preserves generic key equality and fallback behavior.
-let d = Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__empty<String, String>(), "key", "stor" ++ "ed") in Stdlib.Internal.HAMT.__getOrDefaultHelper<String, String>(d, "key", __hash<String>("key"), 0, "fall" ++ "back") ++ Stdlib.Internal.HAMT.__getOrDefaultHelper<String, String>(d, "missing", __hash<String>("missing"), 0, "fall" ++ "back") = "storedfallback"
+let d = Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__empty<String, String>(), "key", "stor" ++ "ed") in Stdlib.Internal.HAMT.__getOrDefaultHelper<String, String>(d, "key", __hash<String>("key"), 0L, "fall" ++ "back") ++ Stdlib.Internal.HAMT.__getOrDefaultHelper<String, String>(d, "missing", __hash<String>("missing"), 0L, "fall" ++ "back") = "storedfallback"
 
 // ========== Larger dictionary tests ==========
 
 // Helper to build a dict with 10 entries
 let buildDict10(): Dict<Int64, Int64> =
-    let d0 = setInt(emptyInt(), 0, 0) in
-    let d1 = setInt(d0, 1, 10) in
-    let d2 = setInt(d1, 2, 20) in
-    let d3 = setInt(d2, 3, 30) in
-    let d4 = setInt(d3, 4, 40) in
-    let d5 = setInt(d4, 5, 50) in
-    let d6 = setInt(d5, 6, 60) in
-    let d7 = setInt(d6, 7, 70) in
-    let d8 = setInt(d7, 8, 80) in
-    setInt(d8, 9, 90)
+    let d0 = setInt(emptyInt(), 0L, 0L) in
+    let d1 = setInt(d0, 1L, 10L) in
+    let d2 = setInt(d1, 2L, 20L) in
+    let d3 = setInt(d2, 3L, 30L) in
+    let d4 = setInt(d3, 4L, 40L) in
+    let d5 = setInt(d4, 5L, 50L) in
+    let d6 = setInt(d5, 6L, 60L) in
+    let d7 = setInt(d6, 7L, 70L) in
+    let d8 = setInt(d7, 8L, 80L) in
+    setInt(d8, 9L, 90L)
 
-Stdlib.Internal.HAMT.__size(buildDict10()) = 10
-getOrDefault(buildDict10(), 5, -1) = 50
+Stdlib.Internal.HAMT.__size(buildDict10()) = 10L
+getOrDefault(buildDict10(), 5L, -1L) = 50L
 
 // ========== Bool key tests ==========
 
@@ -285,18 +285,18 @@ let setBool(d: Dict<Bool, Int64>, k: Bool, v: Int64): Dict<Bool, Int64> = Stdlib
 let getBool(d: Dict<Bool, Int64>, k: Bool): Stdlib.Option.Option<Int64> = Stdlib.Internal.HAMT.__get(d, k)
 
 // Bool keys - two entries
-Stdlib.Internal.HAMT.__size(setBool(setBool(emptyBool(), true, 1), false, 0)) = 2
+Stdlib.Internal.HAMT.__size(setBool(setBool(emptyBool(), true, 1L), false, 0L)) = 2L
 
 // Bool keys - get true
-Stdlib.Option.withDefault(getBool(setBool(emptyBool(), true, 42), true), -1) = 42
+Stdlib.Option.withDefault(getBool(setBool(emptyBool(), true, 42L), true), -1L) = 42L
 
 // Bool keys - get false from true-keyed dict returns None
-isNoneInt(getBool(setBool(emptyBool(), true, 42), false)) = true
+isNoneInt(getBool(setBool(emptyBool(), true, 42L), false)) = true
 
 // ========== Dict with String values ==========
 // Regression: Dict value loads use RawGet + TypedAtom. The compiler must preserve
 // the typed alias instead of defaulting unknown RawGet temps to Stdlib.Int64.
-let s = (let d = Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__empty<Int64, String>(), 1, "hello") in Stdlib.Internal.HAMT.__getOrDefault(d, 1, "missing")) in s ++ "!" = "hello!"
+let s = (let d = Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__empty<Int64, String>(), 1L, "hello") in Stdlib.Internal.HAMT.__getOrDefault(d, 1L, "missing")) in s ++ "!" = "hello!"
 
 // ========== Dict with List values ==========
 // Tests to cover Dict<Int64, List<Int64>> monomorphizations
@@ -306,17 +306,17 @@ let setListDict(d: Dict<Int64, List<Int64>>, k: Int64, v: List<Int64>): Dict<Int
 let getListDict(d: Dict<Int64, List<Int64>>, k: Int64): Stdlib.Option.Option<List<Int64>> = Stdlib.Internal.HAMT.__get(d, k)
 
 // Set and get list value
-Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), [])) = 3I
+Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1L, [10L, 20L, 30L]), 1L), [])) = 3I
 
 // Multiple list entries
-let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), [])) = 3I
+let d = setListDict(emptyListDict(), 1L, [1L, 2L]) in let d = setListDict(d, 2L, [3L, 4L, 5L]) in Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2L), [])) = 3I
 
 // Empty list as value
-Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 42, []), 42), [-1]) = []
+Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 42L, []), 42L), [-1L]) = []
 
 // fromList with list values - use Stdlib.Internal.HAMT.__size with specific type
-let d = Stdlib.Internal.HAMT.__fromListOverwriting([(1, [10]), (2, [20, 30])]) in Stdlib.Internal.HAMT.__size(d) = 2
+let d = Stdlib.Internal.HAMT.__fromListOverwriting([(1L, [10L]), (2L, [20L, 30L])]) in Stdlib.Internal.HAMT.__size(d) = 2L
 
 // Regression: Stdlib.Internal.HAMT.__contains on an internal HAMT node with a missing chunk must not crash.
 // This exercises the "tag == 1 && hasBit == false" path in __containsHelper.
-let d = Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__empty<Int64, Bool>(), 1, true), 2, true) in Stdlib.Internal.HAMT.__contains(d, 4) = false
+let d = Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__setOverwriting(Stdlib.Internal.HAMT.__empty<Int64, Bool>(), 1L, true), 2L, true) in Stdlib.Internal.HAMT.__contains(d, 4L) = false

@@ -1,21 +1,21 @@
 // Recursive declaration groups remain monomorphic while active.
-let polyRecurse<'a>(x: a) : Int64 = polyRecurse<List<a>>([x]) polyRecurse<Int64>(1) = error="Polymorphic recursion is not supported inside recursive group member: polyRecurse"
+let polyRecurse<'a>(x: a) : Int64 = polyRecurse<List<a>>([x]); polyRecurse<Int64>(1L) = error="Polymorphic recursion is not supported inside recursive group member: polyRecurse"
 
 // A completed generic group can be instantiated independently at many types.
 let completedIdentity<'a>(x: a) : a = x
 
-(completedIdentity<Int64>(1) == 1) && (completedIdentity<String>("ok") == "ok") = true
+(completedIdentity<Int64>(1L) == 1L) && (completedIdentity<String>("ok") == "ok") = true
 
 // Alias-only cycles reject, while nominal recursive ADTs are valid.
-type RecursiveAliasA<'a> = RecursiveAliasB<a> type RecursiveAliasB<'a> = RecursiveAliasA<a> 0 = error="Invalid recursive type alias cycle involving"
+type RecursiveAliasA<'a> = RecursiveAliasB<a> type RecursiveAliasB<'a> = RecursiveAliasA<a> 0L = error="Invalid recursive type alias cycle involving"
 
-type RecursiveStreamAlias = Stream<RecursiveStreamAlias> 0 = error="Invalid recursive type alias cycle involving: RecursiveStreamAlias"
+type RecursiveStreamAlias = Stream<RecursiveStreamAlias> 0L = error="Invalid recursive type alias cycle involving: RecursiveStreamAlias"
 
 type RecursiveTree = RecursiveLeaf of Int64 | RecursiveBranch of RecursiveTree
 
-match RecursiveBranch(RecursiveLeaf(1)) with | RecursiveBranch(inner) -> 1 | _ -> 0 = 1
+match RecursiveBranch(RecursiveLeaf(1L)) with | RecursiveBranch(inner) -> 1L | _ -> 0L = 1L
 
 // Native tail recursion must complete beyond the interpreter's stack depth.
-let recursionParityTail(n: Int64, acc: Int64) : Int64 = if n <= 0 then acc else recursionParityTail(n - 1, acc + 1)
+let recursionParityTail(n: Int64, acc: Int64) : Int64 = if n <= 0L then acc else recursionParityTail(n - 1L, acc + 1L)
 
-recursionParityTail(1000000, 0) = 1000000
+recursionParityTail(1000000L, 0L) = 1000000L

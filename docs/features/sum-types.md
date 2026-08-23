@@ -56,7 +56,7 @@ Pair.Pair(1L, "one")
 OneTuple.OneTuple((1L, "one"))
 ```
 
-Both parser modes reject the removed compiler declaration dialect: omitted
+The canonical parser rejects the removed compiler declaration dialect: omitted
 leading bars, qualified declaration names, bare declaration type parameters,
 and legacy function declarations. Public declarations use the interpreter spellings
 shown above.
@@ -75,7 +75,7 @@ when more than one visible nominal type owns the case; qualification selects a
 unique declaration. A qualified lookup never falls back to an unrelated short
 name.
 
-Both parser modes accept interpreter module headers and nested module blocks.
+The canonical parser accepts interpreter module headers and nested module blocks.
 At the explicit parser-to-AST boundary, source module paths are flattened into
 canonical function and type identities. Module-local opening, package loading,
 and same-name collision behavior remain post-parse resolution boundaries.

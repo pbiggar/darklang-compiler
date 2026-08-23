@@ -5,78 +5,78 @@
 // =====================================================
 
 // Pass named function as argument and call it
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let inc(n: Int64): Int64 = n + 1 apply(inc, 5) = 6
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let inc(n: Int64): Int64 = n + 1L apply(inc, 5L) = 6L
 
 // Two-argument function passed as argument
-let apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b) let add(x: Int64, y: Int64): Int64 = x + y apply2(add, 3, 4) = 7
+let apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b) let add(x: Int64, y: Int64): Int64 = x + y; apply2(add, 3L, 4L) = 7L
 
 // Pass named function and use with multiple values
-let twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let double(n: Int64): Int64 = n * 2 twice(double, 5) = 20
+let twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let double(n: Int64): Int64 = n * 2L twice(double, 5L) = 20L
 
 // =====================================================
 // Lambda as Argument (no captures)
 // =====================================================
 
 // Pass simple lambda as argument
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply(fun y -> y + 1, 5) = 6
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x); apply(fun y -> y + 1L, 5L) = 6L
 
 // Lambda with multiplication
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply(fun y -> y * 2, 21) = 42
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x); apply(fun y -> y * 2L, 21L) = 42L
 
 // Two-argument lambda
-let apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b) apply2(fun a b -> a * b, 6, 7) = 42
+let apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b); apply2(fun a b -> a * b, 6L, 7L) = 42L
 
 // =====================================================
 // Lambda with Captures as Argument
 // =====================================================
 
 // Pass capturing lambda - closure support
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let base = 10 in apply(fun y -> y + base, 5) = 15
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let base = 10L in apply(fun y -> y + base, 5L) = 15L
 
 // Two variables captured
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let a = 10 in let b = 20 in apply(fun y -> y + a + b, 12) = 42
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let a = 10L in let b = 20L in apply(fun y -> y + a + b, 12L) = 42L
 
 // Capture and multiply
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let factor = 7 in apply(fun y -> y * factor, 6) = 42
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let factor = 7L in apply(fun y -> y * factor, 6L) = 42L
 
 // =====================================================
 // Composed Function Applications
 // =====================================================
 
 // Apply function twice using higher-order function
-let twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) twice(fun y -> y + 1, 5) = 7
+let twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)); twice(fun y -> y + 1L, 5L) = 7L
 
 // Twice with capturing lambda
-let twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let inc = 3 in twice(fun y -> y + inc, 5) = 11
+let twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let inc = 3L in twice(fun y -> y + inc, 5L) = 11L
 
 // =====================================================
 // Nested Lambdas (CPS-style)
 // =====================================================
 
 // Nested lambda passed as continuation
-let withCont(x: Int64, cont: (Int64) -> Int64): Int64 = cont(x + 1) withCont(5, fun r -> r * 2) = 12
+let withCont(x: Int64, cont: (Int64) -> Int64): Int64 = cont(x + 1L); withCont(5L, fun r -> r * 2L) = 12L
 
 // Two levels of nesting - inner lambda calls outer function
-let cps1(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let cps2(x: Int64): Int64 = cps1(x + 1, fun r -> r * 2) cps2(5) = 12
+let cps1(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let cps2(x: Int64): Int64 = cps1(x + 1L, fun r -> r * 2L); cps2(5L) = 12L
 
 // Three levels of CPS-style nesting
-let step(x: Int64, k: (Int64) -> Int64): Int64 = k(x + 1) step(1, fun a -> step(a, fun b -> step(b, fun c -> c))) = 4
+let step(x: Int64, k: (Int64) -> Int64): Int64 = k(x + 1L); step(1L, fun a -> step(a, fun b -> step(b, fun c -> c))) = 4L
 
 // Nested lambda capturing outer lambda's parameter
-let outer(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let inner(g: (Int64) -> Int64, y: Int64): Int64 = g(y) outer(fun a -> inner(fun b -> a + b, 10), 32) = 42
+let outer(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let inner(g: (Int64) -> Int64, y: Int64): Int64 = g(y); outer(fun a -> inner(fun b -> a + b, 10L), 32L) = 42L
 
 // CPS-style with captured variables
-let cpsAdd(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let base = 10 in cpsAdd(5, fun r -> r + base) = 15
+let cpsAdd(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let base = 10L in cpsAdd(5L, fun r -> r + base) = 15L
 
 // Capturing function parameter in nested lambda (requires proper type tracking)
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let wrapper(k: (Int64) -> Int64, x: Int64): Int64 = apply(fun r -> k(r), x) wrapper(fun n -> n * 2, 21) = 42
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let wrapper(k: (Int64) -> Int64, x: Int64): Int64 = apply(fun r -> k(r), x); wrapper(fun n -> n * 2L, 21L) = 42L
 
 // =====================================================
 // Multiple FuncRefs (tests wrapper name uniqueness)
 // =====================================================
 
 // Pass two different named functions as values - each needs unique wrapper
-let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let inc(n: Int64): Int64 = n + 1 let dec(n: Int64): Int64 = n - 1 apply(inc, 10) + apply(dec, 10) = 20
+let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let inc(n: Int64): Int64 = n + 1L let dec(n: Int64): Int64 = n - 1L apply(inc, 10L) + apply(dec, 10L) = 20L
 
 // =====================================================
 // Multiple FuncRefs Counter Test (Mutation #53)
@@ -87,7 +87,7 @@ let apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let inc(n: Int64): Int64 
 // This tests 3+ named functions to ensure all wrappers get unique names.
 
 // Three named functions used as values - each should get unique wrapper
-let applyF(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let add1(n: Int64): Int64 = n + 1 let add2(n: Int64): Int64 = n + 2 let add3(n: Int64): Int64 = n + 3 applyF(add1, 10) + applyF(add2, 10) + applyF(add3, 10) = 36
+let applyF(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let add1(n: Int64): Int64 = n + 1L let add2(n: Int64): Int64 = n + 2L let add3(n: Int64): Int64 = n + 3L applyF(add1, 10L) + applyF(add2, 10L) + applyF(add3, 10L) = 36L
 
 // =====================================================
 // FuncRef with Non-Int64 Types (tests correct type propagation)
@@ -100,13 +100,13 @@ let applyF(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let add1(n: Int64): Int6
 let applyBool(f: (Bool) -> Bool, x: Bool): Bool = f(x) let notBool(b: Bool): Bool = if b then false else true applyBool(notBool, true) = false
 
 // FuncRef with Bool return, testing truthiness
-let applyBool2(f: (Bool) -> Bool, x: Bool): Bool = f(x) let identity(b: Bool): Bool = b applyBool2(identity, true) = true
+let applyBool2(f: (Bool) -> Bool, x: Bool): Bool = f(x) let identity(b: Bool): Bool = b; applyBool2(identity, true) = true
 
 // FuncRef with Float parameter and return type
 let applyFloat(f: (Float) -> Float, x: Float): Float = f(x) let doubleFloat(n: Float): Float = n * 2.0 applyFloat(doubleFloat, 21.0) = 42.0
 
 // FuncRef with multiple non-Int64 parameters
-let apply2Floats(f: (Float, Float) -> Float, a: Float, b: Float): Float = f(a, b) let addFloats(x: Float, y: Float): Float = x + y apply2Floats(addFloats, 3.5, 4.5) = 8.0
+let apply2Floats(f: (Float, Float) -> Float, a: Float, b: Float): Float = f(a, b) let addFloats(x: Float, y: Float): Float = x + y; apply2Floats(addFloats, 3.5, 4.5) = 8.0
 
 // FuncRef with String parameter and return type
 let applyStr(f: (String) -> String, s: String): String = f(s) let addBang(s: String): String = s ++ "!" applyStr(addBang, "hello") = "hello!"
@@ -115,7 +115,7 @@ let applyStr(f: (String) -> String, s: String): String = f(s) let addBang(s: Str
 let choose(): (String) -> String = addBang let addBang(s: String): String = s ++ "!" let f = choose() in f("ok") = "ok!"
 
 // FuncRef with mixed types (Int64 param, Bool return)
-let checkPositive(f: (Int64) -> Bool, n: Int64): Bool = f(n) let isPositive(x: Int64): Bool = x > 0 checkPositive(isPositive, 5) = true
+let checkPositive(f: (Int64) -> Bool, n: Int64): Bool = f(n) let isPositive(x: Int64): Bool = x > 0L checkPositive(isPositive, 5L) = true
 
 // FuncRef with mixed types (Bool param, Int64 return)
-let boolToNum(f: (Bool) -> Int64, b: Bool): Int64 = f(b) let fromBool(b: Bool): Int64 = if b then 1 else 0 boolToNum(fromBool, true) = 1
+let boolToNum(f: (Bool) -> Int64, b: Bool): Int64 = f(b) let fromBool(b: Bool): Int64 = if b then 1L else 0L boolToNum(fromBool, true) = 1L

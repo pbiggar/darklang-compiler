@@ -1,12 +1,12 @@
-// 1_InterpreterParser.fs - Lexer and Parser for interpreter-style syntax
+// 1_InterpreterParser.fs - Canonical lexer and parser for Dark syntax
 //
-// Transforms Darklang interpreter-style source code (string) into the shared
-// compiler Abstract Syntax Tree (AST).
+// Transforms interpreter-compatible Dark source code into the compiler's
+// shared Abstract Syntax Tree (AST). This is the compiler's only parser.
 //
 // Lexer: Converts source string into tokens
 // Parser: Recursive descent parser with operator precedence
 //
-// Operator precedence (specific to this parser):
+// Operator precedence:
 // - Multiplication and division bind tighter than addition and subtraction
 // - Operators are left-associative: "1 + 2 + 3" parses as "(1 + 2) + 3"
 // - Parentheses for explicit grouping
@@ -322,148 +322,153 @@ let lex (input: string) : Result<Token list, string> =
                 match remaining with
                 | c :: rest when NameSyntax.isContinueCharacter c -> gluedRunLength rest (length + 1)
                 | _ -> length
-            let emitNumber (remaining: char list) (token: Token) =
+            let finishNumber (remaining: char list) (token: Token) : Result<Token * char list, string> =
                 match remaining with
                 | c :: _ when NameSyntax.isContinueCharacter c ->
                     let consumedLength = List.length chars - List.length remaining
                     let errorLength = consumedLength + gluedRunLength remaining 0
                     Error $"invalid number literal: {numberSource.Substring(0, errorLength)}"
-                | _ -> lexHelper remaining (token :: acc)
+                | _ -> Ok (token, remaining)
 
             // Check if this is a float (has decimal point or exponent)
-            match afterInt with
-            | '.' :: (next :: _ as rest) when System.Char.IsDigit(next) ->
-                // Float with decimal point: 3.14
-                let (fracDigits, afterFrac) = collectDigits rest []
-                // Check for exponent
-                match afterFrac with
-                | ('e' :: rest' | 'E' :: rest') ->
-                    // Scientific notation: 3.14e10 or 3.14e-10
+            let parsedNumber : Result<Token * char list, string> =
+                match afterInt with
+                | '.' :: (next :: _ as rest) when System.Char.IsDigit(next) ->
+                    // Float with decimal point: 3.14
+                    let (fracDigits, afterFrac) = collectDigits rest []
+                    // Check for exponent
+                    match afterFrac with
+                    | ('e' :: rest' | 'E' :: rest') ->
+                        // Scientific notation: 3.14e10 or 3.14e-10
+                        let (expSign, afterSign) =
+                            match rest' with
+                            | '+' :: r -> (['+'], r)
+                            | '-' :: r -> (['-'], r)
+                            | _ -> ([], rest')
+                        let (expDigits, remaining) = collectDigits afterSign []
+                        if List.isEmpty expDigits then
+                            Error "Expected exponent digits after 'e'"
+                        else
+                            let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits @ ['e'] @ expSign @ expDigits))
+                            match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
+                            | (true, value) -> finishNumber remaining (TFloat value)
+                            | (false, _) -> Error $"Invalid float literal: {numStr}"
+                    | _ ->
+                        // Float without exponent: 3.14
+                        let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits))
+                        match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
+                        | (true, value) -> finishNumber afterFrac (TFloat value)
+                        | (false, _) -> Error $"Invalid float literal: {numStr}"
+                | ('e' :: rest | 'E' :: rest) ->
+                    // Scientific notation without decimal: 1e10 or 1e-10
                     let (expSign, afterSign) =
-                        match rest' with
+                        match rest with
                         | '+' :: r -> (['+'], r)
                         | '-' :: r -> (['-'], r)
-                        | _ -> ([], rest')
+                        | _ -> ([], rest)
                     let (expDigits, remaining) = collectDigits afterSign []
                     if List.isEmpty expDigits then
                         Error "Expected exponent digits after 'e'"
                     else
-                        let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits @ ['e'] @ expSign @ expDigits))
+                        let numStr = System.String(Array.ofList (intDigits @ ['e'] @ expSign @ expDigits))
                         match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
-                        | (true, value) -> emitNumber remaining (TFloat value)
+                        | (true, value) -> finishNumber remaining (TFloat value)
                         | (false, _) -> Error $"Invalid float literal: {numStr}"
                 | _ ->
-                    // Float without exponent: 3.14
-                    let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits))
-                    match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
-                    | (true, value) -> emitNumber afterFrac (TFloat value)
-                    | (false, _) -> Error $"Invalid float literal: {numStr}"
-            | ('e' :: rest | 'E' :: rest) ->
-                // Scientific notation without decimal: 1e10 or 1e-10
-                let (expSign, afterSign) =
-                    match rest with
-                    | '+' :: r -> (['+'], r)
-                    | '-' :: r -> (['-'], r)
-                    | _ -> ([], rest)
-                let (expDigits, remaining) = collectDigits afterSign []
-                if List.isEmpty expDigits then
-                    Error "Expected exponent digits after 'e'"
-                else
-                    let numStr = System.String(Array.ofList (intDigits @ ['e'] @ expSign @ expDigits))
-                    match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
-                    | (true, value) -> emitNumber remaining (TFloat value)
-                    | (false, _) -> Error $"Invalid float literal: {numStr}"
-            | _ ->
-                // Current interpreter syntax uses arbitrary-precision Int for
-                // every unsuffixed integer literal. The legacy I suffix remains
-                // accepted as a compiler extension; L selects Int64 explicitly.
-                let numStr = System.String(List.toArray intDigits)
-                let parseInt64OrError (remaining: char list) =
-                    match System.Int64.TryParse(numStr) with
-                    | (true, value) -> emitNumber remaining (TInt64 value)
-                    | (false, _) ->
-                        if numStr = "9223372036854775808" then
-                            emitNumber remaining (TInt64 System.Int64.MinValue)
-                        else
-                            Error $"Integer literal too large: {numStr}"
-                let parseSizedIntOrError typeName tryParse mkToken remaining : Result<Token list, string> =
-                    match tryParse numStr with
-                    | (true, value) -> emitNumber remaining (mkToken value)
-                    | (false, _) -> Error $"Integer literal out of range for {typeName}: {numStr}"
-                let parseSignedSizedIntOrError
-                    typeName
-                    minAbsSentinel
-                    minValue
-                    tryParse
-                    mkToken
-                    remaining
-                    : Result<Token list, string> =
-                    match tryParse numStr with
-                    | (true, value) -> emitNumber remaining (mkToken value)
-                    | (false, _) when numStr = minAbsSentinel ->
-                        emitNumber remaining (mkToken minValue)
-                    | (false, _) ->
-                        Error $"Integer literal out of range for {typeName}: {numStr}"
-                let parseBigIntOrError (remaining: char list) : Result<Token list, string> =
-                    match System.Numerics.BigInteger.TryParse(numStr) with
-                    | (true, value) -> emitNumber remaining (TBigInt value)
-                    | (false, _) -> Error $"Invalid Int literal: {numStr}"
-                let parseInt128OrError (remaining: char list) : Result<Token list, string> =
-                    match System.Int128.TryParse(numStr) with
-                    | (true, value) -> emitNumber remaining (TInt128 value)
-                    | (false, _) ->
-                        if numStr = "170141183460469231731687303715884105728" then
-                            emitNumber remaining (TInt128 System.Int128.MinValue)
-                        else
-                            Error $"Integer literal out of range for Int128: {numStr}"
-                let parseUInt128OrError (remaining: char list) : Result<Token list, string> =
-                    match System.UInt128.TryParse(numStr) with
-                    | (true, value) -> emitNumber remaining (TUInt128 value)
-                    | (false, _) -> Error $"Integer literal out of range for UInt128: {numStr}"
+                    // Current interpreter syntax uses arbitrary-precision Int for
+                    // every unsuffixed integer literal. The legacy I suffix remains
+                    // accepted as a compiler extension; L selects Int64 explicitly.
+                    let numStr = System.String(List.toArray intDigits)
+                    let parseInt64OrError (remaining: char list) =
+                        match System.Int64.TryParse(numStr) with
+                        | (true, value) -> finishNumber remaining (TInt64 value)
+                        | (false, _) ->
+                            if numStr = "9223372036854775808" then
+                                finishNumber remaining (TInt64 System.Int64.MinValue)
+                            else
+                                Error $"Integer literal too large: {numStr}"
+                    let parseSizedIntOrError typeName tryParse mkToken remaining : Result<Token * char list, string> =
+                        match tryParse numStr with
+                        | (true, value) -> finishNumber remaining (mkToken value)
+                        | (false, _) -> Error $"Integer literal out of range for {typeName}: {numStr}"
+                    let parseSignedSizedIntOrError
+                        typeName
+                        minAbsSentinel
+                        minValue
+                        tryParse
+                        mkToken
+                        remaining
+                        : Result<Token * char list, string> =
+                        match tryParse numStr with
+                        | (true, value) -> finishNumber remaining (mkToken value)
+                        | (false, _) when numStr = minAbsSentinel ->
+                            finishNumber remaining (mkToken minValue)
+                        | (false, _) ->
+                            Error $"Integer literal out of range for {typeName}: {numStr}"
+                    let parseBigIntOrError (remaining: char list) : Result<Token * char list, string> =
+                        match System.Numerics.BigInteger.TryParse(numStr) with
+                        | (true, value) -> finishNumber remaining (TBigInt value)
+                        | (false, _) -> Error $"Invalid Int literal: {numStr}"
+                    let parseInt128OrError (remaining: char list) : Result<Token * char list, string> =
+                        match System.Int128.TryParse(numStr) with
+                        | (true, value) -> finishNumber remaining (TInt128 value)
+                        | (false, _) ->
+                            if numStr = "170141183460469231731687303715884105728" then
+                                finishNumber remaining (TInt128 System.Int128.MinValue)
+                            else
+                                Error $"Integer literal out of range for Int128: {numStr}"
+                    let parseUInt128OrError (remaining: char list) : Result<Token * char list, string> =
+                        match System.UInt128.TryParse(numStr) with
+                        | (true, value) -> finishNumber remaining (TUInt128 value)
+                        | (false, _) -> Error $"Integer literal out of range for UInt128: {numStr}"
 
-                match afterInt with
-                | 'I' :: rest ->
-                    parseBigIntOrError rest
-                | 'L' :: rest ->
-                    parseInt64OrError rest
-                | 'Q' :: rest ->
-                    parseInt128OrError rest
-                | 'y' :: rest ->
-                    parseSignedSizedIntOrError
-                        "Int8"
-                        "128"
-                        System.SByte.MinValue
-                        System.SByte.TryParse
-                        TInt8
-                        rest
-                | 's' :: rest ->
-                    parseSignedSizedIntOrError
-                        "Int16"
-                        "32768"
-                        System.Int16.MinValue
-                        System.Int16.TryParse
-                        TInt16
-                        rest
-                | 'l' :: rest ->
-                    parseSignedSizedIntOrError
-                        "Int32"
-                        "2147483648"
-                        System.Int32.MinValue
-                        System.Int32.TryParse
-                        TInt32
-                        rest
-                | 'Z' :: rest ->
-                    parseUInt128OrError rest
-                | 'u' :: 'y' :: rest ->
-                    parseSizedIntOrError "UInt8" System.Byte.TryParse TUInt8 rest
-                | 'u' :: 's' :: rest ->
-                    parseSizedIntOrError "UInt16" System.UInt16.TryParse TUInt16 rest
-                | 'u' :: 'l' :: rest ->
-                    parseSizedIntOrError "UInt32" System.UInt32.TryParse TUInt32 rest
-                | 'U' :: 'L' :: rest ->
-                    parseSizedIntOrError "UInt64" System.UInt64.TryParse TUInt64 rest
-                | _ ->
-                    parseBigIntOrError afterInt
+                    match afterInt with
+                    | 'I' :: rest ->
+                        parseBigIntOrError rest
+                    | 'L' :: rest ->
+                        parseInt64OrError rest
+                    | 'Q' :: rest ->
+                        parseInt128OrError rest
+                    | 'y' :: rest ->
+                        parseSignedSizedIntOrError
+                            "Int8"
+                            "128"
+                            System.SByte.MinValue
+                            System.SByte.TryParse
+                            TInt8
+                            rest
+                    | 's' :: rest ->
+                        parseSignedSizedIntOrError
+                            "Int16"
+                            "32768"
+                            System.Int16.MinValue
+                            System.Int16.TryParse
+                            TInt16
+                            rest
+                    | 'l' :: rest ->
+                        parseSignedSizedIntOrError
+                            "Int32"
+                            "2147483648"
+                            System.Int32.MinValue
+                            System.Int32.TryParse
+                            TInt32
+                            rest
+                    | 'Z' :: rest ->
+                        parseUInt128OrError rest
+                    | 'u' :: 'y' :: rest ->
+                        parseSizedIntOrError "UInt8" System.Byte.TryParse TUInt8 rest
+                    | 'u' :: 's' :: rest ->
+                        parseSizedIntOrError "UInt16" System.UInt16.TryParse TUInt16 rest
+                    | 'u' :: 'l' :: rest ->
+                        parseSizedIntOrError "UInt32" System.UInt32.TryParse TUInt32 rest
+                    | 'U' :: 'L' :: rest ->
+                        parseSizedIntOrError "UInt64" System.UInt64.TryParse TUInt64 rest
+                    | _ ->
+                        parseBigIntOrError afterInt
+
+            match parsedNumber with
+            | Ok (token, remaining) -> lexHelper remaining (token :: acc)
+            | Error err -> Error err
         | '$' :: '"' :: rest ->
             // Parse interpolated string: $"Hello {name}!"
             // Returns TInterpString token with parts list
@@ -857,8 +862,8 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             // Simple type without type arguments
             Ok (TRecord (fullTypeName, []), afterTypeName)
     | TLParen :: rest ->
-        // Parentheses group a type, or delimit a compiler function's parameter
-        // list. Public tuple types use `*`, matching the interpreter grammar.
+        // Could be a function type: (int, int) -> bool
+        // Or a tuple/grouped type: (int, int) or (Person -> Bool)
         parseFunctionTypeParams typeParams rest []
         |> Result.bind (fun (paramTypes, afterParams) ->
             match afterParams with
@@ -875,7 +880,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
                 | [single] ->
                     Ok (single, afterParams)
                 | _ ->
-                    Error "Comma-separated tuple types are not supported; use '*' between elements")
+                    Ok (TTuple paramTypes, afterParams))
     | _ -> Error "Expected type annotation (Int64, Bool, String, Float, TypeName, type variable, or function type)"
 
 /// Parse a type annotation with context for type parameters in scope
@@ -1885,27 +1890,13 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TMatch :: rest ->
             // Parse: match scrutinee with | p1 -> e1 | p2 -> e2
             parseExpr rest
-            |> Result.bind (fun (firstScrutinee, remaining) ->
-                let rec parseBareTupleTail acc tokens =
-                    match tokens with
-                    | TComma :: tail ->
-                        parseExpr tail
-                        |> Result.bind (fun (next, afterNext) ->
-                            parseBareTupleTail (next :: acc) afterNext)
-                    | _ -> Ok (List.rev acc, tokens)
-
-                parseBareTupleTail [firstScrutinee] remaining
-                |> Result.bind (fun (scrutinees, afterScrutinee) ->
-                    let scrutinee =
-                        match scrutinees with
-                        | [single] -> single
-                        | _ -> TupleLiteral scrutinees
-                    match afterScrutinee with
-                    | TWith :: rest' ->
-                        parseCases rest' []
-                        |> Result.map (fun (cases, remaining') ->
-                            (Match (scrutinee, cases), remaining'))
-                    | _ -> Error "Expected 'with' after match scrutinee"))
+            |> Result.bind (fun (scrutinee, remaining) ->
+                match remaining with
+                | TWith :: rest' ->
+                    parseCases rest' []
+                    |> Result.map (fun (cases, remaining') ->
+                        (Match (scrutinee, cases), remaining'))
+                | _ -> Error "Expected 'with' after match scrutinee")
         | _ ->
             parsePipe toks
 
@@ -2144,12 +2135,18 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         // interpreter-style space application: f x y
         parsePrimaryBase toks
         |> Result.bind (fun (expr, remaining) ->
-            parsePostfix expr remaining
-            |> Result.bind (fun (postfixExpr, remaining') ->
-                parseApplication postfixExpr remaining'))
+            parsePostfix false expr remaining
+            |> Result.bind (fun (postfixExpr, remaining', endsWithParenthesizedCall) ->
+                parseApplication postfixExpr remaining' (not endsWithParenthesizedCall)))
 
-    and parseApplication (callee: Expr) (toks: Token list) : Result<Expr * Token list, string> =
-        let negativeNumericArg = canStartNegativeNumericApplicationArg callee toks
+    and parseApplication
+        (callee: Expr)
+        (toks: Token list)
+        (mayStartNegativeNumericArg: bool)
+        : Result<Expr * Token list, string> =
+        let negativeNumericArg =
+            mayStartNegativeNumericArg
+            && canStartNegativeNumericApplicationArg callee toks
         let hasCallableCallee = canAcceptSpaceApplication callee
         if hasCallableCallee && not (isRecordFieldBoundary toks) && (negativeNumericArg || canStartApplicationArg toks) then
             // Parse exactly one argument, then continue left-associatively.
@@ -2162,12 +2159,27 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 else
                     parsePrimaryBase toks
                     |> Result.bind (fun (argBaseExpr, afterArgBase) ->
-                        parsePostfix argBaseExpr afterArgBase)
+                        parsePostfix false argBaseExpr afterArgBase
+                        |> Result.map (fun (argExpr, remaining, _) -> (argExpr, remaining)))
 
             parseOneArg ()
             |> Result.bind (fun (argExpr, afterArg) ->
-                let applied = appendCallArg callee argExpr
-                parseApplication applied afterArg)
+                let applied =
+                    match toks, callee with
+                    | TLParen :: _, Var funcName ->
+                        Call (funcName, NonEmptyList.singleton argExpr)
+                    | TLParen :: _, TypeApp (_, _, existingArgs)
+                        when NonEmptyList.toList existingArgs = [UnitLiteral] ->
+                        appendCallArg callee argExpr
+                    | TLParen :: _, _ ->
+                        Apply (callee, NonEmptyList.singleton argExpr)
+                    | _ ->
+                        appendCallArg callee argExpr
+                let mayStartNextNegativeNumericArg =
+                    match toks with
+                    | TLParen :: _ -> false
+                    | _ -> true
+                parseApplication applied afterArg mayStartNextNegativeNumericArg)
         else
             Ok (callee, toks)
 
@@ -2593,16 +2605,30 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     Ok (ListLiteral (List.rev (expr :: acc)), rest)
                 | _ -> Error "Expected ';', ',', or ']' in list literal")
 
-    and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
-        // Numeric tuple projection is an internal compiler operation. Public source
-        // uses destructuring or the Tuple2/Tuple3 APIs; record fields remain public.
+    and parsePostfix
+        (endsWithParenthesizedCall: bool)
+        (expr: Expr)
+        (toks: Token list)
+        : Result<Expr * Token list * bool, string> =
+        // Handle postfix operations: tuple access (.0, .1), field access (.fieldName),
+        // and optional parenthesized call arguments.
         match toks with
-        | TDot :: (TBigInt _ | TInt64 _) :: _ ->
-            Error "Numeric tuple access is not supported; use destructuring or Stdlib.Tuple2/Stdlib.Tuple3"
+        | TDot :: TBigInt index :: rest ->
+            if index > bigint System.Int32.MaxValue then
+                Error "Tuple index is too large"
+            else
+                let accessExpr = TupleAccess (expr, int index)
+                parsePostfix false accessExpr rest
+        | TDot :: TInt64 index :: rest ->
+            if index < 0L then
+                Error "Tuple index cannot be negative"
+            else
+                let accessExpr = TupleAccess (expr, int index)
+                parsePostfix false accessExpr rest
         | TDot :: TIdent fieldName :: rest ->
             // Record field access
             let accessExpr = RecordAccess (expr, fieldName)
-            parsePostfix accessExpr rest
+            parsePostfix false accessExpr rest
         | TLParen :: rest ->
             // Optional call syntax for interpreter compatibility:
             // f(a, b), g(), (fun x -> x)(1)
@@ -2615,6 +2641,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | TRParen :: _ when depth = 0 -> false
                 | TRParen :: more -> hasTopLevelComma (depth - 1) more
                 | _ :: more -> hasTopLevelComma depth more
+            let hasComma = hasTopLevelComma 0 rest
             let shouldUseCallSyntax =
                 match rest with
                 | TRParen :: _ -> true
@@ -2625,17 +2652,19 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     // single parenthesized argument.
                     match expr with
                     | Constructor _ -> true
-                    | _ -> hasTopLevelComma 0 rest
+                    | _ -> hasComma
             if shouldUseCallSyntax then
                 match expr with
-                | Var _ ->
+                | Var _ when not hasComma ->
                     // Keep `f (x)` as application with a parenthesized argument.
-                    Ok (expr, toks)
+                    Ok (expr, toks, endsWithParenthesizedCall)
                 | _ ->
                     parseCallArgs rest []
                     |> Result.bind (fun (args, remaining) ->
                         let appliedExpr =
                             match expr with
+                            | Var funcName ->
+                                Call (funcName, args)
                             | Call (funcName, existingArgs) ->
                                 Call (funcName, NonEmptyList.appendList existingArgs (NonEmptyList.toList args))
                             | TypeApp (funcName, typeArgs, existingArgs) ->
@@ -2656,10 +2685,10 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                                     Constructor (typeName, variantName, Some (TupleLiteral fields))
                             | _ ->
                                 Apply (expr, args)
-                        parsePostfix appliedExpr remaining)
+                        parsePostfix true appliedExpr remaining)
             else
-                Ok (expr, toks)
-        | _ -> Ok (expr, toks)
+                Ok (expr, toks, endsWithParenthesizedCall)
+        | _ -> Ok (expr, toks, endsWithParenthesizedCall)
 
     and parseCallArgs (toks: Token list) (acc: Expr list) : Result<NonEmptyList<Expr> * Token list, string> =
         match toks with
@@ -2751,12 +2780,31 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // Parse expression
             parseExpr toks
             |> Result.bind (fun (expr, remaining) ->
-                match remaining with
+                // Support bare tuple syntax at top level: `1L, 2L, 3L`.
+                // Commas inside other contexts (calls/records/lists) are already
+                // consumed before we reach this point.
+                let rec parseTupleTail (tupleItemsRev: Expr list) (toks': Token list) : Result<Expr * Token list, string> =
+                    match toks' with
+                    | TComma :: rest ->
+                        parseExpr rest
+                        |> Result.bind (fun (nextExpr, remaining') ->
+                            parseTupleTail (nextExpr :: tupleItemsRev) remaining')
+                    | _ ->
+                        let finalExpr =
+                            match tupleItemsRev with
+                            | [] -> expr
+                            | _ -> TupleLiteral (expr :: List.rev tupleItemsRev)
+                        Ok (finalExpr, toks')
+
+                parseTupleTail [] remaining
+                |> Result.bind (fun (finalExpr, remaining') ->
+                    match remaining' with
                     | TEOF :: [] ->
                         // Single expression program
-                        Ok (NameSyntax.SourceDeclarations (NonEmptyList.fromList (List.rev (NameSyntax.SourceExpression expr :: acc))))
+                        Ok (NameSyntax.SourceDeclarations (NonEmptyList.fromList (List.rev (NameSyntax.SourceExpression finalExpr :: acc))))
                     | _ ->
-                        Error "Unexpected tokens after expression (only function definitions can be followed by more definitions)")
+                        // More top-level definitions after expression not allowed for now
+                        Error "Unexpected tokens after expression (only function definitions can be followed by more definitions)"))
 
     parseTopLevels tokens []
 
@@ -2949,16 +2997,24 @@ let private validatePublicDictTypeArity (tokens: Token list) : Result<unit, stri
     validate tokens
 
 /// Parse a string directly to AST
+type private TopLevelFunctionLayout =
+    | OutsideTopLevelFunction
+    | ReadingTopLevelFunctionHeader
+    | ReadingTopLevelFunctionBody
+
 let private insertNestedFunctionLayoutSeparators (input: string) : string =
     let lines = input.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n') |> Array.toList
     let leadingSpaces (line: string) = line.Length - line.TrimStart().Length
-    let tryNestedFunctionIndent (line: string) : int option =
+    let tryFunctionIndent (line: string) : int option =
         let letIndex = line.IndexOf("let ", System.StringComparison.Ordinal)
-        if letIndex <= 0 then None
+        if letIndex < 0 then None
         else
             let afterLet = line.Substring(letIndex + 4).TrimStart()
             let nameEnd = afterLet.IndexOfAny([|' '; '('; '<'|])
-            if nameEnd < 0 then None
+            // A tuple-pattern binding starts with `(` and is an ordinary let,
+            // not a nested function declaration. Require a non-empty name
+            // before the parameter or type-parameter delimiter.
+            if nameEnd <= 0 then None
             else
                 let afterName = afterLet.Substring(nameEnd).TrimStart()
                 if afterName.StartsWith("(") || afterName.StartsWith("<") then Some letIndex
@@ -2970,31 +3026,53 @@ let private insertNestedFunctionLayoutSeparators (input: string) : string =
             closeCompletedLayouts indent rest (prefix + "in ")
         | _ -> (active, prefix)
 
-    let rec loop (active: int list) (remaining: string list) (acc: string list) =
+    let rec loop
+        (activeNested: int list)
+        (topLevelLayout: TopLevelFunctionLayout)
+        (remaining: string list)
+        (acc: string list)
+        =
         match remaining with
         | [] -> acc |> List.rev |> String.concat "\n"
         | line :: rest when line.Trim() = "" || line.TrimStart().StartsWith("//") ->
-            loop active rest (line :: acc)
+            loop activeNested topLevelLayout rest (line :: acc)
         | line :: rest ->
             let indent = leadingSpaces line
-            let (remainingActive, prefix) = closeCompletedLayouts indent active ""
+            let (remainingActive, nestedPrefix) = closeCompletedLayouts indent activeNested ""
+            let topLevelPrefix =
+                match topLevelLayout with
+                | ReadingTopLevelFunctionBody when indent = 0 -> "; "
+                | _ -> ""
+            let prefix = nestedPrefix + topLevelPrefix
             let rewritten =
                 if prefix = "" then line
                 else line.Substring(0, indent) + prefix + line.Substring(indent)
             let nextActive =
-                match tryNestedFunctionIndent rewritten with
-                | Some declarationIndent ->
+                match tryFunctionIndent line with
+                | Some declarationIndent when declarationIndent > 0 ->
                     let lexicalIndent = if prefix = "" then declarationIndent else indent
                     lexicalIndent :: remainingActive
                 | None -> remainingActive
+                | Some _ -> remainingActive
             let activeAfterExplicitIn =
                 if rewritten.TrimEnd().EndsWith(" in", System.StringComparison.Ordinal) then
                     match nextActive with
                     | _ :: outer -> outer
                     | [] -> []
                 else nextActive
-            loop activeAfterExplicitIn rest (rewritten :: acc)
-    loop [] lines []
+            let startsTopLevelFunction = tryFunctionIndent line = Some 0
+            let completesFunctionHeader = line.Contains("=", System.StringComparison.Ordinal)
+            let nextTopLevelLayout =
+                match topLevelLayout, indent, startsTopLevelFunction, completesFunctionHeader with
+                | ReadingTopLevelFunctionHeader, _, _, true -> ReadingTopLevelFunctionBody
+                | ReadingTopLevelFunctionHeader, _, _, false -> ReadingTopLevelFunctionHeader
+                | _, 0, true, true -> ReadingTopLevelFunctionBody
+                | _, 0, true, false -> ReadingTopLevelFunctionHeader
+                | ReadingTopLevelFunctionBody, nonzeroIndent, _, _ when nonzeroIndent > 0 ->
+                    ReadingTopLevelFunctionBody
+                | _ -> OutsideTopLevelFunction
+            loop activeAfterExplicitIn nextTopLevelLayout rest (rewritten :: acc)
+    loop [] OutsideTopLevelFunction lines []
 
 let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.ParsedSource, string> =
     let rec extractModules source modules =

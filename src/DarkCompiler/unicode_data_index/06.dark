@@ -4,61 +4,61 @@
 module Unicode.Data
 
 let __canonicalCompositionLookupGroup0(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table17.__canonicalCompositionChunk0(), 0, key, 12, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table17.__canonicalCompositionChunk0(), 0L, key, 12L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table18.__canonicalCompositionChunk1(), 0, key, 12, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table18.__canonicalCompositionChunk1(), 0L, key, 12L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table19.__canonicalCompositionChunk2(), 0, key, 12, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table19.__canonicalCompositionChunk2(), 0L, key, 12L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table20.__canonicalCompositionChunk3(), 0, key, 12, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table20.__canonicalCompositionChunk3(), 0L, key, 12L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __canonicalCompositionLookupGroup1(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table21.__canonicalCompositionChunk4(), 0, key, 12, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table21.__canonicalCompositionChunk4(), 0L, key, 12L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table22.__canonicalCompositionChunk5(), 0, key, 12, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table22.__canonicalCompositionChunk5(), 0L, key, 12L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table23.__canonicalCompositionChunk6(), 0, key, 12, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table23.__canonicalCompositionChunk6(), 0L, key, 12L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table24.__canonicalCompositionChunk7(), 0, key, 12, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table24.__canonicalCompositionChunk7(), 0L, key, 12L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __generalCategoryLookupGroup4(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table31.__generalCategoryChunk16(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table31.__generalCategoryChunk16(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table32.__generalCategoryChunk17(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table32.__generalCategoryChunk17(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table33.__generalCategoryChunk18(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table33.__generalCategoryChunk18(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table34.__generalCategoryChunk19(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table34.__generalCategoryChunk19(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __caseIgnorableLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table50.__caseIgnorableChunk0(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table50.__caseIgnorableChunk0(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table51.__caseIgnorableChunk1(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table51.__caseIgnorableChunk1(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table52.__caseIgnorableChunk2(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table52.__caseIgnorableChunk2(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table53.__caseIgnorableChunk3(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table53.__caseIgnorableChunk3(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
@@ -90,5 +90,5 @@ let __casedLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
     | None ->
         None
 
-let lookupCanonicalComposition(key: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__canonicalCompositionLookup(key, 0)
+let lookupCanonicalComposition(key: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__canonicalCompositionLookup(key, 0L)
 let isCased(codepoint: Int64) : Bool = Stdlib.Option.isSome<Int64>(Unicode.Data.__casedLookup(codepoint))

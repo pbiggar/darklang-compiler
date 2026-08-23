@@ -46,11 +46,10 @@ than being hidden by flattening or a magic declaration form.
 
 `ProgramStructureTests.fs` covers ordered multi-unit composition, dependency
 entry rejection, zero/multiple entry cardinality, last-wins function overlays,
-and file-result validation. `SyntaxInteropTests.fs` covers retained source-unit
-identity/purpose, module shape, values at the source boundary, and
-declaration-only validation. `name-resolution.e2e` covers contextual lookup,
-last-wins duplicates, constructor identity, exact qualification, and missing
-names. Legacy `def` remains only in explicit rejection/tooling probes.
+and file-result validation. Canonical syntax fixtures cover retained module
+shape and declaration boundaries. `name-resolution.e2e` covers contextual
+lookup, last-wins duplicates, constructor identity, exact qualification, and
+missing names. Legacy `def` remains only in explicit rejection/tooling probes.
 
 Performance-only differences and native object/executable layout are outside
 this ledger.

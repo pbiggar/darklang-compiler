@@ -5,6 +5,29 @@ module Stdlib.Math
 let pi() : Float = 3.141592653589793
 let tau() : Float = 2.0 * Stdlib.Math.pi()
 
+// Compiler extensions retained for compatibility with existing compiled code.
+let e() : Float = 2.718281828459045
+let abs(x: Float) : Float = Stdlib.Float.abs(x)
+let sqrt(x: Float) : Float = Stdlib.Float.sqrt(x)
+let truncate(x: Float) : Int64 = Stdlib.Float.toInt(x)
+
+let floor(x: Float) : Int64 =
+    let truncated = Stdlib.Float.toInt(x) in
+    if x < Stdlib.Int64.toFloat(truncated) then truncated - 1L else truncated
+
+let ceiling(x: Float) : Int64 =
+    let truncated = Stdlib.Float.toInt(x) in
+    if x > Stdlib.Int64.toFloat(truncated) then truncated + 1L else truncated
+
+let round(x: Float) : Int64 =
+    let lower = Stdlib.Math.floor(x) in
+    let upper = Stdlib.Math.ceiling(x) in
+    let distanceFromLower = x - Stdlib.Int64.toFloat(lower) in
+    if distanceFromLower < 0.5 then lower
+    else if distanceFromLower > 0.5 then upper
+    else if lower % 2L == 0L then lower
+    else upper
+
 let degrees(angleInDegrees: Float) : Float =
     (angleInDegrees * Stdlib.Math.pi()) / 180.0
 
@@ -53,10 +76,10 @@ let __quadrantRemainder(value: Float, quadrant: Int) : Float =
     high - quadrantFloat * 0.00000000006077100506506192
 
 let __quadrantIndex(quadrant: Int) : Int64 =
-    match Stdlib.Int.remainder(quadrant, Stdlib.Int.fromInt64(4)) with
+    match Stdlib.Int.remainder(quadrant, Stdlib.Int.fromInt64(4L)) with
     | Error(message) -> Builtin.testRuntimeError(message)
     | Ok(remainder) ->
-        let normalized = if Stdlib.Int.lessThan(remainder, Stdlib.Int.fromInt64(0)) then Stdlib.Int.add(remainder, Stdlib.Int.fromInt64(4)) else remainder in
+        let normalized = if Stdlib.Int.lessThan(remainder, Stdlib.Int.fromInt64(0L)) then Stdlib.Int.add(remainder, Stdlib.Int.fromInt64(4L)) else remainder in
         match Stdlib.Int.toInt64(normalized) with
         | Some(value) -> value
         | None -> Builtin.testRuntimeError("Math quadrant was not representable as Int64")
@@ -68,9 +91,9 @@ let sin(value: Float) : Float =
         let quadrant = Stdlib.Math.__quadrant(value) in
         let reduced = Stdlib.Math.__quadrantRemainder(value, quadrant) in
         match Stdlib.Math.__quadrantIndex(quadrant) with
-        | 0 -> Stdlib.Math.__sinKernel(reduced)
-        | 1 -> Stdlib.Math.__cosKernel(reduced)
-        | 2 -> 0.0 - Stdlib.Math.__sinKernel(reduced)
+        | 0L -> Stdlib.Math.__sinKernel(reduced)
+        | 1L -> Stdlib.Math.__cosKernel(reduced)
+        | 2L -> 0.0 - Stdlib.Math.__sinKernel(reduced)
         | _ -> 0.0 - Stdlib.Math.__cosKernel(reduced)
 
 let cos(value: Float) : Float =
@@ -79,30 +102,30 @@ let cos(value: Float) : Float =
         let quadrant = Stdlib.Math.__quadrant(value) in
         let reduced = Stdlib.Math.__quadrantRemainder(value, quadrant) in
         match Stdlib.Math.__quadrantIndex(quadrant) with
-        | 0 -> Stdlib.Math.__cosKernel(reduced)
-        | 1 -> 0.0 - Stdlib.Math.__sinKernel(reduced)
-        | 2 -> 0.0 - Stdlib.Math.__cosKernel(reduced)
+        | 0L -> Stdlib.Math.__cosKernel(reduced)
+        | 1L -> 0.0 - Stdlib.Math.__sinKernel(reduced)
+        | 2L -> 0.0 - Stdlib.Math.__cosKernel(reduced)
         | _ -> Stdlib.Math.__sinKernel(reduced)
 
 let tan(value: Float) : Float = Stdlib.Math.sin(value) / Stdlib.Math.cos(value)
 
 let __atanSeries(value: Float, squared: Float, term: Float, index: Int64, remaining: Int64, total: Float) : Float =
-    if remaining == 0 then total
+    if remaining == 0L then total
     else
         let nextTerm = 0.0 - term * squared in
         Stdlib.Math.__atanSeries(
             value,
             squared,
             nextTerm,
-            index + 1,
-            remaining - 1,
-            total + nextTerm / Stdlib.Int64.toFloat(index * 2 + 1))
+            index + 1L,
+            remaining - 1L,
+            total + nextTerm / Stdlib.Int64.toFloat(index * 2L + 1L))
 
 let __atanPositive(value: Float) : Float =
     if value > 1.0 then Stdlib.Math.pi() / 2.0 - Stdlib.Math.__atanPositive(1.0 / value)
     else if value > 0.41421356237309503 then
         Stdlib.Math.pi() / 4.0 + Stdlib.Math.__atanPositive((value - 1.0) / (value + 1.0))
-    else Stdlib.Math.__atanSeries(value, value * value, value, 1, 28, value)
+    else Stdlib.Math.__atanSeries(value, value * value, value, 1L, 28L, value)
 
 let atan(value: Float) : Float =
     if Stdlib.Float.isNaN(value) then value

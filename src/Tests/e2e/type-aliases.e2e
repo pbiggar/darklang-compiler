@@ -3,7 +3,7 @@
 
 // Test that type Unit2 = Unit2 works as a single-variant sum type
 // This should work because parseTypeDef treats a same-name target as a variant.
-type Unit2 = Unit2 match Unit2 with | Unit2 -> 42 = 42
+type Unit2 = | Unit2; match Unit2 with | Unit2 -> 42L = 42L
 
 // Verify that primitive type names as type aliases work correctly
 // type Foo = UInt64 should create a type alias, not a sum type
@@ -21,9 +21,9 @@ testU64(41UL) = 42UL
 // Note: Like UInt64 above, Bool is parsed as TBool by parseTypeBase,
 // not TRecord("Bool", []), so the parseTypeDef primitive guard is unreachable.
 type BoolAlias2 = Bool
-let useBoolAlias(b: Bool): Int64 = if b then 1 else 0
-useBoolAlias(true) = 1
-useBoolAlias(false) = 0
+let useBoolAlias(b: Bool): Int64 = if b then 1L else 0L
+useBoolAlias(true) = 1L
+useBoolAlias(false) = 0L
 
 // =====================================================
 // Parameterized Type Aliases (kills mutation #118)
@@ -39,5 +39,5 @@ type MyList118<'t> = List<t>
 // Use the alias with a concrete type argument
 // If the mutation is applied, the alias won't resolve because substitution is skipped
 // when typeParams.Length = args.Length (should be <>, mutation makes it =)
-let sumMyList(xs: MyList118<Int64>): Int64 = match xs with | [] -> 0 | x :: rest -> x + sumMyList(rest)
-sumMyList([10, 20, 12]) = 42
+let sumMyList(xs: MyList118<Int64>): Int64 = match xs with | [] -> 0L | x :: rest -> x + sumMyList(rest)
+sumMyList([10L, 20L, 12L]) = 42L

@@ -4,48 +4,48 @@
 module Unicode.Data
 
 let __categoryFromCode(value: Int64) : Unicode.Data.GeneralCategory =
-    if value == 0 then Unicode.Data.GeneralCategory.Lu
-    else if value == 1 then Unicode.Data.GeneralCategory.Ll
-    else if value == 2 then Unicode.Data.GeneralCategory.Lt
-    else if value == 3 then Unicode.Data.GeneralCategory.Lm
-    else if value == 4 then Unicode.Data.GeneralCategory.Lo
-    else if value == 5 then Unicode.Data.GeneralCategory.Mn
-    else if value == 6 then Unicode.Data.GeneralCategory.Mc
-    else if value == 7 then Unicode.Data.GeneralCategory.Me
-    else if value == 8 then Unicode.Data.GeneralCategory.Nd
-    else if value == 9 then Unicode.Data.GeneralCategory.Nl
-    else if value == 10 then Unicode.Data.GeneralCategory.No
-    else if value == 11 then Unicode.Data.GeneralCategory.Pc
-    else if value == 12 then Unicode.Data.GeneralCategory.Pd
-    else if value == 13 then Unicode.Data.GeneralCategory.Ps
-    else if value == 14 then Unicode.Data.GeneralCategory.Pe
-    else if value == 15 then Unicode.Data.GeneralCategory.Pi
-    else if value == 16 then Unicode.Data.GeneralCategory.Pf
-    else if value == 17 then Unicode.Data.GeneralCategory.Po
-    else if value == 18 then Unicode.Data.GeneralCategory.Sm
-    else if value == 19 then Unicode.Data.GeneralCategory.Sc
-    else if value == 20 then Unicode.Data.GeneralCategory.Sk
-    else if value == 21 then Unicode.Data.GeneralCategory.So
-    else if value == 22 then Unicode.Data.GeneralCategory.Zs
-    else if value == 23 then Unicode.Data.GeneralCategory.Zl
-    else if value == 24 then Unicode.Data.GeneralCategory.Zp
-    else if value == 25 then Unicode.Data.GeneralCategory.Cc
-    else if value == 26 then Unicode.Data.GeneralCategory.Cf
-    else if value == 27 then Unicode.Data.GeneralCategory.Cs
-    else if value == 28 then Unicode.Data.GeneralCategory.Co
+    if value == 0L then Unicode.Data.GeneralCategory.Lu
+    else if value == 1L then Unicode.Data.GeneralCategory.Ll
+    else if value == 2L then Unicode.Data.GeneralCategory.Lt
+    else if value == 3L then Unicode.Data.GeneralCategory.Lm
+    else if value == 4L then Unicode.Data.GeneralCategory.Lo
+    else if value == 5L then Unicode.Data.GeneralCategory.Mn
+    else if value == 6L then Unicode.Data.GeneralCategory.Mc
+    else if value == 7L then Unicode.Data.GeneralCategory.Me
+    else if value == 8L then Unicode.Data.GeneralCategory.Nd
+    else if value == 9L then Unicode.Data.GeneralCategory.Nl
+    else if value == 10L then Unicode.Data.GeneralCategory.No
+    else if value == 11L then Unicode.Data.GeneralCategory.Pc
+    else if value == 12L then Unicode.Data.GeneralCategory.Pd
+    else if value == 13L then Unicode.Data.GeneralCategory.Ps
+    else if value == 14L then Unicode.Data.GeneralCategory.Pe
+    else if value == 15L then Unicode.Data.GeneralCategory.Pi
+    else if value == 16L then Unicode.Data.GeneralCategory.Pf
+    else if value == 17L then Unicode.Data.GeneralCategory.Po
+    else if value == 18L then Unicode.Data.GeneralCategory.Sm
+    else if value == 19L then Unicode.Data.GeneralCategory.Sc
+    else if value == 20L then Unicode.Data.GeneralCategory.Sk
+    else if value == 21L then Unicode.Data.GeneralCategory.So
+    else if value == 22L then Unicode.Data.GeneralCategory.Zs
+    else if value == 23L then Unicode.Data.GeneralCategory.Zl
+    else if value == 24L then Unicode.Data.GeneralCategory.Zp
+    else if value == 25L then Unicode.Data.GeneralCategory.Cc
+    else if value == 26L then Unicode.Data.GeneralCategory.Cf
+    else if value == 27L then Unicode.Data.GeneralCategory.Cs
+    else if value == 28L then Unicode.Data.GeneralCategory.Co
     else Unicode.Data.GeneralCategory.Cn
 
 let __generalCategoryLookupGroup5(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table35.__generalCategoryChunk20(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table35.__generalCategoryChunk20(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table36.__generalCategoryChunk21(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table36.__generalCategoryChunk21(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table37.__generalCategoryChunk22(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table37.__generalCategoryChunk22(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table38.__generalCategoryChunk23(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table38.__generalCategoryChunk23(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
@@ -63,24 +63,24 @@ let sourceHashes() : List<(String * String)> =
 
 let tableCounts() : List<(String * Int64)> =
     [
-        ("canonicalCompositions", 965),
-        ("canonicalDecompositions", 2081),
-        ("caseIgnorableRanges", 464),
-        ("casedRanges", 158),
-        ("combiningClassRanges", 403),
-        ("compositionExclusions", 81),
-        ("contextualCasingMappings", 16),
-        ("extendedPictographicRanges", 451),
-        ("generalCategoryRanges", 3409),
-        ("graphemeBreakRanges", 1386),
-        ("indicConjunctRanges", 473),
-        ("lowercaseMappings", 1488),
-        ("uppercaseMappings", 1580),
-        ("whiteSpaceRanges", 11)
+        ("canonicalCompositions", 965L),
+        ("canonicalDecompositions", 2081L),
+        ("caseIgnorableRanges", 464L),
+        ("casedRanges", 158L),
+        ("combiningClassRanges", 403L),
+        ("compositionExclusions", 81L),
+        ("contextualCasingMappings", 16L),
+        ("extendedPictographicRanges", 451L),
+        ("generalCategoryRanges", 3409L),
+        ("graphemeBreakRanges", 1386L),
+        ("indicConjunctRanges", 473L),
+        ("lowercaseMappings", 1488L),
+        ("uppercaseMappings", 1580L),
+        ("whiteSpaceRanges", 11L)
     ]
 
 let __whiteSpaceLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table42.__whiteSpaceChunk0(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table42.__whiteSpaceChunk0(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
         None

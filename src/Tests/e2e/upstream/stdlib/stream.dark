@@ -38,7 +38,7 @@
 
 // map doubles every element
 (let s = Stdlib.Stream.fromList [ 1L; 2L; 3L ] in
- let mapped = Stdlib.Stream.map s (fun n -> n * 2L) in
+ let mapped = Stdlib.Stream.map<Int64, Int64> s (fun n -> n * 2L) in
  Stdlib.Stream.toList mapped) = [ 2L; 4L; 6L ]
 
 // filter keeps only matching elements
@@ -92,7 +92,7 @@
 // [1..10] -> evens [2,4,6,8,10] -> +1 [3,5,7,9,11] -> take 3 [3,5,7]
 (let s = Stdlib.Stream.fromList [ 1L; 2L; 3L; 4L; 5L; 6L; 7L; 8L; 9L; 10L ] in
  let filtered = Stdlib.Stream.filter s (fun n -> n % 2L == 0L) in
- let mapped = Stdlib.Stream.map filtered (fun n -> n + 1L) in
+ let mapped = Stdlib.Stream.map<Int64, Int64> filtered (fun n -> n + 1L) in
  let taken = Stdlib.Stream.take mapped 3I in
  Stdlib.Stream.toList taken) = [ 3L; 5L; 7L ]
 
@@ -101,26 +101,26 @@
 
 // map can change the element type
 (let s = Stdlib.Stream.fromList [ 1L; 2L; 3L ] in
- let mapped = Stdlib.Stream.map s (fun n -> Stdlib.Int64.toString n) in
+ let mapped = Stdlib.Stream.map<Int64, String> s (fun n -> Stdlib.Int64.toString n) in
  Stdlib.Stream.toList mapped) = [ "1"; "2"; "3" ]
 
 // take after map — the take limit applies to the mapped output
 (let s = Stdlib.Stream.fromList [ 1L; 2L; 3L; 4L; 5L ] in
- let mapped = Stdlib.Stream.map s (fun n -> n * 10L) in
+ let mapped = Stdlib.Stream.map<Int64, Int64> s (fun n -> n * 10L) in
  let taken = Stdlib.Stream.take mapped 2I in
  Stdlib.Stream.toList taken) = [ 10L; 20L ]
 
 // map after take — map only applies to elements that survive the take
 (let s = Stdlib.Stream.fromList [ 1L; 2L; 3L; 4L; 5L ] in
  let taken = Stdlib.Stream.take s 3I in
- let mapped = Stdlib.Stream.map taken (fun n -> n * n) in
+ let mapped = Stdlib.Stream.map<Int64, Int64> taken (fun n -> n * n) in
  Stdlib.Stream.toList mapped) = [ 1L; 4L; 9L ]
 
 // concat of already-transformed streams
 (let a = Stdlib.Stream.fromList [ 1L; 2L ] in
  let b = Stdlib.Stream.fromList [ 3L; 4L ] in
- let aDoubled = Stdlib.Stream.map a (fun n -> n * 2L) in
- let bNegated = Stdlib.Stream.map b (fun n -> 0L - n) in
+ let aDoubled = Stdlib.Stream.map<Int64, Int64> a (fun n -> n * 2L) in
+ let bNegated = Stdlib.Stream.map<Int64, Int64> b (fun n -> 0L - n) in
  let joined = Stdlib.Stream.concat [ aDoubled; bNegated ] in
  Stdlib.Stream.toList joined) = [ 2L; 4L; -3L; -4L ]
 
@@ -140,7 +140,7 @@
 
 // map/filter/take over an empty source yields empty
 (let s = Stdlib.Stream.fromList<Int64> [] in
- let mapped = Stdlib.Stream.map s (fun n -> n + 1L) in
+ let mapped = Stdlib.Stream.map<Int64, Int64> s (fun n -> n + 1L) in
  let filtered = Stdlib.Stream.filter mapped (fun n -> n > 0L) in
  let taken = Stdlib.Stream.take filtered 5I in
  Stdlib.Stream.toList taken) = []

@@ -1,9 +1,9 @@
 let sumTo(n: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc
-    else sumTo(n - 1, acc + n)
+    if n <= 0L then acc
+    else sumTo(n - 1L, acc + n)
 
 let repeat(n: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc
-    else repeat(n - 1, sumTo(10000, 0))
+    if n <= 0L then acc
+    else repeat(n - 1L, sumTo(10000L, 0L))
 
-Builtin.printLine(Stdlib.Int64.toString(repeat(100, 0)))
+Builtin.printLine(Stdlib.Int64.toString(repeat(100L, 0L)))

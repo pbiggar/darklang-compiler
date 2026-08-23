@@ -1,30 +1,30 @@
 // Record tests for Phase 7 Milestone 2
 
 // Basic record type definition and access
-type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.x = 10
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10L, y = 20L } in p.x = 10L
 
-type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.y = 20
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10L, y = 20L } in p.y = 20L
 
 // Records remain matchable through a variable followed by field access.
-type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in match p with | value -> if value.y == 20 && value.x == 10 then 1 else 0 = 1
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10L, y = 20L } in match p with | value -> if value.y == 20L && value.x == 10L then 1L else 0L = 1L
 
 // Record with arithmetic on fields
-type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 3 } in p.x + p.y = 8
+type Point = { x: Int64, y: Int64 } let p = Point { x = 5L, y = 3L } in p.x + p.y = 8L
 
 // Record with three fields
-type Vec3 = { x: Int64, y: Int64, z: Int64 } let v = Vec3 { x = 1, y = 2, z = 3 } in v.x + v.y + v.z = 6
+type Vec3 = { x: Int64, y: Int64, z: Int64 } let v = Vec3 { x = 1L, y = 2L, z = 3L } in v.x + v.y + v.z = 6L
 
 // Nested let with record
-type Point = { x: Int64, y: Int64 } let a = Point { x = 100, y = 200 } in let b = a.x in b = 100
+type Point = { x: Int64, y: Int64 } let a = Point { x = 100L, y = 200L } in let b = a.x in b = 100L
 
 // Multiple records
-type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 3, y = 4 } in a.x + b.y = 5
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1L, y = 2L } in let b = Point { x = 3L, y = 4L } in a.x + b.y = 5L
 
 // Record with negative values
-type Point = { x: Int64, y: Int64 } let p = Point { x = -5, y = 10 } in p.x + p.y = 5
+type Point = { x: Int64, y: Int64 } let p = Point { x = -5L, y = 10L } in p.x + p.y = 5L
 
 // Record with zero
-type Point = { x: Int64, y: Int64 } let p = Point { x = 0, y = 42 } in p.y = 42
+type Point = { x: Int64, y: Int64 } let p = Point { x = 0L, y = 42L } in p.y = 42L
 
 // ===================================================================
 // Records with String Fields
@@ -32,8 +32,8 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 0, y = 42 } in p.y = 42
 
 // Record with string field
 type Person = { name: String, age: Int64 }
-let p = Person { name = "Alice", age = 30 } in p.name = "Alice"
-let p = Person { name = "Bob", age = 25 } in p.age = 25
+let p = Person { name = "Alice", age = 30L } in p.name = "Alice"
+let p = Person { name = "Bob", age = 25L } in p.age = 25L
 
 // Record with only string fields
 type Names = { first: String, last: String }
@@ -46,8 +46,8 @@ let n = Names { first = "John", last = "Doe" } in n.last = "Doe"
 
 // Record with float field
 type Circle = { radius: Float, x: Int64, y: Int64 }
-let c = Circle { radius = 3.14, x = 0, y = 0 } in c.radius = 3.14
-let c = Circle { radius = 2.5, x = 10, y = 20 } in c.x = 10
+let c = Circle { radius = 3.14, x = 0L, y = 0L } in c.radius = 3.14
+let c = Circle { radius = 2.5, x = 10L, y = 20L } in c.x = 10L
 
 // Generic record printing substitutes concrete field types
 type GenericDisplayBox<'t> = { value: t } GenericDisplayBox { value = "hi" } = stdout="GenericDisplayBox<String> { value: \"hi\" }\n" stderr=""
@@ -64,9 +64,9 @@ let v = Vec2f { x = 1.5, y = 2.5 } in v.x + v.y = 4.0
 
 // Record with bool field
 type Config = { enabled: Bool, value: Int64 }
-let c = Config { enabled = true, value = 42 } in c.enabled = true
-let c = Config { enabled = false, value = 0 } in c.enabled = false
-let c = Config { enabled = true, value = 42 } in c.value = 42
+let c = Config { enabled = true, value = 42L } in c.enabled = true
+let c = Config { enabled = false, value = 0L } in c.enabled = false
+let c = Config { enabled = true, value = 42L } in c.value = 42L
 
 // ===================================================================
 // Records with Many Fields
@@ -74,12 +74,12 @@ let c = Config { enabled = true, value = 42 } in c.value = 42
 
 // Record with 5 fields
 type BigRecord = { a: Int64, b: Int64, c: Int64, d: Int64, e: Int64 }
-let r = BigRecord { a = 1, b = 2, c = 3, d = 4, e = 5 } in r.a + r.b + r.c + r.d + r.e = 15
-let r = BigRecord { a = 10, b = 20, c = 30, d = 40, e = 50 } in r.e = 50
+let r = BigRecord { a = 1L, b = 2L, c = 3L, d = 4L, e = 5L } in r.a + r.b + r.c + r.d + r.e = 15L
+let r = BigRecord { a = 10L, b = 20L, c = 30L, d = 40L, e = 50L } in r.e = 50L
 
 // Record with 6 fields
 type SixFields = { f1: Int64, f2: Int64, f3: Int64, f4: Int64, f5: Int64, f6: Int64 }
-let r = SixFields { f1 = 1, f2 = 2, f3 = 3, f4 = 4, f5 = 5, f6 = 6 } in r.f6 = 6
+let r = SixFields { f1 = 1L, f2 = 2L, f3 = 3L, f4 = 4L, f5 = 5L, f6 = 6L } in r.f6 = 6L
 
 // ===================================================================
 // Mixed Type Records
@@ -87,9 +87,9 @@ let r = SixFields { f1 = 1, f2 = 2, f3 = 3, f4 = 4, f5 = 5, f6 = 6 } in r.f6 = 6
 
 // Record with string, int, bool
 type User = { name: String, age: Int64, active: Bool }
-let u = User { name = "Alice", age = 30, active = true } in u.name = "Alice"
-let u = User { name = "Alice", age = 30, active = true } in u.age = 30
-let u = User { name = "Alice", age = 30, active = true } in u.active = true
+let u = User { name = "Alice", age = 30L, active = true } in u.name = "Alice"
+let u = User { name = "Alice", age = 30L, active = true } in u.age = 30L
+let u = User { name = "Alice", age = 30L, active = true } in u.active = true
 
 // Record with float and string (using 19.75 which is exactly representable in binary)
 type Product = { name: String, price: Float }
@@ -105,15 +105,15 @@ let p = Product { name = "Widget", price = 19.75 } in p.price = 19.75
 
 // Record with float in second field - verify float arithmetic works
 type Pair = { first: Int64, second: Float }
-let p = Pair { first = 1, second = 2.5 } in p.second * 2.0 = 5.0
+let p = Pair { first = 1L, second = 2.5 } in p.second * 2.0 = 5.0
 
 // Record with float in third field - verify correct type at index 2
 type Triple = { a: Int64, b: Int64, c: Float }
-let t = Triple { a = 1, b = 2, c = 3.5 } in t.c + 1.5 = 5.0
+let t = Triple { a = 1L, b = 2L, c = 3.5 } in t.c + 1.5 = 5.0
 
 // Record with float in middle position
 type Middle = { x: Int64, y: Float, z: Int64 }
-let m = Middle { x = 10, y = 1.5, z = 20 } in m.y * 4.0 = 6.0
+let m = Middle { x = 10L, y = 1.5, z = 20L } in m.y * 4.0 = 6.0
 
 // Record with all floats - verify all field positions get float type
 type AllFloats = { a: Float, b: Float, c: Float }
@@ -129,24 +129,24 @@ let r = AllFloats { a = 1.0, b = 2.0, c = 3.0 } in r.a + r.b + r.c = 6.0
 
 // Record update where variable only appears in the record part
 type Point = { x: Int64, y: Int64 }
-let p = Point { x = 10, y = 20 } in { p with x = 5 }.y = 20
+let p = Point { x = 10L, y = 20L } in { p with x = 5L }.y = 20L
 
 // Record update where a later field is replaced and earlier fields are preserved
 type Point = { x: Int64, y: Int64 }
-let p = Point { x = 10, y = 20 } in { p with y = 5 }.x = 10
-let p = Point { x = 10, y = 20 } in { p with y = 5 }.y = 5
+let p = Point { x = 10L, y = 20L } in { p with y = 5L }.x = 10L
+let p = Point { x = 10L, y = 20L } in { p with y = 5L }.y = 5L
 
 // Record update on a three-field record preserves all untouched fields
 type Vec3 = { x: Int64, y: Int64, z: Int64 }
-let v = Vec3 { x = 10, y = 20, z = 30 } in { v with z = 5 }.x + { v with z = 5 }.y + { v with z = 5 }.z = 35
+let v = Vec3 { x = 10L, y = 20L, z = 30L } in { v with z = 5L }.x + { v with z = 5L }.y + { v with z = 5L }.z = 35L
 
 // Record update where variable only appears in the update part
 type Point = { x: Int64, y: Int64 }
-let ``val`` = 100 in { Point { x = 1, y = 2 } with x = ``val`` }.x = 100
+let ``val`` = 100L in { Point { x = 1L, y = 2L } with x = ``val`` }.x = 100L
 
 // Canonical validation, generic identity, nesting, ordering, and rendering.
 type PhantomRecord<'unused> = { value: Int64 }
-PhantomRecord<String> { value = 7 } = stdout="PhantomRecord<String> { value: 7 }\n" stderr=""
+PhantomRecord<String> { value = 7L } = stdout="PhantomRecord<String> { value: 7 }\n" stderr=""
 
 type MixedPhantomRecord<'unused, 'value> = { value: 'value }
 MixedPhantomRecord<Int64, String> { value = "managed" } = stdout="MixedPhantomRecord<Int64, String> { value: \"managed\" }\n" stderr=""
@@ -164,42 +164,42 @@ type AliasRecordView<'a> = AliasRecord<'a>
 AliasRecordView<String> { value = "alias" } == AliasRecord<String> { value = "alias" } = true
 
 type OrderedPresentation = { z: Int64; a: String }
-OrderedPresentation { z = 2; a = "first" } = stdout="OrderedPresentation { a: \"first\", z: 2 }\n" stderr=""
+OrderedPresentation { z = 2L; a = "first" } = stdout="OrderedPresentation { a: \"first\", z: 2 }\n" stderr=""
 
 type DuplicateDeclarationField = { value: Int64; value: String }
-DuplicateDeclarationField { value = 7 }.value = 7
+DuplicateDeclarationField { value = 7L }.value = 7L
 
 type DuplicateConstruction = { value: Int64 }
-DuplicateConstruction { value = 1; value = 2 } = error="Duplicate field `value`"
+DuplicateConstruction { value = 1L; value = 2L } = error="Duplicate field `value`"
 
 type MissingConstruction = { first: Int64; second: Int64 }
-MissingConstruction { first = 1 } = error="Missing fields in record literal: second"
+MissingConstruction { first = 1L } = error="Missing fields in record literal: second"
 
 type UnknownConstruction = { value: Int64 }
-UnknownConstruction { value = 1; other = 2 } = error="Unknown fields in record literal: other"
+UnknownConstruction { value = 1L; other = 2L } = error="Unknown fields in record literal: other"
 
 type EmptyConstructionKey = { value: Int64 }
-EmptyConstructionKey { ___ = 1 } = error="Empty key in record creation"
+EmptyConstructionKey { ___ = 1L } = error="Empty key in record creation"
 
 type ExplicitArity<'a> = { value: a }
-ExplicitArity<Int64, String> { value = 1 } = error="Record type argument arity mismatch: expected 1, got 2"
+ExplicitArity<Int64, String> { value = 1L } = error="Record type argument arity mismatch: expected 1, got 2"
 
 type UpdateLastWins = { value: Int64; untouched: String }
-let original = UpdateLastWins { value = 1; untouched = "kept" } in let updated = { original with value = 2; value = 3 } in updated.value = 3
+let original = UpdateLastWins { value = 1L; untouched = "kept" } in let updated = { original with value = 2L; value = 3L } in updated.value = 3L
 
 type InvalidUpdate = { value: Int64 }
-let original = InvalidUpdate { value = 1 } in { original with other = 2 } = error="Unknown fields in record update: other"
+let original = InvalidUpdate { value = 1L } in { original with other = 2L } = error="Unknown fields in record update: other"
 
 type InvalidUpdate = { value: Int64 }
-let original = InvalidUpdate { value = 1 } in { original with ___ = 2 } = error="Empty key in record update"
+let original = InvalidUpdate { value = 1L } in { original with ___ = 2L } = error="Empty key in record update"
 
 type AccessDiagnostics = { value: Int64 }
-let record = AccessDiagnostics { value = 1 } in record.___ = error="Field name is empty"
+let record = AccessDiagnostics { value = 1L } in record.___ = error="Field name is empty"
 
 type AccessDiagnostics = { value: Int64 }
-let record = AccessDiagnostics { value = 1 } in record.other = error="Tried to access field 'other' but record type AccessDiagnostics has no such field"
+let record = AccessDiagnostics { value = 1L } in record.other = error="Tried to access field 'other' but record type AccessDiagnostics has no such field"
 
-let nonRecord = 1 in nonRecord.value = error="Attempting to access field 'value' on non-record type Int64"
+let nonRecord = 1L in nonRecord.value = error="Attempting to access field 'value' on non-record type Int64"
 
 type LongRenderedRecord = { alpha: String; beta: String }
 LongRenderedRecord { alpha = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"; beta = "abcdefghijklmnopqrstuvwxyz" } = stdout="LongRenderedRecord {\n  alpha: \"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\",\n  beta: \"abcdefghijklmnopqrstuvwxyz\"\n}\n" stderr=""

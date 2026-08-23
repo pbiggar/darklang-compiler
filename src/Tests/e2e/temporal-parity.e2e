@@ -8,10 +8,10 @@ Stdlib.DateTime.month(Builtin.unwrap(Stdlib.DateTime.parse("2000-02-29T23:59:59.
 Stdlib.DateTime.day(Builtin.unwrap(Stdlib.DateTime.parse("2000-02-29T23:59:59.999Z"))) = 29I
 Stdlib.DateTime.fromMilliseconds(0I) == Stdlib.DateTime.fromMilliseconds(0I) = true
 Stdlib.DateTime.fromMilliseconds(0I) == 0I = error="Cannot perform equality check on DateTime and Int"
-let temporalNeedsInt64(value: Int64): Int64 = value temporalNeedsInt64(Stdlib.DateTime.fromMilliseconds(0I)) = error="temporalNeedsInt64's 1st parameter `value` expects Int64, but got DateTime (DateTime)"
-let temporalNeedsInt(value: Int): Int = value temporalNeedsInt(Stdlib.DateTime.fromMilliseconds(0I)) = error="temporalNeedsInt's 1st parameter `value` expects Int, but got DateTime (DateTime)"
-let temporalNeedsDateTime(value: DateTime): DateTime = value temporalNeedsDateTime(0L) = error="temporalNeedsDateTime's 1st parameter `value` expects DateTime, but got Int64 (0)"
-let temporalNeedsDateTimeInt(value: DateTime): DateTime = value temporalNeedsDateTimeInt(0I) = error="temporalNeedsDateTimeInt's 1st parameter `value` expects DateTime, but got Int (0)"
+let temporalNeedsInt64(value: Int64): Int64 = value; temporalNeedsInt64(Stdlib.DateTime.fromMilliseconds(0I)) = error="temporalNeedsInt64's 1st parameter `value` expects Int64, but got DateTime (DateTime)"
+let temporalNeedsInt(value: Int): Int = value; temporalNeedsInt(Stdlib.DateTime.fromMilliseconds(0I)) = error="temporalNeedsInt's 1st parameter `value` expects Int, but got DateTime (DateTime)"
+let temporalNeedsDateTime(value: DateTime): DateTime = value; temporalNeedsDateTime(0L) = error="temporalNeedsDateTime's 1st parameter `value` expects DateTime, but got Int64 (0)"
+let temporalNeedsDateTimeInt(value: DateTime): DateTime = value; temporalNeedsDateTimeInt(0I) = error="temporalNeedsDateTimeInt's 1st parameter `value` expects DateTime, but got Int (0)"
 
 Stdlib.Duration.parse("30s") = Stdlib.Result.Result.Ok(30I)
 Stdlib.Duration.parse("5m") = Stdlib.Result.Result.Ok(300I)

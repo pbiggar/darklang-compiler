@@ -15,25 +15,25 @@
 // Simple case: one Let in each branch
 let ifWithLets(flag: Bool) : Int64 =
   if flag then
-    let x = 10 in x
+    let x = 10L in x
   else
-    let y = 20 in y
-ifWithLets(true) = 10
-ifWithLets(false) = 20
+    let y = 20L in y
+ifWithLets(true) = 10L
+ifWithLets(false) = 20L
 
 // Multiple Lets in each branch (should sum both counts)
 let ifWithMultipleLets(flag: Bool) : Int64 =
   if flag then
-    let a = 1 in
-    let b = 2 in
-    let c = 3 in
+    let a = 1L in
+    let b = 2L in
+    let c = 3L in
     a + b + c
   else
-    let x = 10 in
-    let y = 20 in
+    let x = 10L in
+    let y = 20L in
     x + y
-ifWithMultipleLets(true) = 6
-ifWithMultipleLets(false) = 30
+ifWithMultipleLets(true) = 6L
+ifWithMultipleLets(false) = 30L
 
 // ===================================================================
 // Nested If expressions
@@ -43,19 +43,19 @@ ifWithMultipleLets(false) = 30
 let nestedIf(outer: Bool, inner: Bool) : Int64 =
   if outer then
     if inner then
-      let a = 1 in
-      let b = 2 in
+      let a = 1L in
+      let b = 2L in
       a + b
     else
-      let c = 3 in c
+      let c = 3L in c
   else
-    let d = 4 in
-    let e = 5 in
+    let d = 4L in
+    let e = 5L in
     d + e
-nestedIf(true, true) = 3
-nestedIf(true, false) = 3
-nestedIf(false, true) = 9
-nestedIf(false, false) = 9
+nestedIf(true, true) = 3L
+nestedIf(true, false) = 3L
+nestedIf(false, true) = 9L
+nestedIf(false, false) = 9L
 
 // ===================================================================
 // Functions with large If bodies (near inlining threshold)
@@ -67,32 +67,32 @@ nestedIf(false, false) = 9
 // Total should be 20, right at the threshold
 let largeIfFunction(flag: Bool) : Int64 =
   if flag then
-    let a1 = 1 in
-    let a2 = 2 in
-    let a3 = 3 in
-    let a4 = 4 in
-    let a5 = 5 in
-    let a6 = 6 in
-    let a7 = 7 in
-    let a8 = 8 in
-    let a9 = 9 in
-    let a10 = 10 in
+    let a1 = 1L in
+    let a2 = 2L in
+    let a3 = 3L in
+    let a4 = 4L in
+    let a5 = 5L in
+    let a6 = 6L in
+    let a7 = 7L in
+    let a8 = 8L in
+    let a9 = 9L in
+    let a10 = 10L in
     a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10
   else
-    let b1 = 10 in
-    let b2 = 20 in
-    let b3 = 30 in
-    let b4 = 40 in
-    let b5 = 50 in
-    let b6 = 60 in
-    let b7 = 70 in
-    let b8 = 80 in
-    let b9 = 90 in
-    let b10 = 100 in
+    let b1 = 10L in
+    let b2 = 20L in
+    let b3 = 30L in
+    let b4 = 40L in
+    let b5 = 50L in
+    let b6 = 60L in
+    let b7 = 70L in
+    let b8 = 80L in
+    let b9 = 90L in
+    let b10 = 100L in
     b1 + b2 + b3 + b4 + b5 + b6 + b7 + b8 + b9 + b10
 
-largeIfFunction(true) = 55
-largeIfFunction(false) = 550
+largeIfFunction(true) = 55L
+largeIfFunction(false) = 550L
 
 // Function with asymmetric branches (to test + vs - in counting)
 // then-branch: 15 Lets, else-branch: 5 Lets
@@ -100,32 +100,32 @@ largeIfFunction(false) = 550
 // With -: 10 (well below threshold, would be inlined)
 let asymmetricIfFunction(flag: Bool) : Int64 =
   if flag then
-    let a1 = 1 in
-    let a2 = 2 in
-    let a3 = 3 in
-    let a4 = 4 in
-    let a5 = 5 in
-    let a6 = 6 in
-    let a7 = 7 in
-    let a8 = 8 in
-    let a9 = 9 in
-    let a10 = 10 in
-    let a11 = 11 in
-    let a12 = 12 in
-    let a13 = 13 in
-    let a14 = 14 in
-    let a15 = 15 in
+    let a1 = 1L in
+    let a2 = 2L in
+    let a3 = 3L in
+    let a4 = 4L in
+    let a5 = 5L in
+    let a6 = 6L in
+    let a7 = 7L in
+    let a8 = 8L in
+    let a9 = 9L in
+    let a10 = 10L in
+    let a11 = 11L in
+    let a12 = 12L in
+    let a13 = 13L in
+    let a14 = 14L in
+    let a15 = 15L in
     a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15
   else
-    let b1 = 100 in
-    let b2 = 200 in
-    let b3 = 300 in
-    let b4 = 400 in
-    let b5 = 500 in
+    let b1 = 100L in
+    let b2 = 200L in
+    let b3 = 300L in
+    let b4 = 400L in
+    let b5 = 500L in
     b1 + b2 + b3 + b4 + b5
 
-asymmetricIfFunction(true) = 120
-asymmetricIfFunction(false) = 1500
+asymmetricIfFunction(true) = 120L
+asymmetricIfFunction(false) = 1500L
 
 // ===================================================================
 // Function calling another function with If and Lets
@@ -133,18 +133,18 @@ asymmetricIfFunction(false) = 1500
 // Tests that inlining decisions cascade correctly
 
 let helperWithIf(x: Int64) : Int64 =
-  if x > 0 then
-    let pos = x * 2 in pos
+  if x > 0L then
+    let pos = x * 2L in pos
   else
-    let neg = x * -1 in neg
+    let neg = x * -1L in neg
 
 let callerOfHelper(n: Int64) : Int64 =
   let a = helperWithIf(n) in
   let b = helperWithIf(-n) in
   a + b
 
-callerOfHelper(5) = 15
-callerOfHelper(-3) = 9
+callerOfHelper(5L) = 15L
+callerOfHelper(-3L) = 9L
 
 // ===================================================================
 // Complex nested structure
@@ -153,30 +153,30 @@ callerOfHelper(-3) = 9
 
 let complexNested(a: Bool, b: Bool, c: Bool) : Int64 =
   if a then
-    let x1 = 100 in
+    let x1 = 100L in
     if b then
-      let x2 = x1 + 10 in
+      let x2 = x1 + 10L in
       if c then
-        let x3 = x2 + 1 in x3
+        let x3 = x2 + 1L in x3
       else
-        let x4 = x2 + 2 in x4
+        let x4 = x2 + 2L in x4
     else
-      let x5 = x1 + 20 in x5
+      let x5 = x1 + 20L in x5
   else
-    let y1 = 200 in
+    let y1 = 200L in
     if b then
-      let y2 = y1 + 30 in y2
+      let y2 = y1 + 30L in y2
     else
-      let y3 = y1 + 40 in y3
+      let y3 = y1 + 40L in y3
 
-complexNested(true, true, true) = 111
-complexNested(true, true, false) = 112
-complexNested(true, false, true) = 120
-complexNested(true, false, false) = 120
-complexNested(false, true, true) = 230
-complexNested(false, true, false) = 230
-complexNested(false, false, true) = 240
-complexNested(false, false, false) = 240
+complexNested(true, true, true) = 111L
+complexNested(true, true, false) = 112L
+complexNested(true, false, true) = 120L
+complexNested(true, false, false) = 120L
+complexNested(false, true, true) = 230L
+complexNested(false, true, false) = 230L
+complexNested(false, false, true) = 240L
+complexNested(false, false, false) = 240L
 
 // ===================================================================
 // Inlining in If Expression Branches
@@ -185,7 +185,7 @@ complexNested(false, false, false) = 240
 // function call that gets inlined.
 
 // Small helper function that will be inlined (size 1, well under MaxFunctionSize=20)
-let addTwo(x: Int64) : Int64 = x + 2
+let addTwo(x: Int64) : Int64 = x + 2L
 
 // If expression where only the then-branch has a call that gets inlined
 // The else-branch is a simple expression with no function calls
@@ -194,22 +194,22 @@ let ifWithInlineInThenOnly(flag: Bool, n: Int64) : Int64 =
     let result = addTwo(n) in  // This call will be inlined
     result
   else
-    n * 3                      // No call to inline
+    n * 3L                      // No call to inline
 
-ifWithInlineInThenOnly(true, 10) = 12
-ifWithInlineInThenOnly(false, 10) = 30
+ifWithInlineInThenOnly(true, 10L) = 12L
+ifWithInlineInThenOnly(false, 10L) = 30L
 
 // If expression where only the else-branch has a call that gets inlined
 // The then-branch is a simple expression with no function calls
 let ifWithInlineInElseOnly(flag: Bool, n: Int64) : Int64 =
   if flag then
-    n * 4                      // No call to inline
+    n * 4L                      // No call to inline
   else
     let result = addTwo(n) in  // This call will be inlined
     result
 
-ifWithInlineInElseOnly(true, 5) = 20
-ifWithInlineInElseOnly(false, 5) = 7
+ifWithInlineInElseOnly(true, 5L) = 20L
+ifWithInlineInElseOnly(false, 5L) = 7L
 
 // Nested If where inner If has inlining only in one branch
 // This tests inlining through nested structures
@@ -218,14 +218,14 @@ let nestedIfWithPartialInline(outer: Bool, inner: Bool, n: Int64) : Int64 =
     if inner then
       addTwo(n)    // Inlined
     else
-      n + 100      // Not a call
+      n + 100L      // Not a call
   else
-    n * 5          // No calls in outer else branch
+    n * 5L          // No calls in outer else branch
 
-nestedIfWithPartialInline(true, true, 10) = 12
-nestedIfWithPartialInline(true, false, 10) = 110
-nestedIfWithPartialInline(false, true, 10) = 50
-nestedIfWithPartialInline(false, false, 10) = 50
+nestedIfWithPartialInline(true, true, 10L) = 12L
+nestedIfWithPartialInline(true, false, 10L) = 110L
+nestedIfWithPartialInline(false, true, 10L) = 50L
+nestedIfWithPartialInline(false, false, 10L) = 50L
 
 // ===================================================================
 // Program-Level Inlining Across Multiple Functions
@@ -234,7 +234,7 @@ nestedIfWithPartialInline(false, false, 10) = 50
 // inlining opportunities and others do not.
 
 // Small helper that will be inlined (size 1)
-let tiny(x: Int64) : Int64 = x + 1
+let tiny(x: Int64) : Int64 = x + 1L
 
 // Function that calls tiny - the call will be inlined
 let callerWithInline(n: Int64) : Int64 =
@@ -244,17 +244,17 @@ let callerWithInline(n: Int64) : Int64 =
 
 // Function with no inlining opportunities (no calls to inline-able functions)
 let noInline(n: Int64) : Int64 =
-  let x = n * 2 in
-  let y = x + 3 in
+  let x = n * 2L in
+  let y = x + 3L in
   y
 
 // Test that both functions work correctly when processed together.
-callerWithInline(5) = 7
-noInline(10) = 23
+callerWithInline(5L) = 7L
+noInline(10L) = 23L
 
 // Multiple functions with varying inlining behavior
-let helper1(x: Int64) : Int64 = x * 3
-let helper2(x: Int64) : Int64 = x - 1
+let helper1(x: Int64) : Int64 = x * 3L
+let helper2(x: Int64) : Int64 = x - 1L
 
 // This function has inlining (calls helper1 and helper2)
 let mixedCaller(n: Int64) : Int64 =
@@ -269,5 +269,5 @@ let pureComputation(n: Int64) : Int64 =
   cubed - squared
 
 // Verify behavior when multiple functions process through the fold
-mixedCaller(4) = 11
-pureComputation(3) = 18
+mixedCaller(4L) = 11L
+pureComputation(3L) = 18L

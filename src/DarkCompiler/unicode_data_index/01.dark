@@ -4,62 +4,62 @@
 module Unicode.Data
 
 let __graphemeFromCode(value: Int64) : Unicode.Data.GraphemeBreak =
-    if value == 1 then Unicode.Data.GraphemeBreak.GBCR
-    else if value == 2 then Unicode.Data.GraphemeBreak.GBLF
-    else if value == 3 then Unicode.Data.GraphemeBreak.GBControl
-    else if value == 4 then Unicode.Data.GraphemeBreak.GBExtend
-    else if value == 5 then Unicode.Data.GraphemeBreak.GBZWJ
-    else if value == 6 then Unicode.Data.GraphemeBreak.GBRegionalIndicator
-    else if value == 7 then Unicode.Data.GraphemeBreak.GBPrepend
-    else if value == 8 then Unicode.Data.GraphemeBreak.GBSpacingMark
-    else if value == 9 then Unicode.Data.GraphemeBreak.GBL
-    else if value == 10 then Unicode.Data.GraphemeBreak.GBV
-    else if value == 11 then Unicode.Data.GraphemeBreak.GBT
-    else if value == 12 then Unicode.Data.GraphemeBreak.GBLV
-    else if value == 13 then Unicode.Data.GraphemeBreak.GBLVT
+    if value == 1L then Unicode.Data.GraphemeBreak.GBCR
+    else if value == 2L then Unicode.Data.GraphemeBreak.GBLF
+    else if value == 3L then Unicode.Data.GraphemeBreak.GBControl
+    else if value == 4L then Unicode.Data.GraphemeBreak.GBExtend
+    else if value == 5L then Unicode.Data.GraphemeBreak.GBZWJ
+    else if value == 6L then Unicode.Data.GraphemeBreak.GBRegionalIndicator
+    else if value == 7L then Unicode.Data.GraphemeBreak.GBPrepend
+    else if value == 8L then Unicode.Data.GraphemeBreak.GBSpacingMark
+    else if value == 9L then Unicode.Data.GraphemeBreak.GBL
+    else if value == 10L then Unicode.Data.GraphemeBreak.GBV
+    else if value == 11L then Unicode.Data.GraphemeBreak.GBT
+    else if value == 12L then Unicode.Data.GraphemeBreak.GBLV
+    else if value == 13L then Unicode.Data.GraphemeBreak.GBLVT
     else Unicode.Data.GraphemeBreak.GBOther
 
 let __uppercaseLookupGroup0(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table54.__uppercaseChunk0(), 0, key, 6, 25, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table54.__uppercaseChunk0(), 0L, key, 6L, 25L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table55.__uppercaseChunk1(), 0, key, 6, 25, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table55.__uppercaseChunk1(), 0L, key, 6L, 25L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table56.__uppercaseChunk2(), 0, key, 6, 25, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table56.__uppercaseChunk2(), 0L, key, 6L, 25L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table57.__uppercaseChunk3(), 0, key, 6, 25, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table57.__uppercaseChunk3(), 0L, key, 6L, 25L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __extendedPictographicLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table40.__extendedPictographicChunk0(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table40.__extendedPictographicChunk0(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table41.__extendedPictographicChunk1(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table41.__extendedPictographicChunk1(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table42.__extendedPictographicChunk2(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table42.__extendedPictographicChunk2(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table43.__extendedPictographicChunk3(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table43.__extendedPictographicChunk3(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __generalCategoryLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table15.__generalCategoryChunk0(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table15.__generalCategoryChunk0(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table16.__generalCategoryChunk1(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table16.__generalCategoryChunk1(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table17.__generalCategoryChunk2(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table17.__generalCategoryChunk2(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table18.__generalCategoryChunk3(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table18.__generalCategoryChunk3(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
@@ -85,5 +85,5 @@ let __indicConjunctBreakLookup(codepoint: Int64) : Stdlib.Option.Option<Int64> =
     | None ->
         None
 
-let lookupGeneralCategory(codepoint: Int64) : Unicode.Data.GeneralCategory = Unicode.Data.__categoryFromCode(Stdlib.Option.withDefault<Int64>(Unicode.Data.__generalCategoryLookup(codepoint), 29))
+let lookupGeneralCategory(codepoint: Int64) : Unicode.Data.GeneralCategory = Unicode.Data.__categoryFromCode(Stdlib.Option.withDefault<Int64>(Unicode.Data.__generalCategoryLookup(codepoint), 29L))
 let lookupLowercaseAt(codepoint: Int64, index: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__lowercaseLookup(codepoint, index)

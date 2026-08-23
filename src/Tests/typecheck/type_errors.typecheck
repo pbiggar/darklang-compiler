@@ -1,19 +1,19 @@
 // Type error tests - expressions that should fail type checking
 
 // Arithmetic with booleans
-1 + true : Int64
-false - 5 : error
+1L + true : Int64
+false - 5L : error
 true * false : error
 
 // Boolean operators with integers
-1 && 2 : error
-5 || 10 : error
-!42 : error
+1L && 2L : error
+5L || 10L : error
+!42L : error
 
 // If with mismatched branch types
-if true then 10 else false : error
-if false then true else 5 : error
+if true then 10L else false : error
+if false then true else 5L : error
 
 // Comparison of incompatible types
-true == 5 : error
-10 < false : error
+true == 5L : error
+10L < false : error

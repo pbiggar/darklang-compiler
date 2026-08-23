@@ -7,27 +7,27 @@
 module Stdlib.Internal.SkewList
 
 // Low pointer tags. Empty is the null pointer rather than an allocation.
-let __TAG_EMPTY() : Int64 = 0
-let __TAG_DIGIT() : Int64 = 1
-let __TAG_LEAF() : Int64 = 2
-let __TAG_NODE() : Int64 = 3
+let __TAG_EMPTY() : Int64 = 0L
+let __TAG_DIGIT() : Int64 = 1L
+let __TAG_LEAF() : Int64 = 2L
+let __TAG_NODE() : Int64 = 3L
 
 // Digit layout: [weight][suffix length][tree][rest][refcount].
-let __DIGIT_WEIGHT_OFF() : Int64 = 0
-let __DIGIT_LENGTH_OFF() : Int64 = 8
-let __DIGIT_TREE_OFF() : Int64 = 16
-let __DIGIT_REST_OFF() : Int64 = 24
-let __DIGIT_RC_OFF() : Int64 = 32
+let __DIGIT_WEIGHT_OFF() : Int64 = 0L
+let __DIGIT_LENGTH_OFF() : Int64 = 8L
+let __DIGIT_TREE_OFF() : Int64 = 16L
+let __DIGIT_REST_OFF() : Int64 = 24L
+let __DIGIT_RC_OFF() : Int64 = 32L
 
 // Leaf layout: [value][refcount].
-let __LEAF_VALUE_OFF() : Int64 = 0
-let __LEAF_RC_OFF() : Int64 = 8
+let __LEAF_VALUE_OFF() : Int64 = 0L
+let __LEAF_RC_OFF() : Int64 = 8L
 
 // Internal tree layout: [value][left][right][refcount].
-let __NODE_VALUE_OFF() : Int64 = 0
-let __NODE_LEFT_OFF() : Int64 = 8
-let __NODE_RIGHT_OFF() : Int64 = 16
-let __NODE_RC_OFF() : Int64 = 24
+let __NODE_VALUE_OFF() : Int64 = 0L
+let __NODE_LEFT_OFF() : Int64 = 8L
+let __NODE_RIGHT_OFF() : Int64 = 16L
+let __NODE_RC_OFF() : Int64 = 24L
 
 let __getTag<'a>(value: List<a>) : Int64 =
     __list_get_tag<a>(value)
@@ -42,26 +42,26 @@ let __isNull<'a>(value: List<a>) : Bool =
     __list_is_null<a>(value)
 
 let __allocLeaf<'a>(value: a) : List<a> =
-    let ptr = __raw_alloc(16) in
+    let ptr = __raw_alloc(16L) in
     let _ = __raw_slot_init<a>(ptr, Stdlib.Internal.SkewList.__LEAF_VALUE_OFF(), value) in
-    let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__LEAF_RC_OFF(), 1) in
+    let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__LEAF_RC_OFF(), 1L) in
     Stdlib.Internal.SkewList.__fromRawPtr<a>(ptr, Stdlib.Internal.SkewList.__TAG_LEAF())
 
 let __allocNode<'a>(value: a, left: List<a>, right: List<a>) : List<a> =
-    let ptr = __raw_alloc(32) in
+    let ptr = __raw_alloc(32L) in
     let _ = __raw_slot_init<a>(ptr, Stdlib.Internal.SkewList.__NODE_VALUE_OFF(), value) in
     let _ = __raw_slot_init<List<a>>(ptr, Stdlib.Internal.SkewList.__NODE_LEFT_OFF(), left) in
     let _ = __raw_slot_init<List<a>>(ptr, Stdlib.Internal.SkewList.__NODE_RIGHT_OFF(), right) in
-    let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__NODE_RC_OFF(), 1) in
+    let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__NODE_RC_OFF(), 1L) in
     Stdlib.Internal.SkewList.__fromRawPtr<a>(ptr, Stdlib.Internal.SkewList.__TAG_NODE())
 
 let __allocDigit<'a>(weight: Int64, length: Int64, tree: List<a>, rest: List<a>) : List<a> =
-    let ptr = __raw_alloc(40) in
+    let ptr = __raw_alloc(40L) in
     let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__DIGIT_WEIGHT_OFF(), weight) in
     let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__DIGIT_LENGTH_OFF(), length) in
     let _ = __raw_slot_init<List<a>>(ptr, Stdlib.Internal.SkewList.__DIGIT_TREE_OFF(), tree) in
     let _ = __raw_slot_init<List<a>>(ptr, Stdlib.Internal.SkewList.__DIGIT_REST_OFF(), rest) in
-    let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__DIGIT_RC_OFF(), 1) in
+    let _ = __raw_write_word(ptr, Stdlib.Internal.SkewList.__DIGIT_RC_OFF(), 1L) in
     Stdlib.Internal.SkewList.__fromRawPtr<a>(ptr, Stdlib.Internal.SkewList.__TAG_DIGIT())
 
 let __digitWeight<'a>(digit: List<a>) : Int64 =
@@ -77,7 +77,7 @@ let __digitRest<'a>(digit: List<a>) : List<a> =
     __raw_get<List<a>>(Stdlib.Internal.SkewList.__toRawPtr<a>(digit), Stdlib.Internal.SkewList.__DIGIT_REST_OFF())
 
 let __treeValue<'a>(tree: List<a>) : a =
-    __raw_get<a>(Stdlib.Internal.SkewList.__toRawPtr<a>(tree), 0)
+    __raw_get<a>(Stdlib.Internal.SkewList.__toRawPtr<a>(tree), 0L)
 
 let __nodeLeft<'a>(tree: List<a>) : List<a> =
     __raw_get<List<a>>(Stdlib.Internal.SkewList.__toRawPtr<a>(tree), Stdlib.Internal.SkewList.__NODE_LEFT_OFF())
@@ -92,7 +92,7 @@ let isEmpty<'a>(list: List<a>) : Bool =
     Stdlib.Internal.SkewList.__isNull<a>(list)
 
 let length<'a>(list: List<a>) : Int64 =
-    if Stdlib.Internal.SkewList.__isNull<a>(list) then 0
+    if Stdlib.Internal.SkewList.__isNull<a>(list) then 0L
     else Stdlib.Internal.SkewList.__digitLength<a>(list)
 
 let __lengthFloat(list: List<Float>) : Int64 =
@@ -100,7 +100,7 @@ let __lengthFloat(list: List<Float>) : Int64 =
 
 let singleton<'a>(value: a) : List<a> =
     let tree = Stdlib.Internal.SkewList.__allocLeaf<a>(value) in
-    Stdlib.Internal.SkewList.__allocDigit<a>(1, 1, tree, Stdlib.Internal.SkewList.empty<a>())
+    Stdlib.Internal.SkewList.__allocDigit<a>(1L, 1L, tree, Stdlib.Internal.SkewList.empty<a>())
 
 // Prepend in worst-case O(1). Equal leading weights perform one skew carry.
 let push<'a>(list: List<a>, value: a) : List<a> =
@@ -110,16 +110,16 @@ let push<'a>(list: List<a>, value: a) : List<a> =
         let firstRest = Stdlib.Internal.SkewList.__digitRest<a>(list) in
         if Stdlib.Internal.SkewList.__isNull<a>(firstRest) then
             let tree = Stdlib.Internal.SkewList.__allocLeaf<a>(value) in
-            Stdlib.Internal.SkewList.__allocDigit<a>(1, Stdlib.Internal.SkewList.__digitLength<a>(list) + 1, tree, list)
+            Stdlib.Internal.SkewList.__allocDigit<a>(1L, Stdlib.Internal.SkewList.__digitLength<a>(list) + 1L, tree, list)
         else
             let firstWeight = Stdlib.Internal.SkewList.__digitWeight<a>(list) in
             let secondWeight = Stdlib.Internal.SkewList.__digitWeight<a>(firstRest) in
             if firstWeight == secondWeight then
                 let tree = Stdlib.Internal.SkewList.__allocNode<a>(value, Stdlib.Internal.SkewList.__digitTree<a>(list), Stdlib.Internal.SkewList.__digitTree<a>(firstRest)) in
-                Stdlib.Internal.SkewList.__allocDigit<a>(firstWeight + firstWeight + 1, Stdlib.Internal.SkewList.__digitLength<a>(list) + 1, tree, Stdlib.Internal.SkewList.__digitRest<a>(firstRest))
+                Stdlib.Internal.SkewList.__allocDigit<a>(firstWeight + firstWeight + 1L, Stdlib.Internal.SkewList.__digitLength<a>(list) + 1L, tree, Stdlib.Internal.SkewList.__digitRest<a>(firstRest))
             else
                 let tree = Stdlib.Internal.SkewList.__allocLeaf<a>(value) in
-                Stdlib.Internal.SkewList.__allocDigit<a>(1, Stdlib.Internal.SkewList.__digitLength<a>(list) + 1, tree, list)
+                Stdlib.Internal.SkewList.__allocDigit<a>(1L, Stdlib.Internal.SkewList.__digitLength<a>(list) + 1L, tree, list)
 
 let headUnsafe<'a>(list: List<a>) : a =
     Stdlib.Internal.SkewList.__treeValue<a>(Stdlib.Internal.SkewList.__digitTree<a>(list))
@@ -134,24 +134,24 @@ let tail<'a>(list: List<a>) : List<a> =
         Stdlib.Internal.SkewList.empty<a>()
     else
         let weight = Stdlib.Internal.SkewList.__digitWeight<a>(list) in
-        if weight == 1 then
+        if weight == 1L then
             Stdlib.Internal.SkewList.__digitRest<a>(list)
         else
             let tree = Stdlib.Internal.SkewList.__digitTree<a>(list) in
-            let childWeight = (weight - 1) / 2 in
-            let newLength = Stdlib.Internal.SkewList.__digitLength<a>(list) - 1 in
+            let childWeight = (weight - 1L) / 2L in
+            let newLength = Stdlib.Internal.SkewList.__digitLength<a>(list) - 1L in
             let rightDigit = Stdlib.Internal.SkewList.__allocDigit<a>(childWeight, newLength - childWeight, Stdlib.Internal.SkewList.__nodeRight<a>(tree), Stdlib.Internal.SkewList.__digitRest<a>(list)) in
             Stdlib.Internal.SkewList.__allocDigit<a>(childWeight, newLength, Stdlib.Internal.SkewList.__nodeLeft<a>(tree), rightDigit)
 
 let __treeGetAt<'a>(tree: List<a>, weight: Int64, index: Int64) : a =
-    if index == 0 then
+    if index == 0L then
         Stdlib.Internal.SkewList.__treeValue<a>(tree)
     else
-        let childWeight = (weight - 1) / 2 in
+        let childWeight = (weight - 1L) / 2L in
         if index <= childWeight then
-            Stdlib.Internal.SkewList.__treeGetAt<a>(Stdlib.Internal.SkewList.__nodeLeft<a>(tree), childWeight, index - 1)
+            Stdlib.Internal.SkewList.__treeGetAt<a>(Stdlib.Internal.SkewList.__nodeLeft<a>(tree), childWeight, index - 1L)
         else
-            Stdlib.Internal.SkewList.__treeGetAt<a>(Stdlib.Internal.SkewList.__nodeRight<a>(tree), childWeight, index - childWeight - 1)
+            Stdlib.Internal.SkewList.__treeGetAt<a>(Stdlib.Internal.SkewList.__nodeRight<a>(tree), childWeight, index - childWeight - 1L)
 
 let __digitsGetAt<'a>(digits: List<a>, index: Int64) : a =
     let weight = Stdlib.Internal.SkewList.__digitWeight<a>(digits) in
@@ -161,27 +161,27 @@ let __digitsGetAt<'a>(digits: List<a>, index: Int64) : a =
         Stdlib.Internal.SkewList.__digitsGetAt<a>(Stdlib.Internal.SkewList.__digitRest<a>(digits), index - weight)
 
 let getAt<'a>(list: List<a>, index: Int64) : Stdlib.Option.Option<a> =
-    if index < 0 then None
+    if index < 0L then None
     else if index >= Stdlib.Internal.SkewList.length<a>(list) then None
     else Some(Stdlib.Internal.SkewList.__digitsGetAt<a>(list, index))
 
 let getAtOrDefault<'a>(list: List<a>, index: Int64, default_: a) : a =
-    if index < 0 then default_
+    if index < 0L then default_
     else if index >= Stdlib.Internal.SkewList.length<a>(list) then default_
     else Stdlib.Internal.SkewList.__digitsGetAt<a>(list, index)
 
 let __treeSetAt<'a>(tree: List<a>, weight: Int64, index: Int64, replacement: a) : List<a> =
-    if weight == 1 then
+    if weight == 1L then
         Stdlib.Internal.SkewList.__allocLeaf<a>(replacement)
-    else if index == 0 then
+    else if index == 0L then
         Stdlib.Internal.SkewList.__allocNode<a>(replacement, Stdlib.Internal.SkewList.__nodeLeft<a>(tree), Stdlib.Internal.SkewList.__nodeRight<a>(tree))
     else
-        let childWeight = (weight - 1) / 2 in
+        let childWeight = (weight - 1L) / 2L in
         if index <= childWeight then
-            let newLeft = Stdlib.Internal.SkewList.__treeSetAt<a>(Stdlib.Internal.SkewList.__nodeLeft<a>(tree), childWeight, index - 1, replacement) in
+            let newLeft = Stdlib.Internal.SkewList.__treeSetAt<a>(Stdlib.Internal.SkewList.__nodeLeft<a>(tree), childWeight, index - 1L, replacement) in
             Stdlib.Internal.SkewList.__allocNode<a>(Stdlib.Internal.SkewList.__treeValue<a>(tree), newLeft, Stdlib.Internal.SkewList.__nodeRight<a>(tree))
         else
-            let newRight = Stdlib.Internal.SkewList.__treeSetAt<a>(Stdlib.Internal.SkewList.__nodeRight<a>(tree), childWeight, index - childWeight - 1, replacement) in
+            let newRight = Stdlib.Internal.SkewList.__treeSetAt<a>(Stdlib.Internal.SkewList.__nodeRight<a>(tree), childWeight, index - childWeight - 1L, replacement) in
             Stdlib.Internal.SkewList.__allocNode<a>(Stdlib.Internal.SkewList.__treeValue<a>(tree), Stdlib.Internal.SkewList.__nodeLeft<a>(tree), newRight)
 
 let __digitsSetAt<'a>(digits: List<a>, index: Int64, replacement: a) : List<a> =
@@ -194,7 +194,7 @@ let __digitsSetAt<'a>(digits: List<a>, index: Int64, replacement: a) : List<a> =
         Stdlib.Internal.SkewList.__allocDigit<a>(weight, Stdlib.Internal.SkewList.__digitLength<a>(digits), Stdlib.Internal.SkewList.__digitTree<a>(digits), newRest)
 
 let setAt<'a>(list: List<a>, index: Int64, replacement: a) : List<a> =
-    if index < 0 then list
+    if index < 0L then list
     else if index >= Stdlib.Internal.SkewList.length<a>(list) then list
     else Stdlib.Internal.SkewList.__digitsSetAt<a>(list, index, replacement)
 
@@ -235,7 +235,7 @@ let concat<'a>(left: List<a>, right: List<a>) : List<a> =
     Stdlib.Internal.SkewList.__prependReversed<a>(Stdlib.Internal.SkewList.reverse<a>(left), right)
 
 let last<'a>(list: List<a>) : Stdlib.Option.Option<a> =
-    Stdlib.Internal.SkewList.getAt<a>(list, Stdlib.Internal.SkewList.length<a>(list) - 1)
+    Stdlib.Internal.SkewList.getAt<a>(list, Stdlib.Internal.SkewList.length<a>(list) - 1L)
 
 let init<'a>(list: List<a>) : List<a> =
     if Stdlib.Internal.SkewList.__isNull<a>(list) then Stdlib.Internal.SkewList.empty<a>()

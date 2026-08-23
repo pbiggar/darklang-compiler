@@ -5,42 +5,42 @@
 // of preserving the full Int64 value.
 
 // Small shifts - baseline
-1 << 10 = 1024
-1 << 20 = 1048576
+1L << 10L = 1024L
+1L << 20L = 1048576L
 
 // Value without high bit set - should work
-2000000000 << 1 = 4000000000
-2000000000 << 2 = 8000000000
+2000000000L << 1L = 4000000000L
+2000000000L << 2L = 8000000000L
 
 // Value with high bit set (bit 31 set in 32-bit view)
 // 3282089901 = 0xC3A4BD8D (bit 31 is set)
-3282089901 << 0 = 3282089901
-3282089901 << 1 = 6564179802
-3282089901 << 2 = 13128359604
-3282089901 << 10 = 3360860058624
+3282089901L << 0L = 3282089901L
+3282089901L << 1L = 6564179802L
+3282089901L << 2L = 13128359604L
+3282089901L << 10L = 3360860058624L
 
 // Another value with bit 31 set: 2^31
-2147483648 << 1 = 4294967296
+2147483648L << 1L = 4294967296L
 
 // Value just under 2^31
-2147483647 << 1 = 4294967294
+2147483647L << 1L = 4294967294L
 
 // Test with value 0xC0000000 = 3221225472
-3221225472 << 1 = 6442450944
+3221225472L << 1L = 6442450944L
 
 // Check each 16-bit chunk separately
-48525 << 10 = 49689600
-50084 << 10 = 51286016
+48525L << 10L = 49689600L
+50084L << 10L = 51286016L
 
 // Large values shifted by 1
-4000000000 << 1 = 8000000000
+4000000000L << 1L = 8000000000L
 
 // Check 0xBD8D0000 (the low 16 bits shifted to high position)
 // If shifted right by 6, we get value for comparison
-48525 << 16 = 3180134400
+48525L << 16L = 3180134400L
 
 // Value: 0xC3A40000 (high 16 bits only)
-3282051072 << 10 = 3360820297728
+3282051072L << 10L = 3360820297728L
 
 // Check value loading independently of the shift operation
-3282089901 + 0 = 3282089901
+3282089901L + 0L = 3282089901L

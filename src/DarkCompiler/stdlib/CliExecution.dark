@@ -8,19 +8,19 @@ type NativePosixError = { errno: Int64, message: String }
 
 // Replaced by the native CLI effect during AST-to-ANF conversion.
 let __execute(command: String) : Stdlib.Cli.NativeOutput =
-    Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "native CLI execution unavailable" }
+    Stdlib.Cli.NativeOutput { exitCode = -1L, stdout = "", stderr = "native CLI execution unavailable" }
 
-let __hostOSCode() : Int64 = -1
+let __hostOSCode() : Int64 = -1L
 let __getenv(name: String) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
 let __kill(pid: Int64, signal: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok(())
 let __sleep(delayMs: Float) : Unit = ()
-let __getpid() : Int64 = 0
-let __getuid() : Int64 = 0
-let __cpuCount() : Int64 = 1
+let __getpid() : Int64 = 0L
+let __getuid() : Int64 = 0L
+let __cpuCount() : Int64 = 1L
 let __currentUser() : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
-let __spawnProcess(command: String) : Int64 = -1
-let __processIO(handle: Int64, input: String) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "Invalid process handle" }
-let __terminateProcess(handle: Int64) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1, stdout = "", stderr = "Invalid process handle" }
+let __spawnProcess(command: String) : Int64 = -1L
+let __processIO(handle: Int64, input: String) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
+let __terminateProcess(handle: Int64) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
 
 let execute(command: String) : Stdlib.Cli.ExecutionOutcome =
     let result = Stdlib.Cli.__execute(command) in

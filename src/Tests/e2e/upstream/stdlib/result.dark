@@ -220,38 +220,38 @@ Stdlib.Result.isError_v0 (Stdlib.Result.Result.Ok "test") = false
 Stdlib.Result.isError_v0 (Stdlib.Result.Result.Error "test") = true
 
 
-Stdlib.Result.and_v0
-  (Stdlib.Result.Result.Ok "test1")
-  (Stdlib.Result.Result.Ok "test2") = Stdlib.Result.Result.Ok "test2"
+Stdlib.Result.and_v0<String, String>(
+  Stdlib.Result.Result.Ok("test1"),
+  Stdlib.Result.Result.Ok("test2")) = Stdlib.Result.Result.Ok "test2"
 
-Stdlib.Result.and_v0
-  (Stdlib.Result.Result.Ok "test1")
-  (Stdlib.Result.Result.Error "test2") = Stdlib.Result.Result.Error "test2"
+Stdlib.Result.and_v0<String, String>(
+  Stdlib.Result.Result.Ok("test1"),
+  Stdlib.Result.Result.Error("test2")) = Stdlib.Result.Result.Error "test2"
 
-Stdlib.Result.and_v0
-  (Stdlib.Result.Result.Error "test1")
-  (Stdlib.Result.Result.Ok "test2") = Stdlib.Result.Result.Error "test1"
+Stdlib.Result.and_v0<String, String>(
+  Stdlib.Result.Result.Error("test1"),
+  Stdlib.Result.Result.Ok("test2")) = Stdlib.Result.Result.Error "test1"
 
-Stdlib.Result.and_v0
-  (Stdlib.Result.Result.Error "test1")
-  (Stdlib.Result.Result.Error "test2") = Stdlib.Result.Result.Error "test1"
+Stdlib.Result.and_v0<String, String>(
+  Stdlib.Result.Result.Error("test1"),
+  Stdlib.Result.Result.Error("test2")) = Stdlib.Result.Result.Error "test1"
 
 
-Stdlib.Result.or_v0
-  (Stdlib.Result.Result.Ok "test1")
-  (Stdlib.Result.Result.Ok "test2") = Stdlib.Result.Result.Ok "test1"
+Stdlib.Result.or_v0<String, String>(
+  Stdlib.Result.Result.Ok("test1"),
+  Stdlib.Result.Result.Ok("test2")) = Stdlib.Result.Result.Ok "test1"
 
-Stdlib.Result.or_v0
-  (Stdlib.Result.Result.Ok "test1")
-  (Stdlib.Result.Result.Error "test2") = Stdlib.Result.Result.Ok "test1"
+Stdlib.Result.or_v0<String, String>(
+  Stdlib.Result.Result.Ok("test1"),
+  Stdlib.Result.Result.Error("test2")) = Stdlib.Result.Result.Ok "test1"
 
-Stdlib.Result.or_v0
-  (Stdlib.Result.Result.Error "test1")
-  (Stdlib.Result.Result.Ok "test2") = Stdlib.Result.Result.Ok "test2"
+Stdlib.Result.or_v0<String, String>(
+  Stdlib.Result.Result.Error("test1"),
+  Stdlib.Result.Result.Ok("test2")) = Stdlib.Result.Result.Ok "test2"
 
-Stdlib.Result.or_v0
-  (Stdlib.Result.Result.Error "test1")
-  (Stdlib.Result.Result.Error "test2") = Stdlib.Result.Result.Error "test2"
+Stdlib.Result.or_v0<String, String>(
+  Stdlib.Result.Result.Error("test1"),
+  Stdlib.Result.Result.Error("test2")) = Stdlib.Result.Result.Error "test2"
 
 
 Stdlib.Result.toList_v0 (Stdlib.Result.Result.Ok "test") = [ "test" ]

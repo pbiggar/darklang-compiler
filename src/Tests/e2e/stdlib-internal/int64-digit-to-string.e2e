@@ -2,7 +2,7 @@
 //
 // Internal identifiers are only allowed in stdlib-internal test files.
 
-Stdlib.Int64.__digitToString(0) = "0"
-Stdlib.Int64.__digitToString(5) = "5"
-Stdlib.Int64.__digitToString(9) = "9"
-Stdlib.Int64.__digitToString(10) = error="Uncaught exception: Stdlib.Int64.__digitToString expected a digit from 0 to 9"
+Stdlib.Int64.__digitToString(0L) = "0"
+Stdlib.Int64.__digitToString(5L) = "5"
+Stdlib.Int64.__digitToString(9L) = "9"
+Stdlib.Int64.__digitToString(10L) = error="Uncaught exception: Stdlib.Int64.__digitToString expected a digit from 0 to 9"

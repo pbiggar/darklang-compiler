@@ -8,45 +8,45 @@
 // - If with complex conditions
 
 // Simple if/else with boolean literals
-if true then 42 else 0 = 42
-if false then 0 else 99 = 99
+if true then 42L else 0L = 42L
+if false then 0L else 99L = 99L
 
 // If with comparisons
-if 5 > 3 then 1 else 2 = 1
-if 1 > 10 then 100 else 200 = 200
+if 5L > 3L then 1L else 2L = 1L
+if 1L > 10L then 100L else 200L = 200L
 
 // If with arithmetic in branches
-if true then 10 + 5 else 20 - 3 = 15
+if true then 10L + 5L else 20L - 3L = 15L
 
 // Nested if expressions
-if true then (if false then 1 else 2) else 3 = 2
+if true then (if false then 1L else 2L) else 3L = 2L
 
 // If with let bindings
-let x = 10 in if x > 5 then 100 else 0 = 100
-let y = 3 in if y > 5 then 100 else 50 = 50
+let x = 10L in if x > 5L then 100L else 0L = 100L
+let y = 3L in if y > 5L then 100L else 50L = 50L
 
 // Complex conditions
-if 2 + 3 == 5 then 42 else 0 = 42
+if 2L + 3L == 5L then 42L else 0L = 42L
 
 // Boolean operators in conditions
-if true && false then 1 else 2 = 2
-if true || false then 10 else 20 = 10
+if true && false then 1L else 2L = 2L
+if true || false then 10L else 20L = 10L
 
 // Multiple operations
-let x = 5 in let y = 3 in if x > y then x + y else x - y = 8
+let x = 5L in let y = 3L in if x > y then x + y else x - y = 8L
 
 // If-expressions in atom position (sub-expressions)
-(if true then 5 else 10) + 3 = 8
-(if false then 5 else 10) + 3 = 13
-2 * (if true then 3 else 4) = 6
-(if 1 < 2 then 100 else 200) - 50 = 50
+(if true then 5L else 10L) + 3L = 8L
+(if false then 5L else 10L) + 3L = 13L
+2L * (if true then 3L else 4L) = 6L
+(if 1L < 2L then 100L else 200L) - 50L = 50L
 
 // If in both operands
-(if true then 1 else 2) + (if false then 3 else 4) = 5
+(if true then 1L else 2L) + (if false then 3L else 4L) = 5L
 
 // Nested if in atom position
-(if true then (if false then 1 else 2) else 3) + 10 = 12
+(if true then (if false then 1L else 2L) else 3L) + 10L = 12L
 
 // Let binding with if in atom position
-let x = if true then 42 else 99 in x = 42
-let y = (if false then 10 else 20) + 5 in y = 25
+let x = if true then 42L else 99L in x = 42L
+let y = (if false then 10L else 20L) + 5L in y = 25L

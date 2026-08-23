@@ -3,12 +3,12 @@
 ---NAME---
 compiler canonical self recursion
 ---PARSE-AS---
-compiler
+interpreter
 ---SOURCE---
 let factorial(n: Int64) : Int64 = if n <= 1 then 1 else n * factorial(n - 1)
 factorial(5)
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 interpreter canonical self recursion
@@ -35,7 +35,7 @@ interpreter
 ---SOURCE---
 let countdown = fun n -> if n <= 0L then 0L else countdown (n - 1L) in countdown 5L
 ---ROUNDTRIP-AS---
-compiler, interpreter
+interpreter
 
 ---NAME---
 ordinary value annotation is not a recursive declaration

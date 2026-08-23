@@ -6,17 +6,17 @@
 
 module Stdlib.DateTime
 
-let __ticksPerMillisecond() : Int64 = 10000
-let __ticksPerSecond() : Int64 = 10000000
-let __ticksPerMinute() : Int64 = 600000000
-let __ticksPerHour() : Int64 = 36000000000
-let __ticksPerDay() : Int64 = 864000000000
+let __ticksPerMillisecond() : Int64 = 10000L
+let __ticksPerSecond() : Int64 = 10000000L
+let __ticksPerMinute() : Int64 = 600000000L
+let __ticksPerHour() : Int64 = 36000000000L
+let __ticksPerDay() : Int64 = 864000000000L
 
 // NodaTime 3.2.2 Instant bounds used by the pinned interpreter.
-let __minimumTicks() : Int64 = -3776735808000000000
-let __maximumTicks() : Int64 = 2534023007999999999
-let __maximumDeltaMilliseconds() : Int64 = 631075881599999
-let __maximumDeltaSeconds() : Int64 = 631075881599
+let __minimumTicks() : Int64 = -3776735808000000000L
+let __maximumTicks() : Int64 = 2534023007999999999L
+let __maximumDeltaMilliseconds() : Int64 = 631075881599999L
+let __maximumDeltaSeconds() : Int64 = 631075881599L
 
 let __outOfRange() : DateTime =
     Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
@@ -32,11 +32,11 @@ let __int64ToInt(value: Int64) : Int = Stdlib.Int.fromInt64(value)
 // require floor division for negative instants and negative proleptic years.
 let __floorDiv(value: Int64, divisor: Int64) : Int64 =
     let quotient = value / divisor in
-    if value < 0 && value % divisor != 0 then quotient - 1 else quotient
+    if value < 0L && value % divisor != 0L then quotient - 1L else quotient
 
 let __floorMod(value: Int64, divisor: Int64) : Int64 =
     let remainder = value % divisor in
-    if remainder < 0 then remainder + divisor else remainder
+    if remainder < 0L then remainder + divisor else remainder
 
 let __ticks(date: DateTime) : Int64 =
     Stdlib.DateTime.__toUnixTimeTicks(date)
@@ -53,8 +53,8 @@ let __checkedTicks(ticks: Int64) : DateTime =
 
 let fromMilliseconds(milliseconds: Int) : DateTime =
     let milliseconds = Stdlib.DateTime.__intToInt64(milliseconds) in
-    if milliseconds < Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__minimumTicks(), 10000) ||
-       milliseconds > Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__maximumTicks(), 10000) then
+    if milliseconds < Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__minimumTicks(), 10000L) ||
+       milliseconds > Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__maximumTicks(), 10000L) then
         Stdlib.DateTime.__outOfRange()
     else
         Stdlib.DateTime.__fromValidTicks(milliseconds * Stdlib.DateTime.__ticksPerMillisecond())
@@ -67,8 +67,8 @@ let toMilliseconds(date: DateTime) : Int =
 
 let fromSeconds(seconds: Int) : DateTime =
     let seconds = Stdlib.DateTime.__intToInt64(seconds) in
-    if seconds < Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__minimumTicks(), 10000000) ||
-       seconds > Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__maximumTicks(), 10000000) then
+    if seconds < Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__minimumTicks(), 10000000L) ||
+       seconds > Stdlib.DateTime.__floorDiv(Stdlib.DateTime.__maximumTicks(), 10000000L) then
         Stdlib.DateTime.__outOfRange()
     else
         Stdlib.DateTime.__fromValidTicks(seconds * Stdlib.DateTime.__ticksPerSecond())
@@ -97,7 +97,7 @@ let __subtractTicks(date: DateTime, delta: Int64) : DateTime =
 
 let addSeconds(date: DateTime, seconds: Int) : DateTime =
     let seconds = Stdlib.DateTime.__intToInt64(seconds) in
-    if seconds < 0 - Stdlib.DateTime.__maximumDeltaSeconds() ||
+    if seconds < 0L - Stdlib.DateTime.__maximumDeltaSeconds() ||
        seconds > Stdlib.DateTime.__maximumDeltaSeconds() then
         Stdlib.DateTime.__outOfRange()
     else
@@ -105,7 +105,7 @@ let addSeconds(date: DateTime, seconds: Int) : DateTime =
 
 let subtractSeconds(date: DateTime, seconds: Int) : DateTime =
     let seconds = Stdlib.DateTime.__intToInt64(seconds) in
-    if seconds < 0 - Stdlib.DateTime.__maximumDeltaSeconds() ||
+    if seconds < 0L - Stdlib.DateTime.__maximumDeltaSeconds() ||
        seconds > Stdlib.DateTime.__maximumDeltaSeconds() then
         Stdlib.DateTime.__outOfRange()
     else
@@ -113,7 +113,7 @@ let subtractSeconds(date: DateTime, seconds: Int) : DateTime =
 
 let addMilliseconds(date: DateTime, milliseconds: Int) : DateTime =
     let milliseconds = Stdlib.DateTime.__intToInt64(milliseconds) in
-    if milliseconds < 0 - Stdlib.DateTime.__maximumDeltaMilliseconds() ||
+    if milliseconds < 0L - Stdlib.DateTime.__maximumDeltaMilliseconds() ||
        milliseconds > Stdlib.DateTime.__maximumDeltaMilliseconds() then
         Stdlib.DateTime.__outOfRange()
     else
@@ -121,7 +121,7 @@ let addMilliseconds(date: DateTime, milliseconds: Int) : DateTime =
 
 let subtractMilliseconds(date: DateTime, milliseconds: Int) : DateTime =
     let milliseconds = Stdlib.DateTime.__intToInt64(milliseconds) in
-    if milliseconds < 0 - Stdlib.DateTime.__maximumDeltaMilliseconds() ||
+    if milliseconds < 0L - Stdlib.DateTime.__maximumDeltaMilliseconds() ||
        milliseconds > Stdlib.DateTime.__maximumDeltaMilliseconds() then
         Stdlib.DateTime.__outOfRange()
     else
@@ -142,14 +142,14 @@ let greaterThanOrEqualTo(left: DateTime, right: DateTime) : Bool =
 let __roundToNearestEven(value: Int64, divisor: Int64) : Int64 =
     let quotient = value / divisor in
     let remainder = value % divisor in
-    let absoluteRemainder = if remainder < 0 then 0 - remainder else remainder in
-    let halfway = divisor / 2 in
+    let absoluteRemainder = if remainder < 0L then 0L - remainder else remainder in
+    let halfway = divisor / 2L in
     if absoluteRemainder < halfway then quotient
     else if absoluteRemainder > halfway then
-        if value < 0 then quotient - 1 else quotient + 1
-    else if quotient % 2 == 0 then quotient
-    else if value < 0 then quotient - 1
-    else quotient + 1
+        if value < 0L then quotient - 1L else quotient + 1L
+    else if quotient % 2L == 0L then quotient
+    else if value < 0L then quotient - 1L
+    else quotient + 1L
 
 let subtract(endDate: DateTime, startDate: DateTime) : Int =
     Stdlib.DateTime.__int64ToInt(
@@ -165,27 +165,27 @@ let subtractMs(endDate: DateTime, startDate: DateTime) : Int =
 
 // Convert a proleptic Gregorian civil date to days since 1970-01-01.
 let __daysFromCivil(year: Int64, month: Int64, day: Int64) : Int64 =
-    let adjustedYear = if month <= 2 then year - 1 else year in
-    let era = Stdlib.DateTime.__floorDiv(adjustedYear, 400) in
-    let yearOfEra = adjustedYear - era * 400 in
-    let adjustedMonth = if month > 2 then month - 3 else month + 9 in
-    let dayOfYear = (153 * adjustedMonth + 2) / 5 + day - 1 in
-    let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear in
-    era * 146097 + dayOfEra - 719468
+    let adjustedYear = if month <= 2L then year - 1L else year in
+    let era = Stdlib.DateTime.__floorDiv(adjustedYear, 400L) in
+    let yearOfEra = adjustedYear - era * 400L in
+    let adjustedMonth = if month > 2L then month - 3L else month + 9L in
+    let dayOfYear = (153L * adjustedMonth + 2L) / 5L + day - 1L in
+    let dayOfEra = yearOfEra * 365L + yearOfEra / 4L - yearOfEra / 100L + dayOfYear in
+    era * 146097L + dayOfEra - 719468L
 
 // Convert days since 1970-01-01 to (year, month, day) in constant time.
-let __civilFromDays(days: Int64) : (Int64 * Int64 * Int64) =
-    let shifted = days + 719468 in
-    let era = Stdlib.DateTime.__floorDiv(shifted, 146097) in
-    let dayOfEra = shifted - era * 146097 in
+let __civilFromDays(days: Int64) : (Int64, Int64, Int64) =
+    let shifted = days + 719468L in
+    let era = Stdlib.DateTime.__floorDiv(shifted, 146097L) in
+    let dayOfEra = shifted - era * 146097L in
     let yearOfEra =
-        (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365 in
-    let preliminaryYear = yearOfEra + era * 400 in
-    let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100) in
-    let monthPrime = (5 * dayOfYear + 2) / 153 in
-    let day = dayOfYear - (153 * monthPrime + 2) / 5 + 1 in
-    let month = if monthPrime < 10 then monthPrime + 3 else monthPrime - 9 in
-    let year = if month <= 2 then preliminaryYear + 1 else preliminaryYear in
+        (dayOfEra - dayOfEra / 1460L + dayOfEra / 36524L - dayOfEra / 146096L) / 365L in
+    let preliminaryYear = yearOfEra + era * 400L in
+    let dayOfYear = dayOfEra - (365L * yearOfEra + yearOfEra / 4L - yearOfEra / 100L) in
+    let monthPrime = (5L * dayOfYear + 2L) / 153L in
+    let day = dayOfYear - (153L * monthPrime + 2L) / 5L + 1L in
+    let month = if monthPrime < 10L then monthPrime + 3L else monthPrime - 9L in
+    let year = if month <= 2L then preliminaryYear + 1L else preliminaryYear in
     (year, month, day)
 
 let __daysSinceEpoch(date: DateTime) : Int64 =
@@ -205,7 +205,7 @@ let day(date: DateTime) : Int =
 
 let weekday(date: DateTime) : Int =
     Stdlib.DateTime.__int64ToInt(
-        Stdlib.DateTime.__floorMod(Stdlib.DateTime.__daysSinceEpoch(date) + 3, 7) + 1)
+        Stdlib.DateTime.__floorMod(Stdlib.DateTime.__daysSinceEpoch(date) + 3L, 7L) + 1L)
 
 let __ticksWithinDay(date: DateTime) : Int64 =
     Stdlib.DateTime.__floorMod(Stdlib.DateTime.__ticks(date), Stdlib.DateTime.__ticksPerDay())
@@ -216,15 +216,15 @@ let hour(date: DateTime) : Int =
 
 let minute(date: DateTime) : Int =
     Stdlib.DateTime.__int64ToInt(
-        (Stdlib.DateTime.__ticksWithinDay(date) / Stdlib.DateTime.__ticksPerMinute()) % 60)
+        (Stdlib.DateTime.__ticksWithinDay(date) / Stdlib.DateTime.__ticksPerMinute()) % 60L)
 
 let second(date: DateTime) : Int =
     Stdlib.DateTime.__int64ToInt(
-        (Stdlib.DateTime.__ticksWithinDay(date) / Stdlib.DateTime.__ticksPerSecond()) % 60)
+        (Stdlib.DateTime.__ticksWithinDay(date) / Stdlib.DateTime.__ticksPerSecond()) % 60L)
 
 let millisecond(date: DateTime) : Int =
     Stdlib.DateTime.__int64ToInt(
-        (Stdlib.DateTime.__ticksWithinDay(date) / Stdlib.DateTime.__ticksPerMillisecond()) % 1000)
+        (Stdlib.DateTime.__ticksWithinDay(date) / Stdlib.DateTime.__ticksPerMillisecond()) % 1000L)
 
 let atStartOfDay(date: DateTime) : DateTime =
     Stdlib.DateTime.__fromValidTicks(
@@ -235,21 +235,21 @@ let now() : DateTime = Stdlib.DateTime.__now()
 let today() : DateTime = Stdlib.DateTime.atStartOfDay(Stdlib.DateTime.now())
 
 let __padZero2(value: Int64) : String =
-    if value < 10 then "0" ++ Stdlib.Int64.toString(value)
+    if value < 10L then "0" ++ Stdlib.Int64.toString(value)
     else Stdlib.Int64.toString(value)
 
 let __padZero3(value: Int64) : String =
-    if value < 10 then "00" ++ Stdlib.Int64.toString(value)
-    else if value < 100 then "0" ++ Stdlib.Int64.toString(value)
+    if value < 10L then "00" ++ Stdlib.Int64.toString(value)
+    else if value < 100L then "0" ++ Stdlib.Int64.toString(value)
     else Stdlib.Int64.toString(value)
 
 let __padZero4(value: Int64) : String =
-    if value < 10 then "000" ++ Stdlib.Int64.toString(value)
-    else if value < 100 then "00" ++ Stdlib.Int64.toString(value)
-    else if value < 1000 then "0" ++ Stdlib.Int64.toString(value)
+    if value < 10L then "000" ++ Stdlib.Int64.toString(value)
+    else if value < 100L then "00" ++ Stdlib.Int64.toString(value)
+    else if value < 1000L then "0" ++ Stdlib.Int64.toString(value)
     else Stdlib.Int64.toString(value)
 
-let __calendarParts(date: DateTime) : (Int64 * Int64 * Int64) =
+let __calendarParts(date: DateTime) : (Int64, Int64, Int64) =
     Stdlib.DateTime.__civilFromDays(Stdlib.DateTime.__daysSinceEpoch(date))
 
 let toString(date: DateTime) : String =
@@ -259,9 +259,9 @@ let toString(date: DateTime) : String =
     let day = Stdlib.Tuple3.third<Int64, Int64, Int64>(parts) in
     let withinDay = Stdlib.DateTime.__ticksWithinDay(date) in
     let hour = withinDay / Stdlib.DateTime.__ticksPerHour() in
-    let minute = (withinDay / Stdlib.DateTime.__ticksPerMinute()) % 60 in
-    let second = (withinDay / Stdlib.DateTime.__ticksPerSecond()) % 60 in
-    let millisecond = (withinDay / Stdlib.DateTime.__ticksPerMillisecond()) % 1000 in
+    let minute = (withinDay / Stdlib.DateTime.__ticksPerMinute()) % 60L in
+    let second = (withinDay / Stdlib.DateTime.__ticksPerSecond()) % 60L in
+    let millisecond = (withinDay / Stdlib.DateTime.__ticksPerMillisecond()) % 1000L in
     let dateAndTime =
         Stdlib.DateTime.__padZero4(year) ++ "-" ++
         Stdlib.DateTime.__padZero2(month) ++ "-" ++
@@ -269,7 +269,7 @@ let toString(date: DateTime) : String =
         Stdlib.DateTime.__padZero2(hour) ++ ":" ++
         Stdlib.DateTime.__padZero2(minute) ++ ":" ++
         Stdlib.DateTime.__padZero2(second) in
-    if millisecond == 0 then dateAndTime ++ "Z"
+    if millisecond == 0L then dateAndTime ++ "Z"
     else dateAndTime ++ "." ++ Stdlib.DateTime.__padZero3(millisecond) ++ "Z"
 
 let toStringISO8601BasicDate(date: DateTime) : String =
@@ -282,97 +282,97 @@ let toStringISO8601BasicDateTime(date: DateTime) : String =
     let withinDay = Stdlib.DateTime.__ticksWithinDay(date) in
     Stdlib.DateTime.toStringISO8601BasicDate(date) ++ "T" ++
     Stdlib.DateTime.__padZero2(withinDay / Stdlib.DateTime.__ticksPerHour()) ++
-    Stdlib.DateTime.__padZero2((withinDay / Stdlib.DateTime.__ticksPerMinute()) % 60) ++
-    Stdlib.DateTime.__padZero2((withinDay / Stdlib.DateTime.__ticksPerSecond()) % 60) ++ "Z"
+    Stdlib.DateTime.__padZero2((withinDay / Stdlib.DateTime.__ticksPerMinute()) % 60L) ++
+    Stdlib.DateTime.__padZero2((withinDay / Stdlib.DateTime.__ticksPerSecond()) % 60L) ++ "Z"
 
 let __digitAt(value: String, index: Int64) : Stdlib.Result.Result<Int64, String> =
     if index >= Stdlib.String.__byteLength(value) then Error("Invalid date format")
     else
         let byte = Stdlib.String.getByteAt(value, index) in
-        if byte >= 48 && byte <= 57 then Ok(byte - 48)
+        if byte >= 48L && byte <= 57L then Ok(byte - 48L)
         else Error("Invalid date format")
 
-let __parseDigits(value: String, index: Int64, remaining: Int64, total: Int64) : Stdlib.Result.Result<(Int64 * Int64), String> =
-    if remaining == 0 then Ok((total, index))
+let __parseDigits(value: String, index: Int64, remaining: Int64, total: Int64) : Stdlib.Result.Result<(Int64, Int64), String> =
+    if remaining == 0L then Ok((total, index))
     else
         match Stdlib.DateTime.__digitAt(value, index) with
         | Error(message) -> Error(message)
         | Ok(digit) ->
-            Stdlib.DateTime.__parseDigits(value, index + 1, remaining - 1, total * 10 + digit)
+            Stdlib.DateTime.__parseDigits(value, index + 1L, remaining - 1L, total * 10L + digit)
 
 let __hasByte(value: String, index: Int64, expected: Int64) : Bool =
     index < Stdlib.String.__byteLength(value) && Stdlib.String.getByteAt(value, index) == expected
 
 let __isLeapYear(year: Int64) : Bool =
-    if year % 4 != 0 then false
-    else if year % 100 != 0 then true
-    else year % 400 == 0
+    if year % 4L != 0L then false
+    else if year % 100L != 0L then true
+    else year % 400L == 0L
 
 let __daysInMonth(month: Int64, year: Int64) : Int64 =
     match month with
-    | 1 -> 31
-    | 2 -> if Stdlib.DateTime.__isLeapYear(year) then 29 else 28
-    | 3 -> 31
-    | 4 -> 30
-    | 5 -> 31
-    | 6 -> 30
-    | 7 -> 31
-    | 8 -> 31
-    | 9 -> 30
-    | 10 -> 31
-    | 11 -> 30
-    | 12 -> 31
-    | _ -> 0
+    | 1L -> 31L
+    | 2L -> if Stdlib.DateTime.__isLeapYear(year) then 29L else 28L
+    | 3L -> 31L
+    | 4L -> 30L
+    | 5L -> 31L
+    | 6L -> 30L
+    | 7L -> 31L
+    | 8L -> 31L
+    | 9L -> 30L
+    | 10L -> 31L
+    | 11L -> 30L
+    | 12L -> 31L
+    | _ -> 0L
 
 let __parseParts(value: String, hasMilliseconds: Bool) : Stdlib.Result.Result<DateTime, String> =
-    match Stdlib.DateTime.__parseDigits(value, 0, 4, 0) with
+    match Stdlib.DateTime.__parseDigits(value, 0L, 4L, 0L) with
     | Error(message) -> Error(message)
     | Ok(yearPart) ->
         let (year, afterYear) = yearPart in
-        match Stdlib.DateTime.__parseDigits(value, 5, 2, 0) with
+        match Stdlib.DateTime.__parseDigits(value, 5L, 2L, 0L) with
         | Error(message) -> Error(message)
         | Ok(monthPart) ->
             let (month, afterMonth) = monthPart in
-            match Stdlib.DateTime.__parseDigits(value, 8, 2, 0) with
+            match Stdlib.DateTime.__parseDigits(value, 8L, 2L, 0L) with
             | Error(message) -> Error(message)
             | Ok(dayPart) ->
                 let (day, afterDay) = dayPart in
-                match Stdlib.DateTime.__parseDigits(value, 11, 2, 0) with
+                match Stdlib.DateTime.__parseDigits(value, 11L, 2L, 0L) with
                 | Error(message) -> Error(message)
                 | Ok(hourPart) ->
                     let (hour, afterHour) = hourPart in
-                    match Stdlib.DateTime.__parseDigits(value, 14, 2, 0) with
+                    match Stdlib.DateTime.__parseDigits(value, 14L, 2L, 0L) with
                     | Error(message) -> Error(message)
                     | Ok(minutePart) ->
                         let (minute, afterMinute) = minutePart in
-                        match Stdlib.DateTime.__parseDigits(value, 17, 2, 0) with
+                        match Stdlib.DateTime.__parseDigits(value, 17L, 2L, 0L) with
                         | Error(message) -> Error(message)
                         | Ok(secondPart) ->
                             let (second, afterSecond) = secondPart in
                             let millisecondResult =
-                                if hasMilliseconds then Stdlib.DateTime.__parseDigits(value, 20, 3, 0)
-                                else Ok((0, 19)) in
+                                if hasMilliseconds then Stdlib.DateTime.__parseDigits(value, 20L, 3L, 0L)
+                                else Ok((0L, 19L)) in
                             match millisecondResult with
                             | Error(message) -> Error(message)
                             | Ok(millisecondPart) ->
                                 let (millisecond, afterMillisecond) = millisecondPart in
                                 let separatorsAreValid =
-                                    afterYear == 4 && Stdlib.DateTime.__hasByte(value, 4, 45) &&
-                                    afterMonth == 7 && Stdlib.DateTime.__hasByte(value, 7, 45) &&
-                                    afterDay == 10 && Stdlib.DateTime.__hasByte(value, 10, 84) &&
-                                    afterHour == 13 && Stdlib.DateTime.__hasByte(value, 13, 58) &&
-                                    afterMinute == 16 && Stdlib.DateTime.__hasByte(value, 16, 58) &&
-                                    afterSecond == 19 &&
-                                    ((hasMilliseconds && Stdlib.DateTime.__hasByte(value, 19, 46) &&
-                                      afterMillisecond == 23 && Stdlib.DateTime.__hasByte(value, 23, 90)) ||
-                                     ((!hasMilliseconds) && Stdlib.DateTime.__hasByte(value, 19, 90))) in
+                                    afterYear == 4L && Stdlib.DateTime.__hasByte(value, 4L, 45L) &&
+                                    afterMonth == 7L && Stdlib.DateTime.__hasByte(value, 7L, 45L) &&
+                                    afterDay == 10L && Stdlib.DateTime.__hasByte(value, 10L, 84L) &&
+                                    afterHour == 13L && Stdlib.DateTime.__hasByte(value, 13L, 58L) &&
+                                    afterMinute == 16L && Stdlib.DateTime.__hasByte(value, 16L, 58L) &&
+                                    afterSecond == 19L &&
+                                    ((hasMilliseconds && Stdlib.DateTime.__hasByte(value, 19L, 46L) &&
+                                      afterMillisecond == 23L && Stdlib.DateTime.__hasByte(value, 23L, 90L)) ||
+                                     ((!hasMilliseconds) && Stdlib.DateTime.__hasByte(value, 19L, 90L))) in
                                 let fieldsAreValid =
-                                    year >= 1 && year <= 9999 &&
-                                    month >= 1 && month <= 12 &&
-                                    day >= 1 && day <= Stdlib.DateTime.__daysInMonth(month, year) &&
-                                    hour >= 0 && hour <= 23 &&
-                                    minute >= 0 && minute <= 59 &&
-                                    second >= 0 && second <= 59 in
+                                    year >= 1L && year <= 9999L &&
+                                    month >= 1L && month <= 12L &&
+                                    day >= 1L && day <= Stdlib.DateTime.__daysInMonth(month, year) &&
+                                    hour >= 0L && hour <= 23L &&
+                                    minute >= 0L && minute <= 59L &&
+                                    second >= 0L && second <= 59L in
                                 if separatorsAreValid && fieldsAreValid then
                                     let ticks =
                                         Stdlib.DateTime.__daysFromCivil(year, month, day) * Stdlib.DateTime.__ticksPerDay() +
@@ -385,6 +385,6 @@ let __parseParts(value: String, hasMilliseconds: Bool) : Stdlib.Result.Result<Da
 
 let parse(value: String) : Stdlib.Result.Result<DateTime, String> =
     let length = Stdlib.String.__byteLength(value) in
-    if length == 20 then Stdlib.DateTime.__parseParts(value, false)
-    else if length == 24 then Stdlib.DateTime.__parseParts(value, true)
+    if length == 20L then Stdlib.DateTime.__parseParts(value, false)
+    else if length == 24L then Stdlib.DateTime.__parseParts(value, true)
     else Error("Invalid date format")

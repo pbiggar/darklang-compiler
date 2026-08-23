@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
+import re
 import sys
 import urllib.request
 
@@ -64,6 +65,21 @@ GENERAL_CATEGORIES = [
     "Zs", "Zl", "Zp", "Cc", "Cf", "Cs", "Co", "Cn",
 ]
 INCB_CASES = {"Consonant": "Consonant", "Extend": "InCBExtend", "Linker": "Linker"}
+INT64_LITERAL = re.compile(r"(?<![A-Za-z0-9_.])(?<![eE][+-])([0-9]+)(?![A-Za-z0-9_.])")
+
+
+def suffix_dark_int64_literals(source: str) -> str:
+    """Make generated machine-index literals explicit under canonical Dark syntax."""
+    def suffix_line(line: str) -> str:
+        code, separator, comment = line.partition("//")
+        segments = code.split('"')
+        explicit_code = '"'.join(
+            segment if index % 2 == 1 else INT64_LITERAL.sub(r"\1L", segment)
+            for index, segment in enumerate(segments)
+        )
+        return explicit_code + separator + comment
+
+    return "\n".join(suffix_line(line) for line in source.split("\n"))
 
 COMPACT_LOOKUP_SOURCE = [
     "let __hexDigit(byte: Int64) : Int64 =",
@@ -629,6 +645,9 @@ def main() -> int:
 
     contents = {name: obtain(name, url) for name, url in SOURCES.items()}
     output, index_shards, shards = generate(contents)
+    output = suffix_dark_int64_literals(output)
+    index_shards = [suffix_dark_int64_literals(shard) for shard in index_shards]
+    shards = [suffix_dark_int64_literals(shard) for shard in shards]
     expected_files = {SHARD_DIR / f"{index:02d}.dark": shard for index, shard in enumerate(shards)}
     expected_index_files = {
         INDEX_SHARD_DIR / f"{index:02d}.dark": shard

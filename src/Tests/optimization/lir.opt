@@ -6,7 +6,7 @@ counted_loop_unroll_by_two_generated_code
 ---INPUT---
 let loop(i: Int64, limit: Int64, sum: Float, sign: Float) : Float =
     if i >= limit then sum
-    else loop(i + 1, limit, sum + sign, Stdlib.Float.negate(sign))
+    else loop(i + 1L, limit, sum + sign, Stdlib.Float.negate(sign))
 ---EXPECTED---
 loop:
   StackSize: 0
@@ -59,9 +59,9 @@ add:
 licm_hoist_loop_constant
 ---INPUT---
 let collatzSteps(n: Int64, steps: Int64) : Int64 =
-    if n == 1 then steps
-    else if n % 2 == 0 then collatzSteps(n / 2, steps + 1)
-    else collatzSteps(3 * n + 1, steps + 1)
+    if n == 1L then steps
+    else if n % 2L == 0L then collatzSteps(n / 2L, steps + 1L)
+    else collatzSteps(3L * n + 1L, steps + 1L)
 ---EXPECTED---
 collatzSteps:
   StackSize: 0
@@ -98,8 +98,8 @@ collatzSteps:
 licm_hoist_loop_float_constant
 ---INPUT---
 let sum(n: Int64, acc: Float) : Float =
-    if n == 0 then acc
-    else sum(n - 1, acc + 1.5)
+    if n == 0L then acc
+    else sum(n - 1L, acc + 1.5)
 ---EXPECTED---
 sum:
   StackSize: 0
@@ -125,36 +125,36 @@ sum:
 licm_skip_loop_with_call
 ---INPUT---
 let helper(x: Int64) : Int64 =
-    let a0 = x + 1 in
-    let a1 = a0 + 1 in
-    let a2 = a1 + 1 in
-    let a3 = a2 + 1 in
-    let a4 = a3 + 1 in
-    let a5 = a4 + 1 in
-    let a6 = a5 + 1 in
-    let a7 = a6 + 1 in
-    let a8 = a7 + 1 in
-    let a9 = a8 + 1 in
-    let a10 = a9 + 1 in
-    let a11 = a10 + 1 in
-    let a12 = a11 + 1 in
-    let a13 = a12 + 1 in
-    let a14 = a13 + 1 in
-    let a15 = a14 + 1 in
-    let a16 = a15 + 1 in
-    let a17 = a16 + 1 in
-    let a18 = a17 + 1 in
-    let a19 = a18 + 1 in
-    let a20 = a19 + 1 in
-    let a21 = a20 + 1 in
-    let a22 = a21 + 1 in
-    let a23 = a22 + 1 in
-    let a24 = a23 + 1 in
+    let a0 = x + 1L in
+    let a1 = a0 + 1L in
+    let a2 = a1 + 1L in
+    let a3 = a2 + 1L in
+    let a4 = a3 + 1L in
+    let a5 = a4 + 1L in
+    let a6 = a5 + 1L in
+    let a7 = a6 + 1L in
+    let a8 = a7 + 1L in
+    let a9 = a8 + 1L in
+    let a10 = a9 + 1L in
+    let a11 = a10 + 1L in
+    let a12 = a11 + 1L in
+    let a13 = a12 + 1L in
+    let a14 = a13 + 1L in
+    let a15 = a14 + 1L in
+    let a16 = a15 + 1L in
+    let a17 = a16 + 1L in
+    let a18 = a17 + 1L in
+    let a19 = a18 + 1L in
+    let a20 = a19 + 1L in
+    let a21 = a20 + 1L in
+    let a22 = a21 + 1L in
+    let a23 = a22 + 1L in
+    let a24 = a23 + 1L in
     a24
 
 let loop(n: Int64, acc: Int64) : Int64 =
-    if n == 0 then acc
-    else loop(n - 1, helper(3 * acc))
+    if n == 0L then acc
+    else loop(n - 1L, helper(3L * acc))
 ---EXPECTED---
 helper:
   StackSize: 0
@@ -210,10 +210,14 @@ type ExhaustiveChoice = First | Second of Int64 | Third
 
 let choose(value: ExhaustiveChoice) : Int64 =
     match value with
-    | First -> 1
+    | First -> 1L
     | Second(n) -> n
-    | Third -> 3
+    | Third -> 3L
 
+let choosePartial(value: PartialChoice) : Int64 =
+    match value with
+    | FirstPartial -> 1L
+    | SecondPartial(n) -> n
 ---EXPECTED---
 choose:
   StackSize: 0
@@ -239,7 +243,7 @@ choose:
 closure_devirtualization_capture_free_generated_code
 ---INPUT---
 let applyOnce(value: Int64) : Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   increment(value)
 ---EXPECTED---
 __closure_0:
@@ -297,7 +301,7 @@ addOffset:
 closure_devirtualization_preserves_escaping_generated_code
 ---INPUT---
 let makeIncrement() : (Int64) -> Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   increment
 ---EXPECTED---
 __closure_0:
@@ -321,7 +325,7 @@ makeIncrement:
 closure_devirtualization_reuses_local_generated_code
 ---INPUT---
 let applyTwice(value: Int64) : Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   let once = increment(value) in
   increment(once)
 ---EXPECTED---

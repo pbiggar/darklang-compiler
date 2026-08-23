@@ -11,90 +11,90 @@
 // Build [1, 2, 3, ..., n] with O(1) prepend, then reverse once.
 let buildTree(n: Int64, count: Int64, tree: List<Int64>): List<Int64> =
     if n > count then Stdlib.Internal.SkewList.reverse(tree)
-    else buildTree(n + 1, count, Stdlib.Internal.SkewList.push(tree, n))
+    else buildTree(n + 1L, count, Stdlib.Internal.SkewList.push(tree, n))
 
 // Build tree with push (front): [n, n-1, ..., 2, 1]
 let buildTreeFront(n: Int64, count: Int64, tree: List<Int64>): List<Int64> =
-    if n > count then tree else buildTreeFront(n + 1, count, Stdlib.Internal.SkewList.push(tree, n))
+    if n > count then tree else buildTreeFront(n + 1L, count, Stdlib.Internal.SkewList.push(tree, n))
 
 // Verify all indices have correct values (for pushBack-built tree)
 // Returns count of correct values
 let verifyIndices(tree: List<Int64>, idx: Int64, count: Int64, correct: Int64): Int64 =
     if idx >= count then correct
     else
-        let expected = idx + 1 in
-        let actual = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(tree, idx), -1) in
-        let newCorrect = if actual == expected then correct + 1 else correct in
-        verifyIndices(tree, idx + 1, count, newCorrect)
+        let expected = idx + 1L in
+        let actual = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(tree, idx), -1L) in
+        let newCorrect = if actual == expected then correct + 1L else correct in
+        verifyIndices(tree, idx + 1L, count, newCorrect)
 
 // Sum all elements via getAt
 let sumTree(tree: List<Int64>, idx: Int64, count: Int64, acc: Int64): Int64 =
     if idx >= count then acc
     else
-        let val = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(tree, idx), 0) in
-        sumTree(tree, idx + 1, count, acc + val)
+        let val = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(tree, idx), 0L) in
+        sumTree(tree, idx + 1L, count, acc + val)
 
 // Build tree with mixed push/pushBack
 let buildMixed(n: Int64, count: Int64, tree: List<Int64>): List<Int64> =
     if n > count then tree
     else
-        let newTree = if n % 2 == 0 then Stdlib.Internal.SkewList.push(tree, n) else Stdlib.Internal.SkewList.pushBack(tree, n) in
-        buildMixed(n + 1, count, newTree)
+        let newTree = if n % 2L == 0L then Stdlib.Internal.SkewList.push(tree, n) else Stdlib.Internal.SkewList.pushBack(tree, n) in
+        buildMixed(n + 1L, count, newTree)
 
 // ===================================================================
 // Scale Tests - Large Tree Construction
 // ===================================================================
 
 // Build 100 elements
-Stdlib.Internal.SkewList.length(buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>())) = 100
+Stdlib.Internal.SkewList.length(buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>())) = 100L
 
 // Build 500 elements
-Stdlib.Internal.SkewList.length(buildTree(1, 500, Stdlib.Internal.SkewList.empty<Int64>())) = 500
+Stdlib.Internal.SkewList.length(buildTree(1L, 500L, Stdlib.Internal.SkewList.empty<Int64>())) = 500L
 
 // Build 1000 elements
-Stdlib.Internal.SkewList.length(buildTree(1, 1000, Stdlib.Internal.SkewList.empty<Int64>())) = 1000
+Stdlib.Internal.SkewList.length(buildTree(1L, 1000L, Stdlib.Internal.SkewList.empty<Int64>())) = 1000L
 
 // ===================================================================
 // Index Verification - getAt returns correct values
 // ===================================================================
 
 // 100 elements: verify all indices
-verifyIndices(buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>()), 0, 100, 0) = 100
+verifyIndices(buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>()), 0L, 100L, 0L) = 100L
 
 // 500 elements: verify all indices
-verifyIndices(buildTree(1, 500, Stdlib.Internal.SkewList.empty<Int64>()), 0, 500, 0) = 500
+verifyIndices(buildTree(1L, 500L, Stdlib.Internal.SkewList.empty<Int64>()), 0L, 500L, 0L) = 500L
 
 // 1000 elements: verify all indices
-verifyIndices(buildTree(1, 1000, Stdlib.Internal.SkewList.empty<Int64>()), 0, 1000, 0) = 1000
+verifyIndices(buildTree(1L, 1000L, Stdlib.Internal.SkewList.empty<Int64>()), 0L, 1000L, 0L) = 1000L
 
 // ===================================================================
 // Sum Verification - Mathematical correctness
 // ===================================================================
 
 // Sum of 1..100 = 5050
-sumTree(buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>()), 0, 100, 0) = 5050
+sumTree(buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>()), 0L, 100L, 0L) = 5050L
 
 // Sum of 1..500 = 125250
-sumTree(buildTree(1, 500, Stdlib.Internal.SkewList.empty<Int64>()), 0, 500, 0) = 125250
+sumTree(buildTree(1L, 500L, Stdlib.Internal.SkewList.empty<Int64>()), 0L, 500L, 0L) = 125250L
 
 // Sum of 1..1000 = 500500
-sumTree(buildTree(1, 1000, Stdlib.Internal.SkewList.empty<Int64>()), 0, 1000, 0) = 500500
+sumTree(buildTree(1L, 1000L, Stdlib.Internal.SkewList.empty<Int64>()), 0L, 1000L, 0L) = 500500L
 
 // ===================================================================
 // Push/PushBack Consistency
 // ===================================================================
 
 // pushBack then head = first element
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>())), -1) = 1
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>())), -1L) = 1L
 
 // pushBack then last = last element pushed
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>())), -1) = 100
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>())), -1L) = 100L
 
 // push (front) then head = last element pushed
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(buildTreeFront(1, 100, Stdlib.Internal.SkewList.empty<Int64>())), -1) = 100
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(buildTreeFront(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>())), -1L) = 100L
 
 // push (front) then last = first element pushed
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(buildTreeFront(1, 100, Stdlib.Internal.SkewList.empty<Int64>())), -1) = 1
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(buildTreeFront(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>())), -1L) = 1L
 
 // ===================================================================
 // setAt Preserves Other Elements
@@ -102,69 +102,69 @@ Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(buildTreeFront(1, 100, S
 
 // setAt middle, check neighbors unchanged
 let testSetAt(): Int64 =
-    let t1 = buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>()) in
-    let t2 = Stdlib.Internal.SkewList.setAt(t1, 50, 999) in
-    let v49 = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t2, 49), -1) in
-    let v50 = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t2, 50), -1) in
-    let v51 = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t2, 51), -1) in
-    v49 * 10000 + v50 * 100 + v51
+    let t1 = buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>()) in
+    let t2 = Stdlib.Internal.SkewList.setAt(t1, 50L, 999L) in
+    let v49 = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t2, 49L), -1L) in
+    let v50 = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t2, 50L), -1L) in
+    let v51 = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t2, 51L), -1L) in
+    v49 * 10000L + v50 * 100L + v51
 
-testSetAt() = 599952
+testSetAt() = 599952L
 
 // setAt first element
-let t = Stdlib.Internal.SkewList.setAt(buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()), 0, 999) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(t), -1) = 999
+let t = Stdlib.Internal.SkewList.setAt(buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()), 0L, 999L) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(t), -1L) = 999L
 
 // setAt last element
-let t = Stdlib.Internal.SkewList.setAt(buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()), 9, 999) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(t), -1) = 999
+let t = Stdlib.Internal.SkewList.setAt(buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()), 9L, 999L) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(t), -1L) = 999L
 
 // ===================================================================
 // Concat Verification
 // ===================================================================
 
 // Concat two 50-element trees = 100 elements
-let t1 = buildTree(1, 50, Stdlib.Internal.SkewList.empty<Int64>()) in let t2 = buildTree(51, 100, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.concat(t1, t2)) = 100
+let t1 = buildTree(1L, 50L, Stdlib.Internal.SkewList.empty<Int64>()) in let t2 = buildTree(51L, 100L, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.concat(t1, t2)) = 100L
 
 // Concat preserves head from first tree
-let t1 = buildTree(1, 50, Stdlib.Internal.SkewList.empty<Int64>()) in let t2 = buildTree(51, 100, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(Stdlib.Internal.SkewList.concat(t1, t2)), -1) = 1
+let t1 = buildTree(1L, 50L, Stdlib.Internal.SkewList.empty<Int64>()) in let t2 = buildTree(51L, 100L, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(Stdlib.Internal.SkewList.concat(t1, t2)), -1L) = 1L
 
 // Concat preserves last from second tree
-let t1 = buildTree(1, 50, Stdlib.Internal.SkewList.empty<Int64>()) in let t2 = buildTree(51, 100, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(Stdlib.Internal.SkewList.concat(t1, t2)), -1) = 100
+let t1 = buildTree(1L, 50L, Stdlib.Internal.SkewList.empty<Int64>()) in let t2 = buildTree(51L, 100L, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(Stdlib.Internal.SkewList.concat(t1, t2)), -1L) = 100L
 
 // ===================================================================
 // Property: Length Invariants
 // ===================================================================
 
 // push increases length by 1
-let t = buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.push(t, 0)) = 11
+let t = buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.push(t, 0L)) = 11L
 
 // pushBack increases length by 1
-let t = buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.pushBack(t, 11)) = 11
+let t = buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.pushBack(t, 11L)) = 11L
 
 // tail decreases length by 1
-let t = buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.tail(t)) = 9
+let t = buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.tail(t)) = 9L
 
 // init decreases length by 1
-let t = buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.init(t)) = 9
+let t = buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()) in Stdlib.Internal.SkewList.length(Stdlib.Internal.SkewList.init(t)) = 9L
 
 // ===================================================================
 // Property: head/last Correctness
 // ===================================================================
 
 // head equals getAt(0)
-let t = buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>()) in let h = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(t), -1) in let g = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t, 0), -2) in h == g = true
+let t = buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>()) in let h = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(t), -1L) in let g = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t, 0L), -2L) in h == g = true
 
 // last equals getAt(length-1)
-let t = buildTree(1, 100, Stdlib.Internal.SkewList.empty<Int64>()) in let l = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(t), -1) in let len = Stdlib.Internal.SkewList.length(t) in let g = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t, len - 1), -2) in l == g = true
+let t = buildTree(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>()) in let l = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(t), -1L) in let len = Stdlib.Internal.SkewList.length(t) in let g = Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(t, len - 1L), -2L) in l == g = true
 
 // ===================================================================
 // Property: pushBack-last and push-head
 // ===================================================================
 
 // pushBack then last returns pushed value
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(Stdlib.Internal.SkewList.pushBack(buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()), 999)), -1) = 999
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(Stdlib.Internal.SkewList.pushBack(buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()), 999L)), -1L) = 999L
 
 // push then head returns pushed value
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(Stdlib.Internal.SkewList.push(buildTree(1, 10, Stdlib.Internal.SkewList.empty<Int64>()), 999)), -1) = 999
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(Stdlib.Internal.SkewList.push(buildTree(1L, 10L, Stdlib.Internal.SkewList.empty<Int64>()), 999L)), -1L) = 999L
 
 // ===================================================================
 // Empty Tree Edge Cases
@@ -174,7 +174,7 @@ Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(Stdlib.Internal.SkewList
 Stdlib.Internal.SkewList.isEmpty(Stdlib.Internal.SkewList.empty<Int64>()) = true
 
 // isEmpty on non-empty
-Stdlib.Internal.SkewList.isEmpty(Stdlib.Internal.SkewList.singleton(1)) = false
+Stdlib.Internal.SkewList.isEmpty(Stdlib.Internal.SkewList.singleton(1L)) = false
 
 // head on empty returns None
 Stdlib.Option.isNone(Stdlib.Internal.SkewList.head(Stdlib.Internal.SkewList.empty<Int64>())) = true
@@ -183,43 +183,43 @@ Stdlib.Option.isNone(Stdlib.Internal.SkewList.head(Stdlib.Internal.SkewList.empt
 Stdlib.Option.isNone(Stdlib.Internal.SkewList.last(Stdlib.Internal.SkewList.empty<Int64>())) = true
 
 // getAt on empty returns None
-Stdlib.Option.isNone(Stdlib.Internal.SkewList.getAt(Stdlib.Internal.SkewList.empty<Int64>(), 0)) = true
+Stdlib.Option.isNone(Stdlib.Internal.SkewList.getAt(Stdlib.Internal.SkewList.empty<Int64>(), 0L)) = true
 
 // ===================================================================
 // Mixed Operations
 // ===================================================================
 
 // Mixed push/pushBack maintains length
-Stdlib.Internal.SkewList.length(buildMixed(1, 100, Stdlib.Internal.SkewList.empty<Int64>())) = 100
+Stdlib.Internal.SkewList.length(buildMixed(1L, 100L, Stdlib.Internal.SkewList.empty<Int64>())) = 100L
 
 // ===================================================================
 // Deep operation chains formerly exposed a FingerTree-specific bug.
 // ===================================================================
 
 // 3 tails + headUnsafe
-let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1), 2), 3), 4), 5) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in Stdlib.Internal.SkewList.headUnsafe(rest2) = 4
+let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1L), 2L), 3L), 4L), 5L) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in Stdlib.Internal.SkewList.headUnsafe(rest2) = 4L
 
 // Length after 4 tails
-let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1), 2), 3), 4), 5) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in let rest3 = Stdlib.Internal.SkewList.tail(rest2) in Stdlib.Internal.SkewList.length(rest3) = 1
+let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1L), 2L), 3L), 4L), 5L) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in let rest3 = Stdlib.Internal.SkewList.tail(rest2) in Stdlib.Internal.SkewList.length(rest3) = 1L
 
 // 4 tails + headUnsafe
-let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1), 2), 3), 4), 5) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in let rest3 = Stdlib.Internal.SkewList.tail(rest2) in Stdlib.Internal.SkewList.headUnsafe(rest3) = 5
+let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1L), 2L), 3L), 4L), 5L) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in let rest3 = Stdlib.Internal.SkewList.tail(rest2) in Stdlib.Internal.SkewList.headUnsafe(rest3) = 5L
 
 // 6 element tree with 5 tails
-let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1), 2), 3), 4), 5), 6) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in let rest3 = Stdlib.Internal.SkewList.tail(rest2) in let rest4 = Stdlib.Internal.SkewList.tail(rest3) in Stdlib.Internal.SkewList.headUnsafe(rest4) = 6
+let nums = Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.pushBack(Stdlib.Internal.SkewList.empty<Int64>(), 1L), 2L), 3L), 4L), 5L), 6L) in let rest0 = Stdlib.Internal.SkewList.tail(nums) in let rest1 = Stdlib.Internal.SkewList.tail(rest0) in let rest2 = Stdlib.Internal.SkewList.tail(rest1) in let rest3 = Stdlib.Internal.SkewList.tail(rest2) in let rest4 = Stdlib.Internal.SkewList.tail(rest3) in Stdlib.Internal.SkewList.headUnsafe(rest4) = 6L
 
 // ===================================================================
 // Spot Checks on Large Trees
 // ===================================================================
 
 // 10000 elements: verify length
-Stdlib.Internal.SkewList.length(buildTree(1, 10000, Stdlib.Internal.SkewList.empty<Int64>())) = 10000
+Stdlib.Internal.SkewList.length(buildTree(1L, 10000L, Stdlib.Internal.SkewList.empty<Int64>())) = 10000L
 
 // 10000 elements: verify head
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(buildTree(1, 10000, Stdlib.Internal.SkewList.empty<Int64>())), -1) = 1
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.head(buildTree(1L, 10000L, Stdlib.Internal.SkewList.empty<Int64>())), -1L) = 1L
 
 // 10000 elements: verify last
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(buildTree(1, 10000, Stdlib.Internal.SkewList.empty<Int64>())), -1) = 10000
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.last(buildTree(1L, 10000L, Stdlib.Internal.SkewList.empty<Int64>())), -1L) = 10000L
 
 // 10000 elements: verify middle element
-Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(buildTree(1, 10000, Stdlib.Internal.SkewList.empty<Int64>()), 4999), -1) = 5000
+Stdlib.Option.withDefault(Stdlib.Internal.SkewList.getAt(buildTree(1L, 10000L, Stdlib.Internal.SkewList.empty<Int64>()), 4999L), -1L) = 5000L

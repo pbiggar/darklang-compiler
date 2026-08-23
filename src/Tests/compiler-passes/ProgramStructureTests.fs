@@ -38,8 +38,8 @@ let testOrderedSourceComposition (stdlib: CompilerLibrary.StdlibResult) () : Tes
             stdlib
             CompilerLibrary.TestExpression
             [ source "library.dark" NameSyntax.SourceUnitPurpose.Library
-                "let answer(x: Int64): Int64 = x + 1"
-              source "entry.dark" NameSyntax.SourceUnitPurpose.Executable "answer(41)" ]
+                "let answer(x: Int64): Int64 = x + 1L"
+              source "entry.dark" NameSyntax.SourceUnitPurpose.Executable "answer(41L)" ]
     match report.Result with
     | Error error -> Error error
     | Ok binary ->
@@ -54,10 +54,10 @@ let testLastFunctionDeclarationWins (stdlib: CompilerLibrary.StdlibResult) () : 
             stdlib
             CompilerLibrary.TestExpression
             [ source "first.dark" NameSyntax.SourceUnitPurpose.Library
-                "let overlaid(x: Int64): Int64 = x + 1"
+                "let overlaid(x: Int64): Int64 = x + 1L"
               source "second.dark" NameSyntax.SourceUnitPurpose.Library
-                "let overlaid(x: Int64): Int64 = x + 2"
-              source "entry.dark" NameSyntax.SourceUnitPurpose.Executable "overlaid(40)" ]
+                "let overlaid(x: Int64): Int64 = x + 2L"
+              source "entry.dark" NameSyntax.SourceUnitPurpose.Executable "overlaid(40L)" ]
     match report.Result with
     | Error error -> Error error
     | Ok binary ->

@@ -16,7 +16,7 @@ The Dark compiler transforms source code through a series of passes, each with a
 
 | #    | Pass                    | File                                                        | Transform                                     |
 |------|-------------------------|-------------------------------------------------------------|-----------------------------------------------|
-| 1    | Parser                  | `passes/1_Parser.fs`                                        | Source → AST                                  |
+| 1    | Parser                  | `passes/1_InterpreterParser.fs`                             | Source → AST                                  |
 | 1.5  | Type checking           | `passes/1.5_TypeChecking.fs`                                | AST → Typed AST                               |
 | 2    | AST → ANF               | `passes/2_AST_to_ANF.fs`                                    | AST → ANF                                     |
 | 2.3  | ANF optimizations       | `passes/2.3_ANF_Optimize.fs`                                | ANF → ANF                                     |
@@ -43,7 +43,7 @@ selects the backend from that explicit target.
 
 ---
 
-## Pass 1: Parser (`1_Parser.fs`)
+## Pass 1: Parser (`1_InterpreterParser.fs`)
 
 **Input**: Source code string
 **Output**: Abstract Syntax Tree (AST)

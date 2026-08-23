@@ -11,7 +11,7 @@ let orderedLiteralFailureA(): Int64 = Builtin.testRuntimeError("record literal a
 OrderedLiteral { b = orderedLiteralFailureB(), a = orderedLiteralFailureA() } = error="record literal b"
 
 type OrderedUpdate = { a: Int64, b: Int64, c: Int64 }
-let orderedUpdateBase(): OrderedUpdate = OrderedUpdate { a = 1, b = 2, c = 3 }
+let orderedUpdateBase(): OrderedUpdate = OrderedUpdate { a = 1L, b = 2L, c = 3L }
 let orderedUpdateFailureC(): Int64 = Builtin.testRuntimeError("record update c")
 let orderedUpdateFailureA(): Int64 = Builtin.testRuntimeError("record update a")
 { orderedUpdateBase() with c = orderedUpdateFailureC(), a = orderedUpdateFailureA() } = error="record update c"
@@ -39,14 +39,14 @@ parityAdd(1L) == parityAdd(2L) = stdout="false\n"
 "hello" = stdout="\"hello\"\n"
 'x' = stdout="'x'\n"
 ("outer", ('x', ["inner"])) = stdout="(\"outer\", ('x', [\"inner\"]))\n"
-[(1, "one"), (2, "two")] = stdout="[(1, \"one\"), (2, \"two\")]\n"
+[(1L, "one"), (2L, "two")] = stdout="[(1, \"one\"), (2, \"two\")]\n"
 let emptyParityStrings(): List<String> = [] emptyParityStrings() = stdout="List<String> []\n"
 
 type RenderRecord<'value> = { z: List<'value>, a: String }
-RenderRecord<Int64> { z = [1, 2], a = "record" } = stdout="RenderRecord<Int64> { a: \"record\", z: [1, 2] }\n"
+RenderRecord<Int64> { z = [1L, 2L], a = "record" } = stdout="RenderRecord<Int64> { a: \"record\", z: [1, 2] }\n"
 
-type RenderEnum<'value> = RenderEmpty | RenderValue of ('value * String)
-RenderValue((7, "seven")) = stdout="RenderEnum<Int64>.RenderValue((7, \"seven\"))\n"
+type RenderEnum<'value> = RenderEmpty | RenderValue of ('value, String)
+RenderValue((7L, "seven")) = stdout="RenderEnum<Int64>.RenderValue((7, \"seven\"))\n"
 
 let renderedNamedFunction(x: Int64): Int64 = x
 renderedNamedFunction = stdout="renderedNamedFunction\n"

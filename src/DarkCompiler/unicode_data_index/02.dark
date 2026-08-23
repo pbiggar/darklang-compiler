@@ -4,81 +4,81 @@
 module Unicode.Data
 
 let __canonicalDecompositionLookupGroup3(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table12.__canonicalDecompositionChunk12(), 0, key, 6, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table12.__canonicalDecompositionChunk12(), 0L, key, 6L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table13.__canonicalDecompositionChunk13(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table13.__canonicalDecompositionChunk13(), 0L, key, 6L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table14.__canonicalDecompositionChunk14(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table14.__canonicalDecompositionChunk14(), 0L, key, 6L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table15.__canonicalDecompositionChunk15(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table15.__canonicalDecompositionChunk15(), 0L, key, 6L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __lowercaseLookupGroup2(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table11.__lowercaseChunk8(), 0, key, 6, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table11.__lowercaseChunk8(), 0L, key, 6L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table12.__lowercaseChunk9(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table12.__lowercaseChunk9(), 0L, key, 6L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table13.__lowercaseChunk10(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table13.__lowercaseChunk10(), 0L, key, 6L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table14.__lowercaseChunk11(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table14.__lowercaseChunk11(), 0L, key, 6L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __lowercaseLookupGroup1(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table07.__lowercaseChunk4(), 0, key, 6, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table07.__lowercaseChunk4(), 0L, key, 6L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table08.__lowercaseChunk5(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table08.__lowercaseChunk5(), 0L, key, 6L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table09.__lowercaseChunk6(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table09.__lowercaseChunk6(), 0L, key, 6L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table10.__lowercaseChunk7(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table10.__lowercaseChunk7(), 0L, key, 6L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __graphemeBreakLookupGroup1(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table33.__graphemeBreakChunk4(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table33.__graphemeBreakChunk4(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table34.__graphemeBreakChunk5(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table34.__graphemeBreakChunk5(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table35.__graphemeBreakChunk6(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table35.__graphemeBreakChunk6(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table36.__graphemeBreakChunk7(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table36.__graphemeBreakChunk7(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __graphemeBreakLookupGroup2(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table37.__graphemeBreakChunk8(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table37.__graphemeBreakChunk8(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table38.__graphemeBreakChunk9(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table38.__graphemeBreakChunk9(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table39.__graphemeBreakChunk10(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table39.__graphemeBreakChunk10(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
                 None
 
 let __hex(data: String, index: Int64, remaining: Int64, acc: Int64) : Int64 =
-    if remaining == 0 then acc
-    else Unicode.Data.__hex(data, index + 1, remaining - 1, acc * 16 + Unicode.Data.__hexDigit(Stdlib.String.getByteAt(data, index)))
+    if remaining == 0L then acc
+    else Unicode.Data.__hex(data, index + 1L, remaining - 1L, acc * 16L + Unicode.Data.__hexDigit(Stdlib.String.getByteAt(data, index)))
 
-let lookupGraphemeBreak(codepoint: Int64) : Unicode.Data.GraphemeBreak = Unicode.Data.__graphemeFromCode(Stdlib.Option.withDefault<Int64>(Unicode.Data.__graphemeBreakLookup(codepoint), 0))
+let lookupGraphemeBreak(codepoint: Int64) : Unicode.Data.GraphemeBreak = Unicode.Data.__graphemeFromCode(Stdlib.Option.withDefault<Int64>(Unicode.Data.__graphemeBreakLookup(codepoint), 0L))
 let isExtendedPictographic(codepoint: Int64) : Bool = Stdlib.Option.isSome<Int64>(Unicode.Data.__extendedPictographicLookup(codepoint))
 type IndicConjunctBreak = InCBNone | InCBConsonant | InCBExtend | InCBLinker

@@ -1,5 +1,5 @@
 let fib(n: Int64) : Int64 =
-    if n <= 1 then n
-    else fib(n - 1) + fib(n - 2)
+    if n <= 1L then n
+    else fib(n - 1L) + fib(n - 2L)
 
-Builtin.printLine(Stdlib.Int64.toString(fib(35)))
+Builtin.printLine(Stdlib.Int64.toString(fib(35L)))

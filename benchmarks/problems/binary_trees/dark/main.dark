@@ -3,21 +3,21 @@
 type Tree<'a> = Leaf of a | Node of (Tree<a> * Tree<a>)
 
 let makeTree(depth: Int64) : Tree<Int64> =
-    if depth <= 0 then Leaf(1)
-    else Node((makeTree(depth - 1), makeTree(depth - 1)))
+    if depth <= 0L then Leaf(1L)
+    else Node((makeTree(depth - 1L), makeTree(depth - 1L)))
 
 let countTree(tree: Tree<Int64>) : Int64 =
     match tree with
-    | Leaf(_) -> 1
-    | Node((left, right)) -> 1 + countTree(left) + countTree(right)
+    | Leaf(_) -> 1L
+    | Node((left, right)) -> 1L + countTree(left) + countTree(right)
 
 let stressTest(depth: Int64, iterations: Int64, acc: Int64) : Int64 =
-    if iterations <= 0 then acc
+    if iterations <= 0L then acc
     else
         let tree = makeTree(depth) in
         let count = countTree(tree) in
-        stressTest(depth, iterations - 1, acc + count)
+        stressTest(depth, iterations - 1L, acc + count)
 
 // Construct and traverse 100 trees of depth 15.
 // Each complete binary tree of depth 15 has 2^16 - 1 = 65535 nodes
-Builtin.printLine(Stdlib.Int64.toString(stressTest(15, 100, 0)))
+Builtin.printLine(Stdlib.Int64.toString(stressTest(15L, 100L, 0L)))

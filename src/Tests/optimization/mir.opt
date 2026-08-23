@@ -6,7 +6,7 @@ counted_loop_unroll_by_two_mir
 ---INPUT---
 let loop(i: Int64, limit: Int64, sum: Float, sign: Float) : Float =
     if i >= limit then sum
-    else loop(i + 1, limit, sum + sign, Stdlib.Float.negate(sign))
+    else loop(i + 1L, limit, sum + sign, Stdlib.Float.negate(sign))
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -42,8 +42,8 @@ Function loop:
 tail_recursion_modulo_addition_forms_loop
 ---INPUT---
 let fib(n: Int64) : Int64 =
-    if n <= 1 then n else fib(n - 1) + fib(n - 2)
-fib(10)
+    if n <= 1L then n else fib(n - 1L) + fib(n - 2L)
+fib(10L)
 ---EXPECTED---
 Function fib:
   fib_entry:
@@ -115,12 +115,12 @@ Function _start:
 licm_hoists_recursive_effect_free_scalar_call
 ---INPUT---
 let factorial(n: Int64) : Int64 =
-    if n <= 1 then 1
-    else n * factorial(n - 1)
+    if n <= 1L then 1L
+    else n * factorial(n - 1L)
 
 let repeat(n: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc
-    else repeat(n - 1, factorial(20))
+    if n <= 0L then acc
+    else repeat(n - 1L, factorial(20L))
 ---EXPECTED---
 Function factorial:
   factorial_entry:
@@ -165,14 +165,14 @@ Function repeat:
 licm_hoists_mutually_recursive_effect_free_scalar_call
 ---INPUT---
 let isEven(n: Int64) : Bool =
-    if n <= 0 then true else isOdd(n - 1)
+    if n <= 0L then true else isOdd(n - 1L)
 
 let isOdd(n: Int64) : Bool =
-    if n <= 0 then false else isEven(n - 1)
+    if n <= 0L then false else isEven(n - 1L)
 
 let loop(n: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc
-    else loop(n - 1, if isEven(20) then acc + 1 else acc)
+    if n <= 0L then acc
+    else loop(n - 1L, if isEven(20L) then acc + 1L else acc)
 ---EXPECTED---
 Function isEven:
   isEven_entry:
@@ -224,12 +224,12 @@ Function loop:
 licm_keeps_effecting_recursive_call_in_loop
 ---INPUT---
 let readRandom(n: Int64) : Int64 =
-    if n <= 0 then Stdlib.Random.int64()
-    else readRandom(n - 1)
+    if n <= 0L then Stdlib.Random.int64()
+    else readRandom(n - 1L)
 
 let loop(n: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc
-    else loop(n - 1, readRandom(1))
+    if n <= 0L then acc
+    else loop(n - 1L, readRandom(1L))
 ---EXPECTED---
 Function readRandom:
   readRandom_entry:
@@ -267,10 +267,10 @@ Function loop:
 licm_keeps_side_effecting_call_in_loop
 ---INPUT---
 let loop(n: Int64, acc: Int64) : Int64 =
-    if n < 1 then acc
+    if n < 1L then acc
     else
         let h = __hash<String>("hello") in
-        loop(n - 1, acc + h)
+        loop(n - 1L, acc + h)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -294,8 +294,8 @@ Function loop:
 licm_skip_constant_move
 ---INPUT---
 let loop(n: Int64) : Int64 =
-    if n < 1 then 0
-    else loop(1)
+    if n < 1L then 0L
+    else loop(1L)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -314,8 +314,8 @@ Function loop:
 const_branch_elimination_bitand
 ---INPUT---
 let pick(n: Int64) : Int64 =
-    let masked = n & 0 in
-    if masked == 0 then 1 else 2
+    let masked = n & 0L in
+    if masked == 0L then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -325,7 +325,7 @@ Function pick:
 redundant_successor_branch_elimination
 ---INPUT---
 let choose(cond: Bool) : Int64 =
-    if cond then (if cond then 1 else 2) else 3
+    if cond then (if cond then 1L else 2L) else 3L
 ---EXPECTED---
 Function choose:
   choose_entry:
@@ -339,7 +339,7 @@ Function choose:
 const_branch_elimination_self_eq
 ---INPUT---
 let pick(n: Int64) : Int64 =
-    if n == n then 1 else 2
+    if n == n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -349,7 +349,7 @@ Function pick:
 const_branch_elimination_self_neq
 ---INPUT---
 let pick(n: Int64) : Int64 =
-    if n != n then 1 else 2
+    if n != n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -359,7 +359,7 @@ Function pick:
 const_branch_elimination_self_lt
 ---INPUT---
 let pick(n: Int64) : Int64 =
-    if n < n then 1 else 2
+    if n < n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -369,7 +369,7 @@ Function pick:
 const_branch_elimination_self_gt
 ---INPUT---
 let pick(n: Int64) : Int64 =
-    if n > n then 1 else 2
+    if n > n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -379,7 +379,7 @@ Function pick:
 const_branch_elimination_self_lte
 ---INPUT---
 let pick(n: Int64) : Int64 =
-    if n <= n then 1 else 2
+    if n <= n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -389,7 +389,7 @@ Function pick:
 const_branch_elimination_self_gte
 ---INPUT---
 let pick(n: Int64) : Int64 =
-    if n >= n then 1 else 2
+    if n >= n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -399,7 +399,7 @@ Function pick:
 self_eq_float_not_folded
 ---INPUT---
 let pick(n: Float) : Int64 =
-    if n == n then 1 else 2
+    if n == n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -415,8 +415,8 @@ self_eq_shadowed_vars_not_folded
 ---INPUT---
 let pick(n: Int64) : Int64 =
     let x = n in
-    let x = n + 1 in
-    if x == n then 1 else 2
+    let x = n + 1L in
+    if x == n then 1L else 2L
 ---EXPECTED---
 Function pick:
   pick_entry:
@@ -442,11 +442,11 @@ Function divideSelf:
 ---NAME---
 licm_hoist_tuple_load
 ---INPUT---
-let loop(n: Int64, acc: Int64, t: (Int64 * Int64)) : Int64 =
-    if n < 1 then acc
+let loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
+    if n < 1L then acc
     else
         let v = t.0 in
-        loop(n - 1, acc + v, t)
+        loop(n - 1L, acc + v, t)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -472,8 +472,8 @@ derived_induction_affine_shift
 let loop(i: Int64, n: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
-        let odd = 2 * i + 1 in
-        loop(i + 1, n, total + odd)
+        let odd = 2L * i + 1L in
+        loop(i + 1L, n, total + odd)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -511,7 +511,7 @@ Function loop:
 closure_devirtualization_capture_free_local
 ---INPUT---
 let applyOnce(value: Int64) : Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   increment(value)
 ---EXPECTED---
 Function __closure_0:
@@ -550,7 +550,7 @@ Function addOffset:
 closure_devirtualization_preserves_escaping_closure
 ---INPUT---
 let makeIncrement() : (Int64) -> Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   increment
 ---EXPECTED---
 Function __closure_0:
@@ -568,7 +568,7 @@ Function makeIncrement:
 closure_devirtualization_reuses_local_closure
 ---INPUT---
 let applyTwice(value: Int64) : Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   let once = increment(value) in
   increment(once)
 ---EXPECTED---

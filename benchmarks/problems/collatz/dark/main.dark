@@ -11,13 +11,13 @@
 // - Loop performance
 
 let collatzSteps(n: Int64, steps: Int64) : Int64 =
-    if n == 1 then steps
-    else if n % 2 == 0 then collatzSteps(n / 2, steps + 1)
-    else collatzSteps(3 * n + 1, steps + 1)
+    if n == 1L then steps
+    else if n % 2L == 0L then collatzSteps(n / 2L, steps + 1L)
+    else collatzSteps(3L * n + 1L, steps + 1L)
 
 let sumCollatzRange(i: Int64, limit: Int64, total: Int64) : Int64 =
     if i > limit then total
-    else sumCollatzRange(i + 1, limit, total + collatzSteps(i, 0))
+    else sumCollatzRange(i + 1L, limit, total + collatzSteps(i, 0L))
 
 // Sum steps for numbers 1 to 100000
-Builtin.printLine(Stdlib.Int64.toString(sumCollatzRange(1, 100000, 0)))
+Builtin.printLine(Stdlib.Int64.toString(sumCollatzRange(1L, 100000L, 0L)))

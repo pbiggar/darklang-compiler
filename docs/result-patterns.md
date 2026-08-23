@@ -138,7 +138,7 @@ match checkExpr cond env, checkExpr thenBr env, checkExpr elseBr env with
 |------|-------------|------------|
 | `src/DarkCompiler/CompilerLibrary.fs` | Main orchestration | `string` |
 | `src/DarkCompiler/passes/1.5_TypeChecking.fs` | Type validation | `TypeError` |
-| `src/DarkCompiler/passes/1_Parser.fs` | Lexing/parsing | `string` |
+| `src/DarkCompiler/passes/1_InterpreterParser.fs` | Lexing/parsing | `string` |
 | `src/DarkCompiler/passes/2_AST_to_ANF.fs` | ANF conversion | `string` |
 
 ## Things to Avoid

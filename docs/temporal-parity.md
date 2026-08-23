@@ -126,7 +126,7 @@ unit character exactly:
 
 | Contract | Compiler evidence at `882f633f…` | Interpreter evidence at `04fbe9dc…` | Result |
 | --- | --- | --- | --- |
-| Distinct value/type traversal | `AST.fs`, both parsers, `1.5_TypeChecking.fs`, `ANF.fs`, `2_AST_to_ANF.fs`, `2.5_RefCountInsertion.fs`, `4_MIR_to_LIR.fs`, `5_RegisterAllocation.fs` | `backend/src/LibExecution/RuntimeTypes.fs:133-153,948-969` | Aligned |
+| Distinct value/type traversal | `AST.fs`, `1_InterpreterParser.fs`, `1.5_TypeChecking.fs`, `ANF.fs`, `2_AST_to_ANF.fs`, `2.5_RefCountInsertion.fs`, `4_MIR_to_LIR.fs`, `5_RegisterAllocation.fs` | `backend/src/LibExecution/RuntimeTypes.fs:133-153,948-969` | Aligned |
 | Clock and tick precision | `Runtime.fs:2450-2525`, `passes/x64/6_CodeGen.fs:4102-4124` | `Builtins.Time/Libs/DateTime.fs:14-45`, `DarkDateTime.fs` | Aligned to available host precision |
 | Public signatures and behavior | `stdlib/DateTime.dark:1-390` | `packages/darklang/stdlib/dateTime.dark:4-136`, `Builtins.Pure/Libs/DateTime.fs:13-536` | Aligned |
 | Duration grammar and errors | `stdlib/Duration.dark:1-21`, `stdlib/Int.dark:399-416` | `packages/darklang/stdlib/duration.dark:6-28`, `Builtins.Pure/Libs/Int.fs:359-379` | Aligned for the documented grammar |
@@ -151,6 +151,6 @@ respectively, identical to the pinned interpreter files.
   host-access extension; conversions themselves remain UTC, locale-free and
   timezone-free.
 - Compiler syntax retains `I` as an explicit arbitrary-precision integer
-  suffix. Current interpreter syntax uses unsuffixed `Int`; the compatibility
-  parser now does the same. This spelling extension does not change the
+  suffix. Current interpreter syntax uses unsuffixed `Int`; the canonical
+  parser does the same. This spelling extension does not change the
   canonical DateTime or Duration signatures.

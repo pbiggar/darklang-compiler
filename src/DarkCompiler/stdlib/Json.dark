@@ -7,7 +7,7 @@ let __padNumber(value: String, goalLength: Int64) : String =
     | Ok(padded) -> padded
     | Error(_) -> Builtin.testRuntimeError("JSON numeric padding failed")
 
-let __floatRatio(value: Float) : (Int * Int) =
+let __floatRatio(value: Float) : (Int, Int) =
     let bits = Stdlib.Float.toBits(value) in
     let rawExponent = (bits >> 52UL) & 2047UL in
     let mantissa = bits & 4503599627370495UL in
@@ -15,25 +15,25 @@ let __floatRatio(value: Float) : (Int * Int) =
         if rawExponent == 0UL then Stdlib.Int.fromUInt64(mantissa)
         else Stdlib.Int.add(Stdlib.Int.fromUInt64(mantissa), Stdlib.Int.shiftLeft(1I, 52I)) in
     let binaryExponent =
-        if rawExponent == 0UL then -1074
-        else Stdlib.Float.__smallUInt64ToInt64(rawExponent) - 1023 - 52 in
-    if binaryExponent >= 0 then
+        if rawExponent == 0UL then -1074L
+        else Stdlib.Float.__smallUInt64ToInt64(rawExponent) - 1023L - 52L in
+    if binaryExponent >= 0L then
         (Stdlib.Int.shiftLeft(significand, Stdlib.Int.fromInt64(binaryExponent)), 1I)
     else
-        (significand, Stdlib.Int.shiftLeft(1I, Stdlib.Int.fromInt64(0 - binaryExponent)))
+        (significand, Stdlib.Int.shiftLeft(1I, Stdlib.Int.fromInt64(0L - binaryExponent)))
 
 let __formatFloatPrecision(numerator: Int, denominator: Int, precision: Int64) : String =
     let integerPart = Stdlib.Int.divide(numerator, denominator) in
     let integerText = Stdlib.Int.toString(integerPart) in
     let integerDigits = Stdlib.String.__byteLength(integerText) in
     let fractionDigits0 = precision - integerDigits in
-    let fractionDigits = if fractionDigits0 < 1 then 1 else fractionDigits0 in
+    let fractionDigits = if fractionDigits0 < 1L then 1L else fractionDigits0 in
     let decimalScale = Stdlib.Int.power(10I, Stdlib.Int.fromInt64(fractionDigits)) in
     let rounded = Stdlib.AltJson.__roundRatio(Stdlib.Int.multiply(numerator, decimalScale), denominator) in
     let scaledText0 = Stdlib.Int.toString(rounded) in
-    let scaledText = Stdlib.Json.__padNumber(scaledText0, fractionDigits + 1) in
+    let scaledText = Stdlib.Json.__padNumber(scaledText0, fractionDigits + 1L) in
     let split = Stdlib.String.__byteLength(scaledText) - fractionDigits in
-    let whole = Stdlib.String.__byteSlice(scaledText, 0, split) in
+    let whole = Stdlib.String.__byteSlice(scaledText, 0L, split) in
     let fraction = Stdlib.Float.__stripDecimalTrailingZeros(Stdlib.String.__byteDrop(scaledText, split)) in
     whole ++ "." ++ fraction
 
@@ -41,64 +41,64 @@ let __shortestFloat(numerator: Int, denominator: Int, targetBits: UInt64, precis
     let candidate = Stdlib.Json.__formatFloatPrecision(numerator, denominator, precision) in
     match Stdlib.AltJson.__numberToFloat(candidate) with
     | Some(parsed) ->
-        if Stdlib.Float.toBits(parsed) == targetBits || precision >= 17 then candidate
-        else Stdlib.Json.__shortestFloat(numerator, denominator, targetBits, precision + 1)
+        if Stdlib.Float.toBits(parsed) == targetBits || precision >= 17L then candidate
+        else Stdlib.Json.__shortestFloat(numerator, denominator, targetBits, precision + 1L)
     | None ->
-        if precision >= 17 then candidate
-        else Stdlib.Json.__shortestFloat(numerator, denominator, targetBits, precision + 1)
+        if precision >= 17L then candidate
+        else Stdlib.Json.__shortestFloat(numerator, denominator, targetBits, precision + 1L)
 
 let __decimalExponentAboveOne(numerator: Int, denominator: Int, exponent: Int64) : Int64 =
     let tenfold = Stdlib.Int.multiply(denominator, 10I) in
     if Stdlib.Int.lessThan(numerator, tenfold) then exponent
-    else Stdlib.Json.__decimalExponentAboveOne(numerator, tenfold, exponent + 1)
+    else Stdlib.Json.__decimalExponentAboveOne(numerator, tenfold, exponent + 1L)
 
 let __decimalExponentBelowOne(numerator: Int, denominator: Int, exponent: Int64) : Int64 =
     if Stdlib.Int.greaterThanOrEqualTo(numerator, denominator) then exponent
-    else Stdlib.Json.__decimalExponentBelowOne(Stdlib.Int.multiply(numerator, 10I), denominator, exponent - 1)
+    else Stdlib.Json.__decimalExponentBelowOne(Stdlib.Int.multiply(numerator, 10I), denominator, exponent - 1L)
 
 let __decimalExponent(numerator: Int, denominator: Int) : Int64 =
     if Stdlib.Int.greaterThanOrEqualTo(numerator, denominator) then
-        Stdlib.Json.__decimalExponentAboveOne(numerator, denominator, 0)
+        Stdlib.Json.__decimalExponentAboveOne(numerator, denominator, 0L)
     else
-        Stdlib.Json.__decimalExponentBelowOne(Stdlib.Int.multiply(numerator, 10I), denominator, -1)
+        Stdlib.Json.__decimalExponentBelowOne(Stdlib.Int.multiply(numerator, 10I), denominator, -1L)
 
 let __scientificExponent(exponent: Int64) : String =
-    let sign = if exponent < 0 then "-" else "+" in
+    let sign = if exponent < 0L then "-" else "+" in
     let magnitude = Stdlib.Int64.toString(Stdlib.Int64.absoluteValue(exponent)) in
-    "E" ++ sign ++ Stdlib.Json.__padNumber(magnitude, 2)
+    "E" ++ sign ++ Stdlib.Json.__padNumber(magnitude, 2L)
 
 let __formatScientificPrecision(numerator: Int, denominator: Int, precision: Int64) : String =
     let exponent = Stdlib.Json.__decimalExponent(numerator, denominator) in
-    let scale = precision - 1 - exponent in
+    let scale = precision - 1L - exponent in
     let power = Stdlib.Int.power(10I, Stdlib.Int.fromInt64(Stdlib.Int64.absoluteValue(scale))) in
-    let scaleAfterPower = precision - 1 - Stdlib.Json.__decimalExponent(numerator, denominator) in
+    let scaleAfterPower = precision - 1L - Stdlib.Json.__decimalExponent(numerator, denominator) in
     let rounded =
-        if scaleAfterPower >= 0 then Stdlib.AltJson.__roundRatio(Stdlib.Int.multiply(numerator, power), denominator)
+        if scaleAfterPower >= 0L then Stdlib.AltJson.__roundRatio(Stdlib.Int.multiply(numerator, power), denominator)
         else Stdlib.AltJson.__roundRatio(numerator, Stdlib.Int.multiply(denominator, power)) in
     let roundedText = Stdlib.Int.toString(rounded) in
     let carried =
-        Stdlib.String.__byteLength(roundedText) > 1
-        && Stdlib.String.getByteAt(roundedText, 0) == 49
-        && Stdlib.Json.__allZero(roundedText, 1, Stdlib.String.__byteLength(roundedText)) in
+        Stdlib.String.__byteLength(roundedText) > 1L
+        && Stdlib.String.getByteAt(roundedText, 0L) == 49L
+        && Stdlib.Json.__allZero(roundedText, 1L, Stdlib.String.__byteLength(roundedText)) in
     let digits0 =
-        if carried then Stdlib.String.__byteSlice(roundedText, 0, Stdlib.String.__byteLength(roundedText) - 1)
+        if carried then Stdlib.String.__byteSlice(roundedText, 0L, Stdlib.String.__byteLength(roundedText) - 1L)
         else roundedText in
     let digits = Stdlib.Float.__stripDecimalTrailingZeros(digits0) in
     let mantissa =
-        if Stdlib.String.__byteLength(digits) == 1 then digits
-        else Stdlib.String.__byteTake(digits, 1) ++ "." ++ Stdlib.String.__byteDrop(digits, 1) in
-    let finalExponent = Stdlib.Json.__decimalExponent(numerator, denominator) + (if carried then 1 else 0) in
+        if Stdlib.String.__byteLength(digits) == 1L then digits
+        else Stdlib.String.__byteTake(digits, 1L) ++ "." ++ Stdlib.String.__byteDrop(digits, 1L) in
+    let finalExponent = Stdlib.Json.__decimalExponent(numerator, denominator) + (if carried then 1L else 0L) in
     mantissa ++ Stdlib.Json.__scientificExponent(finalExponent)
 
 let __shortestScientificFloat(numerator: Int, denominator: Int, targetBits: UInt64, precision: Int64) : String =
     let candidate = Stdlib.Json.__formatScientificPrecision(numerator, denominator, precision) in
     match Stdlib.AltJson.__numberToFloat(candidate) with
     | Some(parsed) ->
-        if Stdlib.Float.toBits(parsed) == targetBits || precision >= 17 then candidate
-        else Stdlib.Json.__shortestScientificFloat(numerator, denominator, targetBits, precision + 1)
+        if Stdlib.Float.toBits(parsed) == targetBits || precision >= 17L then candidate
+        else Stdlib.Json.__shortestScientificFloat(numerator, denominator, targetBits, precision + 1L)
     | None ->
-        if precision >= 17 then candidate
-        else Stdlib.Json.__shortestScientificFloat(numerator, denominator, targetBits, precision + 1)
+        if precision >= 17L then candidate
+        else Stdlib.Json.__shortestScientificFloat(numerator, denominator, targetBits, precision + 1L)
 
 let __serializeFloat(value: Float) : String =
     let bits = Stdlib.Float.toBits(value) in
@@ -113,17 +113,16 @@ let __serializeFloat(value: Float) : String =
         if absolute == 0.0 then if (bits >> 63UL) == 1UL then "-0.0" else "0.0"
         else
             let ratio = Stdlib.Json.__floatRatio(absolute) in
-            let (ratioNumerator, ratioDenominator) = ratio in
             let rendered =
                 if absolute >= 10000000000000000.0 || absolute < 0.0001 then
-                    Stdlib.Json.__shortestScientificFloat(ratioNumerator, ratioDenominator, Stdlib.Float.toBits(absolute), 1)
+                    Stdlib.Json.__shortestScientificFloat(ratio.0, ratio.1, Stdlib.Float.toBits(absolute), 1L)
                 else
-                    Stdlib.Json.__shortestFloat(ratioNumerator, ratioDenominator, Stdlib.Float.toBits(absolute), 1) in
+                    Stdlib.Json.__shortestFloat(ratio.0, ratio.1, Stdlib.Float.toBits(absolute), 1L) in
             if (bits >> 63UL) == 1UL then "-" ++ rendered else rendered
 
 let __numberHasDecimalSyntax(text: String) : Bool =
-    Stdlib.AltJson.__findNumberMarker(text, 0, 46, 46) >= 0
-    || Stdlib.AltJson.__findNumberMarker(text, 0, 101, 69) >= 0
+    Stdlib.AltJson.__findNumberMarker(text, 0L, 46L, 46L) >= 0L
+    || Stdlib.AltJson.__findNumberMarker(text, 0L, 101L, 69L) >= 0L
 
 let __floatIsInteger(value: Float) : Bool =
     let bits = Stdlib.Float.toBits(Stdlib.Float.abs(value)) in
@@ -172,77 +171,77 @@ let __numberToUInt128(text: String) : Stdlib.Option.Option<UInt128> =
 
 let __allZero(text: String, index: Int64, endIndex: Int64) : Bool =
     if index >= endIndex then true
-    else if Stdlib.String.getByteAt(text, index) != 48 then false
-    else Stdlib.Json.__allZero(text, index + 1, endIndex)
+    else if Stdlib.String.getByteAt(text, index) != 48L then false
+    else Stdlib.Json.__allZero(text, index + 1L, endIndex)
 
 let __stripLeadingZeroes(text: String, index: Int64) : String =
-    if index + 1 >= Stdlib.String.__byteLength(text) then Stdlib.String.__byteDrop(text, index)
-    else if Stdlib.String.getByteAt(text, index) == 48 then Stdlib.Json.__stripLeadingZeroes(text, index + 1)
+    if index + 1L >= Stdlib.String.__byteLength(text) then Stdlib.String.__byteDrop(text, index)
+    else if Stdlib.String.getByteAt(text, index) == 48L then Stdlib.Json.__stripLeadingZeroes(text, index + 1L)
     else Stdlib.String.__byteDrop(text, index)
 
 let __mantissaDigits(text: String) : String =
-    let dot = Stdlib.AltJson.__findNumberMarker(text, 0, 46, 46) in
-    if dot < 0 then text
-    else Stdlib.String.__byteSlice(text, 0, dot) ++ Stdlib.String.__byteDrop(text, dot + 1)
+    let dot = Stdlib.AltJson.__findNumberMarker(text, 0L, 46L, 46L) in
+    if dot < 0L then text
+    else Stdlib.String.__byteSlice(text, 0L, dot) ++ Stdlib.String.__byteDrop(text, dot + 1L)
 
 let __mantissaFractionCount(text: String) : Int64 =
-    let dot = Stdlib.AltJson.__findNumberMarker(text, 0, 46, 46) in
-    if dot < 0 then 0 else Stdlib.String.__byteLength(text) - dot - 1
+    let dot = Stdlib.AltJson.__findNumberMarker(text, 0L, 46L, 46L) in
+    if dot < 0L then 0L else Stdlib.String.__byteLength(text) - dot - 1L
 
 let __shiftIntegerDigits(digits: String, shift: Int64) : Stdlib.Option.Option<String> =
-    if Stdlib.Json.__allZero(digits, 0, Stdlib.String.__byteLength(digits)) then
+    if Stdlib.Json.__allZero(digits, 0L, Stdlib.String.__byteLength(digits)) then
         Stdlib.Option.Option.Some("0")
-    else if shift >= 0 then
+    else if shift >= 0L then
         Stdlib.Option.Option.Some(digits ++ Stdlib.String.repeat("0", Stdlib.Int.fromInt64(shift)))
     else
-        let remove = 0 - shift in
+        let remove = 0L - shift in
         let length = Stdlib.String.__byteLength(digits) in
         if remove > length || Stdlib.Json.__allZero(digits, length - remove, length) == false then
             Stdlib.Option.Option.None
-        else Stdlib.Option.Option.Some(Stdlib.String.__byteSlice(digits, 0, length - remove))
+        else Stdlib.Option.Option.Some(Stdlib.String.__byteSlice(digits, 0L, length - remove))
 
 let __applyIntegerExponent(digits: String, fractionCount: Int64, exponentText: String) : Stdlib.Option.Option<String> =
     let length = Stdlib.String.__byteLength(exponentText) in
-    let first = Stdlib.String.getByteAt(exponentText, 0) in
-    if first == 45 then
-        let magnitude = Stdlib.AltJson.__parseSmallExponent(exponentText, 1, length, 0) in
-        if magnitude > 1000 then Stdlib.Option.Option.None
-        else Stdlib.Json.__shiftIntegerDigits(digits, 0 - magnitude - fractionCount)
-    else if first == 43 then
-        let magnitude = Stdlib.AltJson.__parseSmallExponent(exponentText, 1, length, 0) in
-        if magnitude > 1000 then Stdlib.Option.Option.None
+    let first = Stdlib.String.getByteAt(exponentText, 0L) in
+    if first == 45L then
+        let magnitude = Stdlib.AltJson.__parseSmallExponent(exponentText, 1L, length, 0L) in
+        if magnitude > 1000L then Stdlib.Option.Option.None
+        else Stdlib.Json.__shiftIntegerDigits(digits, 0L - magnitude - fractionCount)
+    else if first == 43L then
+        let magnitude = Stdlib.AltJson.__parseSmallExponent(exponentText, 1L, length, 0L) in
+        if magnitude > 1000L then Stdlib.Option.Option.None
         else Stdlib.Json.__shiftIntegerDigits(digits, magnitude - fractionCount)
     else
-        let magnitude = Stdlib.AltJson.__parseSmallExponent(exponentText, 0, length, 0) in
-        if magnitude > 1000 then Stdlib.Option.Option.None
+        let magnitude = Stdlib.AltJson.__parseSmallExponent(exponentText, 0L, length, 0L) in
+        if magnitude > 1000L then Stdlib.Option.Option.None
         else Stdlib.Json.__shiftIntegerDigits(digits, magnitude - fractionCount)
 
 let __unsignedIntegerLexeme(text: String) : Stdlib.Option.Option<String> =
-    let exponentMarker = Stdlib.AltJson.__findNumberMarker(text, 0, 101, 69) in
-    let mantissa = if exponentMarker < 0 then text else Stdlib.String.__byteSlice(text, 0, exponentMarker) in
+    let exponentMarker = Stdlib.AltJson.__findNumberMarker(text, 0L, 101L, 69L) in
+    let mantissa = if exponentMarker < 0L then text else Stdlib.String.__byteSlice(text, 0L, exponentMarker) in
     let digits = Stdlib.Json.__mantissaDigits(mantissa) in
     // Zero remains exactly zero regardless of exponent magnitude; do this
     // before the expansion bound used to protect non-zero values.
-    if Stdlib.Json.__allZero(digits, 0, Stdlib.String.__byteLength(digits)) then
+    if Stdlib.Json.__allZero(digits, 0L, Stdlib.String.__byteLength(digits)) then
         Stdlib.Option.Option.Some("0")
-    else if exponentMarker < 0 then
+    else if exponentMarker < 0L then
         Stdlib.Json.__shiftIntegerDigits(
             digits,
-            0 - Stdlib.Json.__mantissaFractionCount(text))
+            0L - Stdlib.Json.__mantissaFractionCount(text))
     else
         Stdlib.Json.__applyIntegerExponent(
             digits,
             Stdlib.Json.__mantissaFractionCount(mantissa),
-            Stdlib.String.__byteDrop(text, exponentMarker + 1))
+            Stdlib.String.__byteDrop(text, exponentMarker + 1L))
 
 let __normalizeIntegerMagnitude(value: String) : String =
-    Stdlib.Json.__stripLeadingZeroes(if value == "" then "0" else value, 0)
+    Stdlib.Json.__stripLeadingZeroes(if value == "" then "0" else value, 0L)
 
 // Convert every integer-valued JSON number spelling to canonical decimal
 // without passing through Float. Large exponents are bounded before expansion.
 let __integerLexeme(text: String) : Stdlib.Option.Option<String> =
-    if Stdlib.String.getByteAt(text, 0) == 45 then
-        (match Stdlib.Json.__unsignedIntegerLexeme(Stdlib.String.__byteDrop(text, 1)) with
+    if Stdlib.String.getByteAt(text, 0L) == 45L then
+        (match Stdlib.Json.__unsignedIntegerLexeme(Stdlib.String.__byteDrop(text, 1L)) with
         | None -> Stdlib.Option.Option.None
         | Some(value) -> Stdlib.Option.Option.Some("-" ++ Stdlib.Json.__normalizeIntegerMagnitude(value)))
     else
@@ -250,7 +249,7 @@ let __integerLexeme(text: String) : Stdlib.Option.Option<String> =
         | None -> Stdlib.Option.Option.None
         | Some(value) -> Stdlib.Option.Option.Some(Stdlib.Json.__normalizeIntegerMagnitude(value)))
 
-let __matchingFields(key: String, fields: List<(String * Stdlib.AltJson.InternalRawJson)>) : List<Stdlib.AltJson.InternalRawJson> =
+let __matchingFields(key: String, fields: List<(String, Stdlib.AltJson.InternalRawJson)>) : List<Stdlib.AltJson.InternalRawJson> =
     match fields with
     | [] -> []
     | head :: tail ->

@@ -5,22 +5,22 @@
 
 let isDivisible(n: Int64, d: Int64, limit: Int64) : Bool =
     if d > limit then false
-    else if n % d == 0 then true
-    else isDivisible(n, d + 1, limit)
+    else if n % d == 0L then true
+    else isDivisible(n, d + 1L, limit)
 
 let isPrime(n: Int64) : Bool =
-    if n < 2 then false
-    else if n == 2 then true
-    else if n % 2 == 0 then false
+    if n < 2L then false
+    else if n == 2L then true
+    else if n % 2L == 0L then false
     else
         let limit = Stdlib.Float.toInt(Stdlib.Float.sqrt(Stdlib.Int64.toFloat(n))) in
-        if isDivisible(n, 3, limit) then false else true
+        if isDivisible(n, 3L, limit) then false else true
 
 let countPrimes(n: Int64, count: Int64) : Int64 =
-    if n <= 1 then count
-    else if isPrime(n) then countPrimes(n - 1, count + 1)
-    else countPrimes(n - 1, count)
+    if n <= 1L then count
+    else if isPrime(n) then countPrimes(n - 1L, count + 1L)
+    else countPrimes(n - 1L, count)
 
 // Count primes up to 10000
 // Expected: 1229 primes
-Builtin.printLine(Stdlib.Int64.toString(countPrimes(10000, 0)))
+Builtin.printLine(Stdlib.Int64.toString(countPrimes(10000L, 0L)))

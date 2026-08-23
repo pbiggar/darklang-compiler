@@ -20,42 +20,42 @@ false = false
 // ===================================================================
 
 // Equality
-1 == 1 = true
-1 == 2 = false
-5 == 5 = true
-0 == 0 = true
-42 == 42 = true
+1L == 1L = true
+1L == 2L = false
+5L == 5L = true
+0L == 0L = true
+42L == 42L = true
 
 // Inequality
-1 != 2 = true
-5 != 5 = false
-0 != 1 = true
-42 != 0 = true
+1L != 2L = true
+5L != 5L = false
+0L != 1L = true
+42L != 0L = true
 
 // Less than
-1 < 2 = true
-2 < 1 = false
-5 < 5 = false
-0 < 1 = true
-10 < 20 = true
+1L < 2L = true
+2L < 1L = false
+5L < 5L = false
+0L < 1L = true
+10L < 20L = true
 
 // Greater than
-2 > 1 = true
-1 > 2 = false
-5 > 5 = false
-20 > 10 = true
+2L > 1L = true
+1L > 2L = false
+5L > 5L = false
+20L > 10L = true
 
 // Less than or equal
-1 <= 2 = true
-2 <= 2 = true
-3 <= 2 = false
-5 <= 10 = true
+1L <= 2L = true
+2L <= 2L = true
+3L <= 2L = false
+5L <= 10L = true
 
 // Greater than or equal
-2 >= 1 = true
-2 >= 2 = true
-1 >= 2 = false
-10 >= 5 = true
+2L >= 1L = true
+2L >= 2L = true
+1L >= 2L = false
+10L >= 5L = true
 
 
 // ===================================================================
@@ -86,16 +86,16 @@ false || false = false
 // ===================================================================
 
 // Comparisons with boolean operators
-1 == 1 && 2 == 2 = true
-1 == 1 && 1 == 2 = false
-1 == 2 || 2 == 2 = true
-1 == 2 || 3 == 4 = false
+1L == 1L && 2L == 2L = true
+1L == 1L && 1L == 2L = false
+1L == 2L || 2L == 2L = true
+1L == 2L || 3L == 4L = false
 
 // Negated comparisons
-!(1 == 1) = false
-!(1 == 2) = true
-!(5 < 3) = true
-!(5 > 3) = false
+!(1L == 1L) = false
+!(1L == 2L) = true
+!(5L < 3L) = true
+!(5L > 3L) = false
 
 
 // ===================================================================
@@ -104,20 +104,20 @@ false || false = false
 
 let x = true in x = true
 let x = false in x = false
-let x = 1 == 1 in x = true
-let x = 1 == 2 in x = false
-let x = 5 < 10 in x = true
+let x = 1L == 1L in x = true
+let x = 1L == 2L in x = false
+let x = 5L < 10L in x = true
 
 // Multiple let bindings
 let x = true in let y = false in x && y = false
 let x = true in let y = false in x || y = true
-let x = 1 < 2 in let y = 3 > 2 in x && y = true
+let x = 1L < 2L in let y = 3L > 2L in x && y = true
 
 // Boolean operations in let values
 let x = true && false in x = false
 let x = true || false in x = true
 let x = !true in x = false
-let x = !(1 == 2) in x = true
+let x = !(1L == 2L) in x = true
 
 
 // ===================================================================
@@ -130,16 +130,16 @@ true && (false || true) = true
 (true && false) || (true && true) = true
 
 // Comparisons with arithmetic
-1 + 1 == 2 = true
-3 * 4 == 12 = true
-10 - 5 == 5 = true
-8 / 2 == 4 = true
+1L + 1L == 2L = true
+3L * 4L == 12L = true
+10L - 5L == 5L = true
+8L / 2L == 4L = true
 
 // More complex
-(1 + 2) < (4 + 5) = true
-(10 - 3) > (2 * 2) = true
-(6 / 2) == 3 = true
+(1L + 2L) < (4L + 5L) = true
+(10L - 3L) > (2L * 2L) = true
+(6L / 2L) == 3L = true
 
 // Negation with arithmetic
-!(5 + 5 == 11) = true
-!(3 * 3 == 9) = false
+!(5L + 5L == 11L) = true
+!(3L * 3L == 9L) = false

@@ -16,9 +16,9 @@ evidence only.
 | Claim | Compiler probe | Interpreter evidence | Result |
 | --- | --- | --- | --- |
 | `let` accepts optional `in` and a layout continuation | `src/Tests/syntax/bindings.syntax`; `src/Tests/e2e/interpreter/bindings.e2e` | `backend/testfiles/execution/language/basic/elet.dark`; `LibParser/Parser.fs:1357-1443` | Shared |
-| Let and lambda binders are variable, wildcard, unit, parenthesized, or nested tuple patterns only | `bindings.syntax`; restricted parsers at `src/DarkCompiler/passes/1_Parser.fs:1322` and `1_InterpreterParser.fs:1394` | dedicated `parseLetPattern`, `LibParser/Parser.fs:1306-1355` | Shared |
-| Public lambdas use unannotated `fun patterns -> body` | `bindings.syntax`; compiler parser and interpreter-syntax parser probes | `backend/testfiles/execution/language/basic/elambda.dark`; `LibParser/Parser.fs:2044-2071` | Shared |
-| Parameter and return annotations belong to local function declarations | `bindings.syntax`; `SyntaxInteropTests.fs` | `LibParser/Parser.fs` local-function production | Shared |
+| Let and lambda binders are variable, wildcard, unit, parenthesized, or nested tuple patterns only | `bindings.syntax`; restricted parser in `src/DarkCompiler/passes/1_InterpreterParser.fs` | dedicated `parseLetPattern`, `LibParser/Parser.fs:1306-1355` | Shared |
+| Public lambdas use unannotated `fun patterns -> body` | `bindings.syntax`; canonical parser probes | `backend/testfiles/execution/language/basic/elambda.dark`; `LibParser/Parser.fs:2044-2071` | Shared |
+| Parameter and return annotations belong to local function declarations | `bindings.syntax`; parser and program-structure tests | `LibParser/Parser.fs` local-function production | Shared |
 | The RHS is outside the new scope and runs before the continuation | `bindings.e2e` rebinding and use-before-binding probes | `LibParser/WrittenTypesToProgramTypes.fs:591-611` | Shared |
 | Duplicate usable names reject the complete let/lambda binder set; `_` names do not bind | duplicate rejection cases in `bindings.syntax`; validator at `AST.fs:213-249` | `LibParser/Validation.fs:81-150,201-216` | Shared |
 | Tuple destructuring commits atomically; mismatch skips the continuation | mismatch and evaluation-order cases in `bindings.e2e`; lowering at `2_AST_to_ANF.fs:4263-4339` | `LibExecution/ProgramTypesToRuntimeTypes.fs:721-730`; `LibExecution/Interpreter.fs:1882-1898` | Shared |

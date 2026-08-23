@@ -4,35 +4,35 @@
 ---NAME---
 const_fold_int_add
 ---INPUT---
-1 + 2
+1L + 2L
 ---EXPECTED---
 return 3
 
 ---NAME---
 const_fold_int_sub
 ---INPUT---
-10 - 3
+10L - 3L
 ---EXPECTED---
 return 7
 
 ---NAME---
 const_fold_int_mul
 ---INPUT---
-4 * 5
+4L * 5L
 ---EXPECTED---
 return 20
 
 ---NAME---
 const_fold_int_div
 ---INPUT---
-20 / 4
+20L / 4L
 ---EXPECTED---
 return 5
 
 ---NAME---
 const_fold_int_mod
 ---INPUT---
-10 % 3
+10L % 3L
 ---EXPECTED---
 return 1
 
@@ -102,14 +102,14 @@ return 4
 ---NAME---
 const_fold_float_lt
 ---INPUT---
-if 1.5 < 2.5 then 10 else 20
+if 1.5 < 2.5 then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_float_eq
 ---INPUT---
-if 1.5 == 1.5 then 10 else 20
+if 1.5 == 1.5 then 10L else 20L
 ---EXPECTED---
 return 10
 
@@ -137,7 +137,7 @@ return 3
 ---NAME---
 const_fold_int64_to_float
 ---INPUT---
-let x = 42 in Stdlib.Int64.toFloat(x)
+let x = 42L in Stdlib.Int64.toFloat(x)
 ---EXPECTED---
 return 42
 
@@ -158,133 +158,133 @@ return 4607182418800017408
 ---NAME---
 const_fold_comparison_lt
 ---INPUT---
-if 1 < 2 then 10 else 20
+if 1L < 2L then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_comparison_gt
 ---INPUT---
-if 2 > 1 then 10 else 20
+if 2L > 1L then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_comparison_eq
 ---INPUT---
-if 1 == 1 then 10 else 20
+if 1L == 1L then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_comparison_neq
 ---INPUT---
-if 1 != 2 then 10 else 20
+if 1L != 2L then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_uint64_eq
 ---INPUT---
-if 18446744073709551615UL == 0UL then 10 else 20
+if 18446744073709551615UL == 0UL then 10L else 20L
 ---EXPECTED---
 return 20
 
 ---NAME---
 const_fold_uint64_neq
 ---INPUT---
-if 18446744073709551615UL != 0UL then 10 else 20
+if 18446744073709551615UL != 0UL then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_uint64_lt
 ---INPUT---
-if 18446744073709551615UL < 0UL then 10 else 20
+if 18446744073709551615UL < 0UL then 10L else 20L
 ---EXPECTED---
 return 20
 
 ---NAME---
 const_fold_uint64_gt
 ---INPUT---
-if 18446744073709551615UL > 0UL then 10 else 20
+if 18446744073709551615UL > 0UL then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_uint64_lte
 ---INPUT---
-if 18446744073709551615UL <= 0UL then 10 else 20
+if 18446744073709551615UL <= 0UL then 10L else 20L
 ---EXPECTED---
 return 20
 
 ---NAME---
 const_fold_uint64_gte
 ---INPUT---
-if 18446744073709551615UL >= 0UL then 10 else 20
+if 18446744073709551615UL >= 0UL then 10L else 20L
 ---EXPECTED---
 return 10
 
 ---NAME---
 const_fold_bool_and_true
 ---INPUT---
-if true && true then 1 else 0
+if true && true then 1L else 0L
 ---EXPECTED---
 return 1
 
 ---NAME---
 const_fold_bool_and_false
 ---INPUT---
-if true && false then 1 else 0
+if true && false then 1L else 0L
 ---EXPECTED---
 return 0
 
 ---NAME---
 const_fold_bool_or_true
 ---INPUT---
-if false || true then 1 else 0
+if false || true then 1L else 0L
 ---EXPECTED---
 return 1
 
 ---NAME---
 const_fold_bool_or_false
 ---INPUT---
-if false || false then 1 else 0
+if false || false then 1L else 0L
 ---EXPECTED---
 return 0
 
 ---NAME---
 const_fold_int_shl
 ---INPUT---
-8 << 3
+8L << 3L
 ---EXPECTED---
 return 64
 
 ---NAME---
 const_fold_int_shr
 ---INPUT---
-64 >> 3
+64L >> 3L
 ---EXPECTED---
 return 8
 
 ---NAME---
 const_fold_int_bitand
 ---INPUT---
-6 & 3
+6L & 3L
 ---EXPECTED---
 return 2
 
 ---NAME---
 const_fold_int_bitor
 ---INPUT---
-4 ||| 3
+4L ||| 3L
 ---EXPECTED---
 return 7
 
 ---NAME---
 const_fold_int_bitxor
 ---INPUT---
-6 ^ 3
+6L ^ 3L
 ---EXPECTED---
 return 5
 
@@ -312,14 +312,14 @@ return 18446744073709551614
 ---NAME---
 identity_add_zero_right
 ---INPUT---
-let x = 42 in x + 0
+let x = 42L in x + 0L
 ---EXPECTED---
 return 42
 
 ---NAME---
 identity_add_zero_left
 ---INPUT---
-let x = 42 in 0 + x
+let x = 42L in 0L + x
 ---EXPECTED---
 return 42
 
@@ -351,7 +351,7 @@ return t1
 ---NAME---
 identity_sub_zero
 ---INPUT---
-let x = 42 in x - 0
+let x = 42L in x - 0L
 ---EXPECTED---
 return 42
 
@@ -366,7 +366,7 @@ return t0
 ---NAME---
 strength_reduce_sub_from_zero
 ---INPUT---
-let f(x: Int64) : Int64 = 0 - x
+let f(x: Int64) : Int64 = 0L - x
 ---EXPECTED---
 Function f:
 let TempId 1 = -t0
@@ -375,35 +375,35 @@ return t1
 ---NAME---
 identity_mul_one_right
 ---INPUT---
-let x = 42 in x * 1
+let x = 42L in x * 1L
 ---EXPECTED---
 return 42
 
 ---NAME---
 identity_mul_one_left
 ---INPUT---
-let x = 42 in 1 * x
+let x = 42L in 1L * x
 ---EXPECTED---
 return 42
 
 ---NAME---
 identity_mul_zero_right
 ---INPUT---
-let x = 42 in x * 0
+let x = 42L in x * 0L
 ---EXPECTED---
 return 0
 
 ---NAME---
 identity_mul_zero_left
 ---INPUT---
-let x = 42 in 0 * x
+let x = 42L in 0L * x
 ---EXPECTED---
 return 0
 
 ---NAME---
 identity_div_one
 ---INPUT---
-let x = 42 in x / 1
+let x = 42L in x / 1L
 ---EXPECTED---
 return 42
 
@@ -509,7 +509,7 @@ return 0
 ---NAME---
 strength_reduce_div_negative_one
 ---INPUT---
-let f(x: Int64) : Int64 = x / -1
+let f(x: Int64) : Int64 = x / -1L
 ---EXPECTED---
 Function f:
 let TempId 1 = -t0
@@ -518,8 +518,8 @@ return t1
 ---NAME---
 identity_mod_one
 ---INPUT---
-let use(x: Int64): Int64 = x % 1
-use(42)
+let use(x: Int64): Int64 = x % 1L
+use(42L)
 ---EXPECTED---
 Function use:
 return 0
@@ -530,8 +530,8 @@ return t2
 ---NAME---
 identity_mod_negative_one
 ---INPUT---
-let use(x: Int64): Int64 = x % -1
-use(42)
+let use(x: Int64): Int64 = x % -1L
+use(42L)
 ---EXPECTED---
 Function use:
 return 0
@@ -554,63 +554,63 @@ return t2
 ---NAME---
 dce_unused_binding
 ---INPUT---
-let unused = 1 + 2 in 42
+let unused = 1L + 2L in 42L
 ---EXPECTED---
 return 42
 
 ---NAME---
 dce_multiple_unused
 ---INPUT---
-let a = 1 in let b = 2 in let c = 3 in 100
+let a = 1L in let b = 2L in let c = 3L in 100L
 ---EXPECTED---
 return 100
 
 ---NAME---
 const_prop_simple
 ---INPUT---
-let x = 5 in x + 1
+let x = 5L in x + 1L
 ---EXPECTED---
 return 6
 
 ---NAME---
 const_prop_chain
 ---INPUT---
-let x = 2 in let y = x * 3 in y + 1
+let x = 2L in let y = x * 3L in y + 1L
 ---EXPECTED---
 return 7
 
 ---NAME---
 const_prop_multi_level
 ---INPUT---
-let x = 2 in let y = x * 3 in let z = y + 1 in z
+let x = 2L in let y = x * 3L in let z = y + 1L in z
 ---EXPECTED---
 return 7
 
 ---NAME---
 cond_simp_true_branch
 ---INPUT---
-if true then 1 else 2
+if true then 1L else 2L
 ---EXPECTED---
 return 1
 
 ---NAME---
 cond_simp_false_branch
 ---INPUT---
-if false then 1 else 2
+if false then 1L else 2L
 ---EXPECTED---
 return 2
 
 ---NAME---
 cond_simp_nested
 ---INPUT---
-if true then (if false then 1 else 2) else 3
+if true then (if false then 1L else 2L) else 3L
 ---EXPECTED---
 return 2
 
 ---NAME---
 unary_neg_int
 ---INPUT---
--(5)
+-(5L)
 ---EXPECTED---
 return -5
 
@@ -624,56 +624,56 @@ return -3.5
 ---NAME---
 unary_not_true
 ---INPUT---
-if !true then 1 else 2
+if !true then 1L else 2L
 ---EXPECTED---
 return 2
 
 ---NAME---
 unary_not_false
 ---INPUT---
-if !false then 1 else 2
+if !false then 1L else 2L
 ---EXPECTED---
 return 1
 
 ---NAME---
 strength_reduce_mul_2
 ---INPUT---
-let x = 5 in x * 2
+let x = 5L in x * 2L
 ---EXPECTED---
 return 10
 
 ---NAME---
 strength_reduce_2_mul
 ---INPUT---
-let x = 5 in 2 * x
+let x = 5L in 2L * x
 ---EXPECTED---
 return 10
 
 ---NAME---
 strength_reduce_mul_4
 ---INPUT---
-let x = 3 in x * 4
+let x = 3L in x * 4L
 ---EXPECTED---
 return 12
 
 ---NAME---
 strength_reduce_mul_8
 ---INPUT---
-let x = 7 in x * 8
+let x = 7L in x * 8L
 ---EXPECTED---
 return 56
 
 ---NAME---
 strength_reduce_mul_16
 ---INPUT---
-let x = 2 in x * 16
+let x = 2L in x * 16L
 ---EXPECTED---
 return 32
 
 ---NAME---
 strength_reduce_mul_neg_one_right
 ---INPUT---
-let f(x: Int64) : Int64 = x * -1
+let f(x: Int64) : Int64 = x * -1L
 ---EXPECTED---
 Function f:
 let TempId 1 = -t0
@@ -682,7 +682,7 @@ return t1
 ---NAME---
 strength_reduce_mul_neg_one_left
 ---INPUT---
-let f(x: Int64) : Int64 = -1 * x
+let f(x: Int64) : Int64 = -1L * x
 ---EXPECTED---
 Function f:
 let TempId 1 = -t0
@@ -854,7 +854,7 @@ return t2
 self_subtraction_int
 ---INPUT---
 let f(x: Int64) : Int64 = x - x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return 0
@@ -867,7 +867,7 @@ return t2
 self_comparison_int_eq
 ---INPUT---
 let f(x: Int64) : Bool = x == x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return true
@@ -880,7 +880,7 @@ return t2
 self_comparison_int_lt
 ---INPUT---
 let f(x: Int64) : Bool = x < x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return false
@@ -893,7 +893,7 @@ return t2
 self_comparison_int_neq
 ---INPUT---
 let f(x: Int64) : Bool = x != x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return false
@@ -906,7 +906,7 @@ return t3
 self_comparison_int_gt
 ---INPUT---
 let f(x: Int64) : Bool = x > x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return false
@@ -919,7 +919,7 @@ return t2
 self_comparison_int_lte
 ---INPUT---
 let f(x: Int64) : Bool = x <= x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return true
@@ -932,7 +932,7 @@ return t2
 self_comparison_int_gte
 ---INPUT---
 let f(x: Int64) : Bool = x >= x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return true
@@ -944,7 +944,7 @@ return t2
 ---NAME---
 self_comparison_float_lt_eliminates_branch
 ---INPUT---
-let f(x: Float) : Int64 = if x < x then 1 else 2
+let f(x: Float) : Int64 = if x < x then 1L else 2L
 f(0.0)
 ---EXPECTED---
 Function f:
@@ -957,7 +957,7 @@ return t2
 ---NAME---
 self_comparison_float_gt_eliminates_branch
 ---INPUT---
-let f(x: Float) : Int64 = if x > x then 1 else 2
+let f(x: Float) : Int64 = if x > x then 1L else 2L
 f(0.0)
 ---EXPECTED---
 Function f:
@@ -970,7 +970,7 @@ return t2
 ---NAME---
 self_comparison_float_nan_sensitive_relations_remain
 ---INPUT---
-let f(x: Float) : (Bool * Bool * Bool * Bool) =
+let f(x: Float) : (Bool, Bool, Bool, Bool) =
   (x == x, x != x, x <= x, x >= x)
 f(0.0)
 ---EXPECTED---
@@ -1015,7 +1015,7 @@ return t3
 identity_if_same_branches
 ---INPUT---
 let f(cond: Bool, x: Int64) : Int64 = if cond then x else x
-f(true, 42)
+f(true, 42L)
 ---EXPECTED---
 Function f:
 return t1
@@ -1028,9 +1028,9 @@ return t2
 identity_if_value_same_branches_drops_condition
 ---INPUT---
 let f(x: Int64) : Int64 =
-    let cond = x > 0 in
-    (if cond then x else x) + 1
-f(42)
+    let cond = x > 0L in
+    (if cond then x else x) + 1L
+f(42L)
 ---EXPECTED---
 Function f:
 let TempId 4 = t0 + 1
@@ -1070,7 +1070,7 @@ return t1
 ---NAME---
 branch_on_single_use_bool_negation
 ---INPUT---
-let f(cond: Bool) : Int64 = if !cond then 1 else 2
+let f(cond: Bool) : Int64 = if !cond then 1L else 2L
 f(true)
 ---EXPECTED---
 Function f:
@@ -1106,7 +1106,7 @@ return t3
 negated_integer_comparison_uses_complement
 ---INPUT---
 let f(left: Int64, right: Int64) : Bool = !(left < right)
-f(1, 2)
+f(1L, 2L)
 ---EXPECTED---
 Function f:
 let TempId 3 = t0 >= t1
@@ -1161,7 +1161,7 @@ return t2
 identity_bitand_self
 ---INPUT---
 let f(x: Int64) : Int64 = x & x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return t0
@@ -1174,7 +1174,7 @@ return t2
 identity_bitor_self
 ---INPUT---
 let f(x: Int64) : Int64 = x ||| x
-f(42)
+f(42L)
 ---EXPECTED---
 Function f:
 return t0
@@ -1202,7 +1202,7 @@ return t0
 ---NAME---
 identity_bitand_zero_right
 ---INPUT---
-let f(x: Int64) : Int64 = x & 0
+let f(x: Int64) : Int64 = x & 0L
 ---EXPECTED---
 Function f:
 return 0
@@ -1210,7 +1210,7 @@ return 0
 ---NAME---
 identity_bitand_zero_left
 ---INPUT---
-let f(x: Int64) : Int64 = 0 & x
+let f(x: Int64) : Int64 = 0L & x
 ---EXPECTED---
 Function f:
 return 0
@@ -1218,7 +1218,7 @@ return 0
 ---NAME---
 identity_bitor_zero_right
 ---INPUT---
-let f(x: Int64) : Int64 = x ||| 0
+let f(x: Int64) : Int64 = x ||| 0L
 ---EXPECTED---
 Function f:
 return t0
@@ -1226,7 +1226,7 @@ return t0
 ---NAME---
 identity_bitor_zero_left
 ---INPUT---
-let f(x: Int64) : Int64 = 0 ||| x
+let f(x: Int64) : Int64 = 0L ||| x
 ---EXPECTED---
 Function f:
 return t0
@@ -1234,7 +1234,7 @@ return t0
 ---NAME---
 identity_bitxor_zero_right
 ---INPUT---
-let f(x: Int64) : Int64 = x ^ 0
+let f(x: Int64) : Int64 = x ^ 0L
 ---EXPECTED---
 Function f:
 return t0
@@ -1242,7 +1242,7 @@ return t0
 ---NAME---
 identity_bitxor_zero_left
 ---INPUT---
-let f(x: Int64) : Int64 = 0 ^ x
+let f(x: Int64) : Int64 = 0L ^ x
 ---EXPECTED---
 Function f:
 return t0
@@ -1481,7 +1481,7 @@ return true
 ---NAME---
 const_fold_internal_string_eq_equal_literals
 ---INPUT---
-let f() : Int64 = if __string_eq("same", "same") then 1 else 2
+let f() : Int64 = if __string_eq("same", "same") then 1L else 2L
 ---EXPECTED---
 Function f:
 return 1
@@ -1489,7 +1489,7 @@ return 1
 ---NAME---
 const_fold_internal_string_eq_unequal_literals
 ---INPUT---
-let f() : Int64 = if __string_eq("same", "different") then 1 else 2
+let f() : Int64 = if __string_eq("same", "different") then 1L else 2L
 ---EXPECTED---
 Function f:
 return 2
@@ -1581,7 +1581,7 @@ return -1
 ---NAME---
 bitwise_complement_preserves_reused_not
 ---INPUT---
-let f(x: Int64) : (Int64 * Int64) =
+let f(x: Int64) : (Int64, Int64) =
   let complemented = ~~~x in
   (x & complemented, complemented)
 ---EXPECTED---
@@ -1640,7 +1640,7 @@ return t5
 ---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
-let f(x: Int64) : Int64 = x & -1
+let f(x: Int64) : Int64 = x & -1L
 ---EXPECTED---
 Function f:
 return t0
@@ -1648,7 +1648,7 @@ return t0
 ---NAME---
 identity_bitand_all_ones_left
 ---INPUT---
-let f(x: Int64) : Int64 = -1 & x
+let f(x: Int64) : Int64 = -1L & x
 ---EXPECTED---
 Function f:
 return t0
@@ -1656,7 +1656,7 @@ return t0
 ---NAME---
 identity_bitor_all_ones_right
 ---INPUT---
-let f(x: Int64) : Int64 = x ||| -1
+let f(x: Int64) : Int64 = x ||| -1L
 ---EXPECTED---
 Function f:
 return -1
@@ -1664,7 +1664,7 @@ return -1
 ---NAME---
 identity_bitor_all_ones_left
 ---INPUT---
-let f(x: Int64) : Int64 = -1 ||| x
+let f(x: Int64) : Int64 = -1L ||| x
 ---EXPECTED---
 Function f:
 return -1
@@ -1672,7 +1672,7 @@ return -1
 ---NAME---
 identity_bitxor_all_ones_right
 ---INPUT---
-let f(x: Int64) : Int64 = x ^ -1
+let f(x: Int64) : Int64 = x ^ -1L
 ---EXPECTED---
 Function f:
 let TempId 1 = ~~~t0
@@ -1681,7 +1681,7 @@ return t1
 ---NAME---
 identity_bitxor_all_ones_left
 ---INPUT---
-let f(x: Int64) : Int64 = -1 ^ x
+let f(x: Int64) : Int64 = -1L ^ x
 ---EXPECTED---
 Function f:
 let TempId 1 = ~~~t0
@@ -1690,7 +1690,7 @@ return t1
 ---NAME---
 identity_shl_zero
 ---INPUT---
-let f(x: Int64) : Int64 = x << 0
+let f(x: Int64) : Int64 = x << 0L
 ---EXPECTED---
 Function f:
 return t0
@@ -1698,7 +1698,7 @@ return t0
 ---NAME---
 identity_shr_zero
 ---INPUT---
-let f(x: Int64) : Int64 = x >> 0
+let f(x: Int64) : Int64 = x >> 0L
 ---EXPECTED---
 Function f:
 return t0
@@ -1706,7 +1706,7 @@ return t0
 ---NAME---
 identity_shl_zero_left
 ---INPUT---
-let f(x: Int64) : Int64 = 0 << x
+let f(x: Int64) : Int64 = 0L << x
 ---EXPECTED---
 Function f:
 return 0
@@ -1714,7 +1714,7 @@ return 0
 ---NAME---
 identity_shr_zero_left
 ---INPUT---
-let f(x: Int64) : Int64 = 0 >> x
+let f(x: Int64) : Int64 = 0L >> x
 ---EXPECTED---
 Function f:
 return 0
@@ -1778,7 +1778,7 @@ return t2
 ---NAME---
 strength_reduce_sub_negative_literal
 ---INPUT---
-let f(x: Int64) : Int64 = x - -4
+let f(x: Int64) : Int64 = x - -4L
 ---EXPECTED---
 Function f:
 let TempId 1 = t0 + 4
@@ -1787,7 +1787,7 @@ return t1
 ---NAME---
 strength_reduce_add_negative_literal_right
 ---INPUT---
-let f(x: Int64) : Int64 = x + -4
+let f(x: Int64) : Int64 = x + -4L
 ---EXPECTED---
 Function f:
 let TempId 1 = t0 - 4
@@ -1796,7 +1796,7 @@ return t1
 ---NAME---
 strength_reduce_add_negative_literal_left
 ---INPUT---
-let f(x: Int64) : Int64 = -4 + x
+let f(x: Int64) : Int64 = -4L + x
 ---EXPECTED---
 Function f:
 let TempId 1 = t0 - 4
@@ -1823,7 +1823,7 @@ return t3
 ---NAME---
 preserve_reused_int64_negation_in_add
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64 * Int64) =
+let f(x: Int64, y: Int64) : (Int64, Int64) =
   let negated = -y in
   (x + negated, negated)
 ---EXPECTED---
@@ -1848,7 +1848,7 @@ return t3
 ---NAME---
 reassociate_integer_add_constants
 ---INPUT---
-let f(x: Int64) : Int64 = (x + 2) + 3
+let f(x: Int64) : Int64 = (x + 2L) + 3L
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 + 5
@@ -1867,7 +1867,7 @@ return t2
 ---NAME---
 reassociate_int64_multiply_constants
 ---INPUT---
-let f(x: Int64) : Int64 = (x * 3) * 5
+let f(x: Int64) : Int64 = (x * 3L) * 5L
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 * 15
@@ -1876,7 +1876,7 @@ return t2
 ---NAME---
 reassociate_int64_multiply_constants_with_wrapping
 ---INPUT---
-let f(x: Int64) : Int64 = (x * 4000000000) * 4000000000
+let f(x: Int64) : Int64 = (x * 4000000000L) * 4000000000L
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 * -2446744073709551616
@@ -1885,9 +1885,9 @@ return t2
 ---NAME---
 int64_multiply_reassociation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64) : (Int64 * Int64) =
-  let scaled = x * 3 in
-  (scaled * 5, scaled)
+let f(x: Int64) : (Int64, Int64) =
+  let scaled = x * 3L in
+  (scaled * 5L, scaled)
 ---EXPECTED---
 Function f:
 let TempId 1 = t0 * 3
@@ -1908,7 +1908,7 @@ return t2
 ---NAME---
 factor_shared_int64_mul_add_product_left
 ---INPUT---
-let f(x: Int64) : Int64 = (x * 3) + x
+let f(x: Int64) : Int64 = (x * 3L) + x
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 << 2
@@ -1917,7 +1917,7 @@ return t2
 ---NAME---
 factor_shared_int64_mul_add_addend_left
 ---INPUT---
-let f(x: Int64) : Int64 = x + (x * 3)
+let f(x: Int64) : Int64 = x + (x * 3L)
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 << 2
@@ -1926,7 +1926,7 @@ return t2
 ---NAME---
 factor_shared_int64_mul_add_commuted_product_left
 ---INPUT---
-let f(x: Int64) : Int64 = (3 * x) + x
+let f(x: Int64) : Int64 = (3L * x) + x
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 << 2
@@ -1935,7 +1935,7 @@ return t2
 ---NAME---
 factor_shared_int64_mul_add_commuted_addend_left
 ---INPUT---
-let f(x: Int64) : Int64 = x + (3 * x)
+let f(x: Int64) : Int64 = x + (3L * x)
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 << 2
@@ -1944,8 +1944,8 @@ return t2
 ---NAME---
 preserve_shared_mul_add_live_product
 ---INPUT---
-let f(x: Int64) : (Int64 * Int64) =
-  let product = x * 3 in
+let f(x: Int64) : (Int64, Int64) =
+  let product = x * 3L in
   (product + x, product)
 ---EXPECTED---
 Function f:
@@ -1999,7 +1999,7 @@ return t0
 ---NAME---
 integer_add_subtract_cancellation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64 * Int64) =
+let f(x: Int64, y: Int64) : (Int64, Int64) =
   let sum = x + y in
   let cancelled = sum - y in
   (sum, cancelled)
@@ -2012,7 +2012,7 @@ return t6
 ---NAME---
 commuted_int64_cancellation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64 * Int64) =
+let f(x: Int64, y: Int64) : (Int64, Int64) =
   let sum = x + y in
   let cancelled = sum - x in
   (sum, cancelled)
@@ -2025,7 +2025,7 @@ return t6
 ---NAME---
 integer_subtract_add_cancellation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64 * Int64) =
+let f(x: Int64, y: Int64) : (Int64, Int64) =
   let difference = x - y in
   let cancelled = difference + y in
   (difference, cancelled)
@@ -2069,8 +2069,8 @@ return t3
 cse_reuses_duplicate_integer_add
 ---INPUT---
 let f(x: Int64) : Int64 =
-  let y = x + 1 in
-  let z = x + 1 in
+  let y = x + 1L in
+  let z = x + 1L in
   y + z
 ---EXPECTED---
 Function f:
@@ -2095,8 +2095,8 @@ return t7
 cse_reuses_commuted_integer_add
 ---INPUT---
 let f(x: Int64) : Int64 =
-  let y = x + 1 in
-  let z = 1 + x in
+  let y = x + 1L in
+  let z = 1L + x in
   y + z
 ---EXPECTED---
 Function f:
@@ -2107,7 +2107,7 @@ return t5
 ---NAME---
 cse_reuses_reversed_strict_comparison
 ---INPUT---
-let f(a: Int64, b: Int64) : (Bool * Bool) =
+let f(a: Int64, b: Int64) : (Bool, Bool) =
   let forward = a < b in
   let reverse = b > a in
   (forward, reverse)
@@ -2120,7 +2120,7 @@ return t6
 ---NAME---
 cse_reuses_reversed_inclusive_comparison
 ---INPUT---
-let f(a: Int64, b: Int64) : (Bool * Bool) =
+let f(a: Int64, b: Int64) : (Bool, Bool) =
   let forward = a <= b in
   let reverse = b >= a in
   (forward, reverse)
@@ -2133,11 +2133,11 @@ return t6
 ---NAME---
 cse_reuses_duplicate_tuple_get
 ---INPUT---
-let f(t: (Int64 * Int64)) : Int64 =
+let f(t: (Int64, Int64)) : Int64 =
   let a = t.0 in
   let b = t.0 in
   a + b
-f((1, 2))
+f((1L, 2L))
 ---EXPECTED---
 Function f:
 let TempId 1 = t0.0
@@ -2163,7 +2163,7 @@ return t1
 tuple_get_from_local_tuple_alloc_preserves_owned_projection
 ---INPUT---
 let f(value: Blob) : Blob =
-  let tuple = (value, 1) in
+  let tuple = (value, 1L) in
   tuple.0
 ---EXPECTED---
 Function f:
@@ -2205,7 +2205,7 @@ return t5
 ---NAME---
 cse_reuses_duplicate_float_to_bits
 ---INPUT---
-let f(x: Float) : (UInt64 * UInt64) =
+let f(x: Float) : (UInt64, UInt64) =
   let a = Stdlib.Float.toBits(x) in
   let b = Stdlib.Float.toBits(x) in
   (a, b)
@@ -2273,7 +2273,7 @@ return t2
 closure_devirtualization_capture_free_local
 ---INPUT---
 let applyOnce(value: Int64) : Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   increment(value)
 ---EXPECTED---
 Function __closure_0:
@@ -2305,7 +2305,7 @@ return t9
 closure_devirtualization_preserves_escaping_closure
 ---INPUT---
 let makeIncrement() : (Int64) -> Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   increment
 ---EXPECTED---
 Function __closure_0:
@@ -2320,7 +2320,7 @@ return t3
 closure_devirtualization_reuses_local_closure
 ---INPUT---
 let applyTwice(value: Int64) : Int64 =
-  let increment = fun x -> x + 1 in
+  let increment = fun x -> x + 1L in
   let once = increment(value) in
   increment(once)
 ---EXPECTED---
@@ -2337,12 +2337,12 @@ return t8
 hoist_identical_pure_leading_branch_binding
 ---INPUT---
 let f(x: Int64) : Int64 =
-  if x > 0 then
-    let shared = x * 3 in
-    shared + 1
+  if x > 0L then
+    let shared = x * 3L in
+    shared + 1L
   else
-    let shared = x * 3 in
-    shared - 1
+    let shared = x * 3L in
+    shared - 1L
 ---EXPECTED---
 Function f:
 let TempId 2 = t0 * 3
@@ -2358,12 +2358,12 @@ return t7
 hoist_identical_leading_branch_binding_preserves_effects
 ---INPUT---
 let f(x: Int64) : Int64 =
-  if x > 0 then
+  if x > 0L then
     let value = Stdlib.Random.int64() in
-    value + 1
+    value + 1L
   else
     let value = Stdlib.Random.int64() in
-    value - 1
+    value - 1L
 ---EXPECTED---
 Function f:
 let TempId 1 = t0 > 0
@@ -2407,8 +2407,8 @@ return t2
 tail_recursion_modulo_integer_addition
 ---INPUT---
 let fib(n: Int64) : Int64 =
-  if n <= 1 then n else fib(n - 1) + fib(n - 2)
-fib(10)
+  if n <= 1L then n else fib(n - 1L) + fib(n - 2L)
+fib(10L)
 ---EXPECTED---
 Function fib:
 let TempId 11 = fib$trmo(t0, 0)
@@ -2435,8 +2435,8 @@ return t7
 tail_recursion_modulo_addition_excludes_float
 ---INPUT---
 let fibFloat(n: Int64) : Float =
-  if n <= 1 then 1.0 else fibFloat(n - 1) + fibFloat(n - 2)
-fibFloat(5)
+  if n <= 1L then 1.0 else fibFloat(n - 1L) + fibFloat(n - 2L)
+fibFloat(5L)
 ---EXPECTED---
 Function fibFloat:
 let TempId 1 = t0 <= 1

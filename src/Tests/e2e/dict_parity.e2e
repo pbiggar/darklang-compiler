@@ -3,56 +3,56 @@
 // Current compiler behavior was compared at rebased main 9cf0799fc485a2edc1eb19551826745705cf695e.
 
 // Public typing is String-keyed and exposes exactly one value type parameter.
-let dictIdentity<'a>(dict: Dict<a>): Dict<a> = dict dictIdentity<Int64>(Dict { answer = 42 }) = Dict { answer = 42 }
+let dictIdentity<'a>(dict: Dict<a>): Dict<a> = dict; dictIdentity<Int64>(Dict { answer = 42L }) = Dict { answer = 42L }
 Stdlib.Dict.get<String, Int64>(Dict { }, "a") = error="Stdlib.Dict.get expects 1 type argument, but got 2 type arguments"
-Stdlib.Dict.singleton(1, "one") = error="expected String"
+Stdlib.Dict.singleton(1L, "one") = error="expected String"
 
 // Empty and non-empty literals are distinct from records. Keys support escaped
 // spelling, with ___ reserved by the interpreter syntax for the empty key.
 Stdlib.Dict.empty = Dict { }
-Dict { answer = 42 } = Dict { answer = 42 }
+Dict { answer = 42L } = Dict { answer = 42L }
 Dict { ``Content-Length`` = "0"; ___ = "empty" } = Dict { ``Content-Length`` = "0"; ___ = "empty" }
-Dict { duplicate = 1; duplicate = 2 } = error="Cannot add two dictionary entries with the same key `duplicate`"
-Dict { first = 1; second = "two" } = error="dict values must have one type"
+Dict { duplicate = 1L; duplicate = 2L } = error="Cannot add two dictionary entries with the same key `duplicate`"
+Dict { first = 1L; second = "two" } = error="dict values must have one type"
 
 // Construction, lookup, update, removal, and merge match the interpreter.
 Stdlib.Dict.isEmpty(Stdlib.Dict.empty) = true
-Stdlib.Dict.isEmpty(Stdlib.Dict.singleton("a", 1)) = false
-Stdlib.Dict.size(Dict { a = 1; b = 2 }) = 2I
-Stdlib.Dict.get(Dict { a = 1 }, "a") = Some(1)
-Stdlib.Dict.get(Dict { a = 1 }, "missing") = None
-Stdlib.Dict.member(Dict { a = 1 }, "a") = true
-Stdlib.Dict.member(Dict { a = 1 }, "missing") = false
-Stdlib.Dict.remove(Dict { a = 1 }, "missing") = Dict { a = 1 }
-Stdlib.Dict.remove(Dict { a = 1 }, "a") = Dict { }
-Stdlib.Dict.merge(Dict { a = 1; shared = 2 }, Dict { shared = 3; z = 4 }) = Dict { a = 1; shared = 3; z = 4 }
-Stdlib.Dict.setOverridingDuplicates(Dict { a = 1 }, "a", 2) = Dict { a = 2 }
+Stdlib.Dict.isEmpty(Stdlib.Dict.singleton<Int64>("a", 1L)) = false
+Stdlib.Dict.size(Dict { a = 1L; b = 2L }) = 2I
+Stdlib.Dict.get(Dict { a = 1L }, "a") = Some(1L)
+Stdlib.Dict.get(Dict { a = 1L }, "missing") = None
+Stdlib.Dict.member(Dict { a = 1L }, "a") = true
+Stdlib.Dict.member(Dict { a = 1L }, "missing") = false
+Stdlib.Dict.remove<Int64>(Dict { a = 1L }, "missing") = Dict { a = 1L }
+Stdlib.Dict.remove<Int64>(Dict { a = 1L }, "a") = Dict { }
+Stdlib.Dict.merge<Int64>(Dict { a = 1L; shared = 2L }, Dict { shared = 3L; z = 4L }) = Dict { a = 1L; shared = 3L; z = 4L }
+Stdlib.Dict.setOverridingDuplicates<Int64>(Dict { a = 1L }, "a", 2L) = Dict { a = 2L }
 
 // Rejecting and overwriting paths are observably separate.
-Stdlib.Dict.set(Dict { a = 1 }, "a", 2) = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `a`\n"
-let key = "d" ++ "ynamic" in Stdlib.Dict.set(Dict { dynamic = 1 }, key, 2) = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `dynamic`\n"
-Stdlib.Dict.fromList([("a", 1), ("b", 2)]) = Some(Dict { a = 1; b = 2 })
-Stdlib.Dict.fromList([("a", 1), ("a", 2)]) = None
-Stdlib.Dict.fromListOverwritingDuplicates([("a", 1), ("b", 2), ("a", 3)]) = Dict { a = 3; b = 2 }
+Stdlib.Dict.set<Int64>(Dict { a = 1L }, "a", 2L) = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `a`\n"
+let key = "d" ++ "ynamic" in Stdlib.Dict.set<Int64>(Dict { dynamic = 1L }, key, 2L) = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `dynamic`\n"
+Stdlib.Dict.fromList<Int64>([("a", 1L), ("b", 2L)]) = Some(Dict { a = 1L; b = 2L })
+Stdlib.Dict.fromList<Int64>([("a", 1L), ("a", 2L)]) = None
+Stdlib.Dict.fromListOverwritingDuplicates<Int64>([("a", 1L), ("b", 2L), ("a", 3L)]) = Dict { a = 3L; b = 2L }
 
 // All traversal-based operations use String ordering and key-then-value callbacks.
-Stdlib.Dict.keys(Dict { c = 3; a = 1; b = 2 }) = ["a", "b", "c"]
-Stdlib.Dict.values(Dict { c = 3; a = 1; b = 2 }) = [1, 2, 3]
-Stdlib.Dict.toList(Dict { c = 3; a = 1; b = 2 }) = [("a", 1), ("b", 2), ("c", 3)]
-Stdlib.Dict.keys(Dict { ``𐀀`` = 1; ```` = 2 }) = ["𐀀", ""]
-Stdlib.Dict.map(Dict { b = 2; a = 1 }, fun key -> fun value -> key ++ Stdlib.Int64.toString(value)) = Dict { a = "a1"; b = "b2" }
-Stdlib.Dict.filter(Dict { b = 2; a = 1 }, fun key -> fun value -> key == "b") = Dict { b = 2 }
-Stdlib.Dict.filterMap(Dict { b = 2; a = 1 }, fun key -> fun value -> if key == "a" then Some(value + 10) else None) = Dict { a = 11 }
-let observed = Stdlib.Dict.iter(Dict { b = 2; a = 1 }, fun key -> fun value -> ()) in observed = ()
-Stdlib.Dict.iter(Dict { b = 2; a = 1 }, fun key -> fun value -> let ignored = Builtin.testRuntimeError(key) in ()) = exit=1 stderr="Uncaught exception: a\n"
+Stdlib.Dict.keys(Dict { c = 3L; a = 1L; b = 2L }) = ["a", "b", "c"]
+Stdlib.Dict.values(Dict { c = 3L; a = 1L; b = 2L }) = [1L, 2L, 3L]
+Stdlib.Dict.toList(Dict { c = 3L; a = 1L; b = 2L }) = [("a", 1L), ("b", 2L), ("c", 3L)]
+Stdlib.Dict.keys(Dict { ``𐀀`` = 1L; ```` = 2L }) = ["𐀀", ""]
+Stdlib.Dict.map<Int64, String>(Dict { b = 2L; a = 1L }, fun key -> fun value -> key ++ Stdlib.Int64.toString(value)) = Dict { a = "a1"; b = "b2" }
+Stdlib.Dict.filter<Int64>(Dict { b = 2L; a = 1L }, fun key -> fun value -> key == "b") = Dict { b = 2L }
+Stdlib.Dict.filterMap<Int64, Int64>(Dict { b = 2L; a = 1L }, fun key -> fun value -> if key == "a" then Some(value + 10L) else None) = Dict { a = 11L }
+let observed = Stdlib.Dict.iter(Dict { b = 2L; a = 1L }, fun key -> fun value -> ()) in observed = ()
+Stdlib.Dict.iter(Dict { b = 2L; a = 1L }, fun key -> fun value -> let ignored = Builtin.testRuntimeError(key) in ()) = exit=1 stderr="Uncaught exception: a\n"
 
 // Equality and rendering are content-based and independent of HAMT shape.
-Stdlib.Dict.setOverridingDuplicates(Stdlib.Dict.singleton("b", 2), "a", 1) == Dict { a = 1; b = 2 } = true
-Stdlib.Dict.fromList([("b", 2), ("a", 1)]) == Some(Dict { a = 1; b = 2 }) = true
-Dict { b = 2; a = 1 } != Dict { a = 1; b = 2 } = false
-Dict { nested = Dict { b = 2; a = 1 }; ``not an identifier`` = Dict { } } = stdout="Dict { nested = Dict { a = 1; b = 2 }; ``not an identifier`` = Dict { } }\n" stderr=""
+Stdlib.Dict.setOverridingDuplicates<Int64>(Stdlib.Dict.singleton<Int64>("b", 2L), "a", 1L) == Dict { a = 1L; b = 2L } = true
+Stdlib.Dict.fromList<Int64>([("b", 2L), ("a", 1L)]) == Some(Dict { a = 1L; b = 2L }) = true
+Dict { b = 2L; a = 1L } != Dict { a = 1L; b = 2L } = false
+Dict { nested = Dict { b = 2L; a = 1L }; ``not an identifier`` = Dict { } } = stdout="Dict { nested = Dict { a = 1; b = 2 }; ``not an identifier`` = Dict { } }\n" stderr=""
 
 // Compiler-only public aliases are removed while internal HAMT names remain private.
 Stdlib.Dict.entries(Dict { }) = error="Unresolved callable name: Stdlib.Dict.entries"
-Stdlib.Dict.fold(Dict { }, 0, fun acc key value -> acc) = error="Unresolved callable name: Stdlib.Dict.fold"
-Stdlib.Dict.getOrDefault(Dict { }, "a", 0) = error="Unresolved callable name: Stdlib.Dict.getOrDefault"
+Stdlib.Dict.fold(Dict { }, 0L, fun acc key value -> acc) = error="Unresolved callable name: Stdlib.Dict.fold"
+Stdlib.Dict.getOrDefault(Dict { }, "a", 0L) = error="Unresolved callable name: Stdlib.Dict.getOrDefault"

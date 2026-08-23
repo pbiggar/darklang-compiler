@@ -5,32 +5,32 @@
 type StreamProbeRecord = { stream: Stream<Int64> }
 type StreamProbeSum = | StreamProbeCase of Stream<Int64>
 
-let streamProbeStep(state: (List<Int64> * RawPtr)): Stdlib.Option.Option<(Int64 * (List<Int64> * RawPtr))> = let (remaining, counter) = state in match remaining with | [] -> None | head :: tail -> Some((head, (tail, counter)))
-let streamProbeDispose(state: (List<Int64> * RawPtr)): Unit = let (remaining, counter) = state in let count = __raw_get<Int64>(counter, 0) in __raw_write_word(counter, 0, count + 1)
-let streamProbe(counter: RawPtr, items: List<Int64>): Stream<Int64> = Stdlib.Stream.__fromProducer<(List<Int64> * RawPtr), Int64>((items, counter), streamProbeStep, streamProbeDispose)
-let streamCounter(): RawPtr = let counter = __raw_alloc(8) in let _ = __raw_write_word(counter, 0, 0) in counter
-let streamCountAndFree(counter: RawPtr): Int64 = let count = __raw_get<Int64>(counter, 0) in let _ = __raw_free(counter) in count
-let streamAbandon(counter: RawPtr): Unit = let stream = streamProbe(counter, [1, 2]) in ()
-let streamIncrementCounter(counter: RawPtr): Unit = let count = __raw_get<Int64>(counter, 0) in __raw_write_word(counter, 0, count + 1)
-let streamCloseDuringStep(ptr: RawPtr, counter: RawPtr, _unit: Unit): Stdlib.Option.Option<Int64> = let stream = __rawptr_to_stream<Int64>(ptr) in let _ = Stdlib.Stream.close(stream) in Some(1)
+let streamProbeStep(state: (List<Int64>, RawPtr)): Stdlib.Option.Option<(Int64, (List<Int64>, RawPtr))> = let (remaining, counter) = state in match remaining with | [] -> None | head :: tail -> Some((head, (tail, counter)))
+let streamProbeDispose(state: (List<Int64>, RawPtr)): Unit = let (remaining, counter) = state in let count = __raw_get<Int64>(counter, 0L) in __raw_write_word(counter, 0L, count + 1L)
+let streamProbe(counter: RawPtr, items: List<Int64>): Stream<Int64> = Stdlib.Stream.__fromProducer<(List<Int64>, RawPtr), Int64>((items, counter), streamProbeStep, streamProbeDispose)
+let streamCounter(): RawPtr = let counter = __raw_alloc(8L) in let _ = __raw_write_word(counter, 0L, 0L) in counter
+let streamCountAndFree(counter: RawPtr): Int64 = let count = __raw_get<Int64>(counter, 0L) in let _ = __raw_free(counter) in count
+let streamAbandon(counter: RawPtr): Unit = let stream = streamProbe(counter, [1L, 2L]) in ()
+let streamIncrementCounter(counter: RawPtr): Unit = let count = __raw_get<Int64>(counter, 0L) in __raw_write_word(counter, 0L, count + 1L)
+let streamCloseDuringStep(ptr: RawPtr, counter: RawPtr, _unit: Unit): Stdlib.Option.Option<Int64> = let stream = __rawptr_to_stream<Int64>(ptr) in let _ = Stdlib.Stream.close(stream) in Some(1L)
 let streamReentrantStep(ptr: RawPtr, _unit: Unit): Stdlib.Option.Option<Int64> = let stream = __rawptr_to_stream<Int64>(ptr) in Stdlib.Stream.next(stream)
-let streamSyntheticHandle(counter: RawPtr, closeDuringStep: Bool): Stream<Int64> = let ptr = __raw_alloc(32) in let nextFn = if closeDuringStep then (fun unit -> streamCloseDuringStep(ptr, counter, unit)) else (fun unit -> streamReentrantStep(ptr, unit)) in let closeFn = fun _unit -> streamIncrementCounter(counter) in let _ = __raw_write_word(ptr, 0, 0) in let _ = __raw_slot_init<(Unit) -> Stdlib.Option.Option<Int64>>(ptr, 8, nextFn) in let _ = __raw_slot_init<(Unit) -> Unit>(ptr, 16, closeFn) in let _ = __raw_write_word(ptr, 24, 0) in __rawptr_to_stream<Int64>(ptr)
-let streamAbandonTuple(counter: RawPtr): Unit = let value = (streamProbe(counter, [1]), 1) in ()
-let streamAbandonRecord(counter: RawPtr): Unit = let value = StreamProbeRecord { stream = streamProbe(counter, [1]) } in ()
-let streamAbandonSum(counter: RawPtr): Unit = let value = StreamProbeCase(streamProbe(counter, [1])) in ()
-let streamAbandonList(counter: RawPtr): Unit = let value = [streamProbe(counter, [1])] in ()
-let streamAbandonDict(counter: RawPtr): Unit = let value = Stdlib.Dict.singleton("stream", streamProbe(counter, [1])) in ()
-let streamAbandonClosure(counter: RawPtr): Unit = let stream = streamProbe(counter, [1]) in let value = fun _unit -> Stdlib.Stream.next(stream) in ()
+let streamSyntheticHandle(counter: RawPtr, closeDuringStep: Bool): Stream<Int64> = let ptr = __raw_alloc(32L) in let nextFn = if closeDuringStep then (fun unit -> streamCloseDuringStep(ptr, counter, unit)) else (fun unit -> streamReentrantStep(ptr, unit)) in let closeFn = fun _unit -> streamIncrementCounter(counter) in let _ = __raw_write_word(ptr, 0L, 0L) in let _ = __raw_slot_init<(Unit) -> Stdlib.Option.Option<Int64>>(ptr, 8L, nextFn) in let _ = __raw_slot_init<(Unit) -> Unit>(ptr, 16L, closeFn) in let _ = __raw_write_word(ptr, 24L, 0L) in __rawptr_to_stream<Int64>(ptr)
+let streamAbandonTuple(counter: RawPtr): Unit = let value = (streamProbe(counter, [1L]), 1L) in ()
+let streamAbandonRecord(counter: RawPtr): Unit = let value = StreamProbeRecord { stream = streamProbe(counter, [1L]) } in ()
+let streamAbandonSum(counter: RawPtr): Unit = let value = StreamProbeCase(streamProbe(counter, [1L])) in ()
+let streamAbandonList(counter: RawPtr): Unit = let value = [streamProbe(counter, [1L])] in ()
+let streamAbandonDict(counter: RawPtr): Unit = let value = Stdlib.Dict.singleton("stream", streamProbe(counter, [1L])) in ()
+let streamAbandonClosure(counter: RawPtr): Unit = let stream = streamProbe(counter, [1L]) in let value = fun _unit -> Stdlib.Stream.next(stream) in ()
 
-let stream = Stdlib.Stream.fromList<Int64>([1, 2]) in __raw_get<Int64>(__stream_to_rawptr<Int64>(stream), 24) = stdout="1\n" stderr="" // stream constructor exposes one owning edge internally
+let stream = Stdlib.Stream.fromList<Int64>([1L, 2L]) in __raw_get<Int64>(__stream_to_rawptr<Int64>(stream), 24L) = stdout="1\n" stderr="" // stream constructor exposes one owning edge internally
 
-let counter = streamCounter() in let stream = streamProbe(counter, [1, 2]) in let values = Stdlib.Stream.toList(stream) in streamCountAndFree(counter) = stdout="1\n" stderr="" // natural exhaustion disposes once
+let counter = streamCounter() in let stream = streamProbe(counter, [1L, 2L]) in let values = Stdlib.Stream.toList(stream) in streamCountAndFree(counter) = stdout="1\n" stderr="" // natural exhaustion disposes once
 let counter = streamCounter() in let stream = streamProbe(counter, []) in let value = Stdlib.Stream.next(stream) in streamCountAndFree(counter) = stdout="1\n" stderr="" // empty source disposes on first pull
-let counter = streamCounter() in let stream = streamProbe(counter, [1, 2]) in let _ = Stdlib.Stream.close(stream) in let _ = Stdlib.Stream.close(stream) in streamCountAndFree(counter) = stdout="1\n" stderr="" // repeated close is idempotent
+let counter = streamCounter() in let stream = streamProbe(counter, [1L, 2L]) in let _ = Stdlib.Stream.close(stream) in let _ = Stdlib.Stream.close(stream) in streamCountAndFree(counter) = stdout="1\n" stderr="" // repeated close is idempotent
 let counter = streamCounter() in let _ = streamAbandon(counter) in streamCountAndFree(counter) = stdout="1\n" stderr="" // partial-drain abandonment finalizes
-let counter = streamCounter() in let source = streamProbe(counter, [1, 2, 3]) in let taken = Stdlib.Stream.take(source, 1I) in let values = Stdlib.Stream.toList(taken) in streamCountAndFree(counter) = stdout="1\n" stderr="" // early take closes its source
-let leftCounter = streamCounter() in let rightCounter = streamCounter() in let joined = Stdlib.Stream.concat([streamProbe(leftCounter, [1]), streamProbe(rightCounter, [2])]) in let values = Stdlib.Stream.toList(joined) in let total = streamCountAndFree(leftCounter) + streamCountAndFree(rightCounter) in total = stdout="2\n" stderr="" // concat disposes each source at handoff/exhaustion
-let counter = streamCounter() in let source = streamProbe(counter, [1, 2, 3, 4]) in let nested = Stdlib.Stream.take(Stdlib.Stream.filter(Stdlib.Stream.map(source, fun value -> value + 1), fun value -> value % 2 == 0), 1I) in let values = Stdlib.Stream.toList(nested) in streamCountAndFree(counter) = stdout="1\n" stderr="" // nested early termination reaches the resource
+let counter = streamCounter() in let source = streamProbe(counter, [1L, 2L, 3L]) in let taken = Stdlib.Stream.take(source, 1I) in let values = Stdlib.Stream.toList(taken) in streamCountAndFree(counter) = stdout="1\n" stderr="" // early take closes its source
+let leftCounter = streamCounter() in let rightCounter = streamCounter() in let joined = Stdlib.Stream.concat([streamProbe(leftCounter, [1L]), streamProbe(rightCounter, [2L])]) in let values = Stdlib.Stream.toList(joined) in let total = streamCountAndFree(leftCounter) + streamCountAndFree(rightCounter) in total = stdout="2\n" stderr="" // concat disposes each source at handoff/exhaustion
+let counter = streamCounter() in let source = streamProbe(counter, [1L, 2L, 3L, 4L]) in let nested = Stdlib.Stream.take(Stdlib.Stream.filter(Stdlib.Stream.map(source, fun value -> value + 1L), fun value -> value % 2L == 0L), 1I) in let values = Stdlib.Stream.toList(nested) in streamCountAndFree(counter) = stdout="1\n" stderr="" // nested early termination reaches the resource
 let counter = streamCounter() in let stream = streamSyntheticHandle(counter, true) in let value = Stdlib.Stream.next(stream) in let count = streamCountAndFree(counter) in (value, count) = stdout="(Stdlib.Option.Option<Int64>.None, 1)\n" stderr="" // close during advancement is deferred and suppresses the produced value
 let counter = streamCounter() in let stream = streamSyntheticHandle(counter, false) in Stdlib.Stream.next(stream) = error="Uncaught exception: Stream.next cannot overlap or reenter an active pull" // overlapping/reentrant pull has one stable runtime error
 let counter = streamCounter() in let _ = streamAbandonTuple(counter) in streamCountAndFree(counter) = stdout="1\n" stderr="" // tuple retains and releases a Stream root

@@ -10,13 +10,13 @@
 // ===================================================================
 // Integer Equality
 // ===================================================================
-1 == 1 = true
-1 == 2 = false
-5 == 5 = true
-0 == 0 = true
+1L == 1L = true
+1L == 2L = false
+5L == 5L = true
+0L == 0L = true
 
-1 != 2 = true
-1 != 1 = false
+1L != 2L = true
+1L != 1L = false
 
 // ===================================================================
 // Boolean Equality
@@ -34,55 +34,55 @@ true != true = false
 // ===================================================================
 
 // Two-element tuples
-(1, 2) == (1, 2) = true
-(1, 2) == (1, 3) = false
-(1, 2) == (2, 2) = false
-(1, 2) != (1, 3) = true
-(1, 2) != (1, 2) = false
+(1L, 2L) == (1L, 2L) = true
+(1L, 2L) == (1L, 3L) = false
+(1L, 2L) == (2L, 2L) = false
+(1L, 2L) != (1L, 3L) = true
+(1L, 2L) != (1L, 2L) = false
 
 // Three-element tuples
-(1, 2, 3) == (1, 2, 3) = true
-(1, 2, 3) == (1, 2, 4) = false
-(1, 2, 3) != (1, 2, 4) = true
+(1L, 2L, 3L) == (1L, 2L, 3L) = true
+(1L, 2L, 3L) == (1L, 2L, 4L) = false
+(1L, 2L, 3L) != (1L, 2L, 4L) = true
 
 // Tuples with booleans
 (true, false) == (true, false) = true
 (true, false) == (false, true) = false
 
 // Tuples in variables
-let a = (1, 2) in let b = (1, 2) in a == b = true
-let a = (1, 2) in let b = (1, 3) in a == b = false
+let a = (1L, 2L) in let b = (1L, 2L) in a == b = true
+let a = (1L, 2L) in let b = (1L, 3L) in a == b = false
 
 // Tuple equality in conditionals
-if (1, 2) == (1, 2) then 1 else 0 = 1
-if (1, 2) == (1, 3) then 1 else 0 = 0
+if (1L, 2L) == (1L, 2L) then 1L else 0L = 1L
+if (1L, 2L) == (1L, 3L) then 1L else 0L = 0L
 
 // ===================================================================
 // Record Equality
 // ===================================================================
 
 // Same records are equal
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = true
+type Point = { x: Int64, y: Int64 } Point { x = 1L, y = 2L } == Point { x = 1L, y = 2L } = true
 
 // Different field values are not equal
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = false
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = false
+type Point = { x: Int64, y: Int64 } Point { x = 1L, y = 2L } == Point { x = 1L, y = 3L } = false
+type Point = { x: Int64, y: Int64 } Point { x = 1L, y = 2L } == Point { x = 2L, y = 2L } = false
 
 // Inequality
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = true
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = false
+type Point = { x: Int64, y: Int64 } Point { x = 1L, y = 2L } != Point { x = 3L, y = 4L } = true
+type Point = { x: Int64, y: Int64 } Point { x = 1L, y = 2L } != Point { x = 1L, y = 2L } = false
 
 // Records in variables
-type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 2 } in a == b = true
-type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 3 } in a == b = false
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1L, y = 2L } in let b = Point { x = 1L, y = 2L } in a == b = true
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1L, y = 2L } in let b = Point { x = 1L, y = 3L } in a == b = false
 
 // Three-field records
-type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 3 } = true
-type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 4 } = false
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1L, y = 2L, z = 3L } == Vec3 { x = 1L, y = 2L, z = 3L } = true
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1L, y = 2L, z = 3L } == Vec3 { x = 1L, y = 2L, z = 4L } = false
 
 // Record equality in conditionals
-type Point = { x: Int64, y: Int64 } if Point { x = 1, y = 2 } == Point { x = 1, y = 2 } then 1 else 0 = 1
-type Point = { x: Int64, y: Int64 } if Point { x = 1, y = 2 } == Point { x = 1, y = 3 } then 1 else 0 = 0
+type Point = { x: Int64, y: Int64 } if Point { x = 1L, y = 2L } == Point { x = 1L, y = 2L } then 1L else 0L = 1L
+type Point = { x: Int64, y: Int64 } if Point { x = 1L, y = 2L } == Point { x = 1L, y = 3L } then 1L else 0L = 0L
 
 // ===================================================================
 // Enum Equality (simple - no payload)
@@ -98,29 +98,29 @@ type Color = Red | Green | Blue let a = Red in let b = Red in a == b = true
 type Color = Red | Green | Blue let a = Red in let b = Blue in a == b = false
 
 // Enum in conditionals
-type Color = Red | Green | Blue if Red == Red then 1 else 0 = 1
-type Color = Red | Green | Blue if Red == Blue then 1 else 0 = 0
+type Color = Red | Green | Blue if Red == Red then 1L else 0L = 1L
+type Color = Red | Green | Blue if Red == Blue then 1L else 0L = 0L
 
 // Enum with payload equality
-type BoxedList = EmptyBox | FullBox of List<Int64> FullBox([1, 2]) == FullBox([1, 2]) = true
+type BoxedList = EmptyBox | FullBox of List<Int64> FullBox([1L, 2L]) == FullBox([1L, 2L]) = true
 
 // ===================================================================
 // Nested Structural Equality
 // ===================================================================
 
 // Tuple of tuples
-((1, 2), (3, 4)) == ((1, 2), (3, 4)) = true
-((1, 2), (3, 4)) == ((1, 2), (3, 5)) = false
+((1L, 2L), (3L, 4L)) == ((1L, 2L), (3L, 4L)) = true
+((1L, 2L), (3L, 4L)) == ((1L, 2L), (3L, 5L)) = false
 
 // Record with tuple field
-type PointPair = { p1: (Int64 * Int64), p2: (Int64 * Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 4) } = true
-type PointPair = { p1: (Int64 * Int64), p2: (Int64 * Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 5) } = false
-type PolyRecA<'t, 'u> = { first: t, second: u } PolyRecA { first = 1, second = true } == PolyRecA { first = 1, second = true } = true
+type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1L, 2L), p2 = (3L, 4L) } == PointPair { p1 = (1L, 2L), p2 = (3L, 4L) } = true
+type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1L, 2L), p2 = (3L, 4L) } == PointPair { p1 = (1L, 2L), p2 = (3L, 5L) } = false
+type PolyRecA<'t, 'u> = { first: t, second: u } PolyRecA { first = 1L, second = true } == PolyRecA { first = 1L, second = true } = true
 
 // ===================================================================
 // Deeply Nested Polymorphic Sum Equality With Records
 // ===================================================================
-type WrapEq1<'t> = WNoneEq1 | WSomeEq1 of t type EitherEq1<'a, 'b> = LeftEq1 of a | RightEq1 of b type RecEq1<'a, 'b, 'c> = { left: WrapEq1<a>, mid: EitherEq1<b, c>, right: WrapEq1<c> } let a = RecEq1 { left = WSomeEq1(1), mid = LeftEq1(7), right = WSomeEq1(WSomeEq1(9)) } in let b = RecEq1 { left = WSomeEq1(1), mid = LeftEq1(7), right = WSomeEq1(WSomeEq1(9)) } in a == b = true
-type WrapEq2<'t> = WNoneEq2 | WSomeEq2 of t type EitherEq2<'a, 'b> = LeftEq2 of a | RightEq2 of b type RecEq2<'a, 'b, 'c> = { left: WrapEq2<a>, mid: EitherEq2<b, c>, right: WrapEq2<c> } let a = RecEq2 { left = WSomeEq2(1), mid = LeftEq2(7), right = WSomeEq2(WSomeEq2(9)) } in let b = RecEq2 { left = WSomeEq2(1), mid = LeftEq2(7), right = WSomeEq2(WSomeEq2(10)) } in a == b = false
-type BoxEq3<'t> = BoxNoneEq3 | BoxSomeEq3 of t type ChoiceEq3<'a, 'b> = ChoiceLeftEq3 of a | ChoiceRightEq3 of b type RecEq3<'a, 'b, 'c> = { one: BoxEq3<a>, two: ChoiceEq3<b, c>, three: (BoxEq3<c> * ChoiceEq3<a, b>) } let a = RecEq3 { one = BoxSomeEq3(11), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22), ChoiceRightEq3("x")) } in let b = RecEq3 { one = BoxSomeEq3(11), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22), ChoiceRightEq3("x")) } in a == b = true
-type BoxEq4<'t> = BoxNoneEq4 | BoxSomeEq4 of t type ChoiceEq4<'a, 'b> = ChoiceLeftEq4 of a | ChoiceRightEq4 of b type RecEq4<'a, 'b, 'c> = { one: BoxEq4<a>, two: ChoiceEq4<b, c>, three: (BoxEq4<c> * ChoiceEq4<a, b>) } let a = RecEq4 { one = BoxSomeEq4(11), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22), ChoiceRightEq4("x")) } in let b = RecEq4 { one = BoxSomeEq4(11), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22), ChoiceRightEq4("y")) } in a != b = true
+type WrapEq1<'t> = WNoneEq1 | WSomeEq1 of t type EitherEq1<'a, 'b> = LeftEq1 of a | RightEq1 of b type RecEq1<'a, 'b, 'c> = { left: WrapEq1<a>, mid: EitherEq1<b, c>, right: WrapEq1<c> } let a = RecEq1 { left = WSomeEq1(1L), mid = LeftEq1(7L), right = WSomeEq1(WSomeEq1(9L)) } in let b = RecEq1 { left = WSomeEq1(1L), mid = LeftEq1(7L), right = WSomeEq1(WSomeEq1(9L)) } in a == b = true
+type WrapEq2<'t> = WNoneEq2 | WSomeEq2 of t type EitherEq2<'a, 'b> = LeftEq2 of a | RightEq2 of b type RecEq2<'a, 'b, 'c> = { left: WrapEq2<a>, mid: EitherEq2<b, c>, right: WrapEq2<c> } let a = RecEq2 { left = WSomeEq2(1L), mid = LeftEq2(7L), right = WSomeEq2(WSomeEq2(9L)) } in let b = RecEq2 { left = WSomeEq2(1L), mid = LeftEq2(7L), right = WSomeEq2(WSomeEq2(10L)) } in a == b = false
+type BoxEq3<'t> = BoxNoneEq3 | BoxSomeEq3 of t type ChoiceEq3<'a, 'b> = ChoiceLeftEq3 of a | ChoiceRightEq3 of b type RecEq3<'a, 'b, 'c> = { one: BoxEq3<a>, two: ChoiceEq3<b, c>, three: (BoxEq3<c>, ChoiceEq3<a, b>) } let a = RecEq3 { one = BoxSomeEq3(11L), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22L), ChoiceRightEq3("x")) } in let b = RecEq3 { one = BoxSomeEq3(11L), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22L), ChoiceRightEq3("x")) } in a == b = true
+type BoxEq4<'t> = BoxNoneEq4 | BoxSomeEq4 of t type ChoiceEq4<'a, 'b> = ChoiceLeftEq4 of a | ChoiceRightEq4 of b type RecEq4<'a, 'b, 'c> = { one: BoxEq4<a>, two: ChoiceEq4<b, c>, three: (BoxEq4<c>, ChoiceEq4<a, b>) } let a = RecEq4 { one = BoxSomeEq4(11L), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22L), ChoiceRightEq4("x")) } in let b = RecEq4 { one = BoxSomeEq4(11L), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22L), ChoiceRightEq4("y")) } in a != b = true

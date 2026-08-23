@@ -14,20 +14,20 @@ let sieveLoop(i: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, B
             if Stdlib.Internal.HAMT.__contains<Int64, Bool>(composites, i) then composites
             else markMultiples(i + i, i, n, composites)
         in
-        sieveLoop(i + 1, n, newComposites)
+        sieveLoop(i + 1L, n, newComposites)
 
 // Count primes (numbers not in composites set)
 let countPrimes(i: Int64, n: Int64, composites: Dict<Int64, Bool>, count: Int64) : Int64 =
     if i > n then count
     else
-        let newCount = if Stdlib.Internal.HAMT.__contains<Int64, Bool>(composites, i) then count else count + 1 in
-        countPrimes(i + 1, n, composites, newCount)
+        let newCount = if Stdlib.Internal.HAMT.__contains<Int64, Bool>(composites, i) then count else count + 1L in
+        countPrimes(i + 1L, n, composites, newCount)
 
 let nsieve(n: Int64) : Int64 =
-    let composites = sieveLoop(2, n, Stdlib.Internal.HAMT.__empty<Int64, Bool>()) in
-    countPrimes(2, n, composites, 0)
+    let composites = sieveLoop(2L, n, Stdlib.Internal.HAMT.__empty<Int64, Bool>()) in
+    countPrimes(2L, n, composites, 0L)
 
 // Diagnostic only: one full-size run. The original Rust reference runs 100
 // times; Dark's bump allocator cannot reclaim the persistent Dict between runs,
 // so this implementation is non-comparable and excluded from canonical ratios.
-nsieve(100000)
+nsieve(100000L)

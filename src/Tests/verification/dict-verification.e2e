@@ -16,109 +16,109 @@ let getOrDefault(d: Dict<Int64, Int64>, k: Int64, default: Int64): Int64 = Stdli
 
 // Build a dict with entries 1->10, 2->20, ..., n->n*10
 let buildDict(n: Int64, d: Dict<Int64, Int64>): Dict<Int64, Int64> =
-    if n <= 0 then d else buildDict(n - 1, set(d, n, n * 10))
+    if n <= 0L then d else buildDict(n - 1L, set(d, n, n * 10L))
 
 // Verify all keys 1..n have correct values (returns number of correct entries)
 let verifyDict(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
-    if n <= 0 then count
+    if n <= 0L then count
     else
-        let expected = n * 10 in
-        let actual = getOrDefault(d, n, -1) in
-        let newCount = if actual == expected then count + 1 else count in
-        verifyDict(n - 1, d, newCount)
+        let expected = n * 10L in
+        let actual = getOrDefault(d, n, -1L) in
+        let newCount = if actual == expected then count + 1L else count in
+        verifyDict(n - 1L, d, newCount)
 
 // Build dict and remove odd keys
 let buildAndRemoveOdds(n: Int64, d: Dict<Int64, Int64>): Dict<Int64, Int64> =
-    if n <= 0 then d
+    if n <= 0L then d
     else
-        let d2 = set(d, n, n * 10) in
-        let d3 = if n % 2 == 1 then remove(d2, n) else d2 in
-        buildAndRemoveOdds(n - 1, d3)
+        let d2 = set(d, n, n * 10L) in
+        let d3 = if n % 2L == 1L then remove(d2, n) else d2 in
+        buildAndRemoveOdds(n - 1L, d3)
 
 // Count even keys that have correct values
 let verifyEvenKeys(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
-    if n <= 0 then count
+    if n <= 0L then count
     else
-        if n % 2 == 0 then
-            let expected = n * 10 in
-            let actual = getOrDefault(d, n, -1) in
-            let newCount = if actual == expected then count + 1 else count in
-            verifyEvenKeys(n - 2, d, newCount)
+        if n % 2L == 0L then
+            let expected = n * 10L in
+            let actual = getOrDefault(d, n, -1L) in
+            let newCount = if actual == expected then count + 1L else count in
+            verifyEvenKeys(n - 2L, d, newCount)
         else
-            verifyEvenKeys(n - 1, d, count)
+            verifyEvenKeys(n - 1L, d, count)
 
 // Verify odd keys are removed (returns count of correctly removed)
 let verifyOddsRemoved(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
-    if n <= 0 then count
+    if n <= 0L then count
     else
-        if n % 2 == 1 then
+        if n % 2L == 1L then
             let isRemoved = Stdlib.Option.isNone(get(d, n)) in
-            let newCount = if isRemoved then count + 1 else count in
-            verifyOddsRemoved(n - 2, d, newCount)
+            let newCount = if isRemoved then count + 1L else count in
+            verifyOddsRemoved(n - 2L, d, newCount)
         else
-            verifyOddsRemoved(n - 1, d, count)
+            verifyOddsRemoved(n - 1L, d, count)
 
 // ===================================================================
 // Scale Tests - Large Dict Construction
 // ===================================================================
 
 // Build 100 entries
-Stdlib.Internal.HAMT.__size(buildDict(100, emptyDict())) = 100
+Stdlib.Internal.HAMT.__size(buildDict(100L, emptyDict())) = 100L
 
 // Build 500 entries
-Stdlib.Internal.HAMT.__size(buildDict(500, emptyDict())) = 500
+Stdlib.Internal.HAMT.__size(buildDict(500L, emptyDict())) = 500L
 
 // Build 1000 entries
-Stdlib.Internal.HAMT.__size(buildDict(1000, emptyDict())) = 1000
+Stdlib.Internal.HAMT.__size(buildDict(1000L, emptyDict())) = 1000L
 
 // ===================================================================
 // Round-trip Verification - Insert then retrieve all
 // ===================================================================
 
 // 100 entries: verify all values correct
-verifyDict(100, buildDict(100, emptyDict()), 0) = 100
+verifyDict(100L, buildDict(100L, emptyDict()), 0L) = 100L
 
 // 500 entries: verify all values correct
-verifyDict(500, buildDict(500, emptyDict()), 0) = 500
+verifyDict(500L, buildDict(500L, emptyDict()), 0L) = 500L
 
 // 1000 entries: verify all values correct
-verifyDict(1000, buildDict(1000, emptyDict()), 0) = 1000
+verifyDict(1000L, buildDict(1000L, emptyDict()), 0L) = 1000L
 
 // ===================================================================
 // Remove Operations on Large Dicts
 // ===================================================================
 
 // Build 100, remove odds: 50 evens remain
-Stdlib.Internal.HAMT.__size(buildAndRemoveOdds(100, emptyDict())) = 50
+Stdlib.Internal.HAMT.__size(buildAndRemoveOdds(100L, emptyDict())) = 50L
 
 // Verify even values correct after removing odds (50 evens in 1..100)
-verifyEvenKeys(100, buildAndRemoveOdds(100, emptyDict()), 0) = 50
+verifyEvenKeys(100L, buildAndRemoveOdds(100L, emptyDict()), 0L) = 50L
 
 // Verify odd keys are actually removed (50 odds in 1..100)
-verifyOddsRemoved(99, buildAndRemoveOdds(100, emptyDict()), 0) = 50
+verifyOddsRemoved(99L, buildAndRemoveOdds(100L, emptyDict()), 0L) = 50L
 
 // ===================================================================
 // Enumeration Correctness
 // ===================================================================
 
 // keys() count matches size()
-let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 100I
+let d = buildDict(100L, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__keys(d)) = 100I
 
 // values() count matches size()
-let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 100I
+let d = buildDict(100L, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__values(d)) = 100I
 
 // entries() count matches size()
-let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 100I
+let d = buildDict(100L, emptyDict()) in Stdlib.List.length(Stdlib.Internal.HAMT.__entries(d)) = 100I
 
 // ===================================================================
 // Immutability Verification
 // ===================================================================
 
 // Original dict unchanged after set
-let d1 = buildDict(10, emptyDict()) in let d2 = set(d1, 100, 1000) in Stdlib.Internal.HAMT.__size(d1) = 10
+let d1 = buildDict(10L, emptyDict()) in let d2 = set(d1, 100L, 1000L) in Stdlib.Internal.HAMT.__size(d1) = 10L
 
 // Original dict unchanged after remove
-let d1 = buildDict(10, emptyDict()) in let d2 = remove(d1, 5) in getOrDefault(d1, 5, -1) = 50
+let d1 = buildDict(10L, emptyDict()) in let d2 = remove(d1, 5L) in getOrDefault(d1, 5L, -1L) = 50L
 
 // ===================================================================
 // Hash Collision Path Testing
@@ -126,79 +126,79 @@ let d1 = buildDict(10, emptyDict()) in let d2 = remove(d1, 5) in getOrDefault(d1
 // ===================================================================
 
 // Two keys with same level-0 chunk
-let d = set(set(emptyDict(), 0, 100), 64, 200) in getOrDefault(d, 0, -1) * 10 + getOrDefault(d, 64, -1) / 20 = 1010
+let d = set(set(emptyDict(), 0L, 100L), 64L, 200L) in getOrDefault(d, 0L, -1L) * 10L + getOrDefault(d, 64L, -1L) / 20L = 1010L
 
 // Three keys with same level-0 chunk
-let d = set(set(set(emptyDict(), 0, 100), 64, 200), 128, 300) in Stdlib.Internal.HAMT.__size(d) = 3
+let d = set(set(set(emptyDict(), 0L, 100L), 64L, 200L), 128L, 300L) in Stdlib.Internal.HAMT.__size(d) = 3L
 
 // Four keys with same level-0 chunk
-let d = set(set(set(set(emptyDict(), 0, 100), 64, 200), 128, 300), 192, 400) in Stdlib.Internal.HAMT.__size(d) = 4
+let d = set(set(set(set(emptyDict(), 0L, 100L), 64L, 200L), 128L, 300L), 192L, 400L) in Stdlib.Internal.HAMT.__size(d) = 4L
 
 // Verify all four values correct
-let d = set(set(set(set(emptyDict(), 0, 100), 64, 200), 128, 300), 192, 400) in getOrDefault(d, 0, -1) + getOrDefault(d, 64, -1) + getOrDefault(d, 128, -1) + getOrDefault(d, 192, -1) = 1000
+let d = set(set(set(set(emptyDict(), 0L, 100L), 64L, 200L), 128L, 300L), 192L, 400L) in getOrDefault(d, 0L, -1L) + getOrDefault(d, 64L, -1L) + getOrDefault(d, 128L, -1L) + getOrDefault(d, 192L, -1L) = 1000L
 
 // ===================================================================
 // Property: Insert-Get Roundtrip
 // ===================================================================
 
 // Single insert-get
-getOrDefault(set(emptyDict(), 42, 999), 42, -1) = 999
+getOrDefault(set(emptyDict(), 42L, 999L), 42L, -1L) = 999L
 
 // Multiple inserts maintain earlier values
-let d = set(set(set(emptyDict(), 1, 10), 2, 20), 3, 30) in getOrDefault(d, 1, -1) + getOrDefault(d, 2, -1) + getOrDefault(d, 3, -1) = 60
+let d = set(set(set(emptyDict(), 1L, 10L), 2L, 20L), 3L, 30L) in getOrDefault(d, 1L, -1L) + getOrDefault(d, 2L, -1L) + getOrDefault(d, 3L, -1L) = 60L
 
 // Overwrite returns new value
-getOrDefault(set(set(emptyDict(), 1, 100), 1, 999), 1, -1) = 999
+getOrDefault(set(set(emptyDict(), 1L, 100L), 1L, 999L), 1L, -1L) = 999L
 
 // ===================================================================
 // Property: Size Correctness
 // ===================================================================
 
 // Size after sequential inserts
-let d = set(set(set(emptyDict(), 1, 10), 2, 20), 3, 30) in Stdlib.Internal.HAMT.__size(d) = 3
+let d = set(set(set(emptyDict(), 1L, 10L), 2L, 20L), 3L, 30L) in Stdlib.Internal.HAMT.__size(d) = 3L
 
 // Size unchanged on overwrite
-let d = set(set(emptyDict(), 1, 10), 1, 20) in Stdlib.Internal.HAMT.__size(d) = 1
+let d = set(set(emptyDict(), 1L, 10L), 1L, 20L) in Stdlib.Internal.HAMT.__size(d) = 1L
 
 // Size decreases on remove
-let d = remove(set(set(emptyDict(), 1, 10), 2, 20), 1) in Stdlib.Internal.HAMT.__size(d) = 1
+let d = remove(set(set(emptyDict(), 1L, 10L), 2L, 20L), 1L) in Stdlib.Internal.HAMT.__size(d) = 1L
 
 // ===================================================================
 // Property: Remove-Get Returns None
 // ===================================================================
 
 // Remove then get returns None
-Stdlib.Option.isNone(get(remove(set(emptyDict(), 1, 100), 1), 1)) = true
+Stdlib.Option.isNone(get(remove(set(emptyDict(), 1L, 100L), 1L), 1L)) = true
 
 // Remove non-existent key, original still there
-getOrDefault(remove(set(emptyDict(), 1, 100), 999), 1, -1) = 100
+getOrDefault(remove(set(emptyDict(), 1L, 100L), 999L), 1L, -1L) = 100L
 
 // ===================================================================
 // Edge Cases
 // ===================================================================
 
 // Zero as key
-getOrDefault(set(emptyDict(), 0, 42), 0, -1) = 42
+getOrDefault(set(emptyDict(), 0L, 42L), 0L, -1L) = 42L
 
 // Negative keys
-getOrDefault(set(emptyDict(), -1, 100), -1, -1) = 100
-getOrDefault(set(emptyDict(), -999999, 42), -999999, -1) = 42
+getOrDefault(set(emptyDict(), -1L, 100L), -1L, -1L) = 100L
+getOrDefault(set(emptyDict(), -999999L, 42L), -999999L, -1L) = 42L
 
 // Large keys
-getOrDefault(set(emptyDict(), 9223372036854775807, 42), 9223372036854775807, -1) = 42
+getOrDefault(set(emptyDict(), 9223372036854775807L, 42L), 9223372036854775807L, -1L) = 42L
 
 // ===================================================================
 // Fold Tests
 // ===================================================================
 
 // Sum values of 10-entry dict
-let d = buildDict(10, emptyDict()) in Stdlib.Internal.HAMT.__fold(d, 0, fun acc k v -> acc + v) = 550
+let d = buildDict(10L, emptyDict()) in Stdlib.Internal.HAMT.__fold(d, 0L, fun acc k v -> acc + v) = 550L
 
 // Sum keys of 10-entry dict
-let d = buildDict(10, emptyDict()) in Stdlib.Internal.HAMT.__fold(d, 0, fun acc k v -> acc + k) = 55
+let d = buildDict(10L, emptyDict()) in Stdlib.Internal.HAMT.__fold(d, 0L, fun acc k v -> acc + k) = 55L
 
 // Count entries via fold
-let d = buildDict(50, emptyDict()) in Stdlib.Internal.HAMT.__fold(d, 0, fun acc k v -> acc + 1) = 50
+let d = buildDict(50L, emptyDict()) in Stdlib.Internal.HAMT.__fold(d, 0L, fun acc k v -> acc + 1L) = 50L
 
 // ===================================================================
 // Contains Tests at Scale
@@ -206,14 +206,14 @@ let d = buildDict(50, emptyDict()) in Stdlib.Internal.HAMT.__fold(d, 0, fun acc 
 
 // All inserted keys contained
 let checkContains(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
-    if n <= 0 then count
+    if n <= 0L then count
     else
         let contained = Stdlib.Internal.HAMT.__contains(d, n) in
-        let newCount = if contained then count + 1 else count in
-        checkContains(n - 1, d, newCount)
+        let newCount = if contained then count + 1L else count in
+        checkContains(n - 1L, d, newCount)
 
-checkContains(100, buildDict(100, emptyDict()), 0) = 100
+checkContains(100L, buildDict(100L, emptyDict()), 0L) = 100L
 
 // Non-inserted keys not contained
-Stdlib.Internal.HAMT.__contains(buildDict(100, emptyDict()), 101) = false
-Stdlib.Internal.HAMT.__contains(buildDict(100, emptyDict()), 999) = false
+Stdlib.Internal.HAMT.__contains(buildDict(100L, emptyDict()), 101L) = false
+Stdlib.Internal.HAMT.__contains(buildDict(100L, emptyDict()), 999L) = false

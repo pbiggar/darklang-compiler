@@ -11,5 +11,5 @@ type PairRec =
     b = 7L }).b = 7L
 
 ((Stdlib.Result.Result.Ok 5L)
- |> Stdlib.Result.map (fun x -> x + 1L)) =
+ |> Stdlib.Result.map<Int64, Int64, String> (fun x -> x + 1L)) =
   Stdlib.Result.Result.Ok 6L

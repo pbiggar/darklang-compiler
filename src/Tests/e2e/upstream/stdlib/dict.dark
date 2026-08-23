@@ -8,7 +8,7 @@ module ConstructionErrors =
 module FilterMap =
   Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Stdlib.Option.Option<b$1>, got (binding_lambda_0_value) -> Int64"
 
-  (Stdlib.Dict.filterMap
+  (Stdlib.Dict.filterMap<String, String>
     (Dict { a = "x"; b = "y"; c = "z" })
     (fun key value ->
       if value == "y" then
@@ -31,7 +31,7 @@ module Filter =
     (Dict { key1 = "val1"; key2 = "val2" })
     (fun k v -> k == "key1")) = (Dict { key1 = "val1" })
 
-  Stdlib.Dict.filter (Dict { key1 = 1L; key2 = 3L }) (fun k v -> v < 2L) =
+  Stdlib.Dict.filter<Int64> (Dict { key1 = 1L; key2 = 3L }) (fun k v -> v < 2L) =
     (Dict { key1 = 1L })
 
   Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) = error="Type mismatch in lambda return type: expected (a$0) -> Bool, got (binding_lambda_0_v) -> Int64"
@@ -40,10 +40,10 @@ module Filter =
 module FromListOverwritingDuplicates =
   Stdlib.Dict.fromListOverwritingDuplicates_v0 [] = (Dict { })
 
-  (Stdlib.Dict.fromListOverwritingDuplicates_v0 [ ("duplicate_key", 1L); ("b", 2L); ("duplicate_key", 3L) ]) =
+  (Stdlib.Dict.fromListOverwritingDuplicates_v0<Int64> [ ("duplicate_key", 1L); ("b", 2L); ("duplicate_key", 3L) ]) =
     (Dict { b = 2L; duplicate_key = 3L })
 
-  Stdlib.Dict.fromListOverwritingDuplicates_v0 [ ("a", 1L); ("b", 2L); ("c", 3L) ] =
+  Stdlib.Dict.fromListOverwritingDuplicates_v0<Int64> [ ("a", 1L); ("b", 2L); ("c", 3L) ] =
     (Dict { c = 3L; b = 2L; a = 1L })
 
   Stdlib.Dict.fromListOverwritingDuplicates_v0 [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
@@ -54,7 +54,7 @@ module FromListOverwritingDuplicates =
 module FromList =
   Stdlib.Dict.fromList_v0 [] = Stdlib.Option.Option.Some(Dict { })
 
-  Stdlib.Dict.fromList_v0 [ ("a", 1L); ("b", 2L); ("c", 3L) ] =
+  Stdlib.Dict.fromList_v0<Int64> [ ("a", 1L); ("b", 2L); ("c", 3L) ] =
     Stdlib.Option.Option.Some(Dict { c = 3L; b = 2L; a = 1L })
 
   // CLEANUP this test feels surprising - should it error or something?
@@ -83,14 +83,14 @@ module Keys =
 
 
 module Map =
-  Stdlib.Dict.map_v0 (Dict { }) (fun key value -> 0L) = (Dict { })
+  Stdlib.Dict.map_v0<Int64, Int64> (Dict { }) (fun key value -> 0L) = (Dict { })
 
-  (Stdlib.Dict.map_v0
+  (Stdlib.Dict.map_v0<String, String>
     (Dict { key1 = "val1"; key2 = "val2" })
     (fun k x -> k ++ x)
   ) = (Dict { key2 = "key2val2"; key1 = "key1val1" })
 
-  (Stdlib.Dict.map_v0
+  (Stdlib.Dict.map_v0<Int64, Bool>
     (Dict { key1 = 5L; key2 = 3L; key3 = 3L })
     (fun k x ->
       Stdlib.Bool.and_v0
@@ -99,7 +99,7 @@ module Map =
     )
     )= (Dict { key3 = true; key2 = true; key1 = false })
 
-  Stdlib.Dict.map_v0 (Dict { a = 1L; b = 2L }) (fun k x -> x + 1L) =
+  Stdlib.Dict.map_v0<Int64, Int64> (Dict { a = 1L; b = 2L }) (fun k x -> x + 1L) =
     (Dict { b = 3L; a = 2L })
 
 
@@ -129,7 +129,7 @@ module Set =
   Stdlib.Dict.set_v0 (Dict { }) "key1" "val1" =
     (Dict { key1 = "val1" })
 
-  Stdlib.Dict.set_v0 (Dict { }) "key1" 2L =
+  Stdlib.Dict.set_v0<Int64> (Dict { }) "key1" 2L =
     (Dict { key1 = 2L })
 
 
@@ -147,9 +147,9 @@ module SetOverridingDuplicates =
 
 
 module Singleton =
-  Stdlib.Dict.singleton_v0 "one" 1L = (Dict { one = 1L })
+  Stdlib.Dict.singleton_v0<Int64> "one" 1L = (Dict { one = 1L })
 
-  Stdlib.Dict.singleton_v0 "Content-Length" 1L = (Dict { ``Content-Length`` = 1L })
+  Stdlib.Dict.singleton_v0<Int64> "Content-Length" 1L = (Dict { ``Content-Length`` = 1L })
 
 
 module Size =

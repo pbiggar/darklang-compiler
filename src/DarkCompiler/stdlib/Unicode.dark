@@ -5,38 +5,38 @@ module Unicode
 type Utf8Error = InvalidUtf8 of Int64
 
 let isScalar(codepoint: Int64) : Bool =
-    codepoint >= 0 && codepoint <= 1114111 && !(codepoint >= 55296 && codepoint <= 57343)
+    codepoint >= 0L && codepoint <= 1114111L && !(codepoint >= 55296L && codepoint <= 57343L)
 
-let __isContinuation(byte: Int64) : Bool = byte >= 128 && byte <= 191
+let __isContinuation(byte: Int64) : Bool = byte >= 128L && byte <= 191L
 
 let decodeAt(value: String, index: Int64) : Stdlib.Result.Result<(Int64 * Int64), Unicode.Utf8Error> =
     let length = Stdlib.String.__byteLength(value) in
-    if index < 0 || index >= length then Error(Unicode.Utf8Error.InvalidUtf8(index))
+    if index < 0L || index >= length then Error(Unicode.Utf8Error.InvalidUtf8(index))
     else
         let b0 = Stdlib.String.getByteAt(value, index) in
-        if b0 <= 127 then Ok((b0, 1))
-        else if b0 >= 194 && b0 <= 223 && index + 1 < length then
-            let b1 = Stdlib.String.getByteAt(value, index + 1) in
-            if Unicode.__isContinuation(b1) then Ok((((b0 & 31) << 6) ^ (b1 & 63), 2))
+        if b0 <= 127L then Ok((b0, 1L))
+        else if b0 >= 194L && b0 <= 223L && index + 1L < length then
+            let b1 = Stdlib.String.getByteAt(value, index + 1L) in
+            if Unicode.__isContinuation(b1) then Ok((((b0 & 31L) << 6L) ^ (b1 & 63L), 2L))
             else Error(Unicode.Utf8Error.InvalidUtf8(index))
-        else if b0 >= 224 && b0 <= 239 && index + 2 < length then
-            let b1 = Stdlib.String.getByteAt(value, index + 1) in
-            let b2 = Stdlib.String.getByteAt(value, index + 2) in
+        else if b0 >= 224L && b0 <= 239L && index + 2L < length then
+            let b1 = Stdlib.String.getByteAt(value, index + 1L) in
+            let b2 = Stdlib.String.getByteAt(value, index + 2L) in
             let validSecond = Unicode.__isContinuation(b1) &&
-                !(b0 == 224 && b1 < 160) &&
-                !(b0 == 237 && b1 > 159) in
+                !(b0 == 224L && b1 < 160L) &&
+                !(b0 == 237L && b1 > 159L) in
             if validSecond && Unicode.__isContinuation(b2) then
-                Ok((((b0 & 15) << 12) ^ ((b1 & 63) << 6) ^ (b2 & 63), 3))
+                Ok((((b0 & 15L) << 12L) ^ ((b1 & 63L) << 6L) ^ (b2 & 63L), 3L))
             else Error(Unicode.Utf8Error.InvalidUtf8(index))
-        else if b0 >= 240 && b0 <= 244 && index + 3 < length then
-            let b1 = Stdlib.String.getByteAt(value, index + 1) in
-            let b2 = Stdlib.String.getByteAt(value, index + 2) in
-            let b3 = Stdlib.String.getByteAt(value, index + 3) in
+        else if b0 >= 240L && b0 <= 244L && index + 3L < length then
+            let b1 = Stdlib.String.getByteAt(value, index + 1L) in
+            let b2 = Stdlib.String.getByteAt(value, index + 2L) in
+            let b3 = Stdlib.String.getByteAt(value, index + 3L) in
             let validSecond = Unicode.__isContinuation(b1) &&
-                !(b0 == 240 && b1 < 144) &&
-                !(b0 == 244 && b1 > 143) in
+                !(b0 == 240L && b1 < 144L) &&
+                !(b0 == 244L && b1 > 143L) in
             if validSecond && Unicode.__isContinuation(b2) && Unicode.__isContinuation(b3) then
-                Ok((((b0 & 7) << 18) ^ ((b1 & 63) << 12) ^ ((b2 & 63) << 6) ^ (b3 & 63), 4))
+                Ok((((b0 & 7L) << 18L) ^ ((b1 & 63L) << 12L) ^ ((b2 & 63L) << 6L) ^ (b3 & 63L), 4L))
             else Error(Unicode.Utf8Error.InvalidUtf8(index))
         else Error(Unicode.Utf8Error.InvalidUtf8(index))
 
@@ -52,7 +52,7 @@ let __decode(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Resu
                 Stdlib.List.push<Int64>(acc, Stdlib.Tuple2.first<Int64, Int64>(decoded)))
 
 let decode(value: String) : Stdlib.Result.Result<List<Int64>, Unicode.Utf8Error> =
-    Unicode.__decode(value, 0, [])
+    Unicode.__decode(value, 0L, [])
 
 let __lookupMapping(codepoint: Int64, entries: List<(Int64 * List<Int64>)>) : Stdlib.Option.Option<List<Int64>> =
     match entries with
@@ -146,18 +146,18 @@ let isNumber(codepoint: Int64) : Bool =
     category == Unicode.Data.GeneralCategory.No
 
 let __decomposeCodepoint(codepoint: Int64) : List<Int64> =
-    if codepoint >= 44032 && codepoint <= 55203 then
-        let syllableIndex = codepoint - 44032 in
-        let l = 4352 + syllableIndex / 588 in
-        let v = 4449 + (syllableIndex % 588) / 28 in
-        let tIndex = syllableIndex % 28 in
-        if tIndex == 0 then Unicode.__decomposeList([l, v], [])
-        else Unicode.__decomposeList([l, v, 4519 + tIndex], [])
+    if codepoint >= 44032L && codepoint <= 55203L then
+        let syllableIndex = codepoint - 44032L in
+        let l = 4352L + syllableIndex / 588L in
+        let v = 4449L + (syllableIndex % 588L) / 28L in
+        let tIndex = syllableIndex % 28L in
+        if tIndex == 0L then Unicode.__decomposeList([l, v], [])
+        else Unicode.__decomposeList([l, v, 4519L + tIndex], [])
     else
-        match Unicode.Data.lookupCanonicalDecompositionAt(codepoint, 0) with
+        match Unicode.Data.lookupCanonicalDecompositionAt(codepoint, 0L) with
         | None -> [codepoint]
         | Some(first) ->
-            match Unicode.Data.lookupCanonicalDecompositionAt(codepoint, 1) with
+            match Unicode.Data.lookupCanonicalDecompositionAt(codepoint, 1L) with
             | Some(second) -> Unicode.__decomposeList([first, second], [])
             | None -> Unicode.__decomposeList([first], [])
 
@@ -173,7 +173,7 @@ let __insertCanonical(codepoint: Int64, ccc: Int64, segment: List<Int64>) : List
     | [] -> [codepoint]
     | head :: rest ->
         let headClass = Unicode.combiningClass(head) in
-        if headClass != 0 && headClass > ccc then Stdlib.List.push<Int64>(segment, codepoint)
+        if headClass != 0L && headClass > ccc then Stdlib.List.push<Int64>(segment, codepoint)
         else Stdlib.List.push<Int64>(Unicode.__insertCanonical(codepoint, ccc, rest), head)
 
 let __reorder(codepoints: List<Int64>, segment: List<Int64>, acc: List<Int64>) : List<Int64> =
@@ -181,31 +181,31 @@ let __reorder(codepoints: List<Int64>, segment: List<Int64>, acc: List<Int64>) :
     | [] -> Stdlib.List.append<Int64>(acc, segment)
     | codepoint :: rest ->
         let ccc = Unicode.combiningClass(codepoint) in
-        if ccc == 0 then
+        if ccc == 0L then
             Unicode.__reorder(rest, [codepoint], Stdlib.List.append<Int64>(acc, segment))
         else
             Unicode.__reorder(rest, Unicode.__insertCanonical(codepoint, ccc, segment), acc)
 
 let __hangulComposition(first: Int64, second: Int64) : Stdlib.Option.Option<Int64> =
-    let lIndex = first - 4352 in
-    if lIndex >= 0 && lIndex < 19 && second >= 4449 && second < 4470 then
-        Some(44032 + (lIndex * 21 + (second - 4449)) * 28)
-    else if first >= 44032 && first <= 55203 && (first - 44032) % 28 == 0 && second > 4519 && second < 4548 then
-        Some(first + second - 4519)
+    let lIndex = first - 4352L in
+    if lIndex >= 0L && lIndex < 19L && second >= 4449L && second < 4470L then
+        Some(44032L + (lIndex * 21L + (second - 4449L)) * 28L)
+    else if first >= 44032L && first <= 55203L && (first - 44032L) % 28L == 0L && second > 4519L && second < 4548L then
+        Some(first + second - 4519L)
     else None
 
 let __composition(first: Int64, second: Int64) : Stdlib.Option.Option<Int64> =
     match Unicode.__hangulComposition(first, second) with
     | Some(composed) -> Some(composed)
     | None ->
-        let key = first * 1114112 + second in
+        let key = first * 1114112L + second in
         Unicode.Data.lookupCanonicalComposition(key)
 
 let __replaceStarter(acc: List<Int64>, composed: Int64) : List<Int64> =
     match acc with
     | [] -> []
     | head :: rest ->
-        if Unicode.combiningClass(head) == 0 then Stdlib.List.push<Int64>(rest, composed)
+        if Unicode.combiningClass(head) == 0L then Stdlib.List.push<Int64>(rest, composed)
         else Stdlib.List.push<Int64>(Unicode.__replaceStarter(rest, composed), head)
 
 let __compose(codepoints: List<Int64>, starter: Stdlib.Option.Option<Int64>, lastClass: Int64, acc: List<Int64>) : List<Int64> =
@@ -217,13 +217,13 @@ let __compose(codepoints: List<Int64>, starter: Stdlib.Option.Option<Int64>, las
             match starter with
             | None -> None
             | Some(value) ->
-                if lastClass == 0 || lastClass < ccc then Unicode.__composition(value, codepoint)
+                if lastClass == 0L || lastClass < ccc then Unicode.__composition(value, codepoint)
                 else None in
         match candidate with
         | Some(composed) ->
             Unicode.__compose(rest, Some(composed), lastClass, Unicode.__replaceStarter(acc, composed))
         | None ->
-            if ccc == 0 then Unicode.__compose(rest, Some(codepoint), 0, Stdlib.List.push<Int64>(acc, codepoint))
+            if ccc == 0L then Unicode.__compose(rest, Some(codepoint), 0L, Stdlib.List.push<Int64>(acc, codepoint))
             else Unicode.__compose(rest, starter, ccc, Stdlib.List.push<Int64>(acc, codepoint))
 
 let normalize(value: String) : Stdlib.Result.Result<String, Unicode.Utf8Error> =
@@ -232,7 +232,7 @@ let normalize(value: String) : Stdlib.Result.Result<String, Unicode.Utf8Error> =
     | Ok(codepoints) ->
         let decomposed = Unicode.__decomposeList(codepoints, []) in
         let reordered = Unicode.__reorder(decomposed, [], []) in
-        Ok(Stdlib.String.__fromCodepointsRaw(Unicode.__compose(reordered, None, 0, [])))
+        Ok(Stdlib.String.__fromCodepointsRaw(Unicode.__compose(reordered, None, 0L, [])))
 
 let normalizeValid(value: String) : String =
     match Unicode.normalize(value) with
@@ -267,7 +267,7 @@ let __regionalCount(previous: List<Int64>, count: Int64) : Int64 =
     | [] -> count
     | head :: rest ->
         match Unicode.graphemeBreak(head) with
-        | GBRegionalIndicator -> Unicode.__regionalCount(rest, count + 1)
+        | GBRegionalIndicator -> Unicode.__regionalCount(rest, count + 1L)
         | _ -> count
 
 let __shouldBreak(previous: List<Int64>, codepoint: Int64) : Bool =
@@ -292,7 +292,7 @@ let __shouldBreak(previous: List<Int64>, codepoint: Int64) : Bool =
         else if left == Unicode.Data.GraphemeBreak.GBZWJ && Unicode.isExtendedPictographic(codepoint) && Unicode.__emojiBeforeZwj(beforePrior) then false
         else if Unicode.indicConjunctBreak(codepoint) == Unicode.Data.IndicConjunctBreak.InCBConsonant && Unicode.__indicBefore(previous, false) then false
         else if left == Unicode.Data.GraphemeBreak.GBRegionalIndicator && right == Unicode.Data.GraphemeBreak.GBRegionalIndicator then
-            Unicode.__regionalCount(previous, 0) % 2 == 0
+            Unicode.__regionalCount(previous, 0L) % 2L == 0L
         else true
 
 let segmentCodepoints(codepoints: List<Int64>, previous: List<Int64>, current: String, result: List<String>) : List<String> =
@@ -332,10 +332,10 @@ let graphemeCountUtf8(value: String, index: Int64, previous: List<Int64>, count:
             let codepoint = Stdlib.Tuple2.first<Int64, Int64>(decoded) in
             let width = Stdlib.Tuple2.second<Int64, Int64>(decoded) in
             match previous with
-            | [] -> Unicode.graphemeCountUtf8(value, index + width, [codepoint], count + 1)
+            | [] -> Unicode.graphemeCountUtf8(value, index + width, [codepoint], count + 1L)
             | _ ->
                 if Unicode.__shouldBreak(previous, codepoint) then
-                    Unicode.graphemeCountUtf8(value, index + width, [codepoint], count + 1)
+                    Unicode.graphemeCountUtf8(value, index + width, [codepoint], count + 1L)
                 else
                     Unicode.graphemeCountUtf8(value, index + width, Stdlib.List.push<Int64>(previous, codepoint), count)
 
@@ -363,23 +363,23 @@ let __fullMappingFromValues(first: Stdlib.Option.Option<Int64>, second: Stdlib.O
 
 let uppercaseCodepoint(codepoint: Int64) : List<Int64> =
     Unicode.__mappingFromValues(
-        Unicode.Data.lookupUppercaseAt(codepoint, 0),
-        Unicode.Data.lookupUppercaseAt(codepoint, 1),
-        Unicode.Data.lookupUppercaseAt(codepoint, 2),
+        Unicode.Data.lookupUppercaseAt(codepoint, 0L),
+        Unicode.Data.lookupUppercaseAt(codepoint, 1L),
+        Unicode.Data.lookupUppercaseAt(codepoint, 2L),
         codepoint)
 
 let lowercaseCodepoint(codepoint: Int64) : List<Int64> =
     Unicode.__mappingFromValues(
-        Unicode.Data.lookupLowercaseAt(codepoint, 0),
-        Unicode.Data.lookupLowercaseAt(codepoint, 1),
-        Unicode.Data.lookupLowercaseAt(codepoint, 2),
+        Unicode.Data.lookupLowercaseAt(codepoint, 0L),
+        Unicode.Data.lookupLowercaseAt(codepoint, 1L),
+        Unicode.Data.lookupLowercaseAt(codepoint, 2L),
         codepoint)
 
 let uppercaseCodepointFull(codepoint: Int64) : List<Int64> =
     Unicode.__fullMappingFromValues(
-        Unicode.Data.lookupUppercaseAt(codepoint, 0),
-        Unicode.Data.lookupUppercaseAt(codepoint, 1),
-        Unicode.Data.lookupUppercaseAt(codepoint, 2),
+        Unicode.Data.lookupUppercaseAt(codepoint, 0L),
+        Unicode.Data.lookupUppercaseAt(codepoint, 1L),
+        Unicode.Data.lookupUppercaseAt(codepoint, 2L),
         codepoint)
 
 let __mapCase(codepoints: List<Int64>, uppercase: Bool, acc: List<Int64>) : List<Int64> =
@@ -410,7 +410,7 @@ let __mapCaseUtf8(value: String, index: Int64, uppercase: Bool, full: Bool, prev
             let codepoint = Stdlib.Tuple2.first<Int64, Int64>(decoded) in
             let width = Stdlib.Tuple2.second<Int64, Int64>(decoded) in
             let mapped =
-                if !uppercase && codepoint == 931 && previousCased && !Unicode.__hasFollowingCased(value, index + width) then [962]
+                if !uppercase && codepoint == 931L && previousCased && !Unicode.__hasFollowingCased(value, index + width) then [962L]
                 else if uppercase && full then Unicode.uppercaseCodepointFull(codepoint)
                 else if uppercase then Unicode.uppercaseCodepoint(codepoint)
                 else Unicode.lowercaseCodepoint(codepoint) in
@@ -427,10 +427,10 @@ let __mapCaseUtf8(value: String, index: Int64, uppercase: Bool, full: Bool, prev
                 Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(mapped), acc))
 
 let uppercase(value: String) : String =
-    Unicode.normalizeValid(Stdlib.String.__fromCodepointsRaw(Unicode.__mapCaseUtf8(value, 0, true, false, false, [])))
+    Unicode.normalizeValid(Stdlib.String.__fromCodepointsRaw(Unicode.__mapCaseUtf8(value, 0L, true, false, false, [])))
 
 let uppercaseFull(value: String) : String =
-    Unicode.normalizeValid(Stdlib.String.__fromCodepointsRaw(Unicode.__mapCaseUtf8(value, 0, true, true, false, [])))
+    Unicode.normalizeValid(Stdlib.String.__fromCodepointsRaw(Unicode.__mapCaseUtf8(value, 0L, true, true, false, [])))
 
 let lowercase(value: String) : String =
-    Unicode.normalizeValid(Stdlib.String.__fromCodepointsRaw(Unicode.__mapCaseUtf8(value, 0, false, false, false, [])))
+    Unicode.normalizeValid(Stdlib.String.__fromCodepointsRaw(Unicode.__mapCaseUtf8(value, 0L, false, false, false, [])))

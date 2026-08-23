@@ -1,8 +1,8 @@
 // Internal tick probes make sub-millisecond DateTime behavior deterministic.
 
-Stdlib.DateTime.__fromUnixTimeTicks(1) != Stdlib.DateTime.__fromUnixTimeTicks(2) = true
-Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.__fromUnixTimeTicks(-1)) = -1I
-Stdlib.DateTime.subtract(Stdlib.DateTime.__fromUnixTimeTicks(5000000), Stdlib.DateTime.__fromUnixTimeTicks(0)) = 0I
-Stdlib.DateTime.subtract(Stdlib.DateTime.__fromUnixTimeTicks(15000000), Stdlib.DateTime.__fromUnixTimeTicks(0)) = 2I
-Stdlib.DateTime.subtractMs(Stdlib.DateTime.__fromUnixTimeTicks(5000), Stdlib.DateTime.__fromUnixTimeTicks(0)) = 0I
-Stdlib.DateTime.subtractMs(Stdlib.DateTime.__fromUnixTimeTicks(15000), Stdlib.DateTime.__fromUnixTimeTicks(0)) = 2I
+Stdlib.DateTime.__fromUnixTimeTicks(1L) != Stdlib.DateTime.__fromUnixTimeTicks(2L) = true
+Stdlib.DateTime.toMilliseconds(Stdlib.DateTime.__fromUnixTimeTicks(-1L)) = -1I
+Stdlib.DateTime.subtract(Stdlib.DateTime.__fromUnixTimeTicks(5000000L), Stdlib.DateTime.__fromUnixTimeTicks(0L)) = 0I
+Stdlib.DateTime.subtract(Stdlib.DateTime.__fromUnixTimeTicks(15000000L), Stdlib.DateTime.__fromUnixTimeTicks(0L)) = 2I
+Stdlib.DateTime.subtractMs(Stdlib.DateTime.__fromUnixTimeTicks(5000L), Stdlib.DateTime.__fromUnixTimeTicks(0L)) = 0I
+Stdlib.DateTime.subtractMs(Stdlib.DateTime.__fromUnixTimeTicks(15000L), Stdlib.DateTime.__fromUnixTimeTicks(0L)) = 2I

@@ -4,16 +4,16 @@
 module Unicode.Data
 
 let __canonicalDecompositionLookupGroup1(key: Int64, valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table04.__canonicalDecompositionChunk4(), 0, key, 6, 19, valueIndex) with
+    match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table04.__canonicalDecompositionChunk4(), 0L, key, 6L, 19L, valueIndex) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table05.__canonicalDecompositionChunk5(), 0, key, 6, 19, valueIndex) with
+        match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table05.__canonicalDecompositionChunk5(), 0L, key, 6L, 19L, valueIndex) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table06.__canonicalDecompositionChunk6(), 0, key, 6, 19, valueIndex) with
+            match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table06.__canonicalDecompositionChunk6(), 0L, key, 6L, 19L, valueIndex) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table07.__canonicalDecompositionChunk7(), 0, key, 6, 19, valueIndex) with
+                match Unicode.Data.__lookupMappingValueIn(Unicode.Data.Table07.__canonicalDecompositionChunk7(), 0L, key, 6L, 19L, valueIndex) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
@@ -37,43 +37,43 @@ let __canonicalDecompositionLookup(key: Int64, valueIndex: Int64) : Stdlib.Optio
                         None
 
 let __indicConjunctBreakLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table44.__indicConjunctBreakChunk0(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table44.__indicConjunctBreakChunk0(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table45.__indicConjunctBreakChunk1(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table45.__indicConjunctBreakChunk1(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table46.__indicConjunctBreakChunk2(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table46.__indicConjunctBreakChunk2(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table47.__indicConjunctBreakChunk3(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table47.__indicConjunctBreakChunk3(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __graphemeBreakLookupGroup0(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table29.__graphemeBreakChunk0(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table29.__graphemeBreakChunk0(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table30.__graphemeBreakChunk1(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table30.__graphemeBreakChunk1(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table31.__graphemeBreakChunk2(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table31.__graphemeBreakChunk2(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
-                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table32.__graphemeBreakChunk3(), 0, codepoint, 14) with
+                match Unicode.Data.__lookupRangeIn(Unicode.Data.Table32.__graphemeBreakChunk3(), 0L, codepoint, 14L) with
                 | Some(value) -> Some(value)
                 | None ->
                     None
 
 let __generalCategoryLookupGroup6(codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table39.__generalCategoryChunk24(), 0, codepoint, 14) with
+    match Unicode.Data.__lookupRangeIn(Unicode.Data.Table39.__generalCategoryChunk24(), 0L, codepoint, 14L) with
     | Some(value) -> Some(value)
     | None ->
-        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table40.__generalCategoryChunk25(), 0, codepoint, 14) with
+        match Unicode.Data.__lookupRangeIn(Unicode.Data.Table40.__generalCategoryChunk25(), 0L, codepoint, 14L) with
         | Some(value) -> Some(value)
         | None ->
-            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table41.__generalCategoryChunk26(), 0, codepoint, 14) with
+            match Unicode.Data.__lookupRangeIn(Unicode.Data.Table41.__generalCategoryChunk26(), 0L, codepoint, 14L) with
             | Some(value) -> Some(value)
             | None ->
                 None
@@ -84,6 +84,6 @@ let __extendedPictographicLookup(codepoint: Int64) : Stdlib.Option.Option<Int64>
     | None ->
         None
 
-let lookupIndicConjunctBreak(codepoint: Int64) : Unicode.Data.IndicConjunctBreak = Unicode.Data.__indicFromCode(Stdlib.Option.withDefault<Int64>(Unicode.Data.__indicConjunctBreakLookup(codepoint), 0))
-let lookupCombiningClass(codepoint: Int64) : Int64 = Stdlib.Option.withDefault<Int64>(Unicode.Data.__combiningClassLookup(codepoint), 0)
+let lookupIndicConjunctBreak(codepoint: Int64) : Unicode.Data.IndicConjunctBreak = Unicode.Data.__indicFromCode(Stdlib.Option.withDefault<Int64>(Unicode.Data.__indicConjunctBreakLookup(codepoint), 0L))
+let lookupCombiningClass(codepoint: Int64) : Int64 = Stdlib.Option.withDefault<Int64>(Unicode.Data.__combiningClassLookup(codepoint), 0L)
 let isCaseIgnorable(codepoint: Int64) : Bool = Stdlib.Option.isSome<Int64>(Unicode.Data.__caseIgnorableLookup(codepoint))

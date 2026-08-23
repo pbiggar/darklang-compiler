@@ -1,42 +1,43 @@
 // Tuple tests for Phase 7 Milestone 1
 
-// Basic tuple creation and destructuring
+// Basic tuple creation and access
+// Note: Currently tuples cannot be directly printed, so we access elements
 
 // 2-element tuple - first element
-let t = (1, 2) in let (first, _) = t in first = 1
+let t = (1L, 2L) in t.0 = 1L
 
 // 2-element tuple - second element
-let t = (1, 2) in let (_, second) = t in second = 2
+let t = (1L, 2L) in t.1 = 2L
 
 // 3-element tuple - all elements
-let t = (10, 20, 30) in let (first, _, _) = t in first = 10
-let t = (10, 20, 30) in let (_, second, _) = t in second = 20
-let t = (10, 20, 30) in let (_, _, third) = t in third = 30
+let t = (10L, 20L, 30L) in t.0 = 10L
+let t = (10L, 20L, 30L) in t.1 = 20L
+let t = (10L, 20L, 30L) in t.2 = 30L
 
 // Tuple with negative numbers
-let t = (-1, -2) in let (first, _) = t in first = -1
-let t = (-1, -2) in let (_, second) = t in second = -2
+let t = (-1L, -2L) in t.0 = -1L
+let t = (-1L, -2L) in t.1 = -2L
 
 // Tuple with zero
-let t = (0, 1) in let (first, _) = t in first = 0
-let t = (0, 1) in let (_, second) = t in second = 1
+let t = (0L, 1L) in t.0 = 0L
+let t = (0L, 1L) in t.1 = 1L
 
 // Nested tuple access (single level)
-let t = (100, 200) in let (first, second) = t in first + second = 300
+let t = (100L, 200L) in t.0 + t.1 = 300L
 
 // Tuple with boolean values
-let t = (true, false) in let (first, _) = t in first = true
-let t = (true, false) in let (_, second) = t in second = false
+let t = (true, false) in t.0 = true
+let t = (true, false) in t.1 = false
 
 // Tuple elements in arithmetic
-let t = (5, 3) in let (first, second) = t in first - second = 2
-let t = (5, 3) in let (first, second) = t in first * second = 15
+let t = (5L, 3L) in t.0 - t.1 = 2L
+let t = (5L, 3L) in t.0 * t.1 = 15L
 
 // Multiple tuples
-let a = (1, 2) in let b = (3, 4) in let (first, _) = a in let (_, fourth) = b in first + fourth = 5
+let a = (1L, 2L) in let b = (3L, 4L) in a.0 + b.1 = 5L
 
 // Large tuple (4 elements)
-let t = (1, 2, 3, 4) in let (a, b, c, d) = t in a + b + c + d = 10
+let t = (1L, 2L, 3L, 4L) in t.0 + t.1 + t.2 + t.3 = 10L
 
 
 // ===================================================================
@@ -44,122 +45,122 @@ let t = (1, 2, 3, 4) in let (a, b, c, d) = t in a + b + c + d = 10
 // ===================================================================
 
 // Basic tuple destructuring - 2 elements
-let (a, b) = (1, 2) in a = 1
-let (a, b) = (1, 2) in b = 2
-let (a, b) = (10, 20) in a + b = 30
+let (a, b) = (1L, 2L) in a = 1L
+let (a, b) = (1L, 2L) in b = 2L
+let (a, b) = (10L, 20L) in a + b = 30L
 
 // 3-element tuple destructuring
-let (a, b, c) = (1, 2, 3) in a = 1
-let (a, b, c) = (1, 2, 3) in b = 2
-let (a, b, c) = (1, 2, 3) in c = 3
-let (a, b, c) = (10, 20, 30) in a + b + c = 60
+let (a, b, c) = (1L, 2L, 3L) in a = 1L
+let (a, b, c) = (1L, 2L, 3L) in b = 2L
+let (a, b, c) = (1L, 2L, 3L) in c = 3L
+let (a, b, c) = (10L, 20L, 30L) in a + b + c = 60L
 
 // 4-element tuple destructuring
-let (a, b, c, d) = (1, 2, 3, 4) in a + b + c + d = 10
+let (a, b, c, d) = (1L, 2L, 3L, 4L) in a + b + c + d = 10L
 
 // Tuple destructuring with expressions
-let (x, y) = (3 + 4, 5 * 2) in x = 7
-let (x, y) = (3 + 4, 5 * 2) in y = 10
-let (x, y) = (3 + 4, 5 * 2) in x + y = 17
+let (x, y) = (3L + 4L, 5L * 2L) in x = 7L
+let (x, y) = (3L + 4L, 5L * 2L) in y = 10L
+let (x, y) = (3L + 4L, 5L * 2L) in x + y = 17L
 
 // Nested let with tuple destructuring
-let (a, b) = (1, 2) in let (c, d) = (3, 4) in a + b + c + d = 10
+let (a, b) = (1L, 2L) in let (c, d) = (3L, 4L) in a + b + c + d = 10L
 
 // Tuple from variable
-let t = (5, 10) in let (a, b) = t in a * b = 50
+let t = (5L, 10L) in let (a, b) = t in a * b = 50L
 
 // Wildcard in tuple pattern
-let (a, _) = (42, 99) in a = 42
-let (_, b) = (99, 42) in b = 42
-let (a, _, c) = (1, 2, 3) in a + c = 4
+let (a, _) = (42L, 99L) in a = 42L
+let (_, b) = (99L, 42L) in b = 42L
+let (a, _, c) = (1L, 2L, 3L) in a + c = 4L
 
 // Tuple destructuring with negative numbers
-let (a, b) = (-5, 10) in a + b = 5
+let (a, b) = (-5L, 10L) in a + b = 5L
 
 // Complex expression using destructured values
-let (x, y) = (6, 4) in x * y - x + y = 22
+let (x, y) = (6L, 4L) in x * y - x + y = 22L
 
 // ===================================================================
 // Tuple Printing
 // ===================================================================
 
 // Basic tuple printing
-(1, 2) = (1, 2)
-(42, 99) = (42, 99)
-(0, 0) = (0, 0)
+(1L, 2L) = (1L, 2L)
+(42L, 99L) = (42L, 99L)
+(0L, 0L) = (0L, 0L)
 
 // 3-element tuple printing
-(1, 2, 3) = (1, 2, 3)
-(10, 20, 30) = (10, 20, 30)
+(1L, 2L, 3L) = (1L, 2L, 3L)
+(10L, 20L, 30L) = (10L, 20L, 30L)
 
 // Tuple with negative numbers
-(-1, -2) = (-1, -2)
-(5, -10) = (5, -10)
+(-1L, -2L) = (-1L, -2L)
+(5L, -10L) = (5L, -10L)
 
 // Tuple with computed values
-let x = 5 in (x, x + 1) = (5, 6)
-(3 + 4, 5 * 2) = (7, 10)
+let x = 5L in (x, x + 1L) = (5L, 6L)
+(3L + 4L, 5L * 2L) = (7L, 10L)
 
 // ===================================================================
 // String Extraction from Tuples
 // ===================================================================
 
 // Extract string from first position
-match ("hello", 5) with | (a, _) -> a = "hello"
+match ("hello", 5L) with | (a, _) -> a = "hello"
 
 // Extract string from second position
-match (5, "world") with | (_, b) -> b = "world"
+match (5L, "world") with | (_, b) -> b = "world"
 
 // Extract string using let-pattern
-let (s, _) = ("test", 42) in s = "test"
-let (_, s) = (42, "test") in s = "test"
+let (s, _) = ("test", 42L) in s = "test"
+let (_, s) = (42L, "test") in s = "test"
 
 // Extract string alongside other values
-let (a, s, b) = (1, "middle", 2) in s = "middle"
+let (a, s, b) = (1L, "middle", 2L) in s = "middle"
 
 // ===================================================================
 // Tuples with Floats (GpToFp/FpToGp conversion tests)
 // ===================================================================
 
 // Float in first position
-let (first, _) = (3.14, 42) in first = 3.14
-let (_, second) = (3.14, 42) in second = 42
+(3.14, 42L).0 = 3.14
+(3.14, 42L).1 = 42L
 
 // Float in second position
-let (first, _) = (42, 3.14) in first = 42
-let (_, second) = (42, 3.14) in second = 3.14
+(42L, 3.14).0 = 42L
+(42L, 3.14).1 = 3.14
 
 // All floats
-let (first, second) = (1.0, 2.0) in first + second = 3.0
+(1.0, 2.0).0 + (1.0, 2.0).1 = 3.0
 
 // Mixed float/int/bool
-let (first, _, _) = (1.5, true, 42) in first = 1.5
-let (_, second, _) = (1.5, true, 42) in second = true
-let (_, _, third) = (1.5, true, 42) in third = 42
+(1.5, true, 42L).0 = 1.5
+(1.5, true, 42L).1 = true
+(1.5, true, 42L).2 = 42L
 
 // Float in last position of 3-tuple
-let (_, _, third) = (10, 20, 3.14) in third = 3.14
+(10L, 20L, 3.14).2 = 3.14
 
 // Float tuple destructuring
 let (a, b) = (1.5, 2.5) in a + b = 4.0
 
 // Mixed destructuring with float
-let (x, y, z) = (1.0, 42, 2.0) in x + z = 3.0
+let (x, y, z) = (1.0, 42L, 2.0) in x + z = 3.0
 
 // Float tuple in let binding
-let t = (3.14, 2.71) in let (first, _) = t in first = 3.14
-let t = (3.14, 2.71) in let (_, second) = t in second = 2.71
+let t = (3.14, 2.71) in t.0 = 3.14
+let t = (3.14, 2.71) in t.1 = 2.71
 
 // Float tuple with arithmetic on access
-let t = (1.5, 2.5) in let (first, second) = t in first * second = 3.75
+let t = (1.5, 2.5) in t.0 * t.1 = 3.75
 
 // Nested tuple with float
-let t = ((1.0, 2.0), 3) in let (_, second) = t in second = 3
+let t = ((1.0, 2.0), 3L) in t.1 = 3L
 
 // Float tuple printing
 (1.0, 2.0) = (1.0, 2.0)
-(3.14, 42) = (3.14, 42)
-(42, 3.14) = (42, 3.14)
+(3.14, 42L) = (3.14, 42L)
+(42L, 3.14) = (42L, 3.14)
 
 // ===================================================================
 // Tuple pattern index ordering (kills mutation #65)
@@ -169,13 +170,13 @@ let t = ((1.0, 2.0), 3) in let (_, second) = t in second = 3
 
 // Verify second element gets index 1, not index -1 or 0
 // Using subtraction to detect if wrong element is bound
-let (a, b) = (100, 37) in b - a = -63
+let (a, b) = (100L, 37L) in b - a = -63L
 
 // Three-element tuple: verify third element uses index 2
-let (x, y, z) = (10, 20, 30) in z - x = 20
+let (x, y, z) = (10L, 20L, 30L) in z - x = 20L
 
 // Four-element tuple: verify all indices are correct
-let (a, b, c, d) = (1000, 100, 10, 1) in d - a = -999
+let (a, b, c, d) = (1000L, 100L, 10L, 1L) in d - a = -999L
 
 // ===================================================================
 // Tuple pattern index ordering with guards (kills mutation #66)
@@ -186,13 +187,13 @@ let (a, b, c, d) = (1000, 100, 10, 1) in d - a = -999
 
 // Verify second element gets correct index in guard context
 // Using subtraction to detect if wrong element is bound
-match (100, 37) with | (a, b) when b < a -> b - a | _ -> 999 = -63
+match (100L, 37L) with | (a, b) when b < a -> b - a | _ -> 999L = -63L
 
 // Three-element tuple with guard: verify third element uses index 2
-match (10, 20, 30) with | (x, y, z) when z > y -> z - x | _ -> 999 = 20
+match (10L, 20L, 30L) with | (x, y, z) when z > y -> z - x | _ -> 999L = 20L
 
 // Four-element tuple with guard: verify all indices are correct
-match (1000, 100, 10, 1) with | (a, b, c, d) when d < c -> d - a | _ -> 999 = -999
+match (1000L, 100L, 10L, 1L) with | (a, b, c, d) when d < c -> d - a | _ -> 999L = -999L
 
 // ===================================================================
 // Tuple pattern matching with float elements (kills mutation #114)
@@ -203,13 +204,13 @@ match (1000, 100, 10, 1) with | (a, b, c, d) when d < c -> d - a | _ -> 999 = -9
 // ===================================================================
 
 // Match tuple with float in second position - verify float arithmetic works
-match (42, 2.5) with | (_, f) -> f * 2.0 = 5.0
+match (42L, 2.5) with | (_, f) -> f * 2.0 = 5.0
 
 // Match tuple with float in third position - verify index 2 gets correct type
-match (1, 2, 3.5) with | (_, _, f) -> f + 1.5 = 5.0
+match (1L, 2L, 3.5) with | (_, _, f) -> f + 1.5 = 5.0
 
 // Match tuple with mixed types - extract float from middle position
-match (10, 1.5, 20) with | (_, f, _) -> f * 4.0 = 6.0
+match (10L, 1.5, 20L) with | (_, f, _) -> f * 4.0 = 6.0
 
 // Match tuple with all floats - verify all positions get float type
 match (1.0, 2.0, 3.0) with | (a, b, c) -> a + b + c = 6.0

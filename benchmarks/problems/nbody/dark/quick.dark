@@ -91,10 +91,10 @@ let advanceStep(system: System, dt: Float) : System =
     }
 
 let advance(system: System, dt: Float, n: Int64) : System =
-    if n <= 0 then
+    if n <= 0L then
         system
     else
-        advance(advanceStep(system, dt), dt, n - 1)
+        advance(advanceStep(system, dt), dt, n - 1L)
 
 let kinetic(body: Body) : Float =
     0.5 * body.mass * (body.vx * body.vx + body.vy * body.vy + body.vz * body.vz)
@@ -198,5 +198,5 @@ let initialSystem(): System =
 
 let system = offsetMomentum(initialSystem()) in
 // Reduced from 500,000 simulation steps to 100 steps.
-let finalSystem = advance(system, 0.01, 100) in
+let finalSystem = advance(system, 0.01, 100L) in
 Stdlib.Float.toInt(energy(finalSystem) * 1000000.0)

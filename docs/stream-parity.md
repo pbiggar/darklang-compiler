@@ -38,7 +38,7 @@ state advancement, close, and backend finalization are compiler internals.
 ## Opaque type and value behavior
 
 `Stream<'a>` is a built-in opaque type with no constructors or patterns. It is
-propagated through both parsers, aliases, substitution, unification,
+propagated through the canonical parser, aliases, substitution, unification,
 specialization/mangling, inference, IR type traversals, and value rendering.
 Two values compare equal only when they are the same handle. Ordering is
 rejected by AOT type checking. Rendering produces `<stream>` without pulling.

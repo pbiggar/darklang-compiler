@@ -34,11 +34,11 @@
 // Constants
 // ===================================================================
 
-42 = 42
-0 = 0
--5 = -5  // negative literal
--42 = -42
--1 = -1
+42L = 42L
+0L = 0L
+-5L = -5L  // negative literal
+-42L = -42L
+-1L = -1L
 
 
 // ===================================================================
@@ -46,21 +46,21 @@
 // ===================================================================
 
 // Addition
-2 + 3 = 5
-1 + 2 + 3 + 4 = 10  // left associativity
+2L + 3L = 5L
+1L + 2L + 3L + 4L = 10L  // left associativity
 
 // Subtraction
-10 - 3 = 7
-5 - 2 = 3  // ARM64 SUB_imm encoding bug regression test
-20 - 5 - 3 = 12  // left associativity
+10L - 3L = 7L
+5L - 2L = 3L  // ARM64 SUB_imm encoding bug regression test
+20L - 5L - 3L = 12L  // left associativity
 
 // Multiplication
-6 * 7 = 42
-2 * 3 * 4 = 24  // chained multiplication
+6L * 7L = 42L
+2L * 3L * 4L = 24L  // chained multiplication
 
 // Division
-15 / 3 = 5
-100 / 5 / 2 = 10  // chained division (left associative)
+15L / 3L = 5L
+100L / 5L / 2L = 10L  // chained division (left associative)
 
 
 // ===================================================================
@@ -68,22 +68,22 @@
 // ===================================================================
 
 // Precedence
-2 + 3 * 4 = 14  // multiplication before addition
+2L + 3L * 4L = 14L  // multiplication before addition
 
 // Parentheses
-(2 + 3) * 4 = 20
-((1 + 2) * (3 + 4)) = 21  // nested parentheses
+(2L + 3L) * 4L = 20L
+((1L + 2L) * (3L + 4L)) = 21L  // nested parentheses
 
 // Complex expressions (operator precedence)
-10 + 20 / 2 - 3 * 4 = 8  // 10 + (20/2) - (3*4) = 10 + 10 - 12 = 8
-10 - 2 * 3 + 8 / 4 = 6  // 10 - (2*3) + (8/4) = 10 - 6 + 2 = 6
+10L + 20L / 2L - 3L * 4L = 8L  // 10 + (20/2) - (3*4) = 10 + 10 - 12 = 8
+10L - 2L * 3L + 8L / 4L = 6L  // 10 - (2*3) + (8/4) = 10 - 6 + 2 = 6
 
 
 // ===================================================================
 // Edge Cases
 // ===================================================================
 
-123456789 = 123456789  // large numbers print correctly
+123456789L = 123456789L  // large numbers print correctly
 
 
 // ===================================================================
@@ -91,38 +91,38 @@
 // ===================================================================
 
 // Subtraction tests (negative results)
-0 - 1 = -1
-0 - 2 = -2
-1 - 2 = -1
-1 - 10 = -9
-10 - 20 = -10
-0 - 255 = -255
-100 - 200 = -100
+0L - 1L = -1L
+0L - 2L = -2L
+1L - 2L = -1L
+1L - 10L = -9L
+10L - 20L = -10L
+0L - 255L = -255L
+100L - 200L = -100L
 
 // Mixed operations (negative results)
-0 - 1 + 1 = 0
-5 - 10 + 3 = -2
-100 - 200 + 50 = -50
+0L - 1L + 1L = 0L
+5L - 10L + 3L = -2L
+100L - 200L + 50L = -50L
 
 // Operations with negative literals
--5 + 10 = 5
--5 + 5 = 0
--5 + 3 = -2
-10 + -5 = 5
--10 + -5 = -15
--5 * 3 = -15
-5 * -3 = -15
--5 * -3 = 15
--10 / 2 = -5
-10 / -2 = -5
--10 / -2 = 5
--(-5) = 5  // double negation
--(10 + 5) = -15  // negation of expression
+-5L + 10L = 5L
+-5L + 5L = 0L
+-5L + 3L = -2L
+10L + -5L = 5L
+-10L + -5L = -15L
+-5L * 3L = -15L
+5L * -3L = -15L
+-5L * -3L = 15L
+-10L / 2L = -5L
+10L / -2L = -5L
+-10L / -2L = 5L
+-(-5L) = 5L  // double negation
+-(10L + 5L) = -15L  // negation of expression
 
 
 // ===================================================================
 // Explicit Format Examples
 // ===================================================================
 
-100 = 100  // explicit stdout, exit defaults to 0
-10 + 5 = 15  // same as simple format "10 + 5 = 15"
+100L = 100L  // explicit stdout, exit defaults to 0
+10L + 5L = 15L  // same as simple format "10 + 5 = 15"

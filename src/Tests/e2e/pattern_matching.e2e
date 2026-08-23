@@ -8,16 +8,16 @@ type Color = Red | Green | Blue
 
 // Multi-line match expression (testing multi-line syntax support)
 (match Red with
-    | Red -> 1
-    | Green -> 2
-    | Blue -> 3) = 1
+    | Red -> 1L
+    | Green -> 2L
+    | Blue -> 3L) = 1L
 
 // Multi-line with closing paren on separate line
 (match Green with
-    | Red -> 100
-    | Green -> 200
-    | Blue -> 300
-) = 200
+    | Red -> 100L
+    | Green -> 200L
+    | Blue -> 300L
+) = 200L
 
 // A dedented branch bar belongs to the outer match, not to the nested match
 // in the preceding branch body.
@@ -32,28 +32,28 @@ let nestedBranchBars(value: Bool) : Int64 =
 nestedBranchBars(false) = 3
 
 // Match on simple enum - first variant
-match Red with | Red -> 1 | Green -> 2 | Blue -> 3 = 1
+match Red with | Red -> 1L | Green -> 2L | Blue -> 3L = 1L
 
 // Match on simple enum - second variant
-match Green with | Red -> 1 | Green -> 2 | Blue -> 3 = 2
+match Green with | Red -> 1L | Green -> 2L | Blue -> 3L = 2L
 
 // Match on simple enum - third variant
-match Blue with | Red -> 1 | Green -> 2 | Blue -> 3 = 3
+match Blue with | Red -> 1L | Green -> 2L | Blue -> 3L = 3L
 
 // Wildcard pattern matches anything
-match Green with | Red -> 1 | _ -> 99 = 99
+match Green with | Red -> 1L | _ -> 99L = 99L
 
 // Wildcard at end is catch-all
-match Blue with | Red -> 1 | Green -> 2 | _ -> 100 = 100
+match Blue with | Red -> 1L | Green -> 2L | _ -> 100L = 100L
 
 // Match on enum stored in variable
-let c = Green in match c with | Red -> 10 | Green -> 20 | Blue -> 30 = 20
+let c = Green in match c with | Red -> 10L | Green -> 20L | Blue -> 30L = 20L
 
 // Match with arithmetic in case body
-match Red with | Red -> 5 + 10 | _ -> 0 = 15
+match Red with | Red -> 5L + 10L | _ -> 0L = 15L
 
 // Match with complex body expressions
-match Red with | Red -> 2 + 3 | Green -> 10 - 5 | Blue -> 1 * 1 = 5
+match Red with | Red -> 2L + 3L | Green -> 10L - 5L | Blue -> 1L * 1L = 5L
 
 // =====================================================
 // Other Simple Enums
@@ -62,323 +62,323 @@ match Red with | Red -> 2 + 3 | Green -> 10 - 5 | Blue -> 1 * 1 = 5
 // Two variant type (shadowing built-in Bool for testing)
 type Bool = True | False
 
-let b = True in match b with | True -> 100 | False -> 0 = 100
-match False with | True -> 1 | False -> 0 = 0
+let b = True in match b with | True -> 100L | False -> 0L = 100L
+match False with | True -> 1L | False -> 0L = 0L
 
 // Four variant type
 type Dir = North | East | South | West
 
-match South with | North -> 0 | East -> 1 | South -> 2 | West -> 3 = 2
+match South with | North -> 0L | East -> 1L | South -> 2L | West -> 3L = 2L
 
 // === Milestone 6: Payload Extraction ===
 
 type MyOption = MyNone | MySome of Int64
 
 // Extract payload from MySome variant
-match MySome(42) with | MySome(x) -> x | MyNone -> 0 = 42
+match MySome(42L) with | MySome(x) -> x | MyNone -> 0L = 42L
 
 // Extract and use payload in arithmetic
-match MySome(10) with | MySome(x) -> x + 5 | MyNone -> 0 = 15
+match MySome(10L) with | MySome(x) -> x + 5L | MyNone -> 0L = 15L
 
 // Match MyNone case (no extraction)
-match MyNone with | MySome(x) -> x | MyNone -> 99 = 99
+match MyNone with | MySome(x) -> x | MyNone -> 99L = 99L
 
 // Extract and multiply
-match MySome(6) with | MySome(x) -> x * 7 | MyNone -> 0 = 42
+match MySome(6L) with | MySome(x) -> x * 7L | MyNone -> 0L = 42L
 
 // Extract with wildcard fallback
-match MySome(123) with | MySome(n) -> n | _ -> 0 = 123
+match MySome(123L) with | MySome(n) -> n | _ -> 0L = 123L
 
 // Variable binding on whole scrutinee (uses Color from above)
-match Green with | x -> 1 = 1
+match Green with | x -> 1L = 1L
 
 // Extract payload with different variant order
 type MyResult = MyOk of Int64 | MyErr
 
-match MyOk(100) with | MyOk(v) -> v | MyErr -> 0 = 100
-match MyErr with | MyOk(v) -> v | MyErr -> 1 = 1
+match MyOk(100L) with | MyOk(v) -> v | MyErr -> 0L = 100L
+match MyErr with | MyOk(v) -> v | MyErr -> 1L = 1L
 
 // Multiple payload variants
 type Either = Left of Int64 | Right of Int64
 
-match Left(5) with | Left(x) -> x | Right(y) -> y = 5
-match Right(7) with | Left(x) -> x | Right(y) -> y = 7
+match Left(5L) with | Left(x) -> x | Right(y) -> y = 5L
+match Right(7L) with | Left(x) -> x | Right(y) -> y = 7L
 
 // Guard should use payload type for string equality
 type GuardWrap = GuardWrap of String | GuardEmpty
-match GuardWrap("a" ++ "b") with | GuardWrap(s) when s == ("a" ++ "b") -> 1 | _ -> 0 = 1
+match GuardWrap("a" ++ "b") with | GuardWrap(s) when s == ("a" ++ "b") -> 1L | _ -> 0L = 1L
 
 // === Integer Literal Patterns ===
 
 // Match on integer literal - first case
-match 42 with | 42 -> 1 | _ -> 0 = 1
+match 42L with | 42L -> 1L | _ -> 0L = 1L
 
 // Match on integer literal - fallback
-match 99 with | 42 -> 1 | _ -> 0 = 0
+match 99L with | 42L -> 1L | _ -> 0L = 0L
 
 // Multiple integer cases
-match 2 with | 1 -> 10 | 2 -> 20 | 3 -> 30 | _ -> 0 = 20
+match 2L with | 1L -> 10L | 2L -> 20L | 3L -> 30L | _ -> 0L = 20L
 
 // Integer match with variable binding
-match 7 with | 7 -> 100 | x -> x = 100
+match 7L with | 7L -> 100L | x -> x = 100L
 
 // Match on computed integer
-let x = 3 + 2 in match x with | 5 -> 1 | _ -> 0 = 1
+let x = 3L + 2L in match x with | 5L -> 1L | _ -> 0L = 1L
 
 // Large integer literal
-match 1000000 with | 1000000 -> 1 | _ -> 0 = 1
+match 1000000L with | 1000000L -> 1L | _ -> 0L = 1L
 
 // Zero matching
-match 0 with | 0 -> 42 | _ -> 0 = 42
+match 0L with | 0L -> 42L | _ -> 0L = 42L
 
 // Negative number matching
-match 0 - 5 with | 0 -> 1 | x -> x + 10 = 5
+match 0L - 5L with | 0L -> 1L | x -> x + 10L = 5L
 
 // === Boolean Patterns ===
 
 // Match on true literal
-match true with | true -> 1 | false -> 0 = 1
+match true with | true -> 1L | false -> 0L = 1L
 
 // Match on false literal
-match false with | true -> 1 | false -> 0 = 0
+match false with | true -> 1L | false -> 0L = 0L
 
 // Boolean from comparison
-match 5 > 3 with | true -> 100 | false -> 0 = 100
+match 5L > 3L with | true -> 100L | false -> 0L = 100L
 
 // Boolean from equality
-match 5 == 5 with | true -> 1 | false -> 0 = 1
+match 5L == 5L with | true -> 1L | false -> 0L = 1L
 
 // Boolean in variable
-let b = true in match b with | true -> 42 | false -> 0 = 42
+let b = true in match b with | true -> 42L | false -> 0L = 42L
 
 // Inverted boolean match
-match false with | false -> 99 | true -> 1 = 99
+match false with | false -> 99L | true -> 1L = 99L
 
 // === Tuple Patterns ===
 
 // Simple 2-tuple extraction
-match (1, 2) with | (a, b) -> a + b = 3
+match (1L, 2L) with | (a, b) -> a + b = 3L
 
 // The interpreter's public match grammar also permits a bare tuple pattern.
 match (1, 2) with | a, b -> a + b = 3
 
 // 3-tuple extraction
-match (10, 20, 30) with | (a, b, c) -> a + b + c = 60
+match (10L, 20L, 30L) with | (a, b, c) -> a + b + c = 60L
 
 // 4-tuple extraction
-match (1, 2, 3, 4) with | (a, b, c, d) -> a + b + c + d = 10
+match (1L, 2L, 3L, 4L) with | (a, b, c, d) -> a + b + c + d = 10L
 
 // Tuple with wildcard elements
-match (100, 200) with | (x, _) -> x = 100
+match (100L, 200L) with | (x, _) -> x = 100L
 
 // Tuple with second element wildcard
-match (100, 200) with | (_, y) -> y = 200
+match (100L, 200L) with | (_, y) -> y = 200L
 
 // Nested arithmetic in tuple
-match (5 + 5, 3 * 4) with | (a, b) -> a * b = 120
+match (5L + 5L, 3L * 4L) with | (a, b) -> a * b = 120L
 
 // Tuple from variable
-let t = (7, 8) in match t with | (x, y) -> x * y = 56
+let t = (7L, 8L) in match t with | (x, y) -> x * y = 56L
 
 // Tuple with all wildcards (just structure match)
-match (1, 2, 3) with | (_, _, _) -> 42 = 42
+match (1L, 2L, 3L) with | (_, _, _) -> 42L = 42L
 
 // Mix of binding and wildcard
-match (1, 2, 3, 4, 5) with | (a, _, c, _, e) -> a + c + e = 9
+match (1L, 2L, 3L, 4L, 5L) with | (a, _, c, _, e) -> a + c + e = 9L
 
 // Tuple pattern with guard clause to verify element index ordering (kills mutation #68)
 // This tests the extractAndCompileBodyWithGuard.collectFromTuple code path
-match (100, 37) with | (a, b) when b < a -> b - a | _ -> 999 = -63
+match (100L, 37L) with | (a, b) when b < a -> b - a | _ -> 999L = -63L
 
 // Three-element tuple with guard to verify all element indices are correct
-match (100, 40, 7) with | (a, b, c) when c < b -> a - b - c | _ -> 999 = 53
+match (100L, 40L, 7L) with | (a, b, c) when c < b -> a - b - c | _ -> 999L = 53L
 
 // Tuple pattern with constructor payload typing (structural equality)
-type PairOption = PairNone | PairSome of (Int64 * Int64)
-match (PairSome((1, 2)), PairSome((1, 2))) with | (PairSome(x), PairSome(y)) -> x == y | _ -> false = true
+type PairOption = PairNone | PairSome of (Int64, Int64)
+match (PairSome((1L, 2L)), PairSome((1L, 2L))) with | (PairSome(x), PairSome(y)) -> x == y | _ -> false = true
 
 // Tuple literal pattern index increment verification (kills mutation #82)
 // Tests that buildTupleComparisons correctly increments index for second element comparison
 // If index + 1 were changed to index - 1, the second comparison would re-read index 0
 // causing (5, 7) to incorrectly match pattern (5, 5) since it would compare 5==5 twice
-match (5, 7) with | (5, 5) -> 1 | _ -> 0 = 0
+match (5L, 7L) with | (5L, 5L) -> 1L | _ -> 0L = 0L
 
 // Three-element tuple literal pattern to verify all indices increment correctly
 // Pattern (10, 10, 10) should NOT match (10, 20, 30) - only first element matches
-match (10, 20, 30) with | (10, 10, 10) -> 1 | _ -> 0 = 0
+match (10L, 20L, 30L) with | (10L, 10L, 10L) -> 1L | _ -> 0L = 0L
 
 // Verify the positive case still works - pattern should match when all elements are equal
-match (5, 5) with | (5, 5) -> 1 | _ -> 0 = 1
+match (5L, 5L) with | (5L, 5L) -> 1L | _ -> 0L = 1L
 
 // === Record Patterns ===
 
 type Point = { x: Int64, y: Int64 }
 
 // Simple record extraction
-match Point { x = 10, y = 20 } with | p -> p.x + p.y = 30
+match Point { x = 10L, y = 20L } with | p -> p.x + p.y = 30L
 
 // Record with one field extracted
-match Point { x = 5, y = 10 } with | p -> p.x = 5
+match Point { x = 5L, y = 10L } with | p -> p.x = 5L
 
 // Record second field only
-match Point { x = 5, y = 15 } with | p -> p.y = 15
+match Point { x = 5L, y = 15L } with | p -> p.y = 15L
 
 // Record from variable
-let p = Point { x = 3, y = 4 } in match p with | value -> value.x * value.x + value.y * value.y = 25
+let p = Point { x = 3L, y = 4L } in match p with | value -> value.x * value.x + value.y * value.y = 25L
 
 // Three-field record
 type Vec3 = { x: Int64, y: Int64, z: Int64 }
 
-match Vec3 { x = 1, y = 2, z = 3 } with | v -> v.x + v.y + v.z = 6
+match Vec3 { x = 1L, y = 2L, z = 3L } with | v -> v.x + v.y + v.z = 6L
 
 // Record pattern with subtraction to verify correct field index ordering (kills mutation #62)
-match Point { x = 100, y = 37 } with | p -> p.x - p.y = 63
+match Point { x = 100L, y = 37L } with | p -> p.x - p.y = 63L
 
 // Three-field record with subtraction to verify field index ordering
-match Vec3 { x = 100, y = 40, z = 7 } with | v -> v.x - v.y - v.z = 53
+match Vec3 { x = 100L, y = 40L, z = 7L } with | v -> v.x - v.y - v.z = 53L
 
 // Record pattern with guard clause to verify field index ordering (kills mutation #67)
 // This tests the extractAndCompileBodyWithGuard.collectFromRecord code path
-match Point { x = 100, y = 37 } with | p when p.y < p.x -> p.y - p.x | _ -> 999 = -63
+match Point { x = 100L, y = 37L } with | p when p.y < p.x -> p.y - p.x | _ -> 999L = -63L
 
 // Three-field record with guard to verify all field indices are correct
-match Vec3 { x = 100, y = 40, z = 7 } with | v when v.z < v.y -> v.x - v.y - v.z | _ -> 999 = 53
+match Vec3 { x = 100L, y = 40L, z = 7L } with | v when v.z < v.y -> v.x - v.y - v.z | _ -> 999L = 53L
 
 // Record pattern with wildcard followed by field extraction (kills mutation #73)
 // Tests that fieldIdx is correctly incremented after wildcard patterns
-match Vec3 { x = 100, y = 40, z = 7 } with | v -> v.y - v.z = 33
+match Vec3 { x = 100L, y = 40L, z = 7L } with | v -> v.y - v.z = 33L
 
 // Record pattern with field extraction, wildcard, then another extraction (kills mutation #74)
 // Tests that fieldIdx is correctly incremented when wildcard appears between extractions
-match Vec3 { x = 100, y = 40, z = 7 } with | v -> v.x - v.z = 93
+match Vec3 { x = 100L, y = 40L, z = 7L } with | v -> v.x - v.z = 93L
 
 // === Nested ADT Patterns ===
 
 // Nested - testing Wrap type (MyOption already defined above)
 type Nested = Empty | Wrap of Int64
 
-match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = 42
+match Wrap(42L) with | Wrap(x) -> x | Empty -> 0L = 42L
 
 // Deeply extract from nested variant
 type Box = Empty | Full of Int64
 
-match Full(99) with | Full(n) -> n * 2 | Empty -> 0 = 198
+match Full(99L) with | Full(n) -> n * 2L | Empty -> 0L = 198L
 
 // === Complex Combinations ===
 // Note: Uses MyOption and Point defined above
 
 // Tuple inside match case body
-match MySome(5) with | MySome(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | MyNone -> 0 = 15
+match MySome(5L) with | MySome(x) -> let t = (x, x * 2L) in match t with | (a, b) -> a + b | MyNone -> 0L = 15L
 
 // Record access in match body
-match MySome(1) with | MySome(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | MyNone -> 0 = 30
+match MySome(1L) with | MySome(_) -> let p = Point { x = 10L, y = 20L } in p.x + p.y | MyNone -> 0L = 30L
 
 // Match on tuple element
-match (1, 2) with | (a, _) -> match a with | 1 -> 100 | _ -> 0 = 100
+match (1L, 2L) with | (a, _) -> match a with | 1L -> 100L | _ -> 0L = 100L
 
 // Chained matches (uses Color from above)
-match Red with | Red -> match true with | true -> 42 | false -> 0 | _ -> 0 = 42
+match Red with | Red -> match true with | true -> 42L | false -> 0L | _ -> 0L = 42L
 
 // Match with arithmetic in result (avoid match-in-atom-position)
-match 5 with | 5 -> 100 + 1 | _ -> 0 = 101
+match 5L with | 5L -> 100L + 1L | _ -> 0L = 101L
 
 // Nested matches (avoid let x = match ... in ...)
-match 1 with | 1 -> match 2 with | 2 -> 10 + 20 | _ -> 0 | _ -> 0 = 30
+match 1L with | 1L -> match 2L with | 2L -> 10L + 20L | _ -> 0L | _ -> 0L = 30L
 
 // Arithmetic on extracted values
 type Pair = MkPair of Int64
 
-match MkPair(7) with | MkPair(n) -> n * n + n = 56
+match MkPair(7L) with | MkPair(n) -> n * n + n = 56L
 
 // Boolean from comparison used in match
-let x = 42 in match x == 42 with | true -> 1 | false -> 0 = 1
+let x = 42L in match x == 42L with | true -> 1L | false -> 0L = 1L
 
 // Tuple with computed elements
-let x = 5 in let y = 10 in match (x * 2, y / 2) with | (a, b) -> a + b = 15
+let x = 5L in let y = 10L in match (x * 2L, y / 2L) with | (a, b) -> a + b = 15L
 
 // === Edge Cases ===
 
 // Single element match (just variable)
-match 42 with | x -> x = 42
+match 42L with | x -> x = 42L
 
 // Empty-ish patterns with just wildcards
-match 999 with | _ -> 1 = 1
+match 999L with | _ -> 1L = 1L
 
 // Order of patterns matters
-match 1 with | 1 -> 100 | 2 -> 200 | _ -> 0 = 100
+match 1L with | 1L -> 100L | 2L -> 200L | _ -> 0L = 100L
 
 // Last pattern is fallback
-match 99 with | 1 -> 100 | 2 -> 200 | n -> n = 99
+match 99L with | 1L -> 100L | 2L -> 200L | n -> n = 99L
 
 // Multiple wildcards in different positions
 type Triple = T of Int64
 
-match T(5) with | T(x) -> x + 1 = 6
+match T(5L) with | T(x) -> x + 1L = 6L
 
 // Combine enum and payload extraction
 type MaybeInt = Nothing | Just of Int64
 
-match Just(10) with | Nothing -> 0 | Just(n) -> n + n = 20
+match Just(10L) with | Nothing -> 0L | Just(n) -> n + n = 20L
 
 // Mix patterns in same match
-match 2 with | 1 -> 10 | 2 -> 20 | x -> x * 100 = 20
+match 2L with | 1L -> 10L | 2L -> 20L | x -> x * 100L = 20L
 
 // Fallback captures value
-match 7 with | 1 -> 10 | 2 -> 20 | x -> x * 100 = 700
+match 7L with | 1L -> 10L | 2L -> 20L | x -> x * 100L = 700L
 
 // === Tuple-Returning Functions ===
 
 // Function that returns tuple, matched
-let t = (1 + 2, 3 + 4) in match t with | (a, b) -> a * b = 21
+let t = (1L + 2L, 3L + 4L) in match t with | (a, b) -> a * b = 21L
 
 // Tuple of booleans
-match (true, false) with | (a, _) -> match a with | true -> 1 | false -> 0 = 1
+match (true, false) with | (a, _) -> match a with | true -> 1L | false -> 0L = 1L
 
 // === Records with Complex Bodies ===
 // Note: Point already defined above
 
 // Complex arithmetic with record fields
-let p = Point { x = 3, y = 4 } in match p with | value -> (value.x + value.y) * (value.x - value.y) = -7
+let p = Point { x = 3L, y = 4L } in match p with | value -> (value.x + value.y) * (value.x - value.y) = -7L
 
 // Manhattan distance style
-match Point { x = 3, y = 4 } with | p -> if p.x > p.y then p.x else p.y = 4
+match Point { x = 3L, y = 4L } with | p -> if p.x > p.y then p.x else p.y = 4L
 
 // === Wild Nested Combinations ===
 
 // Tuple in ADT payload then extracted
 type BoxPair = EmptyPair | Pair of Int64
 
-match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | EmptyPair -> 0 = 85
+match Pair(42L) with | Pair(n) -> let t = (n, n + 1L) in match t with | (a, b) -> a + b | EmptyPair -> 0L = 85L
 
 // ADT in tuple (via let)
 type Maybe = No | Yes of Int64
 
-let m = Yes(5) in let t = (m, 10) in match t with | (_, y) -> y = 10
+let m = Yes(5L) in let t = (m, 10L) in match t with | (_, y) -> y = 10L
 
 // Deeply nested match cascade
-match 1 with | 1 -> match 2 with | 2 -> match 3 with | 3 -> 42 | _ -> 0 | _ -> 0 | _ -> 0 = 42
+match 1L with | 1L -> match 2L with | 2L -> match 3L with | 3L -> 42L | _ -> 0L | _ -> 0L | _ -> 0L = 42L
 
 // Match that returns different types of numbers
-match true with | true -> 99 | false -> 0 - 1 = 99
+match true with | true -> 99L | false -> 0L - 1L = 99L
 
 // Compare result in match
-let x = 5 in let y = 5 in match x == y with | true -> 1000 | false -> 0 = 1000
+let x = 5L in let y = 5L in match x == y with | true -> 1000L | false -> 0L = 1000L
 
 // Boolean arithmetic in match
-match (5 > 3) && (2 < 4) with | true -> 1 | false -> 0 = 1
+match (5L > 3L) && (2L < 4L) with | true -> 1L | false -> 0L = 1L
 
 // Or in match condition
-match (1 > 10) || (10 > 1) with | true -> 42 | false -> 0 = 42
+match (1L > 10L) || (10L > 1L) with | true -> 42L | false -> 0L = 42L
 
 // === Non-exhaustive pattern match test ===
 // A non-matching exact list pattern is rejected before lowering.
-match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive match expression"
+match [1L, 2L, 3L] with | [a, b] -> a + b = error="Non-exhaustive match expression"
 
 // Duplicate bindings in a single pattern should be rejected by type checking.
-match (1, 2) with | (x, x) -> x | _ -> 0 = error="Duplicate binding 'x' in the same pattern"
+match (1L, 2L) with | (x, x) -> x | _ -> 0L = error="Duplicate binding 'x' in the same pattern"
 
 // Pattern groups must bind the same names in every alternative.
-match (1, 2) with | (x, _) | (_, _) -> x | _ -> 0 = error="Pattern matches require all branches to provide the same variables - expected [x], got []"
+match (1L, 2L) with | (x, _) | (_, _) -> x | _ -> 0L = error="Pattern matches require all branches to provide the same variables - expected [x], got []"
 
 // Underscore-prefixed names bind locally but do not participate in the
 // alternative binding-set check, matching interpreter validation.
@@ -386,76 +386,76 @@ match 1 with | _left | _right -> 1 = 1
 
 // Grouped list-pattern alternatives on non-list scrutinees must compile as non-matches.
 // Regression: lowering previously hit a TInt64 fallback and crashed during MIR conversion.
-match 42 with | 0 | [_] -> 1 | _ -> 99 = 99
+match 42L with | 0L | [_] -> 1L | _ -> 99L = 99L
 
 // Nested list pattern inside a grouped tuple alternative must not execute list extraction on non-list tuple fields.
 // Regression: default TInt64 element typing let an impossible branch segfault at runtime.
-match (1, 2) with | (x, 0) | ([x], _) -> x | _ -> 99 = 99
+match (1L, 2L) with | (x, 0L) | ([x], _) -> x | _ -> 99L = 99L
 
 // Tuple arity-mismatch alternatives in a grouped pattern must not default bindings to Stdlib.Int64.
 // The impossible `(x, _, _)` alternative should contribute no type bindings, so `x` stays Stdlib.String.
-(match ("a" ++ "b", 1) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = true
+(match ("a" ++ "b", 1L) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = true
 
 // Integer literal pattern on non-int scrutinee should be rejected
-match true with | 1 -> 42 | _ -> 0 = error="Cannot match Bool value true with an Int64 pattern"
+match true with | 1L -> 42L | _ -> 0L = error="Cannot match Bool value true with an Int64 pattern"
 
 // List cons pattern on non-list type should be rejected (prevents TInt64 fallback in AST_to_ANF)
 // The type checker prevents this - without this check, the compiler would silently assume
 // TInt64 element type which would produce incorrect code
-match 42 with | h :: t -> h | _ -> 0 = error="Cannot match Int64 value 42 with a List pattern"
+match 42L with | h :: t -> h | _ -> 0L = error="Cannot match Int64 value 42 with a List pattern"
 
 // === Nested pattern tests ===
 
 // Record values use variable matches plus access; record destructuring is not public syntax.
-type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | p when p.x == 5 -> p.y | _ -> 0 = 10
+type Point = { x: Int64, y: Int64 } match Point { x = 5L, y = 10L } with | p when p.x == 5L -> p.y | _ -> 0L = 10L
 
 // Nested constructor pattern in list element
-type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x | _ -> 0 = 1
+type MyOpt = MyNone | MySome of Int64 match [MySome(1L)] with | [MySome(x)] -> x | _ -> 0L = 1L
 
 // Nested literal pattern inside tuple inside list
-match [(1, 2)] with | [(1, x)] -> x | _ -> 0 = 2
+match [(1L, 2L)] with | [(1L, x)] -> x | _ -> 0L = 2L
 
 // Parenthesized alternatives are recursive patterns in the interpreter grammar.
 // The first matching alternative supplies the bindings to the guard and body.
-match (2, 3) with | ((1 | 2), x) -> x | _ -> 0 = 3
+match (2L, 3L) with | ((1L | 2L), x) -> x | _ -> 0L = 3L
 
 // A failed alternative must not leak its partial binding into the guard.
-match (0, 7) with | ((x, 0) | (0, x)) when x == 7 -> x | _ -> 0 = 7
+match (0L, 7L) with | ((x, 0L) | (0L, x)) when x == 7L -> x | _ -> 0L = 7L
 
 // Nested constructor pattern in list cons head
-type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | MySome(x) :: rest -> x | _ -> 0 = 1
+type MyOpt = | MyNone | MySome of Int64; match [MySome(1L), MySome(2L)] with | (MySome(x)) :: rest -> x | _ -> 0L = 1L
 
 // Nested literal pattern inside tuple inside list cons
-match [(1, 2), (3, 4)] with | (1, x) :: rest -> x | _ -> 0 = 2
+match [(1L, 2L), (3L, 4L)] with | (1L, x) :: rest -> x | _ -> 0L = 2L
 
 // === Literal patterns in lists (now supported) ===
 // These test that literal patterns in list elements work correctly
 
 // Literal pattern in list - match
-match [1, 2, 3] with | [1, x, 3] -> x | _ -> 0 = 2
+match [1L, 2L, 3L] with | [1L, x, 3L] -> x | _ -> 0L = 2L
 
 // Literal pattern in list - no match (wrong literal)
-match [1, 2, 4] with | [1, x, 3] -> x | _ -> 0 = 0
+match [1L, 2L, 4L] with | [1L, x, 3L] -> x | _ -> 0L = 0L
 
 // Literal pattern in list cons - match
-match [1, 2, 3] with | 1 :: rest -> 42 | _ -> 0 = 42
+match [1L, 2L, 3L] with | 1L :: rest -> 42L | _ -> 0L = 42L
 
 // List cons should preserve string element typing even when scrutinee type comes from an if-expression
 // with an unreachable runtime-error branch.
-match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t -> if h == "a" then 1 else 0 | _ -> 0 = 1
+match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t -> if h == "a" then 1L else 0L | _ -> 0L = 1L
 
 // Guarded list cons should preserve string element typing from inferred scrutinee types.
-match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t when h == "a" -> 1 | _ -> 0 = 1
+match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t when h == "a" -> 1L | _ -> 0L = 1L
 
 // Literal pattern in list cons - no match
-match [2, 2, 3] with | 1 :: rest -> 42 | _ -> 0 = 0
+match [2L, 2L, 3L] with | 1L :: rest -> 42L | _ -> 0L = 0L
 
 // Tuple arity mismatch in list-cons head must fall through (regression for TInt64 fallback in tuple element typing)
-match [(1, 2)] with | (a, b, c) :: rest -> 1 | _ -> 2 = 2
+match [(1L, 2L)] with | (a, b, c) :: rest -> 1L | _ -> 2L = 2L
 
 // List-cons tuple head patterns must preserve unresolved tuple element bindings instead of dropping to TInt64/defaults.
 // Regression: when the list element type arrived as TVar from ANF inferType, this failed with `Undefined variable: a`.
-let x = match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))] in match x with | (a, b) :: rest -> match a with | _ -> 1 | _ -> 2 = 1
+let x = match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))] in match x with | (a, b) :: rest -> match a with | _ -> 1L | _ -> 2L = 1L
 
 // Nested list-cons heads must not default unresolved inner element types to TInt64.
 // Regression: this produced 3.0 instead of 4.0 by lowering `a`/`b` as Int64 in ANF.
@@ -463,87 +463,87 @@ let x = match false with | true -> [] | false -> [[1.5, 2.5], [3.0]] in match x 
 
 // Tuple arity mismatch inside constructor payload list pattern must not default missing tuple slots to Stdlib.Int64.
 // Regression: this previously matched and evaluated the branch body instead of surfacing the tuple arity issue.
-type TupleListBox = TupleListBox of List<(Int64 * Int64)> match TupleListBox([(1, 2)]) with | TupleListBox([(a, b, c)]) -> 1 | _ -> 2 = error="Tuple pattern expects 3 elements but got 2"
+type TupleListBox = TupleListBox of List<(Int64, Int64)> match TupleListBox([(1L, 2L)]) with | TupleListBox([(a, b, c)]) -> 1L | _ -> 2L = error="Tuple pattern expects 3 elements but got 2"
 
 // Constructor payload tuple pattern on non-tuple payload type must not match in list patterns.
 // Regression: this previously matched due nested tuple bindings defaulting to TInt64.
-match [Some(5), Some(6)] with | [None, _] -> 1 | [Some((x, _)), _] -> 2 | _ -> 3 = 3
+match [Some(5L), Some(6L)] with | [None, _] -> 1L | [Some((x, _)), _] -> 2L | _ -> 3L = 3L
 
 // Generic constructor payload tuple destructuring must preserve unresolved tuple element bindings.
 // Regression: lowering dropped tuple bindings for `TVar` payloads and failed with `Undefined variable: x`.
-let genericPayloadTupleBinding(v: Stdlib.Option.Option<(String * Int64)>) : String = match v with | Some((x, _)) -> x | _ -> "" genericPayloadTupleBinding(Some(("a" ++ "", 1))) = "a"
+let genericPayloadTupleBinding(v: Stdlib.Option.Option<(String, Int64)>) : String = match v with | Some((x, _)) -> x | _ -> "" genericPayloadTupleBinding(Some(("a" ++ "", 1L))) = "a"
 
 // Generic top-level list patterns should allow unresolved scrutinee TVars.
 // Regression: type checking rejected list-pattern bindings on TVar scrutinees before lowering.
-let genericTopLevelListMatch<'t>(v: t) : Float = match v with | [a, b] -> 4.0 | _ -> 0.0 genericTopLevelListMatch([1.5, 2.5]) = 4.0
+let genericTopLevelListMatch<'t>(v: t) : Float = match v with | [a, b] -> 4.0 | _ -> 0.0; genericTopLevelListMatch<List<Float>>([1.5, 2.5]) = 4.0
 
 // Generic tuple/list-cons patterns should preserve unresolved element bindings.
-let genericTupleListConsBinding<'t>(v: t) : String = match v with | (x :: _, _) -> x | _ -> "" genericTupleListConsBinding((["a" ++ ""], 1)) = "a"
+let genericTupleListConsBinding<'t>(v: t) : String = match v with | (x :: _, _) -> x | _ -> ""; genericTupleListConsBinding<(List<String>, Int64)>((["a" ++ ""], 1L)) = "a"
 
 // Single literal pattern
-match [13] with | [13] -> 1 | _ -> 0 = 1
+match [13L] with | [13L] -> 1L | _ -> 0L = 1L
 
 // Single literal pattern - no match
-match [14] with | [13] -> 1 | _ -> 0 = 0
+match [14L] with | [13L] -> 1L | _ -> 0L = 0L
 
 // === Nested Bool patterns in constructors (regression tests) ===
 // These test that Option<Bool> with literal patterns work correctly
 
 // Some(false) should NOT match Some(true)
-match Some(false) with | Some(true) -> 100 | Some(false) -> 0 | None -> -1 = 0
+match Some(false) with | Some(true) -> 100L | Some(false) -> 0L | None -> -1L = 0L
 
 // Some(true) should match Some(true)
-match Some(true) with | Some(true) -> 100 | Some(false) -> 0 | None -> -1 = 100
+match Some(true) with | Some(true) -> 100L | Some(false) -> 0L | None -> -1L = 100L
 
 // Order of patterns doesn't matter for correctness
-match Some(false) with | Some(false) -> 0 | Some(true) -> 100 | None -> -1 = 0
+match Some(false) with | Some(false) -> 0L | Some(true) -> 100L | None -> -1L = 0L
 
 // Wildcard should work as fallback
-match Some(false) with | Some(true) -> 100 | _ -> 0 = 0
+match Some(false) with | Some(true) -> 100L | _ -> 0L = 0L
 
 // Variable binding in Some still works
-match Some(true) with | Some(x) -> match x with | true -> 42 | false -> 0 | None -> -1 = 42
+match Some(true) with | Some(x) -> match x with | true -> 42L | false -> 0L | None -> -1L = 42L
 
 // === Nested tuple literal patterns in constructor payloads (kills mutation #85) ===
 // Tests that buildPatternComparison correctly handles tuple patterns with literals
 // inside constructor payloads, specifically testing index incrementing
 
 // Define a type with a tuple payload
-type TupleBox = TupleEmpty | TupleHas of (Int64 * Int64)
+type TupleBox = TupleEmpty | TupleHas of (Int64, Int64)
 
 // Tuple literal pattern inside constructor - should NOT match when second element differs
 // If index + 1 were changed to index - 1, both comparisons would check the first element
 // causing (5, 7) to incorrectly match (5, 5) since it would compare 5==5 twice
-match TupleHas((5, 7)) with | TupleHas((5, 5)) -> 1 | _ -> 0 = 0
+match TupleHas((5L, 7L)) with | TupleHas((5L, 5L)) -> 1L | _ -> 0L = 0L
 
 // Verify positive case - should match when all elements are equal
-match TupleHas((5, 5)) with | TupleHas((5, 5)) -> 1 | _ -> 0 = 1
+match TupleHas((5L, 5L)) with | TupleHas((5L, 5L)) -> 1L | _ -> 0L = 1L
 
 // Three-element tuple payload to verify all indices increment correctly
-type TripleBox = TripleEmpty | TripleHas of (Int64 * Int64 * Int64)
-match TripleHas((10, 20, 30)) with | TripleHas((10, 10, 10)) -> 1 | _ -> 0 = 0
-match TripleHas((10, 10, 10)) with | TripleHas((10, 10, 10)) -> 1 | _ -> 0 = 1
+type TripleBox = TripleEmpty | TripleHas of (Int64, Int64, Int64)
+match TripleHas((10L, 20L, 30L)) with | TripleHas((10L, 10L, 10L)) -> 1L | _ -> 0L = 0L
+match TripleHas((10L, 10L, 10L)) with | TripleHas((10L, 10L, 10L)) -> 1L | _ -> 0L = 1L
 
 // === Tuple with list patterns (regression test) ===
 // Tests that tuple patterns containing list patterns correctly check each list
 
 // Tuple with empty list pattern - should NOT match when first element is non-empty
-let a = [1, 2] in let b = [3, 4] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | _ -> 99 = 99
+let a = [1L, 2L] in let b = [3L, 4L] in match (a, b) with | ([], _) -> 0L | (_, []) -> 1L | _ -> 99L = 99L
 
 // Tuple with empty list pattern - should match when first element IS empty
-let a = [] in let b = [3, 4] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | _ -> 99 = 0
+let a = [] in let b = [3L, 4L] in match (a, b) with | ([], _) -> 0L | (_, []) -> 1L | _ -> 99L = 0L
 
 // Tuple with empty list pattern - should match when second element is empty
-let a = [1, 2] in let b = [] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | _ -> 99 = 1
+let a = [1L, 2L] in let b = [] in match (a, b) with | ([], _) -> 0L | (_, []) -> 1L | _ -> 99L = 1L
 
 // Both empty lists
-let a = [] in let b = [] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | _ -> 99 = 0
+let a = [] in let b = [] in match (a, b) with | ([], _) -> 0L | (_, []) -> 1L | _ -> 99L = 0L
 
 // Record field access after a variable match preserves the field's String type.
 type PersonEq = { name: String } let p = PersonEq { name = "a" ++ "b" } in let extracted = match p with | value -> value.name in extracted == ("a" ++ "b") = true
 
 // Full pattern with list cons
-let a = [1, 2] in let b = [3, 4] in match (a, b) with | ([], _) -> 0 | (_, []) -> 1 | (x :: xs, y :: ys) -> x + y | _ -> 99 = 4
+let a = [1L, 2L] in let b = [3L, 4L] in match (a, b) with | ([], _) -> 0L | (_, []) -> 1L | (x :: xs, y :: ys) -> x + y | _ -> 99L = 4L
 
 // === Tuple+cons pattern matching with different body expressions ===
 // These tests verify tuple patterns containing list cons patterns work correctly.
@@ -555,7 +555,7 @@ let recursiveTupleConsHelper(a: List<Int64>, b: List<Int64>, acc: Int64) : Int64
     | (_, []) -> acc
     | (x :: xs, y :: ys) -> recursiveTupleConsHelper(xs, ys, acc + x + y)
 
-recursiveTupleConsHelper([1, 2, 3], [4, 5, 6], 0L) = 21
+recursiveTupleConsHelper([1L, 2L, 3L], [4L, 5L, 6L], 0L) = 21L
 
 // Single list pattern with list cons in body - works
 let singleListConsWithAcc(a: List<Int64>, acc: List<Int64>) : List<Int64> =
@@ -563,7 +563,7 @@ let singleListConsWithAcc(a: List<Int64>, acc: List<Int64>) : List<Int64> =
     | [] -> acc
     | x :: xs -> singleListConsWithAcc(xs, Stdlib.List.push<Int64>(acc, x))
 
-Stdlib.List.length<Int64>(singleListConsWithAcc([1, 2, 3], [])) = 3I
+Stdlib.List.length<Int64>(singleListConsWithAcc([1L, 2L, 3L], [])) = 3I
 
 // Workaround for tuple+cons+list-accumulator: use nested matches instead of tuple pattern
 // This is the pattern used in Stdlib.Crypto.__xorByteLists
@@ -575,7 +575,7 @@ let nestedMatchListCons(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List
         | [] -> acc
         | y :: ys -> nestedMatchListCons(xs, ys, Stdlib.List.push<Int64>(acc, x + y))
 
-Stdlib.List.length<Int64>(nestedMatchListCons([1, 2, 3], [4, 5, 6], [])) = 3I
+Stdlib.List.length<Int64>(nestedMatchListCons([1L, 2L, 3L], [4L, 5L, 6L], [])) = 3I
 
 // Tuple+cons pattern with list accumulator body - now fixed with TypedAtom wrapper
 let tupleConsListAccum(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<Int64> =
@@ -584,7 +584,7 @@ let tupleConsListAccum(a: List<Int64>, b: List<Int64>, acc: List<Int64>) : List<
     | (_, []) -> acc
     | (x :: xs, y :: ys) -> tupleConsListAccum(xs, ys, Stdlib.List.push<Int64>(acc, x + y))
 
-Stdlib.List.length<Int64>(tupleConsListAccum([1, 2, 3], [4, 5, 6], [])) = 3I
+Stdlib.List.length<Int64>(tupleConsListAccum([1L, 2L, 3L], [4L, 5L, 6L], [])) = 3I
 
 // ===================================================================
 // Variable in scrutinee only (kills mutation #140)
@@ -595,10 +595,10 @@ Stdlib.List.length<Int64>(tupleConsListAccum([1, 2, 3], [4, 5, 6], [])) = 3I
 // ===================================================================
 
 // Variable only appears in scrutinee - literal patterns in cases
-let scrutineeOnly = 42 in match scrutineeOnly with | 42 -> 100 | _ -> 0 = 100
+let scrutineeOnly = 42L in match scrutineeOnly with | 42L -> 100L | _ -> 0L = 100L
 
 // Variable in scrutinee with complex expression
-let computed = 6 * 7 in match computed with | 42 -> 1 | 0 -> 2 | _ -> 3 = 1
+let computed = 6L * 7L in match computed with | 42L -> 1L | 0L -> 2L | _ -> 3L = 1L
 
 // Int128/UInt128 literal patterns must not use UInt64/Int64 modulo behavior.
 match 18446744073709551616Q with | 0Q -> true | _ -> false = false
@@ -623,8 +623,8 @@ match U128Wrap(340282366920938463463374607431768211455Z) with | U128Wrap(3402823
 match [170141183460469231731687303715884105727Q, 1Q] with | 170141183460469231731687303715884105727Q :: tail -> Stdlib.List.length<Int128>(tail) | _ -> 0I = 1I
 match [340282366920938463463374607431768211455Z, 1Z] with | 340282366920938463463374607431768211455Z :: tail -> Stdlib.List.length<UInt128>(tail) | _ -> 0I = 1I
 
-match 5Q with | 4Q | 5Q -> 1 | _ -> 0 = 1
-match 5Z with | 4Z | 5Z -> 1 | _ -> 0 = 1
+match 5Q with | 4Q | 5Q -> 1L | _ -> 0L = 1L
+match 5Z with | 4Z | 5Z -> 1L | _ -> 0L = 1L
 
 // A finite scrutinee with an uncovered case must fail during AOT type checking.
-match false with | true -> 1 = error="Non-exhaustive match expression"
+match false with | true -> 1L = error="Non-exhaustive match expression"

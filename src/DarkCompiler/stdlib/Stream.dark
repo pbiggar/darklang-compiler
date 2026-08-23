@@ -6,36 +6,36 @@
 
 module Stdlib.Stream
 
-let __STATE_READY() : Int64 = 0
-let __STATE_ADVANCING() : Int64 = 1
-let __STATE_CLOSE_REQUESTED() : Int64 = 2
-let __STATE_EXHAUSTED() : Int64 = 3
-let __STATE_FAILED() : Int64 = 4
-let __STATE_CLOSED() : Int64 = 5
+let __STATE_READY() : Int64 = 0L
+let __STATE_ADVANCING() : Int64 = 1L
+let __STATE_CLOSE_REQUESTED() : Int64 = 2L
+let __STATE_EXHAUSTED() : Int64 = 3L
+let __STATE_FAILED() : Int64 = 4L
+let __STATE_CLOSED() : Int64 = 5L
 
-let __STATE_OFFSET() : Int64 = 0
-let __NEXT_OFFSET() : Int64 = 8
-let __CLOSE_OFFSET() : Int64 = 16
-let __REFCOUNT_OFFSET() : Int64 = 24
-let __HANDLE_SIZE() : Int64 = 32
+let __STATE_OFFSET() : Int64 = 0L
+let __NEXT_OFFSET() : Int64 = 8L
+let __CLOSE_OFFSET() : Int64 = 16L
+let __REFCOUNT_OFFSET() : Int64 = 24L
+let __HANDLE_SIZE() : Int64 = 32L
 
 let __cellNew<'state>(initial: state) : RawPtr =
-    let cell = __raw_alloc(8) in
-    let _ = __raw_slot_init<state>(cell, 0, initial) in
+    let cell = __raw_alloc(8L) in
+    let _ = __raw_slot_init<state>(cell, 0L, initial) in
     cell
 
 let __cellGet<'state>(cell: RawPtr) : state =
-    __raw_get<state>(cell, 0)
+    __raw_get<state>(cell, 0L)
 
 let __cellSet<'state>(cell: RawPtr, nextState: state) : Unit =
-    let previous = __raw_take<state>(cell, 0) in
-    let _ = __raw_write_word(cell, 0, 0) in
-    let _ = __raw_slot_init<state>(cell, 0, nextState) in
+    let previous = __raw_take<state>(cell, 0L) in
+    let _ = __raw_write_word(cell, 0L, 0L) in
+    let _ = __raw_slot_init<state>(cell, 0L, nextState) in
     ()
 
 let __cellDispose<'state>(cell: RawPtr) : Unit =
-    let previous = __raw_take<state>(cell, 0) in
-    let _ = __raw_write_word(cell, 0, 0) in
+    let previous = __raw_take<state>(cell, 0L) in
+    let _ = __raw_write_word(cell, 0L, 0L) in
     let _ = __raw_free(cell) in
     ()
 
@@ -47,7 +47,7 @@ let __new<'a>(nextFn: (Unit) -> Stdlib.Option.Option<a>, closeFn: (Unit) -> Unit
     // The raw-to-Stream cast is an ownership-producing typed alias. RC
     // insertion retains that alias at the return boundary, so construction
     // seeds the word at zero and hands the caller the first owning edge.
-    let _ = __raw_write_word(ptr, Stdlib.Stream.__REFCOUNT_OFFSET(), 0) in
+    let _ = __raw_write_word(ptr, Stdlib.Stream.__REFCOUNT_OFFSET(), 0L) in
     __rawptr_to_stream<a>(ptr)
 
 let __closeReady<'a>(stream: Stream<a>, ptr: RawPtr) : Unit =

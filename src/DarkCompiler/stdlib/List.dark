@@ -74,7 +74,7 @@ let __filterToReverse<'a>(list: List<a>, fn: (a) -> Bool, acc: List<a>) : List<a
 
 let __filterHelper<'a>(list: List<a>, fn: (a) -> Bool, acc: List<a>) : List<a> =
     let len = Stdlib.Internal.SkewList.length<a>(list) in
-    let filtered = Stdlib.List.__filterByIndexHelper<a>(list, fn, 0, len, Stdlib.Internal.SkewList.empty<a>()) in
+    let filtered = Stdlib.List.__filterByIndexHelper<a>(list, fn, 0L, len, Stdlib.Internal.SkewList.empty<a>()) in
     Stdlib.List.append<a>(acc, filtered)
 
 let __filterByIndexHelper<'a>(list: List<a>, fn: (a) -> Bool, index: Int64, len: Int64, accRev: List<a>) : List<a> =
@@ -85,7 +85,7 @@ let __filterByIndexHelper<'a>(list: List<a>, fn: (a) -> Bool, index: Int64, len:
         | None -> Stdlib.List.reverse<a>(accRev)
         | Some(v) ->
             let nextAccRev = if fn(v) then Stdlib.List.push<a>(accRev, v) else accRev in
-            Stdlib.List.__filterByIndexHelper<a>(list, fn, index + 1, len, nextAccRev)
+            Stdlib.List.__filterByIndexHelper<a>(list, fn, index + 1L, len, nextAccRev)
 
 // Append an element to the end of a list - O(n)
 let pushBack<'a>(list: List<a>, value: a) : List<a> =
@@ -103,12 +103,12 @@ let __reverseHelper<'a>(list: List<a>, acc: List<a>) : List<a> =
     Stdlib.Internal.SkewList.__reverseInto<a>(list, acc)
 
 let __reverseByIndexHelper<'a>(list: List<a>, index: Int64, acc: List<a>) : List<a> =
-    if index < 0 then acc
+    if index < 0L then acc
     else
         match Stdlib.Internal.SkewList.getAt<a>(list, index) with
         | None -> acc
         | Some(v) ->
-            Stdlib.List.__reverseByIndexHelper<a>(list, index - 1, Stdlib.Internal.SkewList.pushBack<a>(acc, v))
+            Stdlib.List.__reverseByIndexHelper<a>(list, index - 1L, Stdlib.Internal.SkewList.pushBack<a>(acc, v))
 
 let sortByComparator<'a>(list: List<a>, comparator: (a, a) -> Int) : Stdlib.Result.Result<List<a>, String> =
     Stdlib.List.SortByComparatorHelpers.mergeSort<a>(comparator, list)
@@ -275,8 +275,8 @@ let __repeatHelper<'a>(count: Int, value: a, acc: List<a>) : List<a> =
 // Internal machine-sized form for compiler and benchmark workloads whose
 // cardinality is already proven to fit the skew-list representation.
 let __repeatInt64<'a>(count: Int64, value: a, acc: List<a>) : List<a> =
-    if count <= 0 then acc
-    else Stdlib.List.__repeatInt64<a>(count - 1, value, Stdlib.Internal.SkewList.push<a>(acc, value))
+    if count <= 0L then acc
+    else Stdlib.List.__repeatInt64<a>(count - 1L, value, Stdlib.Internal.SkewList.push<a>(acc, value))
 
 // Repeat validates negative counts and preserves the interpreter's exact error.
 let repeat<'a>(count: Int, value: a) : Stdlib.Result.Result<List<a>, String> =
@@ -452,7 +452,7 @@ let __randomIndex(bound: Int64) : Int64 =
 
 let randomElement<'a>(list: List<a>) : Stdlib.Option.Option<a> =
     let length = Stdlib.Internal.SkewList.length<a>(list) in
-    if length == 0 then None
+    if length == 0L then None
     else Stdlib.Internal.SkewList.getAt<a>(list, Stdlib.List.__randomIndex(length))
 
 let chunkBySizeHelper<'a>(size: Int, currentList: List<a>, accum: List<List<a>>) : List<List<a>> =

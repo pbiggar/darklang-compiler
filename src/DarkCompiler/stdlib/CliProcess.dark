@@ -17,7 +17,7 @@ let __output(result: Stdlib.Cli.NativeOutput) : Stdlib.Cli.Process.Output =
 let run(program: String, args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
     let command = Stdlib.Cli.Process.shellQuote(program) ++ " " ++ Stdlib.Cli.Process.__quotedArgs(args) in
     let result = Stdlib.Cli.__execute(command) in
-    if result.exitCode == 127 && Stdlib.String.contains(result.stderr, "No such file or directory") then
+    if result.exitCode == 127L && Stdlib.String.contains(result.stderr, "No such file or directory") then
         Error(Stdlib.Cli.Posix.Error { errno = 2I, message = "No such file or directory" })
     else Ok(Stdlib.Cli.Process.__output(result))
 
