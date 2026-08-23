@@ -7148,7 +7148,17 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
     optimize [] instrs
 
 /// Convert LIR program to ARM64 instructions with options
-let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
+/// Caller-owned conversion cache. Program-wide helper and layout generation is
+/// intentionally outside this hook and is performed for every executable.
+type FunctionCodegenCache =
+    LIR.Function -> (unit -> Result<ARM64Symbolic.Instr list, string>) -> Result<ARM64Symbolic.Instr list, string>
+
+let generateARM64WithOptionsAndCache
+    (target: ARM64.TargetConfig)
+    (options: CodeGenOptions)
+    (functionCache: FunctionCodegenCache option)
+    (program: LIR.Program)
+    : Result<ARM64Symbolic.Instr list, string> =
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
@@ -7843,7 +7853,13 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
     let directlyNeedsStreamRcDecHelper =
         rcHelperRequirements.NeedsStreamRcDecHelper
 
-    ResultList.collectResults (convertFunction heapOverflowTrapBody ctx) sortedFunctions
+    let convertCached func =
+        let generate () = convertFunction heapOverflowTrapBody ctx func
+        match functionCache with
+        | Some cache when func.Name <> "_start" -> cache func generate
+        | _ -> generate ()
+
+    ResultList.collectResults convertCached sortedFunctions
     |> Result.map (fun allFunctionInstrs ->
         let listRcDecHelperLabelsFromDictHelpers =
             neededDictRcDecHelperLabels
@@ -7945,6 +7961,9 @@ let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptio
             if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper ()
             else []
         (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers @ streamRcHelpers @ recursiveSumRcHelpers @ cliHelpers) |> peepholeOptimize)
+
+let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
+    generateARM64WithOptionsAndCache target options None program
 
 /// Convert LIR program to ARM64 instructions (uses default options)
 let generateARM64 (target: ARM64.TargetConfig) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =

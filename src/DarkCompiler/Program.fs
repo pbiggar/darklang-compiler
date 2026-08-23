@@ -416,6 +416,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
                 Options = options
                 PackageValues = CompilerLibrary.emptyPackageValueCatalog
                 PassTimingRecorder = None
+                Session = None
             }
             let compileReport = CompilerLibrary.compile request
             match compileReport.Result with
@@ -481,6 +482,7 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
                     Options = options
                     PackageValues = CompilerLibrary.emptyPackageValueCatalog
                     PassTimingRecorder = None
+                    Session = None
                 }
                 let compileReport = CompilerLibrary.compile request
                 match compileReport.Result with

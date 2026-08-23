@@ -12,6 +12,7 @@ open System
 open System.IO
 open System.Diagnostics
 open System.Reflection
+open System.Collections.Generic
 open Output
 
 /// Timing for a single compiler pass
@@ -138,6 +139,40 @@ let defaultOptions : CompilerOptions = {
     DumpMIR = false
     DumpLIR = false
 }
+
+/// Explicit lifetime for reuse across a bounded group of compilations (the E2E
+/// runner owns one per suite). No compiler-global cache is retained.
+type CompilationSession() =
+    let jsonPlanning = new JsonPlanning.PlanningSession()
+    let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
+    let mutable disposed = false
+
+    member _.JsonPlanning = jsonPlanning
+
+    member _.CodegenFunction
+        (target: ARM64.TargetConfig)
+        (options: CodeGen.CodeGenOptions)
+        (func: LIR.Function)
+        (generate: unit -> Result<ARM64Symbolic.Instr list, string>)
+        : Result<ARM64Symbolic.Instr list, string> =
+        if disposed || options.EnableCoverage then generate ()
+        else
+            let key = (func, target, options)
+            match arm64Functions.TryGetValue key with
+            | true, result -> result
+            | false, _ ->
+                let result = generate ()
+                arm64Functions.[key] <- result
+                result
+
+    member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
+    member _.CachedJsonPlanCount = jsonPlanning.Count
+
+    interface IDisposable with
+        member _.Dispose() =
+            arm64Functions.Clear()
+            (jsonPlanning :> IDisposable).Dispose()
+            disposed <- true
 
 let private recordPassTiming
     (recorder: PassTimingRecorder option)
@@ -599,6 +634,7 @@ let private generateBinary
     (emitLabel: string)
     (dumpAsm: bool)
     (dumpMachineCode: bool)
+    (session: CompilationSession option)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
@@ -678,7 +714,13 @@ let private generateBinary
             EnableLeakCheck = options.EnableLeakCheck
         }
         let arm64Target = ARM64.targetConfigFor armTarget
-        let codegenResult = CodeGen.generateARM64WithOptions arm64Target codegenOptions allocatedProgram
+        let functionCache =
+            session
+            |> Option.filter (fun _ -> not options.EnableCoverage)
+            |> Option.map (fun current ->
+                fun func generate -> current.CodegenFunction arm64Target codegenOptions func generate)
+        let codegenResult =
+            CodeGen.generateARM64WithOptionsAndCache arm64Target codegenOptions functionCache allocatedProgram
         match codegenResult with
         | Error err -> Error $"Code generation error: {err}"
         | Ok arm64Instructions ->
@@ -868,6 +910,8 @@ type CompileRequest = {
     Options: CompilerOptions
     PackageValues: PackageValueCatalog
     PassTimingRecorder: PassTimingRecorder option
+    /// Optional caller-owned bounded reuse scope.
+    Session: CompilationSession option
 }
 
 
@@ -1671,6 +1715,7 @@ type private UserCompilePlan = {
     Options: CompilerOptions
     PackageValues: PackageValueCatalog
     PassTimingRecorder: PassTimingRecorder option
+    Session: CompilationSession option
     Stdlib: StdlibResult
     BaseContext: PipelineContext
     Monomorphization: MonomorphizationMode
@@ -2064,7 +2109,11 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     Error
                         $"File entry expression must return Unit, Int, or Int64; got {TypeChecking.typeToString programType}"
                 | Ok (programType, typedUserAst, userEnv) ->
-                    let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
+                    let plannedUserAst =
+                        JsonPlanning.rewriteProgramWithSession
+                            (plan.Session |> Option.map (fun session -> session.JsonPlanning))
+                            userEnv
+                            typedUserAst
                     let plannedProgramType = TypeChecking.resolveType userEnv.AliasReg programType
                     let renderedUserAst, boundaryProgramType =
                         if plan.Mode = FullProgram then
@@ -2266,6 +2315,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             "  [7/7] ARM64 Emit ({format})..."
                                             false
                                             false
+                                            plan.Session
                                             allocatedProgram
                                     match binaryResult with
                                     | Error err -> Error err
@@ -2526,6 +2576,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
         Options = request.Options
         PackageValues = request.PackageValues
         PassTimingRecorder = request.PassTimingRecorder
+        Session = request.Session
         Stdlib = stdlib
         BaseContext = baseContext
         Monomorphization = monomorphization

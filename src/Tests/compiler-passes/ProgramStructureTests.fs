@@ -24,6 +24,7 @@ let private compile
         Options = CompilerLibrary.defaultOptions
         PackageValues = CompilerLibrary.emptyPackageValueCatalog
         PassTimingRecorder = None
+        Session = None
     }
 
 let private expectCompileError (expected: string) (report: CompilerLibrary.CompileReport) : TestResult =

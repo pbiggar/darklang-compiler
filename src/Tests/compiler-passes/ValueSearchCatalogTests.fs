@@ -105,6 +105,7 @@ let private compile
         Options = CompilerLibrary.defaultOptions
         PackageValues = catalog
         PassTimingRecorder = None
+        Session = None
     }
 
 let testCatalogParity (stdlib: CompilerLibrary.StdlibResult) () : TestResult =

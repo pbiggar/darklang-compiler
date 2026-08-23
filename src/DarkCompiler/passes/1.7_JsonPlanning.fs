@@ -8,6 +8,31 @@
 module JsonPlanning
 
 open AST
+open System.Collections.Generic
+
+/// A bounded, caller-owned registry of generated JSON planning artifacts.
+/// Artifacts are deliberately AST-only: lowering remains in the normal request
+/// pipeline, so each executable retains its own entry function and layout.
+type PlanningSession() =
+    let artifacts = Dictionary<string, TopLevel list>()
+    let mutable disposed = false
+
+    member _.TryFind(key: string) : TopLevel list option =
+        if disposed then None
+        else
+            match artifacts.TryGetValue key with
+            | true, value -> Some value
+            | false, _ -> None
+
+    member _.Store(key: string, functions: TopLevel list) : unit =
+        if not disposed then artifacts.[key] <- functions
+
+    member _.Count = if disposed then 0 else artifacts.Count
+
+    interface System.IDisposable with
+        member _.Dispose() =
+            artifacts.Clear()
+            disposed <- true
 
 type private SumVariant = { Name: string; Tag: int; Payload: Type option }
 type private SumInfo = { TypeParams: string list; Variants: SumVariant list }
@@ -923,7 +948,16 @@ let rec private mapExpr rewrite expr =
         | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
     rewrite mapped
 
-let rewriteProgram (env: TypeChecking.TypeCheckEnv) (Program topLevels) : Program =
+let private declarationContextFingerprint (env: TypeChecking.TypeCheckEnv) : string =
+    // JSON generation depends on nominal record/sum shapes and alias resolution.
+    // Keep this deliberately structural rather than relying on declaration names.
+    stableHash $"{env.IndexedTypeReg}|{env.VariantLookup}|{env.AliasReg}" |> fun hash -> $"{hash:x16}"
+
+let rewriteProgramWithSession
+    (session: PlanningSession option)
+    (env: TypeChecking.TypeCheckEnv)
+    (Program topLevels)
+    : Program =
     let planningEnv = {
         Records = env.IndexedTypeReg
         Sums = sumRegistry env.VariantLookup
@@ -969,25 +1003,32 @@ let rewriteProgram (env: TypeChecking.TypeCheckEnv) (Program topLevels) : Progra
             | TypeDef _ -> acc) ([], [])
         |> fun (serializers, parsers) -> (List.distinct serializers, List.distinct parsers)
 
-    let serializersPlanned =
-        serializerTypes
-        |> List.fold (fun result typ ->
-            result
-            |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
-            (Ok {
-                Functions =
-                    if List.isEmpty parserTypes then
-                        Map.empty
-                    else
-                        rawListAccessorFunctions ()
-                        |> List.map (fun fn -> (fn.Name, fn))
-                        |> Map.ofList
-            })
+    let cacheKey =
+        let resolvedParsers = parserTypes |> List.map (resolveJsonType planningEnv >> structuralTypeKey) |> List.sort
+        let resolvedSerializers = serializerTypes |> List.map (resolveJsonType planningEnv >> structuralTypeKey) |> List.sort
+        let parsersKey = String.concat ";" resolvedParsers
+        let serializersKey = String.concat ";" resolvedSerializers
+        $"{declarationContextFingerprint env}|{parsersKey}|{serializersKey}"
+
+    let cachedArtifacts = session |> Option.bind (fun current -> current.TryFind cacheKey)
     let planned =
-        parserTypes
-        |> List.fold (fun result typ ->
-            result
-            |> Result.bind (fun state -> ensureDecoder planningEnv typ state |> Result.map snd)) serializersPlanned
+        match cachedArtifacts with
+        | Some _ -> Ok { Functions = Map.empty }
+        | None ->
+            let serializersPlanned =
+                serializerTypes
+                |> List.fold (fun result typ ->
+                    result
+                    |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
+                    (Ok {
+                        Functions =
+                            if List.isEmpty parserTypes then Map.empty
+                            else rawListAccessorFunctions () |> List.map (fun fn -> (fn.Name, fn)) |> Map.ofList
+                    })
+            parserTypes
+            |> List.fold (fun result typ ->
+                result
+                |> Result.bind (fun state -> ensureDecoder planningEnv typ state |> Result.map snd)) serializersPlanned
 
     match planned with
     | Error error ->
@@ -1029,5 +1070,14 @@ let rewriteProgram (env: TypeChecking.TypeCheckEnv) (Program topLevels) : Progra
                 | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
                 | Expression expr -> Expression (mapExpr rewrite expr)
                 | other -> other)
-        let generated = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
+        let generated =
+            match cachedArtifacts with
+            | Some cached -> cached
+            | None ->
+                let fresh = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
+                session |> Option.iter (fun current -> current.Store(cacheKey, fresh))
+                fresh
         Program (generated @ rewritten)
+
+let rewriteProgram (env: TypeChecking.TypeCheckEnv) (program: Program) : Program =
+    rewriteProgramWithSession None env program

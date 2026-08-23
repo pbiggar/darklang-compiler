@@ -631,6 +631,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         let stdlib = baseStdlib
         let numTests = testsArray.Length
         if numTests > 0 then
+            use compilationSession = new CompilerLibrary.CompilationSession()
             let suitePassTimingStart = passTimingTotal ()
             let suiteContextTimer = Stopwatch.StartNew()
             let suiteContextsResult =
@@ -725,6 +726,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                                     TestDSL.E2ETestRunner.runE2ETestWithPreambleContext
                                         currentSuiteContexts.Stdlib
                                         ctx
+                                        (Some compilationSession)
                                         test
                                         (Some recordPassTiming)
                                 let passTimingEnd = passTimingTotal ()

@@ -1106,6 +1106,7 @@ let private tryBuildReducedPreambleForTest
 let runE2ETestWithPreambleContext
     (stdlib: CompilerLibrary.StdlibResult)
     (preambleCtx: CompilerLibrary.PreambleContext)
+    (session: CompilerLibrary.CompilationSession option)
     (test: E2ETest)
     (passTimingRecorder: CompilerLibrary.PassTimingRecorder option)
     : E2ETestResult =
@@ -1131,6 +1132,7 @@ let runE2ETestWithPreambleContext
             Options = options
             PackageValues = CompilerLibrary.emptyPackageValueCatalog
             PassTimingRecorder = passTimingRecorder
+            Session = session
         }
         let run = compileAndRun test.Stdin request
         let primaryResult = evaluateExpectations test run
@@ -1166,6 +1168,7 @@ let runE2ETestWithPreambleContext
                 Options = options
                 PackageValues = CompilerLibrary.emptyPackageValueCatalog
                 PassTimingRecorder = passTimingRecorder
+                Session = session
             }
             let fallbackRun = compileAndRun test.Stdin fallbackRequest
             match evaluateExpectations test fallbackRun with
