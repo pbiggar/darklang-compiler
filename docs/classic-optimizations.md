@@ -622,6 +622,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, canonical jump-threading step that removes a branch when the same SSA Boolean condition is already established by the block's sole predecessor edge.
 - Notes: Implemented for both true and false predecessor edges in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs`, with exact-register, sole-edge, and non-entry safety gates. Direct CFG tests in `src/Tests/optimizations/MIROptimizeTests.fs` cover both edge polarities and `redundant_successor_branch_elimination` in `src/Tests/optimization/mir.opt` records the source-to-optimized-MIR result; `--dump-mir` exposes that post-optimization IR.
 
+### CFG fallthrough block placement
+
+- Optimization name: CFG fallthrough block placement
+- Taxonomy category: Control-flow simplification
+- Priority/rationale: Deterministic successor-chain layout makes a conditional false edge and direct jumps fall through, removing avoidable backend branches without profile data.
+- Notes: Implemented in `LIR.layoutBlocks` and both native code generators. Entry remains first; chains prefer the false successor of conditional terminators and the target of direct jumps, with remaining chains begun in label order. LIR layout and ARM64/x64 generated-code tests retain the focused proof that a three-block branch removes its false-edge jump and the final return-to-epilogue jump.
+
 ### Linear basic-block merging
 
 - Optimization name: Linear basic-block merging

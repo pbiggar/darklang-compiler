@@ -405,6 +405,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "ANF to MIR Tests"; Tests = ANFToMIRTests.tests }
         { Name = "MIR Optimize Tests"; Tests = MIROptimizeTests.tests }
         { Name = "LIR Peephole Tests"; Tests = LIRPeepholeTests.tests }
+        { Name = "LIR Layout Tests"; Tests = LIRLayoutTests.tests }
         { Name = "Dead Code Elimination Tests"; Tests = DeadCodeEliminationTests.tests }
         { Name = "ANF Optimize Tests"; Tests = ANFOptimizeTests.tests }
         { Name = "Script Helper Tests"; Tests = ScriptHelperTests.tests }

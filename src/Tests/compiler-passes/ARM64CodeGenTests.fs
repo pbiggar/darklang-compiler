@@ -118,6 +118,40 @@ let testPrintUInt64RuntimePreservesNewline () : TestResult =
     else
         Error "ARM64 UInt64 newline printer does not move the digit cursor before conversion"
 
+let testBranchFalseEdgeFallsThrough () : TestResult =
+    let entry = LIR.Label "arm64_layout_entry"
+    let trueBlock = LIR.Label "arm64_layout_true"
+    let falseBlock = LIR.Label "arm64_layout_false"
+    let block label terminator : LIR.BasicBlock = { Label = label; Instrs = []; Terminator = terminator }
+    let func : LIR.Function = {
+        Name = "arm64_layout"
+        TypedParams = []
+        CFG = {
+            Entry = entry
+            Blocks = Map.ofList [
+                entry, block entry (LIR.Branch (LIR.Physical LIR.X0, trueBlock, falseBlock))
+                trueBlock, block trueBlock LIR.Ret
+                falseBlock, block falseBlock LIR.Ret
+            ]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+    let ctx : CodeGen.CodeGenContext = {
+        Target = target; Options = CodeGen.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
+        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; PlannedListDecHelperLabels = Map.empty
+        NeedsCliRuntimeState = false; FunctionName = func.Name; StackSize = 0; UsedCalleeSaved = []
+        HeapOverflowLabel = "__heap_oom_arm64_layout"
+    }
+    match CodeGen.convertFunction [] ctx func with
+    | Error e -> Error e
+    | Ok instrs ->
+        let falseJump = ARM64Symbolic.B_label "arm64_layout_false"
+        let epilogueJumps = instrs |> List.filter ((=) (ARM64Symbolic.B_label "_epilogue_arm64_layout")) |> List.length
+        if List.contains falseJump instrs then Error "ARM64 emitted a jump to the immediately following false block"
+        elif epilogueJumps <> 1 then Error $"ARM64 emitted {epilogueJumps} jumps to the epilogue; expected one before the final fallthrough"
+        else Ok ()
+
 let private makeEmptyFunction
     (name: string)
     (typedParams: LIR.TypedLIRParam list)
@@ -1571,6 +1605,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("ARM64 peephole fuses bit-clear sequence", testPeepholeFusesBitClearSequence)
     ("ARM64 UInt64 runtime zero branches target digit handlers", testPrintUInt64RuntimeZeroBranches)
     ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)
+    ("ARM64 branch false edge falls through", testBranchFalseEdgeFallsThrough)
     ("ARM64 FLoad encodable constants use immediate", testArm64FLoadEncodableConstantsUseImmediate)
     ("RawAlloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)
     ("Runtime print string length uses full immediate", testRuntimePrintStringLengthUsesFullImmediate)

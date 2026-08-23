@@ -4865,26 +4865,27 @@ let private translateInstr
 let private translateTerminator
     (comparisonContext: ComparisonContext option)
     (epilogueLabel: string)
+    (nextLabel: string option)
     (term: LIR.Terminator)
     : Result<X86_64.Instr list, string> =
     match term with
     | LIR.Ret ->
         // Jump to shared epilogue at end of function
-        Ok [X86_64.JMP epilogueLabel]
+        if nextLabel = None then Ok [] else Ok [X86_64.JMP epilogueLabel]
     | LIR.Jump (LIR.Label target) ->
-        Ok [X86_64.JMP target]
+        if nextLabel = Some target then Ok [] else Ok [X86_64.JMP target]
     | LIR.Branch (cond, LIR.Label trueLabel, LIR.Label falseLabel) ->
         resolveReg cond
         |> Result.map (fun condReg ->
             [X86_64.TEST_reg (condReg, condReg)
-             X86_64.Jcc (X86_64.NE, trueLabel)
-             X86_64.JMP falseLabel])
+             X86_64.Jcc (X86_64.NE, trueLabel)]
+            @ (if nextLabel = Some falseLabel then [] else [X86_64.JMP falseLabel]))
     | LIR.BranchZero (cond, LIR.Label zeroLabel, LIR.Label nonZeroLabel) ->
         resolveReg cond
         |> Result.map (fun condReg ->
             [X86_64.TEST_reg (condReg, condReg)
-             X86_64.Jcc (X86_64.EQ, zeroLabel)
-             X86_64.JMP nonZeroLabel])
+             X86_64.Jcc (X86_64.EQ, zeroLabel)]
+            @ (if nextLabel = Some nonZeroLabel then [] else [X86_64.JMP nonZeroLabel]))
     | LIR.CondBranch (cond, LIR.Label trueLabel, LIR.Label falseLabel) ->
         match comparisonContext with
         | None ->
@@ -4903,16 +4904,16 @@ let private translateTerminator
                     | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
                     | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
                     | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
-            Ok [X86_64.Jcc (x86Cond, trueLabel)
-                X86_64.JMP falseLabel]
+            Ok ([X86_64.Jcc (x86Cond, trueLabel)]
+                @ (if nextLabel = Some falseLabel then [] else [X86_64.JMP falseLabel]))
     | LIR.BranchBitZero (reg, bit, LIR.Label zeroLabel, LIR.Label nonZeroLabel) ->
         resolveReg reg
         |> Result.map (fun regX86 ->
             let mask = 1L <<< bit
             loadImm64 scratch mask
             @ [X86_64.AND_reg (scratch, regX86)
-               X86_64.Jcc (X86_64.EQ, zeroLabel)
-               X86_64.JMP nonZeroLabel])
+               X86_64.Jcc (X86_64.EQ, zeroLabel)]
+            @ (if nextLabel = Some nonZeroLabel then [] else [X86_64.JMP nonZeroLabel]))
 
     | LIR.BranchBitNonZero (reg, bit, LIR.Label nonZeroLabel, LIR.Label zeroLabel) ->
         resolveReg reg
@@ -4920,11 +4921,11 @@ let private translateTerminator
             let mask = 1L <<< bit
             loadImm64 scratch mask
             @ [X86_64.AND_reg (scratch, regX86)
-               X86_64.Jcc (X86_64.NE, nonZeroLabel)
-               X86_64.JMP zeroLabel])
+               X86_64.Jcc (X86_64.NE, nonZeroLabel)]
+            @ (if nextLabel = Some zeroLabel then [] else [X86_64.JMP zeroLabel]))
 
 /// Translate a LIR basic block to x86-64 instructions
-let private translateBlock (ctx: FuncCtx) (epilogueLabel: string) (block: LIR.BasicBlock) : Result<X86_64.Instr list, string> =
+let private translateBlock (ctx: FuncCtx) (epilogueLabel: string) (nextBlock: LIR.BasicBlock option) (block: LIR.BasicBlock) : Result<X86_64.Instr list, string> =
     let (LIR.Label labelName) = block.Label
     let labelInstr = [X86_64.Label labelName]
 
@@ -4945,7 +4946,8 @@ let private translateBlock (ctx: FuncCtx) (epilogueLabel: string) (block: LIR.Ba
     match translateInstrs None [] block.Instrs with
     | Error e -> Error e
     | Ok (bodyInstrs, comparisonContext) ->
-        translateTerminator comparisonContext epilogueLabel block.Terminator
+        let nextLabel = nextBlock |> Option.map (fun next -> let (LIR.Label label) = next.Label in label)
+        translateTerminator comparisonContext epilogueLabel nextLabel block.Terminator
         |> Result.map (fun termInstrs ->
             labelInstr @ bodyInstrs @ termInstrs)
 
@@ -4963,10 +4965,11 @@ let translateFunction
     // at the start of the entry block (e.g., "D1 <- FMov(D0)"). These are
     // handled by the FMov case in translateInstr. No extra codegen needed.
 
-    let rec translateBlocks acc remaining =
-        match remaining with
-        | [] -> Ok (List.rev acc |> List.concat)
-        | block :: rest ->
+    let translateBlocks blocks =
+        let rec loop acc indexedBlocks =
+            match indexedBlocks with
+            | [] -> Ok (List.rev acc |> List.concat)
+            | (block, nextBlock) :: rest ->
             let ctx : FuncCtx = {
                 FunctionName = func.Name
                 StackSize = func.StackSize
@@ -4975,25 +4978,20 @@ let translateFunction
                 RecordRegistry = recordRegistry
                 SumShapeRegistry = sumShapeRegistry
             }
-            match translateBlock ctx epilogueLabel block with
+            match translateBlock ctx epilogueLabel nextBlock block with
             | Error e -> Error e
-            | Ok instrs -> translateBlocks (instrs :: acc) rest
+            | Ok instrs -> loop (instrs :: acc) rest
 
-    // Translate all blocks in order (entry first), reporting malformed CFGs as
-    // codegen errors instead of letting Map.find throw.
+        blocks
+        |> List.mapi (fun index block -> block, List.tryItem (index + 1) blocks)
+        |> loop []
+
+    // Layout blocks into deterministic fallthrough chains before translation.
     let allBlocksResult =
-        match Map.tryFind func.CFG.Entry func.CFG.Blocks with
-        | None ->
-            Error $"x64 codegen: function {func.Name} missing entry block {func.CFG.Entry}"
-        | Some entryBlock ->
-            let otherBlocks =
-                func.CFG.Blocks
-                |> Map.toList
-                |> List.filter (fun (label, _) -> label <> func.CFG.Entry)
-                |> List.map snd
-            Ok (entryBlock :: otherBlocks)
+        LIR.layoutBlocks func.CFG
+        |> Result.mapError (fun e -> $"x64 codegen: function {func.Name}: {e}")
 
-    match allBlocksResult |> Result.bind (translateBlocks []) with
+    match allBlocksResult |> Result.bind translateBlocks with
     | Error e -> Error e
     | Ok blockInstrs ->
         // Heap initialization for _start only

@@ -146,6 +146,36 @@ let private completeFixtureVariants (program: LIR.Program) : LIR.Program =
 
         LIR.Program (functions, mergeInferred variants inferred, records)
 
+let testBranchFalseEdgeFallsThrough () : Result<unit, string> =
+    let entry = LIR.Label "x64_layout_entry"
+    let trueBlock = LIR.Label "x64_layout_true"
+    let falseBlock = LIR.Label "x64_layout_false"
+    let block label terminator : LIR.BasicBlock = { Label = label; Instrs = []; Terminator = terminator }
+    let func : LIR.Function = {
+        Name = "x64_layout"
+        TypedParams = []
+        CFG = {
+            Entry = entry
+            Blocks = Map.ofList [
+                entry, block entry (LIR.Branch (LIR.Physical LIR.X0, trueBlock, falseBlock))
+                trueBlock, block trueBlock LIR.Ret
+                falseBlock, block falseBlock LIR.Ret
+            ]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+    let program = LIR.Program ([func], Map.empty, Map.empty)
+    match CodeGen_X86_64.translateProgram program false with
+    | Error e -> Error e
+    | Ok instrs ->
+        let epilogueJumps = instrs |> List.filter ((=) (X86_64.JMP "_epilogue_x64_layout")) |> List.length
+        if List.contains (X86_64.JMP "x64_layout_false") instrs then
+            Error "x64 emitted a jump to the immediately following false block"
+        elif epilogueJumps <> 1 then
+            Error $"x64 emitted {epilogueJumps} jumps to the epilogue; expected one before the final fallthrough"
+        else Ok ()
+
 /// Build and run a LIR program, returning exit code, stdout, and stderr.
 let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck: bool) : Result<int * string * string, string> =
     match CodeGen_X86_64.translateProgram (completeFixtureVariants program) enableLeakCheck with
@@ -5357,6 +5387,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
         else Error $"Expected list nested sum payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 let tests : (string * (unit -> Result<unit, string>)) list = [
+    ("x64 branch false edge falls through", testBranchFalseEdgeFallsThrough)
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
     ("LIR DateTimeNow x64 lowering uses 100ns Unix ticks", testDateTimeNowLowersTo100nsUnixTicks)

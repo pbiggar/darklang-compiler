@@ -6463,11 +6463,11 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
 
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
-let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64Symbolic.Instr list, string> =
+let convertTerminator (epilogueLabel: string) (nextLabel: string option) (terminator: LIR.Terminator) : Result<ARM64Symbolic.Instr list, string> =
     match terminator with
     | LIR.Ret ->
         // Jump to function epilogue (handles stack cleanup and RET)
-        Ok [ARM64Symbolic.B_label epilogueLabel]
+        if nextLabel = None then Ok [] else Ok [ARM64Symbolic.B_label epilogueLabel]
 
     | LIR.Branch (condReg, trueLabel, falseLabel) ->
         // Branch if register is non-zero (true), otherwise fall through to else
@@ -6477,10 +6477,8 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
         |> Result.map (fun arm64Reg ->
             let (LIR.Label trueLbl) = trueLabel
             let (LIR.Label falseLbl) = falseLabel
-            [
-                ARM64Symbolic.CBNZ (arm64Reg, trueLbl)  // If true, jump to then branch
-                ARM64Symbolic.B_label falseLbl           // Otherwise jump to else branch
-            ])
+            [ARM64Symbolic.CBNZ (arm64Reg, trueLbl)]
+            @ (if nextLabel = Some falseLbl then [] else [ARM64Symbolic.B_label falseLbl]))
 
     | LIR.BranchZero (condReg, zeroLabel, nonZeroLabel) ->
         // Branch if register is zero, otherwise fall through to non-zero case
@@ -6490,10 +6488,8 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
         |> Result.map (fun arm64Reg ->
             let (LIR.Label zeroLbl) = zeroLabel
             let (LIR.Label nonZeroLbl) = nonZeroLabel
-            [
-                ARM64Symbolic.CBZ (arm64Reg, zeroLbl)    // If zero, jump to zero branch
-                ARM64Symbolic.B_label nonZeroLbl          // Otherwise jump to non-zero branch
-            ])
+            [ARM64Symbolic.CBZ (arm64Reg, zeroLbl)]
+            @ (if nextLabel = Some nonZeroLbl then [] else [ARM64Symbolic.B_label nonZeroLbl]))
 
     | LIR.BranchBitZero (condReg, bit, zeroLabel, nonZeroLabel) ->
         // Branch if specified bit is zero, otherwise fall through to non-zero case
@@ -6503,10 +6499,8 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
         |> Result.map (fun arm64Reg ->
             let (LIR.Label zeroLbl) = zeroLabel
             let (LIR.Label nonZeroLbl) = nonZeroLabel
-            [
-                ARM64Symbolic.TBZ_label (arm64Reg, bit, zeroLbl)  // If bit is zero, jump to zero branch
-                ARM64Symbolic.B_label nonZeroLbl                   // Otherwise jump to non-zero branch
-            ])
+            [ARM64Symbolic.TBZ_label (arm64Reg, bit, zeroLbl)]
+            @ (if nextLabel = Some nonZeroLbl then [] else [ARM64Symbolic.B_label nonZeroLbl]))
 
     | LIR.BranchBitNonZero (condReg, bit, nonZeroLabel, zeroLabel) ->
         // Branch if specified bit is non-zero, otherwise fall through to zero case
@@ -6516,14 +6510,12 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
         |> Result.map (fun arm64Reg ->
             let (LIR.Label nonZeroLbl) = nonZeroLabel
             let (LIR.Label zeroLbl) = zeroLabel
-            [
-                ARM64Symbolic.TBNZ_label (arm64Reg, bit, nonZeroLbl)  // If bit is not zero, jump to non-zero branch
-                ARM64Symbolic.B_label zeroLbl                          // Otherwise jump to zero branch
-            ])
+            [ARM64Symbolic.TBNZ_label (arm64Reg, bit, nonZeroLbl)]
+            @ (if nextLabel = Some zeroLbl then [] else [ARM64Symbolic.B_label zeroLbl]))
 
     | LIR.Jump label ->
         let (LIR.Label lbl) = label
-        Ok [ARM64Symbolic.B_label lbl]
+        if nextLabel = Some lbl then Ok [] else Ok [ARM64Symbolic.B_label lbl]
 
     | LIR.CondBranch (cond, trueLabel, falseLabel) ->
         // Branch based on condition flags (set by previous CMP)
@@ -6542,39 +6534,32 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
             | LIR.UGT -> ARM64Symbolic.HI
             | LIR.ULE -> ARM64Symbolic.LS
             | LIR.UGE -> ARM64Symbolic.HS
-        Ok [
-            ARM64Symbolic.B_cond_label (arm64Cond, trueLbl)  // If condition, jump to true branch
-            ARM64Symbolic.B_label falseLbl                   // Otherwise jump to false branch
-        ]
+        Ok ([ARM64Symbolic.B_cond_label (arm64Cond, trueLbl)]
+            @ (if nextLabel = Some falseLbl then [] else [ARM64Symbolic.B_label falseLbl]))
 
 /// Convert LIR basic block to ARM64 instructions (with label)
 /// epilogueLabel: passed through to terminator for Ret handling
-let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64Symbolic.Instr list, string> =
+let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (nextBlock: LIR.BasicBlock option) (block: LIR.BasicBlock) : Result<ARM64Symbolic.Instr list, string> =
     // Emit label for this block
     let (LIR.Label lbl) = block.Label
     let labelInstr = ARM64Symbolic.Label lbl
 
     ResultList.collectResults (convertInstr ctx) block.Instrs
     |> Result.bind (fun instrs ->
-        convertTerminator epilogueLabel block.Terminator
+        let nextLabel = nextBlock |> Option.map (fun next -> let (LIR.Label label) = next.Label in label)
+        convertTerminator epilogueLabel nextLabel block.Terminator
         |> Result.map (fun termInstrs ->
             labelInstr :: (instrs @ termInstrs)))
 
 /// Convert LIR CFG to ARM64 instructions
 /// epilogueLabel: passed through to blocks for Ret handling
 let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64Symbolic.Instr list, string> =
-    // Get blocks in a deterministic order (entry first, then Map's label order).
-    match Map.tryFind cfg.Entry cfg.Blocks with
-    | None ->
-        Error $"ARM64 codegen: function {ctx.FunctionName} missing entry block {cfg.Entry}"
-    | Some entryBlock ->
-        let otherBlocks =
-            cfg.Blocks
-            |> Map.toList
-            |> List.filter (fun (label, _) -> label <> cfg.Entry)
-            |> List.map snd
-
-        ResultList.collectResults (convertBlock ctx epilogueLabel) (entryBlock :: otherBlocks)
+    LIR.layoutBlocks cfg
+    |> Result.mapError (fun e -> $"ARM64 codegen: function {ctx.FunctionName}: {e}")
+    |> Result.bind (fun blocks ->
+        blocks
+        |> List.mapi (fun index block -> convertBlock ctx epilogueLabel (List.tryItem (index + 1) blocks) block)
+        |> ResultList.collectResults id)
 
 /// Generate heap initialization code for _start function
 /// Uses mmap to allocate 512MB of heap space and initializes X27/X28

@@ -216,6 +216,51 @@ type CFG = {
     Blocks: Map<Label, BasicBlock>
 }
 
+/// Arrange blocks into deterministic successor chains so the backends can use
+/// the lexical successor as a fallthrough edge. Entry remains first; each
+/// remaining chain starts in label order, and every block occurs exactly once.
+let layoutBlocks (cfg: CFG) : Result<BasicBlock list, string> =
+    let preferredSuccessor terminator =
+        match terminator with
+        | Ret -> None
+        | Jump target -> Some target
+        | Branch (_, _, falseTarget)
+        | BranchZero (_, _, falseTarget)
+        | BranchBitZero (_, _, _, falseTarget)
+        | BranchBitNonZero (_, _, _, falseTarget)
+        | CondBranch (_, _, falseTarget) -> Some falseTarget
+
+    let rec followChain visited reversedBlocks label =
+        if Set.contains label visited then
+            Ok (visited, reversedBlocks)
+        else
+            match Map.tryFind label cfg.Blocks with
+            | None -> Error $"LIR layout: CFG references missing block {label}"
+            | Some block ->
+                let visited = Set.add label visited
+                let reversedBlocks = block :: reversedBlocks
+                match preferredSuccessor block.Terminator with
+                | Some successor when not (Set.contains successor visited) ->
+                    followChain visited reversedBlocks successor
+                | _ -> Ok (visited, reversedBlocks)
+
+    match Map.tryFind cfg.Entry cfg.Blocks with
+    | None -> Error $"LIR layout: CFG entry block {cfg.Entry} is missing"
+    | Some _ ->
+        followChain Set.empty [] cfg.Entry
+        |> Result.bind (fun (initialVisited, initialBlocks) ->
+            cfg.Blocks
+            |> Map.toList
+            |> List.map fst
+            |> List.fold
+                (fun state label ->
+                    state
+                    |> Result.bind (fun (visited, reversedBlocks) ->
+                        if Set.contains label visited then Ok (visited, reversedBlocks)
+                        else followChain visited reversedBlocks label))
+                (Ok (initialVisited, initialBlocks))
+            |> Result.map (fun (_, reversedBlocks) -> List.rev reversedBlocks))
+
 /// Function with CFG
 type Function = {
     Name: string
