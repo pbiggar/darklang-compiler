@@ -95,9 +95,8 @@ against darklang/dark `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
 `backend/testfiles/execution/stdlib/uuid.dark`, and
 `backend/src/Builtins/Builtins.Pure/Libs/Uuid.fs`). The interpreter's DUuid is represented in the compiler as the ordinary Dark
 newtype `Uuid = UUID(UInt128)`. Canonical parsing and formatting are defined in
-`Stdlib.Uuid`; ordinary sum equality supplies structural UUID equality. The
-historic String parser remains only at `Stdlib.Uuid.Compatibility.parse_v0` as
-a documented compiler compatibility extension, not as the canonical API.
+`Stdlib.Uuid`; ordinary sum equality supplies structural UUID equality. No
+compiler-only UUID compatibility API is retained.
 Ahead-of-time rejection and the absent interpreter-only value categories are
 the intentional public boundary retained here.
 

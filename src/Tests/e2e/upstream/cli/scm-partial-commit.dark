@@ -20,7 +20,7 @@ module PartialCommitPlanning =
     (target: Darklang.LanguageTools.ProgramTypes.Reference)
     : Darklang.SCM.PackageOps.WipOpEntry =
     Darklang.SCM.PackageOps.WipOpEntry
-      { id = Builtin.unwrap (Stdlib.Uuid.parse_v0 uuid)
+      { id = Builtin.unwrap (Stdlib.Uuid.parse uuid)
         op =
           Darklang.LanguageTools.ProgramTypes.PackageOp.SetName(
             Darklang.LanguageTools.ProgramTypes.PackageLocation
@@ -135,7 +135,7 @@ module PartialCommitPlanning =
     (target: Darklang.LanguageTools.ProgramTypes.Reference)
     : Darklang.SCM.PackageOps.WipOpEntry =
     Darklang.SCM.PackageOps.WipOpEntry
-      { id = Builtin.unwrap (Stdlib.Uuid.parse_v0 uuid)
+      { id = Builtin.unwrap (Stdlib.Uuid.parse uuid)
         op =
           Darklang.LanguageTools.ProgramTypes.PackageOp.Deprecate(
             target,
@@ -159,7 +159,7 @@ module PartialCommitPlanning =
   // its source is, so `--include=fn:Dependent` can't split a propagation batch.
   let propagatedWip () : List<Darklang.SCM.PackageOps.WipOpEntry> =
     [ Darklang.SCM.PackageOps.WipOpEntry
-        { id = Builtin.unwrap (Stdlib.Uuid.parse_v0 "00000000-0000-0000-0000-0000000000c1")
+        { id = Builtin.unwrap (Stdlib.Uuid.parse "00000000-0000-0000-0000-0000000000c1")
           op =
             Darklang.LanguageTools.ProgramTypes.PackageOp.SetName(
               Darklang.LanguageTools.ProgramTypes.PackageLocation
@@ -168,7 +168,7 @@ module PartialCommitPlanning =
             )
           propagationId =
             Stdlib.Option.Option.Some(
-              Builtin.unwrap (Stdlib.Uuid.parse_v0 "00000000-0000-0000-0000-0000000000c9")
+              Builtin.unwrap (Stdlib.Uuid.parse "00000000-0000-0000-0000-0000000000c9")
             ) } ]
 
   (match
