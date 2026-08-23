@@ -145,6 +145,57 @@ let rec lex (input: string) : Result<Token list, string> =
           | TFalse | TIdent _ | TRParen | TRBrace | TRBracket) :: _ -> true
         | _ -> false
 
+    /// Decode one regular string/char escape. This mirrors the interpreter's
+    /// scalar-aware decoder: \u and \X are four-digit scalar forms and \U is
+    /// the eight-digit form. Keeping it here makes chars, strings, and
+    /// interpolated literal text share one contract.
+    let decodeEscape (escapeStart: int) : Result<string * int, string> =
+        let parseHex (start: int) (length: int) =
+            if start + length <= inputLength then
+                let text = substring start (start + length)
+                match System.Int32.TryParse(text, System.Globalization.NumberStyles.HexNumber, null) with
+                | true, value -> Ok value
+                | false, _ -> Error text
+            else
+                Error (substring start inputLength)
+
+        let scalar (kind: char) (start: int) (length: int) =
+            parseHex start length
+            |> Result.bind (fun value ->
+                if value > 0x10FFFF || (value >= 0xD800 && value <= 0xDFFF) then
+                    Error $"Invalid Unicode scalar escape: \\{kind}{substring start (min inputLength (start + length))}"
+                else
+                    Ok (System.Char.ConvertFromUtf32 value, start + length))
+
+        if escapeStart + 1 >= inputLength then
+            Error "Unterminated escape sequence"
+        else
+            match input[escapeStart + 1] with
+            | 'n' -> Ok ("\n", escapeStart + 2)
+            | 't' -> Ok ("\t", escapeStart + 2)
+            | 'r' -> Ok ("\r", escapeStart + 2)
+            | 'a' -> Ok (string (char 7), escapeStart + 2)
+            | 'b' -> Ok (string (char 8), escapeStart + 2)
+            | 'v' -> Ok (string (char 11), escapeStart + 2)
+            | 'f' -> Ok (string (char 12), escapeStart + 2)
+            | '\\' -> Ok ("\\", escapeStart + 2)
+            | '"' -> Ok ("\"", escapeStart + 2)
+            | '\'' -> Ok ("'", escapeStart + 2)
+            | '/' -> Ok ("/", escapeStart + 2)
+            | '0' -> Ok ("\000", escapeStart + 2)
+            | '{' -> Ok ("{", escapeStart + 2)
+            | '}' -> Ok ("}", escapeStart + 2)
+            | 'x' ->
+                parseHex (escapeStart + 2) 2
+                |> Result.mapError (fun _ -> $"Invalid hex escape sequence: \\x{substring (escapeStart + 2) (min inputLength (escapeStart + 4))}")
+                |> Result.map (fun value -> (string (char value), escapeStart + 4))
+            | ('u' | 'X') as kind -> scalar kind (escapeStart + 2) 4
+            | 'U' -> scalar 'U' (escapeStart + 2) 8
+            | c -> Error $"Unknown escape sequence: \\{c}"
+
+    let prependDecoded (decoded: string) (chars: char list) : char list =
+        decoded |> Seq.fold (fun accumulated ch -> ch :: accumulated) chars
+
     let rec lexHelper (position: int) (acc: Token list) : Result<Token list, string> =
         if position >= inputLength then
             Ok (List.rev (TEOF :: acc))
@@ -373,41 +424,25 @@ let rec lex (input: string) : Result<Token list, string> =
                         elif intDigits = "9223372036854775808" then emitNumber afterInt (TInt64 System.Int64.MinValue)
                         else Error $"Integer literal too large: {intDigits}"
             | '$' when hasChar position 1 '"' ->
-                let parseEscape (index: int) : Result<char * int, string> =
-                    if index >= inputLength then
-                        Error "Unterminated escape sequence"
-                    else
-                        match input[index] with
-                        | 'n' -> Ok ('\n', index + 1)
-                        | 't' -> Ok ('\t', index + 1)
-                        | 'r' -> Ok ('\r', index + 1)
-                        | '\\' -> Ok ('\\', index + 1)
-                        | '"' -> Ok ('"', index + 1)
-                        | '\'' -> Ok ('\'', index + 1)
-                        | '0' -> Ok ('\000', index + 1)
-                        | '{' -> Ok ('{', index + 1)
-                        | '}' -> Ok ('}', index + 1)
-                        | 'x' when index + 2 < inputLength ->
-                            let hexStr = substring (index + 1) (index + 3)
-                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                            | (true, value) -> Ok (char value, index + 3)
-                            | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
-                        | 'u' when index + 4 < inputLength ->
-                            let hexStr = substring (index + 1) (index + 5)
-                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                            | (true, value) -> Ok (char value, index + 5)
-                            | (false, _) -> Error $"Invalid unicode escape sequence: \\u{hexStr}"
-                        | c -> Error $"Unknown escape sequence: \\{c}"
-
+                let isRaw = hasChar position 2 '"' && hasChar position 3 '"'
+                let contentStart = if isRaw then position + 4 else position + 2
+                let closingLength = if isRaw then 3 else 1
+                let isClosing index =
+                    if isRaw then hasChar index 0 '"' && hasChar index 1 '"' && hasChar index 2 '"'
+                    else hasChar index 0 '"'
                 let rec collectLiteralPart (index: int) (chars: char list) : Result<string * int, string> =
                     if index >= inputLength then
                         Error "Unterminated interpolated string"
                     else
                         match input[index] with
-                        | '"' | '{' -> Ok (System.String(List.rev chars |> List.toArray), index)
-                        | '\\' ->
-                            match parseEscape (index + 1) with
-                            | Ok (c, remaining) -> collectLiteralPart remaining (c :: chars)
+                        | _ when isClosing index -> Ok (System.String(List.rev chars |> List.toArray), index)
+                        | '{' when hasChar index 1 '{' -> collectLiteralPart (index + 2) ('{' :: chars)
+                        | '}' when hasChar index 1 '}' -> collectLiteralPart (index + 2) ('}' :: chars)
+                        | '{' -> Ok (System.String(List.rev chars |> List.toArray), index)
+                        | '}' -> Error "Single '}' in interpolated string text; use '}}' or '\\}' for a literal brace"
+                        | '\\' when not isRaw ->
+                            match decodeEscape index with
+                            | Ok (decoded, remaining) -> collectLiteralPart remaining (prependDecoded decoded chars)
                             | Error err -> Error err
                         | c -> collectLiteralPart (index + 1) (c :: chars)
 
@@ -439,25 +474,26 @@ let rec lex (input: string) : Result<Token list, string> =
                     if index >= inputLength then
                         Error "Unterminated interpolated string"
                     else
-                        match input[index] with
-                        | '"' -> Ok (List.rev parts, index + 1)
-                        | '{' ->
-                            match collectExprChars (index + 1) 0 [] with
-                            | Ok (exprChars, afterExpr) ->
-                                let exprStr = System.String(exprChars |> List.toArray)
-                                match lex exprStr with
-                                | Ok tokens ->
-                                    parseInterpParts afterExpr (InterpTokens tokens :: parts)
-                                | Error err -> Error $"Error in interpolated expression: {err}"
-                            | Error err -> Error err
-                        | _ ->
-                            match collectLiteralPart index [] with
-                            | Ok (str, afterLit) ->
-                                if str = "" then parseInterpParts afterLit parts
-                                else parseInterpParts afterLit (InterpText str :: parts)
-                            | Error err -> Error err
+                        if isClosing index then Ok (List.rev parts, index + closingLength)
+                        else
+                            match input[index] with
+                            | '{' ->
+                                match collectExprChars (index + 1) 0 [] with
+                                | Ok (exprChars, afterExpr) ->
+                                    let exprStr = System.String(exprChars |> List.toArray)
+                                    match lex exprStr with
+                                    | Ok tokens ->
+                                        parseInterpParts afterExpr (InterpTokens tokens :: parts)
+                                    | Error err -> Error $"Error in interpolated expression: {err}"
+                                | Error err -> Error err
+                            | _ ->
+                                match collectLiteralPart index [] with
+                                | Ok (str, afterLit) ->
+                                    if str = "" then parseInterpParts afterLit parts
+                                    else parseInterpParts afterLit (InterpText str :: parts)
+                                | Error err -> Error err
 
-                match parseInterpParts (position + 2) [] with
+                match parseInterpParts contentStart [] with
                 | Ok (parts, remaining) -> lexHelper remaining (TInterpString parts :: acc)
                 | Error err -> Error err
             | '\'' ->
@@ -482,18 +518,10 @@ let rec lex (input: string) : Result<Token list, string> =
                                         Ok (normalized, index + 1)
                                 else
                                     Error "Empty char literal"
-                        | '\\' when hasChar index 1 'n' -> parseCharContent (index + 2) ('\n' :: chars)
-                        | '\\' when hasChar index 1 't' -> parseCharContent (index + 2) ('\t' :: chars)
-                        | '\\' when hasChar index 1 'r' -> parseCharContent (index + 2) ('\r' :: chars)
-                        | '\\' when hasChar index 1 '\\' -> parseCharContent (index + 2) ('\\' :: chars)
-                        | '\\' when hasChar index 1 '\'' -> parseCharContent (index + 2) ('\'' :: chars)
-                        | '\\' when hasChar index 1 '0' -> parseCharContent (index + 2) ('\000' :: chars)
-                        | '\\' when hasChar index 1 'x' && index + 3 < inputLength ->
-                            let hexStr = substring (index + 2) (index + 4)
-                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                            | (true, value) -> parseCharContent (index + 4) (char value :: chars)
-                            | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
-                        | '\\' when index + 1 < inputLength -> Error $"Unknown escape sequence: \\{input[index + 1]}"
+                        | '\\' ->
+                            match decodeEscape index with
+                            | Ok (decoded, remaining) -> parseCharContent remaining (prependDecoded decoded chars)
+                            | Error err -> Error err
                         | c -> parseCharContent (index + 1) (c :: chars)
 
                 let parseCharLiteral () : Result<Token list, string> =
@@ -532,6 +560,16 @@ let rec lex (input: string) : Result<Token list, string> =
                         lexHelper afterTypeVar (TTypeVar (substring contentStart afterTypeVar) :: acc)
                 else
                     parseCharLiteral ()
+            | '"' when hasChar position 1 '"' && hasChar position 2 '"' ->
+                let rec findClosing index =
+                    if index + 2 >= inputLength then Error "Unterminated triple-quoted string literal"
+                    elif hasChar index 0 '"' && hasChar index 1 '"' && hasChar index 2 '"' then Ok index
+                    else findClosing (index + 1)
+
+                findClosing (position + 3)
+                |> Result.bind (fun closing ->
+                    let raw = substring (position + 3) closing |> fun text -> text.Normalize(System.Text.NormalizationForm.FormC)
+                    lexHelper (closing + 3) (TStringLit raw :: acc))
             | '"' ->
                 let rec parseString (index: int) (chars: char list) : Result<string * int, string> =
                     if index >= inputLength then
@@ -539,24 +577,10 @@ let rec lex (input: string) : Result<Token list, string> =
                     else
                         match input[index] with
                         | '"' -> Ok (System.String(List.rev chars |> List.toArray), index + 1)
-                        | '\\' when hasChar index 1 'n' -> parseString (index + 2) ('\n' :: chars)
-                        | '\\' when hasChar index 1 't' -> parseString (index + 2) ('\t' :: chars)
-                        | '\\' when hasChar index 1 'r' -> parseString (index + 2) ('\r' :: chars)
-                        | '\\' when hasChar index 1 '\\' -> parseString (index + 2) ('\\' :: chars)
-                        | '\\' when hasChar index 1 '"' -> parseString (index + 2) ('"' :: chars)
-                        | '\\' when hasChar index 1 '\'' -> parseString (index + 2) ('\'' :: chars)
-                        | '\\' when hasChar index 1 '0' -> parseString (index + 2) ('\000' :: chars)
-                        | '\\' when hasChar index 1 'x' && index + 3 < inputLength ->
-                            let hexStr = substring (index + 2) (index + 4)
-                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                            | (true, value) -> parseString (index + 4) (char value :: chars)
-                            | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
-                        | '\\' when hasChar index 1 'u' && index + 5 < inputLength ->
-                            let hexStr = substring (index + 2) (index + 6)
-                            match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
-                            | (true, value) -> parseString (index + 6) (char value :: chars)
-                            | (false, _) -> Error $"Invalid unicode escape sequence: \\u{hexStr}"
-                        | '\\' when index + 1 < inputLength -> Error $"Unknown escape sequence: \\{input[index + 1]}"
+                        | '\\' ->
+                            match decodeEscape index with
+                            | Ok (decoded, remaining) -> parseString remaining (prependDecoded decoded chars)
+                            | Error err -> Error err
                         | c -> parseString (index + 1) (c :: chars)
 
                 match parseString (position + 1) [] with

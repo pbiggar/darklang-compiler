@@ -1,0 +1,12 @@
+// Interpreter-compatible primitive literal syntax and boundary values.
+// The source contract is pinned in docs/primitive-literals-parity.md.
+
+// Existing arbitrary-precision Int values retain their suffix spelling.
+let identityInt(value: Int) : Int = value identityInt(9223372036854775808I) = 9223372036854775808I
+
+// Regular escapes decode Unicode scalars, while triple quotes are raw.
+"\U0001F600" = "😀"
+"""line\nraw""" = "line\\nraw"
+
+// Raw interpolation preserves escape text while evaluating expressions.
+let value = "ok" in $"""raw\n{value}""" = "raw\\nok"
