@@ -50,7 +50,7 @@ let setAt(list: List<Int64>, index: Int64, value: Int64) : List<Int64> =
     Stdlib.Internal.SkewList.setAt<Int64>(list, index, value)
 
 // Generate next permutation, returns (newPerm, newCount, done)
-let nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<Int64>, List<Int64>, Bool) =
+let nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<Int64> * List<Int64> * Bool) =
     if i >= n then (perm, count, true)
     else
         let newPerm = rotateLeft(perm, i) in

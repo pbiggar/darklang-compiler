@@ -2,48 +2,48 @@
 
 module Stdlib.AltJson.Helpers
 
-let getString(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : Stdlib.Option.Option<String> =
-    match Stdlib.List.findFirst<(String, Stdlib.AltJson.Json)>(fields, fun pair -> Stdlib.Tuple2.first<String, Stdlib.AltJson.Json>(pair) == key) with
+let getString(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Option.Option<String> =
+    match Stdlib.List.findFirst<(String * Stdlib.AltJson.Json)>(fields, fun pair -> Stdlib.Tuple2.first<String, Stdlib.AltJson.Json>(pair) == key) with
     | None -> Stdlib.Option.Option.None
     | Some(pair) ->
         match Stdlib.Tuple2.second<String, Stdlib.AltJson.Json>(pair) with
         | String(value) -> Stdlib.Option.Option.Some(value)
         | _ -> Stdlib.Option.Option.None
 
-let getBool(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Bool> =
-    match Stdlib.List.findFirst<(String, Stdlib.AltJson.Json)>(fields, fun pair -> Stdlib.Tuple2.first<String, Stdlib.AltJson.Json>(pair) == key) with
+let getBool(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Bool> =
+    match Stdlib.List.findFirst<(String * Stdlib.AltJson.Json)>(fields, fun pair -> Stdlib.Tuple2.first<String, Stdlib.AltJson.Json>(pair) == key) with
     | None -> Stdlib.Option.Option.None
     | Some(pair) ->
         match Stdlib.Tuple2.second<String, Stdlib.AltJson.Json>(pair) with
         | Bool(value) -> Stdlib.Option.Option.Some(value)
         | _ -> Stdlib.Option.Option.None
 
-let getValue(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Stdlib.AltJson.Json> =
-    match Stdlib.List.findFirst<(String, Stdlib.AltJson.Json)>(fields, fun pair -> Stdlib.Tuple2.first<String, Stdlib.AltJson.Json>(pair) == key) with
+let getValue(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Stdlib.AltJson.Json> =
+    match Stdlib.List.findFirst<(String * Stdlib.AltJson.Json)>(fields, fun pair -> Stdlib.Tuple2.first<String, Stdlib.AltJson.Json>(pair) == key) with
     | None -> Stdlib.Option.Option.None
     | Some(pair) -> Stdlib.Option.Option.Some(Stdlib.Tuple2.second<String, Stdlib.AltJson.Json>(pair))
 
-let getInt(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : Int =
+let getInt(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : Int =
     match Stdlib.AltJson.Helpers.getValue(key, fields) with
     | Some(Number(value)) -> Stdlib.Int.fromFloat(value)
     | _ -> 0I
 
-let getIntOption(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Int> =
+let getIntOption(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Int> =
     match Stdlib.AltJson.Helpers.getValue(key, fields) with
     | Some(Number(value)) -> Stdlib.Option.Option.Some(Stdlib.Int.fromFloat(value))
     | _ -> Stdlib.Option.Option.None
 
-let getNumber(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Float> =
+let getNumber(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Option.Option<Float> =
     match Stdlib.AltJson.Helpers.getValue(key, fields) with
     | Some(Number(value)) -> Stdlib.Option.Option.Some(value)
     | _ -> Stdlib.Option.Option.None
 
-let getArray(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : List<Stdlib.AltJson.Json> =
+let getArray(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : List<Stdlib.AltJson.Json> =
     match Stdlib.AltJson.Helpers.getValue(key, fields) with
     | Some(Array(value)) -> value
     | _ -> []
 
-let getObject(key: String, fields: List<(String, Stdlib.AltJson.Json)>) : List<(String, Stdlib.AltJson.Json)> =
+let getObject(key: String, fields: List<(String * Stdlib.AltJson.Json)>) : List<(String * Stdlib.AltJson.Json)> =
     match Stdlib.AltJson.Helpers.getValue(key, fields) with
     | Some(Object(value)) -> value
     | _ -> []

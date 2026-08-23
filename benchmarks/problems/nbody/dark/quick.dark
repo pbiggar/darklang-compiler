@@ -23,7 +23,7 @@ let solarMass(): Float = 4.0 * 3.141592653589793 * 3.141592653589793
 
 let daysPerYear(): Float = 365.24
 
-let applyPair(left: Body, right: Body, dt: Float) : (Body, Body) =
+let applyPair(left: Body, right: Body, dt: Float) : (Body * Body) =
     let dx = left.x - right.x in
     let dy = left.y - right.y in
     let dz = left.z - right.z in

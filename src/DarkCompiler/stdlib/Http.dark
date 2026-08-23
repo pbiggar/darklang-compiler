@@ -2,9 +2,9 @@
 
 module Stdlib.Http
 
-type Request = { url: String, headers: List<(String, String)>, body: Blob }
+type Request = { url: String, headers: List<(String * String)>, body: Blob }
 
-let __parseQueryParam(param: String) : Stdlib.Option.Option<(String, String)> =
+let __parseQueryParam(param: String) : Stdlib.Option.Option<(String * String)> =
     if param == "" then None
     else
         match Stdlib.String.split(param, "=") with
@@ -36,7 +36,7 @@ let parseQueryString(url: String) : Dict<String> =
             Stdlib.String.split(Stdlib.String.join(queryParts, "?"), "&"),
             Stdlib.Dict.empty)
 
-let __parseHeaderLine(line: String) : Stdlib.Option.Option<(String, String)> =
+let __parseHeaderLine(line: String) : Stdlib.Option.Option<(String * String)> =
     let trimmed = Stdlib.String.trim(line) in
     if trimmed == "" then None
     else
@@ -66,14 +66,14 @@ let parseHeaders(value: String) : Dict<String> =
     let lines = Stdlib.String.split(Stdlib.String.replace(value, "\r\n", "\n"), "\n") in
     Stdlib.Http.__headerLinesToDict(lines, Stdlib.Dict.empty)
 
-type Response = { statusCode: Int, headers: List<(String, String)>, body: Blob }
+type Response = { statusCode: Int, headers: List<(String * String)>, body: Blob }
 
 let response(body: Blob, statusCode: Int) : Stdlib.Http.Response =
     Stdlib.Http.Response { statusCode = statusCode, headers = [], body = body }
 
 let responseWithHeaders(
     body: Blob,
-    headers: List<(String, String)>,
+    headers: List<(String * String)>,
     statusCode: Int
 ) : Stdlib.Http.Response =
     Stdlib.Http.Response { statusCode = statusCode, headers = headers, body = body }

@@ -59,20 +59,20 @@ Stdlib.notEquals<DateTime>(Builtin.unwrap(Stdlib.DateTime.parse("2021-07-28T22:4
 // Same nominal type plus recursive contents determine structural equality.
 (1, [2, 3], (true, "x")) == (1, [2, 3], (true, "x")) = true
 (1, [2, 3], (true, "x")) != (1, [2, 4], (true, "x")) = true
-type ComparisonRecord = { name: String, values: List<(Int64, Bool)> }
+type ComparisonRecord = { name: String, values: List<(Int64 * Bool)> }
 (ComparisonRecord { name = "r", values = [(1, true), (2, false)] } == ComparisonRecord { name = "r", values = [(1, true), (2, false)] }) = true
-type ComparisonBox = ComparisonBox of List<(Int64, String)>
+type ComparisonBox = ComparisonBox of List<(Int64 * String)>
 ComparisonBox([(1, "one"), (2, "two")]) == ComparisonBox([(1, "one"), (2, "two")]) = true
 ComparisonBox([(1, "one"), (2, "two")]) != ComparisonBox([(1, "one"), (3, "three")]) = true
-Stdlib.equals<(Int64, List<(String, Bool)>)>((1L, [("x", true)]), (1L, [("x", true)])) = true
-Stdlib.notEquals<List<(Int64, List<String>)>>([(1L, ["x", "y"])], [(1L, ["x", "z"])]) = true
+Stdlib.equals<(Int64 * List<(String * Bool)>)>((1L, [("x", true)]), (1L, [("x", true)])) = true
+Stdlib.notEquals<List<(Int64 * List<String>)>>([(1L, ["x", "y"])], [(1L, ["x", "z"])]) = true
 Stdlib.equals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
 Stdlib.notEquals<ComparisonBox>(ComparisonBox([(1, "one")]), ComparisonBox([(2, "two")])) = true
 
 // A typed comparison plan survives substitution and specialization.
 let comparisonGenericEquals<'a>(left: a, right: a): Bool = left == right
 comparisonGenericEquals<List<Int64>>([1, 2, 3], [1, 2, 3]) = true
-comparisonGenericEquals<List<(Int64, String)>>([(1, "one")], [(1, "one")]) = true
+comparisonGenericEquals<List<(Int64 * String)>>([(1, "one")], [(1, "one")]) = true
 comparisonGenericEquals<ComparisonRecord>(ComparisonRecord { name = "r", values = [(1, true)] }, ComparisonRecord { name = "r", values = [(1, true)] }) = true
 
 // Dict equality compares mappings, independently of insertion order and shape.

@@ -5,9 +5,9 @@
 type StreamProbeRecord = { stream: Stream<Int64> }
 type StreamProbeSum = | StreamProbeCase of Stream<Int64>
 
-let streamProbeStep(state: (List<Int64>, RawPtr)): Stdlib.Option.Option<(Int64, (List<Int64>, RawPtr))> = let (remaining, counter) = state in match remaining with | [] -> None | head :: tail -> Some((head, (tail, counter)))
-let streamProbeDispose(state: (List<Int64>, RawPtr)): Unit = let (remaining, counter) = state in let count = __raw_get<Int64>(counter, 0) in __raw_write_word(counter, 0, count + 1)
-let streamProbe(counter: RawPtr, items: List<Int64>): Stream<Int64> = Stdlib.Stream.__fromProducer<(List<Int64>, RawPtr), Int64>((items, counter), streamProbeStep, streamProbeDispose)
+let streamProbeStep(state: (List<Int64> * RawPtr)): Stdlib.Option.Option<(Int64 * (List<Int64> * RawPtr))> = let (remaining, counter) = state in match remaining with | [] -> None | head :: tail -> Some((head, (tail, counter)))
+let streamProbeDispose(state: (List<Int64> * RawPtr)): Unit = let (remaining, counter) = state in let count = __raw_get<Int64>(counter, 0) in __raw_write_word(counter, 0, count + 1)
+let streamProbe(counter: RawPtr, items: List<Int64>): Stream<Int64> = Stdlib.Stream.__fromProducer<(List<Int64> * RawPtr), Int64>((items, counter), streamProbeStep, streamProbeDispose)
 let streamCounter(): RawPtr = let counter = __raw_alloc(8) in let _ = __raw_write_word(counter, 0, 0) in counter
 let streamCountAndFree(counter: RawPtr): Int64 = let count = __raw_get<Int64>(counter, 0) in let _ = __raw_free(counter) in count
 let streamAbandon(counter: RawPtr): Unit = let stream = streamProbe(counter, [1, 2]) in ()

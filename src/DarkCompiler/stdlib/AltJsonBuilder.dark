@@ -2,45 +2,45 @@
 
 module Stdlib.AltJson.Builder
 
-type Fields = List<(String, Stdlib.AltJson.Json)>
+type Fields = List<(String * Stdlib.AltJson.Json)>
 
-let empty() : List<(String, Stdlib.AltJson.Json)> = []
+let empty() : List<(String * Stdlib.AltJson.Json)> = []
 
-let addString(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: String) : List<(String, Stdlib.AltJson.Json)> =
-    Stdlib.List.append<(String, Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.String(value))])
+let addString(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: String) : List<(String * Stdlib.AltJson.Json)> =
+    Stdlib.List.append<(String * Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.String(value))])
 
-let addNumber(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Float) : List<(String, Stdlib.AltJson.Json)> =
-    Stdlib.List.append<(String, Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Number(value))])
+let addNumber(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Float) : List<(String * Stdlib.AltJson.Json)> =
+    Stdlib.List.append<(String * Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Number(value))])
 
-let addInt(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Int) : List<(String, Stdlib.AltJson.Json)> =
-    Stdlib.List.append<(String, Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Number(Stdlib.Int.toFloat(value)))])
+let addInt(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Int) : List<(String * Stdlib.AltJson.Json)> =
+    Stdlib.List.append<(String * Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Number(Stdlib.Int.toFloat(value)))])
 
-let addBool(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Bool) : List<(String, Stdlib.AltJson.Json)> =
-    Stdlib.List.append<(String, Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Bool(value))])
+let addBool(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Bool) : List<(String * Stdlib.AltJson.Json)> =
+    Stdlib.List.append<(String * Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Bool(value))])
 
-let addJson(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Stdlib.AltJson.Json) : List<(String, Stdlib.AltJson.Json)> =
-    Stdlib.List.append<(String, Stdlib.AltJson.Json)>(fields, [(key, value)])
+let addJson(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Stdlib.AltJson.Json) : List<(String * Stdlib.AltJson.Json)> =
+    Stdlib.List.append<(String * Stdlib.AltJson.Json)>(fields, [(key, value)])
 
-let addArray(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: List<Stdlib.AltJson.Json>) : List<(String, Stdlib.AltJson.Json)> =
-    Stdlib.List.append<(String, Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Array(value))])
+let addArray(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: List<Stdlib.AltJson.Json>) : List<(String * Stdlib.AltJson.Json)> =
+    Stdlib.List.append<(String * Stdlib.AltJson.Json)>(fields, [(key, Stdlib.AltJson.Json.Array(value))])
 
-let addOptionalString(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<String>) : List<(String, Stdlib.AltJson.Json)> =
+let addOptionalString(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<String>) : List<(String * Stdlib.AltJson.Json)> =
     match value with | None -> fields | Some(item) -> Stdlib.AltJson.Builder.addString(fields, key, item)
 
-let addOptionalNumber(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Float>) : List<(String, Stdlib.AltJson.Json)> =
+let addOptionalNumber(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Float>) : List<(String * Stdlib.AltJson.Json)> =
     match value with | None -> fields | Some(item) -> Stdlib.AltJson.Builder.addNumber(fields, key, item)
 
-let addOptionalInt(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Int>) : List<(String, Stdlib.AltJson.Json)> =
+let addOptionalInt(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Int>) : List<(String * Stdlib.AltJson.Json)> =
     match value with | None -> fields | Some(item) -> Stdlib.AltJson.Builder.addInt(fields, key, item)
 
-let addOptionalBool(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Bool>) : List<(String, Stdlib.AltJson.Json)> =
+let addOptionalBool(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Bool>) : List<(String * Stdlib.AltJson.Json)> =
     match value with | None -> fields | Some(item) -> Stdlib.AltJson.Builder.addBool(fields, key, item)
 
-let addOptionalJson(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Stdlib.AltJson.Json>) : List<(String, Stdlib.AltJson.Json)> =
+let addOptionalJson(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<Stdlib.AltJson.Json>) : List<(String * Stdlib.AltJson.Json)> =
     match value with | None -> fields | Some(item) -> Stdlib.AltJson.Builder.addJson(fields, key, item)
 
-let addOptionalArray(fields: List<(String, Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<List<Stdlib.AltJson.Json>>) : List<(String, Stdlib.AltJson.Json)> =
+let addOptionalArray(fields: List<(String * Stdlib.AltJson.Json)>, key: String, value: Stdlib.Option.Option<List<Stdlib.AltJson.Json>>) : List<(String * Stdlib.AltJson.Json)> =
     match value with | None -> fields | Some(item) -> Stdlib.AltJson.Builder.addArray(fields, key, item)
 
-let toJson(fields: List<(String, Stdlib.AltJson.Json)>) : Stdlib.AltJson.Json =
+let toJson(fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.AltJson.Json =
     Stdlib.AltJson.Json.Object(fields)

@@ -9,7 +9,7 @@ let rawPtr = __raw_alloc(8) in let _ = __raw_slot_init<Float>(rawPtr, 0, 1.5) in
 
 // __raw_get<T> should preserve T through ANF inferType when lowered to __raw_get_* intrinsics.
 // Regression: a fallback to TInt64 made this tuple/list pattern arm get optimized away.
-let p = __raw_alloc(8) in let _ = __raw_slot_init<(List<String>, Int64)>(p, 0, (["a"], 1)) in let x = __raw_get<(List<String>, Int64)>(p, 0) in match x with | ([_], _) -> 1 | _ -> 2 = 1
+let p = __raw_alloc(8) in let _ = __raw_slot_init<(List<String> * Int64)>(p, 0, (["a"], 1)) in let x = __raw_get<(List<String> * Int64)>(p, 0) in match x with | ([_], _) -> 1 | _ -> 2 = 1
 
 // If lowered via IfValue in atom position, dead branch side effects must remain lazy.
 let p = __raw_alloc(8) in let _ = __raw_write_word(p, 0, 1) in let _ = if true then 0 else let _ = __raw_write_word(p, 0, 99) in 0 in __raw_get<Int64>(p, 0) = 1

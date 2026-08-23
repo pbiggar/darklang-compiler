@@ -1,6 +1,6 @@
 // Binary Trees Benchmark - Quick check version
 
-type Tree<'a> = Leaf of a | Node of (Tree<a>, Tree<a>)
+type Tree<'a> = Leaf of a | Node of (Tree<a> * Tree<a>)
 
 let makeTree(depth: Int64) : Tree<Int64> =
     if depth <= 0 then Leaf(1)

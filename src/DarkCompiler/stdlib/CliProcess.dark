@@ -38,15 +38,15 @@ let runIn(directory: String, program: String, args: List<String>) : Stdlib.Resul
 let runSilent(program: String, args: List<String>) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
     match Stdlib.Cli.Process.run(program, args) with | Ok(output) -> Ok(output.exitCode) | Error(error) -> Error(error)
 
-let __envArgs(env: List<(String, String)>) : List<String> =
-    Stdlib.List.map<(String, String), String>(env, fun pair -> let (key, value) = pair in key ++ "=" ++ value)
+let __envArgs(env: List<(String * String)>) : List<String> =
+    Stdlib.List.map<(String * String), String>(env, fun pair -> let (key, value) = pair in key ++ "=" ++ value)
 
-let __firstInvalidEnv(env: List<(String, String)>) : Stdlib.Option.Option<String> =
+let __firstInvalidEnv(env: List<(String * String)>) : Stdlib.Option.Option<String> =
     match env with
     | [] -> Stdlib.Option.Option.None
     | (key, _) :: rest -> if Stdlib.String.contains(key, "=") || Stdlib.String.contains(key, " ") then Some(key) else Stdlib.Cli.Process.__firstInvalidEnv(rest)
 
-let runWithEnv(program: String, args: List<String>, env: List<(String, String)>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
+let runWithEnv(program: String, args: List<String>, env: List<(String * String)>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
     match Stdlib.Cli.Process.__firstInvalidEnv(env) with
     | Some(name) -> Error("Invalid env var name: '" ++ name ++ "' (must not contain '=' or spaces)")
     | _ ->

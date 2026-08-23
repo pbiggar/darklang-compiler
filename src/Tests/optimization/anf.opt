@@ -970,7 +970,7 @@ return t2
 ---NAME---
 self_comparison_float_nan_sensitive_relations_remain
 ---INPUT---
-let f(x: Float) : (Bool, Bool, Bool, Bool) =
+let f(x: Float) : (Bool * Bool * Bool * Bool) =
   (x == x, x != x, x <= x, x >= x)
 f(0.0)
 ---EXPECTED---
@@ -1581,7 +1581,7 @@ return -1
 ---NAME---
 bitwise_complement_preserves_reused_not
 ---INPUT---
-let f(x: Int64) : (Int64, Int64) =
+let f(x: Int64) : (Int64 * Int64) =
   let complemented = ~~~x in
   (x & complemented, complemented)
 ---EXPECTED---
@@ -1823,7 +1823,7 @@ return t3
 ---NAME---
 preserve_reused_int64_negation_in_add
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64, Int64) =
+let f(x: Int64, y: Int64) : (Int64 * Int64) =
   let negated = -y in
   (x + negated, negated)
 ---EXPECTED---
@@ -1885,7 +1885,7 @@ return t2
 ---NAME---
 int64_multiply_reassociation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64) : (Int64, Int64) =
+let f(x: Int64) : (Int64 * Int64) =
   let scaled = x * 3 in
   (scaled * 5, scaled)
 ---EXPECTED---
@@ -1944,7 +1944,7 @@ return t2
 ---NAME---
 preserve_shared_mul_add_live_product
 ---INPUT---
-let f(x: Int64) : (Int64, Int64) =
+let f(x: Int64) : (Int64 * Int64) =
   let product = x * 3 in
   (product + x, product)
 ---EXPECTED---
@@ -1999,7 +1999,7 @@ return t0
 ---NAME---
 integer_add_subtract_cancellation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64, Int64) =
+let f(x: Int64, y: Int64) : (Int64 * Int64) =
   let sum = x + y in
   let cancelled = sum - y in
   (sum, cancelled)
@@ -2012,7 +2012,7 @@ return t6
 ---NAME---
 commuted_int64_cancellation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64, Int64) =
+let f(x: Int64, y: Int64) : (Int64 * Int64) =
   let sum = x + y in
   let cancelled = sum - x in
   (sum, cancelled)
@@ -2025,7 +2025,7 @@ return t6
 ---NAME---
 integer_subtract_add_cancellation_preserves_live_intermediate
 ---INPUT---
-let f(x: Int64, y: Int64) : (Int64, Int64) =
+let f(x: Int64, y: Int64) : (Int64 * Int64) =
   let difference = x - y in
   let cancelled = difference + y in
   (difference, cancelled)
@@ -2107,7 +2107,7 @@ return t5
 ---NAME---
 cse_reuses_reversed_strict_comparison
 ---INPUT---
-let f(a: Int64, b: Int64) : (Bool, Bool) =
+let f(a: Int64, b: Int64) : (Bool * Bool) =
   let forward = a < b in
   let reverse = b > a in
   (forward, reverse)
@@ -2120,7 +2120,7 @@ return t6
 ---NAME---
 cse_reuses_reversed_inclusive_comparison
 ---INPUT---
-let f(a: Int64, b: Int64) : (Bool, Bool) =
+let f(a: Int64, b: Int64) : (Bool * Bool) =
   let forward = a <= b in
   let reverse = b >= a in
   (forward, reverse)
@@ -2133,7 +2133,7 @@ return t6
 ---NAME---
 cse_reuses_duplicate_tuple_get
 ---INPUT---
-let f(t: (Int64, Int64)) : Int64 =
+let f(t: (Int64 * Int64)) : Int64 =
   let a = t.0 in
   let b = t.0 in
   a + b
@@ -2205,7 +2205,7 @@ return t5
 ---NAME---
 cse_reuses_duplicate_float_to_bits
 ---INPUT---
-let f(x: Float) : (UInt64, UInt64) =
+let f(x: Float) : (UInt64 * UInt64) =
   let a = Stdlib.Float.toBits(x) in
   let b = Stdlib.Float.toBits(x) in
   (a, b)

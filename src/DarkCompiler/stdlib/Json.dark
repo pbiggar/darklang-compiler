@@ -7,7 +7,7 @@ let __padNumber(value: String, goalLength: Int64) : String =
     | Ok(padded) -> padded
     | Error(_) -> Builtin.testRuntimeError("JSON numeric padding failed")
 
-let __floatRatio(value: Float) : (Int, Int) =
+let __floatRatio(value: Float) : (Int * Int) =
     let bits = Stdlib.Float.toBits(value) in
     let rawExponent = (bits >> 52UL) & 2047UL in
     let mantissa = bits & 4503599627370495UL in
@@ -250,7 +250,7 @@ let __integerLexeme(text: String) : Stdlib.Option.Option<String> =
         | None -> Stdlib.Option.Option.None
         | Some(value) -> Stdlib.Option.Option.Some(Stdlib.Json.__normalizeIntegerMagnitude(value)))
 
-let __matchingFields(key: String, fields: List<(String, Stdlib.AltJson.InternalRawJson)>) : List<Stdlib.AltJson.InternalRawJson> =
+let __matchingFields(key: String, fields: List<(String * Stdlib.AltJson.InternalRawJson)>) : List<Stdlib.AltJson.InternalRawJson> =
     match fields with
     | [] -> []
     | head :: tail ->

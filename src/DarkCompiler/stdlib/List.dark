@@ -129,19 +129,19 @@ let __canonicalSortHelper<'a>(remaining: List<a>, sorted: List<a>) : List<a> =
     | [] -> sorted
     | head :: tail -> Stdlib.List.__canonicalSortHelper<a>(tail, Stdlib.List.__canonicalInsert<a>(head, sorted))
 
-let __sortByValues<'key, 'value>(pairs: List<(key, value)>) : List<value> =
+let __sortByValues<'key, 'value>(pairs: List<(key * value)>) : List<value> =
     match pairs with
     | [] -> []
     | (key, value) :: tail -> Stdlib.List.push<value>(Stdlib.List.__sortByValues<key, value>(tail), value)
 
-let __sortByPairs<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b, a)> =
+let __sortByPairs<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b * a)> =
     match list with
     | [] -> []
-    | head :: tail -> Stdlib.List.push<(b, a)>(Stdlib.List.__sortByPairs<a, b>(tail, fn), (fn(head), head))
+    | head :: tail -> Stdlib.List.push<(b * a)>(Stdlib.List.__sortByPairs<a, b>(tail, fn), (fn(head), head))
 
 let sortBy<'a, 'b>(list: List<a>, fn: (a) -> b) : List<a> =
     Stdlib.List.__sortByValues<b, a>(
-        Stdlib.List.sort<(b, a)>(Stdlib.List.__sortByPairs<a, b>(list, fn)))
+        Stdlib.List.sort<(b * a)>(Stdlib.List.__sortByPairs<a, b>(list, fn)))
 
 let unique<'a>(list: List<a>) : List<a> =
     Stdlib.List.sort<a>(Stdlib.List.__uniqueUnsorted<a>(list, []))
@@ -299,7 +299,7 @@ let __indexedMapHelper<'a, 'b>(list: List<a>, fn: (Int, a) -> b, index: Int, acc
 
 // Partition a list into two lists based on a predicate
 // Returns (elements where predicate is true, elements where predicate is false)
-let partition<'a>(list: List<a>, fn: (a) -> Bool) : (List<a>, List<a>) =
+let partition<'a>(list: List<a>, fn: (a) -> Bool) : (List<a> * List<a>) =
     match list with
     | [] -> ([], [])
     | head :: tail ->
@@ -380,40 +380,40 @@ let map2<'a, 'b, 'c>(listA: List<a>, listB: List<b>, fn: (a, b) -> c) : Stdlib.O
     if Stdlib.List.length<a>(listA) != Stdlib.List.length<b>(listB) then None
     else Some(Stdlib.List.map2shortest<a, b, c>(listA, listB, fn))
 
-let zipShortest<'a, 'b>(listA: List<a>, listB: List<b>) : List<(a, b)> =
+let zipShortest<'a, 'b>(listA: List<a>, listB: List<b>) : List<(a * b)> =
     match (listA, listB) with
     | ([], _) -> []
     | (_, []) -> []
-    | (headA :: tailA, headB :: tailB) -> Stdlib.List.push<(a, b)>(Stdlib.List.zipShortest<a, b>(tailA, tailB), (headA, headB))
+    | (headA :: tailA, headB :: tailB) -> Stdlib.List.push<(a * b)>(Stdlib.List.zipShortest<a, b>(tailA, tailB), (headA, headB))
 
-let unzip<'a, 'b>(pairs: List<(a, b)>) : (List<a>, List<b>) =
+let unzip<'a, 'b>(pairs: List<(a * b)>) : (List<a> * List<b>) =
     match pairs with
     | [] -> ([], [])
     | (first, second) :: tail ->
         match Stdlib.List.unzip<a, b>(tail) with
         | (firsts, seconds) -> (Stdlib.List.push<a>(firsts, first), Stdlib.List.push<b>(seconds, second))
 
-let splitLast<'a>(list: List<a>) : Stdlib.Option.Option<(List<a>, a)> =
+let splitLast<'a>(list: List<a>) : Stdlib.Option.Option<(List<a> * a)> =
     match Stdlib.List.reverse<a>(list) with
     | [] -> None
     | last :: reversedInit -> Some((Stdlib.List.reverse<a>(reversedInit), last))
 
-let groupByWithKey<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b, List<a>)> =
+let groupByWithKey<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b * List<a>)> =
     Stdlib.List.__groupByWithKeyHelper<a, b>(list, fn, [])
 
-let __groupContainsKey<'a, 'b>(groups: List<(b, List<a>)>, key: b) : Bool =
+let __groupContainsKey<'a, 'b>(groups: List<(b * List<a>)>, key: b) : Bool =
     match groups with
     | [] -> false
     | (groupKey, _) :: tail -> if groupKey == key then true else Stdlib.List.__groupContainsKey<a, b>(tail, key)
 
-let __appendToGroup<'a, 'b>(groups: List<(b, List<a>)>, key: b, element: a) : List<(b, List<a>)> =
+let __appendToGroup<'a, 'b>(groups: List<(b * List<a>)>, key: b, element: a) : List<(b * List<a>)> =
     match groups with
     | [] -> []
     | (groupKey, groupElements) :: tail ->
-        if groupKey == key then Stdlib.List.push<(b, List<a>)>(tail, (groupKey, Stdlib.List.pushBack<a>(groupElements, element)))
-        else Stdlib.List.push<(b, List<a>)>(Stdlib.List.__appendToGroup<a, b>(tail, key, element), (groupKey, groupElements))
+        if groupKey == key then Stdlib.List.push<(b * List<a>)>(tail, (groupKey, Stdlib.List.pushBack<a>(groupElements, element)))
+        else Stdlib.List.push<(b * List<a>)>(Stdlib.List.__appendToGroup<a, b>(tail, key, element), (groupKey, groupElements))
 
-let __groupByWithKeyHelper<'a, 'b>(remaining: List<a>, fn: (a) -> b, groups: List<(b, List<a>)>) : List<(b, List<a>)> =
+let __groupByWithKeyHelper<'a, 'b>(remaining: List<a>, fn: (a) -> b, groups: List<(b * List<a>)>) : List<(b * List<a>)> =
     match remaining with
     | [] -> groups
     | element :: tail ->
@@ -435,7 +435,7 @@ let __groupByWithKeyHelper<'a, 'b>(remaining: List<a>, fn: (a) -> b, groups: Lis
                 Stdlib.List.__groupByWithKeyHelper<a, b>(
                     tail,
                     fn,
-                    Stdlib.List.pushBack<(b, List<a>)>(rootedGroups, (rootedKey, [rootedElement])))
+                    Stdlib.List.pushBack<(b * List<a>)>(rootedGroups, (rootedKey, [rootedElement])))
             | _ -> Builtin.testRuntimeError("groupByWithKey retained state was empty")
 
 let iter<'a>(list: List<a>, fn: (a) -> Unit) : Unit =
@@ -587,6 +587,6 @@ let __floatsDisplayItems(list: List<Float>, first: Bool) : String =
 let __toDisplayString_f64(list: List<Float>) : String =
     "[" ++ Stdlib.List.__floatsDisplayItems(list, true) ++ "]"
 
-let zip<'a, 'b>(list1: List<a>, list2: List<b>) : Stdlib.Option.Option<List<(a, b)>> =
+let zip<'a, 'b>(list1: List<a>, list2: List<b>) : Stdlib.Option.Option<List<(a * b)>> =
     if Stdlib.List.length<a>(list1) != Stdlib.List.length<b>(list2) then None
     else Some(Stdlib.List.zipShortest<a, b>(list1, list2))

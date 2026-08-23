@@ -21,9 +21,9 @@ let buildTable(oldLines: List<String>, newLines: List<String>) : List<List<Int>>
             fun _i -> 0I) in
     Stdlib.List.fold<String, List<List<Int>>>(newLines, [zeroRow], fun table newLine ->
         let prevRow = Stdlib.Option.withDefault<List<Int>>(Stdlib.List.last<List<Int>>(table), []) in
-        let pairs = Stdlib.List.indexedMap<String, (Int, String)>(oldLines, fun i oldLine -> (i, oldLine)) in
+        let pairs = Stdlib.List.indexedMap<String, (Int * String)>(oldLines, fun i oldLine -> (i, oldLine)) in
         let nextRow =
-            Stdlib.List.fold<(Int, String), List<Int>>(pairs, [0I], fun row pair ->
+            Stdlib.List.fold<(Int * String), List<Int>>(pairs, [0I], fun row pair ->
                 let (i, oldLine) = pair in
                 let above = Stdlib.Option.withDefault<Int>(Stdlib.List.getAt<Int>(prevRow, i + 1I), 0I) in
                 let diag = Stdlib.Option.withDefault<Int>(Stdlib.List.getAt<Int>(prevRow, i), 0I) in

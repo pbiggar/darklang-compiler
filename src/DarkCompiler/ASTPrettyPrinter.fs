@@ -78,7 +78,11 @@ let rec private formatType (typ: Type) : string =
         // every public Dict type is rendered with its single value parameter.
         $"Dict<{formatType keyType}, {formatType valueType}>"
     | TTuple elemTypes ->
-        let elemText = elemTypes |> List.map formatType |> String.concat ", "
+        let formatElement elemType =
+            match elemType with
+            | TFunction _ -> $"({formatType elemType})"
+            | _ -> formatType elemType
+        let elemText = elemTypes |> List.map formatElement |> String.concat " * "
         $"({elemText})"
     | TEnumFields fieldTypes ->
         fieldTypes |> List.map formatType |> String.concat " * "

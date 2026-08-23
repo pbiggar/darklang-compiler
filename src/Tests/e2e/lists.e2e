@@ -350,11 +350,11 @@ match [(2, 3), (4, 5)] with | [(a, b), (c, d)] -> a * b + c * d | _ -> 0 = 26
 match [(10, 20)] with | [(a, b)] -> a + b | _ -> 0 = 30
 
 // Recursive list construction with tuple elements
-let makePairs(n: Int64) : List<(Int64, Int64)> =
+let makePairs(n: Int64) : List<(Int64 * Int64)> =
     if n <= 0 then
         []
     else
-        Stdlib.List.push<(Int64, Int64)>(makePairs(n - 1), (n, n + 1))
+        Stdlib.List.push<(Int64 * Int64)>(makePairs(n - 1), (n, n + 1))
 
 let pairs = makePairs(1) in match pairs with | [(a, b)] -> a + b | _ -> 999 = 3
 
@@ -376,7 +376,7 @@ match [(1.0, 2.5), (3.5, 4.0)] with | [(a, b), (c, d)] -> a + b + c + d | _ -> 0
 match [("a", 0.5)] with | [(_, value)] -> if value < 0.6 then 1 else 0 | _ -> 0 = 1
 
 // Cumulative float tuple selection in list
-let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> = match Stdlib.List.head<(Int64, Float)>(table) with | None -> [] | Some(item) -> let c = Stdlib.Tuple2.first<Int64, Float>(item) in let p = Stdlib.Tuple2.second<Int64, Float>(item) in let newRunning = running + p in match Stdlib.List.tail<(Int64, Float)>(table) with | None -> [(c, newRunning)] | Some(rest) -> Stdlib.List.push<(Int64, Float)>(makeCumulative(rest, newRunning), (c, newRunning)) let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int) : Int64 = match Stdlib.List.getAt(table, idx) with | None -> 0 | Some(item) -> let c = Stdlib.Tuple2.first(item) in let p = Stdlib.Tuple2.second(item) in if r < p then c else if idx + 1I >= Stdlib.List.length(table) then c else selectRandom(table, r, idx + 1I) let table = [(97, 0.27), (99, 0.12), (103, 0.12), (116, 0.27)] in let cumulative = makeCumulative(table, 0.0) in let newSeed = (1 * 3877 + 29573) % 139968 in let r = Stdlib.Int64.toFloat(newSeed) / 139968.0 in selectRandom(cumulative, r, 0I) = 97
+let makeCumulative(table: List<(Int64 * Float)>, running: Float) : List<(Int64 * Float)> = match Stdlib.List.head<(Int64 * Float)>(table) with | None -> [] | Some(item) -> let c = Stdlib.Tuple2.first<Int64, Float>(item) in let p = Stdlib.Tuple2.second<Int64, Float>(item) in let newRunning = running + p in match Stdlib.List.tail<(Int64 * Float)>(table) with | None -> [(c, newRunning)] | Some(rest) -> Stdlib.List.push<(Int64 * Float)>(makeCumulative(rest, newRunning), (c, newRunning)) let selectRandom(table: List<(Int64 * Float)>, r: Float, idx: Int) : Int64 = match Stdlib.List.getAt(table, idx) with | None -> 0 | Some(item) -> let c = Stdlib.Tuple2.first(item) in let p = Stdlib.Tuple2.second(item) in if r < p then c else if idx + 1I >= Stdlib.List.length(table) then c else selectRandom(table, r, idx + 1I) let table = [(97, 0.27), (99, 0.12), (103, 0.12), (116, 0.27)] in let cumulative = makeCumulative(table, 0.0) in let newSeed = (1 * 3877 + 29573) % 139968 in let r = Stdlib.Int64.toFloat(newSeed) / 139968.0 in selectRandom(cumulative, r, 0I) = 97
 // =====================================================
 // Lists of Strings
 // =====================================================

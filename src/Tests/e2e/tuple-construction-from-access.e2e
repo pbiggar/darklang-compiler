@@ -22,11 +22,11 @@ let t = (10, 20, 30) in let (a, _, c) = t in let t2 = (c, a) in let (first, seco
 // =====================================================
 
 // These functions have unique names to avoid collisions in the shared preamble
-let makeTuple3(x: Int64) : (Int64, Int64, Int64) = (x, x * 2, x * 3)
+let makeTuple3(x: Int64) : (Int64 * Int64 * Int64) = (x, x * 2, x * 3)
 
 let r = makeTuple3(5) in let (a, b, _) = r in let t = (a, b) in let (first, second) = t in first + second = 15
 
-let makeTuple4(x: Int64) : (Int64, Int64, Int64, Int64) = (x, x + 1, x + 2, x + 3)
+let makeTuple4(x: Int64) : (Int64 * Int64 * Int64 * Int64) = (x, x + 1, x + 2, x + 3)
 
 let r = makeTuple4(10) in let (_, b, _, d) = r in let t = (b, d) in let (first, second) = t in first + second = 24
 
@@ -40,7 +40,7 @@ let a = (1, 2, 3) in let (a0, a1, a2) = a in let b = (a0 + 10, a1 + 10) in let (
 // Tuple construction in function returning tuple
 // =====================================================
 
-let transformTuple(t: (Int64, Int64, Int64)) : (Int64, Int64) = let (first, second, third) = t in (first + second, second + third)
+let transformTuple(t: (Int64 * Int64 * Int64)) : (Int64 * Int64) = let (first, second, third) = t in (first + second, second + third)
 
 let orig = (1, 2, 3) in let result = transformTuple(orig) in let (first, second) = result in first + second = 8
 
@@ -48,9 +48,9 @@ let orig = (1, 2, 3) in let result = transformTuple(orig) in let (first, second)
 // Recursive function using tuple construction from access
 // =====================================================
 
-let stepPair(x: Int64, y: Int64) : (Int64, Int64) = (x + 1, y + 2)
+let stepPair(x: Int64, y: Int64) : (Int64 * Int64) = (x + 1, y + 2)
 
-let recurseWithTuple(t: (Int64, Int64), n: Int64) : Int64 =
+let recurseWithTuple(t: (Int64 * Int64), n: Int64) : Int64 =
     let (first, second) = t in
     if n <= 0 then first + second
     else

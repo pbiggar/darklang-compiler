@@ -7,7 +7,7 @@
 // =====================================================
 
 // Simple tuple recursion with let binding
-let tupleRecurseLet(t: (Int64, Int64), n: Int64) : Int64 =
+let tupleRecurseLet(t: (Int64 * Int64), n: Int64) : Int64 =
     let (first, second) = t in
     if n <= 0 then first + second
     else
@@ -17,7 +17,7 @@ let tupleRecurseLet(t: (Int64, Int64), n: Int64) : Int64 =
 tupleRecurseLet((0, 0), 10) = 20
 
 // Tuple recursion with inline construction
-let tupleRecurseInline(t: (Int64, Int64), n: Int64) : Int64 =
+let tupleRecurseInline(t: (Int64 * Int64), n: Int64) : Int64 =
     let (first, second) = t in
     if n <= 0 then first + second
     else tupleRecurseInline((first + 1, second + 1), n - 1)
@@ -28,9 +28,9 @@ tupleRecurseInline((0, 0), 10) = 20
 // Tuple recursion with helper function
 // =====================================================
 
-let stepPairHelper(x: Int64, y: Int64) : (Int64, Int64) = (x + 1, y + 2)
+let stepPairHelper(x: Int64, y: Int64) : (Int64 * Int64) = (x + 1, y + 2)
 
-let recurseWithHelper(t: (Int64, Int64), n: Int64) : Int64 =
+let recurseWithHelper(t: (Int64 * Int64), n: Int64) : Int64 =
     let (first, second) = t in
     if n <= 0 then first + second
     else
@@ -43,7 +43,7 @@ recurseWithHelper((0, 0), 10) = 30
 // 3-tuple recursion
 // =====================================================
 
-let tuple3Recurse(t: (Int64, Int64, Int64), n: Int64) : Int64 =
+let tuple3Recurse(t: (Int64 * Int64 * Int64), n: Int64) : Int64 =
     let (first, second, third) = t in
     if n <= 0 then first + second + third
     else
@@ -60,7 +60,7 @@ tuple3Recurse((0, 0, 0), 10) = 30
 // as they involve a different bug with tuple element propagation through recursion
 
 // Non-recursive tuple return works correctly
-let makeTupleFromTuple(t: (Int64, Int64)) : (Int64, Int64) = let (first, second) = t in (first + 1, second + 2)
+let makeTupleFromTuple(t: (Int64 * Int64)) : (Int64 * Int64) = let (first, second) = t in (first + 1, second + 2)
 
 let orig = (5, 10) in let result = makeTupleFromTuple(orig) in let (first, second) = result in first + second = 18
 

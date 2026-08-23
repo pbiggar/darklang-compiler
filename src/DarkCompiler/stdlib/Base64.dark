@@ -114,7 +114,7 @@ let urlEncode(bytes: Blob) : String =
 
 // Decode 4 base64 characters to up to 3 bytes
 // Returns (bytes list, error flag)
-let __decode4Chars(c0: Int64, c1: Int64, c2: Int64, c3: Int64) : (List<Int64>, Bool) =
+let __decode4Chars(c0: Int64, c1: Int64, c2: Int64, c3: Int64) : (List<Int64> * Bool) =
     let v0 = Stdlib.Base64.__decodeChar(c0) in
     let v1 = Stdlib.Base64.__decodeChar(c1) in
     let v2 = Stdlib.Base64.__decodeChar(c2) in

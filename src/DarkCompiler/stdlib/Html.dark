@@ -2,8 +2,8 @@
 
 module Stdlib.Html
 
-type Attribute = List<(String, Stdlib.Option.Option<String>)>
-type Attributes = List<(String, Stdlib.Option.Option<String>)>
+type Attribute = List<(String * Stdlib.Option.Option<String>)>
+type Attributes = List<(String * Stdlib.Option.Option<String>)>
 
 type HtmlTag = {
     name: String,
@@ -46,14 +46,14 @@ let htmlTagNode(
             children = children
         })
 
-let __attributeToString(attr: (String, Stdlib.Option.Option<String>)) : String =
+let __attributeToString(attr: (String * Stdlib.Option.Option<String>)) : String =
     match attr with
     | (key, Some(value)) -> key ++ "=\"" ++ value ++ "\""
     | (key, None) -> key
 
 let __attributesToString(attrs: Stdlib.Html.Attributes) : String =
     Stdlib.String.join(
-        Stdlib.List.map<(String, Stdlib.Option.Option<String>), String>(
+        Stdlib.List.map<(String * Stdlib.Option.Option<String>), String>(
             attrs,
             Stdlib.Html.__attributeToString),
         " ")
@@ -86,20 +86,20 @@ let nodeToString(node: Stdlib.Html.Node) : String =
 let comment(value: String) : Stdlib.Html.Node =
     Stdlib.Html.stringNode("<!-- " ++ value ++ " -->")
 
-let classes(classList: List<String>) : (String, Stdlib.Option.Option<String>) =
+let classes(classList: List<String>) : (String * Stdlib.Option.Option<String>) =
     ("class", Some(Stdlib.String.join(classList, " ")))
 
-let __styleProperty(property: (String, String)) : String =
+let __styleProperty(property: (String * String)) : String =
     let (name, value) = property in name ++ ": " ++ value
 
-let style(properties: List<(String, String)>) : (String, Stdlib.Option.Option<String>) =
+let style(properties: List<(String * String)>) : (String * Stdlib.Option.Option<String>) =
     let rendered =
-        Stdlib.List.map<(String, String), String>(
+        Stdlib.List.map<(String * String), String>(
             properties,
             Stdlib.Html.__styleProperty) in
     ("style", Some(Stdlib.String.join(rendered, "; ")))
 
-let dataAttr(name: String, value: String) : (String, Stdlib.Option.Option<String>) =
+let dataAttr(name: String, value: String) : (String * Stdlib.Option.Option<String>) =
     ("data-" ++ name, Some(value))
 
 let __emptyAttributes() : Stdlib.Html.Attributes = []

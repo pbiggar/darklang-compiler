@@ -18,7 +18,7 @@ let __canonicalDecompositionLookupGroup0(key: Int64, valueIndex: Int64) : Stdlib
                 | None ->
                     None
 
-let contextualCasing() : List<(Int64, List<Int64>, List<Int64>, List<Int64>, String)> =
+let contextualCasing() : List<(Int64 * List<Int64> * List<Int64> * List<Int64> * String)> =
     [
         (931, [962], [931], [931], "Final_Sigma"),
         (775, [775], [], [], "lt After_Soft_Dotted"),

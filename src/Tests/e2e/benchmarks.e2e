@@ -80,7 +80,7 @@ ackermann(3, 3) = 61
 // Binary Trees (binary_trees) - construct and traverse a complete binary tree
 // ===================================================================
 
-type BenchmarkTree<'a> = BenchmarkLeaf of a | BenchmarkNode of (BenchmarkTree<a>, BenchmarkTree<a>)
+type BenchmarkTree<'a> = BenchmarkLeaf of a | BenchmarkNode of (BenchmarkTree<a> * BenchmarkTree<a>)
 
 let makeBenchmarkTree(depth: Int64) : BenchmarkTree<Int64> =
     if depth <= 0 then BenchmarkLeaf(1)
@@ -321,20 +321,20 @@ let makeRepeatFasta(aluBytes: List<Int64>, n: Int64, i: Int64, checksum: Int64) 
         let newChecksum = (checksum + c * (i + 1)) % 1000000007 in
         makeRepeatFasta(aluBytes, n, i + 1, newChecksum)
 
-let makeCumulative(table: List<(Int64, Float)>, running: Float) : List<(Int64, Float)> =
-    match Stdlib.List.head<(Int64, Float)>(table) with
+let makeCumulative(table: List<(Int64 * Float)>, running: Float) : List<(Int64 * Float)> =
+    match Stdlib.List.head<(Int64 * Float)>(table) with
     | None -> []
     | Some(item) ->
         let c = Stdlib.Tuple2.first<Int64, Float>(item) in
         let p = Stdlib.Tuple2.second<Int64, Float>(item) in
         let newRunning = running + p in
-        match Stdlib.List.tail<(Int64, Float)>(table) with
+        match Stdlib.List.tail<(Int64 * Float)>(table) with
         | None -> [(c, newRunning)]
         | Some(rest) ->
             let restCum = makeCumulative(rest, newRunning) in
-            Stdlib.List.push<(Int64, Float)>(restCum, (c, newRunning))
+            Stdlib.List.push<(Int64 * Float)>(restCum, (c, newRunning))
 
-let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 =
+let selectRandom(table: List<(Int64 * Float)>, r: Float, idx: Int64) : Int64 =
     match Stdlib.List.getAt(table, Stdlib.Int.fromInt64(idx)) with
     | None -> 0
     | Some(item) ->
@@ -345,7 +345,7 @@ let selectRandom(table: List<(Int64, Float)>, r: Float, idx: Int64) : Int64 =
             if Stdlib.Int.fromInt64(idx + 1) >= Stdlib.List.length(table) then c
             else selectRandom(table, r, idx + 1)
 
-let makeRandomFasta(n: Int64, table: List<(Int64, Float)>, seed: Int64, i: Int64, checksum: Int64) : (Int64, Int64) =
+let makeRandomFasta(n: Int64, table: List<(Int64 * Float)>, seed: Int64, i: Int64, checksum: Int64) : (Int64 * Int64) =
     if i >= n then (checksum, seed)
     else
         let newSeed = (seed * 3877 + 29573) % 139968 in
@@ -382,30 +382,30 @@ let spectralMatA(i: Int64, j: Int64) : Float =
     let div = ij * (ij + 1) / 2 + i + 1 in
     1.0 / Stdlib.Int64.toFloat(div)
 
-let spectralGet3(v: (Float, Float, Float), i: Int64) : Float =
+let spectralGet3(v: (Float * Float * Float), i: Int64) : Float =
     let (first, second, third) = v in
     if i == 0 then first
     else if i == 1 then second
     else third
 
-let spectralAvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+let spectralAvRow(i: Int64, j: Int64, n: Int64, v: (Float * Float * Float), acc: Float) : Float =
     if j >= n then acc
     else spectralAvRow(i, j + 1, n, v, acc + spectralMatA(i, j) * spectralGet3(v, j))
 
-let spectralAtvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+let spectralAtvRow(i: Int64, j: Int64, n: Int64, v: (Float * Float * Float), acc: Float) : Float =
     if j >= n then acc
     else spectralAtvRow(i, j + 1, n, v, acc + spectralMatA(j, i) * spectralGet3(v, j))
 
-let spectralAv3(v: (Float, Float, Float)) : (Float, Float, Float) =
+let spectralAv3(v: (Float * Float * Float)) : (Float * Float * Float) =
     (spectralAvRow(0, 0, 3, v, 0.0), spectralAvRow(1, 0, 3, v, 0.0), spectralAvRow(2, 0, 3, v, 0.0))
 
-let spectralAtv3(v: (Float, Float, Float)) : (Float, Float, Float) =
+let spectralAtv3(v: (Float * Float * Float)) : (Float * Float * Float) =
     (spectralAtvRow(0, 0, 3, v, 0.0), spectralAtvRow(1, 0, 3, v, 0.0), spectralAtvRow(2, 0, 3, v, 0.0))
 
-let spectralAtav3(v: (Float, Float, Float)) : (Float, Float, Float) =
+let spectralAtav3(v: (Float * Float * Float)) : (Float * Float * Float) =
     spectralAtv3(spectralAv3(v))
 
-let spectralDot3(a: (Float, Float, Float), b: (Float, Float, Float)) : Float =
+let spectralDot3(a: (Float * Float * Float), b: (Float * Float * Float)) : Float =
     let (a0, a1, a2) = a in
     let (b0, b1, b2) = b in
     a0 * b0 + a1 * b1 + a2 * b2

@@ -90,7 +90,7 @@ let next<'a>(stream: Stream<a>) : Stdlib.Option.Option<a> =
 
 let __producerNext<'producerState, 'output>(
     cell: RawPtr,
-    step: (producerState) -> Stdlib.Option.Option<(output, producerState)>
+    step: (producerState) -> Stdlib.Option.Option<(output * producerState)>
     ) : Stdlib.Option.Option<output> =
     let current = Stdlib.Stream.__cellGet<producerState>(cell) in
     match step(current) with
@@ -107,7 +107,7 @@ let __producerClose<'producerState>(cell: RawPtr, dispose: (producerState) -> Un
 
 let __fromProducer<'producerState, 'output>(
     initial: producerState,
-    step: (producerState) -> Stdlib.Option.Option<(output, producerState)>,
+    step: (producerState) -> Stdlib.Option.Option<(output * producerState)>,
     dispose: (producerState) -> Unit
     ) : Stream<output> =
     let cell = Stdlib.Stream.__cellNew<producerState>(initial) in
@@ -117,7 +117,7 @@ let __fromProducer<'producerState, 'output>(
 
 let __ignoreDispose<'state>(_state: state) : Unit = ()
 
-let __fromListStep<'a>(remaining: List<a>) : Stdlib.Option.Option<(a, List<a>)> =
+let __fromListStep<'a>(remaining: List<a>) : Stdlib.Option.Option<(a * List<a>)> =
     match remaining with
     | [] -> None
     | head :: tail -> Some((head, tail))
@@ -127,7 +127,7 @@ let fromList<'a>(items: List<a>) : Stream<a> =
     let dispose = fun _remaining -> () in
     Stdlib.Stream.__fromProducer(items, step, dispose)
 
-let unfold<'state, 'a>(initial: state, step: (state) -> Stdlib.Option.Option<(a, state)>) : Stream<a> =
+let unfold<'state, 'a>(initial: state, step: (state) -> Stdlib.Option.Option<(a * state)>) : Stream<a> =
     let dispose = fun _state -> () in
     Stdlib.Stream.__fromProducer(initial, step, dispose)
 
@@ -145,13 +145,13 @@ let toBlob(stream: Stream<UInt8>) : Blob =
 let __closeStream<'a>(stream: Stream<a>) : Unit =
     Stdlib.Stream.close<a>(stream)
 
-let __mapStep<'a, 'b>(state: (Stream<a>, Unit), fn: (a) -> b) : Stdlib.Option.Option<(b, (Stream<a>, Unit))> =
+let __mapStep<'a, 'b>(state: (Stream<a> * Unit), fn: (a) -> b) : Stdlib.Option.Option<(b * (Stream<a> * Unit))> =
     let (source, marker) = state in
     match Stdlib.Stream.next<a>(source) with
     | None -> None
     | Some(value) -> Some((fn(value), (source, marker)))
 
-let __closeStreamState<'a>(state: (Stream<a>, Unit)) : Unit =
+let __closeStreamState<'a>(state: (Stream<a> * Unit)) : Unit =
     let (source, marker) = state in
     Stdlib.Stream.close<a>(source)
 
@@ -160,7 +160,7 @@ let map<'a, 'b>(stream: Stream<a>, fn: (a) -> b) : Stream<b> =
     let dispose = fun state -> Stdlib.Stream.__closeStreamState<a>(state) in
     Stdlib.Stream.__fromProducer((stream, ()), step, dispose)
 
-let __filterStep<'a>(state: (Stream<a>, Unit), predicate: (a) -> Bool) : Stdlib.Option.Option<(a, (Stream<a>, Unit))> =
+let __filterStep<'a>(state: (Stream<a> * Unit), predicate: (a) -> Bool) : Stdlib.Option.Option<(a * (Stream<a> * Unit))> =
     let (source, marker) = state in
     match Stdlib.Stream.next<a>(source) with
     | None -> None
@@ -173,7 +173,7 @@ let filter<'a>(stream: Stream<a>, predicate: (a) -> Bool) : Stream<a> =
     let dispose = fun state -> Stdlib.Stream.__closeStreamState<a>(state) in
     Stdlib.Stream.__fromProducer((stream, ()), step, dispose)
 
-let __takeStep<'a>(state: (Stream<a>, Int)) : Stdlib.Option.Option<(a, (Stream<a>, Int))> =
+let __takeStep<'a>(state: (Stream<a> * Int)) : Stdlib.Option.Option<(a * (Stream<a> * Int))> =
     let (source, remaining) = state in
     if remaining <= 0I then None
     else
@@ -181,7 +181,7 @@ let __takeStep<'a>(state: (Stream<a>, Int)) : Stdlib.Option.Option<(a, (Stream<a
         | None -> None
         | Some(value) -> Some((value, (source, remaining - 1I)))
 
-let __closeTakeState<'a>(state: (Stream<a>, Int)) : Unit =
+let __closeTakeState<'a>(state: (Stream<a> * Int)) : Unit =
     let (source, remaining) = state in
     Stdlib.Stream.close<a>(source)
 
@@ -198,7 +198,7 @@ let __closeAll<'a>(streams: List<Stream<a>>) : Unit =
         let _ = Stdlib.Stream.close<a>(head) in
         Stdlib.Stream.__closeAll<a>(tail)
 
-let __concatStep<'a>(streams: List<Stream<a>>) : Stdlib.Option.Option<(a, List<Stream<a>>)> =
+let __concatStep<'a>(streams: List<Stream<a>>) : Stdlib.Option.Option<(a * List<Stream<a>>)> =
     match streams with
     | [] -> None
     | head :: tail ->

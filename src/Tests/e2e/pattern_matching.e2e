@@ -194,7 +194,7 @@ match (100, 37) with | (a, b) when b < a -> b - a | _ -> 999 = -63
 match (100, 40, 7) with | (a, b, c) when c < b -> a - b - c | _ -> 999 = 53
 
 // Tuple pattern with constructor payload typing (structural equality)
-type PairOption = PairNone | PairSome of (Int64, Int64)
+type PairOption = PairNone | PairSome of (Int64 * Int64)
 match (PairSome((1, 2)), PairSome((1, 2))) with | (PairSome(x), PairSome(y)) -> x == y | _ -> false = true
 
 // Tuple literal pattern index increment verification (kills mutation #82)
@@ -463,7 +463,7 @@ let x = match false with | true -> [] | false -> [[1.5, 2.5], [3.0]] in match x 
 
 // Tuple arity mismatch inside constructor payload list pattern must not default missing tuple slots to Stdlib.Int64.
 // Regression: this previously matched and evaluated the branch body instead of surfacing the tuple arity issue.
-type TupleListBox = TupleListBox of List<(Int64, Int64)> match TupleListBox([(1, 2)]) with | TupleListBox([(a, b, c)]) -> 1 | _ -> 2 = error="Tuple pattern expects 3 elements but got 2"
+type TupleListBox = TupleListBox of List<(Int64 * Int64)> match TupleListBox([(1, 2)]) with | TupleListBox([(a, b, c)]) -> 1 | _ -> 2 = error="Tuple pattern expects 3 elements but got 2"
 
 // Constructor payload tuple pattern on non-tuple payload type must not match in list patterns.
 // Regression: this previously matched due nested tuple bindings defaulting to TInt64.
@@ -471,7 +471,7 @@ match [Some(5), Some(6)] with | [None, _] -> 1 | [Some((x, _)), _] -> 2 | _ -> 3
 
 // Generic constructor payload tuple destructuring must preserve unresolved tuple element bindings.
 // Regression: lowering dropped tuple bindings for `TVar` payloads and failed with `Undefined variable: x`.
-let genericPayloadTupleBinding(v: Stdlib.Option.Option<(String, Int64)>) : String = match v with | Some((x, _)) -> x | _ -> "" genericPayloadTupleBinding(Some(("a" ++ "", 1))) = "a"
+let genericPayloadTupleBinding(v: Stdlib.Option.Option<(String * Int64)>) : String = match v with | Some((x, _)) -> x | _ -> "" genericPayloadTupleBinding(Some(("a" ++ "", 1))) = "a"
 
 // Generic top-level list patterns should allow unresolved scrutinee TVars.
 // Regression: type checking rejected list-pattern bindings on TVar scrutinees before lowering.
@@ -509,7 +509,7 @@ match Some(true) with | Some(x) -> match x with | true -> 42 | false -> 0 | None
 // inside constructor payloads, specifically testing index incrementing
 
 // Define a type with a tuple payload
-type TupleBox = TupleEmpty | TupleHas of (Int64, Int64)
+type TupleBox = TupleEmpty | TupleHas of (Int64 * Int64)
 
 // Tuple literal pattern inside constructor - should NOT match when second element differs
 // If index + 1 were changed to index - 1, both comparisons would check the first element
@@ -520,7 +520,7 @@ match TupleHas((5, 7)) with | TupleHas((5, 5)) -> 1 | _ -> 0 = 0
 match TupleHas((5, 5)) with | TupleHas((5, 5)) -> 1 | _ -> 0 = 1
 
 // Three-element tuple payload to verify all indices increment correctly
-type TripleBox = TripleEmpty | TripleHas of (Int64, Int64, Int64)
+type TripleBox = TripleEmpty | TripleHas of (Int64 * Int64 * Int64)
 match TripleHas((10, 20, 30)) with | TripleHas((10, 10, 10)) -> 1 | _ -> 0 = 0
 match TripleHas((10, 10, 10)) with | TripleHas((10, 10, 10)) -> 1 | _ -> 0 = 1
 

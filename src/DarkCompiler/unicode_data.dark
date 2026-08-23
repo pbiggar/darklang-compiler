@@ -50,7 +50,7 @@ let __generalCategoryLookupGroup5(codepoint: Int64) : Stdlib.Option.Option<Int64
                 | None ->
                     None
 
-let sourceHashes() : List<(String, String)> =
+let sourceHashes() : List<(String * String)> =
     [
         ("CompositionExclusions.txt", "2f239196ef3b5b61db5cc476e9bd80f534d15aa1b74e1be1dea5d042a344c85f"),
         ("DerivedCoreProperties.txt", "24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08"),
@@ -61,7 +61,7 @@ let sourceHashes() : List<(String, String)> =
         ("emoji-data.txt", "2cb2bb9455cda83e8481541ecf5b6dfda66a3bb89efa3fa7c5297eccf607b72b")
     ]
 
-let tableCounts() : List<(String, Int64)> =
+let tableCounts() : List<(String * Int64)> =
     [
         ("canonicalCompositions", 965),
         ("canonicalDecompositions", 2081),

@@ -442,7 +442,7 @@ Function divideSelf:
 ---NAME---
 licm_hoist_tuple_load
 ---INPUT---
-let loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
+let loop(n: Int64, acc: Int64, t: (Int64 * Int64)) : Int64 =
     if n < 1 then acc
     else
         let v = t.0 in

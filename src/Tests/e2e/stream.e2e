@@ -1,7 +1,7 @@
 // Public Stream parity: opaque typing, laziness, identity, infinite producers,
 // draining behavior, callback errors, and AOT rejection of ordering.
 
-let unfoldStep(value: Int64): Stdlib.Option.Option<(Int64, Int64)> = Some((value, value + 1))
+let unfoldStep(value: Int64): Stdlib.Option.Option<(Int64 * Int64)> = Some((value, value + 1))
 let streamFail(_value: Int64): Int64 = Builtin.testRuntimeError("stream callback failed")
 
 let stream = Stdlib.Stream.unfold(0, unfoldStep) in Stdlib.Stream.toList(Stdlib.Stream.take(stream, 5I)) = [0, 1, 2, 3, 4] // unfold remains lazy over an infinite producer

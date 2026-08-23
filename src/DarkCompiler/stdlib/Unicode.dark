@@ -9,7 +9,7 @@ let isScalar(codepoint: Int64) : Bool =
 
 let __isContinuation(byte: Int64) : Bool = byte >= 128 && byte <= 191
 
-let decodeAt(value: String, index: Int64) : Stdlib.Result.Result<(Int64, Int64), Unicode.Utf8Error> =
+let decodeAt(value: String, index: Int64) : Stdlib.Result.Result<(Int64 * Int64), Unicode.Utf8Error> =
     let length = Stdlib.String.__byteLength(value) in
     if index < 0 || index >= length then Error(Unicode.Utf8Error.InvalidUtf8(index))
     else
@@ -54,7 +54,7 @@ let __decode(value: String, index: Int64, acc: List<Int64>) : Stdlib.Result.Resu
 let decode(value: String) : Stdlib.Result.Result<List<Int64>, Unicode.Utf8Error> =
     Unicode.__decode(value, 0, [])
 
-let __lookupMapping(codepoint: Int64, entries: List<(Int64, List<Int64>)>) : Stdlib.Option.Option<List<Int64>> =
+let __lookupMapping(codepoint: Int64, entries: List<(Int64 * List<Int64>)>) : Stdlib.Option.Option<List<Int64>> =
     match entries with
     | [] -> None
     | entry :: rest ->
@@ -63,7 +63,7 @@ let __lookupMapping(codepoint: Int64, entries: List<(Int64, List<Int64>)>) : Std
         else if key > codepoint then None
         else Unicode.__lookupMapping(codepoint, rest)
 
-let __lookupIntRange(codepoint: Int64, ranges: List<(Int64, Int64, Int64)>, missing: Int64) : Int64 =
+let __lookupIntRange(codepoint: Int64, ranges: List<(Int64 * Int64 * Int64)>, missing: Int64) : Int64 =
     match ranges with
     | [] -> missing
     | range :: rest ->
@@ -76,7 +76,7 @@ let __lookupIntRange(codepoint: Int64, ranges: List<(Int64, Int64, Int64)>, miss
 let combiningClass(codepoint: Int64) : Int64 =
     Unicode.Data.lookupCombiningClass(codepoint)
 
-let __lookupGraphemeRange(codepoint: Int64, ranges: List<(Int64, Int64, Unicode.Data.GraphemeBreak)>) : Unicode.Data.GraphemeBreak =
+let __lookupGraphemeRange(codepoint: Int64, ranges: List<(Int64 * Int64 * Unicode.Data.GraphemeBreak)>) : Unicode.Data.GraphemeBreak =
     match ranges with
     | [] -> Unicode.Data.GraphemeBreak.GBOther
     | range :: rest ->
@@ -89,7 +89,7 @@ let __lookupGraphemeRange(codepoint: Int64, ranges: List<(Int64, Int64, Unicode.
 let graphemeBreak(codepoint: Int64) : Unicode.Data.GraphemeBreak =
     Unicode.Data.lookupGraphemeBreak(codepoint)
 
-let __lookupIndicRange(codepoint: Int64, ranges: List<(Int64, Int64, Unicode.Data.IndicConjunctBreak)>) : Unicode.Data.IndicConjunctBreak =
+let __lookupIndicRange(codepoint: Int64, ranges: List<(Int64 * Int64 * Unicode.Data.IndicConjunctBreak)>) : Unicode.Data.IndicConjunctBreak =
     match ranges with
     | [] -> Unicode.Data.IndicConjunctBreak.InCBNone
     | range :: rest ->
@@ -102,7 +102,7 @@ let __lookupIndicRange(codepoint: Int64, ranges: List<(Int64, Int64, Unicode.Dat
 let indicConjunctBreak(codepoint: Int64) : Unicode.Data.IndicConjunctBreak =
     Unicode.Data.lookupIndicConjunctBreak(codepoint)
 
-let __inRanges(codepoint: Int64, ranges: List<(Int64, Int64)>) : Bool =
+let __inRanges(codepoint: Int64, ranges: List<(Int64 * Int64)>) : Bool =
     match ranges with
     | [] -> false
     | range :: rest ->
@@ -118,7 +118,7 @@ let isExtendedPictographic(codepoint: Int64) : Bool =
 let isWhitespace(codepoint: Int64) : Bool =
     Unicode.Data.isWhiteSpace(codepoint)
 
-let __lookupCategoryRange(codepoint: Int64, ranges: List<(Int64, Int64, Unicode.Data.GeneralCategory)>) : Unicode.Data.GeneralCategory =
+let __lookupCategoryRange(codepoint: Int64, ranges: List<(Int64 * Int64 * Unicode.Data.GeneralCategory)>) : Unicode.Data.GeneralCategory =
     match ranges with
     | [] -> Unicode.Data.GeneralCategory.Cn
     | range :: rest ->

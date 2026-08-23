@@ -6,16 +6,16 @@
 // FIXED: "let t = (a, b) in t" pattern now works
 // =====================================================
 
-let test(a: Int64) : (Int64, Int64) = let t = (a, a * 2) in t
+let test(a: Int64) : (Int64 * Int64) = let t = (a, a * 2) in t
 let r = test(5) in let (first, _) = r in first = 5
 
-let makeNext(t: (Int64, Int64)) : (Int64, Int64) = let (first, second) = t in let next = (first + 1, second + 2) in next
+let makeNext(t: (Int64 * Int64)) : (Int64 * Int64) = let (first, second) = t in let next = (first + 1, second + 2) in next
 let r2 = makeNext((0, 0)) in let (first, _) = r2 in first = 1
 
 // =====================================================
 // Direct tuple return without let binding
 // =====================================================
-let addToTupleDirect(t: (Int64, Int64)) : (Int64, Int64) = let (first, second) = t in (first + 1, second + 2)
+let addToTupleDirect(t: (Int64 * Int64)) : (Int64 * Int64) = let (first, second) = t in (first + 1, second + 2)
 
 let r3 = addToTupleDirect((5, 10)) in let (first, second) = r3 in first + second = 18
 

@@ -34,7 +34,7 @@ type Found = {
 
 let __invalid<'a>() : 'a = Builtin.testRuntimeError("Invalid regex pattern")
 
-let __takeDelimited(chars: List<Char>, open_: Char, close_: Char, depth: Int64, escaped: Bool, acc: List<Char>) : Stdlib.Result.Result<(String, List<Char>), String> =
+let __takeDelimited(chars: List<Char>, open_: Char, close_: Char, depth: Int64, escaped: Bool, acc: List<Char>) : Stdlib.Result.Result<(String * List<Char>), String> =
     match chars with
     | [] -> Error("unterminated regular-expression construct")
     | char :: rest ->
@@ -46,7 +46,7 @@ let __takeDelimited(chars: List<Char>, open_: Char, close_: Char, depth: Int64, 
             else Stdlib.Regex.__takeDelimited(rest, open_, close_, depth - 1, false, Stdlib.List.push<Char>(acc, char))
         else Stdlib.Regex.__takeDelimited(rest, open_, close_, depth, false, Stdlib.List.push<Char>(acc, char))
 
-let __takeClass(chars: List<Char>, escaped: Bool, acc: List<Char>) : Stdlib.Result.Result<(String, List<Char>), String> =
+let __takeClass(chars: List<Char>, escaped: Bool, acc: List<Char>) : Stdlib.Result.Result<(String * List<Char>), String> =
     match chars with
     | [] -> Error("unterminated character class")
     | char :: rest ->
@@ -55,7 +55,7 @@ let __takeClass(chars: List<Char>, escaped: Bool, acc: List<Char>) : Stdlib.Resu
         else if char == ']' then Ok((Stdlib.String.fromList(Stdlib.List.reverse<Char>(acc)), rest))
         else Stdlib.Regex.__takeClass(rest, false, Stdlib.List.push<Char>(acc, char))
 
-let __digits(chars: List<Char>, value: Int64, saw: Bool) : (Int64, Bool, List<Char>) =
+let __digits(chars: List<Char>, value: Int64, saw: Bool) : (Int64 * Bool * List<Char>) =
     match chars with
     | [] -> (value, saw, [])
     | char :: rest ->
@@ -68,7 +68,7 @@ let __digits(chars: List<Char>, value: Int64, saw: Bool) : (Int64, Bool, List<Ch
             else (value, saw, chars)
         | None -> (value, saw, chars)
 
-let __quantifier(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Quantifier, List<Char>), String> =
+let __quantifier(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Quantifier * List<Char>), String> =
     let quantified =
         match chars with
         | [] -> Ok((1, Some(1), chars))
@@ -111,7 +111,7 @@ let __quantifier(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Quantif
             else Ok((Stdlib.Regex.Quantifier { minimum = minimum, maximum = maximum, isLazy = false }, rest))
         | [] -> Ok((Stdlib.Regex.Quantifier { minimum = minimum, maximum = maximum, isLazy = false }, rest))
 
-let __atom(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Atom, List<Char>), String> =
+let __atom(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Atom * List<Char>), String> =
     match chars with
     | [] -> Error("missing atom")
     | char :: rest ->
@@ -141,7 +141,7 @@ let __atom(chars: List<Char>) : Stdlib.Result.Result<(Stdlib.Regex.Atom, List<Ch
         else if char == '*' || char == '+' || char == '?' || char == '{' || char == ')' then Error("quantifier without atom")
         else Ok((Stdlib.Regex.Atom.Literal(char), rest))
 
-let __parseBranch(chars: List<Char>, acc: List<Stdlib.Regex.Piece>) : Stdlib.Result.Result<(List<Stdlib.Regex.Piece>, List<Char>), String> =
+let __parseBranch(chars: List<Char>, acc: List<Stdlib.Regex.Piece>) : Stdlib.Result.Result<(List<Stdlib.Regex.Piece> * List<Char>), String> =
     match chars with
     | [] -> Ok((Stdlib.List.reverse<Stdlib.Regex.Piece>(acc), []))
     | head :: _ ->

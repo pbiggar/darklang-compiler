@@ -2,7 +2,7 @@
 
 module Stdlib.X509
 
-let __readLengthBytes(blob: Blob, index: Int64, remaining: Int64, acc: Int64) : Stdlib.Option.Option<(Int64, Int64)> =
+let __readLengthBytes(blob: Blob, index: Int64, remaining: Int64, acc: Int64) : Stdlib.Option.Option<(Int64 * Int64)> =
     if remaining == 0 then Some((index, acc))
     else if index >= Stdlib.Bytes.length(blob) then None
     else
@@ -12,7 +12,7 @@ let __readLengthBytes(blob: Blob, index: Int64, remaining: Int64, acc: Int64) : 
         else Stdlib.X509.__readLengthBytes(blob, index + 1, remaining - 1, acc * 256 + byte)
 
 // Returns (content offset, content length, end offset).
-let __tlv(blob: Blob, offset: Int64) : Stdlib.Option.Option<(Int64, Int64, Int64)> =
+let __tlv(blob: Blob, offset: Int64) : Stdlib.Option.Option<(Int64 * Int64 * Int64)> =
     let blobLength = Stdlib.Bytes.length(blob) in
     if offset < 0 || offset + 2 > blobLength then None
     else

@@ -41,7 +41,7 @@ let __mergeWithComparatorState<'a>(comparatorState: List<(a, a) -> Int>, left: L
 let merge<'a>(comparator: (a, a) -> Int, left: List<a>, right: List<a>) : Stdlib.Result.Result<List<a>, String> =
     Stdlib.List.SortByComparatorHelpers.__mergeWithComparatorState<a>([comparator], left, right)
 
-let splitList<'a>(list: List<a>) : (List<a>, List<a>) =
+let splitList<'a>(list: List<a>) : (List<a> * List<a>) =
     match list with
     | [] -> ([], [])
     | [x] -> ([x], [])

@@ -113,8 +113,8 @@ type BoxedList = EmptyBox | FullBox of List<Int64> FullBox([1, 2]) == FullBox([1
 ((1, 2), (3, 4)) == ((1, 2), (3, 5)) = false
 
 // Record with tuple field
-type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 4) } = true
-type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 5) } = false
+type PointPair = { p1: (Int64 * Int64), p2: (Int64 * Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 4) } = true
+type PointPair = { p1: (Int64 * Int64), p2: (Int64 * Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 5) } = false
 type PolyRecA<'t, 'u> = { first: t, second: u } PolyRecA { first = 1, second = true } == PolyRecA { first = 1, second = true } = true
 
 // ===================================================================
@@ -122,5 +122,5 @@ type PolyRecA<'t, 'u> = { first: t, second: u } PolyRecA { first = 1, second = t
 // ===================================================================
 type WrapEq1<'t> = WNoneEq1 | WSomeEq1 of t type EitherEq1<'a, 'b> = LeftEq1 of a | RightEq1 of b type RecEq1<'a, 'b, 'c> = { left: WrapEq1<a>, mid: EitherEq1<b, c>, right: WrapEq1<c> } let a = RecEq1 { left = WSomeEq1(1), mid = LeftEq1(7), right = WSomeEq1(WSomeEq1(9)) } in let b = RecEq1 { left = WSomeEq1(1), mid = LeftEq1(7), right = WSomeEq1(WSomeEq1(9)) } in a == b = true
 type WrapEq2<'t> = WNoneEq2 | WSomeEq2 of t type EitherEq2<'a, 'b> = LeftEq2 of a | RightEq2 of b type RecEq2<'a, 'b, 'c> = { left: WrapEq2<a>, mid: EitherEq2<b, c>, right: WrapEq2<c> } let a = RecEq2 { left = WSomeEq2(1), mid = LeftEq2(7), right = WSomeEq2(WSomeEq2(9)) } in let b = RecEq2 { left = WSomeEq2(1), mid = LeftEq2(7), right = WSomeEq2(WSomeEq2(10)) } in a == b = false
-type BoxEq3<'t> = BoxNoneEq3 | BoxSomeEq3 of t type ChoiceEq3<'a, 'b> = ChoiceLeftEq3 of a | ChoiceRightEq3 of b type RecEq3<'a, 'b, 'c> = { one: BoxEq3<a>, two: ChoiceEq3<b, c>, three: (BoxEq3<c>, ChoiceEq3<a, b>) } let a = RecEq3 { one = BoxSomeEq3(11), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22), ChoiceRightEq3("x")) } in let b = RecEq3 { one = BoxSomeEq3(11), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22), ChoiceRightEq3("x")) } in a == b = true
-type BoxEq4<'t> = BoxNoneEq4 | BoxSomeEq4 of t type ChoiceEq4<'a, 'b> = ChoiceLeftEq4 of a | ChoiceRightEq4 of b type RecEq4<'a, 'b, 'c> = { one: BoxEq4<a>, two: ChoiceEq4<b, c>, three: (BoxEq4<c>, ChoiceEq4<a, b>) } let a = RecEq4 { one = BoxSomeEq4(11), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22), ChoiceRightEq4("x")) } in let b = RecEq4 { one = BoxSomeEq4(11), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22), ChoiceRightEq4("y")) } in a != b = true
+type BoxEq3<'t> = BoxNoneEq3 | BoxSomeEq3 of t type ChoiceEq3<'a, 'b> = ChoiceLeftEq3 of a | ChoiceRightEq3 of b type RecEq3<'a, 'b, 'c> = { one: BoxEq3<a>, two: ChoiceEq3<b, c>, three: (BoxEq3<c> * ChoiceEq3<a, b>) } let a = RecEq3 { one = BoxSomeEq3(11), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22), ChoiceRightEq3("x")) } in let b = RecEq3 { one = BoxSomeEq3(11), two = ChoiceLeftEq3("x"), three = (BoxSomeEq3(22), ChoiceRightEq3("x")) } in a == b = true
+type BoxEq4<'t> = BoxNoneEq4 | BoxSomeEq4 of t type ChoiceEq4<'a, 'b> = ChoiceLeftEq4 of a | ChoiceRightEq4 of b type RecEq4<'a, 'b, 'c> = { one: BoxEq4<a>, two: ChoiceEq4<b, c>, three: (BoxEq4<c> * ChoiceEq4<a, b>) } let a = RecEq4 { one = BoxSomeEq4(11), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22), ChoiceRightEq4("x")) } in let b = RecEq4 { one = BoxSomeEq4(11), two = ChoiceLeftEq4("x"), three = (BoxSomeEq4(22), ChoiceRightEq4("y")) } in a != b = true

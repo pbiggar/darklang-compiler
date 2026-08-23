@@ -551,7 +551,7 @@ let testConditionalSyntaxErrorsMatch () : TestResult =
 
 let testInterpreterParserDoesNotTreatTupleBodyAsCallableAcrossTopLevelBoundary () : TestResult =
     let source =
-        "let tupleValue () : (Int64, List<Int64>) =\n"
+        "let tupleValue () : (Int64 * List<Int64>) =\n"
         + "  (0L, [])\n"
         + "0L"
     match InterpreterParser.parseString false source with
@@ -807,7 +807,11 @@ let testInterpreterParserRejectsBareTupleExpression () : TestResult =
     | Ok _ -> Error "Interpreter parser accepted a bare tuple expression outside a match scrutinee"
 
 let testPublicTupleSyntaxBoundaries () : TestResult =
-    let rejectedSources = [ "(1L,)"; "let pair = (1L, 2L) in pair.0" ]
+    let rejectedSources =
+        [ "(1L,)"
+          "let pair = (1L, 2L) in pair.0"
+          "let legacyTuple(value: (Int64, String)) : Int64 = 0L legacyTuple((1L, \"two\"))"
+          "Stdlib.List.head<(Int64, String)>([])" ]
     let parserRejects parse source =
         match parse false source with
         | Error _ -> true
@@ -817,10 +821,19 @@ let testPublicTupleSyntaxBoundaries () : TestResult =
         |> List.forall (fun source ->
             parserRejects Parser.parseString source
             && parserRejects InterpreterParser.parseString source)
-    match InterpreterParser.parseString false "match 1L, 2L with | (a, b) -> a" with
-    | Ok _ when rejectedByBothParsers -> Ok ()
-    | Ok _ -> Error "A public parser accepted singleton/projection tuple syntax"
-    | Error err -> Error $"Interpreter parser rejected bare match tuple scrutinee: {err}"
+    let publicTupleType =
+        "let tupleType(value: (Int64 * String)) : Int64 = 0L tupleType((1L, \"two\"))"
+    match
+        Parser.parseString false publicTupleType,
+        InterpreterParser.parseString false publicTupleType,
+        InterpreterParser.parseString false "match 1L, 2L with | (a, b) -> a"
+    with
+    | Ok _, Ok _, Ok _ when rejectedByBothParsers -> Ok ()
+    | Ok _, Ok _, Ok _ ->
+        Error "A public parser accepted singleton, projection, or comma tuple-type syntax"
+    | Error err, _, _ -> Error $"Compiler parser rejected public star tuple type: {err}"
+    | _, Error err, _ -> Error $"Interpreter parser rejected public star tuple type: {err}"
+    | _, _, Error err -> Error $"Interpreter parser rejected bare match tuple scrutinee: {err}"
 
 let testInterpreterParserParsesPipeOperatorSections () : TestResult =
     let source = "5L |> (*) 2L |> (<) 40L"

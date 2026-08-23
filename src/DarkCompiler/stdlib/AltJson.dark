@@ -6,10 +6,10 @@
 
 module Stdlib.AltJson
 
-type Json = Null | Bool of Bool | Number of Float | String of String | Array of List<Stdlib.AltJson.Json> | Object of List<(String, Stdlib.AltJson.Json)>
+type Json = Null | Bool of Bool | Number of Float | String of String | Array of List<Stdlib.AltJson.Json> | Object of List<(String * Stdlib.AltJson.Json)>
 
 
-type InternalRawJson = RawNull of raw: String | RawBool of value: Bool * raw: String | RawNumber of lexeme: String * raw: String | RawString of value: String * raw: String | RawArray of values: List<Stdlib.AltJson.InternalRawJson> * raw: String | RawObject of fields: List<(String, Stdlib.AltJson.InternalRawJson)> * raw: String
+type InternalRawJson = RawNull of raw: String | RawBool of value: Bool * raw: String | RawNumber of lexeme: String * raw: String | RawString of value: String * raw: String | RawArray of values: List<Stdlib.AltJson.InternalRawJson> * raw: String | RawObject of fields: List<(String * Stdlib.AltJson.InternalRawJson)> * raw: String
 
 type InternalParseValueResult = ParsedValue of Stdlib.AltJson.InternalRawJson * Int64 | InvalidValue
 
@@ -17,7 +17,7 @@ type InternalParseStringResult = ParsedString of String * Int64 | InvalidString
 
 type InternalParseListResult = ParsedList of List<Stdlib.AltJson.InternalRawJson> * Int64 | InvalidList
 
-type InternalParseFieldsResult = ParsedFields of List<(String, Stdlib.AltJson.InternalRawJson)> * Int64 | InvalidFields
+type InternalParseFieldsResult = ParsedFields of List<(String * Stdlib.AltJson.InternalRawJson)> * Int64 | InvalidFields
 
 
 let __isWhitespace(byte: Int64) : Bool =
@@ -218,12 +218,12 @@ let __parseArrayItems(source: String, index: Int64, length: Int64, acc: List<Std
                 else Stdlib.AltJson.InternalParseListResult.InvalidList
         | InvalidValue -> Stdlib.AltJson.InternalParseListResult.InvalidList
 
-let __parseObjectFields(source: String, index: Int64, length: Int64, acc: List<(String, Stdlib.AltJson.InternalRawJson)>) : Stdlib.AltJson.InternalParseFieldsResult =
+let __parseObjectFields(source: String, index: Int64, length: Int64, acc: List<(String * Stdlib.AltJson.InternalRawJson)>) : Stdlib.AltJson.InternalParseFieldsResult =
     let current = Stdlib.AltJson.__skipTrivia(source, index, length) in
     if current < 0 || current >= length then Stdlib.AltJson.InternalParseFieldsResult.InvalidFields
     else if Stdlib.String.getByteAt(source, current) == 125 then
         Stdlib.AltJson.InternalParseFieldsResult.ParsedFields(
-            Stdlib.List.reverse<(String, Stdlib.AltJson.InternalRawJson)>(acc),
+            Stdlib.List.reverse<(String * Stdlib.AltJson.InternalRawJson)>(acc),
             current + 1)
     else
         match Stdlib.AltJson.__parseString(source, current, length) with
@@ -240,13 +240,13 @@ let __parseObjectFields(source: String, index: Int64, length: Int64, acc: List<(
                         let separator = Stdlib.String.getByteAt(source, afterTrivia) in
                         if separator == 125 then
                             Stdlib.AltJson.InternalParseFieldsResult.ParsedFields(
-                                Stdlib.List.reverse<(String, Stdlib.AltJson.InternalRawJson)>(Stdlib.List.push<(String, Stdlib.AltJson.InternalRawJson)>(acc, (key, value))),
+                                Stdlib.List.reverse<(String * Stdlib.AltJson.InternalRawJson)>(Stdlib.List.push<(String * Stdlib.AltJson.InternalRawJson)>(acc, (key, value))),
                                 afterTrivia + 1)
                         else if separator == 44 then
                             let afterComma = Stdlib.AltJson.__skipTrivia(source, afterTrivia + 1, length) in
                             if afterComma >= length || Stdlib.String.getByteAt(source, afterComma) == 125 then
                                 Stdlib.AltJson.InternalParseFieldsResult.InvalidFields
-                            else Stdlib.AltJson.__parseObjectFields(source, afterComma, length, Stdlib.List.push<(String, Stdlib.AltJson.InternalRawJson)>(acc, (key, value)))
+                            else Stdlib.AltJson.__parseObjectFields(source, afterComma, length, Stdlib.List.push<(String * Stdlib.AltJson.InternalRawJson)>(acc, (key, value)))
                         else Stdlib.AltJson.InternalParseFieldsResult.InvalidFields
                 | InvalidValue -> Stdlib.AltJson.InternalParseFieldsResult.InvalidFields)
         | InvalidString -> Stdlib.AltJson.InternalParseFieldsResult.InvalidFields
@@ -439,15 +439,15 @@ let __projectRawList(values: List<Stdlib.AltJson.InternalRawJson>, acc: List<Std
         | None -> Stdlib.Option.Option.None
         | Some(value) -> Stdlib.AltJson.__projectRawList(tail, Stdlib.List.push<Stdlib.AltJson.Json>(acc, value))
 
-let __projectRawFields(values: List<(String, Stdlib.AltJson.InternalRawJson)>, acc: List<(String, Stdlib.AltJson.Json)>) : Stdlib.Option.Option<List<(String, Stdlib.AltJson.Json)>> =
+let __projectRawFields(values: List<(String * Stdlib.AltJson.InternalRawJson)>, acc: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Option.Option<List<(String * Stdlib.AltJson.Json)>> =
     match values with
-    | [] -> Stdlib.Option.Option.Some(Stdlib.List.reverse<(String, Stdlib.AltJson.Json)>(acc))
+    | [] -> Stdlib.Option.Option.Some(Stdlib.List.reverse<(String * Stdlib.AltJson.Json)>(acc))
     | head :: tail ->
         let key = Stdlib.Tuple2.first<String, Stdlib.AltJson.InternalRawJson>(head) in
         let raw = Stdlib.Tuple2.second<String, Stdlib.AltJson.InternalRawJson>(head) in
         match Stdlib.AltJson.__projectRaw(raw) with
         | None -> Stdlib.Option.Option.None
-        | Some(value) -> Stdlib.AltJson.__projectRawFields(tail, Stdlib.List.push<(String, Stdlib.AltJson.Json)>(acc, (key, value)))
+        | Some(value) -> Stdlib.AltJson.__projectRawFields(tail, Stdlib.List.push<(String * Stdlib.AltJson.Json)>(acc, (key, value)))
 
 let __projectRaw(value: Stdlib.AltJson.InternalRawJson) : Stdlib.Option.Option<Stdlib.AltJson.Json> =
     match value with
@@ -539,7 +539,7 @@ let __formatArray(values: List<Stdlib.AltJson.Json>, first: Bool) : String =
         Stdlib.AltJson.format(head) ++
         Stdlib.AltJson.__formatArray(tail, false)
 
-let __formatObject(values: List<(String, Stdlib.AltJson.Json)>, first: Bool) : String =
+let __formatObject(values: List<(String * Stdlib.AltJson.Json)>, first: Bool) : String =
     match values with
     | [] -> ""
     | head :: tail ->

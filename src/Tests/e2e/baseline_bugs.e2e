@@ -107,7 +107,7 @@ let outer = ((1, 2), (3, 4)) in let ((a, b), (c, d)) = outer in a + b + c + d = 
 let a = (1, 2) in let b = a in let c = b in let d = c in let (first, second) = d in first + second = 3
 
 // Heap value returned from function
-let makePair(x: Int64) : (Int64, Int64) = (x, x + 1)
+let makePair(x: Int64) : (Int64 * Int64) = (x, x + 1)
 
 let p = makePair(10) in let (first, second) = p in first + second = 21
 

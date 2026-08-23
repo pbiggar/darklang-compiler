@@ -115,7 +115,7 @@ let __scanExponent(value: String, index: Int64) : Stdlib.Result.Result<Int64, St
         | Error(error) -> Error(error)
         | Ok(magnitude) -> Ok(if negative then 0 - magnitude else magnitude)
 
-let __scanMantissa(value: String, index: Int64, digits: String, fractionalDigits: Int64, sawDot: Bool, sawDigit: Bool) : Stdlib.Result.Result<(String, Int64, Int64), Stdlib.Float.ParseError> =
+let __scanMantissa(value: String, index: Int64, digits: String, fractionalDigits: Int64, sawDot: Bool, sawDigit: Bool) : Stdlib.Result.Result<(String * Int64 * Int64), Stdlib.Float.ParseError> =
     if index >= Stdlib.String.__byteLength(value) then
         if sawDigit then Ok((digits, fractionalDigits, 0))
         else Error(Stdlib.Float.ParseError.BadFormat)
@@ -376,7 +376,7 @@ let __logSeries(z: Float, zSquared: Float, denominator: Int64, remaining: Int64,
         let nextTerm = term * zSquared in
         Stdlib.Float.__logSeries(z, zSquared, denominator + 2, remaining - 1, nextTerm, total + nextTerm / Stdlib.Int64.toFloat(denominator + 2))
 
-let __normalizeLog(value: Float, exponent: Int64) : (Float, Int64) =
+let __normalizeLog(value: Float, exponent: Int64) : (Float * Int64) =
     if value >= 2.0 then Stdlib.Float.__normalizeLog(value * 0.5, exponent + 1)
     else if value < 1.0 then Stdlib.Float.__normalizeLog(value * 2.0, exponent - 1)
     else (value, exponent)

@@ -15,7 +15,7 @@ let getByteAt(value: String, index: Int64) : Int64 =
 
 // JSON traversal needs both the decoded scalar and its source byte width.
 // String values are UTF-8-valid by construction, so failure is unreachable.
-let __decodeUtf8At(value: String, index: Int64) : (Int64, Int64) =
+let __decodeUtf8At(value: String, index: Int64) : (Int64 * Int64) =
     match Unicode.decodeAt(value, index) with
     | Ok(decoded) -> decoded
     | Error(_) -> Builtin.testRuntimeError("Invalid UTF-8 string")
@@ -324,7 +324,7 @@ let __firstMatch(previous: Stdlib.Option.Option<Int>, index: Int) : Stdlib.Optio
     | Some(value) -> Some(value)
     | None -> Some(index)
 
-let __egcIndex(values: List<String>, search: List<String>, index: Int, first: Stdlib.Option.Option<Int>, last: Stdlib.Option.Option<Int>) : (Stdlib.Option.Option<Int>, Stdlib.Option.Option<Int>) =
+let __egcIndex(values: List<String>, search: List<String>, index: Int, first: Stdlib.Option.Option<Int>, last: Stdlib.Option.Option<Int>) : (Stdlib.Option.Option<Int> * Stdlib.Option.Option<Int>) =
     let matches = Stdlib.String.__startsWithList(values, search) in
     let nextFirst = if matches then Stdlib.String.__firstMatch(first, index) else first in
     let nextLast = if matches then Some(index) else last in
@@ -365,7 +365,7 @@ let split(value: String, separator: String) : List<String> =
     if Stdlib.String.isEmpty(separator) then Stdlib.String.toGraphemes(value)
     else Stdlib.String.__splitGraphemes(Stdlib.String.toGraphemes(value), Stdlib.String.toGraphemes(separator), [], [])
 
-let splitFirst(value: String, separator: String) : Stdlib.Option.Option<(String, String)> =
+let splitFirst(value: String, separator: String) : Stdlib.Option.Option<(String * String)> =
     if Stdlib.String.isEmpty(separator) then None
     else
         match Stdlib.String.indexOfEgc(value, separator) with

@@ -6,23 +6,23 @@ module Stdlib.Tuple3
 
 // Stdlib.Tuple3 - 3-tuple operations
 
-let create<'a, 'b, 'c>(first: a, second: b, third: c) : (a, b, c) = (first, second, third)
+let create<'a, 'b, 'c>(first: a, second: b, third: c) : (a * b * c) = (first, second, third)
 
-let first<'a, 'b, 'c>(t: (a, b, c)) : a = match t with | (x, y, z) -> x
+let first<'a, 'b, 'c>(t: (a * b * c)) : a = match t with | (x, y, z) -> x
 
-let second<'a, 'b, 'c>(t: (a, b, c)) : b = match t with | (x, y, z) -> y
+let second<'a, 'b, 'c>(t: (a * b * c)) : b = match t with | (x, y, z) -> y
 
-let third<'a, 'b, 'c>(t: (a, b, c)) : c = match t with | (x, y, z) -> z
+let third<'a, 'b, 'c>(t: (a * b * c)) : c = match t with | (x, y, z) -> z
 
-let mapFirst<'a, 'b, 'c, 'd>(fn: (a) -> d, t: (a, b, c)) : (d, b, c) =
+let mapFirst<'a, 'b, 'c, 'd>(fn: (a) -> d, t: (a * b * c)) : (d * b * c) =
     match t with | (x, y, z) -> (fn(x), y, z)
 
-let mapSecond<'a, 'b, 'c, 'd>(fn: (b) -> d, t: (a, b, c)) : (a, d, c) =
+let mapSecond<'a, 'b, 'c, 'd>(fn: (b) -> d, t: (a * b * c)) : (a * d * c) =
     match t with | (x, y, z) -> (x, fn(y), z)
 
-let mapThird<'a, 'b, 'c, 'd>(fn: (c) -> d, t: (a, b, c)) : (a, b, d) =
+let mapThird<'a, 'b, 'c, 'd>(fn: (c) -> d, t: (a * b * c)) : (a * b * d) =
     match t with | (x, y, z) -> (x, y, fn(z))
 
-let mapAllThree<'a, 'b, 'c, 'd, 'e, 'f>(fnFirst: (a) -> d, fnSecond: (b) -> e, fnThird: (c) -> f, t: (a, b, c)) : (d, e, f) =
+let mapAllThree<'a, 'b, 'c, 'd, 'e, 'f>(fnFirst: (a) -> d, fnSecond: (b) -> e, fnThird: (c) -> f, t: (a * b * c)) : (d * e * f) =
     match t with | (x, y, z) -> (fnFirst(x), fnSecond(y), fnThird(z))
 

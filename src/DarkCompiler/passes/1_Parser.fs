@@ -612,7 +612,7 @@ let rec parseFunctionTypeParams (typeParams: Set<string>) (tokens: Token list) (
         Ok (List.rev acc, rest)
     | _ ->
         // Parse a type
-        parseTypeBase typeParams tokens
+        parseTypeWithContext typeParams tokens
         |> Result.bind (fun (ty, remaining) ->
             match remaining with
             | TRParen :: rest -> Ok (List.rev (ty :: acc), rest)
@@ -725,8 +725,8 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             // Simple type without type arguments
             Ok (TRecord (fullTypeName, []), afterTypeName)
     | TLParen :: rest ->
-        // Could be a function type: (int, int) -> bool
-        // Or a tuple type: (int, int)
+        // Parentheses group a type, or delimit a compiler function's parameter
+        // list. Public tuple types use `*`, matching the interpreter grammar.
         parseFunctionTypeParams typeParams rest []
         |> Result.bind (fun (paramTypes, afterParams) ->
             match afterParams with
@@ -736,11 +736,10 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
                 |> Result.map (fun (returnType, remaining) ->
                     (TFunction (paramTypes, returnType), remaining))
             | _ ->
-                // Tuple type: (type, type, ...)
-                if List.length paramTypes < 2 then
-                    Error "Tuple type must have at least 2 elements"
-                else
-                    Ok (TTuple paramTypes, afterParams))
+                match paramTypes with
+                | [] -> Error "Parenthesized type cannot be empty"
+                | [single] -> Ok (single, afterParams)
+                | _ -> Error "Comma-separated tuple types are not supported; use '*' between elements")
     | _ -> Error "Expected type annotation (Int64, Bool, String, Float, TypeName, type variable, or function type)"
 
 /// Parse a type annotation with context for type parameters in scope
@@ -901,38 +900,11 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
         | _ ->
             // Simple type without type arguments
             withPossibleArrow (TRecord (fullTypeName, [])) afterTypeName
-    | TLParen :: rest ->
-        // Tuple type or function type: (Type1, Type2, ...) or (Type1, Type2) -> RetType
-        parseTypeArgTupleElements rest []
-        |> Result.bind (fun (elemTypes, afterElems) ->
-            match afterElems with
-            | TArrow :: returnRest ->
-                // Function type: (params) -> return
-                parseTypeArgType returnRest
-                |> Result.map (fun (returnType, remaining) ->
-                    (TFunction (elemTypes, returnType), remaining))
-            | _ ->
-                // Tuple type: (type, type, ...)
-                if List.length elemTypes < 2 then
-                    Error "Tuple type must have at least 2 elements"
-                else
-                    Ok (TTuple elemTypes, afterElems))
+    | TLParen :: _ ->
+        // Call-site type arguments use the same grouping, tuple, and function
+        // grammar as annotations. In particular, tuples are `A * B`, not `A, B`.
+        parseTypeWithContext Set.empty tokens
     | _ -> Error "Expected type in type argument"
-
-/// Parse tuple elements in type argument context: Type1, Type2, ... )
-and parseTypeArgTupleElements (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
-    match tokens with
-    | TRParen :: rest ->
-        // End of tuple/parameter list
-        Ok (List.rev acc, rest)
-    | _ ->
-        // Parse a type
-        parseTypeArgType tokens
-        |> Result.bind (fun (ty, remaining) ->
-            match remaining with
-            | TRParen :: rest -> Ok (List.rev (ty :: acc), rest)
-            | TComma :: rest -> parseTypeArgTupleElements rest (ty :: acc)
-            | _ -> Error "Expected ',' or ')' in tuple type")
 
 /// Parse type arguments: <Int64, Bool, Point, t> (concrete types or type vars, for call sites)
 let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =

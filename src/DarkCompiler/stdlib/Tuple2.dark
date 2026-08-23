@@ -6,20 +6,20 @@ module Stdlib.Tuple2
 
 // Stdlib.Tuple2 - 2-tuple operations
 
-let create<'a, 'b>(first: a, second: b) : (a, b) = (first, second)
+let create<'a, 'b>(first: a, second: b) : (a * b) = (first, second)
 
-let first<'a, 'b>(t: (a, b)) : a = match t with | (x, y) -> x
+let first<'a, 'b>(t: (a * b)) : a = match t with | (x, y) -> x
 
-let second<'a, 'b>(t: (a, b)) : b = match t with | (x, y) -> y
+let second<'a, 'b>(t: (a * b)) : b = match t with | (x, y) -> y
 
-let swap<'a, 'b>(t: (a, b)) : (b, a) = match t with | (x, y) -> (y, x)
+let swap<'a, 'b>(t: (a * b)) : (b * a) = match t with | (x, y) -> (y, x)
 
-let mapFirst<'a, 'b, 'c>(fn: (a) -> c, t: (a, b)) : (c, b) =
+let mapFirst<'a, 'b, 'c>(fn: (a) -> c, t: (a * b)) : (c * b) =
     match t with | (x, y) -> (fn(x), y)
 
-let mapSecond<'a, 'b, 'c>(fn: (b) -> c, t: (a, b)) : (a, c) =
+let mapSecond<'a, 'b, 'c>(fn: (b) -> c, t: (a * b)) : (a * c) =
     match t with | (x, y) -> (x, fn(y))
 
-let mapBoth<'a, 'b, 'c, 'd>(fnFirst: (a) -> c, fnSecond: (b) -> d, t: (a, b)) : (c, d) =
+let mapBoth<'a, 'b, 'c, 'd>(fnFirst: (a) -> c, fnSecond: (b) -> d, t: (a * b)) : (c * d) =
     match t with | (x, y) -> (fnFirst(x), fnSecond(y))
 

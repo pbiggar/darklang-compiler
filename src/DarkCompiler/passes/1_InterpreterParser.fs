@@ -857,8 +857,8 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             // Simple type without type arguments
             Ok (TRecord (fullTypeName, []), afterTypeName)
     | TLParen :: rest ->
-        // Could be a function type: (int, int) -> bool
-        // Or a tuple/grouped type: (int, int) or (Person -> Bool)
+        // Parentheses group a type, or delimit a compiler function's parameter
+        // list. Public tuple types use `*`, matching the interpreter grammar.
         parseFunctionTypeParams typeParams rest []
         |> Result.bind (fun (paramTypes, afterParams) ->
             match afterParams with
@@ -875,7 +875,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
                 | [single] ->
                     Ok (single, afterParams)
                 | _ ->
-                    Ok (TTuple paramTypes, afterParams))
+                    Error "Comma-separated tuple types are not supported; use '*' between elements")
     | _ -> Error "Expected type annotation (Int64, Bool, String, Float, TypeName, type variable, or function type)"
 
 /// Parse a type annotation with context for type parameters in scope

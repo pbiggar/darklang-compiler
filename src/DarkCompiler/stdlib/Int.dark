@@ -190,13 +190,13 @@ let __appendMagnitudeDigit(value: String, digit: Int64) : String =
     if value == "0" then Stdlib.Int64.__digitToString(digit)
     else value ++ Stdlib.Int64.__digitToString(digit)
 
-let __quotientDigit(remainder: String, divisor: String, digit: Int64) : (Int64, String) =
+let __quotientDigit(remainder: String, divisor: String, digit: Int64) : (Int64 * String) =
     if digit == 9 || Stdlib.Int.__compareMagnitude(remainder, divisor) < 0 then
         (digit, remainder)
     else
         Stdlib.Int.__quotientDigit(Stdlib.Int.__subtractMagnitude(remainder, divisor), divisor, digit + 1)
 
-let __divideMagnitudeAt(dividend: String, index: Int64, divisor: String, quotient: String, remainder: String) : (String, String) =
+let __divideMagnitudeAt(dividend: String, index: Int64, divisor: String, quotient: String, remainder: String) : (String * String) =
     if index >= Stdlib.String.__byteLength(dividend) then
         (Stdlib.Int.__normalizeMagnitude(quotient), Stdlib.Int.__normalizeMagnitude(remainder))
     else
@@ -212,7 +212,7 @@ let __divideMagnitudeAt(dividend: String, index: Int64, divisor: String, quotien
             quotient ++ Stdlib.Int64.__digitToString(quotientDigit),
             remaining)
 
-let __divideMagnitude(dividend: String, divisor: String) : (String, String) =
+let __divideMagnitude(dividend: String, divisor: String) : (String * String) =
     Stdlib.Int.__divideMagnitudeAt(dividend, 0, divisor, "", "0")
 
 let divide(a: Int, b: Int) : Int =

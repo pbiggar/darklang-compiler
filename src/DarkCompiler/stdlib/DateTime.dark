@@ -174,7 +174,7 @@ let __daysFromCivil(year: Int64, month: Int64, day: Int64) : Int64 =
     era * 146097 + dayOfEra - 719468
 
 // Convert days since 1970-01-01 to (year, month, day) in constant time.
-let __civilFromDays(days: Int64) : (Int64, Int64, Int64) =
+let __civilFromDays(days: Int64) : (Int64 * Int64 * Int64) =
     let shifted = days + 719468 in
     let era = Stdlib.DateTime.__floorDiv(shifted, 146097) in
     let dayOfEra = shifted - era * 146097 in
@@ -249,7 +249,7 @@ let __padZero4(value: Int64) : String =
     else if value < 1000 then "0" ++ Stdlib.Int64.toString(value)
     else Stdlib.Int64.toString(value)
 
-let __calendarParts(date: DateTime) : (Int64, Int64, Int64) =
+let __calendarParts(date: DateTime) : (Int64 * Int64 * Int64) =
     Stdlib.DateTime.__civilFromDays(Stdlib.DateTime.__daysSinceEpoch(date))
 
 let toString(date: DateTime) : String =
@@ -292,7 +292,7 @@ let __digitAt(value: String, index: Int64) : Stdlib.Result.Result<Int64, String>
         if byte >= 48 && byte <= 57 then Ok(byte - 48)
         else Error("Invalid date format")
 
-let __parseDigits(value: String, index: Int64, remaining: Int64, total: Int64) : Stdlib.Result.Result<(Int64, Int64), String> =
+let __parseDigits(value: String, index: Int64, remaining: Int64, total: Int64) : Stdlib.Result.Result<(Int64 * Int64), String> =
     if remaining == 0 then Ok((total, index))
     else
         match Stdlib.DateTime.__digitAt(value, index) with

@@ -45,7 +45,7 @@ let emptyParityStrings(): List<String> = [] emptyParityStrings() = stdout="List<
 type RenderRecord<'value> = { z: List<'value>, a: String }
 RenderRecord<Int64> { z = [1, 2], a = "record" } = stdout="RenderRecord<Int64> { a: \"record\", z: [1, 2] }\n"
 
-type RenderEnum<'value> = RenderEmpty | RenderValue of ('value, String)
+type RenderEnum<'value> = RenderEmpty | RenderValue of ('value * String)
 RenderValue((7, "seven")) = stdout="RenderEnum<Int64>.RenderValue((7, \"seven\"))\n"
 
 let renderedNamedFunction(x: Int64): Int64 = x
