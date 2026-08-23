@@ -54,7 +54,6 @@
     <Compile Include="test-suite-tooling-tests/TypeCheckingFormatTests.fs" />
     <Compile Include="test-suite-tooling-tests/ProgressBarTests.fs" />
     <Compile Include="test-suite-tooling-tests/FormattingRoundtripTests.fs" />
-    <Compile Include="test-suite-tooling-tests/SyntaxDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/EncodingDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/GraphColorDSLTests.fs" />
     <Compile Include="test-suite-tooling-tests/ParallelMoveDSLTests.fs" />
@@ -71,7 +70,6 @@
     <Compile Include="compiler-passes/IRSymbolTests.fs" />
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
     <Compile Include="compiler-passes/LIRLayoutTests.fs" />
-    <Compile Include="compiler-passes/ParserTests.fs" />
     <Compile Include="compiler-passes/ANFToMIRTests.fs" />
     <Compile Include="compiler-passes/TypeCheckingTests.fs" />
     <Compile Include="compiler-passes/BitsetTests.fs" />
@@ -84,8 +82,6 @@
     <Compile Include="compiler-passes/RefCountInsertionTests.fs" />
     <Compile Include="compiler-passes/TailCallDetectionTests.fs" />
     <Compile Include="compiler-passes/LambdaLiftingTests.fs" />
-    <Compile Include="compiler-passes/SyntaxInteropTests.fs" />
-    <Compile Include="compiler-passes/SyntaxRoundtripCorpusTests.fs" />
 
     <!-- ARM64 backend tests -->
     <Compile Include="compiler-passes/ARM64EncodingTests.fs" />

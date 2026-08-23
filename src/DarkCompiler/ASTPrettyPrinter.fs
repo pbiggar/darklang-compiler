@@ -1,14 +1,10 @@
-// ASTPrettyPrinter.fs - Pretty printers for Darklang source syntaxes.
-//
-// Formats the shared AST into compiler syntax or interpreter syntax.
+// ASTPrettyPrinter.fs - Pretty printer for canonical interpreter syntax.
 
 module ASTPrettyPrinter
 
 open AST
 
-type Syntax =
-    | CompilerSyntax
-    | InterpreterSyntax
+type Syntax = InterpreterSyntax
 
 type private LiteralEscapeContext =
     | StringContent
@@ -268,54 +264,32 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
     | PConstructor (name, None) -> formatIdentifierPath name
     | PConstructor (name, Some payload) ->
         let payloadText = formatPattern syntax payload
-        match syntax with
-        | CompilerSyntax -> $"{formatIdentifierPath name}({payloadText})"
-        | InterpreterSyntax -> $"{formatIdentifierPath name} {payloadText}"
+        $"{formatIdentifierPath name} {payloadText}"
     | POr alternatives ->
         alternatives
         |> NonEmptyList.toList
         |> List.map (formatPattern syntax)
         |> String.concat " | "
     | PInt64 n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}"
-        | InterpreterSyntax -> $"{n}L"
+        $"{n}L"
     | PInt128Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}Q"
-        | InterpreterSyntax -> $"{n}Q"
+        $"{n}Q"
     | PInt8Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}y"
-        | InterpreterSyntax -> $"{n}y"
+        $"{n}y"
     | PInt16Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}s"
-        | InterpreterSyntax -> $"{n}s"
+        $"{n}s"
     | PInt32Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}l"
-        | InterpreterSyntax -> $"{n}l"
+        $"{n}l"
     | PUInt8Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}uy"
-        | InterpreterSyntax -> $"{n}uy"
+        $"{n}uy"
     | PUInt16Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}us"
-        | InterpreterSyntax -> $"{n}us"
+        $"{n}us"
     | PUInt32Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}ul"
-        | InterpreterSyntax -> $"{n}ul"
+        $"{n}ul"
     | PUInt64Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}UL"
-        | InterpreterSyntax -> $"{n}UL"
+        $"{n}UL"
     | PUInt128Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}Z"
-        | InterpreterSyntax -> $"{n}Z"
+        $"{n}Z"
     | PBool b -> if b then "true" else "false"
     | PString s -> $"\"{escapeLiteralContent StringContent s}\""
     | PChar c -> $"'{escapeLiteralContent CharContent c}'"
@@ -324,22 +298,19 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         let parts = patterns |> List.map (formatPattern syntax) |> String.concat ", "
         $"({parts})"
     | PList patterns ->
-        let separator =
-            match syntax with
-            | CompilerSyntax -> ", "
-            | InterpreterSyntax -> "; "
+        let separator = "; "
         let items = patterns |> List.map (formatPattern syntax) |> String.concat separator
         $"[{items}]"
     | PListCons (head, tail) ->
         let formatHeadPattern pattern =
             let formatted = formatPattern syntax pattern
-            match syntax, pattern with
+            match pattern with
             // Cons is right-associative. A cons used as a head therefore needs
             // grouping or reparsing would flatten it into the outer chain.
-            | _, PListCons _ -> $"({formatted})"
+            | PListCons _ -> $"({formatted})"
             // Interpreter constructor payloads are whitespace-delimited and parse a
             // complete pattern, so grouping keeps the outer cons outside the payload.
-            | InterpreterSyntax, PConstructor (_, Some _) -> $"({formatted})"
+            | PConstructor (_, Some _) -> $"({formatted})"
             | _ -> formatted
         head
         |> List.map formatHeadPattern
@@ -373,18 +344,14 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
 
     let formatAppArg (arg: Expr) : string =
         let argText = formatExpr syntax arg
-        match syntax with
-        | CompilerSyntax ->
-            parenthesizeIfNeeded arg argText
-        | InterpreterSyntax ->
-            match arg with
-            | _ when isNegativeNumericLiteral arg -> $"({argText})"
-            | Constructor (_, _, None) -> $"({argText})"
-            | TupleLiteral _ -> $"({argText})"
-            | Call _
-            | TypeApp _
-            | Apply _ | IndirectApply _ -> $"({argText})"
-            | _ -> parenthesizeIfNeeded arg argText
+        match arg with
+        | _ when isNegativeNumericLiteral arg -> $"({argText})"
+        | Constructor (_, _, None) -> $"({argText})"
+        | TupleLiteral _ -> $"({argText})"
+        | Call _
+        | TypeApp _
+        | Apply _ | IndirectApply _ -> $"({argText})"
+        | _ -> parenthesizeIfNeeded arg argText
 
     let rec formatInterpreterAppArgs (args: Expr list) : string list =
         match args with
@@ -407,52 +374,30 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
     | BoundaryRender (_, value) -> formatExpr syntax value
     | RuntimeError message ->
         let escaped = escapeLiteralContent StringContent message
-        match syntax with
-        | CompilerSyntax -> $"Builtin.testRuntimeError(\"{escaped}\")"
-        | InterpreterSyntax -> $"Builtin.testRuntimeError \"{escaped}\""
+        $"Builtin.testRuntimeError \"{escaped}\""
     | UnitLiteral -> "()"
     | Int64Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}"
-        | InterpreterSyntax -> $"{n}L"
+        $"{n}L"
     | Int128Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}Q"
-        | InterpreterSyntax -> $"{n}Q"
+        $"{n}Q"
     | BigIntLiteral n ->
         $"{n}I"
     | Int8Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}y"
-        | InterpreterSyntax -> $"{n}y"
+        $"{n}y"
     | Int16Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}s"
-        | InterpreterSyntax -> $"{n}s"
+        $"{n}s"
     | Int32Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}l"
-        | InterpreterSyntax -> $"{n}l"
+        $"{n}l"
     | UInt8Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}uy"
-        | InterpreterSyntax -> $"{n}uy"
+        $"{n}uy"
     | UInt16Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}us"
-        | InterpreterSyntax -> $"{n}us"
+        $"{n}us"
     | UInt32Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}ul"
-        | InterpreterSyntax -> $"{n}ul"
+        $"{n}ul"
     | UInt64Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}UL"
-        | InterpreterSyntax -> $"{n}UL"
+        $"{n}UL"
     | UInt128Literal n ->
-        match syntax with
-        | CompilerSyntax -> $"{n}Z"
-        | InterpreterSyntax -> $"{n}Z"
+        $"{n}Z"
     | BoolLiteral b -> if b then "true" else "false"
     | StringLiteral s -> $"\"{escapeLiteralContent StringContent s}\""
     | CharLiteral c -> $"'{escapeLiteralContent CharContent c}'"
@@ -501,16 +446,15 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         let leftText = formatChild true left
         let rightTextBase = formatChild false right
         let rightText =
-            match syntax, op with
-            | InterpreterSyntax, Sub when leftCanConsumeNegativeNumericArg left && isNumericLiteralExpr right ->
+            match op with
+            | Sub when leftCanConsumeNegativeNumericArg left && isNumericLiteralExpr right ->
                 $"({rightTextBase})"
             | _ -> rightTextBase
         $"{leftText} {formatBinOp op} {rightText}"
     | UnaryOp (op, inner) ->
         let innerText = parenthesizeIfNeeded inner (formatExpr syntax inner)
         $"{formatUnaryOp op}{innerText}"
-    | Let (LPVariable name, Lambda (parameters, Some returnType, functionBody), body)
-        when syntax = InterpreterSyntax ->
+    | Let (LPVariable name, Lambda (parameters, Some returnType, functionBody), body) ->
         let annotatedParameters =
             parameters
             |> NonEmptyList.toList
@@ -537,21 +481,8 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
                 | _ -> None)
         let name = recursiveBindingName recursion
         if annotatedParameters |> List.forall Option.isSome then
-            match syntax with
-            | InterpreterSyntax ->
-                let paramsText = annotatedParameters |> List.choose id |> String.concat " "
-                $"(let {formatIdentifierSegment name} {paramsText} : {formatType returnType} = {formatExpr syntax functionBody} in {formatExpr syntax body})"
-            | CompilerSyntax ->
-                let paramsText =
-                    parameters
-                    |> NonEmptyList.toList
-                    |> List.choose (fun parameter ->
-                        match parameter.Pattern, parameter.SourceAnnotation with
-                        | LPVariable parameterName, Some parameterType ->
-                            Some $"{formatIdentifierSegment parameterName}: {formatType parameterType}"
-                        | _ -> None)
-                    |> String.concat ", "
-                $"(let {formatIdentifierSegment name}({paramsText}) : {formatType returnType} = {formatExpr syntax functionBody} in {formatExpr syntax body})"
+            let paramsText = annotatedParameters |> List.choose id |> String.concat " "
+            $"(let {formatIdentifierSegment name} {paramsText} : {formatType returnType} = {formatExpr syntax functionBody} in {formatExpr syntax body})"
         else
             let lambda = Lambda (parameters, Some returnType, functionBody)
             $"let {formatIdentifierSegment name} = {formatExpr syntax lambda} in {formatExpr syntax body}"
@@ -567,45 +498,29 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
     | Call (funcName, args) ->
         let argsList = NonEmptyList.toList args
         let formattedName = formatIdentifierPath funcName
-        match syntax with
-        | CompilerSyntax ->
-            if isUnitArgumentList args then
-                $"{formattedName}()"
-            else
-                let argsText = argsList |> List.map (formatExpr syntax) |> String.concat ", "
-                $"{formattedName}({argsText})"
-        | InterpreterSyntax ->
-            if isUnitArgumentList args then
-                $"{formattedName}()"
-            else
-                let argsText = argsList |> formatInterpreterAppArgs |> String.concat " "
-                $"{formattedName} {argsText}"
+        if isUnitArgumentList args then
+            $"{formattedName}()"
+        else
+            let argsText = argsList |> formatInterpreterAppArgs |> String.concat " "
+            $"{formattedName} {argsText}"
     | TypeApp (funcName, typeArgs, args) ->
         let argsList = NonEmptyList.toList args
         let typeArgsText = typeArgs |> List.map formatType |> String.concat ", "
         let formattedName = formatIdentifierPath funcName
-        match syntax with
-        | CompilerSyntax ->
-            if isUnitArgumentList args then
-                $"{formattedName}<{typeArgsText}>()"
-            else
-                let argsText = argsList |> List.map (formatExpr syntax) |> String.concat ", "
-                $"{formattedName}<{typeArgsText}>({argsText})"
-        | InterpreterSyntax ->
-            let head = $"{formattedName}<{typeArgsText}>"
-            if isUnitArgumentList args then
-                $"{head}()"
-            else
-                let argsText = argsList |> List.map (formatExpr syntax) |> String.concat ", "
-                $"{head}({argsText})"
+        let head = $"{formattedName}<{typeArgsText}>"
+        if isUnitArgumentList args then
+            $"{head}()"
+        else
+            let argsText = argsList |> List.map (formatExpr syntax) |> String.concat ", "
+            $"{head}({argsText})"
     | TupleLiteral elements ->
         let elementsText = elements |> List.map (formatExpr syntax) |> String.concat ", "
         $"({elementsText})"
     | TupleAccess (tupleExpr, index) ->
         let tupleBaseText = formatExpr syntax tupleExpr
         let tupleText =
-            match syntax, tupleExpr with
-            | InterpreterSyntax, (Call _ | TypeApp _ | Apply _ | IndirectApply _) ->
+            match tupleExpr with
+            | Call _ | TypeApp _ | Apply _ | IndirectApply _ ->
                 // In interpreter syntax, call application has no mandatory wrapping.
                 // Parenthesize before postfix access so `.0` binds to the call result.
                 $"({tupleBaseText})"
@@ -646,8 +561,8 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
     | RecordAccess (recordExpr, fieldName) ->
         let recordBaseText = formatExpr syntax recordExpr
         let recordText =
-            match syntax, recordExpr with
-            | InterpreterSyntax, (Call _ | TypeApp _ | Apply _ | IndirectApply _) ->
+            match recordExpr with
+            | Call _ | TypeApp _ | Apply _ | IndirectApply _ ->
                 // Same ambiguity as tuple access: ensure `.field` applies to call result.
                 $"({recordBaseText})"
             | _ ->
@@ -664,9 +579,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         | None -> fullName
         | Some payloadExpr ->
             let payloadText = formatAppArg payloadExpr
-            match syntax with
-            | CompilerSyntax -> $"{fullName}({formatExpr syntax payloadExpr})"
-            | InterpreterSyntax -> $"{fullName} {payloadText}"
+            $"{fullName} {payloadText}"
     | Match (scrutinee, cases) ->
         let scrutineeText = formatExpr syntax scrutinee
         let formatCaseBody (body: Expr) : string =
@@ -692,10 +605,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             |> String.concat " "
         $"match {scrutineeText} with {caseText}"
     | ListLiteral elements ->
-        let separator =
-            match syntax with
-            | CompilerSyntax -> ", "
-            | InterpreterSyntax -> "; "
+        let separator = "; "
         let elementsText = elements |> List.map (formatExpr syntax) |> String.concat separator
         $"[{elementsText}]"
     | Lambda (parameters, returnAnnotation, body) ->
@@ -718,21 +628,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
     | Apply (funcExpr, args)
     | IndirectApply (funcExpr, args) ->
         let argsList = NonEmptyList.toList args
-        match syntax with
-        | CompilerSyntax ->
-            let funcText =
-                match funcExpr with
-                // Preserve Apply-vs-Constructor distinction for compiler parser
-                // (`Constructor(arg)` parses as constructor payload, not Apply).
-                | Constructor (_, _, None) -> $"({formatExpr syntax funcExpr})"
-                | _ -> parenthesizeIfNeeded funcExpr (formatExpr syntax funcExpr)
-            if isUnitArgumentList args then
-                $"{funcText}()"
-            else
-                let argsText = argsList |> List.map (formatExpr syntax) |> String.concat ", "
-                $"{funcText}({argsText})"
-        | InterpreterSyntax ->
-            match funcExpr, argsList with
+        match funcExpr, argsList with
             // Preserve Apply-vs-Constructor distinction for interpreter parser
             // by printing constructor application in pipe form.
             | Constructor _, [singleArg] ->
@@ -821,7 +717,7 @@ let private formatTypeDef (syntax: Syntax) (typeDef: TypeDef) : string =
                 | Some payloadType ->
                     $"{formatIdentifierSegment variant.Name} of {formatType payloadType}")
             |> String.concat " | "
-        let leadingBar = if syntax = InterpreterSyntax then "| " else ""
+        let leadingBar = "| "
         $"type {formatIdentifierSegment name}{formatTypeParams typeParams} = {leadingBar}{variantsText}"
     | TypeAlias (name, typeParams, targetType) ->
         $"type {formatIdentifierSegment name}{formatTypeParams typeParams} = {formatType targetType}"
@@ -858,10 +754,7 @@ let private tryRestoreModuleDeclaration (topLevel: TopLevel) : (NameSyntax.Quali
     | Expression _ -> None
 
 let formatProgram (syntax: Syntax) (Program items: Program) : string =
-    let separator =
-        match syntax with
-        | CompilerSyntax -> "\n"
-        | InterpreterSyntax -> "\n;\n"
+    let separator = "\n;\n"
     let restored = items |> List.map tryRestoreModuleDeclaration
     match restored with
     | Some (firstModule, _) :: _

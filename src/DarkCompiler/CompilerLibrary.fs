@@ -42,11 +42,6 @@ type CompileMode =
     | FullProgram
     | TestExpression
 
-/// Source syntax for parsing Dark programs
-type SourceSyntax =
-    | CompilerSyntax
-    | InterpreterSyntax
-
 /// Shared compiler warning settings.
 let defaultWarningSettings : AST.WarningSettings = AST.defaultWarningSettings
 
@@ -912,7 +907,6 @@ type SourceUnit = {
 type CompileRequest = {
     Context: CompileContext
     Mode: CompileMode
-    SourceSyntax: SourceSyntax
     Sources: AST.NonEmptyList<SourceUnit>
     AllowInternal: bool
     Verbosity: int
@@ -1190,54 +1184,34 @@ let private tryStartProcess (info: ProcessStartInfo) : Result<Process, string> =
     try Ok (Process.Start(info))
     with ex -> Error ex.Message
 
-let private checkProgramWithBaseEnvForSyntax
-    (sourceSyntax: SourceSyntax)
-    (allowInternal: bool)
+let private checkProgramWithBaseEnv
     (warningSettings: AST.WarningSettings)
     (baseEnv: TypeChecking.TypeCheckEnv)
     (program: AST.Program)
     : Result<AST.Type * AST.Program * TypeChecking.TypeCheckEnv, TypeChecking.TypeError> =
-    let requireExplicitTypeArgs = sourceSyntax = InterpreterSyntax
-    if allowInternal then
-        TypeChecking.checkProgramWithBaseEnvAndSettings
-            baseEnv
-            requireExplicitTypeArgs
-            warningSettings
-            program
-    else
-        TypeChecking.checkPublicProgramWithBaseEnvAndSettings
-            baseEnv
-            requireExplicitTypeArgs
-            warningSettings
-            program
+    TypeChecking.checkProgramWithBaseEnvAndSettings baseEnv true warningSettings program
 
-let private checkSyntheticPreambleWithBaseEnvForSyntax
-    (sourceSyntax: SourceSyntax)
+let private checkSyntheticPreambleWithBaseEnv
     (warningSettings: AST.WarningSettings)
     (baseEnv: TypeChecking.TypeCheckEnv)
     (program: AST.Program)
     : Result<AST.Type * AST.Program * TypeChecking.TypeCheckEnv, TypeChecking.TypeError> =
-    let requireExplicitTypeArgs = sourceSyntax = InterpreterSyntax
     TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
         baseEnv
-        requireExplicitTypeArgs
+        true
         warningSettings
         program
 
 /// Parse and typecheck a preamble, returning typed AST + preamble typecheck env
 let analyzePreamble
-    (sourceSyntax: SourceSyntax)
     (allowInternal: bool)
     (stdlib: StdlibResult)
     (preamble: string)
     : Result<PreambleAnalysis, string> =
-    (match sourceSyntax with
-     | CompilerSyntax -> Parser.parseString allowInternal preamble
-     | InterpreterSyntax -> InterpreterParser.parseString allowInternal preamble)
+    InterpreterParser.parseString allowInternal preamble
     |> Result.mapError (fun err -> $"Preamble parse error: {err}")
     |> Result.bind (fun preambleAst ->
-        checkSyntheticPreambleWithBaseEnvForSyntax
-            sourceSyntax
+        checkSyntheticPreambleWithBaseEnv
             defaultWarningSettings
             stdlib.Context.TypeCheckEnv
             preambleAst
@@ -1266,12 +1240,7 @@ let private loadDarkFileAllowInternal (filename: string) : Result<AST.Program, s
         Error $"Could not find {filename} in any of: {pathsStr}"
     | Some path ->
         let source = File.ReadAllText(path)
-        let parse =
-            if filename = "stdlib/RuntimeValueType.dark" then
-                InterpreterParser.parseString
-            else
-                Parser.parseString
-        parse true source
+        InterpreterParser.parseString true source
         |> Result.mapError (fun err -> $"Error parsing {filename}: {err}")
 
 /// Load the stdlib and unicode_data.dark files
@@ -1728,7 +1697,6 @@ type private UserCompileLabels = {
 type private UserCompilePlan = {
     AllowInternal: bool
     Mode: CompileMode
-    SourceSyntax: SourceSyntax
     Verbosity: int
     Options: CompilerOptions
     PackageValues: PackageValueCatalog
@@ -1746,24 +1714,18 @@ type private UserCompilePlan = {
     Sources: AST.NonEmptyList<SourceUnit>
 }
 
-/// Parse source text into AST using a selected Darklang syntax
+/// Parse source text into AST using the canonical interpreter syntax.
 let parseProgram
-    (sourceSyntax: SourceSyntax)
     (allowInternal: bool)
     (source: string)
     : Result<AST.Program, string> =
-    match sourceSyntax with
-    | CompilerSyntax -> Parser.parseString allowInternal source
-    | InterpreterSyntax -> InterpreterParser.parseString allowInternal source
+    InterpreterParser.parseString allowInternal source
 
 let private parseSourceTree
-    (sourceSyntax: SourceSyntax)
     (allowInternal: bool)
     (source: string)
     : Result<NameSyntax.ParsedSource, string> =
-    match sourceSyntax with
-    | CompilerSyntax -> Parser.parseSourceString allowInternal source
-    | InterpreterSyntax -> InterpreterParser.parseSourceString allowInternal source
+    InterpreterParser.parseSourceString allowInternal source
 
 let private applyDeclarationOverlays (topLevels: AST.TopLevel list) : AST.TopLevel list =
     let declarationKey topLevel =
@@ -1789,7 +1751,6 @@ let private applyDeclarationOverlays (topLevels: AST.TopLevel list) : AST.TopLev
 /// Parse every source unit independently and validate entry ownership before
 /// crossing into the expression-oriented lowering AST.
 let parseSourceProgram
-    (sourceSyntax: SourceSyntax)
     (allowInternal: bool)
     (sources: AST.NonEmptyList<SourceUnit>)
     : Result<NameSyntax.ValidatedExecutableProgram * AST.Program, string> =
@@ -1808,9 +1769,9 @@ let parseSourceProgram
         | sourceUnit :: rest ->
             NameSyntax.sourceUnitName sourceUnit.Name
             |> Result.bind (fun name ->
-                parseSourceTree sourceSyntax allowInternal sourceUnit.Source
+                parseSourceTree allowInternal sourceUnit.Source
                 |> Result.bind (fun parsed ->
-                    parseProgram sourceSyntax allowInternal sourceUnit.Source
+                    parseProgram allowInternal sourceUnit.Source
                     |> Result.bind (fun (AST.Program topLevels) ->
                         let parsedUnit : NameSyntax.ParsedSourceUnit =
                             { Name = name
@@ -2092,7 +2053,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
             // Pass 1: Parse user code only
             if plan.Verbosity >= 1 then println plan.Labels.Parse
             let parseResult =
-                parseSourceProgram plan.SourceSyntax plan.AllowInternal plan.Sources
+                parseSourceProgram plan.AllowInternal plan.Sources
                 |> Result.map snd
             let parseTime = sw.Elapsed.TotalMilliseconds
             recordPassTiming plan.PassTimingRecorder "Parse" parseTime
@@ -2106,9 +2067,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                 // Pass 1.5: Type Checking (user code with base TypeCheckEnv)
                 if plan.Verbosity >= 1 then println plan.Labels.TypeCheck
                 let typeCheckResult =
-                    checkProgramWithBaseEnvForSyntax
-                        plan.SourceSyntax
-                        plan.AllowInternal
+                    checkProgramWithBaseEnv
                         plan.Options.Warnings
                         plan.BaseContext.TypeCheckEnv
                         userAst
@@ -2371,7 +2330,7 @@ let buildPreambleContext
         }
         Ok (stdlib, emptyContext)
     else
-        match Parser.parseString allowInternal preamble with
+    match InterpreterParser.parseString allowInternal preamble with
         | Error err ->
             let msg = $"Preamble parse error: {err}"
             Error msg
@@ -2590,7 +2549,6 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
     {
         AllowInternal = request.AllowInternal
         Mode = request.Mode
-        SourceSyntax = request.SourceSyntax
         Verbosity = request.Verbosity
         Options = request.Options
         PackageValues = request.PackageValues
@@ -2834,7 +2792,7 @@ let getAllStdlibFunctionNamesFromStdlib (stdlib: StdlibResult) : Set<string> =
 /// Used for coverage analysis without re-compiling stdlib
 let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string) : Result<Set<string>, string> =
     // Parse user code
-    match Parser.parseString false source with
+    match InterpreterParser.parseString false source with
     | Error err -> Error $"Parse error: {err}"
     | Ok userAst ->
         // Type check with stdlib environment

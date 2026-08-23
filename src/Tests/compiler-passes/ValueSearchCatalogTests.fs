@@ -94,7 +94,6 @@ let private compile
     CompilerLibrary.compile {
         Context = CompilerLibrary.StdlibOnly stdlib
         Mode = CompilerLibrary.FullProgram
-        SourceSyntax = CompilerLibrary.CompilerSyntax
         Sources =
             AST.NonEmptyList.singleton
                 { CompilerLibrary.SourceUnit.Name = "ValueSearchCatalogTests.dark"

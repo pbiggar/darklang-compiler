@@ -1,9 +1,5 @@
-// SyntaxTestRunner.fs - Executes syntax acceptance, formatting, and roundtrip fixtures.
-//
-// Compares parsed ASTs structurally, with normalization only for generated interpreter lambda seeds.
-
+// SyntaxTestRunner.fs - Runs canonical interpreter syntax fixtures.
 module TestDSL.SyntaxTestRunner
-
 open System.IO
 open System.Text.RegularExpressions
 open AST
@@ -11,104 +7,36 @@ open TestDSL.Common
 open TestDSL.PassTestRunner
 open TestDSL.SyntaxFormat
 
-let private parse (syntax: SyntaxKind) (source: string) : Result<AST.Program, string> =
-    match syntax with
-    | Compiler -> Parser.parseString false source
-    | Interpreter -> InterpreterParser.parseString false source
+let private parse source = InterpreterParser.parseString false source
+let private format program = ASTPrettyPrinter.formatProgram ASTPrettyPrinter.InterpreterSyntax program
+let private normalized (program: Program) = Regex.Replace(sprintf "%A" program, "__interp_lambda_[0-9]+_", "__interp_lambda_N_")
+let private result success message expected actual : PassTestResult = { Success = success; Message = message; Expected = expected; Actual = actual }
 
-let private prettySyntax = function
-    | Compiler -> ASTPrettyPrinter.CompilerSyntax
-    | Interpreter -> ASTPrettyPrinter.InterpreterSyntax
-
-let private formatProgram (syntax: SyntaxKind) (program: AST.Program) : Result<string, string> =
-    try
-        Ok (ASTPrettyPrinter.formatProgram (prettySyntax syntax) program)
-    with ex ->
-        Error ex.Message
-
-let private normalizedAst (program: AST.Program) : string =
-    let debug = sprintf "%A" program
-    Regex.Replace(debug, "__interp_lambda_[0-9]+_", "__interp_lambda_N_")
-
-let private astsEqual (left: AST.Program) (right: AST.Program) : bool =
-    left = right || normalizedAst left = normalizedAst right
-
-let private success : PassTestResult =
-    { Success = true; Message = "Test passed"; Expected = None; Actual = None }
-
-let private failure message expected actual : PassTestResult =
-    { Success = false; Message = message; Expected = expected; Actual = actual }
-
-let private checkFormat (test: SyntaxTest) (ast: AST.Program) : PassTestResult =
-    match test.FormatAs, test.ExpectedFormat with
-    | None, None -> success
-    | Some syntax, Some expected ->
-        match formatProgram syntax ast with
-        | Error msg -> failure $"Formatting failed: {msg}" (Some expected) None
-        | Ok actual when normalizeLineEndings (actual.Trim()) = normalizeLineEndings (expected.Trim()) -> success
-        | Ok actual -> failure "Formatted syntax did not match" (Some expected) (Some actual)
-    | _ -> failure "Invalid syntax fixture formatting state" None None
-
-let private checkRoundtrips (test: SyntaxTest) (ast: AST.Program) : PassTestResult =
-    let rec loop remaining =
-        match remaining with
-        | [] -> success
-        | syntax :: rest ->
-            match formatProgram syntax ast with
-            | Error msg -> failure $"Roundtrip formatting failed: {msg}" None None
-            | Ok formatted ->
-                match parse syntax formatted with
-                | Error msg -> failure $"Roundtrip reparse failed: {msg}" (Some formatted) None
-                | Ok reparsed when astsEqual ast reparsed -> loop rest
-                | Ok reparsed ->
-                    failure
-                        "AST changed after syntax roundtrip"
-                        (Some (normalizedAst ast))
-                        (Some (normalizedAst reparsed))
-    loop test.RoundtripAs
-
-let runSyntaxTest (test: SyntaxTest) : PassTestResult =
-    match parse test.ParseAs test.Source, test.ExpectedError with
-    | Error msg, Some expected when msg.Contains expected -> success
-    | Error msg, Some expected ->
-        failure "Parse error did not contain expected text" (Some expected) (Some msg)
-    | Ok _, Some expected ->
-        failure "Expected syntax parsing to fail" (Some expected) (Some "Parsing succeeded")
-    | Error msg, None -> failure $"Syntax parsing failed: {msg}" None None
+let runSyntaxTest test =
+    match parse test.Source, test.ExpectedError with
+    | Error error, Some expected when error.Contains expected -> result true "Test passed" None None
+    | Error error, Some expected -> result false "Parse error did not contain expected text" (Some expected) (Some error)
+    | Ok _, Some expected -> result false "Expected syntax parsing to fail" (Some expected) (Some "Parsing succeeded")
+    | Error error, None -> result false $"Syntax parsing failed: {error}" None None
     | Ok ast, None ->
-        match checkFormat test ast with
-        | { Success = false } as result -> result
-        | _ -> checkRoundtrips test ast
+        let formatted = format ast
+        match test.ExpectedFormat with
+        | Some expected when normalizeLineEndings (formatted.Trim()) <> normalizeLineEndings (expected.Trim()) -> result false "Formatted syntax did not match" (Some expected) (Some formatted)
+        | _ when not test.Roundtrip -> result true "Test passed" None None
+        | _ ->
+            match parse formatted with
+            | Error error -> result false $"Roundtrip reparse failed: {error}" (Some formatted) None
+            | Ok reparsed when normalized ast = normalized reparsed -> result true "Test passed" None None
+            | Ok reparsed -> result false "AST changed after syntax roundtrip" (Some (normalized ast)) (Some (normalized reparsed))
 
-let loadSyntaxTests (path: string) : Result<SyntaxTest list, string> =
-    if not (File.Exists path) then
-        Error $"Syntax test file not found: {path}"
-    else
-        try
-            File.ReadAllText path
-            |> parseSyntaxFileContent path
-        with ex ->
-            Error $"Failed to read syntax test file {path}: {ex.Message}"
+let loadSyntaxTests path =
+    if not (File.Exists path) then Error $"Syntax test file not found: {path}"
+    else try File.ReadAllText path |> parseSyntaxFileContent path with ex -> Error $"Failed to read syntax test file {path}: {ex.Message}"
 
-let tests (testFiles: string array) : (string * (unit -> Result<unit, string>)) list =
-    let testsForFile path =
+let tests (testFiles: string array) =
+    testFiles |> Array.sort |> Array.toList |> List.collect (fun path ->
         match loadSyntaxTests path with
-        | Error msg ->
-            [ ($"parse {Path.GetFileName path}", fun () -> Error msg) ]
-        | Ok cases ->
-            cases
-            |> List.map (fun test ->
-                (test.Name,
-                 fun () ->
-                    let result = runSyntaxTest test
-                    if result.Success then Ok ()
-                    else
-                        match result.Expected, result.Actual with
-                        | Some expected, Some actual ->
-                            Error $"{result.Message}\nExpected:\n{expected}\nActual:\n{actual}"
-                        | _ -> Error result.Message))
-
-    testFiles
-    |> Array.sort
-    |> Array.toList
-    |> List.collect testsForFile
+        | Error msg -> [ ($"parse {Path.GetFileName path}", fun () -> Error msg) ]
+        | Ok cases -> cases |> List.map (fun test -> test.Name, fun () ->
+            let outcome = runSyntaxTest test
+            if outcome.Success then Ok () else Error (match outcome.Expected, outcome.Actual with | Some expected, Some actual -> $"{outcome.Message}\nExpected:\n{expected}\nActual:\n{actual}" | _ -> outcome.Message)))

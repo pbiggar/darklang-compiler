@@ -418,7 +418,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Optimization Format Tests"; Tests = OptimizationFormatTests.tests }
         { Name = "Type Checking Format Tests"; Tests = TypeCheckingFormatTests.tests }
         { Name = "Progress Bar Tests"; Tests = ProgressBarTests.tests }
-        { Name = "Syntax DSL Tests"; Tests = SyntaxDSLTests.tests }
         { Name = "Encoding DSL Tests"; Tests = EncodingDSLTests.tests }
         { Name = "Graph Color DSL Tests"; Tests = GraphColorDSLTests.tests }
         { Name = "Parallel Move DSL Tests"; Tests = ParallelMoveDSLTests.tests }
@@ -428,7 +427,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "LIR Execution Fixture Tests"; Tests = TestDSL.LIRExecutionTestRunner.tests lirExecutionTestFiles }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
         { Name = "ARM64 Binary Tests"; Tests = ARM64BinaryTests.tests }
-        { Name = "Parser Tests"; Tests = ParserTests.tests }
         { Name = "ARM64 CodeGen Tests"; Tests = ARM64CodeGenTests.tests }
         { Name = "x64 Encoding Fixture Tests"; Tests = TestDSL.X86_64EncodingTestRunner.tests x64encTestFiles }
         { Name = "x64 Binary Tests"; Tests = X86_64BinaryTests.tests }
@@ -450,7 +448,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "ANF Higher-Order Specialization Tests"; Tests = ANFHigherOrderSpecializationTests.tests }
         { Name = "Monomorphization Tests"; Tests = MonomorphizationTests.tests }
         { Name = "Lambda Lifting Tests"; Tests = LambdaLiftingTests.tests }
-        { Name = "Syntax Interop Tests"; Tests = SyntaxInteropTests.tests }
         { Name = "Formatting Roundtrip Tests"; Tests = FormattingRoundtripTests.tests formattingRoundtripTestFiles }
         { Name = "Syntax Fixture Tests"; Tests = TestDSL.SyntaxTestRunner.tests syntaxTestFiles }
         { Name = "E2E Format Tests"; Tests = E2EFormatTests.tests }
@@ -531,13 +528,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let elapsed = timer.Elapsed
     let stdlibPassTimingEnd = passTimingTotal ()
     recordPhaseOverhead "Stdlib Build Overhead" elapsed stdlibPassTimingStart stdlibPassTimingEnd
-    let optionalRoundtripSuites : UnitTestSuite array =
-        [|
-            {
-                Name = "Syntax Roundtrip Corpus Tests"
-                Tests = SyntaxRoundtripCorpusTests.tests roundtripCorpusTestFiles
-            }
-        |]
+    let optionalRoundtripSuites : UnitTestSuite array = [||]
 
     let allUnitTests = Array.append (buildUnitTests stdlib) optionalRoundtripSuites
 

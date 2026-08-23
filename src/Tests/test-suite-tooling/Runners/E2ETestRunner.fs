@@ -15,37 +15,15 @@ let private isInternalTestFile (sourceFile: string) : bool =
     let normalized = sourceFile.Replace('\\', '/')
     normalized.Contains("/stdlib-internal/") || normalized.Contains("/verification/")
 
-// Choose parser syntax from the test suite directory.
-let private sourceSyntaxForTestFile (sourceFile: string) : CompilerLibrary.SourceSyntax =
-    let normalized = sourceFile.Replace('\\', '/')
-    let isUpstreamDark =
-        normalized.Contains("/e2e/upstream/")
-        && normalized.EndsWith(".dark", StringComparison.OrdinalIgnoreCase)
-
-    if normalized.Contains("/interpreter/") || isUpstreamDark then
-        CompilerLibrary.InterpreterSyntax
-    else
-        CompilerLibrary.CompilerSyntax
-
-let private typeCheckProgramForSourceSyntax
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
+let private typeCheckProgram
     (typeCheckEnv: TypeCheckEnv)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
     let warningSettings = CompilerLibrary.defaultWarningSettings
-    match sourceSyntax with
-    | CompilerLibrary.InterpreterSyntax ->
-        TypeChecking.checkProgramWithBaseEnvAndSettings typeCheckEnv true warningSettings program
-    | CompilerLibrary.CompilerSyntax ->
-        TypeChecking.checkProgramWithBaseEnvAndSettings typeCheckEnv false warningSettings program
+    TypeChecking.checkProgramWithBaseEnvAndSettings typeCheckEnv true warningSettings program
 
 // Build the source expression to execute for a test.
 // For `lhs = rhs` value tests, run a synthesized equality assertion.
-
-let private prettySyntaxForSourceSyntax (sourceSyntax: CompilerLibrary.SourceSyntax) : ASTPrettyPrinter.Syntax =
-    match sourceSyntax with
-    | CompilerLibrary.CompilerSyntax -> ASTPrettyPrinter.CompilerSyntax
-    | CompilerLibrary.InterpreterSyntax -> ASTPrettyPrinter.InterpreterSyntax
 
 let private asSingleExpression (program: Program) : Expr option =
     let (Program topLevels) = program
@@ -71,13 +49,11 @@ let private buildValueComparisonExpr (lhsExpr: Expr) (rhsExpr: Expr) : Expr =
         BinOp (Eq, lhsExpr, rhsExpr)
 
 let private tryFormatProgramIfStable
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
     (allowInternal: bool)
     (program: Program)
     : string option =
-    let prettySyntax = prettySyntaxForSourceSyntax sourceSyntax
-    let formatted = ASTPrettyPrinter.formatProgram prettySyntax program
-    match CompilerLibrary.parseProgram sourceSyntax allowInternal formatted with
+    let formatted = ASTPrettyPrinter.formatProgram ASTPrettyPrinter.InterpreterSyntax program
+    match CompilerLibrary.parseProgram allowInternal formatted with
     | Ok _ ->
         // Stable recursive identities include structural declaration paths.
         // Test synthesis inserts a checker declaration, so a valid reparse can
@@ -106,13 +82,12 @@ let private pickValueCheckFuncName (topLevels: TopLevel list) : string =
     loop 0
 
 let private trySynthesizeValueEqualitySource
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
     (allowInternal: bool)
     (source: string)
     (rhsExpr: string)
     : string option =
-    let sourceProgramResult = CompilerLibrary.parseProgram sourceSyntax allowInternal source
-    let rhsProgramResult = CompilerLibrary.parseProgram sourceSyntax allowInternal rhsExpr
+    let sourceProgramResult = CompilerLibrary.parseProgram allowInternal source
+    let rhsProgramResult = CompilerLibrary.parseProgram allowInternal rhsExpr
 
     match sourceProgramResult, rhsProgramResult with
     | Ok (Program sourceTopLevels), Ok rhsProgram ->
@@ -120,53 +95,28 @@ let private trySynthesizeValueEqualitySource
         | Expression lhsExpr :: sourceRestRev, Some rhsAst ->
             let comparisonExpr = buildValueComparisonExpr lhsExpr rhsAst
             let directEqProgram =
-                match sourceSyntax with
-                | CompilerLibrary.CompilerSyntax ->
-                    // Keep the value check isolated in its own top-level def so
-                    // the parser cannot attach the synthesized expression to the
-                    // previous definition body.
-                    let valueCheckFuncName = pickValueCheckFuncName sourceTopLevels
-                    let valueCheckFuncDef : AST.FunctionDef = {
-                        Name = valueCheckFuncName
-                        TypeParams = []
-                        // Match parser-generated synthetic unit parameter naming so
-                        // pretty-print/parse roundtrips stay structurally stable.
-                        Params = NonEmptyList.singleton ("$unit0", TUnit)
-                        ReturnType = TBool
-                        Body = comparisonExpr
-                        Recursion = None
-                    }
-                    Program (
-                        List.rev (
-                            Expression (Call (valueCheckFuncName, NonEmptyList.singleton UnitLiteral))
-                            :: FunctionDef valueCheckFuncDef
-                            :: sourceRestRev
-                        )
-                    )
-                | CompilerLibrary.InterpreterSyntax ->
-                    Program (List.rev (Expression comparisonExpr :: sourceRestRev))
+                Program (List.rev (Expression comparisonExpr :: sourceRestRev))
 
-            tryFormatProgramIfStable sourceSyntax allowInternal directEqProgram
+            tryFormatProgramIfStable allowInternal directEqProgram
         | _ ->
             None
     | _ ->
         None
 
 let private sourceToExecute
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
     (allowInternal: bool)
     (test: E2ETest)
     : Result<string, string> =
     match test.ExpectedValueExpr with
     | Some rhsExpr ->
-        match trySynthesizeValueEqualitySource sourceSyntax allowInternal test.Source rhsExpr with
+        match trySynthesizeValueEqualitySource allowInternal test.Source rhsExpr with
         | Some rewritten -> Ok rewritten
         | None ->
             // Some interpreter-specific forms (for example operator sections) can fail
             // AST pretty-print roundtrips even though the direct source is valid.
             // Fall back to textual wrapping and parse-validate before execution.
             let fallbackSource = $"({test.Source}) == ({rhsExpr})"
-            match CompilerLibrary.parseProgram sourceSyntax allowInternal fallbackSource with
+            match CompilerLibrary.parseProgram allowInternal fallbackSource with
             | Ok _ -> Ok fallbackSource
             | Error _ ->
                 Error (
@@ -197,7 +147,6 @@ type private PreambleBuildSpec = {
     Preamble: string
     FunctionLineMap: Map<string, int>
     AllowInternal: bool
-    SourceSyntax: CompilerLibrary.SourceSyntax
 }
 
 /// Map of built preamble contexts keyed by source file + preamble text
@@ -227,13 +176,11 @@ let private buildPreambleBuildSpec (sourceFile: string) (tests: E2ETest list) : 
             |> List.distinct
         match funcLineMaps with
         | [funcLineMap] ->
-            let sourceSyntax = sourceSyntaxForTestFile sourceFile
             Ok {
                 SourceFile = sourceFile
                 Preamble = preamble
                 FunctionLineMap = funcLineMap
                 AllowInternal = isInternalTestFile sourceFile
-                SourceSyntax = sourceSyntax
             }
         | _ ->
             Error $"Multiple function line maps found for {sourceFile}"
@@ -584,11 +531,10 @@ let private reducePreambleTopLevelsToRequiredFunctions
         | Expression _ -> false)
 
 let private parsePreambleAsProgram
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
     (allowInternal: bool)
     (preamble: string)
     : Result<Program, string> =
-    CompilerLibrary.parseProgram sourceSyntax allowInternal preamble
+    CompilerLibrary.parseProgram allowInternal preamble
 
 let private countLeadingSpaces (lineText: string) : int =
     lineText
@@ -636,14 +582,14 @@ let private analyzePreambleWithReducedFunctionSet
     (tests: E2ETest list)
     : Result<CompilerLibrary.PreambleAnalysis, string> =
     let parseResult =
-        match parsePreambleAsProgram spec.SourceSyntax spec.AllowInternal spec.Preamble with
+        match parsePreambleAsProgram spec.AllowInternal spec.Preamble with
         | Ok program -> Ok program
         | Error primaryErr ->
             let sanitizedPreamble = sanitizePreambleForReducedFallback spec.Preamble
             if sanitizedPreamble = spec.Preamble then
                 Error primaryErr
             else
-                parsePreambleAsProgram spec.SourceSyntax spec.AllowInternal sanitizedPreamble
+                parsePreambleAsProgram spec.AllowInternal sanitizedPreamble
                 |> Result.mapError (fun reducedParseErr ->
                     $"{primaryErr}\nSanitized preamble parse failed: {reducedParseErr}")
 
@@ -669,8 +615,8 @@ let private analyzePreambleWithReducedFunctionSet
         let hasUnparsableTestSource =
             runnableTests
             |> List.exists (fun test ->
-                sourceToExecute spec.SourceSyntax spec.AllowInternal test
-                |> Result.bind (CompilerLibrary.parseProgram spec.SourceSyntax spec.AllowInternal)
+                sourceToExecute spec.AllowInternal test
+                |> Result.bind (CompilerLibrary.parseProgram spec.AllowInternal)
                 |> Result.isError)
 
         let seedFunctions =
@@ -679,8 +625,8 @@ let private analyzePreambleWithReducedFunctionSet
             else
                 runnableTests
                 |> List.map (fun test ->
-                    sourceToExecute spec.SourceSyntax spec.AllowInternal test
-                    |> Result.bind (CompilerLibrary.parseProgram spec.SourceSyntax spec.AllowInternal)
+                    sourceToExecute spec.AllowInternal test
+                    |> Result.bind (CompilerLibrary.parseProgram spec.AllowInternal)
                     |> Result.map (collectProgramReferencedPreambleFuncs preambleFunctionNames))
                 |> List.choose Result.toOption
                 |> List.fold Set.union Set.empty
@@ -697,7 +643,7 @@ let private analyzePreambleWithReducedFunctionSet
 
         TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
             stdlib.Context.TypeCheckEnv
-            (spec.SourceSyntax = CompilerLibrary.InterpreterSyntax)
+            true
             CompilerLibrary.defaultWarningSettings
             reducedProgram
         |> Result.mapError TypeChecking.typeErrorToString
@@ -717,12 +663,10 @@ let private analyzePreambleForPlan
     if String.IsNullOrWhiteSpace spec.Preamble then
         Ok None
     else
-        match CompilerLibrary.analyzePreamble spec.SourceSyntax spec.AllowInternal stdlib spec.Preamble with
+        match CompilerLibrary.analyzePreamble spec.AllowInternal stdlib spec.Preamble with
         | Ok analysis ->
             Ok (Some analysis)
-        | Error primaryErr when
-            spec.SourceSyntax = CompilerLibrary.InterpreterSyntax
-            && isUpstreamDarkTestFile spec.SourceFile ->
+        | Error primaryErr when isUpstreamDarkTestFile spec.SourceFile ->
             analyzePreambleWithReducedFunctionSet stdlib spec tests
             |> Result.map Some
             |> Result.mapError (fun reducedErr ->
@@ -732,7 +676,6 @@ let private analyzePreambleForPlan
 
 let private collectSpecsFromTests
     (allowInternal: bool)
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
     (typeCheckEnv: TypeCheckEnv)
     (tests: E2ETest list)
     : Result<Set<SpecKey> * AST_to_ANF.TypeRegistry * VariantLookup, string> =
@@ -754,16 +697,16 @@ let private collectSpecsFromTests
         match remaining with
         | [] -> Ok (accSpecs, accTypeReg, accVariantLookup)
         | test :: rest ->
-            match sourceToExecute sourceSyntax allowInternal test with
+            match sourceToExecute allowInternal test with
             | Error _ ->
                 // Best effort: source synthesis may fail for malformed tests and
                 // should not block suite-level specialization discovery.
                 loop rest accSpecs accTypeReg accVariantLookup
             | Ok source ->
                 let specsResult =
-                    CompilerLibrary.parseProgram sourceSyntax allowInternal source
+                    CompilerLibrary.parseProgram allowInternal source
                     |> Result.bind (fun testAst ->
-                        typeCheckProgramForSourceSyntax sourceSyntax typeCheckEnv testAst
+                        typeCheckProgram typeCheckEnv testAst
                         |> Result.mapError typeErrorToString
                         |> Result.map (fun (programType, typedAst, _) ->
                             let (typeReg, variantLookup) = registriesFromTypedProgram typedAst
@@ -795,7 +738,7 @@ let private buildPreamblePlan
             match analysisOpt with
             | Some analysis -> analysis.TypeCheckEnv
             | None -> stdlib.Context.TypeCheckEnv
-        collectSpecsFromTests spec.AllowInternal spec.SourceSyntax typeCheckEnv tests
+        collectSpecsFromTests spec.AllowInternal typeCheckEnv tests
         |> Result.bind (fun (testSpecs, testTypeReg, testVariantLookup) ->
             let preambleSpecs =
                 match analysisOpt with
@@ -1000,9 +943,7 @@ let private evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
             failRun run
                 $"Output mismatch. stdout expected '{visibleOutput expectedStdout}', actual '{visibleOutput (stdoutFromRun run)}'; stderr expected '{visibleOutput expectedStderr}', actual '{visibleOutput (stderrFromRun run)}'"
 
-let private buildCompilerOptions
-    (_sourceSyntax: CompilerLibrary.SourceSyntax)
-    (test: E2ETest)
+let private buildCompilerOptions (test: E2ETest)
     : CompilerLibrary.CompilerOptions =
     { CompilerLibrary.defaultOptions with
         DisableFreeList = test.DisableFreeList
@@ -1061,13 +1002,12 @@ let private compileAndRun
             Ran (-1, "", $"Execution failed: {err}", compileReport.CompileTime, TimeSpan.Zero)
 
 let private tryBuildReducedPreambleForTest
-    (sourceSyntax: CompilerLibrary.SourceSyntax)
     (allowInternal: bool)
     (preamble: string)
     (testSource: string)
     : string option =
-    let parsePreambleResult = parsePreambleAsProgram sourceSyntax allowInternal preamble
-    let parseTestResult = CompilerLibrary.parseProgram sourceSyntax allowInternal testSource
+    let parsePreambleResult = parsePreambleAsProgram allowInternal preamble
+    let parseTestResult = CompilerLibrary.parseProgram allowInternal testSource
 
     match parsePreambleResult, parseTestResult with
     | Ok (Program preambleTopLevels), Ok testProgram ->
@@ -1096,8 +1036,7 @@ let private tryBuildReducedPreambleForTest
         let reducedTopLevels =
             reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
 
-        let prettySyntax = prettySyntaxForSourceSyntax sourceSyntax
-        let reducedPreambleSource = ASTPrettyPrinter.formatProgram prettySyntax (Program reducedTopLevels)
+        let reducedPreambleSource = ASTPrettyPrinter.formatProgram ASTPrettyPrinter.InterpreterSyntax (Program reducedTopLevels)
         Some reducedPreambleSource
     | _ ->
         None
@@ -1111,9 +1050,8 @@ let runE2ETestWithPreambleContext
     (passTimingRecorder: CompilerLibrary.PassTimingRecorder option)
     : E2ETestResult =
     let allowInternal = isInternalTestFile test.SourceFile
-    let sourceSyntax = sourceSyntaxForTestFile test.SourceFile
-    let options = buildCompilerOptions sourceSyntax test
-    match sourceToExecute sourceSyntax allowInternal test with
+    let options = buildCompilerOptions test
+    match sourceToExecute allowInternal test with
     | Error msg ->
         let run = CompileFailed (1, msg, TimeSpan.Zero)
         failRun run msg
@@ -1121,7 +1059,6 @@ let runE2ETestWithPreambleContext
         let request : CompilerLibrary.CompileRequest = {
             Context = CompilerLibrary.StdlibWithPreamble (stdlib, preambleCtx)
             Mode = CompilerLibrary.CompileMode.TestExpression
-            SourceSyntax = sourceSyntax
             Sources =
                 NonEmptyList.singleton
                     { CompilerLibrary.SourceUnit.Name = test.SourceFile
@@ -1149,12 +1086,11 @@ let runE2ETestWithPreambleContext
 
         if shouldTryRawPreambleFallback then
             let fallbackPreamble =
-                tryBuildReducedPreambleForTest sourceSyntax allowInternal test.Preamble source
+                tryBuildReducedPreambleForTest allowInternal test.Preamble source
                 |> Option.defaultValue test.Preamble
             let fallbackRequest : CompilerLibrary.CompileRequest = {
                 Context = CompilerLibrary.StdlibOnly stdlib
                 Mode = CompilerLibrary.CompileMode.FullProgram
-                SourceSyntax = sourceSyntax
                 Sources =
                     NonEmptyList.fromList
                         [{ CompilerLibrary.SourceUnit.Name = $"{test.SourceFile}:preamble"

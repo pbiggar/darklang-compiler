@@ -7,7 +7,7 @@ module LambdaLiftingTests
 open AST
 open ANF
 open AST_to_ANF
-open Parser
+open InterpreterParser
 open TypeChecking
 
 type TestResult = Result<unit, string>

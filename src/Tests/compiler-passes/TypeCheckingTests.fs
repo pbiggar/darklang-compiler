@@ -333,7 +333,7 @@ let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
         "let groupEven(n: Int64) : Int64 = if n == 0 then 1 else groupOdd(n - 1) "
         + "let groupOdd(n: Int64) : Int64 = if n == 0 then 0 else groupEven(n - 1) "
         + "let completed(n: Int64) : Int64 = n + 1 completed(1)"
-    Parser.parseString false source
+    InterpreterParser.parseString false source
     |> Result.mapError (fun error -> $"Recursive group parse failed: {error}")
     |> Result.bind (fun program ->
         checkProgram program

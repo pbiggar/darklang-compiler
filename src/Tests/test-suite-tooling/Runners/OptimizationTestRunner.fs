@@ -48,7 +48,7 @@ let private addSyntheticMainExpressionIfNeeded (AST.Program topLevels: AST.Progr
         (AST.Program (topLevels @ [ AST.Expression (AST.Int64Literal 0L) ]), true)
 
 let private parseOptimizationSource (source: string) : Result<AST.Program * bool, string> =
-    match Parser.parseString true source with
+    match InterpreterParser.parseString true source with
     | Error e -> Error $"Parse error: {e}"
     | Ok ast -> Ok (addSyntheticMainExpressionIfNeeded ast)
 

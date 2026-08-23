@@ -17,7 +17,6 @@ let private compile
     CompilerLibrary.compile {
         Context = CompilerLibrary.StdlibOnly stdlib
         Mode = mode
-        SourceSyntax = CompilerLibrary.CompilerSyntax
         Sources = NonEmptyList.fromList sources
         AllowInternal = false
         Verbosity = 0

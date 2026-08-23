@@ -9,7 +9,7 @@ open System.IO
 open TestDSL.TypeCheckingFormat
 open TypeChecking
 open AST
-open Parser
+open InterpreterParser
 
 /// Result of running a type checking test
 type TypeCheckingTestResult = {

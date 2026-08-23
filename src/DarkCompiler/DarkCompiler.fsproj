@@ -23,7 +23,6 @@
     <Compile Include="Bitset.fs" />
 
     <!-- Pass 1: Parsing and type checking -->
-    <Compile Include="passes/1_Parser.fs" />
     <Compile Include="passes/1_InterpreterParser.fs" />
     <Compile Include="passes/1.5_TypeChecking.fs" />
     <Compile Include="passes/1.6_ValueRendering.fs" />
