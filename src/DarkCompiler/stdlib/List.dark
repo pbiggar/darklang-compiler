@@ -404,14 +404,14 @@ let groupByWithKey<'a, 'b>(list: List<a>, fn: (a) -> b) : List<(b, List<a>)> =
 let __groupContainsKey<'a, 'b>(groups: List<(b, List<a>)>, key: b) : Bool =
     match groups with
     | [] -> false
-    | group :: tail -> if group.0 == key then true else Stdlib.List.__groupContainsKey<a, b>(tail, key)
+    | (groupKey, _) :: tail -> if groupKey == key then true else Stdlib.List.__groupContainsKey<a, b>(tail, key)
 
 let __appendToGroup<'a, 'b>(groups: List<(b, List<a>)>, key: b, element: a) : List<(b, List<a>)> =
     match groups with
     | [] -> []
-    | group :: tail ->
-        if group.0 == key then Stdlib.List.push<(b, List<a>)>(tail, (group.0, Stdlib.List.pushBack<a>(group.1, element)))
-        else Stdlib.List.push<(b, List<a>)>(Stdlib.List.__appendToGroup<a, b>(tail, key, element), group)
+    | (groupKey, groupElements) :: tail ->
+        if groupKey == key then Stdlib.List.push<(b, List<a>)>(tail, (groupKey, Stdlib.List.pushBack<a>(groupElements, element)))
+        else Stdlib.List.push<(b, List<a>)>(Stdlib.List.__appendToGroup<a, b>(tail, key, element), (groupKey, groupElements))
 
 let __groupByWithKeyHelper<'a, 'b>(remaining: List<a>, fn: (a) -> b, groups: List<(b, List<a>)>) : List<(b, List<a>)> =
     match remaining with

@@ -80,19 +80,19 @@ let __copyKey(key: String) : String =
 let __findNextKey<'v>(entries: List<(String, v)>, after: Stdlib.Option.Option<String>, candidate: Stdlib.Option.Option<String>) : Stdlib.Option.Option<String> =
     match entries with
     | [] -> candidate
-    | entry :: tail ->
+    | (entryKey, _) :: tail ->
         let isAfter =
             match after with
             | None -> true
-            | Some(previousKey) -> Stdlib.Dict.__compareString(entry.0, previousKey) > 0l in
+            | Some(previousKey) -> Stdlib.Dict.__compareString(entryKey, previousKey) > 0l in
         let nextCandidate =
             if !isAfter then candidate
             else
                 match candidate with
-                | None -> Some(Stdlib.Dict.__copyKey(entry.0))
+                | None -> Some(Stdlib.Dict.__copyKey(entryKey))
                 | Some(currentKey) ->
-                    if Stdlib.Dict.__compareString(entry.0, currentKey) < 0l then
-                        Some(Stdlib.Dict.__copyKey(entry.0))
+                    if Stdlib.Dict.__compareString(entryKey, currentKey) < 0l then
+                        Some(Stdlib.Dict.__copyKey(entryKey))
                     else candidate in
         Stdlib.Dict.__findNextKey<v>(tail, after, nextCandidate)
 
@@ -117,7 +117,7 @@ let toList<'v>(dict: Dict<v>) : List<(String, v)> =
 let __keysFromEntries<'v>(entries: List<(String, v)>) : List<String> =
     match entries with
     | [] -> []
-    | head :: tail -> Stdlib.List.push<String>(Stdlib.Dict.__keysFromEntries<v>(tail), head.0)
+    | (key, _) :: tail -> Stdlib.List.push<String>(Stdlib.Dict.__keysFromEntries<v>(tail), key)
 
 let keys<'v>(dict: Dict<v>) : List<String> =
     Stdlib.Dict.__keysFromEntries<v>(Stdlib.Dict.toList<v>(dict))
@@ -125,7 +125,7 @@ let keys<'v>(dict: Dict<v>) : List<String> =
 let __valuesFromEntries<'v>(entries: List<(String, v)>) : List<v> =
     match entries with
     | [] -> []
-    | head :: tail -> Stdlib.List.push<v>(Stdlib.Dict.__valuesFromEntries<v>(tail), head.1)
+    | (_, value) :: tail -> Stdlib.List.push<v>(Stdlib.Dict.__valuesFromEntries<v>(tail), value)
 
 let values<'v>(dict: Dict<v>) : List<v> =
     Stdlib.Dict.__valuesFromEntries<v>(Stdlib.Dict.toList<v>(dict))
@@ -133,10 +133,10 @@ let values<'v>(dict: Dict<v>) : List<v> =
 let __fromListOverwriting<'v>(entries: List<(String, v)>, dict: Dict<v>) : Dict<v> =
     match entries with
     | [] -> dict
-    | head :: tail ->
+    | (key, value) :: tail ->
         Stdlib.Dict.__fromListOverwriting<v>(
             tail,
-            Stdlib.Internal.HAMT.__setOverwriting<String, v>(dict, head.0, head.1))
+            Stdlib.Internal.HAMT.__setOverwriting<String, v>(dict, key, value))
 
 let fromListOverwritingDuplicates<'v>(entries: List<(String, v)>) : Dict<v> =
     Stdlib.Dict.__fromListOverwriting<v>(entries, Stdlib.Internal.HAMT.__empty<String, v>())
@@ -144,12 +144,12 @@ let fromListOverwritingDuplicates<'v>(entries: List<(String, v)>) : Dict<v> =
 let __fromListRejecting<'v>(entries: List<(String, v)>, dict: Dict<v>) : Stdlib.Option.Option<Dict<v>> =
     match entries with
     | [] -> Some(dict)
-    | head :: tail ->
-        if Stdlib.Internal.HAMT.__contains<String, v>(dict, head.0) then None
+    | (key, value) :: tail ->
+        if Stdlib.Internal.HAMT.__contains<String, v>(dict, key) then None
         else
             Stdlib.Dict.__fromListRejecting<v>(
                 tail,
-                Stdlib.Internal.HAMT.__setOverwriting<String, v>(dict, head.0, head.1))
+                Stdlib.Internal.HAMT.__setOverwriting<String, v>(dict, key, value))
 
 let fromList<'v>(entries: List<(String, v)>) : Stdlib.Option.Option<Dict<v>> =
     Stdlib.Dict.__fromListRejecting<v>(entries, Stdlib.Internal.HAMT.__empty<String, v>())
@@ -160,10 +160,10 @@ let member<'v>(dict: Dict<v>, key: String) : Bool =
 let __mergeEntries<'v>(entries: List<(String, v)>, result: Dict<v>) : Dict<v> =
     match entries with
     | [] -> result
-    | head :: tail ->
+    | (key, value) :: tail ->
         Stdlib.Dict.__mergeEntries<v>(
             tail,
-            Stdlib.Internal.HAMT.__setOverwriting<String, v>(result, head.0, head.1))
+            Stdlib.Internal.HAMT.__setOverwriting<String, v>(result, key, value))
 
 let merge<'v>(left: Dict<v>, right: Dict<v>) : Dict<v> =
     Stdlib.Dict.__mergeEntries<v>(Stdlib.Dict.toList<v>(right), left)
@@ -171,11 +171,11 @@ let merge<'v>(left: Dict<v>, right: Dict<v>) : Dict<v> =
 let __mapEntries<'a, 'b>(entries: List<(String, a)>, fn: (String) -> (a) -> b, result: Dict<b>) : Dict<b> =
     match entries with
     | [] -> result
-    | head :: tail ->
+    | (key, value) :: tail ->
         Stdlib.Dict.__mapEntries<a, b>(
             tail,
             fn,
-            Stdlib.Internal.HAMT.__setOverwriting<String, b>(result, head.0, fn(head.0)(head.1)))
+            Stdlib.Internal.HAMT.__setOverwriting<String, b>(result, key, fn(key)(value)))
 
 let map<'a, 'b>(dict: Dict<a>, fn: (String) -> (a) -> b) : Dict<b> =
     Stdlib.Dict.__mapEntries<a, b>(Stdlib.Dict.toList<a>(dict), fn, Stdlib.Internal.HAMT.__empty<String, b>())
@@ -183,8 +183,8 @@ let map<'a, 'b>(dict: Dict<a>, fn: (String) -> (a) -> b) : Dict<b> =
 let __iterEntries<'a>(entries: List<(String, a)>, fn: (String) -> (a) -> Unit) : Unit =
     match entries with
     | [] -> ()
-    | head :: tail ->
-        let _ = fn(head.0)(head.1) in
+    | (key, value) :: tail ->
+        let _ = fn(key)(value) in
         Stdlib.Dict.__iterEntries<a>(tail, fn)
 
 let iter<'a>(dict: Dict<a>, fn: (String) -> (a) -> Unit) : Unit =
@@ -193,9 +193,9 @@ let iter<'a>(dict: Dict<a>, fn: (String) -> (a) -> Unit) : Unit =
 let __filterEntries<'a>(entries: List<(String, a)>, fn: (String) -> (a) -> Bool, result: Dict<a>) : Dict<a> =
     match entries with
     | [] -> result
-    | head :: tail ->
+    | (key, value) :: tail ->
         let next =
-            if fn(head.0)(head.1) then Stdlib.Internal.HAMT.__setOverwriting<String, a>(result, head.0, head.1)
+            if fn(key)(value) then Stdlib.Internal.HAMT.__setOverwriting<String, a>(result, key, value)
             else result in
         Stdlib.Dict.__filterEntries<a>(tail, fn, next)
 
@@ -205,11 +205,11 @@ let filter<'a>(dict: Dict<a>, fn: (String) -> (a) -> Bool) : Dict<a> =
 let __filterMapEntries<'a, 'b>(entries: List<(String, a)>, fn: (String) -> (a) -> Stdlib.Option.Option<b>, result: Dict<b>) : Dict<b> =
     match entries with
     | [] -> result
-    | head :: tail ->
+    | (key, value) :: tail ->
         let next =
-            match fn(head.0)(head.1) with
+            match fn(key)(value) with
             | None -> result
-            | Some(value) -> Stdlib.Internal.HAMT.__setOverwriting<String, b>(result, head.0, value) in
+            | Some(mapped) -> Stdlib.Internal.HAMT.__setOverwriting<String, b>(result, key, mapped) in
         Stdlib.Dict.__filterMapEntries<a, b>(tail, fn, next)
 
 let filterMap<'a, 'b>(dict: Dict<a>, fn: (String) -> (a) -> Stdlib.Option.Option<b>) : Dict<b> =

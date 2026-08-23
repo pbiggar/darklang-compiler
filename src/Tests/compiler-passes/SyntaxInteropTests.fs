@@ -806,17 +806,20 @@ let testInterpreterParserRejectsBareTupleExpression () : TestResult =
     | Error _ -> Ok ()
     | Ok _ -> Error "Interpreter parser accepted a bare tuple expression outside a match scrutinee"
 
-let testInterpreterTupleSyntaxBoundaries () : TestResult =
+let testPublicTupleSyntaxBoundaries () : TestResult =
     let rejectedSources = [ "(1L,)"; "let pair = (1L, 2L) in pair.0" ]
-    let rejected =
+    let parserRejects parse source =
+        match parse false source with
+        | Error _ -> true
+        | Ok _ -> false
+    let rejectedByBothParsers =
         rejectedSources
         |> List.forall (fun source ->
-            match InterpreterParser.parseString false source with
-            | Error _ -> true
-            | Ok _ -> false)
+            parserRejects Parser.parseString source
+            && parserRejects InterpreterParser.parseString source)
     match InterpreterParser.parseString false "match 1L, 2L with | (a, b) -> a" with
-    | Ok _ when rejected -> Ok ()
-    | Ok _ -> Error "Interpreter parser accepted singleton/projection tuple syntax"
+    | Ok _ when rejectedByBothParsers -> Ok ()
+    | Ok _ -> Error "A public parser accepted singleton/projection tuple syntax"
     | Error err -> Error $"Interpreter parser rejected bare match tuple scrutinee: {err}"
 
 let testInterpreterParserParsesPipeOperatorSections () : TestResult =
@@ -1046,7 +1049,7 @@ let tests = [
     ("record field boundary blocks space application", testInterpreterParserDoesNotCrossRecordFieldBoundaryWithApplication)
     ("record field boundary blocks qualified constructor payload", testInterpreterParserDoesNotCrossRecordFieldBoundaryWithQualifiedConstructor)
     ("reject bare tuple expression", testInterpreterParserRejectsBareTupleExpression)
-    ("interpreter tuple syntax boundaries", testInterpreterTupleSyntaxBoundaries)
+    ("public tuple syntax boundaries", testPublicTupleSyntaxBoundaries)
     ("parse pipe operator sections", testInterpreterParserParsesPipeOperatorSections)
     ("parse qualified record literal", testInterpreterParserParsesQualifiedRecordLiteral)
     ("parse constructor over-application chain", testInterpreterParserParsesConstructorOverApplicationChain)

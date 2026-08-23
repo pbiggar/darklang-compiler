@@ -14,7 +14,7 @@ Generic functions declare type parameters in angle brackets:
 
 ```dark
 let identity<'T>(x: T) : T = x
-let swap<'A, 'B>(pair: (A, B)) : (B, A) = (pair.1, pair.0)
+let swap<'A, 'B>(pair: (A, B)) : (B, A) = let (first, second) = pair in (second, first)
 ```
 
 ### 2. Type Application (Call Sites)

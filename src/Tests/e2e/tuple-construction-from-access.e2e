@@ -8,14 +8,14 @@
 // Basic tuple construction from access (no functions)
 // =====================================================
 
-// Simple 2-tuple construction from 3-tuple access
-let t = (1, 2, 3) in let t2 = (t.0, t.1) in t2.0 + t2.1 = 3
+// Simple 2-tuple construction from 3-tuple destructuring
+let t = (1, 2, 3) in let (a, b, _) = t in let t2 = (a, b) in let (first, second) = t2 in first + second = 3
 
 // 3-tuple construction from 4-tuple access
-let t = (1, 2, 3, 4) in let t2 = (t.0, t.1, t.2) in t2.0 + t2.1 + t2.2 = 6
+let t = (1, 2, 3, 4) in let (a, b, c, _) = t in let t2 = (a, b, c) in let (first, second, third) = t2 in first + second + third = 6
 
 // Constructing tuple with reordered access
-let t = (10, 20, 30) in let t2 = (t.2, t.0) in t2.0 + t2.1 = 40
+let t = (10, 20, 30) in let (a, _, c) = t in let t2 = (c, a) in let (first, second) = t2 in first + second = 40
 
 // =====================================================
 // Tuple construction from function return access
@@ -24,25 +24,25 @@ let t = (10, 20, 30) in let t2 = (t.2, t.0) in t2.0 + t2.1 = 40
 // These functions have unique names to avoid collisions in the shared preamble
 let makeTuple3(x: Int64) : (Int64, Int64, Int64) = (x, x * 2, x * 3)
 
-let r = makeTuple3(5) in let t = (r.0, r.1) in t.0 + t.1 = 15
+let r = makeTuple3(5) in let (a, b, _) = r in let t = (a, b) in let (first, second) = t in first + second = 15
 
 let makeTuple4(x: Int64) : (Int64, Int64, Int64, Int64) = (x, x + 1, x + 2, x + 3)
 
-let r = makeTuple4(10) in let t = (r.1, r.3) in t.0 + t.1 = 24
+let r = makeTuple4(10) in let (_, b, _, d) = r in let t = (b, d) in let (first, second) = t in first + second = 24
 
 // =====================================================
 // Tuple construction in let chain
 // =====================================================
 
-let a = (1, 2, 3) in let b = (a.0 + 10, a.1 + 10) in let c = (b.0, b.1, a.2) in c.0 + c.1 + c.2 = 26
+let a = (1, 2, 3) in let (a0, a1, a2) = a in let b = (a0 + 10, a1 + 10) in let (b0, b1) = b in let c = (b0, b1, a2) in let (c0, c1, c2) = c in c0 + c1 + c2 = 26
 
 // =====================================================
 // Tuple construction in function returning tuple
 // =====================================================
 
-let transformTuple(t: (Int64, Int64, Int64)) : (Int64, Int64) = (t.0 + t.1, t.1 + t.2)
+let transformTuple(t: (Int64, Int64, Int64)) : (Int64, Int64) = let (first, second, third) = t in (first + second, second + third)
 
-let orig = (1, 2, 3) in let result = transformTuple(orig) in result.0 + result.1 = 8
+let orig = (1, 2, 3) in let result = transformTuple(orig) in let (first, second) = result in first + second = 8
 
 // =====================================================
 // Recursive function using tuple construction from access
@@ -51,10 +51,12 @@ let orig = (1, 2, 3) in let result = transformTuple(orig) in result.0 + result.1
 let stepPair(x: Int64, y: Int64) : (Int64, Int64) = (x + 1, y + 2)
 
 let recurseWithTuple(t: (Int64, Int64), n: Int64) : Int64 =
-    if n <= 0 then t.0 + t.1
+    let (first, second) = t in
+    if n <= 0 then first + second
     else
-        let r = stepPair(t.0, t.1) in
-        let t2 = (r.0, r.1) in
+        let r = stepPair(first, second) in
+        let (nextFirst, nextSecond) = r in
+        let t2 = (nextFirst, nextSecond) in
         recurseWithTuple(t2, n - 1)
 
 recurseWithTuple((0, 0), 5) = 15

@@ -90,7 +90,7 @@ let classes(classList: List<String>) : (String, Stdlib.Option.Option<String>) =
     ("class", Some(Stdlib.String.join(classList, " ")))
 
 let __styleProperty(property: (String, String)) : String =
-    property.0 ++ ": " ++ property.1
+    let (name, value) = property in name ++ ": " ++ value
 
 let style(properties: List<(String, String)>) : (String, Stdlib.Option.Option<String>) =
     let rendered =

@@ -1619,7 +1619,7 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
         | _ -> Error "Expected 'when' or '->' after pattern")
 
 /// Parser: convert tokens to AST
-let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
+let parse (allowInternal: bool) (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
     // Recursive descent parser with operator precedence
     // Precedence (low to high): or < and < comparison < +/- < */ < unary
 
@@ -2484,14 +2484,21 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Error "Expected ',', ';', or ']' in list literal")
 
     and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
-        // Handle postfix operations: tuple access (.0, .1), field access (.fieldName), or function application (args)
+        // Numeric tuple projection is an internal compiler operation. Public source
+        // uses destructuring or the Tuple2/Tuple3 APIs; record fields remain public.
         match toks with
-        | TDot :: TInt64 index :: rest ->
+        | TDot :: TBigInt index :: rest when allowInternal ->
+            if index > bigint System.Int32.MaxValue then
+                Error "Tuple index is too large"
+            else
+                parsePostfix (TupleAccess (expr, int index)) rest
+        | TDot :: TInt64 index :: rest when allowInternal ->
             if index < 0L then
                 Error "Tuple index cannot be negative"
             else
-                let accessExpr = TupleAccess (expr, int index)
-                parsePostfix accessExpr rest
+                parsePostfix (TupleAccess (expr, int index)) rest
+        | TDot :: (TBigInt _ | TInt64 _) :: _ ->
+            Error "Numeric tuple access is not supported; use destructuring or Stdlib.Tuple2/Stdlib.Tuple3"
         | TDot :: TIdent fieldName :: rest ->
             // Record field access
             let accessExpr = RecordAccess (expr, fieldName)
@@ -2805,8 +2812,8 @@ let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.
     let (sourceModules, sourceBody) = extractModules input []
     lex sourceBody
     |> Result.bind (fun tokens ->
-        if allowInternal then parse tokens
-        else validatePublicDictTypeArity tokens |> Result.bind (fun () -> parse tokens))
+        if allowInternal then parse true tokens
+        else validatePublicDictTypeArity tokens |> Result.bind (fun () -> parse false tokens))
     |> Result.map (NameSyntax.wrapModules sourceModules)
 
 /// Parse and cross the explicit source-tree to compiler-AST boundary.

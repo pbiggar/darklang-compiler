@@ -49,7 +49,7 @@ Stdlib.List.SortByComparatorHelpers.splitList([1L, 2L, 3L, 4L, 5L]) = ([1L, 3L, 
 Stdlib.List.SortByComparatorHelpers.merge<Int64>(fun a b -> if a < b then -1I else if a > b then 1I else 0I, [1L, 3L], [2L, 4L]) = Ok([1L, 2L, 3L, 4L])
 Stdlib.List.SortByComparatorHelpers.mergeSort<Int64>(fun a b -> if a < b then -1I else if a > b then 1I else 0I, [3L, 1L, 2L]) = Ok([1L, 2L, 3L])
 Stdlib.List.sortByComparator([3L, 1L, 2L], fun a b -> if a < b then -1I else if a > b then 1I else 0I) = Ok([1L, 2L, 3L])
-Stdlib.List.sortByComparator([(1L, "first"), (1L, "second"), (0L, "zero")], fun a b -> if a.0 < b.0 then -1I else if a.0 > b.0 then 1I else 0I) = Ok([(0L, "zero"), (1L, "first"), (1L, "second")])
+Stdlib.List.sortByComparator([(1L, "first"), (1L, "second"), (0L, "zero")], fun a b -> let (aKey, _) = a in let (bKey, _) = b in if aKey < bKey then -1I else if aKey > bKey then 1I else 0I) = Ok([(0L, "zero"), (1L, "first"), (1L, "second")])
 Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 2I) = Error("Expected comparator function to return -1, 0, or 1, but it returned 2")
 Stdlib.List.sortByComparator([3L, 1L, 2L], fun a b -> if a == 3L && b == 2L then 2I else if a < b then -1I else if a > b then 1I else 0I) = Error("Expected comparator function to return -1, 0, or 1, but it returned 2")
 Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 0L) = error="Type mismatch"

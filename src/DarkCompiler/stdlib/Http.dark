@@ -23,8 +23,8 @@ let __queryParamsToDict(
         let next =
             match Stdlib.Http.__parseQueryParam(param) with
             | None -> result
-            | Some(pair) ->
-                Stdlib.Dict.setOverridingDuplicates<String>(result, pair.0, pair.1) in
+            | Some((key, value)) ->
+                Stdlib.Dict.setOverridingDuplicates<String>(result, key, value) in
         Stdlib.Http.__queryParamsToDict(rest, next)
 
 let parseQueryString(url: String) : Dict<String> =
@@ -58,8 +58,8 @@ let __headerLinesToDict(
         let next =
             match Stdlib.Http.__parseHeaderLine(line) with
             | None -> result
-            | Some(pair) ->
-                Stdlib.Dict.setOverridingDuplicates<String>(result, pair.0, pair.1) in
+            | Some((name, value)) ->
+                Stdlib.Dict.setOverridingDuplicates<String>(result, name, value) in
         Stdlib.Http.__headerLinesToDict(rest, next)
 
 let parseHeaders(value: String) : Dict<String> =

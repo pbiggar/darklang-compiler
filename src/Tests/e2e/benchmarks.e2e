@@ -383,9 +383,10 @@ let spectralMatA(i: Int64, j: Int64) : Float =
     1.0 / Stdlib.Int64.toFloat(div)
 
 let spectralGet3(v: (Float, Float, Float), i: Int64) : Float =
-    if i == 0 then v.0
-    else if i == 1 then v.1
-    else v.2
+    let (first, second, third) = v in
+    if i == 0 then first
+    else if i == 1 then second
+    else third
 
 let spectralAvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
     if j >= n then acc
@@ -405,7 +406,9 @@ let spectralAtav3(v: (Float, Float, Float)) : (Float, Float, Float) =
     spectralAtv3(spectralAv3(v))
 
 let spectralDot3(a: (Float, Float, Float), b: (Float, Float, Float)) : Float =
-    a.0 * b.0 + a.1 * b.1 + a.2 * b.2
+    let (a0, a1, a2) = a in
+    let (b0, b1, b2) = b in
+    a0 * b0 + a1 * b1 + a2 * b2
 
 let spectralV = spectralAtav3((1.0, 1.0, 1.0)) in let spectralU = spectralAtav3(spectralV) in Stdlib.Float.round(Stdlib.Float.sqrt(spectralDot3(spectralU, spectralV) / spectralDot3(spectralV, spectralV)) * 1000000000.0) = 1233643706I
 

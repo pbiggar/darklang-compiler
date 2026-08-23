@@ -19,7 +19,8 @@ let __matchingValue(
     key: String,
     pair: (String, String)
 ) : Stdlib.Option.Option<String> =
-    if pair.0 == key then Some(pair.1) else None
+    let (pairKey, value) = pair in
+    if pairKey == key then Some(value) else None
 
 let queryParam(
     req: Stdlib.Http.Request,

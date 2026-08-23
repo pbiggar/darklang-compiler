@@ -184,13 +184,13 @@ let a = "one" in let b = "two" in (fun x -> a ++ " " ++ b ++ " " ++ x)("three") 
 // =====================================================
 
 // Capture tuple, access elements
-let t = (10, 20) in (fun x -> t.0 + t.1 + x)(5) = 35
+let t = (10, 20) in (fun x -> let (first, second) = t in first + second + x)(5) = 35
 
 // Capture 3-tuple
-let t = (1, 2, 3) in (fun x -> t.0 + t.1 + t.2 + x)(4) = 10
+let t = (1, 2, 3) in (fun x -> let (first, second, third) = t in first + second + third + x)(4) = 10
 
 // Capture tuple, use in arithmetic
-let pair = (5, 3) in (fun x -> (pair.0 - pair.1) * x)(7) = 14
+let pair = (5, 3) in (fun x -> let (first, second) = pair in (first - second) * x)(7) = 14
 
 // =====================================================
 // Closures Capturing Records

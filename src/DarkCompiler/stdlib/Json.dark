@@ -113,11 +113,12 @@ let __serializeFloat(value: Float) : String =
         if absolute == 0.0 then if (bits >> 63UL) == 1UL then "-0.0" else "0.0"
         else
             let ratio = Stdlib.Json.__floatRatio(absolute) in
+            let (ratioNumerator, ratioDenominator) = ratio in
             let rendered =
                 if absolute >= 10000000000000000.0 || absolute < 0.0001 then
-                    Stdlib.Json.__shortestScientificFloat(ratio.0, ratio.1, Stdlib.Float.toBits(absolute), 1)
+                    Stdlib.Json.__shortestScientificFloat(ratioNumerator, ratioDenominator, Stdlib.Float.toBits(absolute), 1)
                 else
-                    Stdlib.Json.__shortestFloat(ratio.0, ratio.1, Stdlib.Float.toBits(absolute), 1) in
+                    Stdlib.Json.__shortestFloat(ratioNumerator, ratioDenominator, Stdlib.Float.toBits(absolute), 1) in
             if (bits >> 63UL) == 1UL then "-" ++ rendered else rendered
 
 let __numberHasDecimalSyntax(text: String) : Bool =

@@ -2,7 +2,7 @@
 // Format: <dark expression> // optional display name
 
 0.0 // float literal zero keeps float syntax
-let outer = ((1, 2), (3, 4)) in (outer.0).0 // nested tuple access keeps required parentheses
+let ((first, _), _) = ((1, 2), (3, 4)) in first // nested tuple patterns keep element order
 let triple(x: Int64) : Int64 = x * 3 triple(7) + triple(7) // top-level expression after a declaration is preserved
 let f(x: Int64) : Int64 = x * 2 f(1) + f(2) + f(3) // top-level expression after a declaration with chained add is preserved
 match [1] with | [x] -> (match [x] with | [a] -> a | _ -> 0) | _ -> 0 // nested match branch body keeps required parentheses

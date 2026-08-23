@@ -169,7 +169,7 @@ let gen_inner<'t>(x: t) : t = x let outer = 10 in (fun x -> gen_inner<Int64>(out
 // =====================================================
 
 // 3-element tuple type as generic type argument - tests parseTypeArgType tuple validation
-let tuple3_id<'t>(x: t) : t = x tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).0 + tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).1 + tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)).2 = 6
+let tuple3_id<'t>(x: t) : t = x let (first, second, third) = tuple3_id<(Int64, Int64, Int64)>((1, 2, 3)) in first + second + third = 6
 
 // Match scrutinee from explicit TypeApp preserves payload type (string equality)
 let gen_match_string<'t>(x: t) : t = x
@@ -236,7 +236,7 @@ unwrapOpt218(Some218(42), 0) = 42
 
 // Two type parameters with different concrete types
 let pair218<'a, 'b>(x: a, y: b) : (a, b) = (x, y)
-let p = pair218(42, true) in p.0 = 42
+let p = pair218(42, true) in let (first, _) = p in first = 42
 
 // Type inference where TVar is bound from multiple sources (argument and return)
 let returnFirst218<'a, 'b>(x: a, y: b) : a = x

@@ -50,7 +50,8 @@ let splitList<'a>(list: List<a>) : (List<a>, List<a>) =
         let retainedX = [x] in
         let retainedY = [y] in
         let split = Stdlib.List.SortByComparatorHelpers.splitList<a>(rest) in
-        (Stdlib.List.append<a>(retainedX, split.0), Stdlib.List.append<a>(retainedY, split.1))
+        let (left, right) = split in
+        (Stdlib.List.append<a>(retainedX, left), Stdlib.List.append<a>(retainedY, right))
 
 let __mergeSortWithComparatorState<'a>(comparatorState: List<(a, a) -> Int>, list: List<a>) : Stdlib.Result.Result<List<a>, String> =
     match list with

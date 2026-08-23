@@ -28,7 +28,7 @@ This document lists the language features currently supported by the Dark compil
 - Parentheses for grouping
 - String interpolation: `$"Hello {name}"`
 - String concatenation: `++`
-- Tuple construction and zero-based access: `(1, 2)` and `t.0`
+- Tuple construction and destructuring: `(1, 2)` and `let (first, second) = tuple in first`
 - Record construction and field access: `Point { x = 1, y = 2 }` and `p.x`
 - Record update: `{ p with x = 100 }`
 - List literals and append: `[]`, `[1, 2, 3]`, `[1; 2; 3]`, `[1] @ rest`

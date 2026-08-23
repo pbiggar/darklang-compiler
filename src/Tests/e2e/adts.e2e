@@ -65,12 +65,12 @@ match SomeBool(false) with | SomeBool(b) -> if b then 1 else 0 | NoBool -> -1 = 
 
 // Sum type with tuple payload
 type Pair = NoPair | MkPair of (Int64, Int64)
-match MkPair((10, 20)) with | MkPair(t) -> t.0 + t.1 | NoPair -> 0 = 30
-match NoPair with | MkPair(t) -> t.0 | NoPair -> 99 = 99
+match MkPair((10, 20)) with | MkPair((first, second)) -> first + second | NoPair -> 0 = 30
+match NoPair with | MkPair((first, _)) -> first | NoPair -> 99 = 99
 
 // Tuple payload with 3 elements
 type Triple = NoTriple | MkTriple of (Int64, Int64, Int64)
-match MkTriple((1, 2, 3)) with | MkTriple(t) -> t.0 + t.1 + t.2 | NoTriple -> 0 = 6
+match MkTriple((1, 2, 3)) with | MkTriple((first, second, third)) -> first + second + third | NoTriple -> 0 = 6
 
 // ===================================================================
 // Sum Types with Record Payloads

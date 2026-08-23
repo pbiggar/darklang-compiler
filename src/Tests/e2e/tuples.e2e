@@ -1,43 +1,42 @@
 // Tuple tests for Phase 7 Milestone 1
 
-// Basic tuple creation and access
-// Note: Currently tuples cannot be directly printed, so we access elements
+// Basic tuple creation and destructuring
 
 // 2-element tuple - first element
-let t = (1, 2) in t.0 = 1
+let t = (1, 2) in let (first, _) = t in first = 1
 
 // 2-element tuple - second element
-let t = (1, 2) in t.1 = 2
+let t = (1, 2) in let (_, second) = t in second = 2
 
 // 3-element tuple - all elements
-let t = (10, 20, 30) in t.0 = 10
-let t = (10, 20, 30) in t.1 = 20
-let t = (10, 20, 30) in t.2 = 30
+let t = (10, 20, 30) in let (first, _, _) = t in first = 10
+let t = (10, 20, 30) in let (_, second, _) = t in second = 20
+let t = (10, 20, 30) in let (_, _, third) = t in third = 30
 
 // Tuple with negative numbers
-let t = (-1, -2) in t.0 = -1
-let t = (-1, -2) in t.1 = -2
+let t = (-1, -2) in let (first, _) = t in first = -1
+let t = (-1, -2) in let (_, second) = t in second = -2
 
 // Tuple with zero
-let t = (0, 1) in t.0 = 0
-let t = (0, 1) in t.1 = 1
+let t = (0, 1) in let (first, _) = t in first = 0
+let t = (0, 1) in let (_, second) = t in second = 1
 
 // Nested tuple access (single level)
-let t = (100, 200) in t.0 + t.1 = 300
+let t = (100, 200) in let (first, second) = t in first + second = 300
 
 // Tuple with boolean values
-let t = (true, false) in t.0 = true
-let t = (true, false) in t.1 = false
+let t = (true, false) in let (first, _) = t in first = true
+let t = (true, false) in let (_, second) = t in second = false
 
 // Tuple elements in arithmetic
-let t = (5, 3) in t.0 - t.1 = 2
-let t = (5, 3) in t.0 * t.1 = 15
+let t = (5, 3) in let (first, second) = t in first - second = 2
+let t = (5, 3) in let (first, second) = t in first * second = 15
 
 // Multiple tuples
-let a = (1, 2) in let b = (3, 4) in a.0 + b.1 = 5
+let a = (1, 2) in let b = (3, 4) in let (first, _) = a in let (_, fourth) = b in first + fourth = 5
 
 // Large tuple (4 elements)
-let t = (1, 2, 3, 4) in t.0 + t.1 + t.2 + t.3 = 10
+let t = (1, 2, 3, 4) in let (a, b, c, d) = t in a + b + c + d = 10
 
 
 // ===================================================================
@@ -123,23 +122,23 @@ let (a, s, b) = (1, "middle", 2) in s = "middle"
 // ===================================================================
 
 // Float in first position
-(3.14, 42).0 = 3.14
-(3.14, 42).1 = 42
+let (first, _) = (3.14, 42) in first = 3.14
+let (_, second) = (3.14, 42) in second = 42
 
 // Float in second position
-(42, 3.14).0 = 42
-(42, 3.14).1 = 3.14
+let (first, _) = (42, 3.14) in first = 42
+let (_, second) = (42, 3.14) in second = 3.14
 
 // All floats
-(1.0, 2.0).0 + (1.0, 2.0).1 = 3.0
+let (first, second) = (1.0, 2.0) in first + second = 3.0
 
 // Mixed float/int/bool
-(1.5, true, 42).0 = 1.5
-(1.5, true, 42).1 = true
-(1.5, true, 42).2 = 42
+let (first, _, _) = (1.5, true, 42) in first = 1.5
+let (_, second, _) = (1.5, true, 42) in second = true
+let (_, _, third) = (1.5, true, 42) in third = 42
 
 // Float in last position of 3-tuple
-(10, 20, 3.14).2 = 3.14
+let (_, _, third) = (10, 20, 3.14) in third = 3.14
 
 // Float tuple destructuring
 let (a, b) = (1.5, 2.5) in a + b = 4.0
@@ -148,14 +147,14 @@ let (a, b) = (1.5, 2.5) in a + b = 4.0
 let (x, y, z) = (1.0, 42, 2.0) in x + z = 3.0
 
 // Float tuple in let binding
-let t = (3.14, 2.71) in t.0 = 3.14
-let t = (3.14, 2.71) in t.1 = 2.71
+let t = (3.14, 2.71) in let (first, _) = t in first = 3.14
+let t = (3.14, 2.71) in let (_, second) = t in second = 2.71
 
 // Float tuple with arithmetic on access
-let t = (1.5, 2.5) in t.0 * t.1 = 3.75
+let t = (1.5, 2.5) in let (first, second) = t in first * second = 3.75
 
 // Nested tuple with float
-let t = ((1.0, 2.0), 3) in t.1 = 3
+let t = ((1.0, 2.0), 3) in let (_, second) = t in second = 3
 
 // Float tuple printing
 (1.0, 2.0) = (1.0, 2.0)
