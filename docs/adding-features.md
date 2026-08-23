@@ -2,6 +2,20 @@
 
 This guide provides step-by-step instructions for common extension patterns. Use the F# compiler's exhaustiveness warnings as your guide - they'll show you every location that needs updating.
 
+## Model States Before Implementing
+
+Before adding fields, cases, or representations, make invalid states
+unrepresentable. Use precise domain types and group structurally related values
+together. Reserve `Option` for genuine semantic absence; for every optional
+field, review whether a discriminated union, a required value in the relevant
+case, or removing the field would model the domain more accurately.
+
+When the feature changes a representation, plan the migration to completion:
+identify the single authoritative representation and remove superseded types,
+conversion paths, and callers. Do not add defaults, shims, or special-case
+workarounds to bridge unsupported states. If compatibility is required, define
+and document it as first-class supported behavior, with appropriate tests.
+
 ## Adding a New Binary Operator
 
 **Example**: Adding the modulo operator `%`
@@ -150,6 +164,15 @@ Add end-to-end tests:
 10 % 3 = stdout="1\n"
 7 % 2 = stdout="1\n"
 ```
+
+### Completion Review
+
+- Does every new optional field represent genuine semantic absence, rather than
+  an unmodeled state or invalid field combination?
+- If this changed a representation, has the migration removed old types,
+  conversions, and callers so that one authoritative representation remains?
+- Are unsupported states exposed clearly, and is any retained compatibility
+  explicitly documented and tested as supported behavior?
 
 ---
 

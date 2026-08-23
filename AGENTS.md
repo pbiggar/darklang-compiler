@@ -30,12 +30,20 @@ Write in F#, with the intention to translate to Darklang later. Thus:
 - Use `Option`s and `Result`s - don't use success flags or imperative patterns
 - Don't use exceptions or `exit`
 - Don't use `find` methods which throw exceptions
-- Use the principle "Impossible states should be unrepresentable"
+- Make invalid states unrepresentable: use precise domain types and keep
+  structurally related data together
+- Use `Option` only for genuine semantic absence; review optional fields and
+  replace or remove them when a more precise type models the state
 - Don't use dotnet libraries unless you can't avoid them.
 - Completely avoid all mutable values, ESPECIALLY global variables"
 - Use string interpolation instead of printf-style calls
 - If a function we need throws exceptions, create a wrapper that returns `Result`
 - NEVER EVER assume a default value, type, etc, when we don't know something. Instead, use `Crash.crash` to crash and document the error.
+- Expose unsupported states clearly; do not maintain shims, defaults, or
+  special-case workarounds to conceal them
+- Complete migrations: retain one authoritative representation and remove
+  superseded code paths. Treat compatibility as a first-class supported
+  behavior only when it is explicitly documented.
 
 ## Result Handling
 

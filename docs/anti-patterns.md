@@ -11,6 +11,30 @@ Avoid adding compatibility shims, special cases, or recovery paths just to keep
 the compiler moving past a broken or unsupported case. If something does not
 work yet, crash with a clear message that explains the unsupported path.
 
+Do not preserve defaults, shims, or special-case branches as maintained
+workarounds. Compatibility is acceptable only as explicitly documented,
+first-class supported behavior, rather than an undocumented fallback.
+
+## Imprecise State Modeling
+
+Do not represent invalid combinations with loosely related fields, flags, or
+optional values. Define precise domain types and keep values that must vary
+together in the same structural representation, so invalid combinations cannot
+be constructed.
+
+Use `Option` only when absence is a genuine part of the domain. When reviewing
+an optional field, ask whether a discriminated union, a required field in the
+relevant case, or removing the field altogether more accurately represents the
+state.
+
+## Incomplete Migrations
+
+Do not leave both old and new representations, conversion paths, or callers in
+place after a migration is complete. Finish the migration with one authoritative
+representation and remove superseded code. If old behavior must remain
+supported, document that compatibility explicitly and test it as a supported
+behavior.
+
 ## Default Values for Unexpected Situations
 
 Never fill in missing or unexpected compiler state with a convenient default

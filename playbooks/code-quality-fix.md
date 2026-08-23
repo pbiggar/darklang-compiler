@@ -21,7 +21,16 @@ You are going to fix EXACTLY ONE code quality issue that does not require adding
 
    - Pure functional F# only: no mutation, no exceptions
    - Use `Result`/`Option` patterns from `docs/result-patterns.md`
+   - Make invalid states unrepresentable with precise domain types and
+     structurally related data. Use `Option` only for genuine semantic absence.
+   - When adding or retaining an optional field, review whether a discriminated
+     union, a required field in the relevant case, or removing the field models
+     the state more precisely.
    - If a value truly cannot be known, use `Crash.crash` with a clear message
+   - Do not retain defaults, shims, or special-case workarounds for unsupported
+     states. Compatibility must be explicitly documented as supported behavior.
+   - If the change migrates a representation, complete it: retain one
+     authoritative representation and remove superseded paths.
    - Add a brief comment only if the logic is non-obvious to a senior compiler engineer
 
 4. Run the full test suite (`./run-tests --ai`). Fix the compiler, not the tests, until all tests pass.
@@ -48,3 +57,6 @@ You are going to fix EXACTLY ONE code quality issue that does not require adding
 - No behavior changes without a test demonstrating the expected behavior.
 - Keep the change local to one or two files; avoid sweeping refactors.
 - Maintain pure functional style and Result-based error handling.
+- Before finishing a representation change, confirm optional fields describe
+  genuine absence and that completed migrations leave no old representation or
+  compatibility workaround behind.
