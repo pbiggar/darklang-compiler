@@ -2246,7 +2246,7 @@ let rec private matchPatternBindingTypes
     | AST.POr alternatives ->
         matchPatternBindingTypes typeReg variantLookup (AST.NonEmptyList.head alternatives) scrutineeType
     | AST.PVar name -> Map.ofList [(name, scrutineeType)]
-    | AST.PWildcard | AST.PUnit | AST.PInt64 _ | AST.PInt128Literal _
+    | AST.PWildcard | AST.PUnit | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
     | AST.PInt8Literal _ | AST.PInt16Literal _ | AST.PInt32Literal _
     | AST.PUInt8Literal _ | AST.PUInt16Literal _ | AST.PUInt32Literal _
     | AST.PUInt64Literal _ | AST.PUInt128Literal _ | AST.PBool _
@@ -2424,7 +2424,7 @@ let rec simpleInferType
             extractPatternBindings (AST.NonEmptyList.head alternatives) scrutType
         | AST.PVar name -> Map.ofList [(name, scrutType)]
         | AST.PWildcard -> Map.empty
-        | AST.PInt64 _ | AST.PInt128Literal _
+        | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
         | AST.PInt8Literal _
         | AST.PInt16Literal _
         | AST.PInt32Literal _
@@ -4583,7 +4583,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 extractPatternBindings (AST.NonEmptyList.head alternatives) scrutType
             | AST.PVar name -> Map.ofList [(name, scrutType)]
             | AST.PWildcard -> Map.empty
-            | AST.PInt64 _ | AST.PInt128Literal _
+            | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
             | AST.PInt8Literal _
             | AST.PInt16Literal _
             | AST.PInt32Literal _
@@ -6322,7 +6322,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     extractAndCompileBody (AST.NonEmptyList.head alternatives) body scrutAtom scrutType currentEnv vg
                 | AST.PUnit -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                 | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-                | AST.PInt64 _ | AST.PInt128Literal _
+                | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                 | AST.PInt8Literal _
                 | AST.PInt16Literal _
                 | AST.PInt32Literal _
@@ -6391,7 +6391,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         match pat with
                         | AST.POr alternatives ->
                             collectPatternBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
-                        | AST.PInt64 _ | AST.PInt128Literal _
+                        | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                         | AST.PInt8Literal _
                         | AST.PInt16Literal _
                         | AST.PInt32Literal _
@@ -6620,7 +6620,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     collectTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [elemBinding]) vg1
                                 | AST.PWildcard ->
                                     collectTupleBindings tupRest tupleAtom tupleType (idx + 1) env bindings vg1
-                                | AST.PInt64 _ | AST.PInt128Literal _
+                                | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                                 | AST.PInt8Literal _
                                 | AST.PInt16Literal _
                                 | AST.PInt32Literal _
@@ -6666,7 +6666,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             toANF body vg3' currentEnv typeReg variantLookup funcReg moduleRegistry
                             |> Result.map (fun (bodyExpr, vg4) ->
                                 (wrapBindings bindings bodyExpr, vg4))
-                        | AST.PInt64 _ | AST.PInt128Literal _
+                        | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                         | AST.PInt8Literal _
                         | AST.PInt16Literal _
                         | AST.PInt32Literal _
@@ -6721,7 +6721,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     extractElements rest (ANF.Var typedTailVar) newEnv newBindings vg4
                                 | AST.PWildcard ->
                                     extractElements rest (ANF.Var typedTailVar) env newBindings vg4
-                                | AST.PInt64 _ | AST.PInt128Literal _
+                                | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                                 | AST.PInt8Literal _
                                 | AST.PInt16Literal _
                                 | AST.PInt32Literal _
@@ -6822,7 +6822,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                             collectTupleBindings tupRest types tupleAtom (idx + 1) newEnv (elemBinding :: rawElemBinding :: bindings) vg1'
                                         | AST.PWildcard ->
                                             collectTupleBindings tupRest types tupleAtom (idx + 1) env (rawElemBinding :: bindings) vg1
-                                        | AST.PInt64 _ | AST.PInt128Literal _
+                                        | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                                         | AST.PInt8Literal _
                                         | AST.PInt16Literal _
                                         | AST.PInt32Literal _
@@ -6839,7 +6839,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 collectTupleBindings innerPatterns tupleElemTypes (ANF.Var headVar) 0 env allBaseBindings vg2'
                                 |> Result.bind (fun (newEnv, newBindings, vg3) ->
                                     collectListConsBindings rest (ANF.Var tailVar) newEnv newBindings vg3)
-                            | AST.PInt64 _ | AST.PInt128Literal _
+                            | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                             | AST.PInt8Literal _
                             | AST.PInt16Literal _
                             | AST.PInt32Literal _
@@ -6926,7 +6926,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     match pat with
                     | AST.POr alternatives ->
                         collectBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
-                    | AST.PInt64 _ | AST.PInt128Literal _
+                    | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                     | AST.PInt8Literal _
                     | AST.PInt16Literal _
                     | AST.PInt32Literal _
@@ -7133,6 +7133,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.PInt64 n ->
                     let (cmpVar, vg1) = ANF.freshVar vg
                     let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 n))
+                    Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                | AST.PBigInt n ->
+                    let (cmpVar, vg1) = ANF.freshVar vg
+                    let cmpExpr = ANF.Call ("__string_eq", [scrutAtom; ANF.StringLiteral (n.ToString())])
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PInt128Literal n ->
                     let (cmpVar, vg1) = ANF.freshVar vg
@@ -7484,7 +7488,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         env
                         bindings
                         vg
-                | AST.PInt64 _ | AST.PInt128Literal _
+                | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                 | AST.PInt8Literal _
                 | AST.PInt16Literal _
                 | AST.PInt32Literal _
@@ -7736,7 +7740,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     extractTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [rawElemBinding; elemBinding]) vg1'
                                 | AST.PWildcard ->
                                     extractTupleBindings tupRest tupleAtom tupleType (idx + 1) env (bindings @ [rawElemBinding]) vg1
-                                | AST.PInt64 _ | AST.PInt128Literal _
+                                | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
                                 | AST.PInt8Literal _
                                 | AST.PInt16Literal _
                                 | AST.PInt32Literal _

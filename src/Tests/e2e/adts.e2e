@@ -3,6 +3,9 @@
 // None case - verify through pattern matching
 type MyOption = MyNone | MySome of Int64 match MyNone with | MyNone -> 0 | MySome(x) -> 1 = 0
 
+// Unsuffixed literals are interpreter Ints and must work in literal patterns.
+match 42 with | 42 -> true | _ -> false = true
+
 // Err case - verify through pattern matching
 type MyResult = MyOk of Int64 | MyErr match MyErr with | MyErr -> 1 | MyOk(x) -> 0 = 1
 

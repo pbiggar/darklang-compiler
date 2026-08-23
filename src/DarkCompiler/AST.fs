@@ -166,6 +166,7 @@ type Pattern =
     | PVar of string                                       // x (binds value to variable)
     | PConstructor of variantName:string * payload:Pattern option  // Red, Some(x)
     | PInt64 of int64                                      // 42 (Int64 literal)
+    | PBigInt of System.Numerics.BigInteger                // 42 (Int literal)
     | PInt128Literal of System.Int128                      // 42Q
     | PInt8Literal of sbyte                                // 1y
     | PInt16Literal of int16                               // 1s
@@ -368,7 +369,7 @@ let validateBinders (structure: BinderStructure) : Result<string list, string> =
             (heads |> List.collect matchPatternBindings) @ matchPatternBindings tail
         | POr alternatives ->
             alternatives |> NonEmptyList.head |> matchPatternBindings
-        | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _
+        | PUnit | PWildcard | PInt64 _ | PBigInt _ | PInt128Literal _ | PInt8Literal _
         | PInt16Literal _ | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _
         | PUInt32Literal _ | PUInt64Literal _ | PUInt128Literal _ | PBool _
         | PString _ | PChar _ | PFloat _ -> []

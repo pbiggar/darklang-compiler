@@ -1161,6 +1161,26 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 parseVariantsWithContext typeParams bodyRest []
                 |> Result.map (fun (variants, remaining) ->
                     (SumTypeDef (typeName, typeParams, variants), remaining))
+            | TEquals :: TIdent variantName :: TOf :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
+                // Accept the established unbarred first payload variant form:
+                // `type Result = Ok of value | Error of error`.
+                let typeParamSet = Set.ofList typeParams
+                parseVariantPayloadTypeWithContext typeParamSet bodyRest
+                |> Result.bind (fun (payloadType, afterType) ->
+                    let firstVariant = { Name = variantName; Payload = Some payloadType }
+                    match afterType with
+                    | TBar :: rest' ->
+                        parseVariantsWithContext typeParams rest' [firstVariant]
+                        |> Result.map (fun (variants, remaining) ->
+                            (SumTypeDef (typeName, typeParams, variants), remaining))
+                    | _ ->
+                        Ok (SumTypeDef (typeName, typeParams, [firstVariant]), afterType))
+            | TEquals :: TIdent variantName :: TBar :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
+                // Accept the corresponding unbarred first nullary variant.
+                let firstVariant = { Name = variantName; Payload = None }
+                parseVariantsWithContext typeParams bodyRest [firstVariant]
+                |> Result.map (fun (variants, remaining) ->
+                    (SumTypeDef (typeName, typeParams, variants), remaining))
             | TEquals :: rest' ->
                 let typeParamSet = Set.ofList typeParams
                 parseTypeWithContext typeParamSet rest'
@@ -1311,6 +1331,7 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         match toks with
         | TUnderscore :: _
         | TInt64 _ :: _
+        | TBigInt _ :: _
         | TInt128 _ :: _
         | TInt8 _ :: _
         | TInt16 _ :: _
@@ -1321,8 +1342,8 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         | TUInt64 _ :: _
         | TUInt128 _ :: _
         | TMinus :: TInt64 _ :: _
-        | TMinus :: TInt128 _ :: _
         | TMinus :: TBigInt _ :: _
+        | TMinus :: TInt128 _ :: _
         | TMinus :: TInt8 _ :: _
         | TMinus :: TInt16 _ :: _
         | TMinus :: TInt32 _ :: _
@@ -1345,6 +1366,9 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         | TInt64 n :: rest ->
             // Integer literal pattern (Int64)
             Ok (PInt64 n, rest)
+        | TBigInt n :: rest ->
+            // Unsuffixed interpreter literals are arbitrary-precision Ints.
+            Ok (PBigInt n, rest)
         | TInt128 n :: rest ->
             Ok (PInt128Literal n, rest)
         | TInt8 n :: rest ->
@@ -1366,6 +1390,8 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         | TMinus :: TInt64 n :: rest ->
             // Negative integer literal pattern
             Ok (PInt64 (-n), rest)
+        | TMinus :: TBigInt n :: rest ->
+            Ok (PBigInt (-n), rest)
         | TMinus :: TInt128 n :: rest when n = System.Int128.MinValue ->
             Ok (PInt128Literal System.Int128.MinValue, rest)
         | TMinus :: TInt128 n :: rest ->
@@ -1639,6 +1665,8 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
     /// Parse multiple cases for pattern matching: | p1 -> e1 | p2 -> e2 ...
     let rec parseCases (toks: Token list) (acc: MatchCase list) : Result<MatchCase list * Token list, string> =
         match toks with
+        | TSemicolon :: rest ->
+            parseCases rest acc
         | TBar :: _ ->
             // Another case
             parseCase toks parseExpr
@@ -1723,6 +1751,8 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
 
     and parseExpr (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
+        | TSemicolon :: rest ->
+            parseExpr rest
         | TLet :: TIdent firstName :: TLParen :: rest ->
             // Interpreter-style nested function declaration:
             // let name(args) : ReturnType = fnBody body
@@ -1820,6 +1850,11 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // Elif chains are represented as nested else-if AST nodes.
             let rec parseElseOrElif (tokens: Token list) : Result<Expr * Token list, string> =
                 match tokens with
+                // Layout normalization can separate a complete branch from its
+                // following `else`. The separator is structural, not an empty
+                // expression, so consume it before continuing the conditional.
+                | TSemicolon :: rest ->
+                    parseElseOrElif rest
                 | TElse :: elseTokens ->
                     parseExpr elseTokens
                 | TElif :: elifTokens ->
@@ -2583,7 +2618,14 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             let shouldUseCallSyntax =
                 match rest with
                 | TRParen :: _ -> true
-                | _ -> hasTopLevelComma 0 rest
+                | _ ->
+                    // Constructors remain compatible with the established
+                    // parenthesized payload spelling (`Some(value)`). Regular
+                    // functions retain interpreter space-application for a
+                    // single parenthesized argument.
+                    match expr with
+                    | Constructor _ -> true
+                    | _ -> hasTopLevelComma 0 rest
             if shouldUseCallSyntax then
                 match expr with
                 | Var _ ->
@@ -2754,6 +2796,7 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
     | PUnit
     | PWildcard
     | PInt64 _
+    | PBigInt _
     | PInt128Literal _
     | PInt8Literal _
     | PInt16Literal _

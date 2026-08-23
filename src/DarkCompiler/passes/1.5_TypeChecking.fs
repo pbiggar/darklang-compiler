@@ -1714,6 +1714,7 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
     | PWildcard -> Set.empty
     | PVar name -> Set.singleton name
     | PInt64 _
+    | PBigInt _
     | PInt128Literal _
     | PInt8Literal _
     | PInt16Literal _
@@ -4598,6 +4599,7 @@ let rec private checkExprWithParamNames
                 | PUnit -> ensureLiteralType TUnit
                 | PWildcard -> Ok []
                 | PInt64 _ -> ensureLiteralType TInt64
+                | PBigInt _ -> ensureLiteralType TInt
                 | PInt128Literal _ -> ensureLiteralType TInt128
                 | PInt8Literal _ -> ensureLiteralType TInt8
                 | PInt16Literal _ -> ensureLiteralType TInt16
@@ -4727,6 +4729,7 @@ let rec private checkExprWithParamNames
                                 match pattern with
                                 | PUnit -> isKnownMismatch TUnit
                                 | PInt64 _ -> isKnownMismatch TInt64
+                                | PBigInt _ -> isKnownMismatch TInt
                                 | PInt128Literal _ -> isKnownMismatch TInt128
                                 | PInt8Literal _ -> isKnownMismatch TInt8
                                 | PInt16Literal _ -> isKnownMismatch TInt16
@@ -4864,6 +4867,7 @@ let rec private checkExprWithParamNames
                 | PUnit
                 | PWildcard
                 | PInt64 _
+                | PBigInt _
                 | PInt128Literal _
                 | PInt8Literal _
                 | PInt16Literal _
@@ -4970,6 +4974,8 @@ let rec private checkExprWithParamNames
                 | PUnit, UnitLiteral ->
                     Some true
                 | PInt64 expected, Int64Literal actual ->
+                    Some (expected = actual)
+                | PBigInt expected, BigIntLiteral actual ->
                     Some (expected = actual)
                 | PInt128Literal expected, Int128Literal actual ->
                     Some (expected = actual)
@@ -7482,7 +7488,7 @@ let private resolveProgramNames
         | PTuple patterns | PList patterns -> patterns |> List.map patternBoundNames |> Set.unionMany
         | PListCons (heads, tail) -> Set.union (heads |> List.map patternBoundNames |> Set.unionMany) (patternBoundNames tail)
         | POr alternatives -> alternatives |> NonEmptyList.head |> patternBoundNames
-        | PUnit | PWildcard | PInt64 _ | PInt128Literal _ | PInt8Literal _ | PInt16Literal _
+        | PUnit | PWildcard | PInt64 _ | PBigInt _ | PInt128Literal _ | PInt8Literal _ | PInt16Literal _
         | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _ | PUInt32Literal _ | PUInt64Literal _
         | PUInt128Literal _ | PBool _ | PString _ | PChar _ | PFloat _ -> Set.empty
 

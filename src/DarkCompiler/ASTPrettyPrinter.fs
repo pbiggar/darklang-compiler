@@ -272,6 +272,8 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         |> String.concat " | "
     | PInt64 n ->
         $"{n}L"
+    | PBigInt n ->
+        $"{n}I"
     | PInt128Literal n ->
         $"{n}Q"
     | PInt8Literal n ->
