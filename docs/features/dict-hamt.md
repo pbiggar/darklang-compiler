@@ -7,19 +7,44 @@ HAMT that implements it.
 
 The public contract was revalidated against these exact revisions:
 
-- compiler comparison point: `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`
-- darklang/dark interpreter: `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
-- current revalidation worktree: `1be107c38e12f41c7524c4e83d0cc953ce875346`
-  (no Dict, private HAMT, or intrinsic-registration boundary changes since the
-  compiler comparison point)
-- retained source evidence is the compiler comparison revision itself
-  (`Dict.dark`, `__HAMT.dark`, and `Stdlib.fs:150-166`)
+- current compiler comparison point:
+  `9cf0799fc485a2edc1eb19551826745705cf695e` (the exact `main` HEAD onto which
+  this evidence and focused test were rebased)
+- darklang/dark interpreter:
+  `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
+- historical compiler starting point:
+  `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
+  `src/DarkCompiler/stdlib/Dict.dark`, `__HAMT.dark`, and
+  `src/DarkCompiler/Stdlib.fs:150-166`
 - DCB1 report `8a402797` was starting evidence only; retained findings were
-  checked again against the revisions above.
+  checked again against the current compiler and interpreter revisions above.
+
+The historical and current compiler source blobs are not identical, so the
+historical revision was not treated as proof of current behavior. The relevant
+`Dict.dark`, `__HAMT.dark`, and `Stdlib.fs` blobs at the current compiler point
+are identical to the earlier pre-rebase repair point
+`6366204f670c906bbf4cd6b22b53786098c92a03`. The rebased candidate changes
+only parity documentation, focused E2E coverage, and append-only benchmark
+history; the compiler behavior compared here is therefore exactly the behavior
+at `9cf0799fc485a2edc1eb19551826745705cf695e`.
 
 The interpreter's F# Builtins Dict module and packaged `dict.dark` define the
 language-visible contract. Ahead-of-time compilation and the HAMT layout are
 compiler implementation details.
+
+Current source evidence at the compiler comparison point is
+`src/DarkCompiler/stdlib/Dict.dark:9-216` for the public wrappers and ordered
+higher-order operations, `src/DarkCompiler/stdlib/__HAMT.dark:10-60` for the
+private generic storage boundary, `src/DarkCompiler/passes/1_Parser.fs:2034-2035`
+for the empty value, `src/DarkCompiler/passes/1.5_TypeChecking.fs:5742-5747`
+for content equality, `src/DarkCompiler/passes/1.6_ValueRendering.fs:219-258`
+for canonical rendering, and `src/DarkCompiler/Stdlib.fs:145-166` for the raw
+internal intrinsics. Interpreter evidence at the pinned revision is
+`packages/darklang/stdlib/dict.dark:4-127`,
+`backend/src/Builtins/Builtins.Pure/Libs/Dict.fs:18-306`, and
+`backend/testfiles/execution/stdlib/dict.dark:1-176`. The focused compiler cases
+are in `src/Tests/e2e/dict_parity.e2e`, including an error-producing `iter`
+callback that makes first-visited-key order observable.
 
 ## Public type and literals
 

@@ -1,6 +1,6 @@
 // Dict parity tests pinned to darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
-// The compiler comparison point for this work is 51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3.
-// Worktree 1be107c38e12f41c7524c4e83d0cc953ce875346 retains this Dict boundary unchanged.
+// Historical compiler evidence started at 51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3.
+// Current compiler behavior was compared at rebased main 9cf0799fc485a2edc1eb19551826745705cf695e.
 
 // Public typing is String-keyed and exposes exactly one value type parameter.
 let dictIdentity<'a>(dict: Dict<a>): Dict<a> = dict dictIdentity<Int64>(Dict { answer = 42 }) = Dict { answer = 42 }
@@ -44,6 +44,7 @@ Stdlib.Dict.map(Dict { b = 2; a = 1 }, fun key -> fun value -> key ++ Stdlib.Int
 Stdlib.Dict.filter(Dict { b = 2; a = 1 }, fun key -> fun value -> key == "b") = Dict { b = 2 }
 Stdlib.Dict.filterMap(Dict { b = 2; a = 1 }, fun key -> fun value -> if key == "a" then Some(value + 10) else None) = Dict { a = 11 }
 let observed = Stdlib.Dict.iter(Dict { b = 2; a = 1 }, fun key -> fun value -> ()) in observed = ()
+Stdlib.Dict.iter(Dict { b = 2; a = 1 }, fun key -> fun value -> let ignored = Builtin.testRuntimeError(key) in ()) = exit=1 stderr="Uncaught exception: a\n"
 
 // Equality and rendering are content-based and independent of HAMT shape.
 Stdlib.Dict.setOverridingDuplicates(Stdlib.Dict.singleton("b", 2), "a", 1) == Dict { a = 1; b = 2 } = true
