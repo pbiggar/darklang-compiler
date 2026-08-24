@@ -194,7 +194,8 @@ UTC host-clock syscall boundary. See [temporal-parity.md](temporal-parity.md).
 ### 3.4 Html and Http value modules
 
 The active Html and Http surface has no intentional semantic divergences from
-the pinned interpreter. `Html.s` is a compiler-only constructor extension;
+the pinned interpreter. `Html.s` is the only compiler-only public constructor
+extension; void-tag detection is internal to Html serialization.
 `Cookie` is data-only, and `responseWithJson` accepts an already serialized
 string. See the revision-pinned [Html/Http parity matrix](html-http-parity.md).
 

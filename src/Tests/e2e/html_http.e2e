@@ -19,7 +19,6 @@ Stdlib.Html.nodeToString(Stdlib.Html.htmlTagNode("img", [("alt", Stdlib.Option.O
 Stdlib.Html.nodeToString(Stdlib.Html.htmlTagNode("IMG", [], [])) = "<IMG></IMG>"
 Stdlib.Html.nodeToString(Stdlib.Html.comment("<raw>")) = "<!-- <raw> -->"
 Stdlib.Html.document([Stdlib.Html.html([], [])]) = "<!DOCTYPE html><html></html>"
-Stdlib.Html.voidElements = ["area", "base", "br", "col", "command", "embed", "hr", "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr"]
 
 // Complete constructor family, including the compiler-only s extension.
 Stdlib.List.map<Stdlib.Html.Node, String>(

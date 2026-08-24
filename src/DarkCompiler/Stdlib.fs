@@ -247,7 +247,6 @@ let allModules : ModuleDef list = [
 /// cannot accidentally acquire nullary-call semantics.
 let allValues : ModuleValue list = [
     { Name = "Stdlib.Blob.empty"; Type = TBlob }
-    { Name = "Stdlib.Html.voidElements"; Type = TList TString }
     { Name = "Darklang.LanguageTools.PackageManager.PickContext.empty"
       Type = TRecord ("Darklang.LanguageTools.PackageManager.PickContext", []) }
     { Name = "Stdlib.List.empty"; Type = TList(TVar "a") }

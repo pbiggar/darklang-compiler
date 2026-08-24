@@ -333,7 +333,6 @@ Html                         | thead                               | ✅   | ❌
 Html                         | title                               | ✅   | ❌
 Html                         | tr                                  | ✅   | ❌
 Html                         | ul                                  | ✅   | ❌
-Html                         | voidElements                        | ✅   | ❌
 Http                         | Cookie                              | ✅   | ❌
 Http                         | Request                             | ✅   | ❌
 Http                         | Response                            | ✅   | ❌

@@ -58,6 +58,12 @@ let __attributesToString(attrs: Stdlib.Html.Attributes) : String =
             Stdlib.Html.__attributeToString),
         " ")
 
+let __isVoidElement(name: String) : Bool =
+    Stdlib.List.member<String>(
+        [ "area"; "base"; "br"; "col"; "command"; "embed"; "hr"; "img"
+          "input"; "keygen"; "link"; "meta"; "param"; "source"; "track"; "wbr" ],
+        name)
+
 let nodeToString(node: Stdlib.Html.Node) : String =
     match node with
     | String(str) -> str
@@ -66,7 +72,7 @@ let nodeToString(node: Stdlib.Html.Node) : String =
         let startTag =
             if attributesText == "" then "<" ++ tag.name ++ ">"
             else "<" ++ tag.name ++ " " ++ attributesText ++ ">" in
-        if Stdlib.List.member<String>(Stdlib.Html.voidElements, tag.name) then
+        if Stdlib.Html.__isVoidElement(tag.name) then
             startTag
         else
             let childHtml =

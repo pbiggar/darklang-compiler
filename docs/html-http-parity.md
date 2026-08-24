@@ -33,7 +33,8 @@ after Blob by `src/DarkCompiler/CompilerLibrary.fs:1151-1154`.
 | JSON boundary | `responseWithJson` accepts a serialized `String` (`http.dark:153-160`) | Same signature; no generic JSON serializer was introduced | Non-gap at pinned revision |
 
 There are no intentional Html or Http behavior divergences in the active
-pinned surface. The only extension is `Html.s`.
+pinned surface. The only public compiler extension is `Html.s`; void-tag
+detection is internal to Html serialization.
 
 ## Executable coverage and AOT boundaries
 
