@@ -111,9 +111,9 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
         AST.TSum ("Packet", []),
             BoxedSum (
                 16,
-                [(8, FixedBlock (16, [Immediate; DynamicString])); (8, DynamicBlob)],
+                [(8, FixedBlock (8, [DynamicString])); (8, DynamicBlob)],
                 [
-                    { Tag = 0; FieldShapes = [(8, FixedBlock (16, [Immediate; DynamicString]))] }
+                    { Tag = 0; FieldShapes = [(8, FixedBlock (8, [DynamicString]))] }
                     { Tag = 1; FieldShapes = [(8, DynamicBlob)] }
                 ])
     ]
@@ -393,13 +393,13 @@ let testRcReleasePlanOfTypeUsesRecordMetadata () : TestResult =
 
     let expected =
         RootRelease (
-            32,
+            24,
             GenericHeap,
             FixedBlockPayloadRelease (
-                32,
+                24,
                 [
-                    FieldRelease (16, DynamicBufferRelease DynamicStringBuffer)
-                    FieldRelease (24, DynamicBufferRelease DynamicBlobBuffer)
+                    FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                    FieldRelease (16, DynamicBufferRelease DynamicBlobBuffer)
                 ]))
 
     let actual = rcReleasePlanOfType typeReg (AST.TRecord ("Packet", []))
@@ -466,13 +466,13 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                         FieldRelease (
                             8,
                             RootRelease (
-                                24,
+                                16,
                                 GenericHeap,
                                 FixedBlockPayloadRelease (
-                                    24,
+                                    16,
                                     [
-                                        FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                                        FieldRelease (16, DynamicBufferRelease DynamicBlobBuffer)
+                                        FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
+                                        FieldRelease (8, DynamicBufferRelease DynamicBlobBuffer)
                                     ])))
                     ; FieldRelease (
                         8,
@@ -489,13 +489,13 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                                 FieldRelease (
                                     8,
                                     RootRelease (
-                                        24,
+                                        16,
                                         GenericHeap,
                                         FixedBlockPayloadRelease (
-                                            24,
+                                            16,
                                             [
-                                                FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                                                FieldRelease (16, DynamicBufferRelease DynamicBlobBuffer)
+                                                FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
+                                                FieldRelease (8, DynamicBufferRelease DynamicBlobBuffer)
                                             ])))
                             ]
                     }
