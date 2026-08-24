@@ -11,10 +11,16 @@ Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse(" {3700adbc-7a46-4ff4-81d3
 Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("(3700adbc-7a46-4ff4-81d3-45afb03f6e2d)"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
 Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0x3700adbc,0x7a46,0x4ff4,{0x81,0xd3,0x45,0xaf,0xb0,0x3f,0x6e,0x2d}}"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
 Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0X3700ADBC,0X7A46,0X4FF4,{0X81,0XD3,0X45,0XAF,0XB0,0X3F,0X6E,0X2D}}"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{ 0x3700adbc , 0x7a46 , 0x4ff4 , { 0x81 , 0xd3 , 0x45 , 0xaf , 0xb0 , 0x3f , 0x6e , 0x2d } }"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0x03700adbc,0x07a46,0x04ff4,{0x081,0x0d3,0x045,0x0af,0x0b0,0x03f,0x06e,0x02d}}"))) = "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0x3700adbc,0xffffffff,0x10000,{0x81,0xd3,0x45,0xaf,0xb0,0x3f,0x6e,0x2d}}"))) = "3700adbc-ffff-0000-81d3-45afb03f6e2d"
+Stdlib.Uuid.toString(Builtin.unwrap(Stdlib.Uuid.parse("{0x1,0x2,0x3,{0x4,0x5,0x6,0x7,0x8,0x9,0xa,0xb}}"))) = "00000001-0002-0003-0405-060708090a0b"
 
 // Invalid input has the sole canonical public error case.
 Stdlib.Uuid.parse("not a uuid") = Error(Stdlib.Uuid.ParseError.BadFormat)
 Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2") = Error(Stdlib.Uuid.ParseError.BadFormat)
+Stdlib.Uuid.parse("{0x100000000,0x7a46,0x4ff4,{0x81,0xd3,0x45,0xaf,0xb0,0x3f,0x6e,0x2d}}") = Error(Stdlib.Uuid.ParseError.BadFormat)
+Stdlib.Uuid.parse("{0x3700adbc,0x7a46,0x4ff4,{0x100,0xd3,0x45,0xaf,0xb0,0x3f,0x6e,0x2d}}") = Error(Stdlib.Uuid.ParseError.BadFormat)
 
 // The UUID wrapper is distinct from String and compares structurally.
 let left = Builtin.unwrap(Stdlib.Uuid.parse("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in let right = Builtin.unwrap(Stdlib.Uuid.parse("3700adbc-7a46-4ff4-81d3-45afb03f6e2d")) in if left == right then 0 else 1 = stdout="0\n"

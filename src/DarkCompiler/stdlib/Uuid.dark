@@ -47,30 +47,69 @@ let __hyphenatedDigits(s: String) : String =
     Stdlib.String.__byteSlice(s, 19, 23) ++
     Stdlib.String.__byteSlice(s, 24, 36)
 
-let __isX(s: String) : Bool =
-    Stdlib.String.__byteLength(s) == 68 &&
-    Stdlib.String.getByteAt(s, 0) == 123 && Stdlib.Uuid.__hasHexPrefixAt(s, 1) &&
-    Stdlib.String.getByteAt(s, 11) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 12) &&
-    Stdlib.String.getByteAt(s, 18) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 19) &&
-    Stdlib.String.getByteAt(s, 25) == 44 && Stdlib.String.getByteAt(s, 26) == 123 && Stdlib.Uuid.__hasHexPrefixAt(s, 27) &&
-    Stdlib.String.getByteAt(s, 66) == 125 && Stdlib.String.getByteAt(s, 67) == 125 &&
-    Stdlib.Uuid.__hasHexAt(s, 3, 8) && Stdlib.Uuid.__hasHexAt(s, 14, 4) && Stdlib.Uuid.__hasHexAt(s, 21, 4) &&
-    Stdlib.Uuid.__hasHexAt(s, 29, 2) && Stdlib.String.getByteAt(s, 31) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 32) && Stdlib.Uuid.__hasHexAt(s, 34, 2) && Stdlib.String.getByteAt(s, 36) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 37) && Stdlib.Uuid.__hasHexAt(s, 39, 2) && Stdlib.String.getByteAt(s, 41) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 42) && Stdlib.Uuid.__hasHexAt(s, 44, 2) && Stdlib.String.getByteAt(s, 46) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 47) && Stdlib.Uuid.__hasHexAt(s, 49, 2) && Stdlib.String.getByteAt(s, 51) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 52) && Stdlib.Uuid.__hasHexAt(s, 54, 2) && Stdlib.String.getByteAt(s, 56) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 57) && Stdlib.Uuid.__hasHexAt(s, 59, 2) && Stdlib.String.getByteAt(s, 61) == 44 &&
-    Stdlib.Uuid.__hasHexPrefixAt(s, 62) && Stdlib.Uuid.__hasHexAt(s, 64, 2)
+// Guid's X format is a sequence of hexadecimal integer components. Its parser
+// ignores Unicode whitespace and leading zeroes. The first three components
+// parse as UInt32; components two and three contribute their low 16 bits. The
+// remaining eight components must fit in a byte.
+let __removeXWhitespace(parts: List<String>, acc: String) : String =
+    match parts with
+    | [] -> acc
+    | head :: tail ->
+        Stdlib.Uuid.__removeXWhitespace(
+            tail,
+            if Stdlib.String.__egcWhitespace(head) then acc else acc ++ head)
 
-let __xDigits(s: String) : String =
-    Stdlib.String.__byteSlice(s, 3, 11) ++ Stdlib.String.__byteSlice(s, 14, 18) ++ Stdlib.String.__byteSlice(s, 21, 25) ++
-    Stdlib.String.__byteSlice(s, 29, 31) ++ Stdlib.String.__byteSlice(s, 34, 36) ++ Stdlib.String.__byteSlice(s, 39, 41) ++
-    Stdlib.String.__byteSlice(s, 44, 46) ++ Stdlib.String.__byteSlice(s, 49, 51) ++ Stdlib.String.__byteSlice(s, 54, 56) ++
-    Stdlib.String.__byteSlice(s, 59, 61) ++ Stdlib.String.__byteSlice(s, 64, 66)
+let __xHexEnd(s: String, index: Int64) : Int64 =
+    if index == Stdlib.String.__byteLength(s) then index
+    else if Stdlib.Uuid.__isHexByte(Stdlib.String.getByteAt(s, index)) then
+        Stdlib.Uuid.__xHexEnd(s, index + 1)
+    else index
+
+let __dropLeadingZeroesAt(digits: String, index: Int64) : String =
+    if index == Stdlib.String.__byteLength(digits) then ""
+    else if Stdlib.String.getByteAt(digits, index) == 48 then
+        Stdlib.Uuid.__dropLeadingZeroesAt(digits, index + 1)
+    else Stdlib.String.__byteSlice(digits, index, Stdlib.String.__byteLength(digits))
+
+let __normalizeXField(digits: String, maxWidth: Int64, outputWidth: Int64) : Stdlib.Option.Option<String> =
+    if Stdlib.String.__byteLength(digits) == 0 then None
+    else
+        let significant = Stdlib.Uuid.__dropLeadingZeroesAt(digits, 0) in
+        let significantLength = Stdlib.String.__byteLength(significant) in
+        if significantLength > maxWidth then None
+        else if significantLength > outputWidth then
+            Some(Stdlib.String.__byteSlice(significant, significantLength - outputWidth, significantLength))
+        else Some(Stdlib.String.repeat("0", Stdlib.Int.fromInt64(outputWidth - significantLength)) ++ significant)
+
+let __xFields(s: String, index: Int64, fieldIndex: Int64, acc: String) : Stdlib.Option.Option<String> =
+    let length = Stdlib.String.__byteLength(s) in
+    if index + 2 > length || Stdlib.Uuid.__hasHexPrefixAt(s, index) == false then None
+    else
+        let digitsStart = index + 2 in
+        let digitsEnd = Stdlib.Uuid.__xHexEnd(s, digitsStart) in
+        let maxWidth = if fieldIndex <= 2 then 8 else 2 in
+        let outputWidth = if fieldIndex == 0 then 8 else if fieldIndex <= 2 then 4 else 2 in
+        match Stdlib.Uuid.__normalizeXField(Stdlib.String.__byteSlice(s, digitsStart, digitsEnd), maxWidth, outputWidth) with
+        | None -> None
+        | Some(digits) ->
+            let nextAcc = acc ++ digits in
+            if fieldIndex == 10 then
+                if digitsEnd + 2 == length &&
+                   Stdlib.String.getByteAt(s, digitsEnd) == 125 &&
+                   Stdlib.String.getByteAt(s, digitsEnd + 1) == 125 then Some(nextAcc)
+                else None
+            else if digitsEnd >= length || Stdlib.String.getByteAt(s, digitsEnd) != 44 then None
+            else if fieldIndex == 2 then
+                if digitsEnd + 1 < length && Stdlib.String.getByteAt(s, digitsEnd + 1) == 123 then
+                    Stdlib.Uuid.__xFields(s, digitsEnd + 2, fieldIndex + 1, nextAcc)
+                else None
+            else Stdlib.Uuid.__xFields(s, digitsEnd + 1, fieldIndex + 1, nextAcc)
+
+let __xDigits(s: String) : Stdlib.Option.Option<String> =
+    let compact = Stdlib.Uuid.__removeXWhitespace(Stdlib.String.toGraphemes(s), "") in
+    if Stdlib.String.__byteLength(compact) > 0 && Stdlib.String.getByteAt(compact, 0) == 123 then
+        Stdlib.Uuid.__xFields(compact, 1, 0, "")
+    else None
 
 let __hexDigit(byte: Int64) : Int =
     if byte >= 48 && byte <= 57 then Stdlib.Int.fromInt64(byte - 48)
@@ -98,8 +137,10 @@ let parse(value: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
     else if length == 38 && ((Stdlib.String.getByteAt(s, 0) == 123 && Stdlib.String.getByteAt(s, 37) == 125) || (Stdlib.String.getByteAt(s, 0) == 40 && Stdlib.String.getByteAt(s, 37) == 41)) then
         let inner = Stdlib.String.__byteSlice(s, 1, 37) in
         if Stdlib.Uuid.__isHyphenated(inner) then Stdlib.Uuid.__parseDigits(Stdlib.Uuid.__hyphenatedDigits(inner)) else Error(Stdlib.Uuid.ParseError.BadFormat)
-    else if Stdlib.Uuid.__isX(s) then Stdlib.Uuid.__parseDigits(Stdlib.Uuid.__xDigits(s))
-    else Error(Stdlib.Uuid.ParseError.BadFormat)
+    else
+        match Stdlib.Uuid.__xDigits(s) with
+        | Some(digits) -> Stdlib.Uuid.__parseDigits(digits)
+        | None -> Error(Stdlib.Uuid.ParseError.BadFormat)
 
 // Helper: convert nibble (0-15) to hex char
 let __nibbleToHex(n: Int64) : String =
