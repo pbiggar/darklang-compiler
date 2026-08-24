@@ -1093,7 +1093,6 @@ let private recordDescriptor
         RuntimeTypeName = reference.ResolvedTypeName
         TypeArgs = reference.TypeArgs
         Fields = concreteFields
-        Identity = ANF.recordRuntimeIdentity reference.ResolvedTypeName reference.TypeArgs
     }
 
 /// Match a type pattern (may contain type variables) against a concrete type.

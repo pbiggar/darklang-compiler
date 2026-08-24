@@ -1084,9 +1084,7 @@ let rec convertExpr
                         Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
                 | ANF.RecordAlloc (descriptor, fields)
                 | ANF.RecordClone (descriptor, _, fields) ->
-                    let allocInstr = MIR.HeapAlloc (destReg, (List.length fields + 1) * 8)
-                    let identityInstr =
-                        MIR.HeapStore (destReg, 0, MIR.Int64Const descriptor.Identity, None)
+                    let allocInstr = MIR.HeapAlloc (destReg, List.length fields * 8)
                     fields
                     |> List.mapi (fun index field -> (index, field))
                     |> List.map (fun (index, field) ->
@@ -1094,9 +1092,9 @@ let rec convertExpr
                         let valueType = if fieldType = AST.TFloat64 then Some AST.TFloat64 else None
                         atomToOperand builder field
                         |> Result.map (fun operand ->
-                            MIR.HeapStore (destReg, (index + 1) * 8, operand, valueType)))
+                            MIR.HeapStore (destReg, index * 8, operand, valueType)))
                     |> sequenceResults
-                    |> Result.map (fun stores -> allocInstr :: identityInstr :: stores)
+                    |> Result.map (fun stores -> allocInstr :: stores)
                 | ANF.RecordGet (_, recordAtom, index) ->
                     match recordAtom with
                     | ANF.Var tid ->
@@ -1105,7 +1103,7 @@ let rec convertExpr
                             match destType with
                             | Some AST.TFloat64 -> Some AST.TFloat64
                             | _ -> None
-                        Ok [MIR.HeapLoad (destReg, recordReg, (index + 1) * 8, loadType)]
+                        Ok [MIR.HeapLoad (destReg, recordReg, index * 8, loadType)]
                     | _ ->
                         Error "Internal error: Record access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->
@@ -1766,9 +1764,7 @@ and convertExprToOperand
                         Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
                 | ANF.RecordAlloc (descriptor, fields)
                 | ANF.RecordClone (descriptor, _, fields) ->
-                    let allocInstr = MIR.HeapAlloc (destReg, (List.length fields + 1) * 8)
-                    let identityInstr =
-                        MIR.HeapStore (destReg, 0, MIR.Int64Const descriptor.Identity, None)
+                    let allocInstr = MIR.HeapAlloc (destReg, List.length fields * 8)
                     fields
                     |> List.mapi (fun index field -> (index, field))
                     |> List.map (fun (index, field) ->
@@ -1776,9 +1772,9 @@ and convertExprToOperand
                         let valueType = if fieldType = AST.TFloat64 then Some AST.TFloat64 else None
                         atomToOperand builder field
                         |> Result.map (fun operand ->
-                            MIR.HeapStore (destReg, (index + 1) * 8, operand, valueType)))
+                            MIR.HeapStore (destReg, index * 8, operand, valueType)))
                     |> sequenceResults
-                    |> Result.map (fun stores -> allocInstr :: identityInstr :: stores)
+                    |> Result.map (fun stores -> allocInstr :: stores)
                 | ANF.RecordGet (_, recordAtom, index) ->
                     match recordAtom with
                     | ANF.Var tid ->
@@ -1787,7 +1783,7 @@ and convertExprToOperand
                             match destType with
                             | Some AST.TFloat64 -> Some AST.TFloat64
                             | _ -> None
-                        Ok [MIR.HeapLoad (destReg, recordReg, (index + 1) * 8, loadType)]
+                        Ok [MIR.HeapLoad (destReg, recordReg, index * 8, loadType)]
                     | _ ->
                         Error "Internal error: Record access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->

@@ -223,24 +223,14 @@ type CliOperation =
     | ProcessIO
     | TerminateProcess
 
-/// Immutable nominal metadata attached to every record allocation. The native
-/// value stores Identity in its first payload word; the remaining metadata is
-/// carried through lowering for field layout, diagnostics, and rendering.
+/// Immutable nominal metadata carried through record lowering for field layout,
+/// diagnostics, and rendering. It is compile-time metadata, not a native field.
 type RecordDescriptor = {
     SourceTypeName: string
     RuntimeTypeName: string
     TypeArgs: AST.Type list
     Fields: (string * AST.Type) list
-    Identity: int64
 }
-
-let recordRuntimeIdentity (runtimeTypeName: string) (typeArgs: AST.Type list) : int64 =
-    let text = $"{runtimeTypeName}<{typeArgs}>"
-    text
-    |> Seq.fold
-        (fun hash character -> (hash ^^^ uint64 (int character)) * 1099511628211UL)
-        14695981039346656037UL
-    |> int64
 
 /// Complex expressions (produce values)
 type CExpr =
@@ -393,8 +383,7 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
             let fieldShapes =
                 fields
                 |> List.map (fun (_, fieldType) -> rcShapeOfType typeReg fieldType)
-            // Slot zero is the immutable nominal descriptor identity.
-            FixedBlock ((List.length fields + 1) * 8, Immediate :: fieldShapes)
+            FixedBlock (List.length fields * 8, fieldShapes)
         | None ->
             Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
     | AST.TSum (_, []) ->
@@ -544,7 +533,7 @@ let rcShapeOfTypeWithSums
                     fields
                     |> List.map (fun (_, fieldType) ->
                         fieldType |> applyRcShapeTypeSubstitution subst |> classify expandingSums)
-                FixedBlock ((List.length fields + 1) * 8, Immediate :: fieldShapes)
+                FixedBlock (List.length fields * 8, fieldShapes)
             | None when Map.containsKey name sumReg ->
                 // Bare nominal references are parsed before constructor
                 // metadata is available. Classify the equivalent internal sum

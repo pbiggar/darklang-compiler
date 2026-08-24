@@ -302,79 +302,6 @@ let private completeRcInstrMetadata (records: LIR.RecordRegistry) (instr: LIR.In
     | _ ->
         instr
 
-/// Hand-written backend fixtures predate the nominal descriptor slot. Upgrade
-/// blocks which match a declared record layout so these tests continue to
-/// exercise the production record release plans and offsets.
-let private upgradeRecordFixtureLayouts
-    (records: LIR.RecordRegistry)
-    (instrs: LIR.Instr list)
-    : LIR.Instr list =
-    let storesFor register =
-        instrs
-        |> List.choose (function
-            | LIR.HeapStore (target, offset, _, valueType) when target = register ->
-                Some (offset, valueType)
-            | _ -> None)
-        |> List.sortBy fst
-
-    let matchesFields stores fields =
-        List.length stores = List.length fields
-        && List.forall2
-            (fun (offset, storedType) (index, (_, fieldType)) ->
-                offset = index * 8
-                && match storedType with
-                   | Some typ -> typ = fieldType
-                   | None -> true)
-            stores
-            (List.indexed fields)
-
-    let recordForRegister register =
-        let stores = storesFor register
-        records
-        |> Map.toList
-        |> List.tryFind (fun (_, fields) -> matchesFields stores fields)
-
-    let recordRegisters =
-        instrs
-        |> List.choose (function
-            | LIR.HeapAlloc (register, size) ->
-                recordForRegister register
-                |> Option.bind (fun (recordName, fields) ->
-                    if size = List.length fields * 8 then Some (register, recordName)
-                    else None)
-            | _ -> None)
-        |> Map.ofList
-
-    instrs
-    |> List.collect (function
-        | LIR.HeapAlloc (register, size) as allocation ->
-            match Map.tryFind register recordRegisters with
-            | Some recordName ->
-                [ LIR.HeapAlloc (register, size + 8)
-                  LIR.HeapStore (
-                      register,
-                      0,
-                      LIR.Imm (ANF.recordRuntimeIdentity recordName []),
-                      None
-                  ) ]
-            | None -> [allocation]
-        | LIR.HeapStore (register, offset, value, valueType) as store ->
-            if Map.containsKey register recordRegisters then
-                [LIR.HeapStore (register, offset + 8, value, valueType)]
-            else
-                [store]
-        | LIR.RefCountInc (register, payloadSize, LIR.GenericHeap, metadata) as instruction ->
-            if Map.containsKey register recordRegisters then
-                [LIR.RefCountInc (register, payloadSize + 8, LIR.GenericHeap, metadata)]
-            else
-                [instruction]
-        | LIR.RefCountDec (register, payloadSize, LIR.GenericHeap, metadata) as instruction ->
-            if Map.containsKey register recordRegisters then
-                [LIR.RefCountDec (register, payloadSize + 8, LIR.GenericHeap, metadata)]
-            else
-                [instruction]
-        | instruction -> [instruction])
-
 /// Create a minimal LIR function with a single basic block
 let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Terminator) (records: LIR.RecordRegistry) : LIR.Program =
     let entryLabel = LIR.Label "_start_entry"
@@ -387,9 +314,7 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
     let bodyBlock : LIR.BasicBlock = {
         Label = bodyLabel
         Instrs =
-            instrs
-            |> upgradeRecordFixtureLayouts records
-            |> List.map (completeRcInstrMetadata records)
+            instrs |> List.map (completeRcInstrMetadata records)
         Terminator = term
     }
     let func : LIR.Function = {

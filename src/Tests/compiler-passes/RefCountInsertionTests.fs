@@ -62,7 +62,7 @@ let testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks () : TestResult =
     let recordShape = rcShapeOfType typeReg (AST.TRecord ("Pair", []))
 
     match tupleShape, recordShape with
-    | FixedBlock (24, [Immediate; DynamicString; Immediate]), FixedBlock (24, [Immediate; Immediate; DynamicString]) ->
+    | FixedBlock (24, [Immediate; DynamicString; Immediate]), FixedBlock (16, [Immediate; DynamicString]) ->
         Ok ()
     | _ ->
         Error $"Unexpected fixed-block shapes. tuple={tupleShape}; record={recordShape}"

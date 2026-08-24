@@ -6414,16 +6414,14 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 Ok (loadStringLiteralPointer ARM64Symbolic.X8 ""
                 @ loadStringLiteralPointer ARM64Symbolic.X9 errorMessage
                 @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X28)
-                   ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 40us)]
-                @ loadImmediate ARM64Symbolic.X10 (ANF.recordRuntimeIdentity "Stdlib.Cli.NativeOutput" [])
-                @ [ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 0s)
-                   ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 0us, 0)
+                   ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 32us)]
+                @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 0us, 0)
                    ARM64Symbolic.MVN (ARM64Symbolic.X10, ARM64Symbolic.X10)
-                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 8s)
-                   ARM64Symbolic.STR (ARM64Symbolic.X8, destReg, 16s)
-                   ARM64Symbolic.STR (ARM64Symbolic.X9, destReg, 24s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 0s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X8, destReg, 8s)
+                   ARM64Symbolic.STR (ARM64Symbolic.X9, destReg, 16s)
                    ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
-                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 32s)])
+                   ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 24s)])
             | LIR.GetEnv | LIR.CurrentUser | LIR.Kill ->
                 Ok [ARM64Symbolic.MOVZ (destReg, 0us, 0)]
             | LIR.SpawnProcess ->
@@ -6746,14 +6744,12 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
     @ finalizeString ARM64Symbolic.X20 ARM64Symbolic.X22
     @ finalizeString ARM64Symbolic.X21 ARM64Symbolic.X23
     @ [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X28)
-       ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 40us)]
-    @ loadImmediate ARM64Symbolic.X10 (ANF.recordRuntimeIdentity "Stdlib.Cli.NativeOutput" [])
-    @ [ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s)
-       ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X0, 8s)
-       ARM64Symbolic.STR (ARM64Symbolic.X20, ARM64Symbolic.X0, 16s)
-       ARM64Symbolic.STR (ARM64Symbolic.X21, ARM64Symbolic.X0, 24s)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 32us)]
+    @ [ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X0, 0s)
+       ARM64Symbolic.STR (ARM64Symbolic.X20, ARM64Symbolic.X0, 8s)
+       ARM64Symbolic.STR (ARM64Symbolic.X21, ARM64Symbolic.X0, 16s)
        ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 1us, 0)
-       ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X0, 32s)
+       ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X0, 24s)
        ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 96us)
        ARM64Symbolic.LDP_post (ARM64Symbolic.X23, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
        ARM64Symbolic.LDP_post (ARM64Symbolic.X21, ARM64Symbolic.X22, ARM64Symbolic.SP, 16s)
