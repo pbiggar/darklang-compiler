@@ -18,34 +18,34 @@ let __isHexByte(byte: Int64) : Bool =
 // System.Guid.TryParse, the pinned interpreter implementation, recognizes
 // the X-format marker case-insensitively.
 let __hasHexPrefixAt(s: String, index: Int64) : Bool =
-    Stdlib.String.getByteAt(s, index) == 48 &&
-    (Stdlib.String.getByteAt(s, index + 1) == 120 || Stdlib.String.getByteAt(s, index + 1) == 88)
+    Stdlib.String.getByteAt(s, index) == 48L &&
+    (Stdlib.String.getByteAt(s, index + 1L) == 120L || Stdlib.String.getByteAt(s, index + 1L) == 88L)
 
 let __hasHexAt(s: String, index: Int64, count: Int64) : Bool =
-    if count == 0 then
+    if count == 0L then
         true
     else
         let byte = Stdlib.String.getByteAt(s, index) in
-        Stdlib.Uuid.__isHexByte(byte) && Stdlib.Uuid.__hasHexAt(s, index + 1, count - 1)
+        Stdlib.Uuid.__isHexByte(byte) && Stdlib.Uuid.__hasHexAt(s, index + 1L, count - 1L)
 
 let __isHyphenated(s: String) : Bool =
-    Stdlib.String.__byteLength(s) == 36 &&
-    Stdlib.String.getByteAt(s, 8) == 45 &&
-    Stdlib.String.getByteAt(s, 13) == 45 &&
-    Stdlib.String.getByteAt(s, 18) == 45 &&
-    Stdlib.String.getByteAt(s, 23) == 45 &&
-    Stdlib.Uuid.__hasHexAt(s, 0, 8) &&
-    Stdlib.Uuid.__hasHexAt(s, 9, 4) &&
-    Stdlib.Uuid.__hasHexAt(s, 14, 4) &&
-    Stdlib.Uuid.__hasHexAt(s, 19, 4) &&
-    Stdlib.Uuid.__hasHexAt(s, 24, 12)
+    Stdlib.String.__byteLength(s) == 36L &&
+    Stdlib.String.getByteAt(s, 8L) == 45L &&
+    Stdlib.String.getByteAt(s, 13L) == 45L &&
+    Stdlib.String.getByteAt(s, 18L) == 45L &&
+    Stdlib.String.getByteAt(s, 23L) == 45L &&
+    Stdlib.Uuid.__hasHexAt(s, 0L, 8L) &&
+    Stdlib.Uuid.__hasHexAt(s, 9L, 4L) &&
+    Stdlib.Uuid.__hasHexAt(s, 14L, 4L) &&
+    Stdlib.Uuid.__hasHexAt(s, 19L, 4L) &&
+    Stdlib.Uuid.__hasHexAt(s, 24L, 12L)
 
 let __hyphenatedDigits(s: String) : String =
-    Stdlib.String.__byteSlice(s, 0, 8) ++
-    Stdlib.String.__byteSlice(s, 9, 13) ++
-    Stdlib.String.__byteSlice(s, 14, 18) ++
-    Stdlib.String.__byteSlice(s, 19, 23) ++
-    Stdlib.String.__byteSlice(s, 24, 36)
+    Stdlib.String.__byteSlice(s, 0L, 8L) ++
+    Stdlib.String.__byteSlice(s, 9L, 13L) ++
+    Stdlib.String.__byteSlice(s, 14L, 18L) ++
+    Stdlib.String.__byteSlice(s, 19L, 23L) ++
+    Stdlib.String.__byteSlice(s, 24L, 36L)
 
 // Guid's X format is a sequence of hexadecimal integer components. Its parser
 // ignores Unicode whitespace and leading zeroes. The first three components
@@ -62,19 +62,19 @@ let __removeXWhitespace(parts: List<String>, acc: String) : String =
 let __xHexEnd(s: String, index: Int64) : Int64 =
     if index == Stdlib.String.__byteLength(s) then index
     else if Stdlib.Uuid.__isHexByte(Stdlib.String.getByteAt(s, index)) then
-        Stdlib.Uuid.__xHexEnd(s, index + 1)
+        Stdlib.Uuid.__xHexEnd(s, index + 1L)
     else index
 
 let __dropLeadingZeroesAt(digits: String, index: Int64) : String =
     if index == Stdlib.String.__byteLength(digits) then ""
-    else if Stdlib.String.getByteAt(digits, index) == 48 then
-        Stdlib.Uuid.__dropLeadingZeroesAt(digits, index + 1)
+    else if Stdlib.String.getByteAt(digits, index) == 48L then
+        Stdlib.Uuid.__dropLeadingZeroesAt(digits, index + 1L)
     else Stdlib.String.__byteSlice(digits, index, Stdlib.String.__byteLength(digits))
 
 let __normalizeXField(digits: String, maxWidth: Int64, outputWidth: Int64) : Stdlib.Option.Option<String> =
-    if Stdlib.String.__byteLength(digits) == 0 then None
+    if Stdlib.String.__byteLength(digits) == 0L then None
     else
-        let significant = Stdlib.Uuid.__dropLeadingZeroesAt(digits, 0) in
+        let significant = Stdlib.Uuid.__dropLeadingZeroesAt(digits, 0L) in
         let significantLength = Stdlib.String.__byteLength(significant) in
         if significantLength > maxWidth then None
         else if significantLength > outputWidth then
@@ -83,59 +83,59 @@ let __normalizeXField(digits: String, maxWidth: Int64, outputWidth: Int64) : Std
 
 let __xFields(s: String, index: Int64, fieldIndex: Int64, acc: String) : Stdlib.Option.Option<String> =
     let length = Stdlib.String.__byteLength(s) in
-    if index + 2 > length || Stdlib.Uuid.__hasHexPrefixAt(s, index) == false then None
+    if index + 2L > length || Stdlib.Uuid.__hasHexPrefixAt(s, index) == false then None
     else
-        let digitsStart = index + 2 in
+        let digitsStart = index + 2L in
         let digitsEnd = Stdlib.Uuid.__xHexEnd(s, digitsStart) in
-        let maxWidth = if fieldIndex <= 2 then 8 else 2 in
-        let outputWidth = if fieldIndex == 0 then 8 else if fieldIndex <= 2 then 4 else 2 in
+        let maxWidth = if fieldIndex <= 2L then 8L else 2L in
+        let outputWidth = if fieldIndex == 0L then 8L else if fieldIndex <= 2L then 4L else 2L in
         match Stdlib.Uuid.__normalizeXField(Stdlib.String.__byteSlice(s, digitsStart, digitsEnd), maxWidth, outputWidth) with
         | None -> None
         | Some(digits) ->
             let nextAcc = acc ++ digits in
-            if fieldIndex == 10 then
-                if digitsEnd + 2 == length &&
-                   Stdlib.String.getByteAt(s, digitsEnd) == 125 &&
-                   Stdlib.String.getByteAt(s, digitsEnd + 1) == 125 then Some(nextAcc)
+            if fieldIndex == 10L then
+                if digitsEnd + 2L == length &&
+                   Stdlib.String.getByteAt(s, digitsEnd) == 125L &&
+                   Stdlib.String.getByteAt(s, digitsEnd + 1L) == 125L then Some(nextAcc)
                 else None
-            else if digitsEnd >= length || Stdlib.String.getByteAt(s, digitsEnd) != 44 then None
-            else if fieldIndex == 2 then
-                if digitsEnd + 1 < length && Stdlib.String.getByteAt(s, digitsEnd + 1) == 123 then
-                    Stdlib.Uuid.__xFields(s, digitsEnd + 2, fieldIndex + 1, nextAcc)
+            else if digitsEnd >= length || Stdlib.String.getByteAt(s, digitsEnd) != 44L then None
+            else if fieldIndex == 2L then
+                if digitsEnd + 1L < length && Stdlib.String.getByteAt(s, digitsEnd + 1L) == 123L then
+                    Stdlib.Uuid.__xFields(s, digitsEnd + 2L, fieldIndex + 1L, nextAcc)
                 else None
-            else Stdlib.Uuid.__xFields(s, digitsEnd + 1, fieldIndex + 1, nextAcc)
+            else Stdlib.Uuid.__xFields(s, digitsEnd + 1L, fieldIndex + 1L, nextAcc)
 
 let __xDigits(s: String) : Stdlib.Option.Option<String> =
     let compact = Stdlib.Uuid.__removeXWhitespace(Stdlib.String.toGraphemes(s), "") in
-    if Stdlib.String.__byteLength(compact) > 0 && Stdlib.String.getByteAt(compact, 0) == 123 then
-        Stdlib.Uuid.__xFields(compact, 1, 0, "")
+    if Stdlib.String.__byteLength(compact) > 0L && Stdlib.String.getByteAt(compact, 0L) == 123L then
+        Stdlib.Uuid.__xFields(compact, 1L, 0L, "")
     else None
 
 let __hexDigit(byte: Int64) : Int =
-    if byte >= 48 && byte <= 57 then Stdlib.Int.fromInt64(byte - 48)
-    else if byte >= 65 && byte <= 70 then Stdlib.Int.fromInt64(byte - 55)
-    else Stdlib.Int.fromInt64(byte - 87)
+    if byte >= 48L && byte <= 57L then Stdlib.Int.fromInt64(byte - 48L)
+    else if byte >= 65L && byte <= 70L then Stdlib.Int.fromInt64(byte - 55L)
+    else Stdlib.Int.fromInt64(byte - 87L)
 
 let __hexToIntAt(digits: String, index: Int64, value: Int) : Int =
-    if index == 32 then value
+    if index == 32L then value
     else
         Stdlib.Uuid.__hexToIntAt(
             digits,
-            index + 1,
+            index + 1L,
             Stdlib.Int.add(Stdlib.Int.multiply(value, 16I), Stdlib.Uuid.__hexDigit(Stdlib.String.getByteAt(digits, index))) )
 
 let __parseDigits(digits: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
-    match Stdlib.Int.toUInt128(Stdlib.Uuid.__hexToIntAt(digits, 0, 0I)) with
+    match Stdlib.Int.toUInt128(Stdlib.Uuid.__hexToIntAt(digits, 0L, 0I)) with
     | Some(value) -> Ok(UUID(value))
     | None -> Builtin.testRuntimeError("UUID hex value exceeded UInt128")
 
 let parse(value: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
     let s = Stdlib.String.trim(value) in
     let length = Stdlib.String.__byteLength(s) in
-    if length == 32 && Stdlib.Uuid.__hasHexAt(s, 0, 32) then Stdlib.Uuid.__parseDigits(s)
+    if length == 32L && Stdlib.Uuid.__hasHexAt(s, 0L, 32L) then Stdlib.Uuid.__parseDigits(s)
     else if Stdlib.Uuid.__isHyphenated(s) then Stdlib.Uuid.__parseDigits(Stdlib.Uuid.__hyphenatedDigits(s))
-    else if length == 38 && ((Stdlib.String.getByteAt(s, 0) == 123 && Stdlib.String.getByteAt(s, 37) == 125) || (Stdlib.String.getByteAt(s, 0) == 40 && Stdlib.String.getByteAt(s, 37) == 41)) then
-        let inner = Stdlib.String.__byteSlice(s, 1, 37) in
+    else if length == 38L && ((Stdlib.String.getByteAt(s, 0L) == 123L && Stdlib.String.getByteAt(s, 37L) == 125L) || (Stdlib.String.getByteAt(s, 0L) == 40L && Stdlib.String.getByteAt(s, 37L) == 41L)) then
+        let inner = Stdlib.String.__byteSlice(s, 1L, 37L) in
         if Stdlib.Uuid.__isHyphenated(inner) then Stdlib.Uuid.__parseDigits(Stdlib.Uuid.__hyphenatedDigits(inner)) else Error(Stdlib.Uuid.ParseError.BadFormat)
     else
         match Stdlib.Uuid.__xDigits(s) with
@@ -169,17 +169,17 @@ let __intToHex(value: Int, acc: String) : String =
         | Error(message) -> Builtin.testRuntimeError(message)
 
 let __padHex(value: String) : String =
-    let remaining = 32 - Stdlib.String.__byteLength(value) in
-    if remaining == 0 then value else Stdlib.String.repeat("0", Stdlib.Int.fromInt64(remaining)) ++ value
+    let remaining = 32L - Stdlib.String.__byteLength(value) in
+    if remaining == 0L then value else Stdlib.String.repeat("0", Stdlib.Int.fromInt64(remaining)) ++ value
 
 /// Stringify UUID values as 8-4-4-4-12 lower-case hexadecimal digits.
 let toString(uuid: Uuid) : String =
     match uuid with
     | UUID(value) ->
         let hex = Stdlib.Uuid.__padHex(Stdlib.Uuid.__intToHex(Stdlib.Int.fromUInt128(value), "")) in
-        Stdlib.String.__byteSlice(hex, 0, 8) ++ "-" ++ Stdlib.String.__byteSlice(hex, 8, 12) ++ "-" ++
-        Stdlib.String.__byteSlice(hex, 12, 16) ++ "-" ++ Stdlib.String.__byteSlice(hex, 16, 20) ++ "-" ++
-        Stdlib.String.__byteSlice(hex, 20, 32)
+        Stdlib.String.__byteSlice(hex, 0L, 8L) ++ "-" ++ Stdlib.String.__byteSlice(hex, 8L, 12L) ++ "-" ++
+        Stdlib.String.__byteSlice(hex, 12L, 16L) ++ "-" ++ Stdlib.String.__byteSlice(hex, 16L, 20L) ++ "-" ++
+        Stdlib.String.__byteSlice(hex, 20L, 32L)
 
 // Generate UUID v4: xxxxxxxx-xxxx-4xxx-Nxxx-xxxxxxxxxxxx
 // where N is 8, 9, a, or b (variant bits)
