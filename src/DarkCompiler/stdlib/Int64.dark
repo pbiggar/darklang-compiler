@@ -74,7 +74,9 @@ let bitwiseNot(a: Int64) : Int64 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (Brian Kernighan / SWAR)
-let __popcount(x: Int64) : Int64 =
+// Historical compiler extension retained for the existing public bit-count API.
+// It is deliberately outside the interpreter parity surface.
+let popcount(x: Int64) : Int64 =
     // Constants (in decimal):
     // 0x5555555555555555 = 6148914691236517205
     // 0x3333333333333333 = 3689348814741910323

@@ -78,7 +78,7 @@ let bitwiseNot(a: Int8) : Int8 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let __popcount(x: Int8) : Int8 =
+let popcount(x: Int8) : Int8 =
     let mask1 = 85y in
     let mask2 = 51y in
     let mask3 = 15y in

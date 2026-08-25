@@ -58,7 +58,7 @@ let shiftRight(a: UInt16, shift: UInt16) : UInt16 = a >> shift
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let __popcount(x: UInt16) : UInt16 =
+let popcount(x: UInt16) : UInt16 =
     let mask1 = 21845us in
     let mask2 = 13107us in
     let mask3 = 3855us in

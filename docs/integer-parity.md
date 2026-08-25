@@ -57,6 +57,9 @@ The public modules expose only the interpreter-declared names. Historical
 `sub`, `mul`, `div`, and `*_v0` compatibility aliases, and the historical
 power operator spelling, are absent from this parity surface. Internal
 representation helpers beginning with `__` remain implementation details.
+`Stdlib.Int64.popcount` remains a documented compiler extension required by
+the compiler's existing public E2E contract; it is not part of the interpreter
+integer parity API.
 Static operand and conversion type enforcement is the intentional AOT
 divergence; the compiler does not reproduce interpreter runtime dispatch
 errors for source that can be rejected during type checking.

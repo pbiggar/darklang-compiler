@@ -73,7 +73,7 @@ let bitwiseNot(a: Int32) : Int32 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let __popcount(x: Int32) : Int32 =
+let popcount(x: Int32) : Int32 =
     let mask1 = 1431655765l in
     let mask2 = 858993459l in
     let mask3 = 252645135l in

@@ -58,7 +58,7 @@ let bitwiseNot(a: UInt64) : UInt64 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let __popcount(x: UInt64) : UInt64 =
+let popcount(x: UInt64) : UInt64 =
     let mask1 = 6148914691236517205UL in
     let mask2 = 3689348814741910323UL in
     let mask3 = 1085102592571150095UL in
