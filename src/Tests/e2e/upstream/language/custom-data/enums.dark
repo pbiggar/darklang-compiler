@@ -24,7 +24,7 @@ module Errors =
     MyEnum.B 5L = error="Expected 0 fields in Errors.User.MyEnum.`B`, but got 1"
     (match MyEnum.C "test" with | C v -> v) = "test"
     (match MyEnum.C "test" with | 5 -> "unmatched because it's not an int" | C v -> v) = "test"
-    (match MyEnum.C "test" with | C -> "unmatched because we didn't provide a space for the field") = error="No matching case found for value Errors.User.MyEnum.C(\"test\") in match expression"
+    (match MyEnum.C "test" with | C -> "unmatched because we didn't provide a space for the field") = error="Non-exhaustive match expression"
     (match MyEnum.C "test" with | D -> "unmatched because case name does not exist" | C _ -> 2) = 2
 
     (MyEnum.C 5L) = error="Failed to create enum. Expected String for field 0 in `C`, but got Int64 (5)"

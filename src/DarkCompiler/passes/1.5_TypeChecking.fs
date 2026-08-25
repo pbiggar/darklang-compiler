@@ -5129,6 +5129,25 @@ let rec private checkExprWithParamNames
                 || rightName = $"{leftName}.{lastNameSegment leftName}"
                 || leftName = $"{rightName}.{lastNameSegment rightName}"
 
+            let instantiateVariantPayloadForExhaustiveness
+                (typeParams: string list)
+                (typeArgs: Type list)
+                (payloadType: Type option)
+                : Type option =
+                let substitution =
+                    if List.length typeParams = List.length typeArgs then
+                        List.zip typeParams typeArgs |> Map.ofList
+                    else
+                        Map.empty
+                payloadType
+                |> Option.map (fun payload ->
+                    payload
+                    |> applySubst substitution
+                    |> canonicalizeBareSumTypeRefs variantLookup
+                    |> function
+                        | TEnumFields fields -> TTuple fields
+                        | other -> other)
+
             // Tuple matches are decision matrices. Split each finite head type
             // into its public constructors, then prove that the remaining
             // columns cover every resulting row. This covers, for example,
@@ -5156,12 +5175,17 @@ let rec private checkExprWithParamNames
                                 | _ -> None)
                         tupleDecisionMatrixIsExhaustive restTypes (rowsFor true)
                         && tupleDecisionMatrixIsExhaustive restTypes (rowsFor false)
-                    | TSum (sumTypeName, _) ->
+                    | TSum (sumTypeName, sumTypeArgs) ->
                         let variants =
                             variantLookup
                             |> Map.toList
-                            |> List.choose (fun (variantName, (owner, _, _, payloadType)) ->
-                                if sumTypeNamesMatchForExhaustiveness owner sumTypeName then Some (variantName, payloadType) else None)
+                            |> List.choose (fun (variantName, (owner, typeParams, _, payloadType)) ->
+                                if sumTypeNamesMatchForExhaustiveness owner sumTypeName then
+                                    Some (
+                                        variantName,
+                                        instantiateVariantPayloadForExhaustiveness typeParams sumTypeArgs payloadType
+                                    )
+                                else None)
                         variants <> []
                         && variants
                            |> List.forall (fun (variantName, payloadType) ->
@@ -5230,12 +5254,17 @@ let rec private checkExprWithParamNames
                     | TTuple elementTypes
                     | TEnumFields elementTypes ->
                         tupleMatchIsExhaustive elementTypes patterns
-                    | TSum (sumTypeName, _) ->
+                    | TSum (sumTypeName, sumTypeArgs) ->
                         let variants =
                             variantLookup
                             |> Map.toList
-                            |> List.choose (fun (variantName, (owner, _, _, payloadType)) ->
-                                if sumTypeNamesMatchForExhaustiveness owner sumTypeName then Some (variantName, payloadType) else None)
+                            |> List.choose (fun (variantName, (owner, typeParams, _, payloadType)) ->
+                                if sumTypeNamesMatchForExhaustiveness owner sumTypeName then
+                                    Some (
+                                        variantName,
+                                        instantiateVariantPayloadForExhaustiveness typeParams sumTypeArgs payloadType
+                                    )
+                                else None)
                         variants <> []
                         && variants
                            |> List.forall (fun (variantName, payloadType) ->
@@ -5249,9 +5278,16 @@ let rec private checkExprWithParamNames
                                match payloadType with
                                | None -> matchingPayloads |> List.exists Option.isNone
                                | Some payload ->
-                                   matchingPayloads
-                                   |> List.choose id
-                                   |> patternsCoverType payload)
+                                   let coversPayloadDirectly =
+                                       matchingPayloads
+                                       |> List.exists (function
+                                           | Some payloadPattern ->
+                                               payloadPatternCoversType payloadPattern payload
+                                           | None -> false)
+                                   coversPayloadDirectly
+                                   || (matchingPayloads
+                                       |> List.choose id
+                                       |> patternsCoverType payload))
                     | _ -> false
 
             let rec listPatternCoverage (elementType: Type) (pattern: Pattern) : Set<int> * int option =
@@ -5407,13 +5443,16 @@ let rec private checkExprWithParamNames
             // Pass expectedType to first case so empty lists, None, etc. get the right type
             checkCases cases expectedType []
             |> Result.bind (fun (matchType, cases') ->
-                match expectedType with
-                | Some expected ->
-                    // Use reconcileTypes for expected type check too
-                    match reconcileTypes (Some aliasReg) expected matchType with
-                    | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
-                    | None -> Error (TypeMismatch (expected, matchType, "match expression"))
-                | None -> Ok (matchType, Match (scrutinee', cases'))))
+                if not (matchIsExhaustive cases') then
+                    Error (GenericError $"Non-exhaustive match expression for {typeToString scrutineeType}")
+                else
+                    match expectedType with
+                    | Some expected ->
+                        // Use reconcileTypes for expected type check too
+                        match reconcileTypes (Some aliasReg) expected matchType with
+                        | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
+                        | None -> Error (TypeMismatch (expected, matchType, "match expression"))
+                    | None -> Ok (matchType, Match (scrutinee', cases'))))
 
     | DictLiteral (_, entries) ->
         let duplicateKey =

@@ -142,10 +142,17 @@ during AOT type checking.
 ### Non-Exhaustive Example
 ```dark
 match opt with
-| Some(x) -> x   // Runtime failure when the value is None
+| Some(x) -> x   // AOT type error: None is uncovered
 ```
 
-The exhaustiveness check is implemented via `patternAlwaysMatches`:
+The type checker proves coverage over Bool, tuples, exact and cons list
+shapes, sum constructors (including instantiated generic payloads), and nested
+constructor/tuple decision matrices. A guarded arm never contributes coverage,
+because its guard may be false. Any match that cannot be proved exhaustive is
+rejected with `Non-exhaustive match expression` before ANF lowering; the
+runtime non-exhaustive fallback is therefore unreachable for valid programs.
+
+Irrefutable patterns remain the base case for the coverage proof:
 
 ```fsharp
 let rec patternAlwaysMatches (pattern: AST.Pattern) : bool =
@@ -211,8 +218,9 @@ The scrutinee is evaluated once. Cases, alternatives, and nested structural
 tests run left to right. A successful structural match introduces its bindings
 only for that arm's guard and body. The Boolean guard runs once after those
 bindings are available; a false guard falls through. Only the first eligible
-body executes. If no arm succeeds, the runtime failure is
-`Non-exhaustive match: No matching case found for value <value> in match expression`.
+body executes. The compiler requires every possible value to select an
+unguarded arm, so an unmatched value is a compile-time error rather than a
+runtime match failure.
 
 No compiler-only pattern form is retained in the public parity grammar. Record
 destructuring was removed; compiler-syntax comma separators in list patterns

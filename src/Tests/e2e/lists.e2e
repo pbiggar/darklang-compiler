@@ -367,7 +367,7 @@ match [(100, 40, 7)] with | [(a, b, c)] -> a - b - c | _ -> 0 = 53
 
 // Tuple arity mismatch under a guard should not bind missing elements as Int64 defaults.
 // This pattern cannot match a 2-tuple list element and must fall through.
-match [(1, 2)] with | [(a, b, c)] when true -> 1 = error="Non-exhaustive match: No matching case found for value [(1, 2)] in match expression"
+match [(1, 2)] with | [(a, b, c)] when true -> 1 = error="Non-exhaustive match expression"
 
 // List of float tuples
 match [(1.0, 2.5), (3.5, 4.0)] with | [t1, t2] -> t1.0 + t1.1 + t2.0 + t2.1 | _ -> 0.0 = 11.0
