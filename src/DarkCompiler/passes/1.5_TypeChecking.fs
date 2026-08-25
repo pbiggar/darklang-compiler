@@ -5316,21 +5316,13 @@ let rec private checkExprWithParamNames
                 | minimum :: _ ->
                     [0 .. minimum - 1] |> List.forall (fun length -> Set.contains length exactLengths)
 
-            // A literal scrutinee can make branch selection decidable at compile
-            // time. Preserve source order: a preceding unknown (including a
-            // guarded) branch may still be selected, so only definitely-false
-            // branches can be skipped on the way to a definitely-true branch.
+            // A literal scrutinee is safe when at least one arm definitely
+            // matches it. Earlier unknown arms do not invalidate that proof:
+            // they either select a body themselves or fall through to the
+            // definitely matching arm.
             let knownScrutineeSelectsACase (matchCases: MatchCase list) : bool =
-                let rec selectCase (remainingCases: MatchCase list) : bool =
-                    match remainingCases with
-                    | [] -> false
-                    | matchCase :: rest ->
-                        match knownCaseMatchStatus matchCase with
-                        | Some false -> selectCase rest
-                        | Some true -> true
-                        | None -> false
-
-                selectCase matchCases
+                matchCases
+                |> List.exists (knownCaseMatchStatus >> (=) (Some true))
 
             let matchIsExhaustive (matchCases: MatchCase list) : bool =
                 let unguardedPatterns =

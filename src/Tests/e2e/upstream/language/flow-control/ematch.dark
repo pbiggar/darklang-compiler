@@ -649,7 +649,7 @@ module Option =
 
 module Errors =
   (match "nothing matches" with
-   | "not this" -> "fail") = exit=1 stderr="Non-exhaustive match: No matching case found for value \"nothing matches\" in match expression"
+   | "not this" -> "fail") = error="Non-exhaustive match expression"
   (match Builtin.testRuntimeError "cond is error" with
    | 5L -> "fail"
    | 6L -> "pass"

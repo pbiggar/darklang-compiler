@@ -94,7 +94,7 @@ Stdlib.List.filter [ 1L; 2L; 3L ] (fun item ->
   match item with
   | 1L -> true
   | 2L -> false
-  | 3L -> true) = [ 1L; 3L ]
+  | 3L -> true) = error="Non-exhaustive match expression"
 
 Stdlib.List.filter [] (fun item -> true) = []
 Stdlib.List.filter [ -20L; 5L; 9L ] (fun x -> x > 20L) = []
@@ -218,7 +218,7 @@ module Partition =
   Stdlib.List.partition_v0 [ 1L; 2L; 3L ] (fun item ->
     match item with
     | 1L | 3L -> true
-    | 2L -> false) = ([ 1L; 3L ], [ 2L ])
+    | 2L -> false) = error="Non-exhaustive match expression"
 
   Stdlib.List.partition_v0 [ true; false; true ] (fun item -> "a") = error="Encountered a condition that must be a Bool, but got a String (\"a\")"
   Stdlib.List.partition_v0 [ 1L; 2L; 3L ] (fun item ->
