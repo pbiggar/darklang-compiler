@@ -11,16 +11,22 @@ type ParseError = BadFormat | OutOfRange
 let add(a: UInt64, b: UInt64) : UInt64 = a + b
 
 let subtract(a: UInt64, b: UInt64) : UInt64 = a - b
+let sub(a: UInt64, b: UInt64) : UInt64 = Stdlib.UInt64.subtract(a, b)
 
 let multiply(a: UInt64, b: UInt64) : UInt64 = a * b
+let mul(a: UInt64, b: UInt64) : UInt64 = Stdlib.UInt64.multiply(a, b)
 
 let divide(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.crash("Cannot divide by 0") else a / b
+let div(a: UInt64, b: UInt64) : UInt64 = Stdlib.UInt64.divide(a, b)
 
 let max(a: UInt64, b: UInt64) : UInt64 = if a > b then a else b
 
 let min(a: UInt64, b: UInt64) : UInt64 = if a < b then a else b
 
 let mod(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.crash("Cannot evaluate modulus against 0") else a % b
+
+let absoluteValue(a: UInt64) : UInt64 = a
+let negate(a: UInt64) : UInt64 = 0UL - a
 
 
 let __powerLoop(base: UInt64, exponent: UInt64, result: UInt64) : UInt64 =

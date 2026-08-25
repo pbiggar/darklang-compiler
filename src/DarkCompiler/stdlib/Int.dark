@@ -18,6 +18,9 @@ let add(a: Int, b: Int) : Int = Stdlib.Internal.Integer.add(a, b)
 let subtract(a: Int, b: Int) : Int = Stdlib.Internal.Integer.subtract(a, b)
 let multiply(a: Int, b: Int) : Int = Stdlib.Internal.Integer.multiply(a, b)
 let divide(a: Int, b: Int) : Int = Stdlib.Internal.Integer.divide(a, b)
+let sub(a: Int, b: Int) : Int = Stdlib.Int.subtract(a, b)
+let mul(a: Int, b: Int) : Int = Stdlib.Int.multiply(a, b)
+let div(a: Int, b: Int) : Int = Stdlib.Int.divide(a, b)
 let negate(value: Int) : Int = Stdlib.Internal.Integer.negate(value)
 let absoluteValue(value: Int) : Int =
     if Stdlib.Internal.Integer.lessThan(value, __string_to_int("0")) then

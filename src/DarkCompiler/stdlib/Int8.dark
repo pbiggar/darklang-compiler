@@ -11,13 +11,16 @@ type ParseError = BadFormat | OutOfRange
 let add(a: Int8, b: Int8) : Int8 = a + b
 
 let subtract(a: Int8, b: Int8) : Int8 = a - b
+let sub(a: Int8, b: Int8) : Int8 = Stdlib.Int8.subtract(a, b)
 
 let multiply(a: Int8, b: Int8) : Int8 = a * b
+let mul(a: Int8, b: Int8) : Int8 = Stdlib.Int8.multiply(a, b)
 
 let divide(a: Int8, b: Int8) : Int8 =
     if b == 0y then Builtin.crash("Cannot divide by 0")
     else if a == -128y && b == -1y then -128y
     else a / b
+let div(a: Int8, b: Int8) : Int8 = Stdlib.Int8.divide(a, b)
 
 let max(a: Int8, b: Int8) : Int8 = if a > b then a else b
 

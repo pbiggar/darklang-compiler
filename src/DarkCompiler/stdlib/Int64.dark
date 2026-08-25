@@ -12,13 +12,16 @@ let add(a: Int64, b: Int64) : Int64 = a + b
 
 // Interpreter public names for the existing arithmetic operations.
 let subtract(a: Int64, b: Int64) : Int64 = a - b
+let sub(a: Int64, b: Int64) : Int64 = Stdlib.Int64.subtract(a, b)
 
 let multiply(a: Int64, b: Int64) : Int64 = a * b
+let mul(a: Int64, b: Int64) : Int64 = Stdlib.Int64.multiply(a, b)
 
 let divide(a: Int64, b: Int64) : Int64 =
     if b == 0L then Builtin.crash("Cannot divide by 0")
     else if a == -9223372036854775808L && b == -1L then -9223372036854775808L
     else a / b
+let div(a: Int64, b: Int64) : Int64 = Stdlib.Int64.divide(a, b)
 
 let max(a: Int64, b: Int64) : Int64 = if a > b then a else b
 
