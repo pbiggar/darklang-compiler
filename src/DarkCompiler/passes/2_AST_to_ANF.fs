@@ -61,7 +61,7 @@ let private materializeComparisonPlan (targetType: AST.Type) (args: AST.Expr lis
             )
         | AST.TInt ->
             AST.Call (
-                "Stdlib.Int.equals",
+                "Stdlib.Internal.Integer.equals",
                 AST.NonEmptyList.fromList [leftExpr; rightExpr]
             )
         | _ -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
@@ -514,6 +514,13 @@ let isBuiltinUnwrapName (funcName: string) : bool =
 
 let isBuiltinTestRuntimeErrorName (funcName: string) : bool =
     funcName = "Builtin.testRuntimeError"
+
+/// Source programs use `crash`; the older builtin is retained for tests only.
+let isSourceCrashName (funcName: string) : bool =
+    funcName = "Builtin.crash"
+
+let isRuntimeFailureName (funcName: string) : bool =
+    isBuiltinTestRuntimeErrorName funcName || isSourceCrashName funcName
 
 let isBuiltinTestNanName (name: string) : bool =
     name = "Builtin.testNan"
@@ -2895,7 +2902,7 @@ let private comparisonForCapturedValue
     elif typ = AST.TString then
         AST.Call ("Stdlib.String.equals", exprArgsFromList [left; right])
     elif typ = AST.TInt then
-        AST.Call ("Stdlib.Int.equals", exprArgsFromList [left; right])
+        AST.Call ("Stdlib.Internal.Integer.equals", exprArgsFromList [left; right])
     else
         AST.BinOp (AST.Eq, left, right)
 
@@ -4845,13 +4852,13 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         Error $"Internal error: Builtin.unwrap expects Option/Result argument, got {typeToString argType}")
             | _ ->
                 Error $"Internal error: Builtin.unwrap expects 1 argument, got {List.length argList}"
-        elif isBuiltinTestRuntimeErrorName funcName then
+        elif isRuntimeFailureName funcName then
             match argList with
             // Runtime errors are bottom-like: branch and match inference select
             // the type of the reachable value-producing alternatives.
             | [_] -> Ok AST.TRuntimeError
             | _ ->
-                Error $"Internal error: Builtin.testRuntimeError expects 1 argument, got {List.length argList}"
+                Error $"Internal error: {funcName} expects 1 argument, got {List.length argList}"
         else
             // Look up function return type from the function registry
             match Map.tryFind funcName funcReg with
@@ -5670,7 +5677,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         | _ ->
             Error $"Internal error: Builtin.unwrap should have exactly 1 argument, got {List.length argList}"
 
-    | AST.Call (funcName, args) when isBuiltinTestRuntimeErrorName funcName ->
+    | AST.Call (funcName, args) when isRuntimeFailureName funcName ->
         let argList = exprArgsToList args
         match argList with
         | [messageExpr] ->
@@ -5697,7 +5704,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         )
                     (wrapBindings messageBindings errorExpr, varGen3))
         | _ ->
-            Error $"Internal error: Builtin.testRuntimeError should have exactly 1 argument, got {List.length argList}"
+            Error $"Internal error: {funcName} should have exactly 1 argument, got {List.length argList}"
 
     | AST.Call (funcName, args) ->
         // Function call: convert all arguments to atoms
@@ -9551,7 +9558,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
     | AST.Call (funcName, args) ->
         if isBuiltinUnwrapName funcName then
             Error "Internal error: Builtin.unwrap should be lowered via toANF, not toAtom"
-        elif isBuiltinTestRuntimeErrorName funcName then
+        elif isRuntimeFailureName funcName then
             let argList = exprArgsToList args
             match argList with
             | [messageExpr] ->
@@ -9577,7 +9584,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                             varGen3
                         ))
             | _ ->
-                Error $"Internal error: Builtin.testRuntimeError should have exactly 1 argument, got {List.length argList}"
+                Error $"Internal error: {funcName} should have exactly 1 argument, got {List.length argList}"
         else
             // Function call in atom position: convert all arguments to atoms
             let argExprList = exprArgsToList args

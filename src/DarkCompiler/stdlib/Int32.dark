@@ -10,25 +10,22 @@ type ParseError = BadFormat | OutOfRange
 
 let add(a: Int32, b: Int32) : Int32 = a + b
 
-let sub(a: Int32, b: Int32) : Int32 = a - b
 let subtract(a: Int32, b: Int32) : Int32 = a - b
 
-let mul(a: Int32, b: Int32) : Int32 = a * b
 let multiply(a: Int32, b: Int32) : Int32 = a * b
 
 let divide(a: Int32, b: Int32) : Int32 =
-    if b == 0l then Builtin.testRuntimeError("Cannot divide by 0")
+    if b == 0l then Builtin.crash("Cannot divide by 0")
     else if a == -2147483648l && b == -1l then -2147483648l
     else a / b
-let div(a: Int32, b: Int32) : Int32 = Stdlib.Int32.divide(a, b)
 
 let max(a: Int32, b: Int32) : Int32 = if a > b then a else b
 
 let min(a: Int32, b: Int32) : Int32 = if a < b then a else b
 
 let mod(a: Int32, b: Int32) : Int32 =
-    if b == 0l then Builtin.testRuntimeError("Cannot evaluate modulus against 0")
-    else if b < 0l then Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+    if b == 0l then Builtin.crash("Cannot evaluate modulus against 0")
+    else if b < 0l then Builtin.crash("Cannot evaluate modulus against a negative number")
     else a % b
 let remainder(a: Int32, b: Int32) : Stdlib.Result.Result<Int32, String> =
     if b == 0l then Error("Cannot divide by 0")
@@ -45,7 +42,7 @@ let __powerLoop(base: Int32, exponent: Int32, result: Int32) : Int32 =
         let next = if (exponent % 2l) == 1l then result * base else result in
         Stdlib.Int32.__powerLoop(base * base, exponent / 2l, next)
 let power(base: Int32, exponent: Int32) : Int32 =
-    if exponent < 0l then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
+    if exponent < 0l then Builtin.crash("Cannot raise integer to a negative exponent")
     else Stdlib.Int32.__powerLoop(base, exponent, 1l)
 
 let clamp(value: Int32, limitA: Int32, limitB: Int32) : Int32 =
@@ -76,7 +73,7 @@ let bitwiseNot(a: Int32) : Int32 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: Int32) : Int32 =
+let __popcount(x: Int32) : Int32 =
     let mask1 = 1431655765l in
     let mask2 = 858993459l in
     let mask3 = 252645135l in
@@ -101,7 +98,7 @@ let __digitToString(n: Int32) : String =
     | 7l -> "7"
     | 8l -> "8"
     | 9l -> "9"
-    | _ -> Builtin.testRuntimeError("Stdlib.Int32.__digitToString expected a digit from 0 to 9")
+    | _ -> Builtin.crash("Stdlib.Int32.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
 let toString(n: Int32) : String =
@@ -128,7 +125,7 @@ let sum(list: List<Int32>) : Int32 =
 let __fromIntUnchecked(value: Int) : Int32 =
     match Stdlib.Int.toInt32(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal Int32 conversion invariant failed")
+    | None -> Builtin.crash("Internal Int32 conversion invariant failed")
 let random(start: Int32, finish: Int32) : Int32 = Stdlib.Int32.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromInt32(start), Stdlib.Int.fromInt32(finish)))
 let toFloat(value: Int32) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromInt32(value))
 let sqrt(value: Int32) : Float = Stdlib.Float.sqrt(Stdlib.Int32.toFloat(value))

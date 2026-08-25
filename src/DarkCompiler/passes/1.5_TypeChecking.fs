@@ -269,6 +269,14 @@ let private isBuiltinUnwrapName (funcName: string) : bool =
 let private isBuiltinTestRuntimeErrorName (funcName: string) : bool =
     funcName = "Builtin.testRuntimeError"
 
+/// `crash` is the public source-level bottom operation. The older builtin is
+/// retained solely for the test harness.
+let private isSourceCrashName (funcName: string) : bool =
+    funcName = "Builtin.crash"
+
+let private isRuntimeFailureName (funcName: string) : bool =
+    isBuiltinTestRuntimeErrorName funcName || isSourceCrashName funcName
+
 let private isBuiltinTestNanName (name: string) : bool =
     name = "Builtin.testNan"
 
@@ -316,7 +324,7 @@ let rec private isKnownUnwrapFailureExpr (boundExprs: Map<string, Expr>) (expr: 
 /// Detect known runtime-failing testRuntimeError expressions, including let-bound forms.
 let rec private isKnownTestRuntimeErrorExpr (boundExprs: Map<string, Expr>) (expr: Expr) : bool =
     match expr with
-    | Call (funcName, { Head = _; Tail = [] }) when isBuiltinTestRuntimeErrorName funcName ->
+    | Call (funcName, { Head = _; Tail = [] }) when isRuntimeFailureName funcName ->
         true
     | Let (LPVariable name, valueExpr, bodyExpr) ->
         isKnownTestRuntimeErrorExpr (Map.add name valueExpr boundExprs) bodyExpr
@@ -353,7 +361,7 @@ let rec private tryExtractKnownTestRuntimeErrorMessage
     (expr: Expr)
     : string option =
     match expr with
-    | Call (funcName, { Head = argExpr; Tail = [] }) when isBuiltinTestRuntimeErrorName funcName ->
+    | Call (funcName, { Head = argExpr; Tail = [] }) when isRuntimeFailureName funcName ->
         tryExtractStringLiteral boundExprs argExpr
     | Let (LPVariable name, valueExpr, bodyExpr) ->
         let boundExprs' = Map.add name valueExpr boundExprs
@@ -1317,7 +1325,7 @@ let private buildEqExprForType
     | TString ->
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TInt ->
-        Call ("Stdlib.Int.equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Call ("Stdlib.Internal.Integer.equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TList elemType ->
         let resolvedElemType = resolveType aliasReg elemType
         makeInternalTypeApp (EqHelperDispatchTypeApp (TList resolvedElemType, leftExpr, rightExpr))
@@ -3193,7 +3201,7 @@ let rec private checkExprWithParamNames
                             Ok (normalizedOutputType, Call ("Builtin.unwrap", NonEmptyList.singleton argExpr'))))
             | _ ->
                 Error (GenericError $"Function {funcName} expects 1 arguments, got {List.length args}")
-        elif isBuiltinTestRuntimeErrorName funcName then
+        elif isRuntimeFailureName funcName then
             match args with
             | [argExpr] ->
                 checkExpr argExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some TString)
@@ -3202,7 +3210,7 @@ let rec private checkExprWithParamNames
                         match expectedType with
                         | Some expected -> expected
                         | None -> TRuntimeError
-                    Ok (outputType, Call ("Builtin.testRuntimeError", NonEmptyList.singleton argExpr')))
+                    Ok (outputType, Call (funcName, NonEmptyList.singleton argExpr')))
             | _ ->
                 Error (GenericError $"Function {funcName} expects 1 arguments, got {List.length args}")
         else
@@ -6013,7 +6021,7 @@ let rec private buildEqHelperExpr
         Call ("Stdlib.String.equals", NonEmptyList.fromList [leftExpr; rightExpr])
 
     | _, TInt ->
-        Call ("Stdlib.Int.equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Call ("Stdlib.Internal.Integer.equals", NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TDict (TString, valueType) ->
         let entryType = TTuple [TString; resolveType aliasReg valueType]
@@ -6190,10 +6198,10 @@ let rec private buildCompareHelperExpr
             If (leftExpr, comparisonResultLiteral 1L, comparisonResultLiteral -1L)
         )
     | ExpandCurrent, TInt ->
-        Call ("Stdlib.Int.compare", NonEmptyList.fromList [leftExpr; rightExpr])
+        Call ("Stdlib.Internal.Integer.compare", NonEmptyList.fromList [leftExpr; rightExpr])
     | ExpandCurrent, TInt128 ->
         Call (
-            "Stdlib.Int.compare",
+            "Stdlib.Internal.Integer.compare",
             NonEmptyList.fromList [
                 Call ("__int128_to_int", NonEmptyList.singleton leftExpr)
                 Call ("__int128_to_int", NonEmptyList.singleton rightExpr)
@@ -6201,7 +6209,7 @@ let rec private buildCompareHelperExpr
         )
     | ExpandCurrent, TUInt128 ->
         Call (
-            "Stdlib.Int.compare",
+            "Stdlib.Internal.Integer.compare",
             NonEmptyList.fromList [
                 Call ("__uint128_to_int", NonEmptyList.singleton leftExpr)
                 Call ("__uint128_to_int", NonEmptyList.singleton rightExpr)
@@ -7286,6 +7294,10 @@ let private declarationResolutionEnvironment
             "Builtin.testRuntimeError"
             (NameResolution.BuiltinFunction ("testRuntimeError", 0))
             (NameResolution.BuiltinRegistration "Builtin.testRuntimeError")
+          requiredCandidate
+            "Builtin.crash"
+            (NameResolution.BuiltinFunction ("crash", 0))
+            (NameResolution.BuiltinRegistration "Builtin.crash")
           requiredCandidate
             "Builtin.testNan"
             (NameResolution.BuiltinValue ("testNan", 0))

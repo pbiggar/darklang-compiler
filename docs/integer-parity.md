@@ -53,22 +53,30 @@ machine-width masks on both ARM64 and x86-64.
 
 ## Compiler extensions and intentional differences
 
-The following existing names remain compiler extensions and are not additions
-to the parity API: `sub`, `mul`, and `div`; `Int.compare` and `Int.equals`;
-`popcount`, `isEven`, and `isOdd`; unsigned `absoluteValue` and `negate`; and
-representation helpers beginning with `__`. Compiler syntax retains its
-integer operator spellings: `^` is `Int` power and fixed-width/128-bit XOR,
-while `/` is integer division. The named functions remain the canonical parity
-surface. Static operand and conversion type enforcement is the intentional AOT
-divergence; the compiler does not reproduce interpreter
-runtime dispatch errors for source that can be rejected during type checking.
+The public modules expose only the interpreter-declared names. Historical
+`sub`, `mul`, `div`, and `*_v0` compatibility aliases, and the historical
+power operator spelling, are absent from this parity surface. Internal
+representation helpers beginning with `__` remain implementation details.
+Static operand and conversion type enforcement is the intentional AOT
+divergence; the compiler does not reproduce interpreter runtime dispatch
+errors for source that can be rejected during type checking.
+
+## Package-value probe
+
+The upstream expression `Stdlib.Int8.add Darklang.Test.Values.int8Value 5y`
+obtains the package value `Darklang.Test.Values.int8Value`, whose evaluated
+value is `5y`; the interpreter resolves that global through its package-value
+environment before calling `Int8.add`, producing `10y`. AOT never performs a
+live package lookup. Its compile request receives the immutable
+`PackageValueCatalog` entry with hash `darklang-test-values-int8Value`, the
+`Darklang.Test.Values.int8Value` location, concrete `Int8` result type, and
+the available evaluator expression `5y`. Materialization generates the typed
+`Builtin.pmEvaluateValue<Int8>` case from that entry. The focused parity test
+in `ValueSearchCatalogTests.fs` calls that generated evaluator and supplies its
+returned `5y` to `Stdlib.Int8.add(value, 5y)`, asserting the same `10y` result.
 
 The executable parity corpus is the eleven files under
-`src/Tests/e2e/upstream/stdlib/ints`, plus `integer-family.e2e`. One upstream
-package-value probe is represented by its identical typed Int8 value because
-the AOT test environment does not import interpreter package globals. Fixed
-Int64 power and one closure modulus probe use the equivalent named functions
-because the compiler retains different operator spellings; two aggregate
-expectations express equality explicitly so the native runner evaluates the
-same lists inside the compiled program. These source adaptations are called
-out inline and do not change the values under test.
+`src/Tests/e2e/upstream/stdlib/ints`, plus `integer-family.e2e`. Fixed Int
+power and closure modulus probes use the declared named functions, and two
+aggregate expectations express equality explicitly so the native runner
+evaluates the same lists inside the compiled program.

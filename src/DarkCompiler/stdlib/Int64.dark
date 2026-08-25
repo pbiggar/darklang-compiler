@@ -16,23 +16,17 @@ let subtract(a: Int64, b: Int64) : Int64 = a - b
 let multiply(a: Int64, b: Int64) : Int64 = a * b
 
 let divide(a: Int64, b: Int64) : Int64 =
-    if b == 0L then Builtin.testRuntimeError("Cannot divide by 0")
+    if b == 0L then Builtin.crash("Cannot divide by 0")
     else if a == -9223372036854775808L && b == -1L then -9223372036854775808L
     else a / b
-
-let sub(a: Int64, b: Int64) : Int64 = a - b
-
-let mul(a: Int64, b: Int64) : Int64 = a * b
-
-let div(a: Int64, b: Int64) : Int64 = Stdlib.Int64.divide(a, b)
 
 let max(a: Int64, b: Int64) : Int64 = if a > b then a else b
 
 let min(a: Int64, b: Int64) : Int64 = if a < b then a else b
 
 let mod(a: Int64, b: Int64) : Int64 =
-    if b == 0L then Builtin.testRuntimeError("Cannot evaluate modulus against 0")
-    else if b < 0L then Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+    if b == 0L then Builtin.crash("Cannot evaluate modulus against 0")
+    else if b < 0L then Builtin.crash("Cannot evaluate modulus against a negative number")
     else a % b
 let remainder(a: Int64, b: Int64) : Stdlib.Result.Result<Int64, String> =
     if b == 0L then Error("Cannot divide by 0")
@@ -49,7 +43,7 @@ let __powerLoop(base: Int64, exponent: Int64, result: Int64) : Int64 =
         let next = if (exponent % 2L) == 1L then result * base else result in
         Stdlib.Int64.__powerLoop(base * base, exponent / 2L, next)
 let power(base: Int64, exponent: Int64) : Int64 =
-    if exponent < 0L then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
+    if exponent < 0L then Builtin.crash("Cannot raise integer to a negative exponent")
     else Stdlib.Int64.__powerLoop(base, exponent, 1L)
 
 let clamp(value: Int64, limitA: Int64, limitB: Int64) : Int64 =
@@ -80,7 +74,7 @@ let bitwiseNot(a: Int64) : Int64 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (Brian Kernighan / SWAR)
-let popcount(x: Int64) : Int64 =
+let __popcount(x: Int64) : Int64 =
     // Constants (in decimal):
     // 0x5555555555555555 = 6148914691236517205
     // 0x3333333333333333 = 3689348814741910323
@@ -108,7 +102,7 @@ let __digitToString(n: Int64) : String =
     | 7 -> "7"
     | 8 -> "8"
     | 9 -> "9"
-    | _ -> Builtin.testRuntimeError("Stdlib.Int64.__digitToString expected a digit from 0 to 9")
+    | _ -> Builtin.crash("Stdlib.Int64.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
 let toString(n: Int64) : String =
@@ -139,7 +133,7 @@ let sum(list: List<Int64>) : Int64 =
 let __fromIntUnchecked(value: Int) : Int64 =
     match Stdlib.Int.toInt64(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal Int64 conversion invariant failed")
+    | None -> Builtin.crash("Internal Int64 conversion invariant failed")
 let random(start: Int64, finish: Int64) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromInt64(start), Stdlib.Int.fromInt64(finish)))
 let toFloat(value: Int64) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromInt64(value))
 let sqrt(value: Int64) : Float = Stdlib.Float.sqrt(Stdlib.Int64.toFloat(value))
@@ -153,7 +147,7 @@ let parse(value: String) : Stdlib.Result.Result<Int64, Stdlib.Int64.ParseError> 
 let fromFloat(value: Float) : Int64 =
     match Stdlib.Int.toInt64(Stdlib.Int.fromFloat(value)) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Encountered out-of-range value for type of Int64")
+    | None -> Builtin.crash("Encountered out-of-range value for type of Int64")
 let fromInt8(value: Int8) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromInt8(value))
 let fromUInt8(value: UInt8) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromUInt8(value))
 let fromInt16(value: Int16) : Int64 = Stdlib.Int64.__fromIntUnchecked(Stdlib.Int.fromInt16(value))

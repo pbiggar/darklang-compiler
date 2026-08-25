@@ -10,24 +10,18 @@ type ParseError = BadFormat | OutOfRange
 
 let add(a: UInt8, b: UInt8) : UInt8 = a + b
 
-let sub(a: UInt8, b: UInt8) : UInt8 = a - b
 let subtract(a: UInt8, b: UInt8) : UInt8 = a - b
 
-let mul(a: UInt8, b: UInt8) : UInt8 = a * b
 let multiply(a: UInt8, b: UInt8) : UInt8 = a * b
 
-let divide(a: UInt8, b: UInt8) : UInt8 = if b == 0uy then Builtin.testRuntimeError("Cannot divide by 0") else a / b
-let div(a: UInt8, b: UInt8) : UInt8 = Stdlib.UInt8.divide(a, b)
+let divide(a: UInt8, b: UInt8) : UInt8 = if b == 0uy then Builtin.crash("Cannot divide by 0") else a / b
 
 let max(a: UInt8, b: UInt8) : UInt8 = if a > b then a else b
 
 let min(a: UInt8, b: UInt8) : UInt8 = if a < b then a else b
 
-let mod(a: UInt8, b: UInt8) : UInt8 = if b == 0uy then Builtin.testRuntimeError("Cannot evaluate modulus against 0") else a % b
+let mod(a: UInt8, b: UInt8) : UInt8 = if b == 0uy then Builtin.crash("Cannot evaluate modulus against 0") else a % b
 
-let absoluteValue(a: UInt8) : UInt8 = a
-
-let negate(a: UInt8) : UInt8 = 0uy - a
 
 let __powerLoop(base: UInt8, exponent: UInt8, result: UInt8) : UInt8 =
     if exponent == 0uy then result
@@ -64,7 +58,7 @@ let bitwiseNot(a: UInt8) : UInt8 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: UInt8) : UInt8 =
+let __popcount(x: UInt8) : UInt8 =
     let mask1 = 85uy in
     let mask2 = 51uy in
     let mask3 = 15uy in
@@ -108,7 +102,7 @@ let sum(list: List<UInt8>) : UInt8 =
 let __fromIntUnchecked(value: Int) : UInt8 =
     match Stdlib.Int.toUInt8(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal UInt8 conversion invariant failed")
+    | None -> Builtin.crash("Internal UInt8 conversion invariant failed")
 let random(start: UInt8, finish: UInt8) : UInt8 = Stdlib.UInt8.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromUInt8(start), Stdlib.Int.fromUInt8(finish)))
 let toFloat(value: UInt8) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromUInt8(value))
 let sqrt(value: UInt8) : Float = Stdlib.Float.sqrt(Stdlib.UInt8.toFloat(value))

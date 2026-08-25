@@ -10,24 +10,18 @@ type ParseError = BadFormat | OutOfRange
 
 let add(a: UInt64, b: UInt64) : UInt64 = a + b
 
-let sub(a: UInt64, b: UInt64) : UInt64 = a - b
 let subtract(a: UInt64, b: UInt64) : UInt64 = a - b
 
-let mul(a: UInt64, b: UInt64) : UInt64 = a * b
 let multiply(a: UInt64, b: UInt64) : UInt64 = a * b
 
-let divide(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.testRuntimeError("Cannot divide by 0") else a / b
-let div(a: UInt64, b: UInt64) : UInt64 = Stdlib.UInt64.divide(a, b)
+let divide(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.crash("Cannot divide by 0") else a / b
 
 let max(a: UInt64, b: UInt64) : UInt64 = if a > b then a else b
 
 let min(a: UInt64, b: UInt64) : UInt64 = if a < b then a else b
 
-let mod(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.testRuntimeError("Cannot evaluate modulus against 0") else a % b
+let mod(a: UInt64, b: UInt64) : UInt64 = if b == 0UL then Builtin.crash("Cannot evaluate modulus against 0") else a % b
 
-let absoluteValue(a: UInt64) : UInt64 = a
-
-let negate(a: UInt64) : UInt64 = 0UL - a
 
 let __powerLoop(base: UInt64, exponent: UInt64, result: UInt64) : UInt64 =
     if exponent == 0UL then result
@@ -64,7 +58,7 @@ let bitwiseNot(a: UInt64) : UInt64 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: UInt64) : UInt64 =
+let __popcount(x: UInt64) : UInt64 =
     let mask1 = 6148914691236517205UL in
     let mask2 = 3689348814741910323UL in
     let mask3 = 1085102592571150095UL in
@@ -114,7 +108,7 @@ let sum(list: List<UInt64>) : UInt64 =
 let __fromIntUnchecked(value: Int) : UInt64 =
     match Stdlib.Int.toUInt64(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal UInt64 conversion invariant failed")
+    | None -> Builtin.crash("Internal UInt64 conversion invariant failed")
 let random(start: UInt64, finish: UInt64) : UInt64 = Stdlib.UInt64.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromUInt64(start), Stdlib.Int.fromUInt64(finish)))
 let toFloat(value: UInt64) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromUInt64(value))
 let sqrt(value: UInt64) : Float = Stdlib.Float.sqrt(Stdlib.UInt64.toFloat(value))

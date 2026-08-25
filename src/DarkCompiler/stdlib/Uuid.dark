@@ -159,7 +159,7 @@ let __byteToHex(value: Int64, shift: Int64) : String =
     Stdlib.Uuid.__nibbleToHex(hi) ++ Stdlib.Uuid.__nibbleToHex(lo)
 
 let __intToHex(value: Int, acc: String) : String =
-    if Stdlib.Int.equals(value, 0I) then acc
+    if value == 0I then acc
     else
         match Stdlib.Int.remainder(value, 16I) with
         | Ok(remainder) ->

@@ -14,20 +14,14 @@ let subtract(a: UInt16, b: UInt16) : UInt16 = a - b
 
 let multiply(a: UInt16, b: UInt16) : UInt16 = a * b
 
-let divide(a: UInt16, b: UInt16) : UInt16 = if b == 0us then Builtin.testRuntimeError("Cannot divide by 0") else a / b
-let sub(a: UInt16, b: UInt16) : UInt16 = Stdlib.UInt16.subtract(a, b)
-let mul(a: UInt16, b: UInt16) : UInt16 = Stdlib.UInt16.multiply(a, b)
-let div(a: UInt16, b: UInt16) : UInt16 = Stdlib.UInt16.divide(a, b)
+let divide(a: UInt16, b: UInt16) : UInt16 = if b == 0us then Builtin.crash("Cannot divide by 0") else a / b
 
 let max(a: UInt16, b: UInt16) : UInt16 = if a > b then a else b
 
 let min(a: UInt16, b: UInt16) : UInt16 = if a < b then a else b
 
-let mod(a: UInt16, b: UInt16) : UInt16 = if b == 0us then Builtin.testRuntimeError("Cannot evaluate modulus against 0") else a % b
+let mod(a: UInt16, b: UInt16) : UInt16 = if b == 0us then Builtin.crash("Cannot evaluate modulus against 0") else a % b
 
-let absoluteValue(a: UInt16) : UInt16 = a
-
-let negate(a: UInt16) : UInt16 = 0us - a
 
 let __powerLoop(base: UInt16, exponent: UInt16, result: UInt16) : UInt16 =
     if exponent == 0us then result
@@ -64,7 +58,7 @@ let shiftRight(a: UInt16, shift: UInt16) : UInt16 = a >> shift
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: UInt16) : UInt16 =
+let __popcount(x: UInt16) : UInt16 =
     let mask1 = 21845us in
     let mask2 = 13107us in
     let mask3 = 3855us in
@@ -110,7 +104,7 @@ let sum(list: List<UInt16>) : UInt16 =
 let __fromIntUnchecked(value: Int) : UInt16 =
     match Stdlib.Int.toUInt16(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal UInt16 conversion invariant failed")
+    | None -> Builtin.crash("Internal UInt16 conversion invariant failed")
 let random(start: UInt16, finish: UInt16) : UInt16 = Stdlib.UInt16.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromUInt16(start), Stdlib.Int.fromUInt16(finish)))
 let toFloat(value: UInt16) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromUInt16(value))
 let sqrt(value: UInt16) : Float = Stdlib.Float.sqrt(Stdlib.UInt16.toFloat(value))

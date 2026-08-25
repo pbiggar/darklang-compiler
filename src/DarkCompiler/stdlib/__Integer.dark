@@ -219,7 +219,7 @@ let divide(a: Int, b: Int) : Int =
     let at = Stdlib.Internal.Integer.__text(a) in
     let bt = Stdlib.Internal.Integer.__text(b) in
     let divisor = Stdlib.Internal.Integer.__magnitudeText(bt) in
-    if divisor == "0" then Builtin.testRuntimeError("Cannot divide by 0")
+    if divisor == "0" then Builtin.crash("Cannot divide by 0")
     else
         let result = Stdlib.Internal.Integer.__divideMagnitude(Stdlib.Internal.Integer.__magnitudeText(at), divisor) in
         let quotient = Stdlib.Tuple2.first<String, String>(result) in
@@ -235,14 +235,14 @@ let remainder(a: Int, b: Int) : Stdlib.Result.Result<Int, String> =
         let remainder = Stdlib.Tuple2.second<String, String>(result) in
         Ok(Stdlib.Internal.Integer.__value(Stdlib.Internal.Integer.__withSign(Stdlib.Internal.Integer.__isNegativeText(at), remainder)))
 
-let mod_v0(value: Int, modulus: Int) : Int =
+let mod(value: Int, modulus: Int) : Int =
     if Stdlib.Internal.Integer.equals(modulus, Stdlib.Internal.Integer.__value("0")) then
-        Builtin.testRuntimeError("Cannot evaluate modulus against 0")
+        Builtin.crash("Cannot evaluate modulus against 0")
     else if Stdlib.Internal.Integer.lessThan(modulus, Stdlib.Internal.Integer.__value("0")) then
-        Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+        Builtin.crash("Cannot evaluate modulus against a negative number")
     else
         match Stdlib.Internal.Integer.remainder(value, modulus) with
-        | Error(message) -> Builtin.testRuntimeError(message)
+        | Error(message) -> Builtin.crash(message)
         | Ok(result) -> if Stdlib.Internal.Integer.lessThan(result, Stdlib.Internal.Integer.__value("0")) then Stdlib.Internal.Integer.add(result, modulus) else result
 
 let __isOddMagnitude(value: String) : Bool =
@@ -260,7 +260,7 @@ let __powerLoop(base: Int, exponentMagnitude: String, result: Int) : Int =
 let power(base: Int, exponent: Int) : Int =
     let exponentText = Stdlib.Internal.Integer.__text(exponent) in
     if Stdlib.Internal.Integer.__isNegativeText(exponentText) then
-        Builtin.testRuntimeError("Cannot raise an Int to a negative exponent")
+        Builtin.crash("Cannot raise an Int to a negative exponent")
     else
         Stdlib.Internal.Integer.__powerLoop(base, exponentText, Stdlib.Internal.Integer.__value("1"))
 
@@ -271,7 +271,7 @@ let wrapUnsigned(value: Int, width: Int64) : Int =
         Stdlib.Internal.Integer.power(
             Stdlib.Internal.Integer.__value("2"),
             Stdlib.Internal.Integer.fromInt64(width)) in
-    Stdlib.Internal.Integer.mod_v0(value, modulus)
+    Stdlib.Internal.Integer.mod(value, modulus)
 
 let wrapSigned(value: Int, width: Int64) : Int =
     let modulus =
@@ -282,7 +282,7 @@ let wrapSigned(value: Int, width: Int64) : Int =
         Stdlib.Internal.Integer.power(
             Stdlib.Internal.Integer.__value("2"),
             Stdlib.Internal.Integer.fromInt64(width - 1L)) in
-    let unsigned = Stdlib.Internal.Integer.mod_v0(value, modulus) in
+    let unsigned = Stdlib.Internal.Integer.mod(value, modulus) in
     if Stdlib.Internal.Integer.greaterThanOrEqualTo(unsigned, signBoundary) then
         Stdlib.Internal.Integer.subtract(unsigned, modulus)
     else
@@ -291,7 +291,7 @@ let wrapSigned(value: Int, width: Int64) : Int =
 let __validateShiftCount(count: Int) : String =
     let text = Stdlib.Internal.Integer.__text(count) in
     if Stdlib.Internal.Integer.__isNegativeText(text) || Stdlib.Internal.Integer.__compareMagnitude(text, "2147483647") > 0 then
-        Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
+        Builtin.crash("Encountered out-of-range value for type of Int")
     else text
 
 let shiftLeft(value: Int, count: Int) : Int =
@@ -303,7 +303,7 @@ let shiftRight(value: Int, count: Int) : Int =
     let divisor = Stdlib.Internal.Integer.__powerLoop(Stdlib.Internal.Integer.__value("2"), countText, Stdlib.Internal.Integer.__value("1")) in
     let quotient = Stdlib.Internal.Integer.divide(value, divisor) in
     match Stdlib.Internal.Integer.remainder(value, divisor) with
-    | Error(message) -> Builtin.testRuntimeError(message)
+    | Error(message) -> Builtin.crash(message)
     | Ok(remainder) ->
         if Stdlib.Internal.Integer.lessThan(value, Stdlib.Internal.Integer.__value("0"))
            && !Stdlib.Internal.Integer.equals(remainder, Stdlib.Internal.Integer.__value("0")) then
@@ -504,7 +504,7 @@ let __digitToUInt64(digit: Int64) : UInt64 =
     | 7 -> 7UL
     | 8 -> 8UL
     | 9 -> 9UL
-    | _ -> Builtin.testRuntimeError("Invalid canonical Int digit")
+    | _ -> Builtin.crash("Invalid canonical Int digit")
 
 let __parsePositiveUInt64At(value: String, index: Int64, acc: UInt64) : UInt64 =
     if index >= Stdlib.String.__byteLength(value) then acc
@@ -548,7 +548,7 @@ let toFloat(value: Int) : Float =
     else
         match Stdlib.Float.parse(text) with
         | Ok(result) -> result
-        | Error(_) -> Builtin.testRuntimeError("Invalid canonical Int during Float conversion")
+        | Error(_) -> Builtin.crash("Invalid canonical Int during Float conversion")
 
 let sqrt(value: Int) : Float = Stdlib.Float.sqrt(Stdlib.Internal.Integer.toFloat(value))
 
@@ -556,7 +556,7 @@ let fromFloat(value: Float) : Int =
     let bits = Stdlib.Float.toBits(value) in
     let rawExponent = (bits >> 52UL) & 2047UL in
     if rawExponent == 2047UL then
-        Builtin.testRuntimeError("Encountered out-of-range value for type of Int")
+        Builtin.crash("Encountered out-of-range value for type of Int")
     else if rawExponent == 0UL then Stdlib.Internal.Integer.__value("0")
     else
         let mantissa = bits & 4503599627370495UL in
@@ -592,12 +592,12 @@ let __randomBelow(span: Int, scale: Int, candidate: Int) : Int =
                 Stdlib.Internal.Integer.__randomWord()))
     else
         match Stdlib.Internal.Integer.remainder(scale, span) with
-        | Error(message) -> Builtin.testRuntimeError(message)
+        | Error(message) -> Builtin.crash(message)
         | Ok(discarded) ->
             let limit = Stdlib.Internal.Integer.subtract(scale, discarded) in
             if Stdlib.Internal.Integer.lessThan(candidate, limit) then
                 match Stdlib.Internal.Integer.remainder(candidate, span) with
-                | Error(message) -> Builtin.testRuntimeError(message)
+                | Error(message) -> Builtin.crash(message)
                 | Ok(result) -> result
             else
                 Stdlib.Internal.Integer.__randomBelow(

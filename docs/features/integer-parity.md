@@ -16,9 +16,8 @@ upper half into the signed range. The required boundary therefore holds:
 `170141183460469231731687303715884105726Q + 4Q` is
 `-170141183460469231731687303715884105726Q`.
 
-The compiler retains these non-parity extensions: `sub`, `mul`, and `div`
-aliases; `Int.compare` and `Int.equals`; `popcount`, `isEven`, and `isOdd`;
-unsigned signed-style helpers; integer operator spellings; and internal
-representation helpers. Static type enforcement remains the intentional AOT
+The public modules use the interpreter-declared names and source-level
+`Builtin.crash` behavior. Internal representation helpers remain private
+implementation details. Static type enforcement remains the intentional AOT
 divergence: incorrect operand and conversion types are rejected at compile
 time rather than dispatched at runtime.

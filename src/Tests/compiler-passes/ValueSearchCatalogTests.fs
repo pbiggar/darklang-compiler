@@ -45,6 +45,19 @@ let private entry hash runtimeType locations state : CompilerLibrary.PackageValu
     Evaluator = evaluator state
 }
 
+/// The upstream Int8 probe reads Darklang.Test.Values.int8Value. The
+/// interpreter resolves that package global to 5y; AOT receives the same value
+/// as an immutable catalog evaluator, never through live package lookup.
+let private int8ProbeCatalog =
+    CompilerLibrary.PackageValueCatalog [
+        { ValueHash = "darklang-test-values-int8Value"
+          RuntimeType = customType "type-int8" []
+          Locations = [location ["test"] "Darklang" ["Test"; "Values"] "int8Value"]
+          Evaluator =
+            { ResultType = AST.TInt8
+              State = CompilerLibrary.Available (AST.Int8Literal 5y) } }
+    ]
+
 let private mainBranch = ["branch-main"]
 let private otherBranch = ["branch-other"]
 
@@ -178,7 +191,24 @@ let testCatalogRejectsIllTypedAvailableValue
     | Error error -> Error $"Expected catalog validation failure, got: {error}"
     | Ok _ -> Error "Expected an ill-typed available package value to fail compilation"
 
+let testInt8PackageProbeParity (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
+    let source =
+        """
+        match Builtin.pmEvaluateValue<Int8>(Darklang.LanguageTools.ProgramTypes.Hash.Hash("darklang-test-values-int8Value")) with
+        | Some(value) -> Builtin.printLine(Stdlib.Bool.toString(Stdlib.Int8.add(value, 5y) == 10y))
+        | None -> Builtin.printLine("false")
+        """
+    let report = compile stdlib int8ProbeCatalog source
+    match report.Result with
+    | Error error -> Error $"Int8 package probe did not compile: {error}"
+    | Ok binary ->
+        let output =
+            CompilerLibrary.executeCaptured report.Target 0 CompilerLibrary.ExecutionInput.Closed binary
+        if output.ExitCode = 0 && output.Stdout = "true\n" && output.Stderr = "" then Ok ()
+        else Error $"Unexpected Int8 package probe output: exit={output.ExitCode}, stdout={output.Stdout}, stderr={output.Stderr}"
+
 let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("catalog-backed ValueSearch preserves interpreter lookup order and filtering", testCatalogParity stdlib)
     ("catalog evaluator is statically validated at its concrete specialization", testCatalogRejectsIllTypedAvailableValue stdlib)
+    ("Int8 package-value probe supplies the interpreter value through the AOT catalog", testInt8PackageProbeParity stdlib)
 ]

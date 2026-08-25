@@ -12,8 +12,8 @@
 
 // --- demotion: a big-arithmetic result that fits Int64 collapses to small ---
 9223372036854775808I - 1I = 9223372036854775807I
-(2I ^ 100I) - (2I ^ 100I) = 0I
-(2I ^ 100I) / (2I ^ 100I) = 1I
+(Stdlib.Int.power(2I, 100I)) - (Stdlib.Int.power(2I, 100I)) = 0I
+(Stdlib.Int.power(2I, 100I)) / (Stdlib.Int.power(2I, 100I)) = 1I
 
 // --- normalization: a promoted-then-demoted result equals the small literal ---
 // (this is the property that fails if a small value is left as the big rep)
@@ -21,14 +21,14 @@
 9223372036854775807I == (9223372036854775806I + 1I) = true
 
 // --- equality and ordering across representations ---
-(2I ^ 64I) == (2I ^ 64I) = true
+(Stdlib.Int.power(2I, 64I)) == (Stdlib.Int.power(2I, 64I)) = true
 9223372036854775808I > 5I = true
 5I < 9223372036854775808I = true
 9223372036854775808I == 5I = false
 
 // --- arithmetic correctness at scale ---
-2I ^ 64I = 18446744073709551616I
-2I ^ 200I
+Stdlib.Int.power(2I, 64I) = 18446744073709551616I
+Stdlib.Int.power(2I, 200I)
   = 1606938044258990275541962092341162602522202993782792835301376I
 
 // --- round-trips (stringify / parse / Int64 conversions) ---
@@ -63,11 +63,11 @@ Stdlib.Int.fromUInt128 340282366920938463463374607431768211455Z =
 Stdlib.Int.toInt8 100I = Stdlib.Option.Option.Some 100y
 Stdlib.Int.toInt8 200I = Stdlib.Option.Option.None
 Stdlib.Int.toUInt8 (Stdlib.Int.negate 1I) = Stdlib.Option.Option.None
-Stdlib.Int.toInt32 (2I ^ 40I) = Stdlib.Option.Option.None
-Stdlib.Int.toInt128 (2I ^ 100I) =
+Stdlib.Int.toInt32 (Stdlib.Int.power(2I, 40I)) = Stdlib.Option.Option.None
+Stdlib.Int.toInt128 (Stdlib.Int.power(2I, 100I)) =
   Stdlib.Option.Option.Some 1267650600228229401496703205376Q
-Stdlib.Int.toInt128 (2I ^ 200I) = Stdlib.Option.Option.None
-Stdlib.Int.toUInt128 (2I ^ 200I) = Stdlib.Option.Option.None
+Stdlib.Int.toInt128 (Stdlib.Int.power(2I, 200I)) = Stdlib.Option.Option.None
+Stdlib.Int.toUInt128 (Stdlib.Int.power(2I, 200I)) = Stdlib.Option.Option.None
 
 // --- fromFloat: truncates toward zero; NaN/Infinity have no Int, so OutOfRange ---
 Stdlib.Int.fromFloat 3.9 = 3I
@@ -89,17 +89,17 @@ Stdlib.Int.remainder -20I -8I = Stdlib.Result.Result.Ok -4I
 Stdlib.Int.remainder -15I 6I = Stdlib.Result.Result.Ok -3I
 Stdlib.Int.remainder 5I 0I = Stdlib.Result.Result.Error "Cannot divide by 0"
 // arbitrary precision: 2^100 mod 7 == 2, with a dividend well past Int64
-Stdlib.Int.remainder (2I ^ 100I) 7I = Stdlib.Result.Result.Ok 2I
+Stdlib.Int.remainder (Stdlib.Int.power(2I, 100I)) 7I = Stdlib.Result.Result.Ok 2I
 
 // --- mod: wraps into [0, b); RTE if b <= 0 ---
-Stdlib.Int.mod_v0 15I 5I = 0I
-Stdlib.Int.mod_v0 15I 6I = 3I
-Stdlib.Int.mod_v0 0I 15I = 0I
-Stdlib.Int.mod_v0 -1I 2I = 1I
-Stdlib.Int.mod_v0 -754I 53I = 41I
-Stdlib.Int.mod_v0 (2I ^ 100I) 7I = 2I
-Stdlib.Int.mod_v0 5I 0I = error="Cannot evaluate modulus against 0"
-Stdlib.Int.mod_v0 5I -5I = error="Cannot evaluate modulus against a negative number"
+Stdlib.Int.mod 15I 5I = 0I
+Stdlib.Int.mod 15I 6I = 3I
+Stdlib.Int.mod 0I 15I = 0I
+Stdlib.Int.mod -1I 2I = 1I
+Stdlib.Int.mod -754I 53I = 41I
+Stdlib.Int.mod (Stdlib.Int.power(2I, 100I)) 7I = 2I
+Stdlib.Int.mod 5I 0I = error="Cannot evaluate modulus against 0"
+Stdlib.Int.mod 5I -5I = error="Cannot evaluate modulus against a negative number"
 
 // the % operator dispatches to mod
 15I % 5I = 0I
@@ -110,9 +110,9 @@ Stdlib.Int.mod_v0 5I -5I = error="Cannot evaluate modulus against a negative num
 Stdlib.Int.shiftLeft 1I 4I = 16I
 Stdlib.Int.shiftLeft 1I 64I = 18446744073709551616I
 Stdlib.Int.shiftRight 256I 4I = 16I
-Stdlib.Int.shiftLeft 1I (2I ^ 40I) =
+Stdlib.Int.shiftLeft 1I (Stdlib.Int.power(2I, 40I)) =
   error="Encountered out-of-range value for type of Int"
-Stdlib.Int.shiftRight 1I (2I ^ 40I) =
+Stdlib.Int.shiftRight 1I (Stdlib.Int.power(2I, 40I)) =
   error="Encountered out-of-range value for type of Int"
 
 // --- bitwise operations use infinite two's-complement semantics ---
@@ -120,7 +120,7 @@ Stdlib.Int.bitwiseAnd 12I 10I = 8I
 Stdlib.Int.bitwiseOr 12I 10I = 14I
 Stdlib.Int.bitwiseXor 12I 10I = 6I
 Stdlib.Int.bitwiseNot 12I = -13I
-Stdlib.Int.bitwiseAnd ((2I ^ 100I) + 3I) 7I = 3I
+Stdlib.Int.bitwiseAnd ((Stdlib.Int.power(2I, 100I)) + 3I) 7I = 3I
 Stdlib.Int.bitwiseAnd -5I 3I = 3I
 Stdlib.Int.bitwiseOr -5I 3I = -5I
 Stdlib.Int.bitwiseXor -5I 3I = -8I
@@ -130,7 +130,7 @@ Stdlib.Int.shiftRight -5I 1I = -3I
 ~~~12I = -13I
 (1I << 100I) = 1267650600228229401496703205376I
 (-5I >> 1I) = -3I
-let value = 2I ^ 100I in -value = -1267650600228229401496703205376I
+let value = Stdlib.Int.power(2I, 100I) in -value = -1267650600228229401496703205376I
 
 // --- remaining upstream numeric conversions ---
 Stdlib.Int.toUInt64 18446744073709551615I =

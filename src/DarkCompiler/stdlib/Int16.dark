@@ -15,21 +15,17 @@ let subtract(a: Int16, b: Int16) : Int16 = a - b
 let multiply(a: Int16, b: Int16) : Int16 = a * b
 
 let divide(a: Int16, b: Int16) : Int16 =
-    if b == 0s then Builtin.testRuntimeError("Cannot divide by 0")
+    if b == 0s then Builtin.crash("Cannot divide by 0")
     else if a == -32768s && b == -1s then -32768s
     else a / b
-
-let sub(a: Int16, b: Int16) : Int16 = Stdlib.Int16.subtract(a, b)
-let mul(a: Int16, b: Int16) : Int16 = Stdlib.Int16.multiply(a, b)
-let div(a: Int16, b: Int16) : Int16 = Stdlib.Int16.divide(a, b)
 
 let max(a: Int16, b: Int16) : Int16 = if a > b then a else b
 
 let min(a: Int16, b: Int16) : Int16 = if a < b then a else b
 
 let mod(a: Int16, b: Int16) : Int16 =
-    if b == 0s then Builtin.testRuntimeError("Cannot evaluate modulus against 0")
-    else if b < 0s then Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+    if b == 0s then Builtin.crash("Cannot evaluate modulus against 0")
+    else if b < 0s then Builtin.crash("Cannot evaluate modulus against a negative number")
     else a % b
 
 let remainder(a: Int16, b: Int16) : Stdlib.Result.Result<Int16, String> =
@@ -48,7 +44,7 @@ let __powerLoop(base: Int16, exponent: Int16, result: Int16) : Int16 =
         Stdlib.Int16.__powerLoop(base * base, exponent / 2s, next)
 
 let power(base: Int16, exponent: Int16) : Int16 =
-    if exponent < 0s then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
+    if exponent < 0s then Builtin.crash("Cannot raise integer to a negative exponent")
     else Stdlib.Int16.__powerLoop(base, exponent, 1s)
 
 let clamp(value: Int16, limitA: Int16, limitB: Int16) : Int16 =
@@ -79,7 +75,7 @@ let bitwiseNot(a: Int16) : Int16 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: Int16) : Int16 =
+let __popcount(x: Int16) : Int16 =
     let mask1 = 21845s in
     let mask2 = 13107s in
     let mask3 = 3855s in
@@ -130,7 +126,7 @@ let sum(list: List<Int16>) : Int16 =
 let __fromIntUnchecked(value: Int) : Int16 =
     match Stdlib.Int.toInt16(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal Int16 conversion invariant failed")
+    | None -> Builtin.crash("Internal Int16 conversion invariant failed")
 let random(start: Int16, finish: Int16) : Int16 = Stdlib.Int16.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromInt16(start), Stdlib.Int.fromInt16(finish)))
 let toFloat(value: Int16) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromInt16(value))
 let sqrt(value: Int16) : Float = Stdlib.Float.sqrt(Stdlib.Int16.toFloat(value))

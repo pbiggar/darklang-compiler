@@ -265,7 +265,6 @@ Features in compiler not in interpreter. These are skipped during validation.
 
 | Feature | Skip Reason | Description |
 |---------|-------------|-------------|
-| Integer operator spellings | `extension:integer_operators` | Compiler syntax retains `/` for integer division; `^` is `Int` power and fixed-width/128-bit XOR. The named parity functions remain canonical. |
 | Internal functions | `internal:helper_function` | Functions like `__digitToString`, `__findFrom` are implementation helpers |
 | SkewList/HAMT | `internal:data_structure` | `Stdlib.Internal.SkewList` and `Stdlib.Internal.HAMT` are internal implementations |
 
@@ -297,7 +296,6 @@ Features implemented in this compiler that should be added to the Darklang inter
 | Boolean not | `semantic:boolean_not` | `!` |
 | Random | `stdlib:random` | `Random.int64` |
 | Byte operations | `stdlib:byte_ops` | `String.getByteAt` |
-| Integer conveniences | `stdlib:integer_extensions` | `sub`, `mul`, `div`, `popcount`, `isEven`, `isOdd`, Int `compare`/`equals`, and unsigned signed-style helpers |
 | Float operations | `stdlib:float_ops` | `Float.toBits`, `Float.toInt`, `Float.abs` |
 | Math conveniences | `stdlib:math_extensions` | `Math.e`, `Math.abs`, `Math.sqrt`, and Int64-returning `Math.truncate`, `floor`, `ceiling`, `round` |
 | List functions | `stdlib:missing` | `List.take`, `List.drop` |

@@ -28,5 +28,6 @@ Stdlib.UInt64.fromUInt128(18446744073709551616Z) = None
 // Canonical Result and exact runtime-failure shapes.
 Stdlib.Int.remainder(5I, 0I) = Error("Cannot divide by 0")
 Stdlib.Int128.remainder(5Q, 0Q) = Error("Cannot divide by 0")
+Builtin.crash("integer source crash") = error="Uncaught exception: integer source crash"
 Stdlib.Int64.divide(1L, 0L) = error="Cannot divide by 0"
 Stdlib.Int64.mod(1L, -1L) = error="Cannot evaluate modulus against a negative number"

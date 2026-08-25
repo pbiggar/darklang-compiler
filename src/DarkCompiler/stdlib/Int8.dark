@@ -10,28 +10,22 @@ type ParseError = BadFormat | OutOfRange
 
 let add(a: Int8, b: Int8) : Int8 = a + b
 
-let sub(a: Int8, b: Int8) : Int8 = a - b
-
 let subtract(a: Int8, b: Int8) : Int8 = a - b
-
-let mul(a: Int8, b: Int8) : Int8 = a * b
 
 let multiply(a: Int8, b: Int8) : Int8 = a * b
 
 let divide(a: Int8, b: Int8) : Int8 =
-    if b == 0y then Builtin.testRuntimeError("Cannot divide by 0")
+    if b == 0y then Builtin.crash("Cannot divide by 0")
     else if a == -128y && b == -1y then -128y
     else a / b
-
-let div(a: Int8, b: Int8) : Int8 = Stdlib.Int8.divide(a, b)
 
 let max(a: Int8, b: Int8) : Int8 = if a > b then a else b
 
 let min(a: Int8, b: Int8) : Int8 = if a < b then a else b
 
 let mod(a: Int8, b: Int8) : Int8 =
-    if b == 0y then Builtin.testRuntimeError("Cannot evaluate modulus against 0")
-    else if b < 0y then Builtin.testRuntimeError("Cannot evaluate modulus against a negative number")
+    if b == 0y then Builtin.crash("Cannot evaluate modulus against 0")
+    else if b < 0y then Builtin.crash("Cannot evaluate modulus against a negative number")
     else a % b
 
 let remainder(a: Int8, b: Int8) : Stdlib.Result.Result<Int8, String> =
@@ -44,7 +38,7 @@ let absoluteValue(a: Int8) : Int8 = if a < 0y then 0y - a else a
 let negate(a: Int8) : Int8 = 0y - a
 
 let power(base: Int8, exponent: Int8) : Int8 =
-    if exponent < 0y then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
+    if exponent < 0y then Builtin.crash("Cannot raise integer to a negative exponent")
     else
         let result =
             Stdlib.Internal.Integer.wrapSigned(
@@ -54,7 +48,7 @@ let power(base: Int8, exponent: Int8) : Int8 =
                 8L) in
         match Stdlib.Internal.Integer.toInt8(result) with
         | Some(value) -> value
-        | None -> Builtin.testRuntimeError("Internal Int8 power normalization invariant failed")
+        | None -> Builtin.crash("Internal Int8 power normalization invariant failed")
 
 let clamp(value: Int8, limitA: Int8, limitB: Int8) : Int8 =
     let lower = Stdlib.Int8.min(limitA, limitB) in
@@ -84,7 +78,7 @@ let bitwiseNot(a: Int8) : Int8 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: Int8) : Int8 =
+let __popcount(x: Int8) : Int8 =
     let mask1 = 85y in
     let mask2 = 51y in
     let mask3 = 15y in
@@ -133,7 +127,7 @@ let sum(list: List<Int8>) : Int8 =
 let __fromIntUnchecked(value: Int) : Int8 =
     match Stdlib.Int.toInt8(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal Int8 conversion invariant failed")
+    | None -> Builtin.crash("Internal Int8 conversion invariant failed")
 
 let random(start: Int8, finish: Int8) : Int8 =
     Stdlib.Int8.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromInt8(start), Stdlib.Int.fromInt8(finish)))

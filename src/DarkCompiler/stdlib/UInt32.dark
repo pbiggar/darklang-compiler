@@ -10,24 +10,18 @@ type ParseError = BadFormat | OutOfRange
 
 let add(a: UInt32, b: UInt32) : UInt32 = a + b
 
-let sub(a: UInt32, b: UInt32) : UInt32 = a - b
 let subtract(a: UInt32, b: UInt32) : UInt32 = a - b
 
-let mul(a: UInt32, b: UInt32) : UInt32 = a * b
 let multiply(a: UInt32, b: UInt32) : UInt32 = a * b
 
-let divide(a: UInt32, b: UInt32) : UInt32 = if b == 0ul then Builtin.testRuntimeError("Cannot divide by 0") else a / b
-let div(a: UInt32, b: UInt32) : UInt32 = Stdlib.UInt32.divide(a, b)
+let divide(a: UInt32, b: UInt32) : UInt32 = if b == 0ul then Builtin.crash("Cannot divide by 0") else a / b
 
 let max(a: UInt32, b: UInt32) : UInt32 = if a > b then a else b
 
 let min(a: UInt32, b: UInt32) : UInt32 = if a < b then a else b
 
-let mod(a: UInt32, b: UInt32) : UInt32 = if b == 0ul then Builtin.testRuntimeError("Cannot evaluate modulus against 0") else a % b
+let mod(a: UInt32, b: UInt32) : UInt32 = if b == 0ul then Builtin.crash("Cannot evaluate modulus against 0") else a % b
 
-let absoluteValue(a: UInt32) : UInt32 = a
-
-let negate(a: UInt32) : UInt32 = 0ul - a
 
 let __powerLoop(base: UInt32, exponent: UInt32, result: UInt32) : UInt32 =
     if exponent == 0ul then result
@@ -64,7 +58,7 @@ let bitwiseNot(a: UInt32) : UInt32 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: UInt32) : UInt32 =
+let __popcount(x: UInt32) : UInt32 =
     let mask1 = 1431655765ul in
     let mask2 = 858993459ul in
     let mask3 = 252645135ul in
@@ -111,7 +105,7 @@ let sum(list: List<UInt32>) : UInt32 =
 let __fromIntUnchecked(value: Int) : UInt32 =
     match Stdlib.Int.toUInt32(value) with
     | Some(result) -> result
-    | None -> Builtin.testRuntimeError("Internal UInt32 conversion invariant failed")
+    | None -> Builtin.crash("Internal UInt32 conversion invariant failed")
 let random(start: UInt32, finish: UInt32) : UInt32 = Stdlib.UInt32.__fromIntUnchecked(Stdlib.Int.random(Stdlib.Int.fromUInt32(start), Stdlib.Int.fromUInt32(finish)))
 let toFloat(value: UInt32) : Float = Stdlib.Int.toFloat(Stdlib.Int.fromUInt32(value))
 let sqrt(value: UInt32) : Float = Stdlib.Float.sqrt(Stdlib.UInt32.toFloat(value))

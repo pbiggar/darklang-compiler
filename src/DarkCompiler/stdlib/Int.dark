@@ -18,9 +18,6 @@ let add(a: Int, b: Int) : Int = Stdlib.Internal.Integer.add(a, b)
 let subtract(a: Int, b: Int) : Int = Stdlib.Internal.Integer.subtract(a, b)
 let multiply(a: Int, b: Int) : Int = Stdlib.Internal.Integer.multiply(a, b)
 let divide(a: Int, b: Int) : Int = Stdlib.Internal.Integer.divide(a, b)
-let sub(a: Int, b: Int) : Int = Stdlib.Int.subtract(a, b)
-let mul(a: Int, b: Int) : Int = Stdlib.Int.multiply(a, b)
-let div(a: Int, b: Int) : Int = Stdlib.Int.divide(a, b)
 let negate(value: Int) : Int = Stdlib.Internal.Integer.negate(value)
 let absoluteValue(value: Int) : Int =
     if Stdlib.Internal.Integer.lessThan(value, __string_to_int("0")) then
@@ -30,10 +27,8 @@ let absoluteValue(value: Int) : Int =
 let remainder(value: Int, divisor: Int) : Stdlib.Result.Result<Int, String> =
     Stdlib.Internal.Integer.remainder(value, divisor)
 
-let mod(value: Int, modulus: Int) : Int = Stdlib.Internal.Integer.mod_v0(value, modulus)
+let mod(value: Int, modulus: Int) : Int = Stdlib.Internal.Integer.mod(value, modulus)
 let power(base: Int, exponent: Int) : Int = Stdlib.Internal.Integer.power(base, exponent)
-let compare(a: Int, b: Int) : Int64 = Stdlib.Internal.Integer.compare(a, b)
-let equals(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.equals(a, b)
 let lessThan(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.lessThan(a, b)
 let lessThanOrEqualTo(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.lessThanOrEqualTo(a, b)
 let greaterThan(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.greaterThan(a, b)
