@@ -16,18 +16,26 @@ open System.Collections.Generic
 type PlanningSession() =
     let artifacts = Dictionary<string, TopLevel list>()
     let mutable disposed = false
+    let mutable hitCount = 0
+    let mutable missCount = 0
 
     member _.TryFind(key: string) : TopLevel list option =
         if disposed then None
         else
             match artifacts.TryGetValue key with
-            | true, value -> Some value
-            | false, _ -> None
+            | true, value ->
+                hitCount <- hitCount + 1
+                Some value
+            | false, _ ->
+                missCount <- missCount + 1
+                None
 
     member _.Store(key: string, functions: TopLevel list) : unit =
         if not disposed then artifacts.[key] <- functions
 
     member _.Count = if disposed then 0 else artifacts.Count
+    member _.HitCount = hitCount
+    member _.MissCount = missCount
 
     interface System.IDisposable with
         member _.Dispose() =
@@ -950,8 +958,32 @@ let rec private mapExpr rewrite expr =
 
 let private declarationContextFingerprint (env: TypeChecking.TypeCheckEnv) : string =
     // JSON generation depends on nominal record/sum shapes and alias resolution.
-    // Keep this deliberately structural rather than relying on declaration names.
-    stableHash $"{env.IndexedTypeReg}|{env.VariantLookup}|{env.AliasReg}" |> fun hash -> $"{hash:x16}"
+    // Build the representation explicitly: generic Map/record ToString values
+    // only identify their runtime types, which would alias distinct request
+    // declarations that happen to share a type name.
+    let records =
+        env.IndexedTypeReg
+        |> Map.toList
+        |> List.map (fun (name, info) ->
+            let parameters = String.concat "," info.TypeParams
+            let fields = info.Fields |> List.map (fun (field, typ) -> $"{field}:{typ}") |> String.concat ","
+            $"{name}<{parameters}>({fields})")
+        |> String.concat ";"
+    let variants =
+        env.VariantLookup
+        |> Map.toList
+        |> List.map (fun (name, (owner, parameters, tag, payload)) ->
+            let typeParameters = String.concat "," parameters
+            $"{name}:{owner}<{typeParameters}>:{tag}:{payload}")
+        |> String.concat ";"
+    let aliases =
+        env.AliasReg
+        |> Map.toList
+        |> List.map (fun (name, (parameters, target)) ->
+            let typeParameters = String.concat "," parameters
+            $"{name}<{typeParameters}>:{target}")
+        |> String.concat ";"
+    stableHash $"{records}|{variants}|{aliases}" |> fun hash -> $"{hash:x16}"
 
 let rewriteProgramWithSession
     (session: PlanningSession option)

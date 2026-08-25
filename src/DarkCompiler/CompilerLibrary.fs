@@ -146,6 +146,8 @@ type CompilationSession() =
     let jsonPlanning = new JsonPlanning.PlanningSession()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
     let mutable disposed = false
+    let mutable arm64CodegenHitCount = 0
+    let mutable arm64CodegenMissCount = 0
 
     member _.JsonPlanning = jsonPlanning
 
@@ -159,14 +161,21 @@ type CompilationSession() =
         else
             let key = (func, target, options)
             match arm64Functions.TryGetValue key with
-            | true, result -> result
+            | true, result ->
+                arm64CodegenHitCount <- arm64CodegenHitCount + 1
+                result
             | false, _ ->
                 let result = generate ()
                 arm64Functions.[key] <- result
+                arm64CodegenMissCount <- arm64CodegenMissCount + 1
                 result
 
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
     member _.CachedJsonPlanCount = jsonPlanning.Count
+    member _.Arm64CodegenHitCount = arm64CodegenHitCount
+    member _.Arm64CodegenMissCount = arm64CodegenMissCount
+    member _.JsonPlanHitCount = jsonPlanning.HitCount
+    member _.JsonPlanMissCount = jsonPlanning.MissCount
 
     interface IDisposable with
         member _.Dispose() =
