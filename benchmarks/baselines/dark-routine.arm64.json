@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "1b03683abfad94c4640c3e1ea843ca087c47281c1104818fb22c1df5bff63ee3",
-  "generated_at": "2026-08-25T22:24:01+00:00",
+  "generated_at": "2026-08-26T13:07:20+00:00",
   "compiler": {
-    "commit": "0136ba27d67f554a95900bb841920fbdd85bfcf6",
-    "subject": "Scalarize immediately projected tuple call results"
+    "commit": "166ae8a7bc17230b8fdaa6a16f8de3705539f9fe",
+    "subject": "Repair multiplication recursion MIR snapshots"
   },
   "benchmarks": [
     {
@@ -29,7 +29,7 @@
     },
     {
       "name": "factorial",
-      "instructions": 53892
+      "instructions": 53662
     },
     {
       "name": "fasta",

@@ -2,12 +2,12 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-08-25T22:24:01+00:00
+**Snapshot timestamp:** 2026-08-26T13:07:20+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 1)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `1b03683abfad94c4640c3e1ea843ca087c47281c1104818fb22c1df5bff63ee3`
-**Compiler commit:** `0136ba27d67f554a95900bb841920fbdd85bfcf6` - Scalarize immediately projected tuple call results
+**Compiler commit:** `166ae8a7bc17230b8fdaa6a16f8de3705539f9fe` - Repair multiplication recursion MIR snapshots
 
 | Benchmark     |          Dark (2.91x) |          Rust |
 |---------------|-----------------------|---------------|
@@ -15,7 +15,7 @@ Best-known compatible routine-profile Dark performance vs audited Rust reference
 | binary_trees  |   635,985,955 (0.35x) | 1,842,791,955 |
 | collatz       |    70,189,152 (0.71x) |    98,242,178 |
 | edigits       |  4,478,500,048 (328x) |    13,637,551 |
-| factorial     |        53,892 (0.21x) |       257,669 |
+| factorial     |        53,662 (0.21x) |       257,669 |
 | fasta         |   489,035,380 (24.1x) |    20,252,213 |
 | fib           |   388,190,195 (1.51x) |   257,598,132 |
 | leibniz       |   850,001,411 (1.06x) |   800,257,637 |
