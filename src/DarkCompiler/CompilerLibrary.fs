@@ -1198,9 +1198,9 @@ let private checkProgramWithBaseEnvForSyntax
     : Result<AST.Type * AST.Program * TypeChecking.TypeCheckEnv, TypeChecking.TypeError> =
     match sourceSyntax with
     | InterpreterSyntax ->
-        TypeChecking.checkProgramWithBaseEnvAndSettings baseEnv true warningSettings program
+        TypeChecking.checkPublicProgramWithBaseEnvAndSettings baseEnv true warningSettings program
     | CompilerSyntax ->
-        TypeChecking.checkProgramWithBaseEnvAndSettings baseEnv false warningSettings program
+        TypeChecking.checkPublicProgramWithBaseEnvAndSettings baseEnv false warningSettings program
 
 let private checkSyntheticPreambleWithBaseEnvForSyntax
     (sourceSyntax: SourceSyntax)
@@ -2828,7 +2828,11 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
     | Error err -> Error $"Parse error: {err}"
     | Ok userAst ->
         // Type check with stdlib environment
-        match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv userAst with
+        match TypeChecking.checkPublicProgramWithBaseEnvAndSettings
+            stdlib.Context.TypeCheckEnv
+            false
+            defaultWarningSettings
+            userAst with
         | Error typeErr -> Error (TypeChecking.typeErrorToString typeErr)
         | Ok (programType, typedUserAst, userEnv) ->
             let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
