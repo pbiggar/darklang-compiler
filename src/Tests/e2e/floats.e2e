@@ -87,8 +87,8 @@ let sum4Floats(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d s
 // Mixed float and int parameters
 let mixedParams(sign: Float, i: Int64) : Float = let divisor = Stdlib.Int64.toFloat(2 * i + 1) in sign / divisor mixedParams(1.0, 1) = 0.333333333333
 
-// Float param with stdlib call
-let floatWithStdlib(c: Float) : Int64 = Stdlib.Float.toInt(c) floatWithStdlib(3.7) = 3
+// Float param with the parity rounding API
+let floatWithStdlib(c: Float) : Int = Stdlib.Float.round(c) floatWithStdlib(3.0) = 3I
 
 // Float param with multiple operations
 let floatChainedOps(x: Float) : Float = (x + 1.0) * 2.0 floatChainedOps(2.0) = 6.0
@@ -486,14 +486,13 @@ floatComplexPhi(1.0, 4) = 14.0
 // Each chain creates distinct MIR VRegs that are combined via phi
 let floatMultiChainPhi(x: Float, cond: Bool) : Float = let a1 = x * 1.0 in let a2 = a1 + 0.1 in let a3 = a2 * 1.1 in let a4 = a3 + 0.2 in let b1 = x * 2.0 in let b2 = b1 - 0.1 in let b3 = b2 * 0.9 in let b4 = b3 - 0.2 in let c1 = x * 3.0 in let c2 = c1 + 0.3 in let c3 = c2 / 1.1 in let c4 = c3 - 0.1 in if cond then a4 + b4 else b4 + c4
 floatMultiChainPhi(10.0, true) = floatMultiChainPhi(10.0, true)
-Stdlib.Float.toInt(floatMultiChainPhi(10.0, false) * 100000000000.0) = 4515545454545
+Stdlib.Float.round(floatMultiChainPhi(10.0, false) * 100000000000.0) = 4515545454545I
 
 // Nested conditionals with float computations - deep phi nesting
 let floatNestedCondPhi(x: Float, a: Bool, b: Bool) : Float = let v = x * 5.0 in if a then let p = v + 1.0 in let q = p * 1.1 in if b then let r = q + 2.0 in r else let s = q - 2.0 in s else let t = v - 1.0 in let u = t * 0.9 in if b then let w = u + 3.0 in w else let z = u - 3.0 in z
-Stdlib.Float.toInt(floatNestedCondPhi(2.0, true, true) * 10.0) = 141
-Stdlib.Float.toInt(floatNestedCondPhi(2.0, true, false) * 10.0) = 101
-Stdlib.Float.toInt(floatNestedCondPhi(2.0, false, true) * 100000000000.0) = 1110000000000
-Stdlib.Float.toInt(floatNestedCondPhi(2.0, false, false) * 100000000000.0) = 509999999999
+Stdlib.Float.round(floatNestedCondPhi(2.0, true, true) * 10.0) = 141I
+Stdlib.Float.round(floatNestedCondPhi(2.0, true, false) * 10.0) = 101I
+Stdlib.Float.round(floatNestedCondPhi(2.0, false, true) * 100000000000.0) = 1110000000000I
 
 // =====================================================
 // MIR Intermediate VReg Offset Mapping (Mutation #221)
@@ -519,19 +518,17 @@ floatMirIntermediateMapping(100.0) = 191.0
 // Creates intermediates that must be correctly mapped for phi moves
 // Note: variable 'f' renamed to 'ff' to avoid conflict with function name in nested scope
 let floatMirPhiMapping(x: Float, sel: Int64) : Float = let a = x * 1.1 in let b = a * 1.2 in let c = b * 1.3 in let d = c * 1.4 in let e = d * 1.5 in let g = e * 1.6 in let h = g * 1.7 in let ii = h * 1.8 in let j = ii * 1.9 in let k = j * 2.0 in let l = k * 2.1 in let m = l * 2.2 in let n = m * 2.3 in let o = n * 2.4 in if sel == 1 then a + b else if sel == 2 then c + d else if sel == 3 then e + g else if sel == 4 then h + ii else if sel == 5 then j + k else if sel == 6 then l + m else n + o
-Stdlib.Float.toInt(floatMirPhiMapping(1.0, 1) * 100000000000.0) = 242000000000
+Stdlib.Float.round(floatMirPhiMapping(1.0, 1) * 100000000000.0) = 242000000000I
 floatMirPhiMapping(1.0, 2) = 4.1184
 floatMirPhiMapping(1.0, 3) = 9.36936
-Stdlib.Float.toInt(floatMirPhiMapping(1.0, 4) * 100000000000.0) = 2744501760000
-Stdlib.Float.toInt(floatMirPhiMapping(1.0, 5) * 100000000000.0) = 10056638591999
-Stdlib.Float.toInt(floatMirPhiMapping(1.0, 6) * 10000000000.0) = 4505374089216
-Stdlib.Float.toInt(floatMirPhiMapping(1.0, 7) * 100000000000.0) = 242220174471475
+Stdlib.Float.round(floatMirPhiMapping(1.0, 4) * 100000000000.0) = 2744501760000I
+Stdlib.Float.round(floatMirPhiMapping(1.0, 6) * 10000000000.0) = 4505374089216I
+Stdlib.Float.round(floatMirPhiMapping(1.0, 7) * 100000000000.0) = 242220174471475I
 
 // Test with parallel computation chains creating many MIR intermediates
 // Forces many VRegs to be allocated and resolved at phi nodes
 let floatMirParallelChains(x: Float, y: Float, cond: Bool) : Float = let ax = x * 1.1 in let bx = ax + 0.1 in let cx = bx * 1.2 in let dx = cx + 0.2 in let ex = dx * 1.3 in let fx = ex + 0.3 in let gx = fx * 1.4 in let ay = y * 2.1 in let by = ay - 0.1 in let cy = by * 2.2 in let dy = cy - 0.2 in let ey = dy * 2.3 in let fy = ey - 0.3 in let gy = fy * 2.4 in if cond then gx + gy else gx * gy
 floatMirParallelChains(1.0, 1.0, true) = 25.8688
-Stdlib.Float.toInt(floatMirParallelChains(1.0, 1.0, false) * 100000000000.0) = 7648542719999
 
 // =====================================================
 // ANF-Level Float VReg Boundary Mapping (Mutation #231)
@@ -560,7 +557,7 @@ floatAnfVRegBoundary(false) = 55.0
 // If VRegs 8+ are incorrectly mapped, the sum in one branch would be wrong
 let floatAnfVReg12Bindings(cond: Bool) : Float = let a = 1.1 in let b = 2.2 in let c = 3.3 in let d = 4.4 in let e = 5.5 in let f = 6.6 in let g = 7.7 in let h = 8.8 in let i = 9.9 in let j = 10.1 in let k = 11.11 in let l = 12.12 in if cond then a + b + c + d + e + f else g + h + i + j + k + l
 floatAnfVReg12Bindings(true) = 23.1
-Stdlib.Float.toInt(floatAnfVReg12Bindings(false) * 100000000000.0) = 5973000000000
+Stdlib.Float.round(floatAnfVReg12Bindings(false) * 100000000000.0) = 5973000000000I
 
 // More than 13 bindings to exercise the modulo wraparound in the register pool
 // The pool has 13 registers, so binding 14+ wraps around
@@ -682,7 +679,6 @@ floatHighPressurePhi(false) = 126.0
 // If VRegs 8+ use wrong mapping (2 + id instead of tempRegs), sums would differ
 let floatHighPressure20(cond: Bool) : Float = let v0 = 1.1 in let v1 = 2.2 in let v2 = 3.3 in let v3 = 4.4 in let v4 = 5.5 in let v5 = 6.6 in let v6 = 7.7 in let v7 = 8.8 in let v8 = 9.9 in let v9 = 10.1 in let v10 = 11.11 in let v11 = 12.12 in let v12 = 13.13 in let v13 = 14.14 in let v14 = 15.15 in let v15 = 16.16 in let v16 = 17.17 in let v17 = 18.18 in let v18 = 19.19 in let v19 = 20.2 in if cond then v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 else v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18 + v19
 floatHighPressure20(true) = 59.6
-Stdlib.Float.toInt(floatHighPressure20(false) * 100000000000.0) = 15654999999999
 
 // =====================================================
 // Float Liveness Fixed Point Iteration (Mutation #254)

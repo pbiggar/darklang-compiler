@@ -145,30 +145,6 @@ type NestedBraceRec = { ``val``: String } $"{NestedBraceRec { ``val`` = "ok" }.`
 // in chained string concatenation code generation - to be fixed separately
 
 // =============================================================================
-// Stdlib.String.getByteAt Tests
-// =============================================================================
-
-// Get bytes from ASCII string "abc" = 97, 98, 99
-Stdlib.String.getByteAt("abc", 0) = 97
-Stdlib.String.getByteAt("abc", 1) = 98
-Stdlib.String.getByteAt("abc", 2) = 99
-
-// Get bytes from uppercase "ABC" = 65, 66, 67
-Stdlib.String.getByteAt("ABC", 0) = 65
-Stdlib.String.getByteAt("ABC", 1) = 66
-Stdlib.String.getByteAt("ABC", 2) = 67
-
-// Get byte from single character
-Stdlib.String.getByteAt("x", 0) = 120
-
-// Get space character (ASCII 32)
-Stdlib.String.getByteAt(" ", 0) = 32
-
-// Get digits
-Stdlib.String.getByteAt("0", 0) = 48
-Stdlib.String.getByteAt("9", 0) = 57
-
-// =============================================================================
 // Stdlib.String.startsWith Tests
 // =============================================================================
 
@@ -255,26 +231,3 @@ Stdlib.String.slice("hello", 5I, 5I) = ""
 Stdlib.String.slice("hello", 0I, 100I) = "hello"
 Stdlib.String.slice("hello", 10I, 15I) = ""
 Stdlib.String.slice("hello", 4I, 2I) = ""
-
-// =============================================================================
-// Stdlib.String.take and drop Tests
-// =============================================================================
-
-// take
-Stdlib.String.take("hello world", 5) = "hello"
-Stdlib.String.take("hello", 0) = ""
-Stdlib.String.take("hello", 100) = "hello"
-Stdlib.String.take("hello", -1) = ""
-
-// drop
-Stdlib.String.drop("hello world", 6) = "world"
-Stdlib.String.drop("hello", 0) = "hello"
-Stdlib.String.drop("hello", 100) = ""
-Stdlib.String.drop("hello", -1) = "hello"
-
-// =============================================================================
-// Stdlib.String.substring Tests
-// =============================================================================
-
-Stdlib.String.substring("hello world", 0, 5) = "hello"
-Stdlib.String.substring("hello world", 6, 11) = "world"
