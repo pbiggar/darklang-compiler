@@ -2453,3 +2453,73 @@ return t6
 Main:
 let TempId 7 = fibFloat(5)
 return t7
+
+---NAME---
+tail_recursion_modulo_integer_multiplication
+---INPUT---
+let factorial(n: Int64) : Int64 =
+  if n <= 1 then 1 else n * factorial(n - 1)
+factorial(5)
+---EXPECTED---
+Function factorial:
+let TempId 9 = factorial$trmo(t0, 1)
+return t9
+
+Function factorial$trmo:
+let TempId 1 = t0 <= 1
+if t1 then
+let TempId 7 = t6 * 1
+return t7
+else
+let TempId 2 = t0 - 1
+let TempId 8 = t6 * t0
+let TempId 3 = factorial$trmo(t2, t8)
+return t3
+
+Main:
+let TempId 5 = factorial(5)
+return t5
+
+---NAME---
+tail_recursion_modulo_multiplication_excludes_float
+---INPUT---
+let factorialFloat(n: Float) : Float =
+  if n <= 1.0 then 1.0 else n * factorialFloat(n - 1.0)
+factorialFloat(5.0)
+---EXPECTED---
+Function factorialFloat:
+let TempId 1 = t0 <= 1
+if t1 then
+return 1
+else
+let TempId 2 = t0 - 1
+let TempId 3 = factorialFloat(t2)
+let TempId 4 = t0 * t3
+return t4
+
+Main:
+let TempId 5 = factorialFloat(5)
+return t5
+
+---NAME---
+tail_recursion_modulo_multiplication_excludes_multiple_calls
+---INPUT---
+let productTree(n: Int64) : Int64 =
+  if n <= 1 then 1 else productTree(n - 1) * productTree(n - 2)
+productTree(5)
+---EXPECTED---
+Function productTree:
+let TempId 1 = t0 <= 1
+if t1 then
+return 1
+else
+let TempId 2 = t0 - 1
+let TempId 3 = productTree(t2)
+let TempId 4 = t0 - 2
+let TempId 5 = productTree(t4)
+let TempId 6 = t3 * t5
+return t6
+
+Main:
+let TempId 7 = productTree(5)
+return t7

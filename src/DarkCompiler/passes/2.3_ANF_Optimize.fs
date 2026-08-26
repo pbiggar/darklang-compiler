@@ -14,7 +14,7 @@
 // - Instruction combining: fold single-use negation into integer subtraction
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
 // - Closure devirtualization: directly call capture-free local closures that do not escape
-// - Tail recursion modulo addition: turn safe Int64 sibling recursion into an accumulator loop
+// - Tail recursion modulo arithmetic: turn safe Int64 recursive arithmetic into accumulator loops
 //
 // These optimizations run in a loop until no more changes occur.
 
@@ -1535,6 +1535,16 @@ type private SiblingAddition = {
     ResultId: TempId
 }
 
+/// A direct recursive call whose Int64 result is immediately multiplied by an
+/// Int64 parameter or literal. The factor restriction makes moving the wrapped
+/// multiply ahead of the call observably safe without effect analysis.
+type private WrappedMultiplication = {
+    CallId: TempId
+    CallArgs: Atom list
+    Factor: Atom
+    ResultId: TempId
+}
+
 let private tryLinearBindings (expr: AExpr) : ((TempId * CExpr) list * Atom) option =
     let rec collect reversedBindings remaining =
         match remaining with
@@ -1575,6 +1585,51 @@ let private trySiblingAddition (funcName: string) (expr: AExpr) : SiblingAdditio
         | _ -> None
     | _ -> None
 
+let private isInt64ParameterOrLiteral (int64Params: Set<TempId>) (atom: Atom) : bool =
+    match atom with
+    | IntLiteral (Int64 _) -> true
+    | Var tempId -> Set.contains tempId int64Params
+    | _ -> false
+
+/// Recognize one direct self call wrapped by a final Int64 multiplication.
+/// Every preceding binding must be pure and first-order, which rejects managed
+/// allocations, effects, indirect calls, and unmodelled control-flow values.
+let private tryWrappedMultiplication
+    (funcName: string)
+    (int64Params: Set<TempId>)
+    (expr: AExpr)
+    : WrappedMultiplication option =
+    match tryLinearBindings expr with
+    | Some (bindings, Var returnedId) ->
+        let isAllowedBinding binding =
+            match binding with
+            | _, Atom _
+            | _, TypedAtom _
+            | _, Prim _
+            | _, UnaryPrim _ -> true
+            | _, Call (target, _) when target = funcName -> true
+            | _ -> false
+        match List.rev bindings with
+        | (resultId, Prim (Mul, left, right)) :: _ when resultId = returnedId ->
+            let selfCalls =
+                bindings
+                |> List.choose (fun (tempId, cexpr) ->
+                    match cexpr with
+                    | Call (target, args) when target = funcName -> Some (tempId, args)
+                    | _ -> None)
+            let noOtherCalls = bindings |> List.forall isAllowedBinding
+            match selfCalls with
+            | [(callId, callArgs)] when noOtherCalls ->
+                match left, right with
+                | Var resultCallId, factor when resultCallId = callId && isInt64ParameterOrLiteral int64Params factor ->
+                    Some { CallId = callId; CallArgs = callArgs; Factor = factor; ResultId = resultId }
+                | factor, Var resultCallId when resultCallId = callId && isInt64ParameterOrLiteral int64Params factor ->
+                    Some { CallId = callId; CallArgs = callArgs; Factor = factor; ResultId = resultId }
+                | _ -> None
+            | _ -> None
+        | _ -> None
+    | _ -> None
+
 let private selfCallCount (funcName: string) (expr: AExpr) : int =
     let rec count expr =
         match expr with
@@ -1595,6 +1650,21 @@ let private siblingAdditionCount (funcName: string) (expr: AExpr) : int =
         | Some _ -> 1
         | None ->
             match expr with
+            | Return _ -> 0
+            | Let (_, _, body) -> count body
+            | If (_, thenBranch, elseBranch) -> count thenBranch + count elseBranch
+    count expr
+
+let private wrappedMultiplicationCount
+    (funcName: string)
+    (int64Params: Set<TempId>)
+    (expr: AExpr)
+    : int =
+    let rec count current =
+        match tryWrappedMultiplication funcName int64Params current with
+        | Some _ -> 1
+        | None ->
+            match current with
             | Return _ -> 0
             | Let (_, _, body) -> count body
             | If (_, thenBranch, elseBranch) -> count thenBranch + count elseBranch
@@ -1664,6 +1734,54 @@ let rec private transformAccumulatorBody
                 transformAccumulatorBody funcName helperName accumulatorId varGenAfterThen elseBranch
             (If (cond, thenBranch', elseBranch'), varGenAfterElse)
 
+let private transformWrappedMultiplication
+    (helperName: string)
+    (accumulatorId: TempId)
+    (varGen: VarGen)
+    (wrapped: WrappedMultiplication)
+    (bindings: (TempId * CExpr) list)
+    : AExpr * VarGen =
+    let (nextAccumulatorId, varGen') = freshVar varGen
+    let rec rewrite remaining =
+        match remaining with
+        | [] -> Return (Var wrapped.CallId)
+        | (tempId, _) :: rest when tempId = wrapped.ResultId -> rewrite rest
+        | (tempId, Call (_, _)) :: rest when tempId = wrapped.CallId ->
+            Let (
+                nextAccumulatorId,
+                Prim (Mul, Var accumulatorId, wrapped.Factor),
+                Let (tempId, Call (helperName, wrapped.CallArgs @ [Var nextAccumulatorId]), rewrite rest)
+            )
+        | binding :: rest -> rebuildBindings [binding] (rewrite rest)
+    (rewrite bindings, varGen')
+
+let rec private transformMultiplicationAccumulatorBody
+    (funcName: string)
+    (int64Params: Set<TempId>)
+    (helperName: string)
+    (accumulatorId: TempId)
+    (varGen: VarGen)
+    (expr: AExpr)
+    : AExpr * VarGen =
+    match tryWrappedMultiplication funcName int64Params expr, tryLinearBindings expr with
+    | Some wrapped, Some (bindings, _) ->
+        transformWrappedMultiplication helperName accumulatorId varGen wrapped bindings
+    | _ ->
+        match expr with
+        | Return atom ->
+            let (resultId, varGen') = freshVar varGen
+            (Let (resultId, Prim (Mul, Var accumulatorId, atom), Return (Var resultId)), varGen')
+        | Let (tempId, cexpr, body) ->
+            let (body', varGen') =
+                transformMultiplicationAccumulatorBody funcName int64Params helperName accumulatorId varGen body
+            (Let (tempId, cexpr, body'), varGen')
+        | If (cond, thenBranch, elseBranch) ->
+            let (thenBranch', varGenAfterThen) =
+                transformMultiplicationAccumulatorBody funcName int64Params helperName accumulatorId varGen thenBranch
+            let (elseBranch', varGenAfterElse) =
+                transformMultiplicationAccumulatorBody funcName int64Params helperName accumulatorId varGenAfterThen elseBranch
+            (If (cond, thenBranch', elseBranch'), varGenAfterElse)
+
 let private freshHelperName (usedNames: Set<string>) (funcName: string) : string =
     let rec choose suffix =
         let candidate =
@@ -1716,6 +1834,55 @@ let private transformTailRecursionModuloAddition (program: Program) : Program =
                                         (func.TypedParams |> List.map (fun param -> Var param.Id))
                                         @ [int64Zero]
                                     ),
+                                    Return (Var wrapperResultId)
+                                )
+                    }
+                    (helper :: wrapper :: rewritten, Set.add helperName usedNames, varGenAfterWrapper))
+            ([], initialNames, initialVarGen)
+    Program (List.rev functionsReversed, mainExpr)
+
+/// Turn a direct recursive Int64 multiplication with a pure parameter/literal
+/// factor into an accumulator helper. Wrapping signed multiplication is
+/// associative modulo 2^64, so the helper preserves overflow behavior.
+let private transformTailRecursionModuloMultiplication (program: Program) : Program =
+    let (Program (functions, mainExpr)) = program
+    let initialNames = functions |> List.map (fun func -> func.Name) |> Set.ofList
+    let initialVarGen = freshVarGenForProgram program
+    let (functionsReversed, _, _) =
+        functions
+        |> List.fold
+            (fun (rewritten, usedNames, varGen) func ->
+                let int64Params =
+                    func.TypedParams
+                    |> List.choose (fun param -> if param.Type = AST.TInt64 then Some param.Id else None)
+                    |> Set.ofList
+                let wrappedCalls = wrappedMultiplicationCount func.Name int64Params func.Body
+                let recursiveCalls = selfCallCount func.Name func.Body
+                let eligible =
+                    func.ReturnType = AST.TInt64
+                    && wrappedCalls > 0
+                    && recursiveCalls = wrappedCalls
+                if not eligible then
+                    (func :: rewritten, Set.add func.Name usedNames, varGen)
+                else
+                    let helperName = freshHelperName usedNames func.Name
+                    let (accumulatorId, varGenAfterAccumulator) = freshVar varGen
+                    let (helperBody, varGenAfterHelper) =
+                        transformMultiplicationAccumulatorBody
+                            func.Name int64Params helperName accumulatorId varGenAfterAccumulator func.Body
+                    let (wrapperResultId, varGenAfterWrapper) = freshVar varGenAfterHelper
+                    let helper = {
+                        func with
+                            Name = helperName
+                            TypedParams = func.TypedParams @ [{ Id = accumulatorId; Type = AST.TInt64 }]
+                            Body = helperBody
+                    }
+                    let wrapper = {
+                        func with
+                            Body =
+                                Let (
+                                    wrapperResultId,
+                                    Call (helperName, (func.TypedParams |> List.map (fun param -> Var param.Id)) @ [IntLiteral (Int64 1L)]),
                                     Return (Var wrapperResultId)
                                 )
                     }
@@ -1783,7 +1950,9 @@ let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOpti
     let optimizedProgram =
         Program (functions', devirtualizeCaptureFreeClosures mainOptimized.Body)
     if options.EnableTailRecursionModuloOperation then
-        transformTailRecursionModuloAddition optimizedProgram
+        optimizedProgram
+        |> transformTailRecursionModuloAddition
+        |> transformTailRecursionModuloMultiplication
     else
         optimizedProgram
 

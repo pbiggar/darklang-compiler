@@ -578,6 +578,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Eliminating one sibling recursive call turns the second branch of Fibonacci-style recursion into an accumulator-carrying loop while retaining the original asymptotic work and maximum call depth.
 - Notes: Implemented in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` for functions whose complete recursion consists of two direct self calls combined by a final `Int64` addition. A generated helper carries a zero-initialized accumulator; existing tail-call detection lowers its second call to a loop. Restricting the rewrite to wrapping `Int64` addition preserves reassociation and overflow semantics and excludes floating-point arithmetic. Focused ANF snapshots cover the positive and Float-negative shapes, a MIR snapshot records the accumulator phis and single remaining call, and E2E tests cover base cases and overflow. The routine fib benchmark improved from 642,006,238 to 477,772,383 instructions (25.58%); all other routine counts were unchanged and the aggregate performance ratio improved from 2.42x to 2.38x versus Rust.
 
+### Tail recursion modulo Int64 multiplication
+
+- Optimization name: Tail recursion modulo Int64 multiplication
+- Taxonomy category: Recursion-to-loop conversion
+- Priority/rationale: A direct recursive product such as factorial need not retain a call frame for each multiplier when the factor is a scalar parameter or literal.
+- Notes: Implemented in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` only for complete direct self-recursion whose final operation is one wrapping `Int64` multiplication. The helper carries a one-initialized accumulator and tail-call detection lowers the remaining self call to a jump. Matching permits only primitive/atom bindings, an `Int64` parameter or literal factor, and one direct self call; it therefore rejects Float, managed values, effects, indirect calls, multiple calls, and unsupported control-flow values. Associativity modulo 2^64 preserves overflow behavior. Focused ANF/MIR snapshots cover the loop shape, Float and multiple-call exclusions; the factorial E2E fixture covers overflow. A generated ARM64 comparison of factorial shows the recursive `bl` is replaced by a back-edge `b`, reducing hot recursive calls from one to zero.
+
 ### Effect-free direct-call hoisting
 
 - Optimization name: Effect-free direct-call hoisting

@@ -41,6 +41,8 @@ factorial(0) = 1
 factorial(1) = 1
 factorial(5) = 120
 factorial(6) = 720
+// Wrapping Int64 multiplication must be unchanged by the accumulator helper.
+factorial(21) = -4249290049419214848
 
 
 // ===================================================================

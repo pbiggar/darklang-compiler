@@ -73,6 +73,41 @@ Function fib$trmo:
 Function _start:
   _start_body:
     v10007 <- Call(fib, [10])
+
+---NAME---
+tail_recursion_modulo_multiplication_forms_loop
+---INPUT---
+let factorial(n: Int64) : Int64 =
+    if n <= 1 then 1 else n * factorial(n - 1)
+factorial(10)
+---EXPECTED---
+Function factorial:
+  factorial_entry:
+    TailCall(factorial$trmo, [v0, 1])
+    ret v9
+
+Function factorial$trmo:
+  factorial$trmo_entry:
+    jump factorial$trmo_body
+  factorial$trmo_L1:
+    v10015 <- v10013 - 1 : TInt64
+    v10016 <- v10010 * v10013 : TInt64
+    v10017 <- v10015 : TInt64
+    v10018 <- v10016 : TInt64
+    jump factorial$trmo_body
+  factorial$trmo_L2:
+    ret v10010
+  factorial$trmo_body:
+    v10010 <- Phi([(v6, factorial$trmo_entry), (v10018, factorial$trmo_L1)]) : TInt64
+    v10013 <- Phi([(v0, factorial$trmo_entry), (v10017, factorial$trmo_L1)]) : TInt64
+    v10014 <- v10013 <= 1 : TInt64
+    branch v10014 ? factorial$trmo_L2 : factorial$trmo_L1
+
+Function _start:
+  _start_body:
+    v10005 <- Call(factorial, [10])
+    Print(v10005, type=TInt64)
+    ret v10005
     Print(v10007, type=TInt64)
     ret v10007
 
