@@ -561,6 +561,62 @@ let testCseDoesNotExportNonScalarBinaryTypes () : TestResult =
     else
         Error "Expected a binary expression with the non-scalar TUnit type to remain block-local"
 
+let testCseKeepsScalarHeapLoadsAvailableAcrossFloatSqrt () : TestResult =
+    let entry = Label "entry"
+    let block: BasicBlock = {
+        Label = entry
+        Instrs = [
+            HeapLoad (VReg 1, VReg 0, 8, Some AST.TFloat64)
+            FloatSqrt (VReg 2, Register (VReg 1))
+            HeapLoad (VReg 3, VReg 0, 8, Some AST.TFloat64)
+        ]
+        Terminator = Ret (Register (VReg 3))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, block)]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+    let expected = {
+        block with
+            Instrs = [
+                HeapLoad (VReg 1, VReg 0, 8, Some AST.TFloat64)
+                FloatSqrt (VReg 2, Register (VReg 1))
+                Mov (VReg 3, Register (VReg 1), Some AST.TFloat64)
+            ]
+    }
+
+    match Map.tryFind entry optimized.Blocks with
+    | Some actual when changed && actual = expected -> Ok ()
+    | _ -> Error "Expected FloatSqrt to preserve exact scalar heap-load availability"
+
+let testCseDoesNotExportScalarHeapLoadsAcrossFloatSqrt () : TestResult =
+    let entry = Label "entry"
+    let child = Label "child"
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [
+            HeapLoad (VReg 1, VReg 0, 8, Some AST.TFloat64)
+            FloatSqrt (VReg 2, Register (VReg 1))
+        ]
+        Terminator = Jump child
+    }
+    let childBlock: BasicBlock = {
+        Label = child
+        Instrs = [HeapLoad (VReg 3, VReg 0, 8, Some AST.TFloat64)]
+        Terminator = Ret (Register (VReg 3))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, entryBlock); (child, childBlock)]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+
+    if not changed && optimized = cfg then Ok ()
+    else Error "Expected FloatSqrt to stop scalar heap-load availability at the block boundary"
+
 let testDceRemovesSelfReferentialDeadPhi () : TestResult =
     let entry = Label "entry"
     let loop = Label "loop"
@@ -1224,6 +1280,8 @@ let tests = [
     ("MIR CSE invalidates expressions at reference-count decrements", testCseDoesNotReuseExpressionsAcrossRefCountDecrement)
     ("MIR CSE does not extend expressions across calls", testCseDoesNotExtendExpressionsAcrossCalls)
     ("MIR CSE does not export non-scalar binary types", testCseDoesNotExportNonScalarBinaryTypes)
+    ("MIR CSE keeps scalar heap loads available across FloatSqrt", testCseKeepsScalarHeapLoadsAvailableAcrossFloatSqrt)
+    ("MIR CSE does not export scalar heap loads across FloatSqrt", testCseDoesNotExportScalarHeapLoadsAcrossFloatSqrt)
     ("MIR optimize removes dead self-referential phi", testDceRemovesSelfReferentialDeadPhi)
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
     ("MIR empty block removal rewrites phi source to predecessor", testEmptyBlockRemovalRewritesPhiSourceToPredecessor)

@@ -486,6 +486,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Extends MIR dominator-scoped CSE to exact scalar loads without alias analysis, eliminating a duplicate heap read only when the defining load dominates the replacement and no availability barrier intervenes.
 - Notes: `ScalarHeapLoadExpr(address SSA register, byte offset, scalar type)` reuses the defining load through a typed `Mov`; unknown/non-scalar loads, typed non-scalar values, calls, allocation, stores, raw-memory operations, and reference-count operations clear load availability. The direct MIR fixture `MIR CSE reuses dominating scalar heap loads` changes a dominated `HeapLoad(v0, 8) : TInt64` into `v2 <- v1 : TInt64`; `MIR CSE scalar heap load barriers` preserves the repeated load across each barrier category. A source scan of the routine corpus found tuple/record projections (especially `nbody` and `spectral_norm`) but no attributable barrier-free dominated exact-repeat candidate, so the retained direct fixture is the optimization proof and routine results are regression-only evidence.
 
+### Scalar heap-load reuse across FloatSqrt
+
+- Optimization name: FloatSqrt-transparent scalar heap-load reuse
+- Taxonomy category: Redundant load elimination
+- Priority/rationale: Keeps an exact scalar heap read available through a pure square-root instruction, avoiding repeated tuple or record field loads in float-heavy code.
+- Notes: Implemented in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs` by treating `FloatSqrt` as memory-transparent for local availability in the existing barrier-aware MIR CSE, without exporting the value into dominated blocks. Calls, stores, allocations, memory/runtime instructions, and ownership operations retain their conservative invalidation behavior. `MIR CSE keeps scalar heap loads available across FloatSqrt` directly proves the rewrite. The ARM64 nbody routine benchmark improved from 914,509,449 to 883,009,449 instructions (3.444%); the other routine workloads were unchanged.
+
 ### Duplicate IfValue reuse
 
 - Optimization name: Duplicate IfValue reuse

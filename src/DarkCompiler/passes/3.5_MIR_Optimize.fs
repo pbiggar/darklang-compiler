@@ -2481,6 +2481,11 @@ let applyCSEWithEffectFreeCalls
                 | Mov _
                 | Phi _ ->
                     (instr :: instrs, exprMap, exported, ch)
+                | FloatSqrt _ ->
+                    // Square root cannot affect memory, so exact scalar loads
+                    // remain reusable locally. Do not lengthen their live ranges
+                    // into dominated blocks.
+                    (instr :: instrs, exprMap, Map.empty, ch)
                 | _ ->
                     // Do not extend a new cross-block live range across calls,
                     // allocations, memory operations, or other runtime lowering.
