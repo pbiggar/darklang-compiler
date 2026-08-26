@@ -544,6 +544,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Specializing internal signatures exposes program-wide literal parameters inside recursive helpers while removing their call-sequence argument setup.
 - Notes: Implemented in `src/DarkCompiler/passes/2.4.5_ANF_DirectCallSpecialization.fs` for internal functions with at least one known direct call and no `FuncRef` or `ClosureAlloc` use. Normal, borrowed, and tail calls are rewritten consistently. Focused ANF tests cover mutual recursion, differing literals, and indirect-use exclusions. The isolated ARM64 routine trial improved quicksort by 11,088 instructions and spectral norm by 60. After rebasing onto counted-loop unrolling, the combined routine recording also improves matmul by 4,000,000 instructions, has no regressions, and records a 0.999895 current/baseline geometric ratio; the displayed aggregate performance ratio remains 2.73x.
 
+### Finite scalar-literal direct-call cloning
+
+- Optimization name: Finite scalar-literal direct-call cloning
+- Taxonomy category: Interprocedural constant propagation / function cloning
+- Priority/rationale: Call sites with a small set of differing scalar literals cannot use uniform parameter removal, but cloning those variants removes hot argument setup and exposes each literal inside the callee.
+- Notes: Implemented as a second stage of `src/DarkCompiler/passes/2.4.5_ANF_DirectCallSpecialization.fs`. It creates at most four clones per function and sixteen per program, retains the original fallback, rejects address-taken and closure targets, and excludes managed string literals. Recursive clones remove only parameters passed through unchanged on every self-call, so recursive tail calls keep a consistent reduced signature. Scalar keys preserve exact float bits. Focused ANF-to-MIR-to-LIR and generated-code tests cover routing, fallback, caps, tail calls, ownership exclusions, and float edge cases. An ARM64 Cachegrind microbenchmark with two hot recursive literal modes improved from 5,100,047 to 4,700,047 instructions (7.84%); the existing quick spectral-norm benchmark, which creates `0.0` and `1.0` repeat-helper variants, improved from 100,902 to 100,744 instructions (0.16%).
+
 ### Dead direct-parameter elimination
 
 - Optimization name: Dead direct-parameter elimination

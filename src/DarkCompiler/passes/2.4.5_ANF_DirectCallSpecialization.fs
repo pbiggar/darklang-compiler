@@ -17,6 +17,25 @@ type private ProgramAnalysis = {
     IndirectTargets: Set<string>
 }
 
+type private ScalarLiteral =
+    | UnitScalar
+    | IntScalar of SizedInt
+    | BoolScalar of bool
+    | FloatScalar of int64
+
+type private LiteralPattern = (int * ScalarLiteral) list
+
+type private LiteralClone = {
+    OriginalName: string
+    CloneName: string
+    Pattern: LiteralPattern
+}
+
+// Cloning is deliberately a small whole-program transform: without profile
+// data, larger clone families are not justified by the saved scalar setup.
+let private maxLiteralClonesPerFunction = 4
+let private maxLiteralClonesPerProgram = 16
+
 let private emptyAnalysis = {
     DirectCalls = Map.empty
     IndirectTargets = Set.empty
@@ -126,22 +145,45 @@ let private analyzeProgram (functions: Function list) (main: AExpr) : ProgramAna
     |> List.fold (fun analysis func -> analyzeExpr func.Body analysis) emptyAnalysis
     |> analyzeExpr main
 
-let private literalAtom (atom: Atom) : Atom option =
+let private scalarLiteralAtom (atom: Atom) : ScalarLiteral option =
     match atom with
-    | UnitLiteral
-    | IntLiteral _
-    | BoolLiteral _
+    | UnitLiteral -> Some UnitScalar
+    | IntLiteral value -> Some (IntScalar value)
+    | BoolLiteral value -> Some (BoolScalar value)
+    | FloatLiteral value -> Some (FloatScalar (System.BitConverter.DoubleToInt64Bits value))
     | StringLiteral _
-    | FloatLiteral _ -> Some atom
     | Var _
     | FuncRef _ -> None
+
+let private atomForScalarLiteral (literal: ScalarLiteral) : Atom =
+    match literal with
+    | UnitScalar -> UnitLiteral
+    | IntScalar value -> IntLiteral value
+    | BoolScalar value -> BoolLiteral value
+    | FloatScalar bits -> FloatLiteral (System.BitConverter.Int64BitsToDouble bits)
+
+let private isScalarLiteralType (typ: AST.Type) : bool =
+    match typ with
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TUnit -> true
+    | _ -> false
 
 let private uniformLiteralAt (index: int) (calls: Atom list list) : Atom option =
     let literals =
         calls
-        |> List.map (fun args -> List.tryItem index args |> Option.bind literalAtom)
+        |> List.map (fun args -> List.tryItem index args |> Option.bind scalarLiteralAtom)
     match literals with
-    | Some first :: rest when rest |> List.forall (fun literal -> literal = Some first) -> Some first
+    | Some first :: rest when rest |> List.forall (fun literal -> literal = Some first) ->
+        Some (atomForScalarLiteral first)
     | _ -> None
 
 let private rewritesForFunction
@@ -153,10 +195,11 @@ let private rewritesForFunction
     | Some _ when Set.contains func.Name analysis.IndirectTargets -> None
     | Some calls ->
         func.TypedParams
-        |> List.mapi (fun index _parameter ->
-            match uniformLiteralAt index calls with
-            | Some literal -> ReplaceParameterWith literal
-            | None -> KeepParameter)
+        |> List.mapi (fun index parameter ->
+            match isScalarLiteralType parameter.Type, uniformLiteralAt index calls with
+            | false, _ -> KeepParameter
+            | true, Some literal -> ReplaceParameterWith literal
+            | true, None -> KeepParameter)
         |> Some
 
 let private buildRewriteMap
@@ -316,9 +359,207 @@ let private rewriteFunction
             TypedParams = parameters
             Body = rewriteExpr rewriteMap substitutions func.Body }
 
+let private literalPatternAt (eligibleIndices: Set<int>) (args: Atom list) : LiteralPattern =
+    args
+    |> List.mapi (fun index atom ->
+        if Set.contains index eligibleIndices then
+            scalarLiteralAtom atom |> Option.map (fun literal -> (index, literal))
+        else
+            None)
+    |> List.choose id
+
+let rec private directCallsTo (target: string) (expr: AExpr) : Atom list list =
+    match expr with
+    | Return _ -> []
+    | Let (_, cexpr, body) ->
+        let current =
+            match cexpr with
+            | Call (name, args)
+            | BorrowedCall (name, args)
+            | TailCall (name, args) when name = target -> [args]
+            | _ -> []
+        current @ directCallsTo target body
+    | If (_, thenBranch, elseBranch) ->
+        directCallsTo target thenBranch @ directCallsTo target elseBranch
+
+let private cloneableParameterIndices (func: Function) : Set<int> =
+    let allIndices =
+        func.TypedParams
+        |> List.mapi (fun index parameter ->
+            if isScalarLiteralType parameter.Type then Some index else None)
+        |> List.choose id
+        |> Set.ofList
+    match directCallsTo func.Name func.Body with
+    | [] -> allIndices
+    | selfCalls ->
+        func.TypedParams
+        |> List.mapi (fun index parameter ->
+            let isPassedThrough =
+                isScalarLiteralType parameter.Type
+                && (selfCalls
+                    |> List.forall (fun args ->
+                        List.tryItem index args = Some (Var parameter.Id)))
+            if isPassedThrough then Some index else None)
+        |> List.choose id
+        |> Set.ofList
+
+let private cloneGroups
+    (analysis: ProgramAnalysis)
+    (functions: Function list)
+    : (string * LiteralPattern list) list =
+    functions
+    |> List.choose (fun func ->
+        match Map.tryFind func.Name analysis.DirectCalls with
+        | None -> None
+        | Some _ when Set.contains func.Name analysis.IndirectTargets -> None
+        | Some calls ->
+            let eligibleIndices = cloneableParameterIndices func
+            let patterns =
+                calls
+                |> List.map (literalPatternAt eligibleIndices)
+                |> List.filter (not << List.isEmpty)
+                |> List.distinct
+                |> List.sort
+                |> List.truncate maxLiteralClonesPerFunction
+            if List.length patterns < 2 then None
+            else Some (func.Name, patterns))
+    |> List.sortBy fst
+
+let private boundedCloneGroups
+    (groups: (string * LiteralPattern list) list)
+    : (string * LiteralPattern list) list =
+    groups
+    |> List.fold (fun (selected, remaining) (name, patterns) ->
+        let count = List.length patterns
+        if count <= remaining then
+            ((name, patterns) :: selected, remaining - count)
+        else
+            (selected, remaining)
+    ) ([], maxLiteralClonesPerProgram)
+    |> fst
+    |> List.rev
+
+let private buildLiteralClones
+    (existingNames: Set<string>)
+    (groups: (string * LiteralPattern list) list)
+    : LiteralClone list =
+    let proposed =
+        groups
+        |> List.collect (fun (name, patterns) ->
+            patterns
+            |> List.mapi (fun index pattern ->
+                { OriginalName = name
+                  CloneName = $"{name}__literal_{index}"
+                  Pattern = pattern }))
+    let proposedNames = proposed |> List.map (fun clone -> clone.CloneName)
+    let namesAreUnique = List.length proposedNames = (proposedNames |> List.distinct |> List.length)
+    if namesAreUnique
+       && proposedNames |> List.forall (fun name -> not (Set.contains name existingNames)) then
+        proposed
+    else
+        []
+
+let private removePatternArguments
+    (pattern: LiteralPattern)
+    (args: Atom list)
+    : Atom list =
+    let removedIndices = pattern |> List.map fst |> Set.ofList
+    args
+    |> List.mapi (fun index arg ->
+        if Set.contains index removedIndices then None else Some arg)
+    |> List.choose id
+
+let private routeDirectCall
+    (clonesByName: Map<string, LiteralClone list>)
+    (name: string)
+    (args: Atom list)
+    : string * Atom list =
+    let matchesPattern pattern =
+        pattern
+        |> List.forall (fun (index, literal) ->
+            List.tryItem index args |> Option.bind scalarLiteralAtom = Some literal)
+    let matchingClone =
+        Map.tryFind name clonesByName
+        |> Option.bind (List.tryFind (fun clone -> matchesPattern clone.Pattern))
+    match matchingClone with
+    | Some clone -> (clone.CloneName, removePatternArguments clone.Pattern args)
+    | None -> (name, args)
+
+let private routeCExpr
+    (clonesByName: Map<string, LiteralClone list>)
+    (cexpr: CExpr)
+    : CExpr =
+    match cexpr with
+    | Call (name, args) ->
+        let (target, routedArgs) = routeDirectCall clonesByName name args
+        Call (target, routedArgs)
+    | BorrowedCall (name, args) ->
+        let (target, routedArgs) = routeDirectCall clonesByName name args
+        BorrowedCall (target, routedArgs)
+    | TailCall (name, args) ->
+        let (target, routedArgs) = routeDirectCall clonesByName name args
+        TailCall (target, routedArgs)
+    | _ -> cexpr
+
+let rec private routeExpr
+    (clonesByName: Map<string, LiteralClone list>)
+    (expr: AExpr)
+    : AExpr =
+    match expr with
+    | Let (id, cexpr, body) ->
+        Let (id, routeCExpr clonesByName cexpr, routeExpr clonesByName body)
+    | Return atom -> Return atom
+    | If (condition, thenBranch, elseBranch) ->
+        If (condition, routeExpr clonesByName thenBranch, routeExpr clonesByName elseBranch)
+
+let private cloneFunction
+    (clonesByName: Map<string, LiteralClone list>)
+    (functionsByName: Map<string, Function>)
+    (clone: LiteralClone)
+    : Function =
+    let original =
+        match Map.tryFind clone.OriginalName functionsByName with
+        | Some func -> func
+        | None -> Crash.crash $"Missing direct-call clone source '{clone.OriginalName}'"
+    let literalsByIndex = clone.Pattern |> Map.ofList
+    let parameters =
+        original.TypedParams
+        |> List.mapi (fun index parameter ->
+            if Map.containsKey index literalsByIndex then None else Some parameter)
+        |> List.choose id
+    let substitutions =
+        original.TypedParams
+        |> List.mapi (fun index parameter ->
+            Map.tryFind index literalsByIndex
+            |> Option.map (fun literal -> (parameter.Id, atomForScalarLiteral literal)))
+        |> List.choose id
+        |> Map.ofList
+    let substitutedBody = rewriteExpr Map.empty substitutions original.Body
+    { original with
+        Name = clone.CloneName
+        TypedParams = parameters
+        Body = routeExpr clonesByName substitutedBody }
+
+let private specializeFiniteLiterals (Program (functions, main)) : Program =
+    let analysis = analyzeProgram functions main
+    let clones =
+        cloneGroups analysis functions
+        |> boundedCloneGroups
+        |> buildLiteralClones (functions |> List.map (fun func -> func.Name) |> Set.ofList)
+    let clonesByName =
+        clones
+        |> List.groupBy (fun clone -> clone.OriginalName)
+        |> Map.ofList
+    let functionsByName = functions |> List.map (fun func -> (func.Name, func)) |> Map.ofList
+    let clonedFunctions = clones |> List.map (cloneFunction clonesByName functionsByName)
+    let routedFunctions =
+        functions
+        |> List.map (fun func -> { func with Body = routeExpr clonesByName func.Body })
+    Program (clonedFunctions @ routedFunctions, routeExpr clonesByName main)
+
 let specializeProgram (Program (functions, main)) : Program =
     let analysis = analyzeProgram functions main
     let rewriteMap = buildRewriteMap analysis functions
     let functions' = functions |> List.map (rewriteFunction rewriteMap)
     let main' = rewriteExpr rewriteMap Map.empty main
-    Program (functions', main')
+    specializeFiniteLiterals (Program (functions', main'))

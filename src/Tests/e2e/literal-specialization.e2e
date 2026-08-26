@@ -1,0 +1,9 @@
+// Finite scalar literal specialization end-to-end coverage.
+
+// Differing invariant modes create reduced-signature recursive clones while
+// the changing counter and accumulator retain their original evaluation order.
+let specializedLoop(n: Int64, mode: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else specializedLoop(n - 1, mode, acc + mode)
+
+specializedLoop(5, 2, 0) + specializedLoop(5, 3, 0) = 25
