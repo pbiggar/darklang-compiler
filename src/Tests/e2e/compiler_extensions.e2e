@@ -3,7 +3,7 @@
 
 Stdlib.Path.tempDir() = "/tmp"
 Stdlib.String.replaceAll("a,a", ",", "|") = "a|a"
-Stdlib.Blob.toList(Stdlib.Blob.fromString("A")) = [65]
+Stdlib.Blob.toList(Stdlib.Blob.fromString("A")) = [65uy]
 Stdlib.Float.absoluteValue(-2.0) = 2.0
 
 Stdlib.String.getByteAt("a", 0) = error="Unresolved callable name: Stdlib.String.getByteAt"

@@ -546,7 +546,7 @@ let floatLiveTest(x: Float) : Float = let f1 = 1.0 in let f2 = 2.0 in let f3 = 3
 floatLiveTest(10.0) = 16.0
 
 // Mixed int and float liveness across the same call site
-let mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 200 in let mixFloat = mixedHelper(5.0) in Stdlib.Float.toInt(mixFloat) + mixInt1 + mixInt2 = 306
+let mixedHelper(f: Float) : Float = f + 1.0 let mixInt1 = 100 in let mixInt2 = 200 in let mixFloat = mixedHelper(5.0) in mixFloat + Stdlib.Int64.toFloat(mixInt1 + mixInt2) = 306.0
 
 
 // ===================================================================
