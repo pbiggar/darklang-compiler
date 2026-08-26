@@ -5,27 +5,27 @@
 // Stdlib.Base64.encode - Encode bytes to base64 string
 // ===================================================================
 
-// Empty bytes
-Stdlib.Base64.encode(Stdlib.Bytes.create(0)) = ""
+// Empty blob
+Stdlib.Base64.encode(Stdlib.Blob.empty) = ""
 
 // Single byte
-Stdlib.Base64.encode(Stdlib.Bytes.fromList([0])) = "AA=="
-Stdlib.Base64.encode(Stdlib.Bytes.fromList([255])) = "/w=="
+Stdlib.Base64.encode(Stdlib.Blob.fromList([0uy])) = "AA=="
+Stdlib.Base64.encode(Stdlib.Blob.fromList([255uy])) = "/w=="
 
 // Two bytes
-Stdlib.Base64.encode(Stdlib.Bytes.fromList([0, 0])) = "AAA="
+Stdlib.Base64.encode(Stdlib.Blob.fromList([0uy, 0uy])) = "AAA="
 
 // Three bytes (no padding needed)
-Stdlib.Base64.encode(Stdlib.Bytes.fromList([0, 0, 0])) = "AAAA"
+Stdlib.Base64.encode(Stdlib.Blob.fromList([0uy, 0uy, 0uy])) = "AAAA"
 
 // "Hello" = [72, 101, 108, 108, 111]
-Stdlib.Base64.encode(Stdlib.Bytes.fromList([72, 101, 108, 108, 111])) = "SGVsbG8="
+Stdlib.Base64.encode(Stdlib.Blob.fromList([72uy, 101uy, 108uy, 108uy, 111uy])) = "SGVsbG8="
 
 // "Hi" = [72, 105]
-Stdlib.Base64.encode(Stdlib.Bytes.fromList([72, 105])) = "SGk="
+Stdlib.Base64.encode(Stdlib.Blob.fromList([72uy, 105uy])) = "SGk="
 
 // "ABC" = [65, 66, 67]
-Stdlib.Base64.encode(Stdlib.Bytes.fromList([65, 66, 67])) = "QUJD"
+Stdlib.Base64.encode(Stdlib.Blob.fromList([65uy, 66uy, 67uy])) = "QUJD"
 
 // ===================================================================
 // Stdlib.Base64.urlEncode - URL-safe encoding
@@ -33,7 +33,7 @@ Stdlib.Base64.encode(Stdlib.Bytes.fromList([65, 66, 67])) = "QUJD"
 
 // Test that + and / are replaced with - and _
 // Blob that would produce + in standard encoding
-Stdlib.Base64.urlEncode(Stdlib.Bytes.fromList([251])) = "-w=="
+Stdlib.Base64.urlEncode(Stdlib.Blob.fromList([251uy])) = "-w=="
 
 // ===================================================================
 // Stdlib.Base64.decode - Decode base64 to bytes
@@ -43,23 +43,22 @@ Stdlib.Base64.urlEncode(Stdlib.Bytes.fromList([251])) = "-w=="
 Stdlib.Result.isOk<Blob, String>(Stdlib.Base64.decode("")) = true
 
 // Single padded value
-match Stdlib.Base64.decode("AA==") with | Ok(b) -> Stdlib.Bytes.length(b) | Error(_) -> -1 = 1
-match Stdlib.Base64.decode("AA==") with | Ok(b) -> Stdlib.Bytes.get(b, 0) | Error(_) -> -1 = 0
+match Stdlib.Base64.decode("AA==") with | Ok(b) -> Stdlib.Blob.length(b) | Error(_) -> -1I = 1I
+match Stdlib.Base64.decode("AA==") with | Ok(b) -> Stdlib.Blob.toList(b) | Error(_) -> [] = [0uy]
 
 // Two bytes
-match Stdlib.Base64.decode("AAA=") with | Ok(b) -> Stdlib.Bytes.length(b) | Error(_) -> -1 = 2
+match Stdlib.Base64.decode("AAA=") with | Ok(b) -> Stdlib.Blob.length(b) | Error(_) -> -1I = 2I
 
 // Three bytes
-match Stdlib.Base64.decode("AAAA") with | Ok(b) -> Stdlib.Bytes.length(b) | Error(_) -> -1 = 3
+match Stdlib.Base64.decode("AAAA") with | Ok(b) -> Stdlib.Blob.length(b) | Error(_) -> -1I = 3I
 
 // "SGVsbG8=" -> "Hello"
-match Stdlib.Base64.decode("SGVsbG8=") with | Ok(b) -> Stdlib.Bytes.length(b) | Error(_) -> -1 = 5
-match Stdlib.Base64.decode("SGVsbG8=") with | Ok(b) -> Stdlib.Bytes.get(b, 0) | Error(_) -> -1 = 72
-match Stdlib.Base64.decode("SGVsbG8=") with | Ok(b) -> Stdlib.Bytes.get(b, 4) | Error(_) -> -1 = 111
+match Stdlib.Base64.decode("SGVsbG8=") with | Ok(b) -> Stdlib.Blob.length(b) | Error(_) -> -1I = 5I
+match Stdlib.Base64.decode("SGVsbG8=") with | Ok(b) -> Stdlib.Blob.toList(b) | Error(_) -> [] = [72uy, 101uy, 108uy, 108uy, 111uy]
 
 // Unpadded final groups
-match Stdlib.Base64.decode("Kw") with | Ok(b) -> Stdlib.Bytes.get(b, 0) | Error(_) -> -1 = 43
-match Stdlib.Base64.decode("ABC") with | Ok(b) -> (Stdlib.Bytes.get(b, 0), Stdlib.Bytes.get(b, 1)) | Error(_) -> (-1, -1) = (0, 16)
+match Stdlib.Base64.decode("Kw") with | Ok(b) -> Stdlib.Blob.toList(b) | Error(_) -> [] = [43uy]
+match Stdlib.Base64.decode("ABC") with | Ok(b) -> Stdlib.Blob.toList(b) | Error(_) -> [] = [0uy, 16uy]
 
 // Invalid base64 - a single character cannot encode a byte
 Stdlib.Result.isError<Blob, String>(Stdlib.Base64.decode("x")) = true
@@ -72,5 +71,4 @@ Stdlib.Result.isError<Blob, String>(Stdlib.Base64.decode("=AAA")) = true
 // ===================================================================
 
 // Encode then decode should give back original bytes
-match Stdlib.Base64.decode(Stdlib.Base64.encode(Stdlib.Bytes.fromList([1, 2, 3]))) with | Ok(b) -> Stdlib.Bytes.get(b, 0) | Error(_) -> -1 = 1
-match Stdlib.Base64.decode(Stdlib.Base64.encode(Stdlib.Bytes.fromList([1, 2, 3]))) with | Ok(b) -> Stdlib.Bytes.get(b, 2) | Error(_) -> -1 = 3
+match Stdlib.Base64.decode(Stdlib.Base64.encode(Stdlib.Blob.fromList([1uy, 2uy, 3uy]))) with | Ok(b) -> Stdlib.Blob.toList(b) | Error(_) -> [] = [1uy, 2uy, 3uy]
