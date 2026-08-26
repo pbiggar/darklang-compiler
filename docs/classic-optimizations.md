@@ -472,6 +472,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical extension of local MIR CSE that removes repeated pure scalar computations across a basic-block boundary while keeping new live ranges bounded for the current backend.
 - Notes: Implemented for binary expressions with concrete scalar types and unary expressions computed in trailing scalar/copy regions of dominating blocks. Expression availability is passed independently to dominator-tree siblings, cleared by reference-count/free operations, and not exported across calls, allocations, or memory/runtime instructions. Direct MIR before/after tests cover multi-block dominating binary/unary reuse, sibling-path preservation, reference-count and call barriers, and rejection of non-scalar binary types. The routine benchmark profile retained every recorded instruction count (0% measured gain/loss; performance ratio 7.43x); source-level ANF CSE removes the straightforward source patterns, so the direct MIR fixtures provide the isolating transformation coverage, while `fannkuch` covers the non-scalar/call-boundary safety cases.
 
+### Dominated scalar heap-load reuse
+
+- Optimization name: Barrier-aware dominated scalar heap-load reuse
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Extends MIR dominator-scoped CSE to exact scalar loads without alias analysis, eliminating a duplicate heap read only when the defining load dominates the replacement and no availability barrier intervenes.
+- Notes: `ScalarHeapLoadExpr(address SSA register, byte offset, scalar type)` reuses the defining load through a typed `Mov`; unknown/non-scalar loads, typed non-scalar values, calls, allocation, stores, raw-memory operations, and reference-count operations clear load availability. The direct MIR fixture `MIR CSE reuses dominating scalar heap loads` changes a dominated `HeapLoad(v0, 8) : TInt64` into `v2 <- v1 : TInt64`; `MIR CSE scalar heap load barriers` preserves the repeated load across each barrier category. A source scan of the routine corpus found tuple/record projections (especially `nbody` and `spectral_norm`) but no attributable barrier-free dominated exact-repeat candidate, so the retained direct fixture is the optimization proof and routine results are regression-only evidence.
+
 ### Duplicate IfValue reuse
 
 - Optimization name: Duplicate IfValue reuse

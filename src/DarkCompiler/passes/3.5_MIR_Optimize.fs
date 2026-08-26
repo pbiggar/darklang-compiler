@@ -2162,6 +2162,7 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type)
 type ExprKey =
     | BinExpr of BinOp * Operand * Operand * AST.Type
     | UnaryExpr of UnaryOp * Operand
+    | ScalarHeapLoadExpr of VReg * int * AST.Type
 
 /// Check if a binary operation is commutative (order of operands doesn't matter)
 let isCommutative (op: BinOp) : bool =
@@ -2186,12 +2187,25 @@ let makeBinExprKey (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Typ
 let makeUnaryExprKey (op: UnaryOp) (src: Operand) : ExprKey =
     UnaryExpr (op, src)
 
+/// Build an availability key for an exact typed scalar heap load.
+let makeScalarHeapLoadExprKey (addr: VReg) (offset: int) (valueType: AST.Type) : ExprKey =
+    ScalarHeapLoadExpr (addr, offset, valueType)
+
 let private isCrossBlockCSEType (opType: AST.Type) : bool =
     match opType with
     | AST.TInt64 | AST.TInt32 | AST.TInt16 | AST.TInt8
     | AST.TUInt64 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
     | AST.TFloat64 | AST.TBool | AST.TChar | AST.TDateTime -> true
     | _ -> false
+
+/// Calls, memory operations, and ownership operations invalidate heap-load
+/// availability without discarding independent arithmetic expression keys.
+let private clearScalarHeapLoadAvailability (available: Map<ExprKey, VReg>) : Map<ExprKey, VReg> =
+    available
+    |> Map.filter (fun key _ ->
+        match key with
+        | ScalarHeapLoadExpr _ -> false
+        | _ -> true)
 
 /// Apply CSE to a CFG, carrying available expressions into dominated blocks.
 let applyCSE (cfg: CFG) : CFG * bool =
@@ -2202,13 +2216,18 @@ let applyCSE (cfg: CFG) : CFG * bool =
                 match instr with
                 | BinOp (dest, op, left, right, opType) ->
                     let key = makeBinExprKey op left right opType
-                    match Map.tryFind key exprMap with
+                    let available' =
+                        if isCrossBlockCSEType opType then
+                            exprMap
+                        else
+                            clearScalarHeapLoadAvailability exprMap
+                    match Map.tryFind key available' with
                     | Some prevDest ->
-                        (Mov (dest, Register prevDest, None) :: instrs, exprMap, exported, true)
+                        (Mov (dest, Register prevDest, None) :: instrs, available', exported, true)
                     | None ->
                         let exported' =
-                            if isCrossBlockCSEType opType then Map.add key dest exported else exported
-                        (instr :: instrs, Map.add key dest exprMap, exported', ch)
+                            if isCrossBlockCSEType opType then Map.add key dest exported else Map.empty
+                        (instr :: instrs, Map.add key dest available', exported', ch)
                 | UnaryOp (dest, op, src) ->
                     let key = makeUnaryExprKey op src
                     match Map.tryFind key exprMap with
@@ -2216,6 +2235,17 @@ let applyCSE (cfg: CFG) : CFG * bool =
                         (Mov (dest, Register prevDest, None) :: instrs, exprMap, exported, true)
                     | None ->
                         (instr :: instrs, Map.add key dest exprMap, Map.add key dest exported, ch)
+                | HeapLoad (dest, addr, offset, Some valueType) when isCrossBlockCSEType valueType ->
+                    let key = makeScalarHeapLoadExprKey addr offset valueType
+                    match Map.tryFind key exprMap with
+                    | Some prevDest ->
+                        (Mov (dest, Register prevDest, Some valueType) :: instrs, exprMap, exported, true)
+                    | None ->
+                        (instr :: instrs, Map.add key dest exprMap, Map.add key dest exported, ch)
+                | HeapLoad _ ->
+                    // Unknown and non-scalar values can carry ownership edges;
+                    // do not make earlier scalar loads available past them.
+                    (instr :: instrs, clearScalarHeapLoadAvailability exprMap, Map.empty, ch)
                 | RefCountDec _
                 | RefCountDecString _
                 | RefCountDecBlob _
@@ -2223,6 +2253,10 @@ let applyCSE (cfg: CFG) : CFG * bool =
                     // A previously computed raw address can outlive its managed
                     // owner if reuse removes the later use that kept it alive.
                     (instr :: instrs, Map.empty, Map.empty, ch)
+                | Mov (_, _, Some valueType) when not (isCrossBlockCSEType valueType) ->
+                    (instr :: instrs, clearScalarHeapLoadAvailability exprMap, Map.empty, ch)
+                | Phi (_, _, Some valueType) when not (isCrossBlockCSEType valueType) ->
+                    (instr :: instrs, clearScalarHeapLoadAvailability exprMap, Map.empty, ch)
                 | Mov _
                 | Phi _ ->
                     (instr :: instrs, exprMap, exported, ch)
@@ -2230,7 +2264,7 @@ let applyCSE (cfg: CFG) : CFG * bool =
                     // Do not extend a new cross-block live range across calls,
                     // allocations, memory operations, or other runtime lowering.
                     // Local CSE remains available through exprMap.
-                    (instr :: instrs, exprMap, Map.empty, ch)
+                    (instr :: instrs, clearScalarHeapLoadAvailability exprMap, Map.empty, ch)
             ) ([], available, available, false)
 
         ({ block with Instrs = List.rev instrs' }, exported', changed)

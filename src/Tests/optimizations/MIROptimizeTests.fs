@@ -135,6 +135,91 @@ let testCseReusesDominatingExpressions () : TestResult =
         let actual = formatMIR (Program ([func], Map.empty, Map.empty))
         Error $"Expected binary and unary expressions from the dominating entry block to be reused.\nActual:\n{actual}"
 
+let testCseReusesDominatingScalarHeapLoad () : TestResult =
+    let entry = Label "entry"
+    let bridge = Label "bridge"
+    let child = Label "child"
+    let valueType = AST.TInt64
+    let entryBlock: BasicBlock = {
+        Label = entry
+        Instrs = [HeapLoad (VReg 1, VReg 0, 8, Some valueType)]
+        Terminator = Jump bridge
+    }
+    let bridgeBlock: BasicBlock = {
+        Label = bridge
+        Instrs = []
+        Terminator = Jump child
+    }
+    let childBlock: BasicBlock = {
+        Label = child
+        Instrs = [HeapLoad (VReg 2, VReg 0, 8, Some valueType)]
+        Terminator = Ret (Register (VReg 2))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, entryBlock); (bridge, bridgeBlock); (child, childBlock)]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+    let expectedChild = {
+        childBlock with
+            Instrs = [Mov (VReg 2, Register (VReg 1), Some valueType)]
+    }
+
+    match Map.tryFind child optimized.Blocks with
+    | Some actualChild when changed && actualChild = expectedChild -> Ok ()
+    | _ ->
+        let func = {
+            Name = "dominating_scalar_heap_load_cse"
+            TypedParams = [{ Reg = VReg 0; Type = AST.TTuple [valueType; valueType] }]
+            ReturnType = valueType
+            CFG = optimized
+            FloatRegs = Set.empty
+        }
+        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
+        Error $"Expected an exact scalar heap load from the dominating entry block to be reused.\nActual:\n{actual}"
+
+let testCseDoesNotReuseDominatingScalarHeapLoadAcrossBarriers () : TestResult =
+    let entry = Label "entry"
+    let child = Label "child"
+    let valueType = AST.TInt64
+    let barriers = [
+        ("call", Call (VReg 3, "observe", [], [], AST.TUnit))
+        ("heap allocation", HeapAlloc (VReg 3, 16))
+        ("heap store", HeapStore (VReg 0, 8, Int64Const 99L, Some valueType))
+        ("raw memory read", RawGet (VReg 3, Register (VReg 0), Int64Const 0L, Some valueType))
+        ("raw memory write", RawWriteWord (Register (VReg 0), Int64Const 0L, Int64Const 99L))
+        ("reference count", RefCountInc (VReg 0, 16, GenericHeap, None))
+        ("non-scalar load", HeapLoad (VReg 3, VReg 0, 16, Some AST.TString))
+    ]
+
+    let rec checkBarriers remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (barrierName, barrier) :: rest ->
+            let entryBlock: BasicBlock = {
+                Label = entry
+                Instrs = [HeapLoad (VReg 1, VReg 0, 8, Some valueType); barrier]
+                Terminator = Jump child
+            }
+            let childBlock: BasicBlock = {
+                Label = child
+                Instrs = [HeapLoad (VReg 2, VReg 0, 8, Some valueType)]
+                Terminator = Ret (Register (VReg 2))
+            }
+            let cfg: CFG = {
+                Entry = entry
+                Blocks = Map.ofList [(entry, entryBlock); (child, childBlock)]
+            }
+            let (optimized, changed) = applyCSE cfg
+
+            if not changed && optimized = cfg then
+                checkBarriers rest
+            else
+                Error $"Expected {barrierName} to invalidate a dominated scalar heap load"
+
+    checkBarriers barriers
+
 let testCsePreservesExpressionsAcrossSiblingBlocks () : TestResult =
     let entry = Label "entry"
     let left = Label "left"
@@ -950,6 +1035,8 @@ let testLicmCanonicalizesNestedLoopEntry () : TestResult =
 let tests = [
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
     ("MIR CSE reuses dominating binary and unary expressions", testCseReusesDominatingExpressions)
+    ("MIR CSE reuses dominating scalar heap loads", testCseReusesDominatingScalarHeapLoad)
+    ("MIR CSE scalar heap load barriers", testCseDoesNotReuseDominatingScalarHeapLoadAcrossBarriers)
     ("MIR CSE preserves binary and unary expressions across siblings", testCsePreservesExpressionsAcrossSiblingBlocks)
     ("MIR CSE invalidates expressions at reference-count decrements", testCseDoesNotReuseExpressionsAcrossRefCountDecrement)
     ("MIR CSE does not extend expressions across calls", testCseDoesNotExtendExpressionsAcrossCalls)

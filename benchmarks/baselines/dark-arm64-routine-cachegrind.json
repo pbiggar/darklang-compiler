@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
   "contract_sha256": "566d904c072c803793f88226a36f96e1d5564580f78806a07e515bcb35c2a934",
-  "generated_at": "2026-08-29T12:41:44+00:00",
+  "generated_at": "2026-08-29T21:51:38+00:00",
   "compiler": {
-    "commit": "9ba6dec7e17cc8d33a584a6f28c4c77ba7e8688d",
-    "subject": "Add better benchmarks review changes"
+    "commit": "108f3b3dd18376f6a5ad78015a6a739bb2957ba8",
+    "subject": "Reuse dominated scalar MIR heap loads across barriers"
   },
   "benchmarks": [
     {
@@ -62,7 +62,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 1003502308
+      "instructions": 942002278
     },
     {
       "name": "nqueen",
