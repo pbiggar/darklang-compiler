@@ -161,7 +161,6 @@ let strong(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : St
 let em(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("em", attrs, children)
 let b(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("b", attrs, children)
 let u(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("u", attrs, children)
-let s(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("s", attrs, children)
 let small(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("small", attrs, children)
 let mark(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("mark", attrs, children)
 let del(attrs: Stdlib.Html.Attributes, children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode("del", attrs, children)

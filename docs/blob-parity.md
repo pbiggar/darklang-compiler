@@ -63,21 +63,10 @@ process-local address.
 | `Base64.encode`, `urlEncode` | Always padded; URL encoding substitutes `-` and `_`. |
 | `X509.pemCertificatePublicKey` | Select only a `CERTIFICATE` PEM block; reject malformed Base64/definite DER, truncated lengths, private keys, CSRs, and unsupported shapes as `No certificates`. Preserve the complete SubjectPublicKeyInfo TLV and emit 64-character PEM lines plus a trailing newline. |
 
-## Explicit compiler extensions
+## Implementation boundary
 
-These names are not parity API. They remain compiler extensions over `Blob`:
-
-- `Bytes.create/fromList/get/hexEncode/length/set/toList` keep their existing
-  `Int64`/`List<Int64>` bridge. `create` is deterministically zero-filled;
-  `set` is immutable, returns the same handle for an out-of-bounds index, and
-  truncates values to the low eight bits. `get` retains its unchecked legacy
-  bounds contract.
-- `Base64.urlDecode` delegates to the parity decoder.
-- `Crypto.sha1`, `Crypto.bytesToHex`, and every `Crypto.debug*` declaration use
-  Blob inputs/results where binary data is involved.
-
-These are deliberately classified extensions, not interpreter divergences.
-The Blob-family public divergence table is empty.
+The legacy `Bytes`, `Base64.urlDecode`, and compiler diagnostic Crypto helpers
+are not source APIs. Blob parity operations use private byte-layout helpers.
 
 ## Source evidence and probes
 

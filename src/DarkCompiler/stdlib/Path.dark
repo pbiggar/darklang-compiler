@@ -15,7 +15,5 @@ let combine(a: String, b: String) : String =
     else
         a ++ "/" ++ b
 
-// Get system temp directory (constant-folded at compile time)
-// This is an intrinsic that returns "/tmp" on both macOS and Linux
-// Note: The actual implementation is in the compiler, this is just type info
+// The portable implementation is deliberately ordinary Dark code.
 let tempDir() : String = "/tmp"

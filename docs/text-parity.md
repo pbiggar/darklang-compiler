@@ -75,18 +75,10 @@ matches with discriminated unions and records and does not depend on a host
 regex library. Its input units are EGCs; observable match strings and boundary
 behavior match the interpreter for the activated pinned suite.
 
-## Explicit compiler-extension boundary
+## Implementation boundary
 
-These are compiler extensions, not parity APIs:
-
-- `Char.isLetter`, `isWhitespace`, `isAlphanumeric`, `toCode`, and `fromCode`.
-- `String.getByteAt`, `substring`, `take`, `drop`, `toCodepoints`,
-  `codepointLength`, `fromCodepoints`, `toUpperCase`, `toGraphemes`,
-  `graphemeLength`, `replace`, and `equals`.
-
-Byte-oriented stdlib consumers use internal `String.__byte*` helpers. Public
-extension slices validate UTF-8 scalar boundaries, so they cannot manufacture
-malformed String or Char values.
+Byte-oriented stdlib consumers use private `String.__byte*` helpers. These are
+not source-resolvable; public text behavior is provided only by the parity API.
 
 ## Focused evidence
 

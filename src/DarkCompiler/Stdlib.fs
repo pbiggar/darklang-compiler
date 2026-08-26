@@ -37,39 +37,6 @@ let floatIntrinsicModule : ModuleDef = {
 let resultType (okType: Type) : Type =
     TSum ("Stdlib.Result.Result", [okType; TString])
 
-/// Stdlib.File module - file I/O operations (intrinsics)
-/// These are special-cased in the compiler and generate syscalls
-let fileModule : ModuleDef = {
-    Name = "Stdlib.File"
-    Functions = [
-        // readText : (String) -> Result<String, String>
-        { Name = "readText"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TString }
-        // exists : (String) -> Bool
-        { Name = "exists"; TypeParams = []; ParamTypes = [TString]; ReturnType = TBool }
-        // writeText : (String, String) -> Result<Unit, String>
-        { Name = "writeText"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
-        // appendText : (String, String) -> Result<Unit, String>
-        { Name = "appendText"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
-        // delete : (String) -> Result<Unit, String>
-        { Name = "delete"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
-        // setExecutable : (String) -> Result<Unit, String>
-        { Name = "setExecutable"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
-        // writeFromPtr : (String, RawPtr, Int64) -> Bool - write raw bytes to file
-        { Name = "writeFromPtr"; TypeParams = []; ParamTypes = [TString; TRawPtr; TInt64]; ReturnType = TBool }
-    ]
-}
-
-/// Stdlib.Path module - path operations
-/// combine is defined in stdlib/Path.dark, tempDir is constant-folded at compile time
-let pathModule : ModuleDef = {
-    Name = "Stdlib.Path"
-    Functions = [
-        // tempDir : () -> String - returns system temp directory
-        { Name = "tempDir"; TypeParams = []; ParamTypes = []; ReturnType = TString }
-        // combine is defined in stdlib/Path.dark
-    ]
-}
-
 /// Internal native operations supporting the public Stdlib.Cli modules.
 /// Portable policy stays in Dark; these typed effects are lowered by the compiler.
 let cliIntrinsicModule : ModuleDef = {
@@ -234,8 +201,6 @@ let rawMemoryIntrinsics : ModuleFunc list = [
 let allModules : ModuleDef list = [
     int64IntrinsicModule
     floatIntrinsicModule
-    fileModule
-    pathModule
     cliIntrinsicModule
     randomModule
     dateTimeModule

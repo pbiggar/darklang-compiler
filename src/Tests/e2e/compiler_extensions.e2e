@@ -1,0 +1,17 @@
+// Source programs retain interpreter-parity APIs only; compiler implementation
+// helpers and historical extension spellings must not be source-resolvable.
+
+Stdlib.Path.tempDir() = "/tmp"
+Stdlib.String.replaceAll("a,a", ",", "|") = "a|a"
+Stdlib.Blob.toList(Stdlib.Blob.fromString("A")) = [65]
+Stdlib.Float.absoluteValue(-2.0) = 2.0
+
+Stdlib.String.getByteAt("a", 0) = error="Unresolved callable name: Stdlib.String.getByteAt"
+Stdlib.Char.isLetter('a') = error="Unresolved callable name: Stdlib.Char.isLetter"
+Stdlib.Float.toInt(1.0) = error="Unresolved callable name: Stdlib.Float.toInt"
+Stdlib.Math.floor(1.0) = error="Unresolved callable name: Stdlib.Math.floor"
+Stdlib.Bytes.create(1) = error="Unresolved callable name: Stdlib.Bytes.create"
+Stdlib.Base64.urlDecode("YQ==") = error="Unresolved callable name: Stdlib.Base64.urlDecode"
+Stdlib.Crypto.sha1(Stdlib.Blob.fromString("a")) = error="Unresolved callable name: Stdlib.Crypto.sha1"
+Stdlib.File.exists("/") = error="Unresolved callable name: Stdlib.File.exists"
+Stdlib.Html.s([], []) = error="Unresolved callable name: Stdlib.Html.s"

@@ -8339,6 +8339,26 @@ let private checkProgramInternal
     (warningSettings: WarningSettings)
     (program: Program)
     : Result<Type * Program * TypeCheckEnv, TypeError> =
+    // These declarations exist only to implement retained portable stdlib APIs.
+    // They are checked while the stdlib is built in isolation, but must never
+    // become candidates while resolving a separately compiled source program.
+    let compilerImplementationNames =
+        Set.ofList [
+            "Stdlib.String.getByteAt"; "Stdlib.String.substring"; "Stdlib.String.take"; "Stdlib.String.drop"
+            "Stdlib.String.toCodepoints"; "Stdlib.String.codepointLength"; "Stdlib.String.fromCodepoints"
+            "Stdlib.String.toUpperCase"; "Stdlib.String.toGraphemes"; "Stdlib.String.graphemeLength"
+            "Stdlib.String.replace"; "Stdlib.String.equals"
+            "Stdlib.Char.isLetter"; "Stdlib.Char.isWhitespace"; "Stdlib.Char.isAlphanumeric"; "Stdlib.Char.toCode"; "Stdlib.Char.fromCode"
+            "Stdlib.Float.abs"; "Stdlib.Float.toInt"; "Stdlib.Float.toBits"
+            "Stdlib.Math.e"; "Stdlib.Math.abs"; "Stdlib.Math.sqrt"; "Stdlib.Math.truncate"; "Stdlib.Math.floor"; "Stdlib.Math.ceiling"; "Stdlib.Math.round"
+            "Stdlib.Bytes.create"; "Stdlib.Bytes.fromList"; "Stdlib.Bytes.get"; "Stdlib.Bytes.hexEncode"; "Stdlib.Bytes.length"; "Stdlib.Bytes.set"; "Stdlib.Bytes.toList"
+            "Stdlib.Base64.urlDecode"; "Stdlib.Crypto.sha1"; "Stdlib.Crypto.bytesToHex"
+            "Stdlib.File.readText"; "Stdlib.File.exists"; "Stdlib.File.writeText"; "Stdlib.File.appendText"; "Stdlib.File.delete"; "Stdlib.File.setExecutable"; "Stdlib.File.writeFromPtr" ]
+    let isCompilerImplementationCandidate (candidate: NameResolution.Candidate) =
+        match candidate.Provenance with
+        | NameResolution.SourceDeclaration name
+        | NameResolution.CompilerExtension name -> Set.contains name compilerImplementationNames
+        | _ -> false
     let (Program topLevels) = program
     let declarationValidation =
         if validateDeclarations then
@@ -8355,7 +8375,10 @@ let private checkProgramInternal
         declarationResolutionEnvironment topLevels moduleRegistry (Option.isNone baseEnv)
     let resolutionEnv =
         match baseEnv with
-        | Some existingEnv -> NameResolution.merge existingEnv.ResolutionEnv localResolutionEnv
+        | Some existingEnv ->
+            existingEnv.ResolutionEnv
+            |> NameResolution.filterCandidates (isCompilerImplementationCandidate >> not)
+            |> fun publicBaseEnv -> NameResolution.merge publicBaseEnv localResolutionEnv
         | None -> localResolutionEnv
 
     declarationValidation

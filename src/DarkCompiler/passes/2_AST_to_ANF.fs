@@ -341,16 +341,6 @@ let tryFloatIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr optio
         Some (ANF.FloatToBits xAtom)
     | _ -> None
 
-/// Try to constant-fold platform/path intrinsics at compile time
-/// Returns Some CExpr if it's a constant-foldable intrinsic, None otherwise
-let tryConstantFoldIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
-    let args = normalizeNullaryIntrinsicArgs args
-    match funcName, args with
-    | "Stdlib.Path.tempDir", [] ->
-        // Both macOS and Linux use /tmp
-        Some (ANF.Atom (ANF.StringLiteral "/tmp"))
-    | _ -> None
-
 /// Try to convert a function call to a raw memory intrinsic CExpr
 /// These are internal-only functions for implementing HAMT data structures
 /// Returns Some CExpr if it's a raw memory intrinsic, None otherwise
@@ -5707,13 +5697,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                         Ok (withArgSetups finalExpr, varGen2)
                     | None ->
-                    // Check if it's a constant-fold intrinsic (Platform, Path)
-                    match tryConstantFoldIntrinsic funcName argAtoms with
-                    | Some intrinsicExpr ->
-                        // Constant-folded intrinsic
-                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | None ->
                     // Check if it's a random intrinsic
                     match tryRandomIntrinsic funcName argAtoms with
                     | Some intrinsicExpr ->
@@ -9555,27 +9538,20 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                                 let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                                 Ok (ANF.Var tempVar, allBindings, varGen2)
                             | None ->
-                                // Check if it's a constant-fold intrinsic (Platform, Path)
-                                match tryConstantFoldIntrinsic funcName argAtoms with
+                                // Check if it's a random intrinsic
+                                match tryRandomIntrinsic funcName argAtoms with
                                 | Some intrinsicExpr ->
-                                    // Constant-folded intrinsic
+                                    // Random intrinsic call
                                     let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                                     Ok (ANF.Var tempVar, allBindings, varGen2)
                                 | None ->
-                                    // Check if it's a random intrinsic
-                                    match tryRandomIntrinsic funcName argAtoms with
+                                    // Check if it's a DateTime intrinsic.
+                                    match tryDateTimeIntrinsic funcName argAtoms with
                                     | Some intrinsicExpr ->
-                                        // Random intrinsic call
+                                        // DateTime intrinsic call.
                                         let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                                         Ok (ANF.Var tempVar, allBindings, varGen2)
                                     | None ->
-                                        // Check if it's a DateTime intrinsic.
-                                        match tryDateTimeIntrinsic funcName argAtoms with
-                                        | Some intrinsicExpr ->
-                                            // DateTime intrinsic call.
-                                            let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
-                                            Ok (ANF.Var tempVar, allBindings, varGen2)
-                                        | None ->
                                             // Assume it's a defined function (direct call)
                                             let callArgAtoms =
                                                 match Map.tryFind funcName funcReg with

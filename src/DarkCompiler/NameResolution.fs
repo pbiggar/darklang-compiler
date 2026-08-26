@@ -141,6 +141,10 @@ let addCandidate (candidate: Candidate) (ResolutionEnvironment candidates) : Res
 let addCandidates (newCandidates: Candidate list) (ResolutionEnvironment candidates) : ResolutionEnvironment =
     ResolutionEnvironment (newCandidates @ candidates)
 
+/// Keep only candidates accepted by a compilation boundary.
+let filterCandidates (predicate: Candidate -> bool) (ResolutionEnvironment candidates) : ResolutionEnvironment =
+    candidates |> List.filter predicate |> ResolutionEnvironment
+
 let merge (ResolutionEnvironment baseCandidates) (ResolutionEnvironment overlayCandidates) : ResolutionEnvironment =
     let imported (candidate: Candidate) : Candidate =
         let provenance =

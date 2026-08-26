@@ -5,29 +5,6 @@ module Stdlib.Math
 let pi() : Float = 3.141592653589793
 let tau() : Float = 2.0 * Stdlib.Math.pi()
 
-// Compiler extensions retained for compatibility with existing compiled code.
-let e() : Float = 2.718281828459045
-let abs(x: Float) : Float = Stdlib.Float.abs(x)
-let sqrt(x: Float) : Float = Stdlib.Float.sqrt(x)
-let truncate(x: Float) : Int64 = Stdlib.Float.toInt(x)
-
-let floor(x: Float) : Int64 =
-    let truncated = Stdlib.Float.toInt(x) in
-    if x < Stdlib.Int64.toFloat(truncated) then truncated - 1 else truncated
-
-let ceiling(x: Float) : Int64 =
-    let truncated = Stdlib.Float.toInt(x) in
-    if x > Stdlib.Int64.toFloat(truncated) then truncated + 1 else truncated
-
-let round(x: Float) : Int64 =
-    let lower = Stdlib.Math.floor(x) in
-    let upper = Stdlib.Math.ceiling(x) in
-    let distanceFromLower = x - Stdlib.Int64.toFloat(lower) in
-    if distanceFromLower < 0.5 then lower
-    else if distanceFromLower > 0.5 then upper
-    else if lower % 2 == 0 then lower
-    else upper
-
 let degrees(angleInDegrees: Float) : Float =
     (angleInDegrees * Stdlib.Math.pi()) / 180.0
 

@@ -37,17 +37,8 @@ Interpreter parity includes `Float.ParseError.BadFormat`; `ceiling`,
 functions such as Float arithmetic, `absoluteValue`, `negate`, `sqrt`,
 `toString`, and Math `pi`, `tau`, `degrees`, `turns`, and `radians` remain.
 
-The following are compiler extensions and are deliberately separate from the
-parity surface:
-
-- `Float.abs : Float -> Float`, `Float.toInt : Float -> Int64`, and
-  `Float.toBits : Float -> UInt64`;
-- `Math.e`, `Math.abs`, `Math.sqrt`, and the Int64-returning `Math.truncate`,
-  `Math.floor`, `Math.ceiling`, and `Math.round`.
-
 No runtime type dispatch is introduced. The parity rounding functions return
-arbitrary-precision `Int`; the similarly named Math extensions retain their
-existing Int64 results.
+arbitrary-precision `Int`; compiler implementation helpers are private.
 
 ## Rounding, classification, and clamp
 

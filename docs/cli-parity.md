@@ -60,9 +60,8 @@ above. The benchmark's pinned Dark baseline is
 
 ## Boundaries and non-claims
 
-The compiler still exposes the older `Stdlib.File` and `Stdlib.Path` intrinsics.
-They are compiler-only extensions and are not evidence for the canonical CLI
-contracts. `Stdlib.Cli.Path.resolve` currently has canonical behavior only for
+`Stdlib.Path.tempDir` is an ordinary portable Dark definition. The older
+`Stdlib.File` intrinsic surface is not source-resolvable. `Stdlib.Cli.Path.resolve` currently has canonical behavior only for
 absolute inputs: relative inputs require the process-state `getcwd` primitive.
 The loaded `Stdlib.Cli.Posix.Error` and `StatResult` declarations establish the
 canonical public shapes but do not stand in for native POSIX operations.
