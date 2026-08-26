@@ -5,10 +5,10 @@
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
   "contract_sha256": "1b03683abfad94c4640c3e1ea843ca087c47281c1104818fb22c1df5bff63ee3",
-  "generated_at": "2026-08-26T13:07:20+00:00",
+  "generated_at": "2026-08-26T21:39:34+00:00",
   "compiler": {
-    "commit": "166ae8a7bc17230b8fdaa6a16f8de3705539f9fe",
-    "subject": "Repair multiplication recursion MIR snapshots"
+    "commit": "a3a3c17a36e18e7229823458e7198c07e085067d",
+    "subject": "Check nbody review changes"
   },
   "benchmarks": [
     {
@@ -57,7 +57,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 1074002348
+      "instructions": 1003502308
     },
     {
       "name": "nqueen",

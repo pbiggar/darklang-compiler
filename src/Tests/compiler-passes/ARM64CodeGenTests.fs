@@ -71,6 +71,34 @@ let private makeSimpleProgramWithRecords
     }
     LIR.Program ([func], Map.empty, records)
 
+/// Native record descriptors are compile-time metadata. This fixture locks the
+/// compact payload layout at ARM64 codegen: fields begin at byte zero and no
+/// descriptor immediate is materialized in the heap object.
+let testCompactRecordFieldsStartAtOffsetZero () : TestResult =
+    let records : LIR.RecordRegistry =
+        Map.ofList [ ("Arm64CompactRecord", [("left", AST.TInt64); ("right", AST.TInt64)]) ]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X1, 16)
+                LIR.HeapStore (LIR.Physical LIR.X1, 0, LIR.Imm 10L, None)
+                LIR.HeapStore (LIR.Physical LIR.X1, 8, LIR.Imm 20L, None)
+            ]
+            records
+
+    match CodeGen.generateARM64 target program with
+    | Error error -> Error $"Compact record ARM64 lowering failed: {error}"
+    | Ok instructions ->
+        let fieldStoreOffsets =
+            instructions
+            |> List.choose (function
+                | ARM64Symbolic.STR (ARM64.X9, ARM64.X1, offset) -> Some offset
+                | _ -> None)
+        if fieldStoreOffsets = [0s; 8s] then
+            Ok ()
+        else
+            Error $"Expected compact record field stores at offsets 0 and 8 only, got {fieldStoreOffsets}"
+
 let private emitsPlannedListHelperLabel (instrs: ARM64Symbolic.Instr list) : bool =
     instrs
     |> List.exists (function
@@ -1606,6 +1634,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
 let tests : (string * (unit -> TestResult)) list = [
     ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
+    ("ARM64 compact record fields start at offset zero", testCompactRecordFieldsStartAtOffsetZero)
     ("Generated ARM64 entry uses allocator transfers only", testGeneratedEntryUsesAllocatorTransfersOnly)
     ("ARM64 Sleep normalizes timeout and retries nanosleep", testSleepUsesNormalizedInterruptSafeNanosleep)
     ("ARM64 peephole fuses bit-clear sequence", testPeepholeFusesBitClearSequence)
