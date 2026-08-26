@@ -1,0 +1,11 @@
+// TinyTemplate 1.2.1-inspired compiler/interpreter application benchmark.
+// The selected syntax is documented by tinytemplate 1.2.1: values, if/else,
+// and for blocks. The compiler emits an instruction stream and render executes it.
+type Instruction = Text of String | Title | Enabled | Items
+let findAt(source: String, needle: String, index: Int64) : Int64 = match Stdlib.String.__byteIndexOfFrom(source, needle, index) with | Some(found) -> found | None -> Builtin.testRuntimeError("Valid TinyTemplate source required")
+let compile(source: String) : List<Instruction> = let title = findAt(source, "{ title }", 0) in let conditional = findAt(source, "{{ if enabled }}", title) in let endConditional = findAt(source, "{{ endif }}", conditional) in let loop = findAt(source, "{{ for item in items }}", endConditional) in let endLoop = findAt(source, "{{ endfor }}", loop) in [Text(Stdlib.String.substring(source, 0, title)); Title; Text(Stdlib.String.substring(source, title + 9, conditional)); Enabled; Text(Stdlib.String.substring(source, endConditional + 11, loop)); Items; Text(Stdlib.String.substring(source, endLoop + 12, Stdlib.String.__byteLength(source)))]
+let renderItems(items: List<String>, output: String) : String = match items with | [] -> output | item :: rest -> renderItems(rest, output ++ item ++ ",")
+let render(instructions: List<Instruction>, output: String) : String = match instructions with | [] -> output | instruction :: rest -> match instruction with | Text(text) -> render(rest, output ++ text) | Title -> render(rest, output ++ "Release notes") | Enabled -> render(rest, output ++ "Active") | Items -> render(rest, renderItems(["parser", "renderer", "cache", "compiler", "runtime"], output))
+let checksum(text: String, index: Int64, total: Int64) : Int64 = if index >= Stdlib.String.__byteLength(text) then total else checksum(text, index + 1, (total * 31 + Stdlib.String.getByteAt(text, index)) % 1000000007)
+let run(remaining: Int64, source: String, total: Int64) : Int64 = if remaining == 0 then total else let program = compile(source) in run(remaining - 1, source, (total + checksum(render(program, ""), 0, 0)) % 1000000007)
+let source = "Report: { title }\n{{ if enabled }}Active{{ else }}Disabled{{ endif }}\nTags: {{ for item in items }}{ item },{{ endfor }}\n" in Builtin.printLine(Stdlib.Int64.toString(run(800, source, 0)))

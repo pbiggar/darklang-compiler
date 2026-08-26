@@ -258,6 +258,18 @@
         "rust_sha256": "5d7794db4292372508bd87f6b584b0a73483aebc98d3e2ffcdc51da8db6c0d41",
         "expected_sha256": "2e6d31a5983a91251bfae5aefa1c0a19d8ba3cf601d0e8a706b4cfa9661a6b8a"
       }
+    },
+    "tinytemplate": {
+      "status": "comparable",
+      "dark_sha256": "7926f7d7246c3161bc96671080f25e318c0a6e744341f446bc5578d925bca28f",
+      "rust_sha256": "c626ea51859df44681284674528c361b7101d452f25b24e94b0a65c207455248",
+      "expected_sha256": "07d23b59993d8dbeb073aae43caf01cb22def37a35354f5ca8515ee2b2b4a2c3",
+      "quick": {
+        "status": "comparable",
+        "dark_sha256": "0e73fb8b64491d4b57aaa590174db73a17484357f511c500be05984c8351d2d8",
+        "rust_sha256": "29cf9fc103e7a300c1721b75ca380e1aeac6db74c7f73fb9979468bd8d71113f",
+        "expected_sha256": "3f15a5a50d2a904795aec277f64d2267ff29145b099fde21125011192059ec9f"
+      }
     }
   }
 }

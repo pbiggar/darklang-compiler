@@ -17,3 +17,4 @@ quicksort
 spectral_norm
 sum_to_n
 tak
+tinytemplate

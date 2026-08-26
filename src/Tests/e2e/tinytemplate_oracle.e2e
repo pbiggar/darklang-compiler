@@ -1,0 +1,17 @@
+// TinyTemplate 1.2.1 rendering cases used by the application benchmark.
+// The selected documented success cases exercise scalar interpolation,
+// conditional selection, and repeated collection rendering.
+
+type TemplateItem = { name: String, price: Int64 }
+
+let renderItems(items: List<TemplateItem>) : String =
+    match items with
+    | [] -> ""
+    | item :: rest -> "- " ++ item.name ++ ": " ++ Stdlib.Int64.toString(item.price) ++ "\n" ++ renderItems(rest)
+
+let renderDashboard(userName: String, isAdmin: Bool, items: List<TemplateItem>) : String =
+    let role = if isAdmin then "administrator" else "member" in
+    "Hello " ++ userName ++ "!\nRole: " ++ role ++ "\nItems:\n" ++ renderItems(items)
+
+renderDashboard("Ada", true, [TemplateItem { name = "book", price = 12 }, TemplateItem { name = "lamp", price = 7 }]) = "Hello Ada!\nRole: administrator\nItems:\n- book: 12\n- lamp: 7\n"
+renderDashboard("Lin", false, []) = "Hello Lin!\nRole: member\nItems:\n"
