@@ -714,6 +714,76 @@ Function loop:
     branch v10028 ? loop_L2 : loop_L1
 
 ---NAME---
+derived_induction_affine_int8
+---INPUT---
+let loop(i: Int8, n: Int8, a: Int8, total: Int8) : Int8 =
+    if i >= n then total
+    else
+        let value = a * i + 3y in
+        loop(i + 1y, n, a, total + value)
+---EXPECTED---
+Function loop:
+  loop_entry:
+    v10041 <- v0 * v2 : TInt8
+    v10042 <- v10041 + 3 : TInt8
+    jump loop_body
+  loop_L1:
+    v10031 <- v10027 + 1 : TInt8
+    v10032 <- v10024 + v10030 : TInt8
+    v10043 <- v10030 + v10025 : TInt8
+    v10044 <- v10043 : TInt8
+    v10037 <- v10031 : TInt8
+    v10038 <- v10026 : TInt8
+    v10039 <- v10025 : TInt8
+    v10040 <- v10032 : TInt8
+    jump loop_body
+  loop_L2:
+    ret v10024
+  loop_body:
+    v10024 <- Phi([(v3, loop_entry), (v10040, loop_L1)]) : TInt8
+    v10025 <- Phi([(v2, loop_entry), (v10039, loop_L1)]) : TInt8
+    v10026 <- Phi([(v1, loop_entry), (v10038, loop_L1)]) : TInt8
+    v10027 <- Phi([(v0, loop_entry), (v10037, loop_L1)]) : TInt8
+    v10030 <- Phi([(v10042, loop_entry), (v10044, loop_L1)]) : TInt8
+    v10028 <- v10027 >= v10026 : TInt8
+    branch v10028 ? loop_L2 : loop_L1
+
+---NAME---
+derived_induction_affine_uint8
+---INPUT---
+let loop(i: UInt8, n: UInt8, a: UInt8, total: UInt8) : UInt8 =
+    if i >= n then total
+    else
+        let value = a * i + 3uy in
+        loop(i + 1uy, n, a, total + value)
+---EXPECTED---
+Function loop:
+  loop_entry:
+    v10041 <- v0 * v2 : TUInt8
+    v10042 <- v10041 + 3 : TUInt8
+    jump loop_body
+  loop_L1:
+    v10031 <- v10027 + 1 : TUInt8
+    v10032 <- v10024 + v10030 : TUInt8
+    v10043 <- v10030 + v10025 : TUInt8
+    v10044 <- v10043 : TUInt8
+    v10037 <- v10031 : TUInt8
+    v10038 <- v10026 : TUInt8
+    v10039 <- v10025 : TUInt8
+    v10040 <- v10032 : TUInt8
+    jump loop_body
+  loop_L2:
+    ret v10024
+  loop_body:
+    v10024 <- Phi([(v3, loop_entry), (v10040, loop_L1)]) : TUInt8
+    v10025 <- Phi([(v2, loop_entry), (v10039, loop_L1)]) : TUInt8
+    v10026 <- Phi([(v1, loop_entry), (v10038, loop_L1)]) : TUInt8
+    v10027 <- Phi([(v0, loop_entry), (v10037, loop_L1)]) : TUInt8
+    v10030 <- Phi([(v10042, loop_entry), (v10044, loop_L1)]) : TUInt8
+    v10028 <- v10027 >= v10026 : TUInt8
+    branch v10028 ? loop_L2 : loop_L1
+
+---NAME---
 closure_devirtualization_capture_free_local
 ---INPUT---
 let applyOnce(value: Int64) : Int64 =

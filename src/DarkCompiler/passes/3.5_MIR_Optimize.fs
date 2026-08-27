@@ -438,6 +438,7 @@ type private AffineInductionCandidate = {
     Offset: Operand
     PreheaderOffset: Operand
     OffsetOperator: BinOp
+    ValueType: AST.Type
     ScaleInstr: Instr
     AffineInstr: Instr
 }
@@ -473,10 +474,22 @@ let private resolveLatchCopy (instrs: Instr list) (register: VReg) : VReg =
             | None -> current
     resolve Set.empty register
 
-let private isIncrementByOne (inductionPhi: VReg) (nextValue: VReg) (instr: Instr) : bool =
+let private isNativeWrappingIntegerType (valueType: AST.Type) : bool =
+    match valueType with
+    | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> true
+    | _ -> false
+
+let private isIncrementByOne
+    (valueType: AST.Type)
+    (inductionPhi: VReg)
+    (nextValue: VReg)
+    (instr: Instr)
+    : bool =
     match instr with
-    | BinOp (dest, Add, Register source, Int64Const 1L, AST.TInt64)
-    | BinOp (dest, Add, Int64Const 1L, Register source, AST.TInt64) ->
+    | BinOp (dest, Add, Register source, Int64Const 1L, instructionType)
+    | BinOp (dest, Add, Int64Const 1L, Register source, instructionType)
+        when instructionType = valueType ->
         dest = nextValue && source = inductionPhi
     | _ -> false
 
@@ -497,6 +510,7 @@ let private isAffineOperandLoopInvariant
     (latch: Label)
     (loopBlocks: Set<Label>)
     (cfg: CFG)
+    (valueType: AST.Type)
     (operand: Operand)
     : bool =
     match operand with
@@ -512,7 +526,8 @@ let private isAffineOperandLoopInvariant
 
         match definitions with
         | [] -> true
-        | [Phi (destination, sources, Some AST.TInt64)] when destination = register ->
+        | [Phi (destination, sources, Some phiType)]
+            when destination = register && phiType = valueType ->
             let preheaderSources = sources |> List.filter (fun (_, label) -> label = preheader)
             let latchSources = sources |> List.filter (fun (_, label) -> label = latch)
             match sources, preheaderSources, latchSources, Map.tryFind latch cfg.Blocks with
@@ -526,13 +541,15 @@ let private isAffineOperandLoopInvariant
 let private affineOperandAtPreheader
     (headerInstrs: Instr list)
     (preheader: Label)
+    (valueType: AST.Type)
     (operand: Operand)
     : Operand =
     match operand with
     | Register register ->
         headerInstrs
         |> List.tryPick (function
-            | Phi (destination, sources, Some AST.TInt64) when destination = register ->
+            | Phi (destination, sources, Some phiType)
+                when destination = register && phiType = valueType ->
                 sources
                 |> List.tryPick (fun (source, label) -> if label = preheader then Some source else None)
             | _ -> None)
@@ -544,46 +561,47 @@ let private tryAffineExpression
     (latchLabel: Label)
     (latch: BasicBlock)
     (inductionPhi: VReg)
+    (valueType: AST.Type)
     (isLoopInvariant: Operand -> bool)
     : (VReg * Operand * Operand * BinOp * Instr * Instr) option =
     let candidates =
         latch.Instrs
         |> List.collect (fun scaleInstr ->
             match scaleInstr with
-            | BinOp (scaledValue, Shl, Register source, Int64Const 1L, AST.TInt64)
-                when source = inductionPhi ->
+            | BinOp (scaledValue, Shl, Register source, Int64Const 1L, instructionType)
+                when source = inductionPhi && instructionType = valueType ->
                 latch.Instrs
                 |> List.choose (fun affineInstr ->
                     match affineInstr with
-                    | BinOp (affineValue, (Add | Sub as offsetOperator), Register scaledSource, offset, AST.TInt64)
-                        when scaledSource = scaledValue && isLoopInvariant offset ->
+                    | BinOp (affineValue, (Add | Sub as offsetOperator), Register scaledSource, offset, affineType)
+                        when scaledSource = scaledValue && affineType = valueType && isLoopInvariant offset ->
                         Some (scaledValue, affineValue, Int64Const 2L, offset, offsetOperator, scaleInstr, affineInstr)
-                    | BinOp (affineValue, Add, offset, Register scaledSource, AST.TInt64)
-                        when scaledSource = scaledValue && isLoopInvariant offset ->
+                    | BinOp (affineValue, Add, offset, Register scaledSource, affineType)
+                        when scaledSource = scaledValue && affineType = valueType && isLoopInvariant offset ->
                         Some (scaledValue, affineValue, Int64Const 2L, offset, Add, scaleInstr, affineInstr)
                     | _ -> None)
-            | BinOp (scaledValue, Mul, Register source, coefficient, AST.TInt64)
-                when source = inductionPhi && isLoopInvariant coefficient ->
+            | BinOp (scaledValue, Mul, Register source, coefficient, instructionType)
+                when source = inductionPhi && instructionType = valueType && isLoopInvariant coefficient ->
                 latch.Instrs
                 |> List.choose (fun affineInstr ->
                     match affineInstr with
-                    | BinOp (affineValue, (Add | Sub as offsetOperator), Register scaledSource, offset, AST.TInt64)
-                        when scaledSource = scaledValue && isLoopInvariant offset ->
+                    | BinOp (affineValue, (Add | Sub as offsetOperator), Register scaledSource, offset, affineType)
+                        when scaledSource = scaledValue && affineType = valueType && isLoopInvariant offset ->
                         Some (scaledValue, affineValue, coefficient, offset, offsetOperator, scaleInstr, affineInstr)
-                    | BinOp (affineValue, Add, offset, Register scaledSource, AST.TInt64)
-                        when scaledSource = scaledValue && isLoopInvariant offset ->
+                    | BinOp (affineValue, Add, offset, Register scaledSource, affineType)
+                        when scaledSource = scaledValue && affineType = valueType && isLoopInvariant offset ->
                         Some (scaledValue, affineValue, coefficient, offset, Add, scaleInstr, affineInstr)
                     | _ -> None)
-            | BinOp (scaledValue, Mul, coefficient, Register source, AST.TInt64)
-                when source = inductionPhi && isLoopInvariant coefficient ->
+            | BinOp (scaledValue, Mul, coefficient, Register source, instructionType)
+                when source = inductionPhi && instructionType = valueType && isLoopInvariant coefficient ->
                 latch.Instrs
                 |> List.choose (fun affineInstr ->
                     match affineInstr with
-                    | BinOp (affineValue, (Add | Sub as offsetOperator), Register scaledSource, offset, AST.TInt64)
-                        when scaledSource = scaledValue && isLoopInvariant offset ->
+                    | BinOp (affineValue, (Add | Sub as offsetOperator), Register scaledSource, offset, affineType)
+                        when scaledSource = scaledValue && affineType = valueType && isLoopInvariant offset ->
                         Some (scaledValue, affineValue, coefficient, offset, offsetOperator, scaleInstr, affineInstr)
-                    | BinOp (affineValue, Add, offset, Register scaledSource, AST.TInt64)
-                        when scaledSource = scaledValue && isLoopInvariant offset ->
+                    | BinOp (affineValue, Add, offset, Register scaledSource, affineType)
+                        when scaledSource = scaledValue && affineType = valueType && isLoopInvariant offset ->
                         Some (scaledValue, affineValue, coefficient, offset, Add, scaleInstr, affineInstr)
                     | _ -> None)
             | _ -> [])
@@ -628,7 +646,8 @@ let private tryAffineInductionCandidate
                 headerBlock.Instrs
                 |> List.choose (fun instr ->
                     match instr with
-                    | Phi (inductionPhi, sources, Some AST.TInt64) ->
+                    | Phi (inductionPhi, sources, Some valueType)
+                        when isNativeWrappingIntegerType valueType ->
                         let initialSources =
                             sources |> List.filter (fun (_, source) -> source = preheader)
                         let backedgeSources =
@@ -637,10 +656,10 @@ let private tryAffineInductionCandidate
                         | [ _; _ ], [(initialValue, _)], [(Register nextValue, _)] ->
                             let resolvedNext = resolveLatchCopy latch.Instrs nextValue
                             let advancesByOne =
-                                latch.Instrs |> List.exists (isIncrementByOne inductionPhi resolvedNext)
+                                latch.Instrs |> List.exists (isIncrementByOne valueType inductionPhi resolvedNext)
                             let isLoopInvariant =
-                                isAffineOperandLoopInvariant preheader latchLabel loopBlocks cfg
-                            match advancesByOne, tryAffineExpression cfg latchLabel latch inductionPhi isLoopInvariant with
+                                isAffineOperandLoopInvariant preheader latchLabel loopBlocks cfg valueType
+                            match advancesByOne, tryAffineExpression cfg latchLabel latch inductionPhi valueType isLoopInvariant with
                             | true, Some (affineValue, coefficient, offset, offsetOperator, scaleInstr, affineInstr) ->
                                 Some {
                                     Header = header
@@ -649,10 +668,11 @@ let private tryAffineInductionCandidate
                                     InitialValue = initialValue
                                     AffineValue = affineValue
                                     Coefficient = coefficient
-                                    PreheaderCoefficient = affineOperandAtPreheader headerBlock.Instrs preheader coefficient
+                                    PreheaderCoefficient = affineOperandAtPreheader headerBlock.Instrs preheader valueType coefficient
                                     Offset = offset
-                                    PreheaderOffset = affineOperandAtPreheader headerBlock.Instrs preheader offset
+                                    PreheaderOffset = affineOperandAtPreheader headerBlock.Instrs preheader valueType offset
                                     OffsetOperator = offsetOperator
+                                    ValueType = valueType
                                     ScaleInstr = scaleInstr
                                     AffineInstr = affineInstr
                                 }
@@ -693,7 +713,7 @@ let private insertAfterLastUse (value: VReg) (inserted: Instr list) (instrs: Ins
         Crash.crash "insertAfterLastUse: affine induction value has no latch use"
 
 (*
-Recognize a two-block Int64 loop with an `i + 1` backedge and a unique
+Recognize a two-block native-width integer loop with an `i + 1` backedge and a unique
 `a * i + b` use chain. `a` and `b` must be loop-invariant, so the preheader can
 compute the initial value and the latch can advance the derived phi by `a` with
 the same wrapping arithmetic. Reject extra scaled-value uses and non-canonical
@@ -719,7 +739,8 @@ let private applyAffineInductionStrengthReductionWithTopology
         let firstFreshRegister = nextRegisterId cfg
         let (initialScaleOperator, initialScaleOperand) =
             match candidate.ScaleInstr with
-            | BinOp (_, Shl, _, _, AST.TInt64) -> (Shl, Int64Const 1L)
+            | BinOp (_, Shl, _, _, instructionType) when instructionType = candidate.ValueType ->
+                (Shl, Int64Const 1L)
             | _ -> (Mul, candidate.PreheaderCoefficient)
         let initialScaled = VReg firstFreshRegister
         let initialAffine = VReg (firstFreshRegister + 1)
@@ -731,14 +752,14 @@ let private applyAffineInductionStrengthReductionWithTopology
                 initialScaleOperator,
                 candidate.InitialValue,
                 initialScaleOperand,
-                AST.TInt64
+                candidate.ValueType
             )
             BinOp (
                 initialAffine,
                 candidate.OffsetOperator,
                 Register initialScaled,
                 candidate.PreheaderOffset,
-                AST.TInt64
+                candidate.ValueType
             )
         ]
         let derivedPhi =
@@ -748,7 +769,7 @@ let private applyAffineInductionStrengthReductionWithTopology
                     (Register initialAffine, candidate.Preheader)
                     (Register nextAffinePhiSource, candidate.Latch)
                 ],
-                Some AST.TInt64
+                Some candidate.ValueType
             )
         let advanceDerived =
             BinOp (
@@ -756,10 +777,10 @@ let private applyAffineInductionStrengthReductionWithTopology
                 Add,
                 Register candidate.AffineValue,
                 candidate.Coefficient,
-                AST.TInt64
+                candidate.ValueType
             )
         let copyDerivedToPhiSource =
-            Mov (nextAffinePhiSource, Register nextAffine, Some AST.TInt64)
+            Mov (nextAffinePhiSource, Register nextAffine, Some candidate.ValueType)
 
         let blocks =
             cfg.Blocks
@@ -975,7 +996,7 @@ let private tryCountedLoopUnrollCandidate
                         match backedge with
                         | Register nextValue ->
                             let resolvedNext = resolveLatchCopy latchBlock.Instrs nextValue
-                            Some (latchBlock.Instrs |> List.exists (isIncrementByOne induction resolvedNext))
+                            Some (latchBlock.Instrs |> List.exists (isIncrementByOne AST.TInt64 induction resolvedNext))
                         | _ -> Some false
                     else
                         None)
