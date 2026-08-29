@@ -263,13 +263,13 @@
       "status": "comparable",
       "dark_sha256": "9f6c0e6c12bf1ebb001dd749743e919552cf81f59d7a0ca51147f388a87e84f2",
       "rust_sha256": "7bd0c8e4c1d08536a8404e209b5304218f3db25415f30e4246299b07ba91de8e",
-      "rust_tree_sha256": "dd43b6d8a66f80b6dc8b6ebd7d895e80ad1c6958ed10c5c85ac4bd5a4189b9ce",
+      "rust_tree_sha256": "0e96fd27567a486c5c3cd989c9dc9c986ad2c9320f2eb47d9322362058fc7ba8",
       "expected_sha256": "fa8016a383a5aa6c842a14cf0a751e50ec6829b2e8fcd25b92eaae9795f7ce23",
       "quick": {
         "status": "comparable",
         "dark_sha256": "03cc04a13d5fe2e599d94bba190ca65f222eaa56eda87f24ead4eae33c37d673",
         "rust_sha256": "f7b2420fea8928b9e28731bd7884c95a1cc59d73e1fd5b1f9d45f65462b05de7",
-        "rust_tree_sha256": "dd43b6d8a66f80b6dc8b6ebd7d895e80ad1c6958ed10c5c85ac4bd5a4189b9ce",
+        "rust_tree_sha256": "0e96fd27567a486c5c3cd989c9dc9c986ad2c9320f2eb47d9322362058fc7ba8",
         "expected_sha256": "7baeb5eed38c348aa78628c1ac55c44f55c795dc3fcdb9230e3eab45da5f3e75"
       }
     }
