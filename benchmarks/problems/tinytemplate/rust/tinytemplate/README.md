@@ -49,7 +49,7 @@ needs for Criterion.rs. Some had large dependency trees to support features that
 required adding a build script to convert templates into code at runtime, in search of extreme
 performance that I didn't need. Some had elaborate macro-based DSL's to generate HTML, where I just
 wanted plain text with some markup. Some expect the templates to be provided in a directory of text
-files, but I wanted the template to be included in the binary. I just wanted something small and 
+files, but I wanted the template to be included in the binary. I just wanted something small and
 minimal with good documentation but there was nothing like that out there so I wrote my own.
 
 TinyTemplate is well-suited to generating HTML reports and similar text files. It could be used for
