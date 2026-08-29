@@ -46,4 +46,4 @@ let spectralNorm(n: Int64) : Float =
     let v = result.1 in
     Stdlib.Float.sqrt(dot(0, n, u, v, 0.0) / dot(0, n, v, v, 0.0))
 
-Builtin.printLine(Stdlib.Int64.toString(Stdlib.Float.toInt(spectralNorm(100) * 1000000000.0)))
+Builtin.printLine(Stdlib.Int.toString(Stdlib.Float.roundTowardsZero(spectralNorm(100) * 1000000000.0)))

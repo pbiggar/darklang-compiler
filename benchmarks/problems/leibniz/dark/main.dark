@@ -12,4 +12,4 @@ let leibnizPi(n: Int64) : Float =
 
 // Use 100 million iterations for timing
 // Output as integer (multiply by large factor for precision)
-Builtin.printLine(Stdlib.Int64.toString(Stdlib.Float.toInt(leibnizPi(100000000) * 100000000.0)))
+Builtin.printLine(Stdlib.Int.toString(Stdlib.Float.roundTowardsZero(leibnizPi(100000000) * 100000000.0)))

@@ -10,4 +10,4 @@ let leibnizPi(n: Int64) : Float =
     leibnizLoop(0, n, 0.0, 1.0)
 
 // Reduced: 100000 iterations instead of 100000000
-Stdlib.Float.toInt(leibnizPi(100000) * 100000000.0)
+Stdlib.Float.roundTowardsZero(leibnizPi(100000) * 100000000.0)

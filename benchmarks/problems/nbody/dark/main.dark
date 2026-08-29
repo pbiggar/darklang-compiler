@@ -198,4 +198,4 @@ let initialSystem(): System =
 
 let system = offsetMomentum(initialSystem()) in
 let finalSystem = advance(system, 0.01, 500000) in
-Builtin.printLine(Stdlib.Int64.toString(Stdlib.Float.toInt(energy(finalSystem) * 1000000.0)))
+Builtin.printLine(Stdlib.Int.toString(Stdlib.Float.roundTowardsZero(energy(finalSystem) * 1000000.0)))
