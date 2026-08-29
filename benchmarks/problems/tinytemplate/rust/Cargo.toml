@@ -1,0 +1,21 @@
+[package]
+name = "dark-tinytemplate-benchmark"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tinytemplate = { path = "tinytemplate", version = "=1.2.1" }
+
+[[bin]]
+name = "benchmark-full"
+path = "main.rs"
+
+[[bin]]
+name = "benchmark-quick"
+path = "quick.rs"
+
+[profile.release]
+opt-level = 3

@@ -261,14 +261,16 @@
     },
     "tinytemplate": {
       "status": "comparable",
-      "dark_sha256": "7926f7d7246c3161bc96671080f25e318c0a6e744341f446bc5578d925bca28f",
-      "rust_sha256": "c626ea51859df44681284674528c361b7101d452f25b24e94b0a65c207455248",
-      "expected_sha256": "07d23b59993d8dbeb073aae43caf01cb22def37a35354f5ca8515ee2b2b4a2c3",
+      "dark_sha256": "9f6c0e6c12bf1ebb001dd749743e919552cf81f59d7a0ca51147f388a87e84f2",
+      "rust_sha256": "7bd0c8e4c1d08536a8404e209b5304218f3db25415f30e4246299b07ba91de8e",
+      "rust_tree_sha256": "dd43b6d8a66f80b6dc8b6ebd7d895e80ad1c6958ed10c5c85ac4bd5a4189b9ce",
+      "expected_sha256": "fa8016a383a5aa6c842a14cf0a751e50ec6829b2e8fcd25b92eaae9795f7ce23",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "0e73fb8b64491d4b57aaa590174db73a17484357f511c500be05984c8351d2d8",
-        "rust_sha256": "29cf9fc103e7a300c1721b75ca380e1aeac6db74c7f73fb9979468bd8d71113f",
-        "expected_sha256": "3f15a5a50d2a904795aec277f64d2267ff29145b099fde21125011192059ec9f"
+        "dark_sha256": "03cc04a13d5fe2e599d94bba190ca65f222eaa56eda87f24ead4eae33c37d673",
+        "rust_sha256": "f7b2420fea8928b9e28731bd7884c95a1cc59d73e1fd5b1f9d45f65462b05de7",
+        "rust_tree_sha256": "dd43b6d8a66f80b6dc8b6ebd7d895e80ad1c6958ed10c5c85ac4bd5a4189b9ce",
+        "expected_sha256": "7baeb5eed38c348aa78628c1ac55c44f55c795dc3fcdb9230e3eab45da5f3e75"
       }
     }
   }

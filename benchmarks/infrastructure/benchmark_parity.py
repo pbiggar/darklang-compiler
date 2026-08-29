@@ -17,6 +17,25 @@ def source_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def source_tree_hash(path: Path) -> str:
+    """Hash a Cargo benchmark's complete audited source tree deterministically."""
+    digest = hashlib.sha256()
+    files = sorted(
+        candidate
+        for candidate in path.rglob("*")
+        if candidate.is_file()
+        and "target" not in candidate.relative_to(path).parts
+        and candidate.name not in {"main", "quick"}
+    )
+    for candidate in files:
+        relative = candidate.relative_to(path).as_posix().encode()
+        digest.update(relative)
+        digest.update(b"\0")
+        digest.update(candidate.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def load_contract(benchmarks_dir: Path) -> dict[str, dict[str, object]]:
     contract_path = benchmarks_dir / "PARITY.json"
     data = json.loads(contract_path.read_text())
@@ -54,6 +73,15 @@ def validate_entry(
             failures.append(
                 f"{benchmark}: {language} source changed since its parity audit "
                 f"(expected {expected_hash or 'no hash'}, got {actual_hash})"
+            )
+
+    expected_tree_hash = entry.get("rust_tree_sha256")
+    if expected_tree_hash is not None:
+        actual_tree_hash = source_tree_hash(problem_dir / "rust")
+        if expected_tree_hash != actual_tree_hash:
+            failures.append(
+                f"{benchmark}: Rust source tree changed since its parity audit "
+                f"(expected {expected_tree_hash}, got {actual_tree_hash})"
             )
 
     shared_expected = problem_dir / "expected_output.txt"
@@ -111,6 +139,15 @@ def validate_entry(
             failures.append(
                 f"{benchmark}: {language} quick source changed since its parity audit "
                 f"(expected {expected_hash or 'no hash'}, got {actual_hash})"
+            )
+
+    expected_quick_tree_hash = quick.get("rust_tree_sha256")
+    if expected_quick_tree_hash is not None:
+        actual_quick_tree_hash = source_tree_hash(problem_dir / "rust")
+        if expected_quick_tree_hash != actual_quick_tree_hash:
+            failures.append(
+                f"{benchmark}: Rust quick source tree changed since its parity audit "
+                f"(expected {expected_quick_tree_hash}, got {actual_quick_tree_hash})"
             )
 
     quick_expected = problem_dir / "quick_expected_output.txt"

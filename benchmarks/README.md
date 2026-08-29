@@ -3,6 +3,8 @@
 Cross-language benchmarking system to measure compiled Darklang performance
 against human-audited Rust reference implementations. Other language programs
 remain available for diagnostics but do not contribute canonical ratios.
+See [APPLICATION-BENCHMARKS.md](APPLICATION-BENCHMARKS.md) for the research and
+selection criteria behind full-application workloads.
 
 ## Prerequisites
 
@@ -70,8 +72,10 @@ and discovery order contractual. The routine profile accepts only `comparable` f
 pairs; reduced, Dark-only, and incomparable programs remain available for
 diagnostics without contributing to canonical ratios.
 
-Rust is built with the suite's original `rustc -C opt-level=3` command. Dark is
-built with its normal native compiler pipeline. Fairness here means equivalent
+Rust single-file programs are built with `rustc -C opt-level=3`; vendored
+multi-file applications use a release Cargo profile with `opt-level = 3` and
+standardized `benchmark-full`/`benchmark-quick` binaries. Dark is built with its
+normal native compiler pipeline. Fairness here means equivalent
 algorithms, workloads, observable results, and source-level optimization
 opportunities—not forcing either compiler to miss legitimate optimizations.
 
@@ -199,7 +203,7 @@ benchmarks/
       quick_expected_output.txt # Shared reduced-workload output
       dark/main.dark         # Dark implementation
       dark/quick.dark        # Reduced Dark implementation
-      rust/main.rs           # Rust implementation
+      rust/main.rs           # Rust implementation or Cargo application driver
       rust/quick.rs           # Matching reduced Rust implementation
       python/main.py         # Python implementation
 

@@ -263,9 +263,22 @@ for bench in $BENCHMARKS; do
     if [ "$FORCE_BUILD" = true ] || [ ! -x "$QUICK_RUST_BIN" ] || [ "$QUICK_RUST" -nt "$QUICK_RUST_BIN" ]; then
         RUST_NEEDS_BUILD=true
     fi
-    if [ "$RUST_NEEDS_BUILD" = true ] && ! rustc -C opt-level=3 "$QUICK_RUST" -o "$QUICK_RUST_BIN" 2>/dev/null; then
-        BUILD_FAILURES+=("$bench/rust")
-        continue
+    if [ -f "$PROBLEM_DIR/rust/Cargo.toml" ] && [ -x "$QUICK_RUST_BIN" ] && \
+        find "$PROBLEM_DIR/rust" -path "$PROBLEM_DIR/rust/target" -prune -o -type f -newer "$QUICK_RUST_BIN" -print -quit | grep -q .; then
+        RUST_NEEDS_BUILD=true
+    fi
+    if [ "$RUST_NEEDS_BUILD" = true ]; then
+        if [ -f "$PROBLEM_DIR/rust/Cargo.toml" ]; then
+            if ! command -v cargo &> /dev/null || ! cargo build --release --manifest-path "$PROBLEM_DIR/rust/Cargo.toml" --bin benchmark-quick 2>/dev/null; then
+                BUILD_FAILURES+=("$bench/rust")
+                continue
+            fi
+            cp "$PROBLEM_DIR/rust/target/release/benchmark-quick" "$QUICK_RUST_BIN"
+            chmod +x "$QUICK_RUST_BIN"
+        elif ! rustc -C opt-level=3 "$QUICK_RUST" -o "$QUICK_RUST_BIN" 2>/dev/null; then
+            BUILD_FAILURES+=("$bench/rust")
+            continue
+        fi
     fi
 
     if [ ! -f "$QUICK_EXPECTED" ]; then

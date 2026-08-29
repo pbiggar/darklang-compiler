@@ -1,4 +1,9 @@
-// Reduced TinyTemplate 1.2.1 compiler/interpreter benchmark.
-mod engine { include!("main.rs"); }
+// Reduced-workload driver for the full vendored TinyTemplate implementation.
 
-fn main() { engine::benchmark(40); }
+mod full {
+    include!("main.rs");
+}
+
+fn main() {
+    full::benchmark(2, 3);
+}

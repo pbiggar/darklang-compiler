@@ -1,17 +1,68 @@
 // TinyTemplate 1.2.1 rendering cases used by the application benchmark.
-// The selected documented success cases exercise scalar interpolation,
-// conditional selection, and repeated collection rendering.
+// The selected documented success cases cover the full benchmark surface:
+// escaping, formatters, if/else, with, loops and metadata, calls, and @root.
 
 type TemplateItem = { name: String, price: Int64 }
+
+type OracleDetails = { category: String, price: Int64 }
+
+type OracleRow = { name: String, featured: Bool, details: OracleDetails, tags: List<String>, rawHtml: String }
+
+let escapeParts(parts: List<String>) : String =
+    match parts with
+    | [] -> ""
+    | part :: rest ->
+        let escaped = match part with | ">" -> "&gt;" | "<" -> "&lt;" | "&" -> "&amp;" | "'" -> "&#39;" | "\"" -> "&quot;" | _ -> part in
+        escaped ++ escapeParts(rest)
+
+let escape(value: String) : String = escapeParts(Stdlib.String.toGraphemes(value))
 
 let renderItems(items: List<TemplateItem>) : String =
     match items with
     | [] -> ""
-    | item :: rest -> "- " ++ item.name ++ ": " ++ Stdlib.Int64.toString(item.price) ++ "\n" ++ renderItems(rest)
+    | item :: rest -> "- " ++ escape(item.name) ++ ": " ++ Stdlib.Int64.toString(item.price) ++ "\n" ++ renderItems(rest)
 
 let renderDashboard(userName: String, isAdmin: Bool, items: List<TemplateItem>) : String =
     let role = if isAdmin then "administrator" else "member" in
-    "Hello " ++ userName ++ "!\nRole: " ++ role ++ "\nItems:\n" ++ renderItems(items)
+    "Hello " ++ escape(userName) ++ "!\nRole: " ++ role ++ "\nItems:\n" ++ renderItems(items)
+
+let stringListLength(values: List<String>) : Int64 = match values with | [] -> 0 | _ :: rest -> 1 + stringListLength(rest)
+
+let renderTags(tags: List<String>, index: Int64, length: Int64) : String =
+    match tags with
+    | [] -> ""
+    | tag :: rest ->
+        let first = if index == 0 then "true" else "false" in
+        let last = if index == length - 1 then "true" else "false" in
+        "<li data-first=\"" ++ first ++ "\" data-last=\"" ++ last ++ "\">" ++ Stdlib.Int64.toString(index) ++ ":" ++ escape(tag) ++ "</li>" ++ renderTags(rest, index + 1, length)
+
+let renderRow(row: OracleRow) : String =
+    let className = if row.featured then "featured" else "standard" in
+    let details = row.details in
+    "<article class=\"" ++ className ++ "\">\n" ++
+    "<h2>" ++ escape(row.name) ++ "</h2>\n" ++
+    "<p>" ++ escape(details.category) ++ ": $" ++ Stdlib.Int64.toString(details.price) ++ ".00</p>\n" ++
+    "<ul>" ++ renderTags(row.tags, 0, stringListLength(row.tags)) ++ "</ul>\n" ++
+    "<div>" ++ row.rawHtml ++ "</div>\n</article>"
+
+let renderRows(rows: List<OracleRow>) : String = match rows with | [] -> "" | row :: rest -> renderRow(row) ++ renderRows(rest)
+
+let renderReport(title: String, rows: List<OracleRow>, footer: String) : String =
+    let body = if rows == [] then "<p>No inventory.</p>" else "<section>" ++ renderRows(rows) ++ "</section>" in
+    "<main>\n<h1>" ++ escape(title) ++ "</h1>\n" ++ body ++ "\n<footer>" ++ escape(footer) ++ "</footer>\n</main>"
 
 renderDashboard("Ada", true, [TemplateItem { name = "book", price = 12 }, TemplateItem { name = "lamp", price = 7 }]) = "Hello Ada!\nRole: administrator\nItems:\n- book: 12\n- lamp: 7\n"
 renderDashboard("Lin", false, []) = "Hello Lin!\nRole: member\nItems:\n"
+
+renderDashboard("Ada <admin>", true, []) = "Hello Ada &lt;admin&gt;!\nRole: administrator\nItems:\n"
+
+renderReport(
+    "Inventory <nightly>",
+    [OracleRow {
+        name = "Item <0>",
+        featured = true,
+        details = OracleDetails { category = "hardware", price = 7 },
+        tags = ["stable", "ready & tested"],
+        rawHtml = "<span>SKU-000</span>"
+    }],
+    "Generated & checked") = "<main>\n<h1>Inventory &lt;nightly&gt;</h1>\n<section><article class=\"featured\">\n<h2>Item &lt;0&gt;</h2>\n<p>hardware: $7.00</p>\n<ul><li data-first=\"true\" data-last=\"false\">0:stable</li><li data-first=\"false\" data-last=\"true\">1:ready &amp; tested</li></ul>\n<div><span>SKU-000</span></div>\n</article></section>\n<footer>Generated &amp; checked</footer>\n</main>"

@@ -54,8 +54,19 @@ if [ "$BUILD_BASELINES" != "true" ]; then
     exit 0
 fi
 
-# Build Rust implementation
-if [ -f "$PROBLEM_DIR/rust/main.rs" ]; then
+# Build Rust implementation. Most benchmarks are single rustc inputs; complete
+# application benchmarks may provide a Cargo manifest and standardized bin.
+if [ -f "$PROBLEM_DIR/rust/Cargo.toml" ]; then
+    if command -v cargo &> /dev/null; then
+        pretty_info "Building Rust Cargo application..."
+        cargo build --release --manifest-path "$PROBLEM_DIR/rust/Cargo.toml" --bin benchmark-full 2>/dev/null
+        cp "$PROBLEM_DIR/rust/target/release/benchmark-full" "$PROBLEM_DIR/rust/main"
+        chmod +x "$PROBLEM_DIR/rust/main"
+        pretty_ok "Rust Cargo application build complete"
+    else
+        pretty_warn "Rust skipped (cargo not installed)"
+    fi
+elif [ -f "$PROBLEM_DIR/rust/main.rs" ]; then
     if command -v rustc &> /dev/null; then
         pretty_info "Building Rust..."
         rustc -C opt-level=3 "$PROBLEM_DIR/rust/main.rs" -o "$PROBLEM_DIR/rust/main" 2>/dev/null
