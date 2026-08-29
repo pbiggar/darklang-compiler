@@ -199,4 +199,4 @@ let initialSystem(): System =
 let system = offsetMomentum(initialSystem()) in
 // Reduced from 500,000 simulation steps to 100 steps.
 let finalSystem = advance(system, 0.01, 100) in
-Stdlib.Float.roundTowardsZero(energy(finalSystem) * 1000000.0)
+Stdlib.Float.toInt(energy(finalSystem) * 1000000.0)

@@ -1192,15 +1192,24 @@ let private tryStartProcess (info: ProcessStartInfo) : Result<Process, string> =
 
 let private checkProgramWithBaseEnvForSyntax
     (sourceSyntax: SourceSyntax)
+    (allowInternal: bool)
     (warningSettings: AST.WarningSettings)
     (baseEnv: TypeChecking.TypeCheckEnv)
     (program: AST.Program)
     : Result<AST.Type * AST.Program * TypeChecking.TypeCheckEnv, TypeChecking.TypeError> =
-    match sourceSyntax with
-    | InterpreterSyntax ->
-        TypeChecking.checkPublicProgramWithBaseEnvAndSettings baseEnv true warningSettings program
-    | CompilerSyntax ->
-        TypeChecking.checkPublicProgramWithBaseEnvAndSettings baseEnv false warningSettings program
+    let requireExplicitTypeArgs = sourceSyntax = InterpreterSyntax
+    if allowInternal then
+        TypeChecking.checkProgramWithBaseEnvAndSettings
+            baseEnv
+            requireExplicitTypeArgs
+            warningSettings
+            program
+    else
+        TypeChecking.checkPublicProgramWithBaseEnvAndSettings
+            baseEnv
+            requireExplicitTypeArgs
+            warningSettings
+            program
 
 let private checkSyntheticPreambleWithBaseEnvForSyntax
     (sourceSyntax: SourceSyntax)
@@ -2099,6 +2108,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                 let typeCheckResult =
                     checkProgramWithBaseEnvForSyntax
                         plan.SourceSyntax
+                        plan.AllowInternal
                         plan.Options.Warnings
                         plan.BaseContext.TypeCheckEnv
                         userAst

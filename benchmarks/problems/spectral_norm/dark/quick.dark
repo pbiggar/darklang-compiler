@@ -47,4 +47,4 @@ let spectralNorm(n: Int64) : Float =
     Stdlib.Float.sqrt(dot(0, n, u, v, 0.0) / dot(0, n, v, v, 0.0))
 
 // Reduced from n=100 and ten power iterations to n=10 and one iteration.
-Stdlib.Float.roundTowardsZero(spectralNorm(10) * 1000000000.0)
+Stdlib.Float.toInt(spectralNorm(10) * 1000000000.0)

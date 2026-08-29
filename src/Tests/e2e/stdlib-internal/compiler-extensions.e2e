@@ -1,0 +1,4 @@
+// Internal compiler clients may use retained lowering primitives without
+// exposing those names through the public source boundary.
+
+Stdlib.Float.toInt(3.7) = 3
