@@ -79,28 +79,3 @@ let fromCodepoint(codepoint: Int) : Stdlib.Option.Option<Char> =
     | Some(value) ->
         if Unicode.isScalar(value) then Some(Stdlib.Char.__asChar(Stdlib.String.fromCodepoints([value])))
         else None
-
-// Compiler extensions retained outside the parity surface.
-let isLetter(char: Char) : Bool =
-    match Stdlib.Char.__firstCodepoint(char) with
-    | Some(codepoint) -> Unicode.isLetter(codepoint)
-    | None -> false
-
-let isWhitespace(char: Char) : Bool =
-    match Stdlib.Char.__firstCodepoint(char) with
-    | Some(codepoint) -> Unicode.isWhitespace(codepoint)
-    | None -> false
-
-let isAlphanumeric(char: Char) : Bool =
-    match Stdlib.Char.__firstCodepoint(char) with
-    | Some(codepoint) -> Unicode.isLetter(codepoint) || Unicode.isNumber(codepoint)
-    | None -> false
-
-let toCode(char: Char) : Int64 =
-    match Stdlib.Char.__firstCodepoint(char) with
-    | Some(codepoint) -> codepoint
-    | None -> Builtin.testRuntimeError("Char invariant violated: empty value")
-
-let fromCode(codepoint: Int64) : Char =
-    if Unicode.isScalar(codepoint) then Stdlib.Char.__asChar(Stdlib.String.fromCodepoints([codepoint]))
-    else Builtin.testRuntimeError("Invalid Unicode scalar")

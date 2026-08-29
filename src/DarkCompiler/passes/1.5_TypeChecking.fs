@@ -8349,7 +8349,6 @@ let private checkProgramInternal
             "Stdlib.String.toCodepoints"; "Stdlib.String.codepointLength"; "Stdlib.String.fromCodepoints"
             "Stdlib.String.toUpperCase"; "Stdlib.String.toGraphemes"; "Stdlib.String.graphemeLength"
             "Stdlib.String.replace"; "Stdlib.String.equals"
-            "Stdlib.Char.isLetter"; "Stdlib.Char.isWhitespace"; "Stdlib.Char.isAlphanumeric"; "Stdlib.Char.toCode"; "Stdlib.Char.fromCode"
             "Stdlib.Float.abs"; "Stdlib.Float.toInt"; "Stdlib.Float.toBits"
             "Stdlib.Math.e"; "Stdlib.Math.abs"; "Stdlib.Math.sqrt"; "Stdlib.Math.truncate"; "Stdlib.Math.floor"; "Stdlib.Math.ceiling"; "Stdlib.Math.round"
             "Stdlib.Bytes.create"; "Stdlib.Bytes.fromList"; "Stdlib.Bytes.get"; "Stdlib.Bytes.hexEncode"; "Stdlib.Bytes.length"; "Stdlib.Bytes.set"; "Stdlib.Bytes.toList"

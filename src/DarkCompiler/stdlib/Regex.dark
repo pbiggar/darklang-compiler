@@ -173,10 +173,26 @@ let __parsePattern(chars: List<Char>) : Stdlib.Result.Result<List<List<Stdlib.Re
                 | Error(error) -> Error(error)
                 | Ok(branches) -> Ok(Stdlib.List.push<List<Stdlib.Regex.Piece>>(branches, branch))
 
+// Regex classification is part of Regex's interpreter-parity semantics, not a
+// public Char API. A Char is one grapheme cluster, so these inspect its first
+// scalar exactly as the interpreter's character classes do.
+let __firstCodepoint(char: Char) : Stdlib.Option.Option<Int64> =
+    Stdlib.List.head<Int64>(Stdlib.String.toCodepoints(char))
+
+let __isAlphanumeric(char: Char) : Bool =
+    match Stdlib.Regex.__firstCodepoint(char) with
+    | Some(codepoint) -> Unicode.isLetter(codepoint) || Unicode.isNumber(codepoint)
+    | None -> false
+
+let __isWhitespace(char: Char) : Bool =
+    match Stdlib.Regex.__firstCodepoint(char) with
+    | Some(codepoint) -> Unicode.isWhitespace(codepoint)
+    | None -> false
+
 let __escapedClassMatches(kind: Char, value: Char) : Bool =
     if kind == 'd' then Stdlib.Char.isDigit(value)
-    else if kind == 'w' then Stdlib.Char.isAlphanumeric(value) || value == '_'
-    else if kind == 's' then Stdlib.Char.isWhitespace(value)
+    else if kind == 'w' then Stdlib.Regex.__isAlphanumeric(value) || value == '_'
+    else if kind == 's' then Stdlib.Regex.__isWhitespace(value)
     else value == kind
 
 let __inRange(value: Char, first: Char, last: Char) : Bool =
@@ -212,8 +228,8 @@ let __consume(atom: Stdlib.Regex.Atom, input: List<Char>) : List<Stdlib.Regex.Ca
             | Literal(expected) -> char == expected
             | Any -> char != '\n'
             | Digit -> Stdlib.Char.isDigit(char)
-            | Word -> Stdlib.Char.isAlphanumeric(char) || char == '_'
-            | Whitespace -> Stdlib.Char.isWhitespace(char)
+            | Word -> Stdlib.Regex.__isAlphanumeric(char) || char == '_'
+            | Whitespace -> Stdlib.Regex.__isWhitespace(char)
             | CharacterClass(content) -> Stdlib.Regex.__classMatches(content, char)
             | _ -> false in
         if matches then [Stdlib.Regex.Candidate { remaining = rest, value = [char], captures = [], atStart = false }] else []

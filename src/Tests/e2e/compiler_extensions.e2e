@@ -8,6 +8,10 @@ Stdlib.Float.absoluteValue(-2.0) = 2.0
 
 Stdlib.String.getByteAt("a", 0) = error="Unresolved callable name: Stdlib.String.getByteAt"
 Stdlib.Char.isLetter('a') = error="Unresolved callable name: Stdlib.Char.isLetter"
+Stdlib.Char.isWhitespace(' ') = error="Unresolved callable name: Stdlib.Char.isWhitespace"
+Stdlib.Char.isAlphanumeric('a') = error="Unresolved callable name: Stdlib.Char.isAlphanumeric"
+Stdlib.Char.toCode('a') = error="Unresolved callable name: Stdlib.Char.toCode"
+Stdlib.Char.fromCode(65) = error="Unresolved callable name: Stdlib.Char.fromCode"
 Stdlib.Float.toInt(1.0) = error="Unresolved callable name: Stdlib.Float.toInt"
 Stdlib.Math.floor(1.0) = error="Unresolved callable name: Stdlib.Math.floor"
 Stdlib.Bytes.create(1) = error="Unresolved callable name: Stdlib.Bytes.create"
