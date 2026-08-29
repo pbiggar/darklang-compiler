@@ -1,12 +1,14 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-fresh] [--reset-dark-baseline] [--refresh-baseline=rust] [--machine=ID] [--jobs[=N]] [routine|benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-fresh] [--skip-smoke] [--reset-dark-baseline] [--refresh-baseline=rust] [--machine=ID] [--jobs[=N]] [routine|benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
 #   --verify                 Read-only routine verification; equal or improved suites pass
 #   --verify-fresh           Read-only integration gate; an unrecorded improvement fails
+#   --skip-smoke             Skip the cache-free smoke gate only when the caller has
+#                            already passed it on the exact unchanged commit
 #   --reset-dark-baseline    Replace Dark routine snapshot from one complete successful run
 #   --refresh-baseline=rust  Independently refresh audited Rust reference rows
 #   --machine=ID             Optional machine registry ID for recorded history
@@ -39,6 +41,7 @@ JOB_COUNT=""
 SKIP_BENCHMARKS=()
 PROFILE=""
 MACHINE_ID=""
+SKIP_SMOKE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -57,6 +60,10 @@ while [[ $# -gt 0 ]]; do
         --verify-fresh)
             VERIFY_RESULTS=true
             VERIFY_FRESH=true
+            shift
+            ;;
+        --skip-smoke)
+            SKIP_SMOKE=true
             shift
             ;;
         --reset-dark-baseline)
@@ -207,6 +214,14 @@ if [ "$LIST_ONLY" = true ]; then
     exit 0
 fi
 
+if [ "$SKIP_SMOKE" != true ]; then
+    SMOKE_BENCHMARKS=$(IFS=,; echo "${FILTERED_BENCHMARKS[*]}")
+    if ! "$SCRIPT_DIR/quick_check.sh" --smoke --quiet --benchmarks="$SMOKE_BENCHMARKS"; then
+        pretty_fail "Canonical smoke gate failed; Cachegrind was not started"
+        exit 1
+    fi
+fi
+
 OUTPUT_DIR="$SCRIPT_DIR/results/$(date +%Y-%m-%d_%H%M%S)"
 mkdir -p "$OUTPUT_DIR"
 
@@ -260,37 +275,42 @@ echo ""
 
 JOB_PIDS=()
 
-run_benchmark_job() {
+build_benchmark_job() {
     local bench="$1"
     local status_file="$STATUS_DIR/${bench}.status"
-    local parity_status
-    if ! parity_status=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" status "$bench"); then
-        echo "BUILD_FAIL" >> "$status_file"
-        pretty_warn "Parity status unavailable for $bench"
-        return
-    fi
+    local dark_binary="$OUTPUT_DIR/binaries/$bench/dark/main"
     : > "$status_file"
-
-    pretty_header "Benchmark: $bench"
-
-    # Build all implementations
     local build_args=()
     if [ "$USE_CACHEGRIND" = true ] && [ "$REFRESH_BASELINE" = "false" ]; then
         build_args+=(--skip-baselines)
     fi
+    build_args+=(--dark-output="$dark_binary")
     if ! "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench" "${build_args[@]}"; then
         echo "BUILD_FAIL" >> "$status_file"
-        pretty_warn "Build failed for $bench (continuing)"
+        pretty_warn "Build failed for $bench"
+    fi
+}
+
+run_benchmark_job() {
+    local bench="$1"
+    local status_file="$STATUS_DIR/${bench}.status"
+    local parity_status
+    local dark_binary="$OUTPUT_DIR/binaries/$bench/dark/main"
+    if ! parity_status=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" status "$bench"); then
+        echo "RUN_FAIL" >> "$status_file"
+        pretty_warn "Parity status unavailable for $bench"
+        return
     fi
 
-    # Run benchmark
+    pretty_header "Benchmark: $bench"
+
     if [ "$USE_CACHEGRIND" = true ]; then
-        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$REFRESH_BASELINE"; then
+        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$REFRESH_BASELINE" "$dark_binary"; then
             echo "RUN_FAIL" >> "$status_file"
             pretty_warn "Cachegrind failed for $bench (continuing)"
         fi
     else
-        if ! "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status"; then
+        if ! "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$dark_binary"; then
             echo "RUN_FAIL" >> "$status_file"
             pretty_warn "Hyperfine failed for $bench (continuing)"
         fi
@@ -331,6 +351,25 @@ wait_for_all_jobs() {
     JOB_PIDS=()
 }
 
+pretty_section "Build gate"
+for bench in $BENCHMARKS; do
+    build_benchmark_job "$bench"
+done
+
+for bench in $BENCHMARKS; do
+    status_file="$STATUS_DIR/${bench}.status"
+    if [ ! -f "$status_file" ] || grep -q "BUILD_FAIL" "$status_file"; then
+        BUILD_FAILURES+=("$bench")
+    fi
+done
+
+if [ ${#BUILD_FAILURES[@]} -ne 0 ]; then
+    pretty_fail "Build failures: ${BUILD_FAILURES[*]}"
+    pretty_fail "Build gate failed; Cachegrind was not started and canonical reports were not changed"
+    exit 1
+fi
+
+pretty_section "Measurement gate"
 for bench in $BENCHMARKS; do
     if [ "$JOB_COUNT" -le 1 ]; then
         run_benchmark_job "$bench"
@@ -351,9 +390,6 @@ for bench in $BENCHMARKS; do
         RUN_FAILURES+=("$bench")
         continue
     fi
-    if grep -q "BUILD_FAIL" "$status_file"; then
-        BUILD_FAILURES+=("$bench")
-    fi
     if grep -q "RUN_FAIL" "$status_file"; then
         RUN_FAILURES+=("$bench")
     fi
@@ -361,10 +397,7 @@ done
 rm -rf "$STATUS_DIR"
 
 # No result processor or tracked-file recorder may observe an incomplete build/run.
-if [ ${#BUILD_FAILURES[@]} -ne 0 ] || [ ${#RUN_FAILURES[@]} -ne 0 ]; then
-    if [ ${#BUILD_FAILURES[@]} -ne 0 ]; then
-        pretty_fail "Build failures: ${BUILD_FAILURES[*]}"
-    fi
+if [ ${#RUN_FAILURES[@]} -ne 0 ]; then
     if [ ${#RUN_FAILURES[@]} -ne 0 ]; then
         pretty_fail "Benchmark run failures: ${RUN_FAILURES[*]}"
     fi

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build all implementations for a given benchmark
-# Usage: ./build_all.sh <benchmark_name> [--skip-baselines]
+# Usage: ./build_all.sh <benchmark_name> [--skip-baselines] [--dark-output=PATH]
 
 set -e
 
@@ -8,13 +8,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$BENCHMARKS_DIR")"
 BENCHMARK=$1
+shift
 BUILD_BASELINES=true
-if [ "${2:-}" = "--skip-baselines" ]; then
-    BUILD_BASELINES=false
-elif [ -n "${2:-}" ]; then
-    echo "Usage: $0 <benchmark_name> [--skip-baselines]"
-    exit 1
-fi
+DARK_OUTPUT=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --skip-baselines) BUILD_BASELINES=false ;;
+        --dark-output=*) DARK_OUTPUT="${1#*=}" ;;
+        *) echo "Usage: $0 <benchmark_name> [--skip-baselines] [--dark-output=PATH]"; exit 1 ;;
+    esac
+    shift
+done
 source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ]; then
@@ -23,6 +27,7 @@ if [ -z "$BENCHMARK" ]; then
 fi
 
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
+DARK_OUTPUT="${DARK_OUTPUT:-$PROBLEM_DIR/dark/main}"
 
 if [ ! -d "$PROBLEM_DIR" ]; then
     echo "Error: Benchmark '$BENCHMARK' not found at $PROBLEM_DIR"
@@ -34,8 +39,12 @@ pretty_section "Building $BENCHMARK..."
 # Build Dark implementation
 if [ -f "$PROBLEM_DIR/dark/main.dark" ]; then
     pretty_info "Building Dark..."
-    "$PROJECT_ROOT/dark" --allow-internal "$PROBLEM_DIR/dark/main.dark" -o "$PROBLEM_DIR/dark/main" -q
-    chmod +x "$PROBLEM_DIR/dark/main"
+    # A failed compiler invocation must never leave a previously built binary
+    # available for a later correctness check or measurement.
+    mkdir -p "$(dirname "$DARK_OUTPUT")"
+    rm -f "$DARK_OUTPUT"
+    "$PROJECT_ROOT/dark" --allow-internal "$PROBLEM_DIR/dark/main.dark" -o "$DARK_OUTPUT" -q
+    chmod +x "$DARK_OUTPUT"
     pretty_ok "Dark build complete"
 fi
 

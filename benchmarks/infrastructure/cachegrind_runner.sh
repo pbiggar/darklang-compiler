@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run cachegrind benchmark for a given problem
-# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh]
+# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh] [dark_binary]
 #
 # By default, only runs Dark and uses the cached Rust row from BASELINES.md.
 # Pass `rust` as baseline_refresh to re-run the audited Rust reference.
@@ -13,6 +13,7 @@ BENCHMARK=$1
 OUTPUT_DIR=$2
 PARITY_STATUS=${3:-comparable}
 REFRESH_BASELINE=${4:-false}
+DARK_BINARY=${5:-}
 source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
@@ -21,6 +22,7 @@ if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
 fi
 
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
+DARK_BINARY="${DARK_BINARY:-$PROBLEM_DIR/dark/main}"
 EXPECTED_FILE="$PROBLEM_DIR/expected_output.txt"
 EXPECTED=""
 HAS_EXPECTED=false
@@ -138,7 +140,11 @@ fi
 
 # Run cachegrind for each implementation
 for impl in $IMPLS; do
-    BINARY="$PROBLEM_DIR/$impl/main"
+    if [ "$impl" = "dark" ]; then
+        BINARY="$DARK_BINARY"
+    else
+        BINARY="$PROBLEM_DIR/$impl/main"
+    fi
     if [ -x "$BINARY" ]; then
         verify_output "$impl" "$BINARY"
         pretty_info "Running cachegrind on $impl..."

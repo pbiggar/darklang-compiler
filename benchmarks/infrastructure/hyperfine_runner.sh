@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run hyperfine benchmark for a given problem
-# Usage: ./hyperfine_runner.sh <benchmark_name> <output_dir> [parity_status]
+# Usage: ./hyperfine_runner.sh <benchmark_name> <output_dir> [parity_status] [dark_binary]
 
 set -e
 
@@ -9,6 +9,7 @@ BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 BENCHMARK=$1
 OUTPUT_DIR=$2
 PARITY_STATUS=${3:-comparable}
+DARK_BINARY=${4:-}
 source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
@@ -17,6 +18,7 @@ if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
 fi
 
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
+DARK_BINARY="${DARK_BINARY:-$PROBLEM_DIR/dark/main}"
 
 # Check for hyperfine
 if ! command -v hyperfine &> /dev/null; then
@@ -28,8 +30,8 @@ fi
 # Build command list
 COMMANDS=()
 
-if [ -x "$PROBLEM_DIR/dark/main" ]; then
-    COMMANDS+=(-n "Dark" "$PROBLEM_DIR/dark/main")
+if [ -x "$DARK_BINARY" ]; then
+    COMMANDS+=(-n "Dark" "$DARK_BINARY")
 fi
 
 if [ "$PARITY_STATUS" = "comparable" ] && [ -x "$PROBLEM_DIR/rust/main" ]; then
