@@ -2458,8 +2458,8 @@ return t7
 tail_recursion_modulo_integer_multiplication
 ---INPUT---
 let factorial(n: Int64) : Int64 =
-  if n <= 1 then 1 else n * factorial(n - 1)
-factorial(5)
+  if n <= 1L then 1L else n * factorial(n - 1L)
+factorial(5L)
 ---EXPECTED---
 Function factorial:
 let TempId 9 = factorial$trmo(t0, 1)
@@ -2505,8 +2505,8 @@ return t5
 tail_recursion_modulo_multiplication_excludes_multiple_calls
 ---INPUT---
 let productTree(n: Int64) : Int64 =
-  if n <= 1 then 1 else productTree(n - 1) * productTree(n - 2)
-productTree(5)
+  if n <= 1L then 1L else productTree(n - 1L) * productTree(n - 2L)
+productTree(5L)
 ---EXPECTED---
 Function productTree:
 let TempId 1 = t0 <= 1

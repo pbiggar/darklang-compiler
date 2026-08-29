@@ -208,6 +208,8 @@ constructor_match_exhaustiveness_has_no_runtime_failure
 ---INPUT---
 type ExhaustiveChoice = First | Second of Int64 | Third
 
+type PartialChoice = FirstPartial | SecondPartial of Int64
+
 let choose(value: ExhaustiveChoice) : Int64 =
     match value with
     | First -> 1L
@@ -238,6 +240,19 @@ choose:
   Label "choose_entry":
     v10009 <- HeapLoad(v0, 0)
     BranchZero(v10009, Label "choose_L0", Label "choose_L1")
+choosePartial:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "choosePartial_L0":
+    X0 <- Mov(Imm 1)
+    Ret
+  Label "choosePartial_L1":
+    v10019 <- HeapLoad(v10, 8)
+    X0 <- Mov(Reg v10019)
+    Ret
+  Label "choosePartial_entry":
+    v10016 <- HeapLoad(v10, 0)
+    BranchZero(v10016, Label "choosePartial_L0", Label "choosePartial_L1")
 
 ---NAME---
 closure_devirtualization_capture_free_generated_code

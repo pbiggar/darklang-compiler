@@ -26,15 +26,15 @@ let renderDashboard(userName: String, isAdmin: Bool, items: List<TemplateItem>) 
     let role = if isAdmin then "administrator" else "member" in
     "Hello " ++ escape(userName) ++ "!\nRole: " ++ role ++ "\nItems:\n" ++ renderItems(items)
 
-let stringListLength(values: List<String>) : Int64 = match values with | [] -> 0 | _ :: rest -> 1 + stringListLength(rest)
+let stringListLength(values: List<String>) : Int64 = match values with | [] -> 0L | _ :: rest -> 1L + stringListLength(rest)
 
 let renderTags(tags: List<String>, index: Int64, length: Int64) : String =
     match tags with
     | [] -> ""
     | tag :: rest ->
-        let first = if index == 0 then "true" else "false" in
-        let last = if index == length - 1 then "true" else "false" in
-        "<li data-first=\"" ++ first ++ "\" data-last=\"" ++ last ++ "\">" ++ Stdlib.Int64.toString(index) ++ ":" ++ escape(tag) ++ "</li>" ++ renderTags(rest, index + 1, length)
+        let first = if index == 0L then "true" else "false" in
+        let last = if index == length - 1L then "true" else "false" in
+        "<li data-first=\"" ++ first ++ "\" data-last=\"" ++ last ++ "\">" ++ Stdlib.Int64.toString(index) ++ ":" ++ escape(tag) ++ "</li>" ++ renderTags(rest, index + 1L, length)
 
 let renderRow(row: OracleRow) : String =
     let className = if row.featured then "featured" else "standard" in
@@ -42,7 +42,7 @@ let renderRow(row: OracleRow) : String =
     "<article class=\"" ++ className ++ "\">\n" ++
     "<h2>" ++ escape(row.name) ++ "</h2>\n" ++
     "<p>" ++ escape(details.category) ++ ": $" ++ Stdlib.Int64.toString(details.price) ++ ".00</p>\n" ++
-    "<ul>" ++ renderTags(row.tags, 0, stringListLength(row.tags)) ++ "</ul>\n" ++
+    "<ul>" ++ renderTags(row.tags, 0L, stringListLength(row.tags)) ++ "</ul>\n" ++
     "<div>" ++ row.rawHtml ++ "</div>\n</article>"
 
 let renderRows(rows: List<OracleRow>) : String = match rows with | [] -> "" | row :: rest -> renderRow(row) ++ renderRows(rest)
@@ -51,7 +51,7 @@ let renderReport(title: String, rows: List<OracleRow>, footer: String) : String 
     let body = if rows == [] then "<p>No inventory.</p>" else "<section>" ++ renderRows(rows) ++ "</section>" in
     "<main>\n<h1>" ++ escape(title) ++ "</h1>\n" ++ body ++ "\n<footer>" ++ escape(footer) ++ "</footer>\n</main>"
 
-renderDashboard("Ada", true, [TemplateItem { name = "book", price = 12 }, TemplateItem { name = "lamp", price = 7 }]) = "Hello Ada!\nRole: administrator\nItems:\n- book: 12\n- lamp: 7\n"
+renderDashboard("Ada", true, [TemplateItem { name = "book", price = 12L }, TemplateItem { name = "lamp", price = 7L }]) = "Hello Ada!\nRole: administrator\nItems:\n- book: 12\n- lamp: 7\n"
 renderDashboard("Lin", false, []) = "Hello Lin!\nRole: member\nItems:\n"
 
 renderDashboard("Ada <admin>", true, []) = "Hello Ada &lt;admin&gt;!\nRole: administrator\nItems:\n"
@@ -61,7 +61,7 @@ renderReport(
     [OracleRow {
         name = "Item <0>",
         featured = true,
-        details = OracleDetails { category = "hardware", price = 7 },
+        details = OracleDetails { category = "hardware", price = 7L },
         tags = ["stable", "ready & tested"],
         rawHtml = "<span>SKU-000</span>"
     }],

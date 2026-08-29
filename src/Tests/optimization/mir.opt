@@ -80,8 +80,8 @@ Function _start:
 tail_recursion_modulo_multiplication_forms_loop
 ---INPUT---
 let factorial(n: Int64) : Int64 =
-    if n <= 1 then 1 else n * factorial(n - 1)
-factorial(10)
+    if n <= 1L then 1L else n * factorial(n - 1L)
+factorial(10L)
 ---EXPECTED---
 Function factorial:
   factorial_entry:
