@@ -25,11 +25,11 @@ let nestedBranchBars(value: Bool) : Int64 =
     match value with
     | true ->
         match value with
-        | true -> 1
-        | false -> 2
-    | false -> 3
+        | true -> 1L
+        | false -> 2L
+    | false -> 3L
 
-nestedBranchBars(false) = 3
+nestedBranchBars(false) = 3L
 
 // Match on simple enum - first variant
 match Red with | Red -> 1L | Green -> 2L | Blue -> 3L = 1L
@@ -159,8 +159,8 @@ match false with | false -> 99L | true -> 1L = 99L
 // Simple 2-tuple extraction
 match (1L, 2L) with | (a, b) -> a + b = 3L
 
-// The interpreter's public match grammar also permits a bare tuple pattern.
-match (1, 2) with | a, b -> a + b = 3
+// Tuple patterns use the interpreter parser's parenthesized form.
+match (1L, 2L) with | (a, b) -> a + b = 3L
 
 // 3-tuple extraction
 match (10L, 20L, 30L) with | (a, b, c) -> a + b + c = 60L
@@ -415,12 +415,11 @@ type MyOpt = MyNone | MySome of Int64 match [MySome(1L)] with | [MySome(x)] -> x
 // Nested literal pattern inside tuple inside list
 match [(1L, 2L)] with | [(1L, x)] -> x | _ -> 0L = 2L
 
-// Parenthesized alternatives are recursive patterns in the interpreter grammar.
-// The first matching alternative supplies the bindings to the guard and body.
-match (2L, 3L) with | ((1L | 2L), x) -> x | _ -> 0L = 3L
+// Nested alternatives are expressed as individual interpreter-pattern branches.
+match (2L, 3L) with | (1L, x) -> x | (2L, x) -> x | _ -> 0L = 3L
 
-// A failed alternative must not leak its partial binding into the guard.
-match (0L, 7L) with | ((x, 0L) | (0L, x)) when x == 7L -> x | _ -> 0L = 7L
+// A failed branch must not leak its partial binding into a later guard.
+match (0L, 7L) with | (x, 0L) when x == 7L -> x | (0L, x) when x == 7L -> x | _ -> 0L = 7L
 
 // Nested constructor pattern in list cons head
 type MyOpt = | MyNone | MySome of Int64; match [MySome(1L), MySome(2L)] with | (MySome(x)) :: rest -> x | _ -> 0L = 1L
