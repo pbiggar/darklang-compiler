@@ -4,7 +4,7 @@
   "profile": "routine",
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
-  "contract_sha256": "d921dfef06da8fee41cb4b99ab1453aa37ec434352cc4b5ad50e69501f1667ed",
+  "contract_sha256": "566d904c072c803793f88226a36f96e1d5564580f78806a07e515bcb35c2a934",
   "generated_at": "2026-08-26T03:33:20+00:00",
   "compiler": {
     "commit": "079a53371ea3102d0500ea7dbf2a86e79b8c9971",
