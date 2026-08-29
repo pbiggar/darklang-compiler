@@ -1,0 +1,11 @@
+// Nested multiline matches must retain their dedented outer fallback arm.
+
+let nestedFunctionListMatch<'a>(list: List<(a, a) -> Int>) : Int =
+    match list with
+    | [comparator] ->
+        match list with
+        | [inner] -> 1I
+        | _ -> 2I
+    | _ -> 0I
+
+nestedFunctionListMatch<Int>([]) = 0I

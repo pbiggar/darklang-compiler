@@ -3074,13 +3074,50 @@ let private insertNestedFunctionLayoutSeparators (input: string) : string =
             loop activeAfterExplicitIn nextTopLevelLayout rest (rewritten :: acc)
     loop [] OutsideTopLevelFunction lines []
 
+/// Parenthesize an indented match body so a dedented sibling case cannot be
+/// consumed by its nested match after the lexer has discarded source columns.
+let private preserveIndentedMatchBoundaries (input: string) : string =
+    let lines = input.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n') |> Array.toList
+    let leadingSpaces (line: string) = line.Length - line.TrimStart().Length
+    let isSignificant (line: string) =
+        let trimmed = line.Trim()
+        trimmed <> "" && not (trimmed.StartsWith("//"))
+    let nextSignificant remaining = remaining |> List.tryFind isSignificant
+    let isCaseWithNestedMatch (line: string) (remaining: string list) =
+        let trimmed = line.TrimStart()
+        trimmed.StartsWith("|")
+        && trimmed.Contains("->")
+        && (match nextSignificant remaining with
+            | Some next ->
+                leadingSpaces next > leadingSpaces line
+                && next.TrimStart().StartsWith("match ")
+            | None -> false)
+    let rec closeCompleted indent active closers =
+        match active with
+        | caseIndent :: rest when indent <= caseIndent -> closeCompleted indent rest (" )" :: closers)
+        | _ -> (active, closers)
+    let rec loop active remaining acc =
+        match remaining with
+        | [] ->
+            let closing = active |> List.map (fun _ -> " )")
+            (List.rev acc) @ closing |> String.concat "\n"
+        | line :: rest ->
+            let (remainingActive, closers) =
+                if isSignificant line then closeCompleted (leadingSpaces line) active [] else (active, [])
+            let rewritten =
+                if isCaseWithNestedMatch line rest then line + " (" else line
+            let nextActive =
+                if isCaseWithNestedMatch line rest then leadingSpaces line :: remainingActive else remainingActive
+            loop nextActive rest (rewritten :: (closers @ acc))
+    loop [] lines []
+
 let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.ParsedSource, string> =
     let rec extractModules source modules =
         match NameSyntax.tryExtractModuleHeader source with
         | Some (moduleName, body) -> extractModules body (moduleName :: modules)
         | None -> (List.rev modules, source)
     let (sourceModules, sourceBody) = extractModules input []
-    let sourceBody = insertNestedFunctionLayoutSeparators sourceBody
+    let sourceBody = sourceBody |> insertNestedFunctionLayoutSeparators |> preserveIndentedMatchBoundaries
     lex sourceBody
     |> Result.bind (fun tokens ->
         if allowInternal then parse tokens
