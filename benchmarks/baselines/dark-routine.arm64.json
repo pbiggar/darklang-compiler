@@ -4,11 +4,11 @@
   "profile": "routine",
   "architecture": "arm64",
   "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
-  "contract_sha256": "d921dfef06da8fee41cb4b99ab1453aa37ec434352cc4b5ad50e69501f1667ed",
-  "generated_at": "2026-08-26T03:33:20+00:00",
+  "contract_sha256": "566d904c072c803793f88226a36f96e1d5564580f78806a07e515bcb35c2a934",
+  "generated_at": "2026-08-29T12:41:44+00:00",
   "compiler": {
-    "commit": "079a53371ea3102d0500ea7dbf2a86e79b8c9971",
-    "subject": "dcb2: record trial result for Retire the obsolete leibniz loop-copy hypothesis"
+    "commit": "9ba6dec7e17cc8d33a584a6f28c4c77ba7e8688d",
+    "subject": "Add better benchmarks review changes"
   },
   "benchmarks": [
     {
@@ -89,7 +89,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 1454922616
+      "instructions": 179543416420
     }
   ]
 }
