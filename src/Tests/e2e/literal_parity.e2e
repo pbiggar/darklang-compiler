@@ -4,8 +4,8 @@
 // Existing arbitrary-precision Int values retain their suffix spelling.
 let identityInt(value: Int) : Int = value identityInt(9223372036854775808I) = 9223372036854775808I
 
-// Regular escapes decode Unicode scalars, while triple quotes are raw.
-"\U0001F600" = "😀"
+// Interpreter string literals represent non-BMP Unicode scalars as UTF-16 escapes.
+"\uD83D\uDE00" = "😀"
 """line\nraw""" = "line\\nraw"
 
 // Raw interpolation preserves escape text while evaluating expressions.
