@@ -6784,6 +6784,7 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
        ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
        ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 8us)
        ARM64Symbolic.CBNZ (ARM64Symbolic.X13, "__dark_cli_find_envp_for_exec")
+       ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.SP, 88s)
        ARM64Symbolic.Label "__dark_cli_find_shell"
        ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
        ARM64Symbolic.CBZ (ARM64Symbolic.X13, "__dark_cli_shell_found")
@@ -6819,7 +6820,7 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
        zero ARM64Symbolic.X9
        ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 80s)
        ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 56us)
-       ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X14)]
+       ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.SP, 88s)]
     @ syscall 221us
     @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 127us, 0)]
     @ syscall 93us
