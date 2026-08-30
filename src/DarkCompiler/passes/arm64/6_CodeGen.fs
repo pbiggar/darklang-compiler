@@ -6780,6 +6780,10 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
     @ loadStringLiteralPointer ARM64Symbolic.X0 "/bin/bash"
     @ [ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 8us)
        ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X18)
+       ARM64Symbolic.Label "__dark_cli_find_envp_for_exec"
+       ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 8us)
+       ARM64Symbolic.CBNZ (ARM64Symbolic.X13, "__dark_cli_find_envp_for_exec")
        ARM64Symbolic.Label "__dark_cli_find_shell"
        ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
        ARM64Symbolic.CBZ (ARM64Symbolic.X13, "__dark_cli_shell_found")
@@ -6815,7 +6819,7 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
        zero ARM64Symbolic.X9
        ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 80s)
        ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 56us)
-       ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X18)]
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X14)]
     @ syscall 221us
     @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 127us, 0)]
     @ syscall 93us
@@ -6889,14 +6893,10 @@ let convertFunction
         let functionEntryLabel = [ARM64Symbolic.Label func.Name]
 
         // The kernel supplies argc/argv/envp on the original stack. Capture
-        // envp before the language prologue changes SP. X18 is outside the
+        // argv before the language prologue changes SP. X18 is outside the
         // allocator-visible register set and is touched only by CLI binaries.
         let cliEnvironmentInit =
             [ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.SP, 8us)
-             ARM64Symbolic.Label "__dark_cli_find_envp"
-             ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X18, 0s)
-             ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.X18, 8us)
-             ARM64Symbolic.CBNZ (ARM64Symbolic.X9, "__dark_cli_find_envp")
              ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)]
         let cliRuntimeInit =
             if func.Name = "_start" then
