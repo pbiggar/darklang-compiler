@@ -15,7 +15,6 @@ let private compile
     CompilerLibrary.compile {
         Context = CompilerLibrary.StdlibOnly stdlib
         Mode = CompilerLibrary.TestExpression
-        SourceSyntax = CompilerLibrary.CompilerSyntax
         Sources =
             NonEmptyList.singleton {
                 CompilerLibrary.SourceUnit.Name = "CompilationSessionTests.dark"
