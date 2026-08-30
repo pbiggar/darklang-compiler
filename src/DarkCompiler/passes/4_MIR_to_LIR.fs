@@ -259,6 +259,15 @@ let shiftCountMask (operandType: AST.Type) : int64 =
     | AST.TInt64 | AST.TUInt64 -> 63L
     | _ -> 63L
 
+/// ARM64 and x86-64 register shifts use the low six count bits in hardware.
+/// For native 64-bit operands that is exactly the language mask, so emitting
+/// an explicit AND is redundant. Narrow integers retain an explicit mask
+/// because their declared count width is smaller than the machine width.
+let usesNativeVariableShiftMask (operandType: AST.Type) : bool =
+    match operandType with
+    | AST.TInt64 | AST.TUInt64 -> true
+    | _ -> false
+
 let comparisonCondition (operandType: AST.Type) (op: MIR.BinOp) : LIR.Condition =
     let unsigned = isUnsignedIntegerType operandType
     match op, unsigned with
@@ -610,8 +619,11 @@ let selectInstr
                         match ensureInRegister right stateAfterLeft with
                         | Error err -> Error err
                         | Ok (rightInstrs, rightReg, stateAfterRight) ->
-                            let (maskedReg, nextState) = freshTempReg stateAfterRight
-                            Ok (leftInstrs @ rightInstrs @ [LIR.And_imm (maskedReg, rightReg, shiftCountMask operandType); LIR.Lsl (lirDest, leftReg, maskedReg)] @ truncInstrs, nextState)
+                            if usesNativeVariableShiftMask operandType then
+                                Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)] @ truncInstrs, stateAfterRight)
+                            else
+                                let (maskedReg, nextState) = freshTempReg stateAfterRight
+                                Ok (leftInstrs @ rightInstrs @ [LIR.And_imm (maskedReg, rightReg, shiftCountMask operandType); LIR.Lsl (lirDest, leftReg, maskedReg)] @ truncInstrs, nextState)
 
             | MIR.Shr ->
                 match ensureInRegister left state with
@@ -629,11 +641,17 @@ let selectInstr
                         match ensureInRegister right stateAfterLeft with
                         | Error err -> Error err
                         | Ok (rightInstrs, rightReg, stateAfterRight) ->
-                            let (maskedReg, nextState) = freshTempReg stateAfterRight
-                            let shiftInstr =
-                                if isUnsignedIntegerType operandType then LIR.Lsr (lirDest, leftReg, maskedReg)
-                                else LIR.Asr (lirDest, leftReg, maskedReg)
-                            Ok (leftInstrs @ rightInstrs @ [LIR.And_imm (maskedReg, rightReg, shiftCountMask operandType); shiftInstr] @ truncInstrs, nextState)
+                            if usesNativeVariableShiftMask operandType then
+                                let shiftInstr =
+                                    if isUnsignedIntegerType operandType then LIR.Lsr (lirDest, leftReg, rightReg)
+                                    else LIR.Asr (lirDest, leftReg, rightReg)
+                                Ok (leftInstrs @ rightInstrs @ [shiftInstr] @ truncInstrs, stateAfterRight)
+                            else
+                                let (maskedReg, nextState) = freshTempReg stateAfterRight
+                                let shiftInstr =
+                                    if isUnsignedIntegerType operandType then LIR.Lsr (lirDest, leftReg, maskedReg)
+                                    else LIR.Asr (lirDest, leftReg, maskedReg)
+                                Ok (leftInstrs @ rightInstrs @ [LIR.And_imm (maskedReg, rightReg, shiftCountMask operandType); shiftInstr] @ truncInstrs, nextState)
 
             | MIR.BitAnd ->
                 match ensureInRegister left state with
