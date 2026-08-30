@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "160c1f9c3b3fb295c9d260c08e086f6aaab136fa1956a3bce2caf2dbbff55c2c",
-  "generated_at": "2026-08-30T14:25:30+00:00",
+  "generated_at": "2026-08-30T14:30:10+00:00",
   "compiler": {
-    "commit": "cfff7544a1357ec61ab5f2bcec909caec8b99d45",
-    "subject": "dcb2: reply to Remove the Compiler parser"
+    "commit": "2ae6b13822265f43cf6e8cee3fdaee294d309621",
+    "subject": "Integrate canonical x86_64 QEMU benchmark track"
   },
   "benchmarks": [
     {
