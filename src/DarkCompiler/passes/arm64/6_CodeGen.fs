@@ -6908,12 +6908,7 @@ let convertFunction
         // Keep the epilogue immediately after the CFG so its final Ret terminator
         // can fall through. The terminating epilogue makes the overflow trap a
         // cold out-of-line block reached only by explicit allocation branches.
-        let argvHelperLabel = $"__dark_cli_argv_{ctx.FunctionName}"
-        let argvHelper =
-            if cfgInstrs |> List.exists (function | ARM64Symbolic.BL label -> label = argvHelperLabel | _ -> false) then
-                generateCliArgvHelper argvHelperLabel
-            else []
-        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ epilogueLabelInstr @ epilogue @ heapOverflowTrap @ argvHelper)
+        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ epilogueLabelInstr @ epilogue @ heapOverflowTrap)
 
 type private RegisterLifetimeStep =
     | Unrelated
@@ -7945,9 +7940,7 @@ let private generatePreparedARM64WithOptionsAndCache
     let convertCached func =
         let generate () = convertFunction heapOverflowTrapBody ctx func
         match functionCache with
-        // CLI argv code owns a generated helper label. Reusing a cached body
-        // would reuse its BL without re-emitting that program-local helper.
-        | Some cache when func.Name <> "_start" && not (func.Name.StartsWith("Stdlib.Cli.Args.")) -> cache func generate
+        | Some cache when func.Name <> "_start" -> cache func generate
         | _ -> generate ()
 
     let functionTimer = startPhase ()
@@ -8054,7 +8047,13 @@ let private generatePreparedARM64WithOptionsAndCache
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliHelpers =
-            if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else []
+            (match functionCache with
+             // Stdlib function code can be supplied by the session cache. Its
+             // argv call is part of that cached body, so retain the companion
+             // helper at the same program assembly boundary.
+             | Some _ -> generateCliArgvHelper "__dark_cli_argv_Stdlib.Cli.Args.get"
+             | None -> [])
+            @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
         recordPhase "ARM64 Codegen Helpers" helperTimer
         let assemblyTimer = startPhase ()
         let assembled =
