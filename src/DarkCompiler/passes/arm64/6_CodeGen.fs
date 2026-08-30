@@ -8049,9 +8049,6 @@ let private generatePreparedARM64WithOptionsAndCache
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliHelpers =
             (match functionCache with
-             // Stdlib function code can be supplied by the session cache. Its
-             // argv call is part of that cached body, so retain the companion
-             // helper at the same program assembly boundary.
              | Some _ -> generateCliArgvHelper "__dark_cli_argv_Stdlib.Cli.Args.get"
              | None -> [])
             @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
