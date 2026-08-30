@@ -8039,7 +8039,10 @@ let private generatePreparedARM64WithOptionsAndCache
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliHelpers =
-            generateCliArgvHelper ()
+            // Stdlib specialization may materialize this operation after the
+            // original LIR function list has been inspected. The generated
+            // call is therefore the authoritative helper requirement.
+            (if allFunctionInstrs |> List.exists (function | ARM64Symbolic.BL "__dark_cli_argv" -> true | _ -> false) then generateCliArgvHelper () else [])
             @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
         recordPhase "ARM64 Codegen Helpers" helperTimer
         let assemblyTimer = startPhase ()
