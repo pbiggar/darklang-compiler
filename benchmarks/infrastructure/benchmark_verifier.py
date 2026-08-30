@@ -7,6 +7,7 @@ from pathlib import Path
 
 from benchmark_baseline import (
     BaselineError,
+    TRACKS,
     atomic_write_json,
     compare_suites,
     comparison_dict,
@@ -37,11 +38,12 @@ def main() -> int:
     try:
         profile = load_profile(benchmarks_dir, args.profile)
         architecture = machine_architecture()
+        track = TRACKS[f"{architecture}-{args.profile}-cachegrind"]
         baseline = load_snapshot(
-            snapshot_path(benchmarks_dir, args.profile, architecture),
+            snapshot_path(benchmarks_dir, "dark", track),
             benchmarks_dir,
-            args.profile,
-            architecture,
+            "dark",
+            track,
         )
         current = load_dark_counts(results_dir, profile)
         comparison = compare_suites(current, baseline.benchmarks)

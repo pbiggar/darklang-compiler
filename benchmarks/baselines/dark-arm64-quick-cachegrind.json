@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "suite": "dark-compiler",
+  "language": "dark",
+  "track": {
+    "id": "arm64-quick-cachegrind",
+    "profile": "quick",
+    "architecture": "arm64",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
+  },
+  "contract_sha256": "160c1f9c3b3fb295c9d260c08e086f6aaab136fa1956a3bce2caf2dbbff55c2c",
+  "generated_at": "2026-08-30T14:25:30+00:00",
+  "compiler": {
+    "commit": "cfff7544a1357ec61ab5f2bcec909caec8b99d45",
+    "subject": "dcb2: reply to Remove the Compiler parser"
+  },
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 2235385
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 1002690
+    },
+    {
+      "name": "collatz",
+      "instructions": 398592
+    },
+    {
+      "name": "edigits",
+      "instructions": 5944364
+    },
+    {
+      "name": "factorial",
+      "instructions": 4106
+    },
+    {
+      "name": "fannkuch",
+      "instructions": 785728
+    },
+    {
+      "name": "fasta",
+      "instructions": 806477
+    },
+    {
+      "name": "fib",
+      "instructions": 285111
+    },
+    {
+      "name": "leibniz",
+      "instructions": 851355
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 1023341
+    },
+    {
+      "name": "matmul",
+      "instructions": 34319
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 1209223
+    },
+    {
+      "name": "nbody",
+      "instructions": 202931
+    },
+    {
+      "name": "nqueen",
+      "instructions": 373796
+    },
+    {
+      "name": "nsieve",
+      "instructions": 775246
+    },
+    {
+      "name": "pisum",
+      "instructions": 82432
+    },
+    {
+      "name": "primes",
+      "instructions": 86521
+    },
+    {
+      "name": "quicksort",
+      "instructions": 605977
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 351637
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 61189
+    },
+    {
+      "name": "tak",
+      "instructions": 47997100
+    },
+    {
+      "name": "tinytemplate",
+      "instructions": 1392250117
+    }
+  ]
+}

@@ -1,9 +1,14 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "suite": "dark-compiler",
-  "profile": "routine",
-  "architecture": "arm64",
-  "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
+  "language": "dark",
+  "track": {
+    "id": "arm64-routine-cachegrind",
+    "profile": "routine",
+    "architecture": "arm64",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
+  },
   "contract_sha256": "566d904c072c803793f88226a36f96e1d5564580f78806a07e515bcb35c2a934",
   "generated_at": "2026-08-29T12:41:44+00:00",
   "compiler": {

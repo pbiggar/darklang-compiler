@@ -18,6 +18,7 @@ from pathlib import Path
 
 from benchmark_baseline import (
     BaselineError,
+    TRACKS,
     CompilerAttribution,
     Snapshot,
     atomic_write_json,
@@ -30,6 +31,7 @@ from benchmark_baseline import (
     machine_architecture,
     print_comparison,
     snapshot_path,
+    track_dict,
     write_snapshot,
 )
 from benchmark_profiles import load_profile
@@ -551,7 +553,8 @@ def main() -> int:
         metadata = get_run_metadata(results_dir)
         metadata["machine"] = "" if args.machine is None else args.machine
         architecture = machine_architecture()
-        canonical_path = snapshot_path(benchmarks_dir, args.profile, architecture)
+        track = TRACKS[f"{architecture}-{args.profile}-cachegrind"]
+        canonical_path = snapshot_path(benchmarks_dir, "dark", track)
         validate_history_log(benchmarks_dir / HISTORY_FILE)
         validate_new_run_identity(
             benchmarks_dir / HISTORY_FILE, metadata["run_identity"]
@@ -569,8 +572,8 @@ def main() -> int:
         if args.reset_dark_baseline:
             new_snapshot = create_snapshot(
                 benchmarks_dir,
-                args.profile,
-                architecture,
+                "dark",
+                track,
                 current,
                 metadata["timestamp"],
                 compiler,
@@ -580,15 +583,12 @@ def main() -> int:
             ratio = 1.0
             action = "reset"
             decision_document = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "suite": "dark-compiler",
-                "profile": args.profile,
-                "architecture": architecture,
+                "track": track_dict(track),
                 "baseline": {
-                    "profile": args.profile,
                     "commit": compiler.commit,
                     "contract_sha256": new_snapshot.contract_sha256,
-                    "measurement_policy": new_snapshot.measurement_policy,
                 },
                 "decision": decision,
                 "current_baseline_ratio": 1.0,
@@ -599,7 +599,7 @@ def main() -> int:
             print(f"Dark routine baseline reset atomically: {canonical_path}")
         else:
             old_snapshot = load_snapshot(
-                canonical_path, benchmarks_dir, args.profile, architecture
+                canonical_path, benchmarks_dir, "dark", track
             )
             comparison = compare_suites(current, old_snapshot.benchmarks)
             print_comparison(comparison, old_snapshot)
@@ -608,8 +608,8 @@ def main() -> int:
             if decision == "improved":
                 active_snapshot = create_snapshot(
                     benchmarks_dir,
-                    args.profile,
-                    architecture,
+                    "dark",
+                    track,
                     current,
                     metadata["timestamp"],
                     compiler,

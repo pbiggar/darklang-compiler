@@ -18,12 +18,47 @@ from typing import Iterable
 from benchmark_profiles import load_profile
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SUITE_ID = "dark-compiler"
-DECISION_SCHEMA_VERSION = 1
-MEASUREMENT_POLICIES = {
+DECISION_SCHEMA_VERSION = 2
+
+
+@dataclass(frozen=True)
+class BenchmarkTrack:
+    id: str
+    profile: str
+    architecture: str
+    backend: str
+    measurement_policy: str
+
+
+def _track(
+    architecture: str, profile: str, backend: str, measurement_policy: str
+) -> BenchmarkTrack:
+    return BenchmarkTrack(
+        f"{architecture}-{profile}-{backend}",
+        profile,
+        architecture,
+        backend,
+        measurement_policy,
+    )
+
+
+CACHEGRIND_POLICIES = {
     "quick": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs",
     "routine": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs",
+}
+QEMU_QUICK_POLICY = "qemu-tcg-plugin-guest-insns-v1:qemu-11.1.1:rustc-1.89.0"
+TRACKS = {
+    track.id: track
+    for track in (
+        *(
+            _track(architecture, profile, "cachegrind", policy)
+            for architecture in ("arm64", "x86_64")
+            for profile, policy in CACHEGRIND_POLICIES.items()
+        ),
+        _track("x86_64", "quick", "qemu", QEMU_QUICK_POLICY),
+    )
 }
 
 
@@ -47,13 +82,24 @@ class CompilerAttribution:
 class Snapshot:
     schema_version: int
     suite: str
-    profile: str
-    architecture: str
-    measurement_policy: str
+    language: str
+    track: BenchmarkTrack
     contract_sha256: str
     generated_at: str
     compiler: CompilerAttribution
     benchmarks: tuple[BenchmarkCount, ...]
+
+    @property
+    def profile(self) -> str:
+        return self.track.profile
+
+    @property
+    def architecture(self) -> str:
+        return self.track.architecture
+
+    @property
+    def measurement_policy(self) -> str:
+        return self.track.measurement_policy
 
 
 @dataclass(frozen=True)
@@ -202,21 +248,51 @@ def contract_digest(benchmarks_dir: Path, profile_name: str) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def snapshot_path(benchmarks_dir: Path, profile: str, architecture: str) -> Path:
-    return benchmarks_dir / "baselines" / f"dark-{profile}.{normalize_architecture(architecture)}.json"
+def snapshot_names(
+    benchmarks_dir: Path, language: str, profile_name: str
+) -> tuple[str, ...]:
+    names = tuple(load_profile(benchmarks_dir, profile_name))
+    if language == "dark":
+        return names
+    if language != "rust":
+        raise BaselineError(f"unsupported benchmark language: {language!r}")
+    parity = _load_json(benchmarks_dir / "PARITY.json")
+    entries = parity.get("benchmarks") if isinstance(parity, dict) else None
+    if not isinstance(entries, dict):
+        raise BaselineError("PARITY.json must contain a benchmarks object")
+    use_quick = profile_name in {"quick", "quick-fast"}
+    comparable: list[str] = []
+    for name in names:
+        entry = entries.get(name)
+        selected = entry.get("quick") if use_quick and isinstance(entry, dict) else entry
+        if not isinstance(selected, dict) or not isinstance(selected.get("status"), str):
+            raise BaselineError(f"PARITY.json has no valid status for {name}")
+        if selected["status"] == "comparable":
+            comparable.append(name)
+    return tuple(comparable)
+
+
+def snapshot_path(
+    benchmarks_dir: Path, language: str, track: BenchmarkTrack
+) -> Path:
+    if language not in {"dark", "rust"}:
+        raise BaselineError(f"unsupported benchmark language: {language!r}")
+    return benchmarks_dir / "baselines" / f"{language}-{track.id}.json"
 
 
 def create_snapshot(
     benchmarks_dir: Path,
-    profile: str,
-    architecture: str,
+    language: str,
+    track: BenchmarkTrack,
     counts: Iterable[BenchmarkCount],
     generated_at: str,
     compiler: CompilerAttribution,
 ) -> Snapshot:
-    if profile not in MEASUREMENT_POLICIES:
-        raise BaselineError(f"snapshots are not supported for profile: {profile}")
-    names = load_profile(benchmarks_dir, profile)
+    if language not in {"dark", "rust"}:
+        raise BaselineError(f"unsupported benchmark language: {language!r}")
+    if TRACKS.get(track.id) != track:
+        raise BaselineError(f"unsupported benchmark track: {track.id!r}")
+    names = snapshot_names(benchmarks_dir, language, track.profile)
     normalized_counts = validate_counts(counts, names)
     if len(compiler.commit) != 40 or any(
         c not in "0123456789abcdef" for c in compiler.commit
@@ -231,23 +307,31 @@ def create_snapshot(
     return Snapshot(
         schema_version=SCHEMA_VERSION,
         suite=SUITE_ID,
-        profile=profile,
-        architecture=normalize_architecture(architecture),
-        measurement_policy=MEASUREMENT_POLICIES[profile],
-        contract_sha256=contract_digest(benchmarks_dir, profile),
+        language=language,
+        track=track,
+        contract_sha256=contract_digest(benchmarks_dir, track.profile),
         generated_at=generated_at,
         compiler=compiler,
         benchmarks=normalized_counts,
     )
 
 
+def track_dict(track: BenchmarkTrack) -> dict[str, str]:
+    return {
+        "id": track.id,
+        "profile": track.profile,
+        "architecture": track.architecture,
+        "backend": track.backend,
+        "measurement_policy": track.measurement_policy,
+    }
+
+
 def _snapshot_dict(snapshot: Snapshot) -> dict[str, object]:
     return {
         "schema_version": snapshot.schema_version,
         "suite": snapshot.suite,
-        "profile": snapshot.profile,
-        "architecture": snapshot.architecture,
-        "measurement_policy": snapshot.measurement_policy,
+        "language": snapshot.language,
+        "track": track_dict(snapshot.track),
         "contract_sha256": snapshot.contract_sha256,
         "generated_at": snapshot.generated_at,
         "compiler": {
@@ -305,7 +389,10 @@ def write_snapshot(path: Path, snapshot: Snapshot) -> None:
 
 
 def load_snapshot(
-    path: Path, benchmarks_dir: Path, expected_profile: str, expected_architecture: str
+    path: Path,
+    benchmarks_dir: Path,
+    expected_language: str,
+    expected_track: BenchmarkTrack,
 ) -> Snapshot:
     raw = _load_json(path)
     if not isinstance(raw, dict):
@@ -315,15 +402,22 @@ def load_snapshot(
         {
             "schema_version",
             "suite",
-            "profile",
-            "architecture",
-            "measurement_policy",
+            "language",
+            "track",
             "contract_sha256",
             "generated_at",
             "compiler",
             "benchmarks",
         },
         "snapshot",
+    )
+    track_raw = raw["track"]
+    if not isinstance(track_raw, dict):
+        raise BaselineError("snapshot track must be an object")
+    _exact_fields(
+        track_raw,
+        {"id", "profile", "architecture", "backend", "measurement_policy"},
+        "snapshot track",
     )
     compiler_raw = raw["compiler"]
     if not isinstance(compiler_raw, dict):
@@ -348,8 +442,6 @@ def load_snapshot(
             )
         )
 
-    profile = raw["profile"]
-    architecture = raw["architecture"]
     if raw["schema_version"] != SCHEMA_VERSION:
         raise BaselineError(
             f"snapshot schema is {raw['schema_version']!r}, expected {SCHEMA_VERSION}"
@@ -358,20 +450,19 @@ def load_snapshot(
         raise BaselineError(
             f"snapshot suite is {raw['suite']!r}, expected {SUITE_ID!r}"
         )
-    if profile != expected_profile:
+    if raw["language"] != expected_language:
         raise BaselineError(
-            f"snapshot profile is {profile!r}, expected {expected_profile!r}"
+            f"snapshot language is {raw['language']!r}, expected {expected_language!r}"
         )
-    normalized_architecture = normalize_architecture(str(architecture))
-    if normalized_architecture != normalize_architecture(expected_architecture):
+    actual_track = TRACKS.get(str(track_raw["id"]))
+    if actual_track is None or actual_track != expected_track:
         raise BaselineError(
-            f"snapshot architecture is {normalized_architecture}, "
-            f"expected {normalize_architecture(expected_architecture)}"
+            f"snapshot track is {track_raw.get('id')!r}, expected {expected_track.id!r}"
         )
-    expected_policy = MEASUREMENT_POLICIES[expected_profile]
-    if raw["measurement_policy"] != expected_policy:
-        raise BaselineError("snapshot measurement policy is incompatible")
-    expected_digest = contract_digest(benchmarks_dir, expected_profile)
+    expected_track_dict = track_dict(expected_track)
+    if track_raw != expected_track_dict:
+        raise BaselineError("snapshot track metadata is incompatible")
+    expected_digest = contract_digest(benchmarks_dir, expected_track.profile)
     if raw["contract_sha256"] != expected_digest:
         raise BaselineError("snapshot workload contract digest is incompatible")
     if (
@@ -390,14 +481,15 @@ def load_snapshot(
         raise BaselineError("snapshot generated_at must be ISO-8601") from error
     if parsed_timestamp.tzinfo is None:
         raise BaselineError("snapshot generated_at must include a UTC offset")
-    expected_names = load_profile(benchmarks_dir, expected_profile)
+    expected_names = snapshot_names(
+        benchmarks_dir, expected_language, expected_track.profile
+    )
     validated_rows = validate_counts(rows, expected_names)
     return Snapshot(
         SCHEMA_VERSION,
         SUITE_ID,
-        expected_profile,
-        normalized_architecture,
-        expected_policy,
+        expected_language,
+        expected_track,
         expected_digest,
         raw["generated_at"],
         CompilerAttribution(compiler_raw["commit"], compiler_raw["subject"]),
@@ -459,6 +551,16 @@ def compare_suites(
     return SuiteComparison(decision, ratio, deltas)
 
 
+def compare_implementations(dark: Snapshot, rust: Snapshot) -> SuiteComparison:
+    if dark.language != "dark" or rust.language != "rust":
+        raise BaselineError("implementation comparison requires Dark and Rust snapshots")
+    if dark.track != rust.track:
+        raise BaselineError("implementation snapshots use different benchmark tracks")
+    if dark.contract_sha256 != rust.contract_sha256:
+        raise BaselineError("implementation snapshots use different workload contracts")
+    return compare_suites(dark.benchmarks, rust.benchmarks)
+
+
 def comparison_dict(
     comparison: SuiteComparison,
     profile: str,
@@ -468,13 +570,11 @@ def comparison_dict(
     return {
         "schema_version": DECISION_SCHEMA_VERSION,
         "suite": SUITE_ID,
-        "profile": profile,
-        "architecture": baseline.architecture,
+        "track": track_dict(baseline.track),
+        "selection_profile": profile,
         "baseline": {
-            "profile": baseline.profile,
             "commit": baseline.compiler.commit,
             "contract_sha256": baseline.contract_sha256,
-            "measurement_policy": baseline.measurement_policy,
         },
         "decision": comparison.decision,
         "current_baseline_ratio": comparison.ratio,
@@ -495,7 +595,7 @@ def comparison_dict(
 def print_comparison(comparison: SuiteComparison, baseline: Snapshot) -> None:
     print(
         f"Dark baseline: commit {baseline.compiler.commit}, contract "
-        f"{baseline.contract_sha256}, profile {baseline.profile}, architecture {baseline.architecture}"
+        f"{baseline.contract_sha256}, track {baseline.track.id}"
     )
     for row in comparison.rows:
         print(
@@ -552,18 +652,21 @@ def load_dark_counts(
 
 def _quick_command(args: argparse.Namespace) -> int:
     benchmarks_dir = Path(args.benchmarks_dir).resolve()
+    track = TRACKS[args.track]
+    if track.profile != "quick":
+        raise BaselineError(f"quick comparison requires a quick track, got {track.id}")
     selected_profile = "quick-fast" if args.fast else "quick"
     selected_names = load_profile(benchmarks_dir, selected_profile)
     counts = load_count_rows(Path(args.counts), selected_names)
-    baseline_path = snapshot_path(benchmarks_dir, "quick", args.architecture)
+    baseline_path = snapshot_path(benchmarks_dir, "dark", track)
 
     if args.reset:
         if args.fast:
             raise BaselineError("quick-fast runs cannot reset the complete quick baseline")
         snapshot = create_snapshot(
             benchmarks_dir,
-            "quick",
-            args.architecture,
+            "dark",
+            track,
             counts,
             args.timestamp,
             CompilerAttribution(args.commit, args.subject),
@@ -572,16 +675,13 @@ def _quick_command(args: argparse.Namespace) -> int:
         decision = {
             "schema_version": DECISION_SCHEMA_VERSION,
             "suite": SUITE_ID,
-            "profile": "quick",
-            "architecture": snapshot.architecture,
+            "track": track_dict(snapshot.track),
             "decision": "reset",
             "current_baseline_ratio": 1.0,
             "snapshot_action": "reset",
             "baseline": {
-                "profile": snapshot.profile,
                 "commit": snapshot.compiler.commit,
                 "contract_sha256": snapshot.contract_sha256,
-                "measurement_policy": snapshot.measurement_policy,
             },
             "benchmarks": [],
         }
@@ -589,7 +689,7 @@ def _quick_command(args: argparse.Namespace) -> int:
         print(f"Dark quick baseline reset atomically: {baseline_path}")
         return 0
 
-    baseline = load_snapshot(baseline_path, benchmarks_dir, "quick", args.architecture)
+    baseline = load_snapshot(baseline_path, benchmarks_dir, "dark", track)
     baseline_counts = project_counts(baseline.benchmarks, selected_names)
     comparison = compare_suites(counts, baseline_counts)
     if args.fast:
@@ -597,8 +697,8 @@ def _quick_command(args: argparse.Namespace) -> int:
     elif comparison.decision == "improved":
         updated = create_snapshot(
             benchmarks_dir,
-            "quick",
-            args.architecture,
+            "dark",
+            track,
             counts,
             args.timestamp,
             CompilerAttribution(args.commit, args.subject),
@@ -626,10 +726,11 @@ def _quick_command(args: argparse.Namespace) -> int:
 
 def _validate_command(args: argparse.Namespace) -> int:
     benchmarks_dir = Path(args.benchmarks_dir).resolve()
-    path = snapshot_path(benchmarks_dir, args.profile, args.architecture)
-    snapshot = load_snapshot(path, benchmarks_dir, args.profile, args.architecture)
+    track = TRACKS[args.track]
+    path = snapshot_path(benchmarks_dir, args.language, track)
+    snapshot = load_snapshot(path, benchmarks_dir, args.language, track)
     print(
-        f"Valid Dark baseline: {path} (commit {snapshot.compiler.commit}, "
+        f"Valid {args.language} baseline: {path} (commit {snapshot.compiler.commit}, "
         f"contract {snapshot.contract_sha256})"
     )
     return 0
@@ -640,7 +741,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     quick = subparsers.add_parser("quick", help="compare or reset a complete quick run")
     quick.add_argument("--benchmarks-dir", required=True)
-    quick.add_argument("--architecture", required=True)
+    quick.add_argument("--track", choices=sorted(TRACKS), required=True)
     quick.add_argument("--counts", required=True)
     quick.add_argument("--commit", required=True)
     quick.add_argument("--subject", default="")
@@ -653,8 +754,8 @@ def main() -> int:
 
     validate = subparsers.add_parser("validate", help="validate a canonical snapshot")
     validate.add_argument("--benchmarks-dir", required=True)
-    validate.add_argument("--architecture", required=True)
-    validate.add_argument("--profile", choices=sorted(MEASUREMENT_POLICIES), required=True)
+    validate.add_argument("--language", choices=("dark", "rust"), required=True)
+    validate.add_argument("--track", choices=sorted(TRACKS), required=True)
     validate.set_defaults(handler=_validate_command)
     args = parser.parse_args()
     try:

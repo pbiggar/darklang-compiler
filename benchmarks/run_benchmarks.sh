@@ -19,6 +19,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/infrastructure/pretty.sh"
 
+machine_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo "x86_64" ;;
+        aarch64|arm64) echo "arm64" ;;
+        *) uname -m ;;
+    esac
+}
+
+ROUTINE_TRACK="$(machine_arch)-routine-cachegrind"
+
 show_help() {
     sed -n '/^# Usage:/,/^$/ {
         s/^# \{0,1\}//
@@ -181,7 +191,7 @@ fi
 
 if [ "$PROFILE" = "routine" ] && [ "$USE_CACHEGRIND" = true ] && [ "$RESET_DARK_BASELINE" = false ] && [ "$LIST_ONLY" = false ]; then
     if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_baseline.py" validate \
-        --benchmarks-dir "$SCRIPT_DIR" --architecture "$(uname -m)" --profile routine; then
+        --benchmarks-dir "$SCRIPT_DIR" --language dark --track "$ROUTINE_TRACK"; then
         exit 1
     fi
 fi

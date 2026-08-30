@@ -35,3 +35,11 @@ one complete successful `--reset-dark-baseline` routine run; partial, targeted,
 separate via `--refresh-baseline=rust`.
 
 When reporting verification, include the exact commands run, whether they passed or failed, and any residual risk.
+
+For changes limited to the Linux x86_64 backend on an ARM64 worker, use the
+canonical `benchmarks/x86_64_check.py` quick track. DCB measures the exact base
+with Dark and audited Rust, measures the candidate with Dark, and retains the
+structured comparison outside either worktree. A `partial-*` decision is useful
+diagnostic evidence but is never a verified win. Shared compiler/runtime
+changes require both the host routine gate and the x86_64 QEMU gate; a
+regression on either track rejects the aggregate result.

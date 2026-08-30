@@ -22,8 +22,9 @@ RUN apt-get update && apt-get install -y \
     hyperfine \
     valgrind \
     gcc \
-    rustc \
-    cargo \
+    gcc-x86-64-linux-gnu \
+    libc6-dev-amd64-cross \
+    rustup \
     # OCaml tools for benchmarking
     ocaml \
     opam \
@@ -53,7 +54,12 @@ ENV DOTNET_CLI_HOME="/home/dark"
 ENV DOTNET_MULTILEVEL_LOOKUP="0"
 
 # Add .NET, dotnet tools and local bin to PATH
-ENV PATH="${DOTNET_ROOT}:/home/dark/.dotnet/tools:/home/dark/.local/bin:${PATH}"
+ENV PATH="${DOTNET_ROOT}:/home/dark/.dotnet/tools:/home/dark/.local/bin:/home/dark/.cargo/bin:${PATH}"
+
+# Pin the native Rust toolchain and install the Linux x86_64 standard library
+# used to build audited reference binaries for QEMU instruction measurement.
+RUN rustup toolchain install 1.89.0 --profile minimal --target x86_64-unknown-linux-gnu && \
+    rustup default 1.89.0
 
 # Pre-download workload advertising manifests so first-run commands don't fail workload verification.
 # Needs elevated privileges because the SDK is installed system-wide under /usr/share/dotnet.

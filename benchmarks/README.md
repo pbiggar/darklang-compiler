@@ -55,6 +55,10 @@ python3 --version
 
 # Validate every reduced Dark/Rust pair and compare instruction counts
 ./benchmarks/quick_check.sh --build
+
+# On an ARM64 host, measure Linux x86_64 guest instructions with pinned QEMU
+./benchmarks/x86_64_check.py measure --output=/tmp/x86-main.json \
+  --languages=dark,rust --allow-partial
 ```
 
 ## Benchmark Modes
@@ -138,6 +142,36 @@ routine runs retain the same document in their generated results directory.
 names from the compatible complete quick snapshot. It applies the same aggregate
 pass/fail decision but never advances or resets the complete snapshot. Fast,
 targeted, `all`, hyperfine, failed, and partial runs are ineligible for reset.
+
+### x86_64 QEMU track on ARM64
+
+`x86_64_check.py` is the canonical cross-architecture quick runner. It invokes
+the normal Dark compiler CLI with `--target=linux-x86_64 --emit-result`, builds
+the audited Rust references for the same GNU target, checks exact observable
+output, and counts guest instructions with the pinned QEMU TCG plugin. The
+track identity includes the architecture, quick profile, QEMU backend, and
+measurement-policy version, so its snapshots and decisions cannot be confused
+with native Cachegrind evidence.
+
+Measure a clean base with both languages, then a candidate with Dark only:
+
+```bash
+./benchmarks/x86_64_check.py measure --output=/tmp/base.json \
+  --languages=dark,rust --allow-partial
+./benchmarks/x86_64_check.py measure --output=/tmp/candidate.json \
+  --languages=dark --allow-partial
+./benchmarks/x86_64_check.py compare --baseline=/tmp/base.json \
+  --candidate=/tmp/candidate.json --decision-json=/tmp/decision.json
+```
+
+A canonical win requires complete output-valid Dark coverage on both commits
+and a complete audited Rust reference on the base. Incomplete execution is
+reported as `partial-*` and cannot be promoted to a win. Once every workload is
+supported, initialize the tracked Dark and Rust snapshots with a complete
+measurement using `record --initialize`; later complete runs use
+`record --advance`. Rust changes require the separate `--refresh-rust` flag.
+Recording regenerates `RESULTS.x86_64.json`, `RESULTS.x86_64.md`, and appends
+`HISTORY.x86_64.md`.
 
 ### Verification Mode (`--verify`)
 

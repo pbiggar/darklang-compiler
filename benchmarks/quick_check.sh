@@ -34,6 +34,7 @@ show_help() {
 }
 
 ARCH="$(machine_arch)"
+TRACK="${ARCH}-quick-cachegrind"
 FORCE_BUILD=false
 FAST_MODE=false
 QUIET_MODE=false
@@ -126,7 +127,7 @@ fi
 # Fail before expensive work when normal comparison cannot enforce the contract.
 if [ "$SMOKE_MODE" != true ] && [ "$RESET_DARK_BASELINE" = false ]; then
     if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_baseline.py" validate \
-        --benchmarks-dir "$SCRIPT_DIR" --architecture "$ARCH" --profile quick; then
+        --benchmarks-dir "$SCRIPT_DIR" --language dark --track "$TRACK"; then
         exit 1
     fi
 fi
@@ -254,7 +255,7 @@ for bench in $BENCHMARKS; do
     if [ "$FORCE_BUILD" = true ] || [ ! -x "$QUICK_BIN" ] || [ "$QUICK_DARK" -nt "$QUICK_BIN" ] || [ "$COMPILER_DLL" -nt "$QUICK_BIN" ]; then
         NEEDS_BUILD=true
     fi
-    if [ "$NEEDS_BUILD" = true ] && ! "$PROJECT_ROOT/dark" --allow-internal "$QUICK_DARK" -o "$QUICK_BIN" -q 2>/dev/null; then
+    if [ "$NEEDS_BUILD" = true ] && ! "$PROJECT_ROOT/dark" --allow-internal --emit-result "$QUICK_DARK" -o "$QUICK_BIN" -q 2>/dev/null; then
         BUILD_FAILURES+=("$bench")
         continue
     fi
@@ -357,7 +358,7 @@ fi
 
 if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_baseline.py" quick \
     --benchmarks-dir "$SCRIPT_DIR" \
-    --architecture "$ARCH" \
+    --track "$TRACK" \
     --counts "$COUNTS_FILE" \
     --commit "$COMMIT" \
     --subject "$SUBJECT" \

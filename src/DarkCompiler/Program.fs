@@ -31,6 +31,12 @@ open Output
 /// 4 = DumpIR (show all intermediate representations)
 type VerbosityLevel = Quiet | Normal | Verbose | VeryVerbose | DumpIR
 
+/// Select the compiler backend independently from the process architecture.
+/// Explicit targets are compile-only because the CLI does not emulate them.
+type TargetSelection =
+    | HostTarget
+    | ExplicitTarget of Platform.Target
+
 /// Convert VerbosityLevel to integer for library
 /// Library verbosity: 0=silent, 1=pass names, 2=pass names + timing, 3=dump all IRs
 let verbosityToInt (level: VerbosityLevel) : int =
@@ -58,6 +64,8 @@ type CliOptions = {
     Version: bool
     Argument: string option
     LeakCheck: bool
+    Target: TargetSelection
+    EmitResult: bool
     // Compiler-owned sources may use private runtime and HAMT helpers.
     AllowInternal: bool
     // Optimization flags
@@ -97,6 +105,8 @@ let defaultOptions = {
     Version = false
     Argument = None
     LeakCheck = false
+    Target = HostTarget
+    EmitResult = false
     AllowInternal = false
     DisableFreeList = false
     DisableANFOpt = false
@@ -127,6 +137,11 @@ let private parseSourceSyntaxValue (value: string) : Result<CompilerLibrary.Sour
     | "compiler" -> Ok CompilerLibrary.CompilerSyntax
     | "interpreter" -> Ok CompilerLibrary.InterpreterSyntax
     | _ -> Error $"Invalid syntax '{value}' (expected 'compiler' or 'interpreter')"
+
+let private parseTargetValue (value: string) : Result<TargetSelection, string> =
+    match value.Trim().ToLowerInvariant() with
+    | "linux-x86_64" -> Ok (ExplicitTarget Platform.LinuxX86_64)
+    | _ -> Error $"Invalid target '{value}' (expected 'linux-x86_64')"
 
 /// Build compiler options from CLI options
 let buildCompilerOptions (cliOpts: CliOptions) : CompilerLibrary.CompilerOptions = {
@@ -197,6 +212,26 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
         | "--interpreter-syntax" :: rest ->
             parseFlags rest { opts with SourceSyntax = CompilerLibrary.InterpreterSyntax } lastVerbosity
 
+        | "--target" :: value :: rest ->
+            match opts.Target with
+            | ExplicitTarget _ -> Error "Target specified multiple times"
+            | HostTarget ->
+                parseTargetValue value
+                |> Result.bind (fun target ->
+                    parseFlags rest { opts with Target = target } lastVerbosity)
+
+        | "--target" :: [] ->
+            Error "Missing value for --target (expected 'linux-x86_64')"
+
+        | flag :: rest when flag.StartsWith("--target=") ->
+            match opts.Target with
+            | ExplicitTarget _ -> Error "Target specified multiple times"
+            | HostTarget ->
+                let value = flag.Substring(9)
+                parseTargetValue value
+                |> Result.bind (fun target ->
+                    parseFlags rest { opts with Target = target } lastVerbosity)
+
         | "-o" :: value :: rest | "--output" :: value :: rest ->
             if opts.OutputFile.IsSome then
                 Error "Output file specified multiple times"
@@ -249,6 +284,9 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
             // Deliberately omitted from user-facing help. This mode exists for
             // compiler-owned stdlib, regression, and benchmark sources only.
             parseFlags rest { opts with AllowInternal = true } lastVerbosity
+
+        | "--emit-result" :: rest ->
+            parseFlags rest { opts with EmitResult = true } lastVerbosity
 
         | "-h" :: rest | "--help" :: rest ->
             parseFlags rest { opts with Help = true } lastVerbosity
@@ -369,6 +407,8 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
         // Check for conflicting options
         else if opts.Run && opts.OutputFile.IsSome then
             Error "Cannot specify output file with run mode (-r)"
+        else if opts.Run && opts.Target <> HostTarget then
+            Error "Explicit compiler targets are compile-only; remove --run"
         else
             Ok opts
 
@@ -390,7 +430,12 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
     let options = buildCompilerOptions cliOpts
     let sourceFile = sourceFileForDiagnostics cliOpts
 
-    match Platform.detectHostTarget () with
+    let selectedTarget =
+        match cliOpts.Target with
+        | HostTarget -> Platform.detectHostTarget ()
+        | ExplicitTarget target -> Ok target
+
+    match selectedTarget with
     | Error err ->
         eprintln $"Target detection failed: {err}"
         1
@@ -403,7 +448,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
             let request : CompilerLibrary.CompileRequest = {
                 Context = CompilerLibrary.StdlibOnly stdlib
                 Mode =
-                    if cliOpts.IsExpression then CompilerLibrary.CompileMode.TestExpression
+                    if cliOpts.IsExpression || cliOpts.EmitResult then CompilerLibrary.CompileMode.TestExpression
                     else CompilerLibrary.CompileMode.FullProgram
                 SourceSyntax = cliOpts.SourceSyntax
                 Sources =
@@ -469,7 +514,7 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
                 let request : CompilerLibrary.CompileRequest = {
                     Context = CompilerLibrary.StdlibOnly stdlib
                     Mode =
-                        if cliOpts.IsExpression then CompilerLibrary.CompileMode.TestExpression
+                        if cliOpts.IsExpression || cliOpts.EmitResult then CompilerLibrary.CompileMode.TestExpression
                         else CompilerLibrary.CompileMode.FullProgram
                     SourceSyntax = cliOpts.SourceSyntax
                     Sources =
@@ -528,6 +573,8 @@ let printUsage () =
     println "  -e, --expression     Treat argument as expression (not filename)"
     println "  --syntax MODE        Source syntax: compiler (default) or interpreter"
     println "  --interpreter-syntax Alias for --syntax=interpreter"
+    println "  --target TARGET      Compile for linux-x86_64 instead of the host"
+    println "  --emit-result        Print a file's final expression result when executed"
     println "  -o, --output FILE    Output file (default: dark.out)"
     println "  -q, --quiet          Suppress compilation output"
     println "  -v, --verbose        Show compilation pass names"
@@ -562,6 +609,7 @@ let printUsage () =
     printf "  dark -r -e \"2 + 3\"                 Run and show exit code (5)\n"
     printf "  dark -qr -e \"6 * 7\"                Run quietly (exit code: 42)\n"
     println "  dark --syntax=interpreter -e \"let x = 5L in x\""
+    println "  dark --target=linux-x86_64 prog.dark -o prog-x86_64"
     println "  dark -v prog.dark -o output        Compile with verbose output"
     println "  dark -r -e - < input.txt           Run expression from stdin"
     println ""
