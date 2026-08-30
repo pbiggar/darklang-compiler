@@ -9,11 +9,11 @@
     "backend": "cachegrind",
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
-  "contract_sha256": "675babd9db3d09517b3858718c357db45344110a2adac6a8d84f1290abe54f88",
-  "generated_at": "2026-08-30T20:52:48+00:00",
+  "contract_sha256": "749abfa5451153cafe463370754787a856bcde13ed9fe0d9873d2d0e82fb7640",
+  "generated_at": "2026-08-31T00:07:43+00:00",
   "compiler": {
-    "commit": "7785aa00e18bff1a28d0fccc5dfc3d1e1485e661",
-    "subject": "Run TinyTemplate exactly once"
+    "commit": "e20bed7b199f8b876e664b02102976aee42253ef",
+    "subject": "Refresh tinytemplate tuple migration contract"
   },
   "benchmarks": [
     {
