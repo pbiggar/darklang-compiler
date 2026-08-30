@@ -267,9 +267,9 @@
       "expected_sha256": "494484f51df8f4e4e809cdcdd0a812086cf4773c2a3ffa2d9e6ee5653cbb2899",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "74d448557ef3cd2e570105e11f4624fd7900a8bddedcca429d0d5b13b18b5d57",
-        "rust_sha256": "bb8fab09e9f4681cf3c42211226b884ba4b6a20bd4a9a8ab017d5c5ae078599c",
-        "rust_tree_sha256": "faa6b7b382cd5b680fba567dab3b57835e73a679cf22e52effb5bfe14e4ebd62",
+        "dark_sha256": "9095ad0eb1bbce55aa538d018e86d1b2ab0a8c770d278eb30bf75234dcb5dbed",
+        "rust_sha256": "95616915a5b647772cbc365adeb750cac6c9a270b03e906ea25d2184f7138a03",
+        "rust_tree_sha256": "5f3a92cff056fd4df938962812fad14fb651316ba3ddf2ddd46f3283cbf6801f",
         "expected_sha256": "494484f51df8f4e4e809cdcdd0a812086cf4773c2a3ffa2d9e6ee5653cbb2899"
       }
     }

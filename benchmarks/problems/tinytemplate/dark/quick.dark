@@ -737,9 +737,13 @@ let pageTemplate = "{# TinyTemplate application benchmark #}<main>\n<h1>{ title 
 let rowTemplate = "<article class=\"{{ if featured }}featured{{ else }}standard{{ endif }}\">\n<h2>{ name }</h2>\n{{ with details as detail }}<p>{ detail.category }: { detail.price | currency }</p>{{ endwith }}\n<ul>{{ for tag in tags }}<li data-first=\"{ @first }\" data-last=\"{ @last }\">{ @index }:{ tag }</li>{{ endfor }}</ul>\n<div>{ raw_html | unescaped }</div>\n</article>" in
 let footerTemplate = "<footer>{ @root }</footer>" in
 let configured = addFormatter(newTinyTemplate(), "currency", CurrencyFormatter) in
-match compile(pageTemplate) with
-| Error(error) -> Builtin.testRuntimeError(errorMessage(error))
-| Ok(page) ->
+match (Stdlib.Cli.Args.int64(0I), Stdlib.Cli.Args.int64(1I)) with
+| (Error(message), _) -> Builtin.testRuntimeError(message)
+| (_, Error(message)) -> Builtin.testRuntimeError(message)
+| (Ok(rowCount), Ok(runs)) ->
+    match compile(pageTemplate) with
+    | Error(error) -> Builtin.testRuntimeError(errorMessage(error))
+    | Ok(page) ->
     match compile(rowTemplate) with
     | Error(error) -> Builtin.testRuntimeError(errorMessage(error))
     | Ok(row) ->
@@ -748,6 +752,6 @@ match compile(pageTemplate) with
         | Ok(footer) ->
             let templates = [("footer", footer), ("row", row), ("page", page)] in
             let engine = TinyTemplate { templates = templates, formatters = configured.formatters, defaultFormatter = configured.defaultFormatter } in
-            match benchmark(engine, makeReport(12L), 1L, 0L) with
+            match benchmark(engine, makeReport(rowCount), runs, 0L) with
             | Error(error) -> Builtin.testRuntimeError(errorMessage(error))
             | Ok(total) -> Builtin.printLine(Stdlib.Int64.toString(total))

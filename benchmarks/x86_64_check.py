@@ -162,7 +162,9 @@ def measure_binary(repository: Path, name: str, binary: Path) -> tuple[int | Non
         return None, "quick expected output is missing"
     counter = repository / "benchmarks" / "infrastructure" / "qemu_instruction_count.sh"
     try:
-        result = command_result([str(counter), str(binary)], repository, timeout=30)
+        result = command_result(
+            [str(counter), str(binary), *benchmark_arguments(name)], repository, timeout=30
+        )
     except subprocess.TimeoutExpired:
         return None, "execution exceeded 30 seconds"
     if result.returncode != 0:
@@ -173,6 +175,12 @@ def measure_binary(repository: Path, name: str, binary: Path) -> tuple[int | Non
     if len(matches) != 1:
         return None, "QEMU did not report exactly one positive guest instruction count"
     return int(matches[0]), None
+
+
+def benchmark_arguments(name: str) -> list[str]:
+    if name == "tinytemplate":
+        return ["12", "1"]
+    return []
 
 
 def measure_language(

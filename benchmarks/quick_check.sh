@@ -186,6 +186,12 @@ concise_failure() {
         | cut -c1-300
 }
 
+quick_arguments() {
+    case "$1" in
+        tinytemplate) printf '%s\n' 12 1 ;;
+    esac
+}
+
 if [ "$SMOKE_MODE" = true ]; then
     PASSED=0
     for bench in $BENCHMARKS; do
@@ -298,11 +304,12 @@ for bench in $BENCHMARKS; do
         continue
     fi
     EXPECTED_OUTPUT=$(<"$QUICK_EXPECTED")
-    if ! DARK_OUTPUT=$("$QUICK_BIN"); then
+    mapfile -t QUICK_ARGUMENTS < <(quick_arguments "$bench")
+    if ! DARK_OUTPUT=$("$QUICK_BIN" "${QUICK_ARGUMENTS[@]}"); then
         FAILURES+=("$bench: Dark quick execution failed")
         continue
     fi
-    if ! RUST_OUTPUT=$("$QUICK_RUST_BIN"); then
+    if ! RUST_OUTPUT=$("$QUICK_RUST_BIN" "${QUICK_ARGUMENTS[@]}"); then
         FAILURES+=("$bench: Rust quick execution failed")
         continue
     fi
@@ -315,14 +322,14 @@ for bench in $BENCHMARKS; do
         continue
     fi
 
-    CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=no --branch-sim=no "$QUICK_BIN" 2>&1 || true)
+    CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=no --branch-sim=no "$QUICK_BIN" "${QUICK_ARGUMENTS[@]}" 2>&1 || true)
     I_REFS=$(printf '%s\n' "$CG_OUTPUT" | sed -n 's/.*I refs:[[:space:]]*//p' | tr -d ',')
     if [[ ! "$I_REFS" =~ ^[1-9][0-9]*$ ]]; then
         FAILURES+=("$bench: Dark Cachegrind did not produce exactly one positive instruction count")
         continue
     fi
 
-    RUST_CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=no --branch-sim=no "$QUICK_RUST_BIN" 2>&1 || true)
+    RUST_CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=no --branch-sim=no "$QUICK_RUST_BIN" "${QUICK_ARGUMENTS[@]}" 2>&1 || true)
     RUST_I_REFS=$(printf '%s\n' "$RUST_CG_OUTPUT" | sed -n 's/.*I refs:[[:space:]]*//p' | tr -d ',')
     if [[ ! "$RUST_I_REFS" =~ ^[1-9][0-9]*$ ]]; then
         FAILURES+=("$bench: Rust Cachegrind did not produce exactly one positive instruction count")
