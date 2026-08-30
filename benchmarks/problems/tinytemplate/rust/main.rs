@@ -104,5 +104,5 @@ pub fn benchmark(runs: usize, row_count: usize) {
 
 #[allow(dead_code)]
 fn main() {
-    benchmark(80, 12);
+    benchmark(1, 12);
 }

@@ -9,11 +9,11 @@
     "backend": "cachegrind",
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
-  "contract_sha256": "160c1f9c3b3fb295c9d260c08e086f6aaab136fa1956a3bce2caf2dbbff55c2c",
-  "generated_at": "2026-08-30T14:30:10+00:00",
+  "contract_sha256": "42c14b3079e0fc5391e8d324a94ac9837e6b3113cbfa593b46248bb475f04e5e",
+  "generated_at": "2026-08-30T19:45:39+00:00",
   "compiler": {
-    "commit": "2ae6b13822265f43cf6e8cee3fdaee294d309621",
-    "subject": "Integrate canonical x86_64 QEMU benchmark track"
+    "commit": "4ad9e194a0b29c5443599e3842f9573d05f56760",
+    "subject": "Support targeted quick benchmark decisions"
   },
   "benchmarks": [
     {
@@ -66,7 +66,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 202931
+      "instructions": 190601
     },
     {
       "name": "nqueen",
@@ -102,7 +102,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 1392250117
+      "instructions": 788321393
     }
   ]
 }
