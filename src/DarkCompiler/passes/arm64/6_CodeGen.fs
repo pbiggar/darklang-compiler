@@ -6598,30 +6598,77 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
 
 /// Linux AArch64 shell runner. Generated binaries remain libc-free, and both
 /// redirected streams are made nonblocking and drained on every wait probe.
-/// Return argv[index + 1], or null when the positional argument is absent.
+/// Return argv[index + 1] as a boxed Option<String>. Native argv entries are
+/// zero-terminated bytes, so present values are copied into managed Dark strings.
 /// X18 is initialized in _start before its prologue and is reserved for CLI
 /// runtime state, so this helper remains valid across ordinary Dark calls.
-let private generateCliArgvHelper (label: string) : ARM64Symbolic.Instr list =
+let private generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64Symbolic.Instr list =
     let missingLabel = $"{label}_missing"
-    let nextLabel = $"{label}_next"
-    let loadLabel = $"{label}_load"
+    let lengthLabel = $"{label}_length"
+    let lengthDoneLabel = $"{label}_length_done"
+    let copyLabel = $"{label}_copy"
+    let copyDoneLabel = $"{label}_copy_done"
+    let boxLabel = $"{label}_box"
     [ ARM64Symbolic.Label label
       ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
       ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, missingLabel)
-      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X18, 8us)
-      ARM64Symbolic.Label nextLabel
-      ARM64Symbolic.CBZ (ARM64Symbolic.X0, loadLabel)
+      ARM64Symbolic.SUB_imm (ARM64Symbolic.X1, ARM64Symbolic.X18, 8us)
       ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X1, 0s)
-      ARM64Symbolic.CBZ (ARM64Symbolic.X2, missingLabel)
+      ARM64Symbolic.SUB_imm (ARM64Symbolic.X2, ARM64Symbolic.X2, 1us)
+      ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X2)
+      ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, missingLabel)
+      ARM64Symbolic.LSL_imm (ARM64Symbolic.X1, ARM64Symbolic.X0, 3)
+      ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X18, ARM64Symbolic.X1)
       ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 8us)
-      ARM64Symbolic.SUB_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
-      ARM64Symbolic.B_label nextLabel
-      ARM64Symbolic.Label loadLabel
-      ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X1, 0s)
-      ARM64Symbolic.RET
-      ARM64Symbolic.Label missingLabel
-      ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-      ARM64Symbolic.RET ]
+      ARM64Symbolic.LDR (ARM64Symbolic.X3, ARM64Symbolic.X1, 0s)
+      ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 0us, 0)
+      ARM64Symbolic.MOV_reg (ARM64Symbolic.X5, ARM64Symbolic.X3)
+      ARM64Symbolic.Label lengthLabel
+      ARM64Symbolic.LDRB_imm (ARM64Symbolic.X6, ARM64Symbolic.X5, 0)
+      ARM64Symbolic.CBZ (ARM64Symbolic.X6, lengthDoneLabel)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X4, ARM64Symbolic.X4, 1us)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X5, ARM64Symbolic.X5, 1us)
+      ARM64Symbolic.B_label lengthLabel
+      ARM64Symbolic.Label lengthDoneLabel
+      ARM64Symbolic.MOV_reg (ARM64Symbolic.X7, ARM64Symbolic.X28)
+      ARM64Symbolic.STR (ARM64Symbolic.X4, ARM64Symbolic.X7, 0s)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X4, 7us)
+      ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 3us, 0)
+      ARM64Symbolic.LSR_reg (ARM64Symbolic.X9, ARM64Symbolic.X9, ARM64Symbolic.X10)
+      ARM64Symbolic.LSL_reg (ARM64Symbolic.X9, ARM64Symbolic.X9, ARM64Symbolic.X10)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X9, 16us)
+      ARM64Symbolic.ADD_reg (ARM64Symbolic.X28, ARM64Symbolic.X28, ARM64Symbolic.X10)
+      ARM64Symbolic.MOV_reg (ARM64Symbolic.X5, ARM64Symbolic.X3)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X7, 8us)
+      ARM64Symbolic.MOV_reg (ARM64Symbolic.X2, ARM64Symbolic.X4)
+      ARM64Symbolic.Label copyLabel
+      ARM64Symbolic.CBZ (ARM64Symbolic.X2, copyDoneLabel)
+      ARM64Symbolic.LDRB_imm (ARM64Symbolic.X1, ARM64Symbolic.X5, 0)
+      ARM64Symbolic.STRB_reg (ARM64Symbolic.X1, ARM64Symbolic.X10)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X5, ARM64Symbolic.X5, 1us)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 1us)
+      ARM64Symbolic.SUB_imm (ARM64Symbolic.X2, ARM64Symbolic.X2, 1us)
+      ARM64Symbolic.B_label copyLabel
+      ARM64Symbolic.Label copyDoneLabel
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X7, 8us)
+      ARM64Symbolic.ADD_reg (ARM64Symbolic.X10, ARM64Symbolic.X10, ARM64Symbolic.X9)
+      ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 1us, 0)
+      ARM64Symbolic.STR (ARM64Symbolic.X1, ARM64Symbolic.X10, 0s) ]
+    @ generateLeakCounterInc ctx
+    @ [ ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
+        ARM64Symbolic.B_label boxLabel
+        ARM64Symbolic.Label missingLabel
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 1us, 0)
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X7, 0us, 0)
+        ARM64Symbolic.Label boxLabel
+        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X28)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 24us)
+        ARM64Symbolic.STR (ARM64Symbolic.X6, ARM64Symbolic.X0, 0s)
+        ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X0, 8s)
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 1us, 0)
+        ARM64Symbolic.STR (ARM64Symbolic.X1, ARM64Symbolic.X0, 16s) ]
+    @ generateLeakCounterInc ctx
+    @ [ ARM64Symbolic.RET ]
 
 let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
     let syscall number =
@@ -8047,10 +8094,15 @@ let private generatePreparedARM64WithOptionsAndCache
             programMetadata.Facts.RecursiveReleaseTypes
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
+        let cliArgvHelpers =
+            allFunctionInstrs
+            |> List.choose (function
+                | ARM64Symbolic.BL label when label.StartsWith("__dark_cli_argv_") -> Some label
+                | _ -> None)
+            |> List.distinct
+            |> List.collect (generateCliArgvHelper ctx)
         let cliHelpers =
-            (match functionCache with
-             | Some _ -> generateCliArgvHelper "__dark_cli_argv_Stdlib.Cli.Args.get"
-             | None -> [])
+            cliArgvHelpers
             @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
         recordPhase "ARM64 Codegen Helpers" helperTimer
         let assemblyTimer = startPhase ()
