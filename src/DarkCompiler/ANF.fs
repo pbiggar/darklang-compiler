@@ -214,6 +214,7 @@ type CliOperation =
     | Execute
     | HostOS
     | GetEnv
+    | GetArgv
     | Kill
     | GetPid
     | GetUid

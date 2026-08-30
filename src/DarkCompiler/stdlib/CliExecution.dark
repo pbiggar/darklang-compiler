@@ -12,6 +12,9 @@ let __execute(command: String) : Stdlib.Cli.NativeOutput =
 
 let __hostOSCode() : Int64 = -1L
 let __getenv(name: String) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
+// Returns a positional argument, excluding the executable name. The compiler
+// replaces this declaration with a native argv lookup for compiled programs.
+let __argv(index: Int64) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
 let __kill(pid: Int64, signal: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok(())
 let __sleep(delayMs: Float) : Unit = ()
 let __getpid() : Int64 = 0L

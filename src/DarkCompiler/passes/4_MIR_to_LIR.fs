@@ -19,6 +19,7 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.Execute -> LIR.Execute
     | MIR.HostOS -> LIR.HostOS
     | MIR.GetEnv -> LIR.GetEnv
+    | MIR.GetArgv -> LIR.GetArgv
     | MIR.Kill -> LIR.Kill
     | MIR.GetPid -> LIR.GetPid
     | MIR.GetUid -> LIR.GetUid

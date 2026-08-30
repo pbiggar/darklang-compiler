@@ -6384,6 +6384,16 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     ARM64Symbolic.SVC syscalls.SvcImmediate
                     ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]
             | LIR.CpuCount -> Ok [ARM64Symbolic.MOVZ (destReg, 1us, 0)]
+            | LIR.GetArgv ->
+                match args with
+                | [index] ->
+                    loadCliOperand ARM64Symbolic.X0 index
+                    |> Result.map (fun loads ->
+                        loads
+                        @ [ARM64Symbolic.BL "__dark_cli_argv"]
+                        @ (if destReg = ARM64Symbolic.X0 then []
+                           else [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))
+                | _ -> Error "CLI argv expects exactly one index"
             | LIR.Execute | LIR.ProcessIO | LIR.TerminateProcess ->
                 let errorMessage =
                     match operation with
@@ -6588,6 +6598,27 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
 
 /// Linux AArch64 shell runner. Generated binaries remain libc-free, and both
 /// redirected streams are made nonblocking and drained on every wait probe.
+/// Return argv[index + 1], or null when the positional argument is absent.
+/// X18 is initialized in _start before its prologue and is reserved for CLI
+/// runtime state, so this helper remains valid across ordinary Dark calls.
+let private generateCliArgvHelper () : ARM64Symbolic.Instr list =
+    [ ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+      ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, "__dark_cli_argv_missing")
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X18, 8us)
+      ARM64Symbolic.Label "__dark_cli_argv_next"
+      ARM64Symbolic.CBZ (ARM64Symbolic.X0, "__dark_cli_argv_load")
+      ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X1, 0s)
+      ARM64Symbolic.CBZ (ARM64Symbolic.X2, "__dark_cli_argv_missing")
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 8us)
+      ARM64Symbolic.SUB_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
+      ARM64Symbolic.B_label "__dark_cli_argv_next"
+      ARM64Symbolic.Label "__dark_cli_argv_load"
+      ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X1, 0s)
+      ARM64Symbolic.RET
+      ARM64Symbolic.Label "__dark_cli_argv_missing"
+      ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
+      ARM64Symbolic.RET ]
+
 let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
     let syscall number =
         [ARM64Symbolic.MOVZ (ARM64Symbolic.X8, number, 0)
@@ -8008,8 +8039,8 @@ let private generatePreparedARM64WithOptionsAndCache
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliHelpers =
-            if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper ()
-            else []
+            generateCliArgvHelper ()
+            @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
         recordPhase "ARM64 Codegen Helpers" helperTimer
         let assemblyTimer = startPhase ()
         let assembled =

@@ -122,6 +122,7 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.Execute -> MIR.Execute
     | ANF.HostOS -> MIR.HostOS
     | ANF.GetEnv -> MIR.GetEnv
+    | ANF.GetArgv -> MIR.GetArgv
     | ANF.Kill -> MIR.Kill
     | ANF.GetPid -> MIR.GetPid
     | ANF.GetUid -> MIR.GetUid

@@ -174,6 +174,7 @@ let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option 
             | "Stdlib.Cli.__execute" -> Some ANF.Execute
             | "Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
             | "Stdlib.Cli.__getenv" -> Some ANF.GetEnv
+            | "Stdlib.Cli.__argv" -> Some ANF.GetArgv
             | "Stdlib.Cli.__kill" -> Some ANF.Kill
             | "Stdlib.Cli.__getpid" -> Some ANF.GetPid
             | "Stdlib.Cli.__getuid" -> Some ANF.GetUid

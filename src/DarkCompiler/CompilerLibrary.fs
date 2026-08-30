@@ -1455,6 +1455,7 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/CliShell.dark"
         "stdlib/CliHost.dark"
         "stdlib/CliEnv.dark"
+        "stdlib/CliArgs.dark"
         "stdlib/CliProcess.dark"
         "stdlib/CliSys.dark"
         "stdlib/CliStdin.dark"

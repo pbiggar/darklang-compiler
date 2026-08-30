@@ -227,7 +227,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | CliNative (operation, _) ->
         match operation with
         | Execute | ProcessIO | TerminateProcess -> Some (AST.TRecord ("Stdlib.Cli.NativeOutput", []))
-        | GetEnv | CurrentUser -> Some (AST.TSum ("Stdlib.Option.Option", [AST.TString]))
+        | GetEnv | GetArgv | CurrentUser -> Some (AST.TSum ("Stdlib.Option.Option", [AST.TString]))
         | Kill -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TRecord ("Stdlib.Cli.NativePosixError", [])]))
         | HostOS | GetPid | GetUid | CpuCount | SpawnProcess -> Some AST.TInt64
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom

@@ -145,6 +145,10 @@ let private heapPtr = X86_64.R14
 /// Free list base register (codegen-internal, reserved; not allocatable).
 let private freeListBase = X86_64.R15
 
+/// Initial argv vector for native CLI programs. R13 is excluded from x64
+/// allocation so it survives calls after _start has established a frame.
+let private cliArgvBase = X86_64.R13
+
 /// Size of free list heads area (32 size classes × 8 bytes = 256 bytes)
 let private freeListSize = 256
 
@@ -484,6 +488,29 @@ let private genEpilogue (stackSize: int) (usedCalleeSaved: LIR.PhysReg list) : X
     let restores = usedCalleeSaved |> List.rev |> List.map (fun reg -> X86_64.POP (lirRegToX86 reg))
     let restoreFP = [X86_64.POP X86_64.RBP]
     stackDealloc @ restores @ restoreFP
+
+/// Return argv[index + 1], or null after the argv terminator. RDI carries the
+/// zero-based positional index and R13 is the preserved argv base.
+let private generateCliArgvHelper () : X86_64.Instr list =
+    [ X86_64.CMP_imm (X86_64.RDI, 0)
+      X86_64.Jcc (X86_64.LT, "__dark_cli_argv_missing")
+      X86_64.MOV_reg (X86_64.RAX, cliArgvBase)
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.Label "__dark_cli_argv_next"
+      X86_64.CMP_imm (X86_64.RDI, 0)
+      X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_load")
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_missing")
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.SUB_imm (X86_64.RDI, 1)
+      X86_64.JMP "__dark_cli_argv_next"
+      X86_64.Label "__dark_cli_argv_load"
+      X86_64.MOV_load (X86_64.RAX, X86_64.RAX, 0)
+      X86_64.RET
+      X86_64.Label "__dark_cli_argv_missing"
+      X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+      X86_64.RET ]
 
 /// Function context for instructions that need stack frame info (TailCall, etc.)
 type private FuncCtx = {
@@ -4412,7 +4439,7 @@ let private translateInstr
                     X86_64.Label completeLabel ])
         | _ -> Error "Sleep with virtual float register"
 
-    | LIR.CliNative (dest, operation, _args) ->
+    | LIR.CliNative (dest, operation, args) ->
         resolveReg dest
         |> Result.map (fun destReg ->
             match operation with
@@ -4426,6 +4453,20 @@ let private translateInstr
                 @ [X86_64.SYSCALL]
                 @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])
             | LIR.CpuCount -> loadImm64 destReg 1L
+            | LIR.GetArgv ->
+                match args with
+                | [LIR.Imm index] when index >= 0L ->
+                    loadImm64 X86_64.RDI index
+                    @ [X86_64.CALL "__dark_cli_argv"]
+                    @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])
+                | [LIR.Reg index] ->
+                    match resolveReg index with
+                    | Ok indexReg ->
+                        [X86_64.MOV_reg (X86_64.RDI, indexReg)
+                         X86_64.CALL "__dark_cli_argv"]
+                        @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])
+                    | Error _ -> loadImm64 destReg 0L
+                | _ -> loadImm64 destReg 0L
             | LIR.Execute | LIR.ProcessIO | LIR.TerminateProcess ->
                 let errorMessage =
                     match operation with
@@ -5012,7 +5053,11 @@ let translateFunction
                    leakReport @ loadImm64 X86_64.RDI 0L @ genExitSyscall
                else
                    [X86_64.RET])
-        Ok (funcLabel @ prologue @ heapInit @ blockInstrs @ epilogue)
+        let cliRuntimeInit =
+            if func.Name = "_start" then
+                [X86_64.MOV_reg (cliArgvBase, X86_64.RSP); X86_64.ADD_imm (cliArgvBase, 8)]
+            else []
+        Ok (funcLabel @ cliRuntimeInit @ prologue @ heapInit @ blockInstrs @ epilogue)
 
 /// Reference-count runtime helpers required by the program's LIR instructions.
 /// Keeping these requirements together lets code generation discover them in one pass.
@@ -5703,4 +5748,4 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 }
             else
                 []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveSumRcDecHelpers @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveSumRcDecHelpers @ generateCliArgvHelper () @ genOomHandler ())
