@@ -6,11 +6,12 @@
 #   --smoke                Compile full Dark workloads in fresh storage, run them
 #                          natively, and validate their established output;
 #                          never starts Cachegrind or changes a snapshot
-#   --benchmarks=NAMES     Comma-separated smoke workload selection (default: profile)
+#   --benchmarks=NAMES     Comma-separated workload selection. Non-smoke runs
+#                          produce targeted evidence and never update a snapshot
 #   --profile=NAME         Benchmark profile used by smoke mode (default: routine)
 #   --fast                 Run the declared quick-fast projection; never advances a snapshot
 #   --reset-dark-baseline  Replace the architecture's Dark snapshot from a complete quick run
-#   --decision-json=PATH    Persist the machine-readable aggregate decision at PATH
+#   --decision-json=PATH    Persist the machine-readable suite or targeted decision
 #   --build                Force rebuilding benchmark binaries
 #   --quiet                Print only failures and the aggregate outcome
 #   --help                 Show this help
@@ -86,6 +87,16 @@ done
 
 if [ "$FAST_MODE" = true ] && [ "$RESET_DARK_BASELINE" = true ]; then
     pretty_fail "--reset-dark-baseline requires the complete quick profile; --fast is not eligible"
+    exit 1
+fi
+
+if [ "$FAST_MODE" = true ] && [ -n "$BENCHMARK_SELECTION" ]; then
+    pretty_fail "--benchmarks cannot be combined with --fast"
+    exit 1
+fi
+
+if [ "$RESET_DARK_BASELINE" = true ] && [ -n "$BENCHMARK_SELECTION" ]; then
+    pretty_fail "targeted --benchmarks runs cannot reset the canonical snapshot"
     exit 1
 fi
 
@@ -354,6 +365,9 @@ if [ "$RESET_DARK_BASELINE" = true ]; then
 fi
 if [ "$QUIET_MODE" = true ]; then
     BASELINE_ARGS+=(--quiet)
+fi
+if [ -n "$BENCHMARK_SELECTION" ]; then
+    BASELINE_ARGS+=(--selection "$BENCHMARK_SELECTION")
 fi
 
 if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_baseline.py" quick \

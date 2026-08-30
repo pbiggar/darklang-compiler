@@ -508,6 +508,26 @@ def project_counts(
     return tuple(by_name[name] for name in expected)
 
 
+def parse_targeted_selection(
+    selection: str, canonical_names: Iterable[str]
+) -> tuple[str, ...]:
+    canonical = tuple(canonical_names)
+    selected = tuple(name.strip() for name in selection.split(",") if name.strip())
+    if not selected:
+        raise BaselineError("targeted quick selection must not be empty")
+    duplicates = sorted({name for name in selected if selected.count(name) > 1})
+    if duplicates:
+        raise BaselineError(
+            f"duplicate targeted quick benchmarks: {', '.join(duplicates)}"
+        )
+    unknown = [name for name in selected if name not in canonical]
+    if unknown:
+        raise BaselineError(
+            f"unknown targeted quick benchmarks: {', '.join(unknown)}"
+        )
+    return selected
+
+
 def compare_suites(
     current: Iterable[BenchmarkCount], baseline: Iterable[BenchmarkCount]
 ) -> SuiteComparison:
@@ -592,7 +612,9 @@ def comparison_dict(
     }
 
 
-def print_comparison(comparison: SuiteComparison, baseline: Snapshot) -> None:
+def print_comparison(
+    comparison: SuiteComparison, baseline: Snapshot, summary_name: str = "suite"
+) -> None:
     print(
         f"Dark baseline: commit {baseline.compiler.commit}, contract "
         f"{baseline.contract_sha256}, track {baseline.track.id}"
@@ -603,7 +625,7 @@ def print_comparison(comparison: SuiteComparison, baseline: Snapshot) -> None:
             f"delta {row.absolute_delta:+,} ({row.percentage_delta:+.3f}%)"
         )
     print(
-        f"Dark suite: {comparison.decision}; current/baseline geometric ratio "
+        f"Dark {summary_name}: {comparison.decision}; current/baseline geometric ratio "
         f"{comparison.ratio:.6f}"
     )
 
@@ -655,8 +677,18 @@ def _quick_command(args: argparse.Namespace) -> int:
     track = TRACKS[args.track]
     if track.profile != "quick":
         raise BaselineError(f"quick comparison requires a quick track, got {track.id}")
-    selected_profile = "quick-fast" if args.fast else "quick"
-    selected_names = load_profile(benchmarks_dir, selected_profile)
+    canonical_names = load_profile(benchmarks_dir, "quick")
+    selection = getattr(args, "selection", None)
+    if selection and args.fast:
+        raise BaselineError("targeted quick selection cannot be combined with quick-fast")
+    if selection and args.reset:
+        raise BaselineError("targeted quick runs cannot reset the canonical snapshot")
+    selected_profile = "targeted" if selection else "quick-fast" if args.fast else "quick"
+    selected_names = (
+        parse_targeted_selection(selection, canonical_names)
+        if selection
+        else load_profile(benchmarks_dir, selected_profile)
+    )
     counts = load_count_rows(Path(args.counts), selected_names)
     baseline_path = snapshot_path(benchmarks_dir, "dark", track)
 
@@ -692,7 +724,9 @@ def _quick_command(args: argparse.Namespace) -> int:
     baseline = load_snapshot(baseline_path, benchmarks_dir, "dark", track)
     baseline_counts = project_counts(baseline.benchmarks, selected_names)
     comparison = compare_suites(counts, baseline_counts)
-    if args.fast:
+    if selection:
+        action = "targeted-only"
+    elif args.fast:
         action = "projection-only"
     elif comparison.decision == "improved":
         updated = create_snapshot(
@@ -709,18 +743,28 @@ def _quick_command(args: argparse.Namespace) -> int:
         action = "unchanged-equal"
     else:
         action = "preserved-stronger-baseline"
+    summary_name = "targeted selection" if selection else "suite"
     if args.quiet:
         print(
-            f"Dark suite: {comparison.decision}; current/baseline geometric ratio "
+            f"Dark {summary_name}: {comparison.decision}; current/baseline geometric ratio "
             f"{comparison.ratio:.6f}"
         )
     else:
-        print_comparison(comparison, baseline)
-    print(f"Dark quick snapshot: {action}")
-    atomic_write_json(
-        Path(args.decision_json),
-        comparison_dict(comparison, selected_profile, baseline, action),
-    )
+        print_comparison(comparison, baseline, summary_name)
+    if selection:
+        print("Dark quick snapshot: preserved (targeted-only)")
+    else:
+        print(f"Dark quick snapshot: {action}")
+    decision = comparison_dict(comparison, selected_profile, baseline, action)
+    if selection:
+        decision["selected_benchmarks"] = list(selected_names)
+        decision["promotion_eligible"] = False
+        decision["candidate"] = {
+            "commit": args.commit,
+            "subject": args.subject,
+            "measured_at": args.timestamp,
+        }
+    atomic_write_json(Path(args.decision_json), decision)
     return 1 if comparison.decision == "regressed" else 0
 
 
@@ -739,7 +783,9 @@ def _validate_command(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    quick = subparsers.add_parser("quick", help="compare or reset a complete quick run")
+    quick = subparsers.add_parser(
+        "quick", help="compare a complete or explicitly targeted quick run"
+    )
     quick.add_argument("--benchmarks-dir", required=True)
     quick.add_argument("--track", choices=sorted(TRACKS), required=True)
     quick.add_argument("--counts", required=True)
@@ -748,6 +794,10 @@ def main() -> int:
     quick.add_argument("--timestamp", required=True)
     quick.add_argument("--decision-json", required=True)
     quick.add_argument("--fast", action="store_true")
+    quick.add_argument(
+        "--selection",
+        help="comma-separated quick benchmarks to compare without changing the snapshot",
+    )
     quick.add_argument("--reset", action="store_true")
     quick.add_argument("--quiet", action="store_true")
     quick.set_defaults(handler=_quick_command)

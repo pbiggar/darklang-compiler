@@ -143,6 +143,20 @@ names from the compatible complete quick snapshot. It applies the same aggregate
 pass/fail decision but never advances or resets the complete snapshot. Fast,
 targeted, `all`, hyperfine, failed, and partial runs are ineligible for reset.
 
+Use `--benchmarks` to screen one or more quick workloads against their rows in
+the established complete snapshot without changing that snapshot:
+
+```bash
+./benchmarks/quick_check.sh --benchmarks=tinytemplate \
+  --decision-json=/tmp/tinytemplate.json
+```
+
+The targeted decision reports exact per-row counts, deltas, and the geometric
+ratio for the selection. Its structured output uses `selection_profile:
+"targeted"`, `snapshot_action: "targeted-only"`, and `promotion_eligible:
+false`. This evidence can rank candidates, but only the complete applicable
+architecture tracks can establish a canonical win.
+
 ### x86_64 QEMU track on ARM64
 
 `x86_64_check.py` is the canonical cross-architecture quick runner. It invokes

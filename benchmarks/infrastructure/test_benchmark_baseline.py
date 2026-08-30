@@ -6,6 +6,9 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from argparse import Namespace
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 from benchmark_baseline import (
@@ -19,6 +22,7 @@ from benchmark_baseline import (
     load_snapshot,
     snapshot_path,
     write_snapshot,
+    _quick_command,
 )
 
 
@@ -104,6 +108,79 @@ class BenchmarkTrackTests(unittest.TestCase):
         )
         self.assertEqual(decision["track"]["profile"], "quick")
         self.assertEqual(decision["selection_profile"], "quick-fast")
+
+    def test_targeted_quick_comparison_projects_without_advancing_snapshot(self) -> None:
+        track = TRACKS["arm64-quick-cachegrind"]
+        baseline = self.snapshot("dark", track.id, (100, 200))
+        baseline_path = snapshot_path(self.benchmarks, "dark", track)
+        write_snapshot(baseline_path, baseline)
+        counts_path = self.benchmarks / "counts.tsv"
+        counts_path.write_text("alpha\t80\n")
+        decision_path = self.benchmarks / "decision.json"
+
+        output = StringIO()
+        with redirect_stdout(output):
+            result = _quick_command(
+                Namespace(
+                    benchmarks_dir=str(self.benchmarks),
+                    track=track.id,
+                    counts=str(counts_path),
+                    commit="b" * 40,
+                    subject="targeted candidate",
+                    timestamp="2026-08-30T01:00:00+00:00",
+                    decision_json=str(decision_path),
+                    fast=False,
+                    reset=False,
+                    quiet=True,
+                    selection="alpha",
+                )
+            )
+
+        self.assertEqual(result, 0)
+        self.assertIn("Dark targeted selection: improved", output.getvalue())
+        self.assertIn(
+            "Dark quick snapshot: preserved (targeted-only)", output.getvalue()
+        )
+        self.assertEqual(
+            load_snapshot(baseline_path, self.benchmarks, "dark", track).benchmarks,
+            baseline.benchmarks,
+        )
+        decision = json.loads(decision_path.read_text())
+        self.assertEqual(decision["decision"], "improved")
+        self.assertEqual(decision["snapshot_action"], "targeted-only")
+        self.assertEqual(decision["selection_profile"], "targeted")
+        self.assertEqual(decision["selected_benchmarks"], ["alpha"])
+        self.assertFalse(decision["promotion_eligible"])
+        self.assertEqual(decision["candidate"]["commit"], "b" * 40)
+        self.assertAlmostEqual(decision["current_baseline_ratio"], 0.8)
+        self.assertEqual(decision["benchmarks"][0]["baseline"], 100)
+        self.assertEqual(decision["benchmarks"][0]["current"], 80)
+
+    def test_targeted_quick_comparison_rejects_snapshot_reset(self) -> None:
+        track = TRACKS["arm64-quick-cachegrind"]
+        write_snapshot(
+            snapshot_path(self.benchmarks, "dark", track),
+            self.snapshot("dark", track.id, (100, 200)),
+        )
+        counts_path = self.benchmarks / "counts.tsv"
+        counts_path.write_text("alpha\t80\n")
+
+        with self.assertRaisesRegex(BaselineError, "targeted.*cannot reset"):
+            _quick_command(
+                Namespace(
+                    benchmarks_dir=str(self.benchmarks),
+                    track=track.id,
+                    counts=str(counts_path),
+                    commit="b" * 40,
+                    subject="targeted candidate",
+                    timestamp="2026-08-30T01:00:00+00:00",
+                    decision_json=str(self.benchmarks / "decision.json"),
+                    fast=False,
+                    reset=True,
+                    quiet=True,
+                    selection="alpha",
+                )
+            )
 
 
 if __name__ == "__main__":
