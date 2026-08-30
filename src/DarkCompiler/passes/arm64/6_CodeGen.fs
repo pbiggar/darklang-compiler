@@ -7945,7 +7945,9 @@ let private generatePreparedARM64WithOptionsAndCache
     let convertCached func =
         let generate () = convertFunction heapOverflowTrapBody ctx func
         match functionCache with
-        | Some cache when func.Name <> "_start" -> cache func generate
+        // CLI argv code owns a generated helper label. Reusing a cached body
+        // would reuse its BL without re-emitting that program-local helper.
+        | Some cache when func.Name <> "_start" && not (func.Name.StartsWith("Stdlib.Cli.Args.")) -> cache func generate
         | _ -> generate ()
 
     let functionTimer = startPhase ()
