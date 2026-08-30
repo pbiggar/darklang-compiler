@@ -5,5 +5,5 @@ mod full {
 }
 
 fn main() {
-    full::benchmark(1, 3);
+    full::benchmark(1, 12);
 }

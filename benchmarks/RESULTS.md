@@ -2,12 +2,12 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-08-30T19:51:03+00:00
+**Snapshot timestamp:** 2026-08-30T20:52:48+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
-**Workload contract:** `75fcaaf3d950644efb3baeabe8edb2344aee740ae3658719f4c217d5b618ae7d`
-**Compiler commit:** `4ad9e194a0b29c5443599e3842f9573d05f56760` - Support targeted quick benchmark decisions
+**Workload contract:** `675babd9db3d09517b3858718c357db45344110a2adac6a8d84f1290abe54f88`
+**Compiler commit:** `7785aa00e18bff1a28d0fccc5dfc3d1e1485e661` - Run TinyTemplate exactly once
 
 | Benchmark     |          Dark (4.23x) |          Rust |
 |---------------|-----------------------|---------------|

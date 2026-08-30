@@ -9,11 +9,11 @@
     "backend": "cachegrind",
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
-  "contract_sha256": "75fcaaf3d950644efb3baeabe8edb2344aee740ae3658719f4c217d5b618ae7d",
-  "generated_at": "2026-08-30T19:51:03+00:00",
+  "contract_sha256": "675babd9db3d09517b3858718c357db45344110a2adac6a8d84f1290abe54f88",
+  "generated_at": "2026-08-30T20:52:48+00:00",
   "compiler": {
-    "commit": "4ad9e194a0b29c5443599e3842f9573d05f56760",
-    "subject": "Support targeted quick benchmark decisions"
+    "commit": "7785aa00e18bff1a28d0fccc5dfc3d1e1485e661",
+    "subject": "Run TinyTemplate exactly once"
   },
   "benchmarks": [
     {
