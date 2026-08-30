@@ -259,7 +259,7 @@ if [ "$JOB_COUNT" -lt 1 ]; then
 fi
 
 pretty_info "Building current Dark compiler..."
-if ! dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --verbosity quiet; then
+if ! dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --no-incremental --verbosity quiet; then
     pretty_fail "Dark compiler build failed"
     exit 1
 fi
