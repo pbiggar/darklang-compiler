@@ -6390,7 +6390,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     loadCliOperand ARM64Symbolic.X0 index
                     |> Result.map (fun loads ->
                         loads
-                        @ [ARM64Symbolic.BL "__dark_cli_argv"]
+                        @ [ARM64Symbolic.BL $"__dark_cli_argv_{ctx.FunctionName}"]
                         @ (if destReg = ARM64Symbolic.X0 then []
                            else [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))
                 | _ -> Error "CLI argv expects exactly one index"
@@ -6601,21 +6601,25 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
 /// Return argv[index + 1], or null when the positional argument is absent.
 /// X18 is initialized in _start before its prologue and is reserved for CLI
 /// runtime state, so this helper remains valid across ordinary Dark calls.
-let private generateCliArgvHelper () : ARM64Symbolic.Instr list =
-    [ ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
-      ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, "__dark_cli_argv_missing")
+let private generateCliArgvHelper (label: string) : ARM64Symbolic.Instr list =
+    let missingLabel = $"{label}_missing"
+    let nextLabel = $"{label}_next"
+    let loadLabel = $"{label}_load"
+    [ ARM64Symbolic.Label label
+      ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+      ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, missingLabel)
       ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X18, 8us)
-      ARM64Symbolic.Label "__dark_cli_argv_next"
-      ARM64Symbolic.CBZ (ARM64Symbolic.X0, "__dark_cli_argv_load")
+      ARM64Symbolic.Label nextLabel
+      ARM64Symbolic.CBZ (ARM64Symbolic.X0, loadLabel)
       ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X1, 0s)
-      ARM64Symbolic.CBZ (ARM64Symbolic.X2, "__dark_cli_argv_missing")
+      ARM64Symbolic.CBZ (ARM64Symbolic.X2, missingLabel)
       ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 8us)
       ARM64Symbolic.SUB_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
-      ARM64Symbolic.B_label "__dark_cli_argv_next"
-      ARM64Symbolic.Label "__dark_cli_argv_load"
+      ARM64Symbolic.B_label nextLabel
+      ARM64Symbolic.Label loadLabel
       ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X1, 0s)
       ARM64Symbolic.RET
-      ARM64Symbolic.Label "__dark_cli_argv_missing"
+      ARM64Symbolic.Label missingLabel
       ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
       ARM64Symbolic.RET ]
 
@@ -6888,16 +6892,14 @@ let convertFunction
         // envp before the language prologue changes SP. X18 is outside the
         // allocator-visible register set and is touched only by CLI binaries.
         let cliEnvironmentInit =
-            if ctx.NeedsCliRuntimeState then
-                [ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.SP, 8us)
-                 ARM64Symbolic.Label "__dark_cli_find_envp"
-                 ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X18, 0s)
-                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.X18, 8us)
-                 ARM64Symbolic.CBNZ (ARM64Symbolic.X9, "__dark_cli_find_envp")
-                 ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)]
-            else []
+            [ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.SP, 8us)
+             ARM64Symbolic.Label "__dark_cli_find_envp"
+             ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X18, 0s)
+             ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.X18, 8us)
+             ARM64Symbolic.CBNZ (ARM64Symbolic.X9, "__dark_cli_find_envp")
+             ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)]
         let cliRuntimeInit =
-            if func.Name = "_start" && ctx.NeedsCliRuntimeState then
+            if func.Name = "_start" then
                 cliEnvironmentInit
             else []
 
@@ -6906,7 +6908,12 @@ let convertFunction
         // Keep the epilogue immediately after the CFG so its final Ret terminator
         // can fall through. The terminating epilogue makes the overflow trap a
         // cold out-of-line block reached only by explicit allocation branches.
-        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ epilogueLabelInstr @ epilogue @ heapOverflowTrap)
+        let argvHelperLabel = $"__dark_cli_argv_{ctx.FunctionName}"
+        let argvHelper =
+            if cfgInstrs |> List.exists (function | ARM64Symbolic.BL label -> label = argvHelperLabel | _ -> false) then
+                generateCliArgvHelper argvHelperLabel
+            else []
+        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ epilogueLabelInstr @ epilogue @ heapOverflowTrap @ argvHelper)
 
 type private RegisterLifetimeStep =
     | Unrelated
@@ -8045,13 +8052,7 @@ let private generatePreparedARM64WithOptionsAndCache
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliHelpers =
-            // Stdlib specialization may materialize this operation after the
-            // original LIR function list has been inspected. The generated
-            // call is therefore the authoritative helper requirement.
-            (if needsCliArgvRuntime
-                || allFunctionInstrs |> List.exists (function | ARM64Symbolic.BL "__dark_cli_argv" -> true | _ -> false)
-             then generateCliArgvHelper () else [])
-            @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
+            if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else []
         recordPhase "ARM64 Codegen Helpers" helperTimer
         let assemblyTimer = startPhase ()
         let assembled =
