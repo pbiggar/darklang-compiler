@@ -7560,9 +7560,15 @@ let private generatePreparedARM64WithOptionsAndCache
                 | Some facts -> facts
                 | None -> Crash.crash "ARM64 codegen invariant: missing validated function facts"
             (func, facts))
+    // Args.get is specialized after the first LIR scan. Its function identity
+    // is retained even when the intrinsic instruction is materialized later.
+    let needsCliArgvRuntime =
+        functions
+        |> List.exists (fun func -> func.Name.StartsWith("Stdlib.Cli.Args."))
     let needsCliRuntimeState =
-        functionsWithFacts
-        |> List.exists (fun (_, facts) -> facts.NeedsCliRuntimeState)
+        needsCliArgvRuntime
+        || (functionsWithFacts
+            |> List.exists (fun (_, facts) -> facts.NeedsCliRuntimeState))
     let needsCliExecuteHelper =
         functionsWithFacts
         |> List.exists (fun (_, facts) -> facts.NeedsCliExecuteHelper)
@@ -8042,7 +8048,9 @@ let private generatePreparedARM64WithOptionsAndCache
             // Stdlib specialization may materialize this operation after the
             // original LIR function list has been inspected. The generated
             // call is therefore the authoritative helper requirement.
-            (if allFunctionInstrs |> List.exists (function | ARM64Symbolic.BL "__dark_cli_argv" -> true | _ -> false) then generateCliArgvHelper () else [])
+            (if needsCliArgvRuntime
+                || allFunctionInstrs |> List.exists (function | ARM64Symbolic.BL "__dark_cli_argv" -> true | _ -> false)
+             then generateCliArgvHelper () else [])
             @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
         recordPhase "ARM64 Codegen Helpers" helperTimer
         let assemblyTimer = startPhase ()
