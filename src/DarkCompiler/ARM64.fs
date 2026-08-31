@@ -27,7 +27,7 @@ module ARM64
 type Reg =
     | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 | X8 | X9
     | X10 | X11 | X12 | X13 | X14 | X15 | X16 | X17  // X16/X17 are IP0/IP1 scratch registers
-    | X18  // Platform register; retained as Linux CLI environment state
+    | X18  // Platform register; never allocated by generated code
     | X19 | X20 | X21 | X22 | X23 | X24 | X25 | X26  // Callee-saved
     | X27  // Reserved for free list base pointer
     | X28  // Reserved for heap bump pointer

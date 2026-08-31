@@ -145,10 +145,6 @@ let private heapPtr = X86_64.R14
 /// Free list base register (codegen-internal, reserved; not allocatable).
 let private freeListBase = X86_64.R15
 
-/// Initial argv vector for native CLI programs. R13 is excluded from x64
-/// allocation so it survives calls after _start has established a frame.
-let private cliArgvBase = X86_64.R13
-
 /// Size of free list heads area (32 size classes × 8 bytes = 256 bytes)
 let private freeListSize = 256
 
@@ -490,12 +486,21 @@ let private genEpilogue (stackSize: int) (usedCalleeSaved: LIR.PhysReg list) : X
     stackDealloc @ restores @ restoreFP
 
 /// Return argv[index + 1], or null after the argv terminator. RDI carries the
-/// zero-based positional index and R13 is the preserved argv base.
+/// zero-based positional index. The initial argv vector is at a fixed positive
+/// offset from _start's root frame; following the frame-pointer chain avoids
+/// reserving a general-purpose register for process state.
 let private generateCliArgvHelper () : X86_64.Instr list =
     [ X86_64.CMP_imm (X86_64.RDI, 0)
       X86_64.Jcc (X86_64.LT, "__dark_cli_argv_missing")
-      X86_64.MOV_reg (X86_64.RAX, cliArgvBase)
-      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RBP)
+      X86_64.Label "__dark_cli_argv_find_root"
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_root_found")
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RDX)
+      X86_64.JMP "__dark_cli_argv_find_root"
+      X86_64.Label "__dark_cli_argv_root_found"
+      X86_64.ADD_imm (X86_64.RAX, 16)
       X86_64.Label "__dark_cli_argv_next"
       X86_64.CMP_imm (X86_64.RDI, 0)
       X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_load")
@@ -5053,11 +5058,14 @@ let translateFunction
                    leakReport @ loadImm64 X86_64.RDI 0L @ genExitSyscall
                else
                    [X86_64.RET])
-        let cliRuntimeInit =
+        // The root frame terminates the normal frame-pointer chain. This lets
+        // CLI helpers recover process arguments from a known stack-relative
+        // address without reserving R13 for the lifetime of the program.
+        let rootFrameInit =
             if func.Name = "_start" then
-                [X86_64.MOV_reg (cliArgvBase, X86_64.RSP); X86_64.ADD_imm (cliArgvBase, 8)]
+                [X86_64.XOR_reg (X86_64.RBP, X86_64.RBP)]
             else []
-        Ok (funcLabel @ cliRuntimeInit @ prologue @ heapInit @ blockInstrs @ epilogue)
+        Ok (funcLabel @ rootFrameInit @ prologue @ heapInit @ blockInstrs @ epilogue)
 
 /// Reference-count runtime helpers required by the program's LIR instructions.
 /// Keeping these requirements together lets code generation discover them in one pass.

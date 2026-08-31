@@ -47,7 +47,6 @@ type CodeGenContext = {
     ClosureCaptureTypes: Map<string, AST.Type list>
     /// Reuses labels already derived while planning generic list release helpers.
     PlannedListDecHelperLabels: Map<ANF.RcReleasePlan, string>
-    NeedsCliRuntimeState: bool
     FunctionName: string
     // Function context for tail call epilogue generation
     StackSize: int
@@ -6600,8 +6599,9 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
 /// redirected streams are made nonblocking and drained on every wait probe.
 /// Return argv[index + 1] as a boxed Option<String>. Native argv entries are
 /// zero-terminated bytes, so present values are copied into managed Dark strings.
-/// X18 is initialized in _start before its prologue and is reserved for CLI
-/// runtime state, so this helper remains valid across ordinary Dark calls.
+/// The root _start frame terminates the normal frame-pointer chain. Its initial
+/// stack layout keeps argc at +16 and argv at +24, so no register is reserved
+/// for CLI state between calls.
 let private generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64Symbolic.Instr list =
     let missingLabel = $"{label}_missing"
     let lengthLabel = $"{label}_length"
@@ -6612,14 +6612,20 @@ let private generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64S
     [ ARM64Symbolic.Label label
       ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
       ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, missingLabel)
-      ARM64Symbolic.SUB_imm (ARM64Symbolic.X1, ARM64Symbolic.X18, 8us)
+      ARM64Symbolic.MOV_reg (ARM64Symbolic.X1, ARM64Symbolic.X29)
+      ARM64Symbolic.Label $"{label}_find_root"
       ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X1, 0s)
+      ARM64Symbolic.CBZ (ARM64Symbolic.X2, $"{label}_root_found")
+      ARM64Symbolic.MOV_reg (ARM64Symbolic.X1, ARM64Symbolic.X2)
+      ARM64Symbolic.B_label $"{label}_find_root"
+      ARM64Symbolic.Label $"{label}_root_found"
+      ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X1, 16s)
       ARM64Symbolic.SUB_imm (ARM64Symbolic.X2, ARM64Symbolic.X2, 1us)
       ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X2)
       ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, missingLabel)
-      ARM64Symbolic.LSL_imm (ARM64Symbolic.X1, ARM64Symbolic.X0, 3)
-      ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X18, ARM64Symbolic.X1)
-      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 8us)
+      ARM64Symbolic.LSL_imm (ARM64Symbolic.X2, ARM64Symbolic.X0, 3)
+      ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X2)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 24us)
       ARM64Symbolic.LDR (ARM64Symbolic.X3, ARM64Symbolic.X1, 0s)
       ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 0us, 0)
       ARM64Symbolic.MOV_reg (ARM64Symbolic.X5, ARM64Symbolic.X3)
@@ -6826,7 +6832,14 @@ let private generateLinuxCliExecuteHelper () : ARM64Symbolic.Instr list =
     @ closeFd 0s 0 @ closeFd 0s 32 @ closeFd 8s 0 @ closeFd 8s 32
     @ loadStringLiteralPointer ARM64Symbolic.X0 "/bin/bash"
     @ [ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 8us)
-       ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X18)
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X29)
+       ARM64Symbolic.Label "__dark_cli_find_root_for_exec"
+       ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
+       ARM64Symbolic.CBZ (ARM64Symbolic.X13, "__dark_cli_exec_root_found")
+       ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X13)
+       ARM64Symbolic.B_label "__dark_cli_find_root_for_exec"
+       ARM64Symbolic.Label "__dark_cli_exec_root_found"
+       ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 24us)
        ARM64Symbolic.Label "__dark_cli_find_envp_for_exec"
        ARM64Symbolic.LDR (ARM64Symbolic.X13, ARM64Symbolic.X14, 0s)
        ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 8us)
@@ -6940,15 +6953,12 @@ let convertFunction
         // Add function entry label (for BL to branch to)
         let functionEntryLabel = [ARM64Symbolic.Label func.Name]
 
-        // The kernel supplies argc/argv/envp on the original stack. Capture
-        // argv before the language prologue changes SP. X18 is outside the
-        // allocator-visible register set and is touched only by CLI binaries.
-        let cliEnvironmentInit =
-            [ARM64Symbolic.ADD_imm (ARM64Symbolic.X18, ARM64Symbolic.SP, 8us)
-             ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)]
-        let cliRuntimeInit =
+        // Terminate _start's frame-pointer chain so CLI helpers can recover
+        // argv/envp from the original stack without reserving X18.
+        let rootFrameInit =
             if func.Name = "_start" then
-                cliEnvironmentInit
+                [ARM64Symbolic.MOVZ (ARM64Symbolic.X29, 0us, 0)
+                 ARM64Symbolic.MOVZ (ARM64Symbolic.X25, 0us, 0)]
             else []
 
         // Parameter stack stores and parallel register moves are already the first
@@ -6956,7 +6966,7 @@ let convertFunction
         // Keep the epilogue immediately after the CFG so its final Ret terminator
         // can fall through. The terminating epilogue makes the overflow trap a
         // cold out-of-line block reached only by explicit allocation branches.
-        Ok (functionEntryLabel @ cliRuntimeInit @ prologue @ heapInit @ cfgInstrs @ epilogueLabelInstr @ epilogue @ heapOverflowTrap)
+        Ok (functionEntryLabel @ rootFrameInit @ prologue @ heapInit @ cfgInstrs @ epilogueLabelInstr @ epilogue @ heapOverflowTrap)
 
 type private RegisterLifetimeStep =
     | Unrelated
@@ -7610,15 +7620,6 @@ let private generatePreparedARM64WithOptionsAndCache
                 | Some facts -> facts
                 | None -> Crash.crash "ARM64 codegen invariant: missing validated function facts"
             (func, facts))
-    // Args.get is specialized after the first LIR scan. Its function identity
-    // is retained even when the intrinsic instruction is materialized later.
-    let needsCliArgvRuntime =
-        functions
-        |> List.exists (fun func -> func.Name.StartsWith("Stdlib.Cli.Args."))
-    let needsCliRuntimeState =
-        needsCliArgvRuntime
-        || (functionsWithFacts
-            |> List.exists (fun (_, facts) -> facts.NeedsCliRuntimeState))
     let needsCliExecuteHelper =
         functionsWithFacts
         |> List.exists (fun (_, facts) -> facts.NeedsCliExecuteHelper)
@@ -7801,7 +7802,6 @@ let private generatePreparedARM64WithOptionsAndCache
         ClosurePayloadSizes = closurePayloadSizes
         ClosureCaptureTypes = programMetadata.Facts.ClosureCaptureTypes
         PlannedListDecHelperLabels = Map.empty
-        NeedsCliRuntimeState = needsCliRuntimeState
         FunctionName = ""
         StackSize = 0
         UsedCalleeSaved = []

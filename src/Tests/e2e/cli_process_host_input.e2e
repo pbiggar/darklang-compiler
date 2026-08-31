@@ -29,6 +29,15 @@ match Stdlib.Cli.Env.get("PATH") with | Some(path) -> Stdlib.String.length(path)
 // are values, so command-line programs must handle absent or invalid input.
 match Stdlib.Cli.Args.int64(999I) with | Error(message) -> Stdlib.String.length(message) > 0I | Ok(_) -> false = true
 
+// CLI argument lookup must work from a nested non-tail frame: argv is process
+// state, rather than state held in an allocator-visible register.
+let argvMissingFromNestedFrame(depth: Int64): Bool =
+    if depth == 0I then
+        match Stdlib.Cli.Args.int64(999I) with | Error(_) -> true | Ok(_) -> false
+    else
+        let retained = depth in argvMissingFromNestedFrame(depth - 1I) && retained > 0I
+argvMissingFromNestedFrame(3I) = true
+
 match Stdlib.Cli.Process.runIn("/", "pwd", []) with | Ok(output) -> Stdlib.String.trimEnd(output.stdout) | Error(error) -> error.message = "/"
 
 match Stdlib.Cli.Process.runWithEnv("/bin/sh", ["-c", "printf %s \"$CLI_PARITY_VALUE\""], [("CLI_PARITY_VALUE", "inherited")]) with | Ok(output) -> output.stdout | Error(error) -> error = "inherited"

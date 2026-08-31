@@ -1144,9 +1144,7 @@ let calleeSavedRegsFor (arch: Platform.Arch) =
     | Platform.X86_64 ->
         // x86_64: X22 (R14) = heap ptr, X23 (R15) = free list — not allocatable
         // X24-X26 have no x86_64 equivalents
-        // X21 maps to R13, which preserves the initial argv vector for the
-        // x86-64 CLI runtime. It is intentionally not allocatable.
-        [LIR.X19; LIR.X20]
+        [LIR.X19; LIR.X20; LIR.X21]
     | Platform.ARM64 ->
         // ARM64: X27/X28 reserved, X19-X26 allocatable.
         [LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23
