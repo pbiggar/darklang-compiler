@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Merkle Trees Benchmark *)
 (* Builds binary Merkle trees and computes root hashes *)
 (* Uses a simple hash function for portability *)
@@ -31,8 +35,8 @@ let verify_tree depth leaf_start expected_root =
   build_tree depth leaf_start = expected_root
 
 let () =
-  let depth = 15 in
-  let iterations = 50 in
+  let depth = argument 0 in
+  let iterations = argument 1 in
 
   let checksum = ref 0L in
 

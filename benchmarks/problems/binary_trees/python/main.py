@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Binary Trees Benchmark - Python reference implementation
 
@@ -32,5 +38,5 @@ def stress_test(depth, iterations):
     return total
 
 # Same parameters as Dark version
-result = stress_test(15, 100)
+result = stress_test(argument(0), argument(1))
 print(result)

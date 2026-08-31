@@ -5,10 +5,15 @@
 // A(3, n) creates exponentially many recursive calls.
 
 let ackermann(m: Int64, n: Int64) : Int64 =
-    if m == 0L then n + 1L
-    else if n == 0L then ackermann(m - 1L, 1L)
-    else ackermann(m - 1L, ackermann(m, n - 1L))
+    if m == 0 then n + 1
+    else if n == 0 then ackermann(m - 1, 1)
+    else ackermann(m - 1, ackermann(m, n - 1))
 
 // A(3, 12) = 32765
 // This creates millions of recursive calls
-Builtin.printLine(Stdlib.Int64.toString(ackermann(3L, 12L)))
+let benchmarkArg(index: Int) : Int64 =
+    match Stdlib.Cli.Args.int64(index) with
+    | Ok(value) -> value
+    | Error(message) -> Builtin.testRuntimeError(message)
+
+Builtin.printLine(Stdlib.Int64.toString(ackermann(benchmarkArg(0I), benchmarkArg(1I))))

@@ -59,8 +59,8 @@ fi
 if [ -f "$PROBLEM_DIR/rust/Cargo.toml" ]; then
     if command -v cargo &> /dev/null; then
         pretty_info "Building Rust Cargo application..."
-        cargo build --release --manifest-path "$PROBLEM_DIR/rust/Cargo.toml" --bin benchmark-full 2>/dev/null
-        cp "$PROBLEM_DIR/rust/target/release/benchmark-full" "$PROBLEM_DIR/rust/main"
+        cargo build --release --manifest-path "$PROBLEM_DIR/rust/Cargo.toml" --bin benchmark 2>/dev/null
+        cp "$PROBLEM_DIR/rust/target/release/benchmark" "$PROBLEM_DIR/rust/main"
         chmod +x "$PROBLEM_DIR/rust/main"
         pretty_ok "Rust Cargo application build complete"
     else

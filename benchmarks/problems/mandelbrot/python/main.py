@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Mandelbrot Benchmark - Python reference implementation
 # Counts points in the Mandelbrot set
@@ -21,5 +27,5 @@ def count_mandelbrot(size, max_iter):
     return count
 
 # Count points in 200x200 grid with 50 iterations
-result = count_mandelbrot(200, 50)
+result = count_mandelbrot(argument(0), argument(1))
 print(result)

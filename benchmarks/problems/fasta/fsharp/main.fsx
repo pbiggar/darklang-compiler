@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Fasta Benchmark - DNA Sequence Generation
 // Generates pseudo-random DNA sequences and computes checksum
 
@@ -44,7 +48,7 @@ let makeRepeatFasta n (seq: byte[]) =
         checksum <- (checksum + uint64 c * uint64 (i + 1)) % 1000000007UL
     checksum
 
-let n = 100000
+let n = argument 0
 
 let iub = [|
     { c = byte 'a'; p = 0.27 }

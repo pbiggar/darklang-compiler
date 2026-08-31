@@ -1,3 +1,4 @@
+// main.rs - Parameterized Rust benchmark implementation.
 // Collatz Benchmark - Rust reference implementation
 // Counts steps in Collatz sequences for numbers 1 to n
 
@@ -22,8 +23,14 @@ fn sum_collatz(limit: i64) -> i64 {
     total
 }
 
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 fn main() {
-    // Sum steps for numbers 1 to 100000
-    let result = sum_collatz(100000);
+    let result = sum_collatz(argument(0));
     println!("{}", result);
 }

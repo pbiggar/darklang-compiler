@@ -1,5 +1,0 @@
-let fib(n: Int64) : Int64 =
-    if n <= 1L then n
-    else fib(n - 1L) + fib(n - 2L)
-
-fib(20L)

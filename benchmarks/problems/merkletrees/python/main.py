@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Merkle Trees Benchmark
 # Builds binary Merkle trees and computes root hashes
@@ -30,8 +36,8 @@ def build_tree(depth, leaf_start):
 def verify_tree(depth, leaf_start, expected_root):
     return build_tree(depth, leaf_start) == expected_root
 
-depth = 15
-iterations = 50
+depth = argument(0)
+iterations = argument(1)
 
 checksum = 0
 

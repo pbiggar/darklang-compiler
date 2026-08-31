@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Collatz Benchmark - Python reference implementation
 # Counts steps in Collatz sequences for numbers 1 to n
@@ -21,5 +27,5 @@ def sum_collatz(limit):
     return total
 
 # Sum steps for numbers 1 to 100000
-result = sum_collatz(100000)
+result = sum_collatz(argument(0))
 print(result)

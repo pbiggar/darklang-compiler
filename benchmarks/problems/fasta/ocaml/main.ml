@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Fasta Benchmark - DNA Sequence Generation *)
 (* Generates pseudo-random DNA sequences and computes checksum *)
 
@@ -47,7 +51,7 @@ let make_repeat_fasta n seq =
   !checksum
 
 let () =
-  let n = 100000 in
+  let n = argument 0 in
 
   let iub = [|
     ('a', [|0.27|]); ('c', [|0.12|]); ('g', [|0.12|]); ('t', [|0.27|]);

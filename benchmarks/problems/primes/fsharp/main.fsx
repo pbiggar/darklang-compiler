@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Prime Counting Benchmark
 // Counts primes up to N using trial division
 
@@ -26,4 +30,4 @@ let rec countPrimes n count =
 
 // Count primes up to 10000
 // Expected: 1229 primes
-printfn "%d" (countPrimes 10000 0)
+printfn "%d" (countPrimes (argument 0) 0)

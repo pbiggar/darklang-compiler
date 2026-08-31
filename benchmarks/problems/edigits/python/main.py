@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Edigits Benchmark - Computing digits of e
 # Uses series expansion: e = sum(1/n!) for n=0 to infinity
@@ -38,8 +44,8 @@ def compute_e_digits(num_digits):
 
 # Compute first 1000 digits of e multiple times
 checksum = 0
-for _ in range(10):
-    digits = compute_e_digits(1000)
+for _ in range(argument(0)):
+    digits = compute_e_digits(argument(1))
     checksum = 0
     for i, d in enumerate(digits):
         checksum = (checksum + d * (i + 1)) % 1000000007

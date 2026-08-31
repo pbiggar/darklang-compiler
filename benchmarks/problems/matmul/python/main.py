@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Matrix Multiplication Benchmark - Python reference implementation
 # From: plb2 and Julia micro-benchmarks
@@ -35,7 +41,7 @@ def checksum(m, n):
     return result
 
 # Use 100x100 matrices for reasonable runtime
-n = 100
+n = argument(0)
 a = generate_matrix(n, 42)
 b = generate_matrix(n, 123)
 c = matmul(a, b, n)

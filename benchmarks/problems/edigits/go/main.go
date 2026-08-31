@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func computeEDigits(numDigits int) []uint8 {
 	precision := numDigits + 10
@@ -45,7 +61,10 @@ func checksumDigits(digits []uint8) int64 {
 }
 
 func main() {
-	digits := computeEDigits(1000)
+	var digits []byte
+	for i := int64(0); i < argument(0); i++ {
+		digits = computeEDigits(int(argument(1)))
+	}
 	checksum := checksumDigits(digits)
 	fmt.Println(checksum)
 }

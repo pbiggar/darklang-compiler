@@ -1,9 +1,0 @@
-// Ackermann Benchmark - Quick check version
-
-let ackermann(m: Int64, n: Int64) : Int64 =
-    if m == 0L then n + 1L
-    else if n == 0L then ackermann(m - 1L, 1L)
-    else ackermann(m - 1L, ackermann(m, n - 1L))
-
-// Reduced: A(3, 6) instead of A(3, 12)
-ackermann(3L, 6L)

@@ -1,9 +1,23 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"math"
 )
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func isPrime(n int64) bool {
 	if n < 2 {
@@ -35,5 +49,5 @@ func countPrimes(n int64) int64 {
 }
 
 func main() {
-	fmt.Println(countPrimes(10000))
+	fmt.Println(countPrimes(argument(0)))
 }

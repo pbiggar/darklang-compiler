@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Matrix Multiplication Benchmark
 // Multiplies two NxN matrices using naive O(n^3) algorithm
 
@@ -40,7 +47,7 @@ function checksum(m, n) {
 }
 
 // Use 100x100 matrices for reasonable runtime
-const n = 100;
+const n = argument(0);
 const a = generateMatrix(n, 42);
 const b = generateMatrix(n, 123);
 const c = matmul(a, b, n);

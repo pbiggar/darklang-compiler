@@ -1,6 +1,0 @@
-# Diagnostic projection of the complete quick baseline; never recorded independently.
-fib
-ackermann
-mandelbrot
-quicksort
-nqueen

@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func quicksort(arr []int64) []int64 {
 	if len(arr) <= 1 {
@@ -44,7 +60,7 @@ func checksum(arr []int64) int64 {
 }
 
 func main() {
-	arr := generateList(5000, 42)
+	arr := generateList(int(argument(0)), uint64(argument(1)))
 	sorted := quicksort(arr)
 	fmt.Println(checksum(sorted))
 }

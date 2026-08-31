@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* N-Body Benchmark *)
 (* From: Computer Language Benchmarks Game *)
 
@@ -93,5 +97,5 @@ let () =
   |] in
 
   offset_momentum bodies;
-  advance bodies 0.01 500000;
+  advance bodies 0.01 (argument 0);
   Printf.printf "%Ld\n" (Int64.of_float (energy bodies *. 1000000.0))

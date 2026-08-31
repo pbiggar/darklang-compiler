@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func mandelbrot(cr, ci float64, maxIter int) int {
 	zr := 0.0
@@ -30,5 +46,5 @@ func countMandelbrot(size, maxIter int) int {
 }
 
 func main() {
-	fmt.Println(countMandelbrot(200, 50))
+	fmt.Println(countMandelbrot(int(argument(0)), int(argument(1))))
 }

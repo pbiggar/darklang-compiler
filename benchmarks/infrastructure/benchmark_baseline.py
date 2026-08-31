@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-from benchmark_profiles import load_profile
+from benchmark_profiles import load_invocation, load_profile
 
 
 SCHEMA_VERSION = 2
@@ -215,8 +215,8 @@ def load_count_rows(path: Path, expected_names: Iterable[str]) -> tuple[Benchmar
 def contract_digest(benchmarks_dir: Path, profile_name: str) -> str:
     names = load_profile(benchmarks_dir, profile_name)
     parity = _load_json(benchmarks_dir / "PARITY.json")
-    if not isinstance(parity, dict) or parity.get("schema") != 2:
-        raise BaselineError("PARITY.json must use schema 2")
+    if not isinstance(parity, dict) or parity.get("schema") != 3:
+        raise BaselineError("PARITY.json must use schema 3")
     entries = parity.get("benchmarks")
     if not isinstance(entries, dict):
         raise BaselineError("PARITY.json must contain a benchmarks object")
@@ -231,14 +231,20 @@ def contract_digest(benchmarks_dir: Path, profile_name: str) -> str:
         if not isinstance(selected, dict):
             qualifier = "quick " if use_quick else ""
             raise BaselineError(f"PARITY.json has no {qualifier}contract for {name}")
-        relevant = {
-            key: selected[key]
-            for key in sorted(selected)
-            if key == "status" or key.endswith("_sha256")
-        }
-        if "status" not in relevant:
+        relevant = {"status": selected.get("status")}
+        relevant.update(
+            {
+                key: entry[key]
+                for key in sorted(entry)
+                if key.endswith("_sha256")
+            }
+        )
+        if relevant["status"] is None:
             raise BaselineError(f"PARITY.json has no status for {name}")
         contract_rows.append({"name": name, "parity": relevant})
+        invocation = load_invocation(benchmarks_dir, profile_name, name)
+        contract_rows[-1]["args"] = list(invocation.args)
+        contract_rows[-1]["expected_stdout"] = invocation.expected_stdout
 
     payload = {
         "profile": profile_name,

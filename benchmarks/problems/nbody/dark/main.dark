@@ -91,10 +91,10 @@ let advanceStep(system: System, dt: Float) : System =
     }
 
 let advance(system: System, dt: Float, n: Int64) : System =
-    if n <= 0L then
+    if n <= 0 then
         system
     else
-        advance(advanceStep(system, dt), dt, n - 1L)
+        advance(advanceStep(system, dt), dt, n - 1)
 
 let kinetic(body: Body) : Float =
     0.5 * body.mass * (body.vx * body.vx + body.vy * body.vy + body.vz * body.vz)
@@ -196,6 +196,11 @@ let initialSystem(): System =
         }
     }
 
+let benchmarkArg(index: Int) : Int64 =
+    match Stdlib.Cli.Args.int64(index) with
+    | Ok(value) -> value
+    | Error(message) -> Builtin.testRuntimeError(message)
+
 let system = offsetMomentum(initialSystem()) in
-let finalSystem = advance(system, 0.01, 500000L) in
+let finalSystem = advance(system, 0.01, benchmarkArg(0I)) in
 Builtin.printLine(Stdlib.Int64.toString(Stdlib.Float.toInt(energy(finalSystem) * 1000000.0)))

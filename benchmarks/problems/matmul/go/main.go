@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func matmul(a, b [][]int64, n int) [][]int64 {
 	c := make([][]int64, n)
@@ -44,7 +60,7 @@ func checksum(m [][]int64, n int) int64 {
 }
 
 func main() {
-	n := 100
+	n := int(argument(0))
 	a := generateMatrix(n, 1)
 	b := generateMatrix(n, 2)
 	c := matmul(a, b, n)

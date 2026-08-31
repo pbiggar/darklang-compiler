@@ -40,8 +40,8 @@ The benchmark renders an inventory report through that complete surface.
 The Rust implementation is the complete published 1.2.1 crate source, not a
 facsimile or a dependency on a moving release. The Dark implementation is a
 functional port of the same value model, grammar, public registry operations,
-rendering semantics, and error categories. The quick variant changes only the
-number of rows and render repetitions.
+rendering semantics, and error categories. Routine and quick modes invoke the
+same source with profile-declared row and repetition arguments.
 
 Future additions should prefer another pinned real codebase with a different
 shape—such as a parser, serializer, or persistent-data application—before

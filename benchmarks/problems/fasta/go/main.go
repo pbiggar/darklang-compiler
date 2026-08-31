@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 const (
 	IM = 139968
@@ -59,7 +75,7 @@ func randomFasta(table []IUB, n int) int64 {
 }
 
 func main() {
-	n := 50000
+	n := int(argument(0))
 
 	iub := []IUB{
 		{'a', 0.27},

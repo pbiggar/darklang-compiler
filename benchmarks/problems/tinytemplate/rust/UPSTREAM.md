@@ -6,5 +6,5 @@ downloaded from the published crate at
 The crate records upstream git revision `522605e72e04dbd6ededa29743a485d2fad29dd4`
 in `.cargo_vcs_info.json` and retains its Apache-2.0 and MIT license files.
 
-The sibling `main.rs` and `quick.rs` files are Dark Compiler benchmark drivers;
+The sibling `main.rs` file is the parameterized Dark Compiler benchmark driver;
 they are not part of the upstream distribution.

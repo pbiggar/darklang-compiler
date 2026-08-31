@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Collatz Benchmark
 // Counts steps in Collatz sequences for numbers 1 to n
 
@@ -19,4 +26,4 @@ function sumCollatzRange(i, limit, total) {
 }
 
 // Sum steps for numbers 1 to 100000
-console.log(sumCollatzRange(1, 100000, 0));
+console.log(sumCollatzRange(1, argument(0), 0));

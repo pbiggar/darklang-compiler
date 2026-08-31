@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Nsieve Benchmark - Sieve of Eratosthenes
 # Counts primes up to n using sieve algorithm
@@ -18,6 +24,6 @@ def nsieve(n):
 
 # Run sieve multiple times for meaningful benchmark
 total = 0
-for _ in range(100):
-    total = nsieve(100000)
+for _ in range(argument(1)):
+    total = nsieve(argument(0))
 print(total)

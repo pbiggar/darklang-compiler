@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Ackermann Benchmark - Python reference implementation
 import sys
@@ -12,5 +18,5 @@ def ackermann(m, n):
         return ackermann(m - 1, ackermann(m, n - 1))
 
 # A(3, 12) = 32765
-result = ackermann(3, 12)
+result = ackermann(argument(0), argument(1))
 print(result)

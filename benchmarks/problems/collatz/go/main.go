@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func collatzSteps(n int64) int64 {
 	var steps int64
@@ -24,5 +40,5 @@ func sumCollatz(limit int64) int64 {
 }
 
 func main() {
-	fmt.Println(sumCollatz(100000))
+	fmt.Println(sumCollatz(argument(0)))
 }

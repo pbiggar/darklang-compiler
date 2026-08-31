@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Prime Counting Benchmark - Python reference implementation
 import math
@@ -23,5 +29,5 @@ def count_primes(n):
     return count
 
 # Count primes up to 10000
-result = count_primes(10000)
+result = count_primes(argument(0))
 print(result)

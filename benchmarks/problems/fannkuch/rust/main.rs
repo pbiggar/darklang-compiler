@@ -1,3 +1,11 @@
+// main.rs - Parameterized Rust benchmark implementation.
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 // Fannkuch Benchmark - Rust reference implementation
 // From: Computer Language Benchmarks Game
 
@@ -48,6 +56,6 @@ fn fannkuch(n: usize) -> i32 {
 
 fn main() {
     // n=9 gives reasonable runtime
-    let result = fannkuch(9);
+    let result = fannkuch(argument(0) as usize);
     println!("{}", result);
 }

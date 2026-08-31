@@ -1,3 +1,4 @@
+// main.rs - Parameterized Rust benchmark implementation.
 // Prime Counting Benchmark - Rust reference implementation
 
 fn is_prime(n: i64) -> bool {
@@ -29,8 +30,14 @@ fn count_primes(n: i64) -> i64 {
     count
 }
 
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 fn main() {
-    // Count primes up to 10000
-    let result = count_primes(10000);
+    let result = count_primes(argument(0));
     println!("{}", result);
 }

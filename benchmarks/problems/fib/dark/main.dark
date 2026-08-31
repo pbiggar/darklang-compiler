@@ -1,5 +1,10 @@
 let fib(n: Int64) : Int64 =
-    if n <= 1L then n
-    else fib(n - 1L) + fib(n - 2L)
+    if n <= 1 then n
+    else fib(n - 1) + fib(n - 2)
 
-Builtin.printLine(Stdlib.Int64.toString(fib(35L)))
+let benchmarkArg(index: Int) : Int64 =
+    match Stdlib.Cli.Args.int64(index) with
+    | Ok(value) -> value
+    | Error(message) -> Builtin.testRuntimeError(message)
+
+Builtin.printLine(Stdlib.Int64.toString(fib(benchmarkArg(0I))))

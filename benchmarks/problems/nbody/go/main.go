@@ -1,9 +1,23 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"math"
 )
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 const (
 	PI          = math.Pi
@@ -95,7 +109,7 @@ func main() {
 	}
 
 	offsetMomentum(bodies)
-	advance(bodies, 0.01, 500000)
+	advance(bodies, 0.01, int(argument(0)))
 	result := energy(bodies)
 	fmt.Println(int64(result * 1000000.0))
 }

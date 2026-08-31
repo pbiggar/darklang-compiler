@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Enforce human-audited full and quick benchmark parity contracts."""
+"""Enforce source parity and profile-invocation contracts."""
 
 import hashlib
 import json
 import sys
 from pathlib import Path
 
-from benchmark_profiles import load_profile
+from benchmark_profiles import load_invocation, load_profile
 
 
 ALLOWED_STATUSES = {"comparable", "incomparable", "reduced", "dark-only"}
@@ -39,8 +39,8 @@ def source_tree_hash(path: Path) -> str:
 def load_contract(benchmarks_dir: Path) -> dict[str, dict[str, object]]:
     contract_path = benchmarks_dir / "PARITY.json"
     data = json.loads(contract_path.read_text())
-    if data.get("schema") != 2 or not isinstance(data.get("benchmarks"), dict):
-        raise ValueError("PARITY.json must use schema 2 and contain a benchmarks object")
+    if data.get("schema") != 3 or not isinstance(data.get("benchmarks"), dict):
+        raise ValueError("PARITY.json must use schema 3 and contain a benchmarks object")
     return data["benchmarks"]
 
 
@@ -84,35 +84,11 @@ def validate_entry(
                 f"(expected {expected_tree_hash}, got {actual_tree_hash})"
             )
 
-    shared_expected = problem_dir / "expected_output.txt"
-    if not shared_expected.is_file():
-        failures.append(f"{benchmark}: full pair has no shared expected output")
-    else:
-        expected_hash = entry.get("expected_sha256")
-        actual_hash = source_hash(shared_expected)
-        if expected_hash != actual_hash:
-            failures.append(
-                f"{benchmark}: full expected output changed since its parity audit "
-                f"(expected {expected_hash or 'no hash'}, got {actual_hash})"
-            )
-
-    dark_expected = problem_dir / "dark" / "expected_output.txt"
-    if dark_expected.is_file():
-        expected_hash = entry.get("dark_expected_sha256")
-        actual_hash = source_hash(dark_expected)
-        if expected_hash != actual_hash:
-            failures.append(
-                f"{benchmark}: Dark full expected output changed since its parity audit "
-                f"(expected {expected_hash or 'no hash'}, got {actual_hash})"
-            )
-
-    if status == "comparable":
-        if shared_expected.is_file() and dark_expected.is_file() and (
-            dark_expected.read_text().strip() != shared_expected.read_text().strip()
-        ):
-            failures.append(
-                f"{benchmark}: comparable pair has a different Dark expected output"
-            )
+    for mode in ("routine", "quick"):
+        try:
+            load_invocation(benchmarks_dir, mode, benchmark)
+        except ValueError as error:
+            failures.append(str(error))
 
     quick = entry.get("quick")
     if not isinstance(quick, dict):
@@ -125,42 +101,19 @@ def validate_entry(
     if quick_status != "comparable" and not quick.get("reason"):
         failures.append(f"{benchmark}: incomparable quick status requires a reason")
 
-    quick_sources = (
-        ("dark", problem_dir / "dark" / "quick.dark"),
-        ("rust", problem_dir / "rust" / "quick.rs"),
+    if set(quick) - {"status", "reason"}:
+        failures.append(f"{benchmark}: quick parity must not duplicate source or output hashes")
+
+    legacy = (
+        problem_dir / "dark" / "quick.dark",
+        problem_dir / "rust" / "quick.rs",
+        problem_dir / "quick_expected_output.txt",
+        problem_dir / "expected_output.txt",
+        problem_dir / "dark" / "expected_output.txt",
     )
-    for language, path in quick_sources:
-        if not path.is_file():
-            failures.append(f"{benchmark}: missing {language} quick source")
-            continue
-        expected_hash = quick.get(f"{language}_sha256")
-        actual_hash = source_hash(path)
-        if expected_hash != actual_hash:
-            failures.append(
-                f"{benchmark}: {language} quick source changed since its parity audit "
-                f"(expected {expected_hash or 'no hash'}, got {actual_hash})"
-            )
-
-    expected_quick_tree_hash = quick.get("rust_tree_sha256")
-    if expected_quick_tree_hash is not None:
-        actual_quick_tree_hash = source_tree_hash(problem_dir / "rust")
-        if expected_quick_tree_hash != actual_quick_tree_hash:
-            failures.append(
-                f"{benchmark}: Rust quick source tree changed since its parity audit "
-                f"(expected {expected_quick_tree_hash}, got {actual_quick_tree_hash})"
-            )
-
-    quick_expected = problem_dir / "quick_expected_output.txt"
-    if not quick_expected.is_file():
-        failures.append(f"{benchmark}: quick pair has no shared expected output")
-    else:
-        expected_hash = quick.get("expected_sha256")
-        actual_hash = source_hash(quick_expected)
-        if expected_hash != actual_hash:
-            failures.append(
-                f"{benchmark}: quick expected output changed since its parity audit "
-                f"(expected {expected_hash or 'no hash'}, got {actual_hash})"
-            )
+    for path in legacy:
+        if path.exists():
+            failures.append(f"{benchmark}: legacy duplicated contract file remains: {path.name}")
 
     return failures
 

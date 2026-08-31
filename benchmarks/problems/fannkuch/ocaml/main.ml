@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Fannkuch Benchmark *)
 (* From: Computer Language Benchmarks Game *)
 
@@ -51,4 +55,4 @@ let fannkuch n =
   !max_flips
 
 (* n=9 gives reasonable runtime *)
-let () = Printf.printf "%d\n" (fannkuch 9)
+let () = Printf.printf "%d\n" (fannkuch (argument 0))

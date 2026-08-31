@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Spectral Norm Benchmark *)
 (* From: Computer Language Benchmarks Game *)
 
@@ -26,12 +30,12 @@ let atav n v out tmp =
   av n v tmp;
   atv n tmp out
 
-let spectral_norm n =
+let spectral_norm n iterations =
   let u = Array.make n 1.0 in
   let v = Array.make n 0.0 in
   let tmp = Array.make n 0.0 in
 
-  for _ = 0 to 9 do
+  for _ = 1 to iterations do
     atav n u v tmp;
     atav n v u tmp
   done;
@@ -47,5 +51,5 @@ let spectral_norm n =
 
 (* n = 100 is a reasonable size *)
 let () =
-  let result = spectral_norm 100 in
+  let result = spectral_norm (argument 0) (argument 1) in
   Printf.printf "%Ld\n" (Int64.of_float (result *. 1000000000.0))

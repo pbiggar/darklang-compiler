@@ -1,3 +1,11 @@
+// main.rs - Parameterized Rust benchmark implementation.
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 // Matrix Multiplication Benchmark - Rust reference implementation
 // From: plb2 and Julia micro-benchmarks
 // Multiplies two NxN matrices using naive O(n^3) algorithm
@@ -42,7 +50,7 @@ fn checksum(m: &Vec<Vec<i64>>, n: usize) -> i64 {
 
 fn main() {
     // Use 100x100 matrices for reasonable runtime
-    let n = 100;
+    let n = argument(0) as usize;
     let a = generate_matrix(n, 42);
     let b = generate_matrix(n, 123);
     let c = matmul(&a, &b, n);

@@ -500,7 +500,9 @@ let private generateCliArgvHelper () : X86_64.Instr list =
       X86_64.MOV_reg (X86_64.RAX, X86_64.RDX)
       X86_64.JMP "__dark_cli_argv_find_root"
       X86_64.Label "__dark_cli_argv_root_found"
-      X86_64.ADD_imm (X86_64.RAX, 16)
+      // _start's saved RBP is at +0, argc at +8, argv[0] at +16, and the
+      // first positional argument at +24.
+      X86_64.ADD_imm (X86_64.RAX, 24)
       X86_64.Label "__dark_cli_argv_next"
       X86_64.CMP_imm (X86_64.RDI, 0)
       X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_load")

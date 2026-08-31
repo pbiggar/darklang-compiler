@@ -1,3 +1,11 @@
+// main.rs - Parameterized Rust benchmark implementation.
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 // Full-application benchmark driver for the vendored TinyTemplate 1.2.1 crate.
 
 use serde::Serialize;
@@ -102,7 +110,8 @@ pub fn benchmark(runs: usize, row_count: usize) {
     println!("{}", total);
 }
 
-#[allow(dead_code)]
 fn main() {
-    benchmark(1, 12);
+    let row_count = argument(0) as usize;
+    let runs = argument(1) as usize;
+    benchmark(runs, row_count);
 }

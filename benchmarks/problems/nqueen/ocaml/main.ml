@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* N-Queens Benchmark *)
 (* Counts solutions to the N-queens problem using bit manipulation *)
 
@@ -21,4 +25,4 @@ let nqueen n =
   solve 0 0 0
 
 (* N=13 gives reasonable runtime *)
-let () = Printf.printf "%Ld\n" (nqueen 13)
+let () = Printf.printf "%Ld\n" (nqueen (argument 0))

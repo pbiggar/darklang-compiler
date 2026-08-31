@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func nqueen(n uint32) uint64 {
 	allOnes := uint32((1 << n) - 1)
@@ -24,5 +40,5 @@ func nqueen(n uint32) uint64 {
 }
 
 func main() {
-	fmt.Println(nqueen(13))
+	fmt.Println(nqueen(uint(argument(0))))
 }

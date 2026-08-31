@@ -297,12 +297,12 @@ run_benchmark_job() {
     pretty_header "Benchmark: $bench"
 
     if [ "$USE_CACHEGRIND" = true ]; then
-        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$REFRESH_BASELINE" "$dark_binary"; then
+        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$REFRESH_BASELINE" "$dark_binary" routine; then
             echo "RUN_FAIL" >> "$status_file"
             pretty_warn "Cachegrind failed for $bench (continuing)"
         fi
     else
-        if ! "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$dark_binary"; then
+        if ! "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR" "$parity_status" "$dark_binary" routine; then
             echo "RUN_FAIL" >> "$status_file"
             pretty_warn "Hyperfine failed for $bench (continuing)"
         fi

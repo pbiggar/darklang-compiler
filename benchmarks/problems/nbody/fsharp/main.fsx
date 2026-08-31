@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // N-Body Benchmark
 // From: Computer Language Benchmarks Game
 
@@ -86,5 +90,5 @@ let bodies = [|
 |]
 
 offsetMomentum bodies
-advance bodies 0.01 500000
+advance bodies 0.01 (argument 0)
 printfn "%d" (int64 (energy bodies * 1000000.0))

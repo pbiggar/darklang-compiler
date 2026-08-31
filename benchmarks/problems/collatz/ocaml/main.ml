@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Collatz Benchmark *)
 (* Counts steps in Collatz sequences for numbers 1 to n *)
 
@@ -11,4 +15,4 @@ let rec sum_collatz_range i limit total =
   else sum_collatz_range (Int64.add i 1L) limit (total + collatz_steps i 0)
 
 (* Sum steps for numbers 1 to 100000 *)
-let () = Printf.printf "%d\n" (sum_collatz_range 1L 100000L 0)
+let () = Printf.printf "%d\n" (sum_collatz_range 1L (argument64 0) 0)

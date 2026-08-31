@@ -1,3 +1,4 @@
+// main.rs - Parameterized Rust benchmark implementation.
 // Binary Trees Benchmark - Rust reference implementation
 
 enum Tree {
@@ -32,8 +33,14 @@ fn stress_test(depth: i64, iterations: i64) -> i64 {
     total
 }
 
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 fn main() {
-    // Same parameters as Dark version
-    let result = stress_test(15, 100);
+    let result = stress_test(argument(0), argument(1));
     println!("{}", result);
 }

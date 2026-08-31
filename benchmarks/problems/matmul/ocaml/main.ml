@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Matrix Multiplication Benchmark *)
 (* Multiplies two NxN matrices using naive O(n^3) algorithm *)
 
@@ -36,7 +40,7 @@ let checksum m n =
 
 (* Use 100x100 matrices for reasonable runtime *)
 let () =
-  let n = 100 in
+  let n = argument 0 in
   let a = generate_matrix n 42L in
   let b = generate_matrix n 123L in
   let c = matmul a b n in

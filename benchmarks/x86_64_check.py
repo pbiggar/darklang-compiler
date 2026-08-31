@@ -30,7 +30,7 @@ from benchmark_baseline import (  # noqa: E402
     track_dict,
     write_snapshot,
 )
-from benchmark_profiles import load_profile  # noqa: E402
+from benchmark_profiles import load_invocation, load_profile  # noqa: E402
 
 
 SCHEMA_VERSION = 1
@@ -81,11 +81,11 @@ def toolchains(repository: Path) -> dict[str, str]:
 
 def build_dark(repository: Path, name: str, output: Path) -> str | None:
     compiler = repository / "bin" / "DarkCompiler" / "Debug" / "net10.0" / "DarkCompiler.dll"
-    source = repository / "benchmarks" / "problems" / name / "dark" / "quick.dark"
+    source = repository / "benchmarks" / "problems" / name / "dark" / "main.dark"
     if not compiler.is_file():
         return "compiler output is missing"
     if not source.is_file():
-        return "quick Dark source is missing"
+        return "Dark source is missing"
     output.parent.mkdir(parents=True, exist_ok=True)
     result = command_result(
         [
@@ -109,9 +109,9 @@ def build_dark(repository: Path, name: str, output: Path) -> str | None:
 
 def build_rust(repository: Path, name: str, output: Path) -> str | None:
     rust_root = repository / "benchmarks" / "problems" / name / "rust"
-    source = rust_root / "quick.rs"
+    source = rust_root / "main.rs"
     if not source.is_file():
-        return "quick Rust source is missing"
+        return "Rust source is missing"
     output.parent.mkdir(parents=True, exist_ok=True)
     manifest = rust_root / "Cargo.toml"
     if manifest.is_file():
@@ -125,12 +125,12 @@ def build_rust(repository: Path, name: str, output: Path) -> str | None:
                 "--target=x86_64-unknown-linux-gnu",
                 f"--target-dir={target_dir}",
                 f"--manifest-path={manifest}",
-                "--bin=benchmark-quick",
+                "--bin=benchmark",
             ],
             repository,
             timeout=180,
         )
-        built = target_dir / "x86_64-unknown-linux-gnu" / "release" / "benchmark-quick"
+        built = target_dir / "x86_64-unknown-linux-gnu" / "release" / "benchmark"
         if result.returncode == 0 and built.is_file():
             output.write_bytes(built.read_bytes())
             output.chmod(0o755)
@@ -157,31 +157,22 @@ def build_rust(repository: Path, name: str, output: Path) -> str | None:
 
 
 def measure_binary(repository: Path, name: str, binary: Path) -> tuple[int | None, str | None]:
-    expected_path = repository / "benchmarks" / "problems" / name / "quick_expected_output.txt"
-    if not expected_path.is_file():
-        return None, "quick expected output is missing"
+    invocation = load_invocation(repository / "benchmarks", "quick", name)
     counter = repository / "benchmarks" / "infrastructure" / "qemu_instruction_count.sh"
     try:
         result = command_result(
-            [str(counter), str(binary), *benchmark_arguments(name)], repository, timeout=30
+            [str(counter), str(binary), *invocation.args], repository, timeout=30
         )
     except subprocess.TimeoutExpired:
         return None, "execution exceeded 30 seconds"
     if result.returncode != 0:
         return None, f"execution exited {result.returncode}"
-    if result.stdout != expected_path.read_text():
-        return None, "program output did not match quick_expected_output.txt"
+    if result.stdout != invocation.expected_stdout:
+        return None, "program output did not match the quick workload contract"
     matches = TOTAL_PATTERN.findall(result.stderr)
     if len(matches) != 1:
         return None, "QEMU did not report exactly one positive guest instruction count"
     return int(matches[0]), None
-
-
-def benchmark_arguments(name: str) -> list[str]:
-    if name == "tinytemplate":
-        return ["12", "1"]
-    return []
-
 
 def measure_language(
     repository: Path, language: str, names: tuple[str, ...], output_root: Path

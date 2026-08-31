@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Edigits Benchmark - Computing digits of e
 // Uses series expansion: e = sum(1/n!) for n=0 to infinity
 // Computes checksum of first N digits
@@ -35,8 +39,8 @@ let computeEDigits numDigits =
 
 // Compute first 1000 digits of e multiple times
 let mutable checksum = 0L
-for _ in 1 .. 10 do
-    let digits = computeEDigits 1000
+for _ in 1 .. argument 0 do
+    let digits = computeEDigits (argument 1)
     checksum <- 0L
     for i in 0 .. digits.Length - 1 do
         checksum <- (checksum + int64 digits.[i] * int64 (i + 1)) % 1000000007L

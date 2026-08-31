@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func fannkuch(n int) int {
 	perm := make([]int, n)
@@ -55,5 +71,5 @@ func fannkuch(n int) int {
 }
 
 func main() {
-	fmt.Println(fannkuch(10))
+	fmt.Println(fannkuch(int(argument(0))))
 }

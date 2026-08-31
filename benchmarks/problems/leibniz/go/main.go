@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func leibnizPi(n int64) float64 {
 	s := 0.0
@@ -13,6 +29,6 @@ func leibnizPi(n int64) float64 {
 }
 
 func main() {
-	result := leibnizPi(100000000)
+	result := leibnizPi(argument(0))
 	fmt.Println(int64(result * 100000000.0))
 }

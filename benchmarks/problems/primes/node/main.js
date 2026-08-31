@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Prime Counting Benchmark
 // Counts primes up to N using trial division
 
@@ -46,4 +53,4 @@ function countPrimes(n, count) {
 
 // Count primes up to 10000
 // Expected: 1229 primes
-console.log(countPrimes(10000, 0));
+console.log(countPrimes(argument(0), 0));

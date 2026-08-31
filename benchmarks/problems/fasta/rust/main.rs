@@ -1,3 +1,11 @@
+// main.rs - Parameterized Rust benchmark implementation.
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 // Fasta Benchmark - DNA Sequence Generation
 // From: Computer Language Benchmarks Game
 // Generates pseudo-random DNA sequences and computes checksum
@@ -66,7 +74,7 @@ fn make_repeat_fasta(n: usize, seq: &[u8]) -> u64 {
 }
 
 fn main() {
-    let n = 100000;
+    let n = argument(0) as usize;
 
     let mut iub = vec![
         IUB { c: b'a', p: 0.27 },

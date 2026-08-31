@@ -24,20 +24,36 @@ from benchmark_baseline import (
     write_snapshot,
     _quick_command,
 )
+from benchmark_profiles import load_invocation
 
 
 class BenchmarkTrackTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.benchmarks = Path(self.temporary.name)
-        (self.benchmarks / "profiles").mkdir()
-        (self.benchmarks / "profiles" / "quick.txt").write_text("alpha\nbeta\n")
+        (self.benchmarks / "profiles.json").write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "profiles": {"quick": ["alpha", "beta"]},
+                    "workloads": {
+                        name: {
+                            "quick": {
+                                "args": ["10"],
+                                "expected_stdout": f"{name}\n",
+                            }
+                        }
+                        for name in ("alpha", "beta")
+                    },
+                }
+            )
+        )
         for name in ("alpha", "beta"):
             (self.benchmarks / "problems" / name).mkdir(parents=True)
         (self.benchmarks / "PARITY.json").write_text(
             json.dumps(
                 {
-                    "schema": 2,
+                    "schema": 3,
                     "benchmarks": {
                         name: {
                             "quick": {
@@ -75,6 +91,11 @@ class BenchmarkTrackTests(unittest.TestCase):
         )
         self.assertNotEqual(cachegrind, qemu)
         self.assertEqual(qemu.name, "dark-x86_64-quick-qemu.json")
+
+    def test_profile_invocation_owns_arguments_and_expected_stdout(self) -> None:
+        invocation = load_invocation(self.benchmarks, "quick-fast", "alpha")
+        self.assertEqual(invocation.args, ("10",))
+        self.assertEqual(invocation.expected_stdout, "alpha\n")
 
     def test_loading_rejects_a_different_measurement_track(self) -> None:
         source_track = TRACKS["x86_64-quick-qemu"]

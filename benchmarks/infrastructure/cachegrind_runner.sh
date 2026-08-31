@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run cachegrind benchmark for a given problem
-# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh] [dark_binary]
+# Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh] [dark_binary] [profile]
 #
 # By default, only runs Dark and uses the cached Rust row from BASELINES.md.
 # Pass `rust` as baseline_refresh to re-run the audited Rust reference.
@@ -14,6 +14,7 @@ OUTPUT_DIR=$2
 PARITY_STATUS=${3:-comparable}
 REFRESH_BASELINE=${4:-false}
 DARK_BINARY=${5:-}
+PROFILE=${6:-routine}
 source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
@@ -23,16 +24,8 @@ fi
 
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
 DARK_BINARY="${DARK_BINARY:-$PROBLEM_DIR/dark/main}"
-EXPECTED_FILE="$PROBLEM_DIR/expected_output.txt"
-EXPECTED=""
-HAS_EXPECTED=false
-
-if [ -f "$EXPECTED_FILE" ]; then
-    EXPECTED=$(cat "$EXPECTED_FILE")
-    HAS_EXPECTED=true
-else
-    pretty_warn "No expected_output.txt for $BENCHMARK, skipping output validation"
-fi
+EXPECTED=$(python3 "$SCRIPT_DIR/benchmark_profiles.py" expected "$PROFILE" "$BENCHMARK")
+mapfile -t BENCHMARK_ARGUMENTS < <(python3 "$SCRIPT_DIR/benchmark_profiles.py" arguments "$PROFILE" "$BENCHMARK")
 
 # Check for valgrind
 if ! command -v valgrind &> /dev/null; then
@@ -53,38 +46,18 @@ should_run_lang() {
     echo ",$REFRESH_BASELINE," | grep -q ",$lang,"
 }
 
-expected_output_for_impl() {
-    local impl="$1"
-    if [ "$impl" = "dark" ] && [ -f "$PROBLEM_DIR/dark/expected_output.txt" ]; then
-        cat "$PROBLEM_DIR/dark/expected_output.txt"
-    else
-        echo "$EXPECTED"
-    fi
-}
-
 verify_output() {
     local impl="$1"
     shift
-
-    if [ "$HAS_EXPECTED" != "true" ]; then
-        return 0
-    fi
-
-    local expected
-    expected=$(expected_output_for_impl "$impl")
     local output
-    output=$("$@" 2>&1 || true)
+    output=$("$@" "${BENCHMARK_ARGUMENTS[@]}" 2>&1 || true)
 
-    if [ "$output" = "$expected" ]; then
-        if [ "$impl" = "dark" ] && [ "$expected" != "$EXPECTED" ]; then
-            pretty_ok "$impl output OK (reduced size)"
-        else
-            pretty_ok "$impl output OK"
-        fi
+    if [ "$output" = "$EXPECTED" ]; then
+        pretty_ok "$impl output OK"
         return 0
     fi
 
-    pretty_fail "$impl output mismatch (got: '$output', expected: '$expected')"
+    pretty_fail "$impl output mismatch (got: '$output', expected: '$EXPECTED')"
     return 1
 }
 
@@ -153,7 +126,7 @@ for impl in $IMPLS; do
         CACHEGRIND_OUT_FILE="$CACHEGRIND_OUT_DIR/${BENCHMARK}_${impl}.out"
         rm -f "$CACHEGRIND_OUT_FILE"
         CACHEGRIND_OUT_FILES+=("$CACHEGRIND_OUT_FILE")
-        CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes --cachegrind-out-file="$CACHEGRIND_OUT_FILE" "$BINARY" 2>&1)
+        CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes --cachegrind-out-file="$CACHEGRIND_OUT_FILE" "$BINARY" "${BENCHMARK_ARGUMENTS[@]}" 2>&1)
 
         # Parse the output
         I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
@@ -202,7 +175,7 @@ if [ "$PARITY_STATUS" = "comparable" ] && should_run_lang "python" && [ -f "$PRO
         CACHEGRIND_OUT_FILE="$CACHEGRIND_OUT_DIR/${BENCHMARK}_python.out"
         rm -f "$CACHEGRIND_OUT_FILE"
         CACHEGRIND_OUT_FILES+=("$CACHEGRIND_OUT_FILE")
-        if CG_OUTPUT=$(timeout "$PYTHON_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes --cachegrind-out-file="$CACHEGRIND_OUT_FILE" python3 "$PROBLEM_DIR/python/main.py" 2>&1); then
+        if CG_OUTPUT=$(timeout "$PYTHON_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes --cachegrind-out-file="$CACHEGRIND_OUT_FILE" python3 "$PROBLEM_DIR/python/main.py" "${BENCHMARK_ARGUMENTS[@]}" 2>&1); then
             PYTHON_SUCCESS=true
         else
             EXIT_CODE=$?
@@ -260,7 +233,7 @@ if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
         CACHEGRIND_OUT_FILE="$CACHEGRIND_OUT_DIR/${BENCHMARK}_node.out"
         rm -f "$CACHEGRIND_OUT_FILE"
         CACHEGRIND_OUT_FILES+=("$CACHEGRIND_OUT_FILE")
-        if CG_OUTPUT=$(timeout "$NODE_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes --cachegrind-out-file="$CACHEGRIND_OUT_FILE" node "$PROBLEM_DIR/node/main.js" 2>&1); then
+        if CG_OUTPUT=$(timeout "$NODE_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes --cachegrind-out-file="$CACHEGRIND_OUT_FILE" node "$PROBLEM_DIR/node/main.js" "${BENCHMARK_ARGUMENTS[@]}" 2>&1); then
             NODE_SUCCESS=true
         else
             EXIT_CODE=$?

@@ -1,3 +1,4 @@
+// main.rs - Parameterized Rust benchmark implementation.
 // Merkle Trees Benchmark
 // Builds binary Merkle trees and computes root hashes
 // Uses a simple hash function for portability
@@ -35,9 +36,16 @@ fn verify_tree(depth: u32, leaf_start: u64, expected_root: u64) -> bool {
     build_tree(depth, leaf_start) == expected_root
 }
 
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 fn main() {
-    let depth = 15;
-    let iterations = 50;
+    let depth = argument(0) as u32;
+    let iterations = argument(1) as usize;
 
     let mut checksum: u64 = 0;
 

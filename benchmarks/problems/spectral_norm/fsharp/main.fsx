@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Spectral Norm Benchmark
 // From: Computer Language Benchmarks Game
 
@@ -22,12 +26,12 @@ let atav n v out tmp =
     av n v tmp
     atv n tmp out
 
-let spectralNorm n =
+let spectralNorm n iterations =
     let u = Array.create n 1.0
     let v = Array.zeroCreate n
     let tmp = Array.zeroCreate n
 
-    for _ in 0 .. 9 do
+    for _ in 1 .. iterations do
         atav n u v tmp
         atav n v u tmp
 
@@ -40,5 +44,5 @@ let spectralNorm n =
     sqrt (vBv / vv)
 
 // n = 100 is a reasonable size
-let result = spectralNorm 100
+let result = spectralNorm (argument 0) (argument 1)
 printfn "%d" (int64 (result * 1000000000.0))

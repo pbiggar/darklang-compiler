@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Leibniz Pi Benchmark - Python reference implementation
 # Computes pi using Leibniz formula: pi/4 = 1 - 1/3 + 1/5 - 1/7 + ...
@@ -12,6 +18,6 @@ def leibniz_pi(n):
     return s * 4
 
 # Use 100 million iterations for timing
-result = leibniz_pi(100000000)
+result = leibniz_pi(argument(0))
 # Output as integer (multiply by large factor for precision)
 print(int(result * 100000000))

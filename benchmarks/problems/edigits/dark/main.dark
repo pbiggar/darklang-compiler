@@ -9,15 +9,15 @@ let divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int6
         match Stdlib.Internal.SkewList.getAt<Int64>(digits, idx) with
         | None -> digits
         | Some(digit) ->
-            let current = carry * 10L + digit in
+            let current = carry * 10 + digit in
             let newDigit = current / n in
             let newCarry = current % n in
             let updated = Stdlib.Internal.SkewList.setAt<Int64>(digits, idx, newDigit) in
-            divideByN(updated, n, newCarry, idx + 1L, len)
+            divideByN(updated, n, newCarry, idx + 1, len)
 
 // Add the current factorial term right-to-left, matching Rust's reverse loop.
 let addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : List<Int64> =
-    if idx < 0L then e
+    if idx < 0 then e
     else
         match Stdlib.Internal.SkewList.getAt<Int64>(e, idx) with
         | None -> e
@@ -26,27 +26,27 @@ let addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : 
             | None -> e
             | Some(termDigit) ->
                 let total = eDigit + termDigit + carry in
-                let newDigit = total % 10L in
-                let newCarry = total / 10L in
+                let newDigit = total % 10 in
+                let newCarry = total / 10 in
                 let updated = Stdlib.Internal.SkewList.setAt<Int64>(e, idx, newDigit) in
-                addWithCarry(updated, term, newCarry, idx - 1L)
+                addWithCarry(updated, term, newCarry, idx - 1)
 
 let addFactorialTerms(e: List<Int64>, term: List<Int64>, n: Int64, len: Int64) : List<Int64> =
-    if n > 50L then e
+    if n > 50 then e
     else
-        let newTerm = divideByN(term, n, 0L, 0L, len) in
-        let newE = addWithCarry(e, newTerm, 0L, len - 1L) in
-        addFactorialTerms(newE, newTerm, n + 1L, len)
+        let newTerm = divideByN(term, n, 0, 0, len) in
+        let newE = addWithCarry(e, newTerm, 0, len - 1) in
+        addFactorialTerms(newE, newTerm, n + 1, len)
 
 let initDigits(len: Int64) : List<Int64> =
-    Stdlib.List.push<Int64>(Stdlib.List.__repeatInt64<Int64>(len - 1L, 0L, []), 1L)
+    Stdlib.List.push<Int64>(Stdlib.List.__repeatInt64<Int64>(len - 1, 0, []), 1)
 
 let computeEDigits(numDigits: Int64) : List<Int64> =
     // Rust uses indices 0..=precision, hence numDigits + 11 elements.
-    let len = numDigits + 11L in
+    let len = numDigits + 11 in
     let e = initDigits(len) in
     let term = initDigits(len) in
-    addFactorialTerms(e, term, 1L, len)
+    addFactorialTerms(e, term, 1, len)
 
 let computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int64) : Int64 =
     if idx >= numDigits then acc
@@ -54,14 +54,19 @@ let computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int6
         match Stdlib.Internal.SkewList.getAt<Int64>(digits, idx) with
         | None -> acc
         | Some(digit) ->
-            let newAcc = (acc + digit * (idx + 1L)) % 1000000007L in
-            computeChecksum(digits, idx + 1L, newAcc, numDigits)
+            let newAcc = (acc + digit * (idx + 1)) % 1000000007 in
+            computeChecksum(digits, idx + 1, newAcc, numDigits)
 
 let runIterations(remaining: Int64, numDigits: Int64) : Int64 =
-    if remaining <= 0L then 0L
+    if remaining <= 0 then 0
     else
         let digits = computeEDigits(numDigits) in
-        let checksum = computeChecksum(digits, 0L, 0L, numDigits) in
-        if remaining == 1L then checksum else runIterations(remaining - 1L, numDigits)
+        let checksum = computeChecksum(digits, 0, 0, numDigits) in
+        if remaining == 1 then checksum else runIterations(remaining - 1, numDigits)
 
-Builtin.printLine(Stdlib.Int64.toString(runIterations(10L, 1000L)))
+let benchmarkArg(index: Int) : Int64 =
+    match Stdlib.Cli.Args.int64(index) with
+    | Ok(value) -> value
+    | Error(message) -> Builtin.testRuntimeError(message)
+
+Builtin.printLine(Stdlib.Int64.toString(runIterations(benchmarkArg(0I), benchmarkArg(1I))))

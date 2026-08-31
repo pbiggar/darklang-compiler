@@ -1,9 +1,14 @@
 let factorial(n: Int64) : Int64 =
-    if n <= 1L then 1L
-    else n * factorial(n - 1L)
+    if n <= 1 then 1
+    else n * factorial(n - 1)
 
-let repeat(n: Int64, acc: Int64) : Int64 =
-    if n <= 0L then acc
-    else repeat(n - 1L, factorial(20L))
+let repeat(n: Int64, factorialInput: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else repeat(n - 1, factorialInput, factorial(factorialInput))
 
-Builtin.printLine(Stdlib.Int64.toString(repeat(10000L, 0L)))
+let benchmarkArg(index: Int) : Int64 =
+    match Stdlib.Cli.Args.int64(index) with
+    | Ok(value) -> value
+    | Error(message) -> Builtin.testRuntimeError(message)
+
+Builtin.printLine(Stdlib.Int64.toString(repeat(benchmarkArg(0I), benchmarkArg(1I), 0)))

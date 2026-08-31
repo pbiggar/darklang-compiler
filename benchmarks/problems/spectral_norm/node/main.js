@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Spectral Norm Benchmark
 // From: Computer Language Benchmarks Game
 
@@ -30,12 +37,12 @@ function AtAv(n, v, out, tmp) {
     Atv(n, tmp, out);
 }
 
-function spectralNorm(n) {
+function spectralNorm(n, iterations) {
     const u = new Array(n).fill(1.0);
     const v = new Array(n).fill(0.0);
     const tmp = new Array(n).fill(0.0);
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < iterations; i++) {
         AtAv(n, u, v, tmp);
         AtAv(n, v, u, tmp);
     }
@@ -51,5 +58,5 @@ function spectralNorm(n) {
 }
 
 // n = 100 is a reasonable size
-const result = spectralNorm(100);
+const result = spectralNorm(argument(0), argument(1));
 console.log(Math.floor(result * 1000000000));

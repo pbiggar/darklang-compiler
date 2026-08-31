@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // N-Body Benchmark
 // From: Computer Language Benchmarks Game
 
@@ -114,5 +121,5 @@ const bodies = [
 ];
 
 offsetMomentum(bodies);
-advance(bodies, 0.01, 500000);
+advance(bodies, 0.01, argument(0));
 console.log(Math.floor(energy(bodies) * 1000000));

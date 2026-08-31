@@ -1,3 +1,4 @@
+// main.rs - Parameterized Rust benchmark implementation.
 // Ackermann Benchmark - Rust reference implementation
 
 fn ackermann(m: i64, n: i64) -> i64 {
@@ -10,8 +11,14 @@ fn ackermann(m: i64, n: i64) -> i64 {
     }
 }
 
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 fn main() {
-    // A(3, 12) = 32765
-    let result = ackermann(3, 12);
+    let result = ackermann(argument(0), argument(1));
     println!("{}", result);
 }

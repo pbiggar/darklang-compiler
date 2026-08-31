@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Fasta Benchmark - DNA Sequence Generation
 # From: Computer Language Benchmarks Game
@@ -45,7 +51,7 @@ def make_repeat_fasta(n, seq):
         checksum = (checksum + c * (i + 1)) % 1000000007
     return checksum
 
-n = 100000
+n = argument(0)
 
 iub = [
     [ord('a'), 0.27],

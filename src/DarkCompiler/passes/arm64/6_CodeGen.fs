@@ -6600,7 +6600,8 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
 /// Return argv[index + 1] as a boxed Option<String>. Native argv entries are
 /// zero-terminated bytes, so present values are copied into managed Dark strings.
 /// The root _start frame terminates the normal frame-pointer chain. Its initial
-/// stack layout keeps argc at +16 and argv at +24, so no register is reserved
+/// stack layout keeps argc at +16, argv[0] at +24, and the first positional
+/// argument at +32, so no register is reserved
 /// for CLI state between calls.
 let private generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64Symbolic.Instr list =
     let missingLabel = $"{label}_missing"
@@ -6625,7 +6626,7 @@ let private generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64S
       ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, missingLabel)
       ARM64Symbolic.LSL_imm (ARM64Symbolic.X2, ARM64Symbolic.X0, 3)
       ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X2)
-      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 24us)
+      ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 32us)
       ARM64Symbolic.LDR (ARM64Symbolic.X3, ARM64Symbolic.X1, 0s)
       ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 0us, 0)
       ARM64Symbolic.MOV_reg (ARM64Symbolic.X5, ARM64Symbolic.X3)

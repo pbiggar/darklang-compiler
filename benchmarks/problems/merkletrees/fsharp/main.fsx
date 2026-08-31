@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Merkle Trees Benchmark
 // Builds binary Merkle trees and computes root hashes
 // Uses a simple hash function for portability
@@ -28,8 +32,8 @@ let rec buildTree depth leafStart =
 let verifyTree depth leafStart expectedRoot =
     buildTree depth leafStart = expectedRoot
 
-let depth = 15
-let iterations = 50
+let depth = argument 0
+let iterations = argument 1
 
 let mutable checksum = 0UL
 

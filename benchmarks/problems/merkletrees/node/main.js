@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Merkle Trees Benchmark
 // Builds binary Merkle trees and computes root hashes
 // Uses a simple hash function for portability
@@ -37,8 +44,8 @@ function verifyTree(depth, leafStart, expectedRoot) {
     return buildTree(depth, leafStart) === expectedRoot;
 }
 
-const depth = 15;
-const iterations = 50;
+const depth = argument(0);
+const iterations = argument(1);
 
 let checksum = 0n;
 

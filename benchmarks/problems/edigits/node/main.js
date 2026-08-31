@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Edigits Benchmark - Computing digits of e
 // Uses series expansion: e = sum(1/n!) for n=0 to infinity
 // Computes checksum of first N digits
@@ -41,8 +48,8 @@ function computeEDigits(numDigits) {
 
 // Compute first 1000 digits of e multiple times
 let checksum = 0;
-for (let iter = 0; iter < 10; iter++) {
-    const digits = computeEDigits(1000);
+for (let iter = 0; iter < argument(0); iter++) {
+    const digits = computeEDigits(argument(1));
     checksum = 0;
     for (let i = 0; i < digits.length; i++) {
         checksum = (checksum + digits[i] * (i + 1)) % 1000000007;

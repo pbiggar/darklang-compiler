@@ -1,3 +1,11 @@
+// main.rs - Parameterized Rust benchmark implementation.
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 // N-Body Benchmark - Rust reference implementation
 // From: Computer Language Benchmarks Game
 
@@ -123,6 +131,6 @@ fn main() {
     ];
 
     offset_momentum(&mut bodies);
-    advance(&mut bodies, 0.01, 500000);
+    advance(&mut bodies, 0.01, argument(0) as i32);
     println!("{}", (energy(&bodies) * 1000000.0) as i64);
 }

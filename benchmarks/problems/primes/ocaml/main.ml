@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Prime Counting Benchmark *)
 (* Counts primes up to N using trial division *)
 
@@ -26,4 +30,4 @@ let rec count_primes n count =
 
 (* Count primes up to 10000 *)
 (* Expected: 1229 primes *)
-let () = Printf.printf "%d\n" (count_primes 10000 0)
+let () = Printf.printf "%d\n" (count_primes (argument 0) 0)

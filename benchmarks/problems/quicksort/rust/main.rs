@@ -1,3 +1,11 @@
+// main.rs - Parameterized Rust benchmark implementation.
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 // Quicksort Benchmark - Rust reference implementation
 // Sorts a list and returns a checksum
 
@@ -35,7 +43,7 @@ fn checksum(arr: &[i64]) -> i64 {
 }
 
 fn main() {
-    let arr = generate_list(5000, 42);
+    let arr = generate_list(argument(0) as usize, argument(1) as u64);
     let sorted_arr = quicksort(arr);
     println!("{}", checksum(&sorted_arr));
 }

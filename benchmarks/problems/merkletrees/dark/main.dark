@@ -13,26 +13,26 @@
 // FNV-1a hash function (matches OCaml implementation)
 // Iterates 8 times, XORing with low byte of data and multiplying
 let hashLoop(h: Int64, data: Int64, i: Int64) : Int64 =
-    if i >= 8L then h
+    if i >= 8 then h
     else
-        let h1 = (h ^ (data & 255L)) * 1099511628211L in
-        hashLoop(h1, data, i + 1L)
+        let h1 = (h ^ (data & 255)) * 1099511628211 in
+        hashLoop(h1, data, i + 1)
 
 let hashVal(data: Int64) : Int64 =
     // FNV offset basis (signed): -3750763034362895579
-    hashLoop(-3750763034362895579L, data, 0L)
+    hashLoop(-3750763034362895579, data, 0)
 
 let hashPair(left: Int64, right: Int64) : Int64 =
-    hashVal(left + right * 31L)
+    hashVal(left + right * 31)
 
 // Build a complete binary Merkle tree of given depth
 // Returns the root hash
 let buildTree(depth: Int64, leafStart: Int64) : Int64 =
-    if depth == 0L then hashVal(leafStart)
+    if depth == 0 then hashVal(leafStart)
     else
-        let leftSize = 1L << (depth - 1L) in
-        let left = buildTree(depth - 1L, leafStart) in
-        let right = buildTree(depth - 1L, leafStart + leftSize) in
+        let leftSize = 1 << (depth - 1) in
+        let left = buildTree(depth - 1, leafStart) in
+        let right = buildTree(depth - 1, leafStart + leftSize) in
         hashPair(left, right)
 
 // Verify a tree by rebuilding and comparing
@@ -48,8 +48,13 @@ let benchmark(depth: Int64, iterations: Int64, i: Int64, checksum: Int64) : Int6
         // Verify tree (rebuilds it)
         let verified = verifyTree(depth, i, root) in
         // Accumulate checksum
-        let newChecksum = (checksum + root) % 1000000007L in
-        let finalChecksum = if verified then (newChecksum + 1L) % 1000000007L else newChecksum in
-        benchmark(depth, iterations, i + 1L, finalChecksum)
+        let newChecksum = (checksum + root) % 1000000007 in
+        let finalChecksum = if verified then (newChecksum + 1) % 1000000007 else newChecksum in
+        benchmark(depth, iterations, i + 1, finalChecksum)
 
-Builtin.printLine(Stdlib.Int64.toString(benchmark(15L, 50L, 0L, 0L)))
+let benchmarkArg(index: Int) : Int64 =
+    match Stdlib.Cli.Args.int64(index) with
+    | Ok(value) -> value
+    | Error(message) -> Builtin.testRuntimeError(message)
+
+Builtin.printLine(Stdlib.Int64.toString(benchmark(benchmarkArg(0I), benchmarkArg(1I), 0, 0)))

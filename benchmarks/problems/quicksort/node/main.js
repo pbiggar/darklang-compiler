@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Quicksort Benchmark
 // Sorts a list and returns a checksum
 
@@ -30,6 +37,6 @@ function checksum(arr) {
     return result;
 }
 
-const arr = generateList(5000, 42);
+const arr = generateList(argument(0), argument(1));
 const sortedArr = quicksort(arr);
 console.log(checksum(sortedArr));

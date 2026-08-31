@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Fannkuch Benchmark
 // From: Computer Language Benchmarks Game
 
@@ -55,4 +62,4 @@ function fannkuch(n) {
 }
 
 // n=9 gives reasonable runtime
-console.log(fannkuch(9));
+console.log(fannkuch(argument(0)));

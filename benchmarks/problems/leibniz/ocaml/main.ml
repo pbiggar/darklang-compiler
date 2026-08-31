@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Leibniz Pi Benchmark *)
 (* Computes pi using Leibniz formula: pi/4 = 1 - 1/3 + 1/5 - 1/7 + ... *)
 
@@ -12,4 +16,4 @@ let leibniz_pi n =
 
 (* Use 100 million iterations for timing *)
 (* Output as integer (multiply by large factor for precision) *)
-let () = Printf.printf "%Ld\n" (Int64.of_float (leibniz_pi 100000000 *. 100000000.0))
+let () = Printf.printf "%Ld\n" (Int64.of_float (leibniz_pi (argument 0) *. 100000000.0))

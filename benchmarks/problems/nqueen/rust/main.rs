@@ -1,3 +1,4 @@
+// main.rs - Parameterized Rust benchmark implementation.
 // N-Queens Benchmark - Rust reference implementation
 // From: plb2 (Programming Language Benchmark v2)
 // Counts solutions to the N-queens problem using bit manipulation
@@ -22,8 +23,14 @@ fn nqueen(n: u32) -> u64 {
     solve(0, 0, 0, all_ones)
 }
 
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 fn main() {
-    // N=13 gives reasonable runtime
-    let result = nqueen(13);
+    let result = nqueen(argument(0) as u32);
     println!("{}", result);
 }

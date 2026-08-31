@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func hash(data uint64) uint64 {
 	h := uint64(14695981039346656037)
@@ -32,8 +48,8 @@ func verifyTree(depth uint32, leafStart, expectedRoot uint64) bool {
 }
 
 func main() {
-	depth := uint32(15)
-	iterations := 50
+	depth := uint32(argument(0))
+	iterations := int(argument(1))
 
 	var totalHash uint64
 	for i := 0; i < iterations; i++ {

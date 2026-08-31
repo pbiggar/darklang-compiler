@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Spectral Norm Benchmark - Python reference implementation
 # From: Computer Language Benchmarks Game
@@ -25,12 +31,12 @@ def AtAv(n, v, out, tmp):
     Av(n, v, tmp)
     Atv(n, tmp, out)
 
-def spectral_norm(n):
+def spectral_norm(n, iterations):
     u = [1.0] * n
     v = [0.0] * n
     tmp = [0.0] * n
 
-    for _ in range(10):
+    for _ in range(iterations):
         AtAv(n, u, v, tmp)
         AtAv(n, v, u, tmp)
 
@@ -42,5 +48,5 @@ def spectral_norm(n):
     return math.sqrt(vBv / vv)
 
 # n = 100 is a reasonable size
-result = spectral_norm(100)
+result = spectral_norm(argument(0), argument(1))
 print(int(result * 1000000000))

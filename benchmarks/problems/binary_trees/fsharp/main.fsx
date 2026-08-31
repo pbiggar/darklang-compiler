@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Binary Trees Benchmark
 // Counts nodes in complete binary trees
 
@@ -14,4 +18,4 @@ let rec stressTest depth iterations acc =
 // Run stress test: create many trees of depth 15
 // Each complete binary tree of depth 15 has 2^16 - 1 = 65535 nodes
 // Do 100 iterations
-printfn "%d" (stressTest 15 100 0)
+printfn "%d" (stressTest (argument 0) (argument 1) 0)

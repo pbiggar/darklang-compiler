@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Fannkuch Benchmark
 // From: Computer Language Benchmarks Game
 
@@ -44,4 +48,4 @@ let fannkuch n =
     maxFlips
 
 // n=9 gives reasonable runtime
-printfn "%d" (fannkuch 9)
+printfn "%d" (fannkuch (argument 0))

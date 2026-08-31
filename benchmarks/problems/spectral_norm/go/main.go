@@ -1,9 +1,23 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"math"
 )
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 func a(i, j int) float64 {
 	return 1.0 / float64((i+j)*(i+j+1)/2+i+1)
@@ -34,7 +48,7 @@ func atav(n int, v, out, tmp []float64) {
 	atv(n, tmp, out)
 }
 
-func spectralNorm(n int) float64 {
+func spectralNorm(n int, iterations int64) float64 {
 	u := make([]float64, n)
 	v := make([]float64, n)
 	tmp := make([]float64, n)
@@ -43,7 +57,7 @@ func spectralNorm(n int) float64 {
 		u[i] = 1.0
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; int64(i) < iterations; i++ {
 		atav(n, u, v, tmp)
 		atav(n, v, u, tmp)
 	}
@@ -59,6 +73,6 @@ func spectralNorm(n int) float64 {
 }
 
 func main() {
-	result := spectralNorm(100)
+	result := spectralNorm(int(argument(0)), argument(1))
 	fmt.Println(int64(result * 1000000000.0))
 }

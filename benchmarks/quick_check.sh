@@ -186,25 +186,15 @@ concise_failure() {
         | cut -c1-300
 }
 
-quick_arguments() {
-    case "$1" in
-        tinytemplate) printf '%s\n' 12 1 ;;
-    esac
-}
-
 if [ "$SMOKE_MODE" = true ]; then
     PASSED=0
     for bench in $BENCHMARKS; do
         PROBLEM_DIR="$SCRIPT_DIR/problems/$bench"
         MAIN_SOURCE="$PROBLEM_DIR/dark/main.dark"
-        EXPECTED_FILE="$PROBLEM_DIR/expected_output.txt"
-        if [ -f "$PROBLEM_DIR/dark/expected_output.txt" ]; then
-            EXPECTED_FILE="$PROBLEM_DIR/dark/expected_output.txt"
-        fi
         MAIN_BINARY="$TEMP_DIR/${bench}-main"
 
-        if [ ! -f "$MAIN_SOURCE" ] || [ ! -f "$EXPECTED_FILE" ]; then
-            FAILURES+=("metadata|$bench|missing dark/main.dark or expected output")
+        if [ ! -f "$MAIN_SOURCE" ]; then
+            FAILURES+=("metadata|$bench|missing dark/main.dark")
             continue
         fi
 
@@ -212,9 +202,10 @@ if [ "$SMOKE_MODE" = true ]; then
             BUILD_FAILURES+=("main|$bench|$(concise_failure "$MAIN_BUILD_OUTPUT")")
             continue
         fi
-        EXPECTED_OUTPUT=$(<"$EXPECTED_FILE")
+        EXPECTED_OUTPUT=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" expected "$PROFILE" "$bench")
+        mapfile -t MAIN_ARGUMENTS < <(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" arguments "$PROFILE" "$bench")
         set +e
-        MAIN_OUTPUT=$(timeout 120 "$MAIN_BINARY" 2>&1)
+        MAIN_OUTPUT=$(timeout 120 "$MAIN_BINARY" "${MAIN_ARGUMENTS[@]}" 2>&1)
         MAIN_EXIT=$?
         set -e
         if [ "$MAIN_EXIT" -eq 124 ]; then
@@ -256,11 +247,10 @@ fi
 
 for bench in $BENCHMARKS; do
     PROBLEM_DIR="$SCRIPT_DIR/problems/$bench"
-    QUICK_DARK="$PROBLEM_DIR/dark/quick.dark"
+    QUICK_DARK="$PROBLEM_DIR/dark/main.dark"
     QUICK_BIN="$PROBLEM_DIR/dark/quick"
-    QUICK_RUST="$PROBLEM_DIR/rust/quick.rs"
+    QUICK_RUST="$PROBLEM_DIR/rust/main.rs"
     QUICK_RUST_BIN="$PROBLEM_DIR/rust/quick"
-    QUICK_EXPECTED="$PROBLEM_DIR/quick_expected_output.txt"
     GENERATED_RUST_BINARIES+=("$QUICK_RUST_BIN")
 
     if ! QUICK_PARITY_STATUS=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_parity.py" status "$bench" quick); then
@@ -287,11 +277,11 @@ for bench in $BENCHMARKS; do
     fi
     if [ "$RUST_NEEDS_BUILD" = true ]; then
         if [ -f "$PROBLEM_DIR/rust/Cargo.toml" ]; then
-            if ! command -v cargo &> /dev/null || ! cargo build --release --manifest-path "$PROBLEM_DIR/rust/Cargo.toml" --bin benchmark-quick 2>/dev/null; then
+            if ! command -v cargo &> /dev/null || ! cargo build --release --manifest-path "$PROBLEM_DIR/rust/Cargo.toml" --bin benchmark 2>/dev/null; then
                 BUILD_FAILURES+=("$bench/rust")
                 continue
             fi
-            cp "$PROBLEM_DIR/rust/target/release/benchmark-quick" "$QUICK_RUST_BIN"
+            cp "$PROBLEM_DIR/rust/target/release/benchmark" "$QUICK_RUST_BIN"
             chmod +x "$QUICK_RUST_BIN"
         elif ! rustc -C opt-level=3 "$QUICK_RUST" -o "$QUICK_RUST_BIN" 2>/dev/null; then
             BUILD_FAILURES+=("$bench/rust")
@@ -299,12 +289,8 @@ for bench in $BENCHMARKS; do
         fi
     fi
 
-    if [ ! -f "$QUICK_EXPECTED" ]; then
-        FAILURES+=("$bench: missing quick_expected_output.txt")
-        continue
-    fi
-    EXPECTED_OUTPUT=$(<"$QUICK_EXPECTED")
-    mapfile -t QUICK_ARGUMENTS < <(quick_arguments "$bench")
+    EXPECTED_OUTPUT=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" expected "$PROFILE" "$bench")
+    mapfile -t QUICK_ARGUMENTS < <(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" arguments "$PROFILE" "$bench")
     if ! DARK_OUTPUT=$("$QUICK_BIN" "${QUICK_ARGUMENTS[@]}"); then
         FAILURES+=("$bench: Dark quick execution failed")
         continue

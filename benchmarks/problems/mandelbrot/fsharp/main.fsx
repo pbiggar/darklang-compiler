@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Mandelbrot Benchmark
 
 let mandelbrot cr ci maxIter =
@@ -26,4 +30,4 @@ let countMandelbrot size maxIter =
     count
 
 // Count points in 200x200 grid with 50 iterations
-printfn "%d" (countMandelbrot 200 50)
+printfn "%d" (countMandelbrot (argument 0) (argument 1))

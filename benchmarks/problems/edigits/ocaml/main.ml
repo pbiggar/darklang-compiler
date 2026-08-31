@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Edigits Benchmark - Computing digits of e *)
 (* Uses series expansion: e = sum(1/n!) for n=0 to infinity *)
 (* Computes checksum of first N digits *)
@@ -39,8 +43,8 @@ let compute_e_digits num_digits =
 (* Compute first 1000 digits of e multiple times *)
 let () =
   let checksum = ref 0L in
-  for _ = 1 to 10 do
-    let digits = compute_e_digits 1000 in
+  for _ = 1 to argument 0 do
+    let digits = compute_e_digits (argument 1) in
     checksum := 0L;
     for i = 0 to Array.length digits - 1 do
       checksum := Int64.rem (Int64.add !checksum (Int64.mul (Int64.of_int digits.(i)) (Int64.of_int (i + 1)))) 1000000007L

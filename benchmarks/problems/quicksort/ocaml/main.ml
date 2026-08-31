@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Quicksort Benchmark *)
 (* Sorts a list and returns a checksum *)
 
@@ -30,6 +34,6 @@ let checksum arr =
   !result
 
 let () =
-  let arr = generate_list 5000 42L in
+  let arr = generate_list (argument 0) (Int64.of_int (argument 1)) in
   let sorted_arr = quicksort arr in
   Printf.printf "%Ld\n" (checksum sorted_arr)

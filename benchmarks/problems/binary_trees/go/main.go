@@ -1,6 +1,22 @@
+// main.go - Parameterized Go benchmark implementation.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func argument(index int) int64 {
+	value, err := strconv.ParseInt(os.Args[index+1], 10, 64)
+	if err != nil {
+		panic("benchmark argument must be an int64")
+	}
+	return value
+}
+
+
+
 
 type Tree struct {
 	left  *Tree
@@ -34,5 +50,5 @@ func stressTest(depth, iterations int64) int64 {
 }
 
 func main() {
-	fmt.Println(stressTest(15, 100))
+	fmt.Println(stressTest(argument(0), argument(1)))
 }

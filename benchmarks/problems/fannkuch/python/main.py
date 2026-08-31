@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Fannkuch Benchmark - Python reference implementation
 # From: Computer Language Benchmarks Game
@@ -41,5 +47,5 @@ def fannkuch(n):
     return max_flips
 
 # n=9 gives reasonable runtime
-result = fannkuch(9)
+result = fannkuch(argument(0))
 print(result)

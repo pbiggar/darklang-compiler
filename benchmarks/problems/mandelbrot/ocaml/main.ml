@@ -1,3 +1,7 @@
+(* main.ml - Parameterized OCaml benchmark implementation. *)
+let argument index = int_of_string Sys.argv.(index + 1)
+let argument64 index = Int64.of_string Sys.argv.(index + 1)
+
 (* Mandelbrot Benchmark *)
 
 let mandelbrot cr ci max_iter =
@@ -30,4 +34,4 @@ let count_mandelbrot size max_iter =
   !count
 
 (* Count points in 200x200 grid with 50 iterations *)
-let () = Printf.printf "%d\n" (count_mandelbrot 200 50)
+let () = Printf.printf "%d\n" (count_mandelbrot (argument 0) (argument 1))

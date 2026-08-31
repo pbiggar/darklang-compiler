@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Quicksort Benchmark - Python reference implementation
 # Sorts a list and returns a checksum
@@ -27,6 +33,6 @@ def checksum(arr):
         result = (result + x * (i + 1)) % 1000000007
     return result
 
-arr = generate_list(5000, 42)
+arr = generate_list(argument(0), argument(1))
 sorted_arr = quicksort(arr)
 print(checksum(sorted_arr))

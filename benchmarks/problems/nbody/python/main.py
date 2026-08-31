@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # N-Body Benchmark - Python reference implementation
 # Simulates the orbits of Jovian planets using a symplectic integrator
@@ -86,7 +92,7 @@ bodies = copy.deepcopy(BODIES)
 offset_momentum(bodies)
 
 # Run simulation
-n = 500000
+n = argument(0)
 advance(bodies, 0.01, n)
 
 # Output final energy (truncated to int for comparison)

@@ -1,3 +1,4 @@
+// main.rs - Parameterized Rust benchmark implementation.
 // Mandelbrot Benchmark - Rust reference implementation
 
 fn mandelbrot(cr: f64, ci: f64, max_iter: i32) -> i32 {
@@ -27,8 +28,14 @@ fn count_mandelbrot(size: i32, max_iter: i32) -> i32 {
     count
 }
 
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 fn main() {
-    // Count points in 200x200 grid with 50 iterations
-    let result = count_mandelbrot(200, 50);
+    let result = count_mandelbrot(argument(0) as i32, argument(1) as i32);
     println!("{}", result);
 }

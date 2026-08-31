@@ -1,3 +1,11 @@
+// main.rs - Parameterized Rust benchmark implementation.
+fn argument(index: usize) -> i64 {
+    std::env::args().nth(index + 1)
+        .expect("missing benchmark argument")
+        .parse::<i64>()
+        .expect("benchmark argument must be an i64")
+}
+
 // Edigits Benchmark - Computing digits of e
 // Uses series expansion: e = sum(1/n!) for n=0 to infinity
 // Computes checksum of first N digits
@@ -48,8 +56,8 @@ fn compute_e_digits(num_digits: usize) -> Vec<u8> {
 fn main() {
     // Compute first 1000 digits of e multiple times
     let mut checksum: u64 = 0;
-    for _ in 0..10 {
-        let digits = compute_e_digits(1000);
+    for _ in 0..argument(0) {
+        let digits = compute_e_digits(argument(1) as usize);
         checksum = 0;
         for (i, &d) in digits.iter().enumerate() {
             checksum = (checksum + (d as u64) * ((i as u64) + 1)) % 1000000007;

@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // N-Queens Benchmark
 // Counts solutions to the N-queens problem using bit manipulation
 
@@ -22,4 +29,4 @@ function nqueen(n) {
 }
 
 // N=13 gives reasonable runtime
-console.log(nqueen(13));
+console.log(nqueen(argument(0)));

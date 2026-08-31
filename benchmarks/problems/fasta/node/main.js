@@ -1,3 +1,10 @@
+// main.js - Parameterized Node.js benchmark implementation.
+function argument(index) {
+    const value = Number.parseInt(process.argv[index + 2], 10);
+    if (!Number.isFinite(value)) throw new Error(`invalid benchmark argument ${index}`);
+    return value;
+}
+
 // Fasta Benchmark - DNA Sequence Generation
 // From: Computer Language Benchmarks Game
 // Generates pseudo-random DNA sequences and computes checksum
@@ -56,7 +63,7 @@ function makeRepeatFasta(n, seq) {
     return checksum;
 }
 
-const n = 100000;
+const n = argument(0);
 
 const iub = [
     { c: 'a'.charCodeAt(0), p: 0.27 },

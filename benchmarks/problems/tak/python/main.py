@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # Tak (Takeuchi) Benchmark - Python reference implementation
 import sys
@@ -11,6 +17,6 @@ def tak(x, y, z):
 
 # Repeat multiple times for meaningful measurement
 result = 0
-for _ in range(10):
-    result = tak(24, 16, 8)
+for _ in range(argument(0)):
+    result = tak(argument(1), argument(2), argument(3))
 print(result)

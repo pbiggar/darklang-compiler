@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // N-Queens Benchmark
 // Counts solutions to the N-queens problem using bit manipulation
 
@@ -18,4 +22,4 @@ let nqueen n =
     solve 0 0 0
 
 // N=13 gives reasonable runtime
-printfn "%d" (nqueen 13)
+printfn "%d" (nqueen (argument 0))

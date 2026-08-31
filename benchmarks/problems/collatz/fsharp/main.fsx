@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Collatz Benchmark
 // Counts steps in Collatz sequences for numbers 1 to n
 
@@ -11,4 +15,4 @@ let rec sumCollatzRange i limit total =
     else sumCollatzRange (i + 1L) limit (total + collatzSteps i 0)
 
 // Sum steps for numbers 1 to 100000
-printfn "%d" (sumCollatzRange 1L 100000L 0)
+printfn "%d" (sumCollatzRange 1L (argument64 0) 0)

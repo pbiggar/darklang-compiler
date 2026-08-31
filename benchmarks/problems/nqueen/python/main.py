@@ -1,3 +1,9 @@
+# main.py - Parameterized Python benchmark implementation.
+import sys
+
+def argument(index):
+    return int(sys.argv[index + 1])
+
 #!/usr/bin/env python3
 # N-Queens Benchmark - Python reference implementation
 # From: plb2 (Programming Language Benchmark v2)
@@ -25,5 +31,5 @@ def nqueen(n):
     return count
 
 # N=13 gives reasonable runtime
-result = nqueen(13)
+result = nqueen(argument(0))
 print(result)

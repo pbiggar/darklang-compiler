@@ -1,3 +1,7 @@
+// main.fsx - Parameterized F# benchmark implementation.
+let argument index = int fsi.CommandLineArgs.[index + 1]
+let argument64 index = int64 fsi.CommandLineArgs.[index + 1]
+
 // Matrix Multiplication Benchmark
 // Multiplies two NxN matrices using naive O(n^3) algorithm
 
@@ -28,7 +32,7 @@ let checksum (m: int64[][]) n =
     result
 
 // Use 100x100 matrices for reasonable runtime
-let n = 100
+let n = argument 0
 let a = generateMatrix n 42UL
 let b = generateMatrix n 123UL
 let c = matmul a b n
