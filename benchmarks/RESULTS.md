@@ -2,32 +2,32 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-08-31T12:47:37+00:00
+**Snapshot timestamp:** 2026-09-01T00:04:16+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
-**Workload contract:** `749abfa5451153cafe463370754787a856bcde13ed9fe0d9873d2d0e82fb7640`
-**Compiler commit:** `1eaf1aca9061ff5af0f567488f00346caf482a3b` - Ignore QEMU benchmark core artifacts
+**Workload contract:** `b31ea1f388e5d59a7b85fdf42d11968e3dc813fc6452d14227b82d4602f498d2`
+**Compiler commit:** `042b0ec374f65ead729ade9b11dd08986af74572` - Restore one-render TinyTemplate workloads
 
-| Benchmark     |          Dark (4.23x) |          Rust |
-|---------------|-----------------------|---------------|
-| ackermann     | 9,303,371,891 (1.86x) | 5,009,840,894 |
-| binary_trees  |   635,985,955 (0.35x) | 1,842,793,797 |
-| collatz       |    70,189,152 (0.91x) |    76,734,720 |
-| edigits       |  4,478,500,048 (329x) |    13,624,986 |
-| factorial     |        53,662 (0.21x) |       257,875 |
-| fasta         |   487,435,378 (22.7x) |    21,446,459 |
-| fib           |   388,190,195 (1.42x) |   272,528,736 |
-| leibniz       |   850,001,411 (1.21x) |   700,257,860 |
-| mandelbrot    |    16,354,136 (1.30x) |    12,554,856 |
-| matmul        |  1,947,578,291 (115x) |    16,960,641 |
-| merkletrees   |   386,659,268 (3.41x) |   113,305,941 |
-| nbody         |   942,002,278 (4.52x) |   208,256,292 |
-| nqueen        |   212,392,007 (1.29x) |   164,530,821 |
-| pisum         |    40,015,711 (0.88x) |    45,259,394 |
-| primes        |     1,893,401 (1.51x) |     1,251,693 |
-| quicksort     |   218,980,549 (33.5x) |     6,544,669 |
-| spectral_norm |    71,799,837 (14.1x) |     5,095,834 |
-| sum_to_n      |        61,695 (0.24x) |       257,825 |
-| tak           |    47,997,201 (1.22x) |    39,338,221 |
-| tinytemplate  | 2,426,463,046 (3924x) |       618,292 |
+| Benchmark | Dark (4.23x) | Rust |
+|---|---:|---:|
+| ackermann | 9,303,371,891 (1.86x) | 5,009,840,894 |
+| binary_trees | 635,985,955 (0.35x) | 1,842,793,797 |
+| collatz | 70,189,152 (0.91x) | 76,734,720 |
+| edigits | 4,478,500,048 (329x) | 13,624,986 |
+| factorial | 53,662 (0.21x) | 257,875 |
+| fasta | 487,435,378 (22.7x) | 21,446,459 |
+| fib | 388,190,195 (1.42x) | 272,528,736 |
+| leibniz | 850,001,411 (1.21x) | 700,257,860 |
+| mandelbrot | 16,354,136 (1.30x) | 12,554,856 |
+| matmul | 1,947,578,291 (115x) | 16,960,641 |
+| merkletrees | 386,659,268 (3.41x) | 113,305,941 |
+| nbody | 942,002,278 (4.52x) | 208,256,292 |
+| nqueen | 212,392,007 (1.29x) | 164,530,821 |
+| pisum | 40,015,711 (0.88x) | 45,259,394 |
+| primes | 1,893,401 (1.51x) | 1,251,693 |
+| quicksort | 218,980,549 (33.5x) | 6,544,669 |
+| spectral_norm | 71,799,837 (14.1x) | 5,095,834 |
+| sum_to_n | 61,695 (0.24x) | 257,825 |
+| tak | 47,997,201 (1.22x) | 39,338,221 |
+| tinytemplate | 2,426,430,783 (3924x) | 618,292 |

@@ -9,11 +9,11 @@
     "backend": "cachegrind",
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
-  "contract_sha256": "749abfa5451153cafe463370754787a856bcde13ed9fe0d9873d2d0e82fb7640",
-  "generated_at": "2026-08-31T15:20:23+00:00",
+  "contract_sha256": "b31ea1f388e5d59a7b85fdf42d11968e3dc813fc6452d14227b82d4602f498d2",
+  "generated_at": "2026-09-01T00:04:16+00:00",
   "compiler": {
-    "commit": "6b1dbb6f57c8bd60c8823610424b5b3e0fda1bf4",
-    "subject": "Ignore QEMU benchmark core artifacts"
+    "commit": "042b0ec374f65ead729ade9b11dd08986af74572",
+    "subject": "Restore one-render TinyTemplate workloads"
   },
   "benchmarks": [
     {
@@ -94,7 +94,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 2426463046
+      "instructions": 2426430783
     }
   ]
 }

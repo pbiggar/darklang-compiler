@@ -748,6 +748,6 @@ match compile(pageTemplate) with
         | Ok(footer) ->
             let templates = [("footer", footer), ("row", row), ("page", page)] in
             let engine = TinyTemplate { templates = templates, formatters = configured.formatters, defaultFormatter = configured.defaultFormatter } in
-            match benchmark(engine, makeReport(3L), 2L, 0L) with
+            match benchmark(engine, makeReport(12L), 1L, 0L) with
             | Error(error) -> Builtin.testRuntimeError(errorMessage(error))
             | Ok(total) -> Builtin.printLine(Stdlib.Int64.toString(total))
