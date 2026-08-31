@@ -32,11 +32,11 @@ match Stdlib.Cli.Args.int64(999I) with | Error(message) -> Stdlib.String.length(
 // CLI argument lookup must work from a nested non-tail frame: argv is process
 // state, rather than state held in an allocator-visible register.
 let argvMissingFromNestedFrame(depth: Int64): Bool =
-    if depth == 0I then
+    if depth == 0 then
         match Stdlib.Cli.Args.int64(999I) with | Error(_) -> true | Ok(_) -> false
     else
-        let retained = depth in argvMissingFromNestedFrame(depth - 1I) && retained > 0I
-argvMissingFromNestedFrame(3I) = true
+        let retained = depth in argvMissingFromNestedFrame(depth - 1) && retained > 0
+argvMissingFromNestedFrame(3) = true
 
 match Stdlib.Cli.Process.runIn("/", "pwd", []) with | Ok(output) -> Stdlib.String.trimEnd(output.stdout) | Error(error) -> error.message = "/"
 
