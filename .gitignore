@@ -49,6 +49,7 @@ examples/*.out
 examples/output
 dark.out
 cachegrind.out.*
+/qemu_*.core
 
 # Coverage
 coverage.xml

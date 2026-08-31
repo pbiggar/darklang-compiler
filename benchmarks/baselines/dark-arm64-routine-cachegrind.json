@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
   "contract_sha256": "749abfa5451153cafe463370754787a856bcde13ed9fe0d9873d2d0e82fb7640",
-  "generated_at": "2026-08-31T12:59:31+00:00",
+  "generated_at": "2026-08-31T15:20:23+00:00",
   "compiler": {
-    "commit": "21b3ecac917d289a1bdcf9f358b8d0d0b7943f16",
-    "subject": "Apply candidate-updated benchmark contract"
+    "commit": "6b1dbb6f57c8bd60c8823610424b5b3e0fda1bf4",
+    "subject": "Ignore QEMU benchmark core artifacts"
   },
   "benchmarks": [
     {
@@ -38,7 +38,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 489035380
+      "instructions": 487435378
     },
     {
       "name": "fib",
@@ -82,7 +82,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 71806745
+      "instructions": 71799837
     },
     {
       "name": "sum_to_n",
@@ -94,7 +94,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 2426463044
+      "instructions": 2426463046
     }
   ]
 }
