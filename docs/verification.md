@@ -26,10 +26,11 @@ verification, regressions fail, and no tracked benchmark file is modified.
 
 When a compiler change improves aggregate routine performance, run
 `./benchmarks/run_benchmarks.sh routine` in recording mode and commit the updated
-Dark snapshot, `benchmarks/RESULTS.md`, and `benchmarks/HISTORY.md`. Recording
-advances only on improvement, leaves the stronger snapshot/results on regression,
-and logs every valid run. Integration uses `--verify-fresh` and stops if a known
-improvement has not been recorded. An incompatible or missing snapshot requires
+Dark snapshot and generated `benchmarks/RESULTS.md`; commit
+`benchmarks/BASELINES.md` only for an audited Rust refresh. Recording advances
+only on improvement and leaves the stronger snapshot/results on regression.
+Integration uses `--verify-fresh` and stops if a known improvement has not been
+recorded. An incompatible or missing snapshot requires
 one complete successful `--reset-dark-baseline` routine run; partial, targeted,
 `all`, hyperfine, and failed runs cannot reset it. Audited Rust refreshes remain
 separate via `--refresh-baseline=rust`.

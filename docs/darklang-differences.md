@@ -11,6 +11,15 @@ Darklang interpreter. It serves as:
 - Guide for fixing semantic differences
 - Documentation of compiler-only features
 
+## Supported language surface
+
+The compiler supports statically typed expressions, functions and closures,
+records, tuples, lists, sum types, generics, strings, Dicts, streams, and the
+standard-library surface implemented in `src/DarkCompiler/Stdlib.fs`. The
+compiler source and E2E tests are authoritative for a feature's current
+behavior; this document records only compatibility boundaries and intentional
+extensions. Feature implementation notes live in [`features/`](features/).
+
 To validate tests against the interpreter, run:
 ```bash
 python3 scripts/validate-darklang.py --help-full  # See detailed documentation

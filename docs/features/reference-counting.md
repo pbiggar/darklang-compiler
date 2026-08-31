@@ -4,8 +4,8 @@ Dark uses reference counting for compiler-managed heap values. The
 implementation is still being unified around representation shapes, but the old
 "only tuples and records are managed" model is no longer accurate.
 
-For the current remaining work list, see
-[`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md).
+Current ownership behavior is defined by the implementation and focused E2E
+coverage; this document records the supported representation contracts.
 
 ## Runtime Shapes
 
@@ -121,6 +121,3 @@ The major remaining work is:
 - add focused coverage for any new Blob/string runtime allocation paths
 - distinguish static function references from heap closures
 - document or implement the deferred raw memory policy
-
-The detailed task breakdown lives in
-[`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md).

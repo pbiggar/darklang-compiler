@@ -4,7 +4,8 @@
 // program structure. The AST is the output of the Parser and input to the ANF
 // transformation.
 // Keep this file as the structural source of truth for syntax-facing compiler
-// nodes; feature inventories belong in docs/current-language-features.md.
+// nodes; language support and compatibility boundaries belong in
+// docs/darklang-differences.md.
 
 module AST
 

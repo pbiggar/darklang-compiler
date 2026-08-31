@@ -6,7 +6,7 @@
   "enabled": true,
   "lifecyclePhase": "workflow-discovery",
   "purpose": "Fix parser and pretty-printer roundtrip failures one first-failing corpus case at a time.",
-  "summary": "This always-learning agent starts from the parser/pretty roundtrip playbook and tightens source and interpreter syntax roundtrip behavior.",
+  "summary": "Uses the repository inventory tool to identify parser and pretty-printer roundtrip work.",
   "tools": [
     {
       "name": "parser-pretty-roundtrip-inventory",

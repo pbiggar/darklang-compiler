@@ -91,7 +91,6 @@ reuse work remain:
   buffer reuse is still a deferred allocator-policy decision
 - x64 recursive payload parity trails ARM64
 
-See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
 for the current task breakdown.
 
 ## Implementation Files

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-fresh] [--skip-smoke] [--reset-dark-baseline] [--refresh-baseline=rust] [--machine=ID] [--jobs[=N]] [routine|benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-fresh] [--skip-smoke] [--reset-dark-baseline] [--refresh-baseline=rust] [--jobs[=N]] [routine|benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
@@ -11,7 +11,6 @@
 #                            already passed it on the exact unchanged commit
 #   --reset-dark-baseline    Replace Dark routine snapshot from one complete successful run
 #   --refresh-baseline=rust  Independently refresh audited Rust reference rows
-#   --machine=ID             Optional machine registry ID for recorded history
 #   --jobs, --jobs=N         Run up to N benchmarks in parallel (default: 1)
 #   --list                   Print the benchmarks that would run and exit
 
@@ -50,7 +49,6 @@ RESET_DARK_BASELINE=false
 JOB_COUNT=""
 SKIP_BENCHMARKS=()
 PROFILE=""
-MACHINE_ID=""
 SKIP_SMOKE=false
 
 while [[ $# -gt 0 ]]; do
@@ -86,22 +84,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --refresh-baseline=*)
             REFRESH_BASELINE="${1#*=}"
-            shift
-            ;;
-        --machine)
-            if [ -z "${2:-}" ]; then
-                pretty_fail "--machine requires a value"
-                exit 1
-            fi
-            MACHINE_ID="$2"
-            shift 2
-            ;;
-        --machine=*)
-            MACHINE_ID="${1#*=}"
-            if [ -z "$MACHINE_ID" ]; then
-                pretty_fail "--machine requires a value"
-                exit 1
-            fi
             shift
             ;;
         --jobs)
@@ -439,25 +421,21 @@ pretty_info "Processing results..."
                 pretty_warn "benchmark verification failed"
             fi
         elif [ "$PROFILE" = "routine" ]; then
-            # Only a complete routine run updates the canonical results and history.
+            # Only a complete routine run updates canonical current-state files.
             HISTORY_REFRESH_ARGS=()
             if [ "$REFRESH_BASELINE" != "false" ]; then
                 HISTORY_REFRESH_ARGS+=(--refresh-baseline)
-            fi
-            HISTORY_MACHINE_ARGS=()
-            if [ -n "$MACHINE_ID" ]; then
-                HISTORY_MACHINE_ARGS+=(--machine "$MACHINE_ID")
             fi
             HISTORY_RESET_ARGS=()
             if [ "$RESET_DARK_BASELINE" = true ]; then
                 HISTORY_RESET_ARGS+=(--reset-dark-baseline)
             fi
-            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE" "${HISTORY_MACHINE_ARGS[@]}" "${HISTORY_REFRESH_ARGS[@]}" "${HISTORY_RESET_ARGS[@]}"; then
+            if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE" "${HISTORY_REFRESH_ARGS[@]}" "${HISTORY_RESET_ARGS[@]}"; then
                 PROCESS_FAILURES+=("history_updater")
                 pretty_warn "history_updater failed (continuing)"
             fi
         else
-            pretty_info "Diagnostic target complete; RESULTS.md and HISTORY.md were not updated."
+            pretty_info "Diagnostic target complete; canonical current-state files were not updated."
         fi
     else
         if ! python3 "$SCRIPT_DIR/infrastructure/result_processor.py" "$OUTPUT_DIR"; then

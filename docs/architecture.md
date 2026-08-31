@@ -118,7 +118,7 @@ native syscall/ABI boundary only in the selected backend. See
 
 ## Compiler Cache
 
-The compiler does not use a compile cache anymore. `docs/compiler-cache.md`
+The compiler does not use a compile cache.
 remains as a historical record of the removed cache design.
 
 ## Key Invariants

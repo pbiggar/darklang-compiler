@@ -6,7 +6,7 @@
   "enabled": true,
   "lifecyclePhase": "workflow-discovery",
   "purpose": "Find and fix one real syntax or semantic difference between this compiler and the official Darklang interpreter.",
-  "summary": "This always-learning agent starts from the Darklang diff playbook and focuses on one interpreter compatibility gap at a time.",
+  "summary": "Uses the repository inventory tool to identify one interpreter compatibility gap at a time.",
   "tools": [
     {
       "name": "darklang-compatibility-inventory",

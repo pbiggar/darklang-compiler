@@ -6,7 +6,7 @@
   "enabled": true,
   "lifecyclePhase": "workflow-discovery",
   "purpose": "Investigate one benchmark at a time and improve the benchmark investigation notes with current compiler, IR, and assembly evidence.",
-  "summary": "This always-learning agent starts from the benchmark investigation playbook and turns it into a reviewable, evidence-focused workflow.",
+  "summary": "Uses the repository inventory tool to produce bounded, evidence-focused benchmark investigation input.",
   "tools": [
     {
       "name": "benchmark-investigation-inventory",

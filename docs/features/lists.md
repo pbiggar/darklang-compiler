@@ -109,5 +109,4 @@ garbage collector.
 | `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 ownership helpers |
 | `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 ownership helpers |
 
-See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
 for the current memory-management task breakdown.

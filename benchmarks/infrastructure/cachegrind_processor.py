@@ -251,7 +251,7 @@ def main():
             )
 
     generate_summary(results, results_dir)
-    # Note: history_updater.py now handles updating RESULTS.md, BASELINES.md, and HISTORY.md
+    # history_updater.py owns the current-state RESULTS.md and BASELINES.md tables.
 
 
 if __name__ == "__main__":

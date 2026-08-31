@@ -2,7 +2,8 @@
 
 This document describes the performance optimization systems that were removed from the compiler to simplify the codebase. These were removed in the commit that added this document (see `git log --oneline docs/removed-optimizations.md`).
 
-Note: the v4 SQLite function cache was removed again. See `docs/compiler-cache.md`
+The removed SQLite function cache has no retained implementation or operational
+documentation.
 for the historical design and the performance hacks it used.
 
 ## Why They Were Removed

@@ -61,7 +61,7 @@ if [[ "$role" != inventory && "$role" != inspect ]]; then
 fi
 
 cd "$root"
-rg -n -i --glob '!**/bin/**' --glob '!**/obj/**' --glob '!benchmarks/HISTORY.md' \
+rg -n -i --glob '!**/bin/**' --glob '!**/obj/**' \
   "$pattern" "${paths[@]}" >"$artifact" || true
 
 matches="$(wc -l <"$artifact" | tr -d ' ')"

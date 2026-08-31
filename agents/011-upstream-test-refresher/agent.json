@@ -6,7 +6,7 @@
   "enabled": true,
   "lifecyclePhase": "workflow-discovery",
   "purpose": "Refresh the local upstream Dark execution test snapshot and reapply this repository's intentional local deltas.",
-  "summary": "This always-learning agent starts from the upstream test refresh playbook and maintains repeatable upstream test synchronization.",
+  "summary": "Uses the repository inventory tool to identify upstream test synchronization work.",
   "tools": [
     {
       "name": "upstream-test-refresher-inventory",

@@ -119,7 +119,6 @@ match zipped with
 
 **Status**: Partially documented
 **Severity**: Low (rare in practice)
-**Related investigation**: `docs/register-allocation-bug-investigation.md`
 
 ### Description
 
