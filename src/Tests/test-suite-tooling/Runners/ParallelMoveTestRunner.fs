@@ -16,7 +16,6 @@ let private context : CodeGen.CodeGenContext = {
     ClosurePayloadSizes = Map.empty
     ClosureCaptureTypes = Map.empty
     PlannedListDecHelperLabels = Map.empty
-    NeedsCliRuntimeState = false
     FunctionName = "parallel_move_fixture"
     StackSize = 0
     UsedCalleeSaved = []
