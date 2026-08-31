@@ -127,14 +127,12 @@ let firstWord(text: String) : (String, String) =
     | Some(parts) -> (Stdlib.String.trim(parts.0), Stdlib.String.trim(parts.1))
 
 let trimLastLiteral(instructions: List<Instruction>) : List<Instruction> =
-    if Stdlib.List.isEmpty<Instruction>(instructions) then instructions
-    else
-        match Stdlib.List.head<Instruction>(instructions) with
-        | Some(Literal(text)) ->
-            match Stdlib.List.tail<Instruction>(instructions) with
-            | Some(rest) -> Stdlib.List.push<Instruction>(rest, Literal(Stdlib.String.trimEnd(text)))
-            | None -> instructions
+    match instructions with
+    | instruction :: rest ->
+        match instruction with
+        | Literal(text) -> Stdlib.List.push<Instruction>(rest, Literal(Stdlib.String.trimEnd(text)))
         | _ -> instructions
+    | [] -> instructions
 
 let normalizeTag(text: String, instructions: List<Instruction>) : (String, List<Instruction>, Bool) =
     let initial = Stdlib.String.trim(text) in
