@@ -2,7 +2,7 @@
 
 let matA(i: Int64, j: Int64) : Float =
     let ij = i + j in
-    let div = ij * (ij + 1) / 2 + i + 1 in
+    let div = ij * (ij + 1L) / 2L + i + 1L in
     1.0 / Stdlib.Int64.toFloat(div)
 
 // All callers prove the index is within the fixed vector length.
@@ -11,40 +11,40 @@ let getAt(v: List<Float>, i: Int64) : Float =
 
 let avRow(i: Int64, j: Int64, n: Int64, v: List<Float>, acc: Float) : Float =
     if j >= n then acc
-    else avRow(i, j + 1, n, v, acc + matA(i, j) * getAt(v, j))
+    else avRow(i, j + 1L, n, v, acc + matA(i, j) * getAt(v, j))
 
 let atvRow(i: Int64, j: Int64, n: Int64, v: List<Float>, acc: Float) : Float =
     if j >= n then acc
-    else atvRow(i, j + 1, n, v, acc + matA(j, i) * getAt(v, j))
+    else atvRow(i, j + 1L, n, v, acc + matA(j, i) * getAt(v, j))
 
 let avRows(i: Int64, n: Int64, v: List<Float>, out: List<Float>) : List<Float> =
     if i >= n then out
-    else avRows(i + 1, n, v, Stdlib.Internal.SkewList.setAt<Float>(out, i, avRow(i, 0, n, v, 0.0)))
+    else avRows(i + 1L, n, v, Stdlib.Internal.SkewList.setAt<Float>(out, i, avRow(i, 0L, n, v, 0.0)))
 
 let atvRows(i: Int64, n: Int64, v: List<Float>, out: List<Float>) : List<Float> =
     if i >= n then out
-    else atvRows(i + 1, n, v, Stdlib.Internal.SkewList.setAt<Float>(out, i, atvRow(i, 0, n, v, 0.0)))
+    else atvRows(i + 1L, n, v, Stdlib.Internal.SkewList.setAt<Float>(out, i, atvRow(i, 0L, n, v, 0.0)))
 
 let atav(n: Int64, v: List<Float>) : List<Float> =
     let zeroes = Stdlib.List.__repeatInt64<Float>(n, 0.0, []) in
-    atvRows(0, n, avRows(0, n, v, zeroes), zeroes)
+    atvRows(0L, n, avRows(0L, n, v, zeroes), zeroes)
 
 let iterate(iterations: Int64, n: Int64, u: List<Float>, v: List<Float>) : (List<Float> * List<Float>) =
-    if iterations <= 0 then (u, v)
+    if iterations <= 0L then (u, v)
     else
         let nextV = atav(n, u) in
         let nextU = atav(n, nextV) in
-        iterate(iterations - 1, n, nextU, nextV)
+        iterate(iterations - 1L, n, nextU, nextV)
 
 let dot(i: Int64, n: Int64, a: List<Float>, b: List<Float>, acc: Float) : Float =
     if i >= n then acc
-    else dot(i + 1, n, a, b, acc + getAt(a, i) * getAt(b, i))
+    else dot(i + 1L, n, a, b, acc + getAt(a, i) * getAt(b, i))
 
 let spectralNorm(n: Int64, iterations: Int64) : Float =
     let result = iterate(iterations, n, Stdlib.List.__repeatInt64<Float>(n, 1.0, []), Stdlib.List.__repeatInt64<Float>(n, 0.0, [])) in
     let u = result.0 in
     let v = result.1 in
-    Stdlib.Float.sqrt(dot(0, n, u, v, 0.0) / dot(0, n, v, v, 0.0))
+    Stdlib.Float.sqrt(dot(0L, n, u, v, 0.0) / dot(0L, n, v, v, 0.0))
 
 let benchmarkArg(index: Int) : Int64 =
     match Stdlib.Cli.Args.int64(index) with

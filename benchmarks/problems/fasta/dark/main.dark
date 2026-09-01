@@ -6,17 +6,17 @@
 
 // Get element from ALU at position i (mod 287)
 let getAlu(aluBytes: List<Int64>, i: Int64) : Int64 =
-    match Stdlib.Internal.SkewList.getAt<Int64>(aluBytes, i % 287) with
+    match Stdlib.Internal.SkewList.getAt<Int64>(aluBytes, i % 287L) with
     | Some(v) -> v
-    | None -> 0
+    | None -> 0L
 
 // Generate repeat fasta checksum
 let makeRepeatFasta(aluBytes: List<Int64>, n: Int64, i: Int64, checksum: Int64) : Int64 =
     if i >= n then checksum
     else
         let c = getAlu(aluBytes, i) in
-        let newChecksum = (checksum + c * (i + 1)) % 1000000007 in
-        makeRepeatFasta(aluBytes, n, i + 1, newChecksum)
+        let newChecksum = (checksum + c * (i + 1L)) % 1000000007L in
+        makeRepeatFasta(aluBytes, n, i + 1L, newChecksum)
 
 // Convert probability table to cumulative distribution
 let makeCumulative(table: List<(Int64 * Float)>, running: Float) : List<(Int64 * Float)> =
@@ -35,24 +35,24 @@ let makeCumulative(table: List<(Int64 * Float)>, running: Float) : List<(Int64 *
 // Select element from cumulative table
 let selectRandom(table: List<(Int64 * Float)>, r: Float, idx: Int64) : Int64 =
     match Stdlib.Internal.SkewList.getAt(table, idx) with
-    | None -> 0
+    | None -> 0L
     | Some(item) ->
         let c = Stdlib.Tuple2.first(item) in
         let p = Stdlib.Tuple2.second(item) in
         if r < p then c
         else
-            if idx + 1 >= Stdlib.Internal.SkewList.length(table) then c
-            else selectRandom(table, r, idx + 1)
+            if idx + 1L >= Stdlib.Internal.SkewList.length(table) then c
+            else selectRandom(table, r, idx + 1L)
 
 // Generate random fasta checksum - returns (checksum, seed)
 let makeRandomFasta(n: Int64, table: List<(Int64 * Float)>, seed: Int64, i: Int64, checksum: Int64) : (Int64 * Int64) =
     if i >= n then (checksum, seed)
     else
-        let newSeed = (seed * 3877 + 29573) % 139968 in
+        let newSeed = (seed * 3877L + 29573L) % 139968L in
         let r = Stdlib.Int64.toFloat(newSeed) / 139968.0 in
-        let c = selectRandom(table, r, 0) in
-        let newChecksum = (checksum + c * (i + 1)) % 1000000007 in
-        makeRandomFasta(n, table, newSeed, i + 1, newChecksum)
+        let c = selectRandom(table, r, 0L) in
+        let newChecksum = (checksum + c * (i + 1L)) % 1000000007L in
+        makeRandomFasta(n, table, newSeed, i + 1L, newChecksum)
 
 // Full size: n=100000
 // 2n=200000 repeat, 3n=300000 random iub, 5n=500000 random homo
@@ -63,17 +63,17 @@ let benchmarkArg(index: Int) : Int64 =
     | Error(message) -> Builtin.testRuntimeError(message)
 
 // ALU sequence bytes (287 chars)
-let aluBytes = [71, 71, 67, 67, 71, 71, 71, 67, 71, 67, 71, 71, 84, 71, 71, 67, 84, 67, 65, 67, 71, 67, 67, 84, 71, 84, 65, 65, 84, 67, 67, 67, 65, 71, 67, 65, 67, 84, 84, 84, 71, 71, 71, 65, 71, 71, 67, 67, 71, 65, 71, 71, 67, 71, 71, 71, 67, 71, 71, 65, 84, 67, 65, 67, 67, 84, 71, 65, 71, 71, 84, 67, 65, 71, 71, 65, 71, 84, 84, 67, 71, 65, 71, 65, 67, 67, 65, 71, 67, 67, 84, 71, 71, 67, 67, 65, 65, 67, 65, 84, 71, 71, 84, 71, 65, 65, 65, 67, 67, 67, 67, 71, 84, 67, 84, 67, 84, 65, 67, 84, 65, 65, 65, 65, 65, 84, 65, 67, 65, 65, 65, 65, 65, 84, 84, 65, 71, 67, 67, 71, 71, 71, 67, 71, 84, 71, 71, 84, 71, 71, 67, 71, 67, 71, 67, 71, 67, 67, 84, 71, 84, 65, 65, 84, 67, 67, 67, 65, 71, 67, 84, 65, 67, 84, 67, 71, 71, 71, 65, 71, 71, 67, 84, 71, 65, 71, 71, 67, 65, 71, 71, 65, 71, 65, 65, 84, 67, 71, 67, 84, 84, 71, 65, 65, 67, 67, 67, 71, 71, 71, 65, 71, 71, 67, 71, 71, 65, 71, 71, 84, 84, 71, 67, 65, 71, 84, 71, 65, 71, 67, 67, 71, 65, 71, 65, 84, 67, 71, 67, 71, 67, 67, 65, 67, 84, 71, 67, 65, 67, 84, 67, 67, 65, 71, 67, 67, 84, 71, 71, 71, 67, 71, 65, 67, 65, 71, 65, 71, 67, 71, 65, 71, 65, 67, 84, 67, 67, 71, 84, 67, 84, 67, 65, 65, 65, 65, 65] in
+let aluBytes = [71L, 71L, 67L, 67L, 71L, 71L, 71L, 67L, 71L, 67L, 71L, 71L, 84L, 71L, 71L, 67L, 84L, 67L, 65L, 67L, 71L, 67L, 67L, 84L, 71L, 84L, 65L, 65L, 84L, 67L, 67L, 67L, 65L, 71L, 67L, 65L, 67L, 84L, 84L, 84L, 71L, 71L, 71L, 65L, 71L, 71L, 67L, 67L, 71L, 65L, 71L, 71L, 67L, 71L, 71L, 71L, 67L, 71L, 71L, 65L, 84L, 67L, 65L, 67L, 67L, 84L, 71L, 65L, 71L, 71L, 84L, 67L, 65L, 71L, 71L, 65L, 71L, 84L, 84L, 67L, 71L, 65L, 71L, 65L, 67L, 67L, 65L, 71L, 67L, 67L, 84L, 71L, 71L, 67L, 67L, 65L, 65L, 67L, 65L, 84L, 71L, 71L, 84L, 71L, 65L, 65L, 65L, 67L, 67L, 67L, 67L, 71L, 84L, 67L, 84L, 67L, 84L, 65L, 67L, 84L, 65L, 65L, 65L, 65L, 65L, 84L, 65L, 67L, 65L, 65L, 65L, 65L, 65L, 84L, 84L, 65L, 71L, 67L, 67L, 71L, 71L, 71L, 67L, 71L, 84L, 71L, 71L, 84L, 71L, 71L, 67L, 71L, 67L, 71L, 67L, 71L, 67L, 67L, 84L, 71L, 84L, 65L, 65L, 84L, 67L, 67L, 67L, 65L, 71L, 67L, 84L, 65L, 67L, 84L, 67L, 71L, 71L, 71L, 65L, 71L, 71L, 67L, 84L, 71L, 65L, 71L, 71L, 67L, 65L, 71L, 71L, 65L, 71L, 65L, 65L, 84L, 67L, 71L, 67L, 84L, 84L, 71L, 65L, 65L, 67L, 67L, 67L, 71L, 71L, 71L, 65L, 71L, 71L, 67L, 71L, 71L, 65L, 71L, 71L, 84L, 84L, 71L, 67L, 65L, 71L, 84L, 71L, 65L, 71L, 67L, 67L, 71L, 65L, 71L, 65L, 84L, 67L, 71L, 67L, 71L, 67L, 67L, 65L, 67L, 84L, 71L, 67L, 65L, 67L, 84L, 67L, 67L, 65L, 71L, 67L, 67L, 84L, 71L, 71L, 71L, 67L, 71L, 65L, 67L, 65L, 71L, 65L, 71L, 67L, 71L, 65L, 71L, 65L, 67L, 84L, 67L, 67L, 71L, 84L, 67L, 84L, 67L, 65L, 65L, 65L, 65L, 65L] in
 let n = benchmarkArg(0I) in
-let iub = [(97, 0.27), (99, 0.12), (103, 0.12), (116, 0.27), (66, 0.02), (68, 0.02), (72, 0.02), (75, 0.02), (77, 0.02), (78, 0.02), (82, 0.02), (83, 0.02), (86, 0.02), (87, 0.02), (89, 0.02)] in
-let homosapiens = [(97, 0.3029549426680), (99, 0.1979883004921), (103, 0.1975473066391), (116, 0.3015094502008)] in
+let iub = [(97L, 0.27), (99L, 0.12), (103L, 0.12), (116L, 0.27), (66L, 0.02), (68L, 0.02), (72L, 0.02), (75L, 0.02), (77L, 0.02), (78L, 0.02), (82L, 0.02), (83L, 0.02), (86L, 0.02), (87L, 0.02), (89L, 0.02)] in
+let homosapiens = [(97L, 0.3029549426680), (99L, 0.1979883004921), (103L, 0.1975473066391), (116L, 0.3015094502008)] in
 let iubCum = makeCumulative(iub, 0.0) in
 let homoCum = makeCumulative(homosapiens, 0.0) in
-let c1 = makeRepeatFasta(aluBytes, n * 2, 0, 0) in
-let result2 = makeRandomFasta(n * 3, iubCum, 42, 0, 0) in
+let c1 = makeRepeatFasta(aluBytes, n * 2L, 0L, 0L) in
+let result2 = makeRandomFasta(n * 3L, iubCum, 42L, 0L, 0L) in
 let c2 = Stdlib.Tuple2.first<Int64, Int64>(result2) in
 let seed2 = Stdlib.Tuple2.second<Int64, Int64>(result2) in
-let result3 = makeRandomFasta(n * 5, homoCum, seed2, 0, 0) in
+let result3 = makeRandomFasta(n * 5L, homoCum, seed2, 0L, 0L) in
 let c3 = Stdlib.Tuple2.first<Int64, Int64>(result3) in
-let total = (c1 + c2 + c3) % 1000000007 in
+let total = (c1 + c2 + c3) % 1000000007L in
 Builtin.printLine(Stdlib.Int64.toString(total))

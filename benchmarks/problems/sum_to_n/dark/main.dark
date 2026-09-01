@@ -1,14 +1,14 @@
 let sumTo(n: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc
-    else sumTo(n - 1, acc + n)
+    if n <= 0L then acc
+    else sumTo(n - 1L, acc + n)
 
 let repeat(n: Int64, sumInput: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc
-    else repeat(n - 1, sumInput, sumTo(sumInput, 0))
+    if n <= 0L then acc
+    else repeat(n - 1L, sumInput, sumTo(sumInput, 0L))
 
 let benchmarkArg(index: Int) : Int64 =
     match Stdlib.Cli.Args.int64(index) with
     | Ok(value) -> value
     | Error(message) -> Builtin.testRuntimeError(message)
 
-Builtin.printLine(Stdlib.Int64.toString(repeat(benchmarkArg(0I), benchmarkArg(1I), 0)))
+Builtin.printLine(Stdlib.Int64.toString(repeat(benchmarkArg(0I), benchmarkArg(1I), 0L)))

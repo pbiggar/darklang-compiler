@@ -4,44 +4,44 @@
 // matching the separate multiplication and checksum stages in Rust.
 
 let nextRand(x: Int64) : Int64 =
-    (x * 1103515245 + 12345) % 2147483648
+    (x * 1103515245L + 12345L) % 2147483648L
 
 let generateMatrixValues(remaining: Int64, index: Int64, seed: Int64, values: Dict<Int64, Int64>) : Dict<Int64, Int64> =
-    if remaining <= 0 then values
+    if remaining <= 0L then values
     else
         let next = nextRand(seed) in
-        generateMatrixValues(remaining - 1, index + 1, next, Stdlib.Internal.HAMT.__setOverwriting<Int64, Int64>(values, index, next % 100))
+        generateMatrixValues(remaining - 1L, index + 1L, next, Stdlib.Internal.HAMT.__setOverwriting<Int64, Int64>(values, index, next % 100L))
 
 let matrixValue(values: Dict<Int64, Int64>, index: Int64) : Int64 =
-    Stdlib.Internal.HAMT.__getOrDefault<Int64, Int64>(values, index, 0)
+    Stdlib.Internal.HAMT.__getOrDefault<Int64, Int64>(values, index, 0L)
 
 let dotCell(a: Dict<Int64, Int64>, b: Dict<Int64, Int64>, n: Int64, i: Int64, j: Int64, k: Int64, acc: Int64) : Int64 =
     if k >= n then acc
     else
         let aValue = matrixValue(a, i * n + k) in
         let bValue = matrixValue(b, k * n + j) in
-        dotCell(a, b, n, i, j, k + 1, acc + aValue * bValue)
+        dotCell(a, b, n, i, j, k + 1L, acc + aValue * bValue)
 
 let multiplyCells(a: Dict<Int64, Int64>, b: Dict<Int64, Int64>, n: Int64, i: Int64, j: Int64, result: Dict<Int64, Int64>) : Dict<Int64, Int64> =
     if i >= n then result
-    else if j >= n then multiplyCells(a, b, n, i + 1, 0, result)
+    else if j >= n then multiplyCells(a, b, n, i + 1L, 0L, result)
     else
-        let cell = dotCell(a, b, n, i, j, 0, 0) in
+        let cell = dotCell(a, b, n, i, j, 0L, 0L) in
         let index = i * n + j in
         let updated = Stdlib.Internal.HAMT.__setOverwriting<Int64, Int64>(result, index, cell) in
-        multiplyCells(a, b, n, i, j + 1, updated)
+        multiplyCells(a, b, n, i, j + 1L, updated)
 
 let checksumCells(result: Dict<Int64, Int64>, total: Int64, index: Int64, acc: Int64) : Int64 =
     if index >= total then acc
     else
         let cell = matrixValue(result, index) in
-        checksumCells(result, total, index + 1, (acc + cell * (index + 1)) % 1000000007)
+        checksumCells(result, total, index + 1L, (acc + cell * (index + 1L)) % 1000000007L)
 
 let matmulChecksum(n: Int64) : Int64 =
-    let a = generateMatrixValues(n * n, 0, 42, Stdlib.Internal.HAMT.__empty<Int64, Int64>()) in
-    let b = generateMatrixValues(n * n, 0, 123, Stdlib.Internal.HAMT.__empty<Int64, Int64>()) in
-    let result = multiplyCells(a, b, n, 0, 0, Stdlib.Internal.HAMT.__empty<Int64, Int64>()) in
-    checksumCells(result, n * n, 0, 0)
+    let a = generateMatrixValues(n * n, 0L, 42L, Stdlib.Internal.HAMT.__empty<Int64, Int64>()) in
+    let b = generateMatrixValues(n * n, 0L, 123L, Stdlib.Internal.HAMT.__empty<Int64, Int64>()) in
+    let result = multiplyCells(a, b, n, 0L, 0L, Stdlib.Internal.HAMT.__empty<Int64, Int64>()) in
+    checksumCells(result, n * n, 0L, 0L)
 
 let benchmarkArg(index: Int) : Int64 =
     match Stdlib.Cli.Args.int64(index) with
