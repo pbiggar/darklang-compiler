@@ -141,7 +141,7 @@
     },
     "quicksort": {
       "status": "comparable",
-      "dark_sha256": "1bba415fdf2be26af38e336c8831a7d5234a4d451013324a82608a0257137a3a3",
+      "dark_sha256": "1bba415fdf2be26af38e336c8831a7d5234a4d451013324a82608a0257137a3a",
       "rust_sha256": "148f63961f9a8568d9f66ae2f49e3a4d097398b547cf316e3fcf20bce2af5452",
       "quick": {
         "status": "comparable"
