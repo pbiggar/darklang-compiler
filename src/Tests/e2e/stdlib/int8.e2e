@@ -13,31 +13,31 @@ Stdlib.Int8.add(-5y, 5y) = 0y
 Stdlib.Int8.add(100y, 20y) = 120y
 
 // ===================================================================
-// Stdlib.Int8.sub - Subtract two integers
+// Stdlib.Int8.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.Int8.sub(10y, 9y) = 1y
-Stdlib.Int8.sub(0y, 0y) = 0y
-Stdlib.Int8.sub(100y, 50y) = 50y
-Stdlib.Int8.sub(5y, 10y) = -5y
+Stdlib.Int8.subtract(10y, 9y) = 1y
+Stdlib.Int8.subtract(0y, 0y) = 0y
+Stdlib.Int8.subtract(100y, 50y) = 50y
+Stdlib.Int8.subtract(5y, 10y) = -5y
 
 // ===================================================================
-// Stdlib.Int8.mul - Multiply two integers
+// Stdlib.Int8.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.Int8.mul(8y, 8y) = 64y
-Stdlib.Int8.mul(0y, 100y) = 0y
-Stdlib.Int8.mul(-5y, 5y) = -25y
-Stdlib.Int8.mul(10y, 10y) = 100y
+Stdlib.Int8.multiply(8y, 8y) = 64y
+Stdlib.Int8.multiply(0y, 100y) = 0y
+Stdlib.Int8.multiply(-5y, 5y) = -25y
+Stdlib.Int8.multiply(10y, 10y) = 100y
 
 // ===================================================================
-// Stdlib.Int8.div - Divide two integers
+// Stdlib.Int8.divide - Divide two integers
 // ===================================================================
 
-Stdlib.Int8.div(10y, 5y) = 2y
-Stdlib.Int8.div(10y, 3y) = 3y
-Stdlib.Int8.div(100y, 10y) = 10y
-Stdlib.Int8.div(-10y, 2y) = -5y
+Stdlib.Int8.divide(10y, 5y) = 2y
+Stdlib.Int8.divide(10y, 3y) = 3y
+Stdlib.Int8.divide(100y, 10y) = 10y
+Stdlib.Int8.divide(-10y, 2y) = -5y
 
 // ===================================================================
 // Stdlib.Int8.mod - Modulo operation
@@ -151,25 +151,11 @@ Stdlib.Int8.toString(120y) = "120"
 // Stdlib.Int8.isEven - Check if integer is even
 // ===================================================================
 
-Stdlib.Int8.isEven(0y) = true
-Stdlib.Int8.isEven(2y) = true
-Stdlib.Int8.isEven(4y) = true
-Stdlib.Int8.isEven(-2y) = true
-Stdlib.Int8.isEven(1y) = false
-Stdlib.Int8.isEven(3y) = false
-Stdlib.Int8.isEven(-1y) = false
 
 // ===================================================================
 // Stdlib.Int8.isOdd - Check if integer is odd
 // ===================================================================
 
-Stdlib.Int8.isOdd(1y) = true
-Stdlib.Int8.isOdd(3y) = true
-Stdlib.Int8.isOdd(-1y) = true
-Stdlib.Int8.isOdd(0y) = false
-Stdlib.Int8.isOdd(2y) = false
-Stdlib.Int8.isOdd(4y) = false
-Stdlib.Int8.isOdd(-2y) = false
 
 // ===================================================================
 // Stdlib.Int8.sum - Sum all integers in a list

@@ -11,16 +11,13 @@ type ParseError = BadFormat | OutOfRange
 let add(a: Int32, b: Int32) : Int32 = a + b
 
 let subtract(a: Int32, b: Int32) : Int32 = a - b
-let sub(a: Int32, b: Int32) : Int32 = Stdlib.Int32.subtract(a, b)
 
 let multiply(a: Int32, b: Int32) : Int32 = a * b
-let mul(a: Int32, b: Int32) : Int32 = Stdlib.Int32.multiply(a, b)
 
 let divide(a: Int32, b: Int32) : Int32 =
     if b == 0l then Builtin.crash("Cannot divide by 0")
     else if a == -2147483648l && b == -1l then -2147483648l
     else a / b
-let div(a: Int32, b: Int32) : Int32 = Stdlib.Int32.divide(a, b)
 
 let max(a: Int32, b: Int32) : Int32 = if a > b then a else b
 
@@ -76,7 +73,7 @@ let bitwiseNot(a: Int32) : Int32 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: Int32) : Int32 =
+let __popcount(x: Int32) : Int32 =
     let mask1 = 1431655765l in
     let mask2 = 858993459l in
     let mask3 = 252645135l in
@@ -88,7 +85,7 @@ let popcount(x: Int32) : Int32 =
     let x = x + (x >> 16l) in
     x & mask4
 
-// Convert a single digit (0-9) to its string representation
+// Convert a single digit (0l-9l) to its string representation
 let __digitToString(n: Int32) : String =
     match n with
     | 0l -> "0"
@@ -101,7 +98,7 @@ let __digitToString(n: Int32) : String =
     | 7l -> "7"
     | 8l -> "8"
     | 9l -> "9"
-    | _ -> Builtin.crash("Stdlib.Int32.__digitToString expected a digit from 0 to 9")
+    | _ -> Builtin.crash("Stdlib.Int32.__digitToString expected a digit from 0l to 9")
 
 // Convert an integer to its string representation
 let toString(n: Int32) : String =
@@ -112,14 +109,6 @@ let toString(n: Int32) : String =
         else "-" ++ Stdlib.Int32.__digitToString(0l - n)
     else if n < 10l then Stdlib.Int32.__digitToString(n)
     else Stdlib.Int32.toString(n / 10l) ++ Stdlib.Int32.__digitToString(n % 10l)
-
-// Check if integer is even
-let isEven(n: Int32) : Bool =
-    (n % 2l) == 0l
-
-// Check if integer is odd
-let isOdd(n: Int32) : Bool =
-    (n % 2l) != 0l
 
 // Sum all integers in a list
 let sum(list: List<Int32>) : Int32 =

@@ -152,25 +152,11 @@ Stdlib.Int16.toString(12345s) = "12345"
 // Stdlib.Int16.isEven - Check if integer is even
 // ===================================================================
 
-Stdlib.Int16.isEven(0s) = true
-Stdlib.Int16.isEven(2s) = true
-Stdlib.Int16.isEven(4s) = true
-Stdlib.Int16.isEven(-2s) = true
-Stdlib.Int16.isEven(1s) = false
-Stdlib.Int16.isEven(3s) = false
-Stdlib.Int16.isEven(-1s) = false
 
 // ===================================================================
 // Stdlib.Int16.isOdd - Check if integer is odd
 // ===================================================================
 
-Stdlib.Int16.isOdd(1s) = true
-Stdlib.Int16.isOdd(3s) = true
-Stdlib.Int16.isOdd(-1s) = true
-Stdlib.Int16.isOdd(0s) = false
-Stdlib.Int16.isOdd(2s) = false
-Stdlib.Int16.isOdd(4s) = false
-Stdlib.Int16.isOdd(-2s) = false
 
 // ===================================================================
 // Stdlib.Int16.sum - Sum all integers in a list

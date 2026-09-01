@@ -13,31 +13,31 @@ Stdlib.Int64.add(-5L, 5L) = 0L
 Stdlib.Int64.add(100L, 200L) = 300L
 
 // ===================================================================
-// Stdlib.Int64.sub - Subtract two integers
+// Stdlib.Int64.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.Int64.sub(10L, 9L) = 1L
-Stdlib.Int64.sub(0L, 0L) = 0L
-Stdlib.Int64.sub(100L, 50L) = 50L
-Stdlib.Int64.sub(5L, 10L) = -5L
+Stdlib.Int64.subtract(10L, 9L) = 1L
+Stdlib.Int64.subtract(0L, 0L) = 0L
+Stdlib.Int64.subtract(100L, 50L) = 50L
+Stdlib.Int64.subtract(5L, 10L) = -5L
 
 // ===================================================================
-// Stdlib.Int64.mul - Multiply two integers
+// Stdlib.Int64.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.Int64.mul(8L, 8L) = 64L
-Stdlib.Int64.mul(0L, 100L) = 0L
-Stdlib.Int64.mul(-5L, 5L) = -25L
-Stdlib.Int64.mul(100L, 100L) = 10000L
+Stdlib.Int64.multiply(8L, 8L) = 64L
+Stdlib.Int64.multiply(0L, 100L) = 0L
+Stdlib.Int64.multiply(-5L, 5L) = -25L
+Stdlib.Int64.multiply(100L, 100L) = 10000L
 
 // ===================================================================
-// Stdlib.Int64.div - Divide two integers
+// Stdlib.Int64.divide - Divide two integers
 // ===================================================================
 
-Stdlib.Int64.div(10L, 5L) = 2L
-Stdlib.Int64.div(10L, 3L) = 3L
-Stdlib.Int64.div(100L, 10L) = 10L
-Stdlib.Int64.div(-10L, 2L) = -5L
+Stdlib.Int64.divide(10L, 5L) = 2L
+Stdlib.Int64.divide(10L, 3L) = 3L
+Stdlib.Int64.divide(100L, 10L) = 10L
+Stdlib.Int64.divide(-10L, 2L) = -5L
 
 // ===================================================================
 // Stdlib.Int64.mod - Modulo operation
@@ -152,25 +152,11 @@ Stdlib.Int64.toString(1234567890L) = "1234567890"
 // Stdlib.Int64.isEven - Check if integer is even
 // ===================================================================
 
-Stdlib.Int64.isEven(0L) = true
-Stdlib.Int64.isEven(2L) = true
-Stdlib.Int64.isEven(4L) = true
-Stdlib.Int64.isEven(-2L) = true
-Stdlib.Int64.isEven(1L) = false
-Stdlib.Int64.isEven(3L) = false
-Stdlib.Int64.isEven(-1L) = false
 
 // ===================================================================
 // Stdlib.Int64.isOdd - Check if integer is odd
 // ===================================================================
 
-Stdlib.Int64.isOdd(1L) = true
-Stdlib.Int64.isOdd(3L) = true
-Stdlib.Int64.isOdd(-1L) = true
-Stdlib.Int64.isOdd(0L) = false
-Stdlib.Int64.isOdd(2L) = false
-Stdlib.Int64.isOdd(4L) = false
-Stdlib.Int64.isOdd(-2L) = false
 
 // ===================================================================
 // Stdlib.Int64.sum - Sum all integers in a list

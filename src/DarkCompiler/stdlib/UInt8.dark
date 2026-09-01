@@ -11,13 +11,10 @@ type ParseError = BadFormat | OutOfRange
 let add(a: UInt8, b: UInt8) : UInt8 = a + b
 
 let subtract(a: UInt8, b: UInt8) : UInt8 = a - b
-let sub(a: UInt8, b: UInt8) : UInt8 = Stdlib.UInt8.subtract(a, b)
 
 let multiply(a: UInt8, b: UInt8) : UInt8 = a * b
-let mul(a: UInt8, b: UInt8) : UInt8 = Stdlib.UInt8.multiply(a, b)
 
 let divide(a: UInt8, b: UInt8) : UInt8 = if b == 0uy then Builtin.crash("Cannot divide by 0") else a / b
-let div(a: UInt8, b: UInt8) : UInt8 = Stdlib.UInt8.divide(a, b)
 
 let max(a: UInt8, b: UInt8) : UInt8 = if a > b then a else b
 
@@ -64,7 +61,7 @@ let bitwiseNot(a: UInt8) : UInt8 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: UInt8) : UInt8 =
+let __popcount(x: UInt8) : UInt8 =
     let mask1 = 85uy in
     let mask2 = 51uy in
     let mask3 = 15uy in
@@ -73,7 +70,7 @@ let popcount(x: UInt8) : UInt8 =
     let x = (x + (x >> 4uy)) & mask3 in
     x
 
-// Convert a single digit (0-9) to its string representation
+// Convert a single digit (0uy-9uy) to its string representation
 let __digitToString(n: UInt8) : String =
     match n with
     | 0uy -> "0"
@@ -92,14 +89,6 @@ let __digitToString(n: UInt8) : String =
 let toString(n: UInt8) : String =
     if n < 10uy then Stdlib.UInt8.__digitToString(n)
     else Stdlib.UInt8.toString(n / 10uy) ++ Stdlib.UInt8.__digitToString(n % 10uy)
-
-// Check if integer is even
-let isEven(n: UInt8) : Bool =
-    (n % 2uy) == 0uy
-
-// Check if integer is odd
-let isOdd(n: UInt8) : Bool =
-    (n % 2uy) != 0uy
 
 // Sum all integers in a list
 let sum(list: List<UInt8>) : UInt8 =

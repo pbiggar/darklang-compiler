@@ -15,31 +15,31 @@ Stdlib.UInt64.add(5UL, 5UL) = 10UL
 Stdlib.UInt64.add(100UL, 200UL) = 300UL
 
 // ===================================================================
-// Stdlib.UInt64.sub - Subtract two integers
+// Stdlib.UInt64.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.UInt64.sub(10UL, 9UL) = 1UL
-Stdlib.UInt64.sub(10UL, 0UL) = 10UL
-Stdlib.UInt64.sub(100UL, 50UL) = 50UL
-Stdlib.UInt64.sub(5UL, 0UL) = 5UL
+Stdlib.UInt64.subtract(10UL, 9UL) = 1UL
+Stdlib.UInt64.subtract(10UL, 0UL) = 10UL
+Stdlib.UInt64.subtract(100UL, 50UL) = 50UL
+Stdlib.UInt64.subtract(5UL, 0UL) = 5UL
 
 // ===================================================================
-// Stdlib.UInt64.mul - Multiply two integers
+// Stdlib.UInt64.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.UInt64.mul(8UL, 8UL) = 64UL
-Stdlib.UInt64.mul(0UL, 100UL) = 0UL
-Stdlib.UInt64.mul(5UL, 5UL) = 25UL
-Stdlib.UInt64.mul(100UL, 100UL) = 10000UL
+Stdlib.UInt64.multiply(8UL, 8UL) = 64UL
+Stdlib.UInt64.multiply(0UL, 100UL) = 0UL
+Stdlib.UInt64.multiply(5UL, 5UL) = 25UL
+Stdlib.UInt64.multiply(100UL, 100UL) = 10000UL
 
 // ===================================================================
-// Stdlib.UInt64.div - Divide two integers
+// Stdlib.UInt64.divide - Divide two integers
 // ===================================================================
 
-Stdlib.UInt64.div(10UL, 5UL) = 2UL
-Stdlib.UInt64.div(10UL, 3UL) = 3UL
-Stdlib.UInt64.div(100UL, 10UL) = 10UL
-Stdlib.UInt64.div(10UL, 2UL) = 5UL
+Stdlib.UInt64.divide(10UL, 5UL) = 2UL
+Stdlib.UInt64.divide(10UL, 3UL) = 3UL
+Stdlib.UInt64.divide(100UL, 10UL) = 10UL
+Stdlib.UInt64.divide(10UL, 2UL) = 5UL
 
 // ===================================================================
 // Stdlib.UInt64.mod - Modulo operation
@@ -107,9 +107,6 @@ Stdlib.UInt64.bitwiseXor(12UL, 10UL) = 6UL
 Stdlib.UInt64.bitwiseNot(0UL) = 18446744073709551615UL
 Stdlib.UInt64.shiftLeft(1UL, 4UL) = 16UL
 Stdlib.UInt64.shiftRight(16UL, 4UL) = 1UL
-Stdlib.UInt64.popcount(0UL) = 0UL
-Stdlib.UInt64.popcount(18446744073709551615UL) = 64UL
-Stdlib.UInt64.popcount(1085102592571150095UL) = 32UL
 
 // ===================================================================
 // Stdlib.UInt64.clamp - Clamp value between limits
@@ -169,25 +166,11 @@ Stdlib.UInt64.toString(18446744073709551615UL) = "18446744073709551615"
 // Stdlib.UInt64.isEven - Check if integer is even
 // ===================================================================
 
-Stdlib.UInt64.isEven(0UL) = true
-Stdlib.UInt64.isEven(2UL) = true
-Stdlib.UInt64.isEven(4UL) = true
-Stdlib.UInt64.isEven(6UL) = true
-Stdlib.UInt64.isEven(1UL) = false
-Stdlib.UInt64.isEven(3UL) = false
-Stdlib.UInt64.isEven(5UL) = false
 
 // ===================================================================
 // Stdlib.UInt64.isOdd - Check if integer is odd
 // ===================================================================
 
-Stdlib.UInt64.isOdd(1UL) = true
-Stdlib.UInt64.isOdd(3UL) = true
-Stdlib.UInt64.isOdd(5UL) = true
-Stdlib.UInt64.isOdd(0UL) = false
-Stdlib.UInt64.isOdd(2UL) = false
-Stdlib.UInt64.isOdd(4UL) = false
-Stdlib.UInt64.isOdd(6UL) = false
 
 // ===================================================================
 // Stdlib.UInt64.sum - Sum all integers in a list

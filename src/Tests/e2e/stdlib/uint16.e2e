@@ -154,10 +154,6 @@ Stdlib.UInt16.shiftRight(43690us, 1us) = 21845us
 Stdlib.UInt16.bitwiseNot(0us) = 65535us
 Stdlib.UInt16.bitwiseNot(65535us) = 0us
 Stdlib.UInt16.bitwiseNot(43690us) = 21845us
-Stdlib.UInt16.popcount(0us) = 0us
-Stdlib.UInt16.popcount(65535us) = 16us
-Stdlib.UInt16.popcount(43690us) = 8us
-Stdlib.UInt16.popcount(3855us) = 8us
 
 // ===================================================================
 // Stdlib.UInt16.toString - Convert integer to string
@@ -172,25 +168,11 @@ Stdlib.UInt16.toString(12345us) = "12345"
 // Stdlib.UInt16.isEven - Check if integer is even
 // ===================================================================
 
-Stdlib.UInt16.isEven(0us) = true
-Stdlib.UInt16.isEven(2us) = true
-Stdlib.UInt16.isEven(4us) = true
-Stdlib.UInt16.isEven(6us) = true
-Stdlib.UInt16.isEven(1us) = false
-Stdlib.UInt16.isEven(3us) = false
-Stdlib.UInt16.isEven(5us) = false
 
 // ===================================================================
 // Stdlib.UInt16.isOdd - Check if integer is odd
 // ===================================================================
 
-Stdlib.UInt16.isOdd(1us) = true
-Stdlib.UInt16.isOdd(3us) = true
-Stdlib.UInt16.isOdd(5us) = true
-Stdlib.UInt16.isOdd(0us) = false
-Stdlib.UInt16.isOdd(2us) = false
-Stdlib.UInt16.isOdd(4us) = false
-Stdlib.UInt16.isOdd(6us) = false
 
 // ===================================================================
 // Stdlib.UInt16.sum - Sum all integers in a list

@@ -11,24 +11,24 @@ let __text(value: Int) : String = __int_to_string(value)
 let __value(value: String) : Int = __string_to_int(value)
 
 let __isNegativeText(value: String) : Bool =
-    Stdlib.String.__byteLength(value) > 0 && Stdlib.String.getByteAt(value, 0) == 45
+    Stdlib.String.__byteLength(value) > 0L && Stdlib.String.getByteAt(value, 0L) == 45L
 
 let __magnitudeText(value: String) : String =
     if Stdlib.Internal.Integer.__isNegativeText(value) then
-        Stdlib.String.__byteDrop(value, 1)
+        Stdlib.String.__byteDrop(value, 1L)
     else
         value
 
 let __dropLeadingZeros(value: String, index: Int64) : String =
     let length = Stdlib.String.__byteLength(value) in
     if index >= length then "0"
-    else if Stdlib.String.getByteAt(value, index) == 48 then
-        Stdlib.Internal.Integer.__dropLeadingZeros(value, index + 1)
+    else if Stdlib.String.getByteAt(value, index) == 48L then
+        Stdlib.Internal.Integer.__dropLeadingZeros(value, index + 1L)
     else
         Stdlib.String.__byteDrop(value, index)
 
 let __normalizeMagnitude(value: String) : String =
-    Stdlib.Internal.Integer.__dropLeadingZeros(value, 0)
+    Stdlib.Internal.Integer.__dropLeadingZeros(value, 0L)
 
 let __withSign(negative: Bool, magnitude: String) : String =
     let normalized = Stdlib.Internal.Integer.__normalizeMagnitude(magnitude) in
@@ -39,90 +39,90 @@ let __withSign(negative: Bool, magnitude: String) : String =
     else "" ++ normalized
 
 let __compareMagnitudeAt(a: String, b: String, index: Int64, length: Int64) : Int64 =
-    if index >= length then 0
+    if index >= length then 0L
     else
         let da = Stdlib.String.getByteAt(a, index) in
         let db = Stdlib.String.getByteAt(b, index) in
-        if da < db then -1
-        else if da > db then 1
-        else Stdlib.Internal.Integer.__compareMagnitudeAt(a, b, index + 1, length)
+        if da < db then -1L
+        else if da > db then 1L
+        else Stdlib.Internal.Integer.__compareMagnitudeAt(a, b, index + 1L, length)
 
 let __compareMagnitude(a: String, b: String) : Int64 =
     let an = Stdlib.Internal.Integer.__normalizeMagnitude(a) in
     let bn = Stdlib.Internal.Integer.__normalizeMagnitude(b) in
     let alen = Stdlib.String.__byteLength(an) in
     let blen = Stdlib.String.__byteLength(bn) in
-    if alen < blen then -1
-    else if alen > blen then 1
-    else Stdlib.Internal.Integer.__compareMagnitudeAt(an, bn, 0, alen)
+    if alen < blen then -1L
+    else if alen > blen then 1L
+    else Stdlib.Internal.Integer.__compareMagnitudeAt(an, bn, 0L, alen)
 
 let __compareText(a: String, b: String) : Int64 =
     let aneg = Stdlib.Internal.Integer.__isNegativeText(a) in
     let bneg = Stdlib.Internal.Integer.__isNegativeText(b) in
-    if aneg && !bneg then -1
-    else if !aneg && bneg then 1
+    if aneg && !bneg then -1L
+    else if !aneg && bneg then 1L
     else
         let magnitudeComparison =
             Stdlib.Internal.Integer.__compareMagnitude(
                 Stdlib.Internal.Integer.__magnitudeText(a),
                 Stdlib.Internal.Integer.__magnitudeText(b)) in
-        if aneg then 0 - magnitudeComparison else magnitudeComparison
+        if aneg then 0L - magnitudeComparison else magnitudeComparison
 
 let compare(a: Int, b: Int) : Int64 =
     Stdlib.Internal.Integer.__compareText(Stdlib.Internal.Integer.__text(a), Stdlib.Internal.Integer.__text(b))
 
-let equals(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) == 0
-let lessThan(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) < 0
-let lessThanOrEqualTo(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) <= 0
-let greaterThan(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) > 0
-let greaterThanOrEqualTo(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) >= 0
+let equals(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) == 0L
+let lessThan(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) < 0L
+let lessThanOrEqualTo(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) <= 0L
+let greaterThan(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) > 0L
+let greaterThanOrEqualTo(a: Int, b: Int) : Bool = Stdlib.Internal.Integer.compare(a, b) >= 0L
 
 let __addMagnitudeAt(a: String, ai: Int64, b: String, bi: Int64, carry: Int64, acc: String) : String =
-    if ai < 0 && bi < 0 then
-        if carry == 0 then acc else Stdlib.Int64.__digitToString(carry) ++ acc
+    if ai < 0L && bi < 0L then
+        if carry == 0L then acc else Stdlib.Int64.__digitToString(carry) ++ acc
     else
-        let da = if ai < 0 then 0 else Stdlib.String.getByteAt(a, ai) - 48 in
-        let db = if bi < 0 then 0 else Stdlib.String.getByteAt(b, bi) - 48 in
+        let da = if ai < 0L then 0L else Stdlib.String.getByteAt(a, ai) - 48L in
+        let db = if bi < 0L then 0L else Stdlib.String.getByteAt(b, bi) - 48L in
         let sum = da + db + carry in
         Stdlib.Internal.Integer.__addMagnitudeAt(
             a,
-            ai - 1,
+            ai - 1L,
             b,
-            bi - 1,
-            sum / 10,
-            Stdlib.Int64.__digitToString(sum % 10) ++ acc)
+            bi - 1L,
+            sum / 10L,
+            Stdlib.Int64.__digitToString(sum % 10L) ++ acc)
 
 let __addMagnitude(a: String, b: String) : String =
     Stdlib.Internal.Integer.__addMagnitudeAt(
         a,
-        Stdlib.String.__byteLength(a) - 1,
+        Stdlib.String.__byteLength(a) - 1L,
         b,
-        Stdlib.String.__byteLength(b) - 1,
-        0,
+        Stdlib.String.__byteLength(b) - 1L,
+        0L,
         "")
 
 let __subtractMagnitudeAt(a: String, ai: Int64, b: String, bi: Int64, borrow: Int64, acc: String) : String =
-    if ai < 0 then Stdlib.Internal.Integer.__normalizeMagnitude(acc)
+    if ai < 0L then Stdlib.Internal.Integer.__normalizeMagnitude(acc)
     else
-        let da = Stdlib.String.getByteAt(a, ai) - 48 - borrow in
-        let db = if bi < 0 then 0 else Stdlib.String.getByteAt(b, bi) - 48 in
+        let da = Stdlib.String.getByteAt(a, ai) - 48L - borrow in
+        let db = if bi < 0L then 0L else Stdlib.String.getByteAt(b, bi) - 48L in
         let needsBorrow = da < db in
-        let digit = if needsBorrow then da + 10 - db else da - db in
+        let digit = if needsBorrow then da + 10L - db else da - db in
         Stdlib.Internal.Integer.__subtractMagnitudeAt(
             a,
-            ai - 1,
+            ai - 1L,
             b,
-            bi - 1,
-            if needsBorrow then 1 else 0,
+            bi - 1L,
+            if needsBorrow then 1L else 0L,
             Stdlib.Int64.__digitToString(digit) ++ acc)
 
 let __subtractMagnitude(a: String, b: String) : String =
     Stdlib.Internal.Integer.__subtractMagnitudeAt(
         a,
-        Stdlib.String.__byteLength(a) - 1,
+        Stdlib.String.__byteLength(a) - 1L,
         b,
-        Stdlib.String.__byteLength(b) - 1,
-        0,
+        Stdlib.String.__byteLength(b) - 1L,
+        0L,
         "")
 
 let __addText(a: String, b: String) : String =
@@ -134,8 +134,8 @@ let __addText(a: String, b: String) : String =
         Stdlib.Internal.Integer.__withSign(aneg, Stdlib.Internal.Integer.__addMagnitude(amag, bmag))
     else
         let comparison = Stdlib.Internal.Integer.__compareMagnitude(amag, bmag) in
-        if comparison == 0 then "0"
-        else if comparison > 0 then
+        if comparison == 0L then "0"
+        else if comparison > 0L then
             Stdlib.Internal.Integer.__withSign(aneg, Stdlib.Internal.Integer.__subtractMagnitude(amag, bmag))
         else
             Stdlib.Internal.Integer.__withSign(bneg, Stdlib.Internal.Integer.__subtractMagnitude(bmag, amag))
@@ -146,38 +146,38 @@ let add(a: Int, b: Int) : Int =
 let negate(value: Int) : Int =
     let text = Stdlib.Internal.Integer.__text(value) in
     if text == "0" then value
-    else if Stdlib.Internal.Integer.__isNegativeText(text) then Stdlib.Internal.Integer.__value(Stdlib.String.__byteDrop(text, 1))
+    else if Stdlib.Internal.Integer.__isNegativeText(text) then Stdlib.Internal.Integer.__value(Stdlib.String.__byteDrop(text, 1L))
     else Stdlib.Internal.Integer.__value("-" ++ text)
 
 let subtract(a: Int, b: Int) : Int = Stdlib.Internal.Integer.add(a, Stdlib.Internal.Integer.negate(b))
 
 let __multiplyMagnitudeByDigitAt(value: String, index: Int64, digit: Int64, carry: Int64, acc: String) : String =
-    if index < 0 then
-        if carry == 0 then Stdlib.Internal.Integer.__normalizeMagnitude(acc)
+    if index < 0L then
+        if carry == 0L then Stdlib.Internal.Integer.__normalizeMagnitude(acc)
         else Stdlib.Int64.toString(carry) ++ acc
     else
-        let product = (Stdlib.String.getByteAt(value, index) - 48) * digit + carry in
+        let product = (Stdlib.String.getByteAt(value, index) - 48L) * digit + carry in
         Stdlib.Internal.Integer.__multiplyMagnitudeByDigitAt(
             value,
-            index - 1,
+            index - 1L,
             digit,
-            product / 10,
-            Stdlib.Int64.__digitToString(product % 10) ++ acc)
+            product / 10L,
+            Stdlib.Int64.__digitToString(product % 10L) ++ acc)
 
 let __multiplyMagnitudeByDigit(value: String, digit: Int64) : String =
-    if digit == 0 then "0"
-    else Stdlib.Internal.Integer.__multiplyMagnitudeByDigitAt(value, Stdlib.String.__byteLength(value) - 1, digit, 0, "")
+    if digit == 0L then "0"
+    else Stdlib.Internal.Integer.__multiplyMagnitudeByDigitAt(value, Stdlib.String.__byteLength(value) - 1L, digit, 0L, "")
 
 let __multiplyMagnitudeAt(a: String, index: Int64, b: String, zeros: String, acc: String) : String =
-    if index < 0 then Stdlib.Internal.Integer.__normalizeMagnitude(acc)
+    if index < 0L then Stdlib.Internal.Integer.__normalizeMagnitude(acc)
     else
-        let digit = Stdlib.String.getByteAt(a, index) - 48 in
+        let digit = Stdlib.String.getByteAt(a, index) - 48L in
         let row = Stdlib.Internal.Integer.__multiplyMagnitudeByDigit(b, digit) ++ zeros in
-        Stdlib.Internal.Integer.__multiplyMagnitudeAt(a, index - 1, b, zeros ++ "0", Stdlib.Internal.Integer.__addMagnitude(acc, row))
+        Stdlib.Internal.Integer.__multiplyMagnitudeAt(a, index - 1L, b, zeros ++ "0", Stdlib.Internal.Integer.__addMagnitude(acc, row))
 
 let __multiplyMagnitude(a: String, b: String) : String =
     if a == "0" || b == "0" then "0"
-    else Stdlib.Internal.Integer.__multiplyMagnitudeAt(a, Stdlib.String.__byteLength(a) - 1, b, "", "0")
+    else Stdlib.Internal.Integer.__multiplyMagnitudeAt(a, Stdlib.String.__byteLength(a) - 1L, b, "", "0")
 
 let multiply(a: Int, b: Int) : Int =
     let at = Stdlib.Internal.Integer.__text(a) in
@@ -191,29 +191,29 @@ let __appendMagnitudeDigit(value: String, digit: Int64) : String =
     else value ++ Stdlib.Int64.__digitToString(digit)
 
 let __quotientDigit(remainder: String, divisor: String, digit: Int64) : (Int64, String) =
-    if digit == 9 || Stdlib.Internal.Integer.__compareMagnitude(remainder, divisor) < 0 then
+    if digit == 9L || Stdlib.Internal.Integer.__compareMagnitude(remainder, divisor) < 0L then
         (digit, remainder)
     else
-        Stdlib.Internal.Integer.__quotientDigit(Stdlib.Internal.Integer.__subtractMagnitude(remainder, divisor), divisor, digit + 1)
+        Stdlib.Internal.Integer.__quotientDigit(Stdlib.Internal.Integer.__subtractMagnitude(remainder, divisor), divisor, digit + 1L)
 
 let __divideMagnitudeAt(dividend: String, index: Int64, divisor: String, quotient: String, remainder: String) : (String, String) =
     if index >= Stdlib.String.__byteLength(dividend) then
         (Stdlib.Internal.Integer.__normalizeMagnitude(quotient), Stdlib.Internal.Integer.__normalizeMagnitude(remainder))
     else
         let nextRemainder =
-            Stdlib.Internal.Integer.__appendMagnitudeDigit(remainder, Stdlib.String.getByteAt(dividend, index) - 48) in
-        let step = Stdlib.Internal.Integer.__quotientDigit(nextRemainder, divisor, 0) in
+            Stdlib.Internal.Integer.__appendMagnitudeDigit(remainder, Stdlib.String.getByteAt(dividend, index) - 48L) in
+        let step = Stdlib.Internal.Integer.__quotientDigit(nextRemainder, divisor, 0L) in
         let quotientDigit = Stdlib.Tuple2.first<Int64, String>(step) in
         let remaining = Stdlib.Tuple2.second<Int64, String>(step) in
         Stdlib.Internal.Integer.__divideMagnitudeAt(
             dividend,
-            index + 1,
+            index + 1L,
             divisor,
             quotient ++ Stdlib.Int64.__digitToString(quotientDigit),
             remaining)
 
 let __divideMagnitude(dividend: String, divisor: String) : (String, String) =
-    Stdlib.Internal.Integer.__divideMagnitudeAt(dividend, 0, divisor, "", "0")
+    Stdlib.Internal.Integer.__divideMagnitudeAt(dividend, 0L, divisor, "", "0")
 
 let divide(a: Int, b: Int) : Int =
     let at = Stdlib.Internal.Integer.__text(a) in
@@ -246,8 +246,8 @@ let mod(value: Int, modulus: Int) : Int =
         | Ok(result) -> if Stdlib.Internal.Integer.lessThan(result, Stdlib.Internal.Integer.__value("0")) then Stdlib.Internal.Integer.add(result, modulus) else result
 
 let __isOddMagnitude(value: String) : Bool =
-    let last = Stdlib.String.getByteAt(value, Stdlib.String.__byteLength(value) - 1) - 48 in
-    last % 2 == 1
+    let last = Stdlib.String.getByteAt(value, Stdlib.String.__byteLength(value) - 1L) - 48L in
+    last % 2L == 1L
 
 let __powerLoop(base: Int, exponentMagnitude: String, result: Int) : Int =
     if exponentMagnitude == "0" then result
@@ -290,7 +290,7 @@ let wrapSigned(value: Int, width: Int64) : Int =
 
 let __validateShiftCount(count: Int) : String =
     let text = Stdlib.Internal.Integer.__text(count) in
-    if Stdlib.Internal.Integer.__isNegativeText(text) || Stdlib.Internal.Integer.__compareMagnitude(text, "2147483647") > 0 then
+    if Stdlib.Internal.Integer.__isNegativeText(text) || Stdlib.Internal.Integer.__compareMagnitude(text, "2147483647") > 0L then
         Builtin.crash("Encountered out-of-range value for type of Int")
     else text
 
@@ -424,15 +424,15 @@ let __validDigits(value: String, index: Int64) : Bool =
     if index >= Stdlib.String.__byteLength(value) then true
     else
         let byte = Stdlib.String.getByteAt(value, index) in
-        byte >= 48 && byte <= 57 && Stdlib.Internal.Integer.__validDigits(value, index + 1)
+        byte >= 48L && byte <= 57L && Stdlib.Internal.Integer.__validDigits(value, index + 1L)
 
 let parse(value: String) : Stdlib.Result.Result<Int, Bool> =
     let input = Stdlib.String.trim(value) in
     let length = Stdlib.String.__byteLength(input) in
-    let first = if length > 0 then Stdlib.String.getByteAt(input, 0) else 0 in
-    let negative = first == 45 in
-    let hasSign = negative || first == 43 in
-    let digitStart = if hasSign then 1 else 0 in
+    let first = if length > 0L then Stdlib.String.getByteAt(input, 0L) else 0L in
+    let negative = first == 45L in
+    let hasSign = negative || first == 43L in
+    let digitStart = if hasSign then 1L else 0L in
     if digitStart >= length || !Stdlib.Internal.Integer.__validDigits(input, digitStart) then
         Error(false)
     else
@@ -452,7 +452,7 @@ let fromUInt128(value: UInt128) : Int = __uint128_to_int(value)
 
 let __parsePositiveInt64At(value: String, index: Int64, acc: Int64) : Int64 =
     if index >= Stdlib.String.__byteLength(value) then acc
-    else Stdlib.Internal.Integer.__parsePositiveInt64At(value, index + 1, acc * 10 + Stdlib.String.getByteAt(value, index) - 48)
+    else Stdlib.Internal.Integer.__parsePositiveInt64At(value, index + 1L, acc * 10L + Stdlib.String.getByteAt(value, index) - 48L)
 
 let __toInt64Unchecked(value: Int) : Int64 =
     let text = Stdlib.Internal.Integer.__text(value) in
@@ -460,8 +460,8 @@ let __toInt64Unchecked(value: Int) : Int64 =
     else
         let negative = Stdlib.Internal.Integer.__isNegativeText(text) in
         let magnitude = Stdlib.Internal.Integer.__magnitudeText(text) in
-        let parsed = Stdlib.Internal.Integer.__parsePositiveInt64At(magnitude, 0, 0) in
-        if negative then 0 - parsed else parsed
+        let parsed = Stdlib.Internal.Integer.__parsePositiveInt64At(magnitude, 0L, 0L) in
+        if negative then 0L - parsed else parsed
 
 let toInt64(value: Int) : Stdlib.Option.Option<Int64> =
     if Stdlib.Internal.Integer.lessThan(value, Stdlib.Internal.Integer.__value("-9223372036854775808"))
@@ -494,31 +494,31 @@ let toUInt32(value: Int) : Stdlib.Option.Option<UInt32> =
 
 let __digitToUInt64(digit: Int64) : UInt64 =
     match digit with
-    | 0 -> 0UL
-    | 1 -> 1UL
-    | 2 -> 2UL
-    | 3 -> 3UL
-    | 4 -> 4UL
-    | 5 -> 5UL
-    | 6 -> 6UL
-    | 7 -> 7UL
-    | 8 -> 8UL
-    | 9 -> 9UL
+    | 0L -> 0UL
+    | 1L -> 1UL
+    | 2L -> 2UL
+    | 3L -> 3UL
+    | 4L -> 4UL
+    | 5L -> 5UL
+    | 6L -> 6UL
+    | 7L -> 7UL
+    | 8L -> 8UL
+    | 9L -> 9UL
     | _ -> Builtin.crash("Invalid canonical Int digit")
 
 let __parsePositiveUInt64At(value: String, index: Int64, acc: UInt64) : UInt64 =
     if index >= Stdlib.String.__byteLength(value) then acc
     else
-        let digit = Stdlib.String.getByteAt(value, index) - 48 in
+        let digit = Stdlib.String.getByteAt(value, index) - 48L in
         Stdlib.Internal.Integer.__parsePositiveUInt64At(
             value,
-            index + 1,
+            index + 1L,
             acc * 10UL + Stdlib.Internal.Integer.__digitToUInt64(digit))
 
 let toUInt64(value: Int) : Stdlib.Option.Option<UInt64> =
     if Stdlib.Internal.Integer.lessThan(value, Stdlib.Internal.Integer.__value("0"))
        || Stdlib.Internal.Integer.greaterThan(value, Stdlib.Internal.Integer.__value("18446744073709551615")) then None
-    else Some(Stdlib.Internal.Integer.__parsePositiveUInt64At(Stdlib.Internal.Integer.__text(value), 0, 0UL))
+    else Some(Stdlib.Internal.Integer.__parsePositiveUInt64At(Stdlib.Internal.Integer.__text(value), 0L, 0UL))
 
 let toInt128(value: Int) : Stdlib.Option.Option<Int128> =
     if Stdlib.Internal.Integer.lessThan(value, Stdlib.Internal.Integer.__value("-170141183460469231731687303715884105728"))
@@ -533,17 +533,17 @@ let toUInt128(value: Int) : Stdlib.Option.Option<UInt128> =
 let __magnitudeToFloatAt(value: String, index: Int64, acc: Float) : Float =
     if index >= Stdlib.String.__byteLength(value) then acc
     else
-        let digit = Stdlib.String.getByteAt(value, index) - 48 in
+        let digit = Stdlib.String.getByteAt(value, index) - 48L in
         Stdlib.Internal.Integer.__magnitudeToFloatAt(
             value,
-            index + 1,
+            index + 1L,
             acc * 10.0 + Stdlib.Int64.toFloat(digit))
 
 let toFloat(value: Int) : Float =
     let text = Stdlib.Internal.Integer.__text(value) in
     let magnitudeText = Stdlib.Internal.Integer.__magnitudeText(text) in
-    if Stdlib.Internal.Integer.__compareMagnitude(magnitudeText, "9007199254740991") <= 0 then
-        let magnitude = Stdlib.Internal.Integer.__magnitudeToFloatAt(magnitudeText, 0, 0.0) in
+    if Stdlib.Internal.Integer.__compareMagnitude(magnitudeText, "9007199254740991") <= 0L then
+        let magnitude = Stdlib.Internal.Integer.__magnitudeToFloatAt(magnitudeText, 0L, 0.0) in
         if Stdlib.Internal.Integer.__isNegativeText(text) then 0.0 - magnitude else magnitude
     else
         match Stdlib.Float.parse(text) with
@@ -561,16 +561,16 @@ let fromFloat(value: Float) : Int =
     else
         let mantissa = bits & 4503599627370495UL in
         let significand = mantissa ||| 4503599627370496UL in
-        let exponent = Stdlib.Float.__smallUInt64ToInt64(rawExponent) - 1023 - 52 in
+        let exponent = Stdlib.Float.__smallUInt64ToInt64(rawExponent) - 1023L - 52L in
         let magnitude = Stdlib.Internal.Integer.fromUInt64(significand) in
         let truncated =
-            if exponent >= 0 then
+            if exponent >= 0L then
                 Stdlib.Internal.Integer.shiftLeft(magnitude, Stdlib.Internal.Integer.fromInt64(exponent))
             else
-                Stdlib.Internal.Integer.shiftRight(magnitude, Stdlib.Internal.Integer.fromInt64(0 - exponent)) in
+                Stdlib.Internal.Integer.shiftRight(magnitude, Stdlib.Internal.Integer.fromInt64(0L - exponent)) in
         if (bits >> 63UL) == 1UL then Stdlib.Internal.Integer.negate(truncated) else truncated
 
-// Build an unsigned 64-bit entropy word in Int without overflowing machine
+// Build an unsigned 64L-bit entropy word in Int without overflowing machine
 // arithmetic. Random.int64 returns the native word with its sign bit intact.
 let __randomWord() : Int =
     let word = Stdlib.Random.int64() in

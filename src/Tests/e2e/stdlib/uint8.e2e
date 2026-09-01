@@ -13,31 +13,31 @@ Stdlib.UInt8.add(5uy, 5uy) = 10uy
 Stdlib.UInt8.add(100uy, 20uy) = 120uy
 
 // ===================================================================
-// Stdlib.UInt8.sub - Subtract two integers
+// Stdlib.UInt8.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.UInt8.sub(10uy, 9uy) = 1uy
-Stdlib.UInt8.sub(10uy, 0uy) = 10uy
-Stdlib.UInt8.sub(100uy, 50uy) = 50uy
-Stdlib.UInt8.sub(5uy, 0uy) = 5uy
+Stdlib.UInt8.subtract(10uy, 9uy) = 1uy
+Stdlib.UInt8.subtract(10uy, 0uy) = 10uy
+Stdlib.UInt8.subtract(100uy, 50uy) = 50uy
+Stdlib.UInt8.subtract(5uy, 0uy) = 5uy
 
 // ===================================================================
-// Stdlib.UInt8.mul - Multiply two integers
+// Stdlib.UInt8.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.UInt8.mul(8uy, 8uy) = 64uy
-Stdlib.UInt8.mul(0uy, 100uy) = 0uy
-Stdlib.UInt8.mul(5uy, 5uy) = 25uy
-Stdlib.UInt8.mul(10uy, 10uy) = 100uy
+Stdlib.UInt8.multiply(8uy, 8uy) = 64uy
+Stdlib.UInt8.multiply(0uy, 100uy) = 0uy
+Stdlib.UInt8.multiply(5uy, 5uy) = 25uy
+Stdlib.UInt8.multiply(10uy, 10uy) = 100uy
 
 // ===================================================================
-// Stdlib.UInt8.div - Divide two integers
+// Stdlib.UInt8.divide - Divide two integers
 // ===================================================================
 
-Stdlib.UInt8.div(10uy, 5uy) = 2uy
-Stdlib.UInt8.div(10uy, 3uy) = 3uy
-Stdlib.UInt8.div(100uy, 10uy) = 10uy
-Stdlib.UInt8.div(10uy, 2uy) = 5uy
+Stdlib.UInt8.divide(10uy, 5uy) = 2uy
+Stdlib.UInt8.divide(10uy, 3uy) = 3uy
+Stdlib.UInt8.divide(100uy, 10uy) = 10uy
+Stdlib.UInt8.divide(10uy, 2uy) = 5uy
 
 // ===================================================================
 // Stdlib.UInt8.mod - Modulo operation
@@ -150,25 +150,11 @@ Stdlib.UInt8.toString(120uy) = "120"
 // Stdlib.UInt8.isEven - Check if integer is even
 // ===================================================================
 
-Stdlib.UInt8.isEven(0uy) = true
-Stdlib.UInt8.isEven(2uy) = true
-Stdlib.UInt8.isEven(4uy) = true
-Stdlib.UInt8.isEven(6uy) = true
-Stdlib.UInt8.isEven(1uy) = false
-Stdlib.UInt8.isEven(3uy) = false
-Stdlib.UInt8.isEven(5uy) = false
 
 // ===================================================================
 // Stdlib.UInt8.isOdd - Check if integer is odd
 // ===================================================================
 
-Stdlib.UInt8.isOdd(1uy) = true
-Stdlib.UInt8.isOdd(3uy) = true
-Stdlib.UInt8.isOdd(5uy) = true
-Stdlib.UInt8.isOdd(0uy) = false
-Stdlib.UInt8.isOdd(2uy) = false
-Stdlib.UInt8.isOdd(4uy) = false
-Stdlib.UInt8.isOdd(6uy) = false
 
 // ===================================================================
 // Stdlib.UInt8.sum - Sum all integers in a list

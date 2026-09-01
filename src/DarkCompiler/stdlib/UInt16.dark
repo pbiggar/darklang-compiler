@@ -11,13 +11,10 @@ type ParseError = BadFormat | OutOfRange
 let add(a: UInt16, b: UInt16) : UInt16 = a + b
 
 let subtract(a: UInt16, b: UInt16) : UInt16 = a - b
-let sub(a: UInt16, b: UInt16) : UInt16 = Stdlib.UInt16.subtract(a, b)
 
 let multiply(a: UInt16, b: UInt16) : UInt16 = a * b
-let mul(a: UInt16, b: UInt16) : UInt16 = Stdlib.UInt16.multiply(a, b)
 
 let divide(a: UInt16, b: UInt16) : UInt16 = if b == 0us then Builtin.crash("Cannot divide by 0") else a / b
-let div(a: UInt16, b: UInt16) : UInt16 = Stdlib.UInt16.divide(a, b)
 
 let max(a: UInt16, b: UInt16) : UInt16 = if a > b then a else b
 
@@ -64,7 +61,7 @@ let shiftRight(a: UInt16, shift: UInt16) : UInt16 = a >> shift
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (SWAR)
-let popcount(x: UInt16) : UInt16 =
+let __popcount(x: UInt16) : UInt16 =
     let mask1 = 21845us in
     let mask2 = 13107us in
     let mask3 = 3855us in
@@ -75,7 +72,7 @@ let popcount(x: UInt16) : UInt16 =
     let x = x + (x >> 8us) in
     x & mask4
 
-// Convert a single digit (0-9) to its string representation
+// Convert a single digit (0us-9us) to its string representation
 let __digitToString(n: UInt16) : String =
     match n with
     | 0us -> "0"
@@ -94,14 +91,6 @@ let __digitToString(n: UInt16) : String =
 let toString(n: UInt16) : String =
     if n < 10us then Stdlib.UInt16.__digitToString(n)
     else Stdlib.UInt16.toString(n / 10us) ++ Stdlib.UInt16.__digitToString(n % 10us)
-
-// Check if integer is even
-let isEven(n: UInt16) : Bool =
-    (n % 2us) == 0us
-
-// Check if integer is odd
-let isOdd(n: UInt16) : Bool =
-    (n % 2us) != 0us
 
 // Sum all integers in a list
 let sum(list: List<UInt16>) : UInt16 =

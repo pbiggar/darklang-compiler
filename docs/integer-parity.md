@@ -51,14 +51,11 @@ shifts and arithmetic lower in `4_MIR_to_LIR.fs`; signed right shift is
 arithmetic, unsigned right shift is logical, and counts use the interpreter's
 machine-width masks on both ARM64 and x86-64.
 
-## Compiler extensions and intentional differences
+## Intentional difference
 
-The named parity API uses the interpreter-declared functions. Historical
-`sub`, `mul`, and `div` aliases, fixed-width `popcount`, `isEven`, `isOdd`, and
-unsigned `absoluteValue`/`negate` remain documented compiler extensions for
-the established compiler E2E contract; they are not part of the interpreter
-integer parity API. Internal representation helpers beginning with `__` remain
-implementation details.
+The named parity API uses only the interpreter-declared functions. Historical
+integer aliases and compiler-only helper names have been removed. Internal
+representation helpers beginning with `__` remain implementation details.
 Static operand and conversion type enforcement is the intentional AOT
 divergence; the compiler does not reproduce interpreter runtime dispatch
 errors for source that can be rejected during type checking.

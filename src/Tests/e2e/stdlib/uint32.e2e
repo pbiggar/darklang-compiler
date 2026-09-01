@@ -13,31 +13,31 @@ Stdlib.UInt32.add(5ul, 5ul) = 10ul
 Stdlib.UInt32.add(100ul, 200ul) = 300ul
 
 // ===================================================================
-// Stdlib.UInt32.sub - Subtract two integers
+// Stdlib.UInt32.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.UInt32.sub(10ul, 9ul) = 1ul
-Stdlib.UInt32.sub(10ul, 0ul) = 10ul
-Stdlib.UInt32.sub(100ul, 50ul) = 50ul
-Stdlib.UInt32.sub(5ul, 0ul) = 5ul
+Stdlib.UInt32.subtract(10ul, 9ul) = 1ul
+Stdlib.UInt32.subtract(10ul, 0ul) = 10ul
+Stdlib.UInt32.subtract(100ul, 50ul) = 50ul
+Stdlib.UInt32.subtract(5ul, 0ul) = 5ul
 
 // ===================================================================
-// Stdlib.UInt32.mul - Multiply two integers
+// Stdlib.UInt32.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.UInt32.mul(8ul, 8ul) = 64ul
-Stdlib.UInt32.mul(0ul, 100ul) = 0ul
-Stdlib.UInt32.mul(5ul, 5ul) = 25ul
-Stdlib.UInt32.mul(100ul, 100ul) = 10000ul
+Stdlib.UInt32.multiply(8ul, 8ul) = 64ul
+Stdlib.UInt32.multiply(0ul, 100ul) = 0ul
+Stdlib.UInt32.multiply(5ul, 5ul) = 25ul
+Stdlib.UInt32.multiply(100ul, 100ul) = 10000ul
 
 // ===================================================================
-// Stdlib.UInt32.div - Divide two integers
+// Stdlib.UInt32.divide - Divide two integers
 // ===================================================================
 
-Stdlib.UInt32.div(10ul, 5ul) = 2ul
-Stdlib.UInt32.div(10ul, 3ul) = 3ul
-Stdlib.UInt32.div(100ul, 10ul) = 10ul
-Stdlib.UInt32.div(10ul, 2ul) = 5ul
+Stdlib.UInt32.divide(10ul, 5ul) = 2ul
+Stdlib.UInt32.divide(10ul, 3ul) = 3ul
+Stdlib.UInt32.divide(100ul, 10ul) = 10ul
+Stdlib.UInt32.divide(10ul, 2ul) = 5ul
 
 // ===================================================================
 // Stdlib.UInt32.mod - Modulo operation
@@ -150,25 +150,11 @@ Stdlib.UInt32.toString(1234567890ul) = "1234567890"
 // Stdlib.UInt32.isEven - Check if integer is even
 // ===================================================================
 
-Stdlib.UInt32.isEven(0ul) = true
-Stdlib.UInt32.isEven(2ul) = true
-Stdlib.UInt32.isEven(4ul) = true
-Stdlib.UInt32.isEven(6ul) = true
-Stdlib.UInt32.isEven(1ul) = false
-Stdlib.UInt32.isEven(3ul) = false
-Stdlib.UInt32.isEven(5ul) = false
 
 // ===================================================================
 // Stdlib.UInt32.isOdd - Check if integer is odd
 // ===================================================================
 
-Stdlib.UInt32.isOdd(1ul) = true
-Stdlib.UInt32.isOdd(3ul) = true
-Stdlib.UInt32.isOdd(5ul) = true
-Stdlib.UInt32.isOdd(0ul) = false
-Stdlib.UInt32.isOdd(2ul) = false
-Stdlib.UInt32.isOdd(4ul) = false
-Stdlib.UInt32.isOdd(6ul) = false
 
 // ===================================================================
 // Stdlib.UInt32.sum - Sum all integers in a list
