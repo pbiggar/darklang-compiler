@@ -261,13 +261,13 @@
     },
     "tinytemplate": {
       "status": "comparable",
-      "dark_sha256": "a96eaf9455b8ddd92cc892b4f1b3764e420b1f9b1ee3692e4a86cdec61e6bee8",
+      "dark_sha256": "90eddde4d255b95a93e814217a3c36ca02128118841cdb805f358d6388d3a6f3",
       "rust_sha256": "4926b3535e016b926371afcf503af55a940ca4e262e7cda2aa7b441153e86806",
       "rust_tree_sha256": "faa6b7b382cd5b680fba567dab3b57835e73a679cf22e52effb5bfe14e4ebd62",
       "expected_sha256": "494484f51df8f4e4e809cdcdd0a812086cf4773c2a3ffa2d9e6ee5653cbb2899",
       "quick": {
         "status": "comparable",
-        "dark_sha256": "c7710e2a9d8ff8599c0acd612b4aee19a2717dc0bc8972ada4da47a34b2af33f",
+        "dark_sha256": "74d448557ef3cd2e570105e11f4624fd7900a8bddedcca429d0d5b13b18b5d57",
         "rust_sha256": "bb8fab09e9f4681cf3c42211226b884ba4b6a20bd4a9a8ab017d5c5ae078599c",
         "rust_tree_sha256": "faa6b7b382cd5b680fba567dab3b57835e73a679cf22e52effb5bfe14e4ebd62",
         "expected_sha256": "494484f51df8f4e4e809cdcdd0a812086cf4773c2a3ffa2d9e6ee5653cbb2899"
