@@ -104,7 +104,7 @@ let __digitToString(n: Int64) : String =
     | 7L -> "7"
     | 8L -> "8"
     | 9L -> "9"
-    | _ -> Builtin.crash("Stdlib.Int64.__digitToString expected a digit from 0L to 9")
+    | _ -> Builtin.crash("Stdlib.Int64.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
 let toString(n: Int64) : String =

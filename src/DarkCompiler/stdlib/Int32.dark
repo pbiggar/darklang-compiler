@@ -98,7 +98,7 @@ let __digitToString(n: Int32) : String =
     | 7l -> "7"
     | 8l -> "8"
     | 9l -> "9"
-    | _ -> Builtin.crash("Stdlib.Int32.__digitToString expected a digit from 0l to 9")
+    | _ -> Builtin.crash("Stdlib.Int32.__digitToString expected a digit from 0 to 9")
 
 // Convert an integer to its string representation
 let toString(n: Int32) : String =

@@ -213,27 +213,27 @@ Stdlib.Int64.divide 0L 1L = 0L
 Stdlib.Int64.divide 1L 0L = error="Cannot divide by 0"
 Stdlib.Int64.divide (-9223372036854775808L) -1L = -9223372036854775808L
 (Stdlib.List.range 1I 5I)
-|> Stdlib.List.map (fun x -> Stdlib.Int64.random 1L 2L)
-|> Stdlib.List.map (fun x -> (x >= 1L) && (x <= 2L)) = [ true; true; true; true; true ]
+|> Stdlib.List.map<Int, Int64>(fun x -> Stdlib.Int64.random 1L 2L)
+|> Stdlib.List.map<Int64, Bool>(fun x -> (x >= 1L) && (x <= 2L)) = [ true; true; true; true; true ]
 
 (Stdlib.List.range 1I 5I)
-|> Stdlib.List.map (fun x -> Stdlib.Int64.random 10L 20L)
-|> Stdlib.List.map (fun x -> (x >= 10L) && (x <= 20L)) = [ true; true; true; true; true ]
+|> Stdlib.List.map<Int, Int64>(fun x -> Stdlib.Int64.random 10L 20L)
+|> Stdlib.List.map<Int64, Bool>(fun x -> (x >= 10L) && (x <= 20L)) = [ true; true; true; true; true ]
 
 (Stdlib.List.range 1I 5I)
-|> Stdlib.List.map (fun x -> Stdlib.Int64.random 2L 1L)
-|> Stdlib.List.map (fun x -> (x >= 1L) && (x <= 2L)) = [ true; true; true; true; true ]
+|> Stdlib.List.map<Int, Int64>(fun x -> Stdlib.Int64.random 2L 1L)
+|> Stdlib.List.map<Int64, Bool>(fun x -> (x >= 1L) && (x <= 2L)) = [ true; true; true; true; true ]
 
 (Stdlib.List.range 1I 5I)
-|> Stdlib.List.map (fun x -> Stdlib.Int64.random 20L 10L)
-|> Stdlib.List.map (fun x -> (x >= 10L) && (x <= 20L)) = [ true; true; true; true; true ]
+|> Stdlib.List.map<Int, Int64>(fun x -> Stdlib.Int64.random 20L 10L)
+|> Stdlib.List.map<Int64, Bool>(fun x -> (x >= 10L) && (x <= 20L)) = [ true; true; true; true; true ]
 
 ((Stdlib.List.range 1I 100I)
- |> Stdlib.List.map (fun x -> Stdlib.Int64.random 0L 1L)
+ |> Stdlib.List.map<Int, Int64>(fun x -> Stdlib.Int64.random 0L 1L)
  |> Stdlib.List.unique) = [ 0L; 1L ]
 
 ((Stdlib.List.range 1I 100I)
- |> Stdlib.List.map (fun x -> Stdlib.Int64.random 0L 2L)
+ |> Stdlib.List.map<Int, Int64>(fun x -> Stdlib.Int64.random 0L 2L)
  |> Stdlib.List.unique) = [ 0L; 1L; 2L ]
 
 Stdlib.Int64.sum [ 1L; 2L ] = 3L
