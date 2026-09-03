@@ -64,7 +64,7 @@ let private none = constructor "Stdlib.Option.Option" "None" None
 let private some value = constructor "Stdlib.Option.Option" "Some" (Some value)
 
 let private jsonErrorType = TSum ("Stdlib.Json.ParseError.ParseError", [])
-let private valueViewType = TString
+let private valueViewType = TInt64
 let private pathPartType = TSum ("Stdlib.Json.ParseError.JsonPath.Part.Part", [])
 let private pathType = TList pathPartType
 let private resultType okType = TSum ("Stdlib.Result.Result", [okType; jsonErrorType])
@@ -146,7 +146,7 @@ let private cantMatch typ raw path =
               call "Stdlib.Json.ParseError.__copyPath" [path] ])
     |> error
 
-let private rawSource raw = call "Stdlib.Json.__copyRaw" [raw]
+let private rawSource source raw = call "Stdlib.Json.__copyRaw" [source; raw]
 
 let private resultCases okName okBody errorName =
     [ makeCase (PConstructor ("Ok", Some (PVar okName))) okBody
@@ -419,9 +419,9 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
             $"Unsupported type in JSON: {TypeChecking.typeToString typ}. Some types are not supported in Json serialization"
 
 let private optionDecoder typ functionName =
-    let failure = cantMatch typ (rawSource (Var "__view")) (Var "__path")
+    let failure = cantMatch typ (rawSource (Var "__source") (Var "__view")) (Var "__path")
     Match (
-        call functionName [Var "__view"],
+        call functionName [Var "__source"; Var "__view"],
         [ makeCase (PConstructor ("Some", Some (PVar "__value"))) (ok (Var "__value"))
           makeCase (PConstructor ("None", None)) failure ])
 
@@ -434,7 +434,7 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.fromList ["__view", valueViewType; "__path", pathType]
+            Params = NonEmptyList.fromList ["__source", TString; "__view", valueViewType; "__path", pathType]
             ReturnType = resultType typ
             Body = RuntimeError "unfinished JSON decoder"
             Recursion = None
@@ -447,7 +447,7 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
 
 and private decodeCall env typ view path state =
     ensureDecoder env typ state
-    |> Result.map (fun (name, nextState) -> (call name [view; path], nextState))
+    |> Result.map (fun (name, nextState) -> (call name [Var "__source"; view; path], nextState))
 
 and private sequenceDecoded env items build state =
     let rec loop remaining current bindings =
@@ -463,20 +463,22 @@ and private sequenceDecoded env items build state =
 
 and private ensureListDecoder env elemType state =
     let elemType = resolveJsonType env elemType
-    let name = decodeListName (TList elemType)
+    let listType = TList elemType
+    let name = decodeListName listType
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
-        let viewListType = TList valueViewType
         let placeholder = {
             Name = name
             TypeParams = []
             Params =
                 NonEmptyList.fromList
-                    ["__views", viewListType
+                    ["__source", TString
+                     "__array_view", valueViewType
+                     "__next_index", TInt64
                      "__path", pathType
                      "__index", TInt64]
-            ReturnType = resultType (TList elemType)
+            ReturnType = resultType listType
             Body = RuntimeError "unfinished JSON list decoder"
             Recursion = None
         }
@@ -488,35 +490,46 @@ and private ensureListDecoder env elemType state =
                 (constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (call "Stdlib.Int.fromInt64" [Var "__index"])))
         decodeCall env elemType (Var "__head") itemPath reserved
         |> Result.map (fun (decodedHead, nextState) ->
-            let head = call viewHeadName [Var "__views"]
-            let tail = call viewTailName [Var "__views"]
             let decodedTail =
                 call
                     name
-                    [ Var "__tail"
+                    [ Var "__source"
+                      Var "__array_view"
+                      Var "__after_item"
                       Var "__path"
                       BinOp (Add, Var "__index", Int64Literal 1L) ]
+            let invalid =
+                cantMatch
+                    listType
+                    (rawSource (Var "__source") (Var "__array_view"))
+                    (Var "__path")
             let body =
-                If (
-                    call viewIsEmptyName [Var "__views"],
-                    ok (ListLiteral []),
-                    Let (
-                        LPVariable "__head",
-                        head,
-                        Let (
-                            LPVariable "__tail",
-                            tail,
-                            Match (
-                                decodedHead,
-                                resultCases
-                                    "__decoded_head"
-                                    (Match (
-                                        decodedTail,
+                Let (
+                    LPVariable "__head",
+                    call "Stdlib.Json.__arrayNext" [Var "__source"; Var "__array_view"; Var "__next_index"],
+                    If (
+                        BinOp (Eq, Var "__head", Int64Literal -1L),
+                        ok (ListLiteral []),
+                        If (
+                            BinOp (Eq, Var "__head", Int64Literal -2L),
+                            invalid,
+                            Let (
+                                LPVariable "__after_item",
+                                call "Stdlib.Json.__arrayAfter" [Var "__source"; Var "__array_view"; Var "__head"],
+                                If (
+                                    BinOp (Lt, Var "__after_item", Int64Literal 0L),
+                                    invalid,
+                                    Match (
+                                        decodedHead,
                                         resultCases
-                                            "__decoded_tail"
-                                            (ok (listPush elemType (Var "__decoded_tail") (Var "__decoded_head")))
-                                            "__tail_error"))
-                                    "__head_error"))))
+                                            "__decoded_head"
+                                            (Match (
+                                                decodedTail,
+                                                resultCases
+                                                    "__decoded_tail"
+                                                    (ok (listPush elemType (Var "__decoded_tail") (Var "__decoded_head")))
+                                                    "__tail_error"))
+                                            "__head_error"))))))
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
@@ -533,7 +546,8 @@ and private ensureDictDecoder env valueType state =
             TypeParams = []
             Params =
                 NonEmptyList.fromList
-                    ["__fields", viewFieldsType
+                    ["__source", TString
+                     "__fields", viewFieldsType
                      "__path", pathType
                      "__dict", dictType]
             ReturnType = resultType dictType
@@ -566,7 +580,7 @@ and private ensureDictDecoder env valueType state =
                               resultCases
                                   "__decoded_value"
                                   (Match (
-                                      call name [Var "__tail"; Var "__path"; withValue],
+                                      call name [Var "__source"; Var "__tail"; Var "__path"; withValue],
                                       resultCases
                                           "__decoded_dict"
                                           (ok (Var "__decoded_dict"))
@@ -647,7 +661,7 @@ and private decodeEnumCase env typ typeName subst variant state =
                 constructor
                     "Stdlib.Json.ParseError.ParseError"
                     "EnumExtraField"
-                    (tuplePayload [rawSource (Var extraName); extraPath])
+                    (tuplePayload [rawSource (Var "__source") (Var extraName); extraPath])
                 |> error
             sequenceDecoded env (decodedItems fieldTypes.Length) (fun _ -> extra) missingState
             |> Result.map (fun (extraBody, finalState) ->
@@ -660,18 +674,18 @@ and private decodeEnumCase env typ typeName subst variant state =
                         missing @ [exact; makeCase extraPattern extraBody])
                 let body =
                     Match (
-                        call "Stdlib.Json.__arrayItems" [Var "__case_raw"],
+                        call "Stdlib.Json.__arrayItems" [Var "__source"; Var "__case_raw"],
                         [ makeCase
                               (PConstructor ("Some", Some (PVar "__enum_args")))
                               arrayBody
-                          makeCase PWildcard (cantMatch typ (rawSource (Var "__case_raw")) casePath) ])
+                          makeCase PWildcard (cantMatch typ (rawSource (Var "__source") (Var "__case_raw")) casePath) ])
                 (body, finalState))))
 
 and private decodeBody env typ state : Result<Expr * State, string> =
-    let failure = cantMatch typ (rawSource (Var "__view")) (Var "__path")
+    let failure = cantMatch typ (rawSource (Var "__source") (Var "__view")) (Var "__path")
     match typ with
     | TUnit ->
-        Ok (If (call "Stdlib.Json.__isNull" [Var "__view"], ok UnitLiteral, failure), state)
+        Ok (If (call "Stdlib.Json.__isNull" [Var "__source"; Var "__view"], ok UnitLiteral, failure), state)
     | TBool -> Ok (optionDecoder typ "Stdlib.Json.__boolValue", state)
     | TString -> Ok (optionDecoder typ "Stdlib.Json.__stringValue", state)
     | TChar -> Ok (optionDecoder typ "Stdlib.Json.__viewChar", state)
@@ -692,12 +706,13 @@ and private decodeBody env typ state : Result<Expr * State, string> =
     | TList elemType ->
         ensureListDecoder env elemType state
         |> Result.map (fun (listDecoder, nextState) ->
-            (Match (
-                call "Stdlib.Json.__arrayItems" [Var "__view"],
-                [ makeCase
-                      (PConstructor ("Some", Some (PVar "__items")))
-                      (call listDecoder [Var "__items"; Var "__path"; Int64Literal 0L])
-                  makeCase PWildcard failure ]),
+            (Let (
+                LPVariable "__array_start",
+                call "Stdlib.Json.__arrayStart" [Var "__source"; Var "__view"],
+                If (
+                    BinOp (Lt, Var "__array_start", Int64Literal 0L),
+                    failure,
+                    call listDecoder [Var "__source"; Var "__view"; Var "__array_start"; Var "__path"; Int64Literal 0L])),
              nextState))
     | TTuple elementTypes ->
         let names = elementTypes |> List.mapi (fun index _ -> $"__tuple_raw_{index}")
@@ -712,7 +727,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
         sequenceDecoded env items (fun bindings -> ok (TupleLiteral (bindings |> List.map (fst >> Var)))) state
         |> Result.map (fun (decoded, nextState) ->
             (Match (
-                call "Stdlib.Json.__arrayItems" [Var "__view"],
+                call "Stdlib.Json.__arrayItems" [Var "__source"; Var "__view"],
                 [ makeCase (PConstructor ("Some", Some (PList patterns))) decoded
                   makeCase PWildcard failure ]),
              nextState))
@@ -725,6 +740,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 // Conversion checks required fields in declaration order; wire
                 // serialization is independently ordinal-by-name.
                 let fields = recordInfo.Fields
+                let viewListType = TList valueViewType
                 let rec build remaining current decodedFields =
                     match remaining with
                     | [] ->
@@ -740,7 +756,10 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                     | (fieldName, fieldType) :: rest ->
                         let concrete = applySubstitution subst fieldType |> resolveJsonType env
                         let matches =
-                            call "Stdlib.Json.__matchingViews" [StringLiteral fieldName; Var "__object_fields"]
+                            TypeApp (
+                                "Stdlib.Dict.get",
+                                [viewListType],
+                                args [Var "__object_field_map"; StringLiteral fieldName])
                         let fieldPath =
                             listPush
                                 pathPartType
@@ -753,13 +772,12 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                                 let missing = constructor "Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
                                 let duplicate = constructor "Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
                                 let one = Match (decoded, resultCases $"__field_{fieldName}" tail "__field_error")
-                                (Let (
-                                    LPVariable "__matches",
+                                (Match (
                                     matches,
-                                    If (
-                                        call viewIsEmptyName [Var "__matches"],
-                                        missing,
-                                        Let (
+                                    [ makeCase (PConstructor ("None", None)) missing
+                                      makeCase
+                                        (PConstructor ("Some", Some (PVar "__matches")))
+                                        (Let (
                                             LPVariable "__field_raw",
                                             call viewHeadName [Var "__matches"],
                                             Let (
@@ -768,13 +786,13 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                                                 If (
                                                     call viewIsEmptyName [Var "__field_rest"],
                                                     one,
-                                                    duplicate))))),
+                                                    duplicate)))) ]),
                                  finalState)))
                 build fields state []
                 |> Result.map (fun (decoded, nextState) ->
                     (Match (
-                        call "Stdlib.Json.__objectFields" [Var "__view"],
-                        [ makeCase (PConstructor ("Some", Some (PVar "__object_fields"))) decoded
+                        call "Stdlib.Json.__objectFieldMap" [Var "__source"; Var "__view"],
+                        [ makeCase (PConstructor ("Some", Some (PVar "__object_field_map"))) decoded
                           makeCase PWildcard failure ]),
                      nextState)))
     | TDict (TString, valueType) ->
@@ -782,10 +800,10 @@ and private decodeBody env typ state : Result<Expr * State, string> =
         |> Result.map (fun (dictDecoder, nextState) ->
             let empty = DictLiteral (valueType, [])
             (Match (
-                call "Stdlib.Json.__objectFields" [Var "__view"],
+                call "Stdlib.Json.__objectFields" [Var "__source"; Var "__view"],
                 [ makeCase
                       (PConstructor ("Some", Some (PVar "__object_fields")))
-                      (call dictDecoder [Var "__object_fields"; Var "__path"; empty])
+                      (call dictDecoder [Var "__source"; Var "__object_fields"; Var "__path"; empty])
                   makeCase PWildcard failure ]),
              nextState))
     | TSum (typeName, typeArgs) ->
@@ -813,22 +831,25 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         Match (
                             Var "__case_name",
                             caseMatches @ [makeCase PWildcard invalidCase])
+                    let tooMany =
+                        constructor
+                            "Stdlib.Json.ParseError.ParseError"
+                            "EnumTooManyCases"
+                            (tuplePayload [typeReference typ; Var "__case_names"; Var "__path"])
+                        |> error
+                    let checkedOneField = oneField
                     let objectBody =
                         Match (
-                            call "Stdlib.Json.__enumObject" [Var "__view"],
+                            call "Stdlib.Json.__enumCandidate" [Var "__source"; Var "__view"],
                             [ makeCase (PConstructor ("EnumNoFields", None)) failure
                               makeCase
                                   (PConstructor (
                                       "EnumOneField",
                                       Some (PTuple [PVar "__case_name"; PVar "__case_raw"])))
-                                  oneField
+                                  checkedOneField
                               makeCase
                                   (PConstructor ("EnumManyFields", Some (PVar "__case_names")))
-                                  (constructor
-                                      "Stdlib.Json.ParseError.ParseError"
-                                      "EnumTooManyCases"
-                                      (tuplePayload [typeReference typ; Var "__case_names"; Var "__path"])
-                                   |> error)
+                                  tooMany
                               makeCase PWildcard failure ])
                     (objectBody, nextState)))
     | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TEnumFields _ | TDict _ ->
@@ -974,19 +995,23 @@ let rewriteProgram
                 writerFinish written
             | TypeApp ("Stdlib.Json.parse", [typ], values) ->
                 let concrete = resolveJsonType planningEnv typ
-                let parsed = call "Stdlib.Json.__parseRoot" (NonEmptyList.toList values)
+                let source = NonEmptyList.head values
+                let parsed = call "Stdlib.Json.__parseRoot" [Var "__json_source"]
                 let rootPath = ListLiteral [constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Root" None]
                 Let (
-                    LPVariable "__json_parse_result",
-                    parsed,
-                    Match (
-                        Var "__json_parse_result",
-                        [ makeCase
-                              (PConstructor ("Ok", Some (PVar "__json_view")))
-                              (call (decoderName concrete) [Var "__json_view"; rootPath])
-                          makeCase
-                              (PConstructor ("Error", Some PWildcard))
-                              (constructor "Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ]))
+                    LPVariable "__json_source",
+                    source,
+                    Let (
+                        LPVariable "__json_parse_result",
+                        parsed,
+                        Match (
+                            Var "__json_parse_result",
+                            [ makeCase
+                                  (PConstructor ("Ok", Some (PVar "__json_view")))
+                                  (call (decoderName concrete) [Var "__json_source"; Var "__json_view"; rootPath])
+                              makeCase
+                                  (PConstructor ("Error", Some PWildcard))
+                                  (constructor "Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ])))
             | _ -> expr
         let rewritten =
             topLevels

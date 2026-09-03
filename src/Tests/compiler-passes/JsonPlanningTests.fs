@@ -40,6 +40,12 @@ let testTypedDecodingUsesSharedViews
             Error "Typed JSON decoding still generates functions over InternalRawJson"
         elif planned.Contains "__dark_json_view_" then
             Error "Typed JSON decoding still generates per-program view-list accessors"
+        elif not (planned.Contains "Stdlib.Json.__objectFieldMap") then
+            Error "Expected record decoding to build its field index in one source-order pass"
+        elif planned.Contains "Stdlib.Json.__matchingViews" then
+            Error "Record decoding still scans the object once per declared field"
+        elif not (planned.Contains "Stdlib.Json.__arrayNext") then
+            Error "Expected list decoding to consume the shared streaming array cursor"
         else
             Ok ())
 

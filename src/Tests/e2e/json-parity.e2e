@@ -28,6 +28,7 @@ Stdlib.Json.serialize<Stdlib.Result.Result<List<(Dict<String>, Stdlib.Option.Opt
 Stdlib.Json.serialize<JsonParityPerson>(JsonParityPerson { Name = "Ada", Age = 36L }) = "{\"Age\":36,\"Name\":\"Ada\"}"
 Stdlib.Json.parse<JsonParityPerson>("{\"Name\":\"Ada\",\"Age\":36,\"extra\":true}") = Stdlib.Result.Result.Ok(JsonParityPerson { Name = "Ada", Age = 36L })
 Stdlib.Json.parse<JsonParityAlias>("{\"Name\":\"Ada\",\"Age\":36}") = Stdlib.Result.Result.Ok(JsonParityPerson { Name = "Ada", Age = 36L })
+Stdlib.Json.parse<List<JsonParityPerson>>("[{\"Name\":\"Ada\",\"Age\":36},{\"Name\":\"Grace\",\"Age\":37}]") = Stdlib.Result.Result.Ok([JsonParityPerson { Name = "Ada", Age = 36L }, JsonParityPerson { Name = "Grace", Age = 37L }])
 jsonParityError<JsonParityPerson>(Stdlib.Json.parse<JsonParityPerson>("{\"Age\":36}")) = "Can't parse JSON because `Name` field is not provided at path: `root`"
 jsonParityError<JsonParityPerson>(Stdlib.Json.parse<JsonParityPerson>("{\"Name\":\"Ada\",\"Age\":1,\"Age\":2}")) = "Can't parse JSON because `Age` is defined more than once at path: `root`"
 Stdlib.Json.serialize<JsonParityChoice>(JsonParityChoice.JsonParityYes("because", 7L)) = "{\"JsonParityYes\":[\"because\",7]}"

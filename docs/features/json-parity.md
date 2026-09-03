@@ -54,8 +54,11 @@ list results. Builder fields append in call order; every optional adder omits
 `Json.serialize<a>` and `Json.parse<a>` are AOT intrinsics. Specialization
 materializes thin codecs for the concrete type; generated code does not inspect
 runtime type metadata. Typed parsing lexically validates one complete root and
-passes shallow owned raw slices through shared scalar and container helpers,
-without constructing the private `AltJson.InternalRawJson` tree. Typed
+passes allocation-free packed source ranges through shared scalar and container
+helpers, without constructing the private `AltJson.InternalRawJson` tree or
+copying nested input. Lists consume a streaming index cursor, records build one
+field index in source order, and the syntax scan carries a single-field-object
+bit that avoids rescanning the normal enum envelope. Typed
 serialization threads a shared writer through codecs, centralizing punctuation
 and escaping instead of generating `StringConcat` trees.
 
@@ -127,7 +130,7 @@ JSON extensions. There are no JSON-specific compiler-only serialized types.
   `RuntimeTypes*.dark`, and `LanguageTools.dark` sources.
 - AOT plan construction and recursive record/enum substitution:
   `src/DarkCompiler/passes/1.7_JsonPlanning.fs`.
-- The shared slice reader, container traversal, scalar extraction, and writer
+- The shared packed-range reader, container traversal, scalar extraction, and writer
   primitives are in `src/DarkCompiler/stdlib/Json.dark`.
 - Generic intrinsic checking and unsupported-shape diagnostics:
   `src/DarkCompiler/passes/1.5_TypeChecking.fs`.

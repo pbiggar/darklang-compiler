@@ -112,7 +112,8 @@ let rec countMatches (expr: Expr) : int =
     | Match _ -> childCount + 1
     | _ -> childCount
 
-/// Sum equality should lower to one pair-match instead of nested match trees.
+/// Sum equality should match the left value once and then match only the
+/// corresponding right-hand variant, avoiding tuple pair-match expansion.
 let testSumEqualityUsesSinglePairMatch () : TestResult =
     let sumDef =
         TypeDef (
@@ -169,8 +170,8 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
                 | Error err ->
                     Error err
                 | Ok expressionMatchCount ->
-                    if helperMatchCount <> 1 then
-                        Error $"Expected helper body to contain one Match, got {helperMatchCount}"
+                    if helperMatchCount <> 3 then
+                        Error $"Expected one outer and two variant-local Matches, got {helperMatchCount}"
                     elif expressionMatchCount <> 0 then
                         Error $"Expected top-level expression to call helper without Match nodes, got {expressionMatchCount}"
                     else
@@ -364,7 +365,7 @@ let tests = [
     ("Integer literal", testInt64Literal)
     ("Int128 literal", testInt128Literal)
     ("UInt128 literal", testUInt128Literal)
-    ("Sum equality uses single pair match", testSumEqualityUsesSinglePairMatch)
+    ("Sum equality uses sequential variant matches", testSumEqualityUsesSinglePairMatch)
     ("Record access rejects invalid record arity", testRecordAccessRejectsInvalidRecordArity)
     ("Addition", testAddition)
     ("Subtraction", testSubtraction)
