@@ -7,6 +7,8 @@ module Stdlib.Json
 // separately, so ordinary nested views remain allocation-free.
 type InternalValueView = Int64
 
+type InternalObjectField = ObjectField of Stdlib.Json.InternalValueView | DuplicateObjectField
+
 type InternalEnumObject = EnumNotObject | EnumNoFields | EnumOneField of String * Stdlib.Json.InternalValueView | EnumManyFields of List<String>
 
 let __makeView(start: Int64, endIndex: Int64) : Stdlib.Json.InternalValueView =
@@ -324,7 +326,7 @@ let __objectFields(source: String, view: Stdlib.Json.InternalValueView) : Stdlib
     if Stdlib.Json.__viewByte(source, view) != 123L then Stdlib.Option.Option.None
     else Stdlib.Json.__collectObjectFields(source, Stdlib.Json.__viewStart(view) + 1L, Stdlib.Json.__viewEnd(view))
 
-let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dict<List<Stdlib.Json.InternalValueView>>) : Stdlib.Option.Option<Dict<List<Stdlib.Json.InternalValueView>>> =
+let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dict<Stdlib.Json.InternalObjectField>) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalObjectField>> =
     let current = Stdlib.AltJson.__skipTrivia(source, index, limit) in
     if current < 0L || current >= limit then Stdlib.Option.Option.None
     else if Stdlib.String.getByteAt(source, current) == 125L then
@@ -348,12 +350,12 @@ let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dic
                         if (scannedValue & 4611686018427387904L) != 0L then
                             plainValue ||| -9223372036854775808L
                         else plainValue in
-                    let values =
-                        match Stdlib.Dict.get<List<Stdlib.Json.InternalValueView>>(acc, key) with
-                        | None -> [value]
-                        | Some(existing) -> Stdlib.List.push<Stdlib.Json.InternalValueView>(existing, value) in
+                    let field =
+                        match Stdlib.Dict.get<Stdlib.Json.InternalObjectField>(acc, key) with
+                        | None -> Stdlib.Json.InternalObjectField.ObjectField(value)
+                        | Some(_) -> Stdlib.Json.InternalObjectField.DuplicateObjectField in
                     let nextAcc =
-                        Stdlib.Dict.setOverridingDuplicates<List<Stdlib.Json.InternalValueView>>(acc, key, values) in
+                        Stdlib.Dict.setOverridingDuplicates<Stdlib.Json.InternalObjectField>(acc, key, field) in
                     let afterTrivia = Stdlib.AltJson.__skipTrivia(source, afterValue, limit) in
                     if afterTrivia < 0L || afterTrivia >= limit then Stdlib.Option.Option.None
                     else
@@ -363,7 +365,7 @@ let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dic
                             Stdlib.Json.__collectObjectFieldMap(source, afterTrivia + 1L, limit, nextAcc)
                         else Stdlib.Option.Option.None
 
-let __objectFieldMap(source: String, view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Dict<List<Stdlib.Json.InternalValueView>>> =
+let __objectFieldMap(source: String, view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalObjectField>> =
     if Stdlib.Json.__viewByte(source, view) != 123L then Stdlib.Option.Option.None
     else
         Stdlib.Json.__collectObjectFieldMap(

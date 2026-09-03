@@ -81,10 +81,6 @@ let private writerEndObject writer = call "Stdlib.Json.__writerEndObject" [write
 let private writerSeparator writer = call "Stdlib.Json.__writerSeparator" [writer]
 let private writerFieldName writer name = call "Stdlib.Json.__writerFieldName" [writer; name]
 
-let private viewHeadName = "Stdlib.Json.__viewListHead"
-let private viewTailName = "Stdlib.Json.__viewListTail"
-let private viewIsEmptyName = "Stdlib.Json.__viewListIsEmpty"
-
 let rec private typeReference typ =
     let owner = "Darklang.LanguageTools.RuntimeTypes.TypeReference"
     let nullary caseName = constructor owner caseName None
@@ -740,7 +736,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 // Conversion checks required fields in declaration order; wire
                 // serialization is independently ordinal-by-name.
                 let fields = recordInfo.Fields
-                let viewListType = TList valueViewType
+                let objectFieldType = TSum ("Stdlib.Json.InternalObjectField", [])
                 let rec build remaining current decodedFields =
                     match remaining with
                     | [] ->
@@ -758,7 +754,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         let matches =
                             TypeApp (
                                 "Stdlib.Dict.get",
-                                [viewListType],
+                                [objectFieldType],
                                 args [Var "__object_field_map"; StringLiteral fieldName])
                         let fieldPath =
                             listPush
@@ -776,17 +772,15 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                                     matches,
                                     [ makeCase (PConstructor ("None", None)) missing
                                       makeCase
-                                        (PConstructor ("Some", Some (PVar "__matches")))
-                                        (Let (
-                                            LPVariable "__field_raw",
-                                            call viewHeadName [Var "__matches"],
-                                            Let (
-                                                LPVariable "__field_rest",
-                                                call viewTailName [Var "__matches"],
-                                                If (
-                                                    call viewIsEmptyName [Var "__field_rest"],
-                                                    one,
-                                                    duplicate)))) ]),
+                                        (PConstructor (
+                                            "Some",
+                                            Some (PConstructor ("ObjectField", Some (PVar "__field_raw")))))
+                                        one
+                                      makeCase
+                                        (PConstructor (
+                                            "Some",
+                                            Some (PConstructor ("DuplicateObjectField", None))))
+                                        duplicate ]),
                                  finalState)))
                 build fields state []
                 |> Result.map (fun (decoded, nextState) ->
