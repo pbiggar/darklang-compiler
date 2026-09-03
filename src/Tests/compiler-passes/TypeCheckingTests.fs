@@ -165,12 +165,18 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
                 Error "Expected generated structural equality helper function for sum equality"
             | helperDef :: _ ->
                 let helperMatchCount = countMatches helperDef.Body
+                let helperCaseCount =
+                    match helperDef.Body with
+                    | Let (_, _, Match (_, cases)) -> List.length cases
+                    | _ -> 0
                 match expressionMatchCountResult with
                 | Error err ->
                     Error err
                 | Ok expressionMatchCount ->
                     if helperMatchCount <> 1 then
                         Error $"Expected helper body to contain one Match, got {helperMatchCount}"
+                    elif helperCaseCount <> 3 then
+                        Error $"Expected two unique variant cases and one default, got {helperCaseCount} cases"
                     elif expressionMatchCount <> 0 then
                         Error $"Expected top-level expression to call helper without Match nodes, got {expressionMatchCount}"
                     else

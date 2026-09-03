@@ -6087,6 +6087,7 @@ let rec private buildEqHelperExpr
                         Some (variantName, tag, concretePayloadOpt)
                     else
                         None)
+                |> List.distinctBy (fun (_, tag, _) -> tag)
                 |> List.sortBy (fun (_, tag, _) -> tag)
 
             let variantCases =
