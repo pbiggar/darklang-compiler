@@ -6087,6 +6087,8 @@ let rec private buildEqHelperExpr
                         Some (variantName, tag, concretePayloadOpt)
                     else
                         None)
+                |> List.sortBy (fun (variantName, tag, _) ->
+                    (tag, not (variantName.StartsWith($"{sumTypeName}."))))
                 |> List.distinctBy (fun (_, tag, _) -> tag)
                 |> List.sortBy (fun (_, tag, _) -> tag)
 
