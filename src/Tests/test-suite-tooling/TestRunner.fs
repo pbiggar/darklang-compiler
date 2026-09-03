@@ -32,6 +32,8 @@ let printHelp () =
     println "  --roundtrip-all-dark  Include all upstream .dark files in parser/pretty corpus roundtrip"
     println "  --all-test-timings  Print timing for every test in final timing summary"
     println "  --timings-json=PATH  Write machine-readable timing data to PATH"
+    println "  --codegen-profile-json=PATH  Write opt-in per-function ARM64 codegen metrics"
+    println "  --json-benchmark=PATH  Run the focused JSON benchmark and write JSON results"
     println "  --quiet            Quiet mode: print 'success' or list failed tests"
     println "  --ai               AI mode: compact output with a dot every 250 completed tests"
     println "  --verbose, -v      Print failing tests as soon as they occur"
@@ -89,8 +91,43 @@ type TimingJsonPayload =
       tests: TimingJsonTest array
       passes: TimingJsonPass array }
 
+type CodegenProfileFunction = {
+    name: string
+    category: string
+    generations: int
+    elapsed_ms: float
+    lir_instructions: int
+    symbolic_instructions: int
+}
+
+type CodegenProfileCategory = {
+    name: string
+    elapsed_ms: float
+    percentage_of_codegen: float
+    functions: int
+    generations: int
+}
+
+type CodegenProfileSummary = {
+    codegen_ms: float
+    attributed_function_ms: float
+    program_overhead_ms: float
+    cache_hits: int
+    cache_misses: int
+}
+
+type CodegenProfilePayload = {
+    schema_version: int
+    summary: CodegenProfileSummary
+    categories: CodegenProfileCategory array
+    functions: CodegenProfileFunction array
+}
+
 let private milliseconds (elapsed: TimeSpan) : float =
     Math.Round(elapsed.TotalMilliseconds, 3)
+
+let private roundedMilliseconds (value: float) : float =
+    Math.Round(value, 3)
 
 let private optionalMilliseconds (elapsed: TimeSpan option) : Nullable<float> =
     match elapsed with
@@ -134,6 +171,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         | Ok path -> path
         | Error msg -> Crash.crash msg
 
+    let codegenProfileJsonPath =
+        match parseCodegenProfileJsonArg args with
+        | Ok path -> path
+        | Error msg -> Crash.crash msg
+
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
     match filter with
     | Some pattern -> println $"{Colors.gray}  Filter: {pattern}{Colors.reset}"
@@ -148,6 +190,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     match timingsJsonPath with
     | Some path ->
         println $"{Colors.gray}  Timing JSON output: {path}{Colors.reset}"
+    | None -> ()
+    match codegenProfileJsonPath with
+    | Some path ->
+        println $"{Colors.gray}  Codegen profile JSON output: {path}{Colors.reset}"
     | None -> ()
     println ""
 
@@ -463,6 +509,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
           SectionPrefix = "└─" }
 
     let runState = TestFramework.createStateWithProgressReporter completedTestReporter
+    let codegenMetrics = ResizeArray<CompilerLibrary.CodegenFunctionMetric>()
+    let mutable codegenCacheHits = 0
+    let mutable codegenCacheMisses = 0
     let recordTiming = TestFramework.recordTiming runState
     let recordResults = TestFramework.recordResults runState
     let recordPassTiming = TestFramework.recordPassTiming runState
@@ -626,7 +675,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         let stdlib = baseStdlib
         let numTests = testsArray.Length
         if numTests > 0 then
-            use compilationSession = new CompilerLibrary.CompilationSession()
+            use compilationSession =
+                new CompilerLibrary.CompilationSession(Option.isSome codegenProfileJsonPath)
             let suitePassTimingStart = passTimingTotal ()
             let suiteContextTimer = Stopwatch.StartNew()
             let suiteContextsResult =
@@ -778,6 +828,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
             else
                 println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+
+            if Option.isSome codegenProfileJsonPath then
+                codegenMetrics.AddRange(compilationSession.Arm64CodegenMetrics)
+                codegenCacheHits <- codegenCacheHits + compilationSession.Arm64CodegenHitCount
+                codegenCacheMisses <- codegenCacheMisses + compilationSession.Arm64CodegenMissCount
 
     let runPassTestFile
         (loadTest: string -> Result<'input, string>)
@@ -1237,6 +1292,80 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         println $"  {Colors.gray}⏱  Wrote timing JSON: {path}{Colors.reset}"
     | None -> ()
 
+    let writeCodegenProfileJson (path: string) : unit =
+        let categoryForFunction (name: string) : string =
+            if name.StartsWith("Stdlib.Json.", StringComparison.Ordinal)
+               || name.StartsWith("Stdlib.AltJson.", StringComparison.Ordinal) then
+                "shared_json_runtime"
+            elif name.StartsWith("__dark_json_", StringComparison.Ordinal) then
+                "generated_json_codec"
+            elif name.StartsWith("__dark_eq_", StringComparison.Ordinal)
+                 && (name.Contains("Json", StringComparison.Ordinal)
+                     || name.Contains("TypeReferenc", StringComparison.Ordinal)) then
+                "generated_json_equality"
+            else
+                "other"
+
+        let functionEntries =
+            codegenMetrics
+            |> Seq.groupBy (fun metric -> metric.FunctionName)
+            |> Seq.map (fun (name, metrics) ->
+                let metrics = metrics |> Seq.toArray
+                {
+                    name = name
+                    category = categoryForFunction name
+                    generations = metrics.Length
+                    elapsed_ms = metrics |> Array.sumBy (fun metric -> metric.Elapsed.TotalMilliseconds) |> roundedMilliseconds
+                    lir_instructions = metrics |> Array.sumBy (fun metric -> metric.LirInstructionCount)
+                    symbolic_instructions = metrics |> Array.sumBy (fun metric -> metric.SymbolicInstructionCount)
+                })
+            |> Seq.sortByDescending (fun entry -> entry.elapsed_ms)
+            |> Seq.toArray
+
+        let codegenMs =
+            Map.tryFind "Code Generation" runState.PassTimings
+            |> Option.defaultValue TimeSpan.Zero
+            |> milliseconds
+        let attributedMs = functionEntries |> Array.sumBy (fun entry -> entry.elapsed_ms)
+        let categoryEntries =
+            functionEntries
+            |> Array.groupBy (fun entry -> entry.category)
+            |> Array.map (fun (name, entries) ->
+                let elapsed = entries |> Array.sumBy (fun entry -> entry.elapsed_ms)
+                {
+                    name = name
+                    elapsed_ms = roundedMilliseconds elapsed
+                    percentage_of_codegen =
+                        if codegenMs <= 0.0 then 0.0
+                        else roundedMilliseconds (elapsed * 100.0 / codegenMs)
+                    functions = entries.Length
+                    generations = entries |> Array.sumBy (fun entry -> entry.generations)
+                })
+            |> Array.sortByDescending (fun entry -> entry.elapsed_ms)
+        let payload = {
+            schema_version = 1
+            summary = {
+                codegen_ms = codegenMs
+                attributed_function_ms = roundedMilliseconds attributedMs
+                program_overhead_ms = roundedMilliseconds (max 0.0 (codegenMs - attributedMs))
+                cache_hits = codegenCacheHits
+                cache_misses = codegenCacheMisses
+            }
+            categories = categoryEntries
+            functions = functionEntries
+        }
+        let options = JsonSerializerOptions(WriteIndented = true)
+        let directory = Path.GetDirectoryName(path)
+        if not (String.IsNullOrWhiteSpace(directory)) then
+            Directory.CreateDirectory(directory) |> ignore
+        File.WriteAllText(path, JsonSerializer.Serialize(payload, options))
+
+    match codegenProfileJsonPath with
+    | Some path ->
+        writeCodegenProfileJson path
+        println $"  {Colors.gray}⏱  Wrote codegen profile JSON: {path}{Colors.reset}"
+    | None -> ()
+
     // Print slowest tests
     if runState.Timings.Count > 0 then
         let title =
@@ -1494,14 +1623,21 @@ let private runAiMode (args: string array) : int =
 
 [<EntryPoint>]
 let main args =
-    if hasHelpArg args then
-        printHelp ()
-        0
-    elif hasQuietArg args then
-        captureOutput (fun () -> runTests args)
-        |> printQuietResult
-    elif hasAiArg args then
-        runAiMode args
-    else
-        let result = runTests args
-        result.ExitCode
+    match parseJsonBenchmarkArg args with
+    | Error message ->
+        Console.Error.WriteLine(message)
+        1
+    | Ok (Some path) ->
+        JsonPerformanceBenchmarks.run path
+    | Ok None ->
+        if hasHelpArg args then
+            printHelp ()
+            0
+        elif hasQuietArg args then
+            captureOutput (fun () -> runTests args)
+            |> printQuietResult
+        elif hasAiArg args then
+            runAiMode args
+        else
+            let result = runTests args
+            result.ExitCode

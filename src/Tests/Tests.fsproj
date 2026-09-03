@@ -43,6 +43,7 @@
     <Compile Include="test-suite-tooling/ProgressBar.fs" />
     <Compile Include="test-suite-tooling/TestFramework.fs" />
     <Compile Include="test-suite-tooling/TestRunnerArgs.fs" />
+    <Compile Include="test-suite-tooling/JsonPerformanceBenchmarks.fs" />
 
     <!-- Tests for test suite tooling -->
     <Compile Include="test-suite-tooling-tests/ScriptHelperTests.fs" />

@@ -25,7 +25,19 @@ let testTimingsJsonRejectsEmptyPath () : TestResult =
     | Error "--timings-json requires a non-empty path" -> Ok ()
     | Error msg -> Error $"Unexpected error: {msg}"
 
+let testCodegenProfileJsonParsesPath () : TestResult =
+    match parseCodegenProfileJsonArg [| "--codegen-profile-json=/tmp/codegen.json" |] with
+    | Ok value -> expectEqual (Some "/tmp/codegen.json") value
+    | Error msg -> Error $"Expected valid codegen profile path, got error: {msg}"
+
+let testJsonBenchmarkParsesPath () : TestResult =
+    match parseJsonBenchmarkArg [| "--json-benchmark=/tmp/json-benchmark.json" |] with
+    | Ok value -> expectEqual (Some "/tmp/json-benchmark.json") value
+    | Error msg -> Error $"Expected valid JSON benchmark path, got error: {msg}"
+
 let tests = [
     ("timings JSON parses path", testTimingsJsonParsesPath)
     ("timings JSON rejects empty path", testTimingsJsonRejectsEmptyPath)
+    ("codegen profile JSON parses path", testCodegenProfileJsonParsesPath)
+    ("JSON benchmark parses path", testJsonBenchmarkParsesPath)
 ]

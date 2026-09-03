@@ -137,11 +137,21 @@ let defaultOptions : CompilerOptions = {
 
 /// Explicit lifetime for reuse across a bounded group of compilations (the E2E
 /// runner owns one per suite). No compiler-global cache is retained.
-type CompilationSession() =
+type CodegenFunctionMetric = {
+    FunctionName: string
+    Elapsed: TimeSpan
+    LirInstructionCount: int
+    SymbolicInstructionCount: int
+}
+
+type CompilationSession(collectCodegenMetrics: bool) =
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
+    let arm64CodegenMetrics = ResizeArray<CodegenFunctionMetric>()
     let mutable disposed = false
     let mutable arm64CodegenHitCount = 0
     let mutable arm64CodegenMissCount = 0
+
+    new() = new CompilationSession(false)
 
     member _.CodegenFunction
         (target: ARM64.TargetConfig)
@@ -157,7 +167,28 @@ type CompilationSession() =
                 arm64CodegenHitCount <- arm64CodegenHitCount + 1
                 result
             | false, _ ->
+                let timer =
+                    if collectCodegenMetrics then Some (Stopwatch.StartNew())
+                    else None
                 let result = generate ()
+                match timer with
+                | Some timer ->
+                    timer.Stop()
+                    let lirInstructionCount =
+                        func.CFG.Blocks
+                        |> Map.toSeq
+                        |> Seq.sumBy (fun (_, block) -> block.Instrs.Length + 1)
+                    let symbolicInstructionCount =
+                        match result with
+                        | Ok instructions -> instructions.Length
+                        | Error _ -> 0
+                    arm64CodegenMetrics.Add {
+                        FunctionName = func.Name
+                        Elapsed = timer.Elapsed
+                        LirInstructionCount = lirInstructionCount
+                        SymbolicInstructionCount = symbolicInstructionCount
+                    }
+                | None -> ()
                 arm64Functions.[key] <- result
                 arm64CodegenMissCount <- arm64CodegenMissCount + 1
                 result
@@ -165,10 +196,12 @@ type CompilationSession() =
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
+    member _.Arm64CodegenMetrics = arm64CodegenMetrics |> Seq.toList
 
     interface IDisposable with
         member _.Dispose() =
             arm64Functions.Clear()
+            arm64CodegenMetrics.Clear()
             disposed <- true
 
 let private recordPassTiming

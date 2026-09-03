@@ -29,6 +29,28 @@ Run these inside the supported development environment. Dependencies and
 implementation details are provided by the devcontainer; do not install them
 on the host for repository work.
 
+## Typed JSON diagnostics
+
+The test executable provides two opt-in JSON diagnostics. Build it first with
+`./run-tests --ai --build-only`, then run:
+
+```bash
+bin/Tests/Debug/net10.0/Tests --ai --filter=json \
+  --timings-json=/tmp/json-timings.json \
+  --codegen-profile-json=/tmp/json-codegen.json
+
+bin/Tests/Debug/net10.0/Tests \
+  --json-benchmark=/tmp/json-benchmark.json
+```
+
+The codegen profile attributes ARM64 cache misses by function and reports the
+remaining whole-program codegen time separately. Profiling is disabled unless
+the output flag is present. The focused benchmark validates and times scalar,
+1 KiB flat-record, 1 KiB collection, and 64 KiB nested record/sum decodes; it
+also records executable size and performs a separate leak-check build of each
+case. These are diagnostic comparisons and do not replace the canonical
+routine benchmark gate.
+
 ## Contract
 
 `PARITY.json` locks full and quick Dark/Rust source hashes, expected output, and

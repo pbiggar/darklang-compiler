@@ -52,6 +52,20 @@ let parseTimingsJsonArg (args: string array) : Result<string option, string> =
     | Some path when path.Trim() = "" -> Error "--timings-json requires a non-empty path"
     | Some path -> Ok (Some path)
 
+// Parse --codegen-profile-json=PATH option
+let parseCodegenProfileJsonArg (args: string array) : Result<string option, string> =
+    match parsePrefixedArg "--codegen-profile-json=" args with
+    | None -> Ok None
+    | Some path when path.Trim() = "" -> Error "--codegen-profile-json requires a non-empty path"
+    | Some path -> Ok (Some path)
+
+// Parse --json-benchmark=PATH option
+let parseJsonBenchmarkArg (args: string array) : Result<string option, string> =
+    match parsePrefixedArg "--json-benchmark=" args with
+    | None -> Ok None
+    | Some path when path.Trim() = "" -> Error "--json-benchmark requires a non-empty path"
+    | Some path -> Ok (Some path)
+
 // Check if a test name matches the filter (case-insensitive substring match)
 let matchesFilter (filter: string option) (testName: string) : bool =
     match filter with

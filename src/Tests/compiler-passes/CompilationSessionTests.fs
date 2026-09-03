@@ -83,6 +83,22 @@ let testArm64CodegenCacheSegregatesTargetOptionsAndCoverage (_: CompilerLibrary.
     else
         Error $"Expected target/options entries to segregate and coverage to bypass cache, got calls={calls.Count}, cached={session.CachedArm64FunctionCount}, hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}"
 
+let testArm64CodegenMetricsAreOptIn (_: CompilerLibrary.StdlibResult) () : TestResult =
+    use ordinary = new CompilerLibrary.CompilationSession()
+    use profiled = new CompilerLibrary.CompilationSession(true)
+    let target = ARM64.targetConfigFor Platform.MacOSARM64
+    let generate () = Ok [ARM64Symbolic.RET]
+    let _ = ordinary.CodegenFunction target CodeGen.defaultOptions fakeFunction generate
+    let _ = profiled.CodegenFunction target CodeGen.defaultOptions fakeFunction generate
+    match ordinary.Arm64CodegenMetrics, profiled.Arm64CodegenMetrics with
+    | [], [metric] when
+        metric.FunctionName = fakeFunction.Name
+        && metric.LirInstructionCount = 1
+        && metric.SymbolicInstructionCount = 1 ->
+        Ok ()
+    | ordinaryMetrics, profiledMetrics ->
+        Error $"Expected only the opted-in session to retain one function metric, got ordinary={ordinaryMetrics.Length}, profiled={profiledMetrics.Length}"
+
 let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
     let first = new CompilerLibrary.CompilationSession()
     let second = new CompilerLibrary.CompilationSession()
@@ -100,5 +116,6 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
 let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
+    ("compilation session codegen metrics are opt-in", testArm64CodegenMetricsAreOptIn stdlib)
     ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
 ]
