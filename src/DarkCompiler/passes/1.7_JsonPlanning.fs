@@ -736,7 +736,6 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 // Conversion checks required fields in declaration order; wire
                 // serialization is independently ordinal-by-name.
                 let fields = recordInfo.Fields
-                let objectFieldType = TSum ("Stdlib.Json.InternalObjectField", [])
                 let rec build remaining current decodedFields =
                     match remaining with
                     | [] ->
@@ -754,7 +753,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         let matches =
                             TypeApp (
                                 "Stdlib.Dict.get",
-                                [objectFieldType],
+                                [valueViewType],
                                 args [Var "__object_field_map"; StringLiteral fieldName])
                         let fieldPath =
                             listPush
@@ -772,15 +771,11 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                                     matches,
                                     [ makeCase (PConstructor ("None", None)) missing
                                       makeCase
-                                        (PConstructor (
-                                            "Some",
-                                            Some (PConstructor ("ObjectField", Some (PVar "__field_raw")))))
-                                        one
-                                      makeCase
-                                        (PConstructor (
-                                            "Some",
-                                            Some (PConstructor ("DuplicateObjectField", None))))
-                                        duplicate ]),
+                                        (PConstructor ("Some", Some (PVar "__field_raw")))
+                                        (If (
+                                            call "Stdlib.Json.__viewIsDuplicate" [Var "__field_raw"],
+                                            duplicate,
+                                            one)) ]),
                                  finalState)))
                 build fields state []
                 |> Result.map (fun (decoded, nextState) ->

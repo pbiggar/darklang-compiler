@@ -2,12 +2,10 @@
 
 module Stdlib.Json
 
-// A view packs a 31-bit source start, a 32-bit source end, and a one-bit
-// single-field-object hint into an Int64. Generated codecs pass the source
-// separately, so ordinary nested views remain allocation-free.
+// A view packs 31-bit source offsets plus single-field-object and duplicate
+// hints into an Int64. Generated codecs pass the source separately, so
+// ordinary nested views and object-field index entries remain allocation-free.
 type InternalValueView = Int64
-
-type InternalObjectField = ObjectField of Stdlib.Json.InternalValueView | DuplicateObjectField
 
 type InternalEnumObject = EnumNotObject | EnumNoFields | EnumOneField of String * Stdlib.Json.InternalValueView | EnumManyFields of List<String>
 
@@ -18,9 +16,15 @@ let __viewStart(view: Stdlib.Json.InternalValueView) : Int64 =
     (view >> 32L) & 2147483647L
 
 let __viewEnd(view: Stdlib.Json.InternalValueView) : Int64 =
-    view & 4294967295L
+    view & 2147483647L
 
 let __viewHasSingleField(view: Stdlib.Json.InternalValueView) : Bool = view < 0L
+
+let __viewIsDuplicate(view: Stdlib.Json.InternalValueView) : Bool =
+    (view & 2147483648L) != 0L
+
+let __markDuplicate(view: Stdlib.Json.InternalValueView) : Stdlib.Json.InternalValueView =
+    view ||| 2147483648L
 
 let __scanStringChars(source: String, index: Int64, length: Int64) : Int64 =
     if index >= length then -1L
@@ -326,7 +330,7 @@ let __objectFields(source: String, view: Stdlib.Json.InternalValueView) : Stdlib
     if Stdlib.Json.__viewByte(source, view) != 123L then Stdlib.Option.Option.None
     else Stdlib.Json.__collectObjectFields(source, Stdlib.Json.__viewStart(view) + 1L, Stdlib.Json.__viewEnd(view))
 
-let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dict<Stdlib.Json.InternalObjectField>) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalObjectField>> =
+let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dict<Stdlib.Json.InternalValueView>) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalValueView>> =
     let current = Stdlib.AltJson.__skipTrivia(source, index, limit) in
     if current < 0L || current >= limit then Stdlib.Option.Option.None
     else if Stdlib.String.getByteAt(source, current) == 125L then
@@ -351,11 +355,11 @@ let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dic
                             plainValue ||| -9223372036854775808L
                         else plainValue in
                     let field =
-                        match Stdlib.Dict.get<Stdlib.Json.InternalObjectField>(acc, key) with
-                        | None -> Stdlib.Json.InternalObjectField.ObjectField(value)
-                        | Some(_) -> Stdlib.Json.InternalObjectField.DuplicateObjectField in
+                        match Stdlib.Dict.get<Stdlib.Json.InternalValueView>(acc, key) with
+                        | None -> value
+                        | Some(_) -> Stdlib.Json.__markDuplicate(value) in
                     let nextAcc =
-                        Stdlib.Dict.setOverridingDuplicates<Stdlib.Json.InternalObjectField>(acc, key, field) in
+                        Stdlib.Dict.setOverridingDuplicates<Stdlib.Json.InternalValueView>(acc, key, field) in
                     let afterTrivia = Stdlib.AltJson.__skipTrivia(source, afterValue, limit) in
                     if afterTrivia < 0L || afterTrivia >= limit then Stdlib.Option.Option.None
                     else
@@ -365,7 +369,7 @@ let __collectObjectFieldMap(source: String, index: Int64, limit: Int64, acc: Dic
                             Stdlib.Json.__collectObjectFieldMap(source, afterTrivia + 1L, limit, nextAcc)
                         else Stdlib.Option.Option.None
 
-let __objectFieldMap(source: String, view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalObjectField>> =
+let __objectFieldMap(source: String, view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalValueView>> =
     if Stdlib.Json.__viewByte(source, view) != 123L then Stdlib.Option.Option.None
     else
         Stdlib.Json.__collectObjectFieldMap(

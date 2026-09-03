@@ -44,6 +44,8 @@ let testTypedDecodingUsesSharedViews
             Error "Expected record decoding to build its field index in one source-order pass"
         elif planned.Contains "Stdlib.Json.__matchingViews" then
             Error "Record decoding still scans the object once per declared field"
+        elif not (planned.Contains "Stdlib.Json.__viewIsDuplicate") then
+            Error "Expected record decoding to use allocation-free duplicate markers"
         elif not (planned.Contains "Stdlib.Json.__arrayNext") then
             Error "Expected list decoding to consume the shared streaming array cursor"
         else
