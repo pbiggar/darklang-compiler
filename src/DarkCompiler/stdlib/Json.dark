@@ -2,6 +2,320 @@
 
 module Stdlib.Json
 
+type InternalScanResult = ScannedValue of endIndex: Int64 | InvalidJson
+
+type InternalEnumObject = EnumNotObject | EnumNoFields | EnumOneField of String * String | EnumManyFields of List<String>
+
+let __scanStringChars(source: String, index: Int64, length: Int64) : Int64 =
+    if index >= length then -1L
+    else
+        let byte = Stdlib.String.getByteAt(source, index) in
+        if byte == 34L then index + 1L
+        else if byte < 32L then -1L
+        else if byte != 92L then
+            let decoded = Stdlib.String.__decodeUtf8At(source, index) in
+            let consumed = Stdlib.Tuple2.second<Int64, Int64>(decoded) in
+            Stdlib.Json.__scanStringChars(source, index + consumed, length)
+        else if index + 1L >= length then -1L
+        else
+            let escaped = Stdlib.String.getByteAt(source, index + 1L) in
+            if escaped == 34L || escaped == 92L || escaped == 47L
+               || escaped == 98L || escaped == 102L || escaped == 110L
+               || escaped == 114L || escaped == 116L then
+                Stdlib.Json.__scanStringChars(source, index + 2L, length)
+            else if escaped == 117L then
+                let first = Stdlib.AltJson.__hex4(source, index + 2L, length) in
+                if first < 0L then -1L
+                else if first >= 55296L && first <= 56319L then
+                    if index + 12L > length
+                       || Stdlib.String.getByteAt(source, index + 6L) != 92L
+                       || Stdlib.String.getByteAt(source, index + 7L) != 117L then -1L
+                    else
+                        let second = Stdlib.AltJson.__hex4(source, index + 8L, length) in
+                        if second < 56320L || second > 57343L then -1L
+                        else Stdlib.Json.__scanStringChars(source, index + 12L, length)
+                else if first >= 56320L && first <= 57343L then -1L
+                else Stdlib.Json.__scanStringChars(source, index + 6L, length)
+            else -1L
+
+let __scanString(source: String, index: Int64, length: Int64) : Int64 =
+    if index >= length || Stdlib.String.getByteAt(source, index) != 34L then -1L
+    else Stdlib.Json.__scanStringChars(source, index + 1L, length)
+
+let __scanArray(source: String, index: Int64, length: Int64) : Stdlib.Json.InternalScanResult =
+    let current = Stdlib.AltJson.__skipTrivia(source, index, length) in
+    if current < 0L || current >= length then Stdlib.Json.InternalScanResult.InvalidJson
+    else if Stdlib.String.getByteAt(source, current) == 93L then
+        Stdlib.Json.InternalScanResult.ScannedValue(current + 1L)
+    else
+        match Stdlib.Json.__scanValue(source, current, length) with
+        | InvalidJson -> Stdlib.Json.InternalScanResult.InvalidJson
+        | ScannedValue(afterValue) ->
+            let afterTrivia = Stdlib.AltJson.__skipTrivia(source, afterValue, length) in
+            if afterTrivia < 0L || afterTrivia >= length then Stdlib.Json.InternalScanResult.InvalidJson
+            else
+                let separator = Stdlib.String.getByteAt(source, afterTrivia) in
+                if separator == 93L then Stdlib.Json.InternalScanResult.ScannedValue(afterTrivia + 1L)
+                else if separator == 44L then
+                    let afterComma = Stdlib.AltJson.__skipTrivia(source, afterTrivia + 1L, length) in
+                    if afterComma < 0L || afterComma >= length
+                       || Stdlib.String.getByteAt(source, afterComma) == 93L then
+                        Stdlib.Json.InternalScanResult.InvalidJson
+                    else Stdlib.Json.__scanArray(source, afterComma, length)
+                else Stdlib.Json.InternalScanResult.InvalidJson
+
+let __scanObject(source: String, index: Int64, length: Int64) : Stdlib.Json.InternalScanResult =
+    let current = Stdlib.AltJson.__skipTrivia(source, index, length) in
+    if current < 0L || current >= length then Stdlib.Json.InternalScanResult.InvalidJson
+    else if Stdlib.String.getByteAt(source, current) == 125L then
+        Stdlib.Json.InternalScanResult.ScannedValue(current + 1L)
+    else
+        let afterKey = Stdlib.Json.__scanString(source, current, length) in
+        if afterKey < 0L then Stdlib.Json.InternalScanResult.InvalidJson
+        else
+            let colon = Stdlib.AltJson.__skipTrivia(source, afterKey, length) in
+            if colon < 0L || colon >= length || Stdlib.String.getByteAt(source, colon) != 58L then
+                Stdlib.Json.InternalScanResult.InvalidJson
+            else
+                match Stdlib.Json.__scanValue(source, colon + 1L, length) with
+                | InvalidJson -> Stdlib.Json.InternalScanResult.InvalidJson
+                | ScannedValue(afterValue) ->
+                    let afterTrivia = Stdlib.AltJson.__skipTrivia(source, afterValue, length) in
+                    if afterTrivia < 0L || afterTrivia >= length then Stdlib.Json.InternalScanResult.InvalidJson
+                    else
+                        let separator = Stdlib.String.getByteAt(source, afterTrivia) in
+                        if separator == 125L then Stdlib.Json.InternalScanResult.ScannedValue(afterTrivia + 1L)
+                        else if separator == 44L then
+                            let afterComma = Stdlib.AltJson.__skipTrivia(source, afterTrivia + 1L, length) in
+                            if afterComma < 0L || afterComma >= length
+                               || Stdlib.String.getByteAt(source, afterComma) == 125L then
+                                Stdlib.Json.InternalScanResult.InvalidJson
+                            else Stdlib.Json.__scanObject(source, afterComma, length)
+                        else Stdlib.Json.InternalScanResult.InvalidJson
+
+let __scanValue(source: String, index: Int64, length: Int64) : Stdlib.Json.InternalScanResult =
+    let start = Stdlib.AltJson.__skipTrivia(source, index, length) in
+    if start < 0L || start >= length then Stdlib.Json.InternalScanResult.InvalidJson
+    else
+        let byte = Stdlib.String.getByteAt(source, start) in
+        if byte == 110L && start + 4L <= length
+           && Stdlib.String.__byteSlice(source, start, start + 4L) == "null" then
+            Stdlib.Json.InternalScanResult.ScannedValue(start + 4L)
+        else if byte == 116L && start + 4L <= length
+                && Stdlib.String.__byteSlice(source, start, start + 4L) == "true" then
+            Stdlib.Json.InternalScanResult.ScannedValue(start + 4L)
+        else if byte == 102L && start + 5L <= length
+                && Stdlib.String.__byteSlice(source, start, start + 5L) == "false" then
+            Stdlib.Json.InternalScanResult.ScannedValue(start + 5L)
+        else if byte == 34L then
+            let afterString = Stdlib.Json.__scanString(source, start, length) in
+            if afterString < 0L then Stdlib.Json.InternalScanResult.InvalidJson
+            else Stdlib.Json.InternalScanResult.ScannedValue(afterString)
+        else if byte == 91L then Stdlib.Json.__scanArray(source, start + 1L, length)
+        else if byte == 123L then Stdlib.Json.__scanObject(source, start + 1L, length)
+        else if byte == 45L || (byte >= 48L && byte <= 57L) then
+            let afterNumber = Stdlib.AltJson.__scanNumber(source, start, length) in
+            if afterNumber < 0L then Stdlib.Json.InternalScanResult.InvalidJson
+            else Stdlib.Json.InternalScanResult.ScannedValue(afterNumber)
+        else Stdlib.Json.InternalScanResult.InvalidJson
+
+// Typed JSON keeps shallow raw slices rather than building the recursive
+// RawJson tree. The shared scanner owns syntax validation; generated decoders
+// only select fields and construct values of their statically known target
+// types.
+let __parseRoot(source: String) : Stdlib.Result.Result<String, Stdlib.Json.ParseError.ParseError> =
+    let length = Stdlib.String.__byteLength(source) in
+    let start = Stdlib.AltJson.__skipTrivia(source, 0L, length) in
+    if start < 0L then Stdlib.Result.Result.Error(Stdlib.Json.ParseError.ParseError.NotJson)
+    else
+        match Stdlib.Json.__scanValue(source, start, length) with
+        | InvalidJson -> Stdlib.Result.Result.Error(Stdlib.Json.ParseError.ParseError.NotJson)
+        | ScannedValue(afterValue) ->
+            let endIndex = Stdlib.AltJson.__skipTrivia(source, afterValue, length) in
+            if endIndex == length then
+                Stdlib.Result.Result.Ok(
+                    Stdlib.String.__byteSlice(source, start, afterValue))
+            else Stdlib.Result.Result.Error(Stdlib.Json.ParseError.ParseError.NotJson)
+
+// Managed views need concrete return types at this function boundary so the
+// ownership pass retains projections before releasing their source list.
+let __viewListHead(items: List<String>) : String =
+    Stdlib.Internal.SkewList.headUnsafe<String>(items)
+
+let __viewFieldListHead(items: List<(String, String)>) : (String, String) =
+    Stdlib.Internal.SkewList.headUnsafe<(String, String)>(items)
+
+let __viewFieldName(field: (String, String)) : String =
+    Stdlib.Tuple2.first<String, String>(field)
+
+let __viewFieldValue(field: (String, String)) : String =
+    Stdlib.Tuple2.second<String, String>(field)
+
+let __viewListTail(items: List<String>) : List<String> =
+    Stdlib.Internal.SkewList.tail<String>(items)
+
+let __viewListIsEmpty(items: List<String>) : Bool =
+    Stdlib.List.isEmpty<String>(items)
+
+let __copyRaw(raw: String) : String =
+    Stdlib.String.__byteSlice(raw, 0L, Stdlib.String.__byteLength(raw))
+
+let __viewByte(raw: String) : Int64 =
+    Stdlib.String.getByteAt(raw, 0L)
+
+let __isNull(raw: String) : Bool =
+    Stdlib.Json.__viewByte(raw) == 110L
+
+let __boolValue(raw: String) : Stdlib.Option.Option<Bool> =
+    let byte = Stdlib.Json.__viewByte(raw) in
+    if byte == 116L then Stdlib.Option.Option.Some(true)
+    else if byte == 102L then Stdlib.Option.Option.Some(false)
+    else Stdlib.Option.Option.None
+
+let __stringValue(raw: String) : Stdlib.Option.Option<String> =
+    if Stdlib.String.getByteAt(raw, 0L) != 34L then Stdlib.Option.Option.None
+    else
+        match Stdlib.AltJson.__parseString(raw, 0L, Stdlib.String.__byteLength(raw)) with
+        | ParsedString(decoded, _) -> Stdlib.Option.Option.Some(decoded)
+        | InvalidString -> Stdlib.Option.Option.None
+
+let __isNumber(raw: String) : Bool =
+    let byte = Stdlib.Json.__viewByte(raw) in
+    byte == 45L || (byte >= 48L && byte <= 57L)
+
+let __collectArrayItems(source: String, index: Int64, limit: Int64) : Stdlib.Option.Option<List<String>> =
+    let current = Stdlib.AltJson.__skipTrivia(source, index, limit) in
+    if current < 0L || current >= limit then Stdlib.Option.Option.None
+    else if Stdlib.String.getByteAt(source, current) == 93L then
+        Stdlib.Option.Option.Some([])
+    else
+        match Stdlib.Json.__scanValue(source, current, limit) with
+        | InvalidJson -> Stdlib.Option.Option.None
+        | ScannedValue(afterValue) ->
+            let value =
+                Stdlib.String.__byteSlice(source, current, afterValue) in
+            let afterTrivia = Stdlib.AltJson.__skipTrivia(source, afterValue, limit) in
+            if afterTrivia < 0L || afterTrivia >= limit then Stdlib.Option.Option.None
+            else
+                let separator = Stdlib.String.getByteAt(source, afterTrivia) in
+                if separator == 93L then
+                    Stdlib.Option.Option.Some([value])
+                else if separator == 44L then
+                    match Stdlib.Json.__collectArrayItems(source, afterTrivia + 1L, limit) with
+                    | Some(rest) ->
+                        Stdlib.Option.Option.Some(
+                            Stdlib.List.push<String>(rest, value))
+                    | None -> Stdlib.Option.Option.None
+                else Stdlib.Option.Option.None
+
+let __arrayItems(raw: String) : Stdlib.Option.Option<List<String>> =
+    if Stdlib.String.getByteAt(raw, 0L) != 91L then Stdlib.Option.Option.None
+    else Stdlib.Json.__collectArrayItems(raw, 1L, Stdlib.String.__byteLength(raw))
+
+let __collectObjectFields(source: String, index: Int64, limit: Int64) : Stdlib.Option.Option<List<(String, String)>> =
+    let current = Stdlib.AltJson.__skipTrivia(source, index, limit) in
+    if current < 0L || current >= limit then Stdlib.Option.Option.None
+    else if Stdlib.String.getByteAt(source, current) == 125L then
+        Stdlib.Option.Option.Some([])
+    else
+        match Stdlib.AltJson.__parseString(source, current, limit) with
+        | InvalidString -> Stdlib.Option.Option.None
+        | ParsedString(key, afterKey) ->
+            let colon = Stdlib.AltJson.__skipTrivia(source, afterKey, limit) in
+            if colon < 0L || colon >= limit || Stdlib.String.getByteAt(source, colon) != 58L then
+                Stdlib.Option.Option.None
+            else
+                let valueStart = Stdlib.AltJson.__skipTrivia(source, colon + 1L, limit) in
+                match Stdlib.Json.__scanValue(source, valueStart, limit) with
+                | InvalidJson -> Stdlib.Option.Option.None
+                | ScannedValue(afterValue) ->
+                    let field =
+                        (key,
+                         Stdlib.String.__byteSlice(source, valueStart, afterValue)) in
+                    let afterTrivia = Stdlib.AltJson.__skipTrivia(source, afterValue, limit) in
+                    if afterTrivia < 0L || afterTrivia >= limit then Stdlib.Option.Option.None
+                    else
+                        let separator = Stdlib.String.getByteAt(source, afterTrivia) in
+                        if separator == 125L then
+                            Stdlib.Option.Option.Some([field])
+                        else if separator == 44L then
+                            match Stdlib.Json.__collectObjectFields(source, afterTrivia + 1L, limit) with
+                            | Some(rest) ->
+                                Stdlib.Option.Option.Some(
+                                    Stdlib.List.push<(String, String)>(rest, field))
+                            | None -> Stdlib.Option.Option.None
+                        else Stdlib.Option.Option.None
+
+let __objectFields(raw: String) : Stdlib.Option.Option<List<(String, String)>> =
+    if Stdlib.String.getByteAt(raw, 0L) != 123L then Stdlib.Option.Option.None
+    else Stdlib.Json.__collectObjectFields(raw, 1L, Stdlib.String.__byteLength(raw))
+
+let __matchingViews(key: String, fields: List<(String, String)>) : List<String> =
+    if Stdlib.List.isEmpty<(String, String)>(fields) then []
+    else
+        let head = Stdlib.Internal.SkewList.headUnsafe<(String, String)>(fields) in
+        let tail = Stdlib.Internal.SkewList.tail<(String, String)>(fields) in
+        let rest = Stdlib.Json.__matchingViews(key, tail) in
+        if Stdlib.Tuple2.first<String, String>(head) == key then
+            Stdlib.List.push<String>(
+                rest,
+                Stdlib.Tuple2.second<String, String>(head))
+        else rest
+
+let __fieldNames(fields: List<(String, String)>) : List<String> =
+    if Stdlib.List.isEmpty<(String, String)>(fields) then []
+    else
+        let head = Stdlib.Internal.SkewList.headUnsafe<(String, String)>(fields) in
+        let tail = Stdlib.Internal.SkewList.tail<(String, String)>(fields) in
+        Stdlib.List.push<String>(
+            Stdlib.Json.__fieldNames(tail),
+            Stdlib.Tuple2.first<String, String>(head))
+
+let __enumObject(raw: String) : Stdlib.Json.InternalEnumObject =
+    match Stdlib.Json.__objectFields(raw) with
+    | None -> Stdlib.Json.InternalEnumObject.EnumNotObject
+    | Some(fields) ->
+        match fields with
+        | [] -> Stdlib.Json.InternalEnumObject.EnumNoFields
+        | [field] ->
+            Stdlib.Json.InternalEnumObject.EnumOneField(
+                Stdlib.Tuple2.first<String, String>(field),
+                Stdlib.Tuple2.second<String, String>(field))
+        | _ ->
+            Stdlib.Json.InternalEnumObject.EnumManyFields(
+                Stdlib.Json.__fieldNames(fields))
+
+// Encoders append fragments through a shared writer. Generated codecs only
+// choose typed values and framing operations; escaping, punctuation, and final
+// assembly stay in this shared writer implementation.
+let __writerEmpty(unitArg: Unit) : String = ""
+
+let __writerWriteRaw(writer: String, value: String) : String =
+    writer ++ value
+
+let __writerWriteString(writer: String, value: String) : String =
+    Stdlib.Json.__writerWriteRaw(writer, Stdlib.AltJson.__quote(value))
+
+let __writerBeginArray(writer: String) : String =
+    Stdlib.Json.__writerWriteRaw(writer, "[")
+
+let __writerEndArray(writer: String) : String =
+    Stdlib.Json.__writerWriteRaw(writer, "]")
+
+let __writerBeginObject(writer: String) : String =
+    Stdlib.Json.__writerWriteRaw(writer, "{")
+
+let __writerEndObject(writer: String) : String =
+    Stdlib.Json.__writerWriteRaw(writer, "}")
+
+let __writerSeparator(writer: String) : String =
+    Stdlib.Json.__writerWriteRaw(writer, ",")
+
+let __writerFieldName(writer: String, name: String) : String =
+    Stdlib.Json.__writerWriteRaw(writer, Stdlib.AltJson.__quote(name) ++ ":")
+
+let __writerFinish(writer: String) : String = writer
+
 let __padNumber(value: String, goalLength: Int64) : String =
     match Stdlib.String.padStart(value, "0", Stdlib.Int.fromInt64(goalLength)) with
     | Ok(padded) -> padded
@@ -249,14 +563,101 @@ let __integerLexeme(text: String) : Stdlib.Option.Option<String> =
         | None -> Stdlib.Option.Option.None
         | Some(value) -> Stdlib.Option.Option.Some(Stdlib.Json.__normalizeIntegerMagnitude(value)))
 
-let __matchingFields(key: String, fields: List<(String, Stdlib.AltJson.InternalRawJson)>) : List<Stdlib.AltJson.InternalRawJson> =
-    match fields with
-    | [] -> []
-    | head :: tail ->
-        let rest = Stdlib.Json.__matchingFields(key, tail) in
-        if Stdlib.Tuple2.first<String, Stdlib.AltJson.InternalRawJson>(head) == key then
-            Stdlib.List.push<Stdlib.AltJson.InternalRawJson>(rest, Stdlib.Tuple2.second<String, Stdlib.AltJson.InternalRawJson>(head))
-        else rest
+let __viewInt(value: String) : Stdlib.Option.Option<Int> =
+    if Stdlib.Json.__isNumber(value) then
+        match Stdlib.Int.parse(value) with
+        | Ok(integer) -> Stdlib.Option.Option.Some(integer)
+        | Error(_) ->
+            match Stdlib.Json.__integerLexeme(value) with
+            | None -> Stdlib.Option.Option.None
+            | Some(integerText) ->
+                match Stdlib.Int.parse(integerText) with
+                | Ok(integer) -> Stdlib.Option.Option.Some(integer)
+                | Error(_) -> Stdlib.Option.Option.None
+    else Stdlib.Option.Option.None
+
+let __viewInt8(value: String) : Stdlib.Option.Option<Int8> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toInt8(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewInt16(value: String) : Stdlib.Option.Option<Int16> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toInt16(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewInt32(value: String) : Stdlib.Option.Option<Int32> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toInt32(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewInt64(value: String) : Stdlib.Option.Option<Int64> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toInt64(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewInt128(value: String) : Stdlib.Option.Option<Int128> =
+    if Stdlib.Json.__isNumber(value) then Stdlib.Json.__numberToInt128(value)
+    else Stdlib.Option.Option.None
+
+let __viewUInt8(value: String) : Stdlib.Option.Option<UInt8> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toUInt8(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewUInt16(value: String) : Stdlib.Option.Option<UInt16> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toUInt16(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewUInt32(value: String) : Stdlib.Option.Option<UInt32> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toUInt32(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewUInt64(value: String) : Stdlib.Option.Option<UInt64> =
+    match Stdlib.Json.__viewInt(value) with
+    | Some(integer) -> Stdlib.Int.toUInt64(integer)
+    | None -> Stdlib.Option.Option.None
+
+let __viewUInt128(value: String) : Stdlib.Option.Option<UInt128> =
+    if Stdlib.Json.__isNumber(value) then Stdlib.Json.__numberToUInt128(value)
+    else Stdlib.Option.Option.None
+
+let __viewFloat(value: String) : Stdlib.Option.Option<Float> =
+    if Stdlib.Json.__isNumber(value) then Stdlib.AltJson.__numberToFloat(value)
+    else
+        match Stdlib.Json.__stringValue(value) with
+        | Some(text) ->
+            if text == "NaN" then Stdlib.Option.Option.Some(Stdlib.Float.__nan())
+            else if text == "Infinity" then Stdlib.Option.Option.Some(Stdlib.Float.__infinity())
+            else if text == "-Infinity" then Stdlib.Option.Option.Some(Stdlib.Float.__negativeInfinity())
+            else Stdlib.Option.Option.None
+        | None -> Stdlib.Option.Option.None
+
+let __viewChar(value: String) : Stdlib.Option.Option<Char> =
+    match Stdlib.Json.__stringValue(value) with
+    | Some(text) ->
+        if Stdlib.String.graphemeLength(text) == 1L then
+            Stdlib.Option.Option.Some(Stdlib.Char.__asChar(text))
+        else Stdlib.Option.Option.None
+    | None -> Stdlib.Option.Option.None
+
+let __viewUuid(value: String) : Stdlib.Option.Option<Uuid> =
+    match Stdlib.Json.__stringValue(value) with
+    | Some(text) ->
+        match Stdlib.Uuid.parse(text) with
+        | Ok(uuid) -> Stdlib.Option.Option.Some(uuid)
+        | Error(_) -> Stdlib.Option.Option.None
+    | None -> Stdlib.Option.Option.None
+
+let __viewDateTime(value: String) : Stdlib.Option.Option<DateTime> =
+    match Stdlib.Json.__stringValue(value) with
+    | Some(text) ->
+        match Stdlib.DateTime.parse(text) with
+        | Ok(dateTime) -> Stdlib.Option.Option.Some(dateTime)
+        | Error(_) -> Stdlib.Option.Option.None
+    | None -> Stdlib.Option.Option.None
 
 // These declarations establish the public generic signatures. JsonPlanning
 // replaces every concrete use before ANF lowering; reaching either body means

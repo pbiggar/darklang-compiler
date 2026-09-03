@@ -12,6 +12,24 @@ type ParseError =
     | RecordMissingField of fieldName: String * List<Stdlib.Json.ParseError.JsonPath.Part.Part>
     | NotJson
 
+let __copyString(value: String) : String =
+    Stdlib.String.__byteSlice(value, 0L, Stdlib.String.__byteLength(value))
+
+let __copyPathPart(part: Stdlib.Json.ParseError.JsonPath.Part.Part) : Stdlib.Json.ParseError.JsonPath.Part.Part =
+    match part with
+    | Root -> Stdlib.Json.ParseError.JsonPath.Part.Part.Root
+    | Index(index) -> Stdlib.Json.ParseError.JsonPath.Part.Part.Index(index)
+    | Field(fieldName) ->
+        Stdlib.Json.ParseError.JsonPath.Part.Part.Field(
+            Stdlib.Json.ParseError.__copyString(fieldName))
+
+let __copyPath(path: List<Stdlib.Json.ParseError.JsonPath.Part.Part>) : List<Stdlib.Json.ParseError.JsonPath.Part.Part> =
+    Stdlib.List.map<
+        Stdlib.Json.ParseError.JsonPath.Part.Part,
+        Stdlib.Json.ParseError.JsonPath.Part.Part>(
+            path,
+            fun part -> Stdlib.Json.ParseError.__copyPathPart(part))
+
 let __quotedCases(cases: List<String>) : List<String> =
     Stdlib.List.map<String, String>(cases, fun caseName -> "`" ++ caseName ++ "`")
 

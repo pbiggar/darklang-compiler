@@ -403,6 +403,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "ValueSearch Catalog Tests"; Tests = ValueSearchCatalogTests.tests stdlib }
         { Name = "Program Structure Tests"; Tests = ProgramStructureTests.tests stdlib }
         { Name = "Compilation Session Tests"; Tests = CompilationSessionTests.tests stdlib }
+        { Name = "JSON Planning Tests"; Tests = JsonPlanningTests.tests stdlib }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }
         { Name = "ANF to MIR Tests"; Tests = ANFToMIRTests.tests }

@@ -275,7 +275,25 @@ let private detectTailCallsInFunctionWithRegistry
     : Function =
     // The process entrypoint has no caller return address. A sibling tail branch
     // from _start would make the callee's Ret jump through an invalid address.
-    if func.Name = "_start" then
+    let isJsonOwnershipBoundary =
+        func.Name.StartsWith("Stdlib.Json.__view")
+        || func.Name = "Stdlib.Json.__stripLeadingZeroes"
+        || func.Name = "Stdlib.Json.__shiftIntegerDigits"
+        || func.Name = "Stdlib.Json.__applyIntegerExponent"
+        || func.Name = "Stdlib.Json.__unsignedIntegerLexeme"
+        || func.Name = "Stdlib.Json.__normalizeIntegerMagnitude"
+        || func.Name = "Stdlib.Json.__integerLexeme"
+    // These accessors and generated decoders project managed list/view payloads
+    // before forwarding them. A sibling tail call would move the parent release
+    // ahead of that call and invalidate the projected argument. Scanner loops
+    // remain eligible so large JSON inputs retain bounded stack usage.
+    let isGeneratedJsonRootDecoder =
+        func.Name.StartsWith("__dark_json_decode_")
+        && not (func.Name.StartsWith("__dark_json_decode_list_"))
+        && not (func.Name.StartsWith("__dark_json_decode_dict_"))
+    if func.Name = "_start"
+       || isJsonOwnershipBoundary
+       || isGeneratedJsonRootDecoder then
         func
     else
         // Function body is always in tail position

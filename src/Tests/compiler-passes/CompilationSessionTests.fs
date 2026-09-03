@@ -49,32 +49,17 @@ let private fakeFunction : LIR.Function =
         UsedCalleeSaved = []
     }
 
-let testDecoderHitAndNestedReuse (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
+let testArm64HitWithNestedJson (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
     use session = new CompilerLibrary.CompilationSession()
     let source = "Stdlib.Json.parse<List<List<Int64>>>(\"[[1,2],[3]]\")"
     match expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source),
           expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source) with
     | Ok (), Ok () when
-        session.CachedJsonPlanCount = 1
-        && session.JsonPlanHitCount = 1
-        && session.JsonPlanMissCount = 1
-        && session.Arm64CodegenHitCount > 0
+        session.Arm64CodegenHitCount > 0
         && session.Arm64CodegenMissCount > 0 ->
         Ok ()
     | Ok (), Ok () ->
-        Error $"Expected repeated nested JSON compilation to hit both caches, got JSON plans={session.CachedJsonPlanCount}, JSON hits={session.JsonPlanHitCount}, JSON misses={session.JsonPlanMissCount}, ARM64 hits={session.Arm64CodegenHitCount}, ARM64 misses={session.Arm64CodegenMissCount}"
-    | Error error, _
-    | _, Error error -> Error error
-
-let testDecoderDeclarationContextIsolation (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
-    use session = new CompilerLibrary.CompilationSession()
-    let first = "type SessionRecord = { value: Int64 }\nStdlib.Json.parse<SessionRecord>(\"{\\\"value\\\":1}\")"
-    let second = "type SessionRecord = { label: String }\nStdlib.Json.parse<SessionRecord>(\"{\\\"label\\\":\\\"one\\\"}\")"
-    match expectCompiled (compile stdlib session CompilerLibrary.defaultOptions first),
-          expectCompiled (compile stdlib session CompilerLibrary.defaultOptions second) with
-    | Ok (), Ok () when session.CachedJsonPlanCount = 2 && session.JsonPlanHitCount = 0 && session.JsonPlanMissCount = 2 -> Ok ()
-    | Ok (), Ok () ->
-        Error $"Expected isolated declaration contexts to create two decoder plans, got plans={session.CachedJsonPlanCount}, hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}"
+        Error $"Expected repeated nested JSON compilation to hit the ARM64 cache, got hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}"
     | Error error, _
     | _, Error error -> Error error
 
@@ -106,15 +91,14 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
     let secondResult = expectCompiled (compile stdlib second CompilerLibrary.defaultOptions source)
     (first :> System.IDisposable).Dispose()
     match firstResult, secondResult with
-    | Ok (), Ok () when first.CachedJsonPlanCount = 0 && second.CachedJsonPlanCount = 1 && second.JsonPlanMissCount = 1 -> Ok ()
+    | Ok (), Ok () when first.CachedArm64FunctionCount = 0 && second.CachedArm64FunctionCount > 0 -> Ok ()
     | Ok (), Ok () ->
-        Error $"Expected isolated sessions and disposal to release only the first registry, got first={first.CachedJsonPlanCount}, second={second.CachedJsonPlanCount}"
+        Error $"Expected isolated sessions and disposal to release only the first registry, got first={first.CachedArm64FunctionCount}, second={second.CachedArm64FunctionCount}"
     | Error error, _
     | _, Error error -> Error error
 
 let tests (stdlib: CompilerLibrary.StdlibResult) = [
-    ("compilation session reuses nested JSON decoders", testDecoderHitAndNestedReuse stdlib)
-    ("compilation session isolates JSON declaration contexts", testDecoderDeclarationContextIsolation stdlib)
+    ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
     ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
 ]

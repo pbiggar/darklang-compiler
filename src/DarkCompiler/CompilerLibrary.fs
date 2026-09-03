@@ -138,13 +138,10 @@ let defaultOptions : CompilerOptions = {
 /// Explicit lifetime for reuse across a bounded group of compilations (the E2E
 /// runner owns one per suite). No compiler-global cache is retained.
 type CompilationSession() =
-    let jsonPlanning = new JsonPlanning.PlanningSession()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
     let mutable disposed = false
     let mutable arm64CodegenHitCount = 0
     let mutable arm64CodegenMissCount = 0
-
-    member _.JsonPlanning = jsonPlanning
 
     member _.CodegenFunction
         (target: ARM64.TargetConfig)
@@ -166,16 +163,12 @@ type CompilationSession() =
                 result
 
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
-    member _.CachedJsonPlanCount = jsonPlanning.Count
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
-    member _.JsonPlanHitCount = jsonPlanning.HitCount
-    member _.JsonPlanMissCount = jsonPlanning.MissCount
 
     interface IDisposable with
         member _.Dispose() =
             arm64Functions.Clear()
-            (jsonPlanning :> IDisposable).Dispose()
             disposed <- true
 
 let private recordPassTiming
@@ -2087,11 +2080,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     Error
                         $"File entry expression must return Unit, Int, or Int64; got {TypeChecking.typeToString programType}"
                 | Ok (programType, typedUserAst, userEnv) ->
-                    let plannedUserAst =
-                        JsonPlanning.rewriteProgramWithSession
-                            (plan.Session |> Option.map (fun session -> session.JsonPlanning))
-                            userEnv
-                            typedUserAst
+                    let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
                     let plannedProgramType = TypeChecking.resolveType userEnv.AliasReg programType
                     let renderedUserAst, boundaryProgramType =
                         if plan.Mode = FullProgram then

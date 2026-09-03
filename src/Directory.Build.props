@@ -3,7 +3,6 @@
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
     <BaseOutputPath>$(MSBuildThisFileDirectory)../bin/$(MSBuildProjectName)/</BaseOutputPath>
     <LangVersion>10.0</LangVersion>
-    <ParallelCompilation>true</ParallelCompilation>
     <Deterministic>false</Deterministic>
   </PropertyGroup>
 </Project>

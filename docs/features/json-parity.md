@@ -52,8 +52,12 @@ list results. Builder fields append in call order; every optional adder omits
 ## Typed JSON wire contract
 
 `Json.serialize<a>` and `Json.parse<a>` are AOT intrinsics. Specialization
-materializes a recursive conversion plan for the concrete type; generated code
-does not inspect runtime type metadata.
+materializes thin codecs for the concrete type; generated code does not inspect
+runtime type metadata. Typed parsing lexically validates one complete root and
+passes shallow owned raw slices through shared scalar and container helpers,
+without constructing the private `AltJson.InternalRawJson` tree. Typed
+serialization threads a shared writer through codecs, centralizing punctuation
+and escaping instead of generating `StringConcat` trees.
 
 | Dark type | JSON wire shape |
 | --- | --- |
@@ -123,6 +127,8 @@ JSON extensions. There are no JSON-specific compiler-only serialized types.
   `RuntimeTypes*.dark`, and `LanguageTools.dark` sources.
 - AOT plan construction and recursive record/enum substitution:
   `src/DarkCompiler/passes/1.7_JsonPlanning.fs`.
+- The shared slice reader, container traversal, scalar extraction, and writer
+  primitives are in `src/DarkCompiler/stdlib/Json.dark`.
 - Generic intrinsic checking and unsupported-shape diagnostics:
   `src/DarkCompiler/passes/1.5_TypeChecking.fs`.
 - Late specialization integration and stdlib loading:

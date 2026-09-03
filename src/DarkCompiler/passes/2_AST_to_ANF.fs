@@ -616,12 +616,12 @@ let private listHeadUnsafeFunction
     (funcReg: FunctionRegistry)
     (elementType: AST.Type)
     : string =
-    let rawJsonType = AST.TSum ("Stdlib.AltJson.InternalRawJson", [])
+    let valueViewType = AST.TString
     let jsonAccessor =
         match elementType with
-        | typ when typ = rawJsonType -> Some "__dark_json_raw_head"
-        | AST.TTuple [AST.TString; typ] when typ = rawJsonType ->
-            Some "__dark_json_raw_field_head"
+        | typ when typ = valueViewType -> Some "Stdlib.Json.__viewListHead"
+        | AST.TTuple [AST.TString; typ] when typ = valueViewType ->
+            Some "Stdlib.Json.__viewFieldListHead"
         | _ -> None
     match jsonAccessor with
     | Some name when Map.containsKey name funcReg -> name

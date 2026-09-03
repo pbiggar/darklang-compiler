@@ -8,39 +8,6 @@
 module JsonPlanning
 
 open AST
-open System.Collections.Generic
-
-/// A bounded, caller-owned registry of generated JSON planning artifacts.
-/// Artifacts are deliberately AST-only: lowering remains in the normal request
-/// pipeline, so each executable retains its own entry function and layout.
-type PlanningSession() =
-    let artifacts = Dictionary<string, TopLevel list>()
-    let mutable disposed = false
-    let mutable hitCount = 0
-    let mutable missCount = 0
-
-    member _.TryFind(key: string) : TopLevel list option =
-        if disposed then None
-        else
-            match artifacts.TryGetValue key with
-            | true, value ->
-                hitCount <- hitCount + 1
-                Some value
-            | false, _ ->
-                missCount <- missCount + 1
-                None
-
-    member _.Store(key: string, functions: TopLevel list) : unit =
-        if not disposed then artifacts.[key] <- functions
-
-    member _.Count = if disposed then 0 else artifacts.Count
-    member _.HitCount = hitCount
-    member _.MissCount = missCount
-
-    interface System.IDisposable with
-        member _.Dispose() =
-            artifacts.Clear()
-            disposed <- true
 
 type private SumVariant = { Name: string; Tag: int; Payload: Type option }
 type private SumInfo = { TypeParams: string list; Variants: SumVariant list }
@@ -57,10 +24,6 @@ let private args values = NonEmptyList.fromList values
 let private call name values = Call (name, args values)
 let private listPush elementType list value =
     TypeApp ("Stdlib.List.push", [elementType], args [list; value])
-let private concat parts =
-    match parts with
-    | [] -> StringLiteral ""
-    | first :: rest -> List.fold (fun acc part -> BinOp (StringConcat, acc, part)) first rest
 
 let private stableHash (value: string) : uint64 =
     value
@@ -101,34 +64,26 @@ let private none = constructor "Stdlib.Option.Option" "None" None
 let private some value = constructor "Stdlib.Option.Option" "Some" (Some value)
 
 let private jsonErrorType = TSum ("Stdlib.Json.ParseError.ParseError", [])
-let private rawJsonType = TSum ("Stdlib.AltJson.InternalRawJson", [])
+let private valueViewType = TString
 let private pathPartType = TSum ("Stdlib.Json.ParseError.JsonPath.Part.Part", [])
 let private pathType = TList pathPartType
 let private resultType okType = TSum ("Stdlib.Result.Result", [okType; jsonErrorType])
+let private writerType = TString
 
-let private rawHeadName = "__dark_json_raw_head"
-let private rawFieldHeadName = "__dark_json_raw_field_head"
+let private writerEmpty = call "Stdlib.Json.__writerEmpty" [UnitLiteral]
+let private writerFinish writer = call "Stdlib.Json.__writerFinish" [writer]
+let private writerRaw writer value = call "Stdlib.Json.__writerWriteRaw" [writer; value]
+let private writerString writer value = call "Stdlib.Json.__writerWriteString" [writer; value]
+let private writerBeginArray writer = call "Stdlib.Json.__writerBeginArray" [writer]
+let private writerEndArray writer = call "Stdlib.Json.__writerEndArray" [writer]
+let private writerBeginObject writer = call "Stdlib.Json.__writerBeginObject" [writer]
+let private writerEndObject writer = call "Stdlib.Json.__writerEndObject" [writer]
+let private writerSeparator writer = call "Stdlib.Json.__writerSeparator" [writer]
+let private writerFieldName writer name = call "Stdlib.Json.__writerFieldName" [writer; name]
 
-// List-pattern lowering normally reuses the Int64 skew-list accessor because
-// every list element occupies one machine word. Raw JSON values are managed
-// pointers, however, so their accessor must have a concrete owned return type.
-let private rawListAccessorFunctions () =
-    let accessor name elementType =
-        {
-            Name = name
-            TypeParams = []
-            Params = NonEmptyList.singleton ("__items", TList elementType)
-            ReturnType = elementType
-            Body =
-                TypeApp (
-                    "Stdlib.Internal.SkewList.headUnsafe",
-                    [elementType],
-                    args [Var "__items"])
-            Recursion = None
-        }
-    let rawFieldType = TTuple [TString; rawJsonType]
-    [ accessor rawHeadName rawJsonType
-      accessor rawFieldHeadName rawFieldType ]
+let private viewHeadName = "Stdlib.Json.__viewListHead"
+let private viewTailName = "Stdlib.Json.__viewListTail"
+let private viewIsEmptyName = "Stdlib.Json.__viewListIsEmpty"
 
 let rec private typeReference typ =
     let owner = "Darklang.LanguageTools.RuntimeTypes.TypeReference"
@@ -185,10 +140,13 @@ let private cantMatch typ raw path =
     constructor
         "Stdlib.Json.ParseError.ParseError"
         "CantMatchWithType"
-        (tuplePayload [typeReference typ; raw; path])
+        (tuplePayload
+            [ typeReference typ
+              raw
+              call "Stdlib.Json.ParseError.__copyPath" [path] ])
     |> error
 
-let private rawSource raw = call "Stdlib.AltJson.__rawSource" [raw]
+let private rawSource raw = call "Stdlib.Json.__copyRaw" [raw]
 
 let private resultCases okName okBody errorName =
     [ makeCase (PConstructor ("Ok", Some (PVar okName))) okBody
@@ -247,29 +205,29 @@ let rec private ensureSerializer (env: Env) typ state : Result<string * State, s
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton ("__value", typ)
-            ReturnType = TString
-            Body = StringLiteral ""
+            Params = args [("__writer", writerType); ("__value", typ)]
+            ReturnType = writerType
+            Body = Var "__writer"
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        serializeBody env typ (Var "__value") reserved
+        serializeBody env typ (Var "__value") (Var "__writer") reserved
         |> Result.map (fun (body, nextState) ->
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
-and private serializeCall env typ value state =
+and private serializeCall env typ writer value state =
     ensureSerializer env typ state
-    |> Result.map (fun (name, nextState) -> (call name [value], nextState))
+    |> Result.map (fun (name, nextState) -> (call name [writer; value], nextState))
 
-and private serializeItems env items state =
-    let rec loop remaining current acc =
+and private serializeItems env items writer state =
+    let rec loop remaining currentWriter currentState =
         match remaining with
-        | [] -> Ok (List.rev acc, current)
+        | [] -> Ok (currentWriter, currentState)
         | (typ, value) :: rest ->
-            serializeCall env typ value current
-            |> Result.bind (fun (rendered, next) -> loop rest next (rendered :: acc))
-    loop items state []
+            serializeCall env typ currentWriter value currentState
+            |> Result.bind (fun (nextWriter, nextState) -> loop rest nextWriter nextState)
+    loop items writer state
 
 and private ensureListSerializer env elemType state =
     let elemType = resolveJsonType env elemType
@@ -281,25 +239,27 @@ and private ensureListSerializer env elemType state =
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton ("__items", typ)
-            ReturnType = TString
-            Body = StringLiteral ""
+            Params =
+                args
+                    [("__items", typ)
+                     ("__writer", writerType)
+                     ("__first", TBool)]
+            ReturnType = writerType
+            Body = Var "__writer"
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        serializeCall env elemType (Var "__head") reserved
-        |> Result.map (fun (head, nextState) ->
+        let separated =
+            If (Var "__first", Var "__writer", writerSeparator (Var "__writer"))
+        serializeCall env elemType separated (Var "__head") reserved
+        |> Result.map (fun (encoded, nextState) ->
             let body =
                 Match (
                     Var "__items",
-                    [ makeCase (PList []) (StringLiteral "")
+                    [ makeCase (PList []) (Var "__writer")
                       makeCase
                           (PListCons ([PVar "__head"], PVar "__tail"))
-                          (concat [head
-                                   Match (
-                                       Var "__tail",
-                                       [ makeCase (PList []) (StringLiteral "")
-                                         makeCase PWildcard (concat [StringLiteral ","; call name [Var "__tail"]]) ])]) ])
+                          (call name [Var "__tail"; encoded; BoolLiteral false]) ])
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
@@ -315,72 +275,74 @@ and private ensureDictSerializer env valueType state =
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton ("__entries", listType)
-            ReturnType = TString
-            Body = StringLiteral ""
+            Params =
+                args
+                    [("__entries", listType)
+                     ("__writer", writerType)
+                     ("__first", TBool)]
+            ReturnType = writerType
+            Body = Var "__writer"
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        serializeCall env valueType (TupleAccess (Var "__entry", 1)) reserved
-        |> Result.map (fun (renderedValue, nextState) ->
-            let renderedEntry =
-                concat [call "Stdlib.AltJson.__quote" [TupleAccess (Var "__entry", 0)]
-                        StringLiteral ":"
-                        renderedValue]
+        let separated =
+            If (Var "__first", Var "__writer", writerSeparator (Var "__writer"))
+        let withName = writerFieldName separated (TupleAccess (Var "__entry", 0))
+        serializeCall env valueType withName (TupleAccess (Var "__entry", 1)) reserved
+        |> Result.map (fun (encoded, nextState) ->
             let body =
                 Match (
                     Var "__entries",
-                    [ makeCase (PList []) (StringLiteral "")
+                    [ makeCase (PList []) (Var "__writer")
                       makeCase
                           (PListCons ([PVar "__entry"], PVar "__tail"))
-                          (concat [renderedEntry
-                                   Match (
-                                       Var "__tail",
-                                       [ makeCase (PList []) (StringLiteral "")
-                                         makeCase PWildcard (concat [StringLiteral ","; call name [Var "__tail"]]) ])]) ])
+                          (call name [Var "__tail"; encoded; BoolLiteral false]) ])
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
-and private serializeBody env typ value state : Result<Expr * State, string> =
+and private serializeBody env typ value writer state : Result<Expr * State, string> =
     match typ with
-    | TUnit -> Ok (StringLiteral "null", state)
-    | TBool -> Ok (If (value, StringLiteral "true", StringLiteral "false"), state)
-    | TInt8 -> Ok (call "Stdlib.Int8.toString" [value], state)
-    | TInt16 -> Ok (call "Stdlib.Int16.toString" [value], state)
-    | TInt32 -> Ok (call "Stdlib.Int32.toString" [value], state)
-    | TInt64 -> Ok (call "Stdlib.Int64.toString" [value], state)
-    | TInt -> Ok (call "Stdlib.Int.toString" [value], state)
-    | TUInt8 -> Ok (call "Stdlib.UInt8.toString" [value], state)
-    | TUInt16 -> Ok (call "Stdlib.UInt16.toString" [value], state)
-    | TUInt32 -> Ok (call "Stdlib.UInt32.toString" [value], state)
-    | TUInt64 -> Ok (call "Stdlib.UInt64.toString" [value], state)
+    | TUnit -> Ok (writerRaw writer (StringLiteral "null"), state)
+    | TBool ->
+        Ok (writerRaw writer (If (value, StringLiteral "true", StringLiteral "false")), state)
+    | TInt8 -> Ok (writerRaw writer (call "Stdlib.Int8.toString" [value]), state)
+    | TInt16 -> Ok (writerRaw writer (call "Stdlib.Int16.toString" [value]), state)
+    | TInt32 -> Ok (writerRaw writer (call "Stdlib.Int32.toString" [value]), state)
+    | TInt64 -> Ok (writerRaw writer (call "Stdlib.Int64.toString" [value]), state)
+    | TInt -> Ok (writerRaw writer (call "Stdlib.Int.toString" [value]), state)
+    | TUInt8 -> Ok (writerRaw writer (call "Stdlib.UInt8.toString" [value]), state)
+    | TUInt16 -> Ok (writerRaw writer (call "Stdlib.UInt16.toString" [value]), state)
+    | TUInt32 -> Ok (writerRaw writer (call "Stdlib.UInt32.toString" [value]), state)
+    | TUInt64 -> Ok (writerRaw writer (call "Stdlib.UInt64.toString" [value]), state)
     // The native representation of 128-bit values is already canonical text.
-    | TInt128 | TUInt128 -> Ok (value, state)
-    | TFloat64 -> Ok (call "Stdlib.Json.__serializeFloat" [value], state)
-    | TString | TChar -> Ok (call "Stdlib.AltJson.__quote" [value], state)
-    | TSum ("Uuid", []) -> Ok (call "Stdlib.AltJson.__quote" [call "Stdlib.Uuid.toString" [value]], state)
+    | TInt128 | TUInt128 -> Ok (writerRaw writer value, state)
+    | TFloat64 -> Ok (writerRaw writer (call "Stdlib.Json.__serializeFloat" [value]), state)
+    | TString | TChar -> Ok (writerString writer value, state)
+    | TSum ("Uuid", []) -> Ok (writerString writer (call "Stdlib.Uuid.toString" [value]), state)
     | TDateTime ->
-        Ok (call "Stdlib.AltJson.__quote" [call "Stdlib.DateTime.toString" [value]], state)
+        Ok (writerString writer (call "Stdlib.DateTime.toString" [value]), state)
     | TTuple elementTypes ->
         elementTypes
         |> List.mapi (fun index elemType -> (elemType, TupleAccess (value, index)))
-        |> fun items -> serializeItems env items state
-        |> Result.map (fun (rendered, nextState) ->
-            let separated =
-                rendered
-                |> List.mapi (fun index item -> if index = 0 then [item] else [StringLiteral ","; item])
-                |> List.concat
-            (concat (StringLiteral "[" :: separated @ [StringLiteral "]"]), nextState))
+        |> List.mapi (fun index item -> (index, item))
+        |> List.fold (fun result (index, item) ->
+            result
+            |> Result.bind (fun (currentWriter, currentState) ->
+                let separated = if index = 0 then currentWriter else writerSeparator currentWriter
+                serializeItems env [item] separated currentState))
+            (Ok (writerBeginArray writer, state))
+        |> Result.map (fun (encoded, nextState) -> (writerEndArray encoded, nextState))
     | TList elemType ->
         ensureListSerializer env elemType state
         |> Result.map (fun (name, nextState) ->
-            (concat [StringLiteral "["; call name [value]; StringLiteral "]"], nextState))
+            let encoded = call name [value; writerBeginArray writer; BoolLiteral true]
+            (writerEndArray encoded, nextState))
     | TDict (TString, valueType) ->
         ensureDictSerializer env valueType state
         |> Result.map (fun (name, nextState) ->
             let entries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton value)
-            (Let (LPVariable "__entries", entries,
-                  concat [StringLiteral "{"; call name [Var "__entries"]; StringLiteral "}"]),
+            let encoded = call name [Var "__entries"; writerBeginObject writer; BoolLiteral true]
+            (Let (LPVariable "__entries", entries, writerEndObject encoded),
              nextState))
     | TRecord (typeName, typeArgs) ->
         match Map.tryFind typeName env.Records with
@@ -388,26 +350,21 @@ and private serializeBody env typ value state : Result<Expr * State, string> =
         | Some recordInfo ->
             substitution recordInfo.TypeParams typeArgs
             |> Result.bind (fun subst ->
-                let rec loop remaining current acc =
+                let rec loop remaining index currentWriter currentState =
                     match remaining with
-                    | [] -> Ok (List.rev acc, current)
+                    | [] -> Ok (currentWriter, currentState)
                     | (fieldName, fieldType) :: rest ->
                         let concrete = applySubstitution subst fieldType |> resolveJsonType env
-                        serializeCall env concrete (RecordAccess (value, fieldName)) current
-                        |> Result.bind (fun (rendered, next) -> loop rest next ((fieldName, rendered) :: acc))
+                        let separated = if index = 0 then currentWriter else writerSeparator currentWriter
+                        let named = writerFieldName separated (StringLiteral fieldName)
+                        serializeCall env concrete named (RecordAccess (value, fieldName)) currentState
+                        |> Result.bind (fun (encoded, nextState) ->
+                            loop rest (index + 1) encoded nextState)
                 recordInfo.Fields
                 |> List.sortBy fst
-                |> fun fields -> loop fields state []
-                |> Result.map (fun (fields, nextState) ->
-                    let parts =
-                        fields
-                        |> List.mapi (fun index (fieldName, rendered) ->
-                            [StringLiteral (if index = 0 then "" else ",")
-                             call "Stdlib.AltJson.__quote" [StringLiteral fieldName]
-                             StringLiteral ":"
-                             rendered])
-                        |> List.concat
-                    (concat (StringLiteral "{" :: parts @ [StringLiteral "}"]), nextState)))
+                |> fun fields -> loop fields 0 (writerBeginObject writer) state
+                |> Result.map (fun (encoded, nextState) ->
+                    (writerEndObject encoded, nextState)))
     | TSum (typeName, typeArgs) ->
         match Map.tryFind typeName env.Sums with
         | None -> Error $"Unsupported type in JSON: {TypeChecking.typeToString typ}"
@@ -421,9 +378,12 @@ and private serializeBody env typ value state : Result<Expr * State, string> =
                         match variant.Payload with
                         | None ->
                             let body =
-                                concat [StringLiteral "{"
-                                        call "Stdlib.AltJson.__quote" [StringLiteral variant.Name]
-                                        StringLiteral ":[]}"]
+                                writer
+                                |> writerBeginObject
+                                |> fun current -> writerFieldName current (StringLiteral variant.Name)
+                                |> writerBeginArray
+                                |> writerEndArray
+                                |> writerEndObject
                             loop rest current (makeCase (PConstructor (variant.Name, None)) body :: acc)
                         | Some payloadType ->
                             let concrete = applySubstitution subst payloadType |> resolveJsonType env
@@ -435,16 +395,21 @@ and private serializeBody env typ value state : Result<Expr * State, string> =
                                     |> List.mapi (fun index fieldType ->
                                         (fieldType, TupleAccess (Var payloadName, index)))
                                 | _ -> [(concrete, Var payloadName)]
-                            serializeItems env fields current
-                            |> Result.bind (fun (rendered, next) ->
-                                let separated =
-                                    rendered
-                                    |> List.mapi (fun index item -> if index = 0 then [item] else [StringLiteral ","; item])
-                                    |> List.concat
-                                let body =
-                                    concat ([StringLiteral "{"
-                                             call "Stdlib.AltJson.__quote" [StringLiteral variant.Name]
-                                             StringLiteral ":["] @ separated @ [StringLiteral "]}"])
+                            let initialWriter =
+                                writer
+                                |> writerBeginObject
+                                |> fun current -> writerFieldName current (StringLiteral variant.Name)
+                                |> writerBeginArray
+                            fields
+                            |> List.mapi (fun index item -> (index, item))
+                            |> List.fold (fun result (index, item) ->
+                                result
+                                |> Result.bind (fun (currentWriter, currentState) ->
+                                    let separated = if index = 0 then currentWriter else writerSeparator currentWriter
+                                    serializeItems env [item] separated currentState))
+                                (Ok (initialWriter, current))
+                            |> Result.bind (fun (encoded, next) ->
+                                let body = encoded |> writerEndArray |> writerEndObject
                                 loop rest next (makeCase (PConstructor (variant.Name, Some (PVar payloadName))) body :: acc))
                 loop (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
                 |> Result.map (fun (cases, nextState) -> (Match (value, cases), nextState)))
@@ -453,59 +418,12 @@ and private serializeBody env typ value state : Result<Expr * State, string> =
         Error
             $"Unsupported type in JSON: {TypeChecking.typeToString typ}. Some types are not supported in Json serialization"
 
-let private numericConversion typ intValue =
-    match typ with
-    | TInt -> None
-    | TInt8 -> Some (call "Stdlib.Int.toInt8" [intValue])
-    | TInt16 -> Some (call "Stdlib.Int.toInt16" [intValue])
-    | TInt32 -> Some (call "Stdlib.Int.toInt32" [intValue])
-    | TInt64 -> Some (call "Stdlib.Int.toInt64" [intValue])
-    | TInt128 -> Some (call "Stdlib.Int.toInt128" [intValue])
-    | TUInt8 -> Some (call "Stdlib.Int.toUInt8" [intValue])
-    | TUInt16 -> Some (call "Stdlib.Int.toUInt16" [intValue])
-    | TUInt32 -> Some (call "Stdlib.Int.toUInt32" [intValue])
-    | TUInt64 -> Some (call "Stdlib.Int.toUInt64" [intValue])
-    | TUInt128 -> Some (call "Stdlib.Int.toUInt128" [intValue])
-    | _ -> None
-
-let private numericDecoderBody typ =
-    let failure = cantMatch typ (rawSource (Var "__raw")) (Var "__path")
-    let specializedConversion =
-        match typ with
-        | TInt128 -> Some "Stdlib.Json.__numberToInt128"
-        | TUInt128 -> Some "Stdlib.Json.__numberToUInt128"
-        | _ -> None
-    let converted =
-        match numericConversion typ (Var "__int") with
-        | None -> ok (Var "__int")
-        | Some conversion ->
-            Match (
-                conversion,
-                [ makeCase (PConstructor ("Some", Some (PVar "__converted"))) (ok (Var "__converted"))
-                  makeCase (PConstructor ("None", None)) failure ])
-    let fromNumber =
-        match specializedConversion with
-        | Some functionName ->
-            Match (
-                call functionName [Var "__lexeme"],
-                [ makeCase (PConstructor ("Some", Some (PVar "__converted"))) (ok (Var "__converted"))
-                  makeCase (PConstructor ("None", None)) failure ])
-        | None ->
-            Match (
-                call "Stdlib.Json.__integerLexeme" [Var "__lexeme"],
-                [ makeCase
-                      (PConstructor ("Some", Some (PVar "__integer_text")))
-                      (Match (
-                          call "Stdlib.Int.parse" [Var "__integer_text"],
-                          [ makeCase (PConstructor ("Ok", Some (PVar "__int"))) converted
-                            makeCase (PConstructor ("Error", Some PWildcard)) failure ]))
-                  makeCase (PConstructor ("None", None)) failure ])
+let private optionDecoder typ functionName =
+    let failure = cantMatch typ (rawSource (Var "__view")) (Var "__path")
     Match (
-        Var "__raw",
-        [ makeCase
-              (PConstructor ("RawNumber", Some (PTuple [PVar "__lexeme"; PWildcard])))
-              fromNumber
-          makeCase PWildcard failure ])
+        call functionName [Var "__view"],
+        [ makeCase (PConstructor ("Some", Some (PVar "__value"))) (ok (Var "__value"))
+          makeCase (PConstructor ("None", None)) failure ])
 
 let rec private ensureDecoder (env: Env) typ state : Result<string * State, string> =
     let typ = resolveJsonType env typ
@@ -516,7 +434,7 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.fromList ["__raw", rawJsonType; "__path", pathType]
+            Params = NonEmptyList.fromList ["__view", valueViewType; "__path", pathType]
             ReturnType = resultType typ
             Body = RuntimeError "unfinished JSON decoder"
             Recursion = None
@@ -527,16 +445,16 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
-and private decodeCall env typ raw path state =
+and private decodeCall env typ view path state =
     ensureDecoder env typ state
-    |> Result.map (fun (name, nextState) -> (call name [raw; path], nextState))
+    |> Result.map (fun (name, nextState) -> (call name [view; path], nextState))
 
 and private sequenceDecoded env items build state =
     let rec loop remaining current bindings =
         match remaining with
         | [] -> Ok (build (List.rev bindings), current)
-        | (typ, raw, path, bindingName) :: rest ->
-            decodeCall env typ raw path current
+        | (typ, view, path, bindingName) :: rest ->
+            decodeCall env typ view path current
             |> Result.bind (fun (decoded, next) ->
                 loop rest next ((bindingName, typ) :: bindings)
                 |> Result.map (fun (tail, finalState) ->
@@ -549,11 +467,15 @@ and private ensureListDecoder env elemType state =
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
-        let rawListType = TList rawJsonType
+        let viewListType = TList valueViewType
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.fromList ["__raw_items", rawListType; "__path", pathType; "__index", TInt64]
+            Params =
+                NonEmptyList.fromList
+                    ["__views", viewListType
+                     "__path", pathType
+                     "__index", TInt64]
             ReturnType = resultType (TList elemType)
             Body = RuntimeError "unfinished JSON list decoder"
             Recursion = None
@@ -566,24 +488,35 @@ and private ensureListDecoder env elemType state =
                 (constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (call "Stdlib.Int.fromInt64" [Var "__index"])))
         decodeCall env elemType (Var "__head") itemPath reserved
         |> Result.map (fun (decodedHead, nextState) ->
-            let decodedTail = call name [Var "__tail"; Var "__path"; BinOp (Add, Var "__index", Int64Literal 1L)]
+            let head = call viewHeadName [Var "__views"]
+            let tail = call viewTailName [Var "__views"]
+            let decodedTail =
+                call
+                    name
+                    [ Var "__tail"
+                      Var "__path"
+                      BinOp (Add, Var "__index", Int64Literal 1L) ]
             let body =
-                Match (
-                    Var "__raw_items",
-                    [ makeCase (PList []) (ok (ListLiteral []))
-                      makeCase
-                          (PListCons ([PVar "__head"], PVar "__tail"))
-                          (Match (
-                              decodedHead,
-                              resultCases
-                                  "__decoded_head"
-                                  (Match (
-                                      decodedTail,
-                                      resultCases
-                                          "__decoded_tail"
-                                          (ok (listPush elemType (Var "__decoded_tail") (Var "__decoded_head")))
-                                          "__tail_error"))
-                                  "__head_error")) ])
+                If (
+                    call viewIsEmptyName [Var "__views"],
+                    ok (ListLiteral []),
+                    Let (
+                        LPVariable "__head",
+                        head,
+                        Let (
+                            LPVariable "__tail",
+                            tail,
+                            Match (
+                                decodedHead,
+                                resultCases
+                                    "__decoded_head"
+                                    (Match (
+                                        decodedTail,
+                                        resultCases
+                                            "__decoded_tail"
+                                            (ok (listPush elemType (Var "__decoded_tail") (Var "__decoded_head")))
+                                            "__tail_error"))
+                                    "__head_error"))))
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
@@ -594,13 +527,13 @@ and private ensureDictDecoder env valueType state =
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
-        let rawFieldsType = TList (TTuple [TString; rawJsonType])
+        let viewFieldsType = TList (TTuple [TString; valueViewType])
         let placeholder = {
             Name = name
             TypeParams = []
             Params =
                 NonEmptyList.fromList
-                    ["__raw_fields", rawFieldsType
+                    ["__fields", viewFieldsType
                      "__path", pathType
                      "__dict", dictType]
             ReturnType = resultType dictType
@@ -608,14 +541,14 @@ and private ensureDictDecoder env valueType state =
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        let key = TupleAccess (Var "__entry", 0)
-        let rawValue = TupleAccess (Var "__entry", 1)
+        let key = call "Stdlib.Json.__viewFieldName" [Var "__entry"]
+        let fieldView = call "Stdlib.Json.__viewFieldValue" [Var "__entry"]
         let fieldPath =
             listPush
                 pathPartType
                 (Var "__path")
                 (constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some key))
-        decodeCall env valueType rawValue fieldPath reserved
+        decodeCall env valueType fieldView fieldPath reserved
         |> Result.map (fun (decoded, nextState) ->
             let withValue =
                 TypeApp (
@@ -624,7 +557,7 @@ and private ensureDictDecoder env valueType state =
                     args [Var "__dict"; key; Var "__decoded_value"])
             let body =
                 Match (
-                    Var "__raw_fields",
+                    Var "__fields",
                     [ makeCase (PList []) (ok (Var "__dict"))
                       makeCase
                           (PListCons ([PVar "__entry"], PVar "__tail"))
@@ -727,53 +660,45 @@ and private decodeEnumCase env typ typeName subst variant state =
                         missing @ [exact; makeCase extraPattern extraBody])
                 let body =
                     Match (
-                        Var "__case_raw",
+                        call "Stdlib.Json.__arrayItems" [Var "__case_raw"],
                         [ makeCase
-                              (PConstructor ("RawArray", Some (PTuple [PVar "__enum_args"; PWildcard])))
+                              (PConstructor ("Some", Some (PVar "__enum_args")))
                               arrayBody
                           makeCase PWildcard (cantMatch typ (rawSource (Var "__case_raw")) casePath) ])
                 (body, finalState))))
 
 and private decodeBody env typ state : Result<Expr * State, string> =
-    let failure = cantMatch typ (rawSource (Var "__raw")) (Var "__path")
+    let failure = cantMatch typ (rawSource (Var "__view")) (Var "__path")
     match typ with
     | TUnit ->
-        Ok (Match (Var "__raw", [makeCase (PConstructor ("RawNull", Some PWildcard)) (ok UnitLiteral); makeCase PWildcard failure]), state)
-    | TBool ->
-        Ok (Match (Var "__raw", [makeCase (PConstructor ("RawBool", Some (PTuple [PVar "__value"; PWildcard]))) (ok (Var "__value")); makeCase PWildcard failure]), state)
-    | TString ->
-        Ok (Match (Var "__raw", [makeCase (PConstructor ("RawString", Some (PTuple [PVar "__value"; PWildcard]))) (ok (Var "__value")); makeCase PWildcard failure]), state)
-    | TChar ->
-        let valid = BinOp (Eq, call "Stdlib.String.graphemeLength" [Var "__value"], Int64Literal 1L)
-        Ok (Match (Var "__raw", [makeCase (PConstructor ("RawString", Some (PTuple [PVar "__value"; PWildcard]))) (If (valid, ok (Var "__value"), failure)); makeCase PWildcard failure]), state)
-    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
-    | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128 ->
-        Ok (numericDecoderBody typ, state)
-    | TFloat64 ->
-        let fromNumber =
-            Match (call "Stdlib.AltJson.__numberToFloat" [Var "__lexeme"],
-                   [makeCase (PConstructor ("Some", Some (PVar "__value"))) (ok (Var "__value")); makeCase (PConstructor ("None", None)) failure])
-        let fromString =
-            If (BinOp (Eq, Var "__text", StringLiteral "NaN"), ok (FloatLiteral System.Double.NaN),
-                If (BinOp (Eq, Var "__text", StringLiteral "Infinity"), ok (FloatLiteral System.Double.PositiveInfinity),
-                    If (BinOp (Eq, Var "__text", StringLiteral "-Infinity"), ok (FloatLiteral System.Double.NegativeInfinity), failure)))
-        Ok (Match (Var "__raw", [makeCase (PConstructor ("RawNumber", Some (PTuple [PVar "__lexeme"; PWildcard]))) fromNumber; makeCase (PConstructor ("RawString", Some (PTuple [PVar "__text"; PWildcard]))) fromString; makeCase PWildcard failure]), state)
-    | TSum ("Uuid", []) ->
-        let parsed =
-            Match (
-                call "Stdlib.Uuid.parse" [Var "__text"],
-                [makeCase (PConstructor ("Ok", Some (PVar "__value"))) (ok (Var "__value")); makeCase PWildcard failure])
-        Ok (Match (Var "__raw", [makeCase (PConstructor ("RawString", Some (PTuple [PVar "__text"; PWildcard]))) parsed; makeCase PWildcard failure]), state)
-    | TDateTime ->
-        let parsed =
-            Match (
-                call "Stdlib.DateTime.parse" [Var "__text"],
-                [makeCase (PConstructor ("Ok", Some (PVar "__value"))) (ok (Var "__value")); makeCase PWildcard failure])
-        Ok (Match (Var "__raw", [makeCase (PConstructor ("RawString", Some (PTuple [PVar "__text"; PWildcard]))) parsed; makeCase PWildcard failure]), state)
+        Ok (If (call "Stdlib.Json.__isNull" [Var "__view"], ok UnitLiteral, failure), state)
+    | TBool -> Ok (optionDecoder typ "Stdlib.Json.__boolValue", state)
+    | TString -> Ok (optionDecoder typ "Stdlib.Json.__stringValue", state)
+    | TChar -> Ok (optionDecoder typ "Stdlib.Json.__viewChar", state)
+    | TInt8 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt8", state)
+    | TInt16 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt16", state)
+    | TInt32 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt32", state)
+    | TInt64 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt64", state)
+    | TInt128 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt128", state)
+    | TInt -> Ok (optionDecoder typ "Stdlib.Json.__viewInt", state)
+    | TUInt8 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt8", state)
+    | TUInt16 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt16", state)
+    | TUInt32 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt32", state)
+    | TUInt64 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt64", state)
+    | TUInt128 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt128", state)
+    | TFloat64 -> Ok (optionDecoder typ "Stdlib.Json.__viewFloat", state)
+    | TSum ("Uuid", []) -> Ok (optionDecoder typ "Stdlib.Json.__viewUuid", state)
+    | TDateTime -> Ok (optionDecoder typ "Stdlib.Json.__viewDateTime", state)
     | TList elemType ->
         ensureListDecoder env elemType state
         |> Result.map (fun (listDecoder, nextState) ->
-            (Match (Var "__raw", [makeCase (PConstructor ("RawArray", Some (PTuple [PVar "__items"; PWildcard]))) (call listDecoder [Var "__items"; Var "__path"; Int64Literal 0L]); makeCase PWildcard failure]), nextState))
+            (Match (
+                call "Stdlib.Json.__arrayItems" [Var "__view"],
+                [ makeCase
+                      (PConstructor ("Some", Some (PVar "__items")))
+                      (call listDecoder [Var "__items"; Var "__path"; Int64Literal 0L])
+                  makeCase PWildcard failure ]),
+             nextState))
     | TTuple elementTypes ->
         let names = elementTypes |> List.mapi (fun index _ -> $"__tuple_raw_{index}")
         let patterns = names |> List.map PVar
@@ -786,7 +711,11 @@ and private decodeBody env typ state : Result<Expr * State, string> =
             (elemType, Var names[index], path, $"__tuple_value_{index}"))
         sequenceDecoded env items (fun bindings -> ok (TupleLiteral (bindings |> List.map (fst >> Var)))) state
         |> Result.map (fun (decoded, nextState) ->
-            (Match (Var "__raw", [makeCase (PConstructor ("RawArray", Some (PTuple [PList patterns; PWildcard]))) decoded; makeCase PWildcard failure]), nextState))
+            (Match (
+                call "Stdlib.Json.__arrayItems" [Var "__view"],
+                [ makeCase (PConstructor ("Some", Some (PList patterns))) decoded
+                  makeCase PWildcard failure ]),
+             nextState))
     | TRecord (typeName, typeArgs) ->
         match Map.tryFind typeName env.Records with
         | None -> Error $"Unsupported type in JSON: {TypeChecking.typeToString typ}"
@@ -810,7 +739,8 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         )
                     | (fieldName, fieldType) :: rest ->
                         let concrete = applySubstitution subst fieldType |> resolveJsonType env
-                        let matches = call "Stdlib.Json.__matchingFields" [StringLiteral fieldName; Var "__object_fields"]
+                        let matches =
+                            call "Stdlib.Json.__matchingViews" [StringLiteral fieldName; Var "__object_fields"]
                         let fieldPath =
                             listPush
                                 pathPartType
@@ -823,18 +753,38 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                                 let missing = constructor "Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
                                 let duplicate = constructor "Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
                                 let one = Match (decoded, resultCases $"__field_{fieldName}" tail "__field_error")
-                                (Match (matches, [makeCase (PList []) missing; makeCase (PList [PVar "__field_raw"]) one; makeCase PWildcard duplicate]), finalState)))
+                                (Let (
+                                    LPVariable "__matches",
+                                    matches,
+                                    If (
+                                        call viewIsEmptyName [Var "__matches"],
+                                        missing,
+                                        Let (
+                                            LPVariable "__field_raw",
+                                            call viewHeadName [Var "__matches"],
+                                            Let (
+                                                LPVariable "__field_rest",
+                                                call viewTailName [Var "__matches"],
+                                                If (
+                                                    call viewIsEmptyName [Var "__field_rest"],
+                                                    one,
+                                                    duplicate))))),
+                                 finalState)))
                 build fields state []
                 |> Result.map (fun (decoded, nextState) ->
-                    (Match (Var "__raw", [makeCase (PConstructor ("RawObject", Some (PTuple [PVar "__object_fields"; PWildcard]))) decoded; makeCase PWildcard failure]), nextState)))
+                    (Match (
+                        call "Stdlib.Json.__objectFields" [Var "__view"],
+                        [ makeCase (PConstructor ("Some", Some (PVar "__object_fields"))) decoded
+                          makeCase PWildcard failure ]),
+                     nextState)))
     | TDict (TString, valueType) ->
         ensureDictDecoder env valueType state
         |> Result.map (fun (dictDecoder, nextState) ->
             let empty = DictLiteral (valueType, [])
             (Match (
-                Var "__raw",
+                call "Stdlib.Json.__objectFields" [Var "__view"],
                 [ makeCase
-                      (PConstructor ("RawObject", Some (PTuple [PVar "__object_fields"; PWildcard])))
+                      (PConstructor ("Some", Some (PVar "__object_fields")))
                       (call dictDecoder [Var "__object_fields"; Var "__path"; empty])
                   makeCase PWildcard failure ]),
              nextState))
@@ -863,41 +813,24 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         Match (
                             Var "__case_name",
                             caseMatches @ [makeCase PWildcard invalidCase])
-                    let tooMany =
-                        let caseNames =
-                            TypeApp (
-                                "Stdlib.List.map",
-                                [TTuple [TString; rawJsonType]; TString],
-                                args
-                                    [Var "__object_fields"
-                                     Lambda (
-                                         NonEmptyList.singleton {
-                                             Pattern = LPVariable "__field"
-                                             SourceAnnotation = None
-                                             InferredType = Some (TTuple [TString; rawJsonType])
-                                         },
-                                         None,
-                                         TupleAccess (Var "__field", 0))])
-                        constructor
-                            "Stdlib.Json.ParseError.ParseError"
-                            "EnumTooManyCases"
-                            (tuplePayload [typeReference typ; caseNames; Var "__path"])
-                        |> error
                     let objectBody =
                         Match (
-                            Var "__object_fields",
-                            [ makeCase (PList []) failure
+                            call "Stdlib.Json.__enumObject" [Var "__view"],
+                            [ makeCase (PConstructor ("EnumNoFields", None)) failure
                               makeCase
-                                  (PList [PTuple [PVar "__case_name"; PVar "__case_raw"]])
+                                  (PConstructor (
+                                      "EnumOneField",
+                                      Some (PTuple [PVar "__case_name"; PVar "__case_raw"])))
                                   oneField
-                              makeCase PWildcard tooMany ])
-                    (Match (
-                        Var "__raw",
-                        [ makeCase
-                              (PConstructor ("RawObject", Some (PTuple [PVar "__object_fields"; PWildcard])))
-                              objectBody
-                          makeCase PWildcard failure ]),
-                     nextState)))
+                              makeCase
+                                  (PConstructor ("EnumManyFields", Some (PVar "__case_names")))
+                                  (constructor
+                                      "Stdlib.Json.ParseError.ParseError"
+                                      "EnumTooManyCases"
+                                      (tuplePayload [typeReference typ; Var "__case_names"; Var "__path"])
+                                   |> error)
+                              makeCase PWildcard failure ])
+                    (objectBody, nextState)))
     | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TEnumFields _ | TDict _ ->
         Error $"Unsupported type in JSON: {TypeChecking.typeToString typ}. Some types are not supported in Json serialization"
 
@@ -956,37 +889,7 @@ let rec private mapExpr rewrite expr =
         | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
     rewrite mapped
 
-let private declarationContextFingerprint (env: TypeChecking.TypeCheckEnv) : string =
-    // JSON generation depends on nominal record/sum shapes and alias resolution.
-    // Build the representation explicitly: generic Map/record ToString values
-    // only identify their runtime types, which would alias distinct request
-    // declarations that happen to share a type name.
-    let records =
-        env.IndexedTypeReg
-        |> Map.toList
-        |> List.map (fun (name, info) ->
-            let parameters = String.concat "," info.TypeParams
-            let fields = info.Fields |> List.map (fun (field, typ) -> $"{field}:{typ}") |> String.concat ","
-            $"{name}<{parameters}>({fields})")
-        |> String.concat ";"
-    let variants =
-        env.VariantLookup
-        |> Map.toList
-        |> List.map (fun (name, (owner, parameters, tag, payload)) ->
-            let typeParameters = String.concat "," parameters
-            $"{name}:{owner}<{typeParameters}>:{tag}:{payload}")
-        |> String.concat ";"
-    let aliases =
-        env.AliasReg
-        |> Map.toList
-        |> List.map (fun (name, (parameters, target)) ->
-            let typeParameters = String.concat "," parameters
-            $"{name}<{typeParameters}>:{target}")
-        |> String.concat ";"
-    stableHash $"{records}|{variants}|{aliases}" |> fun hash -> $"{hash:x16}"
-
-let rewriteProgramWithSession
-    (session: PlanningSession option)
+let rewriteProgram
     (env: TypeChecking.TypeCheckEnv)
     (Program topLevels)
     : Program =
@@ -1035,32 +938,17 @@ let rewriteProgramWithSession
             | TypeDef _ -> acc) ([], [])
         |> fun (serializers, parsers) -> (List.distinct serializers, List.distinct parsers)
 
-    let cacheKey =
-        let resolvedParsers = parserTypes |> List.map (resolveJsonType planningEnv >> structuralTypeKey) |> List.sort
-        let resolvedSerializers = serializerTypes |> List.map (resolveJsonType planningEnv >> structuralTypeKey) |> List.sort
-        let parsersKey = String.concat ";" resolvedParsers
-        let serializersKey = String.concat ";" resolvedSerializers
-        $"{declarationContextFingerprint env}|{parsersKey}|{serializersKey}"
-
-    let cachedArtifacts = session |> Option.bind (fun current -> current.TryFind cacheKey)
     let planned =
-        match cachedArtifacts with
-        | Some _ -> Ok { Functions = Map.empty }
-        | None ->
-            let serializersPlanned =
-                serializerTypes
-                |> List.fold (fun result typ ->
-                    result
-                    |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
-                    (Ok {
-                        Functions =
-                            if List.isEmpty parserTypes then Map.empty
-                            else rawListAccessorFunctions () |> List.map (fun fn -> (fn.Name, fn)) |> Map.ofList
-                    })
-            parserTypes
+        let serializersPlanned =
+            serializerTypes
             |> List.fold (fun result typ ->
                 result
-                |> Result.bind (fun state -> ensureDecoder planningEnv typ state |> Result.map snd)) serializersPlanned
+                |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
+                (Ok { Functions = Map.empty })
+        parserTypes
+        |> List.fold (fun result typ ->
+            result
+            |> Result.bind (fun state -> ensureDecoder planningEnv typ state |> Result.map snd)) serializersPlanned
 
     match planned with
     | Error error ->
@@ -1079,10 +967,14 @@ let rewriteProgramWithSession
         let rewrite expr =
             match expr with
             | TypeApp ("Stdlib.Json.serialize", [typ], values) ->
-                Call (serializeName (resolveJsonType planningEnv typ), values)
+                let written =
+                    call
+                        (serializeName (resolveJsonType planningEnv typ))
+                        (writerEmpty :: NonEmptyList.toList values)
+                writerFinish written
             | TypeApp ("Stdlib.Json.parse", [typ], values) ->
                 let concrete = resolveJsonType planningEnv typ
-                let parsed = call "Stdlib.AltJson.__parseRaw" (NonEmptyList.toList values)
+                let parsed = call "Stdlib.Json.__parseRoot" (NonEmptyList.toList values)
                 let rootPath = ListLiteral [constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Root" None]
                 Let (
                     LPVariable "__json_parse_result",
@@ -1090,8 +982,8 @@ let rewriteProgramWithSession
                     Match (
                         Var "__json_parse_result",
                         [ makeCase
-                              (PConstructor ("Ok", Some (PVar "__json_raw")))
-                              (call (decoderName concrete) [Var "__json_raw"; rootPath])
+                              (PConstructor ("Ok", Some (PVar "__json_view")))
+                              (call (decoderName concrete) [Var "__json_view"; rootPath])
                           makeCase
                               (PConstructor ("Error", Some PWildcard))
                               (constructor "Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ]))
@@ -1102,14 +994,5 @@ let rewriteProgramWithSession
                 | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
                 | Expression expr -> Expression (mapExpr rewrite expr)
                 | other -> other)
-        let generated =
-            match cachedArtifacts with
-            | Some cached -> cached
-            | None ->
-                let fresh = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
-                session |> Option.iter (fun current -> current.Store(cacheKey, fresh))
-                fresh
+        let generated = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
         Program (generated @ rewritten)
-
-let rewriteProgram (env: TypeChecking.TypeCheckEnv) (program: Program) : Program =
-    rewriteProgramWithSession None env program
