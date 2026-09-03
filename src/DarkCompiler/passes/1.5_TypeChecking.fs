@@ -6087,7 +6087,6 @@ let rec private buildEqHelperExpr
                         Some (variantName, tag, concretePayloadOpt)
                     else
                         None)
-                |> List.distinctBy (fun (_, tag, _) -> tag)
                 |> List.sortBy (fun (_, tag, _) -> tag)
 
             let variantCases =
@@ -6095,12 +6094,9 @@ let rec private buildEqHelperExpr
                 |> List.map (fun (variantName, tag, payloadTypeOpt) ->
                     match payloadTypeOpt with
                     | None ->
-                        let rightMatch =
-                            Match (
-                                rightExpr,
-                                [ makeSimpleMatchCase (PConstructor (variantName, None)) (BoolLiteral true)
-                                  makeSimpleMatchCase PWildcard (BoolLiteral false) ])
-                        makeSimpleMatchCase (PConstructor (variantName, None)) rightMatch
+                        let pairPattern =
+                            PTuple [PConstructor (variantName, None); PConstructor (variantName, None)]
+                        makeSimpleMatchCase pairPattern (BoolLiteral true)
                     | Some payloadType ->
                         let leftPayloadVar = $"__dark_eq_helper_left_payload_{tag}"
                         let rightPayloadVar = $"__dark_eq_helper_right_payload_{tag}"
@@ -6113,19 +6109,16 @@ let rec private buildEqHelperExpr
                                 payloadType
                                 (Var leftPayloadVar)
                                 (Var rightPayloadVar)
-                        let rightMatch =
-                            Match (
-                                rightExpr,
-                                [ makeSimpleMatchCase
-                                      (PConstructor (variantName, Some (PVar rightPayloadVar)))
-                                      payloadEqExpr
-                                  makeSimpleMatchCase PWildcard (BoolLiteral false) ])
-                        makeSimpleMatchCase
-                            (PConstructor (variantName, Some (PVar leftPayloadVar)))
-                            rightMatch)
+                        let pairPattern =
+                            PTuple [
+                                PConstructor (variantName, Some (PVar leftPayloadVar))
+                                PConstructor (variantName, Some (PVar rightPayloadVar))
+                            ]
+                        makeSimpleMatchCase pairPattern payloadEqExpr)
 
             let defaultCase = makeSimpleMatchCase PWildcard (BoolLiteral false)
-            Match (leftExpr, variantCases @ [defaultCase])
+            let sumPairVar = "__dark_eq_helper_sum_pair"
+            Let (LPVariable sumPairVar, TupleLiteral [leftExpr; rightExpr], Match (Var sumPairVar, variantCases @ [defaultCase]))
 
     | _, _ ->
         BinOp (Eq, leftExpr, rightExpr)
