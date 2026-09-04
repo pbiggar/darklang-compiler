@@ -338,6 +338,72 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
 let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     makeSimpleProgramWithRecords instrs term Map.empty
 
+/// A free-list hit must still return the reused block when the allocation
+/// destination is X3/RCX, which is also an x64 allocator scratch register.
+let testHeapAllocReusesBlockIntoX3 () : Result<unit, string> =
+    let scalarPairType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let program =
+        makeSimpleProgram
+            [ LIR.HeapAlloc (LIR.Physical LIR.X1, 16)
+              LIR.RefCountDec
+                  (LIR.Physical LIR.X1, 16, LIR.GenericHeap, Some (rcMetadata scalarPairType))
+              LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+              LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 2L, None)
+              LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Imm 0x3234L, None)
+              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X3) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program false with
+    | Error error -> Error error
+    | Ok (exitCode, stdout, stderr) ->
+        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
+        elif stdout <> "42" then Error $"Expected reused X3 block to contain '42', got '{stdout}'"
+        else Ok ()
+
+/// String RC lowering must preserve an X3/RCX string pointer while RCX is also
+/// used to calculate the address of the trailing refcount word.
+let testStringRefCountSupportsX3 () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+              LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 2L, None)
+              LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Imm 0x3234L, None)
+              LIR.RefCountIncString (LIR.Reg (LIR.Physical LIR.X3))
+              LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X3))
+              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X3)
+              LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X3)) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error error -> Error error
+    | Ok (exitCode, stdout, stderr) ->
+        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
+        elif stdout <> "42" then Error $"Expected X3 string to contain '42', got '{stdout}'"
+        elif stderr.Trim() <> "" then Error $"Expected balanced X3 string RC, got '{stderr.Trim()}'"
+        else Ok ()
+
+/// Loading a literal right operand uses X4/X5 and scratch. Preserve a left
+/// operand already in X4 across that setup before concatenating into X5.
+let testStringConcatPreservesX4LeftAcrossLiteralRight () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.StringConcat
+                  (LIR.Physical LIR.X4, LIR.StringSymbol "\"", LIR.StringSymbol "42")
+              LIR.StringConcat
+                  (LIR.Physical LIR.X5, LIR.Reg (LIR.Physical LIR.X4), LIR.StringSymbol "\"")
+              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X5)
+              LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X5))
+              LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X4)) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error error -> Error error
+    | Ok (exitCode, stdout, stderr) ->
+        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
+        elif stdout <> "\"42\"" then Error $"Expected quoted x64 string, got '{stdout}'"
+        elif stderr.Trim() <> "" then Error $"Expected balanced concat string RC, got '{stderr.Trim()}'"
+        else Ok ()
+
 /// CLI argv is implemented by an in-binary runtime helper. Its call must
 /// resolve as a code label rather than being deferred as an ELF data fixup.
 let testCliArgvHelperResolvesAsCodeLabel () : Result<unit, string> =
@@ -5345,6 +5411,9 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("x64 branch false edge falls through", testBranchFalseEdgeFallsThrough)
     ("LIR CLI argv x64 helper resolves as code label", testCliArgvHelperResolvesAsCodeLabel)
+    ("LIR HeapAlloc x64 reuses a block into X3", testHeapAllocReusesBlockIntoX3)
+    ("LIR string x64 refcount supports X3", testStringRefCountSupportsX3)
+    ("LIR StringConcat x64 preserves X4 left across literal right", testStringConcatPreservesX4LeftAcrossLiteralRight)
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
     ("LIR DateTimeNow x64 lowering uses 100ns Unix ticks", testDateTimeNowLowersTo100nsUnixTicks)

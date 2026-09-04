@@ -3378,20 +3378,28 @@ let private translateInstr
                 if sizeBytes >= 0 && sizeBytes < freeListSize then
                     let bumpLabel = freshLabel "heap_bump"
                     let freeListDoneLabel = freshLabel "heap_fl_done"
+                    let freeListHeadReg =
+                        if destReg = X86_64.RCX then scratch else X86_64.RCX
+                    let preserveHeadReg =
+                        if destReg = X86_64.RCX then [] else [X86_64.PUSH X86_64.RCX]
+                    let restoreHeadReg =
+                        if destReg = X86_64.RCX then [] else [X86_64.POP X86_64.RCX]
                     let freeListPre =
-                        [X86_64.PUSH X86_64.RCX
-                         X86_64.MOV_load (X86_64.RCX, freeListBase, sizeBytes)
-                         X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
-                         X86_64.Jcc (X86_64.EQ, bumpLabel)
-                         // Free list hit: dest = block, update head to next
-                         X86_64.MOV_reg (destReg, X86_64.RCX)
-                         X86_64.MOV_load (X86_64.RCX, X86_64.RCX, 0)     // next ptr
-                         X86_64.MOV_store (freeListBase, sizeBytes, X86_64.RCX)
-                         X86_64.POP X86_64.RCX]
+                        preserveHeadReg
+                        @ [
+                            X86_64.MOV_load (freeListHeadReg, freeListBase, sizeBytes)
+                            X86_64.TEST_reg (freeListHeadReg, freeListHeadReg)
+                            X86_64.Jcc (X86_64.EQ, bumpLabel)
+                            // Free list hit: dest = block, update head to next
+                            X86_64.MOV_reg (destReg, freeListHeadReg)
+                            X86_64.MOV_load (freeListHeadReg, freeListHeadReg, 0) // next ptr
+                            X86_64.MOV_store (freeListBase, sizeBytes, freeListHeadReg)
+                          ]
+                        @ restoreHeadReg
                         @ storeInitialRefcount
                         @ [X86_64.JMP freeListDoneLabel
-                           X86_64.Label bumpLabel
-                           X86_64.POP X86_64.RCX]
+                           X86_64.Label bumpLabel]
+                        @ restoreHeadReg
                     freeListPre, [X86_64.Label freeListDoneLabel]
                 else [], []
             let (freeListPre, freeListPost) = freeListAlloc
@@ -3756,22 +3764,26 @@ let private translateInstr
                 // Sentinel value INT64_MAX means literal (read-only)
                 let skipLabel = freshLabel "rcinc_str_skip"
                 let literalLabel = freshLabel "rcinc_str_lit"
+                let refAddressReg =
+                    if addrReg = X86_64.RCX then X86_64.RDX else X86_64.RCX
+                let refValueReg =
+                    if refAddressReg = X86_64.RCX then X86_64.RDX else X86_64.RCX
                 [X86_64.PUSH X86_64.RCX
                  X86_64.PUSH X86_64.RDX
                  // Compute refcount address
-                 X86_64.MOV_load (X86_64.RCX, addrReg, 0)    // RCX = length
-                 X86_64.ADD_imm (X86_64.RCX, 7)               // RCX = length + 7
-                 X86_64.AND_imm (X86_64.RCX, -8)              // RCX = aligned(length)
-                 X86_64.ADD_imm (X86_64.RCX, 8)               // RCX = 8 + aligned(length)
-                 X86_64.ADD_reg (X86_64.RCX, addrReg)         // RCX = addr + refcount offset
+                 X86_64.MOV_load (refAddressReg, addrReg, 0)
+                 X86_64.ADD_imm (refAddressReg, 7)
+                 X86_64.AND_imm (refAddressReg, -8)
+                 X86_64.ADD_imm (refAddressReg, 8)
+                 X86_64.ADD_reg (refAddressReg, addrReg)
                  // Load refcount, check sentinel
-                 X86_64.MOV_load (X86_64.RDX, X86_64.RCX, 0) // RDX = refcount
+                 X86_64.MOV_load (refValueReg, refAddressReg, 0)
                 ]
                 @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL        // scratch = INT64_MAX
-                @ [X86_64.CMP_reg (X86_64.RDX, scratch)
+                @ [X86_64.CMP_reg (refValueReg, scratch)
                    X86_64.Jcc (X86_64.EQ, literalLabel)        // skip if literal
-                   X86_64.ADD_imm (X86_64.RDX, 1)
-                   X86_64.MOV_store (X86_64.RCX, 0, X86_64.RDX)
+                   X86_64.ADD_imm (refValueReg, 1)
+                   X86_64.MOV_store (refAddressReg, 0, refValueReg)
                    X86_64.Label literalLabel
                    X86_64.POP X86_64.RDX
                    X86_64.POP X86_64.RCX
@@ -3789,22 +3801,26 @@ let private translateInstr
                 let literalLabel = freshLabel "rcdec_str_lit"
                 let noFreeLabel = freshLabel "rcdec_str_nofree"
                 let leakDec = genLeakCounterDec ctx
+                let refAddressReg =
+                    if addrReg = X86_64.RCX then X86_64.RDX else X86_64.RCX
+                let refValueReg =
+                    if refAddressReg = X86_64.RCX then X86_64.RDX else X86_64.RCX
                 [X86_64.PUSH X86_64.RCX
                  X86_64.PUSH X86_64.RDX
                  // Compute refcount address
-                 X86_64.MOV_load (X86_64.RCX, addrReg, 0)    // RCX = length
-                 X86_64.ADD_imm (X86_64.RCX, 7)
-                 X86_64.AND_imm (X86_64.RCX, -8)
-                 X86_64.ADD_imm (X86_64.RCX, 8)
-                 X86_64.ADD_reg (X86_64.RCX, addrReg)         // RCX = refcount addr
-                 X86_64.MOV_load (X86_64.RDX, X86_64.RCX, 0) // RDX = refcount
+                 X86_64.MOV_load (refAddressReg, addrReg, 0)
+                 X86_64.ADD_imm (refAddressReg, 7)
+                 X86_64.AND_imm (refAddressReg, -8)
+                 X86_64.ADD_imm (refAddressReg, 8)
+                 X86_64.ADD_reg (refAddressReg, addrReg)
+                 X86_64.MOV_load (refValueReg, refAddressReg, 0)
                 ]
                 @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
-                @ [X86_64.CMP_reg (X86_64.RDX, scratch)
+                @ [X86_64.CMP_reg (refValueReg, scratch)
                    X86_64.Jcc (X86_64.EQ, literalLabel)
-                   X86_64.SUB_imm (X86_64.RDX, 1)
-                   X86_64.MOV_store (X86_64.RCX, 0, X86_64.RDX)
-                   X86_64.TEST_reg (X86_64.RDX, X86_64.RDX)
+                   X86_64.SUB_imm (refValueReg, 1)
+                   X86_64.MOV_store (refAddressReg, 0, refValueReg)
+                   X86_64.TEST_reg (refValueReg, refValueReg)
                    X86_64.Jcc (X86_64.NE, noFreeLabel)]
                 // String refcount hit zero - decrement leak counter
                 @ leakDec
@@ -3870,8 +3886,9 @@ let private translateInstr
             // (which might allocate for StringSymbol). This avoids clobbering
             // the right source register during left's heap allocation.
             //
-            // BUG FIX: If left is in R8 or R9, loading right will clobber left's
-            // register. Save left to scratch (R11) first, then load from scratch.
+            // If left is in R8 or R9, loading right will clobber left's register.
+            // Preserve the pointer on the stack because literal materialization
+            // also uses scratch (R11).
             let leftConflictReg =
                 match left with
                 | LIR.Reg reg ->
@@ -3887,17 +3904,23 @@ let private translateInstr
 
                 let preserveLeft =
                     match leftConflictReg with
-                    | Some r -> [X86_64.MOV_reg (scratch, r)]
+                    | Some r -> [X86_64.PUSH r]
                     | None -> []
 
                 let loadLeft =
                     match leftConflictReg with
                     | Some _ ->
-                        // Left was saved in scratch before right clobbered its register
-                        Ok [X86_64.MOV_load (X86_64.RSI, scratch, 0)
+                        // R8 and R9 were pushed after the preserved left pointer.
+                        Ok [X86_64.MOV_load (scratch, X86_64.RSP, 16)
+                            X86_64.MOV_load (X86_64.RSI, scratch, 0)
                             X86_64.LEA (X86_64.RDI, scratch, 8)]
                     | None ->
                         loadInfo left X86_64.RDI X86_64.RSI
+
+                let discardPreservedLeft =
+                    match leftConflictReg with
+                    | Some _ -> [X86_64.ADD_imm (X86_64.RSP, 8)]
+                    | None -> []
 
                 loadLeft
                 |> Result.map (fun leftInstrs ->
@@ -3906,6 +3929,7 @@ let private translateInstr
                     @ rightInstrs @ saveRight @ leftInstrs
                     // Restore right info
                     @ [X86_64.POP X86_64.R9; X86_64.POP X86_64.R8]
+                    @ discardPreservedLeft
 
                     // Total length in RCX
                     @ [X86_64.MOV_reg (X86_64.RCX, X86_64.RSI)
