@@ -93,10 +93,53 @@ let testMirToLirUsesNativeInt64ShiftMask () : TestResult =
             Error "Expected native Int64 variable shift lowering to emit Lsl and Asr"
     | Ok _ -> Error "Expected a single LIR function"
 
+/// Float field stores need an ordinary virtual GP temporary. A fixed scratch
+/// register can alias the scratch used to reload a spilled record address on x64.
+let testMirToLirAllocatesFloatHeapStoreTemporary () : TestResult =
+    let label = MIR.Label "entry"
+    let block: MIR.BasicBlock =
+        { Label = label
+          Instrs =
+            [ MIR.HeapAlloc (MIR.VReg 0, 8)
+              MIR.Mov (MIR.VReg 1, MIR.FloatSymbol 42.5, Some AST.TFloat64)
+              MIR.HeapStore
+                  (MIR.VReg 0, 0, MIR.Register (MIR.VReg 1), Some AST.TFloat64) ]
+          Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
+    let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
+    let func: MIR.Function =
+        { Name = "float_heap_store_temp"
+          TypedParams = []
+          ReturnType = AST.TInt64
+          CFG = cfg
+          FloatRegs = Set.ofList [ 1 ] }
+
+    match MIR_to_LIR.toLIR (MIR.Program ([func], Map.empty, Map.empty)) with
+    | Error err -> Error $"MIR→LIR failed: {err}"
+    | Ok (LIR.Program ([lirFunc], _, _)) ->
+        let instructions =
+            lirFunc.CFG.Blocks
+            |> Map.toList
+            |> List.collect (fun (_, lirBlock) -> lirBlock.Instrs)
+
+        let hasAllocatedTemporary =
+            instructions
+            |> List.pairwise
+            |> List.exists (function
+                | LIR.FpToGp (LIR.Virtual tempId, LIR.FVirtual 1),
+                  LIR.HeapStore
+                      (LIR.Virtual 0, 0, LIR.Reg (LIR.Virtual storedId), None) ->
+                    tempId = storedId && tempId > 1
+                | _ -> false)
+
+        if hasAllocatedTemporary then Ok ()
+        else Error $"Expected an allocated virtual float-store temporary, got {instructions}"
+    | Ok _ -> Error "Expected a single LIR function"
+
 let tests = [
     ("mir → lir symbolic operands", testMirToLirSymbolicOperands)
     ("mir → lir reports missing entry block", testMirToLirReportsMissingEntryBlock)
     ("mir → lir uses native Int64 shift mask", testMirToLirUsesNativeInt64ShiftMask)
+    ("mir → lir allocates float heap-store temporary", testMirToLirAllocatesFloatHeapStoreTemporary)
 ]
 
 /// Run all symbolic LIR unit tests

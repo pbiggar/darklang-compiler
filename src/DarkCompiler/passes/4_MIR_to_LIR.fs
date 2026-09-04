@@ -1060,12 +1060,18 @@ let selectInstr
         // since HeapStore uses GP registers. Use FpToGp to transfer bits.
         match src, valueType with
         | MIR.Register vreg, Some AST.TFloat64 ->
-            // Float in FVirtual register - need to move bits to GP register first
+            // Float in FVirtual register - move its bits through an allocated GP
+            // temporary. A fixed scratch register can alias the scratch used to
+            // reload a spilled destination address on x86-64.
             let srcFReg = vregToLIRFReg vreg
-            let tempReg = LIR.Physical LIR.X9  // Use temp register for FpToGp
+            let (tempReg, nextState) = freshTempReg state
             // After FpToGp, value is in GP register, so use None for valueType
-            // (otherwise CodeGen would try to treat X9 as a float register)
-            Ok ([LIR.FpToGp (tempReg, srcFReg); LIR.HeapStore (lirAddr, offset, LIR.Reg tempReg, None)], state)
+            // (otherwise CodeGen would try to treat the GP register as a float register)
+            Ok (
+                [ LIR.FpToGp (tempReg, srcFReg)
+                  LIR.HeapStore (lirAddr, offset, LIR.Reg tempReg, None) ],
+                nextState
+            )
         | _ ->
             let lirSrc = convertOperand src
             Ok ([LIR.HeapStore (lirAddr, offset, lirSrc, valueType)], state)

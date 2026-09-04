@@ -542,6 +542,47 @@ let testSleepLowersToNormalizedInterruptSafeNanosleep () : Result<unit, string> 
         if hasNormalization && hasSyscall && retriesRemainder then Ok ()
         else Error $"Sleep did not lower to normalized interrupt-safe x64 nanosleep: {instrs}"
 
+/// Float arguments are parallel moves. A swap must retain both original values
+/// rather than letting the first MOVSD overwrite the source of the second one.
+let testFloatArgumentMovesResolveCycles () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.FLoad (LIR.FPhysical LIR.D1, 1.0)
+              LIR.FLoad (LIR.FPhysical LIR.D2, 2.0)
+              LIR.FArgMoves [ (LIR.D1, LIR.FPhysical LIR.D2); (LIR.D2, LIR.FPhysical LIR.D1) ]
+              LIR.FloatToInt64 (LIR.Physical LIR.X1, LIR.FPhysical LIR.D1)
+              LIR.FloatToInt64 (LIR.Physical LIR.X2, LIR.FPhysical LIR.D2)
+              LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 10L)
+              LIR.Mul (LIR.Physical LIR.X0, LIR.Physical LIR.X1, LIR.Physical LIR.X3)
+              LIR.Add (LIR.Physical LIR.X0, LIR.Physical LIR.X0, LIR.Reg (LIR.Physical LIR.X2))
+              LIR.PrintInt64 (LIR.Physical LIR.X0) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program false with
+    | Error error -> Error error
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        if output = "21" && stderr = "" then Ok ()
+        else Error $"Expected swapped float arguments to print 21, got stdout '{output}' and stderr '{stderr}'"
+
+let testHighFloatRegistersExecute () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.FLoad (LIR.FPhysical LIR.D0, 0.01)
+              LIR.FMov (LIR.FPhysical LIR.D11, LIR.FPhysical LIR.D0)
+              LIR.FLoad (LIR.FPhysical LIR.D2, 2000.0)
+              LIR.FMul (LIR.FPhysical LIR.D10, LIR.FPhysical LIR.D11, LIR.FPhysical LIR.D2)
+              LIR.FloatToInt64 (LIR.Physical LIR.X0, LIR.FPhysical LIR.D10)
+              LIR.PrintInt64 (LIR.Physical LIR.X0) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program false with
+    | Error error -> Error error
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        if output = "20" && stderr = "" then Ok ()
+        else Error $"Expected high x64 float registers to print 20, got stdout '{output}' and stderr '{stderr}'"
+
 let private runInNamedFunction (name: string) (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     match makeSimpleProgram [LIR.Call (LIR.Physical LIR.X0, name, [])] LIR.Ret with
     | LIR.Program ([entryFunc], variants, records) ->
@@ -5498,6 +5539,8 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
     ("LIR DateTimeNow x64 lowering uses 100ns Unix ticks", testDateTimeNowLowersTo100nsUnixTicks)
     ("LIR Sleep x64 lowering normalizes timeout and retries nanosleep", testSleepLowersToNormalizedInterruptSafeNanosleep)
+    ("LIR float x64 argument moves resolve cycles", testFloatArgumentMovesResolveCycles)
+    ("LIR high x64 float registers execute", testHighFloatRegistersExecute)
     ("LIR conditional branch", testBranch)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)

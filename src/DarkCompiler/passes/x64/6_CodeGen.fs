@@ -3433,17 +3433,27 @@ let private translateInstr
         |> Result.map (fun destReg -> [X86_64.LEA_rip (destReg, funcName)])
 
     | LIR.FArgMoves moves ->
-        // Move float arguments into XMM registers
-        let instrs =
-            moves |> List.collect (fun (destPhys, srcFreg) ->
-                let destXmm = lirFRegToX86 destPhys
+        // Float arguments are parallel moves: a source may be overwritten by an
+        // earlier destination, so cycles must be broken through reserved XMM15.
+        let resolvedMoves =
+            moves
+            |> List.map (fun (destPhys, srcFreg) ->
                 match srcFreg with
                 | LIR.FPhysical srcPhys ->
-                    let srcXmm = lirFRegToX86 srcPhys
-                    if destXmm = srcXmm then []
-                    else [X86_64.MOVSD_reg (destXmm, srcXmm)]
-                | LIR.FVirtual id -> Crash.crash $"Unresolved virtual float register f{id} in FArgMoves")
-        Ok instrs
+                    (lirFRegToX86 destPhys, lirFRegToX86 srcPhys)
+                | LIR.FVirtual id ->
+                    Crash.crash $"Unresolved virtual float register f{id} in FArgMoves")
+
+        let getSrcReg (srcReg: X86_64.FReg) : X86_64.FReg option = Some srcReg
+        ParallelMoves.resolve resolvedMoves getSrcReg
+        |> List.collect (function
+            | ParallelMoves.SaveToTemp src ->
+                [X86_64.MOVSD_reg (X86_64.XMM15, src)]
+            | ParallelMoves.Move (dest, src) ->
+                [X86_64.MOVSD_reg (dest, src)]
+            | ParallelMoves.MoveFromTemp dest ->
+                [X86_64.MOVSD_reg (dest, X86_64.XMM15)])
+        |> Ok
 
     | LIR.Phi (dest, _, _) ->
         // Phi nodes should be eliminated before codegen (SSA destruction)

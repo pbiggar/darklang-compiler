@@ -2053,6 +2053,21 @@ let floatCalleeSavedRegs : LIR.PhysFPReg list = [
 /// All allocatable float registers - caller-saved first, then callee-saved
 let allocatableFloatRegs : LIR.PhysFPReg list = floatCallerSavedRegs @ floatCalleeSavedRegs
 
+/// XMM15 is the x86-64 floating-point scratch register used for non-commutative
+/// operations and parallel-move cycle breaking, so it must not hold an allocated
+/// value. ARM64 uses D16 for those operations and can allocate the full D0-D15 set.
+let allocatableFloatRegsFor (arch: Platform.Arch) : LIR.PhysFPReg list =
+    match arch with
+    | Platform.X86_64 -> allocatableFloatRegs |> List.filter ((<>) LIR.D15)
+    | Platform.ARM64 -> allocatableFloatRegs
+
+/// AArch64 preserves D8-D15 across calls, while the System V x86-64 ABI treats
+/// every XMM register as caller-saved.
+let floatCallerSavedRegsFor (arch: Platform.Arch) : LIR.PhysFPReg list =
+    match arch with
+    | Platform.X86_64 -> allocatableFloatRegsFor arch
+    | Platform.ARM64 -> floatCallerSavedRegs
+
 /// Float allocation result
 type FAllocationResult = {
     Domain: VRegDomain
@@ -2093,6 +2108,7 @@ let floatColoringToAllocation (colorResult: ColoringResult) (registers: LIR.Phys
 /// additionalVRegs: FVirtual IDs that must be allocated (e.g., float parameters)
 /// even if they don't appear in the CFG instructions
 let private chordalFloatAllocationWithLiveness
+    (registers: LIR.PhysFPReg list)
     (blockIndex: BlockIndex)
     (blocks: LIR.BasicBlock array)
     (classifiedBlocks: ClassifiedBlock array)
@@ -2133,10 +2149,10 @@ let private chordalFloatAllocationWithLiveness
             chordalGraphColor
                 graphWithParams
                 phiParamPrecolors
-                (List.length allocatableFloatRegs)
+                (List.length registers)
                 phiPairs
                 movePairs
-        floatColoringToAllocation colorResult allocatableFloatRegs
+        floatColoringToAllocation colorResult registers
 
 /// Run chordal graph coloring for float register allocation
 /// additionalVRegs: FVirtual IDs that must be allocated (e.g., float parameters)
@@ -2147,7 +2163,15 @@ let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocat
     let (domain, livenessBits) =
         computeFloatLivenessBitsFromFacts blockIndex classifiedBlocks additionalVRegs
     let additionalBits = bitsetFromList domain additionalVRegs
-    chordalFloatAllocationWithLiveness blockIndex blocks classifiedBlocks additionalBits [] domain livenessBits
+    chordalFloatAllocationWithLiveness
+        allocatableFloatRegs
+        blockIndex
+        blocks
+        classifiedBlocks
+        additionalBits
+        []
+        domain
+        livenessBits
 
 /// Apply float allocation to an FReg, converting FVirtual to FPhysical
 let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =
@@ -2258,13 +2282,15 @@ let getLiveCallerSavedRegs (allocation: AllocationResult) (liveVRegs: BitSet) : 
 
 /// Get the caller-saved physical float registers that contain live values
 let getLiveCallerSavedFloatRegs
+    (arch: Platform.Arch)
     (liveFVRegs: BitSet)
     (floatAllocation: FAllocationResult)
     : LIR.PhysFPReg list =
+    let callerSaved = floatCallerSavedRegsFor arch
     bitsetToList floatAllocation.Domain liveFVRegs
     |> List.choose (fun vregId ->
         match tryFloatAllocation floatAllocation vregId with
-        | Some reg when List.contains reg floatCallerSavedRegs ->
+        | Some reg when List.contains reg callerSaved ->
             Some reg
         | _ -> None)
     |> List.distinct
@@ -3438,7 +3464,7 @@ let applyToBlockWithLiveness
                         |> List.distinct
                         |> List.sort
                     let liveCallerSavedFloat =
-                        getLiveCallerSavedFloatRegs floatLiveAfter floatAllocation
+                        getLiveCallerSavedFloatRegs arch floatLiveAfter floatAllocation
                     let regs = (intRegs, liveCallerSavedFloat)
                     let allocated = applyToInstr arch mapping (LIR.SaveRegs regs)
                     (allocated, (regs :: savedRegsStack, remainingLiveness, remainingArgMoveBacking))
@@ -3976,6 +4002,7 @@ let private allocateRegistersInternal
     let (floatAllocation, timings) =
         timePhase swOpt "RegAlloc: Float Allocation" timings (fun () ->
             chordalFloatAllocationWithLiveness
+                (allocatableFloatRegsFor arch)
                 blockIndex
                 blocks
                 classifiedBlocks
