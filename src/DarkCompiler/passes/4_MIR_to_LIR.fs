@@ -118,7 +118,13 @@ let private rcMetadataForPrintType
         recordRegistry
         |> Map.map (fun _typeName fields ->
             fields |> List.map (fun field -> field.Name, field.Type))
-    { ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums anfRecordRegistry (rcSumShapeRegistryFromVariantRegistry variantRegistry) typ)
+    let releasePlan =
+        ANF.rcReleasePlanOfTypeWithSums
+            anfRecordRegistry
+            (rcSumShapeRegistryFromVariantRegistry variantRegistry)
+            typ
+    { ANF.ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey typ releasePlan
+      ANF.ReleasePlan = Some releasePlan
       ANF.SourceType = Some typ }
 
 let private releasePrintedValueFromReg

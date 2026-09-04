@@ -43,11 +43,11 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
     let callTmp = TempId 2
     let decTmp = TempId 3
     let tupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let releasePlan = rcReleasePlanOfType Map.empty tupleType
     let tupleMetadata =
-        {
-            ReleasePlan = Some (rcReleasePlanOfType Map.empty tupleType)
-            SourceType = Some tupleType
-        }
+        { ReleasePlanCacheKey = rcReleasePlanCacheKey tupleType releasePlan
+          ReleasePlan = Some releasePlan
+          SourceType = Some tupleType }
 
     let caller : Function = {
         Name = "caller"
@@ -80,11 +80,11 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
     let callTmp = TempId 3
     let decTmp = TempId 4
     let tupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let releasePlan = rcReleasePlanOfType Map.empty tupleType
     let tupleMetadata =
-        {
-            ReleasePlan = Some (rcReleasePlanOfType Map.empty tupleType)
-            SourceType = Some tupleType
-        }
+        { ReleasePlanCacheKey = rcReleasePlanCacheKey tupleType releasePlan
+          ReleasePlan = Some releasePlan
+          SourceType = Some tupleType }
 
     let caller : Function = {
         Name = "caller"

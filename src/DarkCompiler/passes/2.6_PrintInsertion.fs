@@ -13,10 +13,10 @@ let unsupportedListDisplay (elemType: AST.Type) : 'a =
     Crash.crash $"Unsupported list result display element type: {TypeChecking.typeToString elemType}"
 
 let private metadataForPrintRelease (valueType: AST.Type) : ANF.RcMetadata =
-    {
-        ReleasePlan = Some (ANF.rcReleasePlanOfType Map.empty valueType)
-        SourceType = Some valueType
-    }
+    let releasePlan = ANF.rcReleasePlanOfType Map.empty valueType
+    { ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey valueType releasePlan
+      ReleasePlan = Some releasePlan
+      SourceType = Some valueType }
 
 let private releasePrintedRoot (atom: Atom) (valueType: AST.Type) (body: AExpr) (varGen: VarGen) : AExpr * VarGen =
     match ANF.rcShapeReleaseOperation (ANF.rcShapeOfType Map.empty valueType) with

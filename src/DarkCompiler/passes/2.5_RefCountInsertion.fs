@@ -571,8 +571,10 @@ let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
 let private rcMetadataForType (ctx: TypeContext) (typ: AST.Type) : RcMetadata =
     let canonicalType = canonicalRcSourceType ctx typ
     let shape = rcShapeForType ctx typ
+    let releasePlan = rcShapeReleasePlan shape
     {
-        ReleasePlan = Some (rcShapeReleasePlan shape)
+        ReleasePlanCacheKey = rcReleasePlanCacheKey canonicalType releasePlan
+        ReleasePlan = Some releasePlan
         SourceType = Some canonicalType
     }
 

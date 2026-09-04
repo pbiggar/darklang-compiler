@@ -106,146 +106,16 @@ let private stableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
         fnvOffset
     |> fun hash -> hash.ToString("x16")
 
-/// Hashes a release plan without first materializing its potentially enormous
-/// recursive `%A` representation. Existing list/dict labels retain their
-/// historical hash; new generic helper labels use this allocation-light form.
-let private fastStableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
-    let mutable hash = 14695981039346656037UL
-    let fnvPrime = 1099511628211UL
-
-    let addByte (value: byte) =
-        hash <- (hash ^^^ uint64 value) * fnvPrime
-
-    let addInt (value: int) =
-        let bits = uint64 (int64 value)
-        for shift in 0 .. 8 .. 56 do
-            addByte (byte (bits >>> shift))
-
-    let addString (value: string) =
-        addInt value.Length
-        for ch in value do
-            let code = uint16 ch
-            addByte (byte code)
-            addByte (byte (code >>> 8))
-
-    let addKind kind =
-        addByte (
-            match kind with
-            | ANF.GenericHeap -> 0uy
-            | ANF.StreamHeap -> 1uy
-            | ANF.TaggedList -> 2uy
-            | ANF.DictHeap -> 3uy
-            | ANF.ClosureHeap -> 4uy)
-
-    let rec addPlan plan =
-        match plan with
-        | ANF.NoReleasePlan ->
-            addByte 0uy
-        | ANF.DynamicBufferRelease operation ->
-            addByte 1uy
-            match operation with
-            | ANF.FixedSizeRoot (payloadSize, kind) ->
-                addByte 0uy
-                addInt payloadSize
-                addKind kind
-            | ANF.DynamicStringBuffer -> addByte 1uy
-            | ANF.DynamicBlobBuffer -> addByte 2uy
-        | ANF.RecursiveRelease sourceType ->
-            addByte 2uy
-            addString $"{sourceType}"
-        | ANF.RootRelease (payloadSize, kind, payload) ->
-            addByte 3uy
-            addInt payloadSize
-            addKind kind
-            addPayload payload
-
-    and addFields fields =
-        addInt (List.length fields)
-        fields
-        |> List.iter (fun (ANF.FieldRelease (offset, plan)) ->
-            addInt offset
-            addPlan plan)
-
-    and addPayload payload =
-        match payload with
-        | ANF.NoPayloadRelease ->
-            addByte 0uy
-        | ANF.FixedBlockPayloadRelease (payloadSize, fields) ->
-            addByte 1uy
-            addInt payloadSize
-            addFields fields
-        | ANF.BoxedSumPayloadRelease (payloadSize, fields, variants) ->
-            addByte 2uy
-            addInt payloadSize
-            addFields fields
-            addInt (List.length variants)
-            variants
-            |> List.iter (fun variant ->
-                addInt variant.Tag
-                addFields variant.FieldReleases)
-        | ANF.TaggedListPayloadRelease elementRelease ->
-            addByte 3uy
-            addPlan elementRelease
-        | ANF.DictPayloadRelease (keyRelease, valueRelease) ->
-            addByte 4uy
-            addPlan keyRelease
-            addPlan valueRelease
-        | ANF.ClosurePayloadRelease captureReleases ->
-            addByte 5uy
-            addFields captureReleases
-
-    addPlan releasePlan
-    hash.ToString("x16")
-
 // Small fixed blocks are cheaper to leave in cached function bodies: outlining
 // adds a save/call/restore sequence and another emitted symbol. Stop counting
 // as soon as a plan is large enough that repeated recursive expansion is the
 // dominant cost.
-let private genericReleasePlanOutlineNodeThreshold = 24
+let private genericReleasePlanOutlineNodeThreshold = ANF.rcReleasePlanCompactKeyNodeThreshold
 
 let private genericReleasePlanIsExpensive (releasePlan: ANF.RcReleasePlan) : bool =
-    let mutable nodes = 0
-    let visitNode () =
-        nodes <- nodes + 1
-        nodes > genericReleasePlanOutlineNodeThreshold
-
-    let rec visitPlan (plan: ANF.RcReleasePlan) =
-        if visitNode () then
-            true
-        else
-            match plan with
-            | ANF.RootRelease (_, _, payload) -> visitPayload payload
-            | ANF.NoReleasePlan
-            | ANF.DynamicBufferRelease _
-            | ANF.RecursiveRelease _ -> false
-
-    and visitFields (fields: ANF.RcFieldRelease list) =
-        match fields with
-        | [] -> false
-        | ANF.FieldRelease (_, plan) :: rest ->
-            visitNode () || visitPlan plan || visitFields rest
-
-    and visitVariants (variants: ANF.RcBoxedSumVariantRelease list) =
-        match variants with
-        | [] -> false
-        | variant :: rest ->
-            visitNode () || visitFields variant.FieldReleases || visitVariants rest
-
-    and visitPayload (payload: ANF.RcPayloadReleasePlan) =
-        if visitNode () then
-            true
-        else
-            match payload with
-            | ANF.NoPayloadRelease -> false
-            | ANF.FixedBlockPayloadRelease (_, fields)
-            | ANF.ClosurePayloadRelease fields -> visitFields fields
-            | ANF.BoxedSumPayloadRelease (_, fields, variants) ->
-                visitFields fields || visitVariants variants
-            | ANF.TaggedListPayloadRelease elementRelease -> visitPlan elementRelease
-            | ANF.DictPayloadRelease (keyRelease, valueRelease) ->
-                visitPlan keyRelease || visitPlan valueRelease
-
-    visitPlan releasePlan
+    ANF.rcReleasePlanExceedsNodeCount
+        genericReleasePlanOutlineNodeThreshold
+        releasePlan
 
 let private recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
     let hash =
@@ -260,7 +130,7 @@ let private plannedListDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleaseP
     $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
 
 let private plannedGenericDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
-    $"{plannedGenericRefCountDecHelperLabelPrefix}{fastStableRcReleasePlanHash releasePlan}"
+    $"{plannedGenericRefCountDecHelperLabelPrefix}{ANF.rcReleasePlanFingerprint releasePlan}"
 
 let private plannedDictDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     $"{plannedDictRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
@@ -6641,6 +6511,9 @@ let private generatePlannedGenericRefCountDecHelper
             InstructionSite = "root"
     }
     let metadata = {
+        // This synthetic instruction is lowered immediately and never participates
+        // in helper planning, so computing another whole-plan fingerprint is wasted work.
+        ANF.ReleasePlanCacheKey = None
         ANF.ReleasePlan = Some releasePlan
         ANF.SourceType = None
     }
@@ -7704,10 +7577,11 @@ let private precomputedEmptyRcHelperRequirements : RcHelperRequirements = {
 
 let private precomputedReleasePlanSummary
     includeStaticRootDependencies
+    memoKey
     releasePlan
     (requirements: RcHelperRequirements)
     : RcReleasePlanSummary * RcHelperRequirements =
-    let key = (includeStaticRootDependencies, releasePlan)
+    let key = (includeStaticRootDependencies, memoKey)
     match Map.tryFind key requirements.ReleasePlanSummaries with
     | Some summary -> (summary, requirements)
     | None ->
@@ -7746,7 +7620,11 @@ let private collectPrecomputedRefCountDecRequirement
             else "DictHeap RefCountDec helper selection"
         let releasePlan = requiredRcMetadataReleasePlan context metadata
         let summary, requirements =
-            precomputedReleasePlanSummary false releasePlan requirements
+            precomputedReleasePlanSummary
+                false
+                (LIR.rcReleasePlanMemoKey metadata)
+                releasePlan
+                requirements
         let requirements = addPrecomputedReleasePlanRequirements summary requirements
         if kind = LIR.TaggedList then
             { requirements with
@@ -7761,7 +7639,11 @@ let private collectPrecomputedRefCountDecRequirement
         | None -> requirements
         | Some releasePlan ->
             let summary, requirements =
-                precomputedReleasePlanSummary false releasePlan requirements
+                precomputedReleasePlanSummary
+                    false
+                    (LIR.rcReleasePlanMemoKey metadata)
+                    releasePlan
+                    requirements
             let requirements = addPrecomputedReleasePlanRequirements summary requirements
             {
                 requirements with
@@ -7795,7 +7677,10 @@ let private planFunctionArm64RcRequirements
             ReleasePlanSummaries = releasePlanSummaries
     }
     facts.RefCountDecRequirements
-    |> Set.fold collectPrecomputedRefCountDecRequirement initialRequirements
+    |> Map.fold
+        (fun requirements (kind, _) metadata ->
+            collectPrecomputedRefCountDecRequirement requirements (kind, metadata))
+        initialRequirements
     |> fun requirements ->
         facts.RefCountIncRequirements
         |> Set.fold collectPrecomputedRefCountIncRequirement requirements
@@ -8061,7 +7946,11 @@ let private generatePreparedARM64WithOptionsAndCache
                             | None -> requirements
                             | Some releasePlan ->
                                 let summary, requirements =
-                                    releasePlanSummary true releasePlan requirements
+                                    releasePlanSummary
+                                        true
+                                        (LIR.StructuralReleasePlan (Some releasePlan))
+                                        releasePlan
+                                        requirements
                                 let withPlanRequirements = addReleasePlanRequirements summary requirements
                                 {
                                     withPlanRequirements with

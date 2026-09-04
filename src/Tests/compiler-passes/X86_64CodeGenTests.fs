@@ -276,21 +276,25 @@ let private assertCallsPlannedDictHelper (context: string) (program: LIR.Program
             Error $"{context} did not call a planned dict helper; calls were {labels}"
 
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
-    {
-        ANF.ReleasePlan = None
-        ANF.SourceType = Some typ
-    }
+    { ANF.ReleasePlanCacheKey = None
+      ANF.ReleasePlan = None
+      ANF.SourceType = Some typ }
 
 let private rcMetadataWithSumShapes (sumShapes: ANF.RcSumShapeRegistry) (typ: AST.Type) : ANF.RcMetadata =
-    {
-        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ)
-        ANF.SourceType = Some typ
-    }
+    let releasePlan = ANF.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ
+    { ANF.ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey typ releasePlan
+      ANF.ReleasePlan = Some releasePlan
+      ANF.SourceType = Some typ }
 
 let private completeRcMetadata (records: LIR.RecordRegistry) (metadata: ANF.RcMetadata option) : ANF.RcMetadata option =
     match metadata with
     | Some ({ ReleasePlan = None; SourceType = Some sourceType } as value) ->
-        Some { value with ReleasePlan = Some (ANF.rcReleasePlanOfType records sourceType) }
+        let releasePlan = ANF.rcReleasePlanOfType records sourceType
+        Some {
+            value with
+                ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey sourceType releasePlan
+                ReleasePlan = Some releasePlan
+        }
     | _ ->
         metadata
 

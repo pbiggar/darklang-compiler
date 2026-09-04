@@ -267,6 +267,20 @@ let layoutBlocks (cfg: CFG) : Result<BasicBlock list, string> =
                 (Ok (initialVisited, initialBlocks))
             |> Result.map (fun (_, reversedBlocks) -> List.rev reversedBlocks))
 
+/// Ordered memo key for RC planning. Small plans remain structural because
+/// comparing them is cheaper than hashing; large plans carry a compact key.
+type RcReleasePlanMemoKey =
+    | FingerprintedReleasePlan of string
+    | StructuralReleasePlan of ANF.RcReleasePlan option
+
+let rcReleasePlanMemoKey (metadata: ANF.RcMetadata option) : RcReleasePlanMemoKey =
+    match metadata |> Option.bind (fun value -> value.ReleasePlanCacheKey) with
+    | Some cacheKey -> FingerprintedReleasePlan cacheKey
+    | None ->
+        metadata
+        |> Option.bind (fun value -> value.ReleasePlan)
+        |> StructuralReleasePlan
+
 /// ARM64 helpers implied by traversing one reference-count release plan.
 type Arm64ReleasePlanSummary = {
     ListDecHelperLabels: Set<string>
@@ -292,7 +306,9 @@ type Arm64RcHelperRequirements = {
     NeedsClosureRcIncHelper: bool
     NeedsClosureRcDecHelper: bool
     NeedsStreamRcDecHelper: bool
-    ReleasePlanSummaries: Map<bool * ANF.RcReleasePlan, Arm64ReleasePlanSummary>
+    /// Memoized by the release plan's stable fingerprint. Using the expanded
+    /// recursive plan as the key makes every lookup repeat a deep comparison.
+    ReleasePlanSummaries: Map<bool * RcReleasePlanMemoKey, Arm64ReleasePlanSummary>
 }
 
 /// Compact, register-independent facts needed while assembling native code.
@@ -305,7 +321,9 @@ type FunctionCodegenFacts = {
     ClosureCaptureTypes: AST.Type list option
     ClosurePayloadSizesFromAllocs: (string * int) list
     RecursiveReleaseTypes: Set<AST.Type>
-    RefCountDecRequirements: Set<RcKind * ANF.RcMetadata option>
+    /// Deduplicated by kind and compact plan identity. Keeping recursive
+    /// metadata out of the ordered key prevents deep structural comparisons.
+    RefCountDecRequirements: Map<RcKind * RcReleasePlanMemoKey, ANF.RcMetadata option>
     RefCountIncRequirements: Set<RcKind>
     RawSlotInitTypes: Set<AST.Type>
     NeedsCliRuntimeState: bool
@@ -340,7 +358,7 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
 
     let mutable closurePayloadSizesFromAllocsRev = []
     let mutable recursiveReleaseTypes = Set.empty
-    let mutable refCountDecRequirements = Set.empty
+    let mutable refCountDecRequirements = Map.empty
     let mutable refCountIncRequirements = Set.empty
     let mutable rawSlotInitTypes = Set.empty
     let mutable needsCliRuntimeState = false
@@ -355,7 +373,7 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
                     :: closurePayloadSizesFromAllocsRev
             | RefCountDec (_, _, kind, metadata) ->
                 refCountDecRequirements <-
-                    Set.add (kind, metadata) refCountDecRequirements
+                    Map.add (kind, rcReleasePlanMemoKey metadata) metadata refCountDecRequirements
                 recursiveReleaseTypes <-
                     metadata
                     |> Option.bind (fun metadata -> metadata.ReleasePlan)

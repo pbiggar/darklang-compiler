@@ -1203,10 +1203,16 @@ let private genRefCountDecStream
     @ [X86_64.Label skipLabel]
 
 let private generateStreamRefCountDecHelper (ctx: FuncCtx) : X86_64.Instr list =
+    let sourceType = AST.TStream (AST.TVar "a")
+    let releasePlan =
+        ANF.rcReleasePlanOfTypeWithSums
+            ctx.RecordRegistry
+            ctx.SumShapeRegistry
+            sourceType
     let metadata : ANF.RcMetadata = {
-        ReleasePlan =
-            Some (ANF.rcReleasePlanOfTypeWithSums ctx.RecordRegistry ctx.SumShapeRegistry (AST.TStream (AST.TVar "a")))
-        SourceType = Some (AST.TStream (AST.TVar "a"))
+        ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey sourceType releasePlan
+        ReleasePlan = Some releasePlan
+        SourceType = Some sourceType
     }
     [X86_64.Label streamRefCountDecHelperLabel]
     @ genRefCountDecStream ctx X86_64.RAX (Some metadata)

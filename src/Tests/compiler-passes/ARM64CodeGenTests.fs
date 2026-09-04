@@ -15,22 +15,22 @@ let private generatePreparedARM64 target program =
     |> CodeGen.generateARM64 target
 
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
-    {
-        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ)
-        ANF.SourceType = Some typ
-    }
+    let releasePlan = ANF.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ
+    { ANF.ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey typ releasePlan
+      ANF.ReleasePlan = Some releasePlan
+      ANF.SourceType = Some typ }
 
 let private rcMetadataWithSumShapes (sumShapes: ANF.RcSumShapeRegistry) (typ: AST.Type) : ANF.RcMetadata =
-    {
-        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ)
-        ANF.SourceType = Some typ
-    }
+    let releasePlan = ANF.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ
+    { ANF.ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey typ releasePlan
+      ANF.ReleasePlan = Some releasePlan
+      ANF.SourceType = Some typ }
 
 let private rcMetadataWithRecords (records: LIR.RecordRegistry) (typ: AST.Type) : ANF.RcMetadata =
-    {
-        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums records Map.empty typ)
-        ANF.SourceType = Some typ
-    }
+    let releasePlan = ANF.rcReleasePlanOfTypeWithSums records Map.empty typ
+    { ANF.ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey typ releasePlan
+      ANF.ReleasePlan = Some releasePlan
+      ANF.SourceType = Some typ }
 
 let private makeSimpleProgramWithVariants
     (instrs: LIR.Instr list)

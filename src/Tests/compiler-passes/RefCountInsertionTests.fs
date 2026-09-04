@@ -385,6 +385,35 @@ let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
     | Some (shape, expected) ->
         Error $"Expected shape {shape} to use release plan {expected}, got {rcShapeReleasePlan shape}"
 
+let testRcSourceTypeFingerprintIsStructuralAndStable () : TestResult =
+    let samples = [
+        AST.TInt64
+        AST.TString
+        AST.TList AST.TString
+        AST.TTuple [AST.TString; AST.TInt64]
+        AST.TTuple [AST.TInt64; AST.TString]
+        AST.TRecord ("Pair", [AST.TString; AST.TInt64])
+        AST.TSum ("Pair", [AST.TString; AST.TInt64])
+        AST.TDict (AST.TString, AST.TList AST.TBlob)
+    ]
+    let fingerprints = samples |> List.map rcSourceTypeFingerprint
+    if fingerprints <> (samples |> List.map rcSourceTypeFingerprint) then
+        Error "RC source-type fingerprints were not deterministic"
+    elif (fingerprints |> List.distinct |> List.length) <> List.length samples then
+        Error $"Distinct RC source types produced duplicate fingerprints: {List.zip samples fingerprints}"
+    else
+        Ok ()
+
+let testRcReleasePlanCacheKeyOnlyFingerprintsLargePlans () : TestResult =
+    let smallType = AST.TTuple [AST.TString; AST.TInt64]
+    let smallPlan = rcReleasePlanOfType Map.empty smallType
+    let largeType = AST.TTuple (List.replicate 30 AST.TString)
+    let largePlan = rcReleasePlanOfType Map.empty largeType
+    match rcReleasePlanCacheKey smallType smallPlan, rcReleasePlanCacheKey largeType largePlan with
+    | None, Some cacheKey when cacheKey = rcSourceTypeFingerprint largeType -> Ok ()
+    | smallKey, largeKey ->
+        Error $"Expected only the large release plan to use a compact key, got small={smallKey}, large={largeKey}"
+
 let testRcReleasePlanOfTypeUsesRecordMetadata () : TestResult =
     let typeReg =
         Map.ofList [
@@ -1649,6 +1678,8 @@ let tests = [
     ("RcShape ownership helpers classify ownership-transfer roots", testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots)
     ("RcShape ownership helpers classify recursive release", testRcShapeOwnershipHelpersClassifyRecursiveRelease)
     ("RcShape release plan classifies field cleanup", testRcShapeReleasePlanClassifiesFieldCleanup)
+    ("Rc source type fingerprints are structural and stable", testRcSourceTypeFingerprintIsStructuralAndStable)
+    ("Rc release-plan cache keys are compact only for large plans", testRcReleasePlanCacheKeyOnlyFingerprintsLargePlans)
     ("RcReleasePlan of type uses record metadata", testRcReleasePlanOfTypeUsesRecordMetadata)
     ("RcReleasePlan of type uses sum payload metadata", testRcReleasePlanOfTypeUsesSumPayloadMetadata)
     ("RcReleasePlan of type with sums uses variant metadata", testRcReleasePlanOfTypeWithSumsUsesVariantMetadata)
