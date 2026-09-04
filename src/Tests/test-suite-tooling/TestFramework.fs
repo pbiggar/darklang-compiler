@@ -139,6 +139,12 @@ let filterPassTimingsForOverhead (passTimings: Map<string, TimeSpan>) : Map<stri
     let overlapTimingNames =
         Set.ofList [
             "Start Function Compilation"
+            "JSON Planning"
+            "ARM64 Codegen Metadata"
+            "ARM64 Codegen Functions"
+            "ARM64 Codegen Helpers"
+            "ARM64 Codegen Assembly"
+            "ARM64 Codegen Peephole"
         ]
     passTimings
     |> Map.filter (fun name _ -> not (Set.contains name overlapTimingNames))
@@ -174,6 +180,13 @@ let buildPassTimingColumns
     let hiddenTimingNames =
         Set.ofList [
             "Unit Test Suite Execution"
+            "Start Function Compilation"
+            "JSON Planning"
+            "ARM64 Codegen Metadata"
+            "ARM64 Codegen Functions"
+            "ARM64 Codegen Helpers"
+            "ARM64 Codegen Assembly"
+            "ARM64 Codegen Peephole"
         ]
     let consolidated =
         passTimings
@@ -213,6 +226,9 @@ let buildPassTimingColumns
             ("Pass Test Suite Execution", "Pass Test Suite Execution")
             ("Stdlib Build Overhead", "Stdlib Build Overhead")
             ("E2E Test Parse", "E2E Test Parse")
+            ("Suite Context Planning", "Suite Context Planning")
+            ("Suite Context Stdlib Specialization Overhead", "Suite Context Stdlib Specialization Overhead")
+            ("Suite Context Preamble Build Overhead", "Suite Context Preamble Build Overhead")
             ("E2E Suite Context Overhead", "E2E Suite Context Overhead")
             ("Verification Test Parse", "Verification Test Parse")
             ("Verification Suite Context Overhead", "Verification Suite Context Overhead")

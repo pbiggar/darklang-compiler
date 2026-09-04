@@ -792,6 +792,38 @@ let buildSuiteContexts
     (tests: E2ETest array)
     (passTimingRecorder: CompilerLibrary.PassTimingRecorder option)
     : Result<SuiteContext, string> =
+    let recordTiming name (elapsed: TimeSpan) =
+        passTimingRecorder
+        |> Option.iter (fun record -> record { Pass = name; Elapsed = elapsed })
+
+    let overlappingTimingNames =
+        Set.ofList [
+            "Start Function Compilation"
+            "JSON Planning"
+            "ARM64 Codegen Metadata"
+            "ARM64 Codegen Functions"
+            "ARM64 Codegen Helpers"
+            "ARM64 Codegen Assembly"
+            "ARM64 Codegen Peephole"
+        ]
+
+    let measureWithCompilerPasses name operation =
+        let mutable nestedPassTime = TimeSpan.Zero
+        let nestedRecorder =
+            passTimingRecorder
+            |> Option.map (fun outer ->
+                fun (timing: CompilerLibrary.PassTiming) ->
+                    if not (Set.contains timing.Pass overlappingTimingNames) then
+                        nestedPassTime <- nestedPassTime + timing.Elapsed
+                    outer timing)
+        let timer = Diagnostics.Stopwatch.StartNew()
+        let result = operation nestedRecorder
+        timer.Stop()
+        let overhead = timer.Elapsed - nestedPassTime
+        if overhead > TimeSpan.Zero then recordTiming name overhead
+        result
+
+    let planningTimer = Diagnostics.Stopwatch.StartNew()
     let groupedTests =
         tests
         |> Array.toList
@@ -814,10 +846,20 @@ let buildSuiteContexts
                                 Map.fold (fun acc k v -> Map.add k v acc) stdlibVariantLookup variantLookup
                             ((contextKey, plan) :: plans, Set.union stdlibSpecs specs, mergedTypeReg, mergedVariantLookup)))))
             (Ok ([], Set.empty, Map.empty, Map.empty))
+    planningTimer.Stop()
+    recordTiming "Suite Context Planning" planningTimer.Elapsed
 
     plansResult
     |> Result.bind (fun (plans, stdlibSpecs, externalTypeReg, externalVariantLookup) ->
-        CompilerLibrary.buildStdlibSpecializations stdlib stdlibSpecs externalTypeReg externalVariantLookup passTimingRecorder
+        measureWithCompilerPasses
+            "Suite Context Stdlib Specialization Overhead"
+            (fun nestedRecorder ->
+                CompilerLibrary.buildStdlibSpecializations
+                    stdlib
+                    stdlibSpecs
+                    externalTypeReg
+                    externalVariantLookup
+                    nestedRecorder)
         |> Result.bind (fun stdlibWithSpecs ->
             let buildEmptyContext () : CompilerLibrary.PreambleContext =
                 {
@@ -827,28 +869,31 @@ let buildSuiteContexts
                     SymbolicFunctions = []
                 }
             let contextsResult =
-                plans
-                |> List.fold
-                    (fun acc (contextKey, plan) ->
-                        acc
-                        |> Result.bind (fun (currentStdlib, contexts) ->
-                            let ctxResult =
-                                match plan.Analysis with
-                                | None -> Ok (currentStdlib, buildEmptyContext ())
-                                | Some analysis ->
-                                    CompilerLibrary.buildPreambleContextFromAnalysis
-                                        currentStdlib
-                                        analysis
-                                        plan.Specialization
-                                        plan.Spec.SourceFile
-                                        plan.Spec.FunctionLineMap
-                                        passTimingRecorder
-                                    |> Result.mapError (fun err ->
-                                        $"Preamble build error ({plan.Spec.SourceFile}): {err}")
-                            ctxResult
-                            |> Result.map (fun (updatedStdlib, ctx) ->
-                                (updatedStdlib, Map.add contextKey ctx contexts))))
-                    (Ok (stdlibWithSpecs, Map.empty))
+                measureWithCompilerPasses
+                    "Suite Context Preamble Build Overhead"
+                    (fun nestedRecorder ->
+                        plans
+                        |> List.fold
+                            (fun acc (contextKey, plan) ->
+                                acc
+                                |> Result.bind (fun (currentStdlib, contexts) ->
+                                    let ctxResult =
+                                        match plan.Analysis with
+                                        | None -> Ok (currentStdlib, buildEmptyContext ())
+                                        | Some analysis ->
+                                            CompilerLibrary.buildPreambleContextFromAnalysis
+                                                currentStdlib
+                                                analysis
+                                                plan.Specialization
+                                                plan.Spec.SourceFile
+                                                plan.Spec.FunctionLineMap
+                                                nestedRecorder
+                                            |> Result.mapError (fun err ->
+                                                $"Preamble build error ({plan.Spec.SourceFile}): {err}")
+                                    ctxResult
+                                    |> Result.map (fun (updatedStdlib, ctx) ->
+                                        (updatedStdlib, Map.add contextKey ctx contexts))))
+                            (Ok (stdlibWithSpecs, Map.empty)))
             contextsResult
             |> Result.map (fun (updatedStdlib, contexts) ->
                 {

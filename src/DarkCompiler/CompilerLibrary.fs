@@ -145,6 +145,7 @@ type CodegenFunctionMetric = {
 }
 
 type CompilationSession(collectCodegenMetrics: bool) =
+    let jsonPlanning = new JsonPlanning.PlanningSession()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
     let arm64CodegenMetrics = ResizeArray<CodegenFunctionMetric>()
     let mutable disposed = false
@@ -152,6 +153,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable arm64CodegenMissCount = 0
 
     new() = new CompilationSession(false)
+
+    member _.JsonPlanning = jsonPlanning
 
     member _.CodegenFunction
         (target: ARM64.TargetConfig)
@@ -194,12 +197,16 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 result
 
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
+    member _.CachedJsonPlanCount = jsonPlanning.Count
+    member _.JsonPlanHitCount = jsonPlanning.HitCount
+    member _.JsonPlanMissCount = jsonPlanning.MissCount
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
     member _.Arm64CodegenMetrics = arm64CodegenMetrics |> Seq.toList
 
     interface IDisposable with
         member _.Dispose() =
+            (jsonPlanning :> System.IDisposable).Dispose()
             arm64Functions.Clear()
             arm64CodegenMetrics.Clear()
             disposed <- true
@@ -749,8 +756,21 @@ let private generateBinary
             |> Option.filter (fun _ -> not options.EnableCoverage)
             |> Option.map (fun current ->
                 fun func generate -> current.CodegenFunction arm64Target codegenOptions func generate)
+        let codegenPhaseRecorder =
+            passTimingRecorder
+            |> Option.map (fun record ->
+                fun name (elapsedMs: float) ->
+                    record {
+                        Pass = name
+                        Elapsed = TimeSpan.FromMilliseconds elapsedMs
+                    })
         let codegenResult =
-            CodeGen.generateARM64WithOptionsAndCache arm64Target codegenOptions functionCache allocatedProgram
+            CodeGen.generateARM64WithOptionsAndCache
+                arm64Target
+                codegenOptions
+                functionCache
+                codegenPhaseRecorder
+                allocatedProgram
         match codegenResult with
         | Error err -> Error $"Code generation error: {err}"
         | Ok arm64Instructions ->
@@ -2113,7 +2133,14 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     Error
                         $"File entry expression must return Unit, Int, or Int64; got {TypeChecking.typeToString programType}"
                 | Ok (programType, typedUserAst, userEnv) ->
-                    let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
+                    let jsonPlanningStart = sw.Elapsed.TotalMilliseconds
+                    let plannedUserAst =
+                        JsonPlanning.rewriteProgramWithSession
+                            (plan.Session |> Option.map (fun session -> session.JsonPlanning))
+                            userEnv
+                            typedUserAst
+                    let jsonPlanningElapsed = sw.Elapsed.TotalMilliseconds - jsonPlanningStart
+                    recordPassTiming plan.PassTimingRecorder "JSON Planning" jsonPlanningElapsed
                     let plannedProgramType = TypeChecking.resolveType userEnv.AliasReg programType
                     let renderedUserAst, boundaryProgramType =
                         if plan.Mode = FullProgram then

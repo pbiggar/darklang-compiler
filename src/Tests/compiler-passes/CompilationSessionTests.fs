@@ -56,10 +56,12 @@ let testArm64HitWithNestedJson (stdlib: CompilerLibrary.StdlibResult) () : TestR
           expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source) with
     | Ok (), Ok () when
         session.Arm64CodegenHitCount > 0
-        && session.Arm64CodegenMissCount > 0 ->
+        && session.Arm64CodegenMissCount > 0
+        && session.JsonPlanHitCount = 1
+        && session.JsonPlanMissCount = 1 ->
         Ok ()
     | Ok (), Ok () ->
-        Error $"Expected repeated nested JSON compilation to hit the ARM64 cache, got hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}"
+        Error $"Expected repeated nested JSON compilation to hit both caches, got ARM64 hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}; JSON hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}"
     | Error error, _
     | _, Error error -> Error error
 
@@ -107,15 +109,42 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
     let secondResult = expectCompiled (compile stdlib second CompilerLibrary.defaultOptions source)
     (first :> System.IDisposable).Dispose()
     match firstResult, secondResult with
-    | Ok (), Ok () when first.CachedArm64FunctionCount = 0 && second.CachedArm64FunctionCount > 0 -> Ok ()
+    | Ok (), Ok () when
+        first.CachedArm64FunctionCount = 0
+        && first.CachedJsonPlanCount = 0
+        && second.CachedArm64FunctionCount > 0
+        && second.CachedJsonPlanCount > 0 -> Ok ()
     | Ok (), Ok () ->
         Error $"Expected isolated sessions and disposal to release only the first registry, got first={first.CachedArm64FunctionCount}, second={second.CachedArm64FunctionCount}"
     | Error error, _
     | _, Error error -> Error error
+
+let testJsonPlanCacheSegregatesNominalShapes (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    let first =
+        "type CachedJsonShape = { value: Int64 }\n"
+        + "Stdlib.Json.parse<CachedJsonShape>(\"{\\\"value\\\":1}\")"
+    let second =
+        "type CachedJsonShape = { text: String }\n"
+        + "Stdlib.Json.parse<CachedJsonShape>(\"{\\\"text\\\":\\\"ok\\\"}\")"
+    match expectCompiled (compile stdlib session CompilerLibrary.defaultOptions first),
+          expectCompiled (compile stdlib session CompilerLibrary.defaultOptions second),
+          expectCompiled (compile stdlib session CompilerLibrary.defaultOptions first) with
+    | Ok (), Ok (), Ok () when
+        session.CachedJsonPlanCount = 2
+        && session.JsonPlanMissCount = 2
+        && session.JsonPlanHitCount = 1 ->
+        Ok ()
+    | Ok (), Ok (), Ok () ->
+        Error $"Expected same-named distinct record shapes to use separate JSON plans, got cached={session.CachedJsonPlanCount}, hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}"
+    | Error error, _, _
+    | _, Error error, _
+    | _, _, Error error -> Error error
 
 let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
     ("compilation session codegen metrics are opt-in", testArm64CodegenMetricsAreOptIn stdlib)
     ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
+    ("compilation session segregates canonical JSON declaration shapes", testJsonPlanCacheSegregatesNominalShapes stdlib)
 ]

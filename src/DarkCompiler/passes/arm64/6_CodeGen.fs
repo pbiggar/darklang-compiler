@@ -7157,8 +7157,18 @@ let generateARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
+    (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
     : Result<ARM64Symbolic.Instr list, string> =
+    let startPhase () =
+        phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
+    let recordPhase name timer =
+        match phaseRecorder, timer with
+        | Some record, Some (timer: System.Diagnostics.Stopwatch) ->
+            timer.Stop()
+            record name timer.Elapsed.TotalMilliseconds
+        | _ -> ()
+    let metadataTimer = startPhase ()
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
@@ -7853,14 +7863,21 @@ let generateARM64WithOptionsAndCache
     let directlyNeedsStreamRcDecHelper =
         rcHelperRequirements.NeedsStreamRcDecHelper
 
+    recordPhase "ARM64 Codegen Metadata" metadataTimer
+
     let convertCached func =
         let generate () = convertFunction heapOverflowTrapBody ctx func
         match functionCache with
         | Some cache when func.Name <> "_start" -> cache func generate
         | _ -> generate ()
 
-    ResultList.collectResults convertCached sortedFunctions
+    let functionTimer = startPhase ()
+    let convertedFunctions = ResultList.collectResults convertCached sortedFunctions
+    recordPhase "ARM64 Codegen Functions" functionTimer
+
+    convertedFunctions
     |> Result.map (fun allFunctionInstrs ->
+        let helperTimer = startPhase ()
         let listRcDecHelperLabelsFromDictHelpers =
             neededDictRcDecHelperLabels
             |> Set.toList
@@ -7960,10 +7977,24 @@ let generateARM64WithOptionsAndCache
         let cliHelpers =
             if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper ()
             else []
-        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers @ streamRcHelpers @ recursiveSumRcHelpers @ cliHelpers) |> peepholeOptimize)
+        recordPhase "ARM64 Codegen Helpers" helperTimer
+        let assemblyTimer = startPhase ()
+        let assembled =
+            allFunctionInstrs
+            @ listRcHelpers
+            @ dictRcHelpers
+            @ closureRcHelpers
+            @ streamRcHelpers
+            @ recursiveSumRcHelpers
+            @ cliHelpers
+        recordPhase "ARM64 Codegen Assembly" assemblyTimer
+        let peepholeTimer = startPhase ()
+        let optimized = peepholeOptimize assembled
+        recordPhase "ARM64 Codegen Peephole" peepholeTimer
+        optimized)
 
 let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
-    generateARM64WithOptionsAndCache target options None program
+    generateARM64WithOptionsAndCache target options None None program
 
 /// Convert LIR program to ARM64 instructions (uses default options)
 let generateARM64 (target: ARM64.TargetConfig) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =

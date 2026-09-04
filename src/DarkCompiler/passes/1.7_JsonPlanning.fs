@@ -8,6 +8,42 @@
 module JsonPlanning
 
 open AST
+open System.Collections.Generic
+
+/// Bounded, caller-owned cache of generated typed JSON codec declarations.
+/// Entries are keyed by direction plus the complete reachable shape of the
+/// resolved root type, so unrelated declarations do not prevent reuse while
+/// same-named local declarations with different shapes remain isolated.
+type PlanningSession() =
+    let artifacts = Dictionary<string, FunctionDef list>()
+    let mutable disposed = false
+    let mutable hitCount = 0
+    let mutable missCount = 0
+
+    member _.TryFind(key: string) : FunctionDef list option =
+        if disposed then
+            None
+        else
+            match artifacts.TryGetValue key with
+            | true, functions ->
+                hitCount <- hitCount + 1
+                Some functions
+            | false, _ ->
+                missCount <- missCount + 1
+                None
+
+    member _.Store(key: string, functions: FunctionDef list) : unit =
+        if not disposed then
+            artifacts.[key] <- functions
+
+    member _.Count = if disposed then 0 else artifacts.Count
+    member _.HitCount = hitCount
+    member _.MissCount = missCount
+
+    interface System.IDisposable with
+        member _.Dispose() =
+            artifacts.Clear()
+            disposed <- true
 
 type private SumVariant = { Name: string; Tag: int; Payload: Type option }
 type private SumInfo = { TypeParams: string list; Variants: SumVariant list }
@@ -191,6 +227,78 @@ let private resolveJsonType (env: Env) typ =
         | TFunction (parameters, result) -> TFunction (List.map resolve parameters, resolve result)
         | other -> other
     resolve typ
+
+let private canonicalCodecTypeKey (env: Env) (rootType: Type) : string =
+    // Include only declarations reachable from the requested type. This is
+    // deliberately narrower than fingerprinting the complete type-checking
+    // environment: most E2E files add unrelated declarations, and those must
+    // not defeat reuse of primitive and standard-library codecs.
+    let rec encode (visiting: Set<string>) typ =
+        let typ = resolveJsonType env typ
+        match typ with
+        | TList elementType -> $"list({encode visiting elementType})"
+        | TDict (keyType, valueType) ->
+            $"dict({encode visiting keyType},{encode visiting valueType})"
+        | TTuple elementTypes ->
+            elementTypes
+            |> List.map (encode visiting)
+            |> String.concat ","
+            |> fun elements -> $"tuple({elements})"
+        | TEnumFields fieldTypes ->
+            fieldTypes
+            |> List.map (encode visiting)
+            |> String.concat ","
+            |> fun fields -> $"enum-fields({fields})"
+        | TFunction (parameters, result) ->
+            let parameters = parameters |> List.map (encode visiting) |> String.concat ","
+            $"fn({parameters})->{encode visiting result}"
+        | TRecord (name, typeArgs) ->
+            let identity = $"record:{structuralTypeKey typ}"
+            if Set.contains identity visiting then
+                $"ref({identity})"
+            else
+                let visiting = Set.add identity visiting
+                let args = typeArgs |> List.map (encode visiting) |> String.concat ","
+                match Map.tryFind name env.Records with
+                | None -> $"{identity}<{args}>"
+                | Some info ->
+                    match substitution info.TypeParams typeArgs with
+                    | Error _ -> $"{identity}<{args}>:invalid-arity"
+                    | Ok subst ->
+                        let fields =
+                            info.Fields
+                            |> List.map (fun (fieldName, fieldType) ->
+                                let concrete = applySubstitution subst fieldType
+                                $"{fieldName}:{encode visiting concrete}")
+                            |> String.concat ","
+                        $"{identity}<{args}>{{{fields}}}"
+        | TSum (name, typeArgs) ->
+            let identity = $"sum:{structuralTypeKey typ}"
+            if Set.contains identity visiting then
+                $"ref({identity})"
+            else
+                let visiting = Set.add identity visiting
+                let args = typeArgs |> List.map (encode visiting) |> String.concat ","
+                match Map.tryFind name env.Sums with
+                | None -> $"{identity}<{args}>"
+                | Some info ->
+                    match substitution info.TypeParams typeArgs with
+                    | Error _ -> $"{identity}<{args}>:invalid-arity"
+                    | Ok subst ->
+                        let variants =
+                            info.Variants
+                            |> List.sortBy (fun variant -> variant.Tag)
+                            |> List.map (fun variant ->
+                                let payload =
+                                    variant.Payload
+                                    |> Option.map (applySubstitution subst >> encode visiting)
+                                    |> Option.defaultValue "none"
+                                $"{variant.Tag}:{variant.Name}:{payload}")
+                            |> String.concat ","
+                        $"{identity}<{args}>[{variants}]"
+        | other -> structuralTypeKey other
+
+    encode Set.empty rootType
 
 let rec private ensureSerializer (env: Env) typ state : Result<string * State, string> =
     let typ = resolveJsonType env typ
@@ -899,15 +1007,11 @@ let rec private mapExpr rewrite expr =
         | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
     rewrite mapped
 
-let rewriteProgram
+let rewriteProgramWithSession
+    (session: PlanningSession option)
     (env: TypeChecking.TypeCheckEnv)
     (Program topLevels)
     : Program =
-    let planningEnv = {
-        Records = env.IndexedTypeReg
-        Sums = sumRegistry env.VariantLookup
-        Aliases = env.AliasReg
-    }
     let (serializerTypes, parserTypes) =
         let collect expr acc =
             let initialResult = acc
@@ -948,65 +1052,125 @@ let rewriteProgram
             | TypeDef _ -> acc) ([], [])
         |> fun (serializers, parsers) -> (List.distinct serializers, List.distinct parsers)
 
+    let hasJsonCalls = not (List.isEmpty serializerTypes && List.isEmpty parserTypes)
+    let planningEnv = {
+        Records = env.IndexedTypeReg
+        Sums = if hasJsonCalls then sumRegistry env.VariantLookup else Map.empty
+        Aliases = env.AliasReg
+    }
+
+    let mergeArtifact (state: State) (functions: FunctionDef list) : Result<State, string> =
+        functions
+        |> List.fold
+            (fun result fn ->
+                result
+                |> Result.bind (fun current ->
+                    match Map.tryFind fn.Name current.Functions with
+                    | Some existing when existing <> fn ->
+                        Error $"JSON codec name collision for canonical plan '{fn.Name}'"
+                    | Some _ -> Ok current
+                    | None ->
+                        Ok { current with Functions = Map.add fn.Name fn current.Functions }))
+            (Ok state)
+
+    let planCached
+        (direction: string)
+        (ensure: Env -> Type -> State -> Result<string * State, string>)
+        (typ: Type)
+        (state: State)
+        : Result<State, string> =
+        let concrete = resolveJsonType planningEnv typ
+        let key = $"{direction}|{canonicalCodecTypeKey planningEnv concrete}"
+        match session |> Option.bind (fun current -> current.TryFind key) with
+        | Some functions -> mergeArtifact state functions
+        | None ->
+            ensure planningEnv concrete { Functions = Map.empty }
+            |> Result.bind (fun (_, artifactState) ->
+                let functions =
+                    artifactState.Functions
+                    |> Map.toList
+                    |> List.map snd
+                session |> Option.iter (fun current -> current.Store(key, functions))
+                mergeArtifact state functions)
+
     let planned =
-        let serializersPlanned =
-            serializerTypes
+        match session with
+        | None ->
+            // A one-shot caller can share dependencies directly in one state
+            // without paying for cache keys or artifact merging.
+            let serializersPlanned =
+                serializerTypes
+                |> List.fold (fun result typ ->
+                    result
+                    |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
+                    (Ok { Functions = Map.empty })
+            parserTypes
             |> List.fold (fun result typ ->
                 result
-                |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
-                (Ok { Functions = Map.empty })
-        parserTypes
-        |> List.fold (fun result typ ->
-            result
-            |> Result.bind (fun state -> ensureDecoder planningEnv typ state |> Result.map snd)) serializersPlanned
+                |> Result.bind (fun state -> ensureDecoder planningEnv typ state |> Result.map snd)) serializersPlanned
+        | Some _ ->
+            let serializersPlanned =
+                serializerTypes
+                |> List.fold (fun result typ ->
+                    result |> Result.bind (planCached "serialize" ensureSerializer typ))
+                    (Ok { Functions = Map.empty })
+            parserTypes
+            |> List.fold (fun result typ ->
+                result |> Result.bind (planCached "parse" ensureDecoder typ)) serializersPlanned
 
-    match planned with
-    | Error error ->
-        let rewrite expr =
-            match expr with
-            | TypeApp ("Stdlib.Json.serialize", _, _)
-            | TypeApp ("Stdlib.Json.parse", _, _) -> RuntimeError error
-            | _ -> expr
-        Program (
-            topLevels
-            |> List.map (function
-                | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
-                | Expression expr -> Expression (mapExpr rewrite expr)
-                | other -> other))
-    | Ok state ->
-        let rewrite expr =
-            match expr with
-            | TypeApp ("Stdlib.Json.serialize", [typ], values) ->
-                let written =
-                    call
-                        (serializeName (resolveJsonType planningEnv typ))
-                        (writerEmpty :: NonEmptyList.toList values)
-                writerFinish written
-            | TypeApp ("Stdlib.Json.parse", [typ], values) ->
-                let concrete = resolveJsonType planningEnv typ
-                let source = NonEmptyList.head values
-                let parsed = call "Stdlib.Json.__parseRoot" [Var "__json_source"]
-                let rootPath = ListLiteral [constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Root" None]
-                Let (
-                    LPVariable "__json_source",
-                    source,
+    if not hasJsonCalls then
+        Program topLevels
+    else
+        match planned with
+        | Error error ->
+            let rewrite expr =
+                match expr with
+                | TypeApp ("Stdlib.Json.serialize", _, _)
+                | TypeApp ("Stdlib.Json.parse", _, _) -> RuntimeError error
+                | _ -> expr
+            Program (
+                topLevels
+                |> List.map (function
+                    | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
+                    | Expression expr -> Expression (mapExpr rewrite expr)
+                    | other -> other))
+        | Ok state ->
+            let rewrite expr =
+                match expr with
+                | TypeApp ("Stdlib.Json.serialize", [typ], values) ->
+                    let written =
+                        call
+                            (serializeName (resolveJsonType planningEnv typ))
+                            (writerEmpty :: NonEmptyList.toList values)
+                    writerFinish written
+                | TypeApp ("Stdlib.Json.parse", [typ], values) ->
+                    let concrete = resolveJsonType planningEnv typ
+                    let source = NonEmptyList.head values
+                    let parsed = call "Stdlib.Json.__parseRoot" [Var "__json_source"]
+                    let rootPath = ListLiteral [constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Root" None]
                     Let (
-                        LPVariable "__json_parse_result",
-                        parsed,
-                        Match (
-                            Var "__json_parse_result",
-                            [ makeCase
-                                  (PConstructor ("Ok", Some (PVar "__json_view")))
-                                  (call (decoderName concrete) [Var "__json_source"; Var "__json_view"; rootPath])
-                              makeCase
-                                  (PConstructor ("Error", Some PWildcard))
-                                  (constructor "Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ])))
-            | _ -> expr
-        let rewritten =
-            topLevels
-            |> List.map (function
-                | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
-                | Expression expr -> Expression (mapExpr rewrite expr)
-                | other -> other)
-        let generated = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
-        Program (generated @ rewritten)
+                        LPVariable "__json_source",
+                        source,
+                        Let (
+                            LPVariable "__json_parse_result",
+                            parsed,
+                            Match (
+                                Var "__json_parse_result",
+                                [ makeCase
+                                      (PConstructor ("Ok", Some (PVar "__json_view")))
+                                      (call (decoderName concrete) [Var "__json_source"; Var "__json_view"; rootPath])
+                                  makeCase
+                                      (PConstructor ("Error", Some PWildcard))
+                                      (constructor "Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ])))
+                | _ -> expr
+            let rewritten =
+                topLevels
+                |> List.map (function
+                    | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
+                    | Expression expr -> Expression (mapExpr rewrite expr)
+                    | other -> other)
+            let generated = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
+            Program (generated @ rewritten)
+
+let rewriteProgram (env: TypeChecking.TypeCheckEnv) (program: Program) : Program =
+    rewriteProgramWithSession None env program

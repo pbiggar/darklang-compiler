@@ -72,7 +72,25 @@ let testTypedEncodingUsesSharedWriter
         else
             Ok ())
 
+let testNonJsonProgramIsUnchanged
+    (stdlib: CompilerLibrary.StdlibResult)
+    ()
+    : TestResult =
+    CompilerLibrary.parseProgram false "1L + 2L"
+    |> Result.bind (fun program ->
+        TypeChecking.checkPublicProgramWithBaseEnvAndSettings
+            stdlib.Context.TypeCheckEnv
+            true
+            CompilerLibrary.defaultWarningSettings
+            program
+        |> Result.mapError TypeChecking.typeErrorToString)
+    |> Result.bind (fun (_, typedProgram, env) ->
+        let planned = JsonPlanning.rewriteProgram env typedProgram
+        if planned = typedProgram then Ok ()
+        else Error "Expected JSON planning to leave a program without JSON intrinsics unchanged")
+
 let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("typed JSON decoding uses shared value views", testTypedDecodingUsesSharedViews stdlib)
     ("typed JSON encoding uses the shared writer", testTypedEncodingUsesSharedWriter stdlib)
+    ("JSON planning leaves non-JSON programs unchanged", testNonJsonProgramIsUnchanged stdlib)
 ]

@@ -60,7 +60,11 @@ copying nested input. Lists consume a streaming index cursor, records build one
 field index in source order, and the syntax scan carries a single-field-object
 bit that avoids rescanning the normal enum envelope. Typed
 serialization threads a shared writer through codecs, centralizing punctuation
-and escaping instead of generating `StringConcat` trees.
+and escaping instead of generating `StringConcat` trees. A caller-owned
+compilation session reuses generated codec declarations by serialization
+direction and the complete reachable shape of the resolved type; the cache is
+bounded to that session and distinguishes same-named local declarations with
+different fields or variants.
 
 | Dark type | JSON wire shape |
 | --- | --- |

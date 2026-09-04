@@ -108,17 +108,26 @@ type CodegenProfileCategory = {
     generations: int
 }
 
+type CodegenProfilePhase = {
+    name: string
+    elapsed_ms: float
+    percentage_of_codegen: float
+}
+
 type CodegenProfileSummary = {
     codegen_ms: float
     attributed_function_ms: float
     program_overhead_ms: float
     cache_hits: int
     cache_misses: int
+    json_plan_cache_hits: int
+    json_plan_cache_misses: int
 }
 
 type CodegenProfilePayload = {
     schema_version: int
     summary: CodegenProfileSummary
+    phases: CodegenProfilePhase array
     categories: CodegenProfileCategory array
     functions: CodegenProfileFunction array
 }
@@ -512,6 +521,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let codegenMetrics = ResizeArray<CompilerLibrary.CodegenFunctionMetric>()
     let mutable codegenCacheHits = 0
     let mutable codegenCacheMisses = 0
+    let mutable jsonPlanCacheHits = 0
+    let mutable jsonPlanCacheMisses = 0
     let recordTiming = TestFramework.recordTiming runState
     let recordResults = TestFramework.recordResults runState
     let recordPassTiming = TestFramework.recordPassTiming runState
@@ -833,6 +844,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 codegenMetrics.AddRange(compilationSession.Arm64CodegenMetrics)
                 codegenCacheHits <- codegenCacheHits + compilationSession.Arm64CodegenHitCount
                 codegenCacheMisses <- codegenCacheMisses + compilationSession.Arm64CodegenMissCount
+                jsonPlanCacheHits <- jsonPlanCacheHits + compilationSession.JsonPlanHitCount
+                jsonPlanCacheMisses <- jsonPlanCacheMisses + compilationSession.JsonPlanMissCount
 
     let runPassTestFile
         (loadTest: string -> Result<'input, string>)
@@ -1327,6 +1340,23 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
             |> Option.defaultValue TimeSpan.Zero
             |> milliseconds
         let attributedMs = functionEntries |> Array.sumBy (fun entry -> entry.elapsed_ms)
+        let phaseEntries =
+            [| "ARM64 Codegen Metadata"
+               "ARM64 Codegen Functions"
+               "ARM64 Codegen Helpers"
+               "ARM64 Codegen Assembly"
+               "ARM64 Codegen Peephole" |]
+            |> Array.choose (fun name ->
+                Map.tryFind name runState.PassTimings
+                |> Option.map (fun elapsed ->
+                    let elapsedMs = milliseconds elapsed
+                    {
+                        name = name
+                        elapsed_ms = elapsedMs
+                        percentage_of_codegen =
+                            if codegenMs <= 0.0 then 0.0
+                            else roundedMilliseconds (elapsedMs * 100.0 / codegenMs)
+                    }))
         let categoryEntries =
             functionEntries
             |> Array.groupBy (fun entry -> entry.category)
@@ -1343,14 +1373,17 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 })
             |> Array.sortByDescending (fun entry -> entry.elapsed_ms)
         let payload = {
-            schema_version = 1
+            schema_version = 2
             summary = {
                 codegen_ms = codegenMs
                 attributed_function_ms = roundedMilliseconds attributedMs
                 program_overhead_ms = roundedMilliseconds (max 0.0 (codegenMs - attributedMs))
                 cache_hits = codegenCacheHits
                 cache_misses = codegenCacheMisses
+                json_plan_cache_hits = jsonPlanCacheHits
+                json_plan_cache_misses = jsonPlanCacheMisses
             }
+            phases = phaseEntries
             categories = categoryEntries
             functions = functionEntries
         }

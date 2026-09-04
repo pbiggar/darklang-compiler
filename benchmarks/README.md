@@ -43,6 +43,14 @@ bin/Tests/Debug/net10.0/Tests \
   --json-benchmark=/tmp/json-benchmark.json
 ```
 
+The timing JSON includes exclusive top-level compiler/test phases plus
+diagnostic overlapping subphases for JSON planning and ARM64 code generation.
+The codegen profile separates metadata analysis, function collection, runtime
+helper generation, instruction-list assembly, and the final symbolic peephole
+pass; it also reports ARM64-function and canonical JSON-plan cache hits.
+Suite-context timings split test/preamble planning from stdlib-specialization
+and preamble-build overhead.
+
 The codegen profile attributes ARM64 cache misses by function and reports the
 remaining whole-program codegen time separately. Profiling is disabled unless
 the output flag is present. The focused benchmark validates and times scalar,
