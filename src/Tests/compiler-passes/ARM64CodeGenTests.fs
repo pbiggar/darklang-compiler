@@ -9,10 +9,16 @@ type TestResult = Result<unit, string>
 
 let private target = ARM64.targetConfigFor Platform.LinuxARM64
 
-let private generatePreparedARM64 target program =
+let private generatePreparedARM64WithOptions target options program =
     program
     |> CodeGen.prepareARM64Program
-    |> CodeGen.generateARM64 target
+    |> CodeGen.generateARM64WithOptions target options
+
+let private generatePreparedARM64 target program =
+    generatePreparedARM64WithOptions target CodeGen.defaultOptions program
+
+let private genericReleaseOutliningOptions =
+    { CodeGen.defaultOptions with OutlineGenericReleasePlans = true }
 
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
     let releasePlan = ANF.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ
@@ -126,7 +132,7 @@ let testGenericReleasePlanIsOutlinedOnce () : TestResult =
             ]
             Map.empty
 
-    match generatePreparedARM64 target program with
+    match generatePreparedARM64WithOptions target genericReleaseOutliningOptions program with
     | Error error -> Error $"Generic release helper lowering failed: {error}"
     | Ok instructions ->
         let plannedCalls =
@@ -164,7 +170,7 @@ let testSmallGenericReleasePlanRemainsInline () : TestResult =
             ]
             Map.empty
 
-    match generatePreparedARM64 target program with
+    match generatePreparedARM64WithOptions target genericReleaseOutliningOptions program with
     | Error error -> Error $"Small generic release lowering failed: {error}"
     | Ok instructions ->
         let emitsGenericHelper =
@@ -177,6 +183,35 @@ let testSmallGenericReleasePlanRemainsInline () : TestResult =
                     false)
         if emitsGenericHelper then
             Error "Small generic release plan was outlined despite the complexity cutoff"
+        else
+            Ok ()
+
+let testDisabledGenericReleaseOutliningRemainsInline () : TestResult =
+    let valueType = AST.TTuple (List.replicate 32 AST.TString)
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    256,
+                    LIR.GenericHeap,
+                    Some (rcMetadata valueType))
+            ]
+            Map.empty
+
+    match generatePreparedARM64 target program with
+    | Error error -> Error $"Disabled generic release outlining failed: {error}"
+    | Ok instructions ->
+        let emitsGenericHelper =
+            instructions
+            |> List.exists (function
+                | ARM64Symbolic.BL label
+                | ARM64Symbolic.Label label ->
+                    label.StartsWith("__dark_generic_refcount_dec_plan_")
+                | _ ->
+                    false)
+        if emitsGenericHelper then
+            Error "Generic release plan was outlined while the compile-time option was disabled"
         else
             Ok ()
 
@@ -1740,6 +1775,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("Generic release plan is outlined once", testGenericReleasePlanIsOutlinedOnce)
     ("Small generic release plan remains inline", testSmallGenericReleasePlanRemainsInline)
+    ("Disabled generic release outlining remains inline", testDisabledGenericReleaseOutliningRemainsInline)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
     ("List tuple3 closure/list/dict-list uses typed dict helper", testListTuple3ClosureListDictListValueUsesTypedDictHelper)

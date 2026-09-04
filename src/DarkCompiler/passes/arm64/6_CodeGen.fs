@@ -27,6 +27,9 @@ type CodeGenOptions = {
     CoverageExprCount: int
     /// Enable leak checking instrumentation
     EnableLeakCheck: bool
+    /// Prefer smaller, faster-to-generate code for short-lived test binaries.
+    /// Outlined generic releases add runtime call preservation overhead.
+    OutlineGenericReleasePlans: bool
 }
 
 /// Default code generation options
@@ -35,6 +38,7 @@ let defaultOptions : CodeGenOptions = {
     EnableCoverage = false
     CoverageExprCount = 0
     EnableLeakCheck = false
+    OutlineGenericReleasePlans = false
 }
 
 /// Code generation context (passed through to instruction conversion)
@@ -5620,7 +5624,13 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 ]
                 [ARM64Symbolic.CBZ_offset (addrReg, List.length streamDecCall + 1)] @ streamDecCall
             | LIR.GenericHeap ->
-                match releasePlan |> Option.bind (fun plan -> Map.tryFind plan ctx.PlannedGenericDecHelperLabels) with
+                let plannedHelperLabel =
+                    if ctx.Options.OutlineGenericReleasePlans then
+                        releasePlan
+                        |> Option.bind (fun plan -> Map.tryFind plan ctx.PlannedGenericDecHelperLabels)
+                    else
+                        None
+                match plannedHelperLabel with
                 | Some helperLabel ->
                     // RefCountDec was register-allocated as an inline effect,
                     // so preserve every allocatable integer register across
@@ -7972,7 +7982,10 @@ let private generatePreparedARM64WithOptionsAndCache
     // These plans were named once when per-function facts were attached. Only
     // the maps carried by functions that survived tree shaking are merged.
     let plannedGenericDecHelpers =
-        rcHelperRequirements.PlannedGenericDecHelpers
+        if options.OutlineGenericReleasePlans then
+            rcHelperRequirements.PlannedGenericDecHelpers
+        else
+            Map.empty
 
     let plannedGenericDecHelperLabels =
         plannedGenericDecHelpers
