@@ -414,6 +414,53 @@ let testStringLiteralSupportsX12Destination () : Result<unit, string> =
         elif stdout <> "hello" then Error $"Expected X12 literal 'hello', got '{stdout}'"
         else Ok ()
 
+/// Initializing a string literal field uses RCX internally. A separate live X3
+/// value must survive when the containing record is held in another register.
+let testStringLiteralHeapStorePreservesX3 () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 123L)
+              LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+              LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.StringSymbol "field", Some AST.TString)
+              LIR.Mov (LIR.Physical LIR.X0, LIR.Reg (LIR.Physical LIR.X3))
+              LIR.PrintInt64 (LIR.Physical LIR.X0) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program false with
+    | Error error -> Error error
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        if output = "123" && stderr = "" then Ok ()
+        else Error $"Expected string field initialization to preserve X3=123, got stdout '{output}' and stderr '{stderr}'"
+
+/// RawSlotInit computes its destination through R11. When the retained value is
+/// also in X12/R11, ownership must be established before that computation.
+let testRawSlotInitRetainsX12Value () : Result<unit, string> =
+    let tupleType = AST.TTuple [AST.TString]
+    let program =
+        makeSimpleProgram
+            [ LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+              LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.StringSymbol "owned", Some AST.TString)
+              LIR.Mov (LIR.Physical LIR.X19, LIR.Imm 8L)
+              LIR.RawAlloc (LIR.Physical LIR.X20, LIR.Physical LIR.X19)
+              LIR.Mov (LIR.Physical LIR.X19, LIR.Imm 0L)
+              LIR.Mov (LIR.Physical LIR.X12, LIR.Reg (LIR.Physical LIR.X3))
+              LIR.RawSlotInit
+                  (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X12, tupleType)
+              LIR.RefCountDec
+                  (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata tupleType))
+              LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X20, 0)
+              LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X1, 0)
+              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X1) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program false with
+    | Error error -> Error error
+    | Ok (exitCode, stdout, stderr) ->
+        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
+        elif stdout = "owned" then Ok ()
+        else Error $"Expected X12 RawSlotInit value to remain owned, got stdout '{stdout}' and stderr '{stderr}'"
+
 /// Loading a literal right operand uses X4/X5 and scratch. Preserve a left
 /// operand already in X4 across that setup before concatenating into X5.
 let testStringConcatPreservesX4LeftAcrossLiteralRight () : Result<unit, string> =
@@ -5534,6 +5581,8 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR HeapAlloc x64 reuses a block into X3", testHeapAllocReusesBlockIntoX3)
     ("LIR string x64 refcount supports X3", testStringRefCountSupportsX3)
     ("LIR string literal x64 supports X12 destination", testStringLiteralSupportsX12Destination)
+    ("LIR string literal x64 heap store preserves X3", testStringLiteralHeapStorePreservesX3)
+    ("LIR x64 RawSlotInit retains X12 value", testRawSlotInitRetainsX12Value)
     ("LIR StringConcat x64 preserves X4 left across literal right", testStringConcatPreservesX4LeftAcrossLiteralRight)
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)

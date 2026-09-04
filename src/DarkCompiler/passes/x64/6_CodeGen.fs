@@ -3596,17 +3596,29 @@ let private translateInstr
                 let storeRC =
                     let rcOff = 8 + ((len + 7) &&& (~~~7))
                     loadImm64 X86_64.RCX 0x7FFFFFFFFFFFFFFFL @ [X86_64.MOV_store (scratch, int32 rcOff, X86_64.RCX)]
-                if addrReg = scratch || addrReg = X86_64.RCX then
-                    // String alloc clobbers R11 (scratch) and init clobbers RCX.
-                    // Push addr before alloc, pop into RCX after string is built.
-                    Ok ([X86_64.PUSH addrReg]
+                if addrReg = X86_64.RCX then
+                    // RCX is both the address and the string initializer scratch.
+                    // Restore the address after materializing the string.
+                    Ok ([X86_64.PUSH X86_64.RCX]
                         @ alloc @ storeLen @ copyBytes @ storeRC
                         @ [X86_64.POP X86_64.RCX
                            X86_64.MOV_store (X86_64.RCX, int32 offset, scratch)])
+                elif addrReg = scratch then
+                    // Preserve both the record address in R11 and any unrelated
+                    // live X3 value in RCX while the string is initialized.
+                    Ok ([X86_64.PUSH X86_64.RCX
+                         X86_64.PUSH scratch]
+                        @ alloc @ storeLen @ copyBytes @ storeRC
+                        @ [X86_64.POP X86_64.RCX
+                           X86_64.MOV_store (X86_64.RCX, int32 offset, scratch)
+                           X86_64.POP X86_64.RCX])
                 else
-                    // Store the string pointer into the record field
-                    Ok (alloc @ storeLen @ copyBytes @ storeRC
-                        @ [X86_64.MOV_store (addrReg, int32 offset, scratch)])
+                    // RCX is allocatable, so preserve it while using it to
+                    // initialize the string stored into another record.
+                    Ok ([X86_64.PUSH X86_64.RCX]
+                        @ alloc @ storeLen @ copyBytes @ storeRC
+                        @ [X86_64.MOV_store (addrReg, int32 offset, scratch)
+                           X86_64.POP X86_64.RCX])
             | LIR.StackSlot stackOffset ->
                 let adjOff = adjustStackOffset ctx stackOffset
                 if addrReg = scratch then
@@ -4504,7 +4516,9 @@ let private translateInstr
                              X86_64.ADD_reg (scratch, o)
                              X86_64.MOV_store (scratch, 0, v)]
 
-                    storeInstrs @ ownershipInc)))
+                    // Retain before address calculation: storeInstrs uses R11 as
+                    // its address scratch, which may also carry the value.
+                    ownershipInc @ storeInstrs)))
 
     | LIR.RawWriteByte (ptr, byteOffset, value) ->
         resolveReg ptr |> Result.bind (fun p ->
