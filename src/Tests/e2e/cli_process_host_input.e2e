@@ -31,6 +31,14 @@ match Stdlib.Cli.Args.int64(999I) with | Error(message) -> Stdlib.String.length(
 
 let benchmarkArgForCleanup(index: Int): Int64 = match Stdlib.Cli.Args.int64(index) with | Ok(value) -> value | Error(message) -> Builtin.testRuntimeError(message) let result = benchmarkArgForCleanup(0I) + benchmarkArgForCleanup(1I) in Builtin.printLine(Stdlib.Int64.toString(result)) = stdout="10100\n" arg="100" arg="10000" // inlined successful integer arguments survive cleanup
 
+match (Stdlib.Cli.Args.int64(0I), Stdlib.Cli.Args.int64(1I)) with | (Ok(maximum), Ok(minimum)) -> maximum == 9223372036854775807L && minimum == -9223372036854775808L | _ -> false = true arg="9223372036854775807" arg="-9223372036854775808" // Int64 argv fast path accepts both bounds
+
+match (Stdlib.Cli.Args.int64(0I), Stdlib.Cli.Args.int64(1I)) with | (Ok(positive), Ok(negative)) -> positive == 42L && negative == -17L | _ -> false = true arg=" +42 " arg=" -17 " // Int64 argv preserves trimmed-input fallback
+
+match Stdlib.Cli.Args.int64(0I) with | Error(message) -> message == "invalid Int64 command-line argument at index 0: twelve" | Ok(_) -> false = true arg="twelve" // invalid Int64 argv preserves its diagnostic
+
+match Stdlib.Cli.Args.int64(0I) with | Error(message) -> message == "Int64 command-line argument is out of range at index 0" | Ok(_) -> false = true arg="9223372036854775808" // overflowing Int64 argv preserves its diagnostic
+
 // CLI argument lookup must work from a nested non-tail frame: argv is process
 // state, rather than state held in an allocator-visible register.
 let argvMissingFromNestedFrame(depth: Int64): Bool =
