@@ -338,6 +338,27 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
 let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     makeSimpleProgramWithRecords instrs term Map.empty
 
+/// CLI argv is implemented by an in-binary runtime helper. Its call must
+/// resolve as a code label rather than being deferred as an ELF data fixup.
+let testCliArgvHelperResolvesAsCodeLabel () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [LIR.CliNative (LIR.Physical LIR.X0, LIR.GetArgv, [LIR.Imm 0L])]
+            LIR.Ret
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error error -> Error $"CLI argv x64 lowering failed: {error}"
+    | Ok instrs ->
+        match X86_64_Resolve.resolveAndEncode instrs with
+        | Error error -> Error $"CLI argv x64 resolution failed: {error}"
+        | Ok resolveResult ->
+            match
+                resolveResult.DeferredFixups
+                |> List.tryFind (fun fixup -> fixup.TargetLabel = "__dark_cli_argv")
+            with
+            | None -> Ok ()
+            | Some _ -> Error "CLI argv helper call was deferred as an ELF data fixup"
+
 /// The host is ARM64, so inspect the x64 syscall lowering directly. DateTime
 /// clock values retain nanosecond-derived precision as 100ns Unix ticks.
 let testDateTimeNowLowersTo100nsUnixTicks () : Result<unit, string> =
@@ -5323,6 +5344,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
 
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("x64 branch false edge falls through", testBranchFalseEdgeFallsThrough)
+    ("LIR CLI argv x64 helper resolves as code label", testCliArgvHelperResolvesAsCodeLabel)
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
     ("LIR DateTimeNow x64 lowering uses 100ns Unix ticks", testDateTimeNowLowersTo100nsUnixTicks)

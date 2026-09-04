@@ -490,7 +490,8 @@ let private genEpilogue (stackSize: int) (usedCalleeSaved: LIR.PhysReg list) : X
 /// offset from _start's root frame; following the frame-pointer chain avoids
 /// reserving a general-purpose register for process state.
 let private generateCliArgvHelper () : X86_64.Instr list =
-    [ X86_64.CMP_imm (X86_64.RDI, 0)
+    [ X86_64.Label "__dark_cli_argv"
+      X86_64.CMP_imm (X86_64.RDI, 0)
       X86_64.Jcc (X86_64.LT, "__dark_cli_argv_missing")
       X86_64.MOV_reg (X86_64.RAX, X86_64.RBP)
       X86_64.Label "__dark_cli_argv_find_root"
