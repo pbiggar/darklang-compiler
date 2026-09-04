@@ -121,11 +121,11 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
     let callTmp = TempId 3
     let cleanupTmp = TempId 4
     let tupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let releasePlan = rcReleasePlanOfType Map.empty tupleType
     let tupleMetadata =
-        {
-            ReleasePlan = Some (rcReleasePlanOfType Map.empty tupleType)
-            SourceType = Some tupleType
-        }
+        { ReleasePlanCacheKey = rcReleasePlanCacheKey tupleType releasePlan
+          ReleasePlan = Some releasePlan
+          SourceType = Some tupleType }
     let refCountDec atom = RefCountDec (atom, 16, GenericHeap, Some tupleMetadata)
 
     let caller : Function = {
