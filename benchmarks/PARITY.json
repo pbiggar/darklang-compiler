@@ -43,7 +43,7 @@
     },
     "fannkuch": {
       "status": "comparable",
-      "dark_sha256": "f9e33ed5e80539061b8bb10cfea613fdf835473c9248c3e42f1a01f252eb810c",
+      "dark_sha256": "01c411da3c58696c2d7e9d4ced1cb7d56978227fa0cb3f7a691e71dd484538fe",
       "rust_sha256": "0daca8dcb4fce6b905442af1246a545d06a44d62a68aba3c9832dc4f778ae719",
       "quick": {
         "status": "comparable"
@@ -116,7 +116,7 @@
     "nsieve": {
       "status": "incomparable",
       "reason": "Rust mutates a flat bitmap and counts during marking for 100 runs; Dark persists Dict updates and counts in a separate pass for one run because its bump allocator cannot reclaim each sieve.",
-      "dark_sha256": "408ba8f531de4ebec10064d58915b045d5db65ee400b20e5b7df471c40353f29",
+      "dark_sha256": "86930fe866fbb8be8a32e6bdfde19cecf2c72369074650d5c03e944970b4cae0",
       "rust_sha256": "0e814db9a50f343e1ddef2f1a4dcd42f62e01ffbe894b4760723b1f389da4818",
       "quick": {
         "status": "incomparable",

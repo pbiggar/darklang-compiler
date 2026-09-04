@@ -5,7 +5,7 @@
 let getAt(list: List<Int64>, index: Int64) : Int64 =
     match Stdlib.List.getAt<Int64>(list, Stdlib.Int.fromInt64(index)) with
     | Some(v) -> v
-    | None -> 0
+    | None -> 0L
 
 // Prepend values held in reverse order without constructing an intermediate.
 let prependReversed(source: List<Int64>, suffix: List<Int64>) : List<Int64> =
@@ -15,11 +15,11 @@ let prependReversed(source: List<Int64>, suffix: List<Int64>) : List<Int64> =
 
 // Reverse the first k+1 values in one source traversal.
 let reversePrefixCollect(source: List<Int64>, remaining: Int64, reversed: List<Int64>) : List<Int64> =
-    if remaining < 0 then Stdlib.List.append<Int64>(reversed, source)
+    if remaining < 0L then Stdlib.List.append<Int64>(reversed, source)
     else
         match source with
         | [] -> reversed
-        | h :: t -> reversePrefixCollect(t, remaining - 1, Stdlib.List.push<Int64>(reversed, h))
+        | h :: t -> reversePrefixCollect(t, remaining - 1L, Stdlib.List.push<Int64>(reversed, h))
 
 let reversePrefix(list: List<Int64>, k: Int64) : List<Int64> =
     reversePrefixCollect(list, k, [])
@@ -29,16 +29,16 @@ let countFlips(perm: List<Int64>, flips: Int64) : Int64 =
     match perm with
     | [] -> flips
     | first :: _ ->
-        if first == 0 then flips
-        else countFlips(reversePrefix(perm, first), flips + 1)
+        if first == 0L then flips
+        else countFlips(reversePrefix(perm, first), flips + 1L)
 
 // Rotate first i+1 elements left by 1: [a,b,c,d,...] -> [b,c,d,a,...]
 let rotateLeftCollect(source: List<Int64>, remaining: Int64, reversed: List<Int64>, first: Int64) : List<Int64> =
-    if remaining <= 0 then prependReversed(reversed, Stdlib.List.push<Int64>(source, first))
+    if remaining <= 0L then prependReversed(reversed, Stdlib.List.push<Int64>(source, first))
     else
         match source with
         | [] -> prependReversed(reversed, [first])
-        | h :: t -> rotateLeftCollect(t, remaining - 1, Stdlib.List.push<Int64>(reversed, h), first)
+        | h :: t -> rotateLeftCollect(t, remaining - 1L, Stdlib.List.push<Int64>(reversed, h), first)
 
 let rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
     match list with
@@ -55,20 +55,20 @@ let nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<
     else
         let newPerm = rotateLeft(perm, i) in
         let ci = getAt(count, i) in
-        if ci > 1 then
-            (newPerm, setAt(count, i, ci - 1), false)
+        if ci > 1L then
+            (newPerm, setAt(count, i, ci - 1L), false)
         else
-            let newCount = setAt(count, i, i + 1) in
-            nextPerm(newPerm, newCount, i + 1, n)
+            let newCount = setAt(count, i, i + 1L) in
+            nextPerm(newPerm, newCount, i + 1L, n)
 
 // Main loop: process all permutations
 let fannkuchLoop(perm: List<Int64>, count: List<Int64>, n: Int64, maxFlips: Int64) : Int64 =
     let flips =
         match perm with
-        | [] -> 0
-        | first :: _ -> if first == 0 then 0 else countFlips(perm, 0) in
+        | [] -> 0L
+        | first :: _ -> if first == 0L then 0L else countFlips(perm, 0L) in
     let newMax = if flips > maxFlips then flips else maxFlips in
-    let result = nextPerm(perm, count, 1, n) in
+    let result = nextPerm(perm, count, 1L, n) in
     let newPerm = Stdlib.Tuple3.first<List<Int64>, List<Int64>, Bool>(result) in
     let newCount = Stdlib.Tuple3.second<List<Int64>, List<Int64>, Bool>(result) in
     let done = Stdlib.Tuple3.third<List<Int64>, List<Int64>, Bool>(result) in
@@ -81,7 +81,7 @@ let intToInt64(value: Int) : Int64 =
 
 let createRange(n: Int64) : List<Int64> =
     Stdlib.List.map<Int, Int64>(
-        Stdlib.List.range(0I, Stdlib.Int.fromInt64(n - 1)),
+        Stdlib.List.range(0I, Stdlib.Int.fromInt64(n - 1L)),
         intToInt64)
 
 let fannkuch(n: Int64) : Int64 =
@@ -89,7 +89,7 @@ let fannkuch(n: Int64) : Int64 =
     let count = Stdlib.List.map<Int, Int64>(
         Stdlib.List.range(1I, Stdlib.Int.fromInt64(n)),
         intToInt64) in
-    fannkuchLoop(perm, count, n, 0)
+    fannkuchLoop(perm, count, n, 0L)
 
 // Dark's fixed heap cannot complete the correct n=9 permutation traversal.
 // Run the complete n=8 traversal and keep this full pair explicitly reduced.
