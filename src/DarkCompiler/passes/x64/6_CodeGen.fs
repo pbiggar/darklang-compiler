@@ -153,7 +153,11 @@ let private maxFreeListPayload = freeListSize - 8
 
 /// Emit inline 8-byte-at-a-time copy of a UTF-8 byte array to heap memory.
 /// Stores bytes starting at [destReg + 8] (after the 8-byte length prefix).
-let private emitStringByteCopy (destReg: X86_64.Reg) (strBytes: byte array) : X86_64.Instr list =
+let private emitStringByteCopy
+    (valueReg: X86_64.Reg)
+    (destReg: X86_64.Reg)
+    (strBytes: byte array)
+    : X86_64.Instr list =
     let len = strBytes.Length
     if len = 0 then []
     else
@@ -169,8 +173,8 @@ let private emitStringByteCopy (destReg: X86_64.Reg) (strBytes: byte array) : X8
                     if byteIdx < strBytes.Length then
                         acc ||| (int64 strBytes.[byteIdx] <<< (j * 8))
                     else acc) 0L
-            loadImm64 scratch value
-            @ [X86_64.MOV_store (destReg, int32 offset, scratch)])
+            loadImm64 valueReg value
+            @ [X86_64.MOV_store (destReg, int32 offset, valueReg)])
 
 /// Allocate a heap string from a literal value: [length:8][data:N][padding][refcount:8].
 /// Bump-allocates from heapPtr, stores length, copies bytes, and sets the
@@ -183,12 +187,17 @@ let private emitStringLiteral (destReg: X86_64.Reg) (value: string) : X86_64.Ins
         let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
         let len = strBytes.Length
         let totalSize = ((len + 16) + 7) &&& (~~~7)
+        let valueReg = if destReg = scratch then X86_64.RCX else scratch
+        let preserveValueReg = if destReg = scratch then [X86_64.PUSH valueReg] else []
+        let restoreValueReg = if destReg = scratch then [X86_64.POP valueReg] else []
         let alloc = [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, int32 totalSize)]
-        let storeLen = loadImm64 scratch (int64 len) @ [X86_64.MOV_store (destReg, 0, scratch)]
-        let copyBytes = emitStringByteCopy destReg strBytes
+        let storeLen = loadImm64 valueReg (int64 len) @ [X86_64.MOV_store (destReg, 0, valueReg)]
+        let copyBytes = emitStringByteCopy valueReg destReg strBytes
         let rcOffset = 8 + ((len + 7) &&& (~~~7))
-        let storeRefCount = loadImm64 scratch 0x7FFFFFFFFFFFFFFFL @ [X86_64.MOV_store (destReg, int32 rcOffset, scratch)]
-        alloc @ storeLen @ copyBytes @ storeRefCount
+        let storeRefCount =
+            loadImm64 valueReg 0x7FFFFFFFFFFFFFFFL
+            @ [X86_64.MOV_store (destReg, int32 rcOffset, valueReg)]
+        preserveValueReg @ alloc @ storeLen @ copyBytes @ storeRefCount @ restoreValueReg
 
 /// Allocate a heap string without refcount (for file-op path buffers).
 /// Layout: [length:8][data:N]. Returns instructions with destReg = string ptr.
@@ -196,10 +205,13 @@ let private emitStringLiteralNoRefCount (destReg: X86_64.Reg) (value: string) : 
     let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
     let len = strBytes.Length
     let totalSize = ((len + 16) + 7) &&& (~~~7)
+    let valueReg = if destReg = scratch then X86_64.RCX else scratch
+    let preserveValueReg = if destReg = scratch then [X86_64.PUSH valueReg] else []
+    let restoreValueReg = if destReg = scratch then [X86_64.POP valueReg] else []
     let alloc = [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, int32 totalSize)]
-    let storeLen = loadImm64 scratch (int64 len) @ [X86_64.MOV_store (destReg, 0, scratch)]
-    let copyBytes = emitStringByteCopy destReg strBytes
-    alloc @ storeLen @ copyBytes
+    let storeLen = loadImm64 valueReg (int64 len) @ [X86_64.MOV_store (destReg, 0, valueReg)]
+    let copyBytes = emitStringByteCopy valueReg destReg strBytes
+    preserveValueReg @ alloc @ storeLen @ copyBytes @ restoreValueReg
 
 /// Heap size for mmap (512 MB)
 let private heapMmapSizeBytes = 512L * 1024L * 1024L

@@ -398,6 +398,22 @@ let testStringRefCountSupportsX3 () : Result<unit, string> =
         elif stderr.Trim() <> "" then Error $"Expected balanced X3 string RC, got '{stderr.Trim()}'"
         else Ok ()
 
+/// Literal materialization uses X12/R11 as its usual byte-copy temporary, so
+/// an X12 destination must select a different temporary register.
+let testStringLiteralSupportsX12Destination () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.Mov (LIR.Physical LIR.X12, LIR.StringSymbol "hello")
+              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X12) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program false with
+    | Error error -> Error error
+    | Ok (exitCode, stdout, stderr) ->
+        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
+        elif stdout <> "hello" then Error $"Expected X12 literal 'hello', got '{stdout}'"
+        else Ok ()
+
 /// Loading a literal right operand uses X4/X5 and scratch. Preserve a left
 /// operand already in X4 across that setup before concatenating into X5.
 let testStringConcatPreservesX4LeftAcrossLiteralRight () : Result<unit, string> =
@@ -5476,6 +5492,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR CLI argv x64 returns managed Option String", testCliArgvReturnsManagedOptionString)
     ("LIR HeapAlloc x64 reuses a block into X3", testHeapAllocReusesBlockIntoX3)
     ("LIR string x64 refcount supports X3", testStringRefCountSupportsX3)
+    ("LIR string literal x64 supports X12 destination", testStringLiteralSupportsX12Destination)
     ("LIR StringConcat x64 preserves X4 left across literal right", testStringConcatPreservesX4LeftAcrossLiteralRight)
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR x64 codegen rejects conditions without block comparison", testRejectsConditionsWithoutBlockComparison)
