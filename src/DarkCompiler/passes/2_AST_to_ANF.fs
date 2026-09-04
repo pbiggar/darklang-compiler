@@ -3654,6 +3654,68 @@ let rec private containsIndirectApply (expr: AST.Expr) : bool =
     | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
     | AST.Var _ | AST.FuncRef _ | AST.RuntimeError _ -> false
 
+/// A separately compiled caller may compare any closure returned by this
+/// compilation unit. Retain comparator metadata for function values nested in
+/// exported result types without requiring advance knowledge of their callers.
+let private collectEscapingFunctionParams
+    (typeReg: TypeRegistry)
+    (variantLookup: VariantLookup)
+    (typ: AST.Type)
+    : Set<AST.Type list> =
+    let rec collect (visited: Set<AST.Type>) (current: AST.Type) =
+        if Set.contains current visited then
+            Set.empty
+        else
+            let visited = Set.add current visited
+            let collectMany types =
+                types
+                |> List.map (collect visited)
+                |> List.fold Set.union Set.empty
+            match current with
+            | AST.TFunction (paramTypes, returnType) ->
+                Set.add paramTypes (collect visited returnType)
+            | AST.TList elementType
+            | AST.TStream elementType ->
+                collect visited elementType
+            | AST.TDict (keyType, valueType) ->
+                Set.union (collect visited keyType) (collect visited valueType)
+            | AST.TTuple elementTypes
+            | AST.TEnumFields elementTypes ->
+                collectMany elementTypes
+            | AST.TRecord (typeName, typeArgs) ->
+                match Map.tryFind typeName typeReg with
+                | None -> Set.empty
+                | Some recordInfo ->
+                    let substitution =
+                        buildDeclaredRecordFieldSubst recordInfo typeArgs
+                        |> Option.defaultValue Map.empty
+                    recordInfo.Fields
+                    |> List.map (snd >> applySubstToType substitution)
+                    |> collectMany
+            | AST.TSum (typeName, typeArgs) ->
+                variantLookup
+                |> Map.toList
+                |> List.choose (fun (_, (declaredTypeName, typeParams, _, payloadType)) ->
+                    if declaredTypeName <> typeName then
+                        None
+                    else
+                        payloadType
+                        |> Option.map (fun payload ->
+                            let substitution =
+                                if List.length typeParams = List.length typeArgs then
+                                    List.zip typeParams typeArgs |> Map.ofList
+                                else
+                                    Map.empty
+                            applySubstToType substitution payload))
+                |> List.distinct
+                |> collectMany
+            | AST.TInt64 | AST.TInt128 | AST.TInt | AST.TInt32 | AST.TInt16 | AST.TInt8
+            | AST.TUInt64 | AST.TUInt128 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
+            | AST.TBool | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
+            | AST.TFloat64 | AST.TUnit | AST.TRuntimeError | AST.TRawPtr | AST.TVar _ ->
+                Set.empty
+    collect Set.empty typ
+
 /// Lift lambdas in a program, generating new top-level functions
 let rec liftLambdasInProgram
     (baseTypeReg: TypeRegistry)
@@ -3797,7 +3859,7 @@ let rec liftLambdasInProgram
         Map.fold (fun acc k v -> Map.add k v acc) baseFuncReturnTypes (Map.fold (fun acc k v -> Map.add k v acc) userFuncReturnTypes moduleFuncReturnTypes)
     let genericFuncDefs = Map.fold (fun acc k v -> Map.add k v acc) userGenericFuncDefs moduleGenericFuncDefs
 
-    let comparableFunctionParams =
+    let locallyComparedFunctionParams =
         topLevels
         |> List.choose (function
             | AST.FunctionDef funcDef when containsIndirectApply funcDef.Body ->
@@ -3809,6 +3871,17 @@ let rec liftLambdasInProgram
                     | _ -> None)
             | _ -> None)
         |> Set.ofList
+
+    let escapingFunctionParams =
+        topLevels
+        |> List.choose (function
+            | AST.FunctionDef funcDef -> Some funcDef.ReturnType
+            | _ -> None)
+        |> List.map (collectEscapingFunctionParams canonicalMergedTypeReg mergedVariantLookup)
+        |> List.fold Set.union Set.empty
+
+    let comparableFunctionParams =
+        Set.union locallyComparedFunctionParams escapingFunctionParams
 
     let initialState = {
         Counter = 0
@@ -10302,6 +10375,7 @@ type ConversionResult = {
 /// Used for compiling user code separately from the prebuilt stdlib
 type UserOnlyResult = {
     UserFunctions: ANF.Function list   // Only user functions, not merged with stdlib
+    NonInlineableFunctionNames: Set<string> // Late external specializations compiled in this unit
     MainExpr: ANF.AExpr                // User's main expression
     TypeReg: TypeRegistry              // Merged registries (for lookups)
     VariantLookup: VariantLookup

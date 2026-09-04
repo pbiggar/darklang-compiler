@@ -545,6 +545,7 @@ let private buildAnf
     (sw: Stopwatch)
     (registries: AST_to_ANF.Registries)
     (externalInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>)
+    (nonInlineableFunctionNames: Set<string>)
     (functions: ANF.Function list)
     (specializeInternalSignatures: bool)
     (passTimingRecorder: PassTimingRecorder option)
@@ -590,9 +591,10 @@ let private buildAnf
         if options.DisableInlining then
             anfOptimized
         else
-            ANF_Inlining.inlineProgramWithExternalCandidates
+            ANF_Inlining.inlineProgramWithExternalCandidatesAndExclusions
                 ANF_Inlining.defaultConfig
                 externalInlineCandidates
+                nonInlineableFunctionNames
                 anfOptimized
 
     if verbosity >= 1 && specializeInternalSignatures then
@@ -1175,34 +1177,76 @@ let private convertTypedProgramToConversionResult
 let private convertTypedProgramToUserOnlyWithMode
     (baseContext: PipelineContext)
     (monomorphization: MonomorphizationMode)
+    (typeCheckEnv: TypeChecking.TypeCheckEnv)
     (typedProgram: AST.Program)
     : Result<AST_to_ANF.UserOnlyResult, string> =
     // Late AOT plans (notably Json) may introduce concrete calls to generic
     // stdlib functions after the suite preamble registry was built. Materialize
     // just those missing specializations into the user compilation unit.
-    let (typedProgram, monomorphization) =
+    let (typedProgram, monomorphization, nonInlineableFunctionNames) =
         let addMissing baseRegistry rebuildMode =
             let requested = collectLocalSpecs baseContext.GenericFuncDefs typedProgram
-            let missing =
-                requested
-                |> Set.filter (fun key -> not (Map.containsKey key baseRegistry))
-            if Set.isEmpty missing then
-                (typedProgram, rebuildMode baseRegistry)
-            else
-                let specialization =
-                    AST_to_ANF.specializeFromSpecs baseContext.GenericFuncDefs missing
-                let combinedRegistry =
-                    mergeSpecRegistries baseRegistry specialization.SpecRegistry
-                let newFunctions =
-                    specialization.SpecializedFuncs
-                    |> List.filter (fun fn -> not (Set.contains fn.Name baseContext.BaseFuncNames))
-                    |> List.map AST.FunctionDef
-                let (AST.Program items) = typedProgram
-                (AST.Program (newFunctions @ items), rebuildMode combinedRegistry)
+            let (AST.Program items) = typedProgram
+            let knownFunctionNames =
+                items
+                |> List.choose (function
+                    | AST.FunctionDef fn -> Some fn.Name
+                    | _ -> None)
+                |> Set.ofList
+                |> Set.union baseContext.BaseFuncNames
+            let rec materialize
+                (specRegistry: AST_to_ANF.SpecRegistry)
+                (knownFunctionNames: Set<string>)
+                (pendingSpecs: Set<AST_to_ANF.SpecKey>)
+                (accFunctions: AST.FunctionDef list)
+                : AST_to_ANF.SpecRegistry * AST.FunctionDef list =
+                let missingSpecs =
+                    pendingSpecs
+                    |> Set.filter (fun key -> not (Map.containsKey key specRegistry))
+                if Set.isEmpty missingSpecs then
+                    (specRegistry, accFunctions)
+                else
+                    let specialization =
+                        AST_to_ANF.specializeFromSpecs baseContext.GenericFuncDefs missingSpecs
+                    let combinedRegistry =
+                        mergeSpecRegistries specRegistry specialization.SpecRegistry
+                    let materializedTopLevels =
+                        specialization.SpecializedFuncs
+                        |> List.filter (fun fn -> not (Set.contains fn.Name knownFunctionNames))
+                        |> List.map AST.FunctionDef
+                        |> TypeChecking.materializeEqHelpersInTopLevels
+                            typeCheckEnv.AliasReg
+                            typeCheckEnv.IndexedTypeReg
+                            typeCheckEnv.VariantLookup
+                    let newFunctions =
+                        materializedTopLevels
+                        |> List.choose (function
+                            | AST.FunctionDef fn when not (Set.contains fn.Name knownFunctionNames) -> Some fn
+                            | _ -> None)
+                    let nextKnownFunctionNames =
+                        newFunctions
+                        |> List.fold (fun names fn -> Set.add fn.Name names) knownFunctionNames
+                    let nextSpecs =
+                        materializedTopLevels
+                        |> AST.Program
+                        |> collectLocalSpecs baseContext.GenericFuncDefs
+                    materialize
+                        combinedRegistry
+                        nextKnownFunctionNames
+                        nextSpecs
+                        (accFunctions @ newFunctions)
+
+            let (combinedRegistry, newFunctions) =
+                materialize baseRegistry knownFunctionNames requested []
+            let programWithSpecializations =
+                AST.Program ((newFunctions |> List.map AST.FunctionDef) @ items)
+            let specializedFunctionNames =
+                newFunctions |> List.map (fun fn -> fn.Name) |> Set.ofList
+            (programWithSpecializations, rebuildMode combinedRegistry, specializedFunctionNames)
         match monomorphization with
         | ReplaceTypeApps registry -> addMissing registry ReplaceTypeApps
         | SpecializeLocalAndReplace registry -> addMissing registry SpecializeLocalAndReplace
-        | Monomorphize _ -> (typedProgram, monomorphization)
+        | Monomorphize _ -> (typedProgram, monomorphization, Set.empty)
     let baseFuncNames = baseContext.BaseFuncNames
     prepareProgramForAnf monomorphization baseContext.Registries baseFuncNames typedProgram
     |> Result.bind (fun liftedProgram ->
@@ -1218,6 +1262,7 @@ let private convertTypedProgramToUserOnlyWithMode
                 |> Result.map (fun (anfExpr, _) ->
                     {
                         UserFunctions = anfFuncs
+                        NonInlineableFunctionNames = nonInlineableFunctionNames
                         MainExpr = anfExpr
                         TypeReg = registries.TypeReg
                         VariantLookup = registries.VariantLookup
@@ -1235,6 +1280,7 @@ let private convertTypedProgramToUserOnly
     convertTypedProgramToUserOnlyWithMode
         baseContext
         (Monomorphize (Some baseContext.GenericFuncDefs))
+        baseContext.TypeCheckEnv
         typedProgram
 
 /// Try to delete a file, ignoring any errors
@@ -1516,7 +1562,7 @@ let buildStdlibWithTrace
                 let context = buildContext target typeCheckEnv genericFuncDefs Map.empty registries returnTypes
                 let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
-                match buildAnf 0 stdlibOptions sw registries Map.empty stdlibFunctions false passTimingRecorder with
+                match buildAnf 0 stdlibOptions sw registries Map.empty Set.empty stdlibFunctions false passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, typeMap) ->
@@ -1682,7 +1728,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                         let sw = Stopwatch.StartNew()
-                        buildAnf 0 stdlibOptions sw registries Map.empty anfFuncs false passTimingRecorder
+                        buildAnf 0 stdlibOptions sw registries Map.empty Set.empty anfFuncs false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, typeMap) ->
                             let tcoFunctions = applyTco 0 stdlibOptions sw registries.RecursiveMembers anfFunctions passTimingRecorder
                             let newAnfFuncMap =
@@ -2189,6 +2235,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             convertTypedProgramToUserOnlyWithMode
                                 plan.BaseContext
                                 plan.Monomorphization
+                                userEnv
                                 materializedProgram)
                     let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                     recordPassTiming plan.PassTimingRecorder "AST -> ANF" anfTime
@@ -2225,6 +2272,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 sw
                                 userRegistries
                                 plan.ExternalInlineCandidates
+                                userOnly.NonInlineableFunctionNames
                                 (entryFunction :: functionsToCompile)
                                 true
                                 plan.PassTimingRecorder
@@ -2430,7 +2478,7 @@ let buildPreambleContext
                         mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
                     let pipelineContext =
                         buildContext stdlib.Context.Target preambleTypeCheckEnv mergedGenericDefs Map.empty preambleRegistries preambleReturnTypes
-                    match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.Functions false passTimingRecorder with
+                    match buildAnf 0 preambleOptions sw preambleRegistries Map.empty Set.empty preambleUserOnly.Functions false passTimingRecorder with
                     | Error err ->
                         let rcPrefix = "Reference count insertion error: "
                         let msg =
@@ -2526,7 +2574,7 @@ let buildPreambleContextFromAnalysis
             mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
         let pipelineContext =
             buildContext stdlib.Context.Target analysis.TypeCheckEnv mergedGenericDefs combinedSpecRegistry preambleRegistries preambleReturnTypes
-        match buildAnf 0 preambleOptions sw preambleRegistries Map.empty preambleUserOnly.Functions false passTimingRecorder with
+        match buildAnf 0 preambleOptions sw preambleRegistries Map.empty Set.empty preambleUserOnly.Functions false passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
             let msg =
@@ -2911,7 +2959,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     ModuleRegistry = userOnly.ModuleRegistry
                     RecursiveMembers = userOnly.RecursiveMembers
                 }
-                match buildAnf 0 coverageOptions sw userRegistries Map.empty (entryFunction :: userOnly.UserFunctions) false None with
+                match buildAnf 0 coverageOptions sw userRegistries Map.empty userOnly.NonInlineableFunctionNames (entryFunction :: userOnly.UserFunctions) false None with
                 | Error err -> Error err
                 | Ok (userFunctions, _typeMap) ->
                     match PrintInsertion.insertPrintInEntry "_start" boundaryProgramType userFunctions with

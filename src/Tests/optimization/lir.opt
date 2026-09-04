@@ -327,13 +327,21 @@ __closure_0:
     X0 <- Mov(Reg v10002)
     Ret
 
+__closure_comparison_1:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "__closure_comparison_1_entry":
+    X0 <- Mov(Imm 1)
+    Ret
+
 makeIncrement:
   StackSize: 0
   UsedCalleeSaved: []
   Label "makeIncrement_entry":
-    v10003 <- HeapAlloc(8)
-    HeapStore(v10003, 0, &__closure_0)
-    X0 <- Mov(Reg v10003)
+    v10005 <- HeapAlloc(16)
+    HeapStore(v10005, 0, &__closure_0)
+    HeapStore(v10005, 8, &__closure_comparison_1)
+    X0 <- Mov(Reg v10005)
     Ret
 
 ---NAME---

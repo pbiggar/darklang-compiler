@@ -833,14 +833,18 @@ let inlineInFunction (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
 
 /// Inline functions in a program, using optional external candidates for calls
 /// whose bodies are available but should not be emitted with this program.
-let inlineProgramWithExternalCandidates
+let inlineProgramWithExternalCandidatesAndExclusions
     (config: InliningConfig)
     (externalCandidates: Map<string, FunctionInfo>)
+    (excludedLocalNames: Set<string>)
     (program: Program)
     : Program =
     let (Program (funcs, main)) = program
 
-    let (localInfoMap, localMaxTempId) = buildFunctionInfoMapAndMaxTempId funcs
+    let (allLocalInfo, localMaxTempId) = buildFunctionInfoMapAndMaxTempId funcs
+    let localInfoMap =
+        allLocalInfo
+        |> Map.filter (fun name _ -> not (Set.contains name excludedLocalNames))
     let mainAnalysis = analyzeExpr main
     let calledNames =
         localInfoMap
@@ -877,6 +881,19 @@ let inlineProgramWithExternalCandidates
     let (main', _) = inlineInExpr (funcsForBody main) config 0 varGen' main
 
     Program (List.rev funcs', main')
+
+/// Inline functions in a program, using optional external candidates for calls
+/// whose bodies are available but should not be emitted with this program.
+let inlineProgramWithExternalCandidates
+    (config: InliningConfig)
+    (externalCandidates: Map<string, FunctionInfo>)
+    (program: Program)
+    : Program =
+    inlineProgramWithExternalCandidatesAndExclusions
+        config
+        externalCandidates
+        Set.empty
+        program
 
 /// Inline functions in a program
 let inlineProgram (config: InliningConfig) (program: Program) : Program =

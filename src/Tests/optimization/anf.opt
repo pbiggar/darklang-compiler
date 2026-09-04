@@ -2312,9 +2312,12 @@ Function __closure_0:
 let TempId 2 = t1 + 1
 return t2
 
+Function __closure_comparison_1:
+return true
+
 Function makeIncrement:
-let TempId 3 = ClosureAlloc(__closure_0, [])
-return t3
+let TempId 5 = ClosureAlloc(__closure_0, [&__closure_comparison_1])
+return t5
 
 ---NAME---
 closure_devirtualization_reuses_local_closure

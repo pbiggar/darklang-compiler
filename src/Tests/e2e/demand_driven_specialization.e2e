@@ -1,0 +1,10 @@
+// Demand-driven specialization must materialize comparison helpers after
+// substituting the concrete type into a generic preamble function.
+
+let demandEquals<'a>(left: a, right: a): Bool =
+  left == right
+
+let demandMakePredicate(captured: String): (String) -> Bool =
+  fun value -> value == captured
+
+demandEquals<(String) -> Bool>(demandMakePredicate("left"), demandMakePredicate("right")) = true

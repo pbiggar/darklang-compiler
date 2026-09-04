@@ -162,6 +162,36 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
     else
         Ok ()
 
+let testExcludedLocalFunctionRemainsCall () : TestResult =
+    let param = { Id = TempId 0; Type = AST.TInt64 }
+    let lateExternalSpecialization =
+        { Name = "Stdlib.List.pushBack__String"
+          TypedParams = [param]
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          Body =
+            Let (
+                TempId 1,
+                Prim (Add, Var param.Id, intAtom 1L),
+                Return (Var (TempId 1))
+            ) }
+    let main =
+        Let (
+            TempId 2,
+            Call (lateExternalSpecialization.Name, [intAtom 41L]),
+            Return (Var (TempId 2))
+        )
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramWithExternalCandidatesAndExclusions
+            ANF_Inlining.defaultConfig
+            Map.empty
+            (Set.singleton lateExternalSpecialization.Name)
+            (Program ([lateExternalSpecialization], main))
+    if containsCall lateExternalSpecialization.Name inlinedMain then
+        Ok ()
+    else
+        Error "Expected excluded late external specialization to remain a call"
+
 let testExternalInlineCandidateRemovesFloatToIntCall () : TestResult =
     let param = { Id = TempId 0; Type = AST.TFloat64 }
     let stdlibFloatToInt =
@@ -474,6 +504,7 @@ let tests = [
     ("Inlining literal args removes call", testInliningWithLiteralArgumentsRemovesCall)
     ("Inlining literal args binds literal TempId", testInliningWithLiteralArgumentsBindsTemp)
     ("Inlining underscore-named functions", testInliningUnderscoreFunctionName)
+    ("Excluded local functions remain calls", testExcludedLocalFunctionRemainsCall)
     ("Inlining external shift candidate", testExternalInlineCandidateRemovesShiftCall)
     ("Inlining external float-to-int candidate", testExternalInlineCandidateRemovesFloatToIntCall)
     ("External raw allocation candidates are not inlined", testExternalInlineCandidateRejectsRawAllocBody)

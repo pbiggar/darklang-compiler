@@ -776,11 +776,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                             match Map.tryFind contextKey currentSuiteContexts.PreambleContexts with
                             | None ->
                                 preambleFailureResult $"Missing built preamble context for {test.SourceFile}", TimeSpan.Zero
-                            | Some ctx ->
+                            | Some (contextStdlib, ctx) ->
                                 let passTimingStart = passTimingTotal ()
                                 let testResult =
                                     TestDSL.E2ETestRunner.runE2ETestWithPreambleContext
-                                        currentSuiteContexts.Stdlib
+                                        contextStdlib
                                         ctx
                                         (Some compilationSession)
                                         test
