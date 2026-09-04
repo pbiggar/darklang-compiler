@@ -123,29 +123,8 @@ type private SlotInitRootRetainTarget =
     | SlotInitClosureRootRetain
     | SlotInitGenericRootRetain of payloadSize:int
 
-/// Reference-count helpers implied by one release plan traversal.
-type private RcReleasePlanSummary = {
-    ListDecHelperLabels: Set<string>
-    PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
-    DictDecHelperLabels: Set<string>
-    PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
-    NeedsClosureRcDecHelper: bool
-    NeedsStreamRcDecHelper: bool
-}
-
-/// Reference-count runtime helpers required by the program's LIR instructions.
-type private RcHelperRequirements = {
-    ListDecHelperLabels: Set<string>
-    PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
-    PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
-    DictDecHelperLabels: Set<string>
-    NeedsListRcIncHelper: bool
-    NeedsDictRcIncHelper: bool
-    NeedsClosureRcIncHelper: bool
-    NeedsClosureRcDecHelper: bool
-    NeedsStreamRcDecHelper: bool
-    ReleasePlanSummaries: Map<bool * ANF.RcReleasePlan, RcReleasePlanSummary>
-}
+type private RcReleasePlanSummary = LIR.Arm64ReleasePlanSummary
+type private RcHelperRequirements = LIR.Arm64RcHelperRequirements
 
 type private Arm64ProgramFacts = {
     ClosurePayloadSizesFromParams: Map<string, int>
@@ -154,8 +133,7 @@ type private Arm64ProgramFacts = {
     RecursiveReleaseTypes: Set<AST.Type>
 }
 
-/// ARM64-only facts derived from the program before instruction selection.
-/// The struct wrapper keeps the joint fold from allocating another record per instruction.
+/// ARM64-only metadata assembled from the reachable functions' carried facts.
 [<Struct>]
 type private Arm64ProgramMetadata = {
     Facts: Arm64ProgramFacts
@@ -7147,6 +7125,361 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
             optimize (instr :: acc) rest
     optimize [] instrs
 
+// Plan the expensive, registry-independent portion of ARM64 RC helper
+// selection once per finalized LIR function. The result is carried through
+// tree shaking and merged only when the final compilation unit is assembled.
+let private precomputedEmptyReleasePlanSummary : RcReleasePlanSummary = {
+    ListDecHelperLabels = Set.empty
+    PlannedListDecHelpers = Map.empty
+    DictDecHelperLabels = Set.empty
+    PlannedDictDecHelpers = Map.empty
+    NeedsClosureRcDecHelper = false
+    NeedsStreamRcDecHelper = false
+}
+
+let private mergePrecomputedPlannedListHelpers
+    (left: Map<string, int * ANF.RcReleasePlan>)
+    (right: Map<string, int * ANF.RcReleasePlan>)
+    : Map<string, int * ANF.RcReleasePlan> =
+    Map.fold
+        (fun acc label spec ->
+            match Map.tryFind label acc with
+            | Some existing when existing <> spec ->
+                Crash.crash $"planned list RC helper label collision for {label}"
+            | Some _ -> acc
+            | None -> Map.add label spec acc)
+        left
+        right
+
+let private mergePrecomputedPlannedDictHelpers
+    (left: Map<string, ANF.RcReleasePlan>)
+    (right: Map<string, ANF.RcReleasePlan>)
+    : Map<string, ANF.RcReleasePlan> =
+    Map.fold
+        (fun acc label plan ->
+            match Map.tryFind label acc with
+            | Some existing when existing <> plan ->
+                Crash.crash $"planned dict RC helper label collision for {label}"
+            | Some _ -> acc
+            | None -> Map.add label plan acc)
+        left
+        right
+
+let private addPrecomputedPlannedListHelper
+    payloadSize
+    elementRelease
+    (summary: RcReleasePlanSummary)
+    : RcReleasePlanSummary =
+    let label = plannedListDecHelperLabelForReleasePlan elementRelease
+    match Map.tryFind label summary.PlannedListDecHelpers with
+    | Some existing when existing <> (payloadSize, elementRelease) ->
+        Crash.crash $"planned list RC helper label collision for {label}"
+    | Some _ -> summary
+    | None ->
+        { summary with
+            PlannedListDecHelpers =
+                Map.add label (payloadSize, elementRelease) summary.PlannedListDecHelpers }
+
+let private addPrecomputedPlannedDictHelper
+    releasePlan
+    (summary: RcReleasePlanSummary)
+    : RcReleasePlanSummary =
+    let label = dictDecHelperForReleasePlan releasePlan
+    match Map.tryFind label summary.PlannedDictDecHelpers with
+    | Some existing when existing <> releasePlan ->
+        Crash.crash $"planned dict RC helper label collision for {label}"
+    | Some _ -> summary
+    | None ->
+        { summary with
+            PlannedDictDecHelpers =
+                Map.add label releasePlan summary.PlannedDictDecHelpers }
+
+let rec private collectPrecomputedReleasePlanSummary
+    (includeStaticRootDependencies: bool)
+    (collectListLabels: bool)
+    (collectPlannedListHelpers: bool)
+    (collectDictLabels: bool)
+    (collectPlannedDictHelpers: bool)
+    (collectClosureNeed: bool)
+    (summary: RcReleasePlanSummary)
+    (releasePlan: ANF.RcReleasePlan)
+    : RcReleasePlanSummary =
+    let summary =
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.ClosureHeap, _) when collectClosureNeed ->
+            { summary with NeedsClosureRcDecHelper = true }
+        | ANF.RootRelease (_, ANF.StreamHeap, _) ->
+            { summary with NeedsStreamRcDecHelper = true }
+        | _ -> summary
+
+    match releasePlan with
+    | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+        let summary =
+            if collectListLabels then
+                { summary with
+                    ListDecHelperLabels =
+                        Set.add (listDecHelperForReleasePlan releasePlan) summary.ListDecHelperLabels }
+            else summary
+        let summary =
+            match collectPlannedListHelpers, elementRelease with
+            | true, ANF.RootRelease (payloadSize, ANF.GenericHeap, _)
+            | true, ANF.RootRelease (payloadSize, ANF.StreamHeap, _) ->
+                addPrecomputedPlannedListHelper payloadSize elementRelease summary
+            | true, ANF.RecursiveRelease _ ->
+                addPrecomputedPlannedListHelper 8 elementRelease summary
+            | _ -> summary
+        collectPrecomputedReleasePlanSummary
+            includeStaticRootDependencies
+            collectListLabels
+            collectPlannedListHelpers
+            collectDictLabels
+            collectPlannedDictHelpers
+            false
+            summary
+            elementRelease
+    | ANF.RootRelease (_, kind, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+        if collectPlannedDictHelpers && kind <> ANF.DictHeap then
+            Crash.crash $"ARM64 planned dict dependency collection saw DictPayloadRelease for non-dict kind {kind}"
+        else
+            let summary =
+                if collectDictLabels && kind = ANF.DictHeap then
+                    { summary with
+                        DictDecHelperLabels =
+                            Set.add (dictDecHelperForReleasePlan releasePlan) summary.DictDecHelperLabels }
+                else summary
+            let summary =
+                if collectPlannedDictHelpers
+                   && dictPayloadReleaseNeedsPlannedHelper keyRelease valueRelease then
+                    addPrecomputedPlannedDictHelper releasePlan summary
+                else summary
+            let childDictLabels =
+                collectDictLabels
+                && (includeStaticRootDependencies || kind <> ANF.DictHeap)
+            let collectChild summary childRelease =
+                collectPrecomputedReleasePlanSummary
+                    includeStaticRootDependencies
+                    collectListLabels
+                    collectPlannedListHelpers
+                    childDictLabels
+                    collectPlannedDictHelpers
+                    false
+                    summary
+                    childRelease
+            collectChild (collectChild summary keyRelease) valueRelease
+    | ANF.RootRelease (_, kind, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+    | ANF.RootRelease (_, kind, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
+        let collectStaticOrGeneric = includeStaticRootDependencies || kind = ANF.GenericHeap
+        fieldReleases
+        |> List.fold
+            (fun summary (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                collectPrecomputedReleasePlanSummary
+                    includeStaticRootDependencies
+                    (collectListLabels && collectStaticOrGeneric)
+                    (collectPlannedListHelpers && kind = ANF.GenericHeap)
+                    (collectDictLabels && collectStaticOrGeneric)
+                    (collectPlannedDictHelpers && kind = ANF.GenericHeap)
+                    (collectClosureNeed && kind = ANF.GenericHeap)
+                    summary
+                    fieldReleasePlan)
+            summary
+    | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+        fieldReleases
+        |> List.fold
+            (fun summary (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                collectPrecomputedReleasePlanSummary
+                    includeStaticRootDependencies
+                    collectListLabels
+                    collectPlannedListHelpers
+                    collectDictLabels
+                    collectPlannedDictHelpers
+                    false
+                    summary
+                    fieldReleasePlan)
+            summary
+    | ANF.RootRelease (_, ANF.DictHeap, _)
+        when collectDictLabels && not includeStaticRootDependencies ->
+        { summary with
+            DictDecHelperLabels =
+                Set.add (dictDecHelperForReleasePlan releasePlan) summary.DictDecHelperLabels }
+    | _ -> summary
+
+let private summarizePrecomputedReleasePlan includeStaticRootDependencies releasePlan =
+    collectPrecomputedReleasePlanSummary
+        includeStaticRootDependencies
+        true
+        true
+        true
+        true
+        true
+        precomputedEmptyReleasePlanSummary
+        releasePlan
+
+let private precomputedEmptyRcHelperRequirements : RcHelperRequirements = {
+    ListDecHelperLabels = Set.empty
+    PlannedListDecHelpers = Map.empty
+    PlannedDictDecHelpers = Map.empty
+    DictDecHelperLabels = Set.empty
+    NeedsListRcIncHelper = false
+    NeedsDictRcIncHelper = false
+    NeedsClosureRcIncHelper = false
+    NeedsClosureRcDecHelper = false
+    NeedsStreamRcDecHelper = false
+    ReleasePlanSummaries = Map.empty
+}
+
+let private precomputedReleasePlanSummary
+    includeStaticRootDependencies
+    releasePlan
+    (requirements: RcHelperRequirements)
+    : RcReleasePlanSummary * RcHelperRequirements =
+    let key = (includeStaticRootDependencies, releasePlan)
+    match Map.tryFind key requirements.ReleasePlanSummaries with
+    | Some summary -> (summary, requirements)
+    | None ->
+        let summary = summarizePrecomputedReleasePlan includeStaticRootDependencies releasePlan
+        (summary,
+         { requirements with
+             ReleasePlanSummaries = Map.add key summary requirements.ReleasePlanSummaries })
+
+let private addPrecomputedReleasePlanRequirements
+    (summary: RcReleasePlanSummary)
+    (requirements: RcHelperRequirements)
+    : RcHelperRequirements =
+    { requirements with
+        PlannedListDecHelpers =
+            mergePrecomputedPlannedListHelpers
+                requirements.PlannedListDecHelpers
+                summary.PlannedListDecHelpers
+        PlannedDictDecHelpers =
+            mergePrecomputedPlannedDictHelpers
+                requirements.PlannedDictDecHelpers
+                summary.PlannedDictDecHelpers }
+
+let private collectPrecomputedRefCountDecRequirement
+    (requirements: RcHelperRequirements)
+    (kind, metadata)
+    : RcHelperRequirements =
+    match kind with
+    | LIR.TaggedList
+    | LIR.DictHeap ->
+        let context =
+            if kind = LIR.TaggedList then "TaggedList RefCountDec helper selection"
+            else "DictHeap RefCountDec helper selection"
+        let releasePlan = requiredRcMetadataReleasePlan context metadata
+        let summary, requirements =
+            precomputedReleasePlanSummary false releasePlan requirements
+        let requirements = addPrecomputedReleasePlanRequirements summary requirements
+        if kind = LIR.TaggedList then
+            { requirements with
+                ListDecHelperLabels =
+                    Set.add (listDecHelperForReleasePlan releasePlan) requirements.ListDecHelperLabels }
+        else
+            { requirements with
+                DictDecHelperLabels =
+                    Set.add (dictDecHelperForReleasePlan releasePlan) requirements.DictDecHelperLabels }
+    | LIR.GenericHeap ->
+        match rcMetadataReleasePlan metadata with
+        | None -> requirements
+        | Some releasePlan ->
+            let summary, requirements =
+                precomputedReleasePlanSummary false releasePlan requirements
+            let requirements = addPrecomputedReleasePlanRequirements summary requirements
+            { requirements with
+                ListDecHelperLabels = Set.union requirements.ListDecHelperLabels summary.ListDecHelperLabels
+                DictDecHelperLabels = Set.union requirements.DictDecHelperLabels summary.DictDecHelperLabels
+                NeedsClosureRcDecHelper = requirements.NeedsClosureRcDecHelper || summary.NeedsClosureRcDecHelper
+                NeedsStreamRcDecHelper = requirements.NeedsStreamRcDecHelper || summary.NeedsStreamRcDecHelper }
+    | LIR.ClosureHeap ->
+        { requirements with NeedsClosureRcDecHelper = true }
+    | LIR.StreamHeap ->
+        { requirements with NeedsStreamRcDecHelper = true }
+
+let private collectPrecomputedRefCountIncRequirement
+    (requirements: RcHelperRequirements)
+    kind
+    : RcHelperRequirements =
+    match kind with
+    | LIR.TaggedList -> { requirements with NeedsListRcIncHelper = true }
+    | LIR.DictHeap -> { requirements with NeedsDictRcIncHelper = true }
+    | LIR.ClosureHeap -> { requirements with NeedsClosureRcIncHelper = true }
+    | LIR.GenericHeap
+    | LIR.StreamHeap -> requirements
+
+let private planFunctionArm64RcRequirements
+    releasePlanSummaries
+    (facts: LIR.FunctionCodegenFacts)
+    =
+    let initialRequirements = {
+        precomputedEmptyRcHelperRequirements with
+            ReleasePlanSummaries = releasePlanSummaries
+    }
+    facts.RefCountDecRequirements
+    |> Set.fold collectPrecomputedRefCountDecRequirement initialRequirements
+    |> fun requirements ->
+        facts.RefCountIncRequirements
+        |> Set.fold collectPrecomputedRefCountIncRequirement requirements
+
+let private mergePrecomputedReleasePlanSummaries left right =
+    Map.fold
+        (fun acc key summary ->
+            match Map.tryFind key acc with
+            | Some existing when existing <> summary ->
+                Crash.crash "ARM64 release-plan summary mismatch"
+            | Some _ -> acc
+            | None -> Map.add key summary acc)
+        left
+        right
+
+let private mergePrecomputedRcHelperRequirements
+    (left: RcHelperRequirements)
+    (right: RcHelperRequirements)
+    : RcHelperRequirements =
+    {
+        ListDecHelperLabels = Set.union left.ListDecHelperLabels right.ListDecHelperLabels
+        PlannedListDecHelpers =
+            mergePrecomputedPlannedListHelpers left.PlannedListDecHelpers right.PlannedListDecHelpers
+        PlannedDictDecHelpers =
+            mergePrecomputedPlannedDictHelpers left.PlannedDictDecHelpers right.PlannedDictDecHelpers
+        DictDecHelperLabels = Set.union left.DictDecHelperLabels right.DictDecHelperLabels
+        NeedsListRcIncHelper = left.NeedsListRcIncHelper || right.NeedsListRcIncHelper
+        NeedsDictRcIncHelper = left.NeedsDictRcIncHelper || right.NeedsDictRcIncHelper
+        NeedsClosureRcIncHelper = left.NeedsClosureRcIncHelper || right.NeedsClosureRcIncHelper
+        NeedsClosureRcDecHelper = left.NeedsClosureRcDecHelper || right.NeedsClosureRcDecHelper
+        NeedsStreamRcDecHelper = left.NeedsStreamRcDecHelper || right.NeedsStreamRcDecHelper
+        ReleasePlanSummaries =
+            mergePrecomputedReleasePlanSummaries left.ReleasePlanSummaries right.ReleasePlanSummaries
+    }
+
+/// Attach backend-specific helper planning to a compilation batch. Release
+/// plans shared by sibling functions are traversed once, while each function
+/// retains only its own semantic requirements for later tree-shaken unions.
+let attachARM64CodegenFactsToFunctions
+    (functions: LIR.Function list)
+    : LIR.Function list =
+    functions
+    |> List.mapFold
+        (fun releasePlanSummaries func ->
+            let facts =
+                func.CodegenFacts
+                |> Option.defaultWith (fun () -> LIR.analyzeFunctionCodegenFacts func)
+            let requirementsWithMemo =
+                planFunctionArm64RcRequirements releasePlanSummaries facts
+            let functionRequirements = {
+                requirementsWithMemo with
+                    ReleasePlanSummaries = Map.empty
+            }
+            let plannedFacts = {
+                facts with
+                    Arm64RcHelperRequirements = Some functionRequirements
+            }
+            ({ func with CodegenFacts = Some plannedFacts },
+             requirementsWithMemo.ReleasePlanSummaries))
+        Map.empty
+    |> fst
+
+let attachARM64CodegenFacts (func: LIR.Function) : LIR.Function =
+    attachARM64CodegenFactsToFunctions [func] |> List.head
+
 /// Convert LIR program to ARM64 instructions with options
 /// Caller-owned conversion cache. Program-wide helper and layout generation is
 /// intentionally outside this hook and is performed for every executable.
@@ -7172,22 +7505,21 @@ let generateARM64WithOptionsAndCache
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
+    // Production functions carry facts computed once after LIR optimization.
+    // Keep the scan as an oracle and compatibility path for hand-built LIR.
+    let functionsWithFacts =
+        functions
+        |> List.map (fun func ->
+            let facts =
+                func.CodegenFacts
+                |> Option.defaultWith (fun () -> LIR.analyzeFunctionCodegenFacts func)
+            (func, facts))
     let needsCliRuntimeState =
-        functions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function | LIR.CliNative _ -> true | _ -> false)))
+        functionsWithFacts
+        |> List.exists (fun (_, facts) -> facts.NeedsCliRuntimeState)
     let needsCliExecuteHelper =
-        functions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.CliNative (_, LIR.Execute, _) -> true
-                    | _ -> false)))
+        functionsWithFacts
+        |> List.exists (fun (_, facts) -> facts.NeedsCliExecuteHelper)
 
     // Ensure _start is first (entry point)
     let sortedFunctions =
@@ -7200,224 +7532,15 @@ let generateARM64WithOptionsAndCache
         | [] -> Set.empty
         | _ -> Set.unionMany sets
 
-    let mergePlannedListDecHelperMaps
-        (left: Map<string, int * ANF.RcReleasePlan>)
-        (right: Map<string, int * ANF.RcReleasePlan>)
-        : Map<string, int * ANF.RcReleasePlan> =
-        Map.fold
-            (fun acc helperLabel helperSpec ->
-                match Map.tryFind helperLabel acc with
-                | Some existingSpec when existingSpec <> helperSpec ->
-                    Crash.crash $"planned list RC helper label collision for {helperLabel}"
-                | Some _ ->
-                    acc
-                | None ->
-                    Map.add helperLabel helperSpec acc)
-            left
-            right
-
-    let mergePlannedDictDecHelperMaps
-        (left: Map<string, ANF.RcReleasePlan>)
-        (right: Map<string, ANF.RcReleasePlan>)
-        : Map<string, ANF.RcReleasePlan> =
-        Map.fold
-            (fun acc helperLabel releasePlan ->
-                match Map.tryFind helperLabel acc with
-                | Some existingPlan when existingPlan <> releasePlan ->
-                    Crash.crash $"planned dict RC helper label collision for {helperLabel}"
-                | Some _ ->
-                    acc
-                | None ->
-                    Map.add helperLabel releasePlan acc)
-            left
-            right
-
     let listDecHelperDictDependencyLabels (helperLabel: string) : Set<string> =
         if helperLabel = listRefCountDecDictListHelperLabel then
             Set.singleton dictRefCountDecListValueHelperLabel
         else
             Set.empty
 
-    let emptyReleasePlanSummary : RcReleasePlanSummary = {
-        ListDecHelperLabels = Set.empty
-        PlannedListDecHelpers = Map.empty
-        DictDecHelperLabels = Set.empty
-        PlannedDictDecHelpers = Map.empty
-        NeedsClosureRcDecHelper = false
-        NeedsStreamRcDecHelper = false
-    }
+    let summarizeReleasePlan = summarizePrecomputedReleasePlan
 
-    let addPlannedListHelper
-        payloadSize
-        elementRelease
-        (summary: RcReleasePlanSummary)
-        : RcReleasePlanSummary =
-        let helperLabel = plannedListDecHelperLabelForReleasePlan elementRelease
-        match Map.tryFind helperLabel summary.PlannedListDecHelpers with
-        | Some existingSpec when existingSpec <> (payloadSize, elementRelease) ->
-            Crash.crash $"planned list RC helper label collision for {helperLabel}"
-        | Some _ -> summary
-        | None ->
-            { summary with
-                PlannedListDecHelpers =
-                    Map.add helperLabel (payloadSize, elementRelease) summary.PlannedListDecHelpers }
-
-    let addPlannedDictHelper
-        releasePlan
-        (summary: RcReleasePlanSummary)
-        : RcReleasePlanSummary =
-        let helperLabel = dictDecHelperForReleasePlan releasePlan
-        match Map.tryFind helperLabel summary.PlannedDictDecHelpers with
-        | Some existingPlan when existingPlan <> releasePlan ->
-            Crash.crash $"planned dict RC helper label collision for {helperLabel}"
-        | Some _ -> summary
-        | None ->
-            { summary with
-                PlannedDictDecHelpers =
-                    Map.add helperLabel releasePlan summary.PlannedDictDecHelpers }
-
-    let rec collectReleasePlanSummary
-        (includeStaticRootDependencies: bool)
-        (collectListLabels: bool)
-        (collectPlannedListHelpers: bool)
-        (collectDictLabels: bool)
-        (collectPlannedDictHelpers: bool)
-        (collectClosureNeed: bool)
-        (summary: RcReleasePlanSummary)
-        (releasePlan: ANF.RcReleasePlan)
-        : RcReleasePlanSummary =
-        let summary =
-            match releasePlan with
-            | ANF.RootRelease (_, ANF.ClosureHeap, _) when collectClosureNeed ->
-                { summary with NeedsClosureRcDecHelper = true }
-            | ANF.RootRelease (_, ANF.StreamHeap, _) ->
-                { summary with NeedsStreamRcDecHelper = true }
-            | _ -> summary
-
-        match releasePlan with
-        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
-            let summary =
-                if collectListLabels then
-                    { summary with
-                        ListDecHelperLabels =
-                            Set.add (listDecHelperForReleasePlan releasePlan) summary.ListDecHelperLabels }
-                else
-                    summary
-            let summary =
-                match collectPlannedListHelpers, elementRelease with
-                | true, ANF.RootRelease (payloadSize, ANF.GenericHeap, _)
-                | true, ANF.RootRelease (payloadSize, ANF.StreamHeap, _) ->
-                    addPlannedListHelper payloadSize elementRelease summary
-                | true, ANF.RecursiveRelease _ ->
-                    addPlannedListHelper 8 elementRelease summary
-                | _ -> summary
-            collectReleasePlanSummary
-                includeStaticRootDependencies
-                collectListLabels
-                collectPlannedListHelpers
-                collectDictLabels
-                collectPlannedDictHelpers
-                false
-                summary
-                elementRelease
-        | ANF.RootRelease (_, kind, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
-            if collectPlannedDictHelpers && kind <> ANF.DictHeap then
-                Crash.crash $"ARM64 planned dict dependency collection saw DictPayloadRelease for non-dict kind {kind}"
-            else
-                let summary =
-                    if collectDictLabels
-                       && kind = ANF.DictHeap then
-                        { summary with
-                            DictDecHelperLabels =
-                                Set.add (dictDecHelperForReleasePlan releasePlan) summary.DictDecHelperLabels }
-                    else
-                        summary
-                let summary =
-                    if collectPlannedDictHelpers
-                       && dictPayloadReleaseNeedsPlannedHelper keyRelease valueRelease then
-                        addPlannedDictHelper releasePlan summary
-                    else
-                        summary
-                let childDictLabels =
-                    collectDictLabels
-                    && (includeStaticRootDependencies || kind <> ANF.DictHeap)
-                let collectChild
-                    (summary: RcReleasePlanSummary)
-                    childRelease
-                    : RcReleasePlanSummary =
-                    collectReleasePlanSummary
-                        includeStaticRootDependencies
-                        collectListLabels
-                        collectPlannedListHelpers
-                        childDictLabels
-                        collectPlannedDictHelpers
-                        false
-                        summary
-                        childRelease
-                collectChild (collectChild summary keyRelease) valueRelease
-        | ANF.RootRelease (_, kind, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, kind, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
-            let collectStaticOrGeneric = includeStaticRootDependencies || kind = ANF.GenericHeap
-            fieldReleases
-            |> List.fold
-                (fun summary (ANF.FieldRelease (_, fieldReleasePlan)) ->
-                    collectReleasePlanSummary
-                        includeStaticRootDependencies
-                        (collectListLabels && collectStaticOrGeneric)
-                        (collectPlannedListHelpers && kind = ANF.GenericHeap)
-                        (collectDictLabels && collectStaticOrGeneric)
-                        (collectPlannedDictHelpers && kind = ANF.GenericHeap)
-                        (collectClosureNeed && kind = ANF.GenericHeap)
-                        summary
-                        fieldReleasePlan)
-                summary
-        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
-            fieldReleases
-            |> List.fold
-                (fun summary (ANF.FieldRelease (_, fieldReleasePlan)) ->
-                    collectReleasePlanSummary
-                        includeStaticRootDependencies
-                        collectListLabels
-                        collectPlannedListHelpers
-                        collectDictLabels
-                        collectPlannedDictHelpers
-                        false
-                        summary
-                        fieldReleasePlan)
-                summary
-        | ANF.RootRelease (_, ANF.DictHeap, _) when collectDictLabels && not includeStaticRootDependencies ->
-            { summary with
-                DictDecHelperLabels =
-                    Set.add (dictDecHelperForReleasePlan releasePlan) summary.DictDecHelperLabels }
-        | _ ->
-            summary
-
-    let summarizeReleasePlan
-        (includeStaticRootDependencies: bool)
-        (releasePlan: ANF.RcReleasePlan)
-        : RcReleasePlanSummary =
-        collectReleasePlanSummary
-            includeStaticRootDependencies
-            true
-            true
-            true
-            true
-            true
-            emptyReleasePlanSummary
-            releasePlan
-
-    let emptyRcHelperRequirements = {
-        ListDecHelperLabels = Set.empty
-        PlannedListDecHelpers = Map.empty
-        PlannedDictDecHelpers = Map.empty
-        DictDecHelperLabels = Set.empty
-        NeedsListRcIncHelper = false
-        NeedsDictRcIncHelper = false
-        NeedsClosureRcIncHelper = false
-        NeedsClosureRcDecHelper = false
-        NeedsStreamRcDecHelper = false
-        ReleasePlanSummaries = Map.empty
-    }
+    let emptyRcHelperRequirements = precomputedEmptyRcHelperRequirements
 
     let emptyProgramMetadata = {
         Facts = {
@@ -7429,210 +7552,113 @@ let generateARM64WithOptionsAndCache
         RcHelperRequirements = emptyRcHelperRequirements
     }
 
-    let releasePlanSummary
-        (includeStaticRootDependencies: bool)
-        (releasePlan: ANF.RcReleasePlan)
-        (requirements: RcHelperRequirements)
-        : RcReleasePlanSummary * RcHelperRequirements =
-        let key = (includeStaticRootDependencies, releasePlan)
-        match Map.tryFind key requirements.ReleasePlanSummaries with
-        | Some summary ->
-            (summary, requirements)
-        | None ->
-            let summary = summarizeReleasePlan includeStaticRootDependencies releasePlan
-            (summary,
-             { requirements with
-                 ReleasePlanSummaries =
-                    Map.add key summary requirements.ReleasePlanSummaries })
+    let releasePlanSummary = precomputedReleasePlanSummary
+    let addReleasePlanRequirements = addPrecomputedReleasePlanRequirements
 
-    let addReleasePlanRequirements
-        (summary: RcReleasePlanSummary)
-        (requirements: RcHelperRequirements)
-        : RcHelperRequirements =
-        {
-            requirements with
-                PlannedListDecHelpers =
-                    mergePlannedListDecHelperMaps
-                        requirements.PlannedListDecHelpers
-                        summary.PlannedListDecHelpers
-                PlannedDictDecHelpers =
-                    mergePlannedDictDecHelperMaps
-                        requirements.PlannedDictDecHelpers
-                        summary.PlannedDictDecHelpers
-        }
+    let collectRefCountDecRequirements = collectPrecomputedRefCountDecRequirement
 
-    let collectRcHelperRequirementsFromInstr requirements instr =
-        match instr with
-        | LIR.RefCountDec (_, _, LIR.TaggedList, metadata) ->
-            let releasePlan =
-                requiredRcMetadataReleasePlan
-                    "TaggedList RefCountDec helper selection"
-                    metadata
-            let summary, requirements =
-                releasePlanSummary false releasePlan requirements
-            let withPlanRequirements =
-                addReleasePlanRequirements summary requirements
-            {
-                withPlanRequirements with
-                    ListDecHelperLabels =
-                        Set.add
-                            (listDecHelperForReleasePlan releasePlan)
-                            withPlanRequirements.ListDecHelperLabels
-            }
-        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata) ->
-            let releasePlan =
-                requiredRcMetadataReleasePlan
-                    "DictHeap RefCountDec helper selection"
-                    metadata
-            let summary, requirements =
-                releasePlanSummary false releasePlan requirements
-            let withPlanRequirements =
-                addReleasePlanRequirements summary requirements
-            {
-                withPlanRequirements with
-                    DictDecHelperLabels =
-                        Set.add
-                            (dictDecHelperForReleasePlan releasePlan)
-                            withPlanRequirements.DictDecHelperLabels
-            }
-        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-            match rcMetadataReleasePlan metadata with
-            | None ->
-                requirements
-            | Some releasePlan ->
-                let summary, requirements =
-                    releasePlanSummary false releasePlan requirements
-                let withPlanRequirements = addReleasePlanRequirements summary requirements
-                {
-                    withPlanRequirements with
-                        ListDecHelperLabels =
-                            Set.union
-                                withPlanRequirements.ListDecHelperLabels
-                                summary.ListDecHelperLabels
-                        DictDecHelperLabels =
-                            Set.union
-                                withPlanRequirements.DictDecHelperLabels
-                                summary.DictDecHelperLabels
-                        NeedsClosureRcDecHelper =
-                            withPlanRequirements.NeedsClosureRcDecHelper
-                            || summary.NeedsClosureRcDecHelper
-                        NeedsStreamRcDecHelper =
-                            withPlanRequirements.NeedsStreamRcDecHelper
-                            || summary.NeedsStreamRcDecHelper
-                }
-        | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) ->
-            { requirements with NeedsClosureRcDecHelper = true }
-        | LIR.RefCountDec (_, _, LIR.StreamHeap, _) ->
-            { requirements with NeedsStreamRcDecHelper = true }
-        | LIR.RefCountInc (_, _, LIR.TaggedList, _) ->
+    let collectRefCountIncRequirements = collectPrecomputedRefCountIncRequirement
+
+    let collectRawSlotInitRequirements (requirements: RcHelperRequirements) valueType =
+        match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
+        | Some SlotInitListRootRetain ->
             { requirements with NeedsListRcIncHelper = true }
-        | LIR.RefCountInc (_, _, LIR.DictHeap, _) ->
+        | Some SlotInitDictRootRetain ->
             { requirements with NeedsDictRcIncHelper = true }
-        | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) ->
+        | Some SlotInitClosureRootRetain ->
             { requirements with NeedsClosureRcIncHelper = true }
-        | LIR.RawSlotInit (_, _, _, valueType) ->
-            match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
-            | Some SlotInitListRootRetain ->
-                { requirements with NeedsListRcIncHelper = true }
-            | Some SlotInitDictRootRetain ->
-                { requirements with NeedsDictRcIncHelper = true }
-            | Some SlotInitClosureRootRetain ->
-                { requirements with NeedsClosureRcIncHelper = true }
-            | Some SlotInitDynamicBufferRetain
-            | Some (SlotInitGenericRootRetain _)
-            | None ->
-                requirements
-        | _ ->
+        | Some SlotInitDynamicBufferRetain
+        | Some (SlotInitGenericRootRetain _)
+        | None ->
             requirements
-
-    let collectInstructionMetadata (metadata: Arm64ProgramMetadata) instr : Arm64ProgramMetadata =
-        match instr with
-        | LIR.ClosureAlloc (_, funcName, captures) ->
-            {
-                metadata with
-                    Facts = {
-                        metadata.Facts with
-                            ClosurePayloadSizesFromAllocs =
-                                Map.add
-                                    funcName
-                                    ((List.length captures + 1) * 8)
-                                    metadata.Facts.ClosurePayloadSizesFromAllocs
-                    }
-            }
-        | LIR.RefCountDec (_, _, _, rcMetadata) ->
-            {
-                metadata with
-                    RcHelperRequirements =
-                        collectRcHelperRequirementsFromInstr metadata.RcHelperRequirements instr
-                    Facts = {
-                        metadata.Facts with
-                            RecursiveReleaseTypes =
-                                rcMetadata
-                                |> rcMetadataReleasePlan
-                                |> Option.map ANF.recursiveReleaseTypes
-                                |> Option.defaultValue Set.empty
-                                |> Set.union metadata.Facts.RecursiveReleaseTypes
-                    }
-            }
-        | LIR.RefCountInc (_, _, LIR.TaggedList, _)
-        | LIR.RefCountInc (_, _, LIR.DictHeap, _)
-        | LIR.RefCountInc (_, _, LIR.ClosureHeap, _)
-        | LIR.RawSlotInit _ ->
-            {
-                metadata with
-                    RcHelperRequirements =
-                        collectRcHelperRequirementsFromInstr metadata.RcHelperRequirements instr
-            }
-        | _ ->
-            metadata
 
     let collectFunctionMetadata
         (metadata: Arm64ProgramMetadata)
-        (func: LIR.Function)
+        ((func, facts): LIR.Function * LIR.FunctionCodegenFacts)
         : Arm64ProgramMetadata =
         let withClosureParams =
-            match func.TypedParams with
-            | { Type = AST.TTuple fields } :: _ ->
-                let withPayloadSize = {
+            match facts.ClosurePayloadSizeFromParams with
+            | Some payloadSize ->
+                {
                     metadata with
                         Facts = {
                             metadata.Facts with
                                 ClosurePayloadSizesFromParams =
                                     Map.add
                                         func.Name
-                                        (List.length fields * 8)
+                                        payloadSize
                                         metadata.Facts.ClosurePayloadSizesFromParams
                         }
                 }
-                match fields with
-                | _funcPtrType :: captures ->
-                    {
-                        withPayloadSize with
-                            Facts = {
-                                withPayloadSize.Facts with
-                                    ClosureCaptureTypes =
-                                        Map.add
-                                            func.Name
-                                            captures
-                                            withPayloadSize.Facts.ClosureCaptureTypes
-                            }
-                    }
-                | [] ->
-                    withPayloadSize
-            | _ ->
+            | None ->
                 metadata
 
-        func.CFG.Blocks
-        |> Map.fold
-            (fun blockMetadata _ block ->
-                block.Instrs
-                |> List.fold collectInstructionMetadata blockMetadata)
-            withClosureParams
+        let withClosureCaptures =
+            match facts.ClosureCaptureTypes with
+            | Some captures ->
+                {
+                    withClosureParams with
+                        Facts = {
+                            withClosureParams.Facts with
+                                ClosureCaptureTypes =
+                                    Map.add
+                                        func.Name
+                                        captures
+                                        withClosureParams.Facts.ClosureCaptureTypes
+                        }
+                }
+            | None ->
+                withClosureParams
+
+        let withAllocSizes =
+            facts.ClosurePayloadSizesFromAllocs
+            |> List.fold
+                (fun metadata (funcName, payloadSize) ->
+                    {
+                        metadata with
+                            Facts = {
+                                metadata.Facts with
+                                    ClosurePayloadSizesFromAllocs =
+                                        Map.add
+                                            funcName
+                                            payloadSize
+                                            metadata.Facts.ClosurePayloadSizesFromAllocs
+                            }
+                    })
+                withClosureCaptures
+
+        let requirements =
+            match facts.Arm64RcHelperRequirements with
+            | Some plannedRequirements ->
+                mergePrecomputedRcHelperRequirements
+                    withAllocSizes.RcHelperRequirements
+                    plannedRequirements
+            | None ->
+                facts.RefCountDecRequirements
+                |> Set.fold collectRefCountDecRequirements withAllocSizes.RcHelperRequirements
+                |> fun requirements ->
+                    facts.RefCountIncRequirements
+                    |> Set.fold collectRefCountIncRequirements requirements
+            |> fun requirements ->
+                facts.RawSlotInitTypes
+                |> Set.fold collectRawSlotInitRequirements requirements
+
+        {
+            withAllocSizes with
+                Facts = {
+                    withAllocSizes.Facts with
+                        RecursiveReleaseTypes =
+                            Set.union
+                                withAllocSizes.Facts.RecursiveReleaseTypes
+                                facts.RecursiveReleaseTypes
+                }
+                RcHelperRequirements = requirements
+        }
 
     // Retain source function order for metadata. The replaced Map.ofList scans
     // used last-writer-wins precedence; sortedFunctions is emission order only.
     let instructionMetadata =
-        functions
+        functionsWithFacts
         |> List.fold collectFunctionMetadata emptyProgramMetadata
 
     let programMetadata =

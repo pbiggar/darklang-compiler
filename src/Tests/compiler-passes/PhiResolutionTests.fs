@@ -449,6 +449,7 @@ let testLoopPhiCoalesced () : TestResult =
         CFG = cfg
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
     // Phi coalescing is arch-independent; hardcode ARM64 for the full
@@ -497,6 +498,7 @@ let testFloatLoopPhiCoalesced () : TestResult =
         CFG = cfg
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
     let floatAllocation = RegisterAllocation.chordalFloatAllocation cfg []
@@ -556,6 +558,7 @@ let testFloatLoopPhiPreservesReturnRegister () : TestResult =
         CFG = cfg
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
     let allocated = RegisterAllocation.allocateRegisters Platform.ARM64 func

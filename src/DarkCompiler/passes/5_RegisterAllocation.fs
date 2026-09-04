@@ -4133,6 +4133,7 @@ let private allocateRegistersInternal
         CFG = cfgWithParamCopies
         StackSize = result.StackSize
         UsedCalleeSaved = result.UsedCalleeSaved
+        CodegenFacts = func.CodegenFacts
     }
 
     (LIR_Peephole.removePostAllocationMovesFromFunction allocatedFunc, timings)

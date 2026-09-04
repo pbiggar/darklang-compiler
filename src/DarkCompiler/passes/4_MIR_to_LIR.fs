@@ -2071,7 +2071,8 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
                   TypedParams = lirTypedParams
                   CFG = lirCFG
                   StackSize = 0  // Will be determined by register allocation
-                  UsedCalleeSaved = [] }  // Will be determined by register allocation
+                  UsedCalleeSaved = []  // Will be determined by register allocation
+                  CodegenFacts = None }
 
     match mapResults convertFunc mirFuncs with
     | Error err -> Error err

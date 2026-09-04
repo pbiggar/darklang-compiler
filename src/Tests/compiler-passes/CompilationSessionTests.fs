@@ -47,6 +47,7 @@ let private fakeFunction : LIR.Function =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
 let testArm64HitWithNestedJson (stdlib: CompilerLibrary.StdlibResult) () : TestResult =

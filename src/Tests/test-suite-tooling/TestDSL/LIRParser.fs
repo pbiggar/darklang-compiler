@@ -343,5 +343,6 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
                 CFG = cfg
                 StackSize = 0
                 UsedCalleeSaved = []
+                CodegenFacts = None
             }
             Ok (Program ([func], Map.empty, Map.empty))

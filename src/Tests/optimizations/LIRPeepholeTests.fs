@@ -32,6 +32,7 @@ let testRemoveSelfMovesFromAllocatedFunction () : TestResult =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
     match removeSelfMovesFromFunction func |> fun f -> Map.tryFind label f.CFG.Blocks with
@@ -70,6 +71,7 @@ let testRemoveFloatingCopyBackMovesFromAllocatedFunction () : TestResult =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
     match removePostAllocationMovesFromFunction func |> fun f -> Map.tryFind label f.CFG.Blocks with
@@ -108,6 +110,7 @@ let testFloatingCopyBackKeepsMoveAfterFPhiWritesSource () : TestResult =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
     match removePostAllocationMovesFromFunction func |> fun f -> Map.tryFind label f.CFG.Blocks with

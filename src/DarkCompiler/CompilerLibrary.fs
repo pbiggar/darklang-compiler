@@ -370,7 +370,10 @@ let private compileMirToLir
         if verbosity >= 2 then
             let t = System.Math.Round(lirOptElapsed, 1)
             println $"        {t}ms"
-        Ok optimizedLir
+        // Summarize finalized symbolic LIR once. The facts remain attached to
+        // functions through allocation and tree shaking, so each executable
+        // only unions metadata for its reachable compilation unit.
+        Ok (LIR.attachCodegenFacts optimizedLir)
 
 /// Allocate registers for a list of symbolic LIR functions.
 let private allocateRegistersForFunctions
@@ -445,7 +448,20 @@ let private lowerToAllocatedLir
                     if verbosity >= 2 then
                         let t = System.Math.Round(allocElapsed, 1)
                         println $"        {t}ms"
-                    Ok allocatedFuncs)
+                    let metadataPlanningStart = sw.Elapsed.TotalMilliseconds
+                    let funcsWithCodegenFacts =
+                        match Platform.archFor target with
+                        | Platform.ARM64 ->
+                            CodeGen.attachARM64CodegenFactsToFunctions allocatedFuncs
+                        | Platform.X86_64 ->
+                            allocatedFuncs
+                    let metadataPlanningElapsed =
+                        sw.Elapsed.TotalMilliseconds - metadataPlanningStart
+                    recordPassTiming
+                        passTimingRecorder
+                        "ARM64 Function Metadata Planning"
+                        metadataPlanningElapsed
+                    Ok funcsWithCodegenFacts)
 
     let compileFunctionsWithTiming
         (label: string)

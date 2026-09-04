@@ -46,6 +46,7 @@ let private makeSimpleProgramWithVariants
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     LIR.Program ([func], variants, Map.empty)
 
@@ -68,6 +69,7 @@ let private makeSimpleProgramWithRecords
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     LIR.Program ([func], Map.empty, records)
 
@@ -164,6 +166,7 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     let ctx : CodeGen.CodeGenContext = {
         Target = target; Options = CodeGen.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
@@ -207,6 +210,7 @@ let private makeEmptyFunction
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
 let private makeAllocatedEntryFunction
@@ -232,6 +236,7 @@ let private makeAllocatedEntryFunction
         }
         StackSize = stackSize
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
 let private generatedEntryTransfers
@@ -365,6 +370,7 @@ let testReportsMissingEntryBlock () : TestResult =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     let program = LIR.Program ([func], Map.empty, Map.empty)
 
@@ -1631,6 +1637,72 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
         else
             Error "Closure capture boxed-sum bytes payload release did not consume the variant release plan"
 
+/// The absent-facts path deliberately retains the old whole-function scan as a
+/// test oracle. This fixture covers every carried fact category that affects
+/// ARM64 program assembly and requires byte-identical symbolic output.
+let testCarriedCodegenFactsMatchFallbackScan () : TestResult =
+    let closureName = "arm64_carried_facts_closure"
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let capturedFunc =
+        makeEmptyFunction
+            closureName
+            [{
+                Reg = LIR.Physical LIR.X0
+                Type = AST.TTuple [AST.TInt64; AST.TList AST.TBlob]
+            }]
+    let mainProgram =
+        makeSimpleProgramWithVariants
+            [
+                LIR.ClosureAlloc (
+                    LIR.Physical LIR.X1,
+                    closureName,
+                    [LIR.Reg (LIR.Physical LIR.X2)])
+                LIR.RefCountInc (
+                    LIR.Physical LIR.X3,
+                    16,
+                    LIR.TaggedList,
+                    None)
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X3,
+                    16,
+                    LIR.TaggedList,
+                    Some (rcMetadata (AST.TList AST.TBlob)))
+                LIR.RawSlotInit (
+                    LIR.Physical LIR.X4,
+                    LIR.Physical LIR.X5,
+                    LIR.Physical LIR.X6,
+                    closureType)
+                LIR.CliNative (
+                    LIR.Physical LIR.X7,
+                    LIR.Execute,
+                    [LIR.StringSymbol "true"])
+            ]
+            Map.empty
+    let fallbackProgram =
+        match mainProgram with
+        | LIR.Program ([main], variants, records) ->
+            LIR.Program ([main; capturedFunc], variants, records)
+        | other ->
+            other
+    let carriedProgram =
+        match LIR.attachCodegenFacts fallbackProgram with
+        | LIR.Program (functions, variants, records) ->
+            LIR.Program (
+                List.map CodeGen.attachARM64CodegenFacts functions,
+                variants,
+                records)
+
+    match CodeGen.generateARM64 target fallbackProgram,
+          CodeGen.generateARM64 target carriedProgram with
+    | Ok fallback, Ok carried when fallback = carried ->
+        Ok ()
+    | Ok fallback, Ok carried ->
+        Error $"Carried codegen facts changed ARM64 output: fallback={fallback.Length} instructions, carried={carried.Length} instructions"
+    | Error error, _ ->
+        Error $"Fallback metadata scan failed: {error}"
+    | _, Error error ->
+        Error $"Carried metadata generation failed: {error}"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
@@ -1683,4 +1755,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Generic mixed boxed-sum payload dispatch skips remaining cases", testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases)
     ("Closure capture nested fixed-block bytes field uses release plan", testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan)
     ("Closure capture boxed-sum bytes payload uses release plan", testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan)
+    ("Carried codegen facts match fallback scan", testCarriedCodegenFactsMatchFallbackScan)
 ]

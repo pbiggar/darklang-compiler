@@ -164,6 +164,7 @@ let testBranchFalseEdgeFallsThrough () : Result<unit, string> =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     let program = LIR.Program ([func], Map.empty, Map.empty)
     match CodeGen_X86_64.translateProgram program false with
@@ -326,6 +327,7 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     LIR.Program ([func], Map.empty, records)
 
@@ -416,6 +418,7 @@ let private runInNamedFunction (name: string) (instrs: LIR.Instr list) (term: LI
             }
             StackSize = 0
             UsedCalleeSaved = []
+            CodegenFacts = None
         }
         LIR.Program ([entryFunc; callee], variants, records)
     | _ ->
@@ -432,6 +435,7 @@ let private makeEmptyFunction (name: string) (typedParams: LIR.TypedLIRParam lis
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
 
 /// Test: malformed x64 CFGs should be reported as codegen errors rather than throwing Map.find.
@@ -452,6 +456,7 @@ let testReportsMissingEntryBlock () : Result<unit, string> =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     let program = LIR.Program ([func], Map.empty, Map.empty)
 
@@ -542,6 +547,7 @@ let testBranch () : Result<unit, string> =
         }
         StackSize = 0
         UsedCalleeSaved = []
+        CodegenFacts = None
     }
     let program = LIR.Program ([func], Map.empty, Map.empty)
     match runLIRProgram program with

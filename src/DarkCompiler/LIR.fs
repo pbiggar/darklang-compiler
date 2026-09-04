@@ -266,14 +266,132 @@ let layoutBlocks (cfg: CFG) : Result<BasicBlock list, string> =
                 (Ok (initialVisited, initialBlocks))
             |> Result.map (fun (_, reversedBlocks) -> List.rev reversedBlocks))
 
-/// Function with CFG
+/// ARM64 helpers implied by traversing one reference-count release plan.
+type Arm64ReleasePlanSummary = {
+    ListDecHelperLabels: Set<string>
+    PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
+    DictDecHelperLabels: Set<string>
+    PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
+    NeedsClosureRcDecHelper: bool
+    NeedsStreamRcDecHelper: bool
+}
+
+/// ARM64 helper requirements already planned for one function. The summary
+/// memo is retained so registry-dependent closure captures can reuse it after
+/// reachable functions are combined.
+type Arm64RcHelperRequirements = {
+    ListDecHelperLabels: Set<string>
+    PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
+    PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
+    DictDecHelperLabels: Set<string>
+    NeedsListRcIncHelper: bool
+    NeedsDictRcIncHelper: bool
+    NeedsClosureRcIncHelper: bool
+    NeedsClosureRcDecHelper: bool
+    NeedsStreamRcDecHelper: bool
+    ReleasePlanSummaries: Map<bool * ANF.RcReleasePlan, Arm64ReleasePlanSummary>
+}
+
+/// Compact, register-independent facts needed while assembling native code.
+/// These are computed once from finalized symbolic LIR, then travel with the
+/// function through register allocation and tree shaking. Backends therefore
+/// only combine facts from the functions that survived reachability instead of
+/// rescanning every instruction in every executable.
+type FunctionCodegenFacts = {
+    ClosurePayloadSizeFromParams: int option
+    ClosureCaptureTypes: AST.Type list option
+    ClosurePayloadSizesFromAllocs: (string * int) list
+    RecursiveReleaseTypes: Set<AST.Type>
+    RefCountDecRequirements: Set<RcKind * ANF.RcMetadata option>
+    RefCountIncRequirements: Set<RcKind>
+    RawSlotInitTypes: Set<AST.Type>
+    NeedsCliRuntimeState: bool
+    NeedsCliExecuteHelper: bool
+    Arm64RcHelperRequirements: Arm64RcHelperRequirements option
+}
+
+/// Function with CFG. CodegenFacts is absent only for hand-built or legacy LIR;
+/// production lowering attaches it before register allocation.
 type Function = {
     Name: string
     TypedParams: TypedLIRParam list
     CFG: CFG
     StackSize: int
     UsedCalleeSaved: PhysReg list
+    CodegenFacts: FunctionCodegenFacts option
 }
+
+/// Derive the compact code-generation facts for a single function. Keeping
+/// this public also gives backend tests a slow-path oracle for carried facts.
+let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
+    let closurePayloadSizeFromParams, closureCaptureTypes =
+        match func.TypedParams with
+        | { Type = AST.TTuple fields } :: _ ->
+            let captures =
+                match fields with
+                | _funcPtrType :: captures -> Some captures
+                | [] -> None
+            (Some (List.length fields * 8), captures)
+        | _ ->
+            (None, None)
+
+    let mutable closurePayloadSizesFromAllocsRev = []
+    let mutable recursiveReleaseTypes = Set.empty
+    let mutable refCountDecRequirements = Set.empty
+    let mutable refCountIncRequirements = Set.empty
+    let mutable rawSlotInitTypes = Set.empty
+    let mutable needsCliRuntimeState = false
+    let mutable needsCliExecuteHelper = false
+
+    for KeyValue (_, block) in func.CFG.Blocks do
+        for instr in block.Instrs do
+            match instr with
+            | ClosureAlloc (_, funcName, captures) ->
+                closurePayloadSizesFromAllocsRev <-
+                    (funcName, (List.length captures + 1) * 8)
+                    :: closurePayloadSizesFromAllocsRev
+            | RefCountDec (_, _, kind, metadata) ->
+                refCountDecRequirements <-
+                    Set.add (kind, metadata) refCountDecRequirements
+                recursiveReleaseTypes <-
+                    metadata
+                    |> Option.bind (fun metadata -> metadata.ReleasePlan)
+                    |> Option.map ANF.recursiveReleaseTypes
+                    |> Option.defaultValue Set.empty
+                    |> Set.union recursiveReleaseTypes
+            | RefCountInc (_, _, kind, _) ->
+                match kind with
+                | TaggedList
+                | DictHeap
+                | ClosureHeap ->
+                    refCountIncRequirements <-
+                        Set.add kind refCountIncRequirements
+                | GenericHeap
+                | StreamHeap ->
+                    ()
+            | RawSlotInit (_, _, _, valueType) ->
+                rawSlotInitTypes <- Set.add valueType rawSlotInitTypes
+            | CliNative (_, operation, _) ->
+                needsCliRuntimeState <- true
+                if operation = Execute then needsCliExecuteHelper <- true
+            | _ ->
+                ()
+
+    {
+        ClosurePayloadSizeFromParams = closurePayloadSizeFromParams
+        ClosureCaptureTypes = closureCaptureTypes
+        ClosurePayloadSizesFromAllocs = List.rev closurePayloadSizesFromAllocsRev
+        RecursiveReleaseTypes = recursiveReleaseTypes
+        RefCountDecRequirements = refCountDecRequirements
+        RefCountIncRequirements = refCountIncRequirements
+        RawSlotInitTypes = rawSlotInitTypes
+        NeedsCliRuntimeState = needsCliRuntimeState
+        NeedsCliExecuteHelper = needsCliExecuteHelper
+        Arm64RcHelperRequirements = None
+    }
+
+let attachFunctionCodegenFacts (func: Function) : Function =
+    { func with CodegenFacts = Some (analyzeFunctionCodegenFacts func) }
 
 /// Record definitions needed by late, type-specialized runtime helpers.
 type RecordRegistry = Map<string, (string * AST.Type) list>
@@ -296,6 +414,9 @@ type VariantRegistry = Map<string, TypeVariants>
 
 /// LIR program (symbolic literals, no pools)
 type Program = Program of functions:Function list * variants:VariantRegistry * records:RecordRegistry
+
+let attachCodegenFacts (Program (functions, variants, records)) : Program =
+    Program (List.map attachFunctionCodegenFacts functions, variants, records)
 
 /// Count the number of CoverageHit instructions in a program
 let countCoverageHits (Program (functions, _, _)) : int =

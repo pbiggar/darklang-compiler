@@ -19,7 +19,8 @@ let private namedFunctionWith name instrs =
         { LIR.Entry = LIR.Label "entry"
           LIR.Blocks = Map.ofList [ (LIR.Label "entry", blockWith instrs) ] }
       LIR.StackSize = 0
-      LIR.UsedCalleeSaved = [] }
+      LIR.UsedCalleeSaved = []
+      LIR.CodegenFacts = None }
 
 let private functionWith instrs = namedFunctionWith "user" instrs
 
