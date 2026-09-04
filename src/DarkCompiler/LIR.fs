@@ -271,6 +271,7 @@ let layoutBlocks (cfg: CFG) : Result<BasicBlock list, string> =
 type Arm64ReleasePlanSummary = {
     ListDecHelperLabels: Set<string>
     PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
+    PlannedGenericDecHelpers: Map<string, int * ANF.RcReleasePlan>
     DictDecHelperLabels: Set<string>
     PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
     NeedsClosureRcDecHelper: bool
@@ -283,6 +284,7 @@ type Arm64ReleasePlanSummary = {
 type Arm64RcHelperRequirements = {
     ListDecHelperLabels: Set<string>
     PlannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>
+    PlannedGenericDecHelpers: Map<string, int * ANF.RcReleasePlan>
     PlannedDictDecHelpers: Map<string, ANF.RcReleasePlan>
     DictDecHelperLabels: Set<string>
     NeedsListRcIncHelper: bool

@@ -115,6 +115,71 @@ let private emitsPlannedListHelperLabel (instrs: ARM64Symbolic.Instr list) : boo
         | _ ->
             false)
 
+let testGenericReleasePlanIsOutlinedOnce () : TestResult =
+    let valueType = AST.TTuple (List.replicate 32 AST.TString)
+    let metadata = rcMetadata valueType
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (LIR.Physical LIR.X0, 256, LIR.GenericHeap, Some metadata)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 256, LIR.GenericHeap, Some metadata)
+            ]
+            Map.empty
+
+    match generatePreparedARM64 target program with
+    | Error error -> Error $"Generic release helper lowering failed: {error}"
+    | Ok instructions ->
+        let plannedCalls =
+            instructions
+            |> List.choose (function
+                | ARM64Symbolic.BL label when label.StartsWith("__dark_generic_refcount_dec_plan_") ->
+                    Some label
+                | _ ->
+                    None)
+        let plannedLabels =
+            instructions
+            |> List.choose (function
+                | ARM64Symbolic.Label label when label.StartsWith("__dark_generic_refcount_dec_plan_") ->
+                    Some label
+                | _ ->
+                    None)
+
+        match plannedCalls, plannedLabels with
+        | [ firstCall; secondCall ], [ helperLabel ]
+            when firstCall = helperLabel && secondCall = helperLabel ->
+            Ok ()
+        | _ ->
+            Error $"Expected two calls to one outlined generic release helper, got calls={plannedCalls}; labels={plannedLabels}"
+
+let testSmallGenericReleasePlanRemainsInline () : TestResult =
+    let valueType = AST.TTuple [ AST.TString ]
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    8,
+                    LIR.GenericHeap,
+                    Some (rcMetadata valueType))
+            ]
+            Map.empty
+
+    match generatePreparedARM64 target program with
+    | Error error -> Error $"Small generic release lowering failed: {error}"
+    | Ok instructions ->
+        let emitsGenericHelper =
+            instructions
+            |> List.exists (function
+                | ARM64Symbolic.BL label
+                | ARM64Symbolic.Label label ->
+                    label.StartsWith("__dark_generic_refcount_dec_plan_")
+                | _ ->
+                    false)
+        if emitsGenericHelper then
+            Error "Small generic release plan was outlined despite the complexity cutoff"
+        else
+            Ok ()
+
 let private uint64ZeroBranchTargetsDigit (instrs: ARM64.Instr list) : bool =
     instrs
     |> List.mapi (fun index instr -> index, instr)
@@ -176,6 +241,7 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let ctx : CodeGen.CodeGenContext = {
         Target = target; Options = CodeGen.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; PlannedListDecHelperLabels = Map.empty
+        PlannedGenericDecHelperLabels = Map.empty
         FunctionName = func.Name; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_arm64_layout"
     }
@@ -255,6 +321,7 @@ let private generatedEntryTransfers
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
         PlannedListDecHelperLabels = Map.empty
+        PlannedGenericDecHelperLabels = Map.empty
         FunctionName = func.Name
         InstructionSite = ""
         StackSize = func.StackSize
@@ -396,6 +463,7 @@ let private convertRawAlloc
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
         PlannedListDecHelperLabels = Map.empty
+        PlannedGenericDecHelperLabels = Map.empty
         FunctionName = "test"
         InstructionSite = "test_0"
         StackSize = 0
@@ -1670,6 +1738,8 @@ let tests : (string * (unit -> TestResult)) list = [
     ("RawAlloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)
     ("Runtime print string length uses full immediate", testRuntimePrintStringLengthUsesFullImmediate)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
+    ("Generic release plan is outlined once", testGenericReleasePlanIsOutlinedOnce)
+    ("Small generic release plan remains inline", testSmallGenericReleasePlanRemainsInline)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
     ("List tuple3 closure/list/dict-list uses typed dict helper", testListTuple3ClosureListDictListValueUsesTypedDictHelper)
