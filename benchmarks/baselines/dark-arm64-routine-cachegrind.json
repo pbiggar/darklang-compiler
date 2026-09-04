@@ -10,91 +10,91 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
   "contract_sha256": "b4e6ba180a5f68f107005cf8867371144b93d3ed5326517cea45284c74fa6cc2",
-  "generated_at": "2026-09-04T08:17:14+00:00",
+  "generated_at": "2026-09-04T08:51:00+00:00",
   "compiler": {
-    "commit": "330ed87145a8547da711a18ad814cea985a941cd",
-    "subject": "Fast-path Int64 CLI arguments"
+    "commit": "d0c8f9473a390f2169178522d407586ab99f21e4",
+    "subject": "Optimize no-op string trimming"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 9303378209
+      "instructions": 9303384354
     },
     {
       "name": "binary_trees",
-      "instructions": 635992363
+      "instructions": 635998749
     },
     {
       "name": "collatz",
-      "instructions": 70192376
+      "instructions": 70195999
     },
     {
       "name": "edigits",
-      "instructions": 4478506504
+      "instructions": 4478513012
     },
     {
       "name": "factorial",
-      "instructions": 60174
+      "instructions": 66807
     },
     {
       "name": "fasta",
-      "instructions": 489038565
+      "instructions": 489042185
     },
     {
       "name": "fib",
-      "instructions": 388193228
+      "instructions": 388196363
     },
     {
       "name": "leibniz",
-      "instructions": 850004779
+      "instructions": 850008768
     },
     {
       "name": "mandelbrot",
-      "instructions": 16360550
+      "instructions": 16366939
     },
     {
       "name": "matmul",
-      "instructions": 1947581369
+      "instructions": 1947584623
     },
     {
       "name": "merkletrees",
-      "instructions": 386665634
+      "instructions": 386671901
     },
     {
       "name": "nbody",
-      "instructions": 942005504
+      "instructions": 942009127
     },
     {
       "name": "nqueen",
-      "instructions": 212395040
+      "instructions": 212398175
     },
     {
       "name": "pisum",
-      "instructions": 40022269
+      "instructions": 40029024
     },
     {
       "name": "primes",
-      "instructions": 1896578
+      "instructions": 1900079
     },
     {
       "name": "quicksort",
-      "instructions": 218987023
+      "instructions": 218993531
     },
     {
       "name": "spectral_norm",
-      "instructions": 71806288
+      "instructions": 71812677
     },
     {
       "name": "sum_to_n",
-      "instructions": 68255
+      "instructions": 75010
     },
     {
       "name": "tak",
-      "instructions": 48010226
+      "instructions": 48022635
     },
     {
       "name": "tinytemplate",
-      "instructions": 2426443047
+      "instructions": 1117947731
     }
   ]
 }
