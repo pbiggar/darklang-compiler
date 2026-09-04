@@ -17,6 +17,7 @@ let private context : CodeGen.CodeGenContext = {
     ClosureCaptureTypes = Map.empty
     PlannedListDecHelperLabels = Map.empty
     FunctionName = "parallel_move_fixture"
+    InstructionSite = "fixture_0"
     StackSize = 0
     UsedCalleeSaved = []
     HeapOverflowLabel = "__heap_oom_parallel_move_fixture"

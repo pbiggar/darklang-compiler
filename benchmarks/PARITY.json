@@ -173,7 +173,7 @@
     },
     "tinytemplate": {
       "status": "comparable",
-      "dark_sha256": "6d3f4fa7637b1e98595012c8194b2dc722ea41e1616c2fc74510bbe63e017c6c",
+      "dark_sha256": "51c47ad2e0c474e6947e9c319580875070d3c9576fccecbdbba9edb442103e6f",
       "rust_sha256": "8d48482f6e4d62cc12b31f79e9d713be8d94f1d392b7088c20eeb95261c474c1",
       "rust_tree_sha256": "227382068ebda723333d617219a416f34759e29d47d5ce12f43fcd093e088c71",
       "quick": {

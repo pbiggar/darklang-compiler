@@ -460,6 +460,19 @@ let testParsesEscapedBackslashBeforeNAsLiteralText () : TestResult =
             | _ ->
                 Error $"Expected exactly 1 parsed test, got {tests.Length}")
 
+let testParsesRepeatedProcessArgumentsInOrder () : TestResult =
+    let testSource = "Stdlib.Cli.Args.int64(0I) = Ok(100L) arg=\"100\" arg=\"two words\"\n"
+
+    withTempFileNamed "test.e2e" testSource (fun path ->
+        match parseE2ETestFile path with
+        | Error msg ->
+            Error $"Expected process arguments to parse, but got error: {msg}"
+        | Ok tests ->
+            match tests with
+            | [ test ] when test.Arguments = ["100"; "two words"] -> Ok ()
+            | [ test ] -> Error $"Unexpected process arguments: {test.Arguments}"
+            | _ -> Error $"Expected exactly 1 parsed test, got {tests.Length}")
+
 let tests = [
     ("parses multiline expectation on next line", testParsesMultilineExpectationOnNextLine)
     ("parses skip attribute", testParsesSkipAttribute)
@@ -479,4 +492,5 @@ let tests = [
     ("parses multiline Dict rhs without preamble leakage", testParsesMultilineDictExpectationWithoutPreambleLeakage)
     ("parses sqlerror shorthand expectation", testParsesSqlErrorExpectationShorthand)
     ("parses escaped backslash before n as literal text", testParsesEscapedBackslashBeforeNAsLiteralText)
+    ("parses repeated process arguments in order", testParsesRepeatedProcessArgumentsInOrder)
 ]

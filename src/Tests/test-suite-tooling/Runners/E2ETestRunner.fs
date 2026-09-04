@@ -1020,6 +1020,7 @@ let private buildCompilerOptions (test: E2ETest)
 
 let private tryExecuteBinary
     (target: Platform.Target)
+    (arguments: string list)
     (stdin: TestDSL.E2EFormat.TestStdin)
     (binary: byte array)
     : Result<CompilerLibrary.ExecutionOutput, string> =
@@ -1028,10 +1029,11 @@ let private tryExecuteBinary
         | TestDSL.E2EFormat.Closed -> CompilerLibrary.Closed
         | TestDSL.E2EFormat.Bytes value ->
             value |> System.Text.Encoding.UTF8.GetBytes |> CompilerLibrary.Bytes
-    try Ok (CompilerLibrary.executeCaptured target 0 input binary)
+    try Ok (CompilerLibrary.executeCapturedWithArguments target 0 arguments input binary)
     with ex -> Error ex.Message
 
 let private compileAndRun
+    (arguments: string list)
     (stdin: TestDSL.E2EFormat.TestStdin)
     (request: CompilerLibrary.CompileRequest)
     : E2ERun =
@@ -1040,7 +1042,7 @@ let private compileAndRun
     | Error err ->
         CompileFailed (1, err, compileReport.CompileTime)
     | Ok binary ->
-        match tryExecuteBinary compileReport.Target stdin binary with
+        match tryExecuteBinary compileReport.Target arguments stdin binary with
         | Ok execResult ->
             Ran (execResult.ExitCode, execResult.Stdout, execResult.Stderr, compileReport.CompileTime, execResult.RuntimeTime)
         | Error err ->
@@ -1116,7 +1118,7 @@ let runE2ETestWithPreambleContext
             PassTimingRecorder = passTimingRecorder
             Session = session
         }
-        let run = compileAndRun test.Stdin request
+        let run = compileAndRun test.Arguments test.Stdin request
         let primaryResult = evaluateExpectations test run
 
         let shouldTryRawPreambleFallback =
@@ -1151,7 +1153,7 @@ let runE2ETestWithPreambleContext
                 PassTimingRecorder = passTimingRecorder
                 Session = session
             }
-            let fallbackRun = compileAndRun test.Stdin fallbackRequest
+            let fallbackRun = compileAndRun test.Arguments test.Stdin fallbackRequest
             match evaluateExpectations test fallbackRun with
             | Ok _ as success ->
                 success

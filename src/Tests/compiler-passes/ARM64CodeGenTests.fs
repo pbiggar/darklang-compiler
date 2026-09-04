@@ -176,7 +176,7 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let ctx : CodeGen.CodeGenContext = {
         Target = target; Options = CodeGen.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; PlannedListDecHelperLabels = Map.empty
-        FunctionName = func.Name; StackSize = 0; UsedCalleeSaved = []
+        FunctionName = func.Name; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_arm64_layout"
     }
     match CodeGen.convertFunction [] ctx func with
@@ -256,6 +256,7 @@ let private generatedEntryTransfers
         ClosureCaptureTypes = Map.empty
         PlannedListDecHelperLabels = Map.empty
         FunctionName = func.Name
+        InstructionSite = ""
         StackSize = func.StackSize
         UsedCalleeSaved = func.UsedCalleeSaved
         HeapOverflowLabel = $"__heap_oom_{func.Name}"
@@ -396,6 +397,7 @@ let private convertRawAlloc
         ClosureCaptureTypes = Map.empty
         PlannedListDecHelperLabels = Map.empty
         FunctionName = "test"
+        InstructionSite = "test_0"
         StackSize = 0
         UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_test"

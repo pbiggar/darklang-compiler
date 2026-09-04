@@ -29,6 +29,8 @@ match Stdlib.Cli.Env.get("PATH") with | Some(path) -> Stdlib.String.length(path)
 // are values, so command-line programs must handle absent or invalid input.
 match Stdlib.Cli.Args.int64(999I) with | Error(message) -> Stdlib.String.length(message) > 0I | Ok(_) -> false = true
 
+let benchmarkArgForCleanup(index: Int): Int64 = match Stdlib.Cli.Args.int64(index) with | Ok(value) -> value | Error(message) -> Builtin.testRuntimeError(message) let result = benchmarkArgForCleanup(0I) + benchmarkArgForCleanup(1I) in Builtin.printLine(Stdlib.Int64.toString(result)) = stdout="10100\n" arg="100" arg="10000" // inlined successful integer arguments survive cleanup
+
 // CLI argument lookup must work from a nested non-tail frame: argv is process
 // state, rather than state held in an allocator-visible register.
 let argvMissingFromNestedFrame(depth: Int64): Bool =

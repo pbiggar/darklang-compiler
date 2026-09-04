@@ -48,6 +48,9 @@ type CodeGenContext = {
     /// Reuses labels already derived while planning generic list release helpers.
     PlannedListDecHelperLabels: Map<ANF.RcReleasePlan, string>
     FunctionName: string
+    /// Deterministic block/instruction identity for labels emitted by an effect.
+    /// One source effect can be cloned into multiple CFG locations.
+    InstructionSite: string
     // Function context for tail call epilogue generation
     StackSize: int
     UsedCalleeSaved: LIR.PhysReg list
@@ -4551,7 +4554,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
 
     | LIR.StdoutWrite (effectId, value, appendNewline) ->
         let syscalls = ARM64.targetSyscalls ctx.Target
-        let label suffix = $"__presentation_{ctx.FunctionName}_{effectId}_{suffix}"
+        let label suffix = $"__presentation_{ctx.FunctionName}_{effectId}_{ctx.InstructionSite}_{suffix}"
         let writeLoop prefix =
             let loopLabel = label $"{prefix}_write"
             let retryLabel = label $"{prefix}_retry"
@@ -4638,7 +4641,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
             let syscalls = ARM64.targetSyscalls ctx.Target
-            let label suffix = $"__presentation_{ctx.FunctionName}_{effectId}_{suffix}"
+            let label suffix = $"__presentation_{ctx.FunctionName}_{effectId}_{ctx.InstructionSite}_{suffix}"
             let readLabel = label "stdin_read"
             let retryLabel = label "stdin_retry"
             let gotByteLabel = label "stdin_byte"
@@ -6302,7 +6305,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         lirFRegToARM64FReg delayMs
         |> Result.map (fun delayReg ->
             let syscalls = ARM64.targetSyscalls ctx.Target
-            let label suffix = $"__sleep_{ctx.FunctionName}_{effectId}_{suffix}"
+            let label suffix = $"__sleep_{ctx.FunctionName}_{effectId}_{ctx.InstructionSite}_{suffix}"
             let retryLabel = label "retry"
             let interruptedLabel = label "interrupted"
             let releaseLabel = label "release"
@@ -6529,7 +6532,13 @@ let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (nextBlock: LIR.B
     let (LIR.Label lbl) = block.Label
     let labelInstr = ARM64Symbolic.Label lbl
 
-    ResultList.collectResults (convertInstr ctx) block.Instrs
+    block.Instrs
+    |> List.mapi (fun index instr ->
+        let instructionCtx = {
+            ctx with InstructionSite = $"{lbl}_{index}"
+        }
+        convertInstr instructionCtx instr)
+    |> ResultList.collectResults id
     |> Result.bind (fun instrs ->
         let nextLabel = nextBlock |> Option.map (fun next -> let (LIR.Label label) = next.Label in label)
         convertTerminator epilogueLabel nextLabel block.Terminator
@@ -7804,6 +7813,7 @@ let private generatePreparedARM64WithOptionsAndCache
         ClosureCaptureTypes = programMetadata.Facts.ClosureCaptureTypes
         PlannedListDecHelperLabels = Map.empty
         FunctionName = ""
+        InstructionSite = ""
         StackSize = 0
         UsedCalleeSaved = []
         HeapOverflowLabel = ""

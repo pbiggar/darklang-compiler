@@ -2637,10 +2637,12 @@ let compile (request: CompileRequest) : CompileReport =
     let plan = buildCompilePlan request
     compileUserWithPlan plan
 
-/// Execute a compiled binary with finite stdin while capturing both output streams.
-let executeCaptured
+/// Execute a compiled binary with positional arguments and finite stdin while
+/// capturing both output streams.
+let executeCapturedWithArguments
     (target: Platform.Target)
     (verbosity: int)
+    (arguments: string list)
     (input: ExecutionInput)
     (binary: byte array)
     : ExecutionOutput =
@@ -2715,6 +2717,7 @@ let executeCaptured
                 execInfo.RedirectStandardError <- true
                 execInfo.RedirectStandardInput <- true
                 execInfo.UseShellExecute <- false
+                arguments |> List.iter execInfo.ArgumentList.Add
 
                 // Retry up to 3 times with small delay if we get "Text file busy"
                 let rec startWithRetry attempts =
@@ -2757,6 +2760,15 @@ let executeCaptured
             // Cleanup - ignore deletion errors
             tryDeleteFile tempPath
     result
+
+/// Execute a compiled binary with finite stdin while capturing both output streams.
+let executeCaptured
+    (target: Platform.Target)
+    (verbosity: int)
+    (input: ExecutionInput)
+    (binary: byte array)
+    : ExecutionOutput =
+    executeCapturedWithArguments target verbosity [] input binary
 
 /// Backward-compatible captured execution with an already-closed stdin stream.
 let execute (target: Platform.Target) (verbosity: int) (binary: byte array) : ExecutionOutput =

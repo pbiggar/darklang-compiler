@@ -37,6 +37,8 @@ type E2ETest = {
     Preamble: string
     ExpectedStdout: string option
     ExpectedStderr: string option
+    /// Positional command-line arguments supplied to the native process.
+    Arguments: string list
     Stdin: TestStdin
     OutputMatch: OutputMatch
     ExpectedExitCode: int
@@ -96,6 +98,7 @@ type private OptFlags = {
     DisableLIRPeephole: bool
     DisableFunctionTreeShaking: bool
     DisableLeakCheck: bool
+    Arguments: string list
     Stdin: TestStdin
     OutputMatch: OutputMatch
 }
@@ -121,6 +124,7 @@ let private defaultOptFlags = {
     DisableLIRPeephole = false
     DisableFunctionTreeShaking = false
     DisableLeakCheck = false
+    Arguments = []
     Stdin = Closed
     OutputMatch = NormalizedText
 }
@@ -344,6 +348,7 @@ let private isAttributeKey (key: string) : bool =
     | "exit"
     | "stdout"
     | "stderr"
+    | "arg"
     | "skip"
     | "no_free_list"
     | "disable_leak_check"
@@ -741,6 +746,14 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                                             match parseStringLiteral value with
                                             | Ok s -> stderr <- Some s
                                             | Error e -> errors <- e :: errors
+                                        | "arg" ->
+                                            match parseStringLiteral value with
+                                            | Ok argument ->
+                                                optFlags <- {
+                                                    optFlags with
+                                                        Arguments = optFlags.Arguments @ [argument]
+                                                }
+                                            | Error e -> errors <- $"Invalid argument: {e}" :: errors
                                         | "skip" ->
                                             sawRuntimeExpectationAttribute <- true
                                             match parseStringLiteral value with
@@ -894,6 +907,7 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 Preamble = preamble
                 ExpectedStdout = stdout
                 ExpectedStderr = stderr
+                Arguments = optFlags.Arguments
                 Stdin = optFlags.Stdin
                 OutputMatch = optFlags.OutputMatch
                 ExpectedExitCode = exitCode
