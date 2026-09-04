@@ -294,6 +294,7 @@ let private printLIRProgram (title: string) (program: LIR.Program) : unit =
 
 /// Run SSA + MIR/LIR optimizations, returning an optimized LIR program
 let private compileMirToLir
+    (arch: Platform.Arch)
     (verbosity: int)
     (options: CompilerOptions)
     (sw: Stopwatch)
@@ -342,7 +343,7 @@ let private compileMirToLir
 
     if verbosity >= 1 then println $"  [4/7] MIR → LIR{suffix}..."
     let lirStart = sw.Elapsed.TotalMilliseconds
-    let lirResult = MIR_to_LIR.toLIR optimizedProgram
+    let lirResult = MIR_to_LIR.toLIRFor arch optimizedProgram
     match lirResult with
     | Error err -> Error $"LIR conversion error: {err}"
     | Ok lirProgram ->
@@ -436,7 +437,7 @@ let private lowerToAllocatedLir
                 if verbosity >= 2 then
                     let t = System.Math.Round(mirElapsed, 1)
                     println $"        {t}ms"
-                compileMirToLir verbosity options sw passTimingRecorder stageSuffix mirProgram
+                compileMirToLir (Platform.archFor target) verbosity options sw passTimingRecorder stageSuffix mirProgram
                 |> Result.bind (fun lirProgram ->
                     if verbosity >= 1 then println "  [5/7] Register Allocation..."
                     let allocStart = sw.Elapsed.TotalMilliseconds
@@ -717,10 +718,10 @@ let private generateBinary
 
             if verbosity >= 1 then println (emitLabel.Replace("{format}", "ELF"))
             let emitStart = sw.Elapsed.TotalMilliseconds
+            let x64StaticStringPool = X86_64_Resolve.collectStringPool x86Instructions
             match X86_64_Resolve.resolveAndEncode x86Instructions with
             | Error err -> Error $"x86-64 resolve error: {err}"
             | Ok resolveResult ->
-                let (_, x64StaticStringPool) = LiteralPool.addString LiteralPool.emptyStringPool ""
                 // Patch data labels (e.g., leak counter) if there are deferred fixups
                 let patchedResult =
                     if List.isEmpty resolveResult.DeferredFixups then
@@ -730,16 +731,8 @@ let private generateBinary
                         let programHeaderSize = 56
                         let codeFileOffset = elfHeaderSize + programHeaderSize
                         let codeSize = resolveResult.MachineCode.Length
-                        let alignedDataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
-                        // The canonical empty dynamic buffer occupies the first
-                        // 16 bytes of the x64 literal data section.
-                        let emptyBufferFileOffset = alignedDataStart
-                        let leakCounterFileOffset = alignedDataStart + 16
                         let dataLabels =
-                            Map.ofList [
-                                ("_empty_dynamic_buffer", emptyBufferFileOffset)
-                                ("_leak_count", leakCounterFileOffset)
-                            ]
+                            X86_64_Resolve.dataLabelOffsets codeFileOffset codeSize x64StaticStringPool
                         X86_64_Resolve.patchDataLabels resolveResult dataLabels codeFileOffset
                 match patchedResult with
                 | Error err -> Error $"x86-64 data label error: {err}"

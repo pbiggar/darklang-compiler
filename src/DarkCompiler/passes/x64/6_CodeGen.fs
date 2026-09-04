@@ -176,42 +176,13 @@ let private emitStringByteCopy
             loadImm64 valueReg value
             @ [X86_64.MOV_store (destReg, int32 offset, valueReg)])
 
-/// Allocate a heap string from a literal value: [length:8][data:N][padding][refcount:8].
-/// Bump-allocates from heapPtr, stores length, copies bytes, and sets the
-/// refcount sentinel so dynamic RC operations treat it as immutable literal data.
-/// Returns instructions that leave destReg pointing to the new string.
+/// Load a string from the executable's immutable literal pool.
 let private emitStringLiteral (destReg: X86_64.Reg) (value: string) : X86_64.Instr list =
-    if value = "" then
-        [X86_64.LEA_rip (destReg, "_empty_dynamic_buffer")]
-    else
-        let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
-        let len = strBytes.Length
-        let totalSize = ((len + 16) + 7) &&& (~~~7)
-        let valueReg = if destReg = scratch then X86_64.RCX else scratch
-        let preserveValueReg = if destReg = scratch then [X86_64.PUSH valueReg] else []
-        let restoreValueReg = if destReg = scratch then [X86_64.POP valueReg] else []
-        let alloc = [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, int32 totalSize)]
-        let storeLen = loadImm64 valueReg (int64 len) @ [X86_64.MOV_store (destReg, 0, valueReg)]
-        let copyBytes = emitStringByteCopy valueReg destReg strBytes
-        let rcOffset = 8 + ((len + 7) &&& (~~~7))
-        let storeRefCount =
-            loadImm64 valueReg 0x7FFFFFFFFFFFFFFFL
-            @ [X86_64.MOV_store (destReg, int32 rcOffset, valueReg)]
-        preserveValueReg @ alloc @ storeLen @ copyBytes @ storeRefCount @ restoreValueReg
+    [X86_64.LEA_rip (destReg, X86_64.stringLiteralLabel value)]
 
-/// Allocate a heap string without refcount (for file-op path buffers).
-/// Layout: [length:8][data:N]. Returns instructions with destReg = string ptr.
+/// File-operation path buffers use the same length-prefixed static layout.
 let private emitStringLiteralNoRefCount (destReg: X86_64.Reg) (value: string) : X86_64.Instr list =
-    let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
-    let len = strBytes.Length
-    let totalSize = ((len + 16) + 7) &&& (~~~7)
-    let valueReg = if destReg = scratch then X86_64.RCX else scratch
-    let preserveValueReg = if destReg = scratch then [X86_64.PUSH valueReg] else []
-    let restoreValueReg = if destReg = scratch then [X86_64.POP valueReg] else []
-    let alloc = [X86_64.MOV_reg (destReg, heapPtr); X86_64.ADD_imm (heapPtr, int32 totalSize)]
-    let storeLen = loadImm64 valueReg (int64 len) @ [X86_64.MOV_store (destReg, 0, valueReg)]
-    let copyBytes = emitStringByteCopy valueReg destReg strBytes
-    preserveValueReg @ alloc @ storeLen @ copyBytes @ restoreValueReg
+    emitStringLiteral destReg value
 
 /// Heap size for mmap (512 MB)
 let private heapMmapSizeBytes = 512L * 1024L * 1024L
@@ -3578,47 +3549,18 @@ let private translateInstr
                 else
                     Ok (loadImm64 scratch bits @ [X86_64.MOV_store (addrReg, int32 offset, scratch)])
             | LIR.StringSymbol value ->
-                // Create heap string from literal, store pointer
-                let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
-                let len = strBytes.Length
-                let totalSize = ((len + 16) + 7) &&& (~~~7)
-                let alloc = [X86_64.MOV_reg (scratch, heapPtr); X86_64.ADD_imm (heapPtr, int32 totalSize)]
-                let storeLen = loadImm64 X86_64.RCX (int64 len) @ [X86_64.MOV_store (scratch, 0, X86_64.RCX)]
-                let copyBytes =
-                    let chunks = (len + 7) / 8
-                    [0 .. chunks - 1] |> List.collect (fun i ->
-                        let off = 8 + i * 8
-                        let chunkLen = min 8 (len - i * 8)
-                        let v = [0..chunkLen-1] |> List.fold (fun acc j ->
-                            let bi = i * 8 + j
-                            if bi < strBytes.Length then acc ||| (int64 strBytes.[bi] <<< (j * 8)) else acc) 0L
-                        loadImm64 X86_64.RCX v @ [X86_64.MOV_store (scratch, int32 off, X86_64.RCX)])
-                let storeRC =
-                    let rcOff = 8 + ((len + 7) &&& (~~~7))
-                    loadImm64 X86_64.RCX 0x7FFFFFFFFFFFFFFFL @ [X86_64.MOV_store (scratch, int32 rcOff, X86_64.RCX)]
-                if addrReg = X86_64.RCX then
-                    // RCX is both the address and the string initializer scratch.
-                    // Restore the address after materializing the string.
-                    Ok ([X86_64.PUSH X86_64.RCX]
-                        @ alloc @ storeLen @ copyBytes @ storeRC
-                        @ [X86_64.POP X86_64.RCX
-                           X86_64.MOV_store (X86_64.RCX, int32 offset, scratch)])
-                elif addrReg = scratch then
-                    // Preserve both the record address in R11 and any unrelated
-                    // live X3 value in RCX while the string is initialized.
+                if addrReg = scratch then
+                    // Preserve both the record address in R11 and an unrelated
+                    // live X3 value while R11 receives the literal address.
                     Ok ([X86_64.PUSH X86_64.RCX
                          X86_64.PUSH scratch]
-                        @ alloc @ storeLen @ copyBytes @ storeRC
+                        @ emitStringLiteral scratch value
                         @ [X86_64.POP X86_64.RCX
                            X86_64.MOV_store (X86_64.RCX, int32 offset, scratch)
                            X86_64.POP X86_64.RCX])
                 else
-                    // RCX is allocatable, so preserve it while using it to
-                    // initialize the string stored into another record.
-                    Ok ([X86_64.PUSH X86_64.RCX]
-                        @ alloc @ storeLen @ copyBytes @ storeRC
-                        @ [X86_64.MOV_store (addrReg, int32 offset, scratch)
-                           X86_64.POP X86_64.RCX])
+                    Ok (emitStringLiteral scratch value
+                        @ [X86_64.MOV_store (addrReg, int32 offset, scratch)])
             | LIR.StackSlot stackOffset ->
                 let adjOff = adjustStackOffset ctx stackOffset
                 if addrReg = scratch then
@@ -4000,6 +3942,7 @@ let private translateInstr
             let done1 = freshLabel "strcat_d1"
             let copy2 = freshLabel "strcat_c2"
             let done2 = freshLabel "strcat_d2"
+            let doneAllocation = freshLabel "strcat_alloc_ok"
 
             // Load RIGHT first (if Reg, no allocation needed), then LEFT
             // (which might allocate for StringSymbol). This avoids clobbering
@@ -4061,7 +4004,13 @@ let private translateInstr
                        X86_64.MOV_reg (X86_64.R10, X86_64.RCX)
                        X86_64.ADD_imm (X86_64.R10, 23)
                        X86_64.AND_imm (X86_64.R10, -8)
-                       X86_64.ADD_reg (heapPtr, X86_64.R10)]
+                       X86_64.ADD_reg (heapPtr, X86_64.R10)
+                       X86_64.MOV_reg (scratch, heapPtr)
+                       X86_64.SUB_reg (scratch, freeListBase)
+                       X86_64.CMP_imm (scratch, int32 heapMmapSizeBytes)
+                       X86_64.Jcc (X86_64.LE, doneAllocation)]
+                    @ genOomJump ()
+                    @ [X86_64.Label doneAllocation]
 
                     // Store total length at [RBX]
                     @ [X86_64.MOV_store (X86_64.RBX, 0, X86_64.RCX)]

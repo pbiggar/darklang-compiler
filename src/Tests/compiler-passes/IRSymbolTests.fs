@@ -113,7 +113,7 @@ let testMirToLirAllocatesFloatHeapStoreTemporary () : TestResult =
           CFG = cfg
           FloatRegs = Set.ofList [ 1 ] }
 
-    match MIR_to_LIR.toLIR (MIR.Program ([func], Map.empty, Map.empty)) with
+    match MIR_to_LIR.toLIRFor Platform.X86_64 (MIR.Program ([func], Map.empty, Map.empty)) with
     | Error err -> Error $"MIR→LIR failed: {err}"
     | Ok (LIR.Program ([lirFunc], _, _)) ->
         let instructions =

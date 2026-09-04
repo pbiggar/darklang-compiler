@@ -347,6 +347,7 @@ let buildFloatArgMoves
 /// Convert MIR instruction to LIR instructions
 /// floatRegs: Set of VReg IDs that hold float values (from MIR.Function.FloatRegs)
 let selectInstr
+    (arch: Platform.Arch)
     (instr: MIR.Instr)
     (variantRegistry: MIR.VariantRegistry)
     (recordRegistry: MIR.RecordRegistry)
@@ -1064,7 +1065,10 @@ let selectInstr
             // temporary. A fixed scratch register can alias the scratch used to
             // reload a spilled destination address on x86-64.
             let srcFReg = vregToLIRFReg vreg
-            let (tempReg, nextState) = freshTempReg state
+            let (tempReg, nextState) =
+                match arch with
+                | Platform.ARM64 -> (LIR.Physical LIR.X9, state)
+                | Platform.X86_64 -> freshTempReg state
             // After FpToGp, value is in GP register, so use None for valueType
             // (otherwise CodeGen would try to treat the GP register as a float register)
             Ok (
@@ -1866,6 +1870,7 @@ let integerErrorBlock (label: LIR.Label) (message: string) : LIR.BasicBlock =
     }
 
 let selectBlocksWithModuloChecks
+    (arch: Platform.Arch)
     (_functionName: string)
     (block: MIR.BasicBlock)
     (variantRegistry: MIR.VariantRegistry)
@@ -1886,7 +1891,7 @@ let selectBlocksWithModuloChecks
             // loop invariant for later optimization passes.
             | MIR.BinOp (_, MIR.Div, _, MIR.Int64Const divisor, operandType)
                 when operandType <> AST.TFloat64 && divisor <> 0L ->
-                match selectInstr instr variantRegistry recordRegistry floatRegs currentState with
+                match selectInstr arch instr variantRegistry recordRegistry floatRegs currentState with
                 | Error err -> Error err
                 | Ok (lirInstrs, nextState) ->
                     let nextInstrsRev =
@@ -1898,7 +1903,7 @@ let selectBlocksWithModuloChecks
                 match ensureInRegister right currentState with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg, stateAfterRight) ->
-                    match selectInstr instr variantRegistry recordRegistry floatRegs stateAfterRight with
+                    match selectInstr arch instr variantRegistry recordRegistry floatRegs stateAfterRight with
                     | Error err -> Error err
                     | Ok (divInstrs, nextState) ->
                         let nextLabel = LIR.Label $"{baseLabel}_div_cont_{counter}"
@@ -1919,7 +1924,7 @@ let selectBlocksWithModuloChecks
                 when operandType <> AST.TFloat64
                      && ((isUnsignedIntegerType operandType && divisor <> 0L)
                          || (shouldCheckNegativeDivisor operandType && divisor > 0L)) ->
-                match selectInstr instr variantRegistry recordRegistry floatRegs currentState with
+                match selectInstr arch instr variantRegistry recordRegistry floatRegs currentState with
                 | Error err -> Error err
                 | Ok (lirInstrs, nextState) ->
                     let nextInstrsRev =
@@ -1969,7 +1974,7 @@ let selectBlocksWithModuloChecks
                             zeroCheckBlock :: blocksRev
                     loop rest (counter + 1) nextLabel (List.rev modInstrs) checkBlocksRev nextState
             | _ ->
-                match selectInstr instr variantRegistry recordRegistry floatRegs currentState with
+                match selectInstr arch instr variantRegistry recordRegistry floatRegs currentState with
                 | Error err -> Error err
                 | Ok (lirInstrs, nextState) ->
                     let nextInstrsRev =
@@ -1993,6 +1998,7 @@ let selectBlocksWithModuloChecks
 
 /// Convert MIR CFG to LIR CFG
 let selectCFG
+    (arch: Platform.Arch)
     (functionName: string)
     (cfg: MIR.CFG)
     (variantRegistry: MIR.VariantRegistry)
@@ -2012,7 +2018,7 @@ let selectCFG
         match remaining with
         | [] -> Ok (List.rev blocksAcc |> List.concat, labelMapAcc |> Map.ofList, currentState)
         | (_label, block) :: rest ->
-            match selectBlocksWithModuloChecks functionName block variantRegistry recordRegistry returnType floatRegs errorLabels currentState with
+            match selectBlocksWithModuloChecks arch functionName block variantRegistry recordRegistry returnType floatRegs errorLabels currentState with
             | Error err -> Error err
             | Ok (lirBlocks, finalLabel, nextState) ->
                 let originalLabel = convertLabel block.Label
@@ -2142,8 +2148,8 @@ let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, stri
     | Some err -> Error err
     | None -> Ok ()
 
-/// Convert MIR program to LIR
-let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
+/// Convert a MIR program to LIR for a concrete target architecture.
+let toLIRFor (arch: Platform.Arch) (program: MIR.Program) : Result<LIR.Program, string> =
     let (MIR.Program (mirFuncs, variantRegistry, recordRegistry)) = program
 
     // Pre-check: verify all functions have ≤8 parameters and calls have ≤8 arguments
@@ -2163,7 +2169,7 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
                 ModuloNegativeDivisor = LIR.Label $"__modulo_negative_divisor_error_{mirFunc.Name}"
             }
         let tempState = initTempState mirFunc
-        match selectCFG mirFunc.Name mirFunc.CFG variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs errorLabels tempState with
+        match selectCFG arch mirFunc.Name mirFunc.CFG variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs errorLabels tempState with
         | Error err -> Error err
         | Ok lirCFG ->
             // Convert MIR TypedParams to LIR TypedLIRParams
@@ -2199,3 +2205,7 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
             |> Map.map (fun _ fields ->
                 fields |> List.map (fun field -> (field.Name, field.Type)))
         Ok (LIR.Program (lirFuncs, lirVariantRegistry, lirRecordRegistry))
+
+/// ARM64 remains the default for target-neutral pass fixtures.
+let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
+    toLIRFor Platform.ARM64 program

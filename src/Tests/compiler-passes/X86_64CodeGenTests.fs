@@ -187,6 +187,7 @@ let private runLIRProgramFullWithOptionsAndArgs
     match CodeGen_X86_64.translateProgram (completeFixtureVariants program) enableLeakCheck with
     | Error e -> Error $"Codegen error: {e}"
     | Ok instrs ->
+        let stringPool = X86_64_Resolve.collectStringPool instrs
         match X86_64_Resolve.resolveAndEncode instrs with
         | Error e -> Error $"Resolve error: {e}"
         | Ok unresolvedResult ->
@@ -198,8 +199,8 @@ let private runLIRProgramFullWithOptionsAndArgs
                     let programHeaderSize = 56
                     let codeFileOffset = elfHeaderSize + programHeaderSize
                     let codeSize = unresolvedResult.MachineCode.Length
-                    let alignedDataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
-                    let dataLabels = Map.ofList [("_leak_count", alignedDataStart)]
+                    let dataLabels =
+                        X86_64_Resolve.dataLabelOffsets codeFileOffset codeSize stringPool
                     X86_64_Resolve.patchDataLabels unresolvedResult dataLabels codeFileOffset
 
             match patchedResult with
@@ -207,7 +208,7 @@ let private runLIRProgramFullWithOptionsAndArgs
             | Ok resolveResult ->
             let binary =
                 Binary_Generation_ELF_X86_64.createExecutableWithPools
-                    resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool enableLeakCheck 0
+                    resolveResult.MachineCode stringPool LiteralPool.emptyFloatPool enableLeakCheck 0
             let tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.Guid.NewGuid().ToString("N"))
             try
                 do
@@ -253,13 +254,23 @@ let private runLIRProgram (program: LIR.Program) : Result<int, string> =
     match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
     | Error e -> Error $"Codegen error: {e}"
     | Ok instrs ->
+        let stringPool = X86_64_Resolve.collectStringPool instrs
         match X86_64_Resolve.resolveAndEncode instrs with
         | Error e -> Error $"Resolve error: {e}"
-        | Ok resolveResult ->
-            let binary =
-                Binary_Generation_ELF_X86_64.createExecutableWithPools
-                    resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0
-            X86_64BinaryTests.runElfBinary binary
+        | Ok unresolvedResult ->
+            let codeFileOffset = 64 + 56
+            let dataLabels =
+                X86_64_Resolve.dataLabelOffsets
+                    codeFileOffset
+                    unresolvedResult.MachineCode.Length
+                    stringPool
+            match X86_64_Resolve.patchDataLabels unresolvedResult dataLabels codeFileOffset with
+            | Error e -> Error $"Data label error: {e}"
+            | Ok resolveResult ->
+                let binary =
+                    Binary_Generation_ELF_X86_64.createExecutableWithPools
+                        resolveResult.MachineCode stringPool LiteralPool.emptyFloatPool false 0
+                X86_64BinaryTests.runElfBinary binary
 
 let private generatedCallLabels (program: LIR.Program) : Result<string list, string> =
     match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
@@ -413,6 +424,21 @@ let testStringLiteralSupportsX12Destination () : Result<unit, string> =
         if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
         elif stdout <> "hello" then Error $"Expected X12 literal 'hello', got '{stdout}'"
         else Ok ()
+
+/// Literal strings belong in the executable's immutable literal pool. Emitting
+/// bump-allocation instructions here leaks one heap object per execution and can
+/// exhaust the runtime heap in string-heavy code.
+let testStringLiteralUsesStaticStorage () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.Mov (LIR.Physical LIR.X1, LIR.StringSymbol "pooled") ]
+            LIR.Ret
+
+    match CodeGen_X86_64.translateProgram program false with
+    | Error error -> Error error
+    | Ok instructions ->
+        if instructions |> List.exists (function | X86_64.LEA_rip (_, label) when label.StartsWith("__dark_string_literal_") -> true | _ -> false) then Ok ()
+        else Error "Expected x86 string literal to be loaded from static storage"
 
 /// Initializing a string literal field uses RCX internally. A separate live X3
 /// value must survive when the containing record is held in another register.
@@ -5581,6 +5607,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR HeapAlloc x64 reuses a block into X3", testHeapAllocReusesBlockIntoX3)
     ("LIR string x64 refcount supports X3", testStringRefCountSupportsX3)
     ("LIR string literal x64 supports X12 destination", testStringLiteralSupportsX12Destination)
+    ("LIR string literal x64 uses static storage", testStringLiteralUsesStaticStorage)
     ("LIR string literal x64 heap store preserves X3", testStringLiteralHeapStorePreservesX3)
     ("LIR x64 RawSlotInit retains X12 value", testRawSlotInitRetainsX12Value)
     ("LIR StringConcat x64 preserves X4 left across literal right", testStringConcatPreservesX4LeftAcrossLiteralRight)

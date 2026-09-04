@@ -100,6 +100,44 @@ let private encodeInstruction (state: EncodeState) (instr: Instr) : Result<Encod
 
 type private PatchState = { Errors: string list }
 
+/// Collect every symbolic string reference in first-use order. The empty string
+/// is always first because runtime helpers also address that canonical buffer.
+let collectStringPool (instructions: Instr list) : LiteralPool.StringPool =
+    let (_, initial) = LiteralPool.addString LiteralPool.emptyStringPool ""
+    instructions
+    |> List.fold (fun pool instruction ->
+        match instruction with
+        | LEA_rip (_, label) ->
+            match X86_64.tryStringLiteralValue label with
+            | Some value -> LiteralPool.addString pool value |> snd
+            | None -> pool
+        | _ -> pool) initial
+
+let private stringEntrySize (length: int) : int =
+    8 + ((length + 7) &&& (~~~7)) + 8
+
+/// Resolve symbolic literal/runtime labels against the data segment layout used
+/// by Binary_Generation_ELF_X86_64.
+let dataLabelOffsets
+    (codeFileOffset: int)
+    (codeSize: int)
+    (stringPool: LiteralPool.StringPool)
+    : Map<string, int> =
+    let dataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
+    let (dataEnd, literalLabels) =
+        stringPool.Strings
+        |> Map.toList
+        |> List.sortBy fst
+        |> List.fold (fun (offset, labels) (_, (value, length)) ->
+            let labels = Map.add (X86_64.stringLiteralLabel value) offset labels
+            (offset + stringEntrySize length, labels)) (dataStart, Map.empty)
+    let emptyOffset =
+        Map.tryFind (X86_64.stringLiteralLabel "") literalLabels
+        |> Option.defaultValue dataStart
+    literalLabels
+    |> Map.add "_empty_dynamic_buffer" emptyOffset
+    |> Map.add "_leak_count" dataEnd
+
 /// Returns the final machine code bytes and label positions.
 let resolveAndEncode (instructions: Instr list) : Result<ResolveResult, string> =
     // Pass 1: encode all instructions, collect label positions and fixups

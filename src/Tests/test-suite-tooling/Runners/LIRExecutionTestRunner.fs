@@ -33,14 +33,16 @@ let private executableProgram program =
     | LIR.Program (functions, _, _) ->
         Error $"Executable LIR fixture requires one input function, got {List.length functions}"
 
-let private patchDeferredLabels enableLeakCheck (resolveResult: X86_64_Resolve.ResolveResult) =
+let private patchDeferredLabels
+    (stringPool: LiteralPool.StringPool)
+    (resolveResult: X86_64_Resolve.ResolveResult) =
     if List.isEmpty resolveResult.DeferredFixups then Ok resolveResult
-    elif not enableLeakCheck then Error "Executable LIR fixture produced unexpected deferred data labels"
     else
         let codeFileOffset = 64 + 56
         let codeSize = resolveResult.MachineCode.Length
-        let alignedDataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
-        X86_64_Resolve.patchDataLabels resolveResult (Map.ofList [ ("_leak_count", alignedDataStart) ]) codeFileOffset
+        let dataLabels =
+            X86_64_Resolve.dataLabelOffsets codeFileOffset codeSize stringPool
+        X86_64_Resolve.patchDataLabels resolveResult dataLabels codeFileOffset
 
 let private writeAndRun binary =
     let tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
@@ -85,13 +87,15 @@ let private execute program leakCheck =
     translate program leakCheck
     |> Result.mapError (fun msg -> $"Codegen error: {msg}")
     |> Result.bind (fun instructions ->
+        let stringPool = X86_64_Resolve.collectStringPool instructions
         X86_64_Resolve.resolveAndEncode instructions
-        |> Result.mapError (fun msg -> $"Resolve error: {msg}"))
-    |> Result.bind (patchDeferredLabels enableLeakCheck)
-    |> Result.bind (fun resolved ->
+        |> Result.mapError (fun msg -> $"Resolve error: {msg}")
+        |> Result.bind (patchDeferredLabels stringPool)
+        |> Result.map (fun resolved -> (resolved, stringPool)))
+    |> Result.bind (fun (resolved, stringPool) ->
         Binary_Generation_ELF_X86_64.createExecutableWithPools
             resolved.MachineCode
-            LiteralPool.emptyStringPool
+            stringPool
             LiteralPool.emptyFloatPool
             enableLeakCheck
             0

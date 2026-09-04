@@ -57,6 +57,20 @@ type Size =
     | DWord  // 32-bit
     | QWord  // 64-bit
 
+/// Literal values are carried in symbolic RIP-relative labels until ELF layout.
+/// The payload is kept verbatim: these labels are internal map keys, not names
+/// passed through an assembler.
+let stringLiteralLabelPrefix = "__dark_string_literal_data:"
+
+let stringLiteralLabel (value: string) : string =
+    stringLiteralLabelPrefix + value
+
+let tryStringLiteralValue (label: string) : string option =
+    if label.StartsWith(stringLiteralLabelPrefix, System.StringComparison.Ordinal) then
+        Some (label.Substring(stringLiteralLabelPrefix.Length))
+    else
+        None
+
 /// x86-64 instruction types
 type Instr =
     // Data movement
