@@ -1911,6 +1911,35 @@ let testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease () : Result<uni
         if output = "123" && leaks = "" then Ok ()
         else Error $"Expected live RAX value 123 and no leaks, got stdout '{output}' and stderr '{leaks}'"
 
+/// Test: nested release helpers are calls and must preserve live X1/RDI and
+/// X2/RSI values even though the surrounding LIR instruction is not a Call.
+let testGenericRefCountDecPreservesLiveArgumentRegsAcrossListFieldRelease () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let program =
+        makeSimpleProgram
+            [ LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+              LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 42L, None)
+              LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
+              LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+              LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+              LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X6), Some listType)
+              LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 123L)
+              LIR.Mov (LIR.Physical LIR.X2, LIR.Imm 456L)
+              LIR.RefCountDec
+                  (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata (AST.TTuple [listType])))
+              LIR.Add
+                  (LIR.Physical LIR.X0, LIR.Physical LIR.X1, LIR.Reg (LIR.Physical LIR.X2))
+              LIR.PrintInt64 (LIR.Physical LIR.X0) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error error -> Error error
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        let leaks = stderr.Trim()
+        if output = "579" && leaks = "" then Ok ()
+        else Error $"Expected live X1/X2 sum 579 and no leaks, got stdout '{output}' and stderr '{leaks}'"
+
 /// Test: x64 generic fixed-block RefCountDec preserves live RAX across nested dict field release.
 let testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease () : Result<unit, string> =
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
@@ -5498,6 +5527,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec uses planned helper for string keys and tuple/list values", testDictRefCountDecStringKeyTupleValueUsesPlannedHelper)
     ("LIR DictHeap RefCountDec releases sum string leaf values", testDictRefCountDecSumStringValue)
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
+    ("LIR generic RefCountDec preserves live argument regs across list field release", testGenericRefCountDecPreservesLiveArgumentRegsAcrossListFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across closure field release", testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across string field release", testGenericRefCountDecPreservesLiveRaxAcrossStringFieldRelease)

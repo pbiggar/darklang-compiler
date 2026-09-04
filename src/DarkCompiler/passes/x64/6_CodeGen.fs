@@ -1208,7 +1208,16 @@ and private genRefCountDecGenericWithPlan
     let noFreeLabel = freshLabel "rc_dec_nofree"
     let leakDec = genLeakCounterDec ctx
     let fieldReleases = genFixedBlockFieldReleases ctx releasePlan
-    let saveRegs = [X86_64.RAX; X86_64.RDX; X86_64.RCX; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
+    let saveRegs =
+        [ X86_64.RAX
+          X86_64.RDI
+          X86_64.RSI
+          X86_64.RDX
+          X86_64.RCX
+          X86_64.R8
+          X86_64.R9
+          X86_64.R10
+          scratch ]
     let saves = saveRegs |> List.map X86_64.PUSH
     let restores = saveRegs |> List.rev |> List.map X86_64.POP
     [X86_64.TEST_reg (addrReg, addrReg)
