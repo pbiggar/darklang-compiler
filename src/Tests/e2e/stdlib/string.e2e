@@ -258,6 +258,7 @@ Stdlib.String.trim("       ﷽﷽") = "﷽﷽"
 Stdlib.String.trim(" 🧟‍♀️🧟‍♂️ ") = "🧟‍♀️🧟‍♂️"
 Stdlib.String.trim(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
 Stdlib.String.trim(" 😄foobar😄 ") = "😄foobar😄"
+Stdlib.String.trim(" hello ") = "hello" // non-breaking and em spaces remain Unicode-aware
 
 // ===================================================================
 // Stdlib.String.trimStart - Remove leading whitespace
@@ -277,6 +278,7 @@ Stdlib.String.trimStart("       ﷽﷽  ") = "﷽﷽  "
 Stdlib.String.trimStart(" 🧟‍♀️🧟‍♂️ ") = "🧟‍♀️🧟‍♂️ "
 Stdlib.String.trimStart(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     "
 Stdlib.String.trimStart(" 😄foobar😄 ") = "😄foobar😄 "
+Stdlib.String.trimStart(" hello ") = "hello " // non-breaking space remains Unicode-aware
 
 // ===================================================================
 // Stdlib.String.trimEnd - Remove trailing whitespace
@@ -296,6 +298,7 @@ Stdlib.String.trimEnd("       ﷽﷽  ") = "       ﷽﷽"
 Stdlib.String.trimEnd(" 🧟‍♀️🧟‍♂️ ") = " 🧟‍♀️🧟‍♂️"
 Stdlib.String.trimEnd(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = " 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
 Stdlib.String.trimEnd(" 😄foobar😄 ") = " 😄foobar😄"
+Stdlib.String.trimEnd(" hello ") = " hello" // em space remains Unicode-aware
 
 // ===================================================================
 // Stdlib.String.reverse - Reverse string (grapheme-aware)

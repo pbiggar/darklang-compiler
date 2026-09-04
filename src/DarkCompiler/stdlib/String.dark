@@ -410,15 +410,38 @@ let __trimStart(graphemes: List<String>) : List<String> =
     | head :: rest -> if Stdlib.String.__egcWhitespace(head) then Stdlib.String.__trimStart(rest) else graphemes
     | [] -> []
 
+let __trimEnd(graphemes: List<String>) : List<String> =
+    Stdlib.List.reverse<String>(Stdlib.String.__trimStart(Stdlib.List.reverse<String>(graphemes)))
+
+// Printable ASCII cannot be Unicode whitespace. Checking the relevant
+// boundary lets the common no-op case retain the original normalized string
+// without allocating a grapheme list. Non-ASCII and control boundaries still
+// use the full Unicode-aware path.
+let __printableAsciiBoundary(byte: Int64) : Bool = byte >= 33L && byte <= 126L
+
 let trimStart(value: String) : String =
-    Stdlib.String.join(Stdlib.String.__trimStart(Stdlib.String.toGraphemes(value)), "")
+    let length = Stdlib.String.__byteLength(value) in
+    if length == 0L || Stdlib.String.__printableAsciiBoundary(Stdlib.String.getByteAt(value, 0L)) then value
+    else Stdlib.String.join(Stdlib.String.__trimStart(Stdlib.String.toGraphemes(value)), "")
 
 let trimEnd(value: String) : String =
-    Stdlib.String.join(
-        Stdlib.List.reverse<String>(Stdlib.String.__trimStart(Stdlib.List.reverse<String>(Stdlib.String.toGraphemes(value)))),
-        "")
+    let length = Stdlib.String.__byteLength(value) in
+    if length == 0L || Stdlib.String.__printableAsciiBoundary(Stdlib.String.getByteAt(value, length - 1L)) then value
+    else Stdlib.String.join(Stdlib.String.__trimEnd(Stdlib.String.toGraphemes(value)), "")
 
-let trim(value: String) : String = Stdlib.String.trimEnd(Stdlib.String.trimStart(value))
+let trim(value: String) : String =
+    let length = Stdlib.String.__byteLength(value) in
+    if length == 0L then value
+    else
+        let cleanStart = Stdlib.String.__printableAsciiBoundary(Stdlib.String.getByteAt(value, 0L)) in
+        let cleanEnd = Stdlib.String.__printableAsciiBoundary(Stdlib.String.getByteAt(value, length - 1L)) in
+        if cleanStart && cleanEnd then value
+        else if cleanStart then Stdlib.String.trimEnd(value)
+        else if cleanEnd then Stdlib.String.trimStart(value)
+        else
+            Stdlib.String.join(
+                Stdlib.String.__trimEnd(Stdlib.String.__trimStart(Stdlib.String.toGraphemes(value))),
+                "")
 
 let padStart(value: String, padWith: String, goalLength: Int) : Stdlib.Result.Result<String, String> =
     if Stdlib.String.length(padWith) != Stdlib.Int.fromInt64(1L) then

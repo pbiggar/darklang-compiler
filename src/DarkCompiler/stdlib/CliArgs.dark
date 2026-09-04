@@ -15,48 +15,13 @@ let get(index: Int) : Stdlib.Result.Result<String, String> =
             | Some(value) -> Ok(value)
             | None -> Error("missing command-line argument at index " ++ Stdlib.Int.toString(index))
 
-// Accumulate negatively so Int64.minValue remains representable. This fast
-// path covers the normal CLI form without paying for Unicode-aware trimming;
-// the public parser retains its existing fallback and error behavior below.
-let __parseInt64DigitsFast(value: String, index: Int64, limit: Int64, acc: Int64) : Stdlib.Option.Option<Int64> =
-    if index >= Stdlib.String.__byteLength(value) then Some(acc)
-    else
-        let byte = Stdlib.String.getByteAt(value, index) in
-        if byte < 48L || byte > 57L then None
-        else
-            let digit = byte - 48L in
-            let multiplyLimit = limit / 10L in
-            if acc < multiplyLimit then None
-            else
-                let multiplied = acc * 10L in
-                if multiplied < limit + digit then None
-                else Stdlib.Cli.Args.__parseInt64DigitsFast(value, index + 1L, limit, multiplied - digit)
-
-let __parseInt64Fast(value: String) : Stdlib.Option.Option<Int64> =
-    let length = Stdlib.String.__byteLength(value) in
-    if length == 0L then None
-    else
-        let first = Stdlib.String.getByteAt(value, 0L) in
-        let negative = first == 45L in
-        let hasSign = negative || first == 43L in
-        let digitStart = if hasSign then 1L else 0L in
-        if digitStart >= length then None
-        else
-            let limit = if negative then -9223372036854775808L else -9223372036854775807L in
-            match Stdlib.Cli.Args.__parseInt64DigitsFast(value, digitStart, limit, 0L) with
-            | Some(parsed) -> if negative then Some(parsed) else Some(0L - parsed)
-            | None -> None
-
 let int64(index: Int) : Stdlib.Result.Result<Int64, String> =
     match Stdlib.Cli.Args.get(index) with
     | Error(message) -> Error(message)
     | Ok(value) ->
-        match Stdlib.Cli.Args.__parseInt64Fast(value) with
-        | Some(parsed) -> Ok(parsed)
-        | None ->
-            match Stdlib.Int.parse(value) with
-            | Ok(number) ->
-                match Stdlib.Int.toInt64(number) with
-                | Some(value) -> Ok(value)
-                | None -> Error("Int64 command-line argument is out of range at index " ++ Stdlib.Int.toString(index))
-            | Error(_) -> Error("invalid Int64 command-line argument at index " ++ Stdlib.Int.toString(index) ++ ": " ++ value)
+        match Stdlib.Int.parse(value) with
+        | Ok(number) ->
+            match Stdlib.Int.toInt64(number) with
+            | Some(value) -> Ok(value)
+            | None -> Error("Int64 command-line argument is out of range at index " ++ Stdlib.Int.toString(index))
+        | Error(_) -> Error("invalid Int64 command-line argument at index " ++ Stdlib.Int.toString(index) ++ ": " ++ value)
