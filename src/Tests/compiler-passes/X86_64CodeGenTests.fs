@@ -177,8 +177,13 @@ let testBranchFalseEdgeFallsThrough () : Result<unit, string> =
             Error $"x64 emitted {epilogueJumps} jumps to the epilogue; expected one before the final fallthrough"
         else Ok ()
 
-/// Build and run a LIR program, returning exit code, stdout, and stderr.
-let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck: bool) : Result<int * string * string, string> =
+/// Build and run a LIR program with process arguments, returning exit code,
+/// stdout, and stderr.
+let private runLIRProgramFullWithOptionsAndArgs
+    (program: LIR.Program)
+    (enableLeakCheck: bool)
+    (args: string list)
+    : Result<int * string * string, string> =
     match CodeGen_X86_64.translateProgram (completeFixtureVariants program) enableLeakCheck with
     | Error e -> Error $"Codegen error: {e}"
     | Ok instrs ->
@@ -213,8 +218,15 @@ let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck
                 System.IO.File.SetUnixFileMode(tempPath, permissions ||| System.IO.UnixFileMode.UserExecute)
                 let psi =
                     match Platform.detectArch () with
-                    | Ok Platform.X86_64 -> System.Diagnostics.ProcessStartInfo(tempPath)
-                    | _ -> System.Diagnostics.ProcessStartInfo("qemu-x86_64-static", tempPath)
+                    | Ok Platform.X86_64 ->
+                        let value = System.Diagnostics.ProcessStartInfo(tempPath)
+                        args |> List.iter value.ArgumentList.Add
+                        value
+                    | _ ->
+                        let value = System.Diagnostics.ProcessStartInfo("qemu-x86_64-static")
+                        value.ArgumentList.Add(tempPath)
+                        args |> List.iter value.ArgumentList.Add
+                        value
                 psi.UseShellExecute <- false
                 psi.RedirectStandardOutput <- true
                 psi.RedirectStandardError <- true
@@ -231,6 +243,10 @@ let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck
             |> fun result ->
                 try System.IO.File.Delete(tempPath) with _ -> ()
                 result
+
+/// Build and run a LIR program, returning exit code, stdout, and stderr.
+let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck: bool) : Result<int * string * string, string> =
+    runLIRProgramFullWithOptionsAndArgs program enableLeakCheck []
 
 /// Build and run a LIR program, returning the exit code
 let private runLIRProgram (program: LIR.Program) : Result<int, string> =
@@ -424,6 +440,23 @@ let testCliArgvHelperResolvesAsCodeLabel () : Result<unit, string> =
             with
             | None -> Ok ()
             | Some _ -> Error "CLI argv helper call was deferred as an ELF data fixup"
+
+/// Native argv entries must be copied into a managed String and returned in a
+/// boxed Some value, matching the LIR type of Stdlib.Cli.__argv.
+let testCliArgvReturnsManagedOptionString () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [ LIR.CliNative (LIR.Physical LIR.X1, LIR.GetArgv, [LIR.Imm 0L])
+              LIR.HeapLoad (LIR.Physical LIR.X3, LIR.Physical LIR.X1, 8)
+              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X3) ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptionsAndArgs program false ["hello"] with
+    | Error error -> Error error
+    | Ok (exitCode, stdout, stderr) ->
+        if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
+        elif stdout <> "hello" then Error $"Expected Some(hello), got '{stdout}'"
+        else Ok ()
 
 /// The host is ARM64, so inspect the x64 syscall lowering directly. DateTime
 /// clock values retain nanosecond-derived precision as 100ns Unix ticks.
@@ -5411,6 +5444,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("x64 branch false edge falls through", testBranchFalseEdgeFallsThrough)
     ("LIR CLI argv x64 helper resolves as code label", testCliArgvHelperResolvesAsCodeLabel)
+    ("LIR CLI argv x64 returns managed Option String", testCliArgvReturnsManagedOptionString)
     ("LIR HeapAlloc x64 reuses a block into X3", testHeapAllocReusesBlockIntoX3)
     ("LIR string x64 refcount supports X3", testStringRefCountSupportsX3)
     ("LIR StringConcat x64 preserves X4 left across literal right", testStringConcatPreservesX4LeftAcrossLiteralRight)

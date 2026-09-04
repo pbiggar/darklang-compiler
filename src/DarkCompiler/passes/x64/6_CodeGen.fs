@@ -485,40 +485,116 @@ let private genEpilogue (stackSize: int) (usedCalleeSaved: LIR.PhysReg list) : X
     let restoreFP = [X86_64.POP X86_64.RBP]
     stackDealloc @ restores @ restoreFP
 
-/// Return argv[index + 1], or null after the argv terminator. RDI carries the
-/// zero-based positional index. The initial argv vector is at a fixed positive
-/// offset from _start's root frame; following the frame-pointer chain avoids
-/// reserving a general-purpose register for process state.
-let private generateCliArgvHelper () : X86_64.Instr list =
-    [ X86_64.Label "__dark_cli_argv"
+/// Return argv[index + 1] as a boxed Option<String>. RDI carries the zero-based
+/// positional index. Native argv entries are zero-terminated, so present
+/// values are copied into managed Dark strings. Following the frame-pointer
+/// chain reaches _start's root frame without reserving process-state registers.
+let private generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    let label = "__dark_cli_argv"
+    let missingLabel = $"{label}_missing"
+    let rootLabel = $"{label}_find_root"
+    let rootFoundLabel = $"{label}_root_found"
+    let lengthLabel = $"{label}_length"
+    let lengthDoneLabel = $"{label}_length_done"
+    let copyLabel = $"{label}_copy"
+    let copyDoneLabel = $"{label}_copy_done"
+    let stringHeapOkLabel = $"{label}_string_heap_ok"
+    let boxLabel = $"{label}_box"
+    let boxHeapOkLabel = $"{label}_box_heap_ok"
+    let leakInc =
+        if enableLeakCheck then
+            [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
+              X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
+              X86_64.ADD_imm (X86_64.RDX, 1)
+              X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
+        else
+            []
+    let checkHeapBounds okLabel =
+        [ X86_64.MOV_reg (X86_64.R11, heapPtr)
+          X86_64.SUB_reg (X86_64.R11, freeListBase)
+          X86_64.CMP_imm (X86_64.R11, int32 heapMmapSizeBytes)
+          X86_64.Jcc (X86_64.LE, okLabel)
+          X86_64.JMP oomHandlerLabel
+          X86_64.Label okLabel ]
+
+    [ X86_64.Label label
       X86_64.CMP_imm (X86_64.RDI, 0)
-      X86_64.Jcc (X86_64.LT, "__dark_cli_argv_missing")
+      X86_64.Jcc (X86_64.LT, missingLabel)
       X86_64.MOV_reg (X86_64.RAX, X86_64.RBP)
-      X86_64.Label "__dark_cli_argv_find_root"
+      X86_64.Label rootLabel
       X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
       X86_64.CMP_imm (X86_64.RDX, 0)
-      X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_root_found")
+      X86_64.Jcc (X86_64.EQ, rootFoundLabel)
       X86_64.MOV_reg (X86_64.RAX, X86_64.RDX)
-      X86_64.JMP "__dark_cli_argv_find_root"
-      X86_64.Label "__dark_cli_argv_root_found"
+      X86_64.JMP rootLabel
+      X86_64.Label rootFoundLabel
       // _start's saved RBP is at +0, argc at +8, argv[0] at +16, and the
       // first positional argument at +24.
-      X86_64.ADD_imm (X86_64.RAX, 24)
-      X86_64.Label "__dark_cli_argv_next"
-      X86_64.CMP_imm (X86_64.RDI, 0)
-      X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_load")
-      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
-      X86_64.CMP_imm (X86_64.RDX, 0)
-      X86_64.Jcc (X86_64.EQ, "__dark_cli_argv_missing")
-      X86_64.ADD_imm (X86_64.RAX, 8)
-      X86_64.SUB_imm (X86_64.RDI, 1)
-      X86_64.JMP "__dark_cli_argv_next"
-      X86_64.Label "__dark_cli_argv_load"
-      X86_64.MOV_load (X86_64.RAX, X86_64.RAX, 0)
-      X86_64.RET
-      X86_64.Label "__dark_cli_argv_missing"
-      X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
-      X86_64.RET ]
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 8)
+      X86_64.SUB_imm (X86_64.RDX, 1)
+      X86_64.CMP_reg (X86_64.RDI, X86_64.RDX)
+      X86_64.Jcc (X86_64.GE, missingLabel)
+      X86_64.MOV_reg (X86_64.RDX, X86_64.RDI)
+      X86_64.SHL_imm (X86_64.RDX, 3)
+      X86_64.ADD_reg (X86_64.RAX, X86_64.RDX)
+      X86_64.MOV_load (X86_64.R8, X86_64.RAX, 24)
+      // Measure the native zero-terminated string.
+      X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
+      X86_64.MOV_reg (X86_64.R9, X86_64.R8)
+      X86_64.Label lengthLabel
+      X86_64.MOV_load_byte (X86_64.RDX, X86_64.R9, 0)
+      X86_64.TEST_reg (X86_64.RDX, X86_64.RDX)
+      X86_64.Jcc (X86_64.EQ, lengthDoneLabel)
+      X86_64.ADD_imm (X86_64.RCX, 1)
+      X86_64.ADD_imm (X86_64.R9, 1)
+      X86_64.JMP lengthLabel
+      X86_64.Label lengthDoneLabel
+      // Allocate [length][bytes][padding][refcount]. R10 retains the value
+      // pointer while R11 holds the aligned byte count.
+      X86_64.MOV_reg (X86_64.R10, heapPtr)
+      X86_64.MOV_reg (X86_64.R11, X86_64.RCX)
+      X86_64.ADD_imm (X86_64.R11, 7)
+      X86_64.AND_imm (X86_64.R11, -8)
+      X86_64.ADD_imm (X86_64.R11, 16)
+      X86_64.ADD_reg (heapPtr, X86_64.R11) ]
+    @ checkHeapBounds stringHeapOkLabel
+    @ [ X86_64.MOV_store (X86_64.R10, 0, X86_64.RCX)
+        X86_64.LEA (X86_64.R9, X86_64.R10, 8)
+        X86_64.MOV_reg (X86_64.RAX, X86_64.RCX)
+        X86_64.Label copyLabel
+        X86_64.CMP_imm (X86_64.RAX, 0)
+        X86_64.Jcc (X86_64.EQ, copyDoneLabel)
+        X86_64.MOV_load_byte (X86_64.RDX, X86_64.R8, 0)
+        X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.RDX)
+        X86_64.ADD_imm (X86_64.R8, 1)
+        X86_64.ADD_imm (X86_64.R9, 1)
+        X86_64.SUB_imm (X86_64.RAX, 1)
+        X86_64.JMP copyLabel
+        X86_64.Label copyDoneLabel
+        X86_64.MOV_reg (X86_64.R11, X86_64.RCX)
+        X86_64.ADD_imm (X86_64.R11, 7)
+        X86_64.AND_imm (X86_64.R11, -8)
+        X86_64.LEA (X86_64.R9, X86_64.R10, 8)
+        X86_64.ADD_reg (X86_64.R9, X86_64.R11)
+        X86_64.MOV_imm32 (X86_64.RDX, 1)
+        X86_64.MOV_store (X86_64.R9, 0, X86_64.RDX) ]
+    @ leakInc
+    @ [ X86_64.XOR_reg (X86_64.R8, X86_64.R8)
+        X86_64.JMP boxLabel
+        X86_64.Label missingLabel
+        X86_64.MOV_imm32 (X86_64.R8, 1)
+        X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+        X86_64.Label boxLabel
+        // Allocate the 16-byte Option payload plus its refcount word.
+        X86_64.MOV_reg (X86_64.RAX, heapPtr)
+        X86_64.ADD_imm (heapPtr, 24) ]
+    @ checkHeapBounds boxHeapOkLabel
+    @ [ X86_64.MOV_store (X86_64.RAX, 0, X86_64.R8)
+        X86_64.MOV_store (X86_64.RAX, 8, X86_64.R10)
+        X86_64.MOV_imm32 (X86_64.RDX, 1)
+        X86_64.MOV_store (X86_64.RAX, 16, X86_64.RDX) ]
+    @ leakInc
+    @ [ X86_64.RET ]
 
 /// Function context for instructions that need stack frame info (TailCall, etc.)
 type private FuncCtx = {
@@ -5817,4 +5893,4 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 }
             else
                 []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveSumRcDecHelpers @ generateCliArgvHelper () @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveSumRcDecHelpers @ generateCliArgvHelper enableLeakCheck @ genOomHandler ())
