@@ -7460,8 +7460,10 @@ let attachARM64CodegenFactsToFunctions
     |> List.mapFold
         (fun releasePlanSummaries func ->
             let facts =
-                func.CodegenFacts
-                |> Option.defaultWith (fun () -> LIR.analyzeFunctionCodegenFacts func)
+                match func.CodegenFacts with
+                | Some facts -> facts
+                | None ->
+                    Crash.crash $"ARM64 metadata planning requires LIR facts for function '{func.Name}'"
             let requirementsWithMemo =
                 planFunctionArm64RcRequirements releasePlanSummaries facts
             let functionRequirements = {
@@ -7477,8 +7479,20 @@ let attachARM64CodegenFactsToFunctions
         Map.empty
     |> fst
 
-let attachARM64CodegenFacts (func: LIR.Function) : LIR.Function =
-    attachARM64CodegenFactsToFunctions [func] |> List.head
+/// Explicit preparation entry point for tools that construct LIR directly.
+/// The production compiler performs these two stages around register
+/// allocation so normal codegen never needs to inspect function bodies.
+let prepareARM64Program
+    (LIR.Program (functions, variants, records))
+    : LIR.Program =
+    let functionsWithFacts =
+        functions
+        |> List.map (fun func ->
+            match func.CodegenFacts with
+            | Some _ -> func
+            | None -> LIR.attachFunctionCodegenFacts func)
+        |> attachARM64CodegenFactsToFunctions
+    LIR.Program (functionsWithFacts, variants, records)
 
 /// Convert LIR program to ARM64 instructions with options
 /// Caller-owned conversion cache. Program-wide helper and layout generation is
@@ -7486,7 +7500,7 @@ let attachARM64CodegenFacts (func: LIR.Function) : LIR.Function =
 type FunctionCodegenCache =
     LIR.Function -> (unit -> Result<ARM64Symbolic.Instr list, string>) -> Result<ARM64Symbolic.Instr list, string>
 
-let generateARM64WithOptionsAndCache
+let private generatePreparedARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
@@ -7505,14 +7519,15 @@ let generateARM64WithOptionsAndCache
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
-    // Production functions carry facts computed once after LIR optimization.
-    // Keep the scan as an oracle and compatibility path for hand-built LIR.
+    // The public entry point validates this invariant before reaching the hot
+    // path. No instruction-body fallback is permitted here.
     let functionsWithFacts =
         functions
         |> List.map (fun func ->
             let facts =
-                func.CodegenFacts
-                |> Option.defaultWith (fun () -> LIR.analyzeFunctionCodegenFacts func)
+                match func.CodegenFacts with
+                | Some facts -> facts
+                | None -> Crash.crash "ARM64 codegen invariant: missing validated function facts"
             (func, facts))
     let needsCliRuntimeState =
         functionsWithFacts
@@ -7554,10 +7569,6 @@ let generateARM64WithOptionsAndCache
 
     let releasePlanSummary = precomputedReleasePlanSummary
     let addReleasePlanRequirements = addPrecomputedReleasePlanRequirements
-
-    let collectRefCountDecRequirements = collectPrecomputedRefCountDecRequirement
-
-    let collectRefCountIncRequirements = collectPrecomputedRefCountIncRequirement
 
     let collectRawSlotInitRequirements (requirements: RcHelperRequirements) valueType =
         match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
@@ -7634,11 +7645,7 @@ let generateARM64WithOptionsAndCache
                     withAllocSizes.RcHelperRequirements
                     plannedRequirements
             | None ->
-                facts.RefCountDecRequirements
-                |> Set.fold collectRefCountDecRequirements withAllocSizes.RcHelperRequirements
-                |> fun requirements ->
-                    facts.RefCountIncRequirements
-                    |> Set.fold collectRefCountIncRequirements requirements
+                Crash.crash "ARM64 codegen invariant: missing validated RC helper requirements"
             |> fun requirements ->
                 facts.RawSlotInitTypes
                 |> Set.fold collectRawSlotInitRequirements requirements
@@ -8018,6 +8025,34 @@ let generateARM64WithOptionsAndCache
         let optimized = peepholeOptimize assembled
         recordPhase "ARM64 Codegen Peephole" peepholeTimer
         optimized)
+
+let generateARM64WithOptionsAndCache
+    (target: ARM64.TargetConfig)
+    (options: CodeGenOptions)
+    (functionCache: FunctionCodegenCache option)
+    (phaseRecorder: (string -> float -> unit) option)
+    (program: LIR.Program)
+    : Result<ARM64Symbolic.Instr list, string> =
+    let (LIR.Program (functions, _, _)) = program
+    let missingFacts =
+        functions
+        |> List.tryPick (fun func ->
+            match func.CodegenFacts with
+            | None ->
+                Some $"ARM64 codegen requires prepared LIR; function '{func.Name}' has no codegen facts"
+            | Some facts when Option.isNone facts.Arm64RcHelperRequirements ->
+                Some $"ARM64 codegen requires prepared LIR; function '{func.Name}' has no ARM64 helper plan"
+            | Some _ ->
+                None)
+    match missingFacts with
+    | Some error -> Error error
+    | None ->
+        generatePreparedARM64WithOptionsAndCache
+            target
+            options
+            functionCache
+            phaseRecorder
+            program
 
 let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
     generateARM64WithOptionsAndCache target options None None program

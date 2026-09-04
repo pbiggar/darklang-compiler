@@ -9,6 +9,11 @@ type TestResult = Result<unit, string>
 
 let private target = ARM64.targetConfigFor Platform.LinuxARM64
 
+let private generatePreparedARM64 target program =
+    program
+    |> CodeGen.prepareARM64Program
+    |> CodeGen.generateARM64 target
+
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
     {
         ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ)
@@ -88,7 +93,7 @@ let testCompactRecordFieldsStartAtOffsetZero () : TestResult =
             ]
             records
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error error -> Error $"Compact record ARM64 lowering failed: {error}"
     | Ok instructions ->
         let fieldStoreOffsets =
@@ -374,7 +379,7 @@ let testReportsMissingEntryBlock () : TestResult =
     }
     let program = LIR.Program ([func], Map.empty, Map.empty)
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e when e.Contains "missing entry block" -> Ok ()
     | Error e -> Error $"Expected missing entry block error, got '{e}'"
     | Ok _ -> Error "Expected ARM64 codegen to reject a CFG whose entry block is absent"
@@ -408,7 +413,7 @@ let testGeneratedCodeEliminatesSelfMoves () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -434,7 +439,7 @@ let testSleepUsesNormalizedInterruptSafeNanosleep () : TestResult =
     let program =
         makeSimpleProgramWithVariants [LIR.Sleep (41, LIR.FPhysical LIR.D0)] Map.empty
     let generate targetName targetConfig =
-        CodeGen.generateARM64 targetConfig program
+        generatePreparedARM64 targetConfig program
         |> Result.mapError (fun error -> $"{targetName} sleep lowering failed: {error}")
     match generate "Linux ARM64" (ARM64.targetConfigFor Platform.LinuxARM64),
           generate "macOS ARM64" (ARM64.targetConfigFor Platform.MacOSARM64) with
@@ -531,7 +536,7 @@ let testArm64FLoadEncodableConstantsUseImmediate () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -678,7 +683,7 @@ let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
             ]
             variants
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -708,7 +713,7 @@ let testListTuple3BytesListDictListValueUsesTypedDictHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -736,7 +741,7 @@ let private assertListElementUsesTypedDictListHelper (elementType: AST.Type) (ca
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -859,7 +864,7 @@ let testListTuple4NestedRecordMiddleDictListValueUsesTypedDictHelper () : TestRe
             ]
             records
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -928,7 +933,7 @@ let private assertListSumPayloadUsesTypedDictListHelper (payloadType: AST.Type) 
             ]
             variants
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -996,7 +1001,7 @@ let testDictDictListValueUsesPlannedDictHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1033,7 +1038,7 @@ let private assertDictRefCountDecUsesPlannedDictHelper
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1081,7 +1086,7 @@ let testDictStringKeyValuePlannedHelperReleasesCollisionPayloads () : TestResult
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1112,7 +1117,7 @@ let testDictListValuePlannedHelperReleasesCollisionPayloads () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1143,7 +1148,7 @@ let testDictTupleValuePlannedHelperReleasesCollisionPayloads () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1174,7 +1179,7 @@ let testDictStringKeyTupleValuePlannedHelperReleasesCollisionPayloads () : TestR
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1206,7 +1211,7 @@ let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1244,7 +1249,7 @@ let testPlannedListGenericLeafReleaseReloadsBlockPointer () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1274,7 +1279,7 @@ let testPlannedListNestedGenericReleasePreservesBlockPointer () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1305,7 +1310,7 @@ let testPlannedListTuplePayloadUsesPlannedHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1331,7 +1336,7 @@ let testPlannedListRecordPayloadUsesPlannedHelper () : TestResult =
             ]
             records
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1360,7 +1365,7 @@ let testPlannedListTuple5PayloadUsesPlannedHelper () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1393,7 +1398,7 @@ let testPlannedListRecord5PayloadUsesPlannedHelper () : TestResult =
             ]
             records
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1416,7 +1421,7 @@ let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
             ]
             Map.empty
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1465,7 +1470,7 @@ let testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch () :
             ]
             variants
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1513,7 +1518,7 @@ let testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases () : TestResult =
             ]
             variants
 
-    match CodeGen.generateARM64 target program with
+    match generatePreparedARM64 target program with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1567,7 +1572,7 @@ let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult 
         | other ->
             other
 
-    match CodeGen.generateARM64 target main with
+    match generatePreparedARM64 target main with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1621,7 +1626,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
         | other ->
             other
 
-    match CodeGen.generateARM64 target main with
+    match generatePreparedARM64 target main with
     | Error e ->
         Error e
     | Ok instrs ->
@@ -1637,71 +1642,19 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
         else
             Error "Closure capture boxed-sum bytes payload release did not consume the variant release plan"
 
-/// The absent-facts path deliberately retains the old whole-function scan as a
-/// test oracle. This fixture covers every carried fact category that affects
-/// ARM64 program assembly and requires byte-identical symbolic output.
-let testCarriedCodegenFactsMatchFallbackScan () : TestResult =
-    let closureName = "arm64_carried_facts_closure"
-    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
-    let capturedFunc =
-        makeEmptyFunction
-            closureName
-            [{
-                Reg = LIR.Physical LIR.X0
-                Type = AST.TTuple [AST.TInt64; AST.TList AST.TBlob]
-            }]
-    let mainProgram =
-        makeSimpleProgramWithVariants
-            [
-                LIR.ClosureAlloc (
-                    LIR.Physical LIR.X1,
-                    closureName,
-                    [LIR.Reg (LIR.Physical LIR.X2)])
-                LIR.RefCountInc (
-                    LIR.Physical LIR.X3,
-                    16,
-                    LIR.TaggedList,
-                    None)
-                LIR.RefCountDec (
-                    LIR.Physical LIR.X3,
-                    16,
-                    LIR.TaggedList,
-                    Some (rcMetadata (AST.TList AST.TBlob)))
-                LIR.RawSlotInit (
-                    LIR.Physical LIR.X4,
-                    LIR.Physical LIR.X5,
-                    LIR.Physical LIR.X6,
-                    closureType)
-                LIR.CliNative (
-                    LIR.Physical LIR.X7,
-                    LIR.Execute,
-                    [LIR.StringSymbol "true"])
-            ]
-            Map.empty
-    let fallbackProgram =
-        match mainProgram with
-        | LIR.Program ([main], variants, records) ->
-            LIR.Program ([main; capturedFunc], variants, records)
-        | other ->
-            other
-    let carriedProgram =
-        match LIR.attachCodegenFacts fallbackProgram with
-        | LIR.Program (functions, variants, records) ->
-            LIR.Program (
-                List.map CodeGen.attachARM64CodegenFacts functions,
-                variants,
-                records)
+let testRejectsUnpreparedCodegenFacts () : TestResult =
+    let unprepared =
+        makeSimpleProgramWithVariants [LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 1L)] Map.empty
+    let commonFactsOnly = LIR.attachCodegenFacts unprepared
 
-    match CodeGen.generateARM64 target fallbackProgram,
-          CodeGen.generateARM64 target carriedProgram with
-    | Ok fallback, Ok carried when fallback = carried ->
+    match CodeGen.generateARM64 target unprepared,
+          CodeGen.generateARM64 target commonFactsOnly with
+    | Error missingFacts, Error missingPlan
+        when missingFacts.Contains "has no codegen facts"
+             && missingPlan.Contains "has no ARM64 helper plan" ->
         Ok ()
-    | Ok fallback, Ok carried ->
-        Error $"Carried codegen facts changed ARM64 output: fallback={fallback.Length} instructions, carried={carried.Length} instructions"
-    | Error error, _ ->
-        Error $"Fallback metadata scan failed: {error}"
-    | _, Error error ->
-        Error $"Carried metadata generation failed: {error}"
+    | first, second ->
+        Error $"Expected unprepared ARM64 LIR to be rejected, got facts={first}; plan={second}"
 
 let tests : (string * (unit -> TestResult)) list = [
     ("LIR ARM64 codegen reports missing entry block", testReportsMissingEntryBlock)
@@ -1755,5 +1708,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Generic mixed boxed-sum payload dispatch skips remaining cases", testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases)
     ("Closure capture nested fixed-block bytes field uses release plan", testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan)
     ("Closure capture boxed-sum bytes payload uses release plan", testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan)
-    ("Carried codegen facts match fallback scan", testCarriedCodegenFactsMatchFallbackScan)
+    ("ARM64 codegen rejects unprepared facts", testRejectsUnpreparedCodegenFacts)
 ]

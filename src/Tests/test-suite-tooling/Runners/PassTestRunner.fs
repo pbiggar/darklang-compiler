@@ -374,7 +374,8 @@ let loadLIR2ARM64Test (path: string) : Result<LIR.Program * ARM64Symbolic.Instr 
 /// Run LIR→ARM64 test
 let runLIR2ARM64Test (input: LIR.Program) (expected: ARM64Symbolic.Instr list) : PassTestResult =
     let target = ARM64.targetConfigFor Platform.LinuxARM64
-    match CodeGen.generateARM64 target input with
+    let preparedInput = CodeGen.prepareARM64Program input
+    match CodeGen.generateARM64 target preparedInput with
     | Error err ->
         { Success = false
           Message = $"Code generation failed: {err}"
