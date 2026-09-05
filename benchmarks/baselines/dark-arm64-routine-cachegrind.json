@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
   "contract_sha256": "b4e6ba180a5f68f107005cf8867371144b93d3ed5326517cea45284c74fa6cc2",
-  "generated_at": "2026-09-05T14:14:41+00:00",
+  "generated_at": "2026-09-05T16:11:25+00:00",
   "compiler": {
-    "commit": "b2019c05c7f76b833afd32c178ba9f770f11dc2e",
-    "subject": "Transfer ownership across returning branches"
+    "commit": "2a6636b87a6aae82be6d4a1a1666e5a03e177d38",
+    "subject": "Preserve Stream raw-slot ownership initialization"
   },
   "benchmarks": [
     {
@@ -30,7 +30,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 4473904110
+      "instructions": 3528831110
     },
     {
       "name": "factorial",
@@ -38,7 +38,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 477042551
+      "instructions": 477017163
     },
     {
       "name": "fib",
@@ -54,7 +54,7 @@
     },
     {
       "name": "matmul",
-      "instructions": 1947404921
+      "instructions": 1945532471
     },
     {
       "name": "merkletrees",
@@ -78,11 +78,11 @@
     },
     {
       "name": "quicksort",
-      "instructions": 218891612
+      "instructions": 187792880
     },
     {
       "name": "spectral_norm",
-      "instructions": 71813233
+      "instructions": 69747761
     },
     {
       "name": "sum_to_n",
@@ -94,7 +94,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 1117408587
+      "instructions": 1115881107
     }
   ]
 }
