@@ -29,10 +29,10 @@ unrollBoundary(9223372036854775806L, 9223372036854775807L, 0L) = 922337203685477
 let affineOverflow(i: Int64, n: Int64, a: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
-        let value = a * i + 1 in
-        affineOverflow(i + 1, n, a, total + value)
+        let value = a * i + 1L in
+        affineOverflow(i + 1L, n, a, total + value)
 
-affineOverflow(2, 4, 9223372036854775807, 0) = 9223372036854775805
+affineOverflow(2L, 4L, 9223372036854775807L, 0L) = 9223372036854775805L
 
 // A statically bounded scalar loop can expand without changing wrapping
 // multiplication or bitwise semantics.

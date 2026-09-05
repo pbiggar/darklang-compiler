@@ -513,8 +513,8 @@ derived_induction_affine_invariant_coefficient_positive
 let loop(i: Int64, n: Int64, a: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
-        let value = a * i + 3 in
-        loop(i + 1, n, a, total + value)
+        let value = a * i + 3L in
+        loop(i + 1L, n, a, total + value)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -556,8 +556,8 @@ derived_induction_affine_invariant_coefficient_negative
 let loop(i: Int64, n: Int64, a: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
-        let value = i * a + -7 in
-        loop(i + 1, n, a, total + value)
+        let value = i * a + -7L in
+        loop(i + 1L, n, a, total + value)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -599,8 +599,8 @@ derived_induction_affine_invariant_coefficient_overflow
 let loop(i: Int64, n: Int64, a: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
-        let value = a * i + 1 in
-        loop(i + 1, n, a, total + value)
+        let value = a * i + 1L in
+        loop(i + 1L, n, a, total + value)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -642,8 +642,8 @@ derived_induction_affine_reused_value
 let loop(i: Int64, n: Int64, a: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
-        let value = a * i + 1 in
-        loop(i + 1, n, a, total + value + value)
+        let value = a * i + 1L in
+        loop(i + 1L, n, a, total + value + value)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -687,8 +687,8 @@ derived_induction_affine_noncanonical_step
 let loop(i: Int64, n: Int64, a: Int64, total: Int64) : Int64 =
     if i >= n then total
     else
-        let value = a * i + 1 in
-        loop(i + 2, n, a, total + value)
+        let value = a * i + 1L in
+        loop(i + 2L, n, a, total + value)
 ---EXPECTED---
 Function loop:
   loop_entry:
