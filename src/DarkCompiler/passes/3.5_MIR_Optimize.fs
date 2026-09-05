@@ -2339,6 +2339,7 @@ type ExprKey =
     | BinExpr of BinOp * Operand * Operand * AST.Type
     | UnaryExpr of UnaryOp * Operand
     | ScalarHeapLoadExpr of VReg * int * AST.Type
+    | DirectCallExpr of funcName:string * args:Operand list * returnType:AST.Type
 
 /// Check if a binary operation is commutative (order of operands doesn't matter)
 let isCommutative (op: BinOp) : bool =
@@ -2383,8 +2384,28 @@ let private clearScalarHeapLoadAvailability (available: Map<ExprKey, VReg>) : Ma
         | ScalarHeapLoadExpr _ -> false
         | _ -> true)
 
+let private clearDirectCallAvailability (available: Map<ExprKey, VReg>) : Map<ExprKey, VReg> =
+    available
+    |> Map.filter (fun key _ ->
+        match key with
+        | DirectCallExpr _ -> false
+        | _ -> true)
+
+let private clearHeapLoadAndDirectCallAvailability
+    (available: Map<ExprKey, VReg>)
+    : Map<ExprKey, VReg> =
+    available
+    |> Map.filter (fun key _ ->
+        match key with
+        | ScalarHeapLoadExpr _
+        | DirectCallExpr _ -> false
+        | _ -> true)
+
 /// Apply CSE to a CFG, carrying available expressions into dominated blocks.
-let applyCSE (cfg: CFG) : CFG * bool =
+let applyCSEWithEffectFreeCalls
+    (effectFreeFunctions: Set<string>)
+    (cfg: CFG)
+    : CFG * bool =
     let optimizeBlock (available: Map<ExprKey, VReg>) (block: BasicBlock) : BasicBlock * Map<ExprKey, VReg> * bool =
         let (instrs', _, exported', changed) =
             block.Instrs
@@ -2422,6 +2443,30 @@ let applyCSE (cfg: CFG) : CFG * bool =
                     // Unknown and non-scalar values can carry ownership edges;
                     // do not make earlier scalar loads available past them.
                     (instr :: instrs, clearScalarHeapLoadAvailability exprMap, Map.empty, ch)
+                | Call (dest, funcName, args, _, returnType)
+                    when Set.contains funcName effectFreeFunctions
+                         && isCrossBlockCSEType returnType ->
+                    let key = DirectCallExpr (funcName, args, returnType)
+                    match Map.tryFind key exprMap with
+                    | Some prevDest ->
+                        // Exact callee, operand, and scalar-result identity plus
+                        // the whole-program effect proof make reuse safe.
+                        (Mov (dest, Register prevDest, Some returnType) :: instrs, exprMap, exported, true)
+                    | None ->
+                        // Keep only the current call available across a call
+                        // boundary; independent arithmetic and safe loads remain.
+                        let exprMap' =
+                            exprMap
+                            |> clearDirectCallAvailability
+                            |> Map.add key dest
+                        let exported' =
+                            exported
+                            |> clearDirectCallAvailability
+                            |> Map.add key dest
+                        (instr :: instrs, exprMap', exported', ch)
+                | Call _ ->
+                    // Unproven calls may affect memory and observable state.
+                    (instr :: instrs, clearHeapLoadAndDirectCallAvailability exprMap, Map.empty, ch)
                 | RefCountDec _
                 | RefCountDecString _
                 | RefCountDecBlob _
@@ -2440,7 +2485,7 @@ let applyCSE (cfg: CFG) : CFG * bool =
                     // Do not extend a new cross-block live range across calls,
                     // allocations, memory operations, or other runtime lowering.
                     // Local CSE remains available through exprMap.
-                    (instr :: instrs, clearScalarHeapLoadAvailability exprMap, Map.empty, ch)
+                    (instr :: instrs, clearHeapLoadAndDirectCallAvailability exprMap, Map.empty, ch)
             ) ([], available, available, false)
 
         ({ block with Instrs = List.rev instrs' }, exported', changed)
@@ -2488,6 +2533,9 @@ let applyCSE (cfg: CFG) : CFG * bool =
         ) (reachableBlocks, reachableChanged)
 
     ({ cfg with Blocks = blocks' }, changed)
+
+let applyCSE (cfg: CFG) : CFG * bool =
+    applyCSEWithEffectFreeCalls Set.empty cfg
 
 /// Try to fold a unary operation on a constant
 let tryFoldUnaryOp (op: UnaryOp) (src: Operand) : Operand option =
@@ -2537,7 +2585,10 @@ let private optimizeCFGOnceWithEffectFreeCalls
     let (cfg1, changed1) =
         if options.EnableConstFolding then applyConstantFolding cfg else (cfg, false)
     let (cfg2, changed2) =
-        if options.EnableCSE then applyCSE cfg1 else (cfg1, false)
+        if options.EnableCSE then
+            applyCSEWithEffectFreeCalls effectFreeFunctions cfg1
+        else
+            (cfg1, false)
     let (cfg3, changed3) =
         if options.EnableCopyProp then applyCopyPropagation cfg2 else (cfg2, false)
     // Run constant folding again only when copy propagation changed the CFG.
@@ -2659,7 +2710,10 @@ let optimizeFunction (func: Function) : Function =
 let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : Program =
     let (Program (functions, variants, records)) = program
     let effectFreeFunctions =
-        if options.EnableLICM then analyzeEffectFreeFunctions functions else Set.empty
+        if options.EnableLICM || options.EnableCSE then
+            analyzeEffectFreeFunctions functions
+        else
+            Set.empty
     let functions' =
         functions
         |> List.map (optimizeFunctionWithEffectFreeCalls effectFreeFunctions options)

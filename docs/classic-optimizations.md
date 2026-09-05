@@ -472,6 +472,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Canonical extension of local MIR CSE that removes repeated pure scalar computations across a basic-block boundary while keeping new live ranges bounded for the current backend.
 - Notes: Implemented for binary expressions with concrete scalar types and unary expressions computed in trailing scalar/copy regions of dominating blocks. Expression availability is passed independently to dominator-tree siblings, cleared by reference-count/free operations, and not exported across calls, allocations, or memory/runtime instructions. Direct MIR before/after tests cover multi-block dominating binary/unary reuse, sibling-path preservation, reference-count and call barriers, and rejection of non-scalar binary types. The routine benchmark profile retained every recorded instruction count (0% measured gain/loss; performance ratio 7.43x); source-level ANF CSE removes the straightforward source patterns, so the direct MIR fixtures provide the isolating transformation coverage, while `fannkuch` covers the non-scalar/call-boundary safety cases.
 
+### Effect-free direct-call MIR CSE
+
+- Optimization name: Effect-free direct-call MIR common subexpression elimination
+- Taxonomy category: Common subexpression elimination
+- Priority/rationale: Removes repeated direct calls already proven effect-free by the whole-program call-graph fixed point while retaining conservative memory and ownership boundaries.
+- Notes: Keys use exact callee identity, ordered MIR operands, and a concrete non-owning scalar return type. The second call becomes a typed move only for a proven effect-free callee; indirect calls and managed results are excluded. Direct-call availability is cleared by unproven calls, allocation, memory/runtime operations, and ownership barriers, and crosses basic blocks only along the dominator tree. Routine Cachegrind verification improved `merkletrees` from 386,671,847 to 193,343,646 instructions (49.998%) by reusing the scalar result when its verification path would rebuild the same tree; `spectral_norm` improved by 44 instructions and all other workloads were unchanged.
+
 ### Dominated scalar heap-load reuse
 
 - Optimization name: Barrier-aware dominated scalar heap-load reuse

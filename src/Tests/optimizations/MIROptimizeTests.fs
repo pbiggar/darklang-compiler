@@ -28,6 +28,185 @@ let private optimizedBlockForLabel
         let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
         Error $"{testName}: optimizer removed expected block {label}.\nActual:\n{actual}"
 
+let private directCallCount (funcName: string) (func: Function) : int =
+    func.CFG.Blocks
+    |> Map.toList
+    |> List.collect (fun (_, block) -> block.Instrs)
+    |> List.filter (fun instr ->
+        match instr with
+        | Call (_, calledName, _, _, _) -> calledName = funcName
+        | _ -> false)
+    |> List.length
+
+let private scalarIdentityFunction (name: string) : Function =
+    let entry = Label $"{name}_entry"
+    {
+        Name = name
+        TypedParams = [{ Reg = VReg 0; Type = AST.TInt64 }]
+        ReturnType = AST.TInt64
+        CFG = {
+            Entry = entry
+            Blocks =
+                Map.ofList [
+                    (entry, {
+                        Label = entry
+                        Instrs = []
+                        Terminator = Ret (Register (VReg 0))
+                    })
+                ]
+        }
+        FloatRegs = Set.empty
+    }
+
+let testCseReusesEffectFreeDirectScalarCalls () : TestResult =
+    let entry = Label "caller_entry"
+    let caller = {
+        (scalarIdentityFunction "caller") with
+            CFG = {
+                Entry = entry
+                Blocks =
+                    Map.ofList [
+                        (entry, {
+                            Label = entry
+                            Instrs = [
+                                Call (VReg 1, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                                Call (VReg 2, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                                BinOp (VReg 3, Add, Register (VReg 1), Register (VReg 2), AST.TInt64)
+                            ]
+                            Terminator = Ret (Register (VReg 3))
+                        })
+                    ]
+            }
+    }
+    let (Program (functions, _, _)) =
+        optimizeProgram
+            (Program ([scalarIdentityFunction "pure"; caller], Map.empty, Map.empty))
+
+    match functions |> List.tryFind (fun func -> func.Name = "caller") with
+    | Some optimizedCaller when directCallCount "pure" optimizedCaller = 1 -> Ok ()
+    | Some optimizedCaller ->
+        let remainingCalls = directCallCount "pure" optimizedCaller
+        Error
+            $"Expected one effect-free direct call after CSE, found {remainingCalls}."
+    | None -> Error "Expected optimized caller function"
+
+let testCseReusesDominatingEffectFreeDirectScalarCalls () : TestResult =
+    let entry = Label "caller_entry"
+    let child = Label "caller_child"
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, {
+                    Label = entry
+                    Instrs = [Call (VReg 1, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)]
+                    Terminator = Jump child
+                })
+                (child, {
+                    Label = child
+                    Instrs = [Call (VReg 2, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)]
+                    Terminator = Ret (Register (VReg 2))
+                })
+            ]
+    }
+    let (optimized, changed) =
+        applyCSEWithEffectFreeCalls (Set.ofList ["pure"]) cfg
+    let remainingCalls =
+        optimized.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) -> block.Instrs)
+        |> List.filter (function | Call (_, "pure", _, _, _) -> true | _ -> false)
+        |> List.length
+    if changed && remainingCalls = 1 then Ok ()
+    else Error $"Expected one dominating effect-free call after CSE, found {remainingCalls}."
+
+let testCseDirectCallsRespectBarriersAndScalarTypes () : TestResult =
+    let entry = Label "entry"
+    let call resultType dest =
+        Call (dest, "pure", [Register (VReg 0)], [resultType], resultType)
+    let verifyUnchanged name middle resultType =
+        let cfg = {
+            Entry = entry
+            Blocks =
+                Map.ofList [
+                    (entry, {
+                        Label = entry
+                        Instrs = [call resultType (VReg 1); middle; call resultType (VReg 2)]
+                        Terminator = Ret (Register (VReg 2))
+                    })
+                ]
+        }
+        let (optimized, changed) =
+            applyCSEWithEffectFreeCalls (Set.ofList ["pure"]) cfg
+        let remainingCalls =
+            match Map.tryFind entry optimized.Blocks with
+            | Some block ->
+                block.Instrs
+                |> List.filter (function | Call (_, "pure", _, _, _) -> true | _ -> false)
+                |> List.length
+            | None -> 0
+        if not changed && remainingCalls = 2 then Ok ()
+        else Error $"Expected {name} to prevent direct-call CSE."
+
+    [ verifyUnchanged
+          "an unproven call"
+          (Call (VReg 3, "observe", [], [], AST.TUnit))
+          AST.TInt64
+      verifyUnchanged "a heap allocation" (HeapAlloc (VReg 3, 16)) AST.TInt64
+      verifyUnchanged
+          "a reference-count decrement"
+          (RefCountDec (VReg 3, 8, GenericHeap, None))
+          AST.TInt64
+      verifyUnchanged
+          "a managed result type"
+          (Mov (VReg 3, Int64Const 0L, None))
+          AST.TString ]
+    |> List.tryPick (function | Error error -> Some error | Ok () -> None)
+    |> function | Some error -> Error error | None -> Ok ()
+
+let testCseDoesNotReuseThrowingDirectCalls () : TestResult =
+    let entry = Label "entry"
+    let throwing = {
+        (scalarIdentityFunction "throwing") with
+            CFG = {
+                Entry = entry
+                Blocks =
+                    Map.ofList [
+                        (entry, {
+                            Label = entry
+                            Instrs = [RuntimeError "boom"]
+                            Terminator = Ret (Int64Const 0L)
+                        })
+                    ]
+            }
+    }
+    let caller = {
+        (scalarIdentityFunction "throwing_caller") with
+            CFG = {
+                Entry = entry
+                Blocks =
+                    Map.ofList [
+                        (entry, {
+                            Label = entry
+                            Instrs = [
+                                Call (VReg 1, "throwing", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                                Call (VReg 2, "throwing", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                            ]
+                            Terminator = Ret (Register (VReg 2))
+                        })
+                    ]
+            }
+    }
+    let (Program (functions, _, _)) =
+        optimizeProgram (Program ([throwing; caller], Map.empty, Map.empty))
+    match functions |> List.tryFind (fun func -> func.Name = "throwing_caller") with
+    | Some optimizedCaller when directCallCount "throwing" optimizedCaller = 2 -> Ok ()
+    | Some optimizedCaller ->
+        let remainingCalls = directCallCount "throwing" optimizedCaller
+        Error
+            $"Expected throwing calls to remain, found {remainingCalls}."
+    | None -> Error "Expected optimized throwing caller function"
+
 let testCseAfterCopyPropFixpoint () : TestResult =
     let entry = Label "entry"
     let block: BasicBlock = {
@@ -1033,6 +1212,10 @@ let testLicmCanonicalizesNestedLoopEntry () : TestResult =
     | _ -> Error "Expected nested-loop entry canonicalization to preserve the outer loop and hoist the inner invariant"
 
 let tests = [
+    ("MIR CSE reuses effect-free direct scalar calls", testCseReusesEffectFreeDirectScalarCalls)
+    ("MIR CSE reuses dominating effect-free direct scalar calls", testCseReusesDominatingEffectFreeDirectScalarCalls)
+    ("MIR CSE direct calls respect barriers and scalar types", testCseDirectCallsRespectBarriersAndScalarTypes)
+    ("MIR CSE does not reuse throwing direct calls", testCseDoesNotReuseThrowingDirectCalls)
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
     ("MIR CSE reuses dominating binary and unary expressions", testCseReusesDominatingExpressions)
     ("MIR CSE reuses dominating scalar heap loads", testCseReusesDominatingScalarHeapLoad)
