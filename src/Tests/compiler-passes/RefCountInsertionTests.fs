@@ -1034,6 +1034,123 @@ let testExplicitReleaseBlocksLaterAggregateTransfer () : TestResult =
     else
         Error "An explicit release must block ownership transfer at a later aggregate use"
 
+let testReturnedAggregateTransfersOwnedValueAcrossBranches () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let outerType = AST.TTuple [childType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("wrapChild", AST.TFunction ([AST.TBool], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let conditionTemp = TempId 0
+    let childTemp = TempId 1
+    let thenOuterTemp = TempId 2
+    let elseOuterTemp = TempId 3
+    let func : Function = {
+        Name = "wrapChild"
+        TypedParams = [{ Id = conditionTemp; Type = AST.TBool }]
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                If (
+                    Var conditionTemp,
+                    Let (
+                        thenOuterTemp,
+                        TupleAlloc [Var childTemp],
+                        Return (Var thenOuterTemp)
+                    ),
+                    Let (
+                        elseOuterTemp,
+                        TupleAlloc [Var childTemp],
+                        Return (Var elseOuterTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp childTemp transformed.Body then
+        Error "Every returning branch should adopt the owned value without retaining it"
+    elif hasRefCountDecForTemp childTemp transformed.Body then
+        Error "Branch-complete aggregate transfer should remove the original owner's release"
+    else
+        Ok ()
+
+let testReturnedAggregateRequiresEveryBranchToTransferOwnedValue () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let outerType = AST.TTuple [childType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("wrapChild", AST.TFunction ([AST.TBool], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let conditionTemp = TempId 0
+    let childTemp = TempId 1
+    let replacementTemp = TempId 2
+    let thenOuterTemp = TempId 3
+    let elseOuterTemp = TempId 4
+    let func : Function = {
+        Name = "wrapChild"
+        TypedParams = [{ Id = conditionTemp; Type = AST.TBool }]
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                If (
+                    Var conditionTemp,
+                    Let (
+                        thenOuterTemp,
+                        TupleAlloc [Var childTemp],
+                        Return (Var thenOuterTemp)
+                    ),
+                    Let (
+                        replacementTemp,
+                        Call ("makeChild", []),
+                        Let (
+                            elseOuterTemp,
+                            TupleAlloc [Var replacementTemp],
+                            Return (Var elseOuterTemp)
+                        )
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp childTemp transformed.Body then
+        Ok ()
+    else
+        Error "A value absent from one returning branch must keep its retain in the branch that packages it"
+
 let testReturnedAggregateTransfersNestedOwnedAliases () : TestResult =
     let childType = AST.TTuple [AST.TInt64]
     let innerType = AST.TTuple [childType]
@@ -2289,6 +2406,8 @@ let tests = [
     ("returned aggregate retains ownership-producing Stream alias", testReturnedAggregateRetainsOwnershipProducingStreamAlias)
     ("returned aggregate transfers owned value after borrowed use", testReturnedAggregateTransfersOwnedValueAfterBorrowedUse)
     ("explicit release blocks later aggregate transfer", testExplicitReleaseBlocksLaterAggregateTransfer)
+    ("returned aggregate transfers owned value across branches", testReturnedAggregateTransfersOwnedValueAcrossBranches)
+    ("returned aggregate requires every branch to transfer owned value", testReturnedAggregateRequiresEveryBranchToTransferOwnedValue)
     ("returned aggregate transfers nested owned aliases", testReturnedAggregateTransfersNestedOwnedAliases)
     ("returned aggregate does not transfer duplicated aliases", testReturnedAggregateDoesNotTransferDuplicatedAliases)
     ("static string binding skips no-op RC traffic", testStaticStringBindingSkipsNoOpRcTraffic)

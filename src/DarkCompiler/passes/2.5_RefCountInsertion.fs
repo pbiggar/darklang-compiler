@@ -552,8 +552,9 @@ let rec private aggregateFlowsDirectlyToReturn
             | _ ->
                 aggregateAliasFieldCount aliases nextExpr > 0
                 && aggregateFlowsDirectlyToReturn nextId nextBody
-        | RReturn _
-        | RIf _ ->
+        | RIf (_, thenBranch, elseBranch, _) ->
+            loop aliases thenBranch && loop aliases elseBranch
+        | RReturn _ ->
             false
 
     loop (Set.singleton aggregateId) body
@@ -578,8 +579,9 @@ let rec private transfersIntoReturnedAggregate
                     false
                 else
                     loop aliases nextBody
-        | RReturn _
-        | RIf _ ->
+        | RIf (_, thenBranch, elseBranch, _) ->
+            loop aliases thenBranch && loop aliases elseBranch
+        | RReturn _ ->
             false
 
     loop (Set.singleton candidateId) body
@@ -1139,6 +1141,7 @@ let rec insertRCWithAnalysis
     (expr: ReturnAnnotatedExpr)
     (varGen: VarGen)
     (returnDecs: ReturnDec list)
+    (inheritedTransferableOwnership: ReturnDec list)
     (paramIncs: (TempId * AST.Type) list)
     (types: Map<TempId, AST.Type>)
     (typeCache: CExprTypeCache)
@@ -1149,6 +1152,7 @@ let rec insertRCWithAnalysis
         (expr: ReturnAnnotatedExpr)
         (varGen: VarGen)
         (returnDecs: ReturnDec list)
+        (inheritedTransferableOwnership: ReturnDec list)
         (frames: LetFrame list)
         (types: Map<TempId, AST.Type>)
         (typeCache: CExprTypeCache)
@@ -1163,6 +1167,10 @@ let rec insertRCWithAnalysis
             (finalExpr, finalVarGen, finalTypes, typeCache)
 
         | RIf (cond, thenBranch, elseBranch, _) ->
+            let branchTransferableOwnership =
+                frames
+                |> List.choose (fun frame -> frame.TransferableOwnership)
+                |> fun local -> local @ inheritedTransferableOwnership
             let returnDecTemps =
                 returnDecs
                 |> List.map (fun (tempId, _, _) -> tempId)
@@ -1186,6 +1194,7 @@ let rec insertRCWithAnalysis
                     thenBranch
                     varGen
                     (branchLocalDecs (returnedSet thenBranch) @ returnDecs)
+                    branchTransferableOwnership
                     paramIncs
                     types
                     typeCache
@@ -1196,6 +1205,7 @@ let rec insertRCWithAnalysis
                     elseBranch
                     varGen1
                     (branchLocalDecs (returnedSet elseBranch) @ returnDecs)
+                    branchTransferableOwnership
                     paramIncs
                     types1
                     typeCache1
@@ -1515,6 +1525,9 @@ let rec insertRCWithAnalysis
                                 Some pendingDec
                             | _ ->
                                 None)
+                        |> Option.orElseWith (fun () ->
+                            inheritedTransferableOwnership
+                            |> List.tryFind (fun (candidateOwnerId, _, _) -> candidateOwnerId = ownerId))
                         |> Option.map (fun pendingDec ->
                             ((targetId, pendingDec) :: transfers, Set.add ownerId transferredOwners))
                         |> Option.defaultValue (transfers, transferredOwners)
@@ -1556,6 +1569,12 @@ let rec insertRCWithAnalysis
             let returnDecsAfterTransfers =
                 transferredOwnership
                 |> List.fold (fun pending (_, target) -> removePendingDec target pending) returnDecs'
+
+            let inheritedTransferableOwnershipAfterTransfers =
+                transferredOwnership
+                |> List.fold
+                    (fun pending (_, target) -> removePendingDec target pending)
+                    inheritedTransferableOwnership
 
             let framesAfterTransfers =
                 frames
@@ -1646,11 +1665,12 @@ let rec insertRCWithAnalysis
                 bodyInfo
                 varGen
                 returnDecsAfterTransfers
+                inheritedTransferableOwnershipAfterTransfers
                 (frame :: framesAfterTransfers)
                 typesWithBinding
                 typeCache1
 
-    descend ctxWithTypes expr varGen returnDecs [] types typeCache
+    descend ctxWithTypes expr varGen returnDecs inheritedTransferableOwnership [] types typeCache
 
 /// Insert reference counting operations into an AExpr
 /// Returns (transformed expr, varGen, accumulated TempTypes)
@@ -1664,7 +1684,7 @@ let private insertRCInternal
     let ctxWithTypes = withTempTypes ctx types
     let analyzed = analyzeReturns Map.empty expr
     let (expr', varGen', types', typeCache') =
-        insertRCWithAnalysis ctxWithTypes None analyzed varGen [] [] types typeCache
+        insertRCWithAnalysis ctxWithTypes None analyzed varGen [] [] [] types typeCache
     (expr', varGen', types', typeCache')
 
 /// Insert reference counting operations into an AExpr
@@ -1720,7 +1740,7 @@ let private insertRCInFunctionInternal
 
     // Process function body with return analysis
     let (bodyWithRC, varGen', accTypes, typeCache') =
-        insertRCWithAnalysis ctxWithParams (Some func.Name) bodyInfo varGen [] paramIncs typesWithParams typeCache
+        insertRCWithAnalysis ctxWithParams (Some func.Name) bodyInfo varGen [] [] paramIncs typesWithParams typeCache
     let (bodyWithOwnedAccumulatorDecs, varGen'', accTypes') =
         if List.isEmpty ownedParamDecs then
             (bodyWithRC, varGen', accTypes)
