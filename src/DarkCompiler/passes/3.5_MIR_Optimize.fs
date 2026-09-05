@@ -355,56 +355,77 @@ let dominates (entry: Label) (idoms: Dominators) (dominator: Label) (node: Label
                 else walk parent
         walk node
 
-/// Identify natural loops via backedges (header dominates source)
-let findNaturalLoops (cfg: CFG) : Map<Label, Set<Label>> =
+/// Identify natural loops via backedges (header dominates source), reusing a
+/// predecessor map already computed for this CFG topology.
+let private findNaturalLoopsWithPredecessors
+    (cfg: CFG)
+    (predecessors: Map<Label, Label list>)
+    : Map<Label, Set<Label>> =
+    let idoms = computeDominators cfg predecessors
+    let entry = cfg.Entry
+    let successors = buildSuccessors cfg
+
+    let backedges =
+        successors
+        |> Map.fold (fun acc from successorLabels ->
+            successorLabels
+            |> List.fold (fun acc' successor ->
+                if dominates entry idoms successor from then
+                    let existing =
+                        Map.tryFind successor acc' |> Option.defaultValue []
+                    Map.add successor (from :: existing) acc'
+                else
+                    acc') acc) Map.empty
+
+    backedges
+    |> Map.fold (fun loops header sources ->
+        let loopBlocks =
+            sources
+            |> List.fold (fun acc source ->
+                let initial = Set.ofList [header; source]
+                let rec grow work loopSet =
+                    match work with
+                    | [] -> loopSet
+                    | node :: rest ->
+                        let nodePredecessors =
+                            Map.tryFind node predecessors
+                            |> Option.defaultValue []
+                        let (loopSet', work') =
+                            nodePredecessors
+                            |> List.fold (fun (setAcc, workAcc) predecessor ->
+                                if Set.contains predecessor setAcc then
+                                    (setAcc, workAcc)
+                                elif dominates entry idoms header predecessor then
+                                    (Set.add predecessor setAcc, predecessor :: workAcc)
+                                else
+                                    (setAcc, workAcc)) (loopSet, rest)
+                        grow work' loopSet'
+                Set.union acc (grow [source] initial)) Set.empty
+
+        if Set.isEmpty loopBlocks then loops
+        else Map.add header loopBlocks loops) Map.empty
+
+/// Immutable facts shared only while CFG blocks and edges are unchanged.
+type private LoopTopology = {
+    Loops: Map<Label, Set<Label>>
+    Predecessors: Map<Label, Label list>
+}
+
+let private tryBuildLoopTopology (cfg: CFG) : LoopTopology option =
     if not (cfgHasReachableCycle cfg) then
-        Map.empty
+        None
     else
-        let preds = buildPredecessors cfg
-        let idoms = computeDominators cfg preds
-        let entry = cfg.Entry
-        let succs = buildSuccessors cfg
+        let predecessors = buildPredecessors cfg
+        Some {
+            Loops = findNaturalLoopsWithPredecessors cfg predecessors
+            Predecessors = predecessors
+        }
 
-        let backedges =
-            succs
-            |> Map.fold (fun acc from successors ->
-                successors
-                |> List.fold (fun acc' succ ->
-                    if dominates entry idoms succ from then
-                        let existing = Map.tryFind succ acc' |> Option.defaultValue []
-                        Map.add succ (from :: existing) acc'
-                    else
-                        acc'
-                ) acc
-            ) Map.empty
-
-        backedges
-        |> Map.fold (fun loops header sources ->
-            let loopBlocks =
-                sources
-                |> List.fold (fun acc source ->
-                    let initial = Set.ofList [header; source]
-                    let rec grow work loopSet =
-                        match work with
-                        | [] -> loopSet
-                        | node :: rest ->
-                            let nodePreds = Map.tryFind node preds |> Option.defaultValue []
-                            let (loopSet', work') =
-                                nodePreds
-                                |> List.fold (fun (setAcc, workAcc) pred ->
-                                    if Set.contains pred setAcc then
-                                        (setAcc, workAcc)
-                                    elif dominates entry idoms header pred then
-                                        (Set.add pred setAcc, pred :: workAcc)
-                                    else
-                                        (setAcc, workAcc)
-                                ) (loopSet, rest)
-                            grow work' loopSet'
-                    Set.union acc (grow [source] initial)
-                ) Set.empty
-
-            if Set.isEmpty loopBlocks then loops else Map.add header loopBlocks loops
-        ) Map.empty
+/// Identify natural loops via backedges (header dominates source).
+let findNaturalLoops (cfg: CFG) : Map<Label, Set<Label>> =
+    match tryBuildLoopTopology cfg with
+    | None -> Map.empty
+    | Some topology -> topology.Loops
 
 type private AffineInductionCandidate = {
     Header: Label
@@ -507,10 +528,10 @@ let private tryAffineExpression
 
 let private tryAffineInductionCandidate
     (cfg: CFG)
+    (predecessors: Map<Label, Label list>)
     (header: Label)
     (loopBlocks: Set<Label>)
     : AffineInductionCandidate option =
-    let predecessors = buildPredecessors cfg
     let headerPredecessors = Map.tryFind header predecessors |> Option.defaultValue []
     let outsidePredecessors =
         headerPredecessors |> List.filter (fun label -> not (Set.contains label loopBlocks))
@@ -592,12 +613,19 @@ preheader, and carry it through a header phi advanced by two. Reject additional
 affine expressions, extra uses of the scaled temporary, uses outside the latch,
 and non-canonical control flow so the rewrite remains a local SSA substitution.
 *)
-let applyAffineInductionStrengthReduction (cfg: CFG) : CFG * bool =
+let private applyAffineInductionStrengthReductionWithTopology
+    (topology: LoopTopology)
+    (cfg: CFG)
+    : CFG * bool =
     let candidate =
-        findNaturalLoops cfg
+        topology.Loops
         |> Map.toList
         |> List.tryPick (fun (header, loopBlocks) ->
-            tryAffineInductionCandidate cfg header loopBlocks)
+            tryAffineInductionCandidate
+                cfg
+                topology.Predecessors
+                header
+                loopBlocks)
 
     match candidate with
     | None -> (cfg, false)
@@ -662,6 +690,12 @@ let applyAffineInductionStrengthReduction (cfg: CFG) : CFG * bool =
                 else
                     block)
         ({ cfg with Blocks = blocks }, true)
+
+let applyAffineInductionStrengthReduction (cfg: CFG) : CFG * bool =
+    match tryBuildLoopTopology cfg with
+    | None -> (cfg, false)
+    | Some topology ->
+        applyAffineInductionStrengthReductionWithTopology topology cfg
 
 /// Scalar values can be duplicated or moved without changing ownership.
 let private isScalarValueType (valueType: AST.Type) : bool =
@@ -917,9 +951,12 @@ memory access, and other effects are rejected. The first iteration retains its
 original instruction order; cloned floating-point operations form the second
 iteration in the same order, so evaluation is not reassociated.
 *)
-let applyCountedLoopUnrolling (cfg: CFG) : CFG * bool =
+let private applyCountedLoopUnrollingWithTopology
+    (topology: LoopTopology)
+    (cfg: CFG)
+    : CFG * bool =
     let candidate =
-        findNaturalLoops cfg
+        topology.Loops
         |> Map.toList
         |> List.tryPick (fun (header, loopBlocks) ->
             tryCountedLoopUnrollCandidate cfg header loopBlocks)
@@ -978,6 +1015,11 @@ let applyCountedLoopUnrolling (cfg: CFG) : CFG * bool =
                                 |> Map.add remainderExit remainderExitBlock
                             ({ cfg with Blocks = blocks }, true)
 
+let applyCountedLoopUnrolling (cfg: CFG) : CFG * bool =
+    match tryBuildLoopTopology cfg with
+    | None -> (cfg, false)
+    | Some topology -> applyCountedLoopUnrollingWithTopology topology cfg
+
 /// Scalar results can move across loop iterations without changing ownership.
 let private isScalarReturnType (returnType: AST.Type) : bool =
     isScalarValueType returnType
@@ -1012,6 +1054,7 @@ let isHoistableInstr (instr: Instr) : bool =
 /// in a new preheader phi.  Existing simple preheaders are deliberately unchanged.
 let private canonicalizeLoopPreheaders
     (effectFreeFunctions: Set<string>)
+    (topology: LoopTopology)
     (cfg: CFG)
     : CFG * bool =
     let labelName (Label name) = name
@@ -1031,12 +1074,11 @@ let private canonicalizeLoopPreheaders
             Branch (condition, trueLabel', falseLabel')
         | _ -> terminator
 
-    let loops = findNaturalLoops cfg
+    let loops = topology.Loops
     loops
     |> Map.toList
     |> List.sortBy (fun (header, loopBlocks) -> (Set.count loopBlocks, labelName header))
-    |> List.fold (fun (cfgAcc, changedAcc) (header, loopBlocks) ->
-        let predecessors = buildPredecessors cfgAcc
+    |> List.fold (fun (cfgAcc, predecessors, changedAcc) (header, loopBlocks) ->
         let outsidePreds =
             Map.tryFind header predecessors
             |> Option.defaultValue []
@@ -1087,10 +1129,10 @@ let private canonicalizeLoopPreheaders
                 | None -> false)
 
         if List.isEmpty outsidePreds || hasSimplePreheader || not hasDirectInvariant then
-            (cfgAcc, changedAcc)
+            (cfgAcc, predecessors, changedAcc)
         else
             match Map.tryFind header cfgAcc.Blocks with
-            | None -> (cfgAcc, changedAcc)
+            | None -> (cfgAcc, predecessors, changedAcc)
             | Some headerBlock ->
                 let preheader = freshPreheaderLabel cfgAcc header
                 let nextRegister = nextRegisterId cfgAcc
@@ -1126,17 +1168,30 @@ let private canonicalizeLoopPreheaders
                         else
                             block)
                     |> Map.add preheader preheaderBlock
-                ({ cfgAcc with Blocks = blocks }, true)
-    ) (cfg, false)
+                let cfg' = { cfgAcc with Blocks = blocks }
+                (cfg', buildPredecessors cfg', true)
+    ) (cfg, topology.Predecessors, false)
+    |> fun (canonicalizedCFG, _, changed) -> (canonicalizedCFG, changed)
 
 /// Apply loop-invariant code motion for loops with a simple preheader.
 let private applyLoopInvariantCodeMotionWithEffectFreeCalls
     (effectFreeFunctions: Set<string>)
+    (topology: LoopTopology)
     (cfg: CFG)
-    : CFG * bool =
-    let (cfgWithPreheaders, canonicalized) = canonicalizeLoopPreheaders effectFreeFunctions cfg
-    let loops = findNaturalLoops cfgWithPreheaders
-    let preds = buildPredecessors cfgWithPreheaders
+    : CFG * bool * LoopTopology =
+    let (cfgWithPreheaders, canonicalized) =
+        canonicalizeLoopPreheaders effectFreeFunctions topology cfg
+    let topologyWithPreheaders =
+        if canonicalized then
+            match tryBuildLoopTopology cfgWithPreheaders with
+            | Some updated -> updated
+            | None ->
+                Crash.crash
+                    "LICM preheader canonicalization removed every reachable loop"
+        else
+            topology
+    let loops = topologyWithPreheaders.Loops
+    let preds = topologyWithPreheaders.Predecessors
     let labelName (Label name) = name
     let buildCopyMapForLicm (cfg': CFG) : Map<VReg, VReg> =
         let phiDests =
@@ -1367,9 +1422,19 @@ let private applyLoopInvariantCodeMotionWithEffectFreeCalls
 
                 ({ cfgAcc with Blocks = blocks' }, true)
     ) (cfgWithPreheaders, canonicalized)
+    |> fun (optimizedCFG, changed) ->
+        (optimizedCFG, changed, topologyWithPreheaders)
 
 let applyLoopInvariantCodeMotion (cfg: CFG) : CFG * bool =
-    applyLoopInvariantCodeMotionWithEffectFreeCalls Set.empty cfg
+    match tryBuildLoopTopology cfg with
+    | None -> (cfg, false)
+    | Some topology ->
+        let (optimized, changed, _) =
+            applyLoopInvariantCodeMotionWithEffectFreeCalls
+                Set.empty
+                topology
+                cfg
+        (optimized, changed)
 
 /// Build map from SSA destination to the registers used by its defining instruction.
 let private buildDefUseMap (cfg: CFG) : Map<VReg, VReg list> =
@@ -2369,15 +2434,27 @@ let private optimizeCFGOnceWithEffectFreeCalls
     // After copy prop: v2 = Int64Const(-127) - Int64Const(2) -> can fold
     let (cfg4, changed4) =
         if options.EnableConstFolding && changed3 then applyConstantFolding cfg3 else (cfg3, false)
-    let (cfg5, changed5) =
-        if options.EnableLICM then applyAffineInductionStrengthReduction cfg4 else (cfg4, false)
-    let (cfg6, changed6) =
+    let (cfg5, changed5, cfg6, changed6, loopTopology) =
         if options.EnableLICM then
-            applyLoopInvariantCodeMotionWithEffectFreeCalls effectFreeFunctions cfg5
+            match tryBuildLoopTopology cfg4 with
+            | None -> (cfg4, false, cfg4, false, None)
+            | Some topology ->
+                let (cfg5, changed5) =
+                    applyAffineInductionStrengthReductionWithTopology
+                        topology
+                        cfg4
+                let (cfg6, changed6, topologyAfterLicm) =
+                    applyLoopInvariantCodeMotionWithEffectFreeCalls
+                        effectFreeFunctions
+                        topology
+                        cfg5
+                (cfg5, changed5, cfg6, changed6, Some topologyAfterLicm)
         else
-            (cfg5, false)
+            (cfg4, false, cfg4, false, None)
     let (cfg7, changed7) =
-        if options.EnableLICM then applyCountedLoopUnrolling cfg6 else (cfg6, false)
+        match loopTopology with
+        | Some topology -> applyCountedLoopUnrollingWithTopology topology cfg6
+        | None -> (cfg6, false)
     let (cfg8, changed8) =
         if options.EnableDCE then eliminateDeadCode cfg7 else (cfg7, false)
     let (cfg9, changed9) =
