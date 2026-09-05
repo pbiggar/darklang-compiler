@@ -513,9 +513,15 @@ let private aggregateAliasFieldCount
     | _ ->
         0
 
-let private cexprUsesAnyAlias (aliases: Set<TempId>) (cexpr: CExpr) : bool =
-    aliases
-    |> Set.exists (fun target -> ANF_Optimize.cexprUsesTemp target cexpr)
+let private cexprReleasesAnyAlias (aliases: Set<TempId>) (cexpr: CExpr) : bool =
+    match cexpr with
+    | RefCountDec (atom, _, _, _)
+    | RefCountDecString atom
+    | RefCountDecBlob atom ->
+        aliases
+        |> Set.exists (fun target -> ANF_Optimize.atomUsesTemp target atom)
+    | _ ->
+        false
 
 /// Once ownership is transferred into an aggregate, do not permit observable
 /// work before that aggregate is returned. This preserves internal refcount
@@ -541,8 +547,9 @@ let rec private aggregateFlowsDirectlyToReturn
 
     loop (Set.singleton aggregateId) body
 
-/// Find the sole aggregate use that begins a closed construction suffix ending
-/// in Return. Any earlier use of the candidate makes the proof ineligible.
+/// Find the aggregate use that begins a closed construction suffix ending in
+/// Return. Earlier borrowed uses preserve the candidate's owned edge; an
+/// explicit release makes the proof ineligible.
 let rec private transfersIntoReturnedAggregate
     (candidateId: TempId)
     (body: ReturnAnnotatedExpr)
@@ -556,7 +563,7 @@ let rec private transfersIntoReturnedAggregate
         | RLet (aggregateId, cexpr, nextBody, _) ->
             if aggregateAliasFieldCount aliases cexpr > 0 then
                 aggregateFlowsDirectlyToReturn aggregateId nextBody
-            elif cexprUsesAnyAlias aliases cexpr then
+            elif cexprReleasesAnyAlias aliases cexpr then
                 false
             else
                 loop aliases nextBody

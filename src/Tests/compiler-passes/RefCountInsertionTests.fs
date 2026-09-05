@@ -877,6 +877,114 @@ let testReturnedAggregateTransfersOwnedValueThroughTypedAlias () : TestResult =
     else
         Ok ()
 
+let testReturnedAggregateTransfersOwnedValueAfterBorrowedUse () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let outerType = AST.TTuple [childType; AST.TInt64]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("inspectChild", AST.TFunction ([childType], AST.TInt64))
+            ("wrapChild", AST.TFunction ([], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let childTemp = TempId 0
+    let aliasTemp = TempId 1
+    let inspectedTemp = TempId 2
+    let outerTemp = TempId 3
+    let func : Function = {
+        Name = "wrapChild"
+        TypedParams = []
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                Let (
+                    aliasTemp,
+                    Atom (Var childTemp),
+                    Let (
+                        inspectedTemp,
+                        Call ("inspectChild", [Var aliasTemp]),
+                        Let (
+                            outerTemp,
+                            TupleAlloc [Var aliasTemp; Var inspectedTemp],
+                            Return (Var outerTemp)
+                        )
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp aliasTemp transformed.Body then
+        Error "Returned aggregate should adopt an owned value after its earlier borrowed uses"
+    elif hasRefCountDecForTemp childTemp transformed.Body then
+        Error "Borrowed uses before returned aggregate transfer should not preserve the owner's release"
+    else
+        Ok ()
+
+let testExplicitReleaseBlocksLaterAggregateTransfer () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let outerType = AST.TTuple [childType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("wrapChild", AST.TFunction ([], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let childTemp = TempId 0
+    let releaseTemp = TempId 1
+    let outerTemp = TempId 2
+    let func : Function = {
+        Name = "wrapChild"
+        TypedParams = []
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                Let (
+                    releaseTemp,
+                    RefCountDec (Var childTemp, 8, GenericHeap, None),
+                    Let (
+                        outerTemp,
+                        TupleAlloc [Var childTemp],
+                        Return (Var outerTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp childTemp transformed.Body then
+        Ok ()
+    else
+        Error "An explicit release must block ownership transfer at a later aggregate use"
+
 let testReturnedAggregateTransfersNestedOwnedAliases () : TestResult =
     let childType = AST.TTuple [AST.TInt64]
     let innerType = AST.TTuple [childType]
@@ -2086,6 +2194,8 @@ let tests = [
     ("malformed raw_get intrinsic does not infer Int64", testMalformedRawGetIntrinsicDoesNotInferInt64)
     ("returned aggregate transfers owned value through alias", testReturnedAggregateTransfersOwnedValueThroughAlias)
     ("returned aggregate transfers owned value through typed alias", testReturnedAggregateTransfersOwnedValueThroughTypedAlias)
+    ("returned aggregate transfers owned value after borrowed use", testReturnedAggregateTransfersOwnedValueAfterBorrowedUse)
+    ("explicit release blocks later aggregate transfer", testExplicitReleaseBlocksLaterAggregateTransfer)
     ("returned aggregate transfers nested owned aliases", testReturnedAggregateTransfersNestedOwnedAliases)
     ("returned aggregate does not transfer duplicated aliases", testReturnedAggregateDoesNotTransferDuplicatedAliases)
     ("static string binding skips no-op RC traffic", testStaticStringBindingSkipsNoOpRcTraffic)
