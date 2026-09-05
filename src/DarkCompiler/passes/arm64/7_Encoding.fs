@@ -1540,17 +1540,10 @@ let encodePreparedChunksWithPools
     (floatPool: LiteralPool.FloatPool)
     (os: Platform.OS)
     (enableLeakCheck: bool)
-    (phaseRecorder: (string -> float -> unit) option)
     : ARM64.MachineCode array =
-    let timer = System.Diagnostics.Stopwatch.StartNew ()
-    let recordPhase name startedAt =
-        phaseRecorder
-        |> Option.iter (fun record -> record name (timer.Elapsed.TotalMilliseconds - startedAt))
-
     let codeFileOffset =
         computeCodeFileOffset os stringPool floatPool enableLeakCheck
     // Step 1: Compose cached relative chunk layouts into one program layout.
-    let layoutStart = timer.Elapsed.TotalMilliseconds
     let (codeSize, rawCodeLabels) =
         chunks
         |> List.fold (fun (chunkOffset, labels) chunk ->
@@ -1560,10 +1553,7 @@ let encodePreparedChunksWithPools
                     Map.add name (chunkOffset + relativeOffset) labels) labels
             (chunkOffset + (chunk.MachineCodeTemplate.Length * 4), labels))
             (0, Map.empty)
-    recordPhase "ARM64 Encode Layout" layoutStart
-
     // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
-    let literalOffsetsStart = timer.Elapsed.TotalMilliseconds
     let floatOffsets =
         computeFloatLiteralOffsets codeFileOffset codeSize floatPool
     let floatPoolSize =
@@ -1575,9 +1565,7 @@ let encodePreparedChunksWithPools
 
     let stringPoolSize =
         getStringPoolSize stringPool
-    recordPhase "ARM64 Encode Literal Offsets" literalOffsetsStart
 
-    let labelMapStart = timer.Elapsed.TotalMilliseconds
     let leakLabels =
         if enableLeakCheck then
             computeLeakCounterLabel codeFileOffset codeSize floatPoolSize stringPoolSize
@@ -1590,7 +1578,6 @@ let encodePreparedChunksWithPools
 
     let dataLabels = leakLabels
     let dataOffsets = LiteralOffsets (stringOffsets, floatOffsets)
-    recordPhase "ARM64 Encode Label Map" labelMapStart
 
     // Step 5: Encode with label resolution (current offset includes file offset)
     let encoded = Array.zeroCreate<ARM64.MachineCode> (codeSize / 4)
@@ -1616,10 +1603,7 @@ let encodePreparedChunksWithPools
                         dataLabels)
             encodeChunks rest (outputIndex + chunk.MachineCodeTemplate.Length)
 
-    let encodeLoopStart = timer.Elapsed.TotalMilliseconds
-    let encoded = encodeChunks chunks 0
-    recordPhase "ARM64 Encode Instructions" encodeLoopStart
-    encoded
+    encodeChunks chunks 0
 
 /// Encode one symbolic stream through the same prepared-chunk path used by
 /// production emission.
@@ -1629,7 +1613,6 @@ let encodeSymbolicWithPools
     (floatPool: LiteralPool.FloatPool)
     (os: Platform.OS)
     (enableLeakCheck: bool)
-    (phaseRecorder: (string -> float -> unit) option)
     : ARM64.MachineCode array =
     encodePreparedChunksWithPools
         [prepareSymbolicChunk instructions]
@@ -1637,7 +1620,6 @@ let encodeSymbolicWithPools
         floatPool
         os
         enableLeakCheck
-        phaseRecorder
 
 /// Compatibility entry point for concrete instruction streams. The compiler's
 /// production path keeps instructions symbolic through encoding.
@@ -1652,4 +1634,3 @@ let encodeAllWithPools
     |> List.map ARM64Symbolic.ofARM64
     |> fun symbolic ->
         encodeSymbolicWithPools symbolic stringPool floatPool os enableLeakCheck
-            None
