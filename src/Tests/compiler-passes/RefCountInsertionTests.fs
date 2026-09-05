@@ -1282,6 +1282,49 @@ let testAggregateSkipsRetainsForKnownNonRcSentinels () : TestResult =
     else
         Ok ()
 
+let testAggregateSkipsRetainForConditionalStaticString () : TestResult =
+    let resultType = AST.TTuple [AST.TString]
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = Map.empty
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let conditionTemp = TempId 0
+    let stringTemp = TempId 1
+    let resultTemp = TempId 2
+    let func : Function = {
+        Name = "conditionalStaticString"
+        TypedParams = [{ Id = conditionTemp; Type = AST.TBool }]
+        ReturnType = resultType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                stringTemp,
+                IfValue (
+                    Var conditionTemp,
+                    StringLiteral "first",
+                    StringLiteral "second"
+                ),
+                Let (
+                    resultTemp,
+                    TupleAlloc [Var stringTemp],
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasStringRetainForTemp stringTemp transformed.Body then
+        Error "Aggregate should not retain a conditional whose alternatives are both static strings"
+    else
+        Ok ()
+
 let testNonSelfTailCallDoesNotLeaveDecAfterTailCall () : TestResult =
     let funcReg : AST_to_ANF.FunctionRegistry =
         Map.ofList [
@@ -2251,6 +2294,7 @@ let tests = [
     ("static string binding skips no-op RC traffic", testStaticStringBindingSkipsNoOpRcTraffic)
     ("known empty-list binding skips no-op RC traffic", testKnownEmptyListBindingSkipsNoOpRcTraffic)
     ("aggregate skips retains for known non-RC sentinels", testAggregateSkipsRetainsForKnownNonRcSentinels)
+    ("aggregate skips retain for conditional static string", testAggregateSkipsRetainForConditionalStaticString)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)

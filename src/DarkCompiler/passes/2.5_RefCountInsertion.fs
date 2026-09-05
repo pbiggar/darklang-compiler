@@ -1402,8 +1402,19 @@ let rec insertRCWithAnalysis
                 |> Option.map (fun frame ->
                     match tryOwnershipPreservingAliasSource frame.CExpr with
                     | Some sourceId -> tempProducesNonRcSentinel sourceId
-                    | None -> cexprProducesNonRcSentinel frame.CExpr)
+                    | None ->
+                        match frame.CExpr with
+                        | IfValue (_, thenValue, elseValue) ->
+                            atomProducesNonRcSentinel thenValue
+                            && atomProducesNonRcSentinel elseValue
+                        | _ -> cexprProducesNonRcSentinel frame.CExpr)
                 |> Option.defaultValue false
+
+            and atomProducesNonRcSentinel (atom: Atom) : bool =
+                match atom with
+                | StringLiteral _ -> true
+                | Var sourceId -> tempProducesNonRcSentinel sourceId
+                | _ -> false
 
             let allocationIncTargets =
                 let compoundAllocationTargets =
