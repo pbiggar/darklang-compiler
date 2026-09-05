@@ -144,9 +144,25 @@ type CodegenFunctionMetric = {
     SymbolicInstructionCount: int
 }
 
+type private LirFunctionReferenceComparer() =
+    interface IEqualityComparer<LIR.Function> with
+        member _.Equals(left, right) = Object.ReferenceEquals(left, right)
+        member _.GetHashCode(func) =
+            System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func)
+
 type CompilationSession(collectCodegenMetrics: bool) =
     let jsonPlanning = new JsonPlanning.PlanningSession()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
+    // Prebuilt stdlib and preamble functions retain object identity across a
+    // compilation session. Keep an identity-indexed fast lane for functions
+    // that populated the structural cache, avoiding repeated deep CFG equality
+    // checks without retaining transient structurally equivalent functions.
+    let arm64FunctionsByReference =
+        Dictionary<
+            LIR.Function,
+            Dictionary<
+                ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                Result<ARM64Symbolic.Instr list, string>>>(LirFunctionReferenceComparer())
     let arm64ReleasePlanSummaries =
         Dictionary<
             bool * string,
@@ -200,36 +216,57 @@ type CompilationSession(collectCodegenMetrics: bool) =
         if disposed || options.EnableCoverage then generate ()
         else
             let key = (func, target, options)
-            match arm64Functions.TryGetValue key with
-            | true, result ->
+            let targetOptions = (target, options)
+            let referenceResult =
+                match arm64FunctionsByReference.TryGetValue func with
+                | true, entries ->
+                    match entries.TryGetValue targetOptions with
+                    | true, result -> Some result
+                    | false, _ -> None
+                | false, _ -> None
+            match referenceResult with
+            | Some result ->
                 arm64CodegenHitCount <- arm64CodegenHitCount + 1
                 result
-            | false, _ ->
-                let timer =
-                    if collectCodegenMetrics then Some (Stopwatch.StartNew())
-                    else None
-                let result = generate ()
-                match timer with
-                | Some timer ->
-                    timer.Stop()
-                    let lirInstructionCount =
-                        func.CFG.Blocks
-                        |> Map.toSeq
-                        |> Seq.sumBy (fun (_, block) -> block.Instrs.Length + 1)
-                    let symbolicInstructionCount =
-                        match result with
-                        | Ok instructions -> instructions.Length
-                        | Error _ -> 0
-                    arm64CodegenMetrics.Add {
-                        FunctionName = func.Name
-                        Elapsed = timer.Elapsed
-                        LirInstructionCount = lirInstructionCount
-                        SymbolicInstructionCount = symbolicInstructionCount
-                    }
-                | None -> ()
-                arm64Functions.[key] <- result
-                arm64CodegenMissCount <- arm64CodegenMissCount + 1
-                result
+            | None ->
+                match arm64Functions.TryGetValue key with
+                | true, result ->
+                    arm64CodegenHitCount <- arm64CodegenHitCount + 1
+                    result
+                | false, _ ->
+                    let timer =
+                        if collectCodegenMetrics then Some (Stopwatch.StartNew())
+                        else None
+                    let result = generate ()
+                    match timer with
+                    | Some timer ->
+                        timer.Stop()
+                        let lirInstructionCount =
+                            func.CFG.Blocks
+                            |> Map.toSeq
+                            |> Seq.sumBy (fun (_, block) -> block.Instrs.Length + 1)
+                        let symbolicInstructionCount =
+                            match result with
+                            | Ok instructions -> instructions.Length
+                            | Error _ -> 0
+                        arm64CodegenMetrics.Add {
+                            FunctionName = func.Name
+                            Elapsed = timer.Elapsed
+                            LirInstructionCount = lirInstructionCount
+                            SymbolicInstructionCount = symbolicInstructionCount
+                        }
+                    | None -> ()
+                    arm64Functions.[key] <- result
+                    let referenceEntries =
+                        match arm64FunctionsByReference.TryGetValue func with
+                        | true, entries -> entries
+                        | false, _ ->
+                            let entries = Dictionary<ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
+                            arm64FunctionsByReference.[func] <- entries
+                            entries
+                    referenceEntries.[targetOptions] <- result
+                    arm64CodegenMissCount <- arm64CodegenMissCount + 1
+                    result
 
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
     member _.CachedArm64ReleasePlanSummaryCount =
@@ -248,6 +285,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
         member _.Dispose() =
             (jsonPlanning :> System.IDisposable).Dispose()
             arm64Functions.Clear()
+            arm64FunctionsByReference.Clear()
             arm64ReleasePlanSummaries.Clear()
             arm64CodegenMetrics.Clear()
             disposed <- true
@@ -423,7 +461,10 @@ let private allocateRegistersForFunctions
     (functions: LIR.Function list)
     : LIR.Function list =
     functions
-    |> List.map (RegisterAllocation.allocateRegisters arch)
+    |> List.map (fun func ->
+        func
+        |> RegisterAllocation.allocateRegisters arch
+        |> LIR_Peephole.removeSelfMovesFromFunction)
 
 /// Run MIR+LIR passes (including register allocation) from ANF functions
 let private lowerToAllocatedLir
@@ -2406,8 +2447,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                                     // Combine reachable stdlib functions with user functions
                                     let allFuncs =
-                                        (reachableStdlib @ finalUserFuncs)
-                                        |> List.map LIR_Peephole.removeSelfMovesFromFunction
+                                        reachableStdlib @ finalUserFuncs
                                     let lirVariantRegistry : LIR.VariantRegistry =
                                         let combinedVariantLookup =
                                             Map.fold

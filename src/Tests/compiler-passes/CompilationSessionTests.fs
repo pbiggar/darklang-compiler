@@ -78,15 +78,18 @@ let testArm64CodegenCacheSegregatesTargetOptionsAndCoverage (_: CompilerLibrary.
     let generate () =
         calls.Add ()
         Ok []
+    let structurallyEquivalentFunction =
+        { fakeFunction with Name = fakeFunction.Name }
     let _ = session.CodegenFunction macOS CodeGen.defaultOptions fakeFunction generate
     let _ = session.CodegenFunction macOS CodeGen.defaultOptions fakeFunction generate
+    let _ = session.CodegenFunction macOS CodeGen.defaultOptions structurallyEquivalentFunction generate
     let _ = session.CodegenFunction linux CodeGen.defaultOptions fakeFunction generate
     let _ = session.CodegenFunction macOS changedOptions fakeFunction generate
     let _ = session.CodegenFunction macOS coverageOptions fakeFunction generate
-    if calls.Count = 4 && session.CachedArm64FunctionCount = 3 && session.Arm64CodegenHitCount = 1 && session.Arm64CodegenMissCount = 3 then
+    if calls.Count = 4 && session.CachedArm64FunctionCount = 3 && session.Arm64CodegenHitCount = 2 && session.Arm64CodegenMissCount = 3 then
         Ok ()
     else
-        Error $"Expected target/options entries to segregate and coverage to bypass cache, got calls={calls.Count}, cached={session.CachedArm64FunctionCount}, hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}"
+        Error $"Expected reference and structural hits while target/options entries segregate and coverage bypasses the cache, got calls={calls.Count}, cached={session.CachedArm64FunctionCount}, hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}"
 
 let testArm64CodegenMetricsAreOptIn (_: CompilerLibrary.StdlibResult) () : TestResult =
     use ordinary = new CompilerLibrary.CompilationSession()
