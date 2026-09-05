@@ -7775,13 +7775,25 @@ let prepareARM64Program
 type FunctionCodegenCache =
     LIR.Function -> (unit -> Result<ARM64Symbolic.Instr list, string>) -> Result<ARM64Symbolic.Instr list, string>
 
+type GeneratedChunk = {
+    Instructions: ARM64Symbolic.Instr list
+    ReusableAcrossCompilations: bool
+}
+
+type GeneratedProgram = private GeneratedProgram of GeneratedChunk list
+
+let generatedProgramChunks (GeneratedProgram chunks) : GeneratedChunk list = chunks
+
+let generatedProgramInstructions (GeneratedProgram chunks) : ARM64Symbolic.Instr list =
+    chunks |> List.collect (fun chunk -> chunk.Instructions)
+
 let private generatePreparedARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
-    : Result<ARM64Symbolic.Instr list, string> =
+    : Result<GeneratedProgram, string> =
     let startPhase () =
         phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
     let recordPhase name timer =
@@ -8252,9 +8264,17 @@ let private generatePreparedARM64WithOptionsAndCache
         let generate () =
             convertFunction heapOverflowTrapBody ctx func
             |> Result.map peepholeOptimize
-        match functionCache with
-        | Some cache when func.Name <> "_start" -> cache func generate
-        | _ -> generate ()
+        let reusableAcrossCompilations =
+            Option.isSome functionCache && func.Name <> "_start"
+        let converted =
+            match functionCache with
+            | Some cache when reusableAcrossCompilations -> cache func generate
+            | _ -> generate ()
+        converted
+        |> Result.map (fun instructions -> {
+            Instructions = instructions
+            ReusableAcrossCompilations = reusableAcrossCompilations
+        })
 
     let functionTimer = startPhase ()
     let convertedFunctionChunks = ResultList.mapResults convertCached sortedFunctions
@@ -8361,8 +8381,8 @@ let private generatePreparedARM64WithOptionsAndCache
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliArgvHelpers =
             functionChunks
-            |> List.collect (fun instructions ->
-                instructions
+            |> List.collect (fun chunk ->
+                chunk.Instructions
                 |> List.choose (function
                     | ARM64Symbolic.BL label when label.StartsWith("__dark_cli_argv_") -> Some label
                     | _ -> None))
@@ -8383,10 +8403,15 @@ let private generatePreparedARM64WithOptionsAndCache
         let optimizedHelperInstructions = peepholeOptimize helperInstructions
         recordPhase "ARM64 Codegen Peephole" peepholeTimer
         let assemblyTimer = startPhase ()
-        let assembled =
-            List.concat (functionChunks @ [optimizedHelperInstructions])
+        let generated =
+            GeneratedProgram (
+                functionChunks
+                @ [{
+                    Instructions = optimizedHelperInstructions
+                    ReusableAcrossCompilations = false
+                }])
         recordPhase "ARM64 Codegen Assembly" assemblyTimer
-        assembled)
+        generated)
 
 let generateARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
@@ -8394,7 +8419,7 @@ let generateARM64WithOptionsAndCache
     (functionCache: FunctionCodegenCache option)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
-    : Result<ARM64Symbolic.Instr list, string> =
+    : Result<GeneratedProgram, string> =
     let (LIR.Program (functions, _, _)) = program
     let missingFacts =
         functions
@@ -8416,9 +8441,9 @@ let generateARM64WithOptionsAndCache
             phaseRecorder
             program
 
-let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
+let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<GeneratedProgram, string> =
     generateARM64WithOptionsAndCache target options None None program
 
 /// Convert LIR program to ARM64 instructions (uses default options)
-let generateARM64 (target: ARM64.TargetConfig) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
+let generateARM64 (target: ARM64.TargetConfig) (program: LIR.Program) : Result<GeneratedProgram, string> =
     generateARM64WithOptions target defaultOptions program

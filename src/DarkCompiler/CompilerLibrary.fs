@@ -869,7 +869,7 @@ let private generateBinary
                 allocatedProgram
         match codegenResult with
         | Error err -> Error $"Code generation error: {err}"
-        | Ok arm64Instructions ->
+        | Ok arm64Program ->
             let codegenElapsed = sw.Elapsed.TotalMilliseconds - codegenStart
             recordPassTiming passTimingRecorder "Code Generation" codegenElapsed
             if verbosity >= 2 then
@@ -877,6 +877,8 @@ let private generateBinary
                 println $"        {t}ms"
 
             if dumpAsm && verbosity >= 3 then
+                let arm64Instructions =
+                    CodeGen.generatedProgramInstructions arm64Program
                 println "=== ARM64 Assembly Instructions ==="
                 for (i, instr) in List.indexed arm64Instructions do
                     println $"  {i}: {instr}"
@@ -886,6 +888,8 @@ let private generateBinary
             let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
             if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
             let emitStart = sw.Elapsed.TotalMilliseconds
+            let arm64Instructions =
+                CodeGen.generatedProgramInstructions arm64Program
             let emit =
                 ARM64_Emit.emitBinary
                     arm64Instructions

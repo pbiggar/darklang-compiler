@@ -385,7 +385,8 @@ let runLIR2ARM64Test (input: LIR.Program) (expected: ARM64Symbolic.Instr list) :
           Message = $"Code generation failed: {err}"
           Expected = Some (prettyPrintARM64 expected)
           Actual = None }
-    | Ok actualRaw ->
+    | Ok actualProgram ->
+        let actualRaw = CodeGen.generatedProgramInstructions actualProgram
         // Filter out Label pseudo-instructions for comparison
         let actual = actualRaw |> List.filter (function | ARM64Symbolic.Label _ -> false | _ -> true)
         let expectedForComparison = expected |> List.filter (function | ARM64Symbolic.Label _ -> false | _ -> true)

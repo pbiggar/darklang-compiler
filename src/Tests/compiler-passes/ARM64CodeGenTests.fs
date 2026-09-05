@@ -13,6 +13,7 @@ let private generatePreparedARM64WithOptions target options program =
     program
     |> CodeGen.prepareARM64Program
     |> CodeGen.generateARM64WithOptions target options
+    |> Result.map CodeGen.generatedProgramInstructions
 
 let private generatePreparedARM64 target program =
     generatePreparedARM64WithOptions target CodeGen.defaultOptions program
@@ -221,7 +222,9 @@ let testInlineGenericReleaseTemplateCachePreservesInstructions () : TestResult =
     | Error error, _
     | _, Error error ->
         Error $"Inline generic release template lowering failed: {error}"
-    | Ok uncached, Ok cached ->
+    | Ok uncachedProgram, Ok cachedProgram ->
+        let uncached = CodeGen.generatedProgramInstructions uncachedProgram
+        let cached = CodeGen.generatedProgramInstructions cachedProgram
         let inlineTemplateNames =
             generatedTemplates
             |> Seq.filter (fun name ->
