@@ -8246,17 +8246,22 @@ let private generatePreparedARM64WithOptionsAndCache
     recordPhase "ARM64 Codegen Metadata" metadataTimer
 
     let convertCached func =
-        let generate () = convertFunction heapOverflowTrapBody ctx func
+        // Function chunks are closed by their epilogue (or _start exit), so
+        // peephole patterns cannot span into the next function's entry label.
+        // Cache the finalized chunk and never rescan it per executable.
+        let generate () =
+            convertFunction heapOverflowTrapBody ctx func
+            |> Result.map peepholeOptimize
         match functionCache with
         | Some cache when func.Name <> "_start" -> cache func generate
         | _ -> generate ()
 
     let functionTimer = startPhase ()
-    let convertedFunctions = ResultList.collectResults convertCached sortedFunctions
+    let convertedFunctionChunks = ResultList.mapResults convertCached sortedFunctions
     recordPhase "ARM64 Codegen Functions" functionTimer
 
-    convertedFunctions
-    |> Result.map (fun allFunctionInstrs ->
+    convertedFunctionChunks
+    |> Result.map (fun functionChunks ->
         let helperTimer = startPhase ()
         let listRcDecHelperLabelsFromDictHelpers =
             neededDictRcDecHelperLabels
@@ -8355,30 +8360,33 @@ let private generatePreparedARM64WithOptionsAndCache
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliArgvHelpers =
-            allFunctionInstrs
-            |> List.choose (function
-                | ARM64Symbolic.BL label when label.StartsWith("__dark_cli_argv_") -> Some label
-                | _ -> None)
+            functionChunks
+            |> List.collect (fun instructions ->
+                instructions
+                |> List.choose (function
+                    | ARM64Symbolic.BL label when label.StartsWith("__dark_cli_argv_") -> Some label
+                    | _ -> None))
             |> List.distinct
             |> List.collect (generateCliArgvHelper ctx)
         let cliHelpers =
             cliArgvHelpers
             @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
         recordPhase "ARM64 Codegen Helpers" helperTimer
-        let assemblyTimer = startPhase ()
-        let assembled =
-            allFunctionInstrs
-            @ listRcHelpers
+        let helperInstructions =
+            listRcHelpers
             @ dictRcHelpers
             @ closureRcHelpers
             @ streamRcHelpers
             @ recursiveSumRcHelpers
             @ cliHelpers
-        recordPhase "ARM64 Codegen Assembly" assemblyTimer
         let peepholeTimer = startPhase ()
-        let optimized = peepholeOptimize assembled
+        let optimizedHelperInstructions = peepholeOptimize helperInstructions
         recordPhase "ARM64 Codegen Peephole" peepholeTimer
-        optimized)
+        let assemblyTimer = startPhase ()
+        let assembled =
+            List.concat (functionChunks @ [optimizedHelperInstructions])
+        recordPhase "ARM64 Codegen Assembly" assemblyTimer
+        assembled)
 
 let generateARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
