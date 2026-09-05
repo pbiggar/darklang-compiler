@@ -46,6 +46,15 @@ type InlineGenericReleaseTemplateCache =
         -> (unit -> ARM64Symbolic.Instr list)
         -> ARM64Symbolic.Instr list
 
+/// Caller-owned reuse for expensive, immutable release-plan summaries.
+/// The cache validates complete release-plan shapes before returning a value.
+type ReleasePlanSummaryCache =
+    bool
+        -> string
+        -> ANF.RcReleasePlan
+        -> (unit -> LIR.Arm64ReleasePlanSummary)
+        -> LIR.Arm64ReleasePlanSummary
+
 /// Code generation context (passed through to instruction conversion)
 type CodeGenContext = {
     Target: ARM64.TargetConfig
@@ -7552,7 +7561,8 @@ let private precomputedEmptyRcHelperRequirements : RcHelperRequirements = {
     ReleasePlanSummaries = Map.empty
 }
 
-let private precomputedReleasePlanSummary
+let private precomputedReleasePlanSummaryWithCache
+    (summaryCache: ReleasePlanSummaryCache option)
     includeStaticRootDependencies
     memoKey
     releasePlan
@@ -7562,10 +7572,20 @@ let private precomputedReleasePlanSummary
     match Map.tryFind key requirements.ReleasePlanSummaries with
     | Some summary -> (summary, requirements)
     | None ->
-        let summary = summarizePrecomputedReleasePlan includeStaticRootDependencies releasePlan
+        let generate () =
+            summarizePrecomputedReleasePlan includeStaticRootDependencies releasePlan
+        let summary =
+            match summaryCache, memoKey with
+            | Some cache, LIR.FingerprintedReleasePlan cacheKey ->
+                cache includeStaticRootDependencies cacheKey releasePlan generate
+            | _ ->
+                generate ()
         (summary,
          { requirements with
              ReleasePlanSummaries = Map.add key summary requirements.ReleasePlanSummaries })
+
+let private precomputedReleasePlanSummary =
+    precomputedReleasePlanSummaryWithCache None
 
 let private addPrecomputedReleasePlanRequirements
     (summary: RcReleasePlanSummary)
@@ -7586,6 +7606,7 @@ let private addPrecomputedReleasePlanRequirements
                 summary.PlannedDictDecHelpers }
 
 let private collectPrecomputedRefCountDecRequirement
+    (summaryCache: ReleasePlanSummaryCache option)
     (requirements: RcHelperRequirements)
     (kind, metadata)
     : RcHelperRequirements =
@@ -7597,7 +7618,8 @@ let private collectPrecomputedRefCountDecRequirement
             else "DictHeap RefCountDec helper selection"
         let releasePlan = requiredRcMetadataReleasePlan context metadata
         let summary, requirements =
-            precomputedReleasePlanSummary
+            precomputedReleasePlanSummaryWithCache
+                summaryCache
                 false
                 (LIR.rcReleasePlanMemoKey metadata)
                 releasePlan
@@ -7616,7 +7638,8 @@ let private collectPrecomputedRefCountDecRequirement
         | None -> requirements
         | Some releasePlan ->
             let summary, requirements =
-                precomputedReleasePlanSummary
+                precomputedReleasePlanSummaryWithCache
+                    summaryCache
                     false
                     (LIR.rcReleasePlanMemoKey metadata)
                     releasePlan
@@ -7646,6 +7669,7 @@ let private collectPrecomputedRefCountIncRequirement
     | LIR.StreamHeap -> requirements
 
 let private planFunctionArm64RcRequirements
+    (summaryCache: ReleasePlanSummaryCache option)
     releasePlanSummaries
     (facts: LIR.FunctionCodegenFacts)
     =
@@ -7656,7 +7680,7 @@ let private planFunctionArm64RcRequirements
     facts.RefCountDecRequirements
     |> Map.fold
         (fun requirements (kind, _) metadata ->
-            collectPrecomputedRefCountDecRequirement requirements (kind, metadata))
+            collectPrecomputedRefCountDecRequirement summaryCache requirements (kind, metadata))
         initialRequirements
     |> fun requirements ->
         facts.RefCountIncRequirements
@@ -7698,7 +7722,8 @@ let private mergePrecomputedRcHelperRequirements
 /// Attach backend-specific helper planning to a compilation batch. Release
 /// plans shared by sibling functions are traversed once, while each function
 /// retains only its own semantic requirements for later tree-shaken unions.
-let attachARM64CodegenFactsToFunctions
+let attachARM64CodegenFactsToFunctionsWithCache
+    (summaryCache: ReleasePlanSummaryCache option)
     (functions: LIR.Function list)
     : LIR.Function list =
     functions
@@ -7710,7 +7735,7 @@ let attachARM64CodegenFactsToFunctions
                 | None ->
                     Crash.crash $"ARM64 metadata planning requires LIR facts for function '{func.Name}'"
             let requirementsWithMemo =
-                planFunctionArm64RcRequirements releasePlanSummaries facts
+                planFunctionArm64RcRequirements summaryCache releasePlanSummaries facts
             let functionRequirements = {
                 requirementsWithMemo with
                     ReleasePlanSummaries = Map.empty
@@ -7723,6 +7748,11 @@ let attachARM64CodegenFactsToFunctions
              requirementsWithMemo.ReleasePlanSummaries))
         Map.empty
     |> fst
+
+let attachARM64CodegenFactsToFunctions
+    (functions: LIR.Function list)
+    : LIR.Function list =
+    attachARM64CodegenFactsToFunctionsWithCache None functions
 
 /// Explicit preparation entry point for tools that construct LIR directly.
 /// The production compiler performs these two stages around register

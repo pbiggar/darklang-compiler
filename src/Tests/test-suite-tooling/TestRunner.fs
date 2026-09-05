@@ -120,6 +120,8 @@ type CodegenProfileSummary = {
     program_overhead_ms: float
     cache_hits: int
     cache_misses: int
+    release_plan_summary_cache_hits: int
+    release_plan_summary_cache_misses: int
     json_plan_cache_hits: int
     json_plan_cache_misses: int
 }
@@ -529,6 +531,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let codegenMetrics = ResizeArray<CompilerLibrary.CodegenFunctionMetric>()
     let mutable codegenCacheHits = 0
     let mutable codegenCacheMisses = 0
+    let mutable releasePlanSummaryCacheHits = 0
+    let mutable releasePlanSummaryCacheMisses = 0
     let mutable jsonPlanCacheHits = 0
     let mutable jsonPlanCacheMisses = 0
     let recordTiming = TestFramework.recordTiming runState
@@ -852,6 +856,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 codegenMetrics.AddRange(compilationSession.Arm64CodegenMetrics)
                 codegenCacheHits <- codegenCacheHits + compilationSession.Arm64CodegenHitCount
                 codegenCacheMisses <- codegenCacheMisses + compilationSession.Arm64CodegenMissCount
+                releasePlanSummaryCacheHits <-
+                    releasePlanSummaryCacheHits
+                    + compilationSession.Arm64ReleasePlanSummaryHitCount
+                releasePlanSummaryCacheMisses <-
+                    releasePlanSummaryCacheMisses
+                    + compilationSession.Arm64ReleasePlanSummaryMissCount
                 jsonPlanCacheHits <- jsonPlanCacheHits + compilationSession.JsonPlanHitCount
                 jsonPlanCacheMisses <- jsonPlanCacheMisses + compilationSession.JsonPlanMissCount
 
@@ -1388,6 +1398,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 program_overhead_ms = roundedMilliseconds (max 0.0 (codegenMs - attributedMs))
                 cache_hits = codegenCacheHits
                 cache_misses = codegenCacheMisses
+                release_plan_summary_cache_hits = releasePlanSummaryCacheHits
+                release_plan_summary_cache_misses = releasePlanSummaryCacheMisses
                 json_plan_cache_hits = jsonPlanCacheHits
                 json_plan_cache_misses = jsonPlanCacheMisses
             }

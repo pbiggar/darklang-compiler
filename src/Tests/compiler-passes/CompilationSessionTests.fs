@@ -58,11 +58,13 @@ let testArm64HitWithNestedJson (stdlib: CompilerLibrary.StdlibResult) () : TestR
     | Ok (), Ok () when
         session.Arm64CodegenHitCount > 0
         && session.Arm64CodegenMissCount > 0
+        && session.Arm64ReleasePlanSummaryHitCount > 0
+        && session.Arm64ReleasePlanSummaryMissCount > 0
         && session.JsonPlanHitCount = 1
         && session.JsonPlanMissCount = 1 ->
         Ok ()
     | Ok (), Ok () ->
-        Error $"Expected repeated nested JSON compilation to hit both caches, got ARM64 hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}; JSON hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}"
+        Error $"Expected repeated nested JSON compilation to hit all caches, got ARM64 hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}; release-plan hits={session.Arm64ReleasePlanSummaryHitCount}, misses={session.Arm64ReleasePlanSummaryMissCount}; JSON hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}"
     | Error error, _
     | _, Error error -> Error error
 
@@ -102,6 +104,42 @@ let testArm64CodegenMetricsAreOptIn (_: CompilerLibrary.StdlibResult) () : TestR
     | ordinaryMetrics, profiledMetrics ->
         Error $"Expected only the opted-in session to retain one function metric, got ordinary={ordinaryMetrics.Length}, profiled={profiledMetrics.Length}"
 
+let testArm64ReleasePlanSummaryCacheConfirmsPlanShape (_: CompilerLibrary.StdlibResult) () : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    let firstPlan = ANF.NoReleasePlan
+    let secondPlan = ANF.DynamicBufferRelease ANF.DynamicStringBuffer
+    let summary needsClosure needsStream : LIR.Arm64ReleasePlanSummary = {
+        ListDecHelperLabels = Set.empty
+        PlannedListDecHelpers = Map.empty
+        PlannedGenericDecHelpers = Map.empty
+        DictDecHelperLabels = Set.empty
+        PlannedDictDecHelpers = Map.empty
+        NeedsClosureRcDecHelper = needsClosure
+        NeedsStreamRcDecHelper = needsStream
+    }
+    let firstSummary = summary false false
+    let secondSummary = summary true false
+    let staticSummary = summary false true
+    let generated = ResizeArray<unit>()
+    let generate result () =
+        generated.Add ()
+        result
+    let first = session.Arm64ReleasePlanSummary false "shared-key" firstPlan (generate firstSummary)
+    let second = session.Arm64ReleasePlanSummary false "shared-key" secondPlan (generate secondSummary)
+    let firstAgain = session.Arm64ReleasePlanSummary false "shared-key" firstPlan (generate secondSummary)
+    let staticResult = session.Arm64ReleasePlanSummary true "shared-key" firstPlan (generate staticSummary)
+    if first = firstSummary
+       && second = secondSummary
+       && firstAgain = firstSummary
+       && staticResult = staticSummary
+       && generated.Count = 3
+       && session.CachedArm64ReleasePlanSummaryCount = 3
+       && session.Arm64ReleasePlanSummaryHitCount = 1
+       && session.Arm64ReleasePlanSummaryMissCount = 3 then
+        Ok ()
+    else
+        Error $"Expected release-plan cache to confirm complete shapes and segregate static dependencies, got generated={generated.Count}, cached={session.CachedArm64ReleasePlanSummaryCount}, hits={session.Arm64ReleasePlanSummaryHitCount}, misses={session.Arm64ReleasePlanSummaryMissCount}"
+
 let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : TestResult =
     let first = new CompilerLibrary.CompilationSession()
     let second = new CompilerLibrary.CompilationSession()
@@ -112,8 +150,10 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
     match firstResult, secondResult with
     | Ok (), Ok () when
         first.CachedArm64FunctionCount = 0
+        && first.CachedArm64ReleasePlanSummaryCount = 0
         && first.CachedJsonPlanCount = 0
         && second.CachedArm64FunctionCount > 0
+        && second.CachedArm64ReleasePlanSummaryCount > 0
         && second.CachedJsonPlanCount > 0 -> Ok ()
     | Ok (), Ok () ->
         Error $"Expected isolated sessions and disposal to release only the first registry, got first={first.CachedArm64FunctionCount}, second={second.CachedArm64FunctionCount}"
@@ -146,6 +186,7 @@ let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
     ("compilation session codegen metrics are opt-in", testArm64CodegenMetricsAreOptIn stdlib)
+    ("compilation session confirms ARM64 release-plan cache shapes", testArm64ReleasePlanSummaryCacheConfirmsPlanShape stdlib)
     ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
     ("compilation session segregates canonical JSON declaration shapes", testJsonPlanCacheSegregatesNominalShapes stdlib)
 ]

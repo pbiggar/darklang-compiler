@@ -147,14 +147,49 @@ type CodegenFunctionMetric = {
 type CompilationSession(collectCodegenMetrics: bool) =
     let jsonPlanning = new JsonPlanning.PlanningSession()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
+    let arm64ReleasePlanSummaries =
+        Dictionary<
+            bool * string,
+            (ANF.RcReleasePlan * LIR.Arm64ReleasePlanSummary) list>()
     let arm64CodegenMetrics = ResizeArray<CodegenFunctionMetric>()
     let mutable disposed = false
     let mutable arm64CodegenHitCount = 0
     let mutable arm64CodegenMissCount = 0
+    let mutable arm64ReleasePlanSummaryHitCount = 0
+    let mutable arm64ReleasePlanSummaryMissCount = 0
 
     new() = new CompilationSession(false)
 
     member _.JsonPlanning = jsonPlanning
+
+    member _.Arm64ReleasePlanSummary
+        (includeStaticRootDependencies: bool)
+        (releasePlanCacheKey: string)
+        (releasePlan: ANF.RcReleasePlan)
+        (generate: unit -> LIR.Arm64ReleasePlanSummary)
+        : LIR.Arm64ReleasePlanSummary =
+        if disposed then
+            generate ()
+        else
+            let key =
+                (includeStaticRootDependencies,
+                 releasePlanCacheKey)
+            match arm64ReleasePlanSummaries.TryGetValue key with
+            | true, entries ->
+                match entries |> List.tryFind (fun (existingPlan, _) -> existingPlan = releasePlan) with
+                | Some (_, summary) ->
+                    arm64ReleasePlanSummaryHitCount <- arm64ReleasePlanSummaryHitCount + 1
+                    summary
+                | None ->
+                    let summary = generate ()
+                    arm64ReleasePlanSummaries.[key] <- (releasePlan, summary) :: entries
+                    arm64ReleasePlanSummaryMissCount <- arm64ReleasePlanSummaryMissCount + 1
+                    summary
+            | false, _ ->
+                let summary = generate ()
+                arm64ReleasePlanSummaries.[key] <- [releasePlan, summary]
+                arm64ReleasePlanSummaryMissCount <- arm64ReleasePlanSummaryMissCount + 1
+                summary
 
     member _.CodegenFunction
         (target: ARM64.TargetConfig)
@@ -197,17 +232,23 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 result
 
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
+    member _.CachedArm64ReleasePlanSummaryCount =
+        if disposed then 0
+        else arm64ReleasePlanSummaries.Values |> Seq.sumBy List.length
     member _.CachedJsonPlanCount = jsonPlanning.Count
     member _.JsonPlanHitCount = jsonPlanning.HitCount
     member _.JsonPlanMissCount = jsonPlanning.MissCount
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
+    member _.Arm64ReleasePlanSummaryHitCount = arm64ReleasePlanSummaryHitCount
+    member _.Arm64ReleasePlanSummaryMissCount = arm64ReleasePlanSummaryMissCount
     member _.Arm64CodegenMetrics = arm64CodegenMetrics |> Seq.toList
 
     interface IDisposable with
         member _.Dispose() =
             (jsonPlanning :> System.IDisposable).Dispose()
             arm64Functions.Clear()
+            arm64ReleasePlanSummaries.Clear()
             arm64CodegenMetrics.Clear()
             disposed <- true
 
@@ -391,6 +432,7 @@ let private lowerToAllocatedLir
     (options: CompilerOptions)
     (sw: Stopwatch)
     (passTimingRecorder: PassTimingRecorder option)
+    (releasePlanSummaryCache: CodeGen.ReleasePlanSummaryCache option)
     (stageSuffix: string)
     (functions: ANF.Function list)
     (typeMap: ANF.TypeMap)
@@ -453,7 +495,9 @@ let private lowerToAllocatedLir
                     let funcsWithCodegenFacts =
                         match Platform.archFor target with
                         | Platform.ARM64 ->
-                            CodeGen.attachARM64CodegenFactsToFunctions allocatedFuncs
+                            CodeGen.attachARM64CodegenFactsToFunctionsWithCache
+                                releasePlanSummaryCache
+                                allocatedFuncs
                         | Platform.X86_64 ->
                             allocatedFuncs
                     let metadataPlanningElapsed =
@@ -1587,6 +1631,7 @@ let buildStdlibWithTrace
                         stdlibOptions
                         sw
                         passTimingRecorder
+                        None
                         "stdlib"
                         tcoFunctions
                         typeMap
@@ -1739,6 +1784,7 @@ let buildStdlibSpecializations
                                 stdlibOptions
                                 sw
                                 passTimingRecorder
+                                None
                                 "stdlib_specializations"
                                 tcoFunctions
                                 typeMap
@@ -2297,6 +2343,15 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 let tcoFunctions = applyTco plan.Verbosity plan.Options sw userRegistries.RecursiveMembers printedFunctions plan.PassTimingRecorder
                                 let externalReturnTypes =
                                     mergeReturnTypes plan.BaseContext.ReturnTypes userOnly.LocalReturnTypes
+                                let releasePlanSummaryCache =
+                                    plan.Session
+                                    |> Option.map (fun current ->
+                                        fun includeStaticRootDependencies releasePlanCacheKey releasePlan generate ->
+                                            current.Arm64ReleasePlanSummary
+                                                includeStaticRootDependencies
+                                                releasePlanCacheKey
+                                                releasePlan
+                                                generate)
                                 let userLirResult =
                                     lowerToAllocatedLir
                                         plan.BaseContext.Target
@@ -2304,6 +2359,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         plan.Options
                                         sw
                                         plan.PassTimingRecorder
+                                        releasePlanSummaryCache
                                         plan.Labels.StageSuffix
                                         tcoFunctions
                                         typeMap
@@ -2493,6 +2549,7 @@ let buildPreambleContext
                             preambleOptions
                             sw
                             passTimingRecorder
+                            None
                             "preamble"
                             tcoFunctions
                             typeMap
@@ -2589,6 +2646,7 @@ let buildPreambleContextFromAnalysis
                 preambleOptions
                 sw
                 passTimingRecorder
+                None
                 "preamble"
                 tcoFunctions
                 typeMap
