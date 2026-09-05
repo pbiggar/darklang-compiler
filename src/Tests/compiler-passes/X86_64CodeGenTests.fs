@@ -2207,6 +2207,55 @@ let testClosureAllocRefCountDecBalancesLeakCounter () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure allocation and release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: releasing one closure preserves other live closures in x64 argument registers.
+let testClosureRefCountDecPreservesLiveArgumentClosures () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let closureTupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let capturedFunction name =
+        makeEmptyFunction
+            name
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let firstCaptured = capturedFunction "x64_preserved_closure_first"
+    let secondCaptured = capturedFunction "x64_preserved_closure_second"
+    let main =
+        match makeSimpleProgram
+            [
+                LIR.ClosureAlloc (
+                    LIR.Physical LIR.X5,
+                    firstCaptured.Name,
+                    [LIR.Imm 11L]
+                )
+                LIR.ClosureAlloc (
+                    LIR.Physical LIR.X7,
+                    secondCaptured.Name,
+                    [LIR.Imm 22L]
+                )
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X7,
+                    16,
+                    LIR.ClosureHeap,
+                    Some (rcMetadata closureType)
+                )
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X5,
+                    16,
+                    LIR.ClosureHeap,
+                    Some (rcMetadata closureType)
+                )
+            ]
+            LIR.Ret with
+        | LIR.Program ([func], variants, records) ->
+            LIR.Program ([func; firstCaptured; secondCaptured], variants, records)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (exitCode, _, stderr) ->
+        let leaks = stderr.Trim()
+        if exitCode = 0 && leaks = "" then Ok ()
+        else
+            Error $"Expected both live closures to release cleanly, got exit {exitCode} and stderr '{leaks}'"
+
 /// Test: x64 generic fixed-block RefCountDec releases closure root fields.
 let testGenericRefCountDecClosureField () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -5670,6 +5719,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec preserves live RAX across bytes field release", testGenericRefCountDecPreservesLiveRaxAcrossBytesFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across nested fixed-block release", testGenericRefCountDecPreservesLiveRaxAcrossNestedFixedBlockRelease)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
+    ("LIR closure RefCountDec preserves live argument closures", testClosureRefCountDecPreservesLiveArgumentClosures)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
     ("LIR generic RefCountDec releases sum closure payload", testGenericRefCountDecSumClosurePayload)
     ("LIR closure RefCountDec releases string capture", testClosureRefCountDecStringCapture)

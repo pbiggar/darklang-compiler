@@ -3797,7 +3797,16 @@ let private translateInstr
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL helperLabel]
                 @ restores
             | LIR.ClosureHeap ->
-                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10; scratch]
+                let saveRegs =
+                    [ X86_64.RAX
+                      X86_64.RCX
+                      X86_64.RDX
+                      X86_64.RDI
+                      X86_64.RSI
+                      X86_64.R8
+                      X86_64.R9
+                      X86_64.R10
+                      scratch ]
                 let saves = saveRegs |> List.map X86_64.PUSH
                 let restores = saveRegs |> List.rev |> List.map X86_64.POP
                 saves
