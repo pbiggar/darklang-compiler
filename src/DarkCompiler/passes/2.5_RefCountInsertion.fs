@@ -1550,6 +1550,10 @@ let rec insertRCWithAnalysis
 
             let rawSlotRetainTargets =
                 match cexpr with
+                | RawSlotInit (_, _, _, AST.TStream _) ->
+                    // A materialized Stream seeds its RC word at zero; the
+                    // first typed slot retain establishes the owning edge.
+                    []
                 | RawSlotInit (_, _, Var valueTemp, valueType) when
                     shapeNeedsBorrowedRetain ctx valueType
                     && not (tempProducesNonRcSentinel valueTemp) ->

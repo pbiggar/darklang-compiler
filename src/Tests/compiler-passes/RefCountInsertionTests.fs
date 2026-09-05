@@ -784,12 +784,15 @@ let private pathHasRetainsBeforeDec
 
     loop Set.empty expr
 
-let private rawSlotTransferTestFunction (usesValueAfterSlot: bool) : TypeContext * Function * TempId =
-    let listType = AST.TList AST.TString
+let private rawSlotTransferTestFunction
+    (valueType: AST.Type)
+    (usesValueAfterSlot: bool)
+    : TypeContext * Function * TempId =
+    let listType = AST.TList valueType
     let funcReg : AST_to_ANF.FunctionRegistry =
         Map.ofList [
-            ("makeString", AST.TFunction ([], AST.TString))
-            ("observeString", AST.TFunction ([AST.TString], AST.TUnit))
+            ("makeValue", AST.TFunction ([], valueType))
+            ("observeValue", AST.TFunction ([valueType], AST.TUnit))
             ("makeList", AST.TFunction ([], listType))
         ]
     let ctx : TypeContext = {
@@ -828,7 +831,7 @@ let private rawSlotTransferTestFunction (usesValueAfterSlot: bool) : TypeContext
             )
     let afterSlot =
         if usesValueAfterSlot then
-            Let (observedTemp, Call ("observeString", [Var valueTemp]), tail)
+            Let (observedTemp, Call ("observeValue", [Var valueTemp]), tail)
         else
             tail
     let func : Function = {
@@ -839,13 +842,13 @@ let private rawSlotTransferTestFunction (usesValueAfterSlot: bool) : TypeContext
         Body =
             Let (
                 valueTemp,
-                Call ("makeString", []),
+                Call ("makeValue", []),
                 Let (
                     ptrTemp,
                     RawAlloc (IntLiteral (Int64 16L)),
                     Let (
                         slotTemp,
-                        RawSlotInit (Var ptrTemp, IntLiteral (Int64 0L), Var valueTemp, AST.TString),
+                        RawSlotInit (Var ptrTemp, IntLiteral (Int64 0L), Var valueTemp, valueType),
                         Let (
                             countTemp,
                             RawWriteWord (Var ptrTemp, IntLiteral (Int64 8L), IntLiteral (Int64 1L)),
@@ -858,7 +861,7 @@ let private rawSlotTransferTestFunction (usesValueAfterSlot: bool) : TypeContext
     (ctx, func, valueTemp)
 
 let testFreshOwnedValueTransfersIntoRawSlot () : TestResult =
-    let (ctx, func, valueTemp) = rawSlotTransferTestFunction false
+    let (ctx, func, valueTemp) = rawSlotTransferTestFunction AST.TString false
     let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
 
     if hasRawSlotInitForValue valueTemp transformed.Body then
@@ -871,13 +874,25 @@ let testFreshOwnedValueTransfersIntoRawSlot () : TestResult =
         Ok ()
 
 let testRawSlotRetainsValueUsedAfterInitialization () : TestResult =
-    let (ctx, func, valueTemp) = rawSlotTransferTestFunction true
+    let (ctx, func, valueTemp) = rawSlotTransferTestFunction AST.TString true
     let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
 
     if not (hasRawSlotInitForValue valueTemp transformed.Body) then
         Error "Raw slot must retain a payload that remains in use after initialization"
     elif not (hasStringReleaseForTemp valueTemp transformed.Body) then
         Error "Raw-slot payload used afterward must keep the producer's pending release"
+    else
+        Ok ()
+
+let testRawSlotRetainsFreshStreamValue () : TestResult =
+    let streamType = AST.TStream AST.TInt64
+    let (ctx, func, valueTemp) = rawSlotTransferTestFunction streamType false
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if not (hasRawSlotInitForValue valueTemp transformed.Body) then
+        Error "Fresh Stream raw-slot payload must keep the retain that establishes its first owned edge"
+    elif not (hasRefCountDecForTemp valueTemp transformed.Body) then
+        Error "Fresh Stream raw-slot payload must retain its local pending release"
     else
         Ok ()
 
@@ -2524,6 +2539,7 @@ let tests = [
     ("malformed raw_get intrinsic does not infer Int64", testMalformedRawGetIntrinsicDoesNotInferInt64)
     ("fresh owned value transfers into raw slot", testFreshOwnedValueTransfersIntoRawSlot)
     ("raw slot retains value used after initialization", testRawSlotRetainsValueUsedAfterInitialization)
+    ("raw slot retains fresh Stream value", testRawSlotRetainsFreshStreamValue)
     ("returned aggregate transfers owned value through alias", testReturnedAggregateTransfersOwnedValueThroughAlias)
     ("returned aggregate transfers owned value through typed alias", testReturnedAggregateTransfersOwnedValueThroughTypedAlias)
     ("returned aggregate retains ownership-producing Stream alias", testReturnedAggregateRetainsOwnershipProducingStreamAlias)
