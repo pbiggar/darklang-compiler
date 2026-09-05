@@ -58,11 +58,10 @@ let uint64ToBytes (value: uint64) : byte array =
     |]
 
 /// Convert machine code words to little-endian bytes without per-word arrays
-let private machineCodeToBytes (machineCode: uint32 list) : byte array =
-    let words = machineCode |> List.toArray
-    let byteCount = words.Length * 4
+let private machineCodeToBytes (machineCode: uint32 array) : byte array =
+    let byteCount = machineCode.Length * 4
     Array.init byteCount (fun i ->
-        let word = words.[i / 4]
+        let word = machineCode.[i / 4]
         let shift = (i % 4) * 8
         byte ((word >>> shift) &&& 0xFFu))
 
@@ -311,7 +310,7 @@ let createStringData (stringPool: LiteralPool.StringPool) : byte array * Map<str
 
 /// Create a Mach-O executable with already-laid-out constant data.
 let private createExecutableWithDataBytes
-    (machineCode: uint32 list)
+    (machineCode: uint32 array)
     (dataBytes: byte array)
     (enableLeakCheck: bool)
     : byte array =
@@ -548,7 +547,7 @@ let private createExecutableWithDataBytes
 
 /// Create a Mach-O executable with float and string data
 let createExecutableWithPools
-    (machineCode: uint32 list)
+    (machineCode: uint32 array)
     (stringPool: LiteralPool.StringPool)
     (floatPool: LiteralPool.FloatPool)
     (enableLeakCheck: bool)
@@ -574,17 +573,17 @@ let createExecutableWithPools
     createExecutableWithDataBytes machineCode dataBytes enableLeakCheck
 
 /// Create a Mach-O executable with string data (legacy wrapper for backwards compatibility)
-let createExecutableWithStrings (machineCode: uint32 list) (stringPool: LiteralPool.StringPool) : byte array =
+let createExecutableWithStrings (machineCode: uint32 array) (stringPool: LiteralPool.StringPool) : byte array =
     createExecutableWithPools machineCode stringPool LiteralPool.emptyFloatPool false
 
 /// Create a minimal Mach-O executable from ARM64 machine code (legacy, no data)
-let createExecutable (machineCode: uint32 list) : byte array =
+let createExecutable (machineCode: uint32 array) : byte array =
     createExecutableWithPools machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false
 
 /// Create a Mach-O executable with coverage data section
 /// For now, coverage data is included in the __const section
 /// TODO: Add proper __DATA segment for writable coverage data on macOS
-let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: LiteralPool.StringPool) (floatPool: LiteralPool.FloatPool) (coverageExprCount: int) (enableLeakCheck: bool) : byte array =
+let createExecutableWithCoverage (machineCode: uint32 array) (stringPool: LiteralPool.StringPool) (floatPool: LiteralPool.FloatPool) (coverageExprCount: int) (enableLeakCheck: bool) : byte array =
     // For now, just include the coverage as zeros in the data section
     // This won't actually work for writing on macOS (need __DATA segment)
     // but allows the binary to be generated

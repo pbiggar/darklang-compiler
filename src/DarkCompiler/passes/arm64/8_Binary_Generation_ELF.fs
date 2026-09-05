@@ -50,18 +50,16 @@ let uint64ToBytes (value: uint64) : byte array =
     |]
 
 /// Convert machine code words to little-endian bytes without per-word arrays
-let private machineCodeToBytes (machineCode: uint32 list) : byte array =
-    let bytes = Array.zeroCreate (List.length machineCode * 4)
-    let rec writeWords offset remaining =
-        match remaining with
-        | [] -> bytes
-        | word :: rest ->
-            bytes.[offset] <- byte (word &&& 0xFFu)
-            bytes.[offset + 1] <- byte ((word >>> 8) &&& 0xFFu)
-            bytes.[offset + 2] <- byte ((word >>> 16) &&& 0xFFu)
-            bytes.[offset + 3] <- byte ((word >>> 24) &&& 0xFFu)
-            writeWords (offset + 4) rest
-    writeWords 0 machineCode
+let private machineCodeToBytes (machineCode: uint32 array) : byte array =
+    let bytes = Array.zeroCreate (machineCode.Length * 4)
+    machineCode
+    |> Array.iteri (fun index word ->
+        let offset = index * 4
+        bytes.[offset] <- byte (word &&& 0xFFu)
+        bytes.[offset + 1] <- byte ((word >>> 8) &&& 0xFFu)
+        bytes.[offset + 2] <- byte ((word >>> 16) &&& 0xFFu)
+        bytes.[offset + 3] <- byte ((word >>> 24) &&& 0xFFu))
+    bytes
 
 let private align8Int (value: int) : int =
     ((value + 7) / 8) * 8
@@ -223,7 +221,7 @@ let private createBinary
 
 /// Create an ELF executable with float and string data
 let createExecutableWithPools
-    (machineCode: uint32 list)
+    (machineCode: uint32 array)
     (stringPool: LiteralPool.StringPool)
     (floatPool: LiteralPool.FloatPool)
     (enableLeakCheck: bool)
@@ -253,18 +251,18 @@ let createExecutableWithPools
     |> serializeElf
 
 /// Create an ELF executable with string data (legacy wrapper for backwards compatibility)
-let createExecutableWithStrings (machineCode: uint32 list) (stringPool: LiteralPool.StringPool) : byte array =
+let createExecutableWithStrings (machineCode: uint32 array) (stringPool: LiteralPool.StringPool) : byte array =
     createExecutableWithPools machineCode stringPool LiteralPool.emptyFloatPool false
 
 /// Create a minimal ELF executable from ARM64 machine code (legacy, no data)
-let createExecutable (machineCode: uint32 list) : byte array =
+let createExecutable (machineCode: uint32 array) : byte array =
     createExecutableWithPools machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false
 
 /// Create an ELF executable with coverage data section
 /// coverageExprCount: number of coverage expressions (each needs 8 bytes)
 /// The coverage data is placed after strings and initialized to zero
 /// Uses a single RWX segment for simplicity (code + data + coverage)
-let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: LiteralPool.StringPool) (floatPool: LiteralPool.FloatPool) (coverageExprCount: int) (enableLeakCheck: bool) : byte array =
+let createExecutableWithCoverage (machineCode: uint32 array) (stringPool: LiteralPool.StringPool) (floatPool: LiteralPool.FloatPool) (coverageExprCount: int) (enableLeakCheck: bool) : byte array =
     let codeBytes =
         machineCodeToBytes machineCode
 

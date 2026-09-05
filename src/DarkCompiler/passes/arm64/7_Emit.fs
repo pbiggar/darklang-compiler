@@ -6,7 +6,7 @@
 module ARM64_Emit
 
 type EmitResult = {
-    MachineCode: ARM64.MachineCode list
+    MachineCode: ARM64.MachineCode array
     Binary: byte array
 }
 

@@ -103,7 +103,7 @@ let testSerializeSection64Size () : TestResult =
         Ok ()
 
 let testCreateExecutableNonEmpty () : TestResult =
-    let machineCode = [0xD65F03C0u]
+    let machineCode = [|0xD65F03C0u|]
     let binary = createExecutable machineCode
     if binary.Length = 0 then
         Error "createExecutable: binary is empty"
@@ -111,7 +111,7 @@ let testCreateExecutableNonEmpty () : TestResult =
         Ok ()
 
 let testCreateExecutableMagic () : TestResult =
-    let machineCode = [0xD65F03C0u]
+    let machineCode = [|0xD65F03C0u|]
     let binary = createExecutable machineCode
     let expectedMagic = [| 0xCFuy; 0xFAuy; 0xEDuy; 0xFEuy |]
     if binary.[0..3] <> expectedMagic then
@@ -120,7 +120,7 @@ let testCreateExecutableMagic () : TestResult =
         Ok ()
 
 let testCreateExecutableContainsCode () : TestResult =
-    let machineCode = [0xD65F03C0u]
+    let machineCode = [|0xD65F03C0u|]
     let binary = createExecutable machineCode
     let retBytes = [| 0xC0uy; 0x03uy; 0x5Fuy; 0xD6uy |]
     let found =
@@ -144,7 +144,7 @@ let testMachOConstSectionOffsetPointsToAlignedData () : TestResult =
         LiteralPool.addString LiteralPool.emptyStringPool "abc"
 
     let binary =
-        createExecutableWithPools [0xD65F03C0u] stringPool LiteralPool.emptyFloatPool false
+        createExecutableWithPools [|0xD65F03C0u|] stringPool LiteralPool.emptyFloatPool false
 
     let textSegmentOffset = 32 + 72
     let firstSectionOffset = textSegmentOffset + 72
@@ -182,7 +182,7 @@ let testElfWriteToFileReturnsErrorForInvalidPath () : TestResult =
 
 let testCreateExecutableWithCoverageIncludesCoverageSection () : TestResult =
     let binary =
-        createExecutableWithCoverage [0xD65F03C0u] LiteralPool.emptyStringPool LiteralPool.emptyFloatPool 3 false
+        createExecutableWithCoverage [|0xD65F03C0u|] LiteralPool.emptyStringPool LiteralPool.emptyFloatPool 3 false
 
     let textSegmentOffset = 32 + 72
     let textSegmentNumSectionsOffset = 64
@@ -397,7 +397,7 @@ let testCompleteEncodingPipeline () : TestResult =
         Error "Complete pipeline: wrong RET encoding"
     else
         // Verify binary generation
-        let binary = createExecutable machineCode
+        let binary = createExecutable (List.toArray machineCode)
         if binary.Length = 0 then
             Error "Complete pipeline: binary is empty"
         else

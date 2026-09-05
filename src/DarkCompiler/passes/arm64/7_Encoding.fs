@@ -1492,7 +1492,7 @@ let encodeSymbolicWithPools
     (os: Platform.OS)
     (enableLeakCheck: bool)
     (phaseRecorder: (string -> float -> unit) option)
-    : ARM64.MachineCode list =
+    : ARM64.MachineCode array =
     let timer = System.Diagnostics.Stopwatch.StartNew ()
     let recordPhase name startedAt =
         phaseRecorder
@@ -1537,23 +1537,24 @@ let encodeSymbolicWithPools
     recordPhase "ARM64 Encode Label Map" labelMapStart
 
     // Step 5: Encode with label resolution (current offset includes file offset)
-    let rec encodeLoop instrs offset acc =
+    let encoded = Array.zeroCreate<ARM64.MachineCode> (codeSize / 4)
+    let rec encodeLoop instrs offset outputIndex =
         match instrs with
-        | [] -> List.rev acc
+        | [] -> encoded
         | ARM64Symbolic.Label _ :: rest ->
-            encodeLoop rest offset acc
+            encodeLoop rest offset outputIndex
         | instr :: rest ->
-            let code =
+            encoded.[outputIndex] <-
                 encodeSymbolicWithLabels
                     instr
                     offset
                     codeLabelMap
                     dataOffsets
                     dataLabels
-            encodeLoop rest (offset + 4) (code :: acc)
+            encodeLoop rest (offset + 4) (outputIndex + 1)
 
     let encodeLoopStart = timer.Elapsed.TotalMilliseconds
-    let encoded = encodeLoop instructions codeFileOffset []
+    let encoded = encodeLoop instructions codeFileOffset 0
     recordPhase "ARM64 Encode Instructions" encodeLoopStart
     encoded
 
@@ -1565,7 +1566,7 @@ let encodeAllWithPools
     (floatPool: LiteralPool.FloatPool)
     (os: Platform.OS)
     (enableLeakCheck: bool)
-    : ARM64.MachineCode list =
+    : ARM64.MachineCode array =
     instructions
     |> List.map ARM64Symbolic.ofARM64
     |> fun symbolic ->
