@@ -689,6 +689,19 @@ let rec private hasRefCountIncForTemp (target: TempId) (expr: AExpr) : bool =
         hasRefCountIncForTemp target thenBranch
         || hasRefCountIncForTemp target elseBranch
 
+let rec private countRefCountIncsForTemps (targets: Set<TempId>) (expr: AExpr) : int =
+    match expr with
+    | Return _ ->
+        0
+    | Let (_, RefCountInc (Var tempId, _, _, _), body) ->
+        let current = if Set.contains tempId targets then 1 else 0
+        current + countRefCountIncsForTemps targets body
+    | Let (_, _, body) ->
+        countRefCountIncsForTemps targets body
+    | If (_, thenBranch, elseBranch) ->
+        countRefCountIncsForTemps targets thenBranch
+        + countRefCountIncsForTemps targets elseBranch
+
 let rec private hasRefCountDecForTemp (target: TempId) (expr: AExpr) : bool =
     match expr with
     | Return _ ->
@@ -983,12 +996,13 @@ let testReturnedAggregateDoesNotTransferDuplicatedAliases () : TestResult =
 
     let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
 
-    if hasRefCountIncForTemp firstAlias transformed.Body
-       && hasRefCountIncForTemp secondAlias transformed.Body
-       && hasRefCountDecForTemp childTemp transformed.Body then
+    let retainCount =
+        countRefCountIncsForTemps (Set.ofList [firstAlias; secondAlias]) transformed.Body
+
+    if retainCount = 1 && not (hasRefCountDecForTemp childTemp transformed.Body) then
         Ok ()
     else
-        Error "Duplicated aliases must retain both aggregate edges and preserve the original owner's release"
+        Error $"Duplicated aliases should transfer one owned edge and retain one shared edge; got {retainCount} retains"
 
 let testStaticStringBindingSkipsNoOpRcTraffic () : TestResult =
     let ctx : TypeContext = {

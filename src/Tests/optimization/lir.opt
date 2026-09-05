@@ -118,7 +118,7 @@ makeTransferEnvelope:
     Ret
 
 ---NAME---
-ownership_transfer_rejects_duplicate_child
+ownership_transfer_duplicate_child_reuses_owned_edge
 ---INPUT---
 type DuplicateTransferTree = DuplicateTransferLeaf of Int64 | DuplicateTransferNode of (DuplicateTransferTree, DuplicateTransferTree)
 
@@ -159,11 +159,9 @@ makeDuplicateTransferPair:
     RestoreRegs([], [])
     v10008 <- Mov(Reg X0)
     RefCountInc(v10008, 16, generic)
-    RefCountInc(v10008, 16, generic)
     v10009 <- HeapAlloc(16)
     HeapStore(v10009, 0, Reg v10008)
     HeapStore(v10009, 8, Reg v10008)
-    RefCountDec(v10008, 16, generic)
     X0 <- Mov(Reg v10009)
     Ret
 

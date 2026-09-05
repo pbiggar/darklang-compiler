@@ -488,32 +488,30 @@ let private atomOccurrenceCount (target: TempId) (atoms: Atom list) : int =
         | Var tempId when tempId = target -> 1
         | _ -> 0)
 
-/// True when an aggregate takes exactly one ownership-bearing field from target.
+/// Count ownership-bearing aggregate fields drawn from an alias family.
 /// RecordClone's source record is borrowed by the clone operation, so it cannot
 /// be the ownership-transfer use.
-let private aggregateConsumesExactlyOnce (target: TempId) (cexpr: CExpr) : bool =
+let private aggregateAliasFieldCount
+    (aliases: Set<TempId>)
+    (cexpr: CExpr)
+    : int =
+    let countFields (fields: Atom list) : int =
+        aliases
+        |> Set.toList
+        |> List.sumBy (fun target -> atomOccurrenceCount target fields)
+
     match cexpr with
     | TupleAlloc elements
     | RecordAlloc (_, elements)
     | ClosureAlloc (_, elements) ->
-        atomOccurrenceCount target elements = 1
+        countFields elements
     | RecordClone (_, source, fields) ->
-        not (ANF_Optimize.atomUsesTemp target source)
-        && atomOccurrenceCount target fields = 1
+        let sourceUsesAlias =
+            aliases
+            |> Set.exists (fun target -> ANF_Optimize.atomUsesTemp target source)
+        if sourceUsesAlias then 0 else countFields fields
     | _ ->
-        false
-
-let private aggregateConsumesExactlyOneAlias
-    (aliases: Set<TempId>)
-    (cexpr: CExpr)
-    : bool =
-    aliases
-    |> Set.toList
-    |> List.sumBy (fun target ->
-        if aggregateConsumesExactlyOnce target cexpr then 1
-        elif ANF_Optimize.cexprUsesTemp target cexpr then 2
-        else 0)
-    |> (=) 1
+        0
 
 let private cexprUsesAnyAlias (aliases: Set<TempId>) (cexpr: CExpr) : bool =
     aliases
@@ -535,7 +533,7 @@ let rec private aggregateFlowsDirectlyToReturn
             when Set.contains sourceId aliases ->
             loop (Set.add aliasId aliases) nextBody
         | RLet (nextId, nextExpr, nextBody, _) ->
-            aggregateConsumesExactlyOneAlias aliases nextExpr
+            aggregateAliasFieldCount aliases nextExpr > 0
             && aggregateFlowsDirectlyToReturn nextId nextBody
         | RReturn _
         | RIf _ ->
@@ -556,7 +554,7 @@ let rec private transfersIntoReturnedAggregate
             when Set.contains sourceId aliases ->
             loop (Set.add aliasId aliases) nextBody
         | RLet (aggregateId, cexpr, nextBody, _) ->
-            if aggregateConsumesExactlyOneAlias aliases cexpr then
+            if aggregateAliasFieldCount aliases cexpr > 0 then
                 aggregateFlowsDirectlyToReturn aggregateId nextBody
             elif cexprUsesAnyAlias aliases cexpr then
                 false
@@ -1478,20 +1476,24 @@ let rec insertRCWithAnalysis
 
             let transferredOwnership =
                 allocationIncTargets
-                |> List.choose (fun (targetId, _) ->
+                |> List.fold (fun (transfers, transferredOwners) (targetId, _) ->
                     let ownerId = resolveAliasOwner targetId
-                    frames
-                    |> List.tryPick (fun candidate ->
-                        match candidate.TransferableOwnership with
-                        | Some ((candidateOwnerId, _, _) as pendingDec) when candidateOwnerId = ownerId ->
-                            Some (targetId, pendingDec)
-                        | _ ->
-                            None))
-
-            let transferredTargetIds =
-                transferredOwnership
-                |> List.map fst
-                |> Set.ofList
+                    if Set.contains ownerId transferredOwners then
+                        (transfers, transferredOwners)
+                    else
+                        frames
+                        |> List.tryPick (fun candidate ->
+                            match candidate.TransferableOwnership with
+                            | Some ((candidateOwnerId, _, _) as pendingDec) when candidateOwnerId = ownerId ->
+                                Some pendingDec
+                            | _ ->
+                                None)
+                        |> Option.map (fun pendingDec ->
+                            ((targetId, pendingDec) :: transfers, Set.add ownerId transferredOwners))
+                        |> Option.defaultValue (transfers, transferredOwners)
+                ) ([], Set.empty)
+                |> fst
+                |> List.rev
 
             let transferredOwnerIds =
                 transferredOwnership
@@ -1499,8 +1501,21 @@ let rec insertRCWithAnalysis
                 |> Set.ofList
 
             let allocationIncTargetsAfterTransfers =
-                allocationIncTargets
-                |> List.filter (fun (targetId, _) -> not (Set.contains targetId transferredTargetIds))
+                let removeFirstTarget
+                    (targetId: TempId)
+                    (targets: (TempId * AST.Type) list)
+                    : (TempId * AST.Type) list =
+                    let rec loop prefix remaining =
+                        match remaining with
+                        | [] -> List.rev prefix
+                        | (candidateId, _) :: tail when candidateId = targetId ->
+                            List.rev prefix @ tail
+                        | head :: tail ->
+                            loop (head :: prefix) tail
+                    loop [] targets
+
+                transferredOwnership
+                |> List.fold (fun targets (targetId, _) -> removeFirstTarget targetId targets) allocationIncTargets
 
             let rec removePendingDec
                 (target: ReturnDec)
