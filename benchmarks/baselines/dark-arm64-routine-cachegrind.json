@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs"
   },
   "contract_sha256": "b4e6ba180a5f68f107005cf8867371144b93d3ed5326517cea45284c74fa6cc2",
-  "generated_at": "2026-09-05T21:23:51+00:00",
+  "generated_at": "2026-09-05T22:16:25+00:00",
   "compiler": {
-    "commit": "fab29995ed61eefa735aa0a5d29e997aba41976c",
-    "subject": "Update affine tests for explicit Int64 literals"
+    "commit": "eecff235ad25fc1e783ceb288d780f7466b95434",
+    "subject": "Reuse duplicate effect-free direct calls"
   },
   "benchmarks": [
     {
@@ -58,7 +58,7 @@
     },
     {
       "name": "merkletrees",
-      "instructions": 386671847
+      "instructions": 193343646
     },
     {
       "name": "nbody",
@@ -82,7 +82,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 69747761
+      "instructions": 69747717
     },
     {
       "name": "sum_to_n",
