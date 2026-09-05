@@ -197,6 +197,48 @@ let testBICRegisterEncoding () : TestResult =
     | [word] -> Error $"BIC_reg: expected 0x8A220023, got 0x{word:X8}"
     | words -> Error $"BIC_reg: expected 1 word, got {List.length words}"
 
+let testPreparedChunksPreserveWholeProgramEncoding () : TestResult =
+    let literal = ARM64Symbolic.DataLabel (ARM64Symbolic.StringLiteral "chunked")
+    let chunks = [
+        [
+            ARM64Symbolic.Label "_start"
+            ARM64Symbolic.MOVZ (X0, 42us, 0)
+            ARM64Symbolic.BL "callee"
+            ARM64Symbolic.ADRP (X1, literal)
+            ARM64Symbolic.ADD_label (X1, X1, literal)
+        ]
+        [
+            ARM64Symbolic.Label "callee"
+            ARM64Symbolic.RET
+        ]
+    ]
+    let flattened = List.concat chunks
+    let (expectedStrings, expectedFloats) =
+        ARM64_Resolve.collectPools flattened
+    let expected =
+        encodeSymbolicWithPools
+            flattened
+            expectedStrings
+            expectedFloats
+            Platform.Linux
+            false
+    let prepared = chunks |> List.map prepareSymbolicChunk
+    let (actualStrings, actualFloats) =
+        prepared
+        |> Seq.collect (fun chunk -> chunk.PoolLabelRefs)
+        |> ARM64_Resolve.collectPoolsFromLabelRefs
+    let actual =
+        encodePreparedChunksWithPools
+            prepared
+            actualStrings
+            actualFloats
+            Platform.Linux
+            false
+    if actual = expected then
+        Ok ()
+    else
+        Error $"Prepared chunks changed whole-program encoding: expected={expected}, actual={actual}"
+
 let testInvalidAssertDifferentValueIsRejected () : TestResult =
     let content =
         """---INPUT-ARM64---
@@ -224,6 +266,7 @@ let tests = [
     ("move-wide shifts reject invalid values", testMoveWideShiftsRejectInvalidValues)
     ("FMOV immediate encoding", testFMOVImmediateEncoding)
     ("BIC register encoding", testBICRegisterEncoding)
+    ("prepared chunks preserve whole-program encoding", testPreparedChunksPreserveWholeProgramEncoding)
     ("invalid ASSERT-DIFFERENT value is rejected", testInvalidAssertDifferentValueIsRejected)
 ]
 
