@@ -12,9 +12,13 @@ type EmitResult = {
 
 /// Resolve label refs, encode machine code, and generate a binary for the target OS
 let emitBinary
-    (instructions: ARM64Symbolic.Instr list)
+    (program: CodeGen.GeneratedProgram)
     (os: Platform.OS)
     (enableLeakCheck: bool)
+    (prepareCachedChunk:
+        (ARM64Symbolic.Instr list
+            -> (unit -> ARM64_Encoding.PreparedChunk)
+            -> ARM64_Encoding.PreparedChunk) option)
     (phaseRecorder: (string -> float -> unit) option)
     : EmitResult =
     let timer = System.Diagnostics.Stopwatch.StartNew ()
@@ -22,14 +26,30 @@ let emitBinary
         phaseRecorder
         |> Option.iter (fun record -> record name (timer.Elapsed.TotalMilliseconds - startedAt))
 
+    let preparationStart = timer.Elapsed.TotalMilliseconds
+    let preparedChunks =
+        program
+        |> CodeGen.generatedProgramChunks
+        |> List.map (fun chunk ->
+            let prepare () =
+                ARM64_Encoding.prepareSymbolicChunk chunk.Instructions
+            match prepareCachedChunk with
+            | Some cache when chunk.ReusableAcrossCompilations ->
+                cache chunk.Instructions prepare
+            | _ -> prepare ())
+    recordPhase "ARM64 Emit Chunk Preparation" preparationStart
+
     let poolStart = timer.Elapsed.TotalMilliseconds
-    let (stringPool, floatPool) = ARM64_Resolve.collectPools instructions
+    let (stringPool, floatPool) =
+        preparedChunks
+        |> Seq.collect (fun chunk -> chunk.PoolLabelRefs)
+        |> ARM64_Resolve.collectPoolsFromLabelRefs
     recordPhase "ARM64 Emit Pool Collection" poolStart
 
     let encodingStart = timer.Elapsed.TotalMilliseconds
     let machineCode =
-        ARM64_Encoding.encodeSymbolicWithPools
-            instructions
+        ARM64_Encoding.encodePreparedChunksWithPools
+            preparedChunks
             stringPool
             floatPool
             os

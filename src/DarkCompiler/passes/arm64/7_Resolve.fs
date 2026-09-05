@@ -26,6 +26,16 @@ let private addLabelRefToPools
             let (_, pool') = LiteralPool.addFloat state.FloatPool value
             { state with FloatPool = pool' }
 
+let collectPoolsFromLabelRefs
+    (labelRefs: seq<ARM64Symbolic.LabelRef>)
+    : LiteralPool.StringPool * LiteralPool.FloatPool =
+    let initialState = {
+        StringPool = LiteralPool.emptyStringPool
+        FloatPool = LiteralPool.emptyFloatPool
+    }
+    let pools = Seq.fold addLabelRefToPools initialState labelRefs
+    (pools.StringPool, pools.FloatPool)
+
 let collectPools
     (instructions: ARM64Symbolic.Instr list)
     : LiteralPool.StringPool * LiteralPool.FloatPool =

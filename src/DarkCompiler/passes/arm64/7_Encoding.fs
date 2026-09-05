@@ -1073,6 +1073,55 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     | ARM64Symbolic.BL _ -> []
     | _ -> [encodeSymbolicWord symbolicInstr]
 
+type PreparedChunk = {
+    /// Fixed words are encoded once. Relocation slots contain zero until the
+    /// final program layout is known.
+    MachineCodeTemplate: ARM64.MachineCode array
+    Relocations: struct (int * ARM64Symbolic.Instr) array
+    CodeLabels: struct (string * int) array
+    PoolLabelRefs: ARM64Symbolic.LabelRef array
+}
+
+let prepareSymbolicChunk
+    (instructions: ARM64Symbolic.Instr list)
+    : PreparedChunk =
+    let words = ResizeArray<ARM64.MachineCode>()
+    let relocations = ResizeArray<struct (int * ARM64Symbolic.Instr)>()
+    let codeLabels = ResizeArray<struct (string * int)>()
+    let poolLabelRefs = ResizeArray<ARM64Symbolic.LabelRef>()
+
+    let addRelocation instr =
+        relocations.Add(struct (words.Count, instr))
+        words.Add 0u
+
+    instructions
+    |> List.iter (fun instr ->
+        match instr with
+        | ARM64Symbolic.Label name ->
+            codeLabels.Add(struct (name, words.Count * 4))
+        | ARM64Symbolic.ADRP (_, labelRef)
+        | ARM64Symbolic.ADD_label (_, _, labelRef)
+        | ARM64Symbolic.ADR (_, labelRef) ->
+            poolLabelRefs.Add labelRef
+            addRelocation instr
+        | ARM64Symbolic.CBZ _
+        | ARM64Symbolic.CBNZ _
+        | ARM64Symbolic.B_label _
+        | ARM64Symbolic.B_cond_label _
+        | ARM64Symbolic.TBZ_label _
+        | ARM64Symbolic.TBNZ_label _
+        | ARM64Symbolic.BL _ ->
+            addRelocation instr
+        | _ ->
+            words.Add (encodeSymbolicWord instr))
+
+    {
+        MachineCodeTemplate = words.ToArray()
+        Relocations = relocations.ToArray()
+        CodeLabels = codeLabels.ToArray()
+        PoolLabelRefs = poolLabelRefs.ToArray()
+    }
+
 /// Two-Pass Encoding for Label Resolution
 
 /// Pass 1: Compute byte offset for each concrete label.
@@ -1485,8 +1534,8 @@ let computeLeakCounterLabel (codeFileOffset: int) (codeSize: int) (floatPoolSize
 
 /// Encode symbolic instructions with string and float pool support
 /// Resolves label refs on the fly to avoid allocating a concrete instruction list
-let encodeSymbolicWithPools
-    (instructions: ARM64Symbolic.Instr list)
+let encodePreparedChunksWithPools
+    (chunks: PreparedChunk list)
     (stringPool: LiteralPool.StringPool)
     (floatPool: LiteralPool.FloatPool)
     (os: Platform.OS)
@@ -1500,10 +1549,17 @@ let encodeSymbolicWithPools
 
     let codeFileOffset =
         computeCodeFileOffset os stringPool floatPool enableLeakCheck
-    // Step 1: Compute code size and code label positions in one pass.
+    // Step 1: Compose cached relative chunk layouts into one program layout.
     let layoutStart = timer.Elapsed.TotalMilliseconds
     let (codeSize, rawCodeLabels) =
-        computeSymbolicLayout instructions
+        chunks
+        |> List.fold (fun (chunkOffset, labels) chunk ->
+            let labels =
+                chunk.CodeLabels
+                |> Array.fold (fun labels struct (name, relativeOffset) ->
+                    Map.add name (chunkOffset + relativeOffset) labels) labels
+            (chunkOffset + (chunk.MachineCodeTemplate.Length * 4), labels))
+            (0, Map.empty)
     recordPhase "ARM64 Encode Layout" layoutStart
 
     // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
@@ -1538,25 +1594,50 @@ let encodeSymbolicWithPools
 
     // Step 5: Encode with label resolution (current offset includes file offset)
     let encoded = Array.zeroCreate<ARM64.MachineCode> (codeSize / 4)
-    let rec encodeLoop instrs offset outputIndex =
-        match instrs with
+    let rec encodeChunks remaining outputIndex =
+        match remaining with
         | [] -> encoded
-        | ARM64Symbolic.Label _ :: rest ->
-            encodeLoop rest offset outputIndex
-        | instr :: rest ->
-            encoded.[outputIndex] <-
-                encodeSymbolicWithLabels
-                    instr
-                    offset
-                    codeLabelMap
-                    dataOffsets
-                    dataLabels
-            encodeLoop rest (offset + 4) (outputIndex + 1)
+        | chunk :: rest ->
+            Array.blit
+                chunk.MachineCodeTemplate
+                0
+                encoded
+                outputIndex
+                chunk.MachineCodeTemplate.Length
+            chunk.Relocations
+            |> Array.iter (fun struct (relativeIndex, instr) ->
+                let absoluteIndex = outputIndex + relativeIndex
+                encoded.[absoluteIndex] <-
+                    encodeSymbolicWithLabels
+                        instr
+                        (codeFileOffset + (absoluteIndex * 4))
+                        codeLabelMap
+                        dataOffsets
+                        dataLabels)
+            encodeChunks rest (outputIndex + chunk.MachineCodeTemplate.Length)
 
     let encodeLoopStart = timer.Elapsed.TotalMilliseconds
-    let encoded = encodeLoop instructions codeFileOffset 0
+    let encoded = encodeChunks chunks 0
     recordPhase "ARM64 Encode Instructions" encodeLoopStart
     encoded
+
+/// Encode one symbolic stream through the same prepared-chunk path used by
+/// production emission.
+let encodeSymbolicWithPools
+    (instructions: ARM64Symbolic.Instr list)
+    (stringPool: LiteralPool.StringPool)
+    (floatPool: LiteralPool.FloatPool)
+    (os: Platform.OS)
+    (enableLeakCheck: bool)
+    (phaseRecorder: (string -> float -> unit) option)
+    : ARM64.MachineCode array =
+    encodePreparedChunksWithPools
+        [prepareSymbolicChunk instructions]
+        stringPool
+        floatPool
+        os
+        enableLeakCheck
+        phaseRecorder
 
 /// Compatibility entry point for concrete instruction streams. The compiler's
 /// production path keeps instructions symbolic through encoding.

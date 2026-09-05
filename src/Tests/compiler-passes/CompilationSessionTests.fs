@@ -107,6 +107,31 @@ let testArm64CodegenMetricsAreOptIn (_: CompilerLibrary.StdlibResult) () : TestR
     | ordinaryMetrics, profiledMetrics ->
         Error $"Expected only the opted-in session to retain one function metric, got ordinary={ordinaryMetrics.Length}, profiled={profiledMetrics.Length}"
 
+let testArm64EmissionChunkCacheUsesChunkIdentity (_: CompilerLibrary.StdlibResult) () : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    let instructions = [ARM64Symbolic.MOVZ (ARM64.X0, 42us, 0)]
+    let structurallyEquivalentInstructions =
+        [ARM64Symbolic.MOVZ (ARM64.X0, 42us, 0)]
+    let preparations = ResizeArray<unit>()
+    let prepare chunk () =
+        preparations.Add ()
+        ARM64_Encoding.prepareSymbolicChunk chunk
+    let first =
+        session.PrepareArm64EmissionChunk instructions (prepare instructions)
+    let repeated =
+        session.PrepareArm64EmissionChunk instructions (prepare instructions)
+    let structurallyEquivalent =
+        session.PrepareArm64EmissionChunk
+            structurallyEquivalentInstructions
+            (prepare structurallyEquivalentInstructions)
+    if preparations.Count = 2
+       && System.Object.ReferenceEquals(first, repeated)
+       && not (System.Object.ReferenceEquals(first, structurallyEquivalent))
+       && session.CachedArm64EmissionChunkCount = 2 then
+        Ok ()
+    else
+        Error $"Expected identity-based prepared chunk reuse, got preparations={preparations.Count}, cached={session.CachedArm64EmissionChunkCount}, repeated={System.Object.ReferenceEquals(first, repeated)}, structural={System.Object.ReferenceEquals(first, structurallyEquivalent)}"
+
 let testArm64ReleasePlanSummaryCacheConfirmsPlanShape (_: CompilerLibrary.StdlibResult) () : TestResult =
     use session = new CompilerLibrary.CompilationSession()
     let firstPlan = ANF.NoReleasePlan
@@ -223,6 +248,7 @@ let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
     ("compilation session codegen metrics are opt-in", testArm64CodegenMetricsAreOptIn stdlib)
+    ("compilation session reuses prepared ARM64 chunks by identity", testArm64EmissionChunkCacheUsesChunkIdentity stdlib)
     ("compilation session confirms ARM64 release-plan cache shapes", testArm64ReleasePlanSummaryCacheConfirmsPlanShape stdlib)
     ("expression-only type checking reuses base registries", testExpressionTypeCheckingReusesBaseRegistries stdlib)
     ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)

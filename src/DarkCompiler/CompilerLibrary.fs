@@ -150,6 +150,12 @@ type private LirFunctionReferenceComparer() =
         member _.GetHashCode(func) =
             System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func)
 
+type private Arm64InstructionChunkReferenceComparer() =
+    interface IEqualityComparer<ARM64Symbolic.Instr list> with
+        member _.Equals(left, right) = Object.ReferenceEquals(left, right)
+        member _.GetHashCode(instructions) =
+            System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(instructions)
+
 type CompilationSession(collectCodegenMetrics: bool) =
     let jsonPlanning = new JsonPlanning.PlanningSession()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
@@ -163,6 +169,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
             Dictionary<
                 ARM64.TargetConfig * CodeGen.CodeGenOptions,
                 Result<ARM64Symbolic.Instr list, string>>>(LirFunctionReferenceComparer())
+    let arm64EmissionChunks =
+        Dictionary<
+            ARM64Symbolic.Instr list,
+            ARM64_Encoding.PreparedChunk>(Arm64InstructionChunkReferenceComparer())
     let arm64ReleasePlanSummaries =
         Dictionary<
             bool * string,
@@ -268,7 +278,22 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     arm64CodegenMissCount <- arm64CodegenMissCount + 1
                     result
 
+    member _.PrepareArm64EmissionChunk
+        (instructions: ARM64Symbolic.Instr list)
+        (prepare: unit -> ARM64_Encoding.PreparedChunk)
+        : ARM64_Encoding.PreparedChunk =
+        if disposed then prepare ()
+        else
+            match arm64EmissionChunks.TryGetValue instructions with
+            | true, prepared -> prepared
+            | false, _ ->
+                let prepared = prepare ()
+                arm64EmissionChunks.[instructions] <- prepared
+                prepared
+
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
+    member _.CachedArm64EmissionChunkCount =
+        if disposed then 0 else arm64EmissionChunks.Count
     member _.CachedArm64ReleasePlanSummaryCount =
         if disposed then 0
         else arm64ReleasePlanSummaries.Values |> Seq.sumBy List.length
@@ -286,6 +311,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             (jsonPlanning :> System.IDisposable).Dispose()
             arm64Functions.Clear()
             arm64FunctionsByReference.Clear()
+            arm64EmissionChunks.Clear()
             arm64ReleasePlanSummaries.Clear()
             arm64CodegenMetrics.Clear()
             disposed <- true
@@ -888,13 +914,15 @@ let private generateBinary
             let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
             if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
             let emitStart = sw.Elapsed.TotalMilliseconds
-            let arm64Instructions =
-                CodeGen.generatedProgramInstructions arm64Program
+            let prepareCachedChunk =
+                session
+                |> Option.map (fun current -> current.PrepareArm64EmissionChunk)
             let emit =
                 ARM64_Emit.emitBinary
-                    arm64Instructions
+                    arm64Program
                     os
                     options.EnableLeakCheck
+                    prepareCachedChunk
                     codegenPhaseRecorder
             let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
             recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
