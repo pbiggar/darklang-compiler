@@ -1491,14 +1491,23 @@ let encodeSymbolicWithPools
     (floatPool: LiteralPool.FloatPool)
     (os: Platform.OS)
     (enableLeakCheck: bool)
+    (phaseRecorder: (string -> float -> unit) option)
     : ARM64.MachineCode list =
+    let timer = System.Diagnostics.Stopwatch.StartNew ()
+    let recordPhase name startedAt =
+        phaseRecorder
+        |> Option.iter (fun record -> record name (timer.Elapsed.TotalMilliseconds - startedAt))
+
     let codeFileOffset =
         computeCodeFileOffset os stringPool floatPool enableLeakCheck
     // Step 1: Compute code size and code label positions in one pass.
+    let layoutStart = timer.Elapsed.TotalMilliseconds
     let (codeSize, rawCodeLabels) =
         computeSymbolicLayout instructions
+    recordPhase "ARM64 Encode Layout" layoutStart
 
     // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
+    let literalOffsetsStart = timer.Elapsed.TotalMilliseconds
     let floatOffsets =
         computeFloatLiteralOffsets codeFileOffset codeSize floatPool
     let floatPoolSize =
@@ -1510,6 +1519,9 @@ let encodeSymbolicWithPools
 
     let stringPoolSize =
         getStringPoolSize stringPool
+    recordPhase "ARM64 Encode Literal Offsets" literalOffsetsStart
+
+    let labelMapStart = timer.Elapsed.TotalMilliseconds
     let leakLabels =
         if enableLeakCheck then
             computeLeakCounterLabel codeFileOffset codeSize floatPoolSize stringPoolSize
@@ -1522,6 +1534,7 @@ let encodeSymbolicWithPools
 
     let dataLabels = leakLabels
     let dataOffsets = LiteralOffsets (stringOffsets, floatOffsets)
+    recordPhase "ARM64 Encode Label Map" labelMapStart
 
     // Step 5: Encode with label resolution (current offset includes file offset)
     let rec encodeLoop instrs offset acc =
@@ -1539,7 +1552,10 @@ let encodeSymbolicWithPools
                     dataLabels
             encodeLoop rest (offset + 4) (code :: acc)
 
-    encodeLoop instructions codeFileOffset []
+    let encodeLoopStart = timer.Elapsed.TotalMilliseconds
+    let encoded = encodeLoop instructions codeFileOffset []
+    recordPhase "ARM64 Encode Instructions" encodeLoopStart
+    encoded
 
 /// Compatibility entry point for concrete instruction streams. The compiler's
 /// production path keeps instructions symbolic through encoding.
@@ -1554,3 +1570,4 @@ let encodeAllWithPools
     |> List.map ARM64Symbolic.ofARM64
     |> fun symbolic ->
         encodeSymbolicWithPools symbolic stringPool floatPool os enableLeakCheck
+            None

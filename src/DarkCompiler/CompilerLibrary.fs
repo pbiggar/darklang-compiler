@@ -886,7 +886,12 @@ let private generateBinary
             let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
             if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
             let emitStart = sw.Elapsed.TotalMilliseconds
-            let emit = ARM64_Emit.emitBinary arm64Instructions os options.EnableLeakCheck
+            let emit =
+                ARM64_Emit.emitBinary
+                    arm64Instructions
+                    os
+                    options.EnableLeakCheck
+                    codegenPhaseRecorder
             let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
             recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
             if verbosity >= 2 then
