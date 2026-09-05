@@ -15,6 +15,7 @@ let emitBinary
     (instructions: ARM64Symbolic.Instr list)
     (os: Platform.OS)
     (enableLeakCheck: bool)
+    (tryCachedEncoding: (ARM64Symbolic.Instr -> ARM64.MachineCode option) option)
     (phaseRecorder: (string -> float -> unit) option)
     : EmitResult =
     let timer = System.Diagnostics.Stopwatch.StartNew ()
@@ -34,6 +35,7 @@ let emitBinary
             floatPool
             os
             enableLeakCheck
+            tryCachedEncoding
             phaseRecorder
     recordPhase "ARM64 Emit Encoding" encodingStart
 

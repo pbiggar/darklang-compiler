@@ -1073,6 +1073,25 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     | ARM64Symbolic.BL _ -> []
     | _ -> [encodeSymbolicWord symbolicInstr]
 
+/// Pre-encode instructions whose machine word is independent of program
+/// layout, code labels, and literal-pool addresses.
+let tryEncodePositionIndependent
+    (instr: ARM64Symbolic.Instr)
+    : ARM64.MachineCode option =
+    match instr with
+    | ARM64Symbolic.CBZ _
+    | ARM64Symbolic.CBNZ _
+    | ARM64Symbolic.B_label _
+    | ARM64Symbolic.B_cond_label _
+    | ARM64Symbolic.Label _
+    | ARM64Symbolic.ADRP _
+    | ARM64Symbolic.ADR _
+    | ARM64Symbolic.ADD_label _
+    | ARM64Symbolic.TBZ_label _
+    | ARM64Symbolic.TBNZ_label _
+    | ARM64Symbolic.BL _ -> None
+    | _ -> Some (encodeSymbolicWord instr)
+
 /// Two-Pass Encoding for Label Resolution
 
 /// Pass 1: Compute byte offset for each concrete label.
@@ -1491,6 +1510,7 @@ let encodeSymbolicWithPools
     (floatPool: LiteralPool.FloatPool)
     (os: Platform.OS)
     (enableLeakCheck: bool)
+    (tryCachedEncoding: (ARM64Symbolic.Instr -> ARM64.MachineCode option) option)
     (phaseRecorder: (string -> float -> unit) option)
     : ARM64.MachineCode array =
     let timer = System.Diagnostics.Stopwatch.StartNew ()
@@ -1545,12 +1565,15 @@ let encodeSymbolicWithPools
             encodeLoop rest offset outputIndex
         | instr :: rest ->
             encoded.[outputIndex] <-
-                encodeSymbolicWithLabels
-                    instr
-                    offset
-                    codeLabelMap
-                    dataOffsets
-                    dataLabels
+                match tryCachedEncoding |> Option.bind (fun find -> find instr) with
+                | Some code -> code
+                | None ->
+                    encodeSymbolicWithLabels
+                        instr
+                        offset
+                        codeLabelMap
+                        dataOffsets
+                        dataLabels
             encodeLoop rest (offset + 4) (outputIndex + 1)
 
     let encodeLoopStart = timer.Elapsed.TotalMilliseconds
@@ -1570,5 +1593,5 @@ let encodeAllWithPools
     instructions
     |> List.map ARM64Symbolic.ofARM64
     |> fun symbolic ->
-        encodeSymbolicWithPools symbolic stringPool floatPool os enableLeakCheck
+        encodeSymbolicWithPools symbolic stringPool floatPool os enableLeakCheck None
             None

@@ -150,6 +150,12 @@ type private LirFunctionReferenceComparer() =
         member _.GetHashCode(func) =
             System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func)
 
+type private Arm64InstructionReferenceComparer() =
+    interface IEqualityComparer<ARM64Symbolic.Instr> with
+        member _.Equals(left, right) = Object.ReferenceEquals(left, right)
+        member _.GetHashCode(instr) =
+            System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(instr)
+
 type CompilationSession(collectCodegenMetrics: bool) =
     let jsonPlanning = new JsonPlanning.PlanningSession()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
@@ -163,6 +169,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
             Dictionary<
                 ARM64.TargetConfig * CodeGen.CodeGenOptions,
                 Result<ARM64Symbolic.Instr list, string>>>(LirFunctionReferenceComparer())
+    let arm64PositionIndependentEncodings =
+        Dictionary<ARM64Symbolic.Instr, ARM64.MachineCode>(Arm64InstructionReferenceComparer())
     let arm64ReleasePlanSummaries =
         Dictionary<
             bool * string,
@@ -238,6 +246,16 @@ type CompilationSession(collectCodegenMetrics: bool) =
                         if collectCodegenMetrics then Some (Stopwatch.StartNew())
                         else None
                     let result = generate ()
+                    match result with
+                    | Ok instructions ->
+                        instructions
+                        |> List.iter (fun instr ->
+                            match ARM64_Encoding.tryEncodePositionIndependent instr with
+                            | Some machineCode ->
+                                arm64PositionIndependentEncodings.TryAdd(instr, machineCode)
+                                |> ignore
+                            | None -> ())
+                    | Error _ -> ()
                     match timer with
                     | Some timer ->
                         timer.Stop()
@@ -268,7 +286,18 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     arm64CodegenMissCount <- arm64CodegenMissCount + 1
                     result
 
+    member _.TryArm64PositionIndependentEncoding
+        (instr: ARM64Symbolic.Instr)
+        : ARM64.MachineCode option =
+        if disposed then None
+        else
+            match arm64PositionIndependentEncodings.TryGetValue instr with
+            | true, machineCode -> Some machineCode
+            | false, _ -> None
+
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
+    member _.CachedArm64PositionIndependentEncodingCount =
+        if disposed then 0 else arm64PositionIndependentEncodings.Count
     member _.CachedArm64ReleasePlanSummaryCount =
         if disposed then 0
         else arm64ReleasePlanSummaries.Values |> Seq.sumBy List.length
@@ -286,6 +315,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             (jsonPlanning :> System.IDisposable).Dispose()
             arm64Functions.Clear()
             arm64FunctionsByReference.Clear()
+            arm64PositionIndependentEncodings.Clear()
             arm64ReleasePlanSummaries.Clear()
             arm64CodegenMetrics.Clear()
             disposed <- true
@@ -887,10 +917,14 @@ let private generateBinary
             if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
             let emitStart = sw.Elapsed.TotalMilliseconds
             let emit =
+                let tryCachedEncoding =
+                    session
+                    |> Option.map (fun current -> current.TryArm64PositionIndependentEncoding)
                 ARM64_Emit.emitBinary
                     arm64Instructions
                     os
                     options.EnableLeakCheck
+                    tryCachedEncoding
                     codegenPhaseRecorder
             let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
             recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
