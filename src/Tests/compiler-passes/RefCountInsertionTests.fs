@@ -877,6 +877,55 @@ let testReturnedAggregateTransfersOwnedValueThroughTypedAlias () : TestResult =
     else
         Ok ()
 
+let testReturnedAggregateRetainsOwnershipProducingStreamAlias () : TestResult =
+    let streamType = AST.TStream AST.TInt64
+    let outerType = AST.TTuple [streamType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("wrapStream", AST.TFunction ([], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let ptrTemp = TempId 0
+    let streamTemp = TempId 1
+    let outerTemp = TempId 2
+    let func : Function = {
+        Name = "wrapStream"
+        TypedParams = []
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                ptrTemp,
+                RawAlloc (IntLiteral (Int64 32L)),
+                Let (
+                    streamTemp,
+                    TypedAtom (Var ptrTemp, streamType),
+                    Let (
+                        outerTemp,
+                        TupleAlloc [Var streamTemp],
+                        Return (Var outerTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp streamTemp transformed.Body then
+        Ok ()
+    else
+        Error "RawPtr-to-Stream creates ownership at the aggregate boundary and must retain the Stream alias"
+
 let testReturnedAggregateTransfersOwnedValueAfterBorrowedUse () : TestResult =
     let childType = AST.TTuple [AST.TInt64]
     let outerType = AST.TTuple [childType; AST.TInt64]
@@ -2194,6 +2243,7 @@ let tests = [
     ("malformed raw_get intrinsic does not infer Int64", testMalformedRawGetIntrinsicDoesNotInferInt64)
     ("returned aggregate transfers owned value through alias", testReturnedAggregateTransfersOwnedValueThroughAlias)
     ("returned aggregate transfers owned value through typed alias", testReturnedAggregateTransfersOwnedValueThroughTypedAlias)
+    ("returned aggregate retains ownership-producing Stream alias", testReturnedAggregateRetainsOwnershipProducingStreamAlias)
     ("returned aggregate transfers owned value after borrowed use", testReturnedAggregateTransfersOwnedValueAfterBorrowedUse)
     ("explicit release blocks later aggregate transfer", testExplicitReleaseBlocksLaterAggregateTransfer)
     ("returned aggregate transfers nested owned aliases", testReturnedAggregateTransfersNestedOwnedAliases)

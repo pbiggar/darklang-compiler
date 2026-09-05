@@ -455,6 +455,18 @@ let rec collectAliasChain (aliases: Map<TempId, TempId>) (tempId: TempId) : Set<
     | Some nextId -> Set.add tempId (collectAliasChain aliases nextId)
     | None -> Set.singleton tempId
 
+/// Most TypedAtoms only preserve type information for an existing value. A
+/// RawPtr-to-Stream TypedAtom is different: Stream construction seeds its RC
+/// word at zero and relies on the first owning use to materialize an edge.
+/// Following that cast back to the RawPtr would invent ownership that does not
+/// yet exist and incorrectly remove the required retain.
+let private tryOwnershipPreservingAliasSource (cexpr: CExpr) : TempId option =
+    match cexpr with
+    | Atom (Var sourceId) -> Some sourceId
+    | TypedAtom (Var _, AST.TStream _) -> None
+    | TypedAtom (Var sourceId, _) -> Some sourceId
+    | _ -> None
+
 /// Analyze return values and track alias chains in a single pass
 let rec analyzeReturns
     (aliases: Map<TempId, TempId>)
@@ -469,9 +481,8 @@ let rec analyzeReturns
         RReturn (atom, returned)
     | Let (tempId, cexpr, body) ->
         let aliases' =
-            match cexpr with
-            | Atom (Var sourceId)
-            | TypedAtom (Var sourceId, _) -> Map.add tempId sourceId aliases
+            match tryOwnershipPreservingAliasSource cexpr with
+            | Some sourceId -> Map.add tempId sourceId aliases
             | _ -> aliases
         let bodyInfo = analyzeReturns aliases' body
         RLet (tempId, cexpr, bodyInfo, returnedSet bodyInfo)
@@ -534,13 +545,13 @@ let rec private aggregateFlowsDirectlyToReturn
         match body with
         | RReturn (Var returnedId, _) ->
             Set.contains returnedId aliases
-        | RLet (aliasId, Atom (Var sourceId), nextBody, _)
-        | RLet (aliasId, TypedAtom (Var sourceId, _), nextBody, _)
-            when Set.contains sourceId aliases ->
-            loop (Set.add aliasId aliases) nextBody
         | RLet (nextId, nextExpr, nextBody, _) ->
-            aggregateAliasFieldCount aliases nextExpr > 0
-            && aggregateFlowsDirectlyToReturn nextId nextBody
+            match tryOwnershipPreservingAliasSource nextExpr with
+            | Some sourceId when Set.contains sourceId aliases ->
+                loop (Set.add nextId aliases) nextBody
+            | _ ->
+                aggregateAliasFieldCount aliases nextExpr > 0
+                && aggregateFlowsDirectlyToReturn nextId nextBody
         | RReturn _
         | RIf _ ->
             false
@@ -556,17 +567,17 @@ let rec private transfersIntoReturnedAggregate
     : bool =
     let rec loop (aliases: Set<TempId>) (body: ReturnAnnotatedExpr) : bool =
         match body with
-        | RLet (aliasId, Atom (Var sourceId), nextBody, _)
-        | RLet (aliasId, TypedAtom (Var sourceId, _), nextBody, _)
-            when Set.contains sourceId aliases ->
-            loop (Set.add aliasId aliases) nextBody
         | RLet (aggregateId, cexpr, nextBody, _) ->
-            if aggregateAliasFieldCount aliases cexpr > 0 then
-                aggregateFlowsDirectlyToReturn aggregateId nextBody
-            elif cexprReleasesAnyAlias aliases cexpr then
-                false
-            else
-                loop aliases nextBody
+            match tryOwnershipPreservingAliasSource cexpr with
+            | Some sourceId when Set.contains sourceId aliases ->
+                loop (Set.add aggregateId aliases) nextBody
+            | _ ->
+                if aggregateAliasFieldCount aliases cexpr > 0 then
+                    aggregateFlowsDirectlyToReturn aggregateId nextBody
+                elif cexprReleasesAnyAlias aliases cexpr then
+                    false
+                else
+                    loop aliases nextBody
         | RReturn _
         | RIf _ ->
             false
@@ -1389,10 +1400,9 @@ let rec insertRCWithAnalysis
                 frames
                 |> List.tryFind (fun frame -> frame.TempId = targetId)
                 |> Option.map (fun frame ->
-                    match frame.CExpr with
-                    | Atom (Var sourceId)
-                    | TypedAtom (Var sourceId, _) -> tempProducesNonRcSentinel sourceId
-                    | sourceExpr -> cexprProducesNonRcSentinel sourceExpr)
+                    match tryOwnershipPreservingAliasSource frame.CExpr with
+                    | Some sourceId -> tempProducesNonRcSentinel sourceId
+                    | None -> cexprProducesNonRcSentinel frame.CExpr)
                 |> Option.defaultValue false
 
             let allocationIncTargets =
@@ -1475,10 +1485,9 @@ let rec insertRCWithAnalysis
                 frames
                 |> List.tryFind (fun frame -> frame.TempId = targetId)
                 |> Option.map (fun frame ->
-                    match frame.CExpr with
-                    | Atom (Var sourceId)
-                    | TypedAtom (Var sourceId, _) -> resolveAliasOwner sourceId
-                    | _ -> targetId)
+                    match tryOwnershipPreservingAliasSource frame.CExpr with
+                    | Some sourceId -> resolveAliasOwner sourceId
+                    | None -> targetId)
                 |> Option.defaultValue targetId
 
             let transferredOwnership =
