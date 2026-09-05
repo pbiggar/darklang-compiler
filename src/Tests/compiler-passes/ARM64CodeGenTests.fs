@@ -17,9 +17,6 @@ let private generatePreparedARM64WithOptions target options program =
 let private generatePreparedARM64 target program =
     generatePreparedARM64WithOptions target CodeGen.defaultOptions program
 
-let private genericReleaseOutliningOptions =
-    { CodeGen.defaultOptions with OutlineGenericReleasePlans = true }
-
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
     let releasePlan = ANF.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ
     { ANF.ReleasePlanCacheKey = ANF.rcReleasePlanCacheKey typ releasePlan
@@ -121,42 +118,6 @@ let private emitsPlannedListHelperLabel (instrs: ARM64Symbolic.Instr list) : boo
         | _ ->
             false)
 
-let testGenericReleasePlanIsOutlinedOnce () : TestResult =
-    let valueType = AST.TTuple (List.replicate 32 AST.TString)
-    let metadata = rcMetadata valueType
-    let program =
-        makeSimpleProgramWithVariants
-            [
-                LIR.RefCountDec (LIR.Physical LIR.X0, 256, LIR.GenericHeap, Some metadata)
-                LIR.RefCountDec (LIR.Physical LIR.X1, 256, LIR.GenericHeap, Some metadata)
-            ]
-            Map.empty
-
-    match generatePreparedARM64WithOptions target genericReleaseOutliningOptions program with
-    | Error error -> Error $"Generic release helper lowering failed: {error}"
-    | Ok instructions ->
-        let plannedCalls =
-            instructions
-            |> List.choose (function
-                | ARM64Symbolic.BL label when label.StartsWith("__dark_generic_refcount_dec_plan_") ->
-                    Some label
-                | _ ->
-                    None)
-        let plannedLabels =
-            instructions
-            |> List.choose (function
-                | ARM64Symbolic.Label label when label.StartsWith("__dark_generic_refcount_dec_plan_") ->
-                    Some label
-                | _ ->
-                    None)
-
-        match plannedCalls, plannedLabels with
-        | [ firstCall; secondCall ], [ helperLabel ]
-            when firstCall = helperLabel && secondCall = helperLabel ->
-            Ok ()
-        | _ ->
-            Error $"Expected two calls to one outlined generic release helper, got calls={plannedCalls}; labels={plannedLabels}"
-
 let testSmallGenericReleasePlanRemainsInline () : TestResult =
     let valueType = AST.TTuple [ AST.TString ]
     let program =
@@ -169,24 +130,29 @@ let testSmallGenericReleasePlanRemainsInline () : TestResult =
                     Some (rcMetadata valueType))
             ]
             Map.empty
+        |> CodeGen.prepareARM64Program
+    let generatedCacheEntries = ResizeArray<string>()
+    let cache
+        (func: LIR.Function)
+        (generate: unit -> Result<ARM64Symbolic.Instr list, string>)
+        : Result<ARM64Symbolic.Instr list, string> =
+        generatedCacheEntries.Add func.Name
+        generate ()
 
-    match generatePreparedARM64WithOptions target genericReleaseOutliningOptions program with
+    match CodeGen.generateARM64WithOptionsAndCache
+              target
+              CodeGen.defaultOptions
+              (Some cache)
+              None
+              program with
     | Error error -> Error $"Small generic release lowering failed: {error}"
-    | Ok instructions ->
-        let emitsGenericHelper =
-            instructions
-            |> List.exists (function
-                | ARM64Symbolic.BL label
-                | ARM64Symbolic.Label label ->
-                    label.StartsWith("__dark_generic_refcount_dec_plan_")
-                | _ ->
-                    false)
-        if emitsGenericHelper then
-            Error "Small generic release plan was outlined despite the complexity cutoff"
-        else
+    | Ok _ ->
+        if Seq.isEmpty generatedCacheEntries then
             Ok ()
+        else
+            Error $"Small generic release plan generated cache entries {Seq.toList generatedCacheEntries}"
 
-let testDisabledGenericReleaseOutliningRemainsInline () : TestResult =
+let testGenericReleasePlanRemainsInline () : TestResult =
     let valueType = AST.TTuple (List.replicate 32 AST.TString)
     let program =
         makeSimpleProgramWithVariants
@@ -200,7 +166,7 @@ let testDisabledGenericReleaseOutliningRemainsInline () : TestResult =
             Map.empty
 
     match generatePreparedARM64 target program with
-    | Error error -> Error $"Disabled generic release outlining failed: {error}"
+    | Error error -> Error $"Generic release lowering failed: {error}"
     | Ok instructions ->
         let emitsGenericHelper =
             instructions
@@ -211,7 +177,71 @@ let testDisabledGenericReleaseOutliningRemainsInline () : TestResult =
                 | _ ->
                     false)
         if emitsGenericHelper then
-            Error "Generic release plan was outlined while the compile-time option was disabled"
+            Error "Generic release plan emitted an outlined helper"
+        else
+            Ok ()
+
+let testInlineGenericReleaseTemplateCachePreservesInstructions () : TestResult =
+    let valueType = AST.TTuple (List.replicate 32 AST.TString)
+    let metadata = rcMetadata valueType
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (LIR.Physical LIR.X0, 256, LIR.GenericHeap, Some metadata)
+                LIR.RefCountDec (LIR.Physical LIR.X0, 256, LIR.GenericHeap, Some metadata)
+            ]
+            Map.empty
+        |> CodeGen.prepareARM64Program
+    let target = ARM64.targetConfigFor Platform.LinuxARM64
+    let generatedTemplates = ResizeArray<string>()
+    let entries =
+        System.Collections.Generic.Dictionary<
+            LIR.Function,
+            Result<ARM64Symbolic.Instr list, string>>()
+    let cache
+        (func: LIR.Function)
+        (generate: unit -> Result<ARM64Symbolic.Instr list, string>)
+        : Result<ARM64Symbolic.Instr list, string> =
+        match entries.TryGetValue func with
+        | true, result ->
+            result
+        | false, _ ->
+            let result = generate ()
+            generatedTemplates.Add func.Name
+            entries.[func] <- result
+            result
+
+    match CodeGen.generateARM64WithOptions target CodeGen.defaultOptions program,
+          CodeGen.generateARM64WithOptionsAndCache
+              target
+              CodeGen.defaultOptions
+              (Some cache)
+              None
+              program with
+    | Error error, _
+    | _, Error error ->
+        Error $"Inline generic release template lowering failed: {error}"
+    | Ok uncached, Ok cached ->
+        let inlineTemplateNames =
+            generatedTemplates
+            |> Seq.filter (fun name ->
+                name.StartsWith("__dark_inline_generic_release_template_"))
+            |> Seq.toList
+        let emitsGenericHelper =
+            cached
+            |> List.exists (function
+                | ARM64Symbolic.BL label
+                | ARM64Symbolic.Label label ->
+                    label.StartsWith("__dark_generic_refcount_dec_plan_")
+                | _ ->
+                    false)
+
+        if cached <> uncached then
+            Error "Cached inline generic releases changed the generated instructions"
+        elif emitsGenericHelper then
+            Error "Cached inline generic releases emitted an outlined helper"
+        elif List.length inlineTemplateNames <> 1 then
+            Error $"Expected one cached inline generic release template, got {inlineTemplateNames}"
         else
             Ok ()
 
@@ -276,7 +306,8 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let ctx : CodeGen.CodeGenContext = {
         Target = target; Options = CodeGen.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; PlannedListDecHelperLabels = Map.empty
-        PlannedGenericDecHelperLabels = Map.empty
+        InlineGenericReleaseTemplateLabels = Map.empty
+        CacheInlineGenericReleaseTemplate = None
         FunctionName = func.Name; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_arm64_layout"
     }
@@ -356,7 +387,8 @@ let private generatedEntryTransfers
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
         PlannedListDecHelperLabels = Map.empty
-        PlannedGenericDecHelperLabels = Map.empty
+        InlineGenericReleaseTemplateLabels = Map.empty
+        CacheInlineGenericReleaseTemplate = None
         FunctionName = func.Name
         InstructionSite = ""
         StackSize = func.StackSize
@@ -498,7 +530,8 @@ let private convertRawAlloc
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
         PlannedListDecHelperLabels = Map.empty
-        PlannedGenericDecHelperLabels = Map.empty
+        InlineGenericReleaseTemplateLabels = Map.empty
+        CacheInlineGenericReleaseTemplate = None
         FunctionName = "test"
         InstructionSite = "test_0"
         StackSize = 0
@@ -1773,9 +1806,9 @@ let tests : (string * (unit -> TestResult)) list = [
     ("RawAlloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)
     ("Runtime print string length uses full immediate", testRuntimePrintStringLengthUsesFullImmediate)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
-    ("Generic release plan is outlined once", testGenericReleasePlanIsOutlinedOnce)
     ("Small generic release plan remains inline", testSmallGenericReleasePlanRemainsInline)
-    ("Disabled generic release outlining remains inline", testDisabledGenericReleaseOutliningRemainsInline)
+    ("Generic release plan remains inline", testGenericReleasePlanRemainsInline)
+    ("Inline generic release template cache preserves instructions", testInlineGenericReleaseTemplateCachePreservesInstructions)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
     ("List tuple3 closure/list/dict-list uses typed dict helper", testListTuple3ClosureListDictListValueUsesTypedDictHelper)

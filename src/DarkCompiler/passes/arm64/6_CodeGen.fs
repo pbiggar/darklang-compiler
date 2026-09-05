@@ -27,9 +27,6 @@ type CodeGenOptions = {
     CoverageExprCount: int
     /// Enable leak checking instrumentation
     EnableLeakCheck: bool
-    /// Prefer smaller, faster-to-generate code for short-lived test binaries.
-    /// Outlined generic releases add runtime call preservation overhead.
-    OutlineGenericReleasePlans: bool
 }
 
 /// Default code generation options
@@ -38,8 +35,16 @@ let defaultOptions : CodeGenOptions = {
     EnableCoverage = false
     CoverageExprCount = 0
     EnableLeakCheck = false
-    OutlineGenericReleasePlans = false
 }
+
+/// Reuses the symbolic instruction list for a large generic release while
+/// leaving that list inline at every call site.
+type InlineGenericReleaseTemplateCache =
+    string
+        -> ARM64Symbolic.Reg
+        -> bool
+        -> (unit -> ARM64Symbolic.Instr list)
+        -> ARM64Symbolic.Instr list
 
 /// Code generation context (passed through to instruction conversion)
 type CodeGenContext = {
@@ -51,8 +56,12 @@ type CodeGenContext = {
     ClosureCaptureTypes: Map<string, AST.Type list>
     /// Reuses labels already derived while planning generic list release helpers.
     PlannedListDecHelperLabels: Map<ANF.RcReleasePlan, string>
-    /// Outlines complex generic-root releases once per distinct reachable plan.
-    PlannedGenericDecHelperLabels: Map<ANF.RcReleasePlan, string>
+    /// Names complex generic-root releases for inline template reuse. Compact
+    /// keys avoid comparing expanded recursive plans at every release site.
+    InlineGenericReleaseTemplateLabels: Map<string, string>
+    /// Memoizes large inline generic releases by plan, register, and the one
+    /// ownership policy that can affect their instruction shape.
+    CacheInlineGenericReleaseTemplate: InlineGenericReleaseTemplateCache option
     FunctionName: string
     /// Deterministic block/instruction identity for labels emitted by an effect.
     /// One source effect can be cloned into multiple CFG locations.
@@ -80,7 +89,7 @@ let private heapOverflowLabelPrefix = "__heap_oom_"
 let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
 let private plannedListRefCountDecHelperLabelPrefix = "__dark_list_refcount_dec_plan_"
-let private plannedGenericRefCountDecHelperLabelPrefix = "__dark_generic_refcount_dec_plan_"
+let private inlineGenericReleaseTemplateLabelPrefix = "__dark_inline_generic_release_template_"
 let private listRefCountDecStringHelperLabel = "__dark_list_refcount_dec_string_helper"
 let private listRefCountDecBlobHelperLabel = "__dark_list_refcount_dec_blob_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
@@ -110,16 +119,19 @@ let private stableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
         fnvOffset
     |> fun hash -> hash.ToString("x16")
 
-// Small fixed blocks are cheaper to leave in cached function bodies: outlining
-// adds a save/call/restore sequence and another emitted symbol. Stop counting
-// as soon as a plan is large enough that repeated recursive expansion is the
-// dominant cost.
-let private genericReleasePlanOutlineNodeThreshold = ANF.rcReleasePlanCompactKeyNodeThreshold
+// Small fixed blocks are cheaper to build directly than to name and cache.
+// Stop counting as soon as repeated recursive expansion becomes the dominant
+// cost and an immutable inline template is worthwhile.
+let private genericReleaseTemplateNodeThreshold = ANF.rcReleasePlanCompactKeyNodeThreshold
 
 let private genericReleasePlanIsExpensive (releasePlan: ANF.RcReleasePlan) : bool =
     ANF.rcReleasePlanExceedsNodeCount
-        genericReleasePlanOutlineNodeThreshold
+        genericReleaseTemplateNodeThreshold
         releasePlan
+
+let private callerOwnsSinglePayloadSum (functionName: string) : bool =
+    functionName.StartsWith("Stdlib.Dict.")
+    || not (functionName.StartsWith("Stdlib."))
 
 let private recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
     let hash =
@@ -133,8 +145,8 @@ let private recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
 let private plannedListDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
 
-let private plannedGenericDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
-    $"{plannedGenericRefCountDecHelperLabelPrefix}{ANF.rcReleasePlanFingerprint releasePlan}"
+let private inlineGenericReleaseTemplateLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+    $"{inlineGenericReleaseTemplateLabelPrefix}{ANF.rcReleasePlanFingerprint releasePlan}"
 
 let private plannedDictDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     $"{plannedDictRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
@@ -5460,11 +5472,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 let releaseSumPayloadInstrs =
                     match releasePlan with
                     | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants))) ->
-                        let callerOwnsSinglePayloadSum =
-                            ctx.FunctionName.StartsWith("Stdlib.Dict.")
-                            || not (ctx.FunctionName.StartsWith("Stdlib."))
-
-                        if List.length variants = 1 && not callerOwnsSinglePayloadSum then
+                        if List.length variants = 1
+                           && not (callerOwnsSinglePayloadSum ctx.FunctionName) then
                             []
                         else
                             releaseBoxedSumVariantFieldsFrom ARM64Symbolic.X11 variants
@@ -5638,42 +5647,24 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 ]
                 [ARM64Symbolic.CBZ_offset (addrReg, List.length streamDecCall + 1)] @ streamDecCall
             | LIR.GenericHeap ->
-                let plannedHelperLabel =
-                    if ctx.Options.OutlineGenericReleasePlans then
-                        releasePlan
-                        |> Option.bind (fun plan -> Map.tryFind plan ctx.PlannedGenericDecHelperLabels)
-                    else
-                        None
-                match plannedHelperLabel with
-                | Some helperLabel ->
-                    // RefCountDec was register-allocated as an inline effect,
-                    // so preserve every allocatable integer register across
-                    // the newly outlined call.
-                    let callInstrs = [
-                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -128s)
-                        ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
-                        ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
-                        ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
-                        ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
-                        ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
-                        ARM64Symbolic.STP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
-                        ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
-                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, addrReg)
-                        ARM64Symbolic.BL helperLabel
-                        ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 112s)
-                        ARM64Symbolic.LDP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 96s)
-                        ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
-                        ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
-                        ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
-                        ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
-                        ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
-                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 128s)
-                    ]
-                    [ARM64Symbolic.CBZ_offset (addrReg, List.length callInstrs + 1)] @ callInstrs
-                | None ->
-                    let inlineDecPath = tupleDecPath ()
-                    let cbzOffset = List.length inlineDecPath + 1
-                    [ARM64Symbolic.CBZ_offset (addrReg, cbzOffset)] @ inlineDecPath)
+                let inlineDecPath =
+                    match (metadata
+                           |> Option.bind (fun value -> value.ReleasePlanCacheKey)),
+                          ctx.CacheInlineGenericReleaseTemplate with
+                    | Some releasePlanCacheKey, Some cache ->
+                        match Map.tryFind releasePlanCacheKey ctx.InlineGenericReleaseTemplateLabels with
+                        | Some planLabel ->
+                            cache
+                                planLabel
+                                addrReg
+                                (callerOwnsSinglePayloadSum ctx.FunctionName)
+                                tupleDecPath
+                        | None ->
+                            tupleDecPath ()
+                    | _ ->
+                        tupleDecPath ()
+                let cbzOffset = List.length inlineDecPath + 1
+                [ARM64Symbolic.CBZ_offset (addrReg, cbzOffset)] @ inlineDecPath)
 
     | LIR.StringConcat (dest, left, right) ->
         // String concatenation:
@@ -6518,51 +6509,11 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X9, 0s)        // coverage_buffer[exprId] = X10
         ])
 
-let private generatePlannedGenericRefCountDecHelper
-    (helperLabel: string)
-    (payloadSize: int)
-    (releasePlan: ANF.RcReleasePlan)
-    (ctx: CodeGenContext)
-    : ARM64Symbolic.Instr list =
-    // An empty helper map asks convertInstr for the existing inline
-    // implementation exactly once, rather than recursively calling the helper
-    // that is currently being defined. Nested releases are emitted directly by
-    // that implementation and do not consult this map.
-    let helperCtx = {
-        ctx with
-            PlannedGenericDecHelperLabels = Map.empty
-            FunctionName = helperLabel
-            InstructionSite = "root"
-    }
-    let metadata = {
-        // This synthetic instruction is lowered immediately and never participates
-        // in helper planning, so computing another whole-plan fingerprint is wasted work.
-        ANF.ReleasePlanCacheKey = None
-        ANF.ReleasePlan = Some releasePlan
-        ANF.SourceType = None
-    }
-
-    match convertInstr helperCtx (LIR.RefCountDec (LIR.Physical LIR.X0, payloadSize, LIR.GenericHeap, Some metadata)) with
-    | Ok body ->
-        [
-            ARM64Symbolic.Label helperLabel
-            // The expanded body may call another release helper. Preserve our
-            // caller's link register until the complete plan has finished.
-            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X30, ARM64Symbolic.SP, -16s)
-        ]
-        @ body
-        @ [
-            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
-            ARM64Symbolic.RET
-        ]
-    | Error error ->
-        Crash.crash $"ARM64 generic release helper generation failed for {helperLabel}: {error}"
-
-/// The compilation-session cache accepts LIR functions as keys. Generic
-/// release helpers are fully identified by their collision-checked stable
+/// The compilation-session cache accepts LIR functions as keys. Inline generic
+/// release templates are fully identified by their collision-checked stable
 /// label, so use a tiny synthetic function rather than embedding the enormous
 /// release plan in the dictionary key and structurally hashing it each time.
-let private plannedGenericRefCountDecHelperCacheKey (helperLabel: string) : LIR.Function =
+let private inlineGenericReleaseTemplateCacheKey (templateName: string) : LIR.Function =
     let entry = LIR.Label "cache_entry"
     let block : LIR.BasicBlock = {
         Label = entry
@@ -6570,7 +6521,7 @@ let private plannedGenericRefCountDecHelperCacheKey (helperLabel: string) : LIR.
         Terminator = LIR.Ret
     }
     {
-        Name = helperLabel
+        Name = templateName
         TypedParams = []
         CFG = {
             Entry = entry
@@ -7387,7 +7338,7 @@ let private mergePrecomputedPlannedListHelpers
         left
         right
 
-let private mergePrecomputedPlannedGenericHelpers
+let private mergePrecomputedInlineGenericReleaseTemplates
     (left: Map<string, int * ANF.RcReleasePlan>)
     (right: Map<string, int * ANF.RcReleasePlan>)
     : Map<string, int * ANF.RcReleasePlan> =
@@ -7395,7 +7346,7 @@ let private mergePrecomputedPlannedGenericHelpers
         (fun acc label spec ->
             match Map.tryFind label acc with
             | Some existing when existing <> spec ->
-                Crash.crash $"planned generic RC helper label collision for {label}"
+                Crash.crash $"inline generic release template label collision for {label}"
             | Some _ -> acc
             | None -> Map.add label spec acc)
         left
@@ -7444,16 +7395,16 @@ let private addPrecomputedPlannedDictHelper
             PlannedDictDecHelpers =
                 Map.add label releasePlan summary.PlannedDictDecHelpers }
 
-let private addPrecomputedPlannedGenericHelper
+let private addPrecomputedInlineGenericReleaseTemplate
     payloadSize
     releasePlan
     (summary: RcReleasePlanSummary)
     : RcReleasePlanSummary =
-    let label = plannedGenericDecHelperLabelForReleasePlan releasePlan
+    let label = inlineGenericReleaseTemplateLabelForReleasePlan releasePlan
     let spec = (payloadSize, releasePlan)
     match Map.tryFind label summary.PlannedGenericDecHelpers with
     | Some existing when existing <> spec ->
-        Crash.crash $"planned generic RC helper label collision for {label}"
+        Crash.crash $"inline generic release template label collision for {label}"
     | Some _ -> summary
     | None ->
         { summary with
@@ -7583,7 +7534,7 @@ let private summarizePrecomputedReleasePlan includeStaticRootDependencies releas
     match releasePlan with
     | ANF.RootRelease (payloadSize, ANF.GenericHeap, (ANF.FixedBlockPayloadRelease _ | ANF.BoxedSumPayloadRelease _))
         when genericReleasePlanIsExpensive releasePlan ->
-        addPrecomputedPlannedGenericHelper payloadSize releasePlan summary
+        addPrecomputedInlineGenericReleaseTemplate payloadSize releasePlan summary
     | _ ->
         summary
 
@@ -7626,7 +7577,7 @@ let private addPrecomputedReleasePlanRequirements
                 requirements.PlannedListDecHelpers
                 summary.PlannedListDecHelpers
         PlannedGenericDecHelpers =
-            mergePrecomputedPlannedGenericHelpers
+            mergePrecomputedInlineGenericReleaseTemplates
                 requirements.PlannedGenericDecHelpers
                 summary.PlannedGenericDecHelpers
         PlannedDictDecHelpers =
@@ -7731,7 +7682,7 @@ let private mergePrecomputedRcHelperRequirements
         PlannedListDecHelpers =
             mergePrecomputedPlannedListHelpers left.PlannedListDecHelpers right.PlannedListDecHelpers
         PlannedGenericDecHelpers =
-            mergePrecomputedPlannedGenericHelpers left.PlannedGenericDecHelpers right.PlannedGenericDecHelpers
+            mergePrecomputedInlineGenericReleaseTemplates left.PlannedGenericDecHelpers right.PlannedGenericDecHelpers
         PlannedDictDecHelpers =
             mergePrecomputedPlannedDictHelpers left.PlannedDictDecHelpers right.PlannedDictDecHelpers
         DictDecHelperLabels = Set.union left.DictDecHelperLabels right.DictDecHelperLabels
@@ -7997,17 +7948,71 @@ let private generatePreparedARM64WithOptionsAndCache
 
     // These plans were named once when per-function facts were attached. Only
     // the maps carried by functions that survived tree shaking are merged.
-    let plannedGenericDecHelpers =
-        if options.OutlineGenericReleasePlans then
-            rcHelperRequirements.PlannedGenericDecHelpers
-        else
-            Map.empty
+    let genericReleaseTemplateCandidates =
+        rcHelperRequirements.PlannedGenericDecHelpers
 
-    let plannedGenericDecHelperLabels =
-        plannedGenericDecHelpers
+    let genericReleaseTemplateCandidateLabelsByPlan =
+        genericReleaseTemplateCandidates
         |> Map.toList
         |> List.map (fun (helperLabel, (_, releasePlan)) -> releasePlan, helperLabel)
         |> Map.ofList
+
+    let inlineGenericReleaseTemplateLabels =
+        functionsWithFacts
+        |> List.fold
+            (fun labels (_, facts) ->
+                facts.RefCountDecRequirements
+                |> Map.fold
+                    (fun labels (kind, memoKey) metadata ->
+                        match kind, memoKey, rcMetadataReleasePlan metadata with
+                        | LIR.GenericHeap, LIR.FingerprintedReleasePlan cacheKey, Some releasePlan ->
+                            match Map.tryFind releasePlan genericReleaseTemplateCandidateLabelsByPlan with
+                            | None ->
+                                labels
+                            | Some planLabel ->
+                                match Map.tryFind cacheKey labels with
+                                | Some existing when existing <> planLabel ->
+                                    Crash.crash $"inline generic release template key collision for {cacheKey}"
+                                | Some _ ->
+                                    labels
+                                | None ->
+                                    Map.add cacheKey planLabel labels
+                        | _ ->
+                            labels)
+                    labels)
+            Map.empty
+
+    let localInlineGenericReleaseTemplates =
+        System.Collections.Generic.Dictionary<
+            string * ARM64Symbolic.Reg * bool,
+            ARM64Symbolic.Instr list>()
+
+    let cacheInlineGenericReleaseTemplate
+        (planLabel: string)
+        (addrReg: ARM64Symbolic.Reg)
+        (ownsSinglePayloadSum: bool)
+        (generate: unit -> ARM64Symbolic.Instr list)
+        : ARM64Symbolic.Instr list =
+        let key = (planLabel, addrReg, ownsSinglePayloadSum)
+        match localInlineGenericReleaseTemplates.TryGetValue key with
+        | true, instructions ->
+            instructions
+        | false, _ ->
+            let cacheName = $"{planLabel}_{addrReg}_{ownsSinglePayloadSum}"
+            let generated =
+                match functionCache with
+                | Some cache ->
+                    cache
+                        (inlineGenericReleaseTemplateCacheKey cacheName)
+                        (fun () -> generate () |> Ok)
+                | None ->
+                    generate () |> Ok
+            match generated with
+            | Ok instructions ->
+                localInlineGenericReleaseTemplates.[key] <- instructions
+                instructions
+            | Error error ->
+                Crash.crash $"ARM64 cached inline generic release generation failed for {planLabel}: {error}"
 
     let closurePayloadSizes =
         Map.fold
@@ -8024,7 +8029,8 @@ let private generatePreparedARM64WithOptionsAndCache
         ClosurePayloadSizes = closurePayloadSizes
         ClosureCaptureTypes = programMetadata.Facts.ClosureCaptureTypes
         PlannedListDecHelperLabels = Map.empty
-        PlannedGenericDecHelperLabels = plannedGenericDecHelperLabels
+        InlineGenericReleaseTemplateLabels = inlineGenericReleaseTemplateLabels
+        CacheInlineGenericReleaseTemplate = Some cacheInlineGenericReleaseTemplate
         FunctionName = ""
         InstructionSite = ""
         StackSize = 0
@@ -8296,23 +8302,6 @@ let private generatePreparedARM64WithOptionsAndCache
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
-        let genericRcHelpers =
-            plannedGenericDecHelpers
-            |> Map.toList
-            |> List.collect (fun (helperLabel, (payloadSize, releasePlan)) ->
-                let generate () =
-                    generatePlannedGenericRefCountDecHelper helperLabel payloadSize releasePlan ctx
-                    |> Ok
-                let generated =
-                    match functionCache with
-                    | Some cache ->
-                        cache (plannedGenericRefCountDecHelperCacheKey helperLabel) generate
-                    | None ->
-                        generate ()
-                match generated with
-                | Ok instructions -> instructions
-                | Error error ->
-                    Crash.crash $"ARM64 cached generic release helper generation failed for {helperLabel}: {error}")
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (plannedDictDecHelpers
@@ -8349,7 +8338,6 @@ let private generatePreparedARM64WithOptionsAndCache
         let assemblyTimer = startPhase ()
         let assembled =
             allFunctionInstrs
-            @ genericRcHelpers
             @ listRcHelpers
             @ dictRcHelpers
             @ closureRcHelpers

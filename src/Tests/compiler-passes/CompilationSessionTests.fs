@@ -72,7 +72,6 @@ let testArm64CodegenCacheSegregatesTargetOptionsAndCoverage (_: CompilerLibrary.
     let linux = ARM64.targetConfigFor Platform.LinuxARM64
     let changedOptions = { CodeGen.defaultOptions with DisableFreeList = true }
     let coverageOptions = { CodeGen.defaultOptions with EnableCoverage = true; CoverageExprCount = 1 }
-    let outlineOptions = { CodeGen.defaultOptions with OutlineGenericReleasePlans = true }
     let calls = ResizeArray<unit>()
     let generate () =
         calls.Add ()
@@ -81,9 +80,8 @@ let testArm64CodegenCacheSegregatesTargetOptionsAndCoverage (_: CompilerLibrary.
     let _ = session.CodegenFunction macOS CodeGen.defaultOptions fakeFunction generate
     let _ = session.CodegenFunction linux CodeGen.defaultOptions fakeFunction generate
     let _ = session.CodegenFunction macOS changedOptions fakeFunction generate
-    let _ = session.CodegenFunction macOS outlineOptions fakeFunction generate
     let _ = session.CodegenFunction macOS coverageOptions fakeFunction generate
-    if calls.Count = 5 && session.CachedArm64FunctionCount = 4 && session.Arm64CodegenHitCount = 1 && session.Arm64CodegenMissCount = 4 then
+    if calls.Count = 4 && session.CachedArm64FunctionCount = 3 && session.Arm64CodegenHitCount = 1 && session.Arm64CodegenMissCount = 3 then
         Ok ()
     else
         Error $"Expected target/options entries to segregate and coverage to bypass cache, got calls={calls.Count}, cached={session.CachedArm64FunctionCount}, hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}"

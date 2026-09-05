@@ -684,7 +684,6 @@ let private generateBinary
     (target: Platform.Target)
     (verbosity: int)
     (options: CompilerOptions)
-    (outlineGenericReleasePlans: bool)
     (sw: Stopwatch)
     (passTimingRecorder: PassTimingRecorder option)
     (codegenLabel: string)
@@ -761,7 +760,6 @@ let private generateBinary
             EnableCoverage = options.EnableCoverage
             CoverageExprCount = coverageExprCount
             EnableLeakCheck = options.EnableLeakCheck
-            OutlineGenericReleasePlans = outlineGenericReleasePlans
         }
         let arm64Target = ARM64.targetConfigFor armTarget
         let functionCache =
@@ -2399,7 +2397,6 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             plan.BaseContext.Target
                                             plan.Verbosity
                                             plan.Options
-                                            (plan.Mode = TestExpression)
                                             sw
                                             plan.PassTimingRecorder
                                             "  [6/7] Code Generation..."
