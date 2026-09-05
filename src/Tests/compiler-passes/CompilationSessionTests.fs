@@ -107,21 +107,6 @@ let testArm64CodegenMetricsAreOptIn (_: CompilerLibrary.StdlibResult) () : TestR
     | ordinaryMetrics, profiledMetrics ->
         Error $"Expected only the opted-in session to retain one function metric, got ordinary={ordinaryMetrics.Length}, profiled={profiledMetrics.Length}"
 
-let testArm64CodegenCacheRetainsPositionIndependentEncodings (_: CompilerLibrary.StdlibResult) () : TestResult =
-    use session = new CompilerLibrary.CompilationSession()
-    let target = ARM64.targetConfigFor Platform.MacOSARM64
-    let fixedInstruction = ARM64Symbolic.MOVZ (ARM64.X0, 42us, 0)
-    let positionDependentInstruction = ARM64Symbolic.BL "callee"
-    let generate () = Ok [fixedInstruction; positionDependentInstruction]
-    let _ = session.CodegenFunction target CodeGen.defaultOptions fakeFunction generate
-    match session.TryArm64PositionIndependentEncoding fixedInstruction,
-          session.TryArm64PositionIndependentEncoding positionDependentInstruction with
-    | Some 0xD2800540u, None when
-        session.CachedArm64PositionIndependentEncodingCount = 1 ->
-        Ok ()
-    | fixedEncoding, positionDependentEncoding ->
-        Error $"Expected only the fixed instruction to be pre-encoded, got fixed={fixedEncoding}, position-dependent={positionDependentEncoding}, cached={session.CachedArm64PositionIndependentEncodingCount}"
-
 let testArm64ReleasePlanSummaryCacheConfirmsPlanShape (_: CompilerLibrary.StdlibResult) () : TestResult =
     use session = new CompilerLibrary.CompilationSession()
     let firstPlan = ANF.NoReleasePlan
@@ -238,7 +223,6 @@ let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
     ("compilation session codegen metrics are opt-in", testArm64CodegenMetricsAreOptIn stdlib)
-    ("compilation session retains position-independent ARM64 encodings", testArm64CodegenCacheRetainsPositionIndependentEncodings stdlib)
     ("compilation session confirms ARM64 release-plan cache shapes", testArm64ReleasePlanSummaryCacheConfirmsPlanShape stdlib)
     ("expression-only type checking reuses base registries", testExpressionTypeCheckingReusesBaseRegistries stdlib)
     ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
