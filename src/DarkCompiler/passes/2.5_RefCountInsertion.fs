@@ -502,6 +502,22 @@ let private aggregateConsumesExactlyOnce (target: TempId) (cexpr: CExpr) : bool 
     | _ ->
         false
 
+let private aggregateConsumesExactlyOneAlias
+    (aliases: Set<TempId>)
+    (cexpr: CExpr)
+    : bool =
+    aliases
+    |> Set.toList
+    |> List.sumBy (fun target ->
+        if aggregateConsumesExactlyOnce target cexpr then 1
+        elif ANF_Optimize.cexprUsesTemp target cexpr then 2
+        else 0)
+    |> (=) 1
+
+let private cexprUsesAnyAlias (aliases: Set<TempId>) (cexpr: CExpr) : bool =
+    aliases
+    |> Set.exists (fun target -> ANF_Optimize.cexprUsesTemp target cexpr)
+
 /// Once ownership is transferred into an aggregate, do not permit observable
 /// work before that aggregate is returned. This preserves internal refcount
 /// probes while allowing nested tuple/record/closure construction suffixes.
@@ -509,15 +525,21 @@ let rec private aggregateFlowsDirectlyToReturn
     (aggregateId: TempId)
     (body: ReturnAnnotatedExpr)
     : bool =
-    match body with
-    | RReturn (Var returnedId, _) ->
-        returnedId = aggregateId
-    | RLet (nextId, nextExpr, nextBody, _) ->
-        aggregateConsumesExactlyOnce aggregateId nextExpr
-        && aggregateFlowsDirectlyToReturn nextId nextBody
-    | RReturn _
-    | RIf _ ->
-        false
+    let rec loop (aliases: Set<TempId>) (body: ReturnAnnotatedExpr) : bool =
+        match body with
+        | RReturn (Var returnedId, _) ->
+            Set.contains returnedId aliases
+        | RLet (aliasId, Atom (Var sourceId), nextBody, _)
+            when Set.contains sourceId aliases ->
+            loop (Set.add aliasId aliases) nextBody
+        | RLet (nextId, nextExpr, nextBody, _) ->
+            aggregateConsumesExactlyOneAlias aliases nextExpr
+            && aggregateFlowsDirectlyToReturn nextId nextBody
+        | RReturn _
+        | RIf _ ->
+            false
+
+    loop (Set.singleton aggregateId) body
 
 /// Find the sole aggregate use that begins a closed construction suffix ending
 /// in Return. Any earlier use of the candidate makes the proof ineligible.
@@ -525,17 +547,23 @@ let rec private transfersIntoReturnedAggregate
     (candidateId: TempId)
     (body: ReturnAnnotatedExpr)
     : bool =
-    match body with
-    | RLet (aggregateId, cexpr, nextBody, _) ->
-        if aggregateConsumesExactlyOnce candidateId cexpr then
-            aggregateFlowsDirectlyToReturn aggregateId nextBody
-        elif ANF_Optimize.cexprUsesTemp candidateId cexpr then
+    let rec loop (aliases: Set<TempId>) (body: ReturnAnnotatedExpr) : bool =
+        match body with
+        | RLet (aliasId, Atom (Var sourceId), nextBody, _)
+            when Set.contains sourceId aliases ->
+            loop (Set.add aliasId aliases) nextBody
+        | RLet (aggregateId, cexpr, nextBody, _) ->
+            if aggregateConsumesExactlyOneAlias aliases cexpr then
+                aggregateFlowsDirectlyToReturn aggregateId nextBody
+            elif cexprUsesAnyAlias aliases cexpr then
+                false
+            else
+                loop aliases nextBody
+        | RReturn _
+        | RIf _ ->
             false
-        else
-            transfersIntoReturnedAggregate candidateId nextBody
-    | RReturn _
-    | RIf _ ->
-        false
+
+    loop (Set.singleton candidateId) body
 
 /// Check if a CExpr is a borrowing/aliasing operation
 /// Borrowed/aliased values should NOT get their own RefCountDec - the original value owns the memory
@@ -1410,25 +1438,40 @@ let rec insertRCWithAnalysis
                 | _ ->
                     None
 
+            let rec resolveAliasOwner (targetId: TempId) : TempId =
+                frames
+                |> List.tryFind (fun frame -> frame.TempId = targetId)
+                |> Option.map (fun frame ->
+                    match frame.CExpr with
+                    | Atom (Var sourceId) -> resolveAliasOwner sourceId
+                    | _ -> targetId)
+                |> Option.defaultValue targetId
+
             let transferredOwnership =
                 allocationIncTargets
                 |> List.choose (fun (targetId, _) ->
+                    let ownerId = resolveAliasOwner targetId
                     frames
                     |> List.tryPick (fun candidate ->
                         match candidate.TransferableOwnership with
-                        | Some ((ownerId, _, _) as pendingDec) when ownerId = targetId ->
-                            Some pendingDec
+                        | Some ((candidateOwnerId, _, _) as pendingDec) when candidateOwnerId = ownerId ->
+                            Some (targetId, pendingDec)
                         | _ ->
                             None))
 
-            let transferredIds =
+            let transferredTargetIds =
                 transferredOwnership
-                |> List.map (fun (ownerId, _, _) -> ownerId)
+                |> List.map fst
+                |> Set.ofList
+
+            let transferredOwnerIds =
+                transferredOwnership
+                |> List.map (fun (_, (ownerId, _, _)) -> ownerId)
                 |> Set.ofList
 
             let allocationIncTargetsAfterTransfers =
                 allocationIncTargets
-                |> List.filter (fun (targetId, _) -> not (Set.contains targetId transferredIds))
+                |> List.filter (fun (targetId, _) -> not (Set.contains targetId transferredTargetIds))
 
             let rec removePendingDec
                 (target: ReturnDec)
@@ -1441,12 +1484,12 @@ let rec insertRCWithAnalysis
 
             let returnDecsAfterTransfers =
                 transferredOwnership
-                |> List.fold (fun pending target -> removePendingDec target pending) returnDecs'
+                |> List.fold (fun pending (_, target) -> removePendingDec target pending) returnDecs'
 
             let framesAfterTransfers =
                 frames
                 |> List.map (fun candidate ->
-                    if Set.contains candidate.TempId transferredIds then
+                    if Set.contains candidate.TempId transferredOwnerIds then
                         { candidate with TransferableOwnership = None }
                     else
                         candidate)

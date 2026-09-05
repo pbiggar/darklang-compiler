@@ -736,6 +736,184 @@ let rec private tryRefCountDecSourceTypeForTemp (target: TempId) (expr: AExpr) :
         | Some typ -> Some typ
         | None -> tryRefCountDecSourceTypeForTemp target elseBranch
 
+let testReturnedAggregateTransfersOwnedValueThroughAlias () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let outerType = AST.TTuple [childType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("wrapChild", AST.TFunction ([], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let childTemp = TempId 0
+    let aliasTemp = TempId 1
+    let outerTemp = TempId 2
+    let func : Function = {
+        Name = "wrapChild"
+        TypedParams = []
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                Let (
+                    aliasTemp,
+                    Atom (Var childTemp),
+                    Let (
+                        outerTemp,
+                        TupleAlloc [Var aliasTemp],
+                        Return (Var outerTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp aliasTemp transformed.Body then
+        Error "Returned aggregate should adopt owned value through a pure alias without retaining it"
+    elif hasRefCountDecForTemp childTemp transformed.Body then
+        Error "Returned aggregate alias transfer should remove the original owner's pending release"
+    else
+        Ok ()
+
+let testReturnedAggregateTransfersNestedOwnedAliases () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let innerType = AST.TTuple [childType]
+    let outerType = AST.TTuple [innerType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("wrapChild", AST.TFunction ([], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let childTemp = TempId 0
+    let childAlias = TempId 1
+    let innerTemp = TempId 2
+    let innerAlias = TempId 3
+    let outerTemp = TempId 4
+    let func : Function = {
+        Name = "wrapChild"
+        TypedParams = []
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                Let (
+                    childAlias,
+                    Atom (Var childTemp),
+                    Let (
+                        innerTemp,
+                        TupleAlloc [Var childAlias],
+                        Let (
+                            innerAlias,
+                            Atom (Var innerTemp),
+                            Let (
+                                outerTemp,
+                                TupleAlloc [Var innerAlias],
+                                Return (Var outerTemp)
+                            )
+                        )
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+    let retainedAlias =
+        hasRefCountIncForTemp childAlias transformed.Body
+        || hasRefCountIncForTemp innerAlias transformed.Body
+    let releasedOwner =
+        hasRefCountDecForTemp childTemp transformed.Body
+        || hasRefCountDecForTemp innerTemp transformed.Body
+
+    if retainedAlias then
+        Error "Nested returned aggregates should adopt owned values through pure aliases without retaining them"
+    elif releasedOwner then
+        Error "Nested returned aggregate alias transfer should remove each original owner's pending release"
+    else
+        Ok ()
+
+let testReturnedAggregateDoesNotTransferDuplicatedAliases () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let outerType = AST.TTuple [childType; childType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("duplicateChild", AST.TFunction ([], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let childTemp = TempId 0
+    let firstAlias = TempId 1
+    let secondAlias = TempId 2
+    let outerTemp = TempId 3
+    let func : Function = {
+        Name = "duplicateChild"
+        TypedParams = []
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                Let (
+                    firstAlias,
+                    Atom (Var childTemp),
+                    Let (
+                        secondAlias,
+                        Atom (Var childTemp),
+                        Let (
+                            outerTemp,
+                            TupleAlloc [Var firstAlias; Var secondAlias],
+                            Return (Var outerTemp)
+                        )
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp firstAlias transformed.Body
+       && hasRefCountIncForTemp secondAlias transformed.Body
+       && hasRefCountDecForTemp childTemp transformed.Body then
+        Ok ()
+    else
+        Error "Duplicated aliases must retain both aggregate edges and preserve the original owner's release"
+
 let testNonSelfTailCallDoesNotLeaveDecAfterTailCall () : TestResult =
     let funcReg : AST_to_ANF.FunctionRegistry =
         Map.ofList [
@@ -1695,6 +1873,9 @@ let tests = [
     ("RcShape with sums requires sum metadata", testRcShapeWithSumsRequiresSumMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("malformed raw_get intrinsic does not infer Int64", testMalformedRawGetIntrinsicDoesNotInferInt64)
+    ("returned aggregate transfers owned value through alias", testReturnedAggregateTransfersOwnedValueThroughAlias)
+    ("returned aggregate transfers nested owned aliases", testReturnedAggregateTransfersNestedOwnedAliases)
+    ("returned aggregate does not transfer duplicated aliases", testReturnedAggregateDoesNotTransferDuplicatedAliases)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)
