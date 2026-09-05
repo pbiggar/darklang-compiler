@@ -7798,9 +7798,10 @@ let private validateTopLevelTypeDeclarations
         |> List.rev
 
     let baseTypeArities =
-        match baseEnv with
-        | None -> Map.empty
-        | Some env ->
+        match baseEnv, typeDefs with
+        | _, [] -> Map.empty
+        | None, _ -> Map.empty
+        | Some env, _ ->
             let recordArities =
                 env.IndexedTypeReg
                 |> Map.map (fun _ info -> List.length info.TypeParams)
@@ -8352,6 +8353,77 @@ let private checkResolvedProgramInternal
             | false, [] -> Ok (TUnit, Program topLevelsWithEqHelpers, checkedTypeCheckEnv)
             | false, entries -> Error (GenericError $"Declaration-only program must not contain entry expressions; found {entries.Length}")))
 
+/// Check the common separate-compilation case without constructing and then
+/// merging an empty declaration environment. Name resolution has already run,
+/// and concrete generic specializations and equality helpers retain the same
+/// validation/materialization path as a general program.
+let private checkResolvedExpressionWithBaseEnv
+    (baseEnv: TypeCheckEnv)
+    (resolutionEnv: NameResolution.ResolutionEnvironment)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (expr: Expr)
+    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    let genericFuncReg = {
+        baseEnv.GenericFuncReg with
+            RequireExplicitTypeArgsForBareCalls =
+                baseEnv.GenericFuncReg.RequireExplicitTypeArgsForBareCalls
+                || requireExplicitTypeArgsForBareCalls
+    }
+
+    checkExprWithParamNames
+        baseEnv.FuncParamNames
+        expr
+        baseEnv.FuncEnv
+        baseEnv.IndexedTypeReg
+        baseEnv.VariantLookup
+        genericFuncReg
+        warningSettings
+        baseEnv.ModuleRegistry
+        baseEnv.AliasReg
+        None
+    |> Result.bind (fun (exprType, typedExpr) ->
+        let validateSpecialization (funcName, typeArgs) =
+            match Map.tryFind funcName baseEnv.GenericFuncDefs with
+            | None ->
+                Ok ()
+            | Some funcDef ->
+                specializeFunctionForTypeCheck funcDef typeArgs
+                |> Result.bind (fun specializedFunc ->
+                    checkFunctionDef
+                        baseEnv.FuncParamNames
+                        specializedFunc
+                        baseEnv.FuncEnv
+                        baseEnv.IndexedTypeReg
+                        baseEnv.VariantLookup
+                        genericFuncReg
+                        warningSettings
+                        baseEnv.ModuleRegistry
+                        baseEnv.AliasReg
+                    |> Result.map (fun _ -> ()))
+
+        typedExpr
+        |> collectTypeAppSpecs
+        |> Set.filter (fun (funcName, _) -> Map.containsKey funcName baseEnv.GenericFuncDefs)
+        |> Set.toList
+        |> List.fold
+            (fun result spec ->
+                result |> Result.bind (fun () -> validateSpecialization spec))
+            (Ok ())
+        |> Result.map (fun () ->
+            let topLevelsWithEqHelpers =
+                materializeEqHelpersInTopLevels
+                    baseEnv.AliasReg
+                    baseEnv.IndexedTypeReg
+                    baseEnv.VariantLookup
+                    [Expression typedExpr]
+            let checkedEnv = {
+                baseEnv with
+                    GenericFuncReg = genericFuncReg
+                    ResolutionEnv = resolutionEnv
+            }
+            (exprType, Program topLevelsWithEqHelpers, checkedEnv)))
+
 let private checkProgramInternal
     (baseEnv: TypeCheckEnv option)
     (hideCompilerImplementationNames: bool)
@@ -8432,7 +8504,22 @@ let private checkProgramInternal
             | Some existing -> Set.union localRecordTypeNames (existing.IndexedTypeReg |> Map.keys |> Set.ofSeq)
             | None -> localRecordTypeNames
         resolveProgramNames resolutionEnv aliases recordTypeNames program)
-    |> Result.bind (checkResolvedProgramInternal baseEnv requireExplicitTypeArgsForBareCalls warningSettings requireEntry)
+    |> Result.bind (fun resolvedProgram ->
+        match baseEnv, requireEntry, resolvedProgram with
+        | Some existingEnv, true, Program [Expression expr] ->
+            checkResolvedExpressionWithBaseEnv
+                existingEnv
+                resolutionEnv
+                requireExplicitTypeArgsForBareCalls
+                warningSettings
+                expr
+        | _ ->
+            checkResolvedProgramInternal
+                baseEnv
+                requireExplicitTypeArgsForBareCalls
+                warningSettings
+                requireEntry
+                resolvedProgram)
 
 /// Type-check a program
 /// Returns the type of the main expression and the transformed program
