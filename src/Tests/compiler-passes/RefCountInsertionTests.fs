@@ -788,6 +788,58 @@ let testReturnedAggregateTransfersOwnedValueThroughAlias () : TestResult =
     else
         Ok ()
 
+let testReturnedAggregateTransfersOwnedValueThroughTypedAlias () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let outerType = AST.TTuple [childType]
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeChild", AST.TFunction ([], childType))
+            ("wrapChild", AST.TFunction ([], outerType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let childTemp = TempId 0
+    let aliasTemp = TempId 1
+    let outerTemp = TempId 2
+    let func : Function = {
+        Name = "wrapChild"
+        TypedParams = []
+        ReturnType = outerType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                childTemp,
+                Call ("makeChild", []),
+                Let (
+                    aliasTemp,
+                    TypedAtom (Var childTemp, childType),
+                    Let (
+                        outerTemp,
+                        TupleAlloc [Var aliasTemp],
+                        Return (Var outerTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp aliasTemp transformed.Body then
+        Error "Returned aggregate should adopt owned value through a typed alias without retaining it"
+    elif hasRefCountDecForTemp childTemp transformed.Body then
+        Error "Returned aggregate typed-alias transfer should remove the original owner's pending release"
+    else
+        Ok ()
+
 let testReturnedAggregateTransfersNestedOwnedAliases () : TestResult =
     let childType = AST.TTuple [AST.TInt64]
     let innerType = AST.TTuple [childType]
@@ -894,7 +946,7 @@ let testReturnedAggregateDoesNotTransferDuplicatedAliases () : TestResult =
                     Atom (Var childTemp),
                     Let (
                         secondAlias,
-                        Atom (Var childTemp),
+                        TypedAtom (Var childTemp, childType),
                         Let (
                             outerTemp,
                             TupleAlloc [Var firstAlias; Var secondAlias],
@@ -1874,6 +1926,7 @@ let tests = [
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("malformed raw_get intrinsic does not infer Int64", testMalformedRawGetIntrinsicDoesNotInferInt64)
     ("returned aggregate transfers owned value through alias", testReturnedAggregateTransfersOwnedValueThroughAlias)
+    ("returned aggregate transfers owned value through typed alias", testReturnedAggregateTransfersOwnedValueThroughTypedAlias)
     ("returned aggregate transfers nested owned aliases", testReturnedAggregateTransfersNestedOwnedAliases)
     ("returned aggregate does not transfer duplicated aliases", testReturnedAggregateDoesNotTransferDuplicatedAliases)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)

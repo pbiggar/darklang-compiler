@@ -470,7 +470,8 @@ let rec analyzeReturns
     | Let (tempId, cexpr, body) ->
         let aliases' =
             match cexpr with
-            | Atom (Var sourceId) -> Map.add tempId sourceId aliases
+            | Atom (Var sourceId)
+            | TypedAtom (Var sourceId, _) -> Map.add tempId sourceId aliases
             | _ -> aliases
         let bodyInfo = analyzeReturns aliases' body
         RLet (tempId, cexpr, bodyInfo, returnedSet bodyInfo)
@@ -530,6 +531,7 @@ let rec private aggregateFlowsDirectlyToReturn
         | RReturn (Var returnedId, _) ->
             Set.contains returnedId aliases
         | RLet (aliasId, Atom (Var sourceId), nextBody, _)
+        | RLet (aliasId, TypedAtom (Var sourceId, _), nextBody, _)
             when Set.contains sourceId aliases ->
             loop (Set.add aliasId aliases) nextBody
         | RLet (nextId, nextExpr, nextBody, _) ->
@@ -550,6 +552,7 @@ let rec private transfersIntoReturnedAggregate
     let rec loop (aliases: Set<TempId>) (body: ReturnAnnotatedExpr) : bool =
         match body with
         | RLet (aliasId, Atom (Var sourceId), nextBody, _)
+        | RLet (aliasId, TypedAtom (Var sourceId, _), nextBody, _)
             when Set.contains sourceId aliases ->
             loop (Set.add aliasId aliases) nextBody
         | RLet (aggregateId, cexpr, nextBody, _) ->
@@ -1443,7 +1446,8 @@ let rec insertRCWithAnalysis
                 |> List.tryFind (fun frame -> frame.TempId = targetId)
                 |> Option.map (fun frame ->
                     match frame.CExpr with
-                    | Atom (Var sourceId) -> resolveAliasOwner sourceId
+                    | Atom (Var sourceId)
+                    | TypedAtom (Var sourceId, _) -> resolveAliasOwner sourceId
                     | _ -> targetId)
                 |> Option.defaultValue targetId
 
