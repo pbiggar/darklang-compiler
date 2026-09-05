@@ -524,6 +524,32 @@ let private aggregateAliasFieldCount
     | _ ->
         0
 
+let private rawSlotAliasValueCount
+    (aliases: Set<TempId>)
+    (cexpr: CExpr)
+    : int =
+    match cexpr with
+    | RawSlotInit (_, _, Var valueId, _) when Set.contains valueId aliases -> 1
+    | _ -> 0
+
+let rec private returnAnnotatedExprUsesAnyAlias
+    (aliases: Set<TempId>)
+    (body: ReturnAnnotatedExpr)
+    : bool =
+    let atomUsesAnyAlias atom =
+        aliases
+        |> Set.exists (fun target -> ANF_Optimize.atomUsesTemp target atom)
+
+    match body with
+    | RReturn (atom, _) -> atomUsesAnyAlias atom
+    | RLet (_, cexpr, nextBody, _) ->
+        (aliases |> Set.exists (fun target -> ANF_Optimize.cexprUsesTemp target cexpr))
+        || returnAnnotatedExprUsesAnyAlias aliases nextBody
+    | RIf (cond, thenBranch, elseBranch, _) ->
+        atomUsesAnyAlias cond
+        || returnAnnotatedExprUsesAnyAlias aliases thenBranch
+        || returnAnnotatedExprUsesAnyAlias aliases elseBranch
+
 let private cexprReleasesAnyAlias (aliases: Set<TempId>) (cexpr: CExpr) : bool =
     match cexpr with
     | RefCountDec (atom, _, _, _)
@@ -575,7 +601,39 @@ let rec private transfersIntoReturnedAggregate
             | _ ->
                 if aggregateAliasFieldCount aliases cexpr > 0 then
                     aggregateFlowsDirectlyToReturn aggregateId nextBody
+                elif rawSlotAliasValueCount aliases cexpr > 0 then
+                    false
                 elif cexprReleasesAnyAlias aliases cexpr then
+                    false
+                else
+                    loop aliases nextBody
+        | RIf (_, thenBranch, elseBranch, _) ->
+            loop aliases thenBranch && loop aliases elseBranch
+        | RReturn _ ->
+            false
+
+    loop (Set.singleton candidateId) body
+
+/// Move a locally-owned edge into its first ownership-bearing raw slot use
+/// when no alias remains live afterward. RawSlotInit normally retains a copied
+/// edge; the move instead lets the slot adopt the binding's pending ownership.
+let rec private transfersIntoRawSlot
+    (candidateId: TempId)
+    (body: ReturnAnnotatedExpr)
+    : bool =
+    let rec loop (aliases: Set<TempId>) (body: ReturnAnnotatedExpr) : bool =
+        match body with
+        | RLet (nextId, cexpr, nextBody, _) ->
+            match tryOwnershipPreservingAliasSource cexpr with
+            | Some sourceId when Set.contains sourceId aliases ->
+                loop (Set.add nextId aliases) nextBody
+            | _ ->
+                let rawSlotUses = rawSlotAliasValueCount aliases cexpr
+                if rawSlotUses > 0 then
+                    rawSlotUses = 1
+                    && not (returnAnnotatedExprUsesAnyAlias aliases nextBody)
+                elif aggregateAliasFieldCount aliases cexpr > 0
+                     || cexprReleasesAnyAlias aliases cexpr then
                     false
                 else
                     loop aliases nextBody
@@ -1490,6 +1548,15 @@ let rec insertRCWithAnalysis
                         []
                 compoundAllocationTargets @ erasedSkewListElementTargets
 
+            let rawSlotRetainTargets =
+                match cexpr with
+                | RawSlotInit (_, _, Var valueTemp, valueType) when
+                    shapeNeedsBorrowedRetain ctx valueType
+                    && not (tempProducesNonRcSentinel valueTemp) ->
+                    [valueTemp, valueType]
+                | _ ->
+                    []
+
             let transferableOwnership =
                 let pendingForCurrent =
                     returnDecs'
@@ -1497,7 +1564,8 @@ let rec insertRCWithAnalysis
                 match bindingDec, pendingForCurrent with
                 | Some dec, [ pendingDec ]
                     when dec = pendingDec
-                         && transfersIntoReturnedAggregate tempId bodyInfo ->
+                         && (transfersIntoReturnedAggregate tempId bodyInfo
+                             || transfersIntoRawSlot tempId bodyInfo) ->
                     Some dec
                 | _ ->
                     None
@@ -1512,7 +1580,7 @@ let rec insertRCWithAnalysis
                 |> Option.defaultValue targetId
 
             let transferredOwnership =
-                allocationIncTargets
+                (allocationIncTargets @ rawSlotRetainTargets)
                 |> List.fold (fun (transfers, transferredOwners) (targetId, _) ->
                     let ownerId = resolveAliasOwner targetId
                     if Set.contains ownerId transferredOwners then
@@ -1534,6 +1602,17 @@ let rec insertRCWithAnalysis
                 ) ([], Set.empty)
                 |> fst
                 |> List.rev
+
+            let cexprAfterTransfers =
+                match cexpr, transferredOwnership with
+                | RawSlotInit (ptr, byteOffset, Var valueTemp, _), transfers when
+                    transfers
+                    |> List.exists (fun (targetId, _) -> targetId = valueTemp) ->
+                    // RawSlotInit's backend retain is unnecessary when the slot
+                    // adopts the producer's existing owned edge.
+                    RawWriteWord (ptr, byteOffset, Var valueTemp)
+                | _ ->
+                    cexpr
 
             let transferredOwnerIds =
                 transferredOwnership
@@ -1580,7 +1659,11 @@ let rec insertRCWithAnalysis
                 frames
                 |> List.map (fun candidate ->
                     if Set.contains candidate.TempId transferredOwnerIds then
-                        { candidate with TransferableOwnership = None }
+                        {
+                            candidate with
+                                TransferableOwnership = None
+                                BranchDec = None
+                        }
                     else
                         candidate)
 
@@ -1652,7 +1735,7 @@ let rec insertRCWithAnalysis
 
             let frame = {
                 TempId = tempId
-                CExpr = cexpr
+                CExpr = cexprAfterTransfers
                 TupleIncTargets = allocationIncTargetsAfterTransfers
                 TransferableOwnership = transferableOwnership
                 ReturnInc = returnInc

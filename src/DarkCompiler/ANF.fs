@@ -532,7 +532,7 @@ type CExpr =
     | RawGet of ptr:Atom * byteOffset:Atom * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
     | RawTake of ptr:Atom * byteOffset:Atom * valueType:AST.Type option // Transfer a typed slot edge to the result
     | RawGetByte of ptr:Atom * byteOffset:Atom  // Read 1 byte at offset, returns Int64 (zero-extended)
-    | RawWriteWord of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 unmanaged bytes at offset
+    | RawWriteWord of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 bytes without retaining; RC insertion also uses this for transferred typed edges
     | RawWriteByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 unmanaged byte at offset
     | RawSlotInit of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
     | StringToRawPtr of value:Atom              // Borrow raw backing pointer from String

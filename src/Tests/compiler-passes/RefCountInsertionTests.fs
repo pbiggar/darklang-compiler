@@ -714,6 +714,30 @@ let rec private hasRefCountDecForTemp (target: TempId) (expr: AExpr) : bool =
         hasRefCountDecForTemp target thenBranch
         || hasRefCountDecForTemp target elseBranch
 
+let rec private hasRawSlotInitForValue (target: TempId) (expr: AExpr) : bool =
+    match expr with
+    | Return _ ->
+        false
+    | Let (_, RawSlotInit (_, _, Var valueId, _), _) when valueId = target ->
+        true
+    | Let (_, _, body) ->
+        hasRawSlotInitForValue target body
+    | If (_, thenBranch, elseBranch) ->
+        hasRawSlotInitForValue target thenBranch
+        || hasRawSlotInitForValue target elseBranch
+
+let rec private hasRawWriteWordForValue (target: TempId) (expr: AExpr) : bool =
+    match expr with
+    | Return _ ->
+        false
+    | Let (_, RawWriteWord (_, _, Var valueId), _) when valueId = target ->
+        true
+    | Let (_, _, body) ->
+        hasRawWriteWordForValue target body
+    | If (_, thenBranch, elseBranch) ->
+        hasRawWriteWordForValue target thenBranch
+        || hasRawWriteWordForValue target elseBranch
+
 let rec private hasStringRetainForTemp (target: TempId) (expr: AExpr) : bool =
     match expr with
     | Return _ ->
@@ -759,6 +783,103 @@ let private pathHasRetainsBeforeDec
             loop seenRetains thenBranch || loop seenRetains elseBranch
 
     loop Set.empty expr
+
+let private rawSlotTransferTestFunction (usesValueAfterSlot: bool) : TypeContext * Function * TempId =
+    let listType = AST.TList AST.TString
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeString", AST.TFunction ([], AST.TString))
+            ("observeString", AST.TFunction ([AST.TString], AST.TUnit))
+            ("makeList", AST.TFunction ([], listType))
+        ]
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let valueTemp = TempId 0
+    let ptrTemp = TempId 1
+    let slotTemp = TempId 2
+    let countTemp = TempId 3
+    let taggedTemp = TempId 4
+    let listTemp = TempId 5
+    let observedTemp = TempId 6
+    let alternateTaggedTemp = TempId 7
+    let alternateListTemp = TempId 8
+    let listReturn taggedId listId =
+        Let (
+            taggedId,
+            Prim (BitOr, Var ptrTemp, IntLiteral (Int64 2L)),
+            Let (listId, TypedAtom (Var taggedId, listType), Return (Var listId))
+        )
+    let tail =
+        if usesValueAfterSlot then
+            listReturn taggedTemp listTemp
+        else
+            If (
+                BoolLiteral true,
+                listReturn taggedTemp listTemp,
+                listReturn alternateTaggedTemp alternateListTemp
+            )
+    let afterSlot =
+        if usesValueAfterSlot then
+            Let (observedTemp, Call ("observeString", [Var valueTemp]), tail)
+        else
+            tail
+    let func : Function = {
+        Name = "makeList"
+        TypedParams = []
+        ReturnType = listType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                valueTemp,
+                Call ("makeString", []),
+                Let (
+                    ptrTemp,
+                    RawAlloc (IntLiteral (Int64 16L)),
+                    Let (
+                        slotTemp,
+                        RawSlotInit (Var ptrTemp, IntLiteral (Int64 0L), Var valueTemp, AST.TString),
+                        Let (
+                            countTemp,
+                            RawWriteWord (Var ptrTemp, IntLiteral (Int64 8L), IntLiteral (Int64 1L)),
+                            afterSlot
+                        )
+                    )
+                )
+            )
+    }
+    (ctx, func, valueTemp)
+
+let testFreshOwnedValueTransfersIntoRawSlot () : TestResult =
+    let (ctx, func, valueTemp) = rawSlotTransferTestFunction false
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRawSlotInitForValue valueTemp transformed.Body then
+        Error "Fresh raw-slot payload should not retain a copied ownership edge"
+    elif not (hasRawWriteWordForValue valueTemp transformed.Body) then
+        Error "Fresh raw-slot payload should move its owned edge with an unmanaged store"
+    elif hasStringReleaseForTemp valueTemp transformed.Body then
+        Error "Raw-slot ownership transfer should remove the producer's pending release"
+    else
+        Ok ()
+
+let testRawSlotRetainsValueUsedAfterInitialization () : TestResult =
+    let (ctx, func, valueTemp) = rawSlotTransferTestFunction true
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if not (hasRawSlotInitForValue valueTemp transformed.Body) then
+        Error "Raw slot must retain a payload that remains in use after initialization"
+    elif not (hasStringReleaseForTemp valueTemp transformed.Body) then
+        Error "Raw-slot payload used afterward must keep the producer's pending release"
+    else
+        Ok ()
 
 let rec private tryRefCountDecSourceTypeForTemp (target: TempId) (expr: AExpr) : AST.Type option =
     match expr with
@@ -2401,6 +2522,8 @@ let tests = [
     ("RcShape with sums requires sum metadata", testRcShapeWithSumsRequiresSumMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("malformed raw_get intrinsic does not infer Int64", testMalformedRawGetIntrinsicDoesNotInferInt64)
+    ("fresh owned value transfers into raw slot", testFreshOwnedValueTransfersIntoRawSlot)
+    ("raw slot retains value used after initialization", testRawSlotRetainsValueUsedAfterInitialization)
     ("returned aggregate transfers owned value through alias", testReturnedAggregateTransfersOwnedValueThroughAlias)
     ("returned aggregate transfers owned value through typed alias", testReturnedAggregateTransfersOwnedValueThroughTypedAlias)
     ("returned aggregate retains ownership-producing Stream alias", testReturnedAggregateRetainsOwnershipProducingStreamAlias)

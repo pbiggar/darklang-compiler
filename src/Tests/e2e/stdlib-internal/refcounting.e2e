@@ -79,6 +79,7 @@ let listClosureCapturesString(): List<(Int64) -> String> = let captured = Stdlib
 let fs = Stdlib.List.map<Int64, (Int64) -> Int64>([1L, 2L], fun base -> fun x -> x + base) in 0L = stdout="0\n" stderr="" // stdlib map-produced list of closures releases closure payload roots
 type ListPhantomEnum<'a> = ListPhantomA | ListPhantomB let a = ListPhantomA in let xs = [a] in 0L = stdout="0\n" stderr="" // list does not retain generic pure enum variables as heap roots
 let xs = ["a" ++ "b"] in 0L = stdout="0\n" stderr="" // list releases dynamic string payload
+let value = Stdlib.Internal.SkewList.headUnsafe<String>([dynamicString("a")]) in __stringRefcount(value) = stdout="2\n" stderr="" // fresh list payload transfers its owned edge into the raw slot
 let s = "a" ++ "b" in let xs = [s] in 0L = stdout="0\n" stderr="" // list retains dynamic string variable payload
 let s = dynamicString("a") in let xs = Stdlib.List.pushBack<String>([], s) in __stringRefcount(s) = stdout="2\n" stderr="" // Skew tree node retains its direct dynamic string payload edge
 let listBytes(): List<Blob> = [Stdlib.Bytes.create(4L)] let xs = listBytes() in 0L = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads

@@ -25,6 +25,11 @@ The compiler currently has these managed or partially managed runtime shapes:
 
 Primitive scalars are immediate and do not participate in RC.
 
+`RawSlotInit<T>` is the copied-edge operation. During RC insertion, a fresh
+owned value whose first owning use is a raw slot and whose aliases are dead
+afterward transfers that edge instead; the pass lowers the move to a
+non-retaining `RawWriteWord` and removes the producer's pending release.
+
 ## Ownership Insertion
 
 Pass 2.5, `src/DarkCompiler/passes/2.5_RefCountInsertion.fs`, inserts retains
