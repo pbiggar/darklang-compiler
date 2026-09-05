@@ -2,6 +2,224 @@
 // Tests LIR peephole optimizations and loop-invariant code motion.
 
 ---NAME---
+ownership_transfer_non_recursive_record
+---INPUT---
+type OwnedInnerRecord = { value: Int64 }
+type OwnedOuterRecord = { inner: OwnedInnerRecord }
+
+let makeOwnedInner(value: Int64) : OwnedInnerRecord =
+    if value <= 0L then OwnedInnerRecord { value = 0L }
+    else makeOwnedInner(value - 1L)
+
+let wrapOwnedInner(value: Int64) : OwnedOuterRecord =
+    OwnedOuterRecord { inner = makeOwnedInner(value) }
+
+wrapOwnedInner(1L)
+---EXPECTED---
+makeOwnedInner:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeOwnedInner_L0":
+    v10011 <- HeapAlloc(8)
+    HeapStore(v10011, 0, Imm 0)
+    X0 <- Mov(Reg v10011)
+    Ret
+  Label "makeOwnedInner_L1":
+    v10009 <- Sub(v10007, Imm 1)
+    v10010 <- Mov(Reg v10009)
+    Jump(Label "makeOwnedInner_body")
+  Label "makeOwnedInner_body":
+    v10007 <- Phi([(Reg v0, makeOwnedInner_entry), (Reg v10010, makeOwnedInner_L1)])
+    Cmp(v10007, Imm 0)
+    CondBranch(LE, Label "makeOwnedInner_L0", Label "makeOwnedInner_L1")
+  Label "makeOwnedInner_entry":
+    Jump(Label "makeOwnedInner_body")
+wrapOwnedInner:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "wrapOwnedInner_entry":
+    SaveRegs([], [])
+    ArgMoves(X0 <- Reg v5)
+    v10007 <- Call(makeOwnedInner, [Reg v5])
+    RestoreRegs([], [])
+    v10007 <- Mov(Reg X0)
+    v10008 <- HeapAlloc(8)
+    HeapStore(v10008, 0, Reg v10007)
+    X0 <- Mov(Reg v10008)
+    Ret
+_start:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "_start_body":
+    SaveRegs([], [])
+    ArgMoves(X0 <- Imm 1)
+    v10008 <- Call(wrapOwnedInner, [Imm 1])
+    RestoreRegs([], [])
+    v10008 <- Mov(Reg X0)
+    X19 <- Mov(Reg v10008)
+    PrintRecord(X19, OwnedOuterRecord, [(inner, TRecord ("OwnedInnerRecord", []))])
+    RefCountDec(X19, 8, generic)
+    X0 <- Mov(Reg v10008)
+    Ret
+
+---NAME---
+ownership_transfer_nested_record_suffix
+---INPUT---
+type TransferTree = TransferLeaf of Int64 | TransferNode of (TransferTree, TransferTree)
+type TransferEnvelope = { pair: (TransferTree, TransferTree) }
+
+let makeTransferChild(depth: Int64) : TransferTree =
+    if depth <= 0L then TransferLeaf(1L)
+    else makeTransferChild(depth - 1L)
+
+let makeTransferEnvelope(depth: Int64) : TransferEnvelope =
+    TransferEnvelope { pair = (makeTransferChild(depth), makeTransferChild(depth + 1L)) }
+---EXPECTED---
+makeTransferChild:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeTransferChild_L0":
+    v10011 <- HeapAlloc(16)
+    HeapStore(v10011, 0, Imm 0)
+    HeapStore(v10011, 8, Imm 1)
+    X0 <- Mov(Reg v10011)
+    Ret
+  Label "makeTransferChild_L1":
+    v10009 <- Sub(v10007, Imm 1)
+    v10010 <- Mov(Reg v10009)
+    Jump(Label "makeTransferChild_body")
+  Label "makeTransferChild_body":
+    v10007 <- Phi([(Reg v0, makeTransferChild_entry), (Reg v10010, makeTransferChild_L1)])
+    Cmp(v10007, Imm 0)
+    CondBranch(LE, Label "makeTransferChild_L0", Label "makeTransferChild_L1")
+  Label "makeTransferChild_entry":
+    Jump(Label "makeTransferChild_body")
+makeTransferEnvelope:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeTransferEnvelope_entry":
+    SaveRegs([], [])
+    ArgMoves(X0 <- Reg v5)
+    v10010 <- Call(makeTransferChild, [Reg v5])
+    RestoreRegs([], [])
+    v10010 <- Mov(Reg X0)
+    v10011 <- Add(v5, Imm 1)
+    SaveRegs([], [])
+    ArgMoves(X0 <- Reg v10011)
+    v10012 <- Call(makeTransferChild, [Reg v10011])
+    RestoreRegs([], [])
+    v10012 <- Mov(Reg X0)
+    v10013 <- HeapAlloc(16)
+    HeapStore(v10013, 0, Reg v10010)
+    HeapStore(v10013, 8, Reg v10012)
+    v10014 <- HeapAlloc(8)
+    HeapStore(v10014, 0, Reg v10013)
+    X0 <- Mov(Reg v10014)
+    Ret
+
+---NAME---
+ownership_transfer_rejects_duplicate_child
+---INPUT---
+type DuplicateTransferTree = DuplicateTransferLeaf of Int64 | DuplicateTransferNode of (DuplicateTransferTree, DuplicateTransferTree)
+
+let makeDuplicateTransferChild(depth: Int64) : DuplicateTransferTree =
+    if depth <= 0L then DuplicateTransferLeaf(1L)
+    else makeDuplicateTransferChild(depth - 1L)
+
+let makeDuplicateTransferPair(depth: Int64) : (DuplicateTransferTree, DuplicateTransferTree) =
+    let child = makeDuplicateTransferChild(depth) in
+    (child, child)
+---EXPECTED---
+makeDuplicateTransferChild:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeDuplicateTransferChild_L0":
+    v10011 <- HeapAlloc(16)
+    HeapStore(v10011, 0, Imm 0)
+    HeapStore(v10011, 8, Imm 1)
+    X0 <- Mov(Reg v10011)
+    Ret
+  Label "makeDuplicateTransferChild_L1":
+    v10009 <- Sub(v10007, Imm 1)
+    v10010 <- Mov(Reg v10009)
+    Jump(Label "makeDuplicateTransferChild_body")
+  Label "makeDuplicateTransferChild_body":
+    v10007 <- Phi([(Reg v0, makeDuplicateTransferChild_entry), (Reg v10010, makeDuplicateTransferChild_L1)])
+    Cmp(v10007, Imm 0)
+    CondBranch(LE, Label "makeDuplicateTransferChild_L0", Label "makeDuplicateTransferChild_L1")
+  Label "makeDuplicateTransferChild_entry":
+    Jump(Label "makeDuplicateTransferChild_body")
+makeDuplicateTransferPair:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeDuplicateTransferPair_entry":
+    SaveRegs([], [])
+    ArgMoves(X0 <- Reg v5)
+    v10008 <- Call(makeDuplicateTransferChild, [Reg v5])
+    RestoreRegs([], [])
+    v10008 <- Mov(Reg X0)
+    RefCountInc(v10008, 16, generic)
+    RefCountInc(v10008, 16, generic)
+    v10009 <- HeapAlloc(16)
+    HeapStore(v10009, 0, Reg v10008)
+    HeapStore(v10009, 8, Reg v10008)
+    RefCountDec(v10008, 16, generic)
+    X0 <- Mov(Reg v10009)
+    Ret
+
+---NAME---
+ownership_transfer_retains_cross_level_reuse
+---INPUT---
+type ReusedTransferTree = ReusedTransferLeaf of Int64 | ReusedTransferNode of (ReusedTransferTree, ReusedTransferTree)
+
+let makeReusedTransferChild(depth: Int64) : ReusedTransferTree =
+    if depth <= 0L then ReusedTransferLeaf(1L)
+    else makeReusedTransferChild(depth - 1L)
+
+let makeReusedTransferNested(depth: Int64) : ((ReusedTransferTree, Int64), ReusedTransferTree) =
+    let child = makeReusedTransferChild(depth) in
+    let inner = (child, 1L) in
+    (inner, child)
+---EXPECTED---
+makeReusedTransferChild:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeReusedTransferChild_L0":
+    v10011 <- HeapAlloc(16)
+    HeapStore(v10011, 0, Imm 0)
+    HeapStore(v10011, 8, Imm 1)
+    X0 <- Mov(Reg v10011)
+    Ret
+  Label "makeReusedTransferChild_L1":
+    v10009 <- Sub(v10007, Imm 1)
+    v10010 <- Mov(Reg v10009)
+    Jump(Label "makeReusedTransferChild_body")
+  Label "makeReusedTransferChild_body":
+    v10007 <- Phi([(Reg v0, makeReusedTransferChild_entry), (Reg v10010, makeReusedTransferChild_L1)])
+    Cmp(v10007, Imm 0)
+    CondBranch(LE, Label "makeReusedTransferChild_L0", Label "makeReusedTransferChild_L1")
+  Label "makeReusedTransferChild_entry":
+    Jump(Label "makeReusedTransferChild_body")
+makeReusedTransferNested:
+  StackSize: 0
+  UsedCalleeSaved: []
+  Label "makeReusedTransferNested_entry":
+    SaveRegs([], [])
+    ArgMoves(X0 <- Reg v5)
+    v10010 <- Call(makeReusedTransferChild, [Reg v5])
+    RestoreRegs([], [])
+    v10010 <- Mov(Reg X0)
+    v10011 <- HeapAlloc(16)
+    HeapStore(v10011, 0, Reg v10010)
+    HeapStore(v10011, 8, Imm 1)
+    RefCountInc(v10010, 16, generic)
+    v10012 <- HeapAlloc(16)
+    HeapStore(v10012, 0, Reg v10011)
+    HeapStore(v10012, 8, Reg v10010)
+    X0 <- Mov(Reg v10012)
+    Ret
+
+---NAME---
 counted_loop_unroll_by_two_generated_code
 ---INPUT---
 let loop(i: Int64, limit: Int64, sum: Float, sign: Float) : Float =

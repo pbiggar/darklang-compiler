@@ -480,6 +480,63 @@ let rec analyzeReturns
         let returned = Set.union (returnedSet thenInfo) (returnedSet elseInfo)
         RIf (cond, thenInfo, elseInfo, returned)
 
+let private atomOccurrenceCount (target: TempId) (atoms: Atom list) : int =
+    atoms
+    |> List.sumBy (fun atom ->
+        match atom with
+        | Var tempId when tempId = target -> 1
+        | _ -> 0)
+
+/// True when an aggregate takes exactly one ownership-bearing field from target.
+/// RecordClone's source record is borrowed by the clone operation, so it cannot
+/// be the ownership-transfer use.
+let private aggregateConsumesExactlyOnce (target: TempId) (cexpr: CExpr) : bool =
+    match cexpr with
+    | TupleAlloc elements
+    | RecordAlloc (_, elements)
+    | ClosureAlloc (_, elements) ->
+        atomOccurrenceCount target elements = 1
+    | RecordClone (_, source, fields) ->
+        not (ANF_Optimize.atomUsesTemp target source)
+        && atomOccurrenceCount target fields = 1
+    | _ ->
+        false
+
+/// Once ownership is transferred into an aggregate, do not permit observable
+/// work before that aggregate is returned. This preserves internal refcount
+/// probes while allowing nested tuple/record/closure construction suffixes.
+let rec private aggregateFlowsDirectlyToReturn
+    (aggregateId: TempId)
+    (body: ReturnAnnotatedExpr)
+    : bool =
+    match body with
+    | RReturn (Var returnedId, _) ->
+        returnedId = aggregateId
+    | RLet (nextId, nextExpr, nextBody, _) ->
+        aggregateConsumesExactlyOnce aggregateId nextExpr
+        && aggregateFlowsDirectlyToReturn nextId nextBody
+    | RReturn _
+    | RIf _ ->
+        false
+
+/// Find the sole aggregate use that begins a closed construction suffix ending
+/// in Return. Any earlier use of the candidate makes the proof ineligible.
+let rec private transfersIntoReturnedAggregate
+    (candidateId: TempId)
+    (body: ReturnAnnotatedExpr)
+    : bool =
+    match body with
+    | RLet (aggregateId, cexpr, nextBody, _) ->
+        if aggregateConsumesExactlyOnce candidateId cexpr then
+            aggregateFlowsDirectlyToReturn aggregateId nextBody
+        elif ANF_Optimize.cexprUsesTemp candidateId cexpr then
+            false
+        else
+            transfersIntoReturnedAggregate candidateId nextBody
+    | RReturn _
+    | RIf _ ->
+        false
+
 /// Check if a CExpr is a borrowing/aliasing operation
 /// Borrowed/aliased values should NOT get their own RefCountDec - the original value owns the memory
 let isBorrowingExpr (cexpr: CExpr) : bool =
@@ -739,6 +796,9 @@ type LetFrame = {
     TempId: TempId
     CExpr: CExpr
     TupleIncTargets: (TempId * AST.Type) list
+    /// The pass owns exactly one pending release for this value, and its next
+    /// use transfers that ownership into a closed returned aggregate suffix.
+    TransferableOwnership: ReturnDec option
     ReturnInc: AST.Type option
     BranchDec: ReturnDec option
 }
@@ -1227,6 +1287,20 @@ let rec insertRCWithAnalysis
                        | _ -> false
                 | None ->
                     false
+
+            let bindingDec =
+                if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
+                   && not (isBorrowingExpr cexpr)
+                   && not skipReturnDecForMapHelperLists
+                   && not consumedByImmediateI64Push then
+                    let kindOverride =
+                        match inferredType with
+                        | AST.TList (AST.TFunction _) -> Some TaggedList
+                        | _ -> None
+                    Some (tempId, inferredType, kindOverride)
+                else
+                    None
+
             let returnDecs' =
                 let functionReturnsNestedRecordListDict =
                     let isSingleListDictRecord (name: string) : bool =
@@ -1249,16 +1323,8 @@ let rec insertRCWithAnalysis
                        | AST.TDict _ -> true
                        | _ -> false
 
-                if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
-                   && not (Set.contains tempId bodyReturned)
-                   && not (isBorrowingExpr cexpr)
-                   && not skipReturnDecForMapHelperLists
-                   && not consumedByImmediateI64Push then
-                    let kindOverride =
-                        match inferredType with
-                        | AST.TList (AST.TFunction _) -> Some TaggedList
-                        | _ -> None
-                    let dec = (tempId, inferredType, kindOverride)
+                match bindingDec with
+                | Some dec when not (Set.contains tempId bodyReturned) ->
                     if needsNestedRecordListDictDictDec then
                         // List<Record { List<Dict<_, _>> }> construction retains the
                         // dict once for the inner list payload and once for the returned graph.
@@ -1267,7 +1333,7 @@ let rec insertRCWithAnalysis
                         dec :: dec :: returnDecs
                     else
                         dec :: returnDecs
-                else
+                | _ ->
                     returnDecs
 
             let allocationIncTargets =
@@ -1331,6 +1397,59 @@ let rec insertRCWithAnalysis
                     | _ ->
                         []
                 compoundAllocationTargets @ erasedSkewListElementTargets
+
+            let transferableOwnership =
+                let pendingForCurrent =
+                    returnDecs'
+                    |> List.filter (fun (pendingId, _, _) -> pendingId = tempId)
+                match bindingDec, pendingForCurrent with
+                | Some dec, [ pendingDec ]
+                    when dec = pendingDec
+                         && transfersIntoReturnedAggregate tempId bodyInfo ->
+                    Some dec
+                | _ ->
+                    None
+
+            let transferredOwnership =
+                allocationIncTargets
+                |> List.choose (fun (targetId, _) ->
+                    frames
+                    |> List.tryPick (fun candidate ->
+                        match candidate.TransferableOwnership with
+                        | Some ((ownerId, _, _) as pendingDec) when ownerId = targetId ->
+                            Some pendingDec
+                        | _ ->
+                            None))
+
+            let transferredIds =
+                transferredOwnership
+                |> List.map (fun (ownerId, _, _) -> ownerId)
+                |> Set.ofList
+
+            let allocationIncTargetsAfterTransfers =
+                allocationIncTargets
+                |> List.filter (fun (targetId, _) -> not (Set.contains targetId transferredIds))
+
+            let rec removePendingDec
+                (target: ReturnDec)
+                (pending: ReturnDec list)
+                : ReturnDec list =
+                match pending with
+                | [] -> []
+                | head :: tail when head = target -> tail
+                | head :: tail -> head :: removePendingDec target tail
+
+            let returnDecsAfterTransfers =
+                transferredOwnership
+                |> List.fold (fun pending target -> removePendingDec target pending) returnDecs'
+
+            let framesAfterTransfers =
+                frames
+                |> List.map (fun candidate ->
+                    if Set.contains candidate.TempId transferredIds then
+                        { candidate with TransferableOwnership = None }
+                    else
+                        candidate)
 
             let returnInc =
                 let retainedTypeFromAtom (atom: Atom) : AST.Type option =
@@ -1401,24 +1520,21 @@ let rec insertRCWithAnalysis
             let frame = {
                 TempId = tempId
                 CExpr = cexpr
-                TupleIncTargets = allocationIncTargets
+                TupleIncTargets = allocationIncTargetsAfterTransfers
+                TransferableOwnership = transferableOwnership
                 ReturnInc = returnInc
-                BranchDec =
-                    if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
-                       && not (isBorrowingExpr cexpr)
-                       && not skipReturnDecForMapHelperLists
-                       && not consumedByImmediateI64Push then
-                        let kindOverride =
-                            match inferredType with
-                            | AST.TList (AST.TFunction _) -> Some TaggedList
-                            | _ -> None
-                        Some (tempId, inferredType, kindOverride)
-                    else
-                        None
+                BranchDec = bindingDec
             }
 
             // Process the body iteratively, then rebuild on the way back out
-            descend ctx'' bodyInfo varGen returnDecs' (frame :: frames) typesWithBinding typeCache1
+            descend
+                ctx''
+                bodyInfo
+                varGen
+                returnDecsAfterTransfers
+                (frame :: framesAfterTransfers)
+                typesWithBinding
+                typeCache1
 
     descend ctxWithTypes expr varGen returnDecs [] types typeCache
 
