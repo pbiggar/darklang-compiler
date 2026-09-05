@@ -680,6 +680,18 @@ let private bindingNeedsShapeAutomaticDec (ctx: TypeContext) (cexpr: CExpr) (typ
        | AST.TFunction _, ClosureCall _ -> true
        | _ -> false
 
+/// Values whose runtime representation is known to fail the RC helper's
+/// dynamic-root guard, so emitting the helper call cannot affect ownership.
+let private cexprProducesNonRcSentinel (cexpr: CExpr) : bool =
+    match cexpr with
+    | Atom (StringLiteral _)
+    | TypedAtom (StringLiteral _, _) ->
+        true
+    | TypedAtom (IntLiteral (Int64 0L), AST.TList _) ->
+        true
+    | _ ->
+        false
+
 type private ReturnDec = TempId * AST.Type * RcKind option
 
 let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type) : CExpr =
@@ -1322,6 +1334,7 @@ let rec insertRCWithAnalysis
             let bindingDec =
                 if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
                    && not (isBorrowingExpr cexpr)
+                   && not (cexprProducesNonRcSentinel cexpr)
                    && not skipReturnDecForMapHelperLists
                    && not consumedByImmediateI64Push then
                     let kindOverride =
@@ -1367,6 +1380,16 @@ let rec insertRCWithAnalysis
                 | _ ->
                     returnDecs
 
+            let rec tempProducesNonRcSentinel (targetId: TempId) : bool =
+                frames
+                |> List.tryFind (fun frame -> frame.TempId = targetId)
+                |> Option.map (fun frame ->
+                    match frame.CExpr with
+                    | Atom (Var sourceId)
+                    | TypedAtom (Var sourceId, _) -> tempProducesNonRcSentinel sourceId
+                    | sourceExpr -> cexprProducesNonRcSentinel sourceExpr)
+                |> Option.defaultValue false
+
             let allocationIncTargets =
                 let compoundAllocationTargets =
                     match cexpr with
@@ -1376,7 +1399,7 @@ let rec insertRCWithAnalysis
                             match atom with
                             | Var tid ->
                                 match tryGetType ctxWithTypes tid with
-                                | Some t when shapeNeedsBorrowedRetain ctx t ->
+                                | Some t when shapeNeedsBorrowedRetain ctx t && not (tempProducesNonRcSentinel tid) ->
                                     (tid, t) :: acc
                                 | _ -> acc
                             | _ -> acc
@@ -1389,7 +1412,7 @@ let rec insertRCWithAnalysis
                             match atom with
                             | Var tid ->
                                 match tryGetType ctx tid with
-                                | Some t when shapeNeedsBorrowedRetain ctx t ->
+                                | Some t when shapeNeedsBorrowedRetain ctx t && not (tempProducesNonRcSentinel tid) ->
                                     (tid, t) :: acc
                                 | _ -> acc
                             | _ -> acc
@@ -1401,7 +1424,7 @@ let rec insertRCWithAnalysis
                             match atom with
                             | Var tid ->
                                 match tryGetType ctxWithTypes tid with
-                                | Some t when shapeNeedsBorrowedRetain ctx t ->
+                                | Some t when shapeNeedsBorrowedRetain ctx t && not (tempProducesNonRcSentinel tid) ->
                                     (tid, t) :: acc
                                 | _ -> acc
                             | _ -> acc
@@ -1421,7 +1444,9 @@ let rec insertRCWithAnalysis
                             | _ ->
                                 false
                         match transfersImmediateOwnedValue, tryGetType ctxWithTypes valueTemp with
-                        | false, Some valueType when shapeNeedsBorrowedRetain ctx valueType ->
+                        | false, Some valueType when
+                            shapeNeedsBorrowedRetain ctx valueType
+                            && not (tempProducesNonRcSentinel valueTemp) ->
                             [ valueTemp, valueType ]
                         | _ ->
                             []

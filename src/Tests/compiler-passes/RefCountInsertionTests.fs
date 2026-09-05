@@ -701,6 +701,30 @@ let rec private hasRefCountDecForTemp (target: TempId) (expr: AExpr) : bool =
         hasRefCountDecForTemp target thenBranch
         || hasRefCountDecForTemp target elseBranch
 
+let rec private hasStringRetainForTemp (target: TempId) (expr: AExpr) : bool =
+    match expr with
+    | Return _ ->
+        false
+    | Let (_, RefCountIncString (Var tempId), _) when tempId = target ->
+        true
+    | Let (_, _, body) ->
+        hasStringRetainForTemp target body
+    | If (_, thenBranch, elseBranch) ->
+        hasStringRetainForTemp target thenBranch
+        || hasStringRetainForTemp target elseBranch
+
+let rec private hasStringReleaseForTemp (target: TempId) (expr: AExpr) : bool =
+    match expr with
+    | Return _ ->
+        false
+    | Let (_, RefCountDecString (Var tempId), _) when tempId = target ->
+        true
+    | Let (_, _, body) ->
+        hasStringReleaseForTemp target body
+    | If (_, thenBranch, elseBranch) ->
+        hasStringReleaseForTemp target thenBranch
+        || hasStringReleaseForTemp target elseBranch
+
 let private pathHasRetainsBeforeDec
     (retainTargets: TempId list)
     (decTarget: TempId)
@@ -965,6 +989,127 @@ let testReturnedAggregateDoesNotTransferDuplicatedAliases () : TestResult =
         Ok ()
     else
         Error "Duplicated aliases must retain both aggregate edges and preserve the original owner's release"
+
+let testStaticStringBindingSkipsNoOpRcTraffic () : TestResult =
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = Map.empty
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let stringTemp = TempId 0
+    let resultTemp = TempId 1
+    let func : Function = {
+        Name = "staticString"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                stringTemp,
+                Atom (StringLiteral "static"),
+                Let (
+                    resultTemp,
+                    Atom (IntLiteral (Int64 1L)),
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasStringReleaseForTemp stringTemp transformed.Body then
+        Error "Static string binding should not emit a runtime no-op release"
+    else
+        Ok ()
+
+let testKnownEmptyListBindingSkipsNoOpRcTraffic () : TestResult =
+    let listType = AST.TList AST.TInt64
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = Map.empty
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let listTemp = TempId 0
+    let resultTemp = TempId 1
+    let func : Function = {
+        Name = "emptyList"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                listTemp,
+                TypedAtom (IntLiteral (Int64 0L), listType),
+                Let (
+                    resultTemp,
+                    Atom (IntLiteral (Int64 1L)),
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountDecForTemp listTemp transformed.Body then
+        Error "Known empty-list binding should not emit a runtime no-op release"
+    else
+        Ok ()
+
+let testAggregateSkipsRetainsForKnownNonRcSentinels () : TestResult =
+    let listType = AST.TList AST.TInt64
+    let resultType = AST.TTuple [AST.TString; listType]
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = Map.empty
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let stringTemp = TempId 0
+    let listTemp = TempId 1
+    let resultTemp = TempId 2
+    let func : Function = {
+        Name = "sentinelTuple"
+        TypedParams = []
+        ReturnType = resultType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                stringTemp,
+                Atom (StringLiteral "static"),
+                Let (
+                    listTemp,
+                    TypedAtom (IntLiteral (Int64 0L), listType),
+                    Let (
+                        resultTemp,
+                        TupleAlloc [Var stringTemp; Var listTemp],
+                        Return (Var resultTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasStringRetainForTemp stringTemp transformed.Body then
+        Error "Aggregate should not retain a known static string field"
+    elif hasRefCountIncForTemp listTemp transformed.Body then
+        Error "Aggregate should not retain a known empty-list field"
+    else
+        Ok ()
 
 let testNonSelfTailCallDoesNotLeaveDecAfterTailCall () : TestResult =
     let funcReg : AST_to_ANF.FunctionRegistry =
@@ -1929,6 +2074,9 @@ let tests = [
     ("returned aggregate transfers owned value through typed alias", testReturnedAggregateTransfersOwnedValueThroughTypedAlias)
     ("returned aggregate transfers nested owned aliases", testReturnedAggregateTransfersNestedOwnedAliases)
     ("returned aggregate does not transfer duplicated aliases", testReturnedAggregateDoesNotTransferDuplicatedAliases)
+    ("static string binding skips no-op RC traffic", testStaticStringBindingSkipsNoOpRcTraffic)
+    ("known empty-list binding skips no-op RC traffic", testKnownEmptyListBindingSkipsNoOpRcTraffic)
+    ("aggregate skips retains for known non-RC sentinels", testAggregateSkipsRetainsForKnownNonRcSentinels)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)
