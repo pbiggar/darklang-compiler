@@ -2,12 +2,12 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-09-05T16:11:25+00:00
+**Snapshot timestamp:** 2026-09-05T21:23:51+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `b4e6ba180a5f68f107005cf8867371144b93d3ed5326517cea45284c74fa6cc2`
-**Compiler commit:** `2a6636b87a6aae82be6d4a1a1666e5a03e177d38` - Preserve Stream raw-slot ownership initialization
+**Compiler commit:** `fab29995ed61eefa735aa0a5d29e997aba41976c` - Update affine tests for explicit Int64 literals
 
 | Benchmark | Dark (3.98x) | Rust |
 |---|---:|---:|
@@ -20,7 +20,7 @@ Best-known compatible routine-profile Dark performance vs audited Rust reference
 | fib | 388,196,637 (1.42x) | 272,528,736 |
 | leibniz | 850,009,224 (1.21x) | 700,257,860 |
 | mandelbrot | 16,367,511 (1.30x) | 12,554,856 |
-| matmul | 1,945,532,471 (115x) | 16,960,641 |
+| matmul | 1,941,542,471 (114x) | 16,960,641 |
 | merkletrees | 386,671,847 (3.41x) | 113,305,941 |
 | nbody | 914,509,449 (4.39x) | 208,256,292 |
 | nqueen | 212,398,449 (1.29x) | 164,530,821 |
