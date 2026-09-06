@@ -8124,7 +8124,7 @@ let private checkResolvedProgramInternal
     let programResolutionEnv =
         declarationResolutionEnvironment topLevels moduleRegistry (Option.isNone baseEnv)
 
-    let recordVariantLookup =
+    let availableVariantLookup =
         match baseEnv with
         | Some existingEnv ->
             Map.fold
@@ -8133,16 +8133,29 @@ let private checkResolvedProgramInternal
                 declarationSummary.VariantLookup
         | None -> declarationSummary.VariantLookup
 
-    let recordSumTypeNames = sumTypeNamesFromVariantLookup recordVariantLookup
+    let availableSumTypeNames =
+        sumTypeNamesFromVariantLookup availableVariantLookup
 
-    let canonicalVariantLookup =
-        recordVariantLookup
+    // The base environment is already canonical. Canonicalize only this
+    // program's declarations, then overlay them on the immutable base instead
+    // of mapping and merging the complete base registry again.
+    let canonicalProgramVariantLookup =
+        declarationSummary.VariantLookup
         |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
             (typeName,
              typeParams,
              tag,
              payloadType
-             |> Option.map (canonicalizeBareSumTypeRefsWithNames recordSumTypeNames)))
+             |> Option.map (canonicalizeBareSumTypeRefsWithNames availableSumTypeNames)))
+
+    let canonicalVariantLookup =
+        match baseEnv with
+        | Some existingEnv ->
+            Map.fold
+                (fun lookup name variant -> Map.add name variant lookup)
+                existingEnv.VariantLookup
+                canonicalProgramVariantLookup
+        | None -> canonicalProgramVariantLookup
 
     let canonicalProgramTypeReg =
         programTypeReg
@@ -8152,14 +8165,14 @@ let private checkResolvedProgramInternal
                 (fieldName,
                  canonicalizeDeclaredTypeRefsWithSumTypeNames
                      programTypeReg
-                     recordSumTypeNames
+                     availableSumTypeNames
                      fieldType)))
 
     let programAliasReg =
         declarationSummary.AliasReg
         |> Map.map (fun _ (typeParams, targetType) ->
             (typeParams,
-             canonicalizeBareSumTypeRefsWithNames recordSumTypeNames targetType))
+             canonicalizeBareSumTypeRefsWithNames availableSumTypeNames targetType))
 
     let functionAliasReg =
         match baseEnv with
@@ -8180,9 +8193,9 @@ let private checkResolvedProgramInternal
                 typ
                 |> canonicalizeDeclaredTypeRefsWithSumTypeNames
                     canonicalProgramTypeReg
-                    recordSumTypeNames
+                    availableSumTypeNames
                 |> resolveType functionAliasReg
-                |> canonicalizeBareSumTypeRefsWithNames recordSumTypeNames
+                |> canonicalizeBareSumTypeRefsWithNames availableSumTypeNames
             TFunction (List.map canonicalize paramTypes, canonicalize returnType))
 
     // Build the type check environment for THIS program
@@ -8193,7 +8206,7 @@ let private checkResolvedProgramInternal
                 canonicalVariantLookup
                 declarationSummary.RecordTypeParams
                 canonicalProgramTypeReg
-        VariantLookup = canonicalVariantLookup
+        VariantLookup = canonicalProgramVariantLookup
         FuncEnv = programFuncEnv
         FuncParamNames = declarationSummary.FuncParamNames
         GenericFuncReg = programGenericFuncReg
@@ -8217,7 +8230,7 @@ let private checkResolvedProgramInternal
     let funcParamNameReg = typeCheckEnv.FuncParamNames
     let genericFuncReg = typeCheckEnv.GenericFuncReg
     let mergedAliasReg = typeCheckEnv.AliasReg
-    let sumTypeNames = sumTypeNamesFromVariantLookup variantLookup
+    let sumTypeNames = availableSumTypeNames
 
     // Third pass: type check all function definitions and collect transformed top-levels
     // The accumulator contains (type option * TopLevel) pairs where the type is Some for expressions
