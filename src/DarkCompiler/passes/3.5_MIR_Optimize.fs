@@ -1637,16 +1637,21 @@ let eliminateDeadCode (cfg: CFG) : CFG * bool =
 type CopyMap = Map<VReg, Operand>
 
 let buildCopyMap (cfg: CFG) : CopyMap =
-    // First, collect all phi destinations - these should not be copy propagated
+    // SSA phis are a leading block prefix. Later passes either retain that
+    // invariant or replace a phi with an ordinary move, so stop as soon as the
+    // prefix ends instead of rescanning every instruction in every fixed-point
+    // iteration merely to rediscover the same destinations.
+    let rec collectPhiPrefix dests instrs =
+        match instrs with
+        | Phi (dest, _, _) :: rest ->
+            collectPhiPrefix (Set.add dest dests) rest
+        | _ ->
+            dests
+
     let phiDests =
         cfg.Blocks
         |> Map.fold (fun dests _ block ->
-            block.Instrs
-            |> List.fold (fun d instr ->
-                match instr with
-                | Phi (dest, _, _) -> Set.add dest d
-                | _ -> d
-            ) dests
+            collectPhiPrefix dests block.Instrs
         ) Set.empty
 
     cfg.Blocks
