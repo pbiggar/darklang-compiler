@@ -954,22 +954,26 @@ and private decodeBody env typ state : Result<Expr * State, string> =
 
 let private sumRegistry (variantLookup: TypeChecking.VariantLookup) =
     variantLookup
-    |> Map.toList
-    |> List.map (fun (_, (typeName, typeParams, _, _)) -> (typeName, typeParams))
-    |> List.distinct
-    |> List.map (fun (typeName, typeParams) ->
-        let variants =
-            variantLookup
-            |> Map.toList
-            |> List.choose (fun (lookupName, (owner, _, tag, payload)) ->
-                if owner <> typeName then None
+    |> Map.fold
+        (fun sums lookupName (typeName, typeParams, tag, payload) ->
+            let prefix = $"{typeName}."
+            let caseName =
+                if lookupName.StartsWith prefix then
+                    lookupName.Substring prefix.Length
                 else
-                    let prefix = $"{typeName}."
-                    let caseName = if lookupName.StartsWith prefix then lookupName.Substring prefix.Length else lookupName
-                    Some { Name = caseName; Tag = tag; Payload = payload })
-            |> List.distinctBy (fun variant -> variant.Tag)
-        (typeName, { TypeParams = typeParams; Variants = variants }))
-    |> Map.ofList
+                    lookupName
+            let variant = { Name = caseName; Tag = tag; Payload = payload }
+            match Map.tryFind typeName sums with
+            | None -> Map.add typeName (typeParams, Set.singleton tag, [variant]) sums
+            | Some (_, tags, _) when Set.contains tag tags -> sums
+            | Some (existingTypeParams, tags, reversedVariants) ->
+                Map.add
+                    typeName
+                    (existingTypeParams, Set.add tag tags, variant :: reversedVariants)
+                    sums)
+        Map.empty
+    |> Map.map (fun _ (typeParams, _, reversedVariants) ->
+        { TypeParams = typeParams; Variants = List.rev reversedVariants })
 
 let rec private mapExpr rewrite expr =
     let recurse = mapExpr rewrite
