@@ -490,8 +490,10 @@ let testBuildsParseableUniversalBatchSource () : TestResult =
                 let source = buildBatchSource prepared
                 match CompilerLibrary.parseProgram false source with
                 | Error msg -> Error $"Generated batch source did not parse: {msg}\n{source}"
-                | Ok _ when not (source.StartsWith("let e2eBatchCaseResult0 =")) ->
-                    Error $"Generated batch did not eagerly bind the first result:\n{source}"
+                | Ok _ when not (source.StartsWith("let e2eBatchCaseRun0(_unit: Unit): Bool =")) ->
+                    Error $"Generated batch did not isolate each check in a function:\n{source}"
+                | Ok _ when not (source.Contains("let e2eBatchCaseResult0 = e2eBatchCaseRun0() in")) ->
+                    Error $"Generated batch did not eagerly call the first check:\n{source}"
                 | Ok _ when not (source.EndsWith("(if e2eBatchCaseResult1 then 2L else 0L)")) ->
                     Error $"Generated batch did not encode the final result bit:\n{source}"
                 | Ok _ -> Ok ())
