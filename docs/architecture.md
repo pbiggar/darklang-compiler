@@ -126,6 +126,12 @@ chunks, prepared emission chunks, and composable code-generation metadata.
 Disposing the session releases all of those entries. One-shot CLI compilation
 uses no session and therefore retains no compilation state.
 
+ARM64 function chunks are reusable only inside the registry context that
+produced them. LIR alone does not encode every record/sum layout consulted by
+code generation, so structurally equal LIR from different contexts must not
+share cached machine code. The source-independent `_start` trampoline is the
+intentional exception.
+
 The process entry point is a fixed `_start` trampoline which calls
 `__dark_compiler_program_entry`. The changing source expression lives in the
 latter function, allowing a session to reuse `_start` without giving tests a
