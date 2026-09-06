@@ -2344,6 +2344,7 @@ let toMIR
 /// Each function gets its own RegGen for deterministic VReg assignment.
 let private toMIRFunctionsOnlyInternal
     (phaseRecorder: (string -> float -> unit) option)
+    (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
     (typeReg: Map<string, (string * AST.Type) list>)
@@ -2384,8 +2385,12 @@ let private toMIRFunctionsOnlyInternal
     | Ok mirFuncs ->
         recordPhase "ANF -> MIR Function Conversion" conversionTimer
         let registryTimer = startPhase ()
-        let variantRegistry = buildVariantRegistry variantLookup
-        let recordRegistry = buildRecordRegistry typeRegForRecords
+        let variantRegistry, recordRegistry =
+            match projectedRegistries with
+            | Some registries -> registries
+            | None ->
+                (buildVariantRegistry variantLookup,
+                 buildRecordRegistry typeRegForRecords)
         recordPhase "ANF -> MIR Registry Projection" registryTimer
         Ok (mirFuncs, variantRegistry, recordRegistry)
 
@@ -2400,6 +2405,7 @@ let toMIRFunctionsOnly
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         None
+        None
         program
         typeMap
         typeReg
@@ -2410,6 +2416,7 @@ let toMIRFunctionsOnly
 
 let toMIRFunctionsOnlyWithTrace
     (phaseRecorder: (string -> float -> unit) option)
+    (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
     (typeReg: Map<string, (string * AST.Type) list>)
@@ -2420,6 +2427,7 @@ let toMIRFunctionsOnlyWithTrace
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         phaseRecorder
+        projectedRegistries
         program
         typeMap
         typeReg

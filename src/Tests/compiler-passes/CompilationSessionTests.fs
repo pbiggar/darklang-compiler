@@ -61,10 +61,12 @@ let testArm64HitWithNestedJson (stdlib: CompilerLibrary.StdlibResult) () : TestR
         && session.Arm64ReleasePlanSummaryHitCount > 0
         && session.Arm64ReleasePlanSummaryMissCount > 0
         && session.JsonPlanHitCount = 1
-        && session.JsonPlanMissCount = 1 ->
+        && session.JsonPlanMissCount = 1
+        && session.MirRegistryProjectionHitCount = 1
+        && session.MirRegistryProjectionMissCount = 1 ->
         Ok ()
     | Ok (), Ok () ->
-        Error $"Expected repeated nested JSON compilation to hit all caches, got ARM64 hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}; release-plan hits={session.Arm64ReleasePlanSummaryHitCount}, misses={session.Arm64ReleasePlanSummaryMissCount}; JSON hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}"
+        Error $"Expected repeated nested JSON compilation to hit all caches, got ARM64 hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}; release-plan hits={session.Arm64ReleasePlanSummaryHitCount}, misses={session.Arm64ReleasePlanSummaryMissCount}; JSON hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}; MIR registry hits={session.MirRegistryProjectionHitCount}, misses={session.MirRegistryProjectionMissCount}"
     | Error error, _
     | _, Error error -> Error error
 
@@ -238,12 +240,14 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
         first.CachedArm64FunctionCount = 0
         && first.CachedAnfDependencyCount = 0
         && first.CachedCompiledDependencyCount = 0
+        && first.CachedMirRegistryProjectionCount = 0
         && first.CachedArm64MetadataGroupCount = 0
         && first.CachedArm64ReleasePlanSummaryCount = 0
         && first.CachedJsonPlanCount = 0
         && second.CachedArm64FunctionCount > 0
         && second.CachedAnfDependencyCount > 0
         && second.CachedCompiledDependencyCount > 0
+        && second.CachedMirRegistryProjectionCount > 0
         && second.CachedArm64MetadataGroupCount > 0
         && second.CachedArm64ReleasePlanSummaryCount > 0
         && second.CachedJsonPlanCount > 0 -> Ok ()

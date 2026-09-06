@@ -232,6 +232,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
         Dictionary<
             obj,
             Dictionary<Set<string>, LIR.Function list>>(ObjectReferenceComparer())
+    let mirRegistriesByContext =
+        Dictionary<
+            obj,
+            MIR.VariantRegistry * MIR.RecordRegistry>(ObjectReferenceComparer())
     let arm64MetadataGroupsByContext =
         Dictionary<
             obj,
@@ -283,6 +287,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable compiledStartMissCount = 0
     let mutable stdlibReachabilityHitCount = 0
     let mutable stdlibReachabilityMissCount = 0
+    let mutable mirRegistryProjectionHitCount = 0
+    let mutable mirRegistryProjectionMissCount = 0
     let mutable arm64StartCodegenHitCount = 0
     let mutable arm64MetadataGroupHitCount = 0
     let mutable arm64MetadataGroupMissCount = 0
@@ -396,6 +402,27 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 contextEntries.[directCalls] <- functions
                 stdlibReachabilityMissCount <- stdlibReachabilityMissCount + 1
                 functions
+
+    member internal _.ProjectMirRegistries
+        (contextIdentity: obj)
+        (variantLookup: AST_to_ANF.VariantLookup)
+        (recordFields: Map<string, (string * AST.Type) list>)
+        : MIR.VariantRegistry * MIR.RecordRegistry =
+        if disposed then
+            (ANF_to_MIR.buildVariantRegistry variantLookup,
+             ANF_to_MIR.buildRecordRegistry recordFields)
+        else
+            match mirRegistriesByContext.TryGetValue contextIdentity with
+            | true, registries ->
+                mirRegistryProjectionHitCount <- mirRegistryProjectionHitCount + 1
+                registries
+            | false, _ ->
+                let registries =
+                    (ANF_to_MIR.buildVariantRegistry variantLookup,
+                     ANF_to_MIR.buildRecordRegistry recordFields)
+                mirRegistriesByContext.[contextIdentity] <- registries
+                mirRegistryProjectionMissCount <- mirRegistryProjectionMissCount + 1
+                registries
 
     member internal _.Arm64MetadataGroup
         (contextIdentity: obj)
@@ -603,6 +630,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CachedStdlibReachabilityCount =
         if disposed then 0
         else reachableStdlibFunctionsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
+    member _.CachedMirRegistryProjectionCount =
+        if disposed then 0 else mirRegistriesByContext.Count
     member _.CachedArm64MetadataGroupCount =
         if disposed then 0
         else arm64MetadataGroupsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
@@ -622,6 +651,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CompiledStartMissCount = compiledStartMissCount
     member _.StdlibReachabilityHitCount = stdlibReachabilityHitCount
     member _.StdlibReachabilityMissCount = stdlibReachabilityMissCount
+    member _.MirRegistryProjectionHitCount = mirRegistryProjectionHitCount
+    member _.MirRegistryProjectionMissCount = mirRegistryProjectionMissCount
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
     member _.Arm64StartCodegenHitCount = arm64StartCodegenHitCount
@@ -640,6 +671,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             compiledDependenciesByIdentity.Clear()
             compiledStartFunctions.Clear()
             reachableStdlibFunctionsByContext.Clear()
+            mirRegistriesByContext.Clear()
             arm64MetadataGroupsByContext.Clear()
             arm64FunctionsByContext.Clear()
             arm64HelpersByContext.Clear()
@@ -837,6 +869,7 @@ let private lowerToAllocatedLir
     (functions: ANF.Function list)
     (typeMap: ANF.TypeMap)
     (registries: AST_to_ANF.Registries)
+    (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
     (externalReturnTypes: Map<string, AST.Type>)
     : Result<LIR.Function list, string> =
 
@@ -868,6 +901,7 @@ let private lowerToAllocatedLir
             let mirResult =
                 ANF_to_MIR.toMIRFunctionsOnlyWithTrace
                     mirPhaseRecorder
+                    projectedMirRegistries
                     anfProgram
                     typeMap
                     registries.FuncParams
@@ -2154,6 +2188,7 @@ let buildStdlibWithTrace
                         tcoFunctions
                         typeMap
                         registries
+                        None
                         externalReturnTypes with
                     | Error e ->
                         Error e
@@ -2307,6 +2342,7 @@ let buildStdlibSpecializations
                                 tcoFunctions
                                 typeMap
                                 registries
+                                None
                                 externalReturnTypes
                             |> Result.bind (fun allocatedFuncs ->
                                 let allLirFuncs = stdlib.AllocatedFunctions @ allocatedFuncs
@@ -2875,6 +2911,22 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         releasePlanCacheKey
                                         releasePlan
                                         generate)
+                        let mirRegistryTimer = Stopwatch.StartNew()
+                        let projectedMirRegistries =
+                            match plan.Session with
+                            | Some current ->
+                                current.ProjectMirRegistries
+                                    dependencyIdentity
+                                    userRegistries.VariantLookup
+                                    userRegistries.RecordFieldsReg
+                            | None ->
+                                (ANF_to_MIR.buildVariantRegistry userRegistries.VariantLookup,
+                                 ANF_to_MIR.buildRecordRegistry userRegistries.RecordFieldsReg)
+                        mirRegistryTimer.Stop()
+                        recordPassTiming
+                            plan.PassTimingRecorder
+                            "MIR Registry Projection Preparation"
+                            mirRegistryTimer.Elapsed.TotalMilliseconds
 
                         let compileDependencyFunctions () =
                             buildAnf
@@ -2907,6 +2959,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     tcoDependencies
                                     dependencyTypeMap
                                     userRegistries
+                                    (Some projectedMirRegistries)
                                     externalReturnTypes)
 
                         let dependencyLirResult =
@@ -2991,6 +3044,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         tcoProgramFunctions
                                         programTypeMap
                                         userRegistries
+                                        (Some projectedMirRegistries)
                                         externalReturnTypes
                                 let startResultId = ANF.TempId 0
                                 let startFunction =
@@ -3042,6 +3096,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             tcoStart
                                             startTypeMap
                                             startRegistries
+                                            (Some projectedMirRegistries)
                                             (Map.add programEntryName boundaryProgramType externalReturnTypes))
                                 let startLirResult =
                                     match plan.Session with
@@ -3278,6 +3333,7 @@ let buildPreambleContext
                             tcoFunctions
                             typeMap
                             preambleRegistries
+                            None
                             preambleExternalReturnTypes with
                         | Error err ->
                             let msg = $"Preamble {err}"
@@ -3375,6 +3431,7 @@ let buildPreambleContextFromAnalysis
                 tcoFunctions
                 typeMap
                 preambleRegistries
+                None
                 preambleExternalReturnTypes with
             | Error err ->
                 let msg = $"Preamble {err}"
