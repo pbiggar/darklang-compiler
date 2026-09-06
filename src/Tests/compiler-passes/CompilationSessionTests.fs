@@ -34,6 +34,17 @@ let private expectCompiled (report: CompilerLibrary.CompileReport) : TestResult 
     | Ok _ -> Ok ()
     | Error error -> Error error
 
+let private sessionCounter
+    (name: string)
+    (session: CompilerLibrary.CompilationSession)
+    : Result<int, string> =
+    match session.GetType().GetProperty(name) with
+    | null -> Error $"CompilationSession is missing the {name} counter"
+    | propertyInfo ->
+        match propertyInfo.GetValue(session) with
+        | :? int as value -> Ok value
+        | value -> Error $"CompilationSession.{name} returned an unexpected value: {value}"
+
 let private fakeFunction : LIR.Function =
     let entry = LIR.Label "cached_function_entry"
     {
@@ -244,6 +255,49 @@ let testJsonPlanCacheSegregatesNominalShapes (stdlib: CompilerLibrary.StdlibResu
     | _, Error error, _
     | _, _, Error error -> Error error
 
+let testJsonDependenciesAreReusedBeforeLowering
+    (stdlib: CompilerLibrary.StdlibResult)
+    ()
+    : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    let source = "Stdlib.Json.parse<List<List<Int64>>>(\"[[1,2],[3]]\")"
+    expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source)
+    |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source))
+    |> Result.bind (fun () ->
+        sessionCounter "AnfDependencyHitCount" session
+        |> Result.bind (fun anfHits ->
+            sessionCounter "CompiledDependencyHitCount" session
+            |> Result.bind (fun compiledHits ->
+                if anfHits > 0 && compiledHits > 0 then Ok ()
+                else Error $"Expected repeated JSON dependencies to bypass conversion and lowering, got ANF hits={anfHits}, compiled hits={compiledHits}")))
+
+let testStableStartTrampolineIsReused
+    (stdlib: CompilerLibrary.StdlibResult)
+    ()
+    : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    expectCompiled (compile stdlib session CompilerLibrary.defaultOptions "1L + 1L")
+    |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions "2L + 2L"))
+    |> Result.bind (fun () ->
+        sessionCounter "Arm64StartCodegenHitCount" session
+        |> Result.bind (fun hits ->
+            if hits > 0 then Ok ()
+            else Error "Expected source-independent _start code to be reused"))
+
+let testDependencyMetadataIsReusedCompositionally
+    (stdlib: CompilerLibrary.StdlibResult)
+    ()
+    : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    let source = "Stdlib.Json.parse<List<Int64>>(\"[1,2,3]\")"
+    expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source)
+    |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source))
+    |> Result.bind (fun () ->
+        sessionCounter "Arm64MetadataGroupHitCount" session
+        |> Result.bind (fun hits ->
+            if hits > 0 then Ok ()
+            else Error "Expected cached dependency metadata to be merged without rescanning its functions"))
+
 let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
@@ -253,4 +307,7 @@ let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("expression-only type checking reuses base registries", testExpressionTypeCheckingReusesBaseRegistries stdlib)
     ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
     ("compilation session segregates canonical JSON declaration shapes", testJsonPlanCacheSegregatesNominalShapes stdlib)
+    ("compilation session reuses JSON dependencies before lowering", testJsonDependenciesAreReusedBeforeLowering stdlib)
+    ("compilation session reuses the stable start trampoline", testStableStartTrampolineIsReused stdlib)
+    ("compilation session composes cached dependency metadata", testDependencyMetadataIsReusedCompositionally stdlib)
 ]
