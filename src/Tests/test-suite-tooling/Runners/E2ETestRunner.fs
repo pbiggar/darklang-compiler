@@ -143,7 +143,10 @@ type E2EBatchExecution = {
     Results: (E2ETest * E2ETestResult) list
 }
 
-let maxSupportedBatchSize = 62
+// Larger synthetic entry functions currently exceed an ARM64 backend branch
+// encoding limit in some JSON-heavy programs. Keep the public bound at the
+// largest size exercised successfully by the complete suite.
+let maxSupportedBatchSize = 32
 
 let private canEmbedBatchEqualitySource
     (allowInternal: bool)

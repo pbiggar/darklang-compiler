@@ -42,7 +42,7 @@ let testE2EBatchSizeParsesBoundedSize () : TestResult =
 
 let testE2EBatchSizeRejectsInvalidValues () : TestResult =
     let results =
-        [ "0"; "63"; "many" ]
+        [ "0"; "33"; "many" ]
         |> List.map (fun value -> parseE2EBatchSizeArg [| $"--e2e-batch-size={value}" |])
     if results |> List.forall Result.isError then Ok ()
     else Error $"Expected invalid E2E batch sizes to fail, got {results}"

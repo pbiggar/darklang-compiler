@@ -73,8 +73,8 @@ let parseE2EBatchSizeArg (args: string array) : Result<int option, string> =
     | None -> Ok None
     | Some value ->
         match System.Int32.TryParse value with
-        | true, size when size >= 1 && size <= 62 -> Ok (Some size)
-        | _ -> Error "--e2e-batch-size requires an integer from 1 through 62"
+        | true, size when size >= 1 && size <= TestDSL.E2ETestRunner.maxSupportedBatchSize -> Ok (Some size)
+        | _ -> Error "--e2e-batch-size requires an integer from 1 through 32"
 
 // Check if a test name matches the filter (case-insensitive substring match)
 let matchesFilter (filter: string option) (testName: string) : bool =
