@@ -7834,10 +7834,13 @@ let private generatePreparedARM64WithOptionsAndCache
         | _ -> ()
     let metadataTimer = startPhase ()
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
+    let registrySetupTimer = startPhase ()
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
+    recordPhase "ARM64 Metadata Registry Setup" registrySetupTimer
     // The public entry point validates this invariant before reaching the hot
     // path. No instruction-body fallback is permitted here.
+    let functionInventoryTimer = startPhase ()
     let functionsWithFacts =
         functions
         |> List.map (fun func ->
@@ -7852,6 +7855,7 @@ let private generatePreparedARM64WithOptionsAndCache
         match List.partition (fun (f: LIR.Function) -> f.Name = "_start") functions with
         | startFunc :: _, otherFuncs -> startFunc :: otherFuncs
         | [], _ -> functions  // No _start, keep original order
+    recordPhase "ARM64 Metadata Function Inventory" functionInventoryTimer
 
     let unionLabelSets (sets: Set<string> list) : Set<string> =
         match sets with
@@ -8070,6 +8074,7 @@ let private generatePreparedARM64WithOptionsAndCache
                     right.RcHelperRequirements
         }
 
+    let groupCompositionTimer = startPhase ()
     let groups =
         match metadataGroups with
         | [] -> [{ ContextIdentity = System.Object(); Functions = functions }]
@@ -8088,12 +8093,14 @@ let private generatePreparedARM64WithOptionsAndCache
                 | None ->
                     summarizeGroup group.Functions
             mergeMetadata metadata groupMetadata) emptyProgramMetadata
+    recordPhase "ARM64 Metadata Group Composition" groupCompositionTimer
 
     let rcHelperRequirements = programMetadata.RcHelperRequirements
     let needsCliExecuteHelper = programMetadata.Facts.NeedsCliExecuteHelper
 
     // These plans were named once when per-function facts were attached. Only
     // the maps carried by functions that survived tree shaking are merged.
+    let inlineTemplateTimer = startPhase ()
     let genericReleaseTemplateCandidates =
         rcHelperRequirements.PlannedGenericDecHelpers
 
@@ -8127,6 +8134,7 @@ let private generatePreparedARM64WithOptionsAndCache
                             labels)
                     labels)
             Map.empty
+    recordPhase "ARM64 Metadata Inline Template Planning" inlineTemplateTimer
 
     let localInlineGenericReleaseTemplates =
         System.Collections.Generic.Dictionary<
@@ -8160,6 +8168,7 @@ let private generatePreparedARM64WithOptionsAndCache
             | Error error ->
                 Crash.crash $"ARM64 cached inline generic release generation failed for {planLabel}: {error}"
 
+    let helperMetadataTimer = startPhase ()
     let closurePayloadSizes =
         Map.fold
             (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
@@ -8359,6 +8368,7 @@ let private generatePreparedARM64WithOptionsAndCache
     let directlyNeedsStreamRcDecHelper =
         rcHelperRequirements.NeedsStreamRcDecHelper
 
+    recordPhase "ARM64 Metadata Helper Planning" helperMetadataTimer
     recordPhase "ARM64 Codegen Metadata" metadataTimer
 
     let convertCached func =
