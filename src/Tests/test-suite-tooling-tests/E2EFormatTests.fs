@@ -490,9 +490,9 @@ let testBuildsParseableUniversalBatchSource () : TestResult =
                 let source = buildBatchSource prepared
                 match CompilerLibrary.parseProgram false source with
                 | Error msg -> Error $"Generated batch source did not parse: {msg}\n{source}"
-                | Ok _ when not (source.Contains("_Check0(seed: Int64): Bool =")) ->
+                | Ok _ when not (source.Contains("_Check0(_unit: Unit): Bool =")) ->
                     Error $"Generated batch did not isolate each check in a function:\n{source}"
-                | Ok _ when not (source.Contains("_Padding0_20 == 21L then")) ->
+                | Ok _ when not (source.Contains("_Run(check: (Unit) -> Bool): Bool =")) ->
                     Error $"Generated batch check was not protected from inlining:\n{source}"
                 | Ok _ when not (source.Contains("_Result0 = e2eBatch")) ->
                     Error $"Generated batch did not eagerly call the first check:\n{source}"
