@@ -1081,7 +1081,16 @@ let private buildAnf
 
     if verbosity >= 1 then println "  [2.5/7] Reference Count Insertion..."
     let rcStart = sw.Elapsed.TotalMilliseconds
-    let rcResult = RefCountInsertion.insertRCInProgram convResult
+    let rcPhaseRecorder =
+        passTimingRecorder
+        |> Option.map (fun recorder ->
+            fun name (elapsedMs: float) ->
+                recorder {
+                    Pass = name
+                    Elapsed = TimeSpan.FromMilliseconds elapsedMs
+                })
+    let rcResult =
+        RefCountInsertion.insertRCInProgramWithTrace rcPhaseRecorder convResult
     match rcResult with
     | Error err -> Error $"Reference count insertion error: {err}"
     | Ok (anfAfterRC, typeMap) ->

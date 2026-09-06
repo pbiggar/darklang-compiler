@@ -1912,9 +1912,21 @@ let verifyTypeMapCompleteness (program: ANF.Program) (typeMap: ANF.TypeMap) : Te
 /// Insert RC operations into a program
 /// Returns (ANF.Program, TypeMap) where TypeMap contains all TempId -> Type mappings
 let private insertRCInProgramInternal
+    (phaseRecorder: (string -> float -> unit) option)
     (result: ConversionResult)
     : Result<ANF.Program * ANF.TypeMap, string> =
+    let startPhase () =
+        phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
+    let recordPhase name timer =
+        match phaseRecorder, timer with
+        | Some record, Some (timer: System.Diagnostics.Stopwatch) ->
+            timer.Stop()
+            record name timer.Elapsed.TotalMilliseconds
+        | _ -> ()
+
+    let contextTimer = startPhase ()
     let ctx = createContext result
+    recordPhase "Reference Count Context" contextTimer
     let (ANF.Program (functions, mainExpr)) = result.Program
     let varGen = VarGen 1000  // Start high to avoid conflicts
 
@@ -1936,16 +1948,22 @@ let private insertRCInProgramInternal
                 Map.fold (fun acc tempId typ -> Map.add tempId typ acc) accTypes types
             processFuncs rest vg' (f' :: accFuncs) accTypes'
 
+    let functionsTimer = startPhase ()
     let (functions', varGen1, typesFromFuncs) =
         processFuncs functions varGen [] Map.empty
+    recordPhase "Reference Count Functions" functionsTimer
 
     // Process main expression
+    let mainTimer = startPhase ()
     let (mainExpr', _, finalTypeMap, _typeCache) =
         insertRCInternal ctx mainExpr varGen1 typesFromFuncs emptyCExprTypeCache
+    recordPhase "Reference Count Main" mainTimer
 
     // Verify TypeMap completeness - all defined TempIds should have types
+    let verificationTimer = startPhase ()
     let program' = ANF.Program (functions', mainExpr')
     let missingTypes = verifyTypeMapCompleteness program' finalTypeMap
+    recordPhase "Reference Count Verification" verificationTimer
     if not (List.isEmpty missingTypes) then
         let missingStr = missingTypes |> List.map (fun (TempId n) -> $"t{n}") |> String.concat ", "
         Crash.crash $"RefCountInsertion: TypeMap incomplete - missing types for: {missingStr}"
@@ -1955,4 +1973,11 @@ let private insertRCInProgramInternal
 /// Insert RC operations into a program
 /// Returns (ANF.Program, TypeMap) where TypeMap contains all TempId -> Type mappings
 let insertRCInProgram (result: ConversionResult) : Result<ANF.Program * ANF.TypeMap, string> =
-    insertRCInProgramInternal result
+    insertRCInProgramInternal None result
+
+/// Insert RC operations while reporting nested phase timings.
+let insertRCInProgramWithTrace
+    (phaseRecorder: (string -> float -> unit) option)
+    (result: ConversionResult)
+    : Result<ANF.Program * ANF.TypeMap, string> =
+    insertRCInProgramInternal phaseRecorder result
