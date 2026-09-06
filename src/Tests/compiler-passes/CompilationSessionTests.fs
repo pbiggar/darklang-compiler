@@ -212,9 +212,15 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
     match firstResult, secondResult with
     | Ok (), Ok () when
         first.CachedArm64FunctionCount = 0
+        && first.CachedAnfDependencyCount = 0
+        && first.CachedCompiledDependencyCount = 0
+        && first.CachedArm64MetadataGroupCount = 0
         && first.CachedArm64ReleasePlanSummaryCount = 0
         && first.CachedJsonPlanCount = 0
         && second.CachedArm64FunctionCount > 0
+        && second.CachedAnfDependencyCount > 0
+        && second.CachedCompiledDependencyCount > 0
+        && second.CachedArm64MetadataGroupCount > 0
         && second.CachedArm64ReleasePlanSummaryCount > 0
         && second.CachedJsonPlanCount > 0 -> Ok ()
     | Ok (), Ok () ->
@@ -236,10 +242,14 @@ let testJsonPlanCacheSegregatesNominalShapes (stdlib: CompilerLibrary.StdlibResu
     | Ok (), Ok (), Ok () when
         session.CachedJsonPlanCount = 2
         && session.JsonPlanMissCount = 2
-        && session.JsonPlanHitCount = 1 ->
+        && session.JsonPlanHitCount = 1
+        && session.AnfDependencyMissCount = 2
+        && session.AnfDependencyHitCount = 1
+        && session.CompiledDependencyMissCount = 2
+        && session.CompiledDependencyHitCount = 1 ->
         Ok ()
     | Ok (), Ok (), Ok () ->
-        Error $"Expected same-named distinct record shapes to use separate JSON plans, got cached={session.CachedJsonPlanCount}, hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}"
+        Error $"Expected same-named distinct record shapes to segregate every dependency cache, got JSON cached={session.CachedJsonPlanCount}, hits={session.JsonPlanHitCount}, misses={session.JsonPlanMissCount}; ANF hits={session.AnfDependencyHitCount}, misses={session.AnfDependencyMissCount}; compiled hits={session.CompiledDependencyHitCount}, misses={session.CompiledDependencyMissCount}"
     | Error error, _, _
     | _, Error error, _
     | _, _, Error error -> Error error

@@ -428,6 +428,15 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 prepared
 
     member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
+    member _.CachedAnfDependencyCount =
+        if disposed then 0
+        else anfDependenciesByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
+    member _.CachedCompiledDependencyCount =
+        if disposed then 0
+        else compiledDependenciesByIdentity.Values |> Seq.sumBy (fun entries -> entries.Count)
+    member _.CachedArm64MetadataGroupCount =
+        if disposed then 0
+        else arm64MetadataGroupsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
     member _.CachedArm64EmissionChunkCount =
         if disposed then 0 else arm64EmissionChunks.Count
     member _.CachedArm64ReleasePlanSummaryCount =
