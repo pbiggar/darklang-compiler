@@ -7807,6 +7807,12 @@ type GeneratedChunk = {
     ReusableAcrossCompilations: bool
 }
 
+type FunctionGroupCodegenCache =
+    obj
+        -> LIR.Function list
+        -> (unit -> Result<GeneratedChunk list, string>)
+        -> Result<GeneratedChunk list, string>
+
 type GeneratedProgram = private GeneratedProgram of GeneratedChunk list
 
 let generatedProgramChunks (GeneratedProgram chunks) : GeneratedChunk list = chunks
@@ -7818,6 +7824,7 @@ let private generatePreparedARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
+    (functionGroupCache: FunctionGroupCodegenCache option)
     (metadataGroupCache: MetadataGroupCache option)
     (helperCache: HelperCodegenCache option)
     (metadataGroups: MetadataGroup list)
@@ -8230,7 +8237,48 @@ let private generatePreparedARM64WithOptionsAndCache
         })
 
     let functionTimer = startPhase ()
-    let convertedFunctionChunks = ResultList.mapResults convertCached sortedFunctions
+    let functionContexts =
+        System.Collections.Generic.Dictionary<LIR.Function, obj>(HashIdentity.Reference)
+    for group in metadataGroups do
+        for func in group.Functions do
+            functionContexts.[func] <- group.ContextIdentity
+
+    // Preserve exact function order while coalescing adjacent functions from
+    // the same immutable compilation unit. Cached stdlib/dependency runs can
+    // then bypass hundreds of individual cache probes per executable.
+    let functionRuns =
+        sortedFunctions
+        |> List.fold
+            (fun runs func ->
+                let context =
+                    match functionContexts.TryGetValue func with
+                    | true, value -> Some value
+                    | false, _ -> None
+                match runs with
+                | (existingContext, reversedFunctions) :: rest
+                    when Option.isSome context
+                         && Option.isSome existingContext
+                         && obj.ReferenceEquals(context.Value, existingContext.Value) ->
+                    (existingContext, func :: reversedFunctions) :: rest
+                | _ ->
+                    (context, [func]) :: runs)
+            []
+        |> List.rev
+        |> List.map (fun (context, reversedFunctions) ->
+            (context, List.rev reversedFunctions))
+
+    let convertRun (context, runFunctions) =
+        let generate () = ResultList.mapResults convertCached runFunctions
+        match context, functionGroupCache with
+        | Some contextIdentity, Some cache
+            when not (runFunctions |> List.exists (fun func -> func.Name = "_start")) ->
+            cache contextIdentity runFunctions generate
+        | _ ->
+            generate ()
+
+    let convertedFunctionChunks =
+        ResultList.mapResults convertRun functionRuns
+        |> Result.map List.concat
     recordPhase "ARM64 Codegen Functions" functionTimer
 
     convertedFunctionChunks
@@ -8537,6 +8585,7 @@ let generateARM64WithOptionsAndCaches
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
+    (functionGroupCache: FunctionGroupCodegenCache option)
     (metadataGroupCache: MetadataGroupCache option)
     (helperCache: HelperCodegenCache option)
     (metadataGroups: MetadataGroup list)
@@ -8561,6 +8610,7 @@ let generateARM64WithOptionsAndCaches
             target
             options
             functionCache
+            functionGroupCache
             metadataGroupCache
             helperCache
             metadataGroups
@@ -8578,6 +8628,7 @@ let generateARM64WithOptionsAndCache
         target
         options
         functionCache
+        None
         None
         None
         []
