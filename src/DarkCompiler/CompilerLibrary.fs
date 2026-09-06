@@ -228,6 +228,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 Result<LIR.Function list, string>>>(ObjectReferenceComparer())
     let compiledStartFunctions =
         Dictionary<StartCompilationConfig, Result<LIR.Function list, string>>()
+    let reachableStdlibFunctionsByContext =
+        Dictionary<
+            obj,
+            Dictionary<Set<string>, LIR.Function list>>(ObjectReferenceComparer())
     let arm64MetadataGroupsByContext =
         Dictionary<
             obj,
@@ -277,6 +281,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable compiledDependencyMissCount = 0
     let mutable compiledStartHitCount = 0
     let mutable compiledStartMissCount = 0
+    let mutable stdlibReachabilityHitCount = 0
+    let mutable stdlibReachabilityMissCount = 0
     let mutable arm64StartCodegenHitCount = 0
     let mutable arm64MetadataGroupHitCount = 0
     let mutable arm64MetadataGroupMissCount = 0
@@ -355,6 +361,41 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 compiledStartFunctions.[config] <- result
                 compiledStartMissCount <- compiledStartMissCount + 1
                 result
+
+    member internal _.ReachableStdlibFunctions
+        (contextIdentity: obj)
+        (userFunctions: LIR.Function list)
+        (stdlibCallGraph: Map<string, Set<string>>)
+        (stdlibFunctions: LIR.Function list)
+        : LIR.Function list =
+        let directCalls =
+            userFunctions
+            |> List.fold (fun calls func ->
+                Set.union calls (DeadCodeElimination.getCalledFunctions func)) Set.empty
+        if disposed then
+            let reachable = DeadCodeElimination.findReachable stdlibCallGraph directCalls
+            stdlibFunctions
+            |> List.filter (fun func -> Set.contains func.Name reachable)
+        else
+            let contextEntries =
+                match reachableStdlibFunctionsByContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries = Dictionary<Set<string>, LIR.Function list>()
+                    reachableStdlibFunctionsByContext.[contextIdentity] <- entries
+                    entries
+            match contextEntries.TryGetValue directCalls with
+            | true, functions ->
+                stdlibReachabilityHitCount <- stdlibReachabilityHitCount + 1
+                functions
+            | false, _ ->
+                let reachable = DeadCodeElimination.findReachable stdlibCallGraph directCalls
+                let functions =
+                    stdlibFunctions
+                    |> List.filter (fun func -> Set.contains func.Name reachable)
+                contextEntries.[directCalls] <- functions
+                stdlibReachabilityMissCount <- stdlibReachabilityMissCount + 1
+                functions
 
     member internal _.Arm64MetadataGroup
         (contextIdentity: obj)
@@ -559,6 +600,9 @@ type CompilationSession(collectCodegenMetrics: bool) =
         if disposed then 0
         else compiledDependenciesByIdentity.Values |> Seq.sumBy (fun entries -> entries.Count)
     member _.CachedCompiledStartCount = if disposed then 0 else compiledStartFunctions.Count
+    member _.CachedStdlibReachabilityCount =
+        if disposed then 0
+        else reachableStdlibFunctionsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
     member _.CachedArm64MetadataGroupCount =
         if disposed then 0
         else arm64MetadataGroupsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
@@ -576,6 +620,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CompiledDependencyMissCount = compiledDependencyMissCount
     member _.CompiledStartHitCount = compiledStartHitCount
     member _.CompiledStartMissCount = compiledStartMissCount
+    member _.StdlibReachabilityHitCount = stdlibReachabilityHitCount
+    member _.StdlibReachabilityMissCount = stdlibReachabilityMissCount
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
     member _.Arm64StartCodegenHitCount = arm64StartCodegenHitCount
@@ -593,6 +639,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             anfDependenciesByContext.Clear()
             compiledDependenciesByIdentity.Clear()
             compiledStartFunctions.Clear()
+            reachableStdlibFunctionsByContext.Clear()
             arm64MetadataGroupsByContext.Clear()
             arm64FunctionsByContext.Clear()
             arm64HelpersByContext.Clear()
@@ -3016,10 +3063,20 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         if plan.Options.DisableFunctionTreeShaking then plan.Stdlib.AllocatedFunctions
                                         else
                                             let treeShakeStart = sw.Elapsed.TotalMilliseconds
-                                            FunctionTreeShaking.filterStdlibFunctions
-                                                plan.Stdlib.StdlibCallGraph
-                                                finalUserFuncs
-                                                plan.Stdlib.AllocatedFunctions
+                                            let filtered =
+                                                match plan.Session with
+                                                | Some current ->
+                                                    current.ReachableStdlibFunctions
+                                                        (box plan.Stdlib)
+                                                        finalUserFuncs
+                                                        plan.Stdlib.StdlibCallGraph
+                                                        plan.Stdlib.AllocatedFunctions
+                                                | None ->
+                                                    FunctionTreeShaking.filterStdlibFunctions
+                                                        plan.Stdlib.StdlibCallGraph
+                                                        finalUserFuncs
+                                                        plan.Stdlib.AllocatedFunctions
+                                            filtered
                                             |> fun shakenStdlib ->
                                                 let treeShakeElapsed = sw.Elapsed.TotalMilliseconds - treeShakeStart
                                                 recordPassTiming plan.PassTimingRecorder "Function Tree Shaking" treeShakeElapsed

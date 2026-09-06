@@ -138,6 +138,8 @@ type CodegenProfileSummary = {
     compiled_dependency_cache_misses: int
     compiled_start_cache_hits: int
     compiled_start_cache_misses: int
+    stdlib_reachability_cache_hits: int
+    stdlib_reachability_cache_misses: int
     metadata_group_cache_hits: int
     metadata_group_cache_misses: int
     helper_cache_hits: int
@@ -566,6 +568,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let mutable compiledDependencyCacheMisses = 0
     let mutable compiledStartCacheHits = 0
     let mutable compiledStartCacheMisses = 0
+    let mutable stdlibReachabilityCacheHits = 0
+    let mutable stdlibReachabilityCacheMisses = 0
     let mutable metadataGroupCacheHits = 0
     let mutable metadataGroupCacheMisses = 0
     let mutable helperCacheHits = 0
@@ -1021,6 +1025,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                     compiledStartCacheHits + compilationSession.CompiledStartHitCount
                 compiledStartCacheMisses <-
                     compiledStartCacheMisses + compilationSession.CompiledStartMissCount
+                stdlibReachabilityCacheHits <-
+                    stdlibReachabilityCacheHits + compilationSession.StdlibReachabilityHitCount
+                stdlibReachabilityCacheMisses <-
+                    stdlibReachabilityCacheMisses + compilationSession.StdlibReachabilityMissCount
                 metadataGroupCacheHits <-
                     metadataGroupCacheHits + compilationSession.Arm64MetadataGroupHitCount
                 metadataGroupCacheMisses <-
@@ -1582,6 +1590,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 compiled_dependency_cache_misses = compiledDependencyCacheMisses
                 compiled_start_cache_hits = compiledStartCacheHits
                 compiled_start_cache_misses = compiledStartCacheMisses
+                stdlib_reachability_cache_hits = stdlibReachabilityCacheHits
+                stdlib_reachability_cache_misses = stdlibReachabilityCacheMisses
                 metadata_group_cache_hits = metadataGroupCacheHits
                 metadata_group_cache_misses = metadataGroupCacheMisses
                 helper_cache_hits = helperCacheHits

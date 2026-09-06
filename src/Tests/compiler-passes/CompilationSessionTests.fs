@@ -320,6 +320,21 @@ let testDependencyMetadataIsReusedCompositionally
         if session.Arm64MetadataGroupHitCount > 0 then Ok ()
         else Error "Expected cached dependency metadata to be merged without rescanning its functions")
 
+let testStdlibReachabilityIsReused
+    (stdlib: CompilerLibrary.StdlibResult)
+    ()
+    : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    let source = "Stdlib.Json.parse<List<Int64>>(\"[1,2,3]\")"
+    expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source)
+    |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source))
+    |> Result.bind (fun () ->
+        if session.StdlibReachabilityHitCount > 0
+           && session.StdlibReachabilityMissCount > 0 then
+            Ok ()
+        else
+            Error $"Expected identical stdlib roots to reuse reachability, got hits={session.StdlibReachabilityHitCount}, misses={session.StdlibReachabilityMissCount}")
+
 let testArm64HelpersAreReused
     (stdlib: CompilerLibrary.StdlibResult)
     ()
@@ -348,5 +363,6 @@ let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses JSON dependencies before lowering", testJsonDependenciesAreReusedBeforeLowering stdlib)
     ("compilation session reuses the stable start trampoline", testStableStartTrampolineIsReused stdlib)
     ("compilation session composes cached dependency metadata", testDependencyMetadataIsReusedCompositionally stdlib)
+    ("compilation session reuses stdlib reachability", testStdlibReachabilityIsReused stdlib)
     ("compilation session reuses identical ARM64 helper programs", testArm64HelpersAreReused stdlib)
 ]
