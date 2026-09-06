@@ -7837,6 +7837,7 @@ let generatedProgramInstructions (GeneratedProgram chunks) : ARM64Symbolic.Instr
 let private generatePreparedARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
+    (preparedSumShapeRegistry: ANF.RcSumShapeRegistry option)
     (functionCache: FunctionCodegenCache option)
     (functionGroupCache: FunctionGroupCodegenCache option)
     (functionGroups: FunctionGroup list)
@@ -7858,7 +7859,10 @@ let private generatePreparedARM64WithOptionsAndCache
     let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let registrySetupTimer = startPhase ()
     let heapOverflowTrapBody = generateHeapOverflowTrapBody target
-    let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
+    let sumShapeRegistry =
+        preparedSumShapeRegistry
+        |> Option.defaultWith (fun () ->
+            rcSumShapeRegistryFromVariantRegistry variantRegistry)
     recordPhase "ARM64 Metadata Registry Setup" registrySetupTimer
     // The public entry point validates this invariant before reaching the hot
     // path. No instruction-body fallback is permitted here.
@@ -8590,6 +8594,7 @@ let private generatePreparedARM64WithOptionsAndCache
 let generateARM64WithOptionsAndCaches
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
+    (preparedSumShapeRegistry: ANF.RcSumShapeRegistry option)
     (functionCache: FunctionCodegenCache option)
     (functionGroupCache: FunctionGroupCodegenCache option)
     (functionGroups: FunctionGroup list)
@@ -8616,6 +8621,7 @@ let generateARM64WithOptionsAndCaches
         generatePreparedARM64WithOptionsAndCache
             target
             options
+            preparedSumShapeRegistry
             functionCache
             functionGroupCache
             functionGroups
@@ -8635,6 +8641,7 @@ let generateARM64WithOptionsAndCache
     generateARM64WithOptionsAndCaches
         target
         options
+        None
         functionCache
         None
         []

@@ -1257,6 +1257,7 @@ let private generateBinary
     (programContextIdentity: obj)
     (functionGroups: CodeGen.FunctionGroup list)
     (metadataGroups: CodeGen.MetadataGroup list)
+    (arm64SumShapeRegistry: ANF.RcSumShapeRegistry)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
@@ -1394,6 +1395,7 @@ let private generateBinary
             CodeGen.generateARM64WithOptionsAndCaches
                 arm64Target
                 codegenOptions
+                (Some arm64SumShapeRegistry)
                 functionCache
                 functionGroupCache
                 functionGroups
@@ -3420,6 +3422,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 }
                                              ]
                                              |> List.filter (fun group -> not (List.isEmpty group.Functions)))
+                                            userRegistries.RcSumShapeReg
                                             allocatedProgram
                                     match binaryResult with
                                     | Error err -> Error err
