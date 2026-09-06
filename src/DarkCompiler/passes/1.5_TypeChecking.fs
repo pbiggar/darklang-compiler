@@ -1019,13 +1019,14 @@ let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistr
         fields
         |> List.map (fun (fieldName, fieldType) -> (fieldName, resolveType aliasReg fieldType)))
 
-let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Type) : Type =
-    let sumTypeNames =
-        variantLookup
-        |> Map.toList
-        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
-        |> Set.ofList
+let private sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
+    variantLookup
+    |> Map.fold (fun names _ (typeName, _, _, _) -> Set.add typeName names) Set.empty
 
+let private canonicalizeBareSumTypeRefsWithNames
+    (sumTypeNames: Set<string>)
+    (typ: Type)
+    : Type =
     let rec canonicalize typ =
         match typ with
         | TRecord (name, []) when Set.contains name sumTypeNames ->
@@ -1056,17 +1057,11 @@ let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Typ
 /// Resolve the parser's provisional generic named-type shape against nominal
 /// declarations. Generic spellings initially use TSum because parsing happens
 /// before the record and sum registries are available.
-let private canonicalizeDeclaredTypeRefs
+let private canonicalizeDeclaredTypeRefsWithSumTypeNames
     (typeReg: Map<string, 'recordInfo>)
-    (variantLookup: VariantLookup)
+    (sumTypeNames: Set<string>)
     (typ: Type)
     : Type =
-    let sumTypeNames =
-        variantLookup
-        |> Map.toList
-        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
-        |> Set.ofList
-
     let rec canonicalize current =
         match current with
         | TSum (name, typeArgs) when Map.containsKey name typeReg && not (Set.contains name sumTypeNames) ->
@@ -1096,11 +1091,16 @@ let indexTypeRegistry
     (recordTypeParams: Map<string, string list>)
     (typeReg: TypeRegistry)
     : IndexedTypeRegistry =
+    let sumTypeNames = sumTypeNamesFromVariantLookup variantLookup
     typeReg
     |> Map.map (fun typeName fields ->
         fields
         |> List.map (fun (fieldName, fieldType) ->
-            (fieldName, canonicalizeDeclaredTypeRefs typeReg variantLookup fieldType))
+            (fieldName,
+             canonicalizeDeclaredTypeRefsWithSumTypeNames
+                 typeReg
+                 sumTypeNames
+                 fieldType))
         |> recordTypeInfo
             (match Map.tryFind typeName recordTypeParams with
              | Some declared -> declared
@@ -2114,8 +2114,9 @@ let private paramNameForLegacyError
 /// Returns: Result<Type * Expr, TypeError>
 ///   - Type: The type of the expression
 ///   - Expr: The (possibly transformed) expression
-let rec private checkExprWithParamNames
+let rec private checkExprWithParamNamesAndSumTypeNames
     (funcParamNameReg: Map<string, string list>)
+    (sumTypeNames: Set<string>)
     (expr: Expr)
     (env: TypeEnv)
     (typeReg: IndexedTypeRegistry)
@@ -2137,8 +2138,9 @@ let rec private checkExprWithParamNames
         (innerAliasReg: AliasRegistry)
         (innerExpectedType: Type option)
         : Result<Type * Expr, TypeError> =
-        checkExprWithParamNames
+        checkExprWithParamNamesAndSumTypeNames
             funcParamNameReg
+            sumTypeNames
             innerExpr
             innerEnv
             innerTypeReg
@@ -2151,7 +2153,7 @@ let rec private checkExprWithParamNames
 
     let expectedType =
         expectedType
-        |> Option.map (canonicalizeBareSumTypeRefs variantLookup)
+        |> Option.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)
 
     let rec tryFindCallArguments (targetName: string) (candidate: Expr) : Expr list option =
         let tryChildren children = children |> List.tryPick (tryFindCallArguments targetName)
@@ -2996,7 +2998,7 @@ let rec private checkExprWithParamNames
 
         checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg valueExpectedType
         |> Result.bind (fun (valueType, value') ->
-            let valueType = canonicalizeBareSumTypeRefs variantLookup valueType
+            let valueType = canonicalizeBareSumTypeRefsWithNames sumTypeNames valueType
             match validateBinders (LetBinderPatterns [pattern]) with
             | Error message -> Error (GenericError message)
             | Ok _ ->
@@ -3033,7 +3035,7 @@ let rec private checkExprWithParamNames
             // Variable reference: look up in environment
             match tryLookupResolved name env with
             | Some (varType, resolvedName) ->
-                let varType = canonicalizeBareSumTypeRefs variantLookup varType
+                let varType = canonicalizeBareSumTypeRefsWithNames sumTypeNames varType
 
                 match expectedType with
                 | Some expected ->
@@ -3709,7 +3711,7 @@ let rec private checkExprWithParamNames
                 // 3. Build substitution from type params to type args
                     let typeArgs =
                         typeArgs
-                        |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                        |> List.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)
 
                     validateCanonicalSortableCall aliasReg typeReg variantLookup resolvedFuncName typeArgs
                     |> Result.bind (fun () ->
@@ -3723,11 +3725,11 @@ let rec private checkExprWithParamNames
                         let concreteParamTypes =
                             paramTypes
                             |> List.map (applySubst subst)
-                            |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                            |> List.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)
                         let concreteReturnType =
                             returnType
                             |> applySubst subst
-                            |> canonicalizeBareSumTypeRefs variantLookup
+                            |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
 
                         // 5. Check argument count - allow partial application
                         let numParams = List.length concreteParamTypes
@@ -3873,7 +3875,7 @@ let rec private checkExprWithParamNames
                 // Build substitution from type params to type args
                     let typeArgs =
                         typeArgs
-                        |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                        |> List.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)
 
                     validateCanonicalSortableCall aliasReg typeReg variantLookup resolvedFuncName typeArgs
                     |> Result.bind (fun () -> buildSubstitution typeParams typeArgs |> Result.mapError GenericError)
@@ -3882,11 +3884,11 @@ let rec private checkExprWithParamNames
                         let concreteParamTypes =
                             paramTypes
                             |> List.map (applySubst subst)
-                            |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                            |> List.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)
                         let concreteReturnType =
                             returnType
                             |> applySubst subst
-                            |> canonicalizeBareSumTypeRefs variantLookup
+                            |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
 
                         // Check argument count - allow partial application
                         let numParams = List.length concreteParamTypes
@@ -4465,13 +4467,14 @@ let rec private checkExprWithParamNames
             | Some payloadType, Some payloadExpr ->
                 // Variant with payload - check payload type
                 // For generic types, infer type variables from the payload
-                let payloadType = canonicalizeBareSumTypeRefs variantLookup payloadType
+                let payloadType = canonicalizeBareSumTypeRefsWithNames sumTypeNames payloadType
 
                 if List.isEmpty typeParams then
                     // Non-generic type - check payload has exact type
                     checkExpr payloadExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some payloadType)
                     |> Result.bind (fun (actualPayloadType, payloadExpr') ->
-                        let actualPayloadType = canonicalizeBareSumTypeRefs variantLookup actualPayloadType
+                        let actualPayloadType =
+                            canonicalizeBareSumTypeRefsWithNames sumTypeNames actualPayloadType
 
                         // Use typesCompatible to allow type variables to match concrete types
                         if not (typesCompatible payloadType actualPayloadType) then
@@ -4490,7 +4493,8 @@ let rec private checkExprWithParamNames
                     // First, check the payload expression without expected type
                     checkExpr payloadExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
                     |> Result.bind (fun (actualPayloadType, payloadExpr') ->
-                        let actualPayloadType = canonicalizeBareSumTypeRefs variantLookup actualPayloadType
+                        let actualPayloadType =
+                            canonicalizeBareSumTypeRefsWithNames sumTypeNames actualPayloadType
 
                         // Try to unify payloadType (may contain TVar) with actualPayloadType
                         match unifyTypes payloadType actualPayloadType with
@@ -4501,7 +4505,7 @@ let rec private checkExprWithParamNames
                             let concretePayloadType =
                                 payloadType
                                 |> applySubst subst
-                                |> canonicalizeBareSumTypeRefs variantLookup
+                                |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
 
                             // Use typesCompatible to allow type variables to match concrete types
                             if not (typesCompatible concretePayloadType actualPayloadType) then
@@ -4648,7 +4652,7 @@ let rec private checkExprWithParamNames
                             let concretePayloadType =
                                 pType
                                 |> applySubst subst
-                                |> canonicalizeBareSumTypeRefs variantLookup
+                                |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
                                 |> function
                                     | TEnumFields fieldTypes -> TTuple fieldTypes
                                     | other -> other
@@ -5157,7 +5161,7 @@ let rec private checkExprWithParamNames
                 |> Option.map (fun payload ->
                     payload
                     |> applySubst substitution
-                    |> canonicalizeBareSumTypeRefs variantLookup
+                    |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
                     |> function
                         | TEnumFields fields -> TTuple fields
                         | other -> other)
@@ -6941,8 +6945,9 @@ let materializeCompareHelpersInTopLevels
 
 /// Type-check a function definition
 /// Returns the transformed function body (with Call -> TypeApp transformations)
-let private checkFunctionDef
+let private checkFunctionDefWithSumTypeNames
     (funcParamNameReg: Map<string, string list>)
+    (sumTypeNames: Set<string>)
     (funcDef: FunctionDef)
     (env: TypeEnv)
     (typeReg: IndexedTypeRegistry)
@@ -6957,15 +6962,15 @@ let private checkFunctionDef
         |> NonEmptyList.map (fun (name, typ) ->
             (name,
              typ
-             |> canonicalizeDeclaredTypeRefs typeReg variantLookup
+             |> canonicalizeDeclaredTypeRefsWithSumTypeNames typeReg sumTypeNames
              |> resolveType aliasReg
-             |> canonicalizeBareSumTypeRefs variantLookup))
+             |> canonicalizeBareSumTypeRefsWithNames sumTypeNames))
 
     let canonicalReturnType =
         funcDef.ReturnType
-        |> canonicalizeDeclaredTypeRefs typeReg variantLookup
+        |> canonicalizeDeclaredTypeRefsWithSumTypeNames typeReg sumTypeNames
         |> resolveType aliasReg
-        |> canonicalizeBareSumTypeRefs variantLookup
+        |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
 
     let canonicalFuncDef =
         { funcDef with
@@ -6980,8 +6985,9 @@ let private checkFunctionDef
 
     // Check body has return type
     let bodyCheckResult =
-        checkExprWithParamNames
+        checkExprWithParamNamesAndSumTypeNames
             funcParamNameReg
+            sumTypeNames
             funcDef.Body
             paramEnv
             typeReg
@@ -8127,6 +8133,8 @@ let private checkResolvedProgramInternal
                 declarationSummary.VariantLookup
         | None -> declarationSummary.VariantLookup
 
+    let recordSumTypeNames = sumTypeNamesFromVariantLookup recordVariantLookup
+
     let canonicalVariantLookup =
         recordVariantLookup
         |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
@@ -8134,7 +8142,7 @@ let private checkResolvedProgramInternal
              typeParams,
              tag,
              payloadType
-             |> Option.map (canonicalizeBareSumTypeRefs recordVariantLookup)))
+             |> Option.map (canonicalizeBareSumTypeRefsWithNames recordSumTypeNames)))
 
     let canonicalProgramTypeReg =
         programTypeReg
@@ -8142,12 +8150,16 @@ let private checkResolvedProgramInternal
             fields
             |> List.map (fun (fieldName, fieldType) ->
                 (fieldName,
-                 canonicalizeDeclaredTypeRefs programTypeReg canonicalVariantLookup fieldType)))
+                 canonicalizeDeclaredTypeRefsWithSumTypeNames
+                     programTypeReg
+                     recordSumTypeNames
+                     fieldType)))
 
     let programAliasReg =
         declarationSummary.AliasReg
         |> Map.map (fun _ (typeParams, targetType) ->
-            (typeParams, canonicalizeBareSumTypeRefs canonicalVariantLookup targetType))
+            (typeParams,
+             canonicalizeBareSumTypeRefsWithNames recordSumTypeNames targetType))
 
     let functionAliasReg =
         match baseEnv with
@@ -8166,9 +8178,11 @@ let private checkResolvedProgramInternal
         |> Map.map (fun _ (paramTypes, returnType) ->
             let canonicalize typ =
                 typ
-                |> canonicalizeDeclaredTypeRefs canonicalProgramTypeReg canonicalVariantLookup
+                |> canonicalizeDeclaredTypeRefsWithSumTypeNames
+                    canonicalProgramTypeReg
+                    recordSumTypeNames
                 |> resolveType functionAliasReg
-                |> canonicalizeBareSumTypeRefs canonicalVariantLookup
+                |> canonicalizeBareSumTypeRefsWithNames recordSumTypeNames
             TFunction (List.map canonicalize paramTypes, canonicalize returnType))
 
     // Build the type check environment for THIS program
@@ -8203,6 +8217,7 @@ let private checkResolvedProgramInternal
     let funcParamNameReg = typeCheckEnv.FuncParamNames
     let genericFuncReg = typeCheckEnv.GenericFuncReg
     let mergedAliasReg = typeCheckEnv.AliasReg
+    let sumTypeNames = sumTypeNamesFromVariantLookup variantLookup
 
     // Third pass: type check all function definitions and collect transformed top-levels
     // The accumulator contains (type option * TopLevel) pairs where the type is Some for expressions
@@ -8212,8 +8227,9 @@ let private checkResolvedProgramInternal
         | topLevel :: rest ->
             match topLevel with
             | FunctionDef funcDef ->
-                checkFunctionDef
+                checkFunctionDefWithSumTypeNames
                     funcParamNameReg
+                    sumTypeNames
                     funcDef
                     funcEnv
                     typeReg
@@ -8227,8 +8243,9 @@ let private checkResolvedProgramInternal
             | TypeDef _ ->
                 checkAllTopLevelsWithTypes rest ((None, topLevel) :: accTopLevels)
             | Expression expr ->
-                checkExprWithParamNames
+                checkExprWithParamNamesAndSumTypeNames
                     funcParamNameReg
+                    sumTypeNames
                     expr
                     funcEnv
                     typeReg
@@ -8316,8 +8333,9 @@ let private checkResolvedProgramInternal
             | Some funcDef ->
                 specializeFunctionForTypeCheck funcDef typeArgs
                 |> Result.bind (fun specializedFunc ->
-                    checkFunctionDef
+                    checkFunctionDefWithSumTypeNames
                         funcParamNameReg
+                        sumTypeNames
                         specializedFunc
                         funcEnv
                         typeReg
@@ -8370,9 +8388,11 @@ let private checkResolvedExpressionWithBaseEnv
                 baseEnv.GenericFuncReg.RequireExplicitTypeArgsForBareCalls
                 || requireExplicitTypeArgsForBareCalls
     }
+    let sumTypeNames = sumTypeNamesFromVariantLookup baseEnv.VariantLookup
 
-    checkExprWithParamNames
+    checkExprWithParamNamesAndSumTypeNames
         baseEnv.FuncParamNames
+        sumTypeNames
         expr
         baseEnv.FuncEnv
         baseEnv.IndexedTypeReg
@@ -8390,8 +8410,9 @@ let private checkResolvedExpressionWithBaseEnv
             | Some funcDef ->
                 specializeFunctionForTypeCheck funcDef typeArgs
                 |> Result.bind (fun specializedFunc ->
-                    checkFunctionDef
+                    checkFunctionDefWithSumTypeNames
                         baseEnv.FuncParamNames
+                        sumTypeNames
                         specializedFunc
                         baseEnv.FuncEnv
                         baseEnv.IndexedTypeReg
