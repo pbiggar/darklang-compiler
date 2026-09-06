@@ -617,6 +617,28 @@ let testCseDoesNotExportScalarHeapLoadsAcrossFloatSqrt () : TestResult =
     if not changed && optimized = cfg then Ok ()
     else Error "Expected FloatSqrt to stop scalar heap-load availability at the block boundary"
 
+let testCseDoesNotKeepDirectCallsAvailableAcrossFloatSqrt () : TestResult =
+    let entry = Label "entry"
+    let block: BasicBlock = {
+        Label = entry
+        Instrs = [
+            Call (VReg 1, "pure", [], [], AST.TFloat64)
+            FloatSqrt (VReg 2, Register (VReg 1))
+            Call (VReg 3, "pure", [], [], AST.TFloat64)
+        ]
+        Terminator = Ret (Register (VReg 3))
+    }
+    let cfg: CFG = {
+        Entry = entry
+        Blocks = Map.ofList [(entry, block)]
+    }
+
+    let (optimized, changed) =
+        applyCSEWithEffectFreeCalls (Set.singleton "pure") cfg
+
+    if not changed && optimized = cfg then Ok ()
+    else Error "Expected FloatSqrt to retain the conservative direct-call CSE boundary"
+
 let testDceRemovesSelfReferentialDeadPhi () : TestResult =
     let entry = Label "entry"
     let loop = Label "loop"
@@ -1282,6 +1304,7 @@ let tests = [
     ("MIR CSE does not export non-scalar binary types", testCseDoesNotExportNonScalarBinaryTypes)
     ("MIR CSE keeps scalar heap loads available across FloatSqrt", testCseKeepsScalarHeapLoadsAvailableAcrossFloatSqrt)
     ("MIR CSE does not export scalar heap loads across FloatSqrt", testCseDoesNotExportScalarHeapLoadsAcrossFloatSqrt)
+    ("MIR CSE does not keep direct calls available across FloatSqrt", testCseDoesNotKeepDirectCallsAvailableAcrossFloatSqrt)
     ("MIR optimize removes dead self-referential phi", testDceRemovesSelfReferentialDeadPhi)
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
     ("MIR empty block removal rewrites phi source to predecessor", testEmptyBlockRemovalRewritesPhiSourceToPredecessor)
