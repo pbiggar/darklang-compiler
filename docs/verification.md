@@ -14,13 +14,15 @@ For compiler repository changes, the default verification commands are:
 ./benchmarks/run_benchmarks.sh --verify routine
 ```
 
-The E2E runner compiles compatible value-equality checks in batches of 16 by
-default. Each check remains a separately compiled function; only the caller and
-executable are shared. Use `--e2e-batch-size=1` for a singular diagnostic
-baseline, or a value through 32 for batch-size experiments. Timing JSON records
-the configured size, logical/eligible test counts, physical executions, batch
-count, batched logical tests, and largest observed batch so performance results
-can be compared without confusing logical coverage with compiler invocations.
+The E2E runner compiles each value-equality check separately by default. Use
+`--e2e-batch-size=16` (or another value through 32) only as a diagnostic for
+finding fixed, repeated, or superlinear compiler work. In a batch, each check
+remains a separately compiled function while the caller and executable are
+shared. Timing JSON records the configured size, logical/eligible test counts,
+physical executions, batch count, batched logical tests, and largest observed
+batch so batch-size comparisons do not confuse logical coverage with compiler
+invocations. Batch timing is evidence for locating redundant work, not the
+production test-running configuration.
 
 Agents may run narrower checks while developing a change, but a change is not verified until the full verification policy has passed or the agent explicitly reports why full verification could not be completed.
 
