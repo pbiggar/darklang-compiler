@@ -8023,17 +8023,21 @@ let private generatePreparedARM64WithOptionsAndCache
         { instructionMetadata with RcHelperRequirements = rcHelperRequirements }
 
     let summarizeGroup (group: LIR.Function list) =
+        let summaryTimer = startPhase ()
         // Retain source function order: map entries intentionally preserve the
         // original last-writer-wins behavior for compiler-generated labels.
-        group
-        |> List.map (fun func ->
-            let facts =
-                match func.CodegenFacts with
-                | Some facts -> facts
-                | None -> Crash.crash "ARM64 codegen invariant: missing validated function facts"
-            (func, facts))
-        |> List.fold collectFunctionMetadata emptyProgramMetadata
-        |> finishMetadata
+        let summary =
+            group
+            |> List.map (fun func ->
+                let facts =
+                    match func.CodegenFacts with
+                    | Some facts -> facts
+                    | None -> Crash.crash "ARM64 codegen invariant: missing validated function facts"
+                (func, facts))
+            |> List.fold collectFunctionMetadata emptyProgramMetadata
+            |> finishMetadata
+        recordPhase "ARM64 Metadata Group Summarization" summaryTimer
+        summary
 
     let mergeMaps left right =
         Map.fold (fun result key value -> Map.add key value result) left right

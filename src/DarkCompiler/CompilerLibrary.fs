@@ -185,8 +185,25 @@ type private Arm64InstructionChunkReferenceComparer() =
 
 [<NoComparison>]
 type private Arm64MetadataGroupKey = {
-    FunctionFacts: (string * LIR.FunctionCodegenFacts option) list
+    Functions: LIR.Function list
 }
+
+type private Arm64MetadataGroupKeyComparer() =
+    interface IEqualityComparer<Arm64MetadataGroupKey> with
+        member _.Equals(left, right) =
+            List.length left.Functions = List.length right.Functions
+            && List.forall2
+                (fun leftFunction rightFunction ->
+                    Object.ReferenceEquals(leftFunction, rightFunction))
+                left.Functions
+                right.Functions
+        member _.GetHashCode(key) =
+            key.Functions
+            |> List.fold
+                (fun hash func ->
+                    (hash * 397)
+                    ^^^ System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func))
+                17
 
 [<NoComparison>]
 type private Arm64HelperCacheKey = {
@@ -351,14 +368,13 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 match arm64MetadataGroupsByContext.TryGetValue contextIdentity with
                 | true, entries -> entries
                 | false, _ ->
-                    let entries = Dictionary<Arm64MetadataGroupKey, CodeGen.Arm64ProgramMetadata>()
+                    let entries =
+                        Dictionary<Arm64MetadataGroupKey, CodeGen.Arm64ProgramMetadata>(
+                            Arm64MetadataGroupKeyComparer()
+                        )
                     arm64MetadataGroupsByContext.[contextIdentity] <- entries
                     entries
-            let key = {
-                FunctionFacts =
-                    functions
-                    |> List.map (fun func -> (func.Name, func.CodegenFacts))
-            }
+            let key = { Functions = functions }
             match contextEntries.TryGetValue key with
             | true, metadata ->
                 arm64MetadataGroupHitCount <- arm64MetadataGroupHitCount + 1
