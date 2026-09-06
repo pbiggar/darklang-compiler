@@ -2586,67 +2586,112 @@ let applyConstantFolding (cfg: CFG) : CFG * bool =
 let private optimizeCFGOnceWithEffectFreeCalls
     (effectFreeFunctions: Set<string>)
     (options: OptimizeOptions)
+    (recordTicks: (string -> int64 -> unit) option)
     (cfg: CFG)
     : CFG * bool =
+    let measure name operation =
+        match recordTicks with
+        | None -> operation ()
+        | Some record ->
+            let started = System.Diagnostics.Stopwatch.GetTimestamp()
+            let result = operation ()
+            record name (System.Diagnostics.Stopwatch.GetTimestamp() - started)
+            result
     let (cfg1, changed1) =
-        if options.EnableConstFolding then applyConstantFolding cfg else (cfg, false)
+        if options.EnableConstFolding then
+            measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg)
+        else
+            (cfg, false)
     let (cfg2, changed2) =
         if options.EnableCSE then
-            applyCSEWithEffectFreeCalls effectFreeFunctions cfg1
+            measure "MIR Common Subexpression Elimination" (fun () ->
+                applyCSEWithEffectFreeCalls effectFreeFunctions cfg1)
         else
             (cfg1, false)
     let (cfg3, changed3) =
-        if options.EnableCopyProp then applyCopyPropagation cfg2 else (cfg2, false)
+        if options.EnableCopyProp then
+            measure "MIR Copy Propagation" (fun () -> applyCopyPropagation cfg2)
+        else
+            (cfg2, false)
     // Run constant folding again only when copy propagation changed the CFG.
     // This catches cases like: v1 = -127; v2 = v1 - 2
     // After copy prop: v2 = Int64Const(-127) - Int64Const(2) -> can fold
     let (cfg4, changed4) =
-        if options.EnableConstFolding && changed3 then applyConstantFolding cfg3 else (cfg3, false)
+        if options.EnableConstFolding && changed3 then
+            measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg3)
+        else
+            (cfg3, false)
     let (cfg5, changed5, cfg6, changed6, loopTopology) =
         if options.EnableLICM then
-            match tryBuildLoopTopology cfg4 with
+            match measure "MIR Loop Topology" (fun () -> tryBuildLoopTopology cfg4) with
             | None -> (cfg4, false, cfg4, false, None)
             | Some topology ->
                 let (cfg5, changed5) =
-                    applyAffineInductionStrengthReductionWithTopology
-                        topology
-                        cfg4
+                    measure "MIR Affine Strength Reduction" (fun () ->
+                        applyAffineInductionStrengthReductionWithTopology
+                            topology
+                            cfg4)
                 let (cfg6, changed6, topologyAfterLicm) =
-                    applyLoopInvariantCodeMotionWithEffectFreeCalls
-                        effectFreeFunctions
-                        topology
-                        cfg5
+                    measure "MIR Loop Invariant Code Motion" (fun () ->
+                        applyLoopInvariantCodeMotionWithEffectFreeCalls
+                            effectFreeFunctions
+                            topology
+                            cfg5)
                 (cfg5, changed5, cfg6, changed6, Some topologyAfterLicm)
         else
             (cfg4, false, cfg4, false, None)
     let (cfg7, changed7) =
         match loopTopology with
-        | Some topology -> applyCountedLoopUnrollingWithTopology topology cfg6
+        | Some topology ->
+            measure "MIR Counted Loop Unrolling" (fun () ->
+                applyCountedLoopUnrollingWithTopology topology cfg6)
         | None -> (cfg6, false)
     let (cfg8, changed8) =
-        if options.EnableDCE then eliminateDeadCode cfg7 else (cfg7, false)
+        if options.EnableDCE then
+            measure "MIR Dead Code Elimination" (fun () -> eliminateDeadCode cfg7)
+        else
+            (cfg7, false)
     let (cfg9, changed9) =
-        if options.EnableCFGSimplify then simplifyConstantBranches cfg8 else (cfg8, false)
+        if options.EnableCFGSimplify then
+            measure "MIR Simplify Constant Branches" (fun () -> simplifyConstantBranches cfg8)
+        else
+            (cfg8, false)
     let (cfg10, changed10) =
-        if options.EnableCFGSimplify then simplifyBranchesKnownFromPredecessor cfg9 else (cfg9, false)
+        if options.EnableCFGSimplify then
+            measure "MIR Simplify Known Branches" (fun () -> simplifyBranchesKnownFromPredecessor cfg9)
+        else
+            (cfg9, false)
     let (cfg11, changed11) =
-        if options.EnableCFGSimplify then eliminateUnreachableBlocks cfg10 else (cfg10, false)
+        if options.EnableCFGSimplify then
+            measure "MIR Eliminate Unreachable Blocks" (fun () -> eliminateUnreachableBlocks cfg10)
+        else
+            (cfg10, false)
     let (cfg12, changed12) =
-        if options.EnableCFGSimplify then simplifyRetPhiJoins cfg11 else (cfg11, false)
+        if options.EnableCFGSimplify then
+            measure "MIR Simplify Return Phi Joins" (fun () -> simplifyRetPhiJoins cfg11)
+        else
+            (cfg11, false)
     let (cfg13, changed13) =
-        if options.EnableCFGSimplify then simplifyEmptyBlocks cfg12 else (cfg12, false)
+        if options.EnableCFGSimplify then
+            measure "MIR Simplify Empty Blocks" (fun () -> simplifyEmptyBlocks cfg12)
+        else
+            (cfg12, false)
     let (cfg14, changed14) =
-        if options.EnableCFGSimplify then mergeLinearBlocks cfg13 else (cfg13, false)
+        if options.EnableCFGSimplify then
+            measure "MIR Merge Linear Blocks" (fun () -> mergeLinearBlocks cfg13)
+        else
+            (cfg13, false)
     let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12 || changed13 || changed14
     (cfg14, changed)
 
 let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
-    optimizeCFGOnceWithEffectFreeCalls Set.empty options cfg
+    optimizeCFGOnceWithEffectFreeCalls Set.empty options None cfg
 
 /// Run all optimizations until fixed point
 let private optimizeCFGWithEffectFreeCalls
     (effectFreeFunctions: Set<string>)
     (options: OptimizeOptions)
+    (recordTicks: (string -> int64 -> unit) option)
     (cfg: CFG)
     : CFG =
     let rec loop current remaining =
@@ -2654,7 +2699,7 @@ let private optimizeCFGWithEffectFreeCalls
             current
         else
             let (next, changed) =
-                optimizeCFGOnceWithEffectFreeCalls effectFreeFunctions options current
+                optimizeCFGOnceWithEffectFreeCalls effectFreeFunctions options recordTicks current
             if changed then
                 loop next (remaining - 1)
             else
@@ -2662,7 +2707,7 @@ let private optimizeCFGWithEffectFreeCalls
     loop cfg 10
 
 let optimizeCFGWithOptions (options: OptimizeOptions) (cfg: CFG) : CFG =
-    optimizeCFGWithEffectFreeCalls Set.empty options cfg
+    optimizeCFGWithEffectFreeCalls Set.empty options None cfg
 
 let optimizeCFG (cfg: CFG) : CFG =
     optimizeCFGWithOptions defaultOptimizeOptions cfg
@@ -2705,7 +2750,7 @@ let private optimizeFunctionWithEffectFreeCalls
     (options: OptimizeOptions)
     (func: Function)
     : Function =
-    let cfg' = optimizeCFGWithEffectFreeCalls effectFreeFunctions options func.CFG
+    let cfg' = optimizeCFGWithEffectFreeCalls effectFreeFunctions options None func.CFG
     withOptimizedCFG func cfg'
 
 let optimizeFunction (func: Function) : Function =
@@ -2724,6 +2769,47 @@ let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : P
         functions
         |> List.map (optimizeFunctionWithEffectFreeCalls effectFreeFunctions options)
     Program (functions', variants, records)
+
+/// Optimize a program and report aggregate timings for the fixed-point
+/// subpasses. Timings are accumulated as timestamp ticks so tracing does not
+/// allocate a Stopwatch for every function iteration.
+let optimizeProgramWithOptionsAndTrace
+    (phaseRecorder: (string -> float -> unit) option)
+    (options: OptimizeOptions)
+    (program: Program)
+    : Program =
+    match phaseRecorder with
+    | None -> optimizeProgramWithOptions options program
+    | Some record ->
+        let (Program (functions, variants, records)) = program
+        let accumulatedTicks = System.Collections.Generic.Dictionary<string, int64>()
+        let addTicks name ticks =
+            match accumulatedTicks.TryGetValue name with
+            | true, existing -> accumulatedTicks.[name] <- existing + ticks
+            | false, _ -> accumulatedTicks.[name] <- ticks
+        let effectAnalysisStart = System.Diagnostics.Stopwatch.GetTimestamp()
+        let effectFreeFunctions =
+            if options.EnableLICM || options.EnableCSE then
+                analyzeEffectFreeFunctions functions
+            else
+                Set.empty
+        addTicks
+            "MIR Effect Analysis"
+            (System.Diagnostics.Stopwatch.GetTimestamp() - effectAnalysisStart)
+        let functions' =
+            functions
+            |> List.map (fun func ->
+                let cfg =
+                    optimizeCFGWithEffectFreeCalls
+                        effectFreeFunctions
+                        options
+                        (Some addTicks)
+                        func.CFG
+                withOptimizedCFG func cfg)
+        let tickFrequency = float System.Diagnostics.Stopwatch.Frequency
+        for KeyValue (name, ticks) in accumulatedTicks do
+            record name (float ticks * 1000.0 / tickFrequency)
+        Program (functions', variants, records)
 
 let optimizeProgram (program: Program) : Program =
     optimizeProgramWithOptions defaultOptimizeOptions program

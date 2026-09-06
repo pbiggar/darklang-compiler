@@ -845,7 +845,18 @@ let private compileMirToLir
     let mirOptStart = sw.Elapsed.TotalMilliseconds
     let optimizedProgram =
         if shouldRunMIROptimize mirOptions then
-            MIR_Optimize.optimizeProgramWithOptions mirOptions ssaProgram
+            let mirOptPhaseRecorder =
+                passTimingRecorder
+                |> Option.map (fun recorder ->
+                    fun name (elapsedMs: float) ->
+                        recorder {
+                            Pass = name
+                            Elapsed = TimeSpan.FromMilliseconds elapsedMs
+                        })
+            MIR_Optimize.optimizeProgramWithOptionsAndTrace
+                mirOptPhaseRecorder
+                mirOptions
+                ssaProgram
         else
             ssaProgram
     let mirOptElapsed = sw.Elapsed.TotalMilliseconds - mirOptStart
