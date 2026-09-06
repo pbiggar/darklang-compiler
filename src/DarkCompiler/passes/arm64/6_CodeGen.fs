@@ -6543,6 +6543,13 @@ let private inlineGenericReleaseTemplateCacheKey (templateName: string) : LIR.Fu
         CodegenFacts = None
     }
 
+/// Inline release-template cache keys are synthetic functions whose stable
+/// names completely describe the release-plan fingerprint, register, and
+/// ownership policy. They are independent of the user compilation context.
+let isInlineGenericReleaseTemplateCacheKey (func: LIR.Function) : bool =
+    Option.isNone func.CodegenFacts
+    && func.Name.StartsWith(inlineGenericReleaseTemplateLabelPrefix)
+
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
 let convertTerminator (epilogueLabel: string) (nextLabel: string option) (terminator: LIR.Terminator) : Result<ARM64Symbolic.Instr list, string> =

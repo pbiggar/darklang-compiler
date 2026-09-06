@@ -271,6 +271,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     ARM64.TargetConfig * CodeGen.CodeGenOptions,
                     Result<ARM64Symbolic.Instr list, string>>>>(ObjectReferenceComparer())
     let arm64StartContextIdentity = System.Object()
+    let arm64InlineGenericReleaseTemplateContextIdentity = System.Object()
     let arm64EmissionChunks =
         Dictionary<
             ARM64Symbolic.Instr list,
@@ -306,6 +307,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     new() = new CompilationSession(false)
 
     member _.JsonPlanning = jsonPlanning
+    member internal _.Arm64InlineGenericReleaseTemplateContextIdentity =
+        arm64InlineGenericReleaseTemplateContextIdentity
 
     member internal _.ConvertAnfDependencies
         (contextIdentity: obj)
@@ -1336,21 +1339,19 @@ let private generateBinary
             |> Option.filter (fun _ -> not options.EnableCoverage)
             |> Option.map (fun current ->
                 fun func generate ->
-                    match functionContexts.TryGetValue func with
-                    | true, contextIdentity ->
-                        current.CodegenFunction
-                            contextIdentity
-                            arm64Target
-                            codegenOptions
-                            func
-                            generate
-                    | false, _ ->
-                        current.CodegenFunction
-                            programContextIdentity
-                            arm64Target
-                            codegenOptions
-                            func
-                            generate)
+                    let contextIdentity =
+                        if CodeGen.isInlineGenericReleaseTemplateCacheKey func then
+                            current.Arm64InlineGenericReleaseTemplateContextIdentity
+                        else
+                            match functionContexts.TryGetValue func with
+                            | true, identity -> identity
+                            | false, _ -> programContextIdentity
+                    current.CodegenFunction
+                        contextIdentity
+                        arm64Target
+                        codegenOptions
+                        func
+                        generate)
         let metadataGroupCache =
             session
             |> Option.map (fun current ->
