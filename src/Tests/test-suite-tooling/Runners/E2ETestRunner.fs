@@ -129,6 +129,49 @@ type E2EFailure = {
 }
 
 type E2ETestResult = Result<E2ERun, E2EFailure>
+
+/// A value-equality test whose synthesized checker is a single expression and
+/// can therefore share one compiler invocation with other compatible checks.
+type PreparedE2EBatchTest = {
+    Test: E2ETest
+    EqualitySource: string
+}
+
+/// One physical compile/run with one logical result for every test in it.
+type E2EBatchExecution = {
+    AggregateRun: E2ERun
+    Results: (E2ETest * E2ETestResult) list
+}
+
+let maxSupportedBatchSize = 62
+
+/// Only value-equality tests with no process contract can share a process. The
+/// compiler path and options remain production-identical; only the synthesized
+/// caller contains several independent checks.
+let tryPrepareBatchTest (test: E2ETest) : PreparedE2EBatchTest option =
+    let eligibleExpectation =
+        Option.isSome test.ExpectedValueExpr
+        && Option.isNone test.ExpectedStdout
+        && Option.isNone test.ExpectedStderr
+        && List.isEmpty test.Arguments
+        && test.Stdin = TestDSL.E2EFormat.Closed
+        && test.ExpectedExitCode = 0
+        && not test.ExpectCompileError
+        && Option.isNone test.SkipReason
+
+    if not eligibleExpectation then
+        None
+    else
+        let allowInternal = isInternalTestFile test.SourceFile
+        match sourceToExecute allowInternal test with
+        | Error _ -> None
+        | Ok equalitySource ->
+            match CompilerLibrary.parseProgram allowInternal equalitySource with
+            | Ok (Program [Expression _]) ->
+                Some { Test = test; EqualitySource = equalitySource }
+            | Ok _
+            | Error _ -> None
+
 type PreambleContextKey = string * string
 
 let preambleContextKeyForTest (test: E2ETest) : PreambleContextKey =
@@ -974,6 +1017,167 @@ let private compileAndRun
         | Error err ->
             Ran (-1, "", $"Execution failed: {err}", compileReport.CompileTime, TimeSpan.Zero)
 
+let canBatchTogether
+    (left: PreparedE2EBatchTest)
+    (right: PreparedE2EBatchTest)
+    : bool =
+    preambleContextKeyForTest left.Test = preambleContextKeyForTest right.Test
+    && isInternalTestFile left.Test.SourceFile = isInternalTestFile right.Test.SourceFile
+    && buildCompilerOptions left.Test = buildCompilerOptions right.Test
+
+let private indentBatchBody (source: string) : string =
+    source.Replace("\r\n", "\n").Split('\n')
+    |> Array.map (fun line -> $"  {line}")
+    |> String.concat "\n"
+
+let private batchFunctionPrefix (tests: PreparedE2EBatchTest list) : string =
+    let existingNames =
+        tests
+        |> List.collect (fun prepared -> prepared.Test.FunctionLineMap |> Map.toList |> List.map fst)
+        |> Set.ofList
+
+    let rec pick attempt =
+        let prefix =
+            if attempt = 0 then "e2eBatchCase"
+            else $"e2eBatchCase{attempt}_"
+        let collides = Set.contains $"{prefix}Run" existingNames
+        if collides then pick (attempt + 1) else prefix
+    pick 0
+
+let buildBatchSource (tests: PreparedE2EBatchTest list) : string =
+    let prefix = batchFunctionPrefix tests
+    let runName = $"{prefix}Run"
+    let runFunction =
+        $"let {runName}(check: (Unit) -> Bool): Bool =\n  check()"
+    let resultBindings =
+        tests
+        |> List.mapi (fun index prepared ->
+            $"let {prefix}Result{index} =\n  {runName}(fun _unit ->\n{indentBatchBody (indentBatchBody prepared.EqualitySource)}) in")
+        |> String.concat "\n"
+    let mask =
+        tests
+        |> List.mapi (fun index _ ->
+            let bit = 1L <<< index
+            $"(if {prefix}Result{index} then {bit}L else 0L)")
+        |> String.concat "\n+ "
+    $"{runFunction}\n\n{resultBindings}\n{mask}"
+
+let tryParseBatchBoolResults
+    (expectedCount: int)
+    (stdout: string)
+    : bool list option =
+    let lastLine =
+        stdout.Split([| '\n' |], StringSplitOptions.RemoveEmptyEntries)
+        |> Array.tryLast
+        |> Option.map (fun line -> line.Trim())
+
+    match lastLine with
+    | Some line ->
+        match Int64.TryParse line with
+        | true, mask when expectedCount > 0 && expectedCount <= maxSupportedBatchSize ->
+            let allowedBits = (1L <<< expectedCount) - 1L
+            if mask < 0L || (mask &&& (~~~allowedBits)) <> 0L then
+                None
+            else
+                List.init expectedCount (fun index -> (mask &&& (1L <<< index)) <> 0L)
+                |> Some
+        | _ -> None
+    | None -> None
+
+let private splitDuration
+    (count: int)
+    (index: int)
+    (duration: TimeSpan)
+    : TimeSpan =
+    let count64 = int64 count
+    let quotient = duration.Ticks / count64
+    let remainder = duration.Ticks % count64
+    let ticks = quotient + (if int64 index < remainder then 1L else 0L)
+    TimeSpan.FromTicks ticks
+
+let private splitRun
+    (count: int)
+    (index: int)
+    (stdout: string)
+    (run: E2ERun)
+    : E2ERun =
+    match run with
+    | CompileFailed (exitCode, error, compileTime) ->
+        CompileFailed (exitCode, error, splitDuration count index compileTime)
+    | Ran (exitCode, _, stderr, compileTime, runtimeTime) ->
+        Ran (
+            exitCode,
+            stdout,
+            stderr,
+            splitDuration count index compileTime,
+            splitDuration count index runtimeTime
+        )
+
+let runE2ETestBatchWithPreambleContext
+    (stdlib: CompilerLibrary.StdlibResult)
+    (preambleCtx: CompilerLibrary.PreambleContext)
+    (session: CompilerLibrary.CompilationSession option)
+    (tests: PreparedE2EBatchTest list)
+    (passTimingRecorder: CompilerLibrary.PassTimingRecorder option)
+    : E2EBatchExecution =
+    match tests with
+    | [] ->
+        let run = CompileFailed (1, "Cannot execute an empty E2E batch", TimeSpan.Zero)
+        { AggregateRun = run; Results = [] }
+    | first :: _ ->
+        let count = tests.Length
+        let request : CompilerLibrary.CompileRequest = {
+            Context = CompilerLibrary.StdlibWithPreamble (stdlib, preambleCtx)
+            Mode = CompilerLibrary.CompileMode.TestExpression
+            Sources =
+                NonEmptyList.singleton
+                    { CompilerLibrary.SourceUnit.Name = first.Test.SourceFile
+                      Purpose = NameSyntax.SourceUnitPurpose.Executable
+                      Source = buildBatchSource tests }
+            AllowInternal = isInternalTestFile first.Test.SourceFile
+            Verbosity = 0
+            Options = buildCompilerOptions first.Test
+            PackageValues = CompilerLibrary.emptyPackageValueCatalog
+            PassTimingRecorder = passTimingRecorder
+            Session = session
+        }
+        let aggregateRun =
+            compileAndRun [] TestDSL.E2EFormat.Closed request
+
+        let results =
+            match aggregateRun with
+            | Ran (0, stdout, _, _, _) ->
+                match tryParseBatchBoolResults count stdout with
+                | Some values ->
+                    List.map3 (fun index prepared passed ->
+                        let caseStdout = if passed then "true\n" else "false\n"
+                        let caseRun = splitRun count index caseStdout aggregateRun
+                        (prepared.Test, evaluateExpectations prepared.Test caseRun))
+                        [0 .. count - 1]
+                        tests
+                        values
+                | None ->
+                    tests
+                    |> List.mapi (fun index prepared ->
+                        let caseRun = splitRun count index stdout aggregateRun
+                        (prepared.Test,
+                         failRun caseRun $"Batch returned an invalid result vector for {count} tests. Last stdout: {visibleOutput stdout}"))
+            | _ ->
+                let message =
+                    match aggregateRun with
+                    | CompileFailed (_, error, _) -> $"Batch compilation failed: {error}"
+                    | Ran (exitCode, _, stderr, _, _) ->
+                        let detail =
+                            if String.IsNullOrWhiteSpace stderr then ""
+                            else $": {stderr.Trim()}"
+                        $"Batch execution failed with exit code {exitCode}{detail}"
+                tests
+                |> List.mapi (fun index prepared ->
+                    let caseRun = splitRun count index "" aggregateRun
+                    (prepared.Test, failRun caseRun message))
+
+        { AggregateRun = aggregateRun; Results = results }
+
 let private tryBuildReducedPreambleForTest
     (allowInternal: bool)
     (preamble: string)
@@ -1014,7 +1218,76 @@ let private tryBuildReducedPreambleForTest
     | _ ->
         None
 
-/// Run E2E test using a prebuilt preamble context
+let private runE2ETestSourceWithPreambleContext
+    (stdlib: CompilerLibrary.StdlibResult)
+    (preambleCtx: CompilerLibrary.PreambleContext)
+    (session: CompilerLibrary.CompilationSession option)
+    (test: E2ETest)
+    (source: string)
+    (passTimingRecorder: CompilerLibrary.PassTimingRecorder option)
+    : E2ETestResult =
+    let allowInternal = isInternalTestFile test.SourceFile
+    let options = buildCompilerOptions test
+    let request : CompilerLibrary.CompileRequest = {
+        Context = CompilerLibrary.StdlibWithPreamble (stdlib, preambleCtx)
+        Mode = CompilerLibrary.CompileMode.TestExpression
+        Sources =
+            NonEmptyList.singleton
+                { CompilerLibrary.SourceUnit.Name = test.SourceFile
+                  Purpose = NameSyntax.SourceUnitPurpose.Executable
+                  Source = source }
+        AllowInternal = allowInternal
+        Verbosity = 0
+        Options = options
+        PackageValues = CompilerLibrary.emptyPackageValueCatalog
+        PassTimingRecorder = passTimingRecorder
+        Session = session
+    }
+    let run = compileAndRun test.Arguments test.Stdin request
+    let primaryResult = evaluateExpectations test run
+
+    let shouldTryRawPreambleFallback =
+        match primaryResult with
+        | Ok _ ->
+            false
+        | Error failure ->
+            test.ExpectCompileError
+            && Option.isSome test.ExpectedErrorMessage
+            && isUpstreamDarkTestFile test.SourceFile
+            && failure.Message.StartsWith("Expected error message", StringComparison.Ordinal)
+
+    if shouldTryRawPreambleFallback then
+        let fallbackPreamble =
+            tryBuildReducedPreambleForTest allowInternal test.Preamble source
+            |> Option.defaultValue test.Preamble
+        let fallbackRequest : CompilerLibrary.CompileRequest = {
+            Context = CompilerLibrary.StdlibOnly stdlib
+            Mode = CompilerLibrary.CompileMode.FullProgram
+            Sources =
+                NonEmptyList.fromList
+                    [{ CompilerLibrary.SourceUnit.Name = $"{test.SourceFile}:preamble"
+                       Purpose = NameSyntax.SourceUnitPurpose.Library
+                       Source = fallbackPreamble }
+                     { CompilerLibrary.SourceUnit.Name = test.SourceFile
+                       Purpose = NameSyntax.SourceUnitPurpose.Executable
+                       Source = source }]
+            AllowInternal = allowInternal
+            Verbosity = 0
+            Options = options
+            PackageValues = CompilerLibrary.emptyPackageValueCatalog
+            PassTimingRecorder = passTimingRecorder
+            Session = session
+        }
+        let fallbackRun = compileAndRun test.Arguments test.Stdin fallbackRequest
+        match evaluateExpectations test fallbackRun with
+        | Ok _ as success ->
+            success
+        | Error _ ->
+            primaryResult
+    else
+        primaryResult
+
+/// Run E2E test using a prebuilt preamble context.
 let runE2ETestWithPreambleContext
     (stdlib: CompilerLibrary.StdlibResult)
     (preambleCtx: CompilerLibrary.PreambleContext)
@@ -1023,67 +1296,32 @@ let runE2ETestWithPreambleContext
     (passTimingRecorder: CompilerLibrary.PassTimingRecorder option)
     : E2ETestResult =
     let allowInternal = isInternalTestFile test.SourceFile
-    let options = buildCompilerOptions test
     match sourceToExecute allowInternal test with
     | Error msg ->
         let run = CompileFailed (1, msg, TimeSpan.Zero)
         failRun run msg
     | Ok source ->
-        let request : CompilerLibrary.CompileRequest = {
-            Context = CompilerLibrary.StdlibWithPreamble (stdlib, preambleCtx)
-            Mode = CompilerLibrary.CompileMode.TestExpression
-            Sources =
-                NonEmptyList.singleton
-                    { CompilerLibrary.SourceUnit.Name = test.SourceFile
-                      Purpose = NameSyntax.SourceUnitPurpose.Executable
-                      Source = source }
-            AllowInternal = allowInternal
-            Verbosity = 0
-            Options = options
-            PackageValues = CompilerLibrary.emptyPackageValueCatalog
-            PassTimingRecorder = passTimingRecorder
-            Session = session
-        }
-        let run = compileAndRun test.Arguments test.Stdin request
-        let primaryResult = evaluateExpectations test run
+        runE2ETestSourceWithPreambleContext
+            stdlib
+            preambleCtx
+            session
+            test
+            source
+            passTimingRecorder
 
-        let shouldTryRawPreambleFallback =
-            match primaryResult with
-            | Ok _ ->
-                false
-            | Error failure ->
-                test.ExpectCompileError
-                && Option.isSome test.ExpectedErrorMessage
-                && isUpstreamDarkTestFile test.SourceFile
-                && failure.Message.StartsWith("Expected error message", StringComparison.Ordinal)
-
-        if shouldTryRawPreambleFallback then
-            let fallbackPreamble =
-                tryBuildReducedPreambleForTest allowInternal test.Preamble source
-                |> Option.defaultValue test.Preamble
-            let fallbackRequest : CompilerLibrary.CompileRequest = {
-                Context = CompilerLibrary.StdlibOnly stdlib
-                Mode = CompilerLibrary.CompileMode.FullProgram
-                Sources =
-                    NonEmptyList.fromList
-                        [{ CompilerLibrary.SourceUnit.Name = $"{test.SourceFile}:preamble"
-                           Purpose = NameSyntax.SourceUnitPurpose.Library
-                           Source = fallbackPreamble }
-                         { CompilerLibrary.SourceUnit.Name = test.SourceFile
-                           Purpose = NameSyntax.SourceUnitPurpose.Executable
-                           Source = source }]
-                AllowInternal = allowInternal
-                Verbosity = 0
-                Options = options
-                PackageValues = CompilerLibrary.emptyPackageValueCatalog
-                PassTimingRecorder = passTimingRecorder
-                Session = session
-            }
-            let fallbackRun = compileAndRun test.Arguments test.Stdin fallbackRequest
-            match evaluateExpectations test fallbackRun with
-            | Ok _ as success ->
-                success
-            | Error _ ->
-                primaryResult
-        else
-            primaryResult
+/// Run a prepared equality test singularly without reparsing its synthesized
+/// source. This keeps batch-size comparisons from charging preparation twice.
+let runPreparedE2ETestWithPreambleContext
+    (stdlib: CompilerLibrary.StdlibResult)
+    (preambleCtx: CompilerLibrary.PreambleContext)
+    (session: CompilerLibrary.CompilationSession option)
+    (prepared: PreparedE2EBatchTest)
+    (passTimingRecorder: CompilerLibrary.PassTimingRecorder option)
+    : E2ETestResult =
+    runE2ETestSourceWithPreambleContext
+        stdlib
+        preambleCtx
+        session
+        prepared.Test
+        prepared.EqualitySource
+        passTimingRecorder

@@ -31,6 +31,7 @@ let printHelp () =
     println "  --parser-pretty-roundtrip  Legacy no-op (parser/pretty corpus roundtrip runs by default)"
     println "  --roundtrip-all-dark  Include all upstream .dark files in parser/pretty corpus roundtrip"
     println "  --all-test-timings  Print timing for every test in final timing summary"
+    println "  --e2e-batch-size=N  Compile up to N compatible E2E checks together (1 disables; default 16)"
     println "  --timings-json=PATH  Write machine-readable timing data to PATH"
     println "  --codegen-profile-json=PATH  Write opt-in per-function ARM64 codegen metrics"
     println "  --json-benchmark=PATH  Run the focused JSON benchmark and write JSON results"
@@ -74,7 +75,14 @@ type TimingJsonSummary =
       total_ms: float
       unaccounted_ms: float
       runtime_unaccounted_ms: float
-      overhead_unaccounted_ms: float }
+      overhead_unaccounted_ms: float
+      e2e_batch_size: int
+      e2e_logical_tests: int
+      e2e_batch_eligible_tests: int
+      e2e_physical_executions: int
+      e2e_batch_executions: int
+      e2e_batched_logical_tests: int
+      e2e_largest_batch: int }
 
 type TimingJsonTest =
     { name: string
@@ -194,6 +202,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         | Ok path -> path
         | Error msg -> Crash.crash msg
 
+    let e2eBatchSize =
+        match parseE2EBatchSizeArg args with
+        | Ok size -> Option.defaultValue 16 size
+        | Error msg -> Crash.crash msg
+
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
     match filter with
     | Some pattern -> println $"{Colors.gray}  Filter: {pattern}{Colors.reset}"
@@ -205,6 +218,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         println $"{Colors.gray}  Roundtrip upstream .dark coverage: default subset{Colors.reset}"
     if showAllTestTimings then
         println $"{Colors.gray}  Per-test timings: all tests (mode enabled){Colors.reset}"
+    println $"{Colors.gray}  E2E batch size: {e2eBatchSize}{Colors.reset}"
     match timingsJsonPath with
     | Some path ->
         println $"{Colors.gray}  Timing JSON output: {path}{Colors.reset}"
@@ -549,6 +563,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let mutable metadataGroupCacheHits = 0
     let mutable metadataGroupCacheMisses = 0
     let mutable startCodegenCacheHits = 0
+    let mutable e2eLogicalTests = 0
+    let mutable e2eBatchEligibleTests = 0
+    let mutable e2ePhysicalExecutions = 0
+    let mutable e2eBatchExecutions = 0
+    let mutable e2eBatchedLogicalTests = 0
+    let mutable e2eLargestBatch = 0
     let recordTiming = TestFramework.recordTiming runState
     let recordResults = TestFramework.recordResults runState
     let recordPassTiming = TestFramework.recordPassTiming runState
@@ -787,58 +807,151 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 | _ -> ()
                 details
 
-            for i in 0 .. numTests - 1 do
-                let test = testsArray.[i]
-                let result, passTimingDelta =
-                    match suiteContextsResult with
-                    | Error err ->
-                        preambleFailureResult $"Preamble build failed: {err}", TimeSpan.Zero
-                    | Ok _ ->
-                        match suiteContextsOpt with
-                        | None ->
-                            preambleFailureResult "Missing built suite contexts", TimeSpan.Zero
-                        | Some currentSuiteContexts ->
-                            let contextKey = TestDSL.E2ETestRunner.preambleContextKeyForTest test
-                            match Map.tryFind contextKey currentSuiteContexts.PreambleContexts with
-                            | None ->
-                                preambleFailureResult $"Missing built preamble context for {test.SourceFile}", TimeSpan.Zero
-                            | Some (contextStdlib, ctx) ->
-                                let passTimingStart = passTimingTotal ()
-                                let testResult =
-                                    TestDSL.E2ETestRunner.runE2ETestWithPreambleContext
-                                        contextStdlib
-                                        ctx
-                                        (Some compilationSession)
-                                        test
-                                        (Some recordPassTiming)
-                                let passTimingEnd = passTimingTotal ()
-                                let passTimingDelta = passTimingEnd - passTimingStart
-                                testResult, passTimingDelta
+            let preparedTests =
+                testsArray
+                |> Array.map TestDSL.E2ETestRunner.tryPrepareBatchTest
 
+            let executionUnits =
+                let rec collectBatch first nextIndex remaining acc =
+                    if nextIndex >= numTests || remaining = 0 then
+                        List.rev acc
+                    else
+                        match preparedTests.[nextIndex] with
+                        | Some prepared when TestDSL.E2ETestRunner.canBatchTogether first prepared ->
+                            collectBatch first (nextIndex + 1) (remaining - 1) ((nextIndex, prepared) :: acc)
+                        | _ ->
+                            List.rev acc
+
+                let rec build index acc =
+                    if index >= numTests then
+                        List.rev acc
+                    else
+                        match preparedTests.[index] with
+                        | None ->
+                            build (index + 1) (Choice1Of2 (index, testsArray.[index], None) :: acc)
+                        | Some first when e2eBatchSize = 1 ->
+                            build (index + 1) (Choice1Of2 (index, first.Test, Some first) :: acc)
+                        | Some first ->
+                            let batch =
+                                collectBatch
+                                    first
+                                    (index + 1)
+                                    (e2eBatchSize - 1)
+                                    [(index, first)]
+                            match batch with
+                            | [_] ->
+                                build (index + 1) (Choice1Of2 (index, first.Test, Some first) :: acc)
+                            | _ ->
+                                build (index + batch.Length) (Choice2Of2 batch :: acc)
+                build 0 []
+
+            e2eLogicalTests <- e2eLogicalTests + numTests
+            e2eBatchEligibleTests <-
+                e2eBatchEligibleTests
+                + (preparedTests
+                   |> Array.filter Option.isSome
+                   |> Array.length)
+
+            let recordPhysicalTiming (run: E2ERun) (passTimingDelta: TimeSpan) : unit =
+                let (_, _, _, compileTime, runtimeTime) = unpackRun run
+                recordNonPassTiming "Compile Overhead" (compileTime - passTimingDelta)
+                recordNonPassTiming TestFramework.testRuntimeTimingName runtimeTime
+
+            let recordLogicalResult
+                (index: int)
+                (test: E2ETest)
+                (result: E2ETestResult)
+                : unit =
                 let run = runFromTestResult result
                 let (_, _, _, compileTime, runtimeTime) = unpackRun run
-                let compileOverhead = compileTime - passTimingDelta
-                recordNonPassTiming "Compile Overhead" compileOverhead
-                recordNonPassTiming TestFramework.testRuntimeTimingName runtimeTime
-                let totalTime = compileTime + runtimeTime
-                results.[i] <- Some (test, result)
+                results.[index] <- Some (test, result)
                 recordTiming {
                     Name = $"{suiteName}: {test.Name}"
-                    TotalTime = totalTime
+                    TotalTime = compileTime + runtimeTime
                     CompileTime = Some compileTime
                     RuntimeTime = Some runtimeTime
                 }
-                let success =
-                    match result with
-                    | Ok _ -> true
-                    | Error _ -> false
-                ProgressBar.increment progress success
+                ProgressBar.increment progress (Result.isOk result)
                 match result with
                 | Error failure when verbose ->
                     ProgressBar.finish progress
                     let _ = printE2EFailure test failure
                     ProgressBar.update progress
                 | _ -> ()
+
+            let tryPreambleContext (test: E2ETest) =
+                match suiteContextsResult with
+                | Error err -> Error $"Preamble build failed: {err}"
+                | Ok _ ->
+                    match suiteContextsOpt with
+                    | None -> Error "Missing built suite contexts"
+                    | Some currentSuiteContexts ->
+                        let contextKey = TestDSL.E2ETestRunner.preambleContextKeyForTest test
+                        match Map.tryFind contextKey currentSuiteContexts.PreambleContexts with
+                        | None -> Error $"Missing built preamble context for {test.SourceFile}"
+                        | Some context -> Ok context
+
+            for executionUnit in executionUnits do
+                match executionUnit with
+                | Choice1Of2 (index, test, prepared) ->
+                    let result, passTimingDelta =
+                        match tryPreambleContext test with
+                        | Error message -> preambleFailureResult message, TimeSpan.Zero
+                        | Ok (contextStdlib, ctx) ->
+                            e2ePhysicalExecutions <- e2ePhysicalExecutions + 1
+                            let passTimingStart = passTimingTotal ()
+                            let testResult =
+                                match prepared with
+                                | None ->
+                                    TestDSL.E2ETestRunner.runE2ETestWithPreambleContext
+                                        contextStdlib
+                                        ctx
+                                        (Some compilationSession)
+                                        test
+                                        (Some recordPassTiming)
+                                | Some preparedTest ->
+                                    TestDSL.E2ETestRunner.runPreparedE2ETestWithPreambleContext
+                                        contextStdlib
+                                        ctx
+                                        (Some compilationSession)
+                                        preparedTest
+                                        (Some recordPassTiming)
+                            let passTimingEnd = passTimingTotal ()
+                            testResult, passTimingEnd - passTimingStart
+                    let run = runFromTestResult result
+                    recordPhysicalTiming run passTimingDelta
+                    recordLogicalResult index test result
+
+                | Choice2Of2 indexedBatch ->
+                    let firstTest = indexedBatch.Head |> snd |> fun prepared -> prepared.Test
+                    let batchCount = indexedBatch.Length
+                    match tryPreambleContext firstTest with
+                    | Error message ->
+                        let result = preambleFailureResult message
+                        let run = runFromTestResult result
+                        recordPhysicalTiming run TimeSpan.Zero
+                        for (index, prepared) in indexedBatch do
+                            recordLogicalResult index prepared.Test result
+                    | Ok (contextStdlib, ctx) ->
+                        e2ePhysicalExecutions <- e2ePhysicalExecutions + 1
+                        e2eBatchExecutions <- e2eBatchExecutions + 1
+                        e2eBatchedLogicalTests <- e2eBatchedLogicalTests + batchCount
+                        e2eLargestBatch <- max e2eLargestBatch batchCount
+                        let passTimingStart = passTimingTotal ()
+                        let batchExecution =
+                            TestDSL.E2ETestRunner.runE2ETestBatchWithPreambleContext
+                                contextStdlib
+                                ctx
+                                (Some compilationSession)
+                                (indexedBatch |> List.map snd)
+                                (Some recordPassTiming)
+                        let passTimingEnd = passTimingTotal ()
+                        recordPhysicalTiming
+                            batchExecution.AggregateRun
+                            (passTimingEnd - passTimingStart)
+                        List.zip indexedBatch batchExecution.Results
+                        |> List.iter (fun ((index, _), (test, result)) ->
+                            recordLogicalResult index test result)
 
             ProgressBar.finish progress
 
@@ -1333,7 +1446,14 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                   total_ms = milliseconds totalTimer.Elapsed
                   unaccounted_ms = milliseconds unaccountedBreakdown.Unaccounted
                   runtime_unaccounted_ms = milliseconds unaccountedBreakdown.Runtime
-                  overhead_unaccounted_ms = milliseconds unaccountedBreakdown.Overhead }
+                  overhead_unaccounted_ms = milliseconds unaccountedBreakdown.Overhead
+                  e2e_batch_size = e2eBatchSize
+                  e2e_logical_tests = e2eLogicalTests
+                  e2e_batch_eligible_tests = e2eBatchEligibleTests
+                  e2e_physical_executions = e2ePhysicalExecutions
+                  e2e_batch_executions = e2eBatchExecutions
+                  e2e_batched_logical_tests = e2eBatchedLogicalTests
+                  e2e_largest_batch = e2eLargestBatch }
               tests = testEntries
               passes = passEntries }
         let options =

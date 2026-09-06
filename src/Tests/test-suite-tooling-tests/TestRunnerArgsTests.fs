@@ -35,9 +35,23 @@ let testJsonBenchmarkParsesPath () : TestResult =
     | Ok value -> expectEqual (Some "/tmp/json-benchmark.json") value
     | Error msg -> Error $"Expected valid JSON benchmark path, got error: {msg}"
 
+let testE2EBatchSizeParsesBoundedSize () : TestResult =
+    match parseE2EBatchSizeArg [| "--e2e-batch-size=16" |] with
+    | Ok value -> expectEqual (Some 16) value
+    | Error msg -> Error $"Expected valid E2E batch size, got error: {msg}"
+
+let testE2EBatchSizeRejectsInvalidValues () : TestResult =
+    let results =
+        [ "0"; "63"; "many" ]
+        |> List.map (fun value -> parseE2EBatchSizeArg [| $"--e2e-batch-size={value}" |])
+    if results |> List.forall Result.isError then Ok ()
+    else Error $"Expected invalid E2E batch sizes to fail, got {results}"
+
 let tests = [
     ("timings JSON parses path", testTimingsJsonParsesPath)
     ("timings JSON rejects empty path", testTimingsJsonRejectsEmptyPath)
     ("codegen profile JSON parses path", testCodegenProfileJsonParsesPath)
     ("JSON benchmark parses path", testJsonBenchmarkParsesPath)
+    ("E2E batch size parses a bounded size", testE2EBatchSizeParsesBoundedSize)
+    ("E2E batch size rejects invalid values", testE2EBatchSizeRejectsInvalidValues)
 ]

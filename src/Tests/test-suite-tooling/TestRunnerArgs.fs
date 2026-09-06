@@ -66,6 +66,16 @@ let parseJsonBenchmarkArg (args: string array) : Result<string option, string> =
     | Some path when path.Trim() = "" -> Error "--json-benchmark requires a non-empty path"
     | Some path -> Ok (Some path)
 
+// Parse --e2e-batch-size=N. One preserves singular execution for comparison;
+// larger values batch compatible value-equality tests.
+let parseE2EBatchSizeArg (args: string array) : Result<int option, string> =
+    match parsePrefixedArg "--e2e-batch-size=" args with
+    | None -> Ok None
+    | Some value ->
+        match System.Int32.TryParse value with
+        | true, size when size >= 1 && size <= 62 -> Ok (Some size)
+        | _ -> Error "--e2e-batch-size requires an integer from 1 through 62"
+
 // Check if a test name matches the filter (case-insensitive substring match)
 let matchesFilter (filter: string option) (testName: string) : bool =
     match filter with
