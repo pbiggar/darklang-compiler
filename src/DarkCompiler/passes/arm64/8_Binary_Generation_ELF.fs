@@ -226,9 +226,6 @@ let createExecutableWithPools
     (floatPool: LiteralPool.FloatPool)
     (enableLeakCheck: bool)
     : byte array =
-    let codeBytes =
-        machineCodeToBytes machineCode
-
     // Create float data (goes after code, before strings)
     let floatBytes =
         createFloatData floatPool
@@ -237,18 +234,40 @@ let createExecutableWithPools
     let stringBytes =
         createStringData stringPool
 
-    let dataBytes =
-        let floatAndStringBytes = Array.append floatBytes stringBytes
-        let leakBytes = if enableLeakCheck then Array.create 8 0uy else [||]
-        let leakStart = align8Int floatAndStringBytes.Length
-        let leakPadding = Array.create (leakStart - floatAndStringBytes.Length) 0uy
-        if enableLeakCheck then
-            Array.concat [floatAndStringBytes; leakPadding; leakBytes]
-        else
-            floatAndStringBytes
+    // Write directly into the final ELF image. The old path first allocated a
+    // byte copy of all machine code, then copied it again while concatenating
+    // the complete file. Test-heavy compilation repeats that bandwidth for
+    // the same large runtime on every executable.
+    let codeSize = machineCode.Length * 4
+    let floatAndStringSize = floatBytes.Length + stringBytes.Length
+    let dataSize =
+        if enableLeakCheck then align8Int floatAndStringSize + 8
+        else floatAndStringSize
+    let programHeader =
+        createLoadSegment
+            (uint64 codeSize)
+            (uint64 dataSize)
+            (executableSegmentFlags enableLeakCheck)
+    let headerBytes = createElfHeader codeEntryVAddr |> serializeElf64Header
+    let programHeaderBytes = serializeElf64ProgramHeader programHeader
+    let dataStart = align8Int (int codeFileOffset + codeSize)
+    let binary = Array.zeroCreate<byte> (dataStart + dataSize)
+    Array.blit headerBytes 0 binary 0 headerBytes.Length
+    Array.blit programHeaderBytes 0 binary headerBytes.Length programHeaderBytes.Length
 
-    createBinary codeBytes dataBytes (executableSegmentFlags enableLeakCheck)
-    |> serializeElf
+    machineCode
+    |> Array.iteri (fun index word ->
+        let offset = int codeFileOffset + (index * 4)
+        binary.[offset] <- byte (word &&& 0xFFu)
+        binary.[offset + 1] <- byte ((word >>> 8) &&& 0xFFu)
+        binary.[offset + 2] <- byte ((word >>> 16) &&& 0xFFu)
+        binary.[offset + 3] <- byte ((word >>> 24) &&& 0xFFu))
+
+    Array.blit floatBytes 0 binary dataStart floatBytes.Length
+    Array.blit stringBytes 0 binary (dataStart + floatBytes.Length) stringBytes.Length
+    // Array.zeroCreate already supplies both alignment padding and the leak
+    // counter's initial zero value.
+    binary
 
 /// Create an ELF executable with string data (legacy wrapper for backwards compatibility)
 let createExecutableWithStrings (machineCode: uint32 array) (stringPool: LiteralPool.StringPool) : byte array =
