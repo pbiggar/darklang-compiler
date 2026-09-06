@@ -8376,6 +8376,7 @@ let private generatePreparedARM64WithOptionsAndCache
     convertedFunctionChunks
     |> Result.map (fun functionChunks ->
         let helperTimer = startPhase ()
+        let helperSelectionTimer = startPhase ()
         let listRcDecHelperLabelsFromDictHelpers =
             neededDictRcDecHelperLabels
             |> Set.toList
@@ -8447,9 +8448,13 @@ let private generatePreparedARM64WithOptionsAndCache
             || plannedDictHelpersNeedClosureDecHelper
             || needsStreamRcDecHelper
 
+        recordPhase "ARM64 Helper Selection" helperSelectionTimer
+        let listHelperTimer = startPhase ()
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
+        recordPhase "ARM64 Helper List Generation" listHelperTimer
+        let dictHelperTimer = startPhase ()
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (plannedDictDecHelpers
@@ -8463,15 +8468,21 @@ let private generatePreparedARM64WithOptionsAndCache
             @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false false None true false false ctx else [])
             @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false false None false true false ctx else [])
             @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false None false false true ctx else [])
+        recordPhase "ARM64 Helper Dict Generation" dictHelperTimer
+        let closureHelperTimer = startPhase ()
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if emitClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
         let streamRcHelpers =
             if needsStreamRcDecHelper then generateStreamRefCountDecHelper ctx else []
+        recordPhase "ARM64 Helper Closure Stream Generation" closureHelperTimer
+        let recursiveHelperTimer = startPhase ()
         let recursiveSumRcHelpers =
             programMetadata.Facts.RecursiveReleaseTypes
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
+        recordPhase "ARM64 Helper Recursive Sum Generation" recursiveHelperTimer
+        let cliHelperTimer = startPhase ()
         let cliArgvHelpers =
             programMetadata.Facts.CliArgvHelperLabels
             |> Set.toList
@@ -8479,6 +8490,7 @@ let private generatePreparedARM64WithOptionsAndCache
         let cliHelpers =
             cliArgvHelpers
             @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
+        recordPhase "ARM64 Helper CLI Generation" cliHelperTimer
         recordPhase "ARM64 Codegen Helpers" helperTimer
         let helperInstructions =
             listRcHelpers
