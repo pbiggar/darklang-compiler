@@ -2342,6 +2342,53 @@ let toMIR
 /// Returns just the function list, variant registry, and record registry without wrapping in MIR.Program.
 /// externalReturnTypes: return types for functions not in the program (e.g., specialized functions compiled elsewhere)
 /// Each function gets its own RegGen for deterministic VReg assignment.
+let private toMIRFunctionsOnlyInternal
+    (phaseRecorder: (string -> float -> unit) option)
+    (program: ANF.Program)
+    (typeMap: ANF.TypeMap)
+    (typeReg: Map<string, (string * AST.Type) list>)
+    (variantLookup: AST_to_ANF.VariantLookup)
+    (typeRegForRecords: Map<string, (string * AST.Type) list>)
+    (enableCoverage: bool)
+    (externalReturnTypes: Map<string, AST.Type>)
+    : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+    let startPhase () =
+        phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
+    let recordPhase name timer =
+        match phaseRecorder, timer with
+        | Some record, Some (timer: System.Diagnostics.Stopwatch) ->
+            timer.Stop()
+            record name timer.Elapsed.TotalMilliseconds
+        | _ -> ()
+
+    let (ANF.Program (functions, _mainExpr)) = program
+    // Avoid rescanning the global TypeMap for every function conversion.
+    let typeLookupTimer = startPhase ()
+    let typeById = buildTypeById (maxTempIdInProgram program) typeMap
+    recordPhase "ANF -> MIR Type Lookup Preparation" typeLookupTimer
+
+    // Build return type registry for all functions (needed for caller to know return type)
+    let returnTypeTimer = startPhase ()
+    let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
+    recordPhase "ANF -> MIR Return Type Preparation" returnTypeTimer
+
+    // Phase 2: Convert all functions to MIR (skip main/_start)
+    // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
+    let conversionTimer = startPhase ()
+    match
+        mapResults
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
+            functions
+    with
+    | Error err -> Error err
+    | Ok mirFuncs ->
+        recordPhase "ANF -> MIR Function Conversion" conversionTimer
+        let registryTimer = startPhase ()
+        let variantRegistry = buildVariantRegistry variantLookup
+        let recordRegistry = buildRecordRegistry typeRegForRecords
+        recordPhase "ANF -> MIR Registry Projection" registryTimer
+        Ok (mirFuncs, variantRegistry, recordRegistry)
+
 let toMIRFunctionsOnly
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
@@ -2351,22 +2398,32 @@ let toMIRFunctionsOnly
     (enableCoverage: bool)
     (externalReturnTypes: Map<string, AST.Type>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
-    let (ANF.Program (functions, _mainExpr)) = program
-    // Avoid rescanning the global TypeMap for every function conversion.
-    let typeById = buildTypeById (maxTempIdInProgram program) typeMap
+    toMIRFunctionsOnlyInternal
+        None
+        program
+        typeMap
+        typeReg
+        variantLookup
+        typeRegForRecords
+        enableCoverage
+        externalReturnTypes
 
-    // Build return type registry for all functions (needed for caller to know return type)
-    let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
-
-    // Phase 2: Convert all functions to MIR (skip main/_start)
-    // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
-    match
-        mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
-            functions
-    with
-    | Error err -> Error err
-    | Ok mirFuncs ->
-        let variantRegistry = buildVariantRegistry variantLookup
-        let recordRegistry = buildRecordRegistry typeRegForRecords
-        Ok (mirFuncs, variantRegistry, recordRegistry)
+let toMIRFunctionsOnlyWithTrace
+    (phaseRecorder: (string -> float -> unit) option)
+    (program: ANF.Program)
+    (typeMap: ANF.TypeMap)
+    (typeReg: Map<string, (string * AST.Type) list>)
+    (variantLookup: AST_to_ANF.VariantLookup)
+    (typeRegForRecords: Map<string, (string * AST.Type) list>)
+    (enableCoverage: bool)
+    (externalReturnTypes: Map<string, AST.Type>)
+    : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+    toMIRFunctionsOnlyInternal
+        phaseRecorder
+        program
+        typeMap
+        typeReg
+        variantLookup
+        typeRegForRecords
+        enableCoverage
+        externalReturnTypes

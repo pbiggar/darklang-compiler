@@ -857,8 +857,17 @@ let private lowerToAllocatedLir
             if verbosity >= 1 then println $"  [3/7] ANF → MIR{suffix}..."
             let mirStart = sw.Elapsed.TotalMilliseconds
             let anfProgram = ANF.Program (functionsToCompile, ANF.Return ANF.UnitLiteral)
+            let mirPhaseRecorder =
+                passTimingRecorder
+                |> Option.map (fun recorder ->
+                    fun name (elapsedMs: float) ->
+                        recorder {
+                            Pass = name
+                            Elapsed = TimeSpan.FromMilliseconds elapsedMs
+                        })
             let mirResult =
-                ANF_to_MIR.toMIRFunctionsOnly
+                ANF_to_MIR.toMIRFunctionsOnlyWithTrace
+                    mirPhaseRecorder
                     anfProgram
                     typeMap
                     registries.FuncParams
