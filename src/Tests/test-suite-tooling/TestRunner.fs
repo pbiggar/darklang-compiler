@@ -136,8 +136,12 @@ type CodegenProfileSummary = {
     anf_dependency_cache_misses: int
     compiled_dependency_cache_hits: int
     compiled_dependency_cache_misses: int
+    compiled_start_cache_hits: int
+    compiled_start_cache_misses: int
     metadata_group_cache_hits: int
     metadata_group_cache_misses: int
+    helper_cache_hits: int
+    helper_cache_misses: int
     start_codegen_cache_hits: int
 }
 
@@ -560,8 +564,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let mutable anfDependencyCacheMisses = 0
     let mutable compiledDependencyCacheHits = 0
     let mutable compiledDependencyCacheMisses = 0
+    let mutable compiledStartCacheHits = 0
+    let mutable compiledStartCacheMisses = 0
     let mutable metadataGroupCacheHits = 0
     let mutable metadataGroupCacheMisses = 0
+    let mutable helperCacheHits = 0
+    let mutable helperCacheMisses = 0
     let mutable startCodegenCacheHits = 0
     let mutable e2eLogicalTests = 0
     let mutable e2eBatchEligibleTests = 0
@@ -1009,10 +1017,18 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                     compiledDependencyCacheHits + compilationSession.CompiledDependencyHitCount
                 compiledDependencyCacheMisses <-
                     compiledDependencyCacheMisses + compilationSession.CompiledDependencyMissCount
+                compiledStartCacheHits <-
+                    compiledStartCacheHits + compilationSession.CompiledStartHitCount
+                compiledStartCacheMisses <-
+                    compiledStartCacheMisses + compilationSession.CompiledStartMissCount
                 metadataGroupCacheHits <-
                     metadataGroupCacheHits + compilationSession.Arm64MetadataGroupHitCount
                 metadataGroupCacheMisses <-
                     metadataGroupCacheMisses + compilationSession.Arm64MetadataGroupMissCount
+                helperCacheHits <-
+                    helperCacheHits + compilationSession.Arm64HelperHitCount
+                helperCacheMisses <-
+                    helperCacheMisses + compilationSession.Arm64HelperMissCount
                 startCodegenCacheHits <-
                     startCodegenCacheHits + compilationSession.Arm64StartCodegenHitCount
 
@@ -1549,7 +1565,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 })
             |> Array.sortByDescending (fun entry -> entry.elapsed_ms)
         let payload = {
-            schema_version = 3
+            schema_version = 4
             summary = {
                 codegen_ms = codegenMs
                 attributed_function_ms = roundedMilliseconds attributedMs
@@ -1564,8 +1580,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 anf_dependency_cache_misses = anfDependencyCacheMisses
                 compiled_dependency_cache_hits = compiledDependencyCacheHits
                 compiled_dependency_cache_misses = compiledDependencyCacheMisses
+                compiled_start_cache_hits = compiledStartCacheHits
+                compiled_start_cache_misses = compiledStartCacheMisses
                 metadata_group_cache_hits = metadataGroupCacheHits
                 metadata_group_cache_misses = metadataGroupCacheMisses
+                helper_cache_hits = helperCacheHits
+                helper_cache_misses = helperCacheMisses
                 start_codegen_cache_hits = startCodegenCacheHits
             }
             phases = phaseEntries

@@ -7791,6 +7791,17 @@ type MetadataGroupCache =
         -> (unit -> Arm64ProgramMetadata)
         -> Arm64ProgramMetadata
 
+[<NoComparison>]
+type HelperCacheKey = {
+    ProgramMetadata: Arm64ProgramMetadata
+    InlineGenericReleaseTemplateLabels: Map<string, string>
+}
+
+type HelperCodegenCache =
+    HelperCacheKey
+        -> (unit -> ARM64Symbolic.Instr list)
+        -> ARM64Symbolic.Instr list
+
 type GeneratedChunk = {
     Instructions: ARM64Symbolic.Instr list
     ReusableAcrossCompilations: bool
@@ -7808,6 +7819,7 @@ let private generatePreparedARM64WithOptionsAndCache
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
     (metadataGroupCache: MetadataGroupCache option)
+    (helperCache: HelperCodegenCache option)
     (metadataGroups: MetadataGroup list)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
@@ -8449,66 +8461,76 @@ let private generatePreparedARM64WithOptionsAndCache
             || needsStreamRcDecHelper
 
         recordPhase "ARM64 Helper Selection" helperSelectionTimer
-        let listHelperTimer = startPhase ()
-        let listRcHelpers =
-            (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
-            @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
-        recordPhase "ARM64 Helper List Generation" listHelperTimer
-        let dictHelperTimer = startPhase ()
-        let dictRcHelpers =
-            (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (plannedDictDecHelpers
-               |> Map.toList
-               |> List.collect (fun (helperLabel, releasePlan) ->
-                   generatePlannedDictRefCountDecHelper helperLabel releasePlan ctx))
-            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false false None false false false ctx else [])
-            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false false None false false false ctx else [])
-            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false false None false false false ctx else [])
-            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false false None false false false ctx else [])
-            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false false None true false false ctx else [])
-            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false false None false true false ctx else [])
-            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false None false false true ctx else [])
-        recordPhase "ARM64 Helper Dict Generation" dictHelperTimer
-        let closureHelperTimer = startPhase ()
-        let closureRcHelpers =
-            (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
-            @ (if emitClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
-        let streamRcHelpers =
-            if needsStreamRcDecHelper then generateStreamRefCountDecHelper ctx else []
-        recordPhase "ARM64 Helper Closure Stream Generation" closureHelperTimer
-        let recursiveHelperTimer = startPhase ()
-        let recursiveSumRcHelpers =
-            programMetadata.Facts.RecursiveReleaseTypes
-            |> Set.toList
-            |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
-        recordPhase "ARM64 Helper Recursive Sum Generation" recursiveHelperTimer
-        let cliHelperTimer = startPhase ()
-        let cliArgvHelpers =
-            programMetadata.Facts.CliArgvHelperLabels
-            |> Set.toList
-            |> List.collect (generateCliArgvHelper ctx)
-        let cliHelpers =
-            cliArgvHelpers
-            @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
-        recordPhase "ARM64 Helper CLI Generation" cliHelperTimer
+        let generateHelperInstructions () =
+            let listHelperTimer = startPhase ()
+            let listRcHelpers =
+                (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
+                @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
+            recordPhase "ARM64 Helper List Generation" listHelperTimer
+            let dictHelperTimer = startPhase ()
+            let dictRcHelpers =
+                (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
+                @ (plannedDictDecHelpers
+                   |> Map.toList
+                   |> List.collect (fun (helperLabel, releasePlan) ->
+                       generatePlannedDictRefCountDecHelper helperLabel releasePlan ctx))
+                @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false false None false false false ctx else [])
+                @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false false None false false false ctx else [])
+                @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false false None false false false ctx else [])
+                @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false false None false false false ctx else [])
+                @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false false None true false false ctx else [])
+                @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false false None false true false ctx else [])
+                @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false None false false true ctx else [])
+            recordPhase "ARM64 Helper Dict Generation" dictHelperTimer
+            let closureHelperTimer = startPhase ()
+            let closureRcHelpers =
+                (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
+                @ (if emitClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
+            let streamRcHelpers =
+                if needsStreamRcDecHelper then generateStreamRefCountDecHelper ctx else []
+            recordPhase "ARM64 Helper Closure Stream Generation" closureHelperTimer
+            let recursiveHelperTimer = startPhase ()
+            let recursiveSumRcHelpers =
+                programMetadata.Facts.RecursiveReleaseTypes
+                |> Set.toList
+                |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
+            recordPhase "ARM64 Helper Recursive Sum Generation" recursiveHelperTimer
+            let cliHelperTimer = startPhase ()
+            let cliArgvHelpers =
+                programMetadata.Facts.CliArgvHelperLabels
+                |> Set.toList
+                |> List.collect (generateCliArgvHelper ctx)
+            let cliHelpers =
+                cliArgvHelpers
+                @ (if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux then generateLinuxCliExecuteHelper () else [])
+            recordPhase "ARM64 Helper CLI Generation" cliHelperTimer
+            let helperInstructions =
+                listRcHelpers
+                @ dictRcHelpers
+                @ closureRcHelpers
+                @ streamRcHelpers
+                @ recursiveSumRcHelpers
+                @ cliHelpers
+            let peepholeTimer = startPhase ()
+            let optimized = peepholeOptimize helperInstructions
+            recordPhase "ARM64 Codegen Peephole" peepholeTimer
+            optimized
+        let helperCacheKey = {
+            ProgramMetadata = programMetadata
+            InlineGenericReleaseTemplateLabels = inlineGenericReleaseTemplateLabels
+        }
+        let optimizedHelperInstructions =
+            match helperCache with
+            | Some cache -> cache helperCacheKey generateHelperInstructions
+            | None -> generateHelperInstructions ()
         recordPhase "ARM64 Codegen Helpers" helperTimer
-        let helperInstructions =
-            listRcHelpers
-            @ dictRcHelpers
-            @ closureRcHelpers
-            @ streamRcHelpers
-            @ recursiveSumRcHelpers
-            @ cliHelpers
-        let peepholeTimer = startPhase ()
-        let optimizedHelperInstructions = peepholeOptimize helperInstructions
-        recordPhase "ARM64 Codegen Peephole" peepholeTimer
         let assemblyTimer = startPhase ()
         let generated =
             GeneratedProgram (
                 functionChunks
                 @ [{
                     Instructions = optimizedHelperInstructions
-                    ReusableAcrossCompilations = false
+                    ReusableAcrossCompilations = Option.isSome helperCache
                 }])
         recordPhase "ARM64 Codegen Assembly" assemblyTimer
         generated)
@@ -8518,6 +8540,7 @@ let generateARM64WithOptionsAndCaches
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
     (metadataGroupCache: MetadataGroupCache option)
+    (helperCache: HelperCodegenCache option)
     (metadataGroups: MetadataGroup list)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
@@ -8541,6 +8564,7 @@ let generateARM64WithOptionsAndCaches
             options
             functionCache
             metadataGroupCache
+            helperCache
             metadataGroups
             phaseRecorder
             program
@@ -8556,6 +8580,7 @@ let generateARM64WithOptionsAndCache
         target
         options
         functionCache
+        None
         None
         []
         phaseRecorder

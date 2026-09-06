@@ -188,6 +188,13 @@ type private Arm64MetadataGroupKey = {
     FunctionFacts: (string * LIR.FunctionCodegenFacts option) list
 }
 
+[<NoComparison>]
+type private Arm64HelperCacheKey = {
+    Target: ARM64.TargetConfig
+    Options: CodeGen.CodeGenOptions
+    Helper: CodeGen.HelperCacheKey
+}
+
 type CompilationSession(collectCodegenMetrics: bool) =
     let jsonPlanning = new JsonPlanning.PlanningSession()
     let anfDependenciesByContext =
@@ -216,6 +223,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
             Dictionary<
                 LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions,
                 Result<ARM64Symbolic.Instr list, string>>>(ObjectReferenceComparer())
+    let arm64HelpersByContext =
+        Dictionary<
+            obj,
+            Dictionary<Arm64HelperCacheKey, ARM64Symbolic.Instr list>>(ObjectReferenceComparer())
     // Prebuilt stdlib and preamble functions retain object identity across a
     // compilation session. Keep an identity-indexed fast lane for functions
     // that populated the structural cache, avoiding repeated deep CFG equality
@@ -252,6 +263,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable arm64StartCodegenHitCount = 0
     let mutable arm64MetadataGroupHitCount = 0
     let mutable arm64MetadataGroupMissCount = 0
+    let mutable arm64HelperHitCount = 0
+    let mutable arm64HelperMissCount = 0
 
     new() = new CompilationSession(false)
 
@@ -476,6 +489,34 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     arm64CodegenMissCount <- arm64CodegenMissCount + 1
                     result
 
+    member _.Arm64Helpers
+        (contextIdentity: obj)
+        (target: ARM64.TargetConfig)
+        (options: CodeGen.CodeGenOptions)
+        (helperKey: CodeGen.HelperCacheKey)
+        (generate: unit -> ARM64Symbolic.Instr list)
+        : ARM64Symbolic.Instr list =
+        if disposed || options.EnableCoverage then
+            generate ()
+        else
+            let contextEntries =
+                match arm64HelpersByContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries = Dictionary<Arm64HelperCacheKey, ARM64Symbolic.Instr list>()
+                    arm64HelpersByContext.[contextIdentity] <- entries
+                    entries
+            let key = { Target = target; Options = options; Helper = helperKey }
+            match contextEntries.TryGetValue key with
+            | true, instructions ->
+                arm64HelperHitCount <- arm64HelperHitCount + 1
+                instructions
+            | false, _ ->
+                let instructions = generate ()
+                contextEntries.[key] <- instructions
+                arm64HelperMissCount <- arm64HelperMissCount + 1
+                instructions
+
     member _.PrepareArm64EmissionChunk
         (instructions: ARM64Symbolic.Instr list)
         (prepare: unit -> ARM64_Encoding.PreparedChunk)
@@ -492,6 +533,9 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CachedArm64FunctionCount =
         if disposed then 0
         else arm64FunctionsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
+    member _.CachedArm64HelperCount =
+        if disposed then 0
+        else arm64HelpersByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
     member _.CachedAnfDependencyCount =
         if disposed then 0
         else anfDependenciesByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
@@ -521,6 +565,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.Arm64StartCodegenHitCount = arm64StartCodegenHitCount
     member _.Arm64MetadataGroupHitCount = arm64MetadataGroupHitCount
     member _.Arm64MetadataGroupMissCount = arm64MetadataGroupMissCount
+    member _.Arm64HelperHitCount = arm64HelperHitCount
+    member _.Arm64HelperMissCount = arm64HelperMissCount
     member _.Arm64ReleasePlanSummaryHitCount = arm64ReleasePlanSummaryHitCount
     member _.Arm64ReleasePlanSummaryMissCount = arm64ReleasePlanSummaryMissCount
     member _.Arm64CodegenMetrics = arm64CodegenMetrics |> Seq.toList
@@ -533,6 +579,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             compiledStartFunctions.Clear()
             arm64MetadataGroupsByContext.Clear()
             arm64FunctionsByContext.Clear()
+            arm64HelpersByContext.Clear()
             arm64FunctionsByReferenceAndContext.Clear()
             arm64EmissionChunks.Clear()
             arm64ReleasePlanSummaries.Clear()
@@ -1132,6 +1179,17 @@ let private generateBinary
                         contextIdentity
                         functions
                         summarize)
+        let helperCache =
+            session
+            |> Option.filter (fun _ -> not options.EnableCoverage)
+            |> Option.map (fun current ->
+                fun helperKey generate ->
+                    current.Arm64Helpers
+                        programContextIdentity
+                        arm64Target
+                        codegenOptions
+                        helperKey
+                        generate)
         let codegenPhaseRecorder =
             passTimingRecorder
             |> Option.map (fun record ->
@@ -1146,6 +1204,7 @@ let private generateBinary
                 codegenOptions
                 functionCache
                 metadataGroupCache
+                helperCache
                 metadataGroups
                 codegenPhaseRecorder
                 allocatedProgram
