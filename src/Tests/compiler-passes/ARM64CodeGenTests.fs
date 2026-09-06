@@ -148,10 +148,10 @@ let testSmallGenericReleasePlanRemainsInline () : TestResult =
               program with
     | Error error -> Error $"Small generic release lowering failed: {error}"
     | Ok _ ->
-        if Seq.isEmpty generatedCacheEntries then
+        if Seq.toList generatedCacheEntries = ["_start"] then
             Ok ()
         else
-            Error $"Small generic release plan generated cache entries {Seq.toList generatedCacheEntries}"
+            Error $"Small generic release plan should cache only the stable entry trampoline, got {Seq.toList generatedCacheEntries}"
 
 let testGenericReleasePlanRemainsInline () : TestResult =
     let valueType = AST.TTuple (List.replicate 32 AST.TString)
