@@ -317,7 +317,6 @@ let lex (input: string) : Result<Token list, string> =
 
             let (intDigits, afterInt) = collectDigits chars []
 
-            let numberSource = System.String(chars |> List.toArray)
             let rec gluedRunLength remaining length =
                 match remaining with
                 | c :: rest when NameSyntax.isContinueCharacter c -> gluedRunLength rest (length + 1)
@@ -327,7 +326,12 @@ let lex (input: string) : Result<Token list, string> =
                 | c :: _ when NameSyntax.isContinueCharacter c ->
                     let consumedLength = List.length chars - List.length remaining
                     let errorLength = consumedLength + gluedRunLength remaining 0
-                    Error $"invalid number literal: {numberSource.Substring(0, errorLength)}"
+                    let invalidSource =
+                        chars
+                        |> List.take errorLength
+                        |> List.toArray
+                        |> System.String
+                    Error $"invalid number literal: {invalidSource}"
                 | _ -> Ok (token, remaining)
 
             // Check if this is a float (has decimal point or exponent)
