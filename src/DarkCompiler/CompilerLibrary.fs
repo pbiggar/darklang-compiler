@@ -150,28 +150,6 @@ type private LirFunctionReferenceComparer() =
         member _.GetHashCode(func) =
             System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func)
 
-[<NoComparison; NoEquality>]
-type private Arm64FunctionReferenceKey = {
-    ContextIdentity: obj
-    Function: LIR.Function
-    Target: ARM64.TargetConfig
-    Options: CodeGen.CodeGenOptions
-}
-
-type private Arm64FunctionReferenceKeyComparer() =
-    interface IEqualityComparer<Arm64FunctionReferenceKey> with
-        member _.Equals(left, right) =
-            Object.ReferenceEquals(left.ContextIdentity, right.ContextIdentity)
-            && Object.ReferenceEquals(left.Function, right.Function)
-            && left.Target = right.Target
-            && left.Options = right.Options
-        member _.GetHashCode(key) =
-            HashCode.Combine(
-                System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.ContextIdentity),
-                System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.Function),
-                hash key.Target,
-                hash key.Options)
-
 type private ObjectReferenceComparer() =
     interface IEqualityComparer<obj> with
         member _.Equals(left, right) = Object.ReferenceEquals(left, right)
@@ -275,12 +253,17 @@ type CompilationSession(collectCodegenMetrics: bool) =
             obj,
             Dictionary<Arm64HelperCacheKey, ARM64Symbolic.Instr list>>(ObjectReferenceComparer())
     // Prebuilt stdlib and preamble functions retain object identity across a
-    // compilation session. Most calls are hits, so reach them through one
-    // reference/context/target/options probe instead of four nested maps.
-    let arm64FunctionsByReference =
+    // compilation session. Keep an identity-indexed fast lane for functions
+    // that populated the structural cache, avoiding repeated deep CFG equality
+    // checks without retaining transient structurally equivalent functions.
+    let arm64FunctionsByReferenceAndContext =
         Dictionary<
-            Arm64FunctionReferenceKey,
-            Result<ARM64Symbolic.Instr list, string>>(Arm64FunctionReferenceKeyComparer())
+            obj,
+            Dictionary<
+                LIR.Function,
+                Dictionary<
+                    ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                    Result<ARM64Symbolic.Instr list, string>>>>(ObjectReferenceComparer())
     let arm64StartContextIdentity = System.Object()
     let arm64EmissionChunks =
         Dictionary<
@@ -511,33 +494,46 @@ type CompilationSession(collectCodegenMetrics: bool) =
             let contextIdentity =
                 if func.Name = "_start" then arm64StartContextIdentity
                 else contextIdentity
-            let referenceKey = {
-                ContextIdentity = contextIdentity
-                Function = func
-                Target = target
-                Options = options
-            }
-            match arm64FunctionsByReference.TryGetValue referenceKey with
-            | true, result ->
+            let structuralEntries =
+                match arm64FunctionsByContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries =
+                        Dictionary<
+                            LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                            Result<ARM64Symbolic.Instr list, string>>()
+                    arm64FunctionsByContext.[contextIdentity] <- entries
+                    entries
+            let referenceEntriesForContext =
+                match arm64FunctionsByReferenceAndContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries =
+                        Dictionary<
+                            LIR.Function,
+                            Dictionary<
+                                ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                                Result<ARM64Symbolic.Instr list, string>>>(LirFunctionReferenceComparer())
+                    arm64FunctionsByReferenceAndContext.[contextIdentity] <- entries
+                    entries
+            let key = (func, target, options)
+            let targetOptions = (target, options)
+            let referenceResult =
+                match referenceEntriesForContext.TryGetValue func with
+                | true, entries ->
+                    match entries.TryGetValue targetOptions with
+                    | true, result -> Some result
+                    | false, _ -> None
+                | false, _ -> None
+            match referenceResult with
+            | Some result ->
                 arm64CodegenHitCount <- arm64CodegenHitCount + 1
                 if func.Name = "_start" then
                     arm64StartCodegenHitCount <- arm64StartCodegenHitCount + 1
                 result
-            | false, _ ->
-                let structuralEntries =
-                    match arm64FunctionsByContext.TryGetValue contextIdentity with
-                    | true, entries -> entries
-                    | false, _ ->
-                        let entries =
-                            Dictionary<
-                                LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions,
-                                Result<ARM64Symbolic.Instr list, string>>()
-                        arm64FunctionsByContext.[contextIdentity] <- entries
-                        entries
-                let key = (func, target, options)
+            | None ->
                 match structuralEntries.TryGetValue key with
                 | true, result ->
-                    arm64FunctionsByReference.[referenceKey] <- result
                     arm64CodegenHitCount <- arm64CodegenHitCount + 1
                     if func.Name = "_start" then
                         arm64StartCodegenHitCount <- arm64StartCodegenHitCount + 1
@@ -566,7 +562,14 @@ type CompilationSession(collectCodegenMetrics: bool) =
                         }
                     | None -> ()
                     structuralEntries.[key] <- result
-                    arm64FunctionsByReference.[referenceKey] <- result
+                    let referenceEntries =
+                        match referenceEntriesForContext.TryGetValue func with
+                        | true, entries -> entries
+                        | false, _ ->
+                            let entries = Dictionary<ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
+                            referenceEntriesForContext.[func] <- entries
+                            entries
+                    referenceEntries.[targetOptions] <- result
                     arm64CodegenMissCount <- arm64CodegenMissCount + 1
                     result
 
@@ -672,7 +675,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             arm64MetadataGroupsByContext.Clear()
             arm64FunctionsByContext.Clear()
             arm64HelpersByContext.Clear()
-            arm64FunctionsByReference.Clear()
+            arm64FunctionsByReferenceAndContext.Clear()
             arm64EmissionChunks.Clear()
             arm64ReleasePlanSummaries.Clear()
             arm64CodegenMetrics.Clear()
