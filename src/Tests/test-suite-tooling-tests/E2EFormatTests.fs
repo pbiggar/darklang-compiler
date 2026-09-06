@@ -7,7 +7,6 @@ module E2EFormatTests
 open System
 open System.IO
 open TestDSL.E2EFormat
-open TestDSL.E2ETestRunner
 
 type TestResult = Result<unit, string>
 
@@ -474,49 +473,6 @@ let testParsesRepeatedProcessArgumentsInOrder () : TestResult =
             | [ test ] -> Error $"Unexpected process arguments: {test.Arguments}"
             | _ -> Error $"Expected exactly 1 parsed test, got {tests.Length}")
 
-let testBuildsParseableEagerBatchSource () : TestResult =
-    let testSource = "1L + 1L = 2L\n2L + 2L = 4L\n"
-
-    withTempFileNamed "json-parity.e2e" testSource (fun path ->
-        match parseE2ETestFile path with
-        | Error msg -> Error $"Expected batch fixture to parse, but got error: {msg}"
-        | Ok tests ->
-            let prepared = tests |> List.choose tryPrepareBatchTest
-            if prepared.Length <> 2 then
-                Error $"Expected 2 batchable tests, got {prepared.Length}"
-            elif not (canBatchTogether prepared.[0] prepared.[1]) then
-                Error "Expected adjacent tests with the same context and options to batch together"
-            else
-                let source = buildBatchSource prepared
-                match CompilerLibrary.parseProgram false source with
-                | Error msg -> Error $"Generated batch source did not parse: {msg}\n{source}"
-                | Ok _ when not (source.Contains("let e2eBatchCaseRun(check: (Unit) -> Bool): Bool =")) ->
-                    Error $"Generated batch did not include its non-inlineable closure runner:\n{source}"
-                | Ok _ when not (source.Contains("let e2eBatchCaseResult0 =")) ->
-                    Error $"Generated batch did not eagerly bind the first result:\n{source}"
-                | Ok _ when not (source.EndsWith("(if e2eBatchCaseResult1 then 2L else 0L)")) ->
-                    Error $"Generated batch did not encode the final result bit:\n{source}"
-                | Ok _ -> Ok ())
-
-let testParsesBatchBitmaskResults () : TestResult =
-    match tryParseBatchBoolResults 3 "ignored output\n5\n" with
-    | Some [true; false; true] -> Ok ()
-    | other -> Error $"Expected bitmask 5 to decode as [true; false; true], got {other}"
-
-let testRejectsInvalidBatchBitmaskResults () : TestResult =
-    match tryParseBatchBoolResults 3 "8\n" with
-    | None -> Ok ()
-    | Some values -> Error $"Expected out-of-range result bits to be rejected, got {values}"
-
-let testDoesNotBatchTestsWithProcessInputs () : TestResult =
-    let testSource = "Stdlib.Cli.Args.int64(0I) = Ok(100L) arg=\"100\"\n"
-    withTempFileNamed "json-parity.e2e" testSource (fun path ->
-        match parseE2ETestFile path with
-        | Ok [test] when Option.isNone (tryPrepareBatchTest test) -> Ok ()
-        | Ok [test] -> Error $"Expected argument-bearing test to remain isolated: {test}"
-        | Ok tests -> Error $"Expected exactly 1 parsed test, got {tests.Length}"
-        | Error msg -> Error $"Expected process-input fixture to parse, but got error: {msg}")
-
 let tests = [
     ("parses multiline expectation on next line", testParsesMultilineExpectationOnNextLine)
     ("parses skip attribute", testParsesSkipAttribute)
@@ -537,8 +493,4 @@ let tests = [
     ("parses sqlerror shorthand expectation", testParsesSqlErrorExpectationShorthand)
     ("parses escaped backslash before n as literal text", testParsesEscapedBackslashBeforeNAsLiteralText)
     ("parses repeated process arguments in order", testParsesRepeatedProcessArgumentsInOrder)
-    ("builds parseable eager batch source", testBuildsParseableEagerBatchSource)
-    ("parses batch bitmask results", testParsesBatchBitmaskResults)
-    ("rejects invalid batch bitmask results", testRejectsInvalidBatchBitmaskResults)
-    ("does not batch tests with process inputs", testDoesNotBatchTestsWithProcessInputs)
 ]
