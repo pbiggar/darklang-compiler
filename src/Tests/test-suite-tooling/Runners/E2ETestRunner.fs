@@ -1041,23 +1041,27 @@ let private batchBindingPrefix (tests: PreparedE2EBatchTest list) : string =
             if attempt = 0 then "e2eBatchCase"
             else $"e2eBatchCase{attempt}_"
         let collides =
-            tests
-            |> List.indexed
-            |> List.exists (fun (index, _) -> Set.contains $"{prefix}Run{index}" existingNames)
+            Set.contains $"{prefix}Run" existingNames
+            || (tests
+                |> List.indexed
+                |> List.exists (fun (index, _) -> Set.contains $"{prefix}Check{index}" existingNames))
         if collides then pick (attempt + 1) else prefix
     pick 0
 
 let buildBatchSource (tests: PreparedE2EBatchTest list) : string =
     let prefix = batchBindingPrefix tests
+    let runName = $"{prefix}Run"
+    let runFunction =
+        $"let {runName}(check: (Unit) -> Bool): Bool =\n  check()"
     let checkFunctions =
         tests
         |> List.mapi (fun index prepared ->
-            $"let {prefix}Run{index}(_unit: Unit): Bool =\n{indentBatchBody prepared.EqualitySource}")
+            $"let {prefix}Check{index}(_unit: Unit): Bool =\n{indentBatchBody prepared.EqualitySource}")
         |> String.concat "\n\n"
     let resultBindings =
         tests
         |> List.mapi (fun index _ ->
-            $"let {prefix}Result{index} = {prefix}Run{index}() in")
+            $"let {prefix}Result{index} = {runName}({prefix}Check{index}) in")
         |> String.concat "\n"
     let mask =
         tests
@@ -1065,7 +1069,7 @@ let buildBatchSource (tests: PreparedE2EBatchTest list) : string =
             let bit = 1L <<< index
             $"(if {prefix}Result{index} then {bit}L else 0L)")
         |> String.concat "\n+ "
-    $"{checkFunctions}\n\n{resultBindings}\n{mask}"
+    $"{runFunction}\n\n{checkFunctions}\n\n{resultBindings}\n{mask}"
 
 let tryParseBatchBoolResults
     (expectedCount: int)
