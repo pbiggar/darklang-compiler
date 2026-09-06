@@ -145,6 +145,18 @@ type E2EBatchExecution = {
 
 let maxSupportedBatchSize = 62
 
+let private canEmbedBatchEqualitySource
+    (allowInternal: bool)
+    (equalitySource: string)
+    : bool =
+    let body =
+        equalitySource.Replace("\r\n", "\n").Split('\n')
+        |> Array.map (fun line -> $"  {line}")
+        |> String.concat "\n"
+    let probe =
+        $"let e2eBatchEligibilityCheck(_unit: Unit): Bool =\n{body}\n\ne2eBatchEligibilityCheck()"
+    CompilerLibrary.parseProgram allowInternal probe |> Result.isOk
+
 /// Only value-equality tests with no process contract can share a process. The
 /// compiler path and options remain production-identical; only the synthesized
 /// caller contains several independent checks.
@@ -167,7 +179,7 @@ let tryPrepareBatchTest (test: E2ETest) : PreparedE2EBatchTest option =
         | Error _ -> None
         | Ok equalitySource ->
             match CompilerLibrary.parseProgram allowInternal equalitySource with
-            | Ok (Program [Expression _]) ->
+            | Ok (Program [Expression _]) when canEmbedBatchEqualitySource allowInternal equalitySource ->
                 Some { Test = test; EqualitySource = equalitySource }
             | Ok _
             | Error _ -> None

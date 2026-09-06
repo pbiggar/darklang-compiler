@@ -517,6 +517,16 @@ let testDoesNotBatchTestsWithProcessInputs () : TestResult =
         | Ok tests -> Error $"Expected exactly 1 parsed test, got {tests.Length}"
         | Error msg -> Error $"Expected process-input fixture to parse, but got error: {msg}")
 
+let testDoesNotBatchEqualityThatCannotBeNestedInFunction () : TestResult =
+    let testSource =
+        "let identityInt(value: Int) : Int = value identityInt(9223372036854775808I) = 9223372036854775808I\n"
+    withTempFileNamed "ordinary.e2e" testSource (fun path ->
+        match parseE2ETestFile path with
+        | Ok [test] when Option.isNone (tryPrepareBatchTest test) -> Ok ()
+        | Ok [test] -> Error $"Expected locally-declared equality to remain isolated: {test}"
+        | Ok tests -> Error $"Expected exactly 1 parsed test, got {tests.Length}"
+        | Error msg -> Error $"Expected local-declaration fixture to parse, but got error: {msg}")
+
 let tests = [
     ("parses multiline expectation on next line", testParsesMultilineExpectationOnNextLine)
     ("parses skip attribute", testParsesSkipAttribute)
@@ -541,4 +551,5 @@ let tests = [
     ("parses batch bitmask results", testParsesBatchBitmaskResults)
     ("rejects invalid batch bitmask results", testRejectsInvalidBatchBitmaskResults)
     ("does not batch tests with process inputs", testDoesNotBatchTestsWithProcessInputs)
+    ("does not batch equality that cannot be nested in function", testDoesNotBatchEqualityThatCannotBeNestedInFunction)
 ]
