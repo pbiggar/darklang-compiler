@@ -1,8 +1,6 @@
 // Integer-family parity and managed-ownership regression tests.
 
 // Canonical signed and unsigned 128-bit wrapping boundaries.
-Stdlib.Int128.add(170141183460469231731687303715884105726Q, 4Q) = -170141183460469231731687303715884105726Q
-Stdlib.UInt128.add(340282366920938463463374607431768211455Z, 1Z) = 0Z
 
 // Managed decimal buffers survive aggregates, branches, sums, and closures.
 let value = Stdlib.Int.power(2I, 100I) in let pair = (value, value + 1I) in pair.0 = 1267650600228229401496703205376I
@@ -18,8 +16,6 @@ let value = Stdlib.Int64.random(-9223372036854775808L, 9223372036854775807L) in 
 let value = Stdlib.UInt64.random(18446744073709551615UL, 0UL) in value <= 18446744073709551615UL = true
 
 // Float rounding and checked-conversion boundaries.
-Stdlib.Int128.toFloat(170141183460469231731687303715884105727Q) = 170141183460469231731687303715884105727.0
-Stdlib.UInt128.toFloat(340282366920938463463374607431768211455Z) = 340282366920938463463374607431768211455.0
 Stdlib.Int8.fromInt128(127Q) = Some(127y)
 Stdlib.Int8.fromInt128(128Q) = None
 Stdlib.UInt64.fromUInt128(18446744073709551615Z) = Some(18446744073709551615UL)

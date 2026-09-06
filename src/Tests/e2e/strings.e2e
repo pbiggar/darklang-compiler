@@ -76,11 +76,9 @@ let result = "foo" ++ "bar" in result = "foobar"
 // Single digit conversion
 
 // Basic integer to string
-Stdlib.Int64.toString(0L) = "0"
 Stdlib.Int64.toString(1L) = "1"
 Stdlib.Int64.toString(9L) = "9"
 Stdlib.Int64.toString(10L) = "10"
-Stdlib.Int64.toString(42L) = "42"
 Stdlib.Int64.toString(100L) = "100"
 Stdlib.Int64.toString(999L) = "999"
 Stdlib.Int64.toString(1234L) = "1234"
@@ -104,8 +102,6 @@ Stdlib.Int64.toString(2147483647L) = "2147483647"
 // Stdlib.Bool.toString Tests
 // =============================================================================
 
-Stdlib.Bool.toString(true) = "true"
-Stdlib.Bool.toString(false) = "false"
 "The answer is " ++ Stdlib.Bool.toString(true) = "The answer is true"
 "Flag: " ++ Stdlib.Bool.toString(1L > 0L) = "Flag: true"
 

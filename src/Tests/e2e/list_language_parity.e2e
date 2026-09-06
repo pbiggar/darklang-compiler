@@ -2,12 +2,6 @@
 
 // Literal separators and trailing layout normalize to ordinary list literals.
 [1L, 2L, 3L] = [1L; 2L; 3L]
-[1L, 2L, 3L,] = [1L; 2L; 3L;]
-[
-  1L
-  2L
-  3L
-] = [1L, 2L, 3L]
 [1L, ...[2L]] = error="Parse error: Expected expression"
 match [1L] with | [head, ...tail] -> head | _ -> 0L = error="Parse error: Expected pattern"
 

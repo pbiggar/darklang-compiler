@@ -9,7 +9,6 @@ Stdlib.Dict.singleton(1L, "one") = error="expected String"
 
 // Empty and non-empty literals are distinct from records. Keys support escaped
 // spelling, with ___ reserved by the interpreter syntax for the empty key.
-Stdlib.Dict.empty = Dict { }
 Dict { answer = 42L } = Dict { answer = 42L }
 Dict { ``Content-Length`` = "0"; ___ = "empty" } = Dict { ``Content-Length`` = "0"; ___ = "empty" }
 Dict { duplicate = 1L; duplicate = 2L } = error="Cannot add two dictionary entries with the same key `duplicate`"

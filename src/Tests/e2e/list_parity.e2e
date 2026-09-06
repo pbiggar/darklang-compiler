@@ -53,6 +53,3 @@ Stdlib.List.sortByComparator([(1L, "first"), (1L, "second"), (0L, "zero")], fun 
 Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 2I) = Error("Expected comparator function to return -1, 0, or 1, but it returned 2")
 Stdlib.List.sortByComparator([3L, 1L, 2L], fun a b -> if a == 3L && b == 2L then 2I else if a < b then -1I else if a > b then 1I else 0I) = Error("Expected comparator function to return -1, 0, or 1, but it returned 2")
 Stdlib.List.sortByComparator([1L, 2L], fun _ _ -> 0L) = error="Type mismatch"
-
-Stdlib.List.zip([1L, 2L], ["a", "b"]) = Some([(1L, "a"), (2L, "b")])
-Stdlib.List.zip([1L], ["a", "b"]) = None

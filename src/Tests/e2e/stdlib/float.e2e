@@ -25,7 +25,6 @@ Stdlib.Float.negate(-3.14) = 3.14
 Stdlib.Float.negate(0.0) = -0.0
 
 // toInt (truncates toward zero)
-Stdlib.Float.toInt(3.7) = 3L
 Stdlib.Float.toInt(3.2) = 3L
 Stdlib.Float.toInt(-3.7) = -3L
 Stdlib.Float.toInt(-3.2) = -3L

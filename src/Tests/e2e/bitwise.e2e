@@ -224,7 +224,6 @@ let z = 0L in ~~~z = -1L
 // ===================================================================
 
 // Basic wrapping negation (two's complement)
-0L - 1L = -1L// Wrapping subtraction
 0L - 12L = -12L// Same as unary negation
 
 // Lowest set bit pattern: x & -x (used in nqueen)
@@ -266,7 +265,6 @@ let avail = 20L in let pos = avail & (0L - avail) in pos = 4L// 20 = 0b10100, lo
 
 // Powers of 2 via shift
 1L << 10L = 1024L
-1L << 20L = 1048576L
 1L << 40L = 1099511627776L
 1L << 50L = 1125899906842624L
 

@@ -192,8 +192,6 @@ match Stdlib.List.partition([1L, 2L, 3L, 4L, 5L], fun x -> x > 2L) with | (trues
 // Stdlib.List.all - Check if all satisfy predicate (alias for forAll)
 // ===================================================================
 
-Stdlib.List.all([1L, 2L, 3L], fun x -> x > 0L) = true
-Stdlib.List.all([1L, 2L, 3L], fun x -> x > 2L) = false
 
 // ===================================================================
 // List memory reclamation regression

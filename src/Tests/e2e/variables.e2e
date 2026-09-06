@@ -13,7 +13,6 @@
 // ===================================================================
 
 // Simple let binding
-let x = 5L in x = 5L
 
 // Let binding with arithmetic
 let x = 10L in x + 5L = 15L

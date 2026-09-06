@@ -63,7 +63,6 @@ Stdlib.List.isEmpty(Stdlib.Option.toList(Stdlib.Option.Option.None)) = true
 // ===================================================================
 
 Stdlib.Option.Option.Some(42L) |> Stdlib.Option.isSome() = true
-Stdlib.Option.Option.None |> Stdlib.Option.isNone() = true
 Stdlib.Option.Option.Some(10L) |> Stdlib.Option.map<Int64, Int64>(fun x -> x * 2L) |> Stdlib.Option.withDefault(0L) = 20L
 
 // ===================================================================

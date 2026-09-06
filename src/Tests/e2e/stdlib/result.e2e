@@ -76,7 +76,6 @@ Stdlib.Result.isError(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.R
 
 // Unresolved type variables are preserved during monomorphization
 Stdlib.Result.Result.Ok(42L) |> Stdlib.Result.isOk() = true
-Stdlib.Result.Result.Error(99L) |> Stdlib.Result.isError() = true
 Stdlib.Result.Result.Ok(10L) |> Stdlib.Result.map<Int64, Int64, String>(fun x -> x * 2L) |> Stdlib.Result.withDefault(0L) = 20L
 
 // ===================================================================

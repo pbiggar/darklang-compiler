@@ -773,51 +773,58 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 | _ -> ()
                 details
 
-            for i in 0 .. numTests - 1 do
-                let test = testsArray.[i]
-                let result, passTimingDelta =
-                    match suiteContextsResult with
-                    | Error err ->
-                        preambleFailureResult $"Preamble build failed: {err}", TimeSpan.Zero
-                    | Ok _ ->
-                        match suiteContextsOpt with
-                        | None ->
-                            preambleFailureResult "Missing built suite contexts", TimeSpan.Zero
-                        | Some currentSuiteContexts ->
-                            let contextKey = TestDSL.E2ETestRunner.preambleContextKeyForTest test
-                            match Map.tryFind contextKey currentSuiteContexts.PreambleContexts with
-                            | None ->
-                                preambleFailureResult $"Missing built preamble context for {test.SourceFile}", TimeSpan.Zero
-                            | Some (contextStdlib, ctx) ->
-                                let passTimingStart = passTimingTotal ()
-                                let testResult =
-                                    TestDSL.E2ETestRunner.runE2ETestWithPreambleContext
-                                        contextStdlib
-                                        ctx
-                                        (Some compilationSession)
-                                        test
-                                        (Some recordPassTiming)
-                                let passTimingEnd = passTimingTotal ()
-                                let passTimingDelta = passTimingEnd - passTimingStart
-                                testResult, passTimingDelta
+            let executionUnits =
+                let rec collectBatch first nextIndex remaining acc =
+                    if nextIndex >= numTests || remaining = 0 then
+                        List.rev acc
+                    else
+                        match TestDSL.E2ETestRunner.tryPrepareBatchTest testsArray.[nextIndex] with
+                        | Some prepared when TestDSL.E2ETestRunner.canBatchTogether first prepared ->
+                            collectBatch first (nextIndex + 1) (remaining - 1) ((nextIndex, prepared) :: acc)
+                        | _ ->
+                            List.rev acc
 
+                let rec build index acc =
+                    if index >= numTests then
+                        List.rev acc
+                    else
+                        match TestDSL.E2ETestRunner.tryPrepareBatchTest testsArray.[index] with
+                        | None ->
+                            build (index + 1) (Choice1Of2 (index, testsArray.[index]) :: acc)
+                        | Some first ->
+                            let batch =
+                                collectBatch
+                                    first
+                                    (index + 1)
+                                    (TestDSL.E2ETestRunner.maxBatchSize - 1)
+                                    [(index, first)]
+                            match batch with
+                            | [_] ->
+                                build (index + 1) (Choice1Of2 (index, testsArray.[index]) :: acc)
+                            | _ ->
+                                build (index + batch.Length) (Choice2Of2 batch :: acc)
+                build 0 []
+
+            let recordPhysicalTiming (run: E2ERun) (passTimingDelta: TimeSpan) : unit =
+                let (_, _, _, compileTime, runtimeTime) = unpackRun run
+                recordNonPassTiming "Compile Overhead" (compileTime - passTimingDelta)
+                recordNonPassTiming TestFramework.testRuntimeTimingName runtimeTime
+
+            let recordLogicalResult
+                (index: int)
+                (test: E2ETest)
+                (result: E2ETestResult)
+                : unit =
                 let run = runFromTestResult result
                 let (_, _, _, compileTime, runtimeTime) = unpackRun run
-                let compileOverhead = compileTime - passTimingDelta
-                recordNonPassTiming "Compile Overhead" compileOverhead
-                recordNonPassTiming TestFramework.testRuntimeTimingName runtimeTime
-                let totalTime = compileTime + runtimeTime
-                results.[i] <- Some (test, result)
+                results.[index] <- Some (test, result)
                 recordTiming {
                     Name = $"{suiteName}: {test.Name}"
-                    TotalTime = totalTime
+                    TotalTime = compileTime + runtimeTime
                     CompileTime = Some compileTime
                     RuntimeTime = Some runtimeTime
                 }
-                let success =
-                    match result with
-                    | Ok _ -> true
-                    | Error _ -> false
+                let success = Result.isOk result
                 ProgressBar.increment progress success
                 match result with
                 | Error failure when verbose ->
@@ -825,6 +832,65 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                     let _ = printE2EFailure test failure
                     ProgressBar.update progress
                 | _ -> ()
+
+            let tryPreambleContext (test: E2ETest) =
+                match suiteContextsResult with
+                | Error err -> Error $"Preamble build failed: {err}"
+                | Ok _ ->
+                    match suiteContextsOpt with
+                    | None -> Error "Missing built suite contexts"
+                    | Some currentSuiteContexts ->
+                        let contextKey = TestDSL.E2ETestRunner.preambleContextKeyForTest test
+                        match Map.tryFind contextKey currentSuiteContexts.PreambleContexts with
+                        | None -> Error $"Missing built preamble context for {test.SourceFile}"
+                        | Some context -> Ok context
+
+            for executionUnit in executionUnits do
+                match executionUnit with
+                | Choice1Of2 (index, test) ->
+                    let result, passTimingDelta =
+                        match tryPreambleContext test with
+                        | Error message -> preambleFailureResult message, TimeSpan.Zero
+                        | Ok (contextStdlib, ctx) ->
+                            let passTimingStart = passTimingTotal ()
+                            let testResult =
+                                TestDSL.E2ETestRunner.runE2ETestWithPreambleContext
+                                    contextStdlib
+                                    ctx
+                                    (Some compilationSession)
+                                    test
+                                    (Some recordPassTiming)
+                            let passTimingEnd = passTimingTotal ()
+                            testResult, passTimingEnd - passTimingStart
+                    let run = runFromTestResult result
+                    recordPhysicalTiming run passTimingDelta
+                    recordLogicalResult index test result
+
+                | Choice2Of2 indexedBatch ->
+                    let firstTest = indexedBatch.Head |> snd |> fun prepared -> prepared.Test
+                    match tryPreambleContext firstTest with
+                    | Error message ->
+                        let result = preambleFailureResult message
+                        let run = runFromTestResult result
+                        recordPhysicalTiming run TimeSpan.Zero
+                        for (index, prepared) in indexedBatch do
+                            recordLogicalResult index prepared.Test result
+                    | Ok (contextStdlib, ctx) ->
+                        let passTimingStart = passTimingTotal ()
+                        let batchExecution =
+                            TestDSL.E2ETestRunner.runE2ETestBatchWithPreambleContext
+                                contextStdlib
+                                ctx
+                                (Some compilationSession)
+                                (indexedBatch |> List.map snd)
+                                (Some recordPassTiming)
+                        let passTimingEnd = passTimingTotal ()
+                        recordPhysicalTiming
+                            batchExecution.AggregateRun
+                            (passTimingEnd - passTimingStart)
+                        List.zip indexedBatch batchExecution.Results
+                        |> List.iter (fun ((index, _), (test, result)) ->
+                            recordLogicalResult index test result)
 
             ProgressBar.finish progress
 

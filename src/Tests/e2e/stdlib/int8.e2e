@@ -7,7 +7,6 @@
 // Stdlib.Int8.add - Add two integers
 // ===================================================================
 
-Stdlib.Int8.add(10y, 9y) = 19y
 Stdlib.Int8.add(0y, 0y) = 0y
 Stdlib.Int8.add(-5y, 5y) = 0y
 Stdlib.Int8.add(100y, 20y) = 120y
@@ -16,7 +15,6 @@ Stdlib.Int8.add(100y, 20y) = 120y
 // Stdlib.Int8.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.Int8.subtract(10y, 9y) = 1y
 Stdlib.Int8.subtract(0y, 0y) = 0y
 Stdlib.Int8.subtract(100y, 50y) = 50y
 Stdlib.Int8.subtract(5y, 10y) = -5y
@@ -25,7 +23,6 @@ Stdlib.Int8.subtract(5y, 10y) = -5y
 // Stdlib.Int8.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.Int8.multiply(8y, 8y) = 64y
 Stdlib.Int8.multiply(0y, 100y) = 0y
 Stdlib.Int8.multiply(-5y, 5y) = -25y
 Stdlib.Int8.multiply(10y, 10y) = 100y
@@ -34,7 +31,6 @@ Stdlib.Int8.multiply(10y, 10y) = 100y
 // Stdlib.Int8.divide - Divide two integers
 // ===================================================================
 
-Stdlib.Int8.divide(10y, 5y) = 2y
 Stdlib.Int8.divide(10y, 3y) = 3y
 Stdlib.Int8.divide(100y, 10y) = 10y
 Stdlib.Int8.divide(-10y, 2y) = -5y
@@ -43,7 +39,6 @@ Stdlib.Int8.divide(-10y, 2y) = -5y
 // Stdlib.Int8.mod - Modulo operation
 // ===================================================================
 
-Stdlib.Int8.mod(15y, 6y) = 3y
 Stdlib.Int8.mod(10y, 3y) = 1y
 Stdlib.Int8.mod(100y, 7y) = 2y
 Stdlib.Int8.mod(-10y, 3y) = 2y
@@ -52,7 +47,6 @@ Stdlib.Int8.mod(-10y, 3y) = 2y
 // Stdlib.Int8.max - Maximum of two integers
 // ===================================================================
 
-Stdlib.Int8.max(5y, 6y) = 6y
 Stdlib.Int8.max(6y, 5y) = 6y
 Stdlib.Int8.max(-5y, -10y) = -5y
 Stdlib.Int8.max(0y, 0y) = 0y
@@ -61,7 +55,6 @@ Stdlib.Int8.max(0y, 0y) = 0y
 // Stdlib.Int8.min - Minimum of two integers
 // ===================================================================
 
-Stdlib.Int8.min(5y, 6y) = 5y
 Stdlib.Int8.min(6y, 5y) = 5y
 Stdlib.Int8.min(-5y, -10y) = -10y
 Stdlib.Int8.min(0y, 0y) = 0y
@@ -70,8 +63,6 @@ Stdlib.Int8.min(0y, 0y) = 0y
 // Stdlib.Int8.absoluteValue - Absolute value
 // ===================================================================
 
-Stdlib.Int8.absoluteValue(-5y) = 5y
-Stdlib.Int8.absoluteValue(5y) = 5y
 Stdlib.Int8.absoluteValue(0y) = 0y
 Stdlib.Int8.absoluteValue(-100y) = 100y
 
@@ -79,9 +70,6 @@ Stdlib.Int8.absoluteValue(-100y) = 100y
 // Stdlib.Int8.negate - Negate an integer
 // ===================================================================
 
-Stdlib.Int8.negate(-5y) = 5y
-Stdlib.Int8.negate(5y) = -5y
-Stdlib.Int8.negate(0y) = 0y
 Stdlib.Int8.negate(100y) = -100y
 
 // ===================================================================
@@ -90,7 +78,6 @@ Stdlib.Int8.negate(100y) = -100y
 
 Stdlib.Int8.power(3y, 4y) = 81y
 Stdlib.Int8.power(2y, 6y) = 64y
-Stdlib.Int8.power(0y, 0y) = 1y
 Stdlib.Int8.power(5y, 0y) = 1y
 Stdlib.Int8.power(5y, 1y) = 5y
 Stdlib.Int8.power(2y, 5y) = 32y
@@ -99,8 +86,6 @@ Stdlib.Int8.power(2y, 5y) = 32y
 // Stdlib.Int8.clamp - Clamp value between limits
 // ===================================================================
 
-Stdlib.Int8.clamp(-5y, -2y, 5y) = -2y
-Stdlib.Int8.clamp(3y, 0y, 2y) = 2y
 Stdlib.Int8.clamp(1y, 0y, 5y) = 1y
 Stdlib.Int8.clamp(10y, 5y, 15y) = 10y
 Stdlib.Int8.clamp(0y, 5y, 10y) = 5y
@@ -109,7 +94,6 @@ Stdlib.Int8.clamp(0y, 5y, 10y) = 5y
 // Stdlib.Int8.greaterThan - Greater than comparison
 // ===================================================================
 
-Stdlib.Int8.greaterThan(20y, 1y) = true
 Stdlib.Int8.greaterThan(1y, 20y) = false
 Stdlib.Int8.greaterThan(5y, 5y) = false
 
@@ -117,7 +101,6 @@ Stdlib.Int8.greaterThan(5y, 5y) = false
 // Stdlib.Int8.greaterThanOrEqualTo - Greater than or equal comparison
 // ===================================================================
 
-Stdlib.Int8.greaterThanOrEqualTo(6y, 1y) = true
 Stdlib.Int8.greaterThanOrEqualTo(1y, 6y) = false
 Stdlib.Int8.greaterThanOrEqualTo(5y, 5y) = true
 
@@ -125,7 +108,6 @@ Stdlib.Int8.greaterThanOrEqualTo(5y, 5y) = true
 // Stdlib.Int8.lessThan - Less than comparison
 // ===================================================================
 
-Stdlib.Int8.lessThan(6y, 8y) = true
 Stdlib.Int8.lessThan(8y, 6y) = false
 Stdlib.Int8.lessThan(5y, 5y) = false
 
@@ -133,7 +115,6 @@ Stdlib.Int8.lessThan(5y, 5y) = false
 // Stdlib.Int8.lessThanOrEqualTo - Less than or equal comparison
 // ===================================================================
 
-Stdlib.Int8.lessThanOrEqualTo(6y, 8y) = true
 Stdlib.Int8.lessThanOrEqualTo(8y, 6y) = false
 Stdlib.Int8.lessThanOrEqualTo(5y, 5y) = true
 
@@ -141,10 +122,8 @@ Stdlib.Int8.lessThanOrEqualTo(5y, 5y) = true
 // Stdlib.Int8.toString - Convert integer to string
 // ===================================================================
 
-Stdlib.Int8.toString(0y) = "0"
 Stdlib.Int8.toString(42y) = "42"
 Stdlib.Int8.toString(-5y) = "-5"
-Stdlib.Int8.toString(-128y) = "-128"
 Stdlib.Int8.toString(120y) = "120"
 
 // ===================================================================

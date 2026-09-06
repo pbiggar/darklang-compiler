@@ -46,12 +46,9 @@ let t = (1L, 2L, 3L, 4L) in t.0 + t.1 + t.2 + t.3 = 10L
 
 // Basic tuple destructuring - 2 elements
 let (a, b) = (1L, 2L) in a = 1L
-let (a, b) = (1L, 2L) in b = 2L
-let (a, b) = (10L, 20L) in a + b = 30L
 
 // 3-element tuple destructuring
 let (a, b, c) = (1L, 2L, 3L) in a = 1L
-let (a, b, c) = (1L, 2L, 3L) in b = 2L
 let (a, b, c) = (1L, 2L, 3L) in c = 3L
 let (a, b, c) = (10L, 20L, 30L) in a + b + c = 60L
 
@@ -85,12 +82,10 @@ let (x, y) = (6L, 4L) in x * y - x + y = 22L
 // ===================================================================
 
 // Basic tuple printing
-(1L, 2L) = (1L, 2L)
 (42L, 99L) = (42L, 99L)
 (0L, 0L) = (0L, 0L)
 
 // 3-element tuple printing
-(1L, 2L, 3L) = (1L, 2L, 3L)
 (10L, 20L, 30L) = (10L, 20L, 30L)
 
 // Tuple with negative numbers

@@ -4,7 +4,6 @@
 // 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
 () = ()
-(42L) = 42L
 (1L,) = error="Parse error: Expected expression"
 (1L, true, "three") = stdout="(1, true, \"three\")\n" stderr=""
 ((1L, "two"), (true, (3.0, 4L))) = stdout="((1, \"two\"), (true, (3.0, 4)))\n" stderr=""

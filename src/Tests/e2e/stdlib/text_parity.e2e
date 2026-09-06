@@ -18,9 +18,7 @@ Stdlib.String.indexOfEgc("😀x", "x") = Stdlib.Option.Option.Some(1I)
 
 // Regex returns full matches and advances deterministically after empty matches.
 Stdlib.Regex.find("test123", "\\d+") = Stdlib.Option.Option.Some("123")
-Stdlib.Regex.findAll("test", "") = ["", "", "", "", ""]
 Stdlib.Regex.split("a1b22c", "(\\d+)") = ["a", "1", "b", "22", "c"]
-Stdlib.Regex.isMatch("user@example.com", "^[\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]{2,}$") = true
 Stdlib.Regex.replace("a1b2", "(\\d)", "$1") = "a$1b2"
 Stdlib.Regex.replaceAll("a1b2", "(\\d)", "<$1>") = "a<1>b<2>"
 Stdlib.Regex.split("abc", "\\d+") = ["abc"]

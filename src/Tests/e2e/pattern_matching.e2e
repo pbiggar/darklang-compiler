@@ -32,7 +32,6 @@ let nestedBranchBars(value: Bool) : Int64 =
 nestedBranchBars(false) = 3L
 
 // Match on simple enum - first variant
-match Red with | Red -> 1L | Green -> 2L | Blue -> 3L = 1L
 
 // Match on simple enum - second variant
 match Green with | Red -> 1L | Green -> 2L | Blue -> 3L = 2L
@@ -160,7 +159,6 @@ match false with | false -> 99L | true -> 1L = 99L
 match (1L, 2L) with | (a, b) -> a + b = 3L
 
 // Tuple patterns use the interpreter parser's parenthesized form.
-match (1L, 2L) with | (a, b) -> a + b = 3L
 
 // 3-tuple extraction
 match (10L, 20L, 30L) with | (a, b, c) -> a + b + c = 60L

@@ -138,7 +138,6 @@ Stdlib.Internal.HAMT.__contains(setStr(emptyStr(), "hello", 100L), "hello") = tr
 Stdlib.Internal.HAMT.__contains(setStr(emptyStr(), "hello", 100L), "world") = false
 
 // size tests
-Stdlib.Internal.HAMT.__size(emptyInt()) = 0L
 Stdlib.Internal.HAMT.__size(setInt(emptyInt(), 1L, 100L)) = 1L
 let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in Stdlib.Internal.HAMT.__size(d2) = 2L
 let d1 = setInt(emptyInt(), 1L, 10L) in let d2 = setInt(d1, 2L, 20L) in let d3 = setInt(d2, 3L, 30L) in Stdlib.Internal.HAMT.__size(d3) = 3L

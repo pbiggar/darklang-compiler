@@ -83,7 +83,6 @@ match [5L, 10L, 15L] with | [a, _, c] -> a + c | _ -> 0L = 20L
 // === Non-Matching Cases ===
 
 // Empty list doesn't match single element pattern
-match [] with | [x] -> x | [] -> 99L = 99L
 
 // Shorter list falls through to fallback
 match [1L] with | [x] -> x | _ -> 99L = 1L

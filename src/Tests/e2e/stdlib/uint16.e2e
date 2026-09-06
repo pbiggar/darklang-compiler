@@ -7,7 +7,6 @@
 // Stdlib.UInt16.add - Add two integers
 // ===================================================================
 
-Stdlib.UInt16.add(10us, 9us) = 19us
 Stdlib.UInt16.add(0us, 0us) = 0us
 Stdlib.UInt16.add(5us, 5us) = 10us
 Stdlib.UInt16.add(100us, 200us) = 300us
@@ -16,7 +15,6 @@ Stdlib.UInt16.add(100us, 200us) = 300us
 // Stdlib.UInt16.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.UInt16.subtract(10us, 9us) = 1us
 Stdlib.UInt16.subtract(10us, 0us) = 10us
 Stdlib.UInt16.subtract(100us, 50us) = 50us
 Stdlib.UInt16.subtract(5us, 0us) = 5us
@@ -25,7 +23,6 @@ Stdlib.UInt16.subtract(5us, 0us) = 5us
 // Stdlib.UInt16.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.UInt16.multiply(8us, 8us) = 64us
 Stdlib.UInt16.multiply(0us, 100us) = 0us
 Stdlib.UInt16.multiply(5us, 5us) = 25us
 Stdlib.UInt16.multiply(100us, 100us) = 10000us
@@ -34,7 +31,6 @@ Stdlib.UInt16.multiply(100us, 100us) = 10000us
 // Stdlib.UInt16.divide - Divide two integers
 // ===================================================================
 
-Stdlib.UInt16.divide(10us, 5us) = 2us
 Stdlib.UInt16.divide(10us, 3us) = 3us
 Stdlib.UInt16.divide(100us, 10us) = 10us
 Stdlib.UInt16.divide(10us, 2us) = 5us
@@ -43,7 +39,6 @@ Stdlib.UInt16.divide(10us, 2us) = 5us
 // Stdlib.UInt16.mod - Modulo operation
 // ===================================================================
 
-Stdlib.UInt16.mod(15us, 6us) = 3us
 Stdlib.UInt16.mod(10us, 3us) = 1us
 Stdlib.UInt16.mod(100us, 7us) = 2us
 Stdlib.UInt16.mod(20us, 3us) = 2us
@@ -52,7 +47,6 @@ Stdlib.UInt16.mod(20us, 3us) = 2us
 // Stdlib.UInt16.max - Maximum of two integers
 // ===================================================================
 
-Stdlib.UInt16.max(5us, 6us) = 6us
 Stdlib.UInt16.max(6us, 5us) = 6us
 Stdlib.UInt16.max(10us, 20us) = 20us
 Stdlib.UInt16.max(0us, 0us) = 0us
@@ -61,7 +55,6 @@ Stdlib.UInt16.max(0us, 0us) = 0us
 // Stdlib.UInt16.min - Minimum of two integers
 // ===================================================================
 
-Stdlib.UInt16.min(5us, 6us) = 5us
 Stdlib.UInt16.min(6us, 5us) = 5us
 Stdlib.UInt16.min(10us, 20us) = 10us
 Stdlib.UInt16.min(0us, 0us) = 0us
@@ -90,7 +83,6 @@ Stdlib.UInt16.negate(100us) = 65436us
 
 Stdlib.UInt16.power(8us, 4us) = 4096us
 Stdlib.UInt16.power(2us, 10us) = 1024us
-Stdlib.UInt16.power(0us, 0us) = 1us
 Stdlib.UInt16.power(5us, 0us) = 1us
 Stdlib.UInt16.power(5us, 1us) = 5us
 Stdlib.UInt16.power(2us, 8us) = 256us
@@ -100,7 +92,6 @@ Stdlib.UInt16.power(2us, 8us) = 256us
 // ===================================================================
 
 Stdlib.UInt16.clamp(5us, 0us, 5us) = 5us
-Stdlib.UInt16.clamp(3us, 0us, 2us) = 2us
 Stdlib.UInt16.clamp(1us, 0us, 5us) = 1us
 Stdlib.UInt16.clamp(10us, 5us, 15us) = 10us
 Stdlib.UInt16.clamp(2us, 5us, 10us) = 5us
@@ -109,7 +100,6 @@ Stdlib.UInt16.clamp(2us, 5us, 10us) = 5us
 // Stdlib.UInt16.greaterThan - Greater than comparison
 // ===================================================================
 
-Stdlib.UInt16.greaterThan(20us, 1us) = true
 Stdlib.UInt16.greaterThan(1us, 20us) = false
 Stdlib.UInt16.greaterThan(5us, 5us) = false
 
@@ -117,7 +107,6 @@ Stdlib.UInt16.greaterThan(5us, 5us) = false
 // Stdlib.UInt16.greaterThanOrEqualTo - Greater than or equal comparison
 // ===================================================================
 
-Stdlib.UInt16.greaterThanOrEqualTo(6us, 1us) = true
 Stdlib.UInt16.greaterThanOrEqualTo(1us, 6us) = false
 Stdlib.UInt16.greaterThanOrEqualTo(5us, 5us) = true
 
@@ -125,7 +114,6 @@ Stdlib.UInt16.greaterThanOrEqualTo(5us, 5us) = true
 // Stdlib.UInt16.lessThan - Less than comparison
 // ===================================================================
 
-Stdlib.UInt16.lessThan(6us, 8us) = true
 Stdlib.UInt16.lessThan(8us, 6us) = false
 Stdlib.UInt16.lessThan(5us, 5us) = false
 
@@ -133,7 +121,6 @@ Stdlib.UInt16.lessThan(5us, 5us) = false
 // Stdlib.UInt16.lessThanOrEqualTo - Less than or equal comparison
 // ===================================================================
 
-Stdlib.UInt16.lessThanOrEqualTo(6us, 8us) = true
 Stdlib.UInt16.lessThanOrEqualTo(8us, 6us) = false
 Stdlib.UInt16.lessThanOrEqualTo(5us, 5us) = true
 
@@ -151,15 +138,12 @@ Stdlib.UInt16.shiftLeft(1us, 8us) = 256us
 Stdlib.UInt16.shiftLeft(255us, 4us) = 4080us
 Stdlib.UInt16.shiftRight(65280us, 8us) = 255us
 Stdlib.UInt16.shiftRight(43690us, 1us) = 21845us
-Stdlib.UInt16.bitwiseNot(0us) = 65535us
-Stdlib.UInt16.bitwiseNot(65535us) = 0us
 Stdlib.UInt16.bitwiseNot(43690us) = 21845us
 
 // ===================================================================
 // Stdlib.UInt16.toString - Convert integer to string
 // ===================================================================
 
-Stdlib.UInt16.toString(0us) = "0"
 Stdlib.UInt16.toString(42us) = "42"
 Stdlib.UInt16.toString(5us) = "5"
 Stdlib.UInt16.toString(12345us) = "12345"

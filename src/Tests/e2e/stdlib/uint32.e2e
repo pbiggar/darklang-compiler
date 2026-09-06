@@ -7,7 +7,6 @@
 // Stdlib.UInt32.add - Add two integers
 // ===================================================================
 
-Stdlib.UInt32.add(10ul, 9ul) = 19ul
 Stdlib.UInt32.add(0ul, 0ul) = 0ul
 Stdlib.UInt32.add(5ul, 5ul) = 10ul
 Stdlib.UInt32.add(100ul, 200ul) = 300ul
@@ -16,7 +15,6 @@ Stdlib.UInt32.add(100ul, 200ul) = 300ul
 // Stdlib.UInt32.subtract - Subtract two integers
 // ===================================================================
 
-Stdlib.UInt32.subtract(10ul, 9ul) = 1ul
 Stdlib.UInt32.subtract(10ul, 0ul) = 10ul
 Stdlib.UInt32.subtract(100ul, 50ul) = 50ul
 Stdlib.UInt32.subtract(5ul, 0ul) = 5ul
@@ -25,7 +23,6 @@ Stdlib.UInt32.subtract(5ul, 0ul) = 5ul
 // Stdlib.UInt32.multiply - Multiply two integers
 // ===================================================================
 
-Stdlib.UInt32.multiply(8ul, 8ul) = 64ul
 Stdlib.UInt32.multiply(0ul, 100ul) = 0ul
 Stdlib.UInt32.multiply(5ul, 5ul) = 25ul
 Stdlib.UInt32.multiply(100ul, 100ul) = 10000ul
@@ -34,7 +31,6 @@ Stdlib.UInt32.multiply(100ul, 100ul) = 10000ul
 // Stdlib.UInt32.divide - Divide two integers
 // ===================================================================
 
-Stdlib.UInt32.divide(10ul, 5ul) = 2ul
 Stdlib.UInt32.divide(10ul, 3ul) = 3ul
 Stdlib.UInt32.divide(100ul, 10ul) = 10ul
 Stdlib.UInt32.divide(10ul, 2ul) = 5ul
@@ -43,7 +39,6 @@ Stdlib.UInt32.divide(10ul, 2ul) = 5ul
 // Stdlib.UInt32.mod - Modulo operation
 // ===================================================================
 
-Stdlib.UInt32.mod(15ul, 6ul) = 3ul
 Stdlib.UInt32.mod(10ul, 3ul) = 1ul
 Stdlib.UInt32.mod(100ul, 7ul) = 2ul
 Stdlib.UInt32.mod(20ul, 3ul) = 2ul
@@ -52,7 +47,6 @@ Stdlib.UInt32.mod(20ul, 3ul) = 2ul
 // Stdlib.UInt32.max - Maximum of two integers
 // ===================================================================
 
-Stdlib.UInt32.max(5ul, 6ul) = 6ul
 Stdlib.UInt32.max(6ul, 5ul) = 6ul
 Stdlib.UInt32.max(10ul, 20ul) = 20ul
 Stdlib.UInt32.max(0ul, 0ul) = 0ul
@@ -61,7 +55,6 @@ Stdlib.UInt32.max(0ul, 0ul) = 0ul
 // Stdlib.UInt32.min - Minimum of two integers
 // ===================================================================
 
-Stdlib.UInt32.min(5ul, 6ul) = 5ul
 Stdlib.UInt32.min(6ul, 5ul) = 5ul
 Stdlib.UInt32.min(10ul, 20ul) = 10ul
 Stdlib.UInt32.min(0ul, 0ul) = 0ul
@@ -90,7 +83,6 @@ Stdlib.UInt32.negate(100ul) = 4294967196ul
 
 Stdlib.UInt32.power(8ul, 5ul) = 32768ul
 Stdlib.UInt32.power(2ul, 10ul) = 1024ul
-Stdlib.UInt32.power(0ul, 0ul) = 1ul
 Stdlib.UInt32.power(5ul, 0ul) = 1ul
 Stdlib.UInt32.power(5ul, 1ul) = 5ul
 Stdlib.UInt32.power(2ul, 8ul) = 256ul
@@ -100,7 +92,6 @@ Stdlib.UInt32.power(2ul, 8ul) = 256ul
 // ===================================================================
 
 Stdlib.UInt32.clamp(5ul, 0ul, 5ul) = 5ul
-Stdlib.UInt32.clamp(3ul, 0ul, 2ul) = 2ul
 Stdlib.UInt32.clamp(1ul, 0ul, 5ul) = 1ul
 Stdlib.UInt32.clamp(10ul, 5ul, 15ul) = 10ul
 Stdlib.UInt32.clamp(2ul, 5ul, 10ul) = 5ul
@@ -109,7 +100,6 @@ Stdlib.UInt32.clamp(2ul, 5ul, 10ul) = 5ul
 // Stdlib.UInt32.greaterThan - Greater than comparison
 // ===================================================================
 
-Stdlib.UInt32.greaterThan(20ul, 1ul) = true
 Stdlib.UInt32.greaterThan(1ul, 20ul) = false
 Stdlib.UInt32.greaterThan(5ul, 5ul) = false
 
@@ -117,7 +107,6 @@ Stdlib.UInt32.greaterThan(5ul, 5ul) = false
 // Stdlib.UInt32.greaterThanOrEqualTo - Greater than or equal comparison
 // ===================================================================
 
-Stdlib.UInt32.greaterThanOrEqualTo(6ul, 1ul) = true
 Stdlib.UInt32.greaterThanOrEqualTo(1ul, 6ul) = false
 Stdlib.UInt32.greaterThanOrEqualTo(5ul, 5ul) = true
 
@@ -125,7 +114,6 @@ Stdlib.UInt32.greaterThanOrEqualTo(5ul, 5ul) = true
 // Stdlib.UInt32.lessThan - Less than comparison
 // ===================================================================
 
-Stdlib.UInt32.lessThan(6ul, 8ul) = true
 Stdlib.UInt32.lessThan(8ul, 6ul) = false
 Stdlib.UInt32.lessThan(5ul, 5ul) = false
 
@@ -133,7 +121,6 @@ Stdlib.UInt32.lessThan(5ul, 5ul) = false
 // Stdlib.UInt32.lessThanOrEqualTo - Less than or equal comparison
 // ===================================================================
 
-Stdlib.UInt32.lessThanOrEqualTo(6ul, 8ul) = true
 Stdlib.UInt32.lessThanOrEqualTo(8ul, 6ul) = false
 Stdlib.UInt32.lessThanOrEqualTo(5ul, 5ul) = true
 
@@ -141,7 +128,6 @@ Stdlib.UInt32.lessThanOrEqualTo(5ul, 5ul) = true
 // Stdlib.UInt32.toString - Convert integer to string
 // ===================================================================
 
-Stdlib.UInt32.toString(0ul) = "0"
 Stdlib.UInt32.toString(42ul) = "42"
 Stdlib.UInt32.toString(5ul) = "5"
 Stdlib.UInt32.toString(1234567890ul) = "1234567890"

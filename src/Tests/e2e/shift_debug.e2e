@@ -5,8 +5,6 @@
 // of preserving the full Int64 value.
 
 // Small shifts - baseline
-1L << 10L = 1024L
-1L << 20L = 1048576L
 
 // Value without high bit set - should work
 2000000000L << 1L = 4000000000L
