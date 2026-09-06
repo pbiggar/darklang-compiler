@@ -151,12 +151,10 @@ let private canEmbedBatchEqualitySource
     : bool =
     let body =
         equalitySource.Replace("\r\n", "\n").Split('\n')
-        |> Array.map (fun line -> $"    {line}")
+        |> Array.map (fun line -> $"  {line}")
         |> String.concat "\n"
     let probe =
-        "let e2eBatchEligibilityCheck(recurse: Bool): Bool =\n"
-        + "  if recurse then e2eBatchEligibilityCheck(false) else\n"
-        + $"{body}\n\ne2eBatchEligibilityCheck(false)"
+        $"let e2eBatchEligibilityCheck(_unit: Unit): Bool =\n{body}\n\ne2eBatchEligibilityCheck()"
     CompilerLibrary.parseProgram allowInternal probe |> Result.isOk
 
 /// Only value-equality tests with no process contract can share a process. The
@@ -1045,6 +1043,15 @@ let private indentBatchBody (source: string) : string =
     |> String.concat "\n"
 
 let private batchBindingPrefix (tests: PreparedE2EBatchTest list) : string =
+    let hash =
+        tests
+        |> List.collect (fun prepared ->
+            [prepared.Test.SourceFile; prepared.Test.Name; prepared.EqualitySource])
+        |> List.fold (fun hash part ->
+            part
+            |> Seq.fold
+                (fun current ch -> (current ^^^ uint64 (int ch)) * 1099511628211UL)
+                ((hash ^^^ 255UL) * 1099511628211UL)) 14695981039346656037UL
     let existingNames =
         tests
         |> List.collect (fun prepared -> prepared.Test.FunctionLineMap |> Map.toList |> List.map fst)
@@ -1052,26 +1059,30 @@ let private batchBindingPrefix (tests: PreparedE2EBatchTest list) : string =
 
     let rec pick attempt =
         let prefix =
-            if attempt = 0 then "e2eBatchCase"
-            else $"e2eBatchCase{attempt}_"
+            if attempt = 0 then $"e2eBatch{hash:x16}_"
+            else $"e2eBatch{hash:x16}_{attempt}_"
         let collides =
-            tests
-            |> List.indexed
-            |> List.exists (fun (index, _) -> Set.contains $"{prefix}Check{index}" existingNames)
+            Set.contains $"{prefix}Run" existingNames
+            || (tests
+                |> List.indexed
+                |> List.exists (fun (index, _) -> Set.contains $"{prefix}Check{index}" existingNames))
         if collides then pick (attempt + 1) else prefix
     pick 0
 
 let buildBatchSource (tests: PreparedE2EBatchTest list) : string =
     let prefix = batchBindingPrefix tests
+    let runName = $"{prefix}Run"
+    let runFunction =
+        $"let {runName}(check: (Unit) -> Bool): Bool =\n  check()"
     let checkFunctions =
         tests
         |> List.mapi (fun index prepared ->
-            $"let {prefix}Check{index}(recurse: Bool): Bool =\n  if recurse then {prefix}Check{index}(false) else\n{indentBatchBody (indentBatchBody prepared.EqualitySource)}")
+            $"let {prefix}Check{index}(_unit: Unit): Bool =\n{indentBatchBody prepared.EqualitySource}")
         |> String.concat "\n\n"
     let resultBindings =
         tests
         |> List.mapi (fun index _ ->
-            $"let {prefix}Result{index} = {prefix}Check{index}(false) in")
+            $"let {prefix}Result{index} = {runName}({prefix}Check{index}) in")
         |> String.concat "\n"
     let mask =
         tests
@@ -1079,7 +1090,7 @@ let buildBatchSource (tests: PreparedE2EBatchTest list) : string =
             let bit = 1L <<< index
             $"(if {prefix}Result{index} then {bit}L else 0L)")
         |> String.concat "\n+ "
-    $"{checkFunctions}\n\n{resultBindings}\n{mask}"
+    $"{runFunction}\n\n{checkFunctions}\n\n{resultBindings}\n{mask}"
 
 let tryParseBatchBoolResults
     (expectedCount: int)
