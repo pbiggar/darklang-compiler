@@ -2,12 +2,12 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-09-06T11:17:11+00:00
+**Snapshot timestamp:** 2026-09-06T11:42:18+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `b4e6ba180a5f68f107005cf8867371144b93d3ed5326517cea45284c74fa6cc2`
-**Compiler commit:** `6538b4255a0d35e87743ed2bc240ccfe55a65fa5` - Keep scalar heap loads available across FloatSqrt
+**Compiler commit:** `9f0f23a08c91679b750923637785e0036a090533` - Keep FloatSqrt load reuse scoped to heap values
 
 | Benchmark | Dark (3.84x) | Rust |
 |---|---:|---:|
