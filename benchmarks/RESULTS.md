@@ -2,14 +2,14 @@
 
 Best-known compatible routine-profile Dark performance vs audited Rust references (instruction counts).
 
-**Snapshot timestamp:** 2026-09-05T22:16:25+00:00
+**Snapshot timestamp:** 2026-09-06T11:17:11+00:00
 **Architecture:** `arm64`
 **Profile:** `routine` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=yes,branch-sim=yes,extract=summary-I-refs`
 **Workload contract:** `b4e6ba180a5f68f107005cf8867371144b93d3ed5326517cea45284c74fa6cc2`
-**Compiler commit:** `eecff235ad25fc1e783ceb288d780f7466b95434` - Reuse duplicate effect-free direct calls
+**Compiler commit:** `6538b4255a0d35e87743ed2bc240ccfe55a65fa5` - Keep scalar heap loads available across FloatSqrt
 
-| Benchmark | Dark (3.85x) | Rust |
+| Benchmark | Dark (3.84x) | Rust |
 |---|---:|---:|
 | ackermann | 9,303,384,874 (1.86x) | 5,009,840,894 |
 | binary_trees | 547,528,421 (0.30x) | 1,842,793,797 |
@@ -22,7 +22,7 @@ Best-known compatible routine-profile Dark performance vs audited Rust reference
 | mandelbrot | 16,367,511 (1.30x) | 12,554,856 |
 | matmul | 1,941,542,471 (114x) | 16,960,641 |
 | merkletrees | 193,343,646 (1.71x) | 113,305,941 |
-| nbody | 914,509,449 (4.39x) | 208,256,292 |
+| nbody | 883,009,449 (4.24x) | 208,256,292 |
 | nqueen | 212,398,449 (1.29x) | 164,530,821 |
 | pisum | 40,029,674 (0.88x) | 45,259,394 |
 | primes | 1,470,311 (1.17x) | 1,251,693 |
