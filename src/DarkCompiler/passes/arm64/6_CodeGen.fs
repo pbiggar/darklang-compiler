@@ -7786,7 +7786,9 @@ type MetadataGroup = {
 }
 
 type FunctionGroup = {
+    /// Must uniquely identify this exact ordered function sequence when reusable.
     ContextIdentity: obj
+    ReusableAcrossCompilations: bool
     Functions: LIR.Function list
 }
 
@@ -8249,7 +8251,7 @@ let private generatePreparedARM64WithOptionsAndCache
     // Compilation assembly already knows the exact stdlib/program/dependency
     // boundaries. Consume those ordered groups directly instead of rescanning
     // every function to rediscover them during codegen.
-    let functionRuns =
+    let functionRuns : (FunctionGroup option * LIR.Function list) list =
         match functionGroups with
         | [] -> [ (None, sortedFunctions) ]
         | groups ->
@@ -8263,14 +8265,13 @@ let private generatePreparedARM64WithOptionsAndCache
             if not orderMatches then
                 Crash.crash "ARM64 codegen invariant: function groups do not match program order"
             groups
-            |> List.map (fun group -> (Some group.ContextIdentity, group.Functions))
+            |> List.map (fun group -> (Some group, group.Functions))
 
-    let convertRun (context, runFunctions) =
+    let convertRun (group: FunctionGroup option, runFunctions) =
         let generate () = ResultList.mapResults convertCached runFunctions
-        match context, functionGroupCache with
-        | Some contextIdentity, Some cache
-            when not (runFunctions |> List.exists (fun func -> func.Name = "_start")) ->
-            cache contextIdentity runFunctions generate
+        match group, functionGroupCache with
+        | Some group, Some cache when group.ReusableAcrossCompilations ->
+            cache group.ContextIdentity runFunctions generate
         | _ ->
             generate ()
 

@@ -206,32 +206,6 @@ type private Arm64MetadataGroupKeyComparer() =
                 17
 
 [<NoComparison>]
-type private Arm64FunctionGroupKey = {
-    Target: ARM64.TargetConfig
-    Options: CodeGen.CodeGenOptions
-    Functions: LIR.Function list
-}
-
-type private Arm64FunctionGroupKeyComparer() =
-    interface IEqualityComparer<Arm64FunctionGroupKey> with
-        member _.Equals(left, right) =
-            left.Target = right.Target
-            && left.Options = right.Options
-            && List.length left.Functions = List.length right.Functions
-            && List.forall2
-                (fun leftFunction rightFunction ->
-                    Object.ReferenceEquals(leftFunction, rightFunction))
-                left.Functions
-                right.Functions
-        member _.GetHashCode(key) =
-            key.Functions
-            |> List.fold
-                (fun value func ->
-                    (value * 397)
-                    ^^^ System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func))
-                (HashCode.Combine(hash key.Target, hash key.Options))
-
-[<NoComparison>]
 type private Arm64HelperCacheKey = {
     Target: ARM64.TargetConfig
     Options: CodeGen.CodeGenOptions
@@ -272,7 +246,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
         Dictionary<
             obj,
             Dictionary<
-                Arm64FunctionGroupKey,
+                ARM64.TargetConfig * CodeGen.CodeGenOptions,
                 Result<CodeGen.GeneratedChunk list, string>>>(ObjectReferenceComparer())
     let arm64FunctionsByContext =
         Dictionary<
@@ -491,7 +465,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
         (contextIdentity: obj)
         (target: ARM64.TargetConfig)
         (options: CodeGen.CodeGenOptions)
-        (functions: LIR.Function list)
+        (_functions: LIR.Function list)
         (generate: unit -> Result<CodeGen.GeneratedChunk list, string>)
         : Result<CodeGen.GeneratedChunk list, string> =
         if disposed || options.EnableCoverage then
@@ -503,15 +477,11 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 | false, _ ->
                     let entries =
                         Dictionary<
-                            Arm64FunctionGroupKey,
-                            Result<CodeGen.GeneratedChunk list, string>>(Arm64FunctionGroupKeyComparer())
+                            ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                            Result<CodeGen.GeneratedChunk list, string>>()
                     arm64FunctionGroupsByContext.[contextIdentity] <- entries
                     entries
-            let key = {
-                Target = target
-                Options = options
-                Functions = functions
-            }
+            let key = (target, options)
             match contextEntries.TryGetValue key with
             | true, result ->
                 arm64FunctionGroupHitCount <- arm64FunctionGroupHitCount + 1
@@ -3305,18 +3275,22 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         [
                                             {
                                                 ContextIdentity = freshProgramContextIdentity
+                                                ReusableAcrossCompilations = false
                                                 Functions = startProgramFuncs
                                             }
                                             {
-                                                ContextIdentity = box plan.BaseContext
+                                                ContextIdentity = box reachableStdlib
+                                                ReusableAcrossCompilations = true
                                                 Functions = reachableStdlib
                                             }
                                             {
                                                 ContextIdentity = freshProgramContextIdentity
+                                                ReusableAcrossCompilations = false
                                                 Functions = otherProgramFuncs
                                             }
                                             {
                                                 ContextIdentity = dependencyIdentity
+                                                ReusableAcrossCompilations = false
                                                 Functions = reachableDependencyFuncs
                                             }
                                         ]
