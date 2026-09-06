@@ -1301,6 +1301,7 @@ let private generateBinary
                     os
                     options.EnableLeakCheck
                     prepareCachedChunk
+                    codegenPhaseRecorder
             let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
             recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
             if verbosity >= 2 then

@@ -19,7 +19,18 @@ let emitBinary
         (ARM64Symbolic.Instr list
             -> (unit -> ARM64_Encoding.PreparedChunk)
             -> ARM64_Encoding.PreparedChunk) option)
+    (phaseRecorder: (string -> float -> unit) option)
     : EmitResult =
+    let startPhase () =
+        phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
+    let recordPhase name timer =
+        match phaseRecorder, timer with
+        | Some record, Some (timer: System.Diagnostics.Stopwatch) ->
+            timer.Stop()
+            record name timer.Elapsed.TotalMilliseconds
+        | _ -> ()
+
+    let prepareTimer = startPhase ()
     let preparedChunks =
         program
         |> CodeGen.generatedProgramChunks
@@ -30,12 +41,16 @@ let emitBinary
             | Some cache when chunk.ReusableAcrossCompilations ->
                 cache chunk.Instructions prepare
             | _ -> prepare ())
+    recordPhase "ARM64 Emit Chunk Preparation" prepareTimer
 
+    let poolTimer = startPhase ()
     let (stringPool, floatPool) =
         preparedChunks
         |> Seq.collect (fun chunk -> chunk.PoolLabelRefs)
         |> ARM64_Resolve.collectPoolsFromLabelRefs
+    recordPhase "ARM64 Emit Pool Collection" poolTimer
 
+    let encodingTimer = startPhase ()
     let machineCode =
         ARM64_Encoding.encodePreparedChunksWithPools
             preparedChunks
@@ -43,11 +58,14 @@ let emitBinary
             floatPool
             os
             enableLeakCheck
+    recordPhase "ARM64 Emit Encoding" encodingTimer
 
+    let binaryTimer = startPhase ()
     let binary =
         match os with
         | Platform.MacOS ->
             Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
         | Platform.Linux ->
             Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
+    recordPhase "ARM64 Emit Binary Assembly" binaryTimer
     { MachineCode = machineCode; Binary = binary }
