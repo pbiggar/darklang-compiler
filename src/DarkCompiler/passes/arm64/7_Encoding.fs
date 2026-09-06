@@ -1074,53 +1074,13 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     | _ -> [encodeSymbolicWord symbolicInstr]
 
 type PreparedChunk = {
-    /// Fixed words are encoded once. Relocation slots contain zero until the
-    /// final program layout is known.
+    /// Fixed words and chunk-local relocations are encoded once. Remaining
+    /// relocation slots contain zero until the final program layout is known.
     MachineCodeTemplate: ARM64.MachineCode array
     Relocations: struct (int * ARM64Symbolic.Instr) array
     CodeLabels: struct (string * int) array
     PoolLabelRefs: ARM64Symbolic.LabelRef array
 }
-
-let prepareSymbolicChunk
-    (instructions: ARM64Symbolic.Instr list)
-    : PreparedChunk =
-    let words = ResizeArray<ARM64.MachineCode>()
-    let relocations = ResizeArray<struct (int * ARM64Symbolic.Instr)>()
-    let codeLabels = ResizeArray<struct (string * int)>()
-    let poolLabelRefs = ResizeArray<ARM64Symbolic.LabelRef>()
-
-    let addRelocation instr =
-        relocations.Add(struct (words.Count, instr))
-        words.Add 0u
-
-    instructions
-    |> List.iter (fun instr ->
-        match instr with
-        | ARM64Symbolic.Label name ->
-            codeLabels.Add(struct (name, words.Count * 4))
-        | ARM64Symbolic.ADRP (_, labelRef)
-        | ARM64Symbolic.ADD_label (_, _, labelRef)
-        | ARM64Symbolic.ADR (_, labelRef) ->
-            poolLabelRefs.Add labelRef
-            addRelocation instr
-        | ARM64Symbolic.CBZ _
-        | ARM64Symbolic.CBNZ _
-        | ARM64Symbolic.B_label _
-        | ARM64Symbolic.B_cond_label _
-        | ARM64Symbolic.TBZ_label _
-        | ARM64Symbolic.TBNZ_label _
-        | ARM64Symbolic.BL _ ->
-            addRelocation instr
-        | _ ->
-            words.Add (encodeSymbolicWord instr))
-
-    {
-        MachineCodeTemplate = words.ToArray()
-        Relocations = relocations.ToArray()
-        CodeLabels = codeLabels.ToArray()
-        PoolLabelRefs = poolLabelRefs.ToArray()
-    }
 
 /// Two-Pass Encoding for Label Resolution
 
@@ -1412,6 +1372,80 @@ let encodeWithLabels
         (fun label -> Map.tryFind label codeLabels)
         (LabelOffsets (stringLabels, floatLabels))
         dataLabels
+
+let prepareSymbolicChunk
+    (instructions: ARM64Symbolic.Instr list)
+    : PreparedChunk =
+    let words = ResizeArray<ARM64.MachineCode>()
+    let relocations = ResizeArray<struct (int * ARM64Symbolic.Instr)>()
+    let codeLabels = ResizeArray<struct (string * int)>()
+    let poolLabelRefs = ResizeArray<ARM64Symbolic.LabelRef>()
+
+    let addRelocation instr =
+        relocations.Add(struct (words.Count, instr))
+        words.Add 0u
+
+    instructions
+    |> List.iter (fun instr ->
+        match instr with
+        | ARM64Symbolic.Label name ->
+            codeLabels.Add(struct (name, words.Count * 4))
+        | ARM64Symbolic.ADRP (_, labelRef)
+        | ARM64Symbolic.ADD_label (_, _, labelRef)
+        | ARM64Symbolic.ADR (_, labelRef) ->
+            poolLabelRefs.Add labelRef
+            addRelocation instr
+        | ARM64Symbolic.CBZ _
+        | ARM64Symbolic.CBNZ _
+        | ARM64Symbolic.B_label _
+        | ARM64Symbolic.B_cond_label _
+        | ARM64Symbolic.TBZ_label _
+        | ARM64Symbolic.TBNZ_label _
+        | ARM64Symbolic.BL _ ->
+            addRelocation instr
+        | _ ->
+            words.Add (encodeSymbolicWord instr))
+
+    let machineCodeTemplate = words.ToArray()
+    let codeLabelArray = codeLabels.ToArray()
+    let localCodeLabels =
+        System.Collections.Generic.Dictionary<string, int>(System.StringComparer.Ordinal)
+    for struct (name, offset) in codeLabelArray do
+        localCodeLabels.[name] <- offset
+    let tryFindLocalCodeLabel label =
+        match localCodeLabels.TryGetValue label with
+        | true, offset -> Some offset
+        | false, _ -> None
+    let localTarget = function
+        | ARM64Symbolic.CBZ (_, label)
+        | ARM64Symbolic.CBNZ (_, label)
+        | ARM64Symbolic.B_label label
+        | ARM64Symbolic.B_cond_label (_, label)
+        | ARM64Symbolic.TBZ_label (_, _, label)
+        | ARM64Symbolic.TBNZ_label (_, _, label)
+        | ARM64Symbolic.BL label -> Some label
+        | ARM64Symbolic.ADR (_, ARM64Symbolic.CodeLabel label) -> Some label
+        | _ -> None
+    let unresolvedRelocations = ResizeArray<struct (int * ARM64Symbolic.Instr)>()
+    for struct (wordIndex, instr) in relocations do
+        match localTarget instr with
+        | Some label when localCodeLabels.ContainsKey label ->
+            machineCodeTemplate.[wordIndex] <-
+                encodeSymbolicWithLabels
+                    instr
+                    (wordIndex * 4)
+                    tryFindLocalCodeLabel
+                    (LiteralOffsets (Map.empty, Map.empty))
+                    Map.empty
+        | _ ->
+            unresolvedRelocations.Add(struct (wordIndex, instr))
+
+    {
+        MachineCodeTemplate = machineCodeTemplate
+        Relocations = unresolvedRelocations.ToArray()
+        CodeLabels = codeLabelArray
+        PoolLabelRefs = poolLabelRefs.ToArray()
+    }
 
 /// Compute the size of concrete code in bytes.
 let getCodeSize (instructions: ARM64.Instr list) : int =

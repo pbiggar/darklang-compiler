@@ -202,6 +202,9 @@ let testPreparedChunksPreserveWholeProgramEncoding () : TestResult =
     let chunks = [
         [
             ARM64Symbolic.Label "_start"
+            ARM64Symbolic.B_label "local_continue"
+            ARM64Symbolic.MOVZ (X0, 0us, 0)
+            ARM64Symbolic.Label "local_continue"
             ARM64Symbolic.MOVZ (X0, 42us, 0)
             ARM64Symbolic.BL "callee"
             ARM64Symbolic.ADRP (X1, literal)
@@ -234,10 +237,11 @@ let testPreparedChunksPreserveWholeProgramEncoding () : TestResult =
             actualFloats
             Platform.Linux
             false
-    if actual = expected then
+    let localRelocationWasPrepared = prepared.Head.Relocations.Length = 3
+    if actual = expected && localRelocationWasPrepared then
         Ok ()
     else
-        Error $"Prepared chunks changed whole-program encoding: expected={expected}, actual={actual}"
+        Error $"Prepared chunks changed whole-program encoding or retained a local relocation: expected={expected}, actual={actual}, first relocations={prepared.Head.Relocations.Length}"
 
 let testInvalidAssertDifferentValueIsRejected () : TestResult =
     let content =
