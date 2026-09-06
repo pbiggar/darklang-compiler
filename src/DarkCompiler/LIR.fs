@@ -328,7 +328,6 @@ type FunctionCodegenFacts = {
     RefCountDecRequirements: Map<RcKind * RcReleasePlanMemoKey, ANF.RcMetadata option>
     RefCountIncRequirements: Set<RcKind>
     RawSlotInitTypes: Set<AST.Type>
-    DirectCallTargets: Set<string>
     NeedsCliRuntimeState: bool
     NeedsCliArgvHelper: bool
     NeedsCliExecuteHelper: bool
@@ -345,152 +344,6 @@ type Function = {
     UsedCalleeSaved: PhysReg list
     CodegenFacts: FunctionCodegenFacts option
 }
-
-let private addCallFromOperand (op: Operand) (calls: Set<string>) : Set<string> =
-    match op with
-    | FuncAddr name -> Set.add name calls
-    | _ -> calls
-
-let private addCallsFromOperands (ops: Operand list) (calls: Set<string>) : Set<string> =
-    ops |> List.fold (fun current op -> addCallFromOperand op current) calls
-
-/// Add the direct function references carried by one instruction. This is the
-/// canonical call-edge analysis used both when facts are attached and by the
-/// fallback tree-shaking path for hand-built LIR.
-let addCalledFunctionsFromInstr (instr: Instr) (calls: Set<string>) : Set<string> =
-    match instr with
-    | Mov (_, src) -> addCallFromOperand src calls
-    | Phi (_, sources, _) ->
-        sources
-        |> List.fold (fun current (source, _) -> addCallFromOperand source current) calls
-    | Store _ -> calls
-    | Add (_, _, right)
-    | Sub (_, _, right)
-    | Cmp (_, right) ->
-        addCallFromOperand right calls
-    | Mul _
-    | Sdiv _
-    | Udiv _
-    | Msub _
-    | Madd _
-    | Cset _
-    | And _
-    | And_imm _
-    | Orr _
-    | Eor _
-    | Lsl _
-    | Lsr _
-    | Asr _
-    | Lsl_imm _
-    | Lsr_imm _
-    | Asr_imm _
-    | Mvn _
-    | Sxtb _
-    | Sxth _
-    | Sxtw _
-    | Uxtb _
-    | Uxth _
-    | Uxtw _ ->
-        calls
-    | Call (_, funcName, args) ->
-        calls |> Set.add funcName |> addCallsFromOperands args
-    | TailCall (funcName, args) ->
-        calls |> Set.add funcName |> addCallsFromOperands args
-    | IndirectCall (_, _, args)
-    | IndirectTailCall (_, args)
-    | ClosureCall (_, _, args)
-    | ClosureTailCall (_, args) ->
-        addCallsFromOperands args calls
-    | ClosureAlloc (_, funcName, captures) ->
-        calls |> Set.add funcName |> addCallsFromOperands captures
-    | SaveRegs _
-    | RestoreRegs _ ->
-        calls
-    | ArgMoves moves
-    | TailArgMoves moves ->
-        moves
-        |> List.fold (fun current (_, source) -> addCallFromOperand source current) calls
-    | FArgMoves _
-    | PrintInt64 _
-    | PrintUInt64 _
-    | PrintBool _
-    | PrintInt64NoNewline _
-    | PrintUInt64NoNewline _
-    | PrintBoolNoNewline _
-    | PrintFloat _
-    | PrintFloatNoNewline _
-    | PrintString _
-    | StdoutWrite _
-    | StdinReadLine _
-    | RuntimeError _
-    | RuntimeErrorString _
-    | PrintHeapStringNoNewline _
-    | PrintChars _
-    | PrintBlob _
-    | PrintList _
-    | PrintRecord _
-    | Exit
-    | FPhi _
-    | FMov _
-    | FLoad _
-    | FAdd _
-    | FSub _
-    | FMul _
-    | FDiv _
-    | FNeg _
-    | FAbs _
-    | FSqrt _
-    | FCmp _
-    | Int64ToFloat _
-    | FloatToInt64 _
-    | FloatToBits _
-    | GpToFp _
-    | FpToGp _
-    | HeapAlloc _
-    | HeapLoad _
-    | RefCountInc _
-    | RefCountDec _
-    | PrintHeapString _
-    | FileWriteFromPtr _
-    | RawAlloc _
-    | RawFree _
-    | RawGet _
-    | RawGetByte _
-    | RawWriteWord _
-    | RawWriteByte _
-    | RawSlotInit _
-    | RandomInt64 _
-    | DateTimeNow _
-    | Sleep _
-    | FloatToString _
-    | CoverageHit _ ->
-        calls
-    | CliNative (_, _, args) -> addCallsFromOperands args calls
-    | PrintSum (_, variants) ->
-        variants
-        |> List.fold (fun current (_, _, payloadType) ->
-            match payloadType with
-            | Some (AST.TList elemType) ->
-                match ListDisplay.getDisplayStringFunc elemType with
-                | Some funcName -> Set.add funcName current
-                | None -> current
-            | _ -> current) calls
-    | HeapStore (_, _, src, _) -> addCallFromOperand src calls
-    | StringConcat (_, left, right) ->
-        calls |> addCallFromOperand left |> addCallFromOperand right
-    | LoadFuncAddr (_, funcName) -> Set.add funcName calls
-    | FileReadText (_, path)
-    | FileExists (_, path)
-    | FileDelete (_, path)
-    | FileSetExecutable (_, path)
-    | RefCountIncString path
-    | RefCountDecString path
-    | RefCountIncBlob path
-    | RefCountDecBlob path ->
-        addCallFromOperand path calls
-    | FileWriteText (_, path, content)
-    | FileAppendText (_, path, content) ->
-        calls |> addCallFromOperand path |> addCallFromOperand content
 
 /// Derive the compact code-generation facts for a single function. Keeping
 /// this public also gives backend tests a slow-path oracle for carried facts.
@@ -511,14 +364,12 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
     let mutable refCountDecRequirements = Map.empty
     let mutable refCountIncRequirements = Set.empty
     let mutable rawSlotInitTypes = Set.empty
-    let mutable directCallTargets = Set.empty
     let mutable needsCliRuntimeState = false
     let mutable needsCliArgvHelper = false
     let mutable needsCliExecuteHelper = false
 
     for KeyValue (_, block) in func.CFG.Blocks do
         for instr in block.Instrs do
-            directCallTargets <- addCalledFunctionsFromInstr instr directCallTargets
             match instr with
             | ClosureAlloc (_, funcName, captures) ->
                 closurePayloadSizesFromAllocsRev <-
@@ -560,7 +411,6 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
         RefCountDecRequirements = refCountDecRequirements
         RefCountIncRequirements = refCountIncRequirements
         RawSlotInitTypes = rawSlotInitTypes
-        DirectCallTargets = directCallTargets
         NeedsCliRuntimeState = needsCliRuntimeState
         NeedsCliArgvHelper = needsCliArgvHelper
         NeedsCliExecuteHelper = needsCliExecuteHelper

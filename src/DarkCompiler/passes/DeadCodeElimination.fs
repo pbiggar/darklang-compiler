@@ -157,13 +157,10 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
 
 /// Add every function-call edge in one LIR function to an existing call set.
 let private addCalledFunctions (func: LIR.Function) (calls: Set<string>) : Set<string> =
-    match func.CodegenFacts with
-    | Some facts -> Set.union calls facts.DirectCallTargets
-    | None ->
-        func.CFG.Blocks
-        |> Map.fold (fun calls _ block ->
-            block.Instrs
-            |> List.fold (fun calls instr -> addCallsFromInstr instr calls) calls) calls
+    func.CFG.Blocks
+    |> Map.fold (fun calls _ block ->
+        block.Instrs
+        |> List.fold (fun calls instr -> addCallsFromInstr instr calls) calls) calls
 
 /// Extract function names called from a LIR function
 let getCalledFunctions (func: LIR.Function) : Set<string> =
