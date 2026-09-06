@@ -8172,7 +8172,6 @@ let private generatePreparedARM64WithOptionsAndCache
             | Error error ->
                 Crash.crash $"ARM64 cached inline generic release generation failed for {planLabel}: {error}"
 
-    let helperMetadataTimer = startPhase ()
     let closurePayloadSizes =
         Map.fold
             (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
@@ -8208,171 +8207,6 @@ let private generatePreparedARM64WithOptionsAndCache
         |> Map.ofList
 
     let ctx = { ctx with PlannedListDecHelperLabels = plannedListDecHelperLabels }
-
-    let listDecHelperDependencyLabels (helperLabel: string) : Set<string> =
-        match Map.tryFind helperLabel plannedListDecHelpers with
-        | Some (_, releasePlan) ->
-            (summarizeReleasePlan false releasePlan).ListDecHelperLabels
-            |> Set.remove helperLabel
-        | None ->
-            Set.empty
-
-    let rec expandListDecHelperDependencies (selectedLabels: Set<string>) (pendingLabels: string list) : Set<string> =
-        match pendingLabels with
-        | [] ->
-            selectedLabels
-        | helperLabel :: rest ->
-            let dependencyLabels =
-                listDecHelperDependencyLabels helperLabel
-                |> Set.filter (fun dependencyLabel ->
-                    not (Set.contains dependencyLabel selectedLabels))
-
-            expandListDecHelperDependencies
-                (Set.union selectedLabels dependencyLabels)
-                (rest @ Set.toList dependencyLabels)
-
-    let neededListRcDecHelperLabels =
-        let calledLabels =
-            rcHelperRequirements.ListDecHelperLabels
-
-        if Set.isEmpty calledLabels then
-            Set.empty
-        else
-            let rootLabels = Set.add listRefCountDecHelperLabel calledLabels
-            expandListDecHelperDependencies rootLabels (Set.toList rootLabels)
-
-    let rec rcReleasePlanContains
-        (predicate: ANF.RcReleasePlan -> bool)
-        (releasePlan: ANF.RcReleasePlan)
-        : bool =
-        if predicate releasePlan then
-            true
-        else
-            match releasePlan with
-            | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-            | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
-            | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
-                fieldReleases
-                |> List.exists (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
-                    rcReleasePlanContains predicate fieldReleasePlan)
-            | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
-                rcReleasePlanContains predicate keyRelease
-                || rcReleasePlanContains predicate valueRelease
-            | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
-                rcReleasePlanContains predicate elementRelease
-            | _ ->
-                false
-
-    let selectedPlannedListHelpersNeed predicate selectedLabels =
-        plannedListDecHelpers
-        |> Map.toList
-        |> List.exists (fun (helperLabel, (_, releasePlan)) ->
-            Set.contains helperLabel selectedLabels
-            && rcReleasePlanContains predicate releasePlan)
-
-    let selectedStaticListHelpersNeed
-        (directSpecNeed: ListRefCountDecHelperSpec -> bool)
-        (selectedLabels: Set<string>)
-        : bool =
-        listRefCountDecHelperSpecs
-        |> List.exists (fun spec ->
-            Set.contains spec.Label selectedLabels
-            && directSpecNeed spec)
-
-    let needsListRcIncHelper =
-        rcHelperRequirements.NeedsListRcIncHelper
-
-    let needsDictRcIncHelper =
-        rcHelperRequirements.NeedsDictRcIncHelper
-
-    let dictDecHelperDependencyLabels (helperLabel: string) : Set<string> =
-        match Map.tryFind helperLabel plannedDictDecHelpers with
-        | Some (ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, valueRelease))) ->
-            match valueRelease with
-            | ANF.RootRelease (_, ANF.TaggedList, _) ->
-                Set.singleton dictRefCountDecListValueHelperLabel
-            | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                Set.singleton (dictDecHelperForReleasePlan valueRelease)
-            | ANF.RootRelease (_, ANF.GenericHeap, _) ->
-                Set.union
-                    (summarizeReleasePlan false valueRelease).ListDecHelperLabels
-                    (summarizeReleasePlan true valueRelease).DictDecHelperLabels
-            | _ ->
-                Set.empty
-        | Some other ->
-            Crash.crash $"ARM64 planned dict dependency labels require a DictHeap release plan, got {other}"
-        | None ->
-            match helperLabel with
-            | label when label = dictRefCountDecListValueHelperLabel ->
-                Set.singleton listRefCountDecHelperLabel
-            | label when label = dictRefCountDecDictValueHelperLabel ->
-                Set.singleton dictRefCountDecHelperLabel
-            | label when label = dictRefCountDecDictListValueHelperLabel ->
-                Set.singleton dictRefCountDecListValueHelperLabel
-            | label when label = dictRefCountDecTupleStringListValueHelperLabel ->
-                Set.singleton listRefCountDecHelperLabel
-            | label when label = dictRefCountDecTupleStringListDictValueHelperLabel ->
-                Set.ofList [ listRefCountDecHelperLabel; dictRefCountDecHelperLabel ]
-            | _ ->
-                Set.empty
-
-    let neededDictRcDecHelperLabels =
-        let listHelperDictLabels =
-            neededListRcDecHelperLabels
-            |> Set.toList
-            |> List.map (fun helperLabel ->
-                let staticLabels = listDecHelperDictDependencyLabels helperLabel
-                let plannedLabels =
-                    plannedListDecHelpers
-                    |> Map.tryFind helperLabel
-                    |> Option.map (fun (_, releasePlan) ->
-                        (summarizeReleasePlan false releasePlan).DictDecHelperLabels)
-                    |> Option.defaultValue Set.empty
-
-                Set.union staticLabels plannedLabels)
-            |> unionLabelSets
-
-        let directLabels =
-            rcHelperRequirements.DictDecHelperLabels
-            |> Set.union listHelperDictLabels
-
-        directLabels
-        |> Set.toList
-        |> List.map dictDecHelperDependencyLabels
-        |> unionLabelSets
-        |> Set.union directLabels
-
-    let needsDictRcDecHelper =
-        Set.contains dictRefCountDecHelperLabel neededDictRcDecHelperLabels
-
-    let needsDictRcDecListValueHelper =
-        Set.contains dictRefCountDecListValueHelperLabel neededDictRcDecHelperLabels
-
-    let needsDictRcDecDictValueHelper =
-        Set.contains dictRefCountDecDictValueHelperLabel neededDictRcDecHelperLabels
-
-    let needsDictRcDecDictListValueHelper =
-        Set.contains dictRefCountDecDictListValueHelperLabel neededDictRcDecHelperLabels
-
-    let needsDictRcDecTupleStringListValueHelper =
-        Set.contains dictRefCountDecTupleStringListValueHelperLabel neededDictRcDecHelperLabels
-
-    let needsDictRcDecTupleStringListDictValueHelper =
-        Set.contains dictRefCountDecTupleStringListDictValueHelperLabel neededDictRcDecHelperLabels
-
-    let needsDictRcDecSumStringValueHelper =
-        Set.contains dictRefCountDecSumStringValueHelperLabel neededDictRcDecHelperLabels
-
-    let needsClosureRcIncHelper =
-        rcHelperRequirements.NeedsClosureRcIncHelper
-
-    let needsClosureRcDecHelper =
-        rcHelperRequirements.NeedsClosureRcDecHelper
-
-    let directlyNeedsStreamRcDecHelper =
-        rcHelperRequirements.NeedsStreamRcDecHelper
-
-    recordPhase "ARM64 Metadata Helper Planning" helperMetadataTimer
     recordPhase "ARM64 Codegen Metadata" metadataTimer
 
     let convertCached func =
@@ -8402,88 +8236,238 @@ let private generatePreparedARM64WithOptionsAndCache
     convertedFunctionChunks
     |> Result.map (fun functionChunks ->
         let helperTimer = startPhase ()
-        let helperSelectionTimer = startPhase ()
-        let listRcDecHelperLabelsFromDictHelpers =
-            neededDictRcDecHelperLabels
-            |> Set.toList
-            |> List.map dictDecHelperDependencyLabels
-            |> unionLabelSets
-            |> Set.filter (fun label -> label = listRefCountDecHelperLabel)
-
-        let selectedListRcDecHelperLabels =
-            Set.union neededListRcDecHelperLabels listRcDecHelperLabelsFromDictHelpers
-
-        let selectedListHelpersNeedDictDecHelper =
-            selectedStaticListHelpersNeed
-                (fun spec -> spec.ReleaseLeafDictPayload)
-                selectedListRcDecHelperLabels
-            || selectedPlannedListHelpersNeed
-                (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
-                selectedListRcDecHelperLabels
-
-        let selectedListHelpersNeedClosureDecHelper =
-            selectedStaticListHelpersNeed
-                (fun spec -> spec.ReleaseLeafClosurePayload)
-                selectedListRcDecHelperLabels
-            || selectedPlannedListHelpersNeed
-                (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
-                selectedListRcDecHelperLabels
-
-        let plannedDictHelpersNeedClosureDecHelper =
-            plannedDictDecHelpers
-            |> Map.exists (fun _ releasePlan ->
-                rcReleasePlanContains
-                    (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
-                    releasePlan)
-
-        let selectedListHelpersNeedStreamDecHelper =
-            selectedPlannedListHelpersNeed
-                (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false)
-                selectedListRcDecHelperLabels
-
-        let plannedDictHelpersNeedStreamDecHelper =
-            plannedDictDecHelpers
-            |> Map.exists (fun _ releasePlan ->
-                rcReleasePlanContains
-                    (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false)
-                    releasePlan)
-
-        let selectedClosureHelpersNeedStreamDecHelper =
-            if needsClosureRcDecHelper
-               || selectedListHelpersNeedClosureDecHelper
-               || plannedDictHelpersNeedClosureDecHelper then
-                ctx.ClosureCaptureTypes
-                |> Map.exists (fun _ captureTypes ->
-                    captureTypes
-                    |> List.exists (fun captureType ->
-                        tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType
-                        |> Option.exists (rcReleasePlanContains
-                            (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false))))
-            else
-                false
-
-        let needsStreamRcDecHelper =
-            directlyNeedsStreamRcDecHelper
-            || selectedListHelpersNeedStreamDecHelper
-            || plannedDictHelpersNeedStreamDecHelper
-            || selectedClosureHelpersNeedStreamDecHelper
-
-        let emitClosureRcDecHelper =
-            needsClosureRcDecHelper
-            || selectedListHelpersNeedClosureDecHelper
-            || plannedDictHelpersNeedClosureDecHelper
-            || needsStreamRcDecHelper
-
-        recordPhase "ARM64 Helper Selection" helperSelectionTimer
         let generateHelperInstructions () =
+            // The helper cache key below completely describes helper planning
+            // as well as the emitted helper instructions. Keep the dependency
+            // closure inside the cache miss path so repeated executables do
+            // not rediscover an already-generated plan.
+            let helperMetadataTimer = startPhase ()
+            let listDecHelperDependencyLabels (helperLabel: string) : Set<string> =
+                match Map.tryFind helperLabel plannedListDecHelpers with
+                | Some (_, releasePlan) ->
+                    (summarizeReleasePlan false releasePlan).ListDecHelperLabels
+                    |> Set.remove helperLabel
+                | None ->
+                    Set.empty
+
+            let rec expandListDecHelperDependencies
+                (selectedLabels: Set<string>)
+                (pendingLabels: string list)
+                : Set<string> =
+                match pendingLabels with
+                | [] ->
+                    selectedLabels
+                | helperLabel :: rest ->
+                    let dependencyLabels =
+                        listDecHelperDependencyLabels helperLabel
+                        |> Set.filter (fun dependencyLabel ->
+                            not (Set.contains dependencyLabel selectedLabels))
+
+                    expandListDecHelperDependencies
+                        (Set.union selectedLabels dependencyLabels)
+                        (rest @ Set.toList dependencyLabels)
+
+            let neededListRcDecHelperLabels =
+                let calledLabels = rcHelperRequirements.ListDecHelperLabels
+                if Set.isEmpty calledLabels then
+                    Set.empty
+                else
+                    let rootLabels = Set.add listRefCountDecHelperLabel calledLabels
+                    expandListDecHelperDependencies rootLabels (Set.toList rootLabels)
+
+            let rec rcReleasePlanContains
+                (predicate: ANF.RcReleasePlan -> bool)
+                (releasePlan: ANF.RcReleasePlan)
+                : bool =
+                if predicate releasePlan then
+                    true
+                else
+                    match releasePlan with
+                    | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+                    | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+                    | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+                        fieldReleases
+                        |> List.exists (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                            rcReleasePlanContains predicate fieldReleasePlan)
+                    | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+                        rcReleasePlanContains predicate keyRelease
+                        || rcReleasePlanContains predicate valueRelease
+                    | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+                        rcReleasePlanContains predicate elementRelease
+                    | _ ->
+                        false
+
+            let selectedPlannedListHelpersNeed predicate selectedLabels =
+                plannedListDecHelpers
+                |> Map.toList
+                |> List.exists (fun (helperLabel, (_, releasePlan)) ->
+                    Set.contains helperLabel selectedLabels
+                    && rcReleasePlanContains predicate releasePlan)
+
+            let selectedStaticListHelpersNeed
+                (directSpecNeed: ListRefCountDecHelperSpec -> bool)
+                (selectedLabels: Set<string>)
+                : bool =
+                listRefCountDecHelperSpecs
+                |> List.exists (fun spec ->
+                    Set.contains spec.Label selectedLabels
+                    && directSpecNeed spec)
+
+            let dictDecHelperDependencyLabels (helperLabel: string) : Set<string> =
+                match Map.tryFind helperLabel plannedDictDecHelpers with
+                | Some (ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, valueRelease))) ->
+                    match valueRelease with
+                    | ANF.RootRelease (_, ANF.TaggedList, _) ->
+                        Set.singleton dictRefCountDecListValueHelperLabel
+                    | ANF.RootRelease (_, ANF.DictHeap, _) ->
+                        Set.singleton (dictDecHelperForReleasePlan valueRelease)
+                    | ANF.RootRelease (_, ANF.GenericHeap, _) ->
+                        Set.union
+                            (summarizeReleasePlan false valueRelease).ListDecHelperLabels
+                            (summarizeReleasePlan true valueRelease).DictDecHelperLabels
+                    | _ ->
+                        Set.empty
+                | Some other ->
+                    Crash.crash $"ARM64 planned dict dependency labels require a DictHeap release plan, got {other}"
+                | None ->
+                    match helperLabel with
+                    | label when label = dictRefCountDecListValueHelperLabel ->
+                        Set.singleton listRefCountDecHelperLabel
+                    | label when label = dictRefCountDecDictValueHelperLabel ->
+                        Set.singleton dictRefCountDecHelperLabel
+                    | label when label = dictRefCountDecDictListValueHelperLabel ->
+                        Set.singleton dictRefCountDecListValueHelperLabel
+                    | label when label = dictRefCountDecTupleStringListValueHelperLabel ->
+                        Set.singleton listRefCountDecHelperLabel
+                    | label when label = dictRefCountDecTupleStringListDictValueHelperLabel ->
+                        Set.ofList [ listRefCountDecHelperLabel; dictRefCountDecHelperLabel ]
+                    | _ ->
+                        Set.empty
+
+            let neededDictRcDecHelperLabels =
+                let listHelperDictLabels =
+                    neededListRcDecHelperLabels
+                    |> Set.toList
+                    |> List.map (fun helperLabel ->
+                        let staticLabels = listDecHelperDictDependencyLabels helperLabel
+                        let plannedLabels =
+                            plannedListDecHelpers
+                            |> Map.tryFind helperLabel
+                            |> Option.map (fun (_, releasePlan) ->
+                                (summarizeReleasePlan false releasePlan).DictDecHelperLabels)
+                            |> Option.defaultValue Set.empty
+                        Set.union staticLabels plannedLabels)
+                    |> unionLabelSets
+
+                let directLabels =
+                    rcHelperRequirements.DictDecHelperLabels
+                    |> Set.union listHelperDictLabels
+
+                directLabels
+                |> Set.toList
+                |> List.map dictDecHelperDependencyLabels
+                |> unionLabelSets
+                |> Set.union directLabels
+
+            let listRcDecHelperLabelsFromDictHelpers =
+                neededDictRcDecHelperLabels
+                |> Set.toList
+                |> List.map dictDecHelperDependencyLabels
+                |> unionLabelSets
+                |> Set.filter (fun label -> label = listRefCountDecHelperLabel)
+
+            let selectedListRcDecHelperLabels =
+                Set.union neededListRcDecHelperLabels listRcDecHelperLabelsFromDictHelpers
+
+            let needsDictRcDecHelper =
+                Set.contains dictRefCountDecHelperLabel neededDictRcDecHelperLabels
+            let needsDictRcDecListValueHelper =
+                Set.contains dictRefCountDecListValueHelperLabel neededDictRcDecHelperLabels
+            let needsDictRcDecDictValueHelper =
+                Set.contains dictRefCountDecDictValueHelperLabel neededDictRcDecHelperLabels
+            let needsDictRcDecDictListValueHelper =
+                Set.contains dictRefCountDecDictListValueHelperLabel neededDictRcDecHelperLabels
+            let needsDictRcDecTupleStringListValueHelper =
+                Set.contains dictRefCountDecTupleStringListValueHelperLabel neededDictRcDecHelperLabels
+            let needsDictRcDecTupleStringListDictValueHelper =
+                Set.contains dictRefCountDecTupleStringListDictValueHelperLabel neededDictRcDecHelperLabels
+            let needsDictRcDecSumStringValueHelper =
+                Set.contains dictRefCountDecSumStringValueHelperLabel neededDictRcDecHelperLabels
+
+            recordPhase "ARM64 Metadata Helper Planning" helperMetadataTimer
+
+            let helperSelectionTimer = startPhase ()
+            let selectedListHelpersNeedDictDecHelper =
+                selectedStaticListHelpersNeed
+                    (fun spec -> spec.ReleaseLeafDictPayload)
+                    selectedListRcDecHelperLabels
+                || selectedPlannedListHelpersNeed
+                    (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
+                    selectedListRcDecHelperLabels
+
+            let selectedListHelpersNeedClosureDecHelper =
+                selectedStaticListHelpersNeed
+                    (fun spec -> spec.ReleaseLeafClosurePayload)
+                    selectedListRcDecHelperLabels
+                || selectedPlannedListHelpersNeed
+                    (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
+                    selectedListRcDecHelperLabels
+
+            let plannedDictHelpersNeedClosureDecHelper =
+                plannedDictDecHelpers
+                |> Map.exists (fun _ releasePlan ->
+                    rcReleasePlanContains
+                        (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
+                        releasePlan)
+
+            let selectedListHelpersNeedStreamDecHelper =
+                selectedPlannedListHelpersNeed
+                    (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false)
+                    selectedListRcDecHelperLabels
+
+            let plannedDictHelpersNeedStreamDecHelper =
+                plannedDictDecHelpers
+                |> Map.exists (fun _ releasePlan ->
+                    rcReleasePlanContains
+                        (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false)
+                        releasePlan)
+
+            let needsClosureRcDecHelper = rcHelperRequirements.NeedsClosureRcDecHelper
+            let selectedClosureHelpersNeedStreamDecHelper =
+                if needsClosureRcDecHelper
+                   || selectedListHelpersNeedClosureDecHelper
+                   || plannedDictHelpersNeedClosureDecHelper then
+                    ctx.ClosureCaptureTypes
+                    |> Map.exists (fun _ captureTypes ->
+                        captureTypes
+                        |> List.exists (fun captureType ->
+                            tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType
+                            |> Option.exists (rcReleasePlanContains
+                                (function ANF.RootRelease (_, ANF.StreamHeap, _) -> true | _ -> false))))
+                else
+                    false
+
+            let needsStreamRcDecHelper =
+                rcHelperRequirements.NeedsStreamRcDecHelper
+                || selectedListHelpersNeedStreamDecHelper
+                || plannedDictHelpersNeedStreamDecHelper
+                || selectedClosureHelpersNeedStreamDecHelper
+
+            let emitClosureRcDecHelper =
+                needsClosureRcDecHelper
+                || selectedListHelpersNeedClosureDecHelper
+                || plannedDictHelpersNeedClosureDecHelper
+                || needsStreamRcDecHelper
+
+            recordPhase "ARM64 Helper Selection" helperSelectionTimer
             let listHelperTimer = startPhase ()
             let listRcHelpers =
-                (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
+                (if rcHelperRequirements.NeedsListRcIncHelper then generateListRefCountIncHelper () else [])
                 @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
             recordPhase "ARM64 Helper List Generation" listHelperTimer
             let dictHelperTimer = startPhase ()
             let dictRcHelpers =
-                (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
+                (if rcHelperRequirements.NeedsDictRcIncHelper then generateDictRefCountIncHelper () else [])
                 @ (plannedDictDecHelpers
                    |> Map.toList
                    |> List.collect (fun (helperLabel, releasePlan) ->
@@ -8498,7 +8482,7 @@ let private generatePreparedARM64WithOptionsAndCache
             recordPhase "ARM64 Helper Dict Generation" dictHelperTimer
             let closureHelperTimer = startPhase ()
             let closureRcHelpers =
-                (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
+                (if rcHelperRequirements.NeedsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
                 @ (if emitClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
             let streamRcHelpers =
                 if needsStreamRcDecHelper then generateStreamRefCountDecHelper ctx else []
