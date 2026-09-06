@@ -1462,6 +1462,36 @@ let private mergeReturnTypes
     : Map<string, AST.Type> =
     Map.fold (fun acc k v -> Map.add k v acc) baseReturnTypes overlayReturnTypes
 
+let private packageCatalogFunctionNames =
+    Set.ofList [
+        "Builtin.pmFindValuesByValueType"
+        "Builtin.pmGetLocationsByValue"
+        "Builtin.pmEvaluateValue"
+    ]
+
+/// Generic functions whose call graph can reach a package-catalog intrinsic.
+/// This lets ordinary programs skip catalog specialization without changing
+/// the behavior of generic wrappers around the catalog API.
+let private buildPackageCatalogGenericCallers
+    (genericFuncDefs: AST_to_ANF.GenericFuncDefs)
+    : Set<string> =
+    let callsByFunction =
+        genericFuncDefs
+        |> Map.map (fun _ definition ->
+            AST_to_ANF.collectCalledFunctions definition.Body)
+    let rec findFixedPoint callers =
+        let targets = Set.union packageCatalogFunctionNames callers
+        let next =
+            callsByFunction
+            |> Map.fold (fun found name calls ->
+                if calls |> Set.exists (fun called -> Set.contains called targets) then
+                    Set.add name found
+                else
+                    found) callers
+        if Set.count next = Set.count callers then callers
+        else findFixedPoint next
+    findFixedPoint Set.empty
+
 /// Shared compilation context used across pipeline steps
 type PipelineContext = {
     Target: Platform.Target
@@ -1471,6 +1501,7 @@ type PipelineContext = {
     Registries: AST_to_ANF.Registries
     BaseFuncNames: Set<string>
     ReturnTypes: Map<string, AST.Type>
+    PackageCatalogGenericCallers: Set<string>
 }
 
 let private buildContext
@@ -1490,6 +1521,8 @@ let private buildContext
         Registries = registries
         BaseFuncNames = baseFuncNames
         ReturnTypes = returnTypes
+        PackageCatalogGenericCallers =
+            buildPackageCatalogGenericCallers genericFuncDefs
     }
 
 /// Compiled preamble context - extends stdlib for a test file
@@ -2686,7 +2719,7 @@ let private validateDistinctCatalogHashes
     |> List.fold folder (Ok Set.empty)
     |> Result.map (fun _ -> ())
 
-let private materializePackageValueCatalog
+let private materializeReachablePackageValueCatalog
     (baseContext: PipelineContext)
     (warningSettings: AST.WarningSettings)
     (catalog: PackageValueCatalog)
@@ -2845,6 +2878,29 @@ let private materializePackageValueCatalog
             |> Result.map (fun (_, AST.Program generatedTopLevels, _) ->
                 let (AST.Program userTopLevels) = typedProgram
                 AST.Program (generatedTopLevels @ userTopLevels)))
+
+let private materializePackageValueCatalog
+    (baseContext: PipelineContext)
+    (warningSettings: AST.WarningSettings)
+    (catalog: PackageValueCatalog)
+    (typedProgram: AST.Program)
+    : Result<AST.Program, string> =
+    let programCalls = collectProgramCalls typedProgram
+    let mightReachCatalog =
+        programCalls
+        |> Set.exists (fun called ->
+            Set.contains called packageCatalogFunctionNames
+            || Set.contains called baseContext.PackageCatalogGenericCallers)
+    if mightReachCatalog then
+        materializeReachablePackageValueCatalog
+            baseContext
+            warningSettings
+            catalog
+            typedProgram
+    else
+        let (PackageValueCatalog entries) = catalog
+        validateDistinctCatalogHashes entries
+        |> Result.map (fun () -> typedProgram)
 
 /// Compile a user/test program against a prebuilt stdlib/preamble context
 let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
