@@ -64,7 +64,11 @@ and escaping instead of generating `StringConcat` trees. A caller-owned
 compilation session reuses generated codec declarations by serialization
 direction and the complete reachable shape of the resolved type; the cache is
 bounded to that session and distinguishes same-named local declarations with
-different fields or variants.
+different fields or variants. Once converted, compiler-generated JSON codecs,
+equality helpers, their generic specializations, and their lifted dependencies
+are also compiled to allocated LIR once per session and shared by subsequent
+programs. Code-generation metadata is summarized for those reusable groups and
+merged with each program's small fresh summary.
 
 | Dark type | JSON wire shape |
 | --- | --- |

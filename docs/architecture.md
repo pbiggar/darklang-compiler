@@ -118,8 +118,18 @@ native syscall/ABI boundary only in the selected backend. See
 
 ## Compiler Cache
 
-The compiler does not use a compile cache.
-remains as a historical record of the removed cache design.
+The compiler has no process-global compile cache. Callers may instead provide
+a bounded `CompilationSession` when compiling a related group of programs.
+Within that explicit lifetime the compiler reuses generated-declaration ANF,
+fully lowered compiler-generated dependencies, target-specific function
+chunks, prepared emission chunks, and composable code-generation metadata.
+Disposing the session releases all of those entries. One-shot CLI compilation
+uses no session and therefore retains no compilation state.
+
+The process entry point is a fixed `_start` trampoline which calls
+`__dark_compiler_program_entry`. The changing source expression lives in the
+latter function, allowing a session to reuse `_start` without giving tests a
+different compiler path from production callers.
 
 ## Key Invariants
 
