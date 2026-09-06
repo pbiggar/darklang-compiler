@@ -170,6 +170,13 @@ type internal CompiledDependencyConfig = {
     NonInlineableFunctionNames: Set<string>
 }
 
+[<NoComparison>]
+type internal StartCompilationConfig = {
+    Target: Platform.Target
+    Options: CompilerOptions
+    BoundaryProgramType: AST.Type
+}
+
 type private Arm64InstructionChunkReferenceComparer() =
     interface IEqualityComparer<ARM64Symbolic.Instr list> with
         member _.Equals(left, right) = Object.ReferenceEquals(left, right)
@@ -195,6 +202,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
             Dictionary<
                 CompiledDependencyConfig,
                 Result<LIR.Function list, string>>>(ObjectReferenceComparer())
+    let compiledStartFunctions =
+        Dictionary<StartCompilationConfig, Result<LIR.Function list, string>>()
     let arm64MetadataGroupsByContext =
         Dictionary<
             obj,
@@ -238,6 +247,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable anfDependencyMissCount = 0
     let mutable compiledDependencyHitCount = 0
     let mutable compiledDependencyMissCount = 0
+    let mutable compiledStartHitCount = 0
+    let mutable compiledStartMissCount = 0
     let mutable arm64StartCodegenHitCount = 0
     let mutable arm64MetadataGroupHitCount = 0
     let mutable arm64MetadataGroupMissCount = 0
@@ -296,6 +307,23 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 let result = compile ()
                 entries.[config] <- result
                 compiledDependencyMissCount <- compiledDependencyMissCount + 1
+                result
+
+    member internal _.CompileStart
+        (config: StartCompilationConfig)
+        (compile: unit -> Result<LIR.Function list, string>)
+        : Result<LIR.Function list, string> =
+        if disposed || config.Options.EnableCoverage then
+            compile ()
+        else
+            match compiledStartFunctions.TryGetValue config with
+            | true, result ->
+                compiledStartHitCount <- compiledStartHitCount + 1
+                result
+            | false, _ ->
+                let result = compile ()
+                compiledStartFunctions.[config] <- result
+                compiledStartMissCount <- compiledStartMissCount + 1
                 result
 
     member internal _.Arm64MetadataGroup
@@ -470,6 +498,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CachedCompiledDependencyCount =
         if disposed then 0
         else compiledDependenciesByIdentity.Values |> Seq.sumBy (fun entries -> entries.Count)
+    member _.CachedCompiledStartCount = if disposed then 0 else compiledStartFunctions.Count
     member _.CachedArm64MetadataGroupCount =
         if disposed then 0
         else arm64MetadataGroupsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
@@ -485,6 +514,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.AnfDependencyMissCount = anfDependencyMissCount
     member _.CompiledDependencyHitCount = compiledDependencyHitCount
     member _.CompiledDependencyMissCount = compiledDependencyMissCount
+    member _.CompiledStartHitCount = compiledStartHitCount
+    member _.CompiledStartMissCount = compiledStartMissCount
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
     member _.Arm64StartCodegenHitCount = arm64StartCodegenHitCount
@@ -499,6 +530,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             (jsonPlanning :> System.IDisposable).Dispose()
             anfDependenciesByContext.Clear()
             compiledDependenciesByIdentity.Clear()
+            compiledStartFunctions.Clear()
             arm64MetadataGroupsByContext.Clear()
             arm64FunctionsByContext.Clear()
             arm64FunctionsByReferenceAndContext.Clear()
@@ -2830,7 +2862,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         FuncParams =
                                             Map.add programEntryName [] userRegistries.FuncParams
                                 }
-                                let startLirResult =
+                                let compileStart () =
                                     buildAnf
                                         plan.Verbosity
                                         plan.Options
@@ -2862,6 +2894,18 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             startTypeMap
                                             startRegistries
                                             (Map.add programEntryName boundaryProgramType externalReturnTypes))
+                                let startLirResult =
+                                    match plan.Session with
+                                    | Some current ->
+                                        current.CompileStart
+                                            {
+                                                Target = plan.BaseContext.Target
+                                                Options = plan.Options
+                                                BoundaryProgramType = boundaryProgramType
+                                            }
+                                            compileStart
+                                    | None ->
+                                        compileStart ()
                                 match programLirResult, startLirResult with
                                 | Error err, _
                                 | _, Error err -> Error err

@@ -301,8 +301,12 @@ let testStableStartTrampolineIsReused
     expectCompiled (compile stdlib session CompilerLibrary.defaultOptions "1L + 1L")
     |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions "2L + 2L"))
     |> Result.bind (fun () ->
-        if session.Arm64StartCodegenHitCount > 0 then Ok ()
-        else Error "Expected source-independent _start code to be reused")
+        if session.CompiledStartHitCount > 0
+           && session.CompiledStartMissCount = 1
+           && session.Arm64StartCodegenHitCount > 0 then
+            Ok ()
+        else
+            Error $"Expected source-independent _start lowering and codegen to be reused, got lowering hits={session.CompiledStartHitCount}, misses={session.CompiledStartMissCount}, codegen hits={session.Arm64StartCodegenHitCount}")
 
 let testDependencyMetadataIsReusedCompositionally
     (stdlib: CompilerLibrary.StdlibResult)
