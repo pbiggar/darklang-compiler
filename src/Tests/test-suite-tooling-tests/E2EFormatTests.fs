@@ -490,9 +490,9 @@ let testBuildsParseableUniversalBatchSource () : TestResult =
                 let source = buildBatchSource prepared
                 match CompilerLibrary.parseProgram false source with
                 | Error msg -> Error $"Generated batch source did not parse: {msg}\n{source}"
-                | Ok _ when not (source.Contains("_Check0(_unit: Unit): Bool =")) ->
+                | Ok _ when not (source.Contains("_Check0(seed: Int64): Bool =")) ->
                     Error $"Generated batch did not isolate each check in a function:\n{source}"
-                | Ok _ when not (source.Contains("_Run(check: (Unit) -> Bool): Bool =")) ->
+                | Ok _ when not (source.Contains("fun value -> if seed == 0L then value else false")) ->
                     Error $"Generated batch check was not protected from inlining:\n{source}"
                 | Ok _ when not (source.Contains("_Result0 = e2eBatch")) ->
                     Error $"Generated batch did not eagerly call the first check:\n{source}"
@@ -519,13 +519,13 @@ let testDoesNotBatchTestsWithProcessInputs () : TestResult =
         | Ok tests -> Error $"Expected exactly 1 parsed test, got {tests.Length}"
         | Error msg -> Error $"Expected process-input fixture to parse, but got error: {msg}")
 
-let testDoesNotBatchEqualityThatCannotBeNestedInFunction () : TestResult =
+let testBatchesEqualityInsideExplicitResultBinding () : TestResult =
     let testSource =
         "let identityInt(value: Int) : Int = value identityInt(9223372036854775808I) = 9223372036854775808I\n"
     withTempFileNamed "ordinary.e2e" testSource (fun path ->
         match parseE2ETestFile path with
-        | Ok [test] when Option.isNone (tryPrepareBatchTest test) -> Ok ()
-        | Ok [test] -> Error $"Expected locally-declared equality to remain isolated: {test}"
+        | Ok [test] when Option.isSome (tryPrepareBatchTest test) -> Ok ()
+        | Ok [test] -> Error $"Expected locally-declared equality to embed in an explicit result binding: {test}"
         | Ok tests -> Error $"Expected exactly 1 parsed test, got {tests.Length}"
         | Error msg -> Error $"Expected local-declaration fixture to parse, but got error: {msg}")
 
@@ -553,5 +553,5 @@ let tests = [
     ("parses batch bitmask results", testParsesBatchBitmaskResults)
     ("rejects invalid batch bitmask results", testRejectsInvalidBatchBitmaskResults)
     ("does not batch tests with process inputs", testDoesNotBatchTestsWithProcessInputs)
-    ("does not batch equality that cannot be nested in function", testDoesNotBatchEqualityThatCannotBeNestedInFunction)
+    ("batches equality inside explicit result binding", testBatchesEqualityInsideExplicitResultBinding)
 ]
