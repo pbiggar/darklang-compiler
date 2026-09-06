@@ -2572,7 +2572,7 @@ let parseSourceProgram
             |> Result.bind (fun name ->
                 parseSourceTree allowInternal sourceUnit.Source
                 |> Result.bind (fun parsed ->
-                    parseProgram allowInternal sourceUnit.Source
+                    InterpreterParser.lowerParsedSource allowInternal parsed
                     |> Result.bind (fun (AST.Program topLevels) ->
                         let parsedUnit : NameSyntax.ParsedSourceUnit =
                             { Name = name

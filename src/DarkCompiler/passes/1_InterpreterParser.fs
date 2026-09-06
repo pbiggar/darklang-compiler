@@ -3124,10 +3124,17 @@ let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.
         else validatePublicDictTypeArity tokens |> Result.bind (fun () -> parse tokens))
     |> Result.map (NameSyntax.wrapModules sourceModules)
 
-/// Parse and cross the explicit source-tree to compiler-AST boundary.
-let parseString (allowInternal: bool) (input: string) : Result<Program, string> =
-    parseSourceString allowInternal input
-    |> Result.bind NameSyntax.normalizeSource
+/// Cross an already-parsed source tree to the compiler-AST boundary.
+let lowerParsedSource
+    (allowInternal: bool)
+    (parsed: NameSyntax.ParsedSource)
+    : Result<Program, string> =
+    NameSyntax.normalizeSource parsed
     |> Result.bind (fun program ->
         if allowInternal then Ok program
         else validateNoInternalIdentifiers program)
+
+/// Parse and cross the explicit source-tree to compiler-AST boundary.
+let parseString (allowInternal: bool) (input: string) : Result<Program, string> =
+    parseSourceString allowInternal input
+    |> Result.bind (lowerParsedSource allowInternal)
