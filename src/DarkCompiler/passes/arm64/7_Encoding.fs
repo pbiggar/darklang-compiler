@@ -1210,14 +1210,14 @@ let private labelRefDescription (labelRef: ARM64Symbolic.LabelRef) : string =
 let private encodeSymbolicWithLabels
     (instr: ARM64Symbolic.Instr)
     (currentOffset: int)
-    (codeLabels: Map<string, int>)
+    (tryFindCodeLabel: string -> int option)
     (dataOffsets: DataOffsets)
     (dataLabels: Map<string, int>)
     : ARM64.MachineCode =
     match instr with
     // Label-based branches - resolve to offsets
     | ARM64Symbolic.CBZ (reg, label) ->
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             // Compute relative offset in instructions (divide by 4)
             let byteOffset = targetOffset - currentOffset
@@ -1233,7 +1233,7 @@ let private encodeSymbolicWithLabels
             Crash.crash $"CBZ: Label '{label}' not found in labelMap"
 
     | ARM64Symbolic.CBNZ (reg, label) ->
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
             let instrOffset = byteOffset / 4
@@ -1248,7 +1248,7 @@ let private encodeSymbolicWithLabels
             Crash.crash $"CBNZ: Label '{label}' not found in labelMap"
 
     | ARM64Symbolic.TBZ_label (reg, bit, label) ->
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
             let instrOffset = byteOffset / 4
@@ -1264,7 +1264,7 @@ let private encodeSymbolicWithLabels
             Crash.crash $"TBZ: Label '{label}' not found in labelMap"
 
     | ARM64Symbolic.TBNZ_label (reg, bit, label) ->
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
             let instrOffset = byteOffset / 4
@@ -1280,7 +1280,7 @@ let private encodeSymbolicWithLabels
             Crash.crash $"TBNZ: Label '{label}' not found in labelMap"
 
     | ARM64Symbolic.B_label label ->
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
             let instrOffset = byteOffset / 4
@@ -1292,7 +1292,7 @@ let private encodeSymbolicWithLabels
             Crash.crash $"B: Label '{label}' not found in labelMap"
 
     | ARM64Symbolic.B_cond_label (cond, label) ->
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
             let instrOffset = byteOffset / 4
@@ -1316,7 +1316,7 @@ let private encodeSymbolicWithLabels
             Crash.crash $"B.cond: Label '{label}' not found in labelMap"
 
     | ARM64Symbolic.BL label ->
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             let byteOffset = targetOffset - currentOffset
             let instrOffset = byteOffset / 4
@@ -1358,7 +1358,7 @@ let private encodeSymbolicWithLabels
         // Encoding: 0 immlo(2) 10000 immhi(19) Rd(5)
         // immlo is bits 0-1, immhi is bits 2-20 of the 21-bit signed offset
         let label = labelRefDescription labelRef
-        match Map.tryFind label codeLabels with
+        match tryFindCodeLabel label with
         | Some targetOffset ->
             // Compute byte offset from current PC to label
             let byteOffset = targetOffset - currentOffset
@@ -1409,7 +1409,7 @@ let encodeWithLabels
     encodeSymbolicWithLabels
         (ARM64Symbolic.ofARM64 instr)
         currentOffset
-        codeLabels
+        (fun label -> Map.tryFind label codeLabels)
         (LabelOffsets (stringLabels, floatLabels))
         dataLabels
 
@@ -1544,15 +1544,16 @@ let encodePreparedChunksWithPools
     let codeFileOffset =
         computeCodeFileOffset os stringPool floatPool enableLeakCheck
     // Step 1: Compose cached relative chunk layouts into one program layout.
-    let (codeSize, rawCodeLabels) =
-        chunks
-        |> List.fold (fun (chunkOffset, labels) chunk ->
-            let labels =
-                chunk.CodeLabels
-                |> Array.fold (fun labels struct (name, relativeOffset) ->
-                    Map.add name (chunkOffset + relativeOffset) labels) labels
-            (chunkOffset + (chunk.MachineCodeTemplate.Length * 4), labels))
-            (0, Map.empty)
+    // This index is transient and receives every code label in every emitted
+    // executable. A mutable ordinal dictionary avoids allocating a new tree
+    // path for each insertion and gives relocations constant-time lookup.
+    let codeLabelMap =
+        System.Collections.Generic.Dictionary<string, int>(System.StringComparer.Ordinal)
+    let mutable codeSize = 0
+    for chunk in chunks do
+        for struct (name, relativeOffset) in chunk.CodeLabels do
+            codeLabelMap.[name] <- codeFileOffset + codeSize + relativeOffset
+        codeSize <- codeSize + (chunk.MachineCodeTemplate.Length * 4)
     // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
     let floatOffsets =
         computeFloatLiteralOffsets codeFileOffset codeSize floatPool
@@ -1572,12 +1573,12 @@ let encodePreparedChunksWithPools
         else
             Map.empty
 
-    // Step 4: Convert code label positions from code-relative to file-relative offsets.
-    let codeLabelMap =
-        rawCodeLabels |> Map.map (fun _ offset -> codeFileOffset + offset)
-
     let dataLabels = leakLabels
     let dataOffsets = LiteralOffsets (stringOffsets, floatOffsets)
+    let tryFindCodeLabel label =
+        match codeLabelMap.TryGetValue label with
+        | true, offset -> Some offset
+        | false, _ -> None
 
     // Step 5: Encode with label resolution (current offset includes file offset)
     let encoded = Array.zeroCreate<ARM64.MachineCode> (codeSize / 4)
@@ -1598,7 +1599,7 @@ let encodePreparedChunksWithPools
                     encodeSymbolicWithLabels
                         instr
                         (codeFileOffset + (absoluteIndex * 4))
-                        codeLabelMap
+                        tryFindCodeLabel
                         dataOffsets
                         dataLabels)
             encodeChunks rest (outputIndex + chunk.MachineCodeTemplate.Length)
