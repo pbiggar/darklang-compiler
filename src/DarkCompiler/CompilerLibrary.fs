@@ -201,17 +201,25 @@ type CompilationSession(collectCodegenMetrics: bool) =
             Dictionary<
                 Arm64MetadataGroupKey,
                 CodeGen.Arm64ProgramMetadata>>(ObjectReferenceComparer())
-    let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
+    let arm64FunctionsByContext =
+        Dictionary<
+            obj,
+            Dictionary<
+                LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                Result<ARM64Symbolic.Instr list, string>>>(ObjectReferenceComparer())
     // Prebuilt stdlib and preamble functions retain object identity across a
     // compilation session. Keep an identity-indexed fast lane for functions
     // that populated the structural cache, avoiding repeated deep CFG equality
     // checks without retaining transient structurally equivalent functions.
-    let arm64FunctionsByReference =
+    let arm64FunctionsByReferenceAndContext =
         Dictionary<
-            LIR.Function,
+            obj,
             Dictionary<
-                ARM64.TargetConfig * CodeGen.CodeGenOptions,
-                Result<ARM64Symbolic.Instr list, string>>>(LirFunctionReferenceComparer())
+                LIR.Function,
+                Dictionary<
+                    ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                    Result<ARM64Symbolic.Instr list, string>>>>(ObjectReferenceComparer())
+    let arm64StartContextIdentity = System.Object()
     let arm64EmissionChunks =
         Dictionary<
             ARM64Symbolic.Instr list,
@@ -350,6 +358,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 summary
 
     member _.CodegenFunction
+        (contextIdentity: obj)
         (target: ARM64.TargetConfig)
         (options: CodeGen.CodeGenOptions)
         (func: LIR.Function)
@@ -357,10 +366,35 @@ type CompilationSession(collectCodegenMetrics: bool) =
         : Result<ARM64Symbolic.Instr list, string> =
         if disposed || options.EnableCoverage then generate ()
         else
+            let contextIdentity =
+                if func.Name = "_start" then arm64StartContextIdentity
+                else contextIdentity
+            let structuralEntries =
+                match arm64FunctionsByContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries =
+                        Dictionary<
+                            LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                            Result<ARM64Symbolic.Instr list, string>>()
+                    arm64FunctionsByContext.[contextIdentity] <- entries
+                    entries
+            let referenceEntriesForContext =
+                match arm64FunctionsByReferenceAndContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries =
+                        Dictionary<
+                            LIR.Function,
+                            Dictionary<
+                                ARM64.TargetConfig * CodeGen.CodeGenOptions,
+                                Result<ARM64Symbolic.Instr list, string>>>(LirFunctionReferenceComparer())
+                    arm64FunctionsByReferenceAndContext.[contextIdentity] <- entries
+                    entries
             let key = (func, target, options)
             let targetOptions = (target, options)
             let referenceResult =
-                match arm64FunctionsByReference.TryGetValue func with
+                match referenceEntriesForContext.TryGetValue func with
                 | true, entries ->
                     match entries.TryGetValue targetOptions with
                     | true, result -> Some result
@@ -373,7 +407,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     arm64StartCodegenHitCount <- arm64StartCodegenHitCount + 1
                 result
             | None ->
-                match arm64Functions.TryGetValue key with
+                match structuralEntries.TryGetValue key with
                 | true, result ->
                     arm64CodegenHitCount <- arm64CodegenHitCount + 1
                     if func.Name = "_start" then
@@ -402,13 +436,13 @@ type CompilationSession(collectCodegenMetrics: bool) =
                             SymbolicInstructionCount = symbolicInstructionCount
                         }
                     | None -> ()
-                    arm64Functions.[key] <- result
+                    structuralEntries.[key] <- result
                     let referenceEntries =
-                        match arm64FunctionsByReference.TryGetValue func with
+                        match referenceEntriesForContext.TryGetValue func with
                         | true, entries -> entries
                         | false, _ ->
                             let entries = Dictionary<ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
-                            arm64FunctionsByReference.[func] <- entries
+                            referenceEntriesForContext.[func] <- entries
                             entries
                     referenceEntries.[targetOptions] <- result
                     arm64CodegenMissCount <- arm64CodegenMissCount + 1
@@ -427,7 +461,9 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 arm64EmissionChunks.[instructions] <- prepared
                 prepared
 
-    member _.CachedArm64FunctionCount = if disposed then 0 else arm64Functions.Count
+    member _.CachedArm64FunctionCount =
+        if disposed then 0
+        else arm64FunctionsByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
     member _.CachedAnfDependencyCount =
         if disposed then 0
         else anfDependenciesByContext.Values |> Seq.sumBy (fun entries -> entries.Count)
@@ -464,8 +500,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
             anfDependenciesByContext.Clear()
             compiledDependenciesByIdentity.Clear()
             arm64MetadataGroupsByContext.Clear()
-            arm64Functions.Clear()
-            arm64FunctionsByReference.Clear()
+            arm64FunctionsByContext.Clear()
+            arm64FunctionsByReferenceAndContext.Clear()
             arm64EmissionChunks.Clear()
             arm64ReleasePlanSummaries.Clear()
             arm64CodegenMetrics.Clear()
@@ -957,6 +993,7 @@ let private generateBinary
     (dumpAsm: bool)
     (dumpMachineCode: bool)
     (session: CompilationSession option)
+    (programContextIdentity: obj)
     (metadataGroups: CodeGen.MetadataGroup list)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
@@ -1029,11 +1066,32 @@ let private generateBinary
             EnableLeakCheck = options.EnableLeakCheck
         }
         let arm64Target = ARM64.targetConfigFor armTarget
+        let functionContexts =
+            let contexts = Dictionary<LIR.Function, obj>(LirFunctionReferenceComparer())
+            for group in metadataGroups do
+                for func in group.Functions do
+                    contexts.[func] <- group.ContextIdentity
+            contexts
         let functionCache =
             session
             |> Option.filter (fun _ -> not options.EnableCoverage)
             |> Option.map (fun current ->
-                fun func generate -> current.CodegenFunction arm64Target codegenOptions func generate)
+                fun func generate ->
+                    match functionContexts.TryGetValue func with
+                    | true, contextIdentity ->
+                        current.CodegenFunction
+                            contextIdentity
+                            arm64Target
+                            codegenOptions
+                            func
+                            generate
+                    | false, _ ->
+                        current.CodegenFunction
+                            programContextIdentity
+                            arm64Target
+                            codegenOptions
+                            func
+                            generate)
         let metadataGroupCache =
             session
             |> Option.map (fun current ->
@@ -2875,6 +2933,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             false
                                             false
                                             plan.Session
+                                            dependencyIdentity
                                             ([
                                                 {
                                                     CodeGen.ContextIdentity = box plan.BaseContext

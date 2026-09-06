@@ -74,18 +74,19 @@ let testArm64CodegenCacheSegregatesTargetOptionsAndCoverage (_: CompilerLibrary.
     let linux = ARM64.targetConfigFor Platform.LinuxARM64
     let changedOptions = { CodeGen.defaultOptions with DisableFreeList = true }
     let coverageOptions = { CodeGen.defaultOptions with EnableCoverage = true; CoverageExprCount = 1 }
+    let contextIdentity = System.Object()
     let calls = ResizeArray<unit>()
     let generate () =
         calls.Add ()
         Ok []
     let structurallyEquivalentFunction =
         { fakeFunction with Name = fakeFunction.Name }
-    let _ = session.CodegenFunction macOS CodeGen.defaultOptions fakeFunction generate
-    let _ = session.CodegenFunction macOS CodeGen.defaultOptions fakeFunction generate
-    let _ = session.CodegenFunction macOS CodeGen.defaultOptions structurallyEquivalentFunction generate
-    let _ = session.CodegenFunction linux CodeGen.defaultOptions fakeFunction generate
-    let _ = session.CodegenFunction macOS changedOptions fakeFunction generate
-    let _ = session.CodegenFunction macOS coverageOptions fakeFunction generate
+    let _ = session.CodegenFunction contextIdentity macOS CodeGen.defaultOptions fakeFunction generate
+    let _ = session.CodegenFunction contextIdentity macOS CodeGen.defaultOptions fakeFunction generate
+    let _ = session.CodegenFunction contextIdentity macOS CodeGen.defaultOptions structurallyEquivalentFunction generate
+    let _ = session.CodegenFunction contextIdentity linux CodeGen.defaultOptions fakeFunction generate
+    let _ = session.CodegenFunction contextIdentity macOS changedOptions fakeFunction generate
+    let _ = session.CodegenFunction contextIdentity macOS coverageOptions fakeFunction generate
     if calls.Count = 4 && session.CachedArm64FunctionCount = 3 && session.Arm64CodegenHitCount = 2 && session.Arm64CodegenMissCount = 3 then
         Ok ()
     else
@@ -95,9 +96,10 @@ let testArm64CodegenMetricsAreOptIn (_: CompilerLibrary.StdlibResult) () : TestR
     use ordinary = new CompilerLibrary.CompilationSession()
     use profiled = new CompilerLibrary.CompilationSession(true)
     let target = ARM64.targetConfigFor Platform.MacOSARM64
+    let contextIdentity = System.Object()
     let generate () = Ok [ARM64Symbolic.RET]
-    let _ = ordinary.CodegenFunction target CodeGen.defaultOptions fakeFunction generate
-    let _ = profiled.CodegenFunction target CodeGen.defaultOptions fakeFunction generate
+    let _ = ordinary.CodegenFunction contextIdentity target CodeGen.defaultOptions fakeFunction generate
+    let _ = profiled.CodegenFunction contextIdentity target CodeGen.defaultOptions fakeFunction generate
     match ordinary.Arm64CodegenMetrics, profiled.Arm64CodegenMetrics with
     | [], [metric] when
         metric.FunctionName = fakeFunction.Name
@@ -106,6 +108,28 @@ let testArm64CodegenMetricsAreOptIn (_: CompilerLibrary.StdlibResult) () : TestR
         Ok ()
     | ordinaryMetrics, profiledMetrics ->
         Error $"Expected only the opted-in session to retain one function metric, got ordinary={ordinaryMetrics.Length}, profiled={profiledMetrics.Length}"
+
+let testArm64CodegenCacheSegregatesCompilationContexts (_: CompilerLibrary.StdlibResult) () : TestResult =
+    use session = new CompilerLibrary.CompilationSession()
+    let target = ARM64.targetConfigFor Platform.MacOSARM64
+    let firstContext = System.Object()
+    let secondContext = System.Object()
+    let calls = ResizeArray<unit>()
+    let generate () =
+        calls.Add ()
+        Ok []
+    let structurallyEquivalentFunction =
+        { fakeFunction with Name = fakeFunction.Name }
+    let _ = session.CodegenFunction firstContext target CodeGen.defaultOptions fakeFunction generate
+    let _ = session.CodegenFunction firstContext target CodeGen.defaultOptions structurallyEquivalentFunction generate
+    let _ = session.CodegenFunction secondContext target CodeGen.defaultOptions structurallyEquivalentFunction generate
+    if calls.Count = 2
+       && session.CachedArm64FunctionCount = 2
+       && session.Arm64CodegenHitCount = 1
+       && session.Arm64CodegenMissCount = 2 then
+        Ok ()
+    else
+        Error $"Expected structurally equal functions to reuse only within one registry context, got calls={calls.Count}, cached={session.CachedArm64FunctionCount}, hits={session.Arm64CodegenHitCount}, misses={session.Arm64CodegenMissCount}"
 
 let testArm64EmissionChunkCacheUsesChunkIdentity (_: CompilerLibrary.StdlibResult) () : TestResult =
     use session = new CompilerLibrary.CompilationSession()
@@ -296,6 +320,7 @@ let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
     ("compilation session segregates ARM64 target options and coverage", testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib)
     ("compilation session codegen metrics are opt-in", testArm64CodegenMetricsAreOptIn stdlib)
+    ("compilation session segregates ARM64 registry contexts", testArm64CodegenCacheSegregatesCompilationContexts stdlib)
     ("compilation session reuses prepared ARM64 chunks by identity", testArm64EmissionChunkCacheUsesChunkIdentity stdlib)
     ("compilation session confirms ARM64 release-plan cache shapes", testArm64ReleasePlanSummaryCacheConfirmsPlanShape stdlib)
     ("expression-only type checking reuses base registries", testExpressionTypeCheckingReusesBaseRegistries stdlib)
