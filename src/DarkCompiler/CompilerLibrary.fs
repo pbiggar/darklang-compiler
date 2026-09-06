@@ -3315,14 +3315,17 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             ([
                                                 {
                                                     CodeGen.ContextIdentity = box plan.BaseContext
+                                                    FunctionGroupIdentity = box plan.BaseContext
                                                     Functions = reachableStdlib
                                                 }
                                                 {
-                                                    CodeGen.ContextIdentity = freshProgramContextIdentity
+                                                    CodeGen.ContextIdentity = dependencyIdentity
+                                                    FunctionGroupIdentity = freshProgramContextIdentity
                                                     Functions = reachableProgramFuncs
                                                 }
                                                 {
                                                     CodeGen.ContextIdentity = dependencyIdentity
+                                                    FunctionGroupIdentity = dependencyIdentity
                                                     Functions = reachableDependencyFuncs
                                                 }
                                              ]

@@ -7781,7 +7781,10 @@ type FunctionCodegenCache =
 /// summaries form a monoid, so an executable can merge cached dependency and
 /// stdlib facts with the small fresh program fragment.
 type MetadataGroup = {
+    /// Semantic registry context used by per-function code generation.
     ContextIdentity: obj
+    /// Immutable compilation-unit identity used to reuse the ordered chunk run.
+    FunctionGroupIdentity: obj
     Functions: LIR.Function list
 }
 
@@ -8088,7 +8091,11 @@ let private generatePreparedARM64WithOptionsAndCache
     let groupCompositionTimer = startPhase ()
     let groups =
         match metadataGroups with
-        | [] -> [{ ContextIdentity = System.Object(); Functions = functions }]
+        | [] ->
+            let identity = System.Object()
+            [{ ContextIdentity = identity
+               FunctionGroupIdentity = identity
+               Functions = functions }]
         | groups -> groups
 
     let programMetadata =
@@ -8241,7 +8248,7 @@ let private generatePreparedARM64WithOptionsAndCache
         System.Collections.Generic.Dictionary<LIR.Function, obj>(HashIdentity.Reference)
     for group in metadataGroups do
         for func in group.Functions do
-            functionContexts.[func] <- group.ContextIdentity
+            functionContexts.[func] <- group.FunctionGroupIdentity
 
     // Preserve exact function order while coalescing adjacent functions from
     // the same immutable compilation unit. Cached stdlib/dependency runs can
