@@ -937,6 +937,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                         e2eBatchExecutions <- e2eBatchExecutions + 1
                         e2eBatchedLogicalTests <- e2eBatchedLogicalTests + batchCount
                         e2eLargestBatch <- max e2eLargestBatch batchCount
+                        if verbose then
+                            ProgressBar.finish progress
+                            println $"  batch {batchCount}: {firstTest.SourceFile}:{firstTest.Name}"
+                            ProgressBar.update progress
+                        let batchTimer = Stopwatch.StartNew()
                         let passTimingStart = passTimingTotal ()
                         let batchExecution =
                             TestDSL.E2ETestRunner.runE2ETestBatchWithPreambleContext
@@ -946,6 +951,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                                 (indexedBatch |> List.map snd)
                                 (Some recordPassTiming)
                         let passTimingEnd = passTimingTotal ()
+                        batchTimer.Stop()
+                        if verbose then
+                            ProgressBar.finish progress
+                            println $"  batch completed in {formatTime batchTimer.Elapsed}"
+                            ProgressBar.update progress
                         recordPhysicalTiming
                             batchExecution.AggregateRun
                             (passTimingEnd - passTimingStart)
