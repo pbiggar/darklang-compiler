@@ -490,9 +490,7 @@ let testBuildsParseableUniversalBatchSource () : TestResult =
                 let source = buildBatchSource prepared
                 match CompilerLibrary.parseProgram false source with
                 | Error msg -> Error $"Generated batch source did not parse: {msg}\n{source}"
-                | Ok _ when not (source.Contains("let e2eBatchCaseRun(check: (Unit) -> Bool): Bool =")) ->
-                    Error $"Generated batch did not include its non-inlineable closure runner:\n{source}"
-                | Ok _ when not (source.Contains("let e2eBatchCaseResult0 =")) ->
+                | Ok _ when not (source.StartsWith("let e2eBatchCaseResult0 =")) ->
                     Error $"Generated batch did not eagerly bind the first result:\n{source}"
                 | Ok _ when not (source.EndsWith("(if e2eBatchCaseResult1 then 2L else 0L)")) ->
                     Error $"Generated batch did not encode the final result bit:\n{source}"
