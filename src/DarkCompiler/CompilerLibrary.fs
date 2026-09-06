@@ -1517,83 +1517,96 @@ let private convertTypedProgramToUserOnlyWithMode
     (monomorphization: MonomorphizationMode)
     (typeCheckEnv: TypeChecking.TypeCheckEnv)
     (session: CompilationSession option)
+    (passTimingRecorder: PassTimingRecorder option)
     (typedProgram: AST.Program)
     : Result<AST_to_ANF.UserOnlyResult * obj, string> =
+    let measure name operation =
+        let timer = Stopwatch.StartNew()
+        let result = operation ()
+        timer.Stop()
+        recordPassTiming passTimingRecorder name timer.Elapsed.TotalMilliseconds
+        result
+
     // Late AOT plans (notably Json) may introduce concrete calls to generic
     // stdlib functions after the suite preamble registry was built. Materialize
     // just those missing specializations into the user compilation unit.
     let (typedProgram, monomorphization, nonInlineableFunctionNames) =
-        let addMissing baseRegistry rebuildMode =
-            let requested = collectLocalSpecs baseContext.GenericFuncDefs typedProgram
-            let (AST.Program items) = typedProgram
-            let knownFunctionNames =
-                items
-                |> List.choose (function
-                    | AST.FunctionDef fn -> Some fn.Name
-                    | _ -> None)
-                |> Set.ofList
-                |> Set.union baseContext.BaseFuncNames
-            let rec materialize
-                (specRegistry: AST_to_ANF.SpecRegistry)
-                (knownFunctionNames: Set<string>)
-                (pendingSpecs: Set<AST_to_ANF.SpecKey>)
-                (accFunctions: AST.FunctionDef list)
-                : AST_to_ANF.SpecRegistry * AST.FunctionDef list =
-                let missingSpecs =
-                    pendingSpecs
-                    |> Set.filter (fun key -> not (Map.containsKey key specRegistry))
-                if Set.isEmpty missingSpecs then
-                    (specRegistry, accFunctions)
-                else
-                    let specialization =
-                        AST_to_ANF.specializeFromSpecs baseContext.GenericFuncDefs missingSpecs
-                    let combinedRegistry =
-                        mergeSpecRegistries specRegistry specialization.SpecRegistry
-                    let materializedTopLevels =
-                        specialization.SpecializedFuncs
-                        |> List.filter (fun fn -> not (Set.contains fn.Name knownFunctionNames))
-                        |> List.map AST.FunctionDef
-                        |> TypeChecking.materializeEqHelpersInTopLevels
-                            typeCheckEnv.AliasReg
-                            typeCheckEnv.IndexedTypeReg
-                            typeCheckEnv.VariantLookup
-                    let newFunctions =
-                        materializedTopLevels
-                        |> List.choose (function
-                            | AST.FunctionDef fn when not (Set.contains fn.Name knownFunctionNames) -> Some fn
-                            | _ -> None)
-                    let nextKnownFunctionNames =
-                        newFunctions
-                        |> List.fold (fun names fn -> Set.add fn.Name names) knownFunctionNames
-                    let nextSpecs =
-                        materializedTopLevels
-                        |> AST.Program
-                        |> collectLocalSpecs baseContext.GenericFuncDefs
-                    materialize
-                        combinedRegistry
-                        nextKnownFunctionNames
-                        nextSpecs
-                        (accFunctions @ newFunctions)
+        measure "AST -> ANF Dependency Planning" (fun () ->
+            let addMissing baseRegistry rebuildMode =
+                let requested = collectLocalSpecs baseContext.GenericFuncDefs typedProgram
+                let (AST.Program items) = typedProgram
+                let knownFunctionNames =
+                    items
+                    |> List.choose (function
+                        | AST.FunctionDef fn -> Some fn.Name
+                        | _ -> None)
+                    |> Set.ofList
+                    |> Set.union baseContext.BaseFuncNames
+                let rec materialize
+                    (specRegistry: AST_to_ANF.SpecRegistry)
+                    (knownFunctionNames: Set<string>)
+                    (pendingSpecs: Set<AST_to_ANF.SpecKey>)
+                    (accFunctions: AST.FunctionDef list)
+                    : AST_to_ANF.SpecRegistry * AST.FunctionDef list =
+                    let missingSpecs =
+                        pendingSpecs
+                        |> Set.filter (fun key -> not (Map.containsKey key specRegistry))
+                    if Set.isEmpty missingSpecs then
+                        (specRegistry, accFunctions)
+                    else
+                        let specialization =
+                            AST_to_ANF.specializeFromSpecs baseContext.GenericFuncDefs missingSpecs
+                        let combinedRegistry =
+                            mergeSpecRegistries specRegistry specialization.SpecRegistry
+                        let materializedTopLevels =
+                            specialization.SpecializedFuncs
+                            |> List.filter (fun fn -> not (Set.contains fn.Name knownFunctionNames))
+                            |> List.map AST.FunctionDef
+                            |> TypeChecking.materializeEqHelpersInTopLevels
+                                typeCheckEnv.AliasReg
+                                typeCheckEnv.IndexedTypeReg
+                                typeCheckEnv.VariantLookup
+                        let newFunctions =
+                            materializedTopLevels
+                            |> List.choose (function
+                                | AST.FunctionDef fn when not (Set.contains fn.Name knownFunctionNames) -> Some fn
+                                | _ -> None)
+                        let nextKnownFunctionNames =
+                            newFunctions
+                            |> List.fold (fun names fn -> Set.add fn.Name names) knownFunctionNames
+                        let nextSpecs =
+                            materializedTopLevels
+                            |> AST.Program
+                            |> collectLocalSpecs baseContext.GenericFuncDefs
+                        materialize
+                            combinedRegistry
+                            nextKnownFunctionNames
+                            nextSpecs
+                            (accFunctions @ newFunctions)
 
-            let (combinedRegistry, newFunctions) =
-                materialize baseRegistry knownFunctionNames requested []
-            let programWithSpecializations =
-                AST.Program ((newFunctions |> List.map AST.FunctionDef) @ items)
-            let specializedFunctionNames =
-                newFunctions |> List.map (fun fn -> fn.Name) |> Set.ofList
-            (programWithSpecializations, rebuildMode combinedRegistry, specializedFunctionNames)
-        match monomorphization with
-        | ReplaceTypeApps registry -> addMissing registry ReplaceTypeApps
-        | SpecializeLocalAndReplace registry -> addMissing registry SpecializeLocalAndReplace
-        | Monomorphize _ -> (typedProgram, monomorphization, Set.empty)
+                let (combinedRegistry, newFunctions) =
+                    materialize baseRegistry knownFunctionNames requested []
+                let programWithSpecializations =
+                    AST.Program ((newFunctions |> List.map AST.FunctionDef) @ items)
+                let specializedFunctionNames =
+                    newFunctions |> List.map (fun fn -> fn.Name) |> Set.ofList
+                (programWithSpecializations, rebuildMode combinedRegistry, specializedFunctionNames)
+            match monomorphization with
+            | ReplaceTypeApps registry -> addMissing registry ReplaceTypeApps
+            | SpecializeLocalAndReplace registry -> addMissing registry SpecializeLocalAndReplace
+            | Monomorphize _ -> (typedProgram, monomorphization, Set.empty))
     let baseFuncNames = baseContext.BaseFuncNames
-    prepareProgramForAnf monomorphization baseContext.Registries baseFuncNames typedProgram
+    measure "AST -> ANF Program Preparation" (fun () ->
+        prepareProgramForAnf monomorphization baseContext.Registries baseFuncNames typedProgram)
     |> Result.bind (fun liftedProgram ->
-        AST_to_ANF.splitTopLevels liftedProgram
-        |> Result.bind (fun (typeDefs, functions, expr) ->
-            let (registries, localRegistries, resolvedFunctions) =
-                buildRegistriesForProgram baseContext.Registries.ModuleRegistry baseContext.Registries typeDefs functions
-            let localReturnTypes = extractReturnTypes localRegistries.FuncReg
+        measure "AST -> ANF Registry Construction" (fun () ->
+            AST_to_ANF.splitTopLevels liftedProgram
+            |> Result.map (fun (typeDefs, functions, expr) ->
+                let (registries, localRegistries, resolvedFunctions) =
+                    buildRegistriesForProgram baseContext.Registries.ModuleRegistry baseContext.Registries typeDefs functions
+                let localReturnTypes = extractReturnTypes localRegistries.FuncReg
+                (registries, localRegistries, resolvedFunctions, localReturnTypes, expr)))
+        |> Result.bind (fun (registries, localRegistries, resolvedFunctions, localReturnTypes, expr) ->
             let varGen = ANF.VarGen 0
             let conversionKey = {
                 Functions = resolvedFunctions
@@ -1601,21 +1614,24 @@ let private convertTypedProgramToUserOnlyWithMode
                 NonInlineableFunctionNames = nonInlineableFunctionNames
             }
             let convert () =
-                AST_to_ANF.convertFunctions registries varGen resolvedFunctions
+                measure "AST -> ANF Dependency Conversion" (fun () ->
+                    AST_to_ANF.convertFunctions registries varGen resolvedFunctions)
             let convertedDependencies =
-                match session with
-                | Some current ->
-                    current.ConvertAnfDependencies
-                        (box baseContext)
-                        conversionKey
-                        convert
-                | None ->
-                    convert ()
-                    |> Result.map (fun (anfFuncs, varGen1) ->
-                        (anfFuncs, varGen1, System.Object()))
+                measure "AST -> ANF Dependency Lookup" (fun () ->
+                    match session with
+                    | Some current ->
+                        current.ConvertAnfDependencies
+                            (box baseContext)
+                            conversionKey
+                            convert
+                    | None ->
+                        convert ()
+                        |> Result.map (fun (anfFuncs, varGen1) ->
+                            (anfFuncs, varGen1, System.Object())))
             convertedDependencies
             |> Result.bind (fun (anfFuncs, varGen1, dependencyIdentity) ->
-                AST_to_ANF.convertExprToAnf registries varGen1 expr
+                measure "AST -> ANF Expression Conversion" (fun () ->
+                    AST_to_ANF.convertExprToAnf registries varGen1 expr)
                 |> Result.map (fun (anfExpr, _) ->
                     ({
                         UserFunctions = anfFuncs
@@ -1639,6 +1655,7 @@ let private convertTypedProgramToUserOnly
         baseContext
         (Monomorphize (Some baseContext.GenericFuncDefs))
         baseContext.TypeCheckEnv
+        None
         None
         typedProgram
     |> Result.map fst
@@ -2590,18 +2607,27 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                     // Pass 2: AST → ANF (user only)
                     if plan.Verbosity >= 1 then println plan.Labels.Anf
-                    let userOnlyResult =
+                    let catalogStart = Stopwatch.StartNew()
+                    let materializedProgramResult =
                         materializePackageValueCatalog
                             plan.BaseContext
                             plan.Options.Warnings
                             plan.PackageValues
                             renderedUserAst
+                    catalogStart.Stop()
+                    recordPassTiming
+                        plan.PassTimingRecorder
+                        "AST -> ANF Package Catalog"
+                        catalogStart.Elapsed.TotalMilliseconds
+                    let userOnlyResult =
+                        materializedProgramResult
                         |> Result.bind (fun materializedProgram ->
                             convertTypedProgramToUserOnlyWithMode
                                 plan.BaseContext
                                 plan.Monomorphization
                                 userEnv
                                 plan.Session
+                                plan.PassTimingRecorder
                                 materializedProgram)
                     let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                     recordPassTiming plan.PassTimingRecorder "AST -> ANF" anfTime
