@@ -842,13 +842,9 @@ let private lowerToAllocatedLir
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
+    let functionOrder = functions |> List.map (fun f -> f.Name)
     // Function-affinity batches still call helpers compiled in sibling batches.
     // Keep the complete AOT return-type plan available while lowering each one.
-    let allReturnTypes =
-        functions
-        |> List.fold (fun acc fn -> Map.add fn.Name fn.ReturnType acc) externalReturnTypes
-
-    let functionOrder = functions |> List.map (fun f -> f.Name)
     let allReturnTypes =
         functions
         |> List.fold
@@ -867,7 +863,7 @@ let private lowerToAllocatedLir
                     typeMap
                     registries.FuncParams
                     registries.VariantLookup
-                    (AST_to_ANF.recordFieldsRegistry registries.TypeReg)
+                    registries.RecordFieldsReg
                     options.EnableCoverage
                     allReturnTypes
             match mirResult with
@@ -977,7 +973,10 @@ let private buildConversionResult
         Program = program
         RecursiveMembers = registries.RecursiveMembers
         TypeReg = registries.TypeReg
+        RecordFieldsReg = registries.RecordFieldsReg
+        RecordTypeParamsReg = registries.RecordTypeParamsReg
         VariantLookup = registries.VariantLookup
+        RcSumShapeReg = registries.RcSumShapeReg
         FuncReg = registries.FuncReg
         FuncParams = registries.FuncParams
         ModuleRegistry = registries.ModuleRegistry
@@ -1014,9 +1013,9 @@ let private buildAnf
         printANFProgram "=== ANF (before optimization) ===" anfProgram
     let anfOptStart = sw.Elapsed.TotalMilliseconds
     let anfOptimizeContext : ANF_Optimize.OptimizeContext =
-        { TypeReg = AST_to_ANF.recordFieldsRegistry registries.TypeReg
-          RecordTypeParams = AST_to_ANF.recordTypeParamsRegistry registries.TypeReg
-          SumShapeReg = AST_to_ANF.rcSumShapeRegistryFromVariantLookup registries.VariantLookup }
+        { TypeReg = registries.RecordFieldsReg
+          RecordTypeParams = registries.RecordTypeParamsReg
+          SumShapeReg = registries.RcSumShapeReg }
     let anfOptimized =
         if shouldRunANFOptimize anfOptions then
             ANF_Optimize.optimizeProgramWithOptions anfOptimizeContext anfOptions anfProgram
@@ -1501,7 +1500,10 @@ let private extractReturnTypes (funcReg: Map<string, AST.Type>) : Map<string, AS
 let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Registries =
     {
         TypeReg = Map.empty
+        RecordFieldsReg = Map.empty
+        RecordTypeParamsReg = Map.empty
         VariantLookup = Map.empty
+        RcSumShapeReg = Map.empty
         FuncReg = Map.empty
         FuncParams = Map.empty
         ModuleRegistry = moduleRegistry
@@ -1802,7 +1804,10 @@ let private convertTypedProgramToUserOnlyWithMode
                         NonInlineableFunctionNames = nonInlineableFunctionNames
                         MainExpr = anfExpr
                         TypeReg = registries.TypeReg
+                        RecordFieldsReg = registries.RecordFieldsReg
+                        RecordTypeParamsReg = registries.RecordTypeParamsReg
                         VariantLookup = registries.VariantLookup
+                        RcSumShapeReg = registries.RcSumShapeReg
                         FuncReg = registries.FuncReg
                         LocalReturnTypes = localReturnTypes
                         FuncParams = registries.FuncParams
@@ -2759,7 +2764,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             (plannedUserAst, AST.TUnit)
                         else
                             (ValueRendering.rewriteProgram
-                                (AST_to_ANF.recordFieldsRegistry plan.BaseContext.Registries.TypeReg)
+                                plan.BaseContext.Registries.RecordFieldsReg
                                 userEnv.IndexedTypeReg
                                 plan.BaseContext.Registries.VariantLookup
                                 plan.BaseContext.Registries.FuncReg
@@ -2841,7 +2846,10 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             |> List.exists (fun func -> func.Name = programEntryName)
                         let userRegistries : AST_to_ANF.Registries = {
                             TypeReg = userOnly.TypeReg
+                            RecordFieldsReg = userOnly.RecordFieldsReg
+                            RecordTypeParamsReg = userOnly.RecordTypeParamsReg
                             VariantLookup = userOnly.VariantLookup
+                            RcSumShapeReg = userOnly.RcSumShapeReg
                             FuncReg = userOnly.FuncReg
                             FuncParams = userOnly.FuncParams
                             ModuleRegistry = userOnly.ModuleRegistry
@@ -3134,7 +3142,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         LIR.Program (
                                             allFuncs,
                                             lirVariantRegistry,
-                                            AST_to_ANF.recordFieldsRegistry userRegistries.TypeReg
+                                            userRegistries.RecordFieldsReg
                                         )
                                     if shouldDumpIR plan.Verbosity plan.Options.DumpLIR then
                                         printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
@@ -3697,7 +3705,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     (plannedUserAst, AST.TUnit)
                 else
                     (ValueRendering.rewriteProgram
-                        (AST_to_ANF.recordFieldsRegistry stdlib.Context.Registries.TypeReg)
+                        stdlib.Context.Registries.RecordFieldsReg
                         userEnv.IndexedTypeReg
                         stdlib.Context.Registries.VariantLookup
                         stdlib.Context.Registries.FuncReg
@@ -3714,7 +3722,10 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     AST_to_ANF.synthesizeEntryFunction "_start" boundaryProgramType userOnly.MainExpr
                 let userRegistries : AST_to_ANF.Registries = {
                     TypeReg = userOnly.TypeReg
+                    RecordFieldsReg = userOnly.RecordFieldsReg
+                    RecordTypeParamsReg = userOnly.RecordTypeParamsReg
                     VariantLookup = userOnly.VariantLookup
+                    RcSumShapeReg = userOnly.RcSumShapeReg
                     FuncReg = userOnly.FuncReg
                     FuncParams = userOnly.FuncParams
                     ModuleRegistry = userOnly.ModuleRegistry

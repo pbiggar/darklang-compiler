@@ -56,7 +56,7 @@ let createContext (result: ConversionResult) : TypeContext =
             result.FuncReg
     { TypeReg = result.TypeReg
       VariantLookup = result.VariantLookup
-      SumShapeReg = rcSumShapeRegistryFromVariantLookup result.VariantLookup
+      SumShapeReg = result.RcSumShapeReg
       FuncReg = funcReg
       FuncParams = result.FuncParams
       TempTypes = Map.empty

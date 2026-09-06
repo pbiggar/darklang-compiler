@@ -10399,7 +10399,10 @@ type ConversionResult = {
     Program: ANF.Program
     RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
     TypeReg: TypeRegistry
+    RecordFieldsReg: Map<string, (string * AST.Type) list>
+    RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
+    RcSumShapeReg: ANF.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FuncParams: Map<string, (string * AST.Type) list>  // Function name -> param list with types
     ModuleRegistry: AST.ModuleRegistry
@@ -10412,7 +10415,10 @@ type UserOnlyResult = {
     NonInlineableFunctionNames: Set<string> // Late external specializations compiled in this unit
     MainExpr: ANF.AExpr                // User's main expression
     TypeReg: TypeRegistry              // Merged registries (for lookups)
+    RecordFieldsReg: Map<string, (string * AST.Type) list>
+    RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
+    RcSumShapeReg: ANF.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     LocalReturnTypes: Map<string, AST.Type>
     FuncParams: Map<string, (string * AST.Type) list>
@@ -10423,7 +10429,10 @@ type UserOnlyResult = {
 /// Registry bundle used during ANF conversion
 type Registries = {
     TypeReg: TypeRegistry
+    RecordFieldsReg: Map<string, (string * AST.Type) list>
+    RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
+    RcSumShapeReg: ANF.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
@@ -10583,7 +10592,10 @@ let buildRegistries
 
     {
         TypeReg = typeReg
+        RecordFieldsReg = recordFieldsRegistry typeReg
+        RecordTypeParamsReg = recordTypeParamsRegistry typeReg
         VariantLookup = variantLookup
+        RcSumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
         FuncReg = funcReg
         FuncParams = funcParams
         ModuleRegistry = moduleRegistry
@@ -10595,7 +10607,10 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
+        RecordFieldsReg = mergeMaps baseRegs.RecordFieldsReg overlay.RecordFieldsReg
+        RecordTypeParamsReg = mergeMaps baseRegs.RecordTypeParamsReg overlay.RecordTypeParamsReg
         VariantLookup = mergeMaps baseRegs.VariantLookup overlay.VariantLookup
+        RcSumShapeReg = mergeMaps baseRegs.RcSumShapeReg overlay.RcSumShapeReg
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry

@@ -72,16 +72,19 @@ let private convertTypedProgram (typedAst: AST.Program) : Result<AST_to_ANF.Conv
                         Program = ANF.Program (anfFuncs, anfExpr)
                         RecursiveMembers = registries.RecursiveMembers
                         TypeReg = registries.TypeReg
+                        RecordFieldsReg = registries.RecordFieldsReg
+                        RecordTypeParamsReg = registries.RecordTypeParamsReg
                         VariantLookup = registries.VariantLookup
+                        RcSumShapeReg = registries.RcSumShapeReg
                         FuncReg = registries.FuncReg
                         FuncParams = registries.FuncParams
                         ModuleRegistry = registries.ModuleRegistry
                     }))))
 
 let private optimizeContextFromConversionResult (convResult: AST_to_ANF.ConversionResult) : ANF_Optimize.OptimizeContext =
-    { TypeReg = AST_to_ANF.recordFieldsRegistry convResult.TypeReg
-      RecordTypeParams = AST_to_ANF.recordTypeParamsRegistry convResult.TypeReg
-      SumShapeReg = AST_to_ANF.rcSumShapeRegistryFromVariantLookup convResult.VariantLookup }
+    { TypeReg = convResult.RecordFieldsReg
+      RecordTypeParams = convResult.RecordTypeParamsReg
+      SumShapeReg = convResult.RcSumShapeReg }
 
 /// Normalize IR output for comparison
 /// - Trim whitespace
