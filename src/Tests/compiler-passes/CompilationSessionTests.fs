@@ -34,17 +34,6 @@ let private expectCompiled (report: CompilerLibrary.CompileReport) : TestResult 
     | Ok _ -> Ok ()
     | Error error -> Error error
 
-let private sessionCounter
-    (name: string)
-    (session: CompilerLibrary.CompilationSession)
-    : Result<int, string> =
-    match session.GetType().GetProperty(name) with
-    | null -> Error $"CompilationSession is missing the {name} counter"
-    | propertyInfo ->
-        match propertyInfo.GetValue(session) with
-        | :? int as value -> Ok value
-        | value -> Error $"CompilationSession.{name} returned an unexpected value: {value}"
-
 let private fakeFunction : LIR.Function =
     let entry = LIR.Label "cached_function_entry"
     {
@@ -264,12 +253,11 @@ let testJsonDependenciesAreReusedBeforeLowering
     expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source)
     |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source))
     |> Result.bind (fun () ->
-        sessionCounter "AnfDependencyHitCount" session
-        |> Result.bind (fun anfHits ->
-            sessionCounter "CompiledDependencyHitCount" session
-            |> Result.bind (fun compiledHits ->
-                if anfHits > 0 && compiledHits > 0 then Ok ()
-                else Error $"Expected repeated JSON dependencies to bypass conversion and lowering, got ANF hits={anfHits}, compiled hits={compiledHits}")))
+        if session.AnfDependencyHitCount > 0
+           && session.CompiledDependencyHitCount > 0 then
+            Ok ()
+        else
+            Error $"Expected repeated JSON dependencies to bypass conversion and lowering, got ANF hits={session.AnfDependencyHitCount}, compiled hits={session.CompiledDependencyHitCount}")
 
 let testStableStartTrampolineIsReused
     (stdlib: CompilerLibrary.StdlibResult)
@@ -279,10 +267,8 @@ let testStableStartTrampolineIsReused
     expectCompiled (compile stdlib session CompilerLibrary.defaultOptions "1L + 1L")
     |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions "2L + 2L"))
     |> Result.bind (fun () ->
-        sessionCounter "Arm64StartCodegenHitCount" session
-        |> Result.bind (fun hits ->
-            if hits > 0 then Ok ()
-            else Error "Expected source-independent _start code to be reused"))
+        if session.Arm64StartCodegenHitCount > 0 then Ok ()
+        else Error "Expected source-independent _start code to be reused")
 
 let testDependencyMetadataIsReusedCompositionally
     (stdlib: CompilerLibrary.StdlibResult)
@@ -293,10 +279,8 @@ let testDependencyMetadataIsReusedCompositionally
     expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source)
     |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerLibrary.defaultOptions source))
     |> Result.bind (fun () ->
-        sessionCounter "Arm64MetadataGroupHitCount" session
-        |> Result.bind (fun hits ->
-            if hits > 0 then Ok ()
-            else Error "Expected cached dependency metadata to be merged without rescanning its functions"))
+        if session.Arm64MetadataGroupHitCount > 0 then Ok ()
+        else Error "Expected cached dependency metadata to be merged without rescanning its functions")
 
 let tests (stdlib: CompilerLibrary.StdlibResult) = [
     ("compilation session reuses ARM64 code for nested JSON", testArm64HitWithNestedJson stdlib)
