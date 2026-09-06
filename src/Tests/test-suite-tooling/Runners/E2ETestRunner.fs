@@ -152,9 +152,8 @@ type E2EBatchExecution = {
 let maxBatchSize = 16
 
 let private isJsonBatchFile (sourceFile: string) : bool =
-    let normalized = sourceFile.Replace('\\', '/')
-    normalized.EndsWith("/json-parity.e2e", StringComparison.Ordinal)
-    || normalized.EndsWith("/e2e/upstream/stdlib/json.dark", StringComparison.Ordinal)
+    let _ = sourceFile
+    false
 
 let tryPrepareBatchTest (test: E2ETest) : PreparedE2EBatchTest option =
     let eligibleExpectation =
