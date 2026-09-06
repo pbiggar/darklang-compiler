@@ -25,11 +25,16 @@ let private namedFunctionWith name instrs =
 let private functionWith instrs = namedFunctionWith "user" instrs
 
 let private expectCalls expected instrs =
-    let actual = DeadCodeElimination.getCalledFunctions (functionWith instrs)
-    if actual = Set.ofList expected then
+    let function_ = functionWith instrs
+    let fallback = DeadCodeElimination.getCalledFunctions function_
+    let fromFacts =
+        function_
+        |> LIR.attachFunctionCodegenFacts
+        |> DeadCodeElimination.getCalledFunctions
+    if fallback = Set.ofList expected && fromFacts = fallback then
         Ok ()
     else
-        Error $"Expected calls {expected}, got {Set.toList actual}"
+        Error $"Expected calls {expected}, got fallback={Set.toList fallback}, facts={Set.toList fromFacts}"
 
 let testArgMovesFunctionAddressIsReachable () : TestResult =
     expectCalls
