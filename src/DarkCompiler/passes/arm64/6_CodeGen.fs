@@ -7781,10 +7781,12 @@ type FunctionCodegenCache =
 /// summaries form a monoid, so an executable can merge cached dependency and
 /// stdlib facts with the small fresh program fragment.
 type MetadataGroup = {
-    /// Semantic registry context used by per-function code generation.
     ContextIdentity: obj
-    /// Immutable compilation-unit identity used to reuse the ordered chunk run.
-    FunctionGroupIdentity: obj
+    Functions: LIR.Function list
+}
+
+type FunctionGroup = {
+    ContextIdentity: obj
     Functions: LIR.Function list
 }
 
@@ -7828,6 +7830,7 @@ let private generatePreparedARM64WithOptionsAndCache
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
     (functionGroupCache: FunctionGroupCodegenCache option)
+    (functionGroups: FunctionGroup list)
     (metadataGroupCache: MetadataGroupCache option)
     (helperCache: HelperCodegenCache option)
     (metadataGroups: MetadataGroup list)
@@ -8089,12 +8092,11 @@ let private generatePreparedARM64WithOptionsAndCache
         }
 
     let groupCompositionTimer = startPhase ()
-    let groups =
+    let groups : MetadataGroup list =
         match metadataGroups with
         | [] ->
             let identity = System.Object()
             [{ ContextIdentity = identity
-               FunctionGroupIdentity = identity
                Functions = functions }]
         | groups -> groups
 
@@ -8244,35 +8246,24 @@ let private generatePreparedARM64WithOptionsAndCache
         })
 
     let functionTimer = startPhase ()
-    let functionContexts =
-        System.Collections.Generic.Dictionary<LIR.Function, obj>(HashIdentity.Reference)
-    for group in metadataGroups do
-        for func in group.Functions do
-            functionContexts.[func] <- group.FunctionGroupIdentity
-
-    // Preserve exact function order while coalescing adjacent functions from
-    // the same immutable compilation unit. Cached stdlib/dependency runs can
-    // then bypass hundreds of individual cache probes per executable.
+    // Compilation assembly already knows the exact stdlib/program/dependency
+    // boundaries. Consume those ordered groups directly instead of rescanning
+    // every function to rediscover them during codegen.
     let functionRuns =
-        sortedFunctions
-        |> List.fold
-            (fun runs func ->
-                let context =
-                    match functionContexts.TryGetValue func with
-                    | true, value -> Some value
-                    | false, _ -> None
-                match runs with
-                | (existingContext, reversedFunctions) :: rest
-                    when Option.isSome context
-                         && Option.isSome existingContext
-                         && obj.ReferenceEquals(context.Value, existingContext.Value) ->
-                    (existingContext, func :: reversedFunctions) :: rest
-                | _ ->
-                    (context, [func]) :: runs)
-            []
-        |> List.rev
-        |> List.map (fun (context, reversedFunctions) ->
-            (context, List.rev reversedFunctions))
+        match functionGroups with
+        | [] -> [ (None, sortedFunctions) ]
+        | groups ->
+            let groupedFunctions = groups |> List.collect (fun group -> group.Functions)
+            let orderMatches =
+                List.length groupedFunctions = List.length sortedFunctions
+                && List.forall2
+                    (fun left right -> obj.ReferenceEquals(left, right))
+                    groupedFunctions
+                    sortedFunctions
+            if not orderMatches then
+                Crash.crash "ARM64 codegen invariant: function groups do not match program order"
+            groups
+            |> List.map (fun group -> (Some group.ContextIdentity, group.Functions))
 
     let convertRun (context, runFunctions) =
         let generate () = ResultList.mapResults convertCached runFunctions
@@ -8593,6 +8584,7 @@ let generateARM64WithOptionsAndCaches
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
     (functionGroupCache: FunctionGroupCodegenCache option)
+    (functionGroups: FunctionGroup list)
     (metadataGroupCache: MetadataGroupCache option)
     (helperCache: HelperCodegenCache option)
     (metadataGroups: MetadataGroup list)
@@ -8618,6 +8610,7 @@ let generateARM64WithOptionsAndCaches
             options
             functionCache
             functionGroupCache
+            functionGroups
             metadataGroupCache
             helperCache
             metadataGroups
@@ -8636,6 +8629,7 @@ let generateARM64WithOptionsAndCache
         options
         functionCache
         None
+        []
         None
         None
         []

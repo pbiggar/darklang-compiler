@@ -1262,6 +1262,7 @@ let private generateBinary
     (dumpMachineCode: bool)
     (session: CompilationSession option)
     (programContextIdentity: obj)
+    (functionGroups: CodeGen.FunctionGroup list)
     (metadataGroups: CodeGen.MetadataGroup list)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
@@ -1404,6 +1405,7 @@ let private generateBinary
                 codegenOptions
                 functionCache
                 functionGroupCache
+                functionGroups
                 metadataGroupCache
                 helperCache
                 metadataGroups
@@ -3296,6 +3298,29 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             userRegistries.RecordFieldsReg
                                         )
                                     let freshProgramContextIdentity = box allocatedProgramFuncs
+                                    let startProgramFuncs, otherProgramFuncs =
+                                        reachableProgramFuncs
+                                        |> List.partition (fun func -> func.Name = "_start")
+                                    let functionGroups : CodeGen.FunctionGroup list =
+                                        [
+                                            {
+                                                ContextIdentity = freshProgramContextIdentity
+                                                Functions = startProgramFuncs
+                                            }
+                                            {
+                                                ContextIdentity = box plan.BaseContext
+                                                Functions = reachableStdlib
+                                            }
+                                            {
+                                                ContextIdentity = freshProgramContextIdentity
+                                                Functions = otherProgramFuncs
+                                            }
+                                            {
+                                                ContextIdentity = dependencyIdentity
+                                                Functions = reachableDependencyFuncs
+                                            }
+                                        ]
+                                        |> List.filter (fun group -> not (List.isEmpty group.Functions))
                                     if shouldDumpIR plan.Verbosity plan.Options.DumpLIR then
                                         printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 
@@ -3312,20 +3337,18 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             false
                                             plan.Session
                                             dependencyIdentity
+                                            functionGroups
                                             ([
                                                 {
                                                     CodeGen.ContextIdentity = box plan.BaseContext
-                                                    FunctionGroupIdentity = box plan.BaseContext
                                                     Functions = reachableStdlib
                                                 }
                                                 {
                                                     CodeGen.ContextIdentity = dependencyIdentity
-                                                    FunctionGroupIdentity = freshProgramContextIdentity
                                                     Functions = reachableProgramFuncs
                                                 }
                                                 {
                                                     CodeGen.ContextIdentity = dependencyIdentity
-                                                    FunctionGroupIdentity = dependencyIdentity
                                                     Functions = reachableDependencyFuncs
                                                 }
                                              ]
