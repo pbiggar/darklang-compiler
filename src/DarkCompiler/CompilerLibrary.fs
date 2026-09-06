@@ -869,7 +869,16 @@ let private compileMirToLir
 
     if verbosity >= 1 then println $"  [4/7] MIR → LIR{suffix}..."
     let lirStart = sw.Elapsed.TotalMilliseconds
-    let lirResult = MIR_to_LIR.toLIRFor arch optimizedProgram
+    let lirPhaseRecorder =
+        passTimingRecorder
+        |> Option.map (fun recorder ->
+            fun name (elapsedMs: float) ->
+                recorder {
+                    Pass = name
+                    Elapsed = TimeSpan.FromMilliseconds elapsedMs
+                })
+    let lirResult =
+        MIR_to_LIR.toLIRForWithTrace lirPhaseRecorder arch optimizedProgram
     match lirResult with
     | Error err -> Error $"LIR conversion error: {err}"
     | Ok lirProgram ->

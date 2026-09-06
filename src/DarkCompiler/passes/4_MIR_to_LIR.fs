@@ -2149,7 +2149,19 @@ let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, stri
     | None -> Ok ()
 
 /// Convert a MIR program to LIR for a concrete target architecture.
-let toLIRFor (arch: Platform.Arch) (program: MIR.Program) : Result<LIR.Program, string> =
+let toLIRForWithTrace
+    (phaseRecorder: (string -> float -> unit) option)
+    (arch: Platform.Arch)
+    (program: MIR.Program)
+    : Result<LIR.Program, string> =
+    let startPhase () =
+        phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
+    let recordPhase name timer =
+        match phaseRecorder, timer with
+        | Some record, Some (timer: System.Diagnostics.Stopwatch) ->
+            timer.Stop()
+            record name timer.Elapsed.TotalMilliseconds
+        | _ -> ()
     let (MIR.Program (mirFuncs, variantRegistry, recordRegistry)) = program
 
     // Pre-check: verify all functions have ≤8 parameters and calls have ≤8 arguments
@@ -2186,9 +2198,13 @@ let toLIRFor (arch: Platform.Arch) (program: MIR.Program) : Result<LIR.Program, 
                   UsedCalleeSaved = []  // Will be determined by register allocation
                   CodegenFacts = None }
 
-    match mapResults convertFunc mirFuncs with
+    let functionTimer = startPhase ()
+    let convertedFunctions = mapResults convertFunc mirFuncs
+    recordPhase "MIR -> LIR Function Conversion" functionTimer
+    match convertedFunctions with
     | Error err -> Error err
     | Ok lirFuncs ->
+        let registryTimer = startPhase ()
         let lirVariantRegistry : LIR.VariantRegistry =
             variantRegistry
             |> Map.map (fun _ typeVariants ->
@@ -2204,7 +2220,11 @@ let toLIRFor (arch: Platform.Arch) (program: MIR.Program) : Result<LIR.Program, 
             recordRegistry
             |> Map.map (fun _ fields ->
                 fields |> List.map (fun field -> (field.Name, field.Type)))
+        recordPhase "MIR -> LIR Registry Projection" registryTimer
         Ok (LIR.Program (lirFuncs, lirVariantRegistry, lirRecordRegistry))
+
+let toLIRFor (arch: Platform.Arch) (program: MIR.Program) : Result<LIR.Program, string> =
+    toLIRForWithTrace None arch program
 
 /// ARM64 remains the default for target-neutral pass fixtures.
 let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
