@@ -7814,28 +7814,18 @@ type GeneratedChunk = {
     ReusableAcrossCompilations: bool
 }
 
-type GeneratedChunkGroup = {
-    Chunks: GeneratedChunk list
-    ReusableAcrossCompilations: bool
-}
-
 type FunctionGroupCodegenCache =
     obj
         -> LIR.Function list
         -> (unit -> Result<GeneratedChunk list, string>)
         -> Result<GeneratedChunk list, string>
 
-type GeneratedProgram = private GeneratedProgram of GeneratedChunkGroup list
+type GeneratedProgram = private GeneratedProgram of GeneratedChunk list
 
-let generatedProgramChunkGroups (GeneratedProgram groups) : GeneratedChunkGroup list = groups
+let generatedProgramChunks (GeneratedProgram chunks) : GeneratedChunk list = chunks
 
-let generatedProgramChunks (GeneratedProgram groups) : GeneratedChunk list =
-    groups |> List.collect (fun group -> group.Chunks)
-
-let generatedProgramInstructions (GeneratedProgram groups) : ARM64Symbolic.Instr list =
-    groups
-    |> List.collect (fun group -> group.Chunks)
-    |> List.collect (fun chunk -> chunk.Instructions)
+let generatedProgramInstructions (GeneratedProgram chunks) : ARM64Symbolic.Instr list =
+    chunks |> List.collect (fun chunk -> chunk.Instructions)
 
 let private generatePreparedARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
@@ -8279,26 +8269,19 @@ let private generatePreparedARM64WithOptionsAndCache
 
     let convertRun (group: FunctionGroup option, runFunctions) =
         let generate () = ResultList.mapResults convertCached runFunctions
-        let converted =
-            match group, functionGroupCache with
-            | Some group, Some cache when group.ReusableAcrossCompilations ->
-                cache group.ContextIdentity runFunctions generate
-            | _ ->
-                generate ()
-        converted
-        |> Result.map (fun chunks -> {
-            Chunks = chunks
-            ReusableAcrossCompilations =
-                group
-                |> Option.exists (fun value -> value.ReusableAcrossCompilations)
-        })
+        match group, functionGroupCache with
+        | Some group, Some cache when group.ReusableAcrossCompilations ->
+            cache group.ContextIdentity runFunctions generate
+        | _ ->
+            generate ()
 
-    let convertedFunctionChunkGroups =
+    let convertedFunctionChunks =
         ResultList.mapResults convertRun functionRuns
+        |> Result.map List.concat
     recordPhase "ARM64 Codegen Functions" functionTimer
 
-    convertedFunctionChunkGroups
-    |> Result.map (fun functionChunkGroups ->
+    convertedFunctionChunks
+    |> Result.map (fun functionChunks ->
         let helperTimer = startPhase ()
         let generateHelperInstructions () =
             // The helper cache key below completely describes helper planning
@@ -8589,13 +8572,10 @@ let private generatePreparedARM64WithOptionsAndCache
         let assemblyTimer = startPhase ()
         let generated =
             GeneratedProgram (
-                functionChunkGroups
+                functionChunks
                 @ [{
-                    Chunks = [{
-                        Instructions = optimizedHelperInstructions
-                        ReusableAcrossCompilations = Option.isSome helperCache
-                    }]
-                    ReusableAcrossCompilations = false
+                    Instructions = optimizedHelperInstructions
+                    ReusableAcrossCompilations = Option.isSome helperCache
                 }])
         recordPhase "ARM64 Codegen Assembly" assemblyTimer
         generated)

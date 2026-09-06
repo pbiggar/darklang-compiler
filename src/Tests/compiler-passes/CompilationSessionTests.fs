@@ -152,30 +152,13 @@ let testArm64EmissionChunkCacheUsesChunkIdentity (_: CompilerLibrary.StdlibResul
         session.PrepareArm64EmissionChunk
             structurallyEquivalentInstructions
             (prepare structurallyEquivalentInstructions)
-    let generatedChunk : CodeGen.GeneratedChunk = {
-        Instructions = instructions
-        ReusableAcrossCompilations = true
-    }
-    let chunks = [generatedChunk]
-    let structurallyEquivalentChunks = [generatedChunk]
-    let groupPreparations = ResizeArray<unit>()
-    let prepareGroup () =
-        groupPreparations.Add ()
-        [first]
-    let firstGroup = session.PrepareArm64EmissionChunkGroup chunks prepareGroup
-    let repeatedGroup = session.PrepareArm64EmissionChunkGroup chunks prepareGroup
-    let _ =
-        session.PrepareArm64EmissionChunkGroup structurallyEquivalentChunks prepareGroup
     if preparations.Count = 2
        && System.Object.ReferenceEquals(first, repeated)
        && not (System.Object.ReferenceEquals(first, structurallyEquivalent))
-       && groupPreparations.Count = 2
-       && System.Object.ReferenceEquals(firstGroup, repeatedGroup)
-       && session.CachedArm64EmissionChunkCount = 2
-       && session.CachedArm64EmissionChunkGroupCount = 2 then
+       && session.CachedArm64EmissionChunkCount = 2 then
         Ok ()
     else
-        Error $"Expected identity-based prepared chunk reuse, got preparations={preparations.Count}, groups={groupPreparations.Count}, cached={session.CachedArm64EmissionChunkCount}, cached groups={session.CachedArm64EmissionChunkGroupCount}, repeated={System.Object.ReferenceEquals(first, repeated)}, structural={System.Object.ReferenceEquals(first, structurallyEquivalent)}"
+        Error $"Expected identity-based prepared chunk reuse, got preparations={preparations.Count}, cached={session.CachedArm64EmissionChunkCount}, repeated={System.Object.ReferenceEquals(first, repeated)}, structural={System.Object.ReferenceEquals(first, structurallyEquivalent)}"
 
 let testArm64ReleasePlanSummaryCacheConfirmsPlanShape (_: CompilerLibrary.StdlibResult) () : TestResult =
     use session = new CompilerLibrary.CompilationSession()
@@ -262,7 +245,6 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
         && first.CachedMirRegistryProjectionCount = 0
         && first.CachedArm64MetadataGroupCount = 0
         && first.CachedArm64FunctionGroupCount = 0
-        && first.CachedArm64EmissionChunkGroupCount = 0
         && first.CachedArm64ReleasePlanSummaryCount = 0
         && first.CachedJsonPlanCount = 0
         && second.CachedArm64FunctionCount > 0
@@ -271,7 +253,6 @@ let testSessionIsolationAndDisposal (stdlib: CompilerLibrary.StdlibResult) () : 
         && second.CachedMirRegistryProjectionCount > 0
         && second.CachedArm64MetadataGroupCount > 0
         && second.CachedArm64FunctionGroupCount > 0
-        && second.CachedArm64EmissionChunkGroupCount > 0
         && second.CachedArm64ReleasePlanSummaryCount > 0
         && second.CachedJsonPlanCount > 0 -> Ok ()
     | Ok (), Ok () ->
