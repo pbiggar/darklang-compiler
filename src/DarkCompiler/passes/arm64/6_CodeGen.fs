@@ -170,7 +170,7 @@ type private SlotInitRootRetainTarget =
 type private RcReleasePlanSummary = LIR.Arm64ReleasePlanSummary
 type private RcHelperRequirements = LIR.Arm64RcHelperRequirements
 
-type private Arm64ProgramFacts = {
+type Arm64ProgramFacts = {
     ClosurePayloadSizesFromParams: Map<string, int>
     ClosurePayloadSizesFromAllocs: Map<string, int>
     ClosureCaptureTypes: Map<string, AST.Type list>
@@ -179,7 +179,7 @@ type private Arm64ProgramFacts = {
 
 /// ARM64-only metadata assembled from the reachable functions' carried facts.
 [<Struct>]
-type private Arm64ProgramMetadata = {
+type Arm64ProgramMetadata = {
     Facts: Arm64ProgramFacts
     RcHelperRequirements: RcHelperRequirements
 }
@@ -7775,6 +7775,16 @@ let prepareARM64Program
 type FunctionCodegenCache =
     LIR.Function -> (unit -> Result<ARM64Symbolic.Instr list, string>) -> Result<ARM64Symbolic.Instr list, string>
 
+/// Caller-owned cache for summaries of reusable function groups. Group
+/// summaries form a monoid, so an executable can merge cached dependency and
+/// stdlib facts with the small fresh program fragment.
+type MetadataGroupCache =
+    LIR.RecordRegistry
+        -> ANF.RcSumShapeRegistry
+        -> LIR.Function list
+        -> (unit -> Arm64ProgramMetadata)
+        -> Arm64ProgramMetadata
+
 type GeneratedChunk = {
     Instructions: ARM64Symbolic.Instr list
     ReusableAcrossCompilations: bool
@@ -7791,6 +7801,8 @@ let private generatePreparedARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
+    (metadataGroupCache: MetadataGroupCache option)
+    (metadataGroups: LIR.Function list list)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
     : Result<GeneratedProgram, string> =
@@ -7947,13 +7959,7 @@ let private generatePreparedARM64WithOptionsAndCache
                 RcHelperRequirements = requirements
         }
 
-    // Retain source function order for metadata. The replaced Map.ofList scans
-    // used last-writer-wins precedence; sortedFunctions is emission order only.
-    let instructionMetadata =
-        functionsWithFacts
-        |> List.fold collectFunctionMetadata emptyProgramMetadata
-
-    let programMetadata =
+    let finishMetadata (instructionMetadata: Arm64ProgramMetadata) =
         let rcHelperRequirements =
             instructionMetadata.Facts.ClosureCaptureTypes
             |> Map.fold
@@ -7985,6 +7991,71 @@ let private generatePreparedARM64WithOptionsAndCache
                         requirements)
                 instructionMetadata.RcHelperRequirements
         { instructionMetadata with RcHelperRequirements = rcHelperRequirements }
+
+    let summarizeGroup (group: LIR.Function list) =
+        // Retain source function order: map entries intentionally preserve the
+        // original last-writer-wins behavior for compiler-generated labels.
+        group
+        |> List.map (fun func ->
+            let facts =
+                match func.CodegenFacts with
+                | Some facts -> facts
+                | None -> Crash.crash "ARM64 codegen invariant: missing validated function facts"
+            (func, facts))
+        |> List.fold collectFunctionMetadata emptyProgramMetadata
+        |> finishMetadata
+
+    let mergeMaps left right =
+        Map.fold (fun result key value -> Map.add key value result) left right
+
+    let mergeMetadata
+        (left: Arm64ProgramMetadata)
+        (right: Arm64ProgramMetadata)
+        : Arm64ProgramMetadata =
+        {
+            Facts = {
+                ClosurePayloadSizesFromParams =
+                    mergeMaps
+                        left.Facts.ClosurePayloadSizesFromParams
+                        right.Facts.ClosurePayloadSizesFromParams
+                ClosurePayloadSizesFromAllocs =
+                    mergeMaps
+                        left.Facts.ClosurePayloadSizesFromAllocs
+                        right.Facts.ClosurePayloadSizesFromAllocs
+                ClosureCaptureTypes =
+                    mergeMaps
+                        left.Facts.ClosureCaptureTypes
+                        right.Facts.ClosureCaptureTypes
+                RecursiveReleaseTypes =
+                    Set.union
+                        left.Facts.RecursiveReleaseTypes
+                        right.Facts.RecursiveReleaseTypes
+            }
+            RcHelperRequirements =
+                mergePrecomputedRcHelperRequirements
+                    left.RcHelperRequirements
+                    right.RcHelperRequirements
+        }
+
+    let groups =
+        match metadataGroups with
+        | [] -> [functions]
+        | groups -> groups
+
+    let programMetadata =
+        groups
+        |> List.fold (fun metadata group ->
+            let groupMetadata =
+                match metadataGroupCache with
+                | Some cache ->
+                    cache
+                        recordRegistry
+                        sumShapeRegistry
+                        group
+                        (fun () -> summarizeGroup group)
+                | None ->
+                    summarizeGroup group
+            mergeMetadata metadata groupMetadata) emptyProgramMetadata
 
     let rcHelperRequirements = programMetadata.RcHelperRequirements
 
@@ -8260,12 +8331,13 @@ let private generatePreparedARM64WithOptionsAndCache
     let convertCached func =
         // Function chunks are closed by their epilogue (or _start exit), so
         // peephole patterns cannot span into the next function's entry label.
-        // Cache the finalized chunk and never rescan it per executable.
+        // The compiler's fixed _start trampoline is reusable too: the changing
+        // user expression lives behind its __dark_compiler_program_entry call.
+        // Cache each finalized chunk and never rescan it per executable.
         let generate () =
             convertFunction heapOverflowTrapBody ctx func
             |> Result.map peepholeOptimize
-        let reusableAcrossCompilations =
-            Option.isSome functionCache && func.Name <> "_start"
+        let reusableAcrossCompilations = Option.isSome functionCache
         let converted =
             match functionCache with
             | Some cache when reusableAcrossCompilations -> cache func generate
@@ -8413,10 +8485,12 @@ let private generatePreparedARM64WithOptionsAndCache
         recordPhase "ARM64 Codegen Assembly" assemblyTimer
         generated)
 
-let generateARM64WithOptionsAndCache
+let generateARM64WithOptionsAndCaches
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
+    (metadataGroupCache: MetadataGroupCache option)
+    (metadataGroups: LIR.Function list list)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
     : Result<GeneratedProgram, string> =
@@ -8438,8 +8512,26 @@ let generateARM64WithOptionsAndCache
             target
             options
             functionCache
+            metadataGroupCache
+            metadataGroups
             phaseRecorder
             program
+
+let generateARM64WithOptionsAndCache
+    (target: ARM64.TargetConfig)
+    (options: CodeGenOptions)
+    (functionCache: FunctionCodegenCache option)
+    (phaseRecorder: (string -> float -> unit) option)
+    (program: LIR.Program)
+    : Result<GeneratedProgram, string> =
+    generateARM64WithOptionsAndCaches
+        target
+        options
+        functionCache
+        None
+        []
+        phaseRecorder
+        program
 
 let generateARM64WithOptions (target: ARM64.TargetConfig) (options: CodeGenOptions) (program: LIR.Program) : Result<GeneratedProgram, string> =
     generateARM64WithOptionsAndCache target options None None program

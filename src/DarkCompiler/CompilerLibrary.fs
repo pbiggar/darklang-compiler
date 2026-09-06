@@ -150,14 +150,55 @@ type private LirFunctionReferenceComparer() =
         member _.GetHashCode(func) =
             System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func)
 
+type private ObjectReferenceComparer() =
+    interface IEqualityComparer<obj> with
+        member _.Equals(left, right) = Object.ReferenceEquals(left, right)
+        member _.GetHashCode(value) =
+            System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value)
+
+[<NoComparison>]
+type internal AnfDependencyKey = {
+    Functions: AST.FunctionDef list
+    LocalRegistries: AST_to_ANF.Registries
+    NonInlineableFunctionNames: Set<string>
+}
+
+[<NoComparison>]
+type internal CompiledDependencyConfig = {
+    Target: Platform.Target
+    Options: CompilerOptions
+    NonInlineableFunctionNames: Set<string>
+}
+
 type private Arm64InstructionChunkReferenceComparer() =
     interface IEqualityComparer<ARM64Symbolic.Instr list> with
         member _.Equals(left, right) = Object.ReferenceEquals(left, right)
         member _.GetHashCode(instructions) =
             System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(instructions)
 
+[<NoComparison>]
+type private Arm64MetadataGroupKey = {
+    RecordRegistry: LIR.RecordRegistry
+    SumShapeRegistry: ANF.RcSumShapeRegistry
+    FunctionFacts: (string * LIR.FunctionCodegenFacts option) list
+}
+
 type CompilationSession(collectCodegenMetrics: bool) =
     let jsonPlanning = new JsonPlanning.PlanningSession()
+    let anfDependenciesByContext =
+        Dictionary<
+            obj,
+            Dictionary<
+                AnfDependencyKey,
+                Result<ANF.Function list * ANF.VarGen * obj, string>>>(ObjectReferenceComparer())
+    let compiledDependenciesByIdentity =
+        Dictionary<
+            obj,
+            Dictionary<
+                CompiledDependencyConfig,
+                Result<LIR.Function list, string>>>(ObjectReferenceComparer())
+    let arm64MetadataGroups =
+        Dictionary<Arm64MetadataGroupKey, CodeGen.Arm64ProgramMetadata>()
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
     // Prebuilt stdlib and preamble functions retain object identity across a
     // compilation session. Keep an identity-indexed fast lane for functions
@@ -183,10 +224,95 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable arm64CodegenMissCount = 0
     let mutable arm64ReleasePlanSummaryHitCount = 0
     let mutable arm64ReleasePlanSummaryMissCount = 0
+    let mutable anfDependencyHitCount = 0
+    let mutable anfDependencyMissCount = 0
+    let mutable compiledDependencyHitCount = 0
+    let mutable compiledDependencyMissCount = 0
+    let mutable arm64StartCodegenHitCount = 0
+    let mutable arm64MetadataGroupHitCount = 0
+    let mutable arm64MetadataGroupMissCount = 0
 
     new() = new CompilationSession(false)
 
     member _.JsonPlanning = jsonPlanning
+
+    member internal _.ConvertAnfDependencies
+        (contextIdentity: obj)
+        (key: AnfDependencyKey)
+        (convert: unit -> Result<ANF.Function list * ANF.VarGen, string>)
+        : Result<ANF.Function list * ANF.VarGen * obj, string> =
+        if disposed then
+            convert () |> Result.map (fun (functions, varGen) -> (functions, varGen, System.Object()))
+        else
+            let contextEntries =
+                match anfDependenciesByContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries = Dictionary<AnfDependencyKey, Result<ANF.Function list * ANF.VarGen * obj, string>>()
+                    anfDependenciesByContext.[contextIdentity] <- entries
+                    entries
+            match contextEntries.TryGetValue key with
+            | true, result ->
+                anfDependencyHitCount <- anfDependencyHitCount + 1
+                result
+            | false, _ ->
+                let result =
+                    convert ()
+                    |> Result.map (fun (functions, varGen) -> (functions, varGen, System.Object()))
+                contextEntries.[key] <- result
+                anfDependencyMissCount <- anfDependencyMissCount + 1
+                result
+
+    member internal _.CompileDependencies
+        (dependencyIdentity: obj)
+        (config: CompiledDependencyConfig)
+        (compile: unit -> Result<LIR.Function list, string>)
+        : Result<LIR.Function list, string> =
+        if disposed || config.Options.EnableCoverage then
+            compile ()
+        else
+            let entries =
+                match compiledDependenciesByIdentity.TryGetValue dependencyIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries = Dictionary<CompiledDependencyConfig, Result<LIR.Function list, string>>()
+                    compiledDependenciesByIdentity.[dependencyIdentity] <- entries
+                    entries
+            match entries.TryGetValue config with
+            | true, result ->
+                compiledDependencyHitCount <- compiledDependencyHitCount + 1
+                result
+            | false, _ ->
+                let result = compile ()
+                entries.[config] <- result
+                compiledDependencyMissCount <- compiledDependencyMissCount + 1
+                result
+
+    member internal _.Arm64MetadataGroup
+        (recordRegistry: LIR.RecordRegistry)
+        (sumShapeRegistry: ANF.RcSumShapeRegistry)
+        (functions: LIR.Function list)
+        (summarize: unit -> CodeGen.Arm64ProgramMetadata)
+        : CodeGen.Arm64ProgramMetadata =
+        if disposed then
+            summarize ()
+        else
+            let key = {
+                RecordRegistry = recordRegistry
+                SumShapeRegistry = sumShapeRegistry
+                FunctionFacts =
+                    functions
+                    |> List.map (fun func -> (func.Name, func.CodegenFacts))
+            }
+            match arm64MetadataGroups.TryGetValue key with
+            | true, metadata ->
+                arm64MetadataGroupHitCount <- arm64MetadataGroupHitCount + 1
+                metadata
+            | false, _ ->
+                let metadata = summarize ()
+                arm64MetadataGroups.[key] <- metadata
+                arm64MetadataGroupMissCount <- arm64MetadataGroupMissCount + 1
+                metadata
 
     member _.Arm64ReleasePlanSummary
         (includeStaticRootDependencies: bool)
@@ -237,11 +363,15 @@ type CompilationSession(collectCodegenMetrics: bool) =
             match referenceResult with
             | Some result ->
                 arm64CodegenHitCount <- arm64CodegenHitCount + 1
+                if func.Name = "_start" then
+                    arm64StartCodegenHitCount <- arm64StartCodegenHitCount + 1
                 result
             | None ->
                 match arm64Functions.TryGetValue key with
                 | true, result ->
                     arm64CodegenHitCount <- arm64CodegenHitCount + 1
+                    if func.Name = "_start" then
+                        arm64StartCodegenHitCount <- arm64StartCodegenHitCount + 1
                     result
                 | false, _ ->
                     let timer =
@@ -300,8 +430,15 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CachedJsonPlanCount = jsonPlanning.Count
     member _.JsonPlanHitCount = jsonPlanning.HitCount
     member _.JsonPlanMissCount = jsonPlanning.MissCount
+    member _.AnfDependencyHitCount = anfDependencyHitCount
+    member _.AnfDependencyMissCount = anfDependencyMissCount
+    member _.CompiledDependencyHitCount = compiledDependencyHitCount
+    member _.CompiledDependencyMissCount = compiledDependencyMissCount
     member _.Arm64CodegenHitCount = arm64CodegenHitCount
     member _.Arm64CodegenMissCount = arm64CodegenMissCount
+    member _.Arm64StartCodegenHitCount = arm64StartCodegenHitCount
+    member _.Arm64MetadataGroupHitCount = arm64MetadataGroupHitCount
+    member _.Arm64MetadataGroupMissCount = arm64MetadataGroupMissCount
     member _.Arm64ReleasePlanSummaryHitCount = arm64ReleasePlanSummaryHitCount
     member _.Arm64ReleasePlanSummaryMissCount = arm64ReleasePlanSummaryMissCount
     member _.Arm64CodegenMetrics = arm64CodegenMetrics |> Seq.toList
@@ -309,6 +446,9 @@ type CompilationSession(collectCodegenMetrics: bool) =
     interface IDisposable with
         member _.Dispose() =
             (jsonPlanning :> System.IDisposable).Dispose()
+            anfDependenciesByContext.Clear()
+            compiledDependenciesByIdentity.Clear()
+            arm64MetadataGroups.Clear()
             arm64Functions.Clear()
             arm64FunctionsByReference.Clear()
             arm64EmissionChunks.Clear()
@@ -802,6 +942,7 @@ let private generateBinary
     (dumpAsm: bool)
     (dumpMachineCode: bool)
     (session: CompilationSession option)
+    (metadataGroups: LIR.Function list list)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
@@ -878,6 +1019,15 @@ let private generateBinary
             |> Option.filter (fun _ -> not options.EnableCoverage)
             |> Option.map (fun current ->
                 fun func generate -> current.CodegenFunction arm64Target codegenOptions func generate)
+        let metadataGroupCache =
+            session
+            |> Option.map (fun current ->
+                fun recordRegistry sumShapeRegistry functions summarize ->
+                    current.Arm64MetadataGroup
+                        recordRegistry
+                        sumShapeRegistry
+                        functions
+                        summarize)
         let codegenPhaseRecorder =
             passTimingRecorder
             |> Option.map (fun record ->
@@ -887,10 +1037,12 @@ let private generateBinary
                         Elapsed = TimeSpan.FromMilliseconds elapsedMs
                     })
         let codegenResult =
-            CodeGen.generateARM64WithOptionsAndCache
+            CodeGen.generateARM64WithOptionsAndCaches
                 arm64Target
                 codegenOptions
                 functionCache
+                metadataGroupCache
+                metadataGroups
                 codegenPhaseRecorder
                 allocatedProgram
         match codegenResult with
@@ -1292,8 +1444,9 @@ let private convertTypedProgramToUserOnlyWithMode
     (baseContext: PipelineContext)
     (monomorphization: MonomorphizationMode)
     (typeCheckEnv: TypeChecking.TypeCheckEnv)
+    (session: CompilationSession option)
     (typedProgram: AST.Program)
-    : Result<AST_to_ANF.UserOnlyResult, string> =
+    : Result<AST_to_ANF.UserOnlyResult * obj, string> =
     // Late AOT plans (notably Json) may introduce concrete calls to generic
     // stdlib functions after the suite preamble registry was built. Materialize
     // just those missing specializations into the user compilation unit.
@@ -1370,11 +1523,29 @@ let private convertTypedProgramToUserOnlyWithMode
                 buildRegistriesForProgram baseContext.Registries.ModuleRegistry baseContext.Registries typeDefs functions
             let localReturnTypes = extractReturnTypes localRegistries.FuncReg
             let varGen = ANF.VarGen 0
-            AST_to_ANF.convertFunctions registries varGen resolvedFunctions
-            |> Result.bind (fun (anfFuncs, varGen1) ->
+            let conversionKey = {
+                Functions = resolvedFunctions
+                LocalRegistries = localRegistries
+                NonInlineableFunctionNames = nonInlineableFunctionNames
+            }
+            let convert () =
+                AST_to_ANF.convertFunctions registries varGen resolvedFunctions
+            let convertedDependencies =
+                match session with
+                | Some current ->
+                    current.ConvertAnfDependencies
+                        (box baseContext)
+                        conversionKey
+                        convert
+                | None ->
+                    convert ()
+                    |> Result.map (fun (anfFuncs, varGen1) ->
+                        (anfFuncs, varGen1, System.Object()))
+            convertedDependencies
+            |> Result.bind (fun (anfFuncs, varGen1, dependencyIdentity) ->
                 AST_to_ANF.convertExprToAnf registries varGen1 expr
                 |> Result.map (fun (anfExpr, _) ->
-                    {
+                    ({
                         UserFunctions = anfFuncs
                         NonInlineableFunctionNames = nonInlineableFunctionNames
                         MainExpr = anfExpr
@@ -1385,7 +1556,8 @@ let private convertTypedProgramToUserOnlyWithMode
                         FuncParams = registries.FuncParams
                         ModuleRegistry = registries.ModuleRegistry
                         RecursiveMembers = registries.RecursiveMembers
-                    }))))
+                     },
+                     dependencyIdentity)))))
 
 let private convertTypedProgramToUserOnly
     (baseContext: PipelineContext)
@@ -1395,7 +1567,9 @@ let private convertTypedProgramToUserOnly
         baseContext
         (Monomorphize (Some baseContext.GenericFuncDefs))
         baseContext.TypeCheckEnv
+        None
         typedProgram
+    |> Result.map fst
 
 /// Try to delete a file, ignoring any errors
 let private tryDeleteFile (path: string) : unit =
@@ -2355,6 +2529,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 plan.BaseContext
                                 plan.Monomorphization
                                 userEnv
+                                plan.Session
                                 materializedProgram)
                     let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                     recordPassTiming plan.PassTimingRecorder "AST -> ANF" anfTime
@@ -2364,18 +2539,38 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                     match userOnlyResult with
                     | Error err -> Error $"ANF conversion error: {err}"
-                    | Ok userOnly ->
+                    | Ok (userOnly, dependencyIdentity) ->
                         let functionsToCompile =
                             userOnly.UserFunctions
                             |> List.filter (fun f -> not (Set.contains f.Name plan.SkipFunctionNames))
 
+                        let dependencyRoots =
+                            functionsToCompile
+                            |> List.choose (fun func ->
+                                if func.Name.StartsWith("__dark_json_")
+                                   || func.Name.StartsWith("__dark_eq_")
+                                   || Set.contains func.Name userOnly.NonInlineableFunctionNames then
+                                    Some func.Name
+                                else
+                                    None)
+                            |> Set.ofList
+                        let dependencyNames =
+                            CallGraphReachability.findReachable
+                                (ANFDeadCodeElimination.buildCallGraph functionsToCompile)
+                                dependencyRoots
+                        let dependencyFunctions, programFunctions =
+                            functionsToCompile
+                            |> List.partition (fun func -> Set.contains func.Name dependencyNames)
+
                         if plan.EmitFunctionEvents && plan.Verbosity >= 3 then
-                            println $"  [COMPILE] {functionsToCompile.Length} user functions compiled fresh"
+                            println $"  [COMPILE] {programFunctions.Length} program functions compiled fresh"
                             for f in functionsToCompile do
                                 println $"    - {f.Name}"
 
-                        let entryFunction =
-                            AST_to_ANF.synthesizeEntryFunction "_start" boundaryProgramType userOnly.MainExpr
+                        let programEntryName = "__dark_compiler_program_entry"
+                        let hasReservedName =
+                            functionsToCompile
+                            |> List.exists (fun func -> func.Name = programEntryName)
                         let userRegistries : AST_to_ANF.Registries = {
                             TypeReg = userOnly.TypeReg
                             VariantLookup = userOnly.VariantLookup
@@ -2384,7 +2579,19 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             ModuleRegistry = userOnly.ModuleRegistry
                             RecursiveMembers = userOnly.RecursiveMembers
                         }
-                        let anfResult =
+                        let externalReturnTypes =
+                            mergeReturnTypes plan.BaseContext.ReturnTypes userOnly.LocalReturnTypes
+                        let releasePlanSummaryCache =
+                            plan.Session
+                            |> Option.map (fun current ->
+                                fun includeStaticRootDependencies releasePlanCacheKey releasePlan generate ->
+                                    current.Arm64ReleasePlanSummary
+                                        includeStaticRootDependencies
+                                        releasePlanCacheKey
+                                        releasePlan
+                                        generate)
+
+                        let compileDependencyFunctions () =
                             buildAnf
                                 plan.Verbosity
                                 plan.Options
@@ -2392,19 +2599,81 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 userRegistries
                                 plan.ExternalInlineCandidates
                                 userOnly.NonInlineableFunctionNames
-                                (entryFunction :: functionsToCompile)
+                                dependencyFunctions
                                 true
                                 plan.PassTimingRecorder
-                        match anfResult with
-                        | Error err -> Error err
-                        | Ok (anfFunctions, typeMap) ->
+                            |> Result.bind (fun (anfDependencies, dependencyTypeMap) ->
+                                let tcoDependencies =
+                                    applyTco
+                                        plan.Verbosity
+                                        plan.Options
+                                        sw
+                                        userRegistries.RecursiveMembers
+                                        anfDependencies
+                                        plan.PassTimingRecorder
+                                lowerToAllocatedLir
+                                    plan.BaseContext.Target
+                                    plan.Verbosity
+                                    plan.Options
+                                    sw
+                                    plan.PassTimingRecorder
+                                    releasePlanSummaryCache
+                                    plan.Labels.StageSuffix
+                                    tcoDependencies
+                                    dependencyTypeMap
+                                    userRegistries
+                                    externalReturnTypes)
+
+                        let dependencyLirResult =
+                            if List.isEmpty dependencyFunctions then
+                                Ok []
+                            else
+                                match plan.Session with
+                                | Some current ->
+                                    current.CompileDependencies
+                                        dependencyIdentity
+                                        {
+                                            Target = plan.BaseContext.Target
+                                            Options = plan.Options
+                                            NonInlineableFunctionNames = userOnly.NonInlineableFunctionNames
+                                        }
+                                        compileDependencyFunctions
+                                | None ->
+                                    compileDependencyFunctions ()
+
+                        let programEntry =
+                            AST_to_ANF.synthesizeEntryFunction
+                                programEntryName
+                                boundaryProgramType
+                                userOnly.MainExpr
+                        let programAnfResult =
+                            if hasReservedName then
+                                Error $"Function name '{programEntryName}' is reserved"
+                            else
+                                buildAnf
+                                    plan.Verbosity
+                                    plan.Options
+                                    sw
+                                    userRegistries
+                                    plan.ExternalInlineCandidates
+                                    userOnly.NonInlineableFunctionNames
+                                    (programEntry :: programFunctions)
+                                    true
+                                    plan.PassTimingRecorder
+                        match dependencyLirResult, programAnfResult with
+                        | Error err, _
+                        | _, Error err -> Error err
+                        | Ok allocatedDependencyFuncs, Ok (programAnfFunctions, programTypeMap) ->
                             if plan.Verbosity >= 1 then println "  [2.6/7] Print Insertion..."
                             let printStart = sw.Elapsed.TotalMilliseconds
                             let printResult =
                                 match plan.Mode with
-                                | FullProgram -> Ok anfFunctions
+                                | FullProgram -> Ok programAnfFunctions
                                 | TestExpression ->
-                                    PrintInsertion.insertPrintInEntry "_start" boundaryProgramType anfFunctions
+                                    PrintInsertion.insertPrintInEntry
+                                        programEntryName
+                                        boundaryProgramType
+                                        programAnfFunctions
                             match printResult with
                             | Error err -> Error $"Print insertion error: {err}"
                             | Ok printedFunctions ->
@@ -2417,19 +2686,15 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     let printProgram = ANF.Program (printedFunctions, ANF.Return ANF.UnitLiteral)
                                     printANFProgram "=== ANF (after Print insertion) ===" printProgram
 
-                                let tcoFunctions = applyTco plan.Verbosity plan.Options sw userRegistries.RecursiveMembers printedFunctions plan.PassTimingRecorder
-                                let externalReturnTypes =
-                                    mergeReturnTypes plan.BaseContext.ReturnTypes userOnly.LocalReturnTypes
-                                let releasePlanSummaryCache =
-                                    plan.Session
-                                    |> Option.map (fun current ->
-                                        fun includeStaticRootDependencies releasePlanCacheKey releasePlan generate ->
-                                            current.Arm64ReleasePlanSummary
-                                                includeStaticRootDependencies
-                                                releasePlanCacheKey
-                                                releasePlan
-                                                generate)
-                                let userLirResult =
+                                let tcoProgramFunctions =
+                                    applyTco
+                                        plan.Verbosity
+                                        plan.Options
+                                        sw
+                                        userRegistries.RecursiveMembers
+                                        printedFunctions
+                                        plan.PassTimingRecorder
+                                let programLirResult =
                                     lowerToAllocatedLir
                                         plan.BaseContext.Target
                                         plan.Verbosity
@@ -2438,13 +2703,69 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         plan.PassTimingRecorder
                                         releasePlanSummaryCache
                                         plan.Labels.StageSuffix
-                                        tcoFunctions
-                                        typeMap
+                                        tcoProgramFunctions
+                                        programTypeMap
                                         userRegistries
                                         externalReturnTypes
-                                match userLirResult with
-                                | Error err -> Error err
-                                | Ok allocatedUserFuncs ->
+                                let startResultId = ANF.TempId 0
+                                let startFunction =
+                                    AST_to_ANF.synthesizeEntryFunction
+                                        "_start"
+                                        boundaryProgramType
+                                        (ANF.Let (
+                                            startResultId,
+                                            ANF.Call (programEntryName, []),
+                                            ANF.Return (ANF.Var startResultId)))
+                                let startRegistries = {
+                                    userRegistries with
+                                        FuncReg =
+                                            Map.add
+                                                programEntryName
+                                                (AST.TFunction ([], boundaryProgramType))
+                                                userRegistries.FuncReg
+                                        FuncParams =
+                                            Map.add programEntryName [] userRegistries.FuncParams
+                                }
+                                let startLirResult =
+                                    buildAnf
+                                        plan.Verbosity
+                                        plan.Options
+                                        sw
+                                        startRegistries
+                                        Map.empty
+                                        Set.empty
+                                        [startFunction]
+                                        false
+                                        plan.PassTimingRecorder
+                                    |> Result.bind (fun (startAnf, startTypeMap) ->
+                                        let tcoStart =
+                                            applyTco
+                                                plan.Verbosity
+                                                plan.Options
+                                                sw
+                                                startRegistries.RecursiveMembers
+                                                startAnf
+                                                plan.PassTimingRecorder
+                                        lowerToAllocatedLir
+                                            plan.BaseContext.Target
+                                            plan.Verbosity
+                                            plan.Options
+                                            sw
+                                            plan.PassTimingRecorder
+                                            releasePlanSummaryCache
+                                            plan.Labels.StageSuffix
+                                            tcoStart
+                                            startTypeMap
+                                            startRegistries
+                                            (Map.add programEntryName boundaryProgramType externalReturnTypes))
+                                match programLirResult, startLirResult with
+                                | Error err, _
+                                | _, Error err -> Error err
+                                | Ok allocatedProgramFuncs, Ok allocatedStartFuncs ->
+                                    let allocatedUserFuncs =
+                                        allocatedStartFuncs
+                                        @ allocatedProgramFuncs
+                                        @ allocatedDependencyFuncs
                                     let allSymbolicUserFuncs = plan.PrebuiltSymbolicFunctions @ allocatedUserFuncs
                                     let finalUserFuncs =
                                         if plan.TreeShakeUserFunctions then
@@ -2484,6 +2805,10 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     // Combine reachable stdlib functions with user functions
                                     let allFuncs =
                                         reachableStdlib @ finalUserFuncs
+                                    let reachableDependencyFuncs, reachableProgramFuncs =
+                                        finalUserFuncs
+                                        |> List.partition (fun func ->
+                                            Set.contains func.Name dependencyNames)
                                     let lirVariantRegistry : LIR.VariantRegistry =
                                         let combinedVariantLookup =
                                             Map.fold
@@ -2536,6 +2861,8 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             false
                                             false
                                             plan.Session
+                                            ([reachableStdlib; reachableProgramFuncs; reachableDependencyFuncs]
+                                             |> List.filter (not << List.isEmpty))
                                             allocatedProgram
                                     match binaryResult with
                                     | Error err -> Error err
