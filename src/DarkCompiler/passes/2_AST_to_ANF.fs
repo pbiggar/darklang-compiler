@@ -10505,8 +10505,8 @@ let buildAliasRegistry (typeDefs: AST.TypeDef list) : AliasRegistry =
 let resolveAliasesInFunctions (aliasReg: AliasRegistry) (functions: AST.FunctionDef list) : AST.FunctionDef list =
     functions |> List.map (resolveAliasesInFunction aliasReg)
 
-/// Build registries from type and function definitions
-let buildRegistries
+let private buildRegistriesInternal
+    (includeModuleFunctionParams: bool)
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
@@ -10580,12 +10580,12 @@ let buildRegistries
         |> Map.ofList
 
     let moduleFuncParams : Map<string, (string * AST.Type) list> =
-        moduleRegistry
-        |> Map.toList
-        |> List.map (fun (qualifiedName, moduleFunc) ->
-            let paramList = moduleFunc.ParamTypes |> List.mapi (fun i t -> ($"arg{i}", t))
-            (qualifiedName, paramList))
-        |> Map.ofList
+        if includeModuleFunctionParams then
+            moduleRegistry
+            |> Map.map (fun _ moduleFunc ->
+                moduleFunc.ParamTypes |> List.mapi (fun i typ -> ($"arg{i}", typ)))
+        else
+            Map.empty
 
     let funcParams =
         Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams
@@ -10601,6 +10601,26 @@ let buildRegistries
         ModuleRegistry = moduleRegistry
         RecursiveMembers = loweredRecursiveMemberRegistry functions
     }
+
+/// Build standalone registries from type and function definitions.
+let buildRegistries
+    (moduleRegistry: AST.ModuleRegistry)
+    (typeDefs: AST.TypeDef list)
+    (aliasReg: AliasRegistry)
+    (functions: AST.FunctionDef list)
+    : Registries =
+    buildRegistriesInternal true moduleRegistry typeDefs aliasReg functions
+
+/// Build only the declaration overlay for a context that already contains the
+/// module function parameters. Reconstructing that constant projection for
+/// every separately compiled user unit is both redundant and expensive.
+let buildOverlayRegistries
+    (moduleRegistry: AST.ModuleRegistry)
+    (typeDefs: AST.TypeDef list)
+    (aliasReg: AliasRegistry)
+    (functions: AST.FunctionDef list)
+    : Registries =
+    buildRegistriesInternal false moduleRegistry typeDefs aliasReg functions
 
 /// Merge registries with overlay taking precedence (module registry stays from base)
 let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =

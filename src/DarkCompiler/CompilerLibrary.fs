@@ -1713,6 +1713,7 @@ let private prepareProgramForAnf
             Ok monomorphized
 
 let private buildRegistriesForProgram
+    (baseProvidesModuleFunctionParams: bool)
     (moduleRegistry: AST.ModuleRegistry)
     (baseRegistries: AST_to_ANF.Registries)
     (typeDefs: AST.TypeDef list)
@@ -1720,7 +1721,11 @@ let private buildRegistriesForProgram
     : AST_to_ANF.Registries * AST_to_ANF.Registries * AST.FunctionDef list =
     let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
     let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
-    let localRegistries = AST_to_ANF.buildRegistries moduleRegistry typeDefs aliasReg resolvedFunctions
+    let localRegistries =
+        if baseProvidesModuleFunctionParams then
+            AST_to_ANF.buildOverlayRegistries moduleRegistry typeDefs aliasReg resolvedFunctions
+        else
+            AST_to_ANF.buildRegistries moduleRegistry typeDefs aliasReg resolvedFunctions
     let mergedRegistries = AST_to_ANF.mergeRegistries baseRegistries localRegistries
     (mergedRegistries, localRegistries, resolvedFunctions)
 
@@ -1765,7 +1770,12 @@ let private convertTypedDeclarations
         splitDeclarations liftedProgram
         |> Result.bind (fun (typeDefs, functions) ->
             let (registries, localRegistries, resolvedFunctions) =
-                buildRegistriesForProgram moduleRegistry baseRegistries typeDefs functions
+                buildRegistriesForProgram
+                    (Option.isSome baseContext)
+                    moduleRegistry
+                    baseRegistries
+                    typeDefs
+                    functions
             AST_to_ANF.convertFunctions registries (ANF.VarGen 0) resolvedFunctions
             |> Result.map (fun (anfFunctions, _) ->
                 { Functions = anfFunctions
@@ -1783,7 +1793,7 @@ let private convertTypedProgramToConversionResult
         AST_to_ANF.splitTopLevels liftedProgram
         |> Result.bind (fun (typeDefs, functions, expr) ->
             let (registries, _localRegistries, resolvedFunctions) =
-                buildRegistriesForProgram moduleRegistry baseRegistries typeDefs functions
+                buildRegistriesForProgram false moduleRegistry baseRegistries typeDefs functions
             let varGen = ANF.VarGen 0
             AST_to_ANF.convertFunctions registries varGen resolvedFunctions
             |> Result.bind (fun (anfFuncs, varGen1) ->
@@ -1882,7 +1892,12 @@ let private convertTypedProgramToUserOnlyWithMode
             AST_to_ANF.splitTopLevels liftedProgram
             |> Result.map (fun (typeDefs, functions, expr) ->
                 let (registries, localRegistries, resolvedFunctions) =
-                    buildRegistriesForProgram baseContext.Registries.ModuleRegistry baseContext.Registries typeDefs functions
+                    buildRegistriesForProgram
+                        true
+                        baseContext.Registries.ModuleRegistry
+                        baseContext.Registries
+                        typeDefs
+                        functions
                 let localReturnTypes = extractReturnTypes localRegistries.FuncReg
                 (registries, localRegistries, resolvedFunctions, localReturnTypes, expr)))
         |> Result.bind (fun (registries, localRegistries, resolvedFunctions, localReturnTypes, expr) ->
@@ -2372,6 +2387,7 @@ let buildStdlibSpecializations
                 |> Result.bind (fun (preparedTypeDefs, preparedFunctions) ->
                     let (registries, localRegistries, resolvedFunctions) =
                         buildRegistriesForProgram
+                            true
                             stdlib.Context.Registries.ModuleRegistry
                             stdlib.Context.Registries
                             preparedTypeDefs
