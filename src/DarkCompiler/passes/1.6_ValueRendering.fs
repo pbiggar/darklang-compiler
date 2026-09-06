@@ -25,9 +25,8 @@ type private RecordInfo = {
 }
 
 type private RenderEnv = {
-    Records: Map<string, RecordInfo>
-    Sums: Map<string, SumInfo>
-    NamedFunctions: Set<string>
+    Records: Lazy<Map<string, RecordInfo>>
+    Sums: Lazy<Map<string, SumInfo>>
 }
 
 type private RenderState = {
@@ -121,7 +120,7 @@ let private makeCase (pattern: Pattern) (body: Expr) : MatchCase =
 let rec private canonicalRenderType (env: RenderEnv) (typ: Type) : Type =
     let canonical = canonicalRenderType env
     match typ with
-    | TRecord (name, typeArgs) when Map.containsKey name env.Sums ->
+    | TRecord (name, typeArgs) when Map.containsKey name env.Sums.Value ->
         TSum (name, List.map canonical typeArgs)
     | TRecord (name, typeArgs) -> TRecord (name, List.map canonical typeArgs)
     | TSum (name, typeArgs) -> TSum (name, List.map canonical typeArgs)
@@ -331,7 +330,7 @@ and private renderBody
             )
         (body, nextState)
     | TRecord (typeName, typeArgs) ->
-        match Map.tryFind typeName env.Records with
+        match Map.tryFind typeName env.Records.Value with
         | None ->
             Crash.crash $"Missing record metadata for value renderer: {typeName}"
         | Some recordInfo ->
@@ -394,7 +393,7 @@ and private renderBody
              ), nextState)
     | TSum ("Uuid", []) -> (call "Stdlib.Uuid.toString" [value], state)
     | TSum (typeName, typeArgs) ->
-        match Map.tryFind typeName env.Sums with
+        match Map.tryFind typeName env.Sums.Value with
         | None -> Crash.crash $"Missing sum metadata for value renderer: {typeName}"
         | Some sumInfo ->
             let subst = typeSubstitution sumInfo.TypeParams typeArgs
@@ -476,55 +475,65 @@ let rewriteProgram
     (programType: Type)
     (Program topLevels)
     : Program =
-    let localRecords =
-        topLevels
-        |> List.choose (function
-            | TypeDef (RecordDef (name, typeParams, fields)) ->
-                Some (name, { TypeParams = typeParams; Fields = firstDeclaredRecordFields fields })
-            | _ -> None)
-        |> Map.ofList
-    let baseRecordInfo =
-        baseRecords
-        |> Map.map (fun name fields ->
-            {
-                TypeParams =
-                    recordMetadata
-                    |> Map.tryFind name
-                    |> Option.map (fun info -> info.TypeParams)
-                    |> Option.defaultValue []
-                Fields = firstDeclaredRecordFields fields
-            })
-    let allCheckedRecordInfo =
-        recordMetadata
-        |> Map.map (fun _ (info: TypeChecking.RecordTypeInfo) ->
-            ({ TypeParams = info.TypeParams; Fields = info.Fields }: RecordInfo))
+    // Most programs return a primitive and never inspect declaration metadata
+    // while constructing their boundary renderer. Building complete record,
+    // sum, and function inventories eagerly made every small compilation scan
+    // the entire base environment. Force each inventory only for a renderer
+    // whose result type can actually consult it.
     let records =
-        baseRecordInfo
-        |> Map.fold (fun acc name info -> Map.add name info acc) allCheckedRecordInfo
-        |> fun checkedRecords ->
-            Map.fold (fun acc name info -> Map.add name info acc) checkedRecords localRecords
+        lazy
+            let localRecords =
+                topLevels
+                |> List.choose (function
+                    | TypeDef (RecordDef (name, typeParams, fields)) ->
+                        Some (name, { TypeParams = typeParams; Fields = firstDeclaredRecordFields fields })
+                    | _ -> None)
+                |> Map.ofList
+            let baseRecordInfo =
+                baseRecords
+                |> Map.map (fun name fields ->
+                    {
+                        TypeParams =
+                            recordMetadata
+                            |> Map.tryFind name
+                            |> Option.map (fun info -> info.TypeParams)
+                            |> Option.defaultValue []
+                        Fields = firstDeclaredRecordFields fields
+                    })
+            let allCheckedRecordInfo =
+                recordMetadata
+                |> Map.map (fun _ (info: TypeChecking.RecordTypeInfo) ->
+                    ({ TypeParams = info.TypeParams; Fields = info.Fields }: RecordInfo))
+            baseRecordInfo
+            |> Map.fold (fun acc name info -> Map.add name info acc) allCheckedRecordInfo
+            |> fun checkedRecords ->
+                Map.fold (fun acc name info -> Map.add name info acc) checkedRecords localRecords
 
-    let baseSums = sumRegistryFromVariants baseVariants
-    let localSums =
-        topLevels
-        |> List.choose (function
-            | TypeDef (SumTypeDef (name, typeParams, variants)) ->
-                Some (
-                    name,
-                    { TypeParams = typeParams
-                      Variants =
-                        variants
-                        |> List.mapi (fun tag variant -> { Name = variant.Name; Tag = tag; Payload = variant.Payload }) }
-                )
-            | _ -> None)
-        |> Map.ofList
-    let sums = Map.fold (fun acc name info -> Map.add name info acc) baseSums localSums
+    let sums =
+        lazy
+            let baseSums = sumRegistryFromVariants baseVariants
+            let localSums =
+                topLevels
+                |> List.choose (function
+                    | TypeDef (SumTypeDef (name, typeParams, variants)) ->
+                        Some (
+                            name,
+                            { TypeParams = typeParams
+                              Variants =
+                                variants
+                                |> List.mapi (fun tag variant -> { Name = variant.Name; Tag = tag; Payload = variant.Payload }) }
+                        )
+                    | _ -> None)
+                |> Map.ofList
+            Map.fold (fun acc name info -> Map.add name info acc) baseSums localSums
+
     let namedFunctions =
-        topLevels
-        |> List.choose (function FunctionDef fn -> Some fn.Name | _ -> None)
-        |> Set.ofList
-        |> Set.union (baseFunctions |> Map.keys |> Set.ofSeq)
-    let env = { Records = records; Sums = sums; NamedFunctions = namedFunctions }
+        lazy
+            topLevels
+            |> List.choose (function FunctionDef fn -> Some fn.Name | _ -> None)
+            |> Set.ofList
+            |> Set.union (baseFunctions |> Map.keys |> Set.ofSeq)
+    let env = { Records = records; Sums = sums }
     let (renderName, state) =
         match programType with
         | TDateTime -> (None, { Functions = Map.empty })
@@ -567,7 +576,7 @@ let rewriteProgram
                 BoundaryRender ("Stdlib.DateTime.toString", expr)
             | TFunction _, _, Some name ->
                 Let (LPVariable "__rendered_named_partial", expr, StringLiteral name)
-            | TFunction _, Var name, _ when Set.contains name namedFunctions ->
+            | TFunction _, Var name, _ when Set.contains name namedFunctions.Value ->
                 Let (LPVariable "__rendered_named_function", expr, StringLiteral name)
             | TFunction _, FuncRef name, _ ->
                 Let (LPVariable "__rendered_named_function", expr, StringLiteral name)

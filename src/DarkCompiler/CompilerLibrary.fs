@@ -2586,6 +2586,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             typedUserAst
                     let jsonPlanningElapsed = sw.Elapsed.TotalMilliseconds - jsonPlanningStart
                     recordPassTiming plan.PassTimingRecorder "JSON Planning" jsonPlanningElapsed
+                    let valueRenderingStart = Stopwatch.StartNew()
                     let plannedProgramType = TypeChecking.resolveType userEnv.AliasReg programType
                     let renderedUserAst, boundaryProgramType =
                         if plan.Mode = FullProgram then
@@ -2601,6 +2602,11 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 plannedProgramType
                                 plannedUserAst,
                              AST.TString)
+                    valueRenderingStart.Stop()
+                    recordPassTiming
+                        plan.PassTimingRecorder
+                        "Value Rendering"
+                        valueRenderingStart.Elapsed.TotalMilliseconds
                     if plan.Verbosity >= 3 then
                         println $"Program type: {TypeChecking.typeToString programType}"
                         println ""
