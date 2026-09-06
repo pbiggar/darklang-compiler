@@ -175,6 +175,8 @@ type Arm64ProgramFacts = {
     ClosurePayloadSizesFromAllocs: Map<string, int>
     ClosureCaptureTypes: Map<string, AST.Type list>
     RecursiveReleaseTypes: Set<AST.Type>
+    CliArgvHelperLabels: Set<string>
+    NeedsCliExecuteHelper: bool
 }
 
 /// ARM64-only metadata assembled from the reachable functions' carried facts.
@@ -7833,10 +7835,6 @@ let private generatePreparedARM64WithOptionsAndCache
                 | None -> Crash.crash "ARM64 codegen invariant: missing validated function facts"
             (func, facts))
 
-    let needsCliExecuteHelper =
-        functionsWithFacts
-        |> List.exists (fun (_, facts) -> facts.NeedsCliExecuteHelper)
-
     // Ensure _start is first (entry point)
     let sortedFunctions =
         match List.partition (fun (f: LIR.Function) -> f.Name = "_start") functions with
@@ -7864,6 +7862,8 @@ let private generatePreparedARM64WithOptionsAndCache
             ClosurePayloadSizesFromAllocs = Map.empty
             ClosureCaptureTypes = Map.empty
             RecursiveReleaseTypes = Set.empty
+            CliArgvHelperLabels = Set.empty
+            NeedsCliExecuteHelper = false
         }
         RcHelperRequirements = emptyRcHelperRequirements
     }
@@ -7959,6 +7959,16 @@ let private generatePreparedARM64WithOptionsAndCache
                             Set.union
                                 withAllocSizes.Facts.RecursiveReleaseTypes
                                 facts.RecursiveReleaseTypes
+                        CliArgvHelperLabels =
+                            if facts.NeedsCliArgvHelper then
+                                Set.add
+                                    $"__dark_cli_argv_{func.Name}"
+                                    withAllocSizes.Facts.CliArgvHelperLabels
+                            else
+                                withAllocSizes.Facts.CliArgvHelperLabels
+                        NeedsCliExecuteHelper =
+                            withAllocSizes.Facts.NeedsCliExecuteHelper
+                            || facts.NeedsCliExecuteHelper
                 }
                 RcHelperRequirements = requirements
         }
@@ -8034,6 +8044,13 @@ let private generatePreparedARM64WithOptionsAndCache
                     Set.union
                         left.Facts.RecursiveReleaseTypes
                         right.Facts.RecursiveReleaseTypes
+                CliArgvHelperLabels =
+                    Set.union
+                        left.Facts.CliArgvHelperLabels
+                        right.Facts.CliArgvHelperLabels
+                NeedsCliExecuteHelper =
+                    left.Facts.NeedsCliExecuteHelper
+                    || right.Facts.NeedsCliExecuteHelper
             }
             RcHelperRequirements =
                 mergePrecomputedRcHelperRequirements
@@ -8061,6 +8078,7 @@ let private generatePreparedARM64WithOptionsAndCache
             mergeMetadata metadata groupMetadata) emptyProgramMetadata
 
     let rcHelperRequirements = programMetadata.RcHelperRequirements
+    let needsCliExecuteHelper = programMetadata.Facts.NeedsCliExecuteHelper
 
     // These plans were named once when per-function facts were attached. Only
     // the maps carried by functions that survived tree shaking are merged.
@@ -8455,13 +8473,8 @@ let private generatePreparedARM64WithOptionsAndCache
             |> Set.toList
             |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
         let cliArgvHelpers =
-            functionChunks
-            |> List.collect (fun chunk ->
-                chunk.Instructions
-                |> List.choose (function
-                    | ARM64Symbolic.BL label when label.StartsWith("__dark_cli_argv_") -> Some label
-                    | _ -> None))
-            |> List.distinct
+            programMetadata.Facts.CliArgvHelperLabels
+            |> Set.toList
             |> List.collect (generateCliArgvHelper ctx)
         let cliHelpers =
             cliArgvHelpers

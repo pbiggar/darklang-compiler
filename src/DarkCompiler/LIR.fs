@@ -329,6 +329,7 @@ type FunctionCodegenFacts = {
     RefCountIncRequirements: Set<RcKind>
     RawSlotInitTypes: Set<AST.Type>
     NeedsCliRuntimeState: bool
+    NeedsCliArgvHelper: bool
     NeedsCliExecuteHelper: bool
     Arm64RcHelperRequirements: Arm64RcHelperRequirements option
 }
@@ -364,6 +365,7 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
     let mutable refCountIncRequirements = Set.empty
     let mutable rawSlotInitTypes = Set.empty
     let mutable needsCliRuntimeState = false
+    let mutable needsCliArgvHelper = false
     let mutable needsCliExecuteHelper = false
 
     for KeyValue (_, block) in func.CFG.Blocks do
@@ -396,6 +398,7 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
                 rawSlotInitTypes <- Set.add valueType rawSlotInitTypes
             | CliNative (_, operation, _) ->
                 needsCliRuntimeState <- true
+                if operation = GetArgv then needsCliArgvHelper <- true
                 if operation = Execute then needsCliExecuteHelper <- true
             | _ ->
                 ()
@@ -409,6 +412,7 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
         RefCountIncRequirements = refCountIncRequirements
         RawSlotInitTypes = rawSlotInitTypes
         NeedsCliRuntimeState = needsCliRuntimeState
+        NeedsCliArgvHelper = needsCliArgvHelper
         NeedsCliExecuteHelper = needsCliExecuteHelper
         Arm64RcHelperRequirements = None
     }
