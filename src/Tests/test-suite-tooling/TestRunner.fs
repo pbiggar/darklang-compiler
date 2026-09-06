@@ -124,6 +124,13 @@ type CodegenProfileSummary = {
     release_plan_summary_cache_misses: int
     json_plan_cache_hits: int
     json_plan_cache_misses: int
+    anf_dependency_cache_hits: int
+    anf_dependency_cache_misses: int
+    compiled_dependency_cache_hits: int
+    compiled_dependency_cache_misses: int
+    metadata_group_cache_hits: int
+    metadata_group_cache_misses: int
+    start_codegen_cache_hits: int
 }
 
 type CodegenProfilePayload = {
@@ -535,6 +542,13 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let mutable releasePlanSummaryCacheMisses = 0
     let mutable jsonPlanCacheHits = 0
     let mutable jsonPlanCacheMisses = 0
+    let mutable anfDependencyCacheHits = 0
+    let mutable anfDependencyCacheMisses = 0
+    let mutable compiledDependencyCacheHits = 0
+    let mutable compiledDependencyCacheMisses = 0
+    let mutable metadataGroupCacheHits = 0
+    let mutable metadataGroupCacheMisses = 0
+    let mutable startCodegenCacheHits = 0
     let recordTiming = TestFramework.recordTiming runState
     let recordResults = TestFramework.recordResults runState
     let recordPassTiming = TestFramework.recordPassTiming runState
@@ -864,6 +878,20 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                     + compilationSession.Arm64ReleasePlanSummaryMissCount
                 jsonPlanCacheHits <- jsonPlanCacheHits + compilationSession.JsonPlanHitCount
                 jsonPlanCacheMisses <- jsonPlanCacheMisses + compilationSession.JsonPlanMissCount
+                anfDependencyCacheHits <-
+                    anfDependencyCacheHits + compilationSession.AnfDependencyHitCount
+                anfDependencyCacheMisses <-
+                    anfDependencyCacheMisses + compilationSession.AnfDependencyMissCount
+                compiledDependencyCacheHits <-
+                    compiledDependencyCacheHits + compilationSession.CompiledDependencyHitCount
+                compiledDependencyCacheMisses <-
+                    compiledDependencyCacheMisses + compilationSession.CompiledDependencyMissCount
+                metadataGroupCacheHits <-
+                    metadataGroupCacheHits + compilationSession.Arm64MetadataGroupHitCount
+                metadataGroupCacheMisses <-
+                    metadataGroupCacheMisses + compilationSession.Arm64MetadataGroupMissCount
+                startCodegenCacheHits <-
+                    startCodegenCacheHits + compilationSession.Arm64StartCodegenHitCount
 
     let runPassTestFile
         (loadTest: string -> Result<'input, string>)
@@ -1391,7 +1419,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 })
             |> Array.sortByDescending (fun entry -> entry.elapsed_ms)
         let payload = {
-            schema_version = 2
+            schema_version = 3
             summary = {
                 codegen_ms = codegenMs
                 attributed_function_ms = roundedMilliseconds attributedMs
@@ -1402,6 +1430,13 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 release_plan_summary_cache_misses = releasePlanSummaryCacheMisses
                 json_plan_cache_hits = jsonPlanCacheHits
                 json_plan_cache_misses = jsonPlanCacheMisses
+                anf_dependency_cache_hits = anfDependencyCacheHits
+                anf_dependency_cache_misses = anfDependencyCacheMisses
+                compiled_dependency_cache_hits = compiledDependencyCacheHits
+                compiled_dependency_cache_misses = compiledDependencyCacheMisses
+                metadata_group_cache_hits = metadataGroupCacheHits
+                metadata_group_cache_misses = metadataGroupCacheMisses
+                start_codegen_cache_hits = startCodegenCacheHits
             }
             phases = phaseEntries
             categories = categoryEntries

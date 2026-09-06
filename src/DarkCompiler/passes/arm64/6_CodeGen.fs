@@ -7778,9 +7778,13 @@ type FunctionCodegenCache =
 /// Caller-owned cache for summaries of reusable function groups. Group
 /// summaries form a monoid, so an executable can merge cached dependency and
 /// stdlib facts with the small fresh program fragment.
+type MetadataGroup = {
+    ContextIdentity: obj
+    Functions: LIR.Function list
+}
+
 type MetadataGroupCache =
-    LIR.RecordRegistry
-        -> ANF.RcSumShapeRegistry
+    obj
         -> LIR.Function list
         -> (unit -> Arm64ProgramMetadata)
         -> Arm64ProgramMetadata
@@ -7802,7 +7806,7 @@ let private generatePreparedARM64WithOptionsAndCache
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
     (metadataGroupCache: MetadataGroupCache option)
-    (metadataGroups: LIR.Function list list)
+    (metadataGroups: MetadataGroup list)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
     : Result<GeneratedProgram, string> =
@@ -8039,7 +8043,7 @@ let private generatePreparedARM64WithOptionsAndCache
 
     let groups =
         match metadataGroups with
-        | [] -> [functions]
+        | [] -> [{ ContextIdentity = System.Object(); Functions = functions }]
         | groups -> groups
 
     let programMetadata =
@@ -8049,12 +8053,11 @@ let private generatePreparedARM64WithOptionsAndCache
                 match metadataGroupCache with
                 | Some cache ->
                     cache
-                        recordRegistry
-                        sumShapeRegistry
-                        group
-                        (fun () -> summarizeGroup group)
+                        group.ContextIdentity
+                        group.Functions
+                        (fun () -> summarizeGroup group.Functions)
                 | None ->
-                    summarizeGroup group
+                    summarizeGroup group.Functions
             mergeMetadata metadata groupMetadata) emptyProgramMetadata
 
     let rcHelperRequirements = programMetadata.RcHelperRequirements
@@ -8490,7 +8493,7 @@ let generateARM64WithOptionsAndCaches
     (options: CodeGenOptions)
     (functionCache: FunctionCodegenCache option)
     (metadataGroupCache: MetadataGroupCache option)
-    (metadataGroups: LIR.Function list list)
+    (metadataGroups: MetadataGroup list)
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
     : Result<GeneratedProgram, string> =

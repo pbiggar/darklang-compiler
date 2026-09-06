@@ -178,8 +178,6 @@ type private Arm64InstructionChunkReferenceComparer() =
 
 [<NoComparison>]
 type private Arm64MetadataGroupKey = {
-    RecordRegistry: LIR.RecordRegistry
-    SumShapeRegistry: ANF.RcSumShapeRegistry
     FunctionFacts: (string * LIR.FunctionCodegenFacts option) list
 }
 
@@ -197,8 +195,12 @@ type CompilationSession(collectCodegenMetrics: bool) =
             Dictionary<
                 CompiledDependencyConfig,
                 Result<LIR.Function list, string>>>(ObjectReferenceComparer())
-    let arm64MetadataGroups =
-        Dictionary<Arm64MetadataGroupKey, CodeGen.Arm64ProgramMetadata>()
+    let arm64MetadataGroupsByContext =
+        Dictionary<
+            obj,
+            Dictionary<
+                Arm64MetadataGroupKey,
+                CodeGen.Arm64ProgramMetadata>>(ObjectReferenceComparer())
     let arm64Functions = Dictionary<LIR.Function * ARM64.TargetConfig * CodeGen.CodeGenOptions, Result<ARM64Symbolic.Instr list, string>>()
     // Prebuilt stdlib and preamble functions retain object identity across a
     // compilation session. Keep an identity-indexed fast lane for functions
@@ -289,28 +291,32 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 result
 
     member internal _.Arm64MetadataGroup
-        (recordRegistry: LIR.RecordRegistry)
-        (sumShapeRegistry: ANF.RcSumShapeRegistry)
+        (contextIdentity: obj)
         (functions: LIR.Function list)
         (summarize: unit -> CodeGen.Arm64ProgramMetadata)
         : CodeGen.Arm64ProgramMetadata =
         if disposed then
             summarize ()
         else
+            let contextEntries =
+                match arm64MetadataGroupsByContext.TryGetValue contextIdentity with
+                | true, entries -> entries
+                | false, _ ->
+                    let entries = Dictionary<Arm64MetadataGroupKey, CodeGen.Arm64ProgramMetadata>()
+                    arm64MetadataGroupsByContext.[contextIdentity] <- entries
+                    entries
             let key = {
-                RecordRegistry = recordRegistry
-                SumShapeRegistry = sumShapeRegistry
                 FunctionFacts =
                     functions
                     |> List.map (fun func -> (func.Name, func.CodegenFacts))
             }
-            match arm64MetadataGroups.TryGetValue key with
+            match contextEntries.TryGetValue key with
             | true, metadata ->
                 arm64MetadataGroupHitCount <- arm64MetadataGroupHitCount + 1
                 metadata
             | false, _ ->
                 let metadata = summarize ()
-                arm64MetadataGroups.[key] <- metadata
+                contextEntries.[key] <- metadata
                 arm64MetadataGroupMissCount <- arm64MetadataGroupMissCount + 1
                 metadata
 
@@ -448,7 +454,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             (jsonPlanning :> System.IDisposable).Dispose()
             anfDependenciesByContext.Clear()
             compiledDependenciesByIdentity.Clear()
-            arm64MetadataGroups.Clear()
+            arm64MetadataGroupsByContext.Clear()
             arm64Functions.Clear()
             arm64FunctionsByReference.Clear()
             arm64EmissionChunks.Clear()
@@ -942,7 +948,7 @@ let private generateBinary
     (dumpAsm: bool)
     (dumpMachineCode: bool)
     (session: CompilationSession option)
-    (metadataGroups: LIR.Function list list)
+    (metadataGroups: CodeGen.MetadataGroup list)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
@@ -1022,10 +1028,9 @@ let private generateBinary
         let metadataGroupCache =
             session
             |> Option.map (fun current ->
-                fun recordRegistry sumShapeRegistry functions summarize ->
+                fun contextIdentity functions summarize ->
                     current.Arm64MetadataGroup
-                        recordRegistry
-                        sumShapeRegistry
+                        contextIdentity
                         functions
                         summarize)
         let codegenPhaseRecorder =
@@ -2861,8 +2866,21 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             false
                                             false
                                             plan.Session
-                                            ([reachableStdlib; reachableProgramFuncs; reachableDependencyFuncs]
-                                             |> List.filter (not << List.isEmpty))
+                                            ([
+                                                {
+                                                    CodeGen.ContextIdentity = box plan.BaseContext
+                                                    Functions = reachableStdlib
+                                                }
+                                                {
+                                                    CodeGen.ContextIdentity = dependencyIdentity
+                                                    Functions = reachableProgramFuncs
+                                                }
+                                                {
+                                                    CodeGen.ContextIdentity = dependencyIdentity
+                                                    Functions = reachableDependencyFuncs
+                                                }
+                                             ]
+                                             |> List.filter (fun group -> not (List.isEmpty group.Functions)))
                                             allocatedProgram
                                     match binaryResult with
                                     | Error err -> Error err
