@@ -273,7 +273,11 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
     | BigIntLiteral _ ->
         match expectedType with
         | Some TInt | None -> Ok (TInt, expr)
-        | Some other -> Error (TypeMismatch (other, TInt, "Int literal"))
+        | Some other ->
+            // A type variable or an alias of Int, as for the sized literals.
+            match reconcileTypes (Some aliasReg) other TInt with
+            | Some TInt -> Ok (TInt, expr)
+            | _ -> Error (TypeMismatch (other, TInt, "Int literal"))
 
     | Int8Literal _ ->
         match expectedType with
