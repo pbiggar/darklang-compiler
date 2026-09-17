@@ -1,0 +1,115 @@
+// Layout the interpreter reads from columns: newline-delimited lets without
+// `in`, statement sequences in a block, and a few spellings its pretty-printer
+// emits. Each shape here comes from a package function that failed to compile
+// when darklang/dark's package tree was pushed through this compiler.
+
+// A let's body is the next line at or left of the `let`, even after an
+// application that could have taken more arguments.
+let layoutLetBody (xs: List<Int64>): Int =
+  let doubled = Stdlib.List.map xs (fun x -> x * 2L)
+  Stdlib.List.length doubled
+layoutLetBody [1L, 2L, 3L] = 3
+
+let layoutLetChain (xs: List<Int64>): Int =
+  let a = Stdlib.List.append xs xs
+  let b = Stdlib.List.append a a
+  Stdlib.List.length b
+layoutLetChain [1L] = 4
+
+let layoutLetValueBelow (xs: List<Int64>): Int =
+  let a =
+    Stdlib.List.append xs xs
+  let (b, c) = (a, a)
+  Stdlib.List.length b
+layoutLetValueBelow [1L, 2L] = 4
+
+// A value that continues on the next line with an operator, or closes a
+// literal, is still the same value.
+let layoutOperatorContinuation (a: Int64) (b: Int64): Int64 =
+  let total = a
+    + b
+  total * 2L
+layoutOperatorContinuation 1L 2L = 6L
+
+type LayoutPoint = { x: Int64, y: Int64 }
+let layoutClosingBrace (): Int64 =
+  let p = LayoutPoint {
+    x = 1L,
+    y = 2L
+  }
+  p.x + p.y
+layoutClosingBrace () = 3L
+
+// Two statements at the indent of their block are a sequence.
+let layoutStatements (label: String): String =
+  Stdlib.printLine label
+  Stdlib.printLine (Stdlib.String.toLowercase label)
+  "done"
+layoutStatements "A" = stdout="A\na\n\"done\"\n"
+
+let layoutStatementsThenLet (label: String): Int =
+  Stdlib.printLine label
+  let n = Stdlib.String.length label
+  Stdlib.printLine "second"
+  n
+layoutStatementsThenLet "abc" = stdout="abc\nsecond\n3\n"
+
+let layoutStatementsInArm (o: Stdlib.Option.Option<Int64>): Int64 =
+  match o with
+  | Some v ->
+    Stdlib.printLine "some"
+    v + 1L
+  | None -> 0L
+layoutStatementsInArm (Stdlib.Option.Option.Some 1L) = stdout="some\n2\n"
+
+let layoutStatementsInLambda (xs: List<Int64>): Unit =
+  xs |> Stdlib.List.iter (fun x ->
+    let doubled = x * 2L
+    Stdlib.printLine (Stdlib.Int64.toString doubled)
+    Stdlib.printLine "-")
+layoutStatementsInLambda [1L, 2L] = stdout="2\n-\n4\n-\n"
+
+// Explicit `in` keeps working, mid-line and on a continuation line.
+let layoutExplicitIn (a: Int64): Int64 =
+  let b = a + 1L in let c = b + 1L in
+  let d =
+    c + 1L in
+  d
+layoutExplicitIn 1L = 4L
+
+// A top-level function whose parameters start on the next line is a function,
+// not a value let.
+let layoutMultiLineHeader
+  (a: Int64)
+  (b: Int64)
+  : Int64 =
+  a + b
+layoutMultiLineHeader 1L 2L = 3L
+
+// A `let` inside a string literal declares nothing.
+let layoutLetInString (name: String): String =
+  let header = $"let {name} (x: Int64) : Int64 ="
+  header ++ " x"
+layoutLetInString "f" = "let f (x: Int64) : Int64 = x"
+
+// A function is in scope by its bare name inside its own body.
+let layoutSelfCall (a: List<String>) (b: List<String>): Int =
+  match (a, b) with
+  | (aHead :: aTail, bHead :: bTail) -> if aHead == bHead then 1 + layoutSelfCall aTail bTail else 0
+  | _ -> 0
+layoutSelfCall ["a", "b", "c"] ["a", "b", "x"] = 2
+
+// An unsuffixed Int literal where a type variable is expected.
+Stdlib.List.fold [1L] 9 (fun acc x -> acc) = 9
+Stdlib.Option.withDefault Stdlib.Option.Option.None 9 = 9
+
+// An interpolated string is an argument like any other literal.
+Stdlib.String.toLowercase $"A {"B"} C" = "a b c"
+Stdlib.printLine (Stdlib.String.toLowercase $"  c: `d`") = stdout="  c: `d`\n"
+
+// Doubled braces are literal braces in an interpolated string.
+$"{{ a {"b"} }}" = "{ a b }"
+
+// A constructor with adjacent parenthesized fields is one argument.
+Stdlib.Option.map Stdlib.Option.Option.Some(1L) (fun x -> x + 1L) = Stdlib.Option.Option.Some 2L
+Stdlib.List.length [Stdlib.Option.Option.Some(1L), Stdlib.Option.Option.None] = 2
