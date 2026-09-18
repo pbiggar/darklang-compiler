@@ -27,6 +27,12 @@ lexical `let`, sequence, and conditional edges. Ordinary resolved calls also
 become ordered HIR calls when their typed signature and an independent
 effect/alias contract are available. Uncontracted, generic, indirect, and other
 checked expressions stay as opaque scalar evaluation.
+Native immediate literals and scalar unary/binary operators instead become
+source-primitive leaves that retain their literal or operator identity. Their
+contracts name normalized value inputs, classify unmanaged outputs as
+`NoManagedAlias`, and mark integer division and modulo as potentially failing.
+Managed and call-lowered operations, including string concatenation,
+arbitrary-precision arithmetic, power, and structural equality, remain opaque.
 `passes/hir/VerifyHIR.fs` independently checks definitions, uses, types,
 branch results, and alias sources.
 `ir/owned/OwnedIR.fs` supplies ownership-bearing blocks, ordered
@@ -38,9 +44,9 @@ for closed collection regions, storage selection, and branch-aware ownership.
 Opaque operands still contain checked AST evaluation payloads, but their local
 inputs are normalized identities rather than lexical-name lookups. The
 whole-function constructor is not yet scheduled in code generation, and calls
-without explicit contracts plus primitives outside extracted list regions
-remain opaque; this is not yet a whole-program storage pipeline or a general RC
-solver. See
+without explicit contracts plus unsupported or managed source primitives remain
+opaque; this is not yet a whole-program storage pipeline or a general RC solver.
+See
 [compiler-selected list arrays](runtime/list-array-reuse.md) for its boundary
 and the remaining general ownership work.
 

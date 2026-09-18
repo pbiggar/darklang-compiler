@@ -1,6 +1,7 @@
 // HIR.fs - Normalized values and typed structured control flow shared by semantic dialects.
-// Source expressions remain opaque evaluation payloads. Their lexical inputs
-// are explicit value identities, but they carry no purity or aliasing claim.
+// Unsupported source expressions remain opaque evaluation payloads. Their
+// lexical inputs are explicit value identities, while normalized leaf dialects
+// supply purity and aliasing claims through verified primitive contracts.
 
 module HIR
 
