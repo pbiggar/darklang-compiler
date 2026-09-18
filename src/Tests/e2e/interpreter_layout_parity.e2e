@@ -131,3 +131,25 @@ let nestedVariantArm (o: Stdlib.Option.Option<Stdlib.AltJson.Json>) : Int64 =
 // Option combinator does; it took the function first.
 (Stdlib.Result.Result.Error "e") |> Stdlib.Result.mapError (fun err -> err ++ "!") = Stdlib.Result.Result.Error "e!"
 Stdlib.Result.mapError (Stdlib.Result.Result.Ok 4L) (fun x -> Stdlib.Int64.divide x 2L) = Stdlib.Result.Result.Ok 4L
+
+// An arm's body holds a match after a let: the outer match's later arms are
+// still the outer match's (the body is parenthesized wherever the nested
+// match sits, not only when it is the first line).
+let armBodyWithLaterMatch (json: Stdlib.AltJson.Json): Int64 =
+  match json with
+  | Object(fields) ->
+    let name =
+      match Stdlib.List.findFirst fields (fun (key, _) -> key == "name") with
+      | Some((_, String(name))) -> 1L
+      | _ -> 2L
+    match name with
+    | 1L -> 10L
+    | _ -> 20L
+  | _ -> 3L
+[armBodyWithLaterMatch (Stdlib.AltJson.Json.Object [("name", Stdlib.AltJson.Json.String "x")]), armBodyWithLaterMatch (Stdlib.AltJson.Json.Object []), armBodyWithLaterMatch Stdlib.AltJson.Json.Null] = [10L, 20L, 3L]
+
+// `f x - 1` is subtraction; `f -1` still passes a negative literal.
+let spacedMinus (parts: List<String>) : Int =
+  Stdlib.List.length parts - 1
+[spacedMinus ["a", "b"], spacedMinus []] = [1, -1]
+Stdlib.Int64.add 1L -1L = 0L

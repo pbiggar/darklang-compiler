@@ -45,6 +45,7 @@ and Token =
     | TPlus
     | TPlusPlus    // ++ (string concatenation)
     | TMinus
+    | TSpacedMinus // `-` followed by whitespace: subtraction, never a negative literal
     | TStar
     | TSlash
     | TLParen
@@ -327,6 +328,7 @@ let rec lex (input: string) : Result<Token list, string> =
         | '+' :: '+' :: rest -> lexHelper rest (TPlusPlus :: acc)
         | '+' :: rest -> lexHelper rest (TPlus :: acc)
         | '-' :: '>' :: rest -> lexHelper rest (TArrow :: acc)
+        | '-' :: ((' ' | '\t' | '\n' | '\r') :: _ as rest) -> lexHelper rest (TSpacedMinus :: acc)
         | '-' :: rest -> lexHelper rest (TMinus :: acc)
         | '=' :: '>' :: _ -> Error "Dark syntax does not use '=>'; use 'fun <args> -> <body>'"
         | '*' :: rest -> lexHelper rest (TStar :: acc)
@@ -2072,7 +2074,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     parseMultiplicative rest
                     |> Result.bind (fun (right, remaining') ->
                         parseAdditiveRest (BinOp (Add, leftExpr, right)) remaining')
-                | TMinus :: rest ->
+                | (TMinus | TSpacedMinus) :: rest ->
                     parseMultiplicative rest
                     |> Result.bind (fun (right, remaining') ->
                         parseAdditiveRest (BinOp (Sub, leftExpr, right)) remaining')
@@ -2131,7 +2133,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             Ok (Int32Literal System.Int32.MinValue, rest)
         | TMinus :: TInt32 n :: rest -> Ok (Int32Literal (-n), rest)
         | TMinus :: TFloat f :: rest -> Ok (FloatLiteral (-f), rest)
-        | TMinus :: rest ->
+        | (TMinus | TSpacedMinus) :: rest ->
             // For non-literal expressions, use UnaryOp
             parseUnary rest
             |> Result.map (fun (expr, remaining) -> (UnaryOp (Neg, expr), remaining))
@@ -3272,24 +3274,50 @@ let private preserveIndentedMatchBoundaries (input: string) : string =
         let trimmed = line.Trim()
         trimmed <> "" && not (trimmed.StartsWith("//"))
     let nextSignificant remaining = remaining |> List.tryFind isSignificant
+    // An arm whose body (the deeper lines after its `->`) holds a match, wherever
+    // in the body: after a `let`, inside a `let`. Without the parentheses the
+    // nested match would take the outer match's later arms as its own, and the
+    // outer match then reads as non-exhaustive.
     let isCaseWithNestedMatch (line: string) (remaining: string list) =
         let trimmed = line.TrimStart()
+        let caseIndent = leadingSpaces line
+        let rec bodyHasMatch (lines: string list) =
+            match lines with
+            | [] -> false
+            | l :: rest when not (isSignificant l) -> bodyHasMatch rest
+            | l :: rest ->
+                if leadingSpaces l <= caseIndent then false
+                else
+                    let t = l.TrimStart()
+                    t.StartsWith("match ") || t.Contains(" match ") || t.StartsWith("|") || bodyHasMatch rest
         trimmed.StartsWith("|")
-        && trimmed.Contains("->")
-        && (match nextSignificant remaining with
-            | Some next ->
-                leadingSpaces next > leadingSpaces line
-                && next.TrimStart().StartsWith("match ")
-            | None -> false)
+        && trimmed.TrimEnd().EndsWith("->")
+        && bodyHasMatch remaining
     let rec closeCompleted indent active closers =
         match active with
         | caseIndent :: rest when indent <= caseIndent -> closeCompleted indent rest (" )" :: closers)
         | _ -> (active, closers)
+    // The closers go onto the body's last line, before a trailing `in` if it has
+    // one: as their own line after `... in` they would follow the `in` and take
+    // the let's body with them.
+    let rec closeOnLastLine (closers: string list) (acc: string list) =
+        match closers, acc with
+        | [], _ -> acc
+        | _, [] -> (String.concat "" closers) :: []
+        | _, last :: earlier when not (isSignificant last) ->
+            last :: closeOnLastLine closers earlier
+        | _, last :: earlier ->
+            let trimmedEnd = last.TrimEnd()
+            let closing = String.concat "" closers
+            let rewritten =
+                if trimmedEnd.EndsWith(" in") then trimmedEnd.Substring(0, trimmedEnd.Length - 3) + closing + " in"
+                else trimmedEnd + closing
+            rewritten :: earlier
     let rec loop active remaining acc =
         match remaining with
         | [] ->
             let closing = active |> List.map (fun _ -> " )")
-            (List.rev acc) @ closing |> String.concat "\n"
+            List.rev (closeOnLastLine closing acc) |> String.concat "\n"
         | line :: rest ->
             let (remainingActive, closers) =
                 if isSignificant line then closeCompleted (leadingSpaces line) active [] else (active, [])
@@ -3297,7 +3325,7 @@ let private preserveIndentedMatchBoundaries (input: string) : string =
                 if isCaseWithNestedMatch line rest then line + " (" else line
             let nextActive =
                 if isCaseWithNestedMatch line rest then leadingSpaces line :: remainingActive else remainingActive
-            loop nextActive rest (rewritten :: (closers @ acc))
+            loop nextActive rest (rewritten :: closeOnLastLine closers acc)
     loop [] lines []
 
 /// The layout passes alone: what the lexer is handed for a unit body. Exposed so
