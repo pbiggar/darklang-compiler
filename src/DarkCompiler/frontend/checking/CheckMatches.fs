@@ -106,7 +106,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 | Some (typeName, typeParams, _, fieldTypes) ->
                     // Get type arguments from scrutinee type to substitute into payload type
                     let typeArgs =
-                        match patternType with
+                        match resolveType aliasReg patternType with
                         | TSum (_, args) -> args
                         | _ -> []
                     // Build substitution from type params to type args
