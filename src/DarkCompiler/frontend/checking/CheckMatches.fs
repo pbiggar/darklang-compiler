@@ -12,7 +12,7 @@ open CheckExpressionSupport
 let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (indexedSumTypeReg: IndexedSumTypeRegistry) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (scrutinee: Expr) (cases: MatchCase list) : Result<Type * Expr, TypeError> =
     let scrutineeExpectedType =
         match scrutinee with
-        | ListLiteral [] -> Some (TList (TVar "t"))
+        | ListLiteral [] -> Some (TList (TVar emptyListElementVar))
         | _ -> None
 
     // Type check the scrutinee first

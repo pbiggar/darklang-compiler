@@ -527,7 +527,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     |> Option.orElseWith (fun () ->
                         tryFindCallArguments name currentBody
                         |> Option.bind (inferFunctionExpectationFromArguments (parameters |> NonEmptyList.toList |> List.length)))
-                | _, ListLiteral [] -> Some (TList (TVar "t"))
+                | _, ListLiteral [] -> Some (TList (TVar emptyListElementVar))
                 | _ -> None
 
             match
@@ -1445,8 +1445,8 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             // of a fold) takes the list; the element stays open for the other
             // arguments to fix. `Stdlib.List.fold xs [] (fun acc x -> [x])` was a
             // mismatch reported as the enclosing function's return value.
-            | Some (TVar _) | None -> Ok (TList (TVar "t"), ListLiteral [])
-            | Some other -> Error (TypeMismatch (other, TList (TVar "t"), "empty list"))
+            | Some (TVar _) | None -> Ok (TList (TVar emptyListElementVar), ListLiteral [])
+            | Some other -> Error (TypeMismatch (other, TList (TVar emptyListElementVar), "empty list"))
         | first :: rest ->
             // Use expected list element type for the first element when available, so
             // lambda/list literals in expected contexts reconcile type variables consistently.
