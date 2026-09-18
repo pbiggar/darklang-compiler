@@ -57,6 +57,9 @@ the compiler's other Linux target.
 # Stream per-workload details when diagnosing a verification run
 ./benchmarks/run_benchmarks.sh --verify --verbose full
 
+# Compare that run with the task parent's tracked performance, without rerunning
+python3 benchmarks/compare_with_parent.py benchmarks/results/<run-directory>
+
 # Establish a Dark baseline after an intentional contract/policy reset
 ./benchmarks/run_benchmarks.sh --reset-dark-baseline full
 ./benchmarks/quick_check.sh --reset-dark-baseline
@@ -259,6 +262,14 @@ run to the full snapshot using the shared aggregate rule. Equal and improved
 runs pass; regressions fail. It writes only generated run artifacts (including a
 machine-readable decision) and leaves the snapshot, `RESULTS.md`, `BASELINES.md`,
 and `HISTORY.md` unchanged.
+
+That verification result is a canonical gate, not by itself a measurement of
+the task branch's effect. `compare_with_parent.py` reuses the run's Cachegrind
+files and compares them with the architecture-specific snapshot stored by the
+branch's upstream merge-base. It prints changed workload rows plus the aggregate
+`current/parent` ratio, or only the aggregate with `--quiet`; it does not build
+or measure either revision again. An explicit `--parent=<revision>` overrides
+the merge-base after the script verifies that revision is an ancestor of HEAD.
 
 Normal full recording appends every valid Dark run to `HISTORY.md` with a
 unique timestamp/run identity and decision. An improvement atomically advances
