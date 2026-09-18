@@ -136,17 +136,21 @@ inert-destruction proofs. Storage layouts and consume-or-copy selection remain
 in the list dialect. Region ownership accounting has one verifier, with list
 layout/type verification layered around it.
 
-Future whole-program work must extend this normalized value and registered-call
-interface across all checked functions, preserving conservative contracts for
-opaque source evaluation, then infer and carry unique boundary modes through
-loops and escaping boundaries. The verifier does not insert runtime uniqueness
-tests or model constructor reset tokens. General managed arguments still need
-lowering through ANF and RC insertion. ANF lifetime insertion remains
-authoritative outside these regions. Generated result printing is an explicit
-consuming effect before that boundary; ownership insertion finalizes unrelated
-cleanup before the effect and instruction lowering emits the printed root's
-shape-specific release. No empty future passes or compatibility IR conversions
-are added.
+`passes/hir/ConstructFunctions.fs` extends the normalized value interface across
+checked functions: it constructs ordered function entries and normalizes
+lexical `let`, sequence, and conditional structure while retaining all other
+evaluation as conservative opaque scalar bindings. It is not scheduled in code
+generation yet. The next normalization work must expose resolved calls and
+primitives only alongside their effect and alias contracts, then infer and
+carry unique boundary modes through loops and escaping boundaries. The verifier
+does not insert runtime
+uniqueness tests or model constructor reset tokens. General managed arguments
+still need lowering through ANF and RC insertion. ANF lifetime insertion
+remains authoritative outside list regions. Generated result printing is an
+explicit consuming effect before that boundary; ownership insertion finalizes
+unrelated cleanup before the effect and instruction lowering emits the printed
+root's shape-specific release. No empty future passes or compatibility IR
+conversions are added.
 
 Each refactoring chunk preserves algorithms, evaluation order, and emitted-code
 behavior. Semantic migrations require focused failing E2E coverage before their
