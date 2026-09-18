@@ -11,6 +11,7 @@ open MIRLoopInvariantMotion
 open MIRControlFlow
 open MIRConstants
 open MIRCommonExpressions
+open MIRSparseConditionalConstants
 open MIR_Optimize
 open MIRPrinter
 type TestResult = Result<unit, string>
@@ -1090,6 +1091,217 @@ let testSameTargetBranchBecomesJumpAndDropsCondition () : TestResult =
             )
         Error $"Expected same-target branch to become a jump and its dead condition to be removed.\nActual:\n{actual}"
 
+let testSccpPropagatesPhiConstantAndRemovesUnreachableEdge () : TestResult =
+    let block label instrs terminator : BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = terminator
+    }
+    let entry = Label "entry"
+    let left = Label "left"
+    let right = Label "right"
+    let join = Label "join"
+    let liveResult = Label "live_result"
+    let deadResult = Label "dead_result"
+    let condition = VReg 0
+    let leftValue = VReg 1
+    let rightValue = VReg 2
+    let mergedValue = VReg 3
+    let mergedIsSeven = VReg 4
+
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, block entry [] (Branch (Register condition, left, right)))
+                (left, block left [Mov (leftValue, Int64Const 7L, Some AST.TInt64)] (Jump join))
+                (right, block right [Mov (rightValue, Int64Const 7L, Some AST.TInt64)] (Jump join))
+                (join,
+                    block
+                        join
+                        [
+                            Phi (
+                                mergedValue,
+                                [(Register leftValue, left); (Register rightValue, right)],
+                                Some AST.TInt64
+                            )
+                            BinOp (
+                                mergedIsSeven,
+                                Eq,
+                                Register mergedValue,
+                                Int64Const 7L,
+                                AST.TInt64
+                            )
+                        ]
+                        (Branch (Register mergedIsSeven, liveResult, deadResult)))
+                (liveResult, block liveResult [] (Ret (Int64Const 42L)))
+                (deadResult, block deadResult [RuntimeError "unreachable"] (Ret (Int64Const 0L)))
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind join optimized.Blocks with
+    | Some joinBlock
+        when changed
+             && joinBlock.Terminator = Jump liveResult
+             && Map.containsKey liveResult optimized.Blocks
+             && not (Map.containsKey deadResult optimized.Blocks) -> Ok ()
+    | _ ->
+        let actual =
+            formatMIR (
+                Program (
+                    [{
+                        Name = "sccp_phi_constant"
+                        TypedParams = [{ Reg = condition; Type = AST.TBool }]
+                        ReturnType = AST.TInt64
+                        CFG = optimized
+                        FloatRegs = Set.empty
+                    }],
+                    Map.empty,
+                    Map.empty
+                )
+            )
+        Error $"Expected SCCP to fold the phi-derived branch and prune its false edge.\nActual:\n{actual}"
+
+let testSccpPhiIgnoresNonExecutableIncomingEdge () : TestResult =
+    let block label instrs terminator : BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = terminator
+    }
+    let entry = Label "entry"
+    let live = Label "live"
+    let dead = Label "dead"
+    let join = Label "join"
+    let condition = VReg 0
+    let liveValue = VReg 1
+    let deadValue = VReg 2
+    let mergedValue = VReg 3
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry,
+                    block
+                        entry
+                        [Mov (condition, BoolConst true, Some AST.TBool)]
+                        (Branch (Register condition, live, dead)))
+                (live,
+                    block
+                        live
+                        [Mov (liveValue, Int64Const 5L, Some AST.TInt64)]
+                        (Jump join))
+                (dead,
+                    block
+                        dead
+                        [Mov (deadValue, Int64Const 99L, Some AST.TInt64)]
+                        (Jump join))
+                (join,
+                    block
+                        join
+                        [
+                            Phi (
+                                mergedValue,
+                                [(Register liveValue, live); (Register deadValue, dead)],
+                                Some AST.TInt64
+                            )
+                        ]
+                        (Ret (Register mergedValue)))
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind join optimized.Blocks with
+    | Some joinBlock
+        when changed
+             && joinBlock.Instrs = [Mov (mergedValue, Int64Const 5L, Some AST.TInt64)]
+             && joinBlock.Terminator = Ret (Register mergedValue)
+             && not (Map.containsKey dead optimized.Blocks) -> Ok ()
+    | _ -> Error "Expected SCCP phi evaluation to ignore the non-executable incoming edge"
+
+let testSccpLoopBackedgeWidensInductionValue () : TestResult =
+    let block label instrs terminator : BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = terminator
+    }
+    let entry = Label "entry"
+    let header = Label "header"
+    let body = Label "body"
+    let exit = Label "exit"
+    let induction = VReg 0
+    let condition = VReg 1
+    let nextInduction = VReg 2
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, block entry [] (Jump header))
+                (header,
+                    block
+                        header
+                        [
+                            Phi (
+                                induction,
+                                [(Int64Const 0L, entry); (Register nextInduction, body)],
+                                Some AST.TInt64
+                            )
+                            BinOp (
+                                condition,
+                                Lt,
+                                Register induction,
+                                Int64Const 3L,
+                                AST.TInt64
+                            )
+                        ]
+                        (Branch (Register condition, body, exit)))
+                (body,
+                    block
+                        body
+                        [
+                            BinOp (
+                                nextInduction,
+                                Add,
+                                Register induction,
+                                Int64Const 1L,
+                                AST.TInt64
+                            )
+                        ]
+                        (Jump header))
+                (exit, block exit [] (Ret (Register induction)))
+            ]
+    }
+
+    let optimized, _ = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind header optimized.Blocks with
+    | Some headerBlock
+        when headerBlock.Terminator = Branch (Register condition, body, exit)
+             && Map.containsKey body optimized.Blocks
+             && Map.containsKey exit optimized.Blocks -> Ok ()
+    | _ -> Error "Expected the executable loop backedge to widen the induction value and retain both exits"
+
+let testSccpDoesNotApplyIntegerFoldsToFloatOperations () : TestResult =
+    let entry = Label "entry"
+    let input = VReg 0
+    let result = VReg 1
+    let floatOperation = BinOp (result, Mul, Int64Const 0L, Register input, AST.TFloat64)
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, {
+                    Label = entry
+                    Instrs = [floatOperation]
+                    Terminator = Ret (Register result)
+                })
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind entry optimized.Blocks with
+    | Some block when not changed && block.Instrs = [floatOperation] -> Ok ()
+    | _ -> Error "Expected SCCP to leave non-integer binary operations overdefined"
+
 type private EstablishedEdge =
     | TrueEdge
     | FalseEdge
@@ -1384,6 +1596,10 @@ let tests = [
     ("MIR linear block merge preserves phi sources", testLinearBlockMergePreservesPhiSources)
     ("MIR linear block merge exposes local CSE", testLinearBlockMergeExposesLocalCSE)
     ("MIR same-target branch becomes jump and drops condition", testSameTargetBranchBecomesJumpAndDropsCondition)
+    ("MIR SCCP propagates phi constants and removes unreachable edges", testSccpPropagatesPhiConstantAndRemovesUnreachableEdge)
+    ("MIR SCCP ignores non-executable phi inputs", testSccpPhiIgnoresNonExecutableIncomingEdge)
+    ("MIR SCCP widens loop values after executable backedges", testSccpLoopBackedgeWidensInductionValue)
+    ("MIR SCCP does not apply integer folds to float operations", testSccpDoesNotApplyIntegerFoldsToFloatOperations)
     ("MIR true edge eliminates redundant successor branch", testTrueEdgeEliminatesRedundantSuccessorBranch)
     ("MIR false edge eliminates redundant successor branch", testFalseEdgeEliminatesRedundantSuccessorBranch)
     ("MIR multiple predecessors keep repeated successor branch", testMultiplePredecessorsKeepRepeatedSuccessorBranch)
