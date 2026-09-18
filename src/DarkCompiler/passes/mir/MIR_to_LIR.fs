@@ -1128,7 +1128,7 @@ let selectInstr
         Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.StreamHeap -> LIR.StreamHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
 
     | MIR.Print (src, valueType) ->
-        // Generate appropriate print instruction based on type
+        // Generated and source printing consume the printed ownership root.
         let finishPrint instrs =
             Ok (instrs @ releasePrintedValue printRcContext src valueType, state)
         let finishPrintFromReg reg instrs =

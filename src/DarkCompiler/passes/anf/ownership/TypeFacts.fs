@@ -413,7 +413,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | StringConcat (_, _) -> Some AST.TString  // String concatenation returns a string
     | RefCountInc (_, _, _, _) -> Some AST.TUnit
     | RefCountDec (_, _, _, _) -> Some AST.TUnit
-    | Print (_, valueType) -> Some valueType  // Print returns the type it prints
+    | Print _ -> Some AST.TUnit
     | FileReadText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TString; AST.TString]))  // Result<String, String>
     | FileExists _ -> Some AST.TBool  // Bool
     | FileWriteText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>

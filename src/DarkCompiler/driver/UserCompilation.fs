@@ -278,47 +278,54 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 programEntryName
                                 boundaryProgramType
                                 userOnly.MainExpr
+                        let prepareProgramFunctions () =
+                            let functions = programEntry :: programFunctions
+                            match plan.Mode with
+                            | FullProgram -> Ok functions
+                            | TestExpression ->
+                                if plan.Verbosity >= 1 then
+                                    println "  [anf.print-result] Print Insertion..."
+                                let printStart = sw.Elapsed.TotalMilliseconds
+                                PrintInsertion.insertPrintInEntry
+                                    programEntryName
+                                    boundaryProgramType
+                                    functions
+                                |> Result.mapError (fun err -> $"Print insertion error: {err}")
+                                |> Result.map (fun printedFunctions ->
+                                    let printElapsed = sw.Elapsed.TotalMilliseconds - printStart
+                                    recordPassTiming plan.PassTimingRecorder "Print Insertion" printElapsed
+                                    if plan.Verbosity >= 2 then
+                                        let t = System.Math.Round(printElapsed, 1)
+                                        println $"        {t}ms"
+                                    if shouldDumpIR plan.Verbosity plan.Options.DumpANF then
+                                        let printProgram =
+                                            ANF.Program (printedFunctions, ANF.Return ANF.UnitLiteral)
+                                        printANFProgram
+                                            plan.Options
+                                            "=== ANF (after Print insertion) ==="
+                                            printProgram
+                                    printedFunctions)
                         let programAnfResult =
                             if hasReservedName then
                                 Error $"Function name '{programEntryName}' is reserved"
                             else
-                                buildAnf
-                                    plan.Verbosity
-                                    plan.Options
-                                    sw
-                                    userRegistries
-                                    ANF_Inlining.defaultConfig
-                                    plan.ExternalInlineCandidates
-                                    userOnly.NonInlineableFunctionNames
-                                    (programEntry :: programFunctions)
-                                    true
-                                    plan.PassTimingRecorder
+                                prepareProgramFunctions ()
+                                |> Result.bind (fun preparedFunctions ->
+                                    buildAnf
+                                        plan.Verbosity
+                                        plan.Options
+                                        sw
+                                        userRegistries
+                                        ANF_Inlining.defaultConfig
+                                        plan.ExternalInlineCandidates
+                                        userOnly.NonInlineableFunctionNames
+                                        preparedFunctions
+                                        true
+                                        plan.PassTimingRecorder)
                         match dependencyLirResult, programAnfResult with
                         | Error err, _
                         | _, Error err -> Error err
-                        | Ok allocatedDependencyFuncs, Ok (programAnfFunctions, programTypeMap) ->
-                            if plan.Verbosity >= 1 then println "  [anf.print-result] Print Insertion..."
-                            let printStart = sw.Elapsed.TotalMilliseconds
-                            let printResult =
-                                match plan.Mode with
-                                | FullProgram -> Ok programAnfFunctions
-                                | TestExpression ->
-                                    PrintInsertion.insertPrintInEntry
-                                        programEntryName
-                                        boundaryProgramType
-                                        programAnfFunctions
-                            match printResult with
-                            | Error err -> Error $"Print insertion error: {err}"
-                            | Ok printedFunctions ->
-                                let printElapsed = sw.Elapsed.TotalMilliseconds - printStart
-                                recordPassTiming plan.PassTimingRecorder "Print Insertion" printElapsed
-                                if plan.Verbosity >= 2 then
-                                    let t = System.Math.Round(printElapsed, 1)
-                                    println $"        {t}ms"
-                                if shouldDumpIR plan.Verbosity plan.Options.DumpANF then
-                                    let printProgram = ANF.Program (printedFunctions, ANF.Return ANF.UnitLiteral)
-                                    printANFProgram plan.Options "=== ANF (after Print insertion) ===" printProgram
-
+                        | Ok allocatedDependencyFuncs, Ok (printedFunctions, programTypeMap) ->
                                 let tcoProgramFunctions =
                                     applyTco
                                         plan.Verbosity

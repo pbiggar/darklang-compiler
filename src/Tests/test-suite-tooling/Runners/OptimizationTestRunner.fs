@@ -179,17 +179,17 @@ let getOptimizedMIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
                         ANFConstants.defaultOptimizeOptions
                         convResult.Program
 
-                // Reference counting and print insertion
-                let convResultOptimized = { convResult with Program = optimized }
+                // Generated output participates in reference-count insertion.
+                let (ANF.Program (functions, mainExpr)) = optimized
+                let printed = PrintInsertion.insertPrint functions mainExpr programType
+                let convResultOptimized = { convResult with Program = printed }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
                 | Error e -> Error $"RC insertion error: {e}"
                 | Ok (anfAfterRC, typeMap) ->
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
-                    let (ANF.Program (functions, mainExpr)) = anfAfterTCO
-                    let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction
@@ -222,17 +222,17 @@ let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
                         ANFConstants.defaultOptimizeOptions
                         convResult.Program
 
-                // Reference counting and print insertion
-                let convResultOptimized = { convResult with Program = optimized }
+                // Generated output participates in reference-count insertion.
+                let (ANF.Program (functions, mainExpr)) = optimized
+                let printed = PrintInsertion.insertPrint functions mainExpr programType
+                let convResultOptimized = { convResult with Program = printed }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
                 | Error e -> Error $"RC insertion error: {e}"
                 | Ok (anfAfterRC, typeMap) ->
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
-                    let (ANF.Program (functions, mainExpr)) = anfAfterTCO
-                    let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction and optimization

@@ -20,13 +20,13 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 1.5  | Type checking           | `frontend/TypeChecking.fs`                       | Parsed AST → checked AST                      |
 | 2    | AST → ANF               | `passes/anf/AST_to_ANF.fs`                       | Checked AST → ANF                             |
 | 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `passes/anf/LowerListRegions.fs` | Closed semantic lists → storage → owned arrays → ANF |
+| 2.2  | Generated result output | `passes/anf/PrintInsertion.fs`                   | ANF → ANF                                     |
 | 2.3  | ANF optimizations       | `passes/anf/ANF_Optimize.fs`                                | ANF → ANF                                     |
 | 2.4  | ANF inlining            | `passes/anf/ANF_Inlining.fs`                                | ANF → ANF                                     |
 | 2.4.4 | Known closure specialization | `passes/anf/ANF_HigherOrderSpecialization.fs`       | ANF → ANF                                     |
 | 2.4.5 | Direct-call specialization | `passes/anf/ANF_DirectCallSpecialization.fs`          | ANF → ANF                                     |
 | 2.4.6 | Escape analysis        | `passes/anf/ANF_EscapeAnalysis.fs`                        | ANF → scalar-replaced ANF                     |
 | 2.5  | Ref count insertion     | `passes/anf/RefCountInsertion.fs`                           | ANF + memory ops                              |
-| 2.6  | Print insertion         | `passes/anf/PrintInsertion.fs`                              | ANF → ANF                                     |
 | 2.7  | Tail call detection     | `passes/anf/TailCallDetection.fs`                           | ANF → ANF                                     |
 | 3    | ANF → MIR               | `passes/anf/ANF_to_MIR.fs`                                    | ANF → CFG                                     |
 | 3.1  | SSA construction        | `passes/mir/SSA_Construction.fs`                            | MIR → SSA-form MIR                            |
@@ -134,6 +134,24 @@ Output: let t0 = 2 * 3 in
 
 ---
 
+## Pass 2.2: Generated Result Output (`PrintInsertion.fs`)
+
+**Input**: ANF
+**Output**: ANF with explicit result-printing effects
+
+### Responsibilities
+- **Ensure observable output**: Insert printing for expression-mode program results
+- **Expose ownership**: Make the consuming output use visible before reference-count insertion
+- **Preserve cleanup order**: Finalize unrelated ownership before the output effect consumes its root
+
+Reference-count insertion recognizes the terminal consuming print boundary. It
+finalizes every unrelated ownership obligation before the output effect, while
+the rendered root remains live through printing. MIR-to-LIR lowers that
+consumption to the shape-specific final release using the existing release
+registries.
+
+---
+
 ## Pass 2.3: ANF Optimizations (`ANF_Optimize.fs`)
 
 **Input**: ANF
@@ -205,8 +223,6 @@ treated as one ownership family. Stack allocation, managed-field reuse or
 scalar replacement, and interprocedural representation changes are outside the
 current scope.
 
----
-
 ## Pass 2.5: Reference Count Insertion (`RefCountInsertion.fs`)
 
 **Input**: ANF
@@ -219,17 +235,6 @@ current scope.
 ### Key Algorithms
 - **Borrowed calling convention**: Callers retain ownership, no inc on call
 - **Scope-based release**: Dec when value goes out of scope
-
----
-
-## Pass 2.6: Print Insertion (`PrintInsertion.fs`)
-
-**Input**: ANF
-**Output**: ANF with explicit print operations
-
-### Responsibilities
-- **Ensure observable output**: Insert print calls for program results
-- **Preserve types**: Use type information to select correct printers
 
 ---
 

@@ -3,35 +3,15 @@
 // Inserts a Print instruction at the end of the main expression.
 // This ensures the program's result is printed before exiting.
 //
-// This pass runs after RC insertion and before ANF-to-MIR conversion.
+// This pass runs before RC insertion so generated output and its final managed
+// uses participate in the same ownership analysis as source operations.
 
 module PrintInsertion
-
-open MemoryModel
-open ReleasePlanFingerprint
-open MemoryPlanning
 
 open ANF
 
 let unsupportedListDisplay (elemType: AST.Type) : 'a =
     Crash.crash $"Unsupported list result display element type: {CheckingDiagnostics.typeToString elemType}"
-
-let private metadataForPrintRelease (valueType: AST.Type) : MemoryModel.RcMetadata =
-    let releasePlan = MemoryPlanning.rcReleasePlanOfType Map.empty valueType
-    { ReleasePlanCacheKey = ReleasePlanFingerprint.rcReleasePlanCacheKey valueType releasePlan
-      ReleasePlan = Some releasePlan
-      SourceType = Some valueType }
-
-let private releasePrintedRoot (atom: Atom) (valueType: AST.Type) (body: AExpr) (varGen: VarGen) : AExpr * VarGen =
-    match MemoryPlanning.rcShapeReleaseOperation (MemoryPlanning.rcShapeOfType Map.empty valueType) with
-    | Some (MemoryModel.FixedSizeRoot (payloadSize, kind)) ->
-        let (releaseTmp, varGen') = freshVar varGen
-        let releaseExpr = RefCountDec (atom, payloadSize, kind, Some (metadataForPrintRelease valueType))
-        (Let (releaseTmp, releaseExpr, body), varGen')
-    | Some MemoryModel.DynamicStringBuffer
-    | Some MemoryModel.DynamicBlobBuffer
-    | None ->
-        (body, varGen)
 
 /// Wrap the return value with a Print instruction
 /// Transforms: Return atom  →  Let (_, Print (atom, type), Return atom)
@@ -75,14 +55,12 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             match ListDisplay.getDisplayStringFunc elemType with
             | Some toDisplayStringName ->
                 // Generate: let strTmp = Call(toDisplayString, [list]) in
-                //           let _ = Print(strTmp, String) in release list; Return atom
+                //           let _ = Print(strTmp, String) in Return atom
                 let (strTmp, varGen1) = freshVar varGen
                 let (printTmp, varGen2) = freshVar varGen1
-                let (returnWithRelease, varGen3) =
-                    releasePrintedRoot atom printType (Return atom) varGen2
                 let callExpr = Call (toDisplayStringName, [atom])
                 let printExpr = Print (Var strTmp, AST.TString)
-                (Let (strTmp, callExpr, Let (printTmp, printExpr, returnWithRelease)), varGen3)
+                (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
             | None ->
                 unsupportedListDisplay elemType
         | AST.TFloat64 ->
