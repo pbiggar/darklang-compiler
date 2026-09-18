@@ -328,6 +328,8 @@ branch unchanged and explain the blocker." >"$codex_log" 2>&1; then
 }
 
 last_queue_signature=""
+last_progress_event_id=0
+active_progress_job_ids=""
 
 report_queue_status() {
   local snapshot="$1"
@@ -363,12 +365,124 @@ report_queue_status() {
   fi
 }
 
+running_job_ids() {
+  python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+for job in payload.get("recent_jobs", []):
+    if job.get("state") == "running" and isinstance(job.get("id"), int):
+        print(job["id"])
+'
+}
+
+report_train_progress() {
+  local snapshot="$1"
+  local running_ids job_ids final_poll=false details_file inspect_log job_id
+  local event_id event_state message detail
+
+  running_ids="$(running_job_ids <<<"$snapshot")"
+  if [[ -n "$running_ids" ]]; then
+    active_progress_job_ids="$running_ids"
+    job_ids="$running_ids"
+  elif [[ -n "$active_progress_job_ids" ]]; then
+    job_ids="$active_progress_job_ids"
+    final_poll=true
+  else
+    return 0
+  fi
+
+  details_file="$(mktemp "$attempt_dir/.progress.XXXXXX.jsonl")"
+  for job_id in $job_ids; do
+    inspect_log="$(mktemp "$attempt_dir/.inspect.XXXXXX.log")"
+    if mergetrain --repo "$repo_root" inspect "$job_id" --json \
+      >>"$details_file" 2>"$inspect_log"; then
+      printf '\n' >>"$details_file"
+    fi
+    rm -f "$inspect_log"
+  done
+
+  while IFS=$'\t' read -r event_id event_state message detail; do
+    [[ -n "$event_id" ]] || continue
+    last_progress_event_id="$event_id"
+    if [[ -n "$detail" && "$message" != *"$detail"* ]]; then
+      message="$message — $detail"
+    fi
+    case "$event_state" in
+      success)
+        log_ok "$message"
+        ;;
+      failure|failed|error)
+        log_error "$message"
+        ;;
+      *)
+        log_run "$message"
+        ;;
+    esac
+  done < <(
+    python3 - "$last_progress_event_id" "$details_file" <<'PY'
+import json
+import pathlib
+import sys
+
+minimum_id = int(sys.argv[1])
+events = {}
+text = pathlib.Path(sys.argv[2]).read_text(encoding="utf-8")
+decoder = json.JSONDecoder()
+position = 0
+while position < len(text):
+    while position < len(text) and text[position].isspace():
+        position += 1
+    if position == len(text):
+        break
+    payload, position = decoder.raw_decode(text, position)
+    for event in payload.get("events", []):
+        event_id = event.get("id")
+        if isinstance(event_id, int) and event_id > minimum_id:
+            events[event_id] = event
+
+for event_id in sorted(events):
+    event = events[event_id]
+    fields = [
+        str(event_id),
+        str(event.get("state", "active")),
+        str(event.get("message") or "Mergetrain progress"),
+        str(event.get("detail") or ""),
+    ]
+    print("\t".join(field.replace("\t", " ").replace("\n", " ") for field in fields))
+PY
+  )
+  rm -f "$details_file"
+
+  if [[ "$final_poll" == true ]]; then
+    active_progress_job_ids=""
+  fi
+  return 0
+}
+
 log_info "Integrator started • repo $repo_root • interval ${interval_seconds}s • color $color_mode"
 
 while true; do
   # The native one-shot daemon owns queue locking, validation, and deployment.
   daemon_output="$(mktemp "$attempt_dir/.daemon.XXXXXX.log")"
-  if ! mergetrain --repo "$repo_root" daemon --once >"$daemon_output" 2>&1; then
+  mergetrain --repo "$repo_root" daemon --once >"$daemon_output" 2>&1 &
+  daemon_pid=$!
+  while kill -0 "$daemon_pid" 2>/dev/null; do
+    progress_status_log="$(mktemp "$attempt_dir/.status-progress.XXXXXX.log")"
+    if live_snapshot="$(
+      mergetrain --repo "$repo_root" status --json 2>"$progress_status_log"
+    )"; then
+      live_contract_version="$(json_value contract_version <<<"$live_snapshot")"
+      if [[ "$live_contract_version" == "4" ]]; then
+        report_queue_status "$live_snapshot"
+        report_train_progress "$live_snapshot"
+      fi
+    fi
+    rm -f "$progress_status_log"
+    sleep 0.25
+  done
+  if ! wait "$daemon_pid"; then
     daemon_log="$attempt_dir/daemon-failed-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
     mv "$daemon_output" "$daemon_log"
     log_error "Mergetrain daemon command failed"
@@ -397,6 +511,7 @@ while true; do
     exit 1
   fi
   report_queue_status "$snapshot"
+  report_train_progress "$snapshot"
 
   case "$next_action" in
     fix_blocked_job)
