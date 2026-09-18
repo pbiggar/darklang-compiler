@@ -120,15 +120,20 @@ let testBatchManifestKeepGoingParses () : TestResult =
     match
         Program.parseCommand
             [| "--batch"
+               "--package-server=http://127.0.0.1:9090"
                "--manifest"
-               "compile-items.json"
+               "package-probes.json"
                "--keep-going"
                "--report"
-               "compile-report.jsonl" |]
+               "package-report.jsonl" |]
     with
     | Ok (Program.BatchCommand options) ->
         match options.Input, options.ReportPath with
-        | Program.ManifestFile "compile-items.json", Some "compile-report.jsonl" when options.KeepGoing -> Ok ()
+        | Program.ManifestFile "package-probes.json", Some "package-report.jsonl"
+            when options.KeepGoing
+                 && (options.PackageServer
+                     |> Option.exists (fun server -> server.AbsoluteUri = "http://127.0.0.1:9090/")) ->
+            Ok ()
         | _ -> Error $"Unexpected manifest batch options: {options}"
     | Ok command -> Error $"Expected batch command, got: {command}"
     | Error error -> Error $"Expected manifest batch compilation to parse, got: {error}"

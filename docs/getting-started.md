@@ -95,6 +95,12 @@ To audit hosted packages against the compiler, run the catalog-driven helper:
 python3 scripts/compile-packages.py --server http://127.0.0.1:9090 --limit 10
 ```
 
+The helper writes probe sources and a JSON manifest, then invokes one compiler
+batch so the standard library is prepared once. Compilation continues after
+individual failures. Complete JSONL results go to
+`TestResults/package-compilation.jsonl`; full failure diagnostics go to
+`TestResults/package-compilation.log`.
+
 ## Dump intermediate representations
 
 ```bash

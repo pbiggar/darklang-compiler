@@ -75,24 +75,34 @@ def probe_source(item: PackageItem) -> str:
     return f"let packageProbe = {item.name} in 0L\n"
 
 
-def compile_item(
-    compiler: Path,
-    server: str,
-    item: PackageItem,
-    directory: Path,
-    timeout: float,
-) -> subprocess.CompletedProcess[str]:
-    safe_name = "".join(character if character.isalnum() else "_" for character in item.name)
-    source = directory / f"{item.kind}-{safe_name}.dark"
-    output = directory / f"{item.kind}-{safe_name}.out"
-    source.write_text(probe_source(item), encoding="utf-8")
-    return subprocess.run(
-        [str(compiler), "--quiet", "--package-server", server, str(source), "-o", str(output)],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
+def write_manifest(items: list[PackageItem], directory: Path) -> Path:
+    manifest: list[dict[str, str]] = []
+    output = directory / "probe.out"
+    for index, item in enumerate(items):
+        source = directory / f"probe-{index:05d}.dark"
+        source.write_text(probe_source(item), encoding="utf-8")
+        manifest.append(
+            {
+                "kind": item.kind,
+                "name": item.name,
+                "source": str(source),
+                "output": str(output),
+            }
+        )
+    path = directory / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    return path
+
+
+def read_report(path: Path) -> list[dict[str, object]]:
+    reports: list[dict[str, object]] = []
+    with path.open(encoding="utf-8") as report_file:
+        for line_number, line in enumerate(report_file, 1):
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                raise ValueError(f"report line {line_number} is not an object")
+            reports.append(value)
+    return reports
 
 
 def parse_args() -> argparse.Namespace:
@@ -110,7 +120,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--match", default="", help="Only names containing this text")
     parser.add_argument("--limit", type=int, help="Compile at most this many matching items")
-    parser.add_argument("--timeout", type=float, default=120.0, help="Seconds allowed per compilation")
+    parser.add_argument("--catalog-timeout", type=float, default=120.0, help="Seconds allowed for catalog download")
+    parser.add_argument("--timeout", type=float, help="Optional timeout for the complete compiler batch")
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=repository / "TestResults" / "package-compilation.jsonl",
+        help="Complete machine-readable result log",
+    )
     parser.add_argument(
         "--failure-log",
         type=Path,
@@ -124,8 +141,11 @@ def main() -> int:
     if args.limit is not None and args.limit < 1:
         print("--limit must be positive", file=sys.stderr)
         return 2
-    if args.timeout <= 0:
+    if args.timeout is not None and args.timeout <= 0:
         print("--timeout must be positive", file=sys.stderr)
+        return 2
+    if args.catalog_timeout <= 0:
+        print("--catalog-timeout must be positive", file=sys.stderr)
         return 2
     compiler = args.compiler.resolve()
     if not compiler.is_file():
@@ -141,7 +161,7 @@ def main() -> int:
         }
     )
     try:
-        catalog = request_json(args.server, f"/search?{query}", args.timeout)
+        catalog = request_json(args.server, f"/search?{query}", args.catalog_timeout)
         items = package_items(catalog, kinds)
     except (OSError, ValueError, json.JSONDecodeError, urllib.error.URLError) as error:
         print(f"could not read package catalog from {args.server}: {error}", file=sys.stderr)
@@ -156,19 +176,63 @@ def main() -> int:
         print("no package items matched", file=sys.stderr)
         return 2
 
-    print(f"Pulled catalog from {args.server}; compiling {len(items)} package item(s)")
-    failures: list[tuple[PackageItem, str]] = []
+    print(f"Pulled catalog from {args.server}; compiling {len(items)} package item(s)", flush=True)
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    args.report.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix="dark-package-compilation-") as temp:
         directory = Path(temp)
-        for index, item in enumerate(items, 1):
-            print(f"[{index}/{len(items)}] {item.kind} {item.name}", flush=True)
-            try:
-                result = compile_item(compiler, args.server, item, directory, args.timeout)
-                if result.returncode != 0:
-                    diagnostic = (result.stderr + result.stdout).strip()
-                    failures.append((item, diagnostic or f"compiler exited {result.returncode}"))
-            except subprocess.TimeoutExpired:
-                failures.append((item, f"compilation timed out after {args.timeout:g}s"))
+        manifest = write_manifest(items, directory)
+        command = [
+            str(compiler),
+            "--batch",
+            "--quiet",
+            "--package-server",
+            args.server,
+            "--manifest",
+            str(manifest),
+            "--keep-going",
+            "--report",
+            str(args.report),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=args.timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            duration = f" after {args.timeout:g}s" if args.timeout is not None else ""
+            print(f"compiler batch timed out{duration}", file=sys.stderr)
+            return 2
+
+    try:
+        reports = read_report(args.report)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        diagnostic = (result.stderr + result.stdout).strip()
+        print(f"could not read compiler report {args.report}: {error}", file=sys.stderr)
+        if diagnostic:
+            print(diagnostic, file=sys.stderr)
+        return 2
+    if len(reports) != len(items):
+        print(
+            f"compiler reported {len(reports)}/{len(items)} package items; see {args.report}",
+            file=sys.stderr,
+        )
+        return 2
+
+    failures: list[tuple[PackageItem, str]] = []
+    for item, report in zip(items, reports, strict=True):
+        if report.get("kind") != item.kind or report.get("name") != item.name:
+            print(f"compiler report does not match manifest at {item.kind} {item.name}", file=sys.stderr)
+            return 2
+        if report.get("status") == "failed":
+            diagnostic = report.get("error")
+            failures.append((item, diagnostic if isinstance(diagnostic, str) else "unknown failure"))
+        elif report.get("status") != "compiled":
+            print(f"compiler report has invalid status for {item.kind} {item.name}", file=sys.stderr)
+            return 2
 
     args.failure_log.parent.mkdir(parents=True, exist_ok=True)
     with args.failure_log.open("w", encoding="utf-8") as log:
@@ -176,7 +240,12 @@ def main() -> int:
             log.write(f"=== {item.kind} {item.name} ===\n{diagnostic}\n\n")
 
     passed = len(items) - len(failures)
-    print(f"Compiled: {passed}/{len(items)} succeeded")
+    print(f"Compiled: {passed}/{len(items)} succeeded", flush=True)
+    print(f"Complete report: {args.report}", flush=True)
+    if result.returncode != 0 and not failures:
+        diagnostic = (result.stderr + result.stdout).strip()
+        print(diagnostic or f"compiler exited {result.returncode}", file=sys.stderr)
+        return 2
     if failures:
         for item, diagnostic in failures[:10]:
             first_line = diagnostic.splitlines()[0] if diagnostic else "unknown failure"

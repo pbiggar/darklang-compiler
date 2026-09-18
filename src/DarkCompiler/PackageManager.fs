@@ -620,7 +620,7 @@ let private renderEntity (entity: LocatedEntity) : Result<ResolvedSource, string
 let rec private typeNames (typ: AST.Type) : string list =
     match typ with
     | AST.TFunction (parameters, result) -> List.collect typeNames parameters @ typeNames result
-    | AST.TTuple elements | AST.TEnumFields elements -> List.collect typeNames elements
+    | AST.TTuple elements -> List.collect typeNames elements
     | AST.TRecord (name, arguments)
     | AST.TSum (name, arguments) -> name :: List.collect typeNames arguments
     | AST.TList inner
@@ -633,7 +633,7 @@ let rec private typeNames (typ: AST.Type) : string list =
 
 let rec private patternNames (pattern: AST.Pattern) : string list =
     match pattern with
-    | AST.PConstructor (name, payload) -> name :: (payload |> Option.map patternNames |> Option.defaultValue [])
+    | AST.PConstructor (name, fields) -> name :: List.collect patternNames fields
     | AST.PTuple patterns | AST.PList patterns -> List.collect patternNames patterns
     | AST.PListCons (head, tail) -> List.collect patternNames head @ patternNames tail
     | AST.POr alternatives -> alternatives |> AST.NonEmptyList.toList |> List.collect patternNames
@@ -652,13 +652,17 @@ let rec private expressionNames (expr: AST.Expr) : string list =
     | AST.TypeApp (name, types, arguments) -> name :: List.collect typeNames types @ (arguments |> AST.NonEmptyList.toList |> many)
     | AST.TupleLiteral values | AST.ListLiteral values -> many values
     | AST.TupleAccess (value, _) | AST.RecordAccess (value, _) -> expressionNames value
-    | AST.DictLiteral (typ, entries) -> typeNames typ @ (entries |> List.map snd |> many)
+    | AST.DictLiteral (keyType, valueType, entries) ->
+        typeNames keyType
+        @ typeNames valueType
+        @ (entries
+           |> List.collect (fun (key, value) -> expressionNames key @ expressionNames value))
     | AST.RecordLiteral (reference, fields) ->
         reference.SourceTypeName :: List.collect typeNames reference.TypeArgs @ (fields |> List.map snd |> many)
     | AST.RecordUpdate (record, updates) -> expressionNames record @ (updates |> List.map snd |> many)
-    | AST.Constructor (reference, _, payload) ->
+    | AST.Constructor (reference, _, fields) ->
         let declaringType = AST.constructorReferenceTypeName reference |> Option.toList
-        declaringType @ (payload |> Option.map expressionNames |> Option.defaultValue [])
+        declaringType @ many fields
     | AST.Match (scrutinee, cases) ->
         expressionNames scrutinee
         @ (cases
@@ -697,7 +701,7 @@ let private sourceCandidates (AST.Program topLevels) : string list =
         | AST.ValueDef definition -> expressionNames (AST.valueDefBody definition)
         | AST.TypeDef (AST.RecordDef (_, _, fields)) -> fields |> List.collect (snd >> typeNames)
         | AST.TypeDef (AST.SumTypeDef (_, _, variants)) ->
-            variants |> List.collect (fun variant -> variant.Payload |> Option.map typeNames |> Option.defaultValue [])
+            variants |> List.collect (fun variant -> List.collect typeNames variant.Fields)
         | AST.TypeDef (AST.TypeAlias (_, _, target)) -> typeNames target
         | AST.Expression expression -> expressionNames expression)
     |> List.filter (fun name -> name.Contains '.')
