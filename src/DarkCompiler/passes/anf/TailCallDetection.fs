@@ -214,6 +214,7 @@ let rec private leadingRetainedParams
 /// ordinary recursive frame; a loop instead adopts that argument's ownership.
 let private tryTransferOwnedSelfTailArgument
     (aliasRoots: Map<TempId, TempId>)
+    (tailArgRoots: Set<TempId>)
     (ownedParams: Set<TempId>)
     (releasedTemps: Set<TempId>)
     (typedParams: TypedParam list)
@@ -259,7 +260,6 @@ let private tryTransferOwnedSelfTailArgument
             | _ -> None
         match matchingOwnedParams typedParams args with
         | Some [_] ->
-            let tailArgRoots = tailCallArgTempIds aliasRoots tailCall
             let movable =
                 cleanups
                 |> List.filter (fun (_, cleanup) ->
@@ -318,6 +318,7 @@ let rec detectTailCalls
                 | TailCall (targetFunc, _) when isCurrentMember targetFunc ->
                     tryTransferOwnedSelfTailArgument
                         aliasRoots
+                        tailArgTemps
                         ownedParams
                         releasedTemps
                         typedParams
