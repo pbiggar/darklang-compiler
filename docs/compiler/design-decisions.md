@@ -6,7 +6,7 @@ This document explains the key architectural and implementation decisions in the
 
 **Decision**: Use a multi-stage pipeline with distinct intermediate representations:
 ```
-Source → AST → ANF → MIR → LIR → target ISA → Binary
+Source → parsed AST → checked AST → ANF → MIR → LIR → target ISA → Binary
 ```
 
 **Rationale**:

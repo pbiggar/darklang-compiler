@@ -149,40 +149,53 @@ let private checkProgramInternal
         warningSettings
         program
 
+let private constructCheckedProgram
+    (typ, program, env)
+    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    CheckedAST.ofTypedProgram program
+    |> Result.map (fun checkedProgram -> (typ, checkedProgram, env))
+    |> Result.mapError GenericError
+
 /// Type-check a program
 /// Returns the type of the main expression and the transformed program
 /// The transformed program has Call nodes converted to TypeApp where type inference was applied
-let checkProgram (program: Program) : Result<Type * Program, TypeError> =
+let checkProgram (program: Program) : Result<Type * CheckedAST.Program, TypeError> =
     checkProgramInternal None false false true true AST.defaultWarningSettings program
+    |> Result.bind constructCheckedProgram
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
 
 /// Type-check the public source policy without a base environment.
 /// Used by focused declaration tests and tools that already parsed an isolated
 /// public program.
-let checkPublicProgram (program: Program) : Result<Type * Program, TypeError> =
+let checkPublicProgram (program: Program) : Result<Type * CheckedAST.Program, TypeError> =
     checkProgramInternal None false true true true AST.defaultWarningSettings program
+    |> Result.bind constructCheckedProgram
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
 
 /// Type-check a program and return the type checking environment
 /// Use this when you need to reuse the environment (e.g., for stdlib caching)
-let checkProgramWithEnv (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
+let checkProgramWithEnv (program: Program) : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal None false false true true AST.defaultWarningSettings program
+    |> Result.bind constructCheckedProgram
 
 /// Type-check a declaration-only program without synthesizing an expression.
-let checkDeclarationProgramWithEnv (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
+let checkDeclarationProgramWithEnv (program: Program) : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal None false false true false AST.defaultWarningSettings program
+    |> Result.bind constructCheckedProgram
 
 /// Type-check a program with a pre-populated base environment (for separate compilation)
 /// The program's definitions are merged with the base environment, allowing lookups
 /// of types/functions from both the base (e.g., stdlib) and the program (e.g., user code)
-let checkProgramWithBaseEnv (baseEnv: TypeCheckEnv) (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
+let checkProgramWithBaseEnv (baseEnv: TypeCheckEnv) (program: Program) : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false false true true AST.defaultWarningSettings program
+    |> Result.bind constructCheckedProgram
 
 let checkDeclarationProgramWithBaseEnv
     (baseEnv: TypeCheckEnv)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false false true false AST.defaultWarningSettings program
+    |> Result.bind constructCheckedProgram
 
 /// Type-check a program with a pre-populated base environment, generic-call policy override,
 /// and warning compatibility settings from the compiler driver.
@@ -191,8 +204,9 @@ let checkProgramWithBaseEnvAndSettings
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false requireExplicitTypeArgsForBareCalls true true warningSettings program
+    |> Result.bind constructCheckedProgram
 
 let checkProgramWithBaseEnvAndSettingsWithTrace
     (phaseRecorder: string -> float -> unit)
@@ -200,7 +214,7 @@ let checkProgramWithBaseEnvAndSettingsWithTrace
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternalWithTrace
         (Some phaseRecorder)
         (Some baseEnv)
@@ -210,14 +224,16 @@ let checkProgramWithBaseEnvAndSettingsWithTrace
         true
         warningSettings
         program
+    |> Result.bind constructCheckedProgram
 
 let checkDeclarationProgramWithBaseEnvAndSettings
     (baseEnv: TypeCheckEnv)
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false requireExplicitTypeArgsForBareCalls true false warningSettings program
+    |> Result.bind constructCheckedProgram
 
 /// Analyze a synthetic preamble assembled from otherwise independent tests.
 /// Such preambles can repeat declarations that never coexist in a source
@@ -228,8 +244,9 @@ let checkSyntheticPreambleWithBaseEnvAndSettings
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false requireExplicitTypeArgsForBareCalls false false warningSettings program
+    |> Result.bind constructCheckedProgram
 
 /// Type-check source at the compiler-driver boundary, where implementation-only
 /// stdlib names must not be visible to user programs.
@@ -238,5 +255,6 @@ let checkPublicProgramWithBaseEnvAndSettings
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) true requireExplicitTypeArgsForBareCalls true true warningSettings program
+    |> Result.bind constructCheckedProgram

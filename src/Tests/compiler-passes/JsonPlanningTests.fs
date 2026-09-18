@@ -20,7 +20,7 @@ let private plannedSource
         |> Result.mapError CheckingDiagnostics.typeErrorToString)
     |> Result.map (fun (_, typedProgram, env) ->
         JsonPlanning.rewriteProgram env typedProgram
-        |> ASTPrettyPrinter.formatProgram)
+        |> sprintf "%A")
 
 let testTypedDecodingUsesSharedViews
     (stdlib: CompilationContexts.StdlibResult)
@@ -67,7 +67,7 @@ let testTypedEncodingUsesSharedWriter
             Error "Expected typed JSON encoding to finish the shared writer"
         elif not (planned.Contains "Stdlib.Json.__writerFieldName") then
             Error "Expected record encoding to delegate field syntax to the shared writer"
-        elif planned.Contains " ++ " then
+        elif planned.Contains "StringConcat" then
             Error "Typed JSON encoding still generates string-concatenation plans"
         else
             Ok ())

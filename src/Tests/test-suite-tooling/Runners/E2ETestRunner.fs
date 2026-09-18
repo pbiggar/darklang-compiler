@@ -267,13 +267,13 @@ let private buildPreambleBuildSpec (sourceFile: string) (tests: E2ETest list) : 
     | _ ->
         Error $"Multiple preambles found for {sourceFile}"
 
-let private collectTypeAppsFromProgram (program: Program) : Set<SpecKey> =
-    let (Program topLevels) = program
+let private collectTypeAppsFromProgram (program: CheckedAST.Program) : Set<SpecKey> =
+    let (CheckedAST.Program topLevels) = program
     topLevels
     |> List.map (function
-        | FunctionDef f when List.isEmpty f.TypeParams -> collectTypeAppsFromFunc f
-        | ValueDef valueDef -> collectTypeApps (valueDefBody valueDef)
-        | Expression e -> collectTypeApps e
+        | CheckedAST.FunctionDef f when List.isEmpty f.TypeParams -> collectTypeAppsFromFunc f
+        | CheckedAST.ValueDef valueDef -> collectTypeApps valueDef.Body
+        | CheckedAST.Expression e -> collectTypeApps e
         | _ -> Set.empty)
     |> List.fold Set.union Set.empty
 

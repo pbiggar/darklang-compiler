@@ -12,7 +12,7 @@ type Value = {
 }
 
 type Operand = {
-    Expression: AST.Expr
+    Expression: CheckedAST.Expr
     Type: AST.Type
     Inputs: Map<string, Value>
 }

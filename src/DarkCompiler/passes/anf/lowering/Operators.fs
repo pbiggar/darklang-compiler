@@ -202,8 +202,7 @@ let rec generateStructuralEquality
             let descriptor =
                 recordDescriptor
                     {
-                        SourceTypeName = typeName
-                        ResolvedTypeName = typeName
+                        TypeName = typeName
                         TypeArgs = typeArgs
                     }
                     recordInfo

@@ -72,7 +72,7 @@ unchanged by that grouping.
 6. Extend semantic HIR and ownership interfaces, with explicit verification and
    separate behavior-changing commits.
 
-The intended general pipeline is typed AST → semantic HIR → storage IR → owned
+The intended general pipeline is checked AST → semantic HIR → storage IR → owned
 IR → ANF → MIR → LIR → target instructions. The first three stages currently
 cover only closed list regions; their generalization is implementation work,
 not accomplished by moving files. Do not create empty future stages or duplicate

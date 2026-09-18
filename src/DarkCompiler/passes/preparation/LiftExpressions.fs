@@ -10,24 +10,24 @@ open SpecializationIdentity
 open ClosureAnalysis
 open ClosureComparisons
 
-let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr * LiftState, string> =
+let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<CheckedAST.Expr * LiftState, string> =
     match expr with
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ | AST.RuntimeError _ ->
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
         Ok (expr, state)
-    | AST.BoundaryRender (renderer, value) ->
+    | CheckedAST.BoundaryRender (renderer, value) ->
         liftLambdasInExpr value state
-        |> Result.map (fun (value', state') -> (AST.BoundaryRender (renderer, value'), state'))
-    | AST.BinOp (op, left, right) ->
+        |> Result.map (fun (value', state') -> (CheckedAST.BoundaryRender (renderer, value'), state'))
+    | CheckedAST.BinOp (op, left, right) ->
         liftLambdasInExpr left state
         |> Result.bind (fun (left', state1) ->
             liftLambdasInExpr right state1
-            |> Result.map (fun (right', state2) -> (AST.BinOp (op, left', right'), state2)))
-    | AST.UnaryOp (op, inner) ->
+            |> Result.map (fun (right', state2) -> (CheckedAST.BinOp (op, left', right'), state2)))
+    | CheckedAST.UnaryOp (op, inner) ->
         liftLambdasInExpr inner state
-        |> Result.map (fun (inner', state') -> (AST.UnaryOp (op, inner'), state'))
-    | AST.Let (pattern, value, body) ->
+        |> Result.map (fun (inner', state') -> (CheckedAST.UnaryOp (op, inner'), state'))
+    | CheckedAST.Let (pattern, value, body) ->
         liftLambdasInExpr value state
         |> Result.bind (fun (value', state1) ->
             // Try to infer the type of the value for capturing in nested lambdas
@@ -45,29 +45,23 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                 // The child scope must restore the complete incoming environment;
                 // removing by text would lose an outer binding after shadowing.
                 let state2' = { state2 with TypeEnv = state.TypeEnv }
-                (AST.Let (pattern, value', body'), state2')))
-    | AST.RecursiveLet (recursion, value, body) ->
-        let name = AST.recursiveBindingName recursion
-        match AST.recursiveBindingAvailability recursion with
-        | Some AST.OrdinaryBinding ->
-            liftLambdasInExpr (AST.Let (AST.LPVariable name, value, body)) state
-        | Some AST.SelfRecursiveMember ->
-            let valueType =
-                match recursion with
-                | AST.TypedRecursiveBinding typed -> typed.MonomorphicType
-                | _ -> Crash.crash "RecursiveLet reached lambda lifting without a typed member"
+                (CheckedAST.Let (pattern, value', body'), state2')))
+    | CheckedAST.RecursiveLet (recursion, value, body) ->
+        let name = CheckedAST.recursiveBindingName recursion
+        match CheckedAST.recursiveBindingAvailability recursion with
+        | AST.OrdinaryBinding ->
+            liftLambdasInExpr (CheckedAST.Let (CheckedAST.LPVariable name, value, body)) state
+        | AST.SelfRecursiveMember ->
+            let valueType = recursion.MonomorphicType
             let rewrittenValue =
                 match value with
-                | AST.Lambda (parameters, returnAnnotation, lambdaBody) ->
-                    AST.Lambda (parameters, returnAnnotation, rewriteRecursiveSelfReferences name lambdaBody)
+                | CheckedAST.Lambda (parameters, returnAnnotation, lambdaBody) ->
+                    CheckedAST.Lambda (parameters, returnAnnotation, rewriteRecursiveSelfReferences name lambdaBody)
                 | _ -> Crash.crash "RecursiveLet reached lambda lifting with a non-lambda value"
             let recursiveState =
-                match recursion, AST.recursiveBindingId recursion with
-                | AST.TypedRecursiveBinding typed, Some bindingId ->
-                    { state with
-                        TypeEnv = Map.add "__closure" valueType state.TypeEnv
-                        RecursiveSelf = Some (bindingId, valueType, typed) }
-                | _ -> Crash.crash "Typed recursive binding has no binding identity"
+                { state with
+                    TypeEnv = Map.add "__closure" valueType state.TypeEnv
+                    RecursiveSelf = Some (CheckedAST.recursiveBindingId recursion, valueType, recursion) }
             liftLambdasInExpr rewrittenValue recursiveState
             |> Result.bind (fun (value', state1) ->
                 let continuationState =
@@ -80,62 +74,61 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                         { state2 with
                             TypeEnv = state.TypeEnv
                             RecursiveSelf = state.RecursiveSelf }
-                    (AST.Let (AST.LPVariable name, value', body'), restored)))
-        | Some AST.MutualRecursiveMember
-        | Some AST.CompletedGroupMember
-        | Some AST.ImportedGroupMember ->
+                    (CheckedAST.Let (CheckedAST.LPVariable name, value', body'), restored)))
+        | AST.MutualRecursiveMember
+        | AST.CompletedGroupMember
+        | AST.ImportedGroupMember ->
             Error "Local RecursiveLet has invalid group availability"
-        | None ->
-            Error "Local RecursiveLet has not been resolved"
-    | AST.If (cond, thenBr, elseBr) ->
+    | CheckedAST.If (cond, thenBr, elseBr) ->
         liftLambdasInExpr cond state
         |> Result.bind (fun (cond', state1) ->
             liftLambdasInExpr thenBr state1
             |> Result.bind (fun (thenBr', state2) ->
                 liftLambdasInExpr elseBr state2
-                |> Result.map (fun (elseBr', state3) -> (AST.If (cond', thenBr', elseBr'), state3))))
-    | AST.Sequence (first, next) ->
+                |> Result.map (fun (elseBr', state3) -> (CheckedAST.If (cond', thenBr', elseBr'), state3))))
+    | CheckedAST.Sequence (first, next) ->
         liftLambdasInExpr first state
         |> Result.bind (fun (first', state1) ->
             liftLambdasInExpr next state1
-            |> Result.map (fun (next', state2) -> (AST.Sequence (first', next'), state2)))
-    | AST.Call (funcName, args) ->
+            |> Result.map (fun (next', state2) -> (CheckedAST.Sequence (first', next'), state2)))
+    | CheckedAST.Call (funcName, args) ->
         // Process args, lifting any lambdas
         liftLambdasInArgs args state
-        |> Result.map (fun (args', state') -> (AST.Call (funcName, args'), state'))
-    | AST.TypeApp (funcName, typeArgs, args) ->
+        |> Result.map (fun (args', state') -> (CheckedAST.Call (funcName, args'), state'))
+    | CheckedAST.TypeApp (funcName, typeArgs, args) ->
         liftLambdasInArgs args state
-        |> Result.map (fun (args', state') -> (AST.TypeApp (funcName, typeArgs, args'), state'))
-    | AST.TupleLiteral elems ->
+        |> Result.map (fun (args', state') -> (CheckedAST.TypeApp (funcName, typeArgs, args'), state'))
+    | CheckedAST.TupleLiteral elems ->
         liftLambdasInList elems state
-        |> Result.map (fun (elems', state') -> (AST.TupleLiteral elems', state'))
-    | AST.ListLiteral elems ->
+        |> Result.map (fun (elems', state') -> (CheckedAST.TupleLiteral elems', state'))
+    | CheckedAST.ListLiteral elems ->
         liftLambdasInList elems state
-        |> Result.map (fun (elems', state') -> (AST.ListLiteral elems', state'))
-    | AST.TupleAccess (tuple, index) ->
+        |> Result.map (fun (elems', state') -> (CheckedAST.ListLiteral elems', state'))
+    | CheckedAST.TupleAccess (tuple, index) ->
         liftLambdasInExpr tuple state
-        |> Result.map (fun (tuple', state') -> (AST.TupleAccess (tuple', index), state'))
-    | AST.DictLiteral (keyType, valueType, entries) ->
+        |> Result.map (fun (tuple', state') -> (CheckedAST.TupleAccess (tuple', index), state'))
+    | CheckedAST.DictLiteral (keyType, valueType, entries) ->
         liftLambdasInDictEntries entries state
-        |> Result.map (fun (entries', state') -> (AST.DictLiteral (keyType, valueType, entries'), state'))
-    | AST.RecordLiteral (typeName, fields) ->
+        |> Result.map (fun (entries', state') ->
+            (CheckedAST.DictLiteral (keyType, valueType, entries'), state'))
+    | CheckedAST.RecordLiteral (typeName, fields) ->
         liftLambdasInFields fields state
-        |> Result.map (fun (fields', state') -> (AST.RecordLiteral (typeName, fields'), state'))
-    | AST.RecordUpdate (record, updates) ->
+        |> Result.map (fun (fields', state') -> (CheckedAST.RecordLiteral (typeName, fields'), state'))
+    | CheckedAST.RecordUpdate (record, updates) ->
         liftLambdasInExpr record state
         |> Result.bind (fun (record', state1) ->
             liftLambdasInFields updates state1
-            |> Result.map (fun (updates', state2) -> (AST.RecordUpdate (record', updates'), state2)))
-    | AST.RecordAccess (record, fieldName) ->
+            |> Result.map (fun (updates', state2) -> (CheckedAST.RecordUpdate (record', updates'), state2)))
+    | CheckedAST.RecordAccess (record, fieldName) ->
         liftLambdasInExpr record state
-        |> Result.map (fun (record', state') -> (AST.RecordAccess (record', fieldName), state'))
-    | AST.Constructor (typeName, variantName, payload) ->
+        |> Result.map (fun (record', state') -> (CheckedAST.RecordAccess (record', fieldName), state'))
+    | CheckedAST.Constructor (typeName, variantName, payload) ->
         match payload with
         | None -> Ok (expr, state)
         | Some p ->
             liftLambdasInExpr p state
-            |> Result.map (fun (p', state') -> (AST.Constructor (typeName, variantName, Some p'), state'))
-    | AST.Match (scrutinee, cases) ->
+            |> Result.map (fun (p', state') -> (CheckedAST.Constructor (typeName, variantName, Some p'), state'))
+    | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeType =
             simpleInferType
                 scrutinee
@@ -148,8 +141,8 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
         liftLambdasInExpr scrutinee state
         |> Result.bind (fun (scrutinee', state1) ->
             liftLambdasInCases cases scrutineeType state1
-            |> Result.map (fun (cases', state2) -> (AST.Match (scrutinee', cases'), state2)))
-    | AST.Lambda (parameters, returnAnnotation, body) ->
+            |> Result.map (fun (cases', state2) -> (CheckedAST.Match (scrutinee', cases'), state2)))
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         // Lambda in expression position - lift it to a closure
         // Add lambda parameters to type environment before processing body
         let lambdaParamTypes =
@@ -195,9 +188,9 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                     else
                         plan.CaptureNames
                         |> List.mapi (fun i capName ->
-                            (capName, AST.TupleAccess (AST.Var "__closure", i + captureOffset)))
+                            (capName, CheckedAST.TupleAccess (CheckedAST.Var "__closure", i + captureOffset)))
                         |> List.foldBack (fun (capName, accessor) acc ->
-                            AST.Let (AST.LPVariable capName, accessor, acc)) <| loweredBody
+                            CheckedAST.Let (CheckedAST.LPVariable capName, accessor, acc)) <| loweredBody
 
                 let stateForReturnType = {
                     stateWithLambdaParams with
@@ -208,7 +201,7 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
 
                 inferLambdaReturnType body stateForReturnType
                 |> Result.bind (fun returnType ->
-                    let funcDef : AST.FunctionDef = {
+                    let funcDef : CheckedAST.FunctionDef = {
                         Name = funcName
                         TypeParams = []
                         Params = paramsFromList "lifted lambda" (closureParam :: loweredParameters)
@@ -216,7 +209,7 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                         Body = bodyWithExtractions
                         Recursion =
                             state.RecursiveSelf
-                            |> Option.map (fun (_, _, typed) -> AST.TypedRecursiveBinding typed)
+                            |> Option.map (fun (_, _, typed) -> typed)
                     }
                     let comparisonDef =
                         comparisonInfo
@@ -249,42 +242,46 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
                     }
                     let closureCaptures =
                         match comparisonInfo with
-                        | Some (comparisonName, _, _) -> AST.FuncRef comparisonName :: plan.CaptureExprs
+                        | Some (comparisonName, _, _) -> CheckedAST.FuncRef comparisonName :: plan.CaptureExprs
                         | None -> plan.CaptureExprs
-                    Ok (AST.Closure (funcName, closureCaptures), state'))))
-    | AST.Apply (func, args) ->
+                    Ok (CheckedAST.Closure (funcName, closureCaptures), state'))))
+    | CheckedAST.Apply (func, args) ->
         liftLambdasInExpr func state
         |> Result.bind (fun (func', state1) ->
             liftLambdasInArgs args state1
-            |> Result.map (fun (args', state2) -> (AST.Apply (func', args'), state2)))
-    | AST.IndirectApply (func, args) ->
+            |> Result.map (fun (args', state2) -> (CheckedAST.Apply (func', args'), state2)))
+    | CheckedAST.IndirectApply (func, args) ->
         liftLambdasInExpr func state
         |> Result.bind (fun (func', state1) ->
             liftLambdasInArgs args state1
-            |> Result.map (fun (args', state2) -> (AST.IndirectApply (func', args'), state2)))
-    | AST.InterpolatedString parts ->
-        let rec liftParts (ps: AST.StringPart list) (st: LiftState) (acc: AST.StringPart list) : Result<AST.StringPart list * LiftState, string> =
+            |> Result.map (fun (args', state2) -> (CheckedAST.IndirectApply (func', args'), state2)))
+    | CheckedAST.InterpolatedString parts ->
+        let rec liftParts
+            (ps: CheckedAST.StringPart list)
+            (st: LiftState)
+            (acc: CheckedAST.StringPart list)
+            : Result<CheckedAST.StringPart list * LiftState, string> =
             match ps with
             | [] -> Ok (List.rev acc, st)
-            | AST.StringText s :: rest ->
-                liftParts rest st (AST.StringText s :: acc)
-            | AST.StringExpr e :: rest ->
+            | CheckedAST.StringText s :: rest ->
+                liftParts rest st (CheckedAST.StringText s :: acc)
+            | CheckedAST.StringExpr e :: rest ->
                 liftLambdasInExpr e st
                 |> Result.bind (fun (e', st') ->
-                    liftParts rest st' (AST.StringExpr e' :: acc))
+                    liftParts rest st' (CheckedAST.StringExpr e' :: acc))
         liftParts parts state []
-        |> Result.map (fun (parts', state') -> (AST.InterpolatedString parts', state'))
+        |> Result.map (fun (parts', state') -> (CheckedAST.InterpolatedString parts', state'))
 
 /// Lift lambdas in function arguments, converting all lambdas to Closures
 /// (even non-capturing lambdas become trivial closures for uniform calling convention)
 /// Also wraps FuncRef in closures for uniform calling convention
-and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Result<AST.NonEmptyList<AST.Expr> * LiftState, string> =
-    let rec loop (remaining: AST.Expr list) (state: LiftState) (acc: AST.Expr list) =
+and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftState) : Result<AST.NonEmptyList<CheckedAST.Expr> * LiftState, string> =
+    let rec loop (remaining: CheckedAST.Expr list) (state: LiftState) (acc: CheckedAST.Expr list) =
         match remaining with
         | [] -> Ok (exprArgsFromList (List.rev acc), state)
         | arg :: rest ->
             match arg with
-            | AST.Lambda (parameters, returnAnnotation, body) ->
+            | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
                 // Add lambda parameters to type environment before processing body
                 let lambdaParamTypes =
                     parameters
@@ -327,9 +324,9 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                             else
                                 plan.CaptureNames
                                 |> List.mapi (fun i capName ->
-                                    (capName, AST.TupleAccess (AST.Var "__closure", i + captureOffset)))
+                                    (capName, CheckedAST.TupleAccess (CheckedAST.Var "__closure", i + captureOffset)))
                                 |> List.foldBack (fun (capName, accessor) acc ->
-                                    AST.Let (AST.LPVariable capName, accessor, acc)) <| loweredBody
+                                    CheckedAST.Let (CheckedAST.LPVariable capName, accessor, acc)) <| loweredBody
 
                         let stateForReturnType = {
                             stateWithLambdaParams with
@@ -340,7 +337,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
 
                         inferLambdaReturnType body stateForReturnType
                         |> Result.bind (fun returnType ->
-                            let funcDef : AST.FunctionDef = {
+                            let funcDef : CheckedAST.FunctionDef = {
                                 Name = funcName
                                 TypeParams = []
                                 Params = paramsFromList "lifted argument lambda" (closureParam :: loweredParameters)
@@ -379,11 +376,11 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                             }
                             let closureCaptures =
                                 match comparisonInfo with
-                                | Some (comparisonName, _, _) -> AST.FuncRef comparisonName :: plan.CaptureExprs
+                                | Some (comparisonName, _, _) -> CheckedAST.FuncRef comparisonName :: plan.CaptureExprs
                                 | None -> plan.CaptureExprs
-                            loop rest state' (AST.Closure (funcName, closureCaptures) :: acc))))
+                            loop rest state' (CheckedAST.Closure (funcName, closureCaptures) :: acc))))
 
-            | AST.FuncRef origFuncName ->
+            | CheckedAST.FuncRef origFuncName ->
                 // Named function used as value - wrap in a closure for uniform calling convention
                 // Create wrapper: __funcref_wrapper_N(__closure, ...params) = origFunc(...params)
                 // Look up the actual function signature to generate correct wrapper
@@ -397,9 +394,9 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                         ("__closure", AST.TTuple [AST.TInt64; comparatorStorageType])
                     // Generate parameter names for wrapper that match original function's parameters
                     let wrapperParams = origParams |> List.mapi (fun i (_, t) -> ($"__arg{i}", t))
-                    let wrapperArgs = wrapperParams |> List.map (fun (name, _) -> AST.Var name)
-                    let wrapperBody = AST.Call (origFuncName, exprArgsFromList wrapperArgs)
-                    let wrapperDef : AST.FunctionDef = {
+                    let wrapperArgs = wrapperParams |> List.map (fun (name, _) -> CheckedAST.Var name)
+                    let wrapperBody = CheckedAST.Call (origFuncName, exprArgsFromList wrapperArgs)
+                    let wrapperDef : CheckedAST.FunctionDef = {
                         Name = wrapperName
                         TypeParams = []
                         Params = paramsFromList "liftLambdasInArgs:wrapperDef" (closureParam :: wrapperParams)
@@ -427,9 +424,9 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                         RecursiveSelf = state.RecursiveSelf
                     }
                     let closure =
-                        AST.Closure (
+                        CheckedAST.Closure (
                             wrapperName,
-                            [AST.FuncRef comparisonName]
+                            [CheckedAST.FuncRef comparisonName]
                         )
                     loop rest state' (closure :: acc)
                 | None, _ ->
@@ -437,7 +434,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
                 | _, None ->
                     Error $"FuncRef to unknown function '{origFuncName}': return type not found"
 
-            | AST.Var varName ->
+            | CheckedAST.Var varName ->
                 // Check if this is a function being passed as value
                 // For now, treat as potential function ref - will be handled at ANF level
                 liftLambdasInExpr arg state
@@ -449,8 +446,8 @@ and liftLambdasInArgs (args: AST.NonEmptyList<AST.Expr>) (state: LiftState) : Re
     loop (exprArgsToList args) state []
 
 /// Helper to lift lambdas in a list of expressions
-and liftLambdasInList (exprs: AST.Expr list) (state: LiftState) : Result<AST.Expr list * LiftState, string> =
-    let rec loop (remaining: AST.Expr list) (state: LiftState) (acc: AST.Expr list) =
+and liftLambdasInList (exprs: CheckedAST.Expr list) (state: LiftState) : Result<CheckedAST.Expr list * LiftState, string> =
+    let rec loop (remaining: CheckedAST.Expr list) (state: LiftState) (acc: CheckedAST.Expr list) =
         match remaining with
         | [] -> Ok (List.rev acc, state)
         | e :: rest ->
@@ -459,8 +456,8 @@ and liftLambdasInList (exprs: AST.Expr list) (state: LiftState) : Result<AST.Exp
     loop exprs state []
 
 /// Helper to lift lambdas in record fields
-and liftLambdasInFields (fields: (string * AST.Expr) list) (state: LiftState) : Result<(string * AST.Expr) list * LiftState, string> =
-    let rec loop (remaining: (string * AST.Expr) list) (state: LiftState) (acc: (string * AST.Expr) list) =
+and liftLambdasInFields (fields: (string * CheckedAST.Expr) list) (state: LiftState) : Result<(string * CheckedAST.Expr) list * LiftState, string> =
+    let rec loop (remaining: (string * CheckedAST.Expr) list) (state: LiftState) (acc: (string * CheckedAST.Expr) list) =
         match remaining with
         | [] -> Ok (List.rev acc, state)
         | (name, e) :: rest ->
@@ -468,7 +465,7 @@ and liftLambdasInFields (fields: (string * AST.Expr) list) (state: LiftState) : 
             |> Result.bind (fun (e', state') -> loop rest state' ((name, e') :: acc))
     loop fields state []
 
-and liftLambdasInDictEntries (entries: (AST.Expr * AST.Expr) list) (state: LiftState) : Result<(AST.Expr * AST.Expr) list * LiftState, string> =
+and liftLambdasInDictEntries (entries: (CheckedAST.Expr * CheckedAST.Expr) list) (state: LiftState) : Result<(CheckedAST.Expr * CheckedAST.Expr) list * LiftState, string> =
     let rec loop remaining currentState acc =
         match remaining with
         | [] -> Ok (List.rev acc, currentState)
@@ -482,11 +479,11 @@ and liftLambdasInDictEntries (entries: (AST.Expr * AST.Expr) list) (state: LiftS
 
 /// Helper to lift lambdas in match cases
 and liftLambdasInCases
-    (cases: AST.MatchCase list)
+    (cases: CheckedAST.MatchCase list)
     (scrutineeType: AST.Type option)
     (state: LiftState)
-    : Result<AST.MatchCase list * LiftState, string> =
-    let rec loop (remaining: AST.MatchCase list) (state: LiftState) (acc: AST.MatchCase list) =
+    : Result<CheckedAST.MatchCase list * LiftState, string> =
+    let rec loop (remaining: CheckedAST.MatchCase list) (state: LiftState) (acc: CheckedAST.MatchCase list) =
         match remaining with
         | [] -> Ok (List.rev acc, state)
         | mc :: rest ->

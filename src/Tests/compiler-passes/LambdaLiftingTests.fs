@@ -18,7 +18,7 @@ open CheckingDiagnostics
 open TypeChecking
 type TestResult = Result<unit, string>
 
-let private convertProgramToAnf (typedAst: AST.Program) : Result<ANF.Program, string> =
+let private convertProgramToAnf (typedAst: CheckedAST.Program) : Result<ANF.Program, string> =
     let moduleRegistry = Stdlib.buildModuleRegistry ()
     let monomorphized = monomorphize typedAst
     let inlined = inlineLambdasInProgram monomorphized

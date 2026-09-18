@@ -5,7 +5,7 @@ module SpecializationIdentity
 open ANF
 
 /// Generic function registry - maps generic function names to their definitions
-type GenericFuncDefs = Map<string, AST.FunctionDef>
+type GenericFuncDefs = Map<string, CheckedAST.FunctionDef>
 
 /// Specialization key - a generic function instantiated with specific types
 type SpecKey = string * AST.Type list  // (funcName, typeArgs)
@@ -16,18 +16,18 @@ type SpecRegistry = Map<SpecKey, string>
 
 /// Result of specializing generic functions from a spec set
 type SpecializationResult = {
-    SpecializedFuncs: AST.FunctionDef list
+    SpecializedFuncs: CheckedAST.FunctionDef list
     SpecRegistry: SpecRegistry
     ExternalSpecs: Set<SpecKey>
 }
 
 /// Extract generic function definitions (functions with type parameters)
 /// from a program. Used for on-demand monomorphization of stdlib generics.
-let extractGenericFuncDefs (program: AST.Program) : GenericFuncDefs =
-    let (AST.Program topLevels) = program
+let extractGenericFuncDefs (program: CheckedAST.Program) : GenericFuncDefs =
+    let (CheckedAST.Program topLevels) = program
     topLevels
     |> List.choose (function
-        | AST.FunctionDef f when not (List.isEmpty f.TypeParams) -> Some (f.Name, f)
+        | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) -> Some (f.Name, f)
         | _ -> None)
     |> Map.ofList
 
@@ -105,29 +105,28 @@ let specName (funcName: string) (typeArgs: AST.Type list) : string =
 let internal isGenericKeyIntrinsicName (funcName: string) : bool =
     funcName = "__hash" || funcName = "__key_eq"
 
-let internal exprArgsToList (args: AST.NonEmptyList<AST.Expr>) : AST.Expr list =
+let internal exprArgsToList (args: AST.NonEmptyList<CheckedAST.Expr>) : CheckedAST.Expr list =
     AST.NonEmptyList.toList args
 
-let internal exprArgsFromList (args: AST.Expr list) : AST.NonEmptyList<AST.Expr> =
+let internal exprArgsFromList (args: CheckedAST.Expr list) : AST.NonEmptyList<CheckedAST.Expr> =
     match AST.NonEmptyList.tryFromList args with
     | Some nonEmptyArgs -> nonEmptyArgs
-    | None -> AST.NonEmptyList.singleton AST.UnitLiteral
+    | None -> AST.NonEmptyList.singleton CheckedAST.UnitLiteral
 
 let internal paramsToList (parameters: AST.NonEmptyList<string * AST.Type>) : (string * AST.Type) list =
     AST.NonEmptyList.toList parameters
 
-let internal lambdaParameterType (parameter: AST.LambdaParameter) : AST.Type =
-    parameter.InferredType
-    |> Option.defaultWith (fun () -> Crash.crash "Lambda parameter reached ANF lowering without an inferred type")
+let internal lambdaParameterType (parameter: CheckedAST.LambdaParameter) : AST.Type =
+    parameter.Type
 
 let rec internal letPatternBindingTypes
-    (pattern: AST.LetPattern)
+    (pattern: CheckedAST.LetPattern)
     (typ: AST.Type)
     : (string * AST.Type) list =
     match pattern, typ with
-    | AST.LPVariable name, bindingType -> [(name, bindingType)]
-    | AST.LPWildcard, _ | AST.LPUnit, _ -> []
-    | AST.LPTuple (first, second, rest), AST.TTuple elementTypes ->
+    | CheckedAST.LPVariable name, bindingType -> [(name, bindingType)]
+    | CheckedAST.LPWildcard, _ | CheckedAST.LPUnit, _ -> []
+    | CheckedAST.LPTuple (first, second, rest), AST.TTuple elementTypes ->
         let patterns = first :: second :: rest
         if List.length patterns <> List.length elementTypes then
             Crash.crash "Typed lambda tuple pattern changed arity before ANF lowering"
@@ -135,22 +134,22 @@ let rec internal letPatternBindingTypes
             List.zip patterns elementTypes
             |> List.collect (fun (innerPattern, innerType) ->
                 letPatternBindingTypes innerPattern innerType)
-    | AST.LPTuple _, _ ->
+    | CheckedAST.LPTuple _, _ ->
         Crash.crash "Typed lambda tuple pattern lost its tuple type before ANF lowering"
 
-let internal lambdaParameterBindings (parameter: AST.LambdaParameter) : (string * AST.Type) list =
+let internal lambdaParameterBindings (parameter: CheckedAST.LambdaParameter) : (string * AST.Type) list =
     letPatternBindingTypes parameter.Pattern (lambdaParameterType parameter)
 
 let internal lowerLambdaParameters
-    (parameters: AST.NonEmptyList<AST.LambdaParameter>)
-    (body: AST.Expr)
-    : (string * AST.Type) list * AST.Expr =
+    (parameters: AST.NonEmptyList<CheckedAST.LambdaParameter>)
+    (body: CheckedAST.Expr)
+    : (string * AST.Type) list * CheckedAST.Expr =
     parameters
     |> AST.NonEmptyList.toList
     |> List.mapi (fun index parameter ->
         let parameterType = lambdaParameterType parameter
         match parameter.Pattern with
-        | AST.LPVariable name -> ((name, parameterType), None)
+        | CheckedAST.LPVariable name -> ((name, parameterType), None)
         | pattern ->
             let argumentName = $"__lambda_pattern_arg_{index}"
             ((argumentName, parameterType), Some (pattern, argumentName)))
@@ -160,7 +159,7 @@ let internal lowerLambdaParameters
             lowered
             |> List.choose snd
             |> List.foldBack (fun (pattern, argumentName) continuation ->
-                AST.Let (pattern, AST.Var argumentName, continuation)) <| body
+                CheckedAST.Let (pattern, CheckedAST.Var argumentName, continuation)) <| body
         (functionParameters, destructuredBody)
 
 let internal paramsFromList (context: string) (parameters: (string * AST.Type) list) : AST.NonEmptyList<string * AST.Type> =
@@ -180,25 +179,25 @@ let internal normalizeSyntheticNullaryParams (parameters: (string * AST.Type) li
 
 let internal normalizeSyntheticNullaryArgAtoms
     (paramTypes: AST.Type list)
-    (argExprs: AST.Expr list)
+    (argExprs: CheckedAST.Expr list)
     (argAtoms: ANF.Atom list)
     : ANF.Atom list =
     match paramTypes, argExprs, argAtoms with
-    | [], [AST.UnitLiteral], [_] -> []
+    | [], [CheckedAST.UnitLiteral], [_] -> []
     | _ -> argAtoms
 
-let internal unresolvedKeyIntrinsicTypeArgErrorExpr (funcName: string) : AST.Expr =
-    AST.Call (
+let internal unresolvedKeyIntrinsicTypeArgErrorExpr (funcName: string) : CheckedAST.Expr =
+    CheckedAST.Call (
         "Builtin.testRuntimeError",
-        AST.NonEmptyList.singleton (AST.StringLiteral $"Internal error: unresolved type arguments for {funcName}")
+        AST.NonEmptyList.singleton (CheckedAST.StringLiteral $"Internal error: unresolved type arguments for {funcName}")
     )
 
 /// Preserve left-to-right argument evaluation before forcing a runtime error.
-let internal wrapWithIgnoredArgEvaluations (args: AST.Expr list) (body: AST.Expr) : AST.Expr =
+let internal wrapWithIgnoredArgEvaluations (args: CheckedAST.Expr list) (body: CheckedAST.Expr) : CheckedAST.Expr =
     args
     |> List.indexed
     |> List.rev
     |> List.fold (fun acc (index, argExpr) ->
-        AST.Let (AST.LPVariable $"__dark_internal_unresolved_arg_eval_{index}", argExpr, acc)) body
+        CheckedAST.Let (CheckedAST.LPVariable $"__dark_internal_unresolved_arg_eval_{index}", argExpr, acc)) body
 
 /// Type substitution - maps type variable names to concrete types

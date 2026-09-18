@@ -521,11 +521,11 @@ let testExpressionTypeCheckingReusesBaseRegistries
             CompilerOptions.defaultWarningSettings
             program
         |> Result.mapError CheckingDiagnostics.typeErrorToString)
-    |> Result.bind (fun (programType, Program topLevels, checkedEnv) ->
+    |> Result.bind (fun (programType, CheckedAST.Program topLevels, checkedEnv) ->
         let hasEqualityHelper =
             topLevels
             |> List.exists (function
-                | FunctionDef fn -> fn.Name.StartsWith("__dark_eq_")
+                | CheckedAST.FunctionDef fn -> fn.Name.StartsWith("__dark_eq_")
                 | _ -> false)
         let reusesBaseRegistries =
             obj.ReferenceEquals(checkedEnv.TypeReg, baseEnv.TypeReg)

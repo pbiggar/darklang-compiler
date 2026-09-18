@@ -7,6 +7,7 @@
 module ValueRendering
 
 open AST
+open CheckedAST
 
 type private SumVariant = CheckingTypes.SumVariantInfo
 type private SumInfo = CheckingTypes.SumTypeInfo

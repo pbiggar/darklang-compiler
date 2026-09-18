@@ -16,7 +16,7 @@ open LoweringTypeInference
 open LoweringExpressions
 
 let toANF
-    (expr: AST.Expr)
+    (expr: CheckedAST.Expr)
     (varGen: ANF.VarGen)
     (env: VarEnv)
     (typeReg: TypeRegistry)
@@ -50,7 +50,7 @@ let allocateTypedParams
 let private convertFunctionWithSumTypeNames
     (sumTypeNames: Set<string>)
     (inertScopes: Set<string>)
-    (funcDef: AST.FunctionDef)
+    (funcDef: CheckedAST.FunctionDef)
     (varGen: ANF.VarGen)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
@@ -79,7 +79,7 @@ let private convertFunctionWithSumTypeNames
            Body = body }, varGen2))
 
 let convertFunction
-    (funcDef: AST.FunctionDef)
+    (funcDef: CheckedAST.FunctionDef)
     (varGen: ANF.VarGen)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
@@ -151,12 +151,12 @@ type Registries = {
 /// strings remain presentation keys; recursive ownership and group layout are
 /// recovered exclusively from this registry.
 let loweredRecursiveMemberRegistry
-    (functions: AST.FunctionDef list)
+    (functions: CheckedAST.FunctionDef list)
     : Map<string, AST.LoweredRecursiveMember> =
     functions
     |> List.choose (fun func ->
         match func.Recursion with
-        | Some (AST.TypedRecursiveBinding typed) ->
+        | Some typed ->
             Some (
                 func.Name,
                 ({ Typed = typed; EnvironmentIndex = typed.Resolved.GroupIndex }
@@ -166,28 +166,28 @@ let loweredRecursiveMemberRegistry
     |> Map.ofList
 
 /// Split program into type defs, function defs, and a single expression
-let splitDeclarations (program: AST.Program) : Result<AST.TypeDef list * AST.FunctionDef list, string> =
-    let (AST.Program topLevels) = program
-    let expressions = topLevels |> List.filter (function AST.Expression _ -> true | _ -> false)
+let splitDeclarations (program: CheckedAST.Program) : Result<AST.TypeDef list * CheckedAST.FunctionDef list, string> =
+    let (CheckedAST.Program topLevels) = program
+    let expressions = topLevels |> List.filter (function CheckedAST.Expression _ -> true | _ -> false)
     if List.isEmpty expressions then
         Ok (
-            topLevels |> List.choose (function AST.TypeDef definition -> Some definition | _ -> None),
-            topLevels |> List.choose (function AST.FunctionDef definition -> Some definition | _ -> None)
+            topLevels |> List.choose (function CheckedAST.TypeDef definition -> Some definition | _ -> None),
+            topLevels |> List.choose (function CheckedAST.FunctionDef definition -> Some definition | _ -> None)
         )
     else
         Error $"Declaration-only program must not contain entry expressions; found {expressions.Length}"
 
-let splitTopLevels (program: AST.Program) : Result<AST.TypeDef list * AST.FunctionDef list * AST.Expr, string> =
-    let (AST.Program topLevels) = program
+let splitTopLevels (program: CheckedAST.Program) : Result<AST.TypeDef list * CheckedAST.FunctionDef list * CheckedAST.Expr, string> =
+    let (CheckedAST.Program topLevels) = program
     let typeDefs =
         topLevels
-        |> List.choose (function AST.TypeDef t -> Some t | _ -> None)
+        |> List.choose (function CheckedAST.TypeDef t -> Some t | _ -> None)
     let functions =
         topLevels
-        |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
+        |> List.choose (function CheckedAST.FunctionDef f -> Some f | _ -> None)
     let expressions =
         topLevels
-        |> List.choose (function AST.Expression e -> Some e | _ -> None)
+        |> List.choose (function CheckedAST.Expression e -> Some e | _ -> None)
 
     let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
     let hasStartFunc = functions |> List.exists (fun f -> f.Name = "_start")
@@ -210,7 +210,7 @@ let buildAliasRegistry (typeDefs: AST.TypeDef list) : AliasRegistry =
     |> Map.ofList
 
 /// Resolve type aliases inside function definitions
-let resolveAliasesInFunctions (aliasReg: AliasRegistry) (functions: AST.FunctionDef list) : AST.FunctionDef list =
+let resolveAliasesInFunctions (aliasReg: AliasRegistry) (functions: CheckedAST.FunctionDef list) : CheckedAST.FunctionDef list =
     functions |> List.map (resolveAliasesInFunction aliasReg)
 
 let private buildRegistriesInternal
@@ -218,7 +218,7 @@ let private buildRegistriesInternal
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
-    (functions: AST.FunctionDef list)
+    (functions: CheckedAST.FunctionDef list)
     : Registries =
     let typeRegBase : TypeRegistry =
         typeDefs
@@ -323,7 +323,7 @@ let buildRegistries
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
-    (functions: AST.FunctionDef list)
+    (functions: CheckedAST.FunctionDef list)
     : Registries =
     buildRegistriesInternal true moduleRegistry typeDefs aliasReg functions
 
@@ -334,7 +334,7 @@ let buildOverlayRegistries
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
-    (functions: AST.FunctionDef list)
+    (functions: CheckedAST.FunctionDef list)
     : Registries =
     buildRegistriesInternal false moduleRegistry typeDefs aliasReg functions
 
@@ -359,7 +359,7 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
 let convertFunctions
     (registries: Registries)
     (varGen: ANF.VarGen)
-    (functions: AST.FunctionDef list)
+    (functions: CheckedAST.FunctionDef list)
     : Result<ANF.Function list * ANF.VarGen, string> =
     let sumTypeNames = registries.SumTypeNames
     let inertScopes = DestructionAnalysis.inertFunctionScopes registries.ScopeContracts
@@ -384,7 +384,7 @@ let convertFunctions
 let convertExprToAnf
     (registries: Registries)
     (varGen: ANF.VarGen)
-    (expr: AST.Expr)
+    (expr: CheckedAST.Expr)
     : Result<ANF.AExpr * ANF.VarGen, string> =
     let emptyEnv : VarEnv = Map.empty
     let sumTypeNames = registries.SumTypeNames

@@ -38,79 +38,79 @@ let testInt128Literal () : TestResult =
 let testUInt128Literal () : TestResult =
     expectType (UInt128Literal (System.UInt128.Parse "42")) TUInt128
 
-let rec countMatches (expr: Expr) : int =
+let rec countMatches (expr: CheckedAST.Expr) : int =
     let childMatches =
         match expr with
-        | BoundaryRender (_, value) ->
+        | CheckedAST.BoundaryRender (_, value) ->
             [value]
-        | UnitLiteral
-        | Int64Literal _
-        | Int128Literal _
-        | BigIntLiteral _
-        | Int8Literal _
-        | Int16Literal _
-        | Int32Literal _
-        | UInt8Literal _
-        | UInt16Literal _
-        | UInt32Literal _
-        | UInt64Literal _
-        | UInt128Literal _
-        | BoolLiteral _
-        | StringLiteral _
-        | CharLiteral _
-        | FloatLiteral _
-        | Var _
-        | FuncRef _
-        | RuntimeError _ ->
+        | CheckedAST.UnitLiteral
+        | CheckedAST.Int64Literal _
+        | CheckedAST.Int128Literal _
+        | CheckedAST.BigIntLiteral _
+        | CheckedAST.Int8Literal _
+        | CheckedAST.Int16Literal _
+        | CheckedAST.Int32Literal _
+        | CheckedAST.UInt8Literal _
+        | CheckedAST.UInt16Literal _
+        | CheckedAST.UInt32Literal _
+        | CheckedAST.UInt64Literal _
+        | CheckedAST.UInt128Literal _
+        | CheckedAST.BoolLiteral _
+        | CheckedAST.StringLiteral _
+        | CheckedAST.CharLiteral _
+        | CheckedAST.FloatLiteral _
+        | CheckedAST.Var _
+        | CheckedAST.FuncRef _
+        | CheckedAST.RuntimeError _ ->
             []
-        | InterpolatedString parts ->
+        | CheckedAST.InterpolatedString parts ->
             parts
             |> List.choose (function
-                | StringText _ -> None
-                | StringExpr e -> Some e)
-        | BinOp (_, left, right) ->
+                | CheckedAST.StringText _ -> None
+                | CheckedAST.StringExpr e -> Some e)
+        | CheckedAST.BinOp (_, left, right) ->
             [left; right]
-        | UnaryOp (_, inner) ->
+        | CheckedAST.UnaryOp (_, inner) ->
             [inner]
-        | Let (_, value, body) ->
+        | CheckedAST.Let (_, value, body) ->
             [value; body]
-        | RecursiveLet (_, value, body) ->
+        | CheckedAST.RecursiveLet (_, value, body) ->
             [value; body]
-        | If (cond, thenBranch, elseBranch) ->
+        | CheckedAST.If (cond, thenBranch, elseBranch) ->
             [cond; thenBranch; elseBranch]
-        | Sequence (first, next) ->
+        | CheckedAST.Sequence (first, next) ->
             [first; next]
-        | Call (_, args)
-        | TypeApp (_, _, args) ->
+        | CheckedAST.Call (_, args)
+        | CheckedAST.TypeApp (_, _, args) ->
             NonEmptyList.toList args
-        | TupleLiteral args
-        | ListLiteral args ->
+        | CheckedAST.TupleLiteral args
+        | CheckedAST.ListLiteral args ->
             args
-        | TupleAccess (tuple, _) ->
+        | CheckedAST.TupleAccess (tuple, _) ->
             [tuple]
-        | DictLiteral (_, _, entries) ->
+        | CheckedAST.DictLiteral (_, _, entries) ->
             entries |> List.collect (fun (key, value) -> [key; value])
-        | RecordLiteral (_, fields) ->
+        | CheckedAST.RecordLiteral (_, fields) ->
             fields |> List.map snd
-        | RecordUpdate (recordExpr, updates) ->
+        | CheckedAST.RecordUpdate (recordExpr, updates) ->
             recordExpr :: (updates |> List.map snd)
-        | RecordAccess (recordExpr, _) ->
+        | CheckedAST.RecordAccess (recordExpr, _) ->
             [recordExpr]
-        | Constructor (_, _, payload) ->
+        | CheckedAST.Constructor (_, _, payload) ->
             payload |> Option.toList
-        | Match (scrutinee, cases) ->
+        | CheckedAST.Match (scrutinee, cases) ->
             scrutinee :: (cases |> List.map (fun c -> c.Body))
-        | Lambda (_, _, body) ->
+        | CheckedAST.Lambda (_, _, body) ->
             [body]
-        | Apply (func, args)
-        | IndirectApply (func, args) ->
+        | CheckedAST.Apply (func, args)
+        | CheckedAST.IndirectApply (func, args) ->
             func :: NonEmptyList.toList args
-        | Closure (_, captures) ->
+        | CheckedAST.Closure (_, captures) ->
             captures
 
     let childCount = childMatches |> List.sumBy countMatches
     match expr with
-    | Match _ -> childCount + 1
+    | CheckedAST.Match _ -> childCount + 1
     | _ -> childCount
 
 /// Sum equality should lower to one pair-match instead of nested match trees.
@@ -141,20 +141,20 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
     let program = Program [sumDef; Expression eqExpr]
 
     match checkProgram program with
-    | Ok (actualType, Program topLevels) ->
+    | Ok (actualType, CheckedAST.Program topLevels) ->
         if actualType <> TBool then
             Error $"Expected Bool result type, got {typeToString actualType}"
         else
             let helperDefs =
                 topLevels
                 |> List.choose (function
-                    | FunctionDef funcDef when funcDef.Name.StartsWith("__dark_eq_") -> Some funcDef
+                    | CheckedAST.FunctionDef funcDef when funcDef.Name.StartsWith("__dark_eq_") -> Some funcDef
                     | _ -> None)
 
             let expressionMatchCountResult =
                 topLevels
                 |> List.choose (function
-                    | Expression typedExpr -> Some (countMatches typedExpr)
+                    | CheckedAST.Expression typedExpr -> Some (countMatches typedExpr)
                     | _ -> None)
                 |> List.tryHead
                 |> function
@@ -168,7 +168,7 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
                 let helperMatchCount = countMatches helperDef.Body
                 let helperCaseCount =
                     match helperDef.Body with
-                    | Let (_, _, Match (_, cases)) -> List.length cases
+                    | CheckedAST.Let (_, _, CheckedAST.Match (_, cases)) -> List.length cases
                     | _ -> 0
                 match expressionMatchCountResult with
                 | Error err ->
@@ -345,14 +345,14 @@ let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
     |> Result.bind (fun program ->
         checkProgram program
         |> Result.mapError (fun error -> $"Recursive group type check failed: {typeErrorToString error}"))
-    |> Result.bind (fun (_, Program topLevels) ->
+    |> Result.bind (fun (_, CheckedAST.Program topLevels) ->
         let recursionByName =
             topLevels
             |> List.choose (function
-                | FunctionDef func ->
+                | CheckedAST.FunctionDef func ->
                     match func.Recursion with
-                    | Some (TypedRecursiveBinding typed) -> Some (func.Name, typed.Resolved)
-                    | _ -> None
+                    | Some typed -> Some (func.Name, typed.Resolved)
+                    | None -> None
                 | _ -> None)
             |> Map.ofList
         match Map.tryFind "groupEven" recursionByName,

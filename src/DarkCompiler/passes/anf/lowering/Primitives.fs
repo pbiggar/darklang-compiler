@@ -13,7 +13,7 @@ let internal canonicalBufferKindForType (typ: AST.Type) : MemoryModel.CanonicalB
     | AST.TChar -> Some MemoryModel.GraphemeCluster
     | _ -> None
 
-let internal materializeComparisonPlan (targetType: AST.Type) (args: AST.Expr list) : AST.Expr =
+let internal materializeComparisonPlan (targetType: AST.Type) (args: CheckedAST.Expr list) : CheckedAST.Expr =
     match args with
     | [leftExpr; rightExpr] ->
         match targetType with
@@ -22,39 +22,39 @@ let internal materializeComparisonPlan (targetType: AST.Type) (args: AST.Expr li
         | AST.TTuple _
         | AST.TRecord _
         | AST.TSum _ ->
-            AST.Call (
+            CheckedAST.Call (
                 ComparisonPlanning.eqHelperName targetType,
                 AST.NonEmptyList.fromList [leftExpr; rightExpr]
             )
         | AST.TFunction _ ->
             let leftName = "__comparison_plan_left"
             let rightName = "__comparison_plan_right"
-            AST.Let (
-                AST.LPVariable leftName,
+            CheckedAST.Let (
+                CheckedAST.LPVariable leftName,
                 leftExpr,
-                AST.Let (
-                    AST.LPVariable rightName,
+                CheckedAST.Let (
+                    CheckedAST.LPVariable rightName,
                     rightExpr,
-                    AST.If (
-                        AST.BinOp (
+                    CheckedAST.If (
+                        CheckedAST.BinOp (
                             AST.Eq,
-                            AST.TupleAccess (AST.Var leftName, 1),
-                            AST.TupleAccess (AST.Var rightName, 1)
+                            CheckedAST.TupleAccess (CheckedAST.Var leftName, 1),
+                            CheckedAST.TupleAccess (CheckedAST.Var rightName, 1)
                         ),
-                        AST.IndirectApply (
-                            AST.TupleAccess (AST.Var leftName, 1),
-                            AST.NonEmptyList.fromList [AST.Var leftName; AST.Var rightName]
+                        CheckedAST.IndirectApply (
+                            CheckedAST.TupleAccess (CheckedAST.Var leftName, 1),
+                            AST.NonEmptyList.fromList [CheckedAST.Var leftName; CheckedAST.Var rightName]
                         ),
-                        AST.BoolLiteral false
+                        CheckedAST.BoolLiteral false
                     )
                 )
             )
         | AST.TInt ->
-            AST.Call (
+            CheckedAST.Call (
                 "Stdlib.Int.__equals",
                 AST.NonEmptyList.fromList [leftExpr; rightExpr]
             )
-        | _ -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
+        | _ -> CheckedAST.BinOp (AST.Eq, leftExpr, rightExpr)
     | _ -> Crash.crash "Comparison plan expected exactly two operands"
 
 /// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
@@ -65,14 +65,11 @@ let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
     |> Map.fold (fun names _ (typeName, _, _, _) -> Set.add typeName names) Set.empty
 
 let internal tryFindVariant
-    (constructorReference: AST.ConstructorReference)
+    (constructorReference: CheckedAST.ConstructorReference)
     (variantName: string)
     (variantLookup: VariantLookup)
     : (string * string list * int * AST.Type option) option =
-    match AST.constructorReferenceTypeName constructorReference with
-    | None -> Map.tryFind variantName variantLookup
-    | Some constructorTypeName ->
-        Map.tryFind $"{constructorTypeName}.{variantName}" variantLookup
+    Map.tryFind $"{constructorReference.TypeName}.{variantName}" variantLookup
 
 let internal tryFindVariantForType
     (variantName: string)
@@ -595,24 +592,24 @@ let isBuiltinBlobEmptyName (name: string) : bool =
 let internal tryLookupResolved (name: string) (m: Map<string, 'a>) : ('a * string) option =
     Map.tryFind name m |> Option.map (fun value -> (value, name))
 
-let internal unwrapErrorPayloadToString (expr: AST.Expr) : string option =
+let internal unwrapErrorPayloadToString (expr: CheckedAST.Expr) : string option =
     match expr with
-    | AST.UnitLiteral -> Some "()"
-    | AST.Int64Literal n -> Some $"{n}"
-    | AST.Int128Literal n -> Some (int128ToCanonicalString n)
-    | AST.Int8Literal n -> Some $"{n}"
-    | AST.Int16Literal n -> Some $"{n}"
-    | AST.Int32Literal n -> Some $"{n}"
-    | AST.UInt8Literal n -> Some $"{n}"
-    | AST.UInt16Literal n -> Some $"{n}"
-    | AST.UInt32Literal n -> Some $"{n}"
-    | AST.UInt64Literal n -> Some $"{n}"
-    | AST.UInt128Literal n -> Some (uint128ToCanonicalString n)
-    | AST.BoolLiteral true -> Some "true"
-    | AST.BoolLiteral false -> Some "false"
-    | AST.FloatLiteral f -> Some $"{f}"
-    | AST.StringLiteral s -> Some s
-    | AST.CharLiteral s -> Some s
+    | CheckedAST.UnitLiteral -> Some "()"
+    | CheckedAST.Int64Literal n -> Some $"{n}"
+    | CheckedAST.Int128Literal n -> Some (int128ToCanonicalString n)
+    | CheckedAST.Int8Literal n -> Some $"{n}"
+    | CheckedAST.Int16Literal n -> Some $"{n}"
+    | CheckedAST.Int32Literal n -> Some $"{n}"
+    | CheckedAST.UInt8Literal n -> Some $"{n}"
+    | CheckedAST.UInt16Literal n -> Some $"{n}"
+    | CheckedAST.UInt32Literal n -> Some $"{n}"
+    | CheckedAST.UInt64Literal n -> Some $"{n}"
+    | CheckedAST.UInt128Literal n -> Some (uint128ToCanonicalString n)
+    | CheckedAST.BoolLiteral true -> Some "true"
+    | CheckedAST.BoolLiteral false -> Some "false"
+    | CheckedAST.FloatLiteral f -> Some $"{f}"
+    | CheckedAST.StringLiteral s -> Some s
+    | CheckedAST.CharLiteral s -> Some s
     | _ -> None
 
 /// Record metadata retained through lowering. Declared parameter order cannot

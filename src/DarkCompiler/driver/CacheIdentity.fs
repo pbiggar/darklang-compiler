@@ -299,7 +299,7 @@ type internal ObjectReferenceComparer() =
 
 [<NoComparison>]
 type internal AnfDependencyKey = {
-    Functions: AST.FunctionDef list
+    Functions: CheckedAST.FunctionDef list
     LocalRegistries: AST_to_ANF.Registries
     NonInlineableFunctionNames: Set<string>
 }

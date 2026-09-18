@@ -12,8 +12,8 @@ let private identity = function
 let private value name : HIR.Value = { Id = identity name; Type = AST.TInt64 }
 let private unitValue : HIR.Value = { Id = HIR.ValueId 100; Type = AST.TUnit }
 let private reference name : HIR.Operand =
-    { Expression = AST.Var name; Type = AST.TInt64; Inputs = Map.ofList [name, value name] }
-let private condition : HIR.Operand = { Expression = AST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }
+    { Expression = CheckedAST.Var name; Type = AST.TInt64; Inputs = Map.ofList [name, value name] }
+let private condition : HIR.Operand = { Expression = CheckedAST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }
 
 let private semantics : Semantics<Contract<string>, string> = {
     Leaf = id

@@ -64,7 +64,7 @@ let internal buildDeclaredRecordFieldSubst
         None
 
 let internal recordDescriptor
-    (reference: AST.RecordReference)
+    (reference: CheckedAST.RecordReference)
     (recordInfo: RecordTypeInfo)
     : ANF.RecordDescriptor =
     let fields = recordInfo.Fields
@@ -76,8 +76,8 @@ let internal recordDescriptor
                 (name, applySubstToType subst fieldType))
         | None -> fields
     {
-        SourceTypeName = reference.SourceTypeName
-        RuntimeTypeName = reference.ResolvedTypeName
+        SourceTypeName = reference.TypeName
+        RuntimeTypeName = reference.TypeName
         TypeArgs = reference.TypeArgs
         Fields = concreteFields
     }
@@ -183,82 +183,80 @@ let consolidateTypeBindings (bindings: (string * AST.Type) list) : Result<Map<st
         (Ok Map.empty)
 
 /// Apply a substitution to an expression, replacing type variables in type annotations
-let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
+let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : CheckedAST.Expr =
     match expr with
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ | AST.RuntimeError _ ->
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
         expr  // No types to substitute in literals, variables, function references, and closures
-    | AST.BoundaryRender (renderer, value) ->
-        AST.BoundaryRender (renderer, applySubstToExpr subst value)
-    | AST.BinOp (op, left, right) ->
-        AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
-    | AST.UnaryOp (op, inner) ->
-        AST.UnaryOp (op, applySubstToExpr subst inner)
-    | AST.Let (pattern, value, body) ->
-        AST.Let (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
-    | AST.RecursiveLet (recursion, value, body) ->
-        AST.RecursiveLet (recursion, applySubstToExpr subst value, applySubstToExpr subst body)
-    | AST.If (cond, thenBranch, elseBranch) ->
-        AST.If (applySubstToExpr subst cond, applySubstToExpr subst thenBranch, applySubstToExpr subst elseBranch)
-    | AST.Sequence (first, next) ->
-        AST.Sequence (applySubstToExpr subst first, applySubstToExpr subst next)
-    | AST.Call (funcName, args) ->
-        AST.Call (funcName, AST.NonEmptyList.map (applySubstToExpr subst) args)
-    | AST.TypeApp (funcName, typeArgs, args) ->
+    | CheckedAST.BoundaryRender (renderer, value) ->
+        CheckedAST.BoundaryRender (renderer, applySubstToExpr subst value)
+    | CheckedAST.BinOp (op, left, right) ->
+        CheckedAST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
+    | CheckedAST.UnaryOp (op, inner) ->
+        CheckedAST.UnaryOp (op, applySubstToExpr subst inner)
+    | CheckedAST.Let (pattern, value, body) ->
+        CheckedAST.Let (pattern, applySubstToExpr subst value, applySubstToExpr subst body)
+    | CheckedAST.RecursiveLet (recursion, value, body) ->
+        CheckedAST.RecursiveLet (recursion, applySubstToExpr subst value, applySubstToExpr subst body)
+    | CheckedAST.If (cond, thenBranch, elseBranch) ->
+        CheckedAST.If (applySubstToExpr subst cond, applySubstToExpr subst thenBranch, applySubstToExpr subst elseBranch)
+    | CheckedAST.Sequence (first, next) ->
+        CheckedAST.Sequence (applySubstToExpr subst first, applySubstToExpr subst next)
+    | CheckedAST.Call (funcName, args) ->
+        CheckedAST.Call (funcName, AST.NonEmptyList.map (applySubstToExpr subst) args)
+    | CheckedAST.TypeApp (funcName, typeArgs, args) ->
         // Substitute in type arguments and value arguments
-        AST.TypeApp (
+        CheckedAST.TypeApp (
             funcName,
             List.map (applySubstToType subst) typeArgs,
             AST.NonEmptyList.map (applySubstToExpr subst) args
         )
-    | AST.TupleLiteral elements ->
-        AST.TupleLiteral (List.map (applySubstToExpr subst) elements)
-    | AST.TupleAccess (tuple, index) ->
-        AST.TupleAccess (applySubstToExpr subst tuple, index)
-    | AST.DictLiteral (keyType, valueType, entries) ->
-        AST.DictLiteral (
+    | CheckedAST.TupleLiteral elements ->
+        CheckedAST.TupleLiteral (List.map (applySubstToExpr subst) elements)
+    | CheckedAST.TupleAccess (tuple, index) ->
+        CheckedAST.TupleAccess (applySubstToExpr subst tuple, index)
+    | CheckedAST.DictLiteral (keyType, valueType, entries) ->
+        CheckedAST.DictLiteral (
             applySubstToType subst keyType,
             applySubstToType subst valueType,
             entries
             |> List.map (fun (key, value) ->
                 (applySubstToExpr subst key, applySubstToExpr subst value))
         )
-    | AST.RecordLiteral (reference, fields) ->
-        AST.RecordLiteral (
+    | CheckedAST.RecordLiteral (reference, fields) ->
+        CheckedAST.RecordLiteral (
             { reference with TypeArgs = List.map (applySubstToType subst) reference.TypeArgs },
             List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields
         )
-    | AST.RecordUpdate (record, updates) ->
-        AST.RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
-    | AST.RecordAccess (record, fieldName) ->
-        AST.RecordAccess (applySubstToExpr subst record, fieldName)
-    | AST.Constructor (typeName, variantName, payload) ->
-        AST.Constructor (typeName, variantName, Option.map (applySubstToExpr subst) payload)
-    | AST.Match (scrutinee, cases) ->
-        AST.Match (applySubstToExpr subst scrutinee,
+    | CheckedAST.RecordUpdate (record, updates) ->
+        CheckedAST.RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
+    | CheckedAST.RecordAccess (record, fieldName) ->
+        CheckedAST.RecordAccess (applySubstToExpr subst record, fieldName)
+    | CheckedAST.Constructor (typeName, variantName, payload) ->
+        CheckedAST.Constructor (typeName, variantName, Option.map (applySubstToExpr subst) payload)
+    | CheckedAST.Match (scrutinee, cases) ->
+        CheckedAST.Match (applySubstToExpr subst scrutinee,
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))
-    | AST.ListLiteral elements ->
-        AST.ListLiteral (List.map (applySubstToExpr subst) elements)
-    | AST.Lambda (parameters, returnAnnotation, body) ->
+    | CheckedAST.ListLiteral elements ->
+        CheckedAST.ListLiteral (List.map (applySubstToExpr subst) elements)
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         // Substitute types in parameter annotations and body
         let substParams =
             parameters
             |> AST.NonEmptyList.map (fun parameter ->
-                { parameter with
-                    SourceAnnotation = parameter.SourceAnnotation |> Option.map (applySubstToType subst)
-                    InferredType = parameter.InferredType |> Option.map (applySubstToType subst) })
-        AST.Lambda (substParams, returnAnnotation |> Option.map (applySubstToType subst), applySubstToExpr subst body)
-    | AST.Apply (func, args) ->
-        AST.Apply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
-    | AST.IndirectApply (func, args) ->
-        AST.IndirectApply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
-    | AST.InterpolatedString parts ->
+                { parameter with Type = applySubstToType subst parameter.Type })
+        CheckedAST.Lambda (substParams, returnAnnotation |> Option.map (applySubstToType subst), applySubstToExpr subst body)
+    | CheckedAST.Apply (func, args) ->
+        CheckedAST.Apply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
+    | CheckedAST.IndirectApply (func, args) ->
+        CheckedAST.IndirectApply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
+    | CheckedAST.InterpolatedString parts ->
         let substPart part =
             match part with
-            | AST.StringText s -> AST.StringText s
-            | AST.StringExpr e -> AST.StringExpr (applySubstToExpr subst e)
-        AST.InterpolatedString (List.map substPart parts)
+            | CheckedAST.StringText s -> CheckedAST.StringText s
+            | CheckedAST.StringExpr e -> CheckedAST.StringExpr (applySubstToExpr subst e)
+        CheckedAST.InterpolatedString (List.map substPart parts)
 
 /// Resolve type aliases to their target types
 let rec resolveAliasType (aliasReg: AliasRegistry) (typ: AST.Type) : AST.Type =
@@ -305,7 +303,7 @@ let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistr
                 |> List.map (fun (fieldName, fieldType) -> (fieldName, resolveAliasType aliasReg fieldType)) })
 
 /// Resolve type aliases within function signatures
-let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: AST.FunctionDef) : AST.FunctionDef =
+let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: CheckedAST.FunctionDef) : CheckedAST.FunctionDef =
     let resolvedParams =
         funcDef.Params
         |> AST.NonEmptyList.map (fun (name, typ) -> (name, resolveAliasType aliasReg typ))
@@ -313,7 +311,7 @@ let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: AST.FunctionDef
     { funcDef with Params = resolvedParams; ReturnType = resolvedReturnType }
 
 /// Specialize a generic function definition with specific type arguments
-let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
+let specializeFunction (funcDef: CheckedAST.FunctionDef) (typeArgs: AST.Type list) : CheckedAST.FunctionDef =
     // Build substitution from type parameters to type args
     let subst =
         if List.length funcDef.TypeParams <> List.length typeArgs then

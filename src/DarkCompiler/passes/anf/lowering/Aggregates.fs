@@ -126,7 +126,7 @@ let internal buildSkewListLiteral
 /// Prepare every projection for one binding before its continuation is
 /// lowered. The type checker has already proved the complete unit/tuple shape.
 let rec internal lowerLetPatternBindings
-    (pattern: AST.LetPattern)
+    (pattern: CheckedAST.LetPattern)
     (sourceAtom: ANF.Atom)
     (sourceType: AST.Type)
     (env: VarEnv)
@@ -134,12 +134,12 @@ let rec internal lowerLetPatternBindings
     (varGen: ANF.VarGen)
     : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match pattern with
-    | AST.LPUnit | AST.LPWildcard -> Ok (env, bindingsRev, varGen)
-    | AST.LPVariable name ->
+    | CheckedAST.LPUnit | CheckedAST.LPWildcard -> Ok (env, bindingsRev, varGen)
+    | CheckedAST.LPVariable name ->
         let (bindingId, nextVarGen) = ANF.freshVar varGen
         let env' = Map.add name (bindingId, sourceType) env
         Ok (env', (bindingId, ANF.TypedAtom (sourceAtom, sourceType)) :: bindingsRev, nextVarGen)
-    | AST.LPTuple (first, second, rest) ->
+    | CheckedAST.LPTuple (first, second, rest) ->
         let patterns = first :: second :: rest
         match sourceType with
         | AST.TTuple elementTypes when List.length patterns = List.length elementTypes ->
@@ -164,13 +164,13 @@ let rec internal lowerLetPatternBindings
         | _ -> Error "Let tuple pattern reached ANF lowering with an incompatible type"
 
 let rec internal letPatternAcceptsType
-    (pattern: AST.LetPattern)
+    (pattern: CheckedAST.LetPattern)
     (valueType: AST.Type)
     : bool =
     match pattern, valueType with
-    | AST.LPVariable _, _ | AST.LPWildcard, _ -> true
-    | AST.LPUnit, AST.TUnit -> true
-    | AST.LPTuple (first, second, rest), AST.TTuple elementTypes ->
+    | CheckedAST.LPVariable _, _ | CheckedAST.LPWildcard, _ -> true
+    | CheckedAST.LPUnit, AST.TUnit -> true
+    | CheckedAST.LPTuple (first, second, rest), AST.TTuple elementTypes ->
         let patterns = first :: second :: rest
         List.length patterns = List.length elementTypes
         && List.forall2 letPatternAcceptsType patterns elementTypes

@@ -164,6 +164,9 @@ let gen_string<'t> (x: t) : t = x let s = gen_string<String> "hello" in (fun x -
 // TypeApp call inside lambda with captured outer value (c4d-zts)
 let gen_inner<'t> (x: t) : t = x let outer = 10L in (fun x -> gen_inner<Int64> outer + x) 32L = 42L
 
+// Checked lambda parameter types survive generic specialization and tuple-pattern lowering
+let checked_ast_pair_id<'t> (value: t) : t = value let pair = checked_ast_pair_id<(Int64 * Int64)> (20L, 22L) in (fun (left, right) -> left + right) pair = 42L
+
 // =====================================================
 // Tuple Types as Type Arguments (3+ elements)
 // =====================================================

@@ -8,7 +8,7 @@ let private value id typ : HIR.Value = { Id = HIR.ValueId id; Type = typ }
 let private literal typ expression : HIR.Operand =
     { Expression = expression; Type = typ; Inputs = Map.empty }
 let private reference name input typ : HIR.Operand =
-    { Expression = AST.Var name; Type = typ; Inputs = Map.ofList [name, input] }
+    { Expression = CheckedAST.Var name; Type = typ; Inputs = Map.ofList [name, input] }
 let private block parameters operations result =
     TestBlock { Parameters = parameters; Operations = operations; Result = result }
 let private leaf inputs operands outputs =
@@ -33,7 +33,7 @@ let private check expected root () =
 let tests = [
     let parameter = value 0 AST.TInt64
     let result = value 1 AST.TInt64
-    let condition = literal AST.TBool (AST.BoolLiteral true)
+    let condition = literal AST.TBool (CheckedAST.BoolLiteral true)
     let branchResult = value 2 AST.TInt64
     let branchLocal = value 3 AST.TInt64
     let managedInput = value 5 (AST.TList AST.TInt64)
@@ -80,7 +80,7 @@ let tests = [
     "HIR rejects unaccounted opaque operand effects", check (Error VerifyHIR.UnaccountedOpaqueEffects)
         (block Map.empty
             [contractedWithOperands []
-                [literal AST.TInt64 (AST.Int64Literal 1L)]
+                [literal AST.TInt64 (CheckedAST.Int64Literal 1L)]
                 [{ Value = result; Alias = HIR.NoManagedAlias }]
                 []]
             result)
