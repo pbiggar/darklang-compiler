@@ -61,3 +61,20 @@ let foldFromEmpty (ids: List<Int64>): List<Int64> =
   Stdlib.List.fold ids [] (fun acc id -> Stdlib.List.append acc [id])
 foldFromEmpty [1L, 2L] = [1L, 2L]
 foldFromEmpty [] = []
+
+// A callee with several returns whose result is not a Bool is not inlined
+// where that would copy a large continuation: the derived JSON serializer of
+// a record of Options grew from 66 to 430,000 nodes (WIP.AI.Anthropic.Content
+// in darklang/dark, every block constructor hung when called).
+type InlineJsonRecord =
+  { a: Stdlib.Option.Option<String>
+    b: Stdlib.Option.Option<String>
+    c: Stdlib.Option.Option<Int64>
+    d: Stdlib.Option.Option<String>
+    e: Stdlib.Option.Option<Int64>
+    f: Stdlib.Option.Option<String>
+    g: Stdlib.Option.Option<Int64>
+    h: Stdlib.Option.Option<String>
+    i: Stdlib.Option.Option<Int64>
+    j: Stdlib.Option.Option<String> }
+Stdlib.Json.serialize<InlineJsonRecord> (InlineJsonRecord { a = Stdlib.Option.Option.Some "a", b = Stdlib.Option.Option.None, c = Stdlib.Option.Option.Some 3L, d = Stdlib.Option.Option.None, e = Stdlib.Option.Option.None, f = Stdlib.Option.Option.Some "f", g = Stdlib.Option.Option.None, h = Stdlib.Option.Option.None, i = Stdlib.Option.Option.Some 9L, j = Stdlib.Option.Option.None }) = "{\"a\":{\"Some\":[\"a\"]},\"b\":{\"None\":[]},\"c\":{\"Some\":[3]},\"d\":{\"None\":[]},\"e\":{\"None\":[]},\"f\":{\"Some\":[\"f\"]},\"g\":{\"None\":[]},\"h\":{\"None\":[]},\"i\":{\"Some\":[9]},\"j\":{\"None\":[]}}"

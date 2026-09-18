@@ -23,6 +23,10 @@
 
 module ANF_Inlining
 
+/// The most continuation nodes an inlined callee with several returns may copy
+/// (copies = returns - 1 times the continuation size) before the call is left.
+let private maxContinuationCopy = 64
+
 open MemoryModel
 
 open ANF
@@ -917,12 +921,25 @@ let rec inlineInExpr (scope: InlineScope) (funcs: Map<string, FunctionInfo>) (co
             // result may not (a temp typed by an unresolved variable); Bool
             // results do, and they are the equality helpers that blew up.
             let joinable = info.Func.ReturnType = AST.TBool
-            let result =
-                if countReturns inlinedBody' <= 1 || not joinable then
-                    substituteReturn tid body' inlinedBody'
-                else
-                    Join ({ Id = tid; Type = info.Func.ReturnType }, body', returnsToJumps tid inlinedBody')
-            (result, varGen''')
+            let returns = countReturns inlinedBody'
+            let rec continuationSize (expr: AExpr) : int =
+                match expr with
+                | Jump _ | Return _ -> 1
+                | Let (_, _, body) -> 1 + continuationSize body
+                | Join (_, continuation, entry) -> 1 + continuationSize continuation + continuationSize entry
+                | If (_, thenBranch, elseBranch) -> 1 + continuationSize thenBranch + continuationSize elseBranch
+            if returns <= 1 then
+                (substituteReturn tid body' inlinedBody', varGen''')
+            elif joinable then
+                (Join ({ Id = tid; Type = info.Func.ReturnType }, body', returnsToJumps tid inlinedBody'), varGen''')
+            elif continuationSize body' * (returns - 1) <= maxContinuationCopy then
+                // Copying a small continuation into each return is cheap.
+                (substituteReturn tid body' inlinedBody', varGen''')
+            else
+                // Not joinable and the copies would be large: leave the call. A
+                // derived JSON serializer over a record of Options grew from 66
+                // to 430,000 nodes this way.
+                (Let (tid, Call (funcName, args), body'), varGen''')
         | _ ->
             // Don't inline - continue processing body
             let (body', varGen') = inlineInExpr scope funcs config depth varGen body
