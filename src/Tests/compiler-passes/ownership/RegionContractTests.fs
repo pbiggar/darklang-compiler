@@ -33,6 +33,12 @@ let private block entry operations : Block<Contract<string>, string> =
     { EntryReleases = entry; Body = { Parameters = Map.empty; Operations = operations; Result = unitValue } }
 let private blockResult entry operations result : Block<Contract<string>, string> =
     { EntryReleases = entry; Body = { Parameters = Map.empty; Operations = operations; Result = result } }
+let private functionBlock parameters operations result : Block<Contract<string>, string> =
+    { EntryReleases = []
+      Body =
+        { Parameters = parameters |> List.map (fun name -> name, value name) |> Map.ofList
+          Operations = operations
+          Result = result } }
 let private branch predicate yes no : Step<Contract<string>, string> =
     { Operation = HIR.Branch ({ Id = HIR.ValueId 101; Type = AST.TUnit }, predicate, yes, no); Releases = [] }
 let private managedBranch result predicate yes no : Step<Contract<string>, string> =
@@ -42,8 +48,41 @@ let private read name releases : Step<Contract<string>, string> =
 let private check expected region () =
     let actual = VerifyOwnership.verifyClosed semantics region
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
+let private checkFunction expected signature body () =
+    let actual = VerifyOwnership.verifyFunction semantics signature body
+    if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
 
 let tests = [
+    "Function ownership signatures permit borrowed results from borrowed parameters", checkFunction (Ok ())
+        { Parameters = [BorrowedParameter "a"]; Result = BorrowedResult "a" }
+        (functionBlock ["a"] [] (value "a"))
+    "Function ownership signatures reject consuming borrowed parameters", checkFunction (Error (InvalidRelease "a"))
+        { Parameters = [BorrowedParameter "a"]; Result = UnmanagedResult }
+        (functionBlock ["a"] [step [Consumed "a"] [] []] unitValue)
+    "Function ownership signatures transfer consumed parameters into produced results", checkFunction (Ok ())
+        { Parameters = [ConsumedParameter "a"]; Result = ProducedResult "a" }
+        (functionBlock ["a"] [] (value "a"))
+    "Function ownership signatures transfer locally produced results", checkFunction (Ok ())
+        { Parameters = []; Result = ProducedResult "a" }
+        (functionBlock [] [step [] ["a"] []] (value "a"))
+    "Function ownership signatures require consumed parameters to leave the function", checkFunction (Error (UnreleasedValues (Set.singleton "a")))
+        { Parameters = [ConsumedParameter "a"]; Result = UnmanagedResult }
+        (functionBlock ["a"] [] unitValue)
+    "Function ownership signatures reject producing borrowed parameters", checkFunction (Error (InvalidProducedResult "a"))
+        { Parameters = [BorrowedParameter "a"]; Result = ProducedResult "a" }
+        (functionBlock ["a"] [] (value "a"))
+    "Function ownership signatures reject borrowing consumed parameters", checkFunction (Error (InvalidBorrowedResult "a"))
+        { Parameters = [ConsumedParameter "a"]; Result = BorrowedResult "a" }
+        (functionBlock ["a"] [] (value "a"))
+    "Function ownership signatures cover every managed parameter", checkFunction (Error InconsistentFunctionParameters)
+        { Parameters = []; Result = UnmanagedResult }
+        (functionBlock ["a"] [] unitValue)
+    "Function ownership signatures reject duplicate parameters", checkFunction (Error (DuplicateParameter "a"))
+        { Parameters = [BorrowedParameter "a"; BorrowedParameter "a"]; Result = UnmanagedResult }
+        (functionBlock ["a"] [] unitValue)
+    "Function ownership signatures agree with the managed result identity", checkFunction (Error InconsistentFunctionResult)
+        { Parameters = [ConsumedParameter "a"]; Result = ProducedResult "b" }
+        (functionBlock ["a"] [] (value "a"))
     "Ownership contracts borrow before consuming multiple inputs", check (Ok ())
         (block [] [step [] ["a"; "b"] []; step [Borrowed "a"; Consumed "a"; Consumed "b"] ["c"] ["c"]])
     "Ownership contracts reject duplicate consumed units", check (Error (InvalidRelease "a"))

@@ -101,6 +101,14 @@ residual live sets agree. Current list regions still return only immediate
 scalars from branches; managed ANF joins and escaping list boundaries are not
 enabled by this architecture change.
 
+The same verifier accepts explicit function ownership signatures. Borrowed
+parameters are readable but cannot be released or consumed; consumed
+parameters enter with one ownership unit; produced results transfer one unit
+back to the caller. Current list regions intentionally use the closed signature
+because external source lists still have the persistent skew-list
+representation. Carrying these signatures across general calls and selecting
+an escaping array representation remain later work.
+
 `verifyFunctional` checks the closed region's incoming collection interface
 using representation-independent value contracts. `verifyBlockOwnership`
 supplies list operation contracts to the shared `VerifyOwnership.verifyClosed`, which checks
@@ -221,8 +229,9 @@ ANF pipeline or a complete Perceus implementation. The next boundaries are:
    with primitive effect/alias/ownership contracts and general block interfaces;
    layout/destruction metadata independent of ANF; stage verifiers throughout
    the pipeline. Generated printing must precede general ownership elaboration.
-3. Function ownership and representation interfaces, bounded specialization,
-   explicit conversion profitability, recursive solving, and cache identities.
+3. Carry function ownership signatures through general HIR calls, then add
+   representation interfaces, bounded specialization, explicit conversion
+   profitability, recursive solving, and cache identities.
 4. Runtime uniqueness tests for consumed arrays whose sharing is not statically
    known; surviving borrowed aliases must remain protected.
 5. Managed elements and destruction-effect propagation. Stream finalizers are
