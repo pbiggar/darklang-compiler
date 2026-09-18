@@ -3,6 +3,19 @@
 // Qualified package/module spellings resolve exactly.
 Stdlib.Float.sqrt 4.0 = 2.0
 
+// The interpreter's canonical stdlib root and its public shortcut name the
+// same declaration.
+Darklang.Stdlib.Float.sqrt 9.0 = 3.0
+
+// Option and Result retain their interpreter-wide short type and constructor
+// spellings without implicitly opening the rest of the standard library.
+let shortOption (value: Int64): Option<Int64> = Option.Some value in shortOption 4L = Some 4L
+let shortResult (value: Int64): Result<Int64, String> = Result.Ok value in shortResult 5L = Ok 5L
+
+// Fully-qualified canonical identities and the Stdlib shortcut agree.
+let canonicalOption (value: Int64): Darklang.Stdlib.Option.Option<Int64> = Darklang.Stdlib.Option.Option.Some value in canonicalOption 6L = Some 6L
+let shortcutResult (value: Int64): Stdlib.Result.Result<Int64, String> = Stdlib.Result.Result.Ok value in shortcutResult 7L = Ok 7L
+
 // The compiler no longer inserts an implicit Stdlib qualifier.
 Float.sqrt 4.0 = error="There is no variable named: Float.sqrt"
 Stdlib.Bytes.create 0L = error="There is no variable named: Stdlib.Bytes.create"
