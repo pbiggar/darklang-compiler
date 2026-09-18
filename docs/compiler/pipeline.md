@@ -169,10 +169,11 @@ Output: let t0 = 2 * 3 in
 
 ### Responsibilities
 
-- **Recognize static closure arguments**: Find direct helper calls that receive a locally allocated closure with known target and captures
-- **Clone, do not replace**: Create helper and predicate clones for known calls while retaining the generic closure path for unknown function values
-- **Pass captures directly**: Replace the closure argument with ordinary capture parameters and lower `ClosureCall` to a direct call
-- **Bound transformation size**: Skip large helpers/targets and limit the total number of specialized helper/target pairs
+- **Propagate callable facts**: Track known closures and static function references through aliases, branch values and joins, and function returns
+- **Specialize complete call shapes**: Clone a helper once for all eligible known functional arguments while retaining the generic closure path for unknown values
+- **Pass captures directly**: Replace closure arguments with ordinary capture parameters and lower `ClosureCall` to direct calls; static references need no target clone or heap closure
+- **Cross compilation units**: Use pre-reference-count external ANF templates to create local helper and target clones without changing prebuilt functions
+- **Bound transformation size**: Skip large helpers/targets and charge every specialized functional argument against the sixteen-pair program budget
 
 ---
 

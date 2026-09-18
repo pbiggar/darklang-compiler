@@ -110,7 +110,14 @@ let internal buildAnf
         if options.DisableInlining || not specializeInternalSignatures then
             anfInlined
         else
-            ANF_HigherOrderSpecialization.specializeProgram anfInlined
+            let externalFunctions =
+                externalInlineCandidates
+                |> Map.values
+                |> Seq.map (fun info -> info.Func)
+                |> Seq.toList
+            ANF_HigherOrderSpecialization.specializeProgramWithExternalFunctions
+                externalFunctions
+                anfInlined
     let higherOrderElapsed = sw.Elapsed.TotalMilliseconds - higherOrderStart
     if specializeInternalSignatures then
         recordPassTiming passTimingRecorder "ANF Higher-Order Specialization" higherOrderElapsed

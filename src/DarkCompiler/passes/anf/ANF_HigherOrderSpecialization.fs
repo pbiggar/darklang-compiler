@@ -1,578 +1,570 @@
-// ANF_HigherOrderSpecialization.fs - Specialize known closure arguments.
+// ANF_HigherOrderSpecialization.fs - Specialize statically known callable arguments.
 //
-// A direct call that receives a locally allocated closure has a static target
-// and static capture atoms. For such a call, clone the higher-order helper and
-// its closure target: captures become ordinary parameters and ClosureCall
-// becomes a direct call. Unknown closure values continue to use the original
-// generic helper, preserving the uniform closure ABI.
+// Callable facts flow through aliases, branch values, joins, and function
+// returns. One bounded helper clone jointly specializes all known functional
+// arguments, passing closure captures directly or calling static references.
 
 module ANF_HigherOrderSpecialization
 
 open ANF
 
-type private KnownClosure = {
+type private CallableConvention = ClosureValue | StaticFunction
+
+type private KnownCallable = {
     TargetName: string
     Captures: Atom list
+    Convention: CallableConvention
 }
+
+type private KnownArgument = { Index: int; Callable: KnownCallable }
 
 type private SpecializationRequest = {
     HelperName: string
-    HelperArgumentIndex: int
-    Closure: KnownClosure
+    KnownArguments: KnownArgument list
 }
 
-// Sixteen pairs bound cloned helper/target growth even when a program contains
-// many independent known higher-order call sites.
+type private TargetShape = {
+    ValueParameters: TypedParam list
+    CaptureTypes: AST.Type list
+    ClosureParameter: TempId option
+}
+
+type private RewrittenCallable = {
+    TargetName: string
+    Convention: CallableConvention
+    CaptureParameters: TypedParam list
+}
+
 let private maxSpecializedPairs = 16
 let private maxHelperNodes = 256
 let private maxTargetNodes = 32
 
-let private functionMap (functions: Function list) : Map<string, Function> =
+let private functionMap functions =
     functions |> List.map (fun func -> (func.Name, func)) |> Map.ofList
 
-let private addKnownClosure
-    (id: TempId)
-    (closure: KnownClosure)
-    (known: Map<TempId, KnownClosure>)
-    : Map<TempId, KnownClosure> =
-    Map.add id closure known
+let private mergeFunctionMaps externalFunctions localFunctions =
+    localFunctions
+    |> List.fold (fun definitions func -> Map.add func.Name func definitions) (functionMap externalFunctions)
 
-let private tryKnownArgument
-    (args: Atom list)
-    (index: int)
-    (known: Map<TempId, KnownClosure>)
-    : KnownClosure option =
-    args
-    |> List.tryItem index
-    |> Option.bind (fun atom ->
-        match atom with
-        | Var id -> Map.tryFind id known
-        | _ -> None)
-
-let private directCallNames (cexpr: CExpr) : (string * Atom list) option =
-    match cexpr with
-    | Call (name, args)
-    | BorrowedCall (name, args)
-    | TailCall (name, args) -> Some(name, args)
+let private directCallNames = function
+    | Call (name, args) | BorrowedCall (name, args) | TailCall (name, args) -> Some(name, args)
     | _ -> None
 
-let private appendRequestForKnownArguments
-    (known: Map<TempId, KnownClosure>)
-    (helperName: string)
-    (args: Atom list)
-    (requests: SpecializationRequest list)
-    : SpecializationRequest list =
-    args
-    |> List.mapi (fun index _ -> index)
-    |> List.fold (fun currentRequests index ->
-        match tryKnownArgument args index known with
-        | Some closure ->
-            let request = {
-                HelperName = helperName
-                HelperArgumentIndex = index
-                Closure = closure
-            }
-            currentRequests @ [request]
-        | None -> currentRequests
-    ) requests
+let private tryKnownAtom known = function
+    | Var id -> Map.tryFind id known
+    | FuncRef targetName ->
+        Some { TargetName = targetName; Captures = []; Convention = StaticFunction }
+    | _ -> None
 
-let rec private collectRequests
-    (functions: Map<string, Function>)
-    (expr: AExpr)
-    (known: Map<TempId, KnownClosure>)
-    (requests: SpecializationRequest list)
-    : SpecializationRequest list =
-    let collectCExpr cexpr currentRequests =
-        match directCallNames cexpr with
-        | Some (helperName, args) when Map.containsKey helperName functions ->
-            appendRequestForKnownArguments known helperName args currentRequests
-        | _ -> currentRequests
+let private rewriteAtomWithArguments parameters arguments atom =
+    let replacements =
+        List.zip (parameters |> List.map (fun parameter -> parameter.Id)) arguments
+        |> Map.ofList
+    match atom with
+    | Var id -> Map.tryFind id replacements |> Option.defaultValue atom
+    | _ -> atom
 
+let private instantiateReturnedCallable definitions returnFacts name arguments =
+    match Map.tryFind name definitions, Map.tryFind name returnFacts with
+    | Some func, Some callable when List.length func.TypedParams = List.length arguments ->
+        Some {
+            callable with
+                Captures = callable.Captures |> List.map (rewriteAtomWithArguments func.TypedParams arguments)
+        }
+    | _ -> None
+
+let private tryKnownCExpr definitions returnFacts known = function
+    | Atom atom | TypedAtom (atom, _) -> tryKnownAtom known atom
+    | IfValue (_, thenValue, elseValue) ->
+        match tryKnownAtom known thenValue, tryKnownAtom known elseValue with
+        | Some left, Some right when left = right -> Some left
+        | _ -> None
+    | ClosureAlloc (targetName, captures) ->
+        Some { TargetName = targetName; Captures = captures; Convention = ClosureValue }
+    | Call (name, arguments) | BorrowedCall (name, arguments) ->
+        instantiateReturnedCallable definitions returnFacts name arguments
+    | _ -> None
+
+let private knownAfterBinding definitions returnFacts known boundId cexpr =
+    match tryKnownCExpr definitions returnFacts known cexpr with
+    | Some callable -> Map.add boundId callable known
+    | None -> Map.remove boundId known
+
+let rec private collectJumpFacts definitions returnFacts target known expr =
     match expr with
-    | Jump _ | Return _ -> requests
+    | Jump (jumpTarget, atom) when jumpTarget = target -> [tryKnownAtom known atom]
+    | Jump _ | Return _ -> []
     | Let (boundId, cexpr, body) ->
-        let withCall = collectCExpr cexpr requests
-        let knownAfter =
-            match cexpr with
-            | ClosureAlloc (targetName, captures) ->
-                addKnownClosure boundId { TargetName = targetName; Captures = captures } known
-            | _ -> known
-        collectRequests functions body knownAfter withCall
+        collectJumpFacts definitions returnFacts target
+            (knownAfterBinding definitions returnFacts known boundId cexpr) body
     | Join (parameter, continuation, entry) ->
-        collectRequests functions continuation (Map.remove parameter.Id known) requests
-        |> collectRequests functions entry known
+        collectJumpFacts definitions returnFacts target (Map.remove parameter.Id known) continuation
+        @ collectJumpFacts definitions returnFacts target known entry
     | If (_, thenBranch, elseBranch) ->
-        collectRequests functions thenBranch known requests
-        |> collectRequests functions elseBranch known
+        collectJumpFacts definitions returnFacts target known thenBranch
+        @ collectJumpFacts definitions returnFacts target known elseBranch
 
-let private countNodes (expr: AExpr) : int =
-    let rec count current expr =
-        match expr with
+let private tryJoinCallable definitions returnFacts parameter known entry =
+    match collectJumpFacts definitions returnFacts parameter.Id known entry with
+    | Some first :: rest when rest |> List.forall (fun candidate -> candidate = Some first) -> Some first
+    | _ -> None
+
+let private collectReturnedCallables definitions returnFacts expr =
+    let rec collect known current =
+        match current with
+        | Jump _ -> Some []
+        | Return atom -> tryKnownAtom known atom |> Option.map List.singleton
+        | Let (boundId, cexpr, body) ->
+            collect (knownAfterBinding definitions returnFacts known boundId cexpr) body
+        | Join (parameter, continuation, entry) ->
+            let continuationKnown =
+                match tryJoinCallable definitions returnFacts parameter known entry with
+                | Some callable -> Map.add parameter.Id callable known
+                | None -> Map.remove parameter.Id known
+            match collect continuationKnown continuation, collect known entry with
+            | Some left, Some right -> Some(left @ right)
+            | _ -> None
+        | If (_, thenBranch, elseBranch) ->
+            match collect known thenBranch, collect known elseBranch with
+            | Some left, Some right -> Some(left @ right)
+            | _ -> None
+    match collect Map.empty expr with
+    | Some (first :: rest) when rest |> List.forall ((=) first) -> Some first
+    | _ -> None
+
+let private buildReturnFacts definitions =
+    let summaryUsesOnlyParameters (func: Function) (callable: KnownCallable) =
+        let parameterIds = func.TypedParams |> List.map (fun parameter -> parameter.Id) |> Set.ofList
+        callable.Captures
+        |> List.forall (function
+            | Var id -> Set.contains id parameterIds
+            | _ -> true)
+    let rec solve remaining current =
+        if remaining = 0 then current else
+        let next =
+            definitions
+            |> Map.fold (fun facts name func ->
+                match collectReturnedCallables definitions facts func.Body with
+                | Some callable when summaryUsesOnlyParameters func callable ->
+                    Map.add name callable facts
+                | _ -> facts) current
+        if next = current then current else solve (remaining - 1) next
+    solve (Map.count definitions + 1) Map.empty
+
+let private countNodes expr =
+    let rec count current = function
         | Jump _ | Return _ -> current + 1
         | Let (_, _, body) -> count (current + 1) body
         | Join (_, continuation, entry) -> current + 1 + count 0 continuation + count 0 entry
-        | If (_, thenBranch, elseBranch) ->
-            current + 1 + count 0 thenBranch + count 0 elseBranch
+        | If (_, thenBranch, elseBranch) -> current + 1 + count 0 thenBranch + count 0 elseBranch
     count 0 expr
 
-let private targetShape
-    (target: Function)
-    (captures: Atom list)
-    : (TypedParam list * AST.Type list) option =
-    match target.TypedParams with
-    | closureParam :: valueParams ->
-        match closureParam.Type with
-        | AST.TTuple (AST.TInt64 :: captureTypes) when List.length captureTypes = List.length captures ->
-            Some(valueParams, captureTypes)
-        | _ -> None
-    | [] -> None
+let private targetShape (target: Function) (callable: KnownCallable) =
+    match callable.Convention with
+    | StaticFunction ->
+        Some { ValueParameters = target.TypedParams; CaptureTypes = []; ClosureParameter = None }
+    | ClosureValue ->
+        match target.TypedParams with
+        | closureParameter :: valueParameters ->
+            match closureParameter.Type with
+            | AST.TTuple (AST.TInt64 :: captureTypes)
+                when List.length captureTypes = List.length callable.Captures ->
+                Some {
+                    ValueParameters = valueParameters
+                    CaptureTypes = captureTypes
+                    ClosureParameter = Some closureParameter.Id
+                }
+            | _ -> None
+        | [] -> None
 
-let rec private targetBodyUsesOnlyCaptures
-    (closureId: TempId)
-    (captureCount: int)
-    (expr: AExpr)
-    : bool =
-    let captureAccess cexpr =
-        match cexpr with
-        | TupleGet (Var tupleId, index) when tupleId = closureId ->
-            index >= 1 && index <= captureCount
-        | _ -> not (ANFEffects.cexprUsesTemp closureId cexpr)
-
+let rec private targetBodyUsesOnlyCaptures closureId captureCount expr =
+    let captureAccess = function
+        | TupleGet (Var tupleId, index) when tupleId = closureId -> index >= 1 && index <= captureCount
+        | cexpr -> not (ANFEffects.cexprUsesTemp closureId cexpr)
     match expr with
-    | Jump (_, atom)
-    | Return atom -> not (ANFEffects.atomUsesTemp closureId atom)
-    | Let (_, cexpr, body) ->
-        captureAccess cexpr && targetBodyUsesOnlyCaptures closureId captureCount body
+    | Jump (_, atom) | Return atom -> not (ANFEffects.atomUsesTemp closureId atom)
+    | Let (_, cexpr, body) -> captureAccess cexpr && targetBodyUsesOnlyCaptures closureId captureCount body
     | Join (_, continuation, entry) ->
-        targetBodyUsesOnlyCaptures closureId captureCount continuation && targetBodyUsesOnlyCaptures closureId captureCount entry
+        targetBodyUsesOnlyCaptures closureId captureCount continuation
+        && targetBodyUsesOnlyCaptures closureId captureCount entry
     | If (condition, thenBranch, elseBranch) ->
         not (ANFEffects.atomUsesTemp closureId condition)
         && targetBodyUsesOnlyCaptures closureId captureCount thenBranch
         && targetBodyUsesOnlyCaptures closureId captureCount elseBranch
 
-let private closureCallArity (functionParameterId: TempId) (expr: AExpr) : int option =
-    let rec find current =
-        match current with
+let private closureCallArity functionParameterId expr =
+    let rec find = function
         | Jump _ | Return _ -> None
         | Let (_, cexpr, body) ->
             match cexpr with
-            | ClosureCall (Var id, args)
-            | ClosureTailCall (Var id, args) when id = functionParameterId ->
+            | ClosureCall (Var id, args) | ClosureTailCall (Var id, args) when id = functionParameterId ->
                 Some(List.length args)
             | _ -> find body
         | Join (_, continuation, entry) ->
-            match find entry with
-            | Some arity -> Some arity
-            | None -> find continuation
+            match find entry with Some arity -> Some arity | None -> find continuation
         | If (_, thenBranch, elseBranch) ->
-            match find thenBranch with
-            | Some arity -> Some arity
-            | None -> find elseBranch
+            match find thenBranch with Some arity -> Some arity | None -> find elseBranch
     find expr
 
-let rec private helperUsesParameterOnlyForClosureOperations
-    (helperName: string)
-    (functionParameterId: TempId)
-    (argumentIndex: int)
-    (expr: AExpr)
-    : bool =
-    let allowed cexpr =
-        match cexpr with
-        | ClosureCall (Var id, args)
-        | ClosureTailCall (Var id, args)
-            when id = functionParameterId
-                 && not (ANFEffects.atomsUseTemp functionParameterId args) -> true
-        | Call (name, args)
-        | BorrowedCall (name, args)
-        | TailCall (name, args)
-            when name = helperName
-                 && not (ANFEffects.atomsUseTemp functionParameterId (List.removeAt argumentIndex args)) ->
+let private removeIndexes indexes items =
+    items |> List.indexed |> List.choose (fun (index, item) ->
+        if Set.contains index indexes then None else Some item)
+
+let rec private helperUsesParameterOnlyForClosureOperations helperName parameterId argumentIndex expr =
+    let allowed = function
+        | ClosureCall (Var id, args) | ClosureTailCall (Var id, args)
+            when id = parameterId && not (ANFEffects.atomsUseTemp parameterId args) -> true
+        | Call (name, args) | BorrowedCall (name, args) | TailCall (name, args) when name = helperName ->
             match List.tryItem argumentIndex args with
-            | Some (Var id) -> id = functionParameterId
+            | Some (Var id) when id = parameterId ->
+                args |> removeIndexes (Set.singleton argumentIndex) |> ANFEffects.atomsUseTemp parameterId |> not
             | _ -> false
-        | _ -> not (ANFEffects.cexprUsesTemp functionParameterId cexpr)
-
+        | cexpr -> not (ANFEffects.cexprUsesTemp parameterId cexpr)
     match expr with
-    | Jump (_, atom)
-    | Return atom -> not (ANFEffects.atomUsesTemp functionParameterId atom)
+    | Jump (_, atom) | Return atom -> not (ANFEffects.atomUsesTemp parameterId atom)
     | Let (_, cexpr, body) ->
-        allowed cexpr
-        && helperUsesParameterOnlyForClosureOperations helperName functionParameterId argumentIndex body
+        allowed cexpr && helperUsesParameterOnlyForClosureOperations helperName parameterId argumentIndex body
     | Join (_, continuation, entry) ->
-        helperUsesParameterOnlyForClosureOperations helperName functionParameterId argumentIndex continuation && helperUsesParameterOnlyForClosureOperations helperName functionParameterId argumentIndex entry
+        helperUsesParameterOnlyForClosureOperations helperName parameterId argumentIndex continuation
+        && helperUsesParameterOnlyForClosureOperations helperName parameterId argumentIndex entry
     | If (condition, thenBranch, elseBranch) ->
-        not (ANFEffects.atomUsesTemp functionParameterId condition)
-        && helperUsesParameterOnlyForClosureOperations helperName functionParameterId argumentIndex thenBranch
-        && helperUsesParameterOnlyForClosureOperations helperName functionParameterId argumentIndex elseBranch
+        not (ANFEffects.atomUsesTemp parameterId condition)
+        && helperUsesParameterOnlyForClosureOperations helperName parameterId argumentIndex thenBranch
+        && helperUsesParameterOnlyForClosureOperations helperName parameterId argumentIndex elseBranch
 
-let private validRequest
-    (functions: Map<string, Function>)
-    (request: SpecializationRequest)
-    : bool =
-    match Map.tryFind request.HelperName functions, Map.tryFind request.Closure.TargetName functions with
-    | Some helper, Some target ->
-        match List.tryItem request.HelperArgumentIndex helper.TypedParams with
-        | Some helperParameter ->
-            match targetShape target request.Closure.Captures with
-            | Some(valueParams, _) ->
-                let helperSizeOk = countNodes helper.Body <= maxHelperNodes
-                let targetSizeOk = countNodes target.Body <= maxTargetNodes
-                let targetBodyOk =
-                    targetBodyUsesOnlyCaptures
-                        (List.head target.TypedParams).Id
-                        (List.length request.Closure.Captures)
-                        target.Body
-                let helperBodyOk =
-                    helperUsesParameterOnlyForClosureOperations
-                        helper.Name
-                        helperParameter.Id
-                        request.HelperArgumentIndex
-                        helper.Body
-                let arityOk =
-                    closureCallArity helperParameter.Id helper.Body
-                    |> Option.map (fun arity -> List.length valueParams = arity)
-                    |> Option.defaultValue false
-                helperSizeOk && targetSizeOk && targetBodyOk && helperBodyOk && arityOk
-            | None -> false
+let private validKnownArgument definitions helper (argument: KnownArgument) =
+    match List.tryItem argument.Index helper.TypedParams, Map.tryFind argument.Callable.TargetName definitions with
+    | Some helperParameter, Some target ->
+        match targetShape target argument.Callable with
+        | Some shape ->
+            let targetBodyOk =
+                match shape.ClosureParameter with
+                | Some closureId ->
+                    targetBodyUsesOnlyCaptures closureId (List.length argument.Callable.Captures) target.Body
+                | None -> true
+            countNodes target.Body <= maxTargetNodes
+            && targetBodyOk
+            && helperUsesParameterOnlyForClosureOperations helper.Name helperParameter.Id argument.Index helper.Body
+            && (closureCallArity helperParameter.Id helper.Body
+                |> Option.exists (fun arity -> List.length shape.ValueParameters = arity))
         | None -> false
     | _ -> false
 
-let private requestKey (request: SpecializationRequest) : string * string * int =
-    (request.HelperName, request.Closure.TargetName, request.HelperArgumentIndex)
+let private knownArguments definitions known helperName arguments =
+    match Map.tryFind helperName definitions with
+    | Some helper ->
+        arguments
+        |> List.indexed
+        |> List.choose (fun (index, atom) ->
+            tryKnownAtom known atom |> Option.map (fun callable -> { Index = index; Callable = callable }))
+        |> List.filter (validKnownArgument definitions helper)
+    | None -> []
 
-let rec private greatestTempId (expr: AExpr) (current: int) : int =
+let private requestKey request =
+    (request.HelperName,
+     request.KnownArguments |> List.map (fun argument ->
+         (argument.Index, argument.Callable.TargetName, argument.Callable.Convention)))
+
+let rec private collectRequests definitions returnFacts expr known requests =
     match expr with
-    | Jump (TempId target, atom) ->
-        let valueId = match atom with Var (TempId id) -> id | _ -> current
-        max current (max target valueId)
+    | Jump _ | Return _ -> requests
+    | Let (boundId, cexpr, body) ->
+        let withCall =
+            match directCallNames cexpr with
+            | Some (helperName, arguments) ->
+                match knownArguments definitions known helperName arguments with
+                | [] -> requests
+                | knownForCall -> { HelperName = helperName; KnownArguments = knownForCall } :: requests
+            | None -> requests
+        collectRequests definitions returnFacts body
+            (knownAfterBinding definitions returnFacts known boundId cexpr) withCall
+    | Join (parameter, continuation, entry) ->
+        let continuationKnown =
+            match tryJoinCallable definitions returnFacts parameter known entry with
+            | Some callable -> Map.add parameter.Id callable known
+            | None -> Map.remove parameter.Id known
+        collectRequests definitions returnFacts entry known requests
+        |> collectRequests definitions returnFacts continuation continuationKnown
+    | If (_, thenBranch, elseBranch) ->
+        collectRequests definitions returnFacts thenBranch known requests
+        |> collectRequests definitions returnFacts elseBranch known
+
+let private withinPairBudget requests =
+    requests
+    |> List.fold (fun (remaining, retained) request ->
+        let cost = List.length request.KnownArguments
+        if cost <= remaining then (remaining - cost, request :: retained) else (remaining, retained))
+        (maxSpecializedPairs, [])
+    |> snd |> List.rev
+
+let rec private greatestTempId expr current =
+    let atomId atom value = match atom with Var (TempId id) -> max id value | _ -> value
+    match expr with
+    | Jump (TempId target, atom) -> atomId atom (max target current)
     | Join (parameter, continuation, entry) ->
         let (TempId id) = parameter.Id
         greatestTempId entry (greatestTempId continuation (max id current))
-    | Return _ -> current
+    | Return atom -> atomId atom current
     | Let (TempId boundId, _, body) -> greatestTempId body (max current boundId)
-    | If (_, thenBranch, elseBranch) ->
-        greatestTempId elseBranch (greatestTempId thenBranch current)
+    | If (_, thenBranch, elseBranch) -> greatestTempId elseBranch (greatestTempId thenBranch current)
 
-let private freshVarGen (functions: Function list) (main: AExpr) : VarGen =
-    let parameterIdValue (parameter: TypedParam) =
-        let (TempId value) = parameter.Id
-        value
+let private freshVarGen functions main =
+    let parameterValue parameter = let (TempId value) = parameter.Id in value
+    functions
+    |> List.fold (fun current func ->
+        func.TypedParams |> List.fold (fun value parameter -> max value (parameterValue parameter)) current
+        |> greatestTempId func.Body) 0
+    |> greatestTempId main
+    |> fun greatest -> VarGen (greatest + 1)
 
-    let greatest =
-        functions
-        |> List.fold (fun current func ->
-            func.TypedParams
-            |> List.fold (fun parameterCurrent parameter ->
-                max parameterCurrent (parameterIdValue parameter)) current
-            |> greatestTempId func.Body
-        ) 0
-        |> fun current -> greatestTempId main current
-    VarGen (greatest + 1)
-
-let private makeCaptureParameters
-    (captureTypes: AST.Type list)
-    (varGen: VarGen)
-    : TypedParam list * VarGen =
+let private makeCaptureParameters captureTypes varGen =
     captureTypes
-    |> List.fold (fun (parameters, currentVarGen) typ ->
-        let (id, nextVarGen) = freshVar currentVarGen
-        ({ Id = id; Type = typ } :: parameters, nextVarGen)
-    ) ([], varGen)
-    |> fun (reversedParameters, finalVarGen) -> (List.rev reversedParameters, finalVarGen)
+    |> List.fold (fun (parameters, current) typ ->
+        let (id, next) = freshVar current
+        ({ Id = id; Type = typ } :: parameters, next)) ([], varGen)
+    |> fun (parameters, finalVarGen) -> (List.rev parameters, finalVarGen)
 
-let rec private rewriteTargetBody
-    (closureId: TempId)
-    (captureParameters: TypedParam list)
-    (expr: AExpr)
-    : AExpr =
+let rec private rewriteTargetBody closureId captureParameters expr =
     let rewriteCExpr cexpr =
         match cexpr with
         | TupleGet (Var tupleId, index) when tupleId = closureId ->
-            captureParameters
-            |> List.tryItem (index - 1)
+            captureParameters |> List.tryItem (index - 1)
             |> Option.map (fun parameter -> Atom (Var parameter.Id))
             |> Option.defaultValue cexpr
         | _ -> cexpr
-
     match expr with
     | Jump _ | Return _ -> expr
     | Let (boundId, cexpr, body) ->
         Let (boundId, rewriteCExpr cexpr, rewriteTargetBody closureId captureParameters body)
     | Join (parameter, continuation, entry) ->
-        Join (parameter, rewriteTargetBody closureId captureParameters continuation, rewriteTargetBody closureId captureParameters entry)
+        Join (parameter, rewriteTargetBody closureId captureParameters continuation,
+              rewriteTargetBody closureId captureParameters entry)
     | If (condition, thenBranch, elseBranch) ->
-        If (
-            condition,
-            rewriteTargetBody closureId captureParameters thenBranch,
-            rewriteTargetBody closureId captureParameters elseBranch
-        )
+        If (condition, rewriteTargetBody closureId captureParameters thenBranch,
+            rewriteTargetBody closureId captureParameters elseBranch)
 
-let private removeAt (index: int) (items: Atom list) : Atom list =
-    List.take index items @ List.skip (index + 1) items
+let private specializedTargetName targetName = $"{targetName}__captures"
 
-let private removeTypedParameter (index: int) (parameters: TypedParam list) : TypedParam list =
-    List.take index parameters @ List.skip (index + 1) parameters
+let private specializedHelperName request =
+    let suffix =
+        request.KnownArguments
+        |> List.map (fun argument -> $"{argument.Callable.TargetName}_{argument.Index}")
+        |> String.concat "__"
+    $"{request.HelperName}__known_{suffix}"
 
 let rec private rewriteHelperBody
-    (helperName: string)
-    (specializedHelperName: string)
-    (specializedTargetName: string)
-    (functionParameterId: TempId)
-    (argumentIndex: int)
-    (captureParameters: TypedParam list)
-    (expr: AExpr)
-    : AExpr =
-    let captureAtoms = captureParameters |> List.map (fun parameter -> Var parameter.Id)
-
+    helperName
+    cloneName
+    rewrittenCallables
+    argumentIndexes
+    appendedCaptureParameters
+    expr =
+    let appendedCaptures =
+        appendedCaptureParameters |> List.map (fun parameter -> Var parameter.Id)
+    let directTarget closureId arguments isTail original =
+        match Map.tryFind closureId rewrittenCallables with
+        | Some callable ->
+            let captures =
+                match callable.Convention with
+                | ClosureValue -> callable.CaptureParameters |> List.map (fun parameter -> Var parameter.Id)
+                | StaticFunction -> []
+            if isTail then TailCall (callable.TargetName, captures @ arguments)
+            else Call (callable.TargetName, captures @ arguments)
+        | None -> original
     let rewriteCExpr cexpr =
         match cexpr with
-        | ClosureCall (Var id, args) when id = functionParameterId ->
-            Call (specializedTargetName, captureAtoms @ args)
-        | ClosureTailCall (Var id, args) when id = functionParameterId ->
-            TailCall (specializedTargetName, captureAtoms @ args)
-        | Call (name, args) when name = helperName ->
-            Call (
-                specializedHelperName,
-                removeAt argumentIndex args @ captureAtoms
-            )
-        | BorrowedCall (name, args) when name = helperName ->
-            BorrowedCall (
-                specializedHelperName,
-                removeAt argumentIndex args @ captureAtoms
-            )
-        | TailCall (name, args) when name = helperName ->
-            TailCall (
-                specializedHelperName,
-                removeAt argumentIndex args @ captureAtoms
-            )
+        | ClosureCall (Var id, arguments) -> directTarget id arguments false cexpr
+        | ClosureTailCall (Var id, arguments) -> directTarget id arguments true cexpr
+        | Call (name, arguments) when name = helperName ->
+            Call (cloneName, removeIndexes argumentIndexes arguments @ appendedCaptures)
+        | BorrowedCall (name, arguments) when name = helperName ->
+            BorrowedCall (cloneName, removeIndexes argumentIndexes arguments @ appendedCaptures)
+        | TailCall (name, arguments) when name = helperName ->
+            TailCall (cloneName, removeIndexes argumentIndexes arguments @ appendedCaptures)
         | _ -> cexpr
-
     match expr with
     | Jump _ | Return _ -> expr
     | Let (boundId, cexpr, body) ->
-        Let (
-            boundId,
-            rewriteCExpr cexpr,
-            rewriteHelperBody
-                helperName
-                specializedHelperName
-                specializedTargetName
-                functionParameterId
-                argumentIndex
-                captureParameters
-                body
-        )
+        Let (boundId, rewriteCExpr cexpr,
+             rewriteHelperBody helperName cloneName rewrittenCallables argumentIndexes appendedCaptureParameters body)
     | Join (parameter, continuation, entry) ->
-        Join (parameter, rewriteHelperBody helperName specializedHelperName specializedTargetName functionParameterId argumentIndex captureParameters continuation, rewriteHelperBody helperName specializedHelperName specializedTargetName functionParameterId argumentIndex captureParameters entry)
+        Join (parameter,
+              rewriteHelperBody helperName cloneName rewrittenCallables argumentIndexes appendedCaptureParameters continuation,
+              rewriteHelperBody helperName cloneName rewrittenCallables argumentIndexes appendedCaptureParameters entry)
     | If (condition, thenBranch, elseBranch) ->
-        If (
-            condition,
-            rewriteHelperBody
-                helperName
-                specializedHelperName
-                specializedTargetName
-                functionParameterId
-                argumentIndex
-                captureParameters
-                thenBranch,
-            rewriteHelperBody
-                helperName
-                specializedHelperName
-                specializedTargetName
-                functionParameterId
-                argumentIndex
-                captureParameters
-                elseBranch
-        )
+        If (condition,
+            rewriteHelperBody helperName cloneName rewrittenCallables argumentIndexes appendedCaptureParameters thenBranch,
+            rewriteHelperBody helperName cloneName rewrittenCallables argumentIndexes appendedCaptureParameters elseBranch)
 
-let rec private exprUsesTemp (tempId: TempId) (expr: AExpr) : bool =
-    match expr with
-    | Jump (_, atom)
-    | Return atom -> ANFEffects.atomUsesTemp tempId atom
-    | Let (_, cexpr, body) ->
-        ANFEffects.cexprUsesTemp tempId cexpr || exprUsesTemp tempId body
+let rec private exprUsesTemp tempId = function
+    | Jump (_, atom) | Return atom -> ANFEffects.atomUsesTemp tempId atom
+    | Let (_, cexpr, body) -> ANFEffects.cexprUsesTemp tempId cexpr || exprUsesTemp tempId body
     | Join (parameter, continuation, entry) ->
         exprUsesTemp tempId entry || (parameter.Id <> tempId && exprUsesTemp tempId continuation)
     | If (condition, thenBranch, elseBranch) ->
         ANFEffects.atomUsesTemp tempId condition
-        || exprUsesTemp tempId thenBranch
-        || exprUsesTemp tempId elseBranch
+        || exprUsesTemp tempId thenBranch || exprUsesTemp tempId elseBranch
 
-let rec private rewriteKnownCalls
-    (functions: Map<string, Function>)
-    (specializedNames: Map<string * string * int, string>)
-    (known: Map<TempId, KnownClosure>)
-    (expr: AExpr)
-    : AExpr =
+let rec private rewriteKnownCalls definitions returnFacts specializedNames known expr =
     let rewriteCExpr cexpr =
         match directCallNames cexpr with
-        | Some (helperName, args) when Map.containsKey helperName functions ->
-            let specialized =
-                args
-                |> List.mapi (fun index atom -> (index, atom))
-                |> List.choose (fun (index, atom) ->
-                    match atom with
-                    | Var id ->
-                        Map.tryFind id known
-                        |> Option.map (fun closure -> (index, closure))
-                    | _ -> None)
-                |> List.tryFind (fun (index, closure) ->
-                    Map.containsKey (helperName, closure.TargetName, index) specializedNames)
-
-            match specialized with
-            | Some (index, closure) ->
-                let newName = Map.find (helperName, closure.TargetName, index) specializedNames
-                let newArgs = removeAt index args @ closure.Captures
+        | Some (helperName, arguments) ->
+            let knownForCall = knownArguments definitions known helperName arguments
+            let key =
+                (helperName, knownForCall |> List.map (fun argument ->
+                    (argument.Index, argument.Callable.TargetName, argument.Callable.Convention)))
+            match Map.tryFind key specializedNames with
+            | Some newName ->
+                let indexes = knownForCall |> List.map (fun argument -> argument.Index) |> Set.ofList
+                let newArguments =
+                    removeIndexes indexes arguments
+                    @ (knownForCall |> List.collect (fun argument -> argument.Callable.Captures))
                 match cexpr with
-                | Call _ -> Call (newName, newArgs)
-                | BorrowedCall _ -> BorrowedCall (newName, newArgs)
-                | TailCall _ -> TailCall (newName, newArgs)
+                | Call _ -> Call (newName, newArguments)
+                | BorrowedCall _ -> BorrowedCall (newName, newArguments)
+                | TailCall _ -> TailCall (newName, newArguments)
                 | _ -> cexpr
             | None -> cexpr
-        | _ -> cexpr
-
+        | None -> cexpr
     match expr with
     | Jump _ | Return _ -> expr
     | Let (boundId, cexpr, body) ->
-        let knownAfter =
+        let knownAfter = knownAfterBinding definitions returnFacts known boundId cexpr
+        let rewrittenBody = rewriteKnownCalls definitions returnFacts specializedNames knownAfter body
+        let removable =
             match cexpr with
-            | ClosureAlloc (targetName, captures) ->
-                addKnownClosure boundId { TargetName = targetName; Captures = captures } known
-            | _ -> known
-        let rewrittenBody = rewriteKnownCalls functions specializedNames knownAfter body
-        match cexpr with
-        | ClosureAlloc _ when not (exprUsesTemp boundId rewrittenBody) ->
-            rewrittenBody
-        | _ ->
-            Let (boundId, rewriteCExpr cexpr, rewrittenBody)
+            | Atom _ | TypedAtom _ | IfValue _ | ClosureAlloc _ ->
+                tryKnownCExpr definitions returnFacts known cexpr |> Option.isSome
+            | _ -> false
+        if removable && not (exprUsesTemp boundId rewrittenBody) then rewrittenBody
+        else Let (boundId, rewriteCExpr cexpr, rewrittenBody)
     | Join (parameter, continuation, entry) ->
+        let continuationKnown =
+            match tryJoinCallable definitions returnFacts parameter known entry with
+            | Some callable -> Map.add parameter.Id callable known
+            | None -> Map.remove parameter.Id known
         Join (parameter,
-              rewriteKnownCalls functions specializedNames (Map.remove parameter.Id known) continuation,
-              rewriteKnownCalls functions specializedNames known entry)
+              rewriteKnownCalls definitions returnFacts specializedNames continuationKnown continuation,
+              rewriteKnownCalls definitions returnFacts specializedNames known entry)
     | If (condition, thenBranch, elseBranch) ->
-        If (
-            condition,
-            rewriteKnownCalls functions specializedNames known thenBranch,
-            rewriteKnownCalls functions specializedNames known elseBranch
-        )
+        If (condition,
+            rewriteKnownCalls definitions returnFacts specializedNames known thenBranch,
+            rewriteKnownCalls definitions returnFacts specializedNames known elseBranch)
 
-let private specializedTargetName (targetName: string) : string =
-    $"{targetName}__captures"
+let private requiredFunction name definitions =
+    match Map.tryFind name definitions with
+    | Some func -> func
+    | None -> Crash.crash $"Higher-order specialization lost validated function '{name}'"
 
-let private specializedHelperName (request: SpecializationRequest) : string =
-    $"{request.HelperName}__known_{request.Closure.TargetName}_{request.HelperArgumentIndex}"
-
-let specializeProgram (Program (functions, main)) : Program =
-    let functionsByOriginalName = functionMap functions
+let specializeProgramWithExternalFunctions externalFunctions (Program (functions, main)) =
+    let definitions = mergeFunctionMaps externalFunctions functions
+    let returnFacts = buildReturnFacts definitions
     let rawRequests =
         functions
-        |> List.fold (fun requests func ->
-            collectRequests functionsByOriginalName func.Body Map.empty requests
-        ) []
-        |> fun requests -> collectRequests functionsByOriginalName main Map.empty requests
+        |> List.fold (fun requests func -> collectRequests definitions returnFacts func.Body Map.empty requests) []
+        |> fun requests -> collectRequests definitions returnFacts main Map.empty requests
     let requests =
         rawRequests
         |> List.filter (fun request ->
-            validRequest functionsByOriginalName request)
-        |> List.distinctBy requestKey
-        |> List.sortBy requestKey
-        |> List.truncate maxSpecializedPairs
-
-    let existingNames = functions |> List.map (fun func -> func.Name) |> Set.ofList
+            Map.tryFind request.HelperName definitions
+            |> Option.exists (fun helper -> countNodes helper.Body <= maxHelperNodes))
+        |> List.distinctBy requestKey |> List.sortBy requestKey |> withinPairBudget
+    let existingNames = definitions |> Map.keys |> Set.ofSeq
     let targetCloneNames =
-        requests
-        |> List.distinctBy (fun request -> request.Closure.TargetName)
-        |> List.map (fun request -> specializedTargetName request.Closure.TargetName)
-        |> Set.ofList
-    let helperCloneNames =
-        requests
-        |> List.map specializedHelperName
-        |> Set.ofList
+        requests |> List.collect (fun request -> request.KnownArguments)
+        |> List.filter (fun argument -> argument.Callable.Convention = ClosureValue)
+        |> List.map (fun argument -> specializedTargetName argument.Callable.TargetName) |> Set.ofList
+    let helperCloneNames = requests |> List.map specializedHelperName |> Set.ofList
     let usableRequests =
         requests
         |> List.filter (fun request ->
-            not (Set.contains (specializedTargetName request.Closure.TargetName) existingNames)
-            && not (Set.contains (specializedHelperName request) existingNames)
-            && not (Set.contains (specializedTargetName request.Closure.TargetName) helperCloneNames)
-            && not (Set.contains (specializedHelperName request) targetCloneNames))
+            let helperName = specializedHelperName request
+            let targets =
+                request.KnownArguments
+                |> List.filter (fun argument -> argument.Callable.Convention = ClosureValue)
+                |> List.map (fun argument -> specializedTargetName argument.Callable.TargetName)
+            not (Set.contains helperName existingNames)
+            && not (Set.contains helperName targetCloneNames)
+            && (targets |> List.forall (fun name ->
+                not (Set.contains name existingNames) && not (Set.contains name helperCloneNames))))
 
-    let startVarGen = freshVarGen functions main
-    let targetRequests =
-        usableRequests
-        |> List.distinctBy (fun request -> request.Closure.TargetName)
-        |> List.map (fun request ->
-            (request, specializedTargetName request.Closure.TargetName))
-
+    let allDefinitions = definitions |> Map.values |> Seq.toList
+    let targetCallables =
+        usableRequests |> List.collect (fun request -> request.KnownArguments)
+        |> List.map (fun argument -> argument.Callable)
+        |> List.filter (fun callable -> callable.Convention = ClosureValue)
+        |> List.distinctBy (fun callable -> callable.TargetName)
     let (targetClones, varGenAfterTargets) =
-        targetRequests
-        |> List.fold (fun (clones, currentVarGen) (request, cloneName) ->
-            let target = Map.find request.Closure.TargetName functionsByOriginalName
-            match targetShape target request.Closure.Captures with
-            | Some(valueParams, captureTypes) ->
-                let (captureParameters, nextVarGen) = makeCaptureParameters captureTypes currentVarGen
-                let closureParameter = List.head target.TypedParams
-                let clone =
-                    {
+        targetCallables
+        |> List.fold (fun (clones, currentVarGen) callable ->
+            let target = requiredFunction callable.TargetName definitions
+            match targetShape target callable with
+            | Some shape ->
+                match shape.ClosureParameter with
+                | Some closureId ->
+                    let (captureParameters, nextVarGen) = makeCaptureParameters shape.CaptureTypes currentVarGen
+                    let clone = {
                         target with
-                            Name = cloneName
-                            TypedParams = captureParameters @ valueParams
-                            Body = rewriteTargetBody closureParameter.Id captureParameters target.Body
+                            Name = specializedTargetName target.Name
+                            TypedParams = captureParameters @ shape.ValueParameters
+                            Body = rewriteTargetBody closureId captureParameters target.Body
                     }
-                (clone :: clones, nextVarGen)
-            | None -> (clones, currentVarGen)
-        ) ([], startVarGen)
-
-    let cloneNameForTarget =
-        targetRequests
-        |> List.map (fun (request, cloneName) -> (request.Closure.TargetName, cloneName))
-        |> Map.ofList
+                    (clone :: clones, nextVarGen)
+                | None -> Crash.crash $"Expected closure target shape for '{target.Name}'"
+            | None -> Crash.crash $"Higher-order specialization lost target shape '{target.Name}'")
+            ([], freshVarGen allDefinitions main)
 
     let (helperClones, _) =
         usableRequests
         |> List.fold (fun (clones, currentVarGen) request ->
-            let helper = Map.find request.HelperName functionsByOriginalName
-            let helperParameter =
-                List.item request.HelperArgumentIndex helper.TypedParams
-            let target = Map.find request.Closure.TargetName functionsByOriginalName
-            match targetShape target request.Closure.Captures with
-            | Some(_, captureTypes) ->
-                let (captureParameters, nextVarGen) = makeCaptureParameters captureTypes currentVarGen
-                let cloneName = specializedHelperName request
-                let clone =
-                    {
-                        helper with
-                            Name = cloneName
-                            TypedParams =
-                                removeTypedParameter request.HelperArgumentIndex helper.TypedParams
-                                @ captureParameters
-                            Body =
-                                rewriteHelperBody
-                                    helper.Name
-                                    cloneName
-                                    (Map.find request.Closure.TargetName cloneNameForTarget)
-                                    helperParameter.Id
-                                    request.HelperArgumentIndex
-                                    captureParameters
-                                    helper.Body
+            let helper = requiredFunction request.HelperName definitions
+            let (rewrittenCallables, captureParameters, nextVarGen) =
+                request.KnownArguments
+                |> List.fold (fun (rewritten, allCaptures, varGen) argument ->
+                    let helperParameter =
+                        match List.tryItem argument.Index helper.TypedParams with
+                        | Some parameter -> parameter
+                        | None -> Crash.crash $"Lost helper parameter {argument.Index}"
+                    let target = requiredFunction argument.Callable.TargetName definitions
+                    let shape =
+                        match targetShape target argument.Callable with
+                        | Some value -> value
+                        | None -> Crash.crash $"Lost target shape '{target.Name}'"
+                    let (captures, next) = makeCaptureParameters shape.CaptureTypes varGen
+                    let targetName =
+                        match argument.Callable.Convention with
+                        | ClosureValue -> specializedTargetName argument.Callable.TargetName
+                        | StaticFunction -> argument.Callable.TargetName
+                    let rewrittenCallable = {
+                        TargetName = targetName
+                        Convention = argument.Callable.Convention
+                        CaptureParameters = captures
                     }
-                (clone :: clones, nextVarGen)
-            | None -> (clones, currentVarGen)
-        ) ([], varGenAfterTargets)
+                    (Map.add helperParameter.Id rewrittenCallable rewritten, allCaptures @ captures, next))
+                    (Map.empty, [], currentVarGen)
+            let indexes = request.KnownArguments |> List.map (fun argument -> argument.Index) |> Set.ofList
+            let cloneName = specializedHelperName request
+            let clone = {
+                helper with
+                    Name = cloneName
+                    TypedParams = removeIndexes indexes helper.TypedParams @ captureParameters
+                    Body =
+                        rewriteHelperBody
+                            helper.Name
+                            cloneName
+                            rewrittenCallables
+                            indexes
+                            captureParameters
+                            helper.Body
+            }
+            (clone :: clones, nextVarGen)) ([], varGenAfterTargets)
 
     let specializedNames =
-        usableRequests
-        |> List.map (fun request ->
-            let key = requestKey request
-            (key, specializedHelperName request))
-        |> Map.ofList
-
+        usableRequests |> List.map (fun request -> (requestKey request, specializedHelperName request)) |> Map.ofList
     let rewrittenFunctions =
-        functions
-        |> List.map (fun func ->
-            { func with Body = rewriteKnownCalls functionsByOriginalName specializedNames Map.empty func.Body })
+        functions |> List.map (fun func -> {
+            func with Body = rewriteKnownCalls definitions returnFacts specializedNames Map.empty func.Body })
+    let rewrittenMain = rewriteKnownCalls definitions returnFacts specializedNames Map.empty main
+    Program (List.rev targetClones @ rewrittenFunctions @ List.rev helperClones, rewrittenMain)
 
-    let rewrittenMain = rewriteKnownCalls functionsByOriginalName specializedNames Map.empty main
-    Program (
-        List.rev targetClones @ rewrittenFunctions @ List.rev helperClones,
-        rewrittenMain
-    )
+let specializeProgram program = specializeProgramWithExternalFunctions [] program

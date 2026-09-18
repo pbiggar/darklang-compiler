@@ -87,6 +87,22 @@ dynamic aggregates, and non-exact ranges remain excluded. Focused tests own
 caps, recursive signatures, float-bit identity, known indirect targets,
 construction ownership, fallback routing, and exclusions.
 
+## Higher-order specialization
+
+`passes/anf/ANF_HigherOrderSpecialization.fs` propagates statically known
+callable identities through local aliases, equal branch values and joins, and
+function returns. At a direct helper call, one clone specializes every eligible
+known functional argument together. Captured fields become ordinary parameters;
+static function references call their target directly without allocating a
+closure. The original helper remains available for dynamic call sites.
+
+Pre-reference-count external ANF candidates provide the same proof boundary
+across compilation units: any required helper and closure-target clones are
+emitted into the current unit while the prebuilt originals remain unchanged.
+Helpers larger than 256 nodes, targets larger than 32 nodes, unsupported uses
+of a functional parameter, and calls beyond the shared sixteen-pair budget are
+left on the generic closure path.
+
 ## Escape analysis and scalar replacement
 
 `passes/anf/ANF_EscapeAnalysis.fs` removes fixed-layout tuple and record

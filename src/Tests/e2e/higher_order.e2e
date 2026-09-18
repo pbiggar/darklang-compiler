@@ -119,3 +119,14 @@ let checkPositive (f: Int64 -> Bool) (n: Int64): Bool = f n let isPositive (x: I
 
 // FuncRef with mixed types (Bool param, Int64 return)
 let boolToNum (f: Bool -> Int64) (b: Bool): Int64 = f b let fromBool (b: Bool): Int64 = if b then 1L else 0L boolToNum fromBool true = 1L
+
+// Known higher-order values remain callable after flowing through aliases,
+// branches, and a function return.
+let applyFlow (f: Int64 -> Int64) (x: Int64): Int64 = f x let addTwo (x: Int64): Int64 = x + 2L let chooseFlow (flag: Bool): Int64 -> Int64 = let alias = addTwo in if flag then alias else addTwo let chosen = chooseFlow true in let alias = chosen in applyFlow alias 40L = 42L
+
+// Multiple known functional arguments can be consumed by one helper call.
+let combineKnown (f: Int64 -> Int64) (g: Int64 -> Int64) (x: Int64): Int64 = f x + g x let incKnown (x: Int64): Int64 = x + 1L let doubleKnown (x: Int64): Int64 = x * 2L combineKnown incKnown doubleKnown 10L = 31L
+
+// A partial application is a captured closure and remains valid when passed
+// through another alias before reaching a higher-order helper.
+let addPartial (a: Int64) (b: Int64): Int64 = a + b let applyPartial (f: Int64 -> Int64) (x: Int64): Int64 = f x let addTen = addPartial 10L in let aliasedAddTen = addTen in applyPartial aliasedAddTen 32L = 42L
