@@ -241,7 +241,7 @@ let rec liftLambdasInProgram
     let typeRegBase : TypeRegistry =
         topLevels
         |> List.choose (function
-            | CheckedAST.TypeDef (AST.RecordDef (name, typeParams, fields)) ->
+            | CheckedAST.TypeDef (_, AST.RecordDef (name, typeParams, fields)) ->
                 Some (name, { TypeParams = typeParams; Fields = firstDeclaredRecordFields fields })
             | _ -> None)
         |> Map.ofList
@@ -249,7 +249,7 @@ let rec liftLambdasInProgram
     let aliasReg : AliasRegistry =
         topLevels
         |> List.choose (function
-            | CheckedAST.TypeDef (AST.TypeAlias (name, typeParams, targetType)) -> Some (name, (typeParams, targetType))
+            | CheckedAST.TypeDef (_, AST.TypeAlias (name, typeParams, targetType)) -> Some (name, (typeParams, targetType))
             | _ -> None)
         |> Map.ofList
 
@@ -261,11 +261,11 @@ let rec liftLambdasInProgram
     let variantLookup : VariantLookup =
         let localTypeDefs =
             topLevels
-            |> List.choose (function | CheckedAST.TypeDef typeDef -> Some typeDef | _ -> None)
+            |> List.choose (function | CheckedAST.TypeDef (_, typeDef) -> Some typeDef | _ -> None)
         let collidingCaseNames = AST.collidingConstructorCaseNames localTypeDefs
         topLevels
         |> List.choose (function
-            | CheckedAST.TypeDef (AST.SumTypeDef (typeName, typeParams, variants)) ->
+            | CheckedAST.TypeDef (_, AST.SumTypeDef (typeName, typeParams, variants)) ->
                 Some (typeName, typeParams, variants)
             | _ -> None)
         |> List.fold (fun lookup (typeName, typeParams, variants) ->
@@ -453,8 +453,8 @@ let rec liftLambdasInProgram
                 |> Result.bind (fun (body, state') ->
                     let valueDef' = { valueDef with Body = body }
                     processTopLevels rest state' (CheckedAST.ValueDef valueDef' :: acc))
-            | CheckedAST.TypeDef t ->
-                processTopLevels rest state (CheckedAST.TypeDef t :: acc)
+            | CheckedAST.TypeDef (id, t) ->
+                processTopLevels rest state (CheckedAST.TypeDef (id, t) :: acc)
 
     processTopLevels topLevels initialState []
     |> Result.bind (fun (topLevels', state') ->
@@ -548,7 +548,7 @@ and replaceFuncRefsWithWrappers (wrapperMap: Map<string, string>) (topLevel: Che
     | CheckedAST.ValueDef valueDef ->
         let body = replaceInExpr wrapperMap (CheckedAST.valueDefBody valueDef)
         CheckedAST.ValueDef { valueDef with Body = body }
-    | CheckedAST.TypeDef t -> CheckedAST.TypeDef t
+    | CheckedAST.TypeDef (id, t) -> CheckedAST.TypeDef (id, t)
 
 /// Replace function references with wrapper references in an expression
 and replaceInExpr (wrapperMap: Map<string, string>) (expr: CheckedAST.Expr) : CheckedAST.Expr =

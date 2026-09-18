@@ -411,10 +411,20 @@ let buildStdlibSpecializations
                         | CheckedAST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)
                     |> List.distinctBy (fun funcDef -> funcDef.Name)
+                let checkedTypeDefs, symbols =
+                    typeDefs
+                    |> List.mapFold (fun symbols typeDef ->
+                        let name =
+                            match typeDef with
+                            | AST.RecordDef (name, _, _)
+                            | AST.SumTypeDef (name, _, _)
+                            | AST.TypeAlias (name, _, _) -> name
+                        let (id, symbols) = CheckedAST.internType name symbols
+                        (CheckedAST.TypeDef (id, typeDef), symbols)) symbols
                 let specializationProgram =
                     CheckedAST.Program (
                         symbols,
-                        (typeDefs |> List.map CheckedAST.TypeDef)
+                        checkedTypeDefs
                         @ (materializedFunctions |> List.map CheckedAST.FunctionDef)
                     )
                 prepareProgramForAnf

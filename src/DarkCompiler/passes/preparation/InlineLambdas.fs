@@ -202,7 +202,7 @@ let inlineLambdasInProgram (program: CheckedAST.Program) : CheckedAST.Program =
             | CheckedAST.ValueDef valueDef ->
                 let body = inlineLambdas (CheckedAST.valueDefBody valueDef) Map.empty
                 CheckedAST.ValueDef { valueDef with Body = body }
-            | CheckedAST.TypeDef t -> CheckedAST.TypeDef t)
+            | CheckedAST.TypeDef (id, t) -> CheckedAST.TypeDef (id, t))
     CheckedAST.Program (symbols, topLevels')
 
 // ============================================================================

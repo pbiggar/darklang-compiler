@@ -198,7 +198,7 @@ let testRecordAccessRejectsInvalidRecordArity () : TestResult =
             TypeParams = []
             Params = NonEmptyList.singleton ("box", TRecord ("ArityBoxTc", [TInt64; TBool]))
             ReturnType = TInt64
-            Body = RecordAccess (Var "box", "value")
+            Body = RecordAccess (Var "box", unresolvedRecordFieldReference "value")
             Recursion = None
         }
 

@@ -725,8 +725,8 @@ let replaceTypeAppsInProgramWithRegistry (specRegistry: SpecRegistry) (program: 
                 |> Result.bind (fun body ->
                     let valueDef' = { valueDef with Body = body }
                     loop rest (CheckedAST.ValueDef valueDef' :: acc))
-            | CheckedAST.TypeDef td ->
-                loop rest (CheckedAST.TypeDef td :: acc)
+            | CheckedAST.TypeDef (id, td) ->
+                loop rest (CheckedAST.TypeDef (id, td) :: acc)
 
     loop topLevels []
 

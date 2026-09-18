@@ -151,15 +151,15 @@ let rec internal buildEqHelperExpr
             let concreteFields =
                 match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                 | Ok subst ->
-                    fields |> List.map (fun (name, fieldType) -> (name, resolveType aliasReg (applyTypeArguments subst fieldType)))
+                    fields |> List.mapi (fun index (name, fieldType) -> (index, name, resolveType aliasReg (applyTypeArguments subst fieldType)))
                 | Error _ ->
-                    fields |> List.map (fun (name, fieldType) -> (name, resolveType aliasReg fieldType))
+                    fields |> List.mapi (fun index (name, fieldType) -> (index, name, resolveType aliasReg fieldType))
 
             let leftRecordVar = "__dark_eq_helper_record_left"
             let rightRecordVar = "__dark_eq_helper_record_right"
             let fieldComparisons =
                 concreteFields
-                |> List.map (fun (fieldName, fieldType) ->
+                |> List.map (fun (fieldIndex, fieldName, fieldType) ->
                     buildEqHelperExpr
                         aliasReg
                         typeReg
@@ -167,8 +167,8 @@ let rec internal buildEqHelperExpr
                         indexedSumTypeReg
                         UseHelperCall
                         fieldType
-                        (RecordAccess (Var leftRecordVar, fieldName))
-                        (RecordAccess (Var rightRecordVar, fieldName)))
+                        (RecordAccess (Var leftRecordVar, resolvedRecordFieldReference recordTypeName fieldName fieldIndex))
+                        (RecordAccess (Var rightRecordVar, resolvedRecordFieldReference recordTypeName fieldName fieldIndex)))
             Let (LPVariable leftRecordVar, leftExpr, Let (LPVariable rightRecordVar, rightExpr, chainAndExpr fieldComparisons))
 
     | ExpandCurrent, TSum (sumTypeName, sumTypeArgs) ->

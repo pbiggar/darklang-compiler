@@ -223,7 +223,7 @@ let private materializeProgramValues
                     |> Set.ofList
                 Some (CheckedAST.FunctionDef { funcDef with Body = wrap parameters funcDef.Body })
             | CheckedAST.Expression expr -> Some (CheckedAST.Expression (wrap Set.empty expr))
-            | CheckedAST.TypeDef typeDef -> Some (CheckedAST.TypeDef typeDef))
+            | CheckedAST.TypeDef (id, typeDef) -> Some (CheckedAST.TypeDef (id, typeDef)))
     CheckedAST.Program (symbols, materialized)
 
 let internal prepareProgramForAnf
@@ -329,7 +329,7 @@ let internal splitDeclarations
         Error $"Declaration-only program must not contain entry expressions; found {expressions.Length}"
     else
         Ok (
-            topLevels |> List.choose (function CheckedAST.TypeDef definition -> Some definition | _ -> None),
+            topLevels |> List.choose (function CheckedAST.TypeDef (_, definition) -> Some definition | _ -> None),
             topLevels |> List.choose (function CheckedAST.FunctionDef definition -> Some definition | _ -> None)
         )
 

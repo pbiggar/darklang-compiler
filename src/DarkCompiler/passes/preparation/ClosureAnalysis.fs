@@ -427,7 +427,7 @@ let rec simpleInferType
             match Map.tryFind typeName typeReg with
             | Some recordInfo ->
                 recordInfo.Fields
-                |> List.tryFind (fun (name, _) -> name = fieldName)
+                |> List.tryItem (AST.fieldIndex fieldName)
                 |> Option.map (fun (_, fieldTypePattern) ->
                     match buildDeclaredRecordFieldSubst recordInfo typeArgs with
                     | Some subst -> applySubstToType subst fieldTypePattern

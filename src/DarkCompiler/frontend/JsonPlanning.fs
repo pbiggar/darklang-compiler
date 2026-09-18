@@ -548,15 +548,23 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                 let rec loop remaining index currentWriter currentState =
                     match remaining with
                     | [] -> Ok (currentWriter, currentState)
-                    | (fieldName, fieldType) :: rest ->
+                    | (fieldIndex, fieldName, fieldType) :: rest ->
                         let concrete = applySubstitution subst fieldType |> resolveJsonType env
                         let separated = if index = 0 then currentWriter else writerSeparator currentWriter
                         let named = writerFieldName separated (StringLiteral fieldName)
-                        serializeCall env concrete named (RecordAccess (value, fieldName)) currentState
+                        let (fieldId, symbols) =
+                            CheckedAST.internField typeName fieldName fieldIndex currentState.Symbols
+                        serializeCall
+                            env
+                            concrete
+                            named
+                            (RecordAccess (value, fieldId))
+                            { currentState with Symbols = symbols }
                         |> Result.bind (fun (encoded, nextState) ->
                             loop rest (index + 1) encoded nextState)
                 recordInfo.Fields
-                |> List.sortBy fst
+                |> List.mapi (fun index (name, typ) -> (index, name, typ))
+                |> List.sortBy (fun (_, name, _) -> name)
                 |> fun fields -> loop fields 0 (writerBeginObject writer) state
                 |> Result.map (fun (encoded, nextState) ->
                     (writerEndObject encoded, nextState)))

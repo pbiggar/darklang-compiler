@@ -71,6 +71,23 @@ type RecordReference = {
 let unresolvedRecordReference (sourceTypeName: string) (typeArgs: Type list) : RecordReference =
     { SourceTypeName = sourceTypeName; ResolvedTypeName = sourceTypeName; TypeArgs = typeArgs }
 
+/// A field spelling before or after the checker proves its declaring record.
+/// The resolved owner is semantic evidence required to assign a declaration-
+/// scoped FieldId at the checked-program boundary.
+type RecordFieldReference = {
+    SourceFieldName: string
+    ResolvedTypeName: string option
+    ResolvedFieldIndex: int option
+}
+
+let unresolvedRecordFieldReference fieldName : RecordFieldReference =
+    { SourceFieldName = fieldName; ResolvedTypeName = None; ResolvedFieldIndex = None }
+
+let resolvedRecordFieldReference typeName fieldName fieldIndex : RecordFieldReference =
+    { SourceFieldName = fieldName
+      ResolvedTypeName = Some typeName
+      ResolvedFieldIndex = Some fieldIndex }
+
 /// A source constructor reference before or after nominal resolution.
 /// `None` is the genuinely unqualified form; no empty-name sentinel is used.
 type ConstructorReference =
@@ -237,6 +254,18 @@ type BinderStructure =
 type BindingId = private BindingId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
+type FunctionId = private FunctionId of int
+
+[<Struct; StructuralEquality; StructuralComparison>]
+type TypeId = private TypeId of int
+
+[<Struct; StructuralEquality; StructuralComparison>]
+type ConstructorId = private ConstructorId of int
+
+[<Struct; StructuralEquality; StructuralComparison>]
+type FieldId = private FieldId of identity:int * index:int
+
+[<Struct; StructuralEquality; StructuralComparison>]
 type ScopeBoundaryId = private ScopeBoundaryId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
@@ -246,6 +275,11 @@ type RecursiveGroupId = private RecursiveGroupId of int
 type RecursiveMemberId = private RecursiveMemberId of int
 
 let bindingId ordinal = BindingId ordinal
+let functionId ordinal = FunctionId ordinal
+let typeId ordinal = TypeId ordinal
+let constructorId ordinal = ConstructorId ordinal
+let fieldId identity index = FieldId (identity, index)
+let fieldIndex (FieldId (_, index)) = index
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
 // Group IDs share one compact namespace: declaration groups are even and
 // singleton local-recursion groups are odd.
@@ -434,7 +468,7 @@ and Expr =
     | DictLiteral of keyType:Type * valueType:Type * entries:(Expr * Expr) list
     | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
     | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
-    | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
+    | RecordAccess of record:Expr * field:RecordFieldReference        // p.x, p.y
     | Constructor of reference:ConstructorReference * variantName:string * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]

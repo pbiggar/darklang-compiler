@@ -557,7 +557,7 @@ let rec private formatExpr (expr: Expr) : string =
                 $"({recordBaseText})"
             | _ ->
                 parenthesizeIfNeeded recordExpr recordBaseText
-        $"{recordText}.{formatIdentifierSegment fieldName}"
+        $"{recordText}.{formatIdentifierSegment fieldName.SourceFieldName}"
     | Constructor (constructorReference, variantName, fields) ->
         let fullName =
             let formattedVariantName = formatIdentifierSegment variantName

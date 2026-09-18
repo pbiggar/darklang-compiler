@@ -912,8 +912,9 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 // Look up field index in the specific record type
                 match Map.tryFind typeName typeReg with
                 | Some recordInfo ->
-                    match List.tryFindIndex (fun (name, _) -> name = fieldName) recordInfo.Fields with
-                    | Some index ->
+                    match List.tryItem (AST.fieldIndex fieldName) recordInfo.Fields with
+                    | Some _ ->
+                        let index = AST.fieldIndex fieldName
                         toANFBoundAtomCore sumTypeNames inertScopes recordExpr varGen env typeReg variantLookup funcReg moduleRegistry
                         |> Result.map (fun (recordSetup, recordAtom, varGen1) ->
                             let (resultVar, varGen2) = ANF.freshVar varGen1

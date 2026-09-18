@@ -187,7 +187,7 @@ let splitDeclarations (program: CheckedAST.Program) : Result<AST.TypeDef list * 
     let expressions = topLevels |> List.filter (function CheckedAST.Expression _ -> true | _ -> false)
     if List.isEmpty expressions then
         Ok (
-            topLevels |> List.choose (function CheckedAST.TypeDef definition -> Some definition | _ -> None),
+            topLevels |> List.choose (function CheckedAST.TypeDef (_, definition) -> Some definition | _ -> None),
             topLevels |> List.choose (function CheckedAST.FunctionDef definition -> Some definition | _ -> None)
         )
     else
@@ -197,7 +197,7 @@ let splitTopLevels (program: CheckedAST.Program) : Result<AST.TypeDef list * Che
     let (CheckedAST.Program (_, topLevels)) = program
     let typeDefs =
         topLevels
-        |> List.choose (function CheckedAST.TypeDef t -> Some t | _ -> None)
+        |> List.choose (function CheckedAST.TypeDef (_, t) -> Some t | _ -> None)
     let functions =
         topLevels
         |> List.choose (function CheckedAST.FunctionDef f -> Some f | _ -> None)

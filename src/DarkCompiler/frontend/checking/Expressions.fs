@@ -1228,8 +1228,8 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             | other ->
                 Error (GenericError $"Cannot use record update syntax on non-record type {typeToString other}"))
 
-    | RecordAccess (recordExpr, fieldName) ->
-        let fieldName = if fieldName = "___" then "" else fieldName
+    | RecordAccess (recordExpr, fieldReference) ->
+        let fieldName = if fieldReference.SourceFieldName = "___" then "" else fieldReference.SourceFieldName
         if fieldName = "" then
             Error (GenericError "Field name is empty")
         else
@@ -1246,6 +1246,11 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     | None ->
                         Error (GenericError $"Tried to access field '{fieldName}' but record type {typeName} has no such field")
                     | Some fieldTypePattern ->
+                        let fieldIndex =
+                            recordInfo.Fields
+                            |> List.tryFindIndex (fun (name, _) -> name = fieldName)
+                            |> Option.defaultWith (fun () ->
+                                Crash.crash $"Validated record field '{fieldName}' has no declaration slot")
                         match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                         | Error msg ->
                             Error (GenericError msg)
@@ -1254,7 +1259,11 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                             match expectedType with
                             | Some expected when not (typesCompatibleWithAliases aliasReg expected fieldType) ->
                                 Error (TypeMismatch (expected, fieldType, $"field access .{fieldName}"))
-                            | _ -> Ok (fieldType, RecordAccess (recordExpr', fieldName))
+                            | _ ->
+                                Ok (
+                                    fieldType,
+                                    RecordAccess (recordExpr', resolvedRecordFieldReference typeName fieldName fieldIndex)
+                                )
             | other ->
                 Error (GenericError $"Attempting to access field '{fieldName}' on non-record type {typeToString other}"))
 

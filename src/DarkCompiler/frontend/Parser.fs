@@ -2650,7 +2650,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 parsePostfix accessExpr rest
         | TDot :: TIdent fieldName :: rest ->
             // Record field access
-            let accessExpr = RecordAccess (expr, fieldName)
+            let accessExpr = RecordAccess (expr, unresolvedRecordFieldReference fieldName)
             parsePostfix accessExpr rest
         | TAdjacentLParen :: rest ->
             let rec hasTopLevelComma depth remaining =

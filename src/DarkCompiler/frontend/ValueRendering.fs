@@ -350,13 +350,23 @@ and private renderBody
                 if List.isEmpty recordInfo.TypeParams then fallbackTypeParams
                 else recordInfo.TypeParams
             let subst = typeSubstitution typeParams typeArgs
-            let sortedFields = recordInfo.Fields |> List.sortBy fst
+            let sortedFields =
+                recordInfo.Fields
+                |> List.mapi (fun index (name, typ) -> (index, name, typ))
+                |> List.sortBy (fun (_, name, _) -> name)
             let rec renderFields remaining currentState acc =
                 match remaining with
                 | [] -> (List.rev acc, currentState)
-                | (fieldName, fieldType) :: rest ->
+                | (fieldIndex, fieldName, fieldType) :: rest ->
                     let concreteType = applySubstitution subst fieldType
-                    let (rendered, nextState) = renderCall env concreteType (RecordAccess (value, fieldName)) currentState
+                    let (fieldId, symbols) =
+                        CheckedAST.internField typeName fieldName fieldIndex currentState.Symbols
+                    let (rendered, nextState) =
+                        renderCall
+                            env
+                            concreteType
+                            (RecordAccess (value, fieldId))
+                            { currentState with Symbols = symbols }
                     renderFields rest nextState ((fieldName, rendered) :: acc)
             let (renderedFields, nextState) = renderFields sortedFields state []
             let shortParts =

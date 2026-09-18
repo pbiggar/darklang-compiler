@@ -102,14 +102,14 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             | AST.TRecord (typeName, typeArgs) ->
                 match Map.tryFind typeName typeReg with
                 | Some recordInfo ->
-                    match List.tryFind (fun (name, _) -> name = fieldName) recordInfo.Fields with
+                    match List.tryItem (AST.fieldIndex fieldName) recordInfo.Fields with
                     | Some (_, fieldTypePattern) ->
                         let fieldType =
                             match buildDeclaredRecordFieldSubst recordInfo typeArgs with
                             | Some subst -> applySubstToType subst fieldTypePattern
                             | None -> fieldTypePattern
                         Ok fieldType
-                    | None -> Error $"Record type {typeName} has no field '{fieldName}'"
+                    | None -> Error $"Record type {typeName} has no field at the resolved slot"
                 | None -> Error $"Unknown record type: {typeName}"
             | _ -> Error $"Cannot access field on non-record type")
     | CheckedAST.TupleLiteral elems ->
