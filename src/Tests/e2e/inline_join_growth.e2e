@@ -54,3 +54,10 @@ let lambdaEmptyListMatch (xs: List<String>) : List<String> =
   g xs
 lambdaEmptyListMatch ["a", "b"] = ["a"]
 lambdaEmptyListMatch [] = []
+
+// An empty list as the seed of a generic call: the type variable takes the
+// list and the element is fixed by the other arguments.
+let foldFromEmpty (ids: List<Int64>): List<Int64> =
+  Stdlib.List.fold ids [] (fun acc id -> Stdlib.List.append acc [id])
+foldFromEmpty [1L, 2L] = [1L, 2L]
+foldFromEmpty [] = []

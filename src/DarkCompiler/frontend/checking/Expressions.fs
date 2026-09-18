@@ -1441,8 +1441,12 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             // Empty list: use expected list type or keep a type variable
             match expectedType |> Option.map (resolveType aliasReg) with
             | Some (TList elemType) -> Ok (TList elemType, ListLiteral [])
+            // A bare type variable (a generic parameter not yet bound, as the seed
+            // of a fold) takes the list; the element stays open for the other
+            // arguments to fix. `Stdlib.List.fold xs [] (fun acc x -> [x])` was a
+            // mismatch reported as the enclosing function's return value.
+            | Some (TVar _) | None -> Ok (TList (TVar "t"), ListLiteral [])
             | Some other -> Error (TypeMismatch (other, TList (TVar "t"), "empty list"))
-            | None -> Ok (TList (TVar "t"), ListLiteral [])
         | first :: rest ->
             // Use expected list element type for the first element when available, so
             // lambda/list literals in expected contexts reconcile type variables consistently.
