@@ -166,6 +166,16 @@ let __uniqueByHelper<'a, 'b> (remaining: List<a>) (fn: a -> b) (uniqueValues: Li
         if Stdlib.List.member<b> seen key then Stdlib.List.__uniqueByHelper<a, b> tail fn uniqueValues seen
         else Stdlib.List.__uniqueByHelper<a, b> tail fn (Stdlib.List.push<a> uniqueValues value) (Stdlib.List.push<b> seen key)
 
+let dedup<'a> (list: List<a>) : List<a> =
+    Stdlib.List.reverse (Stdlib.List.__dedup list [] [])
+
+let __dedup<'a> (remaining: List<a>) (seen: List<a>) (result: List<a>) : List<a> =
+    match remaining with
+    | [] -> result
+    | head :: tail ->
+        if Stdlib.List.member seen head then Stdlib.List.__dedup tail seen result
+        else Stdlib.List.__dedup tail (Stdlib.List.push seen head) (Stdlib.List.push result head)
+
 // Fold left (reduce) over a list - O(n)
 let fold<'a, 'b> (list: List<a>) (init: b) (fn: b -> a -> b) : b =
     if Stdlib.List.__isEmpty<a> list then init

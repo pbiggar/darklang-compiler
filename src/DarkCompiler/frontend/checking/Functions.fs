@@ -182,8 +182,11 @@ let rec internal collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         elements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
     | TupleAccess (tuple, _) ->
         collectTypeAppSpecs tuple
-    | DictLiteral (_, entries) ->
-        entries |> List.map (snd >> collectTypeAppSpecs) |> List.fold Set.union Set.empty
+    | DictLiteral (_, _, entries) ->
+        entries
+        |> List.collect (fun (key, value) -> [key; value])
+        |> List.map collectTypeAppSpecs
+        |> List.fold Set.union Set.empty
     | RecordLiteral (_, fields) ->
         fields |> List.map (snd >> collectTypeAppSpecs) |> List.fold Set.union Set.empty
     | RecordUpdate (record, updates) ->

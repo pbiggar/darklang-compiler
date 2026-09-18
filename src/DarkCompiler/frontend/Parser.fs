@@ -128,7 +128,7 @@ let private materializeIndentedListSeparators (input: string) : string =
             // Elements may align with or to the left of the formatter's
             // two-column indent. Deeper indentation continues the current
             // application. An operator cannot finish the preceding element.
-            && indent <= current.OpeningColumn + 2
+            && indent <= current.OpeningColumn + 3
             && next <> ']'
             && (System.Char.IsLetterOrDigit previous
                 || previous = '_'
@@ -2537,27 +2537,34 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
 
-    and parseDictLiteralFields (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
+    and parseDictLiteralFields (toks: Token list) (acc: (Expr * Expr) list) : Result<Expr * Token list, string> =
         let publicKey name = if name = "___" then "" else name
+        let finishEntry key value remaining =
+            let entry = (key, value)
+            match remaining with
+            | (TComma | TSemicolon) :: rest' ->
+                parseDictLiteralFields rest' (entry :: acc)
+            | TIdent _ :: TEquals :: _
+            | TStringLit _ :: TColon :: _ ->
+                parseDictLiteralFields remaining (entry :: acc)
+            | TRBrace :: rest' ->
+                Ok (DictLiteral (TVar "dictKey", TVar "dictValue", List.rev (entry :: acc)), rest')
+            | _ -> Error "Expected ',', ';', or '}' after dictionary entry value"
         match toks with
-        | TRBrace :: rest -> Ok (DictLiteral (TVar "dictValue", List.rev acc), rest)
+        | TRBrace :: rest -> Ok (DictLiteral (TVar "dictKey", TVar "dictValue", List.rev acc), rest)
         // Canonical source uses identifier keys with `=`, while imported
         // interpreter tests retain string keys with `:`.
-        | TIdent keyName :: TEquals :: rest
-        | TStringLit keyName :: TColon :: rest ->
+        | TIdent keyName :: TEquals :: rest ->
             parseExpr rest
-            |> Result.bind (fun (value, remaining) ->
-                let entry = (publicKey keyName, value)
-                match remaining with
-                | (TComma | TSemicolon) :: rest' ->
-                    parseDictLiteralFields rest' (entry :: acc)
-                | TIdent _ :: TEquals :: _ ->
-                    parseDictLiteralFields remaining (entry :: acc)
-                | TStringLit _ :: TColon :: _ ->
-                    parseDictLiteralFields remaining (entry :: acc)
-                | TRBrace :: rest' -> Ok (DictLiteral (TVar "dictValue", List.rev (entry :: acc)), rest')
-                | _ -> Error "Expected ',' or '}' after dictionary entry value")
-        | _ -> Error "Expected dictionary key in Dict literal"
+            |> Result.bind (fun (value, remaining) -> finishEntry (StringLiteral (publicKey keyName)) value remaining)
+        | _ ->
+            parseExpr toks
+            |> Result.bind (fun (key, afterKey) ->
+                match afterKey with
+                | TColon :: afterColon ->
+                    parseExpr afterColon
+                    |> Result.bind (fun (value, remaining) -> finishEntry key value remaining)
+                | _ -> Error "Expected ':' after dictionary key")
 
     and parseRecordUpdateFields (toks: Token list) (acc: (string * Expr) list) : Result<(string * Expr) list * Token list, string> =
         // Parse record update fields: field = expr, field = expr, ... }
@@ -2828,8 +2835,12 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     | TupleLiteral elems ->
         elems |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | TupleAccess (tupleExpr, _) -> validateExpr tupleExpr
-    | DictLiteral (_, entries) ->
-        entries |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
+    | DictLiteral (_, _, entries) ->
+        entries
+        |> List.fold (fun acc (key, value) ->
+            acc
+            |> Result.bind (fun () -> validateExpr key)
+            |> Result.bind (fun () -> validateExpr value)) (Ok ())
     | RecordLiteral (_, fields) ->
         fields |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | RecordUpdate (recordExpr, updates) ->
@@ -2902,25 +2913,6 @@ let private validateNoInternalIdentifiers (Program items) : Result<Program, stri
     items
     |> List.fold (fun acc item -> Result.bind (fun () -> validateTopLevel item) acc) (Ok ())
     |> Result.map (fun () -> Program items)
-
-let private validatePublicDictTypeArity (tokens: Token list) : Result<unit, string> =
-    let rec containsTopLevelComma depth remaining =
-        match remaining with
-        | [] -> false
-        | TLt :: rest -> containsTopLevelComma (depth + 1) rest
-        | TGt :: _ when depth = 1 -> false
-        | TGt :: rest -> containsTopLevelComma (depth - 1) rest
-        | TDoubleRightAngle :: _ when depth <= 2 -> false
-        | TDoubleRightAngle :: rest -> containsTopLevelComma (depth - 2) rest
-        | TComma :: _ when depth = 1 -> true
-        | _ :: rest -> containsTopLevelComma depth rest
-    let rec validate remaining =
-        match remaining with
-        | [] -> Ok ()
-        | TIdent "Dict" :: TLt :: rest when containsTopLevelComma 1 rest ->
-            Error "Dict expects exactly one type argument"
-        | _ :: rest -> validate rest
-    validate tokens
 
 /// Parse a string directly to AST
 type private TopLevelFunctionLayout =
@@ -3143,9 +3135,7 @@ let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.
         |> insertTopLevelValueLayoutSeparators
         |> preserveIndentedMatchBoundaries
     lex sourceBody
-    |> Result.bind (fun tokens ->
-        if allowInternal then parse tokens
-        else validatePublicDictTypeArity tokens |> Result.bind (fun () -> parse tokens))
+    |> Result.bind parse
     |> Result.map (NameSyntax.wrapModules sourceModules)
 
 /// Cross an already-parsed source tree to the compiler-AST boundary.

@@ -35,7 +35,7 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     | AST.TypeApp (_, _, args) -> args |> exprArgsToList |> List.exists (varOccursInExpr name)
     | AST.TupleLiteral elements -> List.exists (varOccursInExpr name) elements
     | AST.TupleAccess (tuple, _) -> varOccursInExpr name tuple
-    | AST.DictLiteral (_, entries) -> List.exists (fun (_, e) -> varOccursInExpr name e) entries
+    | AST.DictLiteral (_, _, entries) -> List.exists (fun (key, value) -> varOccursInExpr name key || varOccursInExpr name value) entries
     | AST.RecordLiteral (_, fields) -> List.exists (fun (_, e) -> varOccursInExpr name e) fields
     | AST.RecordUpdate (record, updates) ->
         varOccursInExpr name record || List.exists (fun (_, e) -> varOccursInExpr name e) updates
@@ -116,8 +116,8 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         AST.TupleLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (inlineLambdas tuple lambdaEnv, index)
-    | AST.DictLiteral (valueType, entries) ->
-        AST.DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, inlineLambdas value lambdaEnv)))
+    | AST.DictLiteral (keyType, valueType, entries) ->
+        AST.DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (inlineLambdas key lambdaEnv, inlineLambdas value lambdaEnv)))
     | AST.RecordLiteral (typeName, fields) ->
         AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) fields)
     | AST.RecordUpdate (record, updates) ->

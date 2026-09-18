@@ -13,6 +13,15 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
     // The resolution boundary has already attached the canonical callable
     // identity. Type checking only validates that identity's signature.
     let args = NonEmptyList.toList args
+    let unavailableTypeVars =
+        let fromEnv =
+            env
+            |> Map.values
+            |> Seq.fold (fun names typ -> collectTypeVarsInType typ names) []
+        expectedType
+        |> Option.map (fun typ -> collectTypeVarsInType typ fromEnv)
+        |> Option.defaultValue fromEnv
+        |> Set.ofList
     if isBuiltinUnwrapName funcName then
         match args with
         | [argExpr] ->
@@ -73,7 +82,8 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
         match tryLookupResolved resolvedFuncName genericFuncReg.Functions with
         | Some (origTypeParams, _) ->
             // Freshen type params to avoid name clashes with caller's scope
-            let (freshTypeParams, renaming) = freshenTypeParams origTypeParams
+            let (freshTypeParams, renaming) =
+                freshenTypeParamsAvoiding unavailableTypeVars origTypeParams
             let paramTypes = origParamTypes |> List.map (applyTypeVarRenaming renaming)
             let returnType = applyTypeVarRenaming renaming origReturnType
             let typeParams = freshTypeParams
@@ -183,6 +193,13 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                             indexedSumTypeReg
                             resolvedFuncName
                             inferredTypeArgs
+                        |> Result.bind (fun () ->
+                            validateDictKeyCall
+                                aliasReg
+                                typeReg
+                                indexedSumTypeReg
+                                resolvedFuncName
+                                inferredTypeArgs)
                         |> Result.bind (fun () ->
                             buildSubstitution typeParams inferredTypeArgs
                             |> Result.mapError GenericError)
@@ -319,7 +336,8 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
             | Some (moduleFunc, resolvedFuncName) ->
                 (
             // Freshen type params to avoid name clashes with caller's scope
-            let (freshTypeParams, renaming) = freshenTypeParams moduleFunc.TypeParams
+            let (freshTypeParams, renaming) =
+                freshenTypeParamsAvoiding unavailableTypeVars moduleFunc.TypeParams
             let paramTypes = moduleFunc.ParamTypes |> List.map (applyTypeVarRenaming renaming)
             let returnType = applyTypeVarRenaming renaming moduleFunc.ReturnType
             let typeParams = freshTypeParams

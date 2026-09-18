@@ -94,7 +94,7 @@ let rec private containsIndirectApply (expr: AST.Expr) : bool =
     | AST.TupleLiteral elements
     | AST.ListLiteral elements -> anyExpr elements
     | AST.TupleAccess (tuple, _) -> containsIndirectApply tuple
-    | AST.DictLiteral (_, entries)
+    | AST.DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> anyExpr
     | AST.RecordLiteral (_, entries) -> entries |> List.map snd |> anyExpr
     | AST.RecordUpdate (record, updates) ->
         containsIndirectApply record || (updates |> List.map snd |> anyExpr)
@@ -484,7 +484,7 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
         | AST.UnaryOp (_, value) | AST.TupleAccess (value, _) | AST.RecordAccess (value, _) ->
             collect bound value
         | AST.TupleLiteral elements | AST.ListLiteral elements -> collectChildren elements
-        | AST.DictLiteral (_, entries) -> entries |> List.map snd |> collectChildren
+        | AST.DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> collectChildren
         | AST.RecordLiteral (_, fields) -> fields |> List.map snd |> collectChildren
         | AST.RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd))
         | AST.Constructor (_, _, payload) -> payload |> Option.map (collect bound) |> Option.defaultValue []
@@ -567,8 +567,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
         | AST.UnaryOp (op, value) -> AST.UnaryOp (op, replace bound value)
         | AST.TupleLiteral elements -> AST.TupleLiteral (elements |> List.map (replace bound))
         | AST.TupleAccess (value, index) -> AST.TupleAccess (replace bound value, index)
-        | AST.DictLiteral (valueType, entries) ->
-            AST.DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, replace bound value)))
+        | AST.DictLiteral (keyType, valueType, entries) ->
+            AST.DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (replace bound key, replace bound value)))
         | AST.RecordLiteral (typeName, fields) ->
             AST.RecordLiteral (typeName, fields |> List.map (fun (name, value) -> (name, replace bound value)))
         | AST.RecordUpdate (record, fields) ->

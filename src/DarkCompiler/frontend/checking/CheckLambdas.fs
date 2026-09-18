@@ -129,7 +129,8 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
             |> collect expected elseBranch
         | TypeApp (_, _, arguments) -> collectChildren (NonEmptyList.toList arguments) constraints
         | TupleLiteral elements | ListLiteral elements -> collectChildren elements constraints
-        | DictLiteral (_, entries) -> collectChildren (entries |> List.map snd) constraints
+        | DictLiteral (_, _, entries) ->
+            collectChildren (entries |> List.collect (fun (key, value) -> [key; value])) constraints
         | RecordLiteral (_, fields) -> collectChildren (fields |> List.map snd) constraints
         | RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd)) constraints
         | Constructor (_, _, payload) -> payload |> Option.map (fun value -> collect None value constraints) |> Option.defaultValue constraints

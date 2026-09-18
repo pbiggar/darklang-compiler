@@ -75,7 +75,8 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
         | _ -> Error $"Expected Stream<...>, got {typeToString actual}"
     | TRecord (name, patternArgs) ->
         match actual with
-        | TRecord (n, actualArgs) when n = name ->
+        | TRecord (n, actualArgs)
+        | TSum (n, actualArgs) when n = name ->
             // Unify type arguments if both have them
             if List.length patternArgs <> List.length actualArgs then
                 Error $"Record type arity mismatch for {name}"
@@ -91,7 +92,8 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
         | _ -> Error $"Expected {name}, got {typeToString actual}"
     | TSum (name, patternArgs) ->
         match actual with
-        | TSum (actualName, actualArgs) when name = actualName ->
+        | TSum (actualName, actualArgs)
+        | TRecord (actualName, actualArgs) when name = actualName ->
             if List.length patternArgs <> List.length actualArgs then
                 Error $"Sum type arity mismatch for {name}"
             else

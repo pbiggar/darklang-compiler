@@ -68,7 +68,7 @@ let internal generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
 
 let internal generateDictRefCountDecHelper
     (helperLabel: string)
-    (releaseLeafDynamicKey: bool)
+    (keyReleasePlan: MemoryModel.RcReleasePlan)
     (releaseLeafDynamicValue: bool)
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
@@ -152,6 +152,10 @@ let internal generateDictRefCountDecHelper
     let skipCollisionGenericPayloadRelease = label "skip_collision_generic_payload_release"
     let collisionGenericPayloadLoop = label "collision_generic_payload_loop"
     let collisionGenericPayloadDone = label "collision_generic_payload_done"
+    let skipLeafKeyRelease = label "skip_leaf_key_release"
+    let skipCollisionKeyRelease = label "skip_collision_key_release"
+    let collisionKeyLoop = label "collision_key_loop"
+    let collisionKeyDone = label "collision_key_done"
     let skipLeafTupleStringListValueRelease = label "skip_leaf_tuple_string_list_value_release"
     let tupleStringListValueDone = label "tuple_string_list_value_done"
     let skipLeafSumStringValueRelease = label "skip_leaf_sum_string_value_release"
@@ -428,11 +432,40 @@ let internal generateDictRefCountDecHelper
             ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 112s)
         ]
 
-    let releaseLeafDynamicKeyInstrs =
-        if releaseLeafDynamicKey then
-            releaseLeafDynamicBufferFieldInstrs 0s skipLeafDynamicKeyRelease
-        else
-            []
+    let releaseLeafKeyInstrs =
+        match keyReleasePlan with
+        | MemoryModel.NoReleasePlan -> []
+        | _ ->
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipLeafKeyRelease)
+            ]
+            @ releasePlanFieldFrom ARM64Symbolic.X3 0 "leaf_key" keyReleasePlan
+            @ [ARM64Symbolic.Label skipLeafKeyRelease]
+
+    let releaseCollisionKeyInstrs =
+        match keyReleasePlan with
+        | MemoryModel.NoReleasePlan -> []
+        | _ ->
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipCollisionKeyRelease)
+                ARM64Symbolic.LDR (ARM64Symbolic.X5, ARM64Symbolic.X3, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
+                ARM64Symbolic.Label collisionKeyLoop
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X6, ARM64Symbolic.X5)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, collisionKeyDone)
+                ARM64Symbolic.LSL_imm (ARM64Symbolic.X11, ARM64Symbolic.X6, 4)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X3, ARM64Symbolic.X11)
+            ]
+            @ releasePlanFieldFrom ARM64Symbolic.X11 0 "collision_key" keyReleasePlan
+            @ [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X6, ARM64Symbolic.X6, 1us)
+                ARM64Symbolic.B_label collisionKeyLoop
+                ARM64Symbolic.Label collisionKeyDone
+                ARM64Symbolic.Label skipCollisionKeyRelease
+            ]
 
     let releaseLeafDynamicValueInstrs =
         if releaseLeafDynamicValue then
@@ -441,7 +474,7 @@ let internal generateDictRefCountDecHelper
             []
 
     let releaseCollisionDynamicPayloadInstrs =
-        if releaseLeafDynamicKey || releaseLeafDynamicValue then
+        if releaseLeafDynamicValue then
             [
                 ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
                 ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipCollisionPayloadRelease)
@@ -454,10 +487,6 @@ let internal generateDictRefCountDecHelper
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 8us)
                 ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X3, ARM64Symbolic.X11)
             ]
-            @ (if releaseLeafDynamicKey then
-                   releaseDynamicBufferFieldAtBaseInstrs ARM64Symbolic.X11 0s skipCollisionDynamicKeyRelease
-               else
-                   [])
             @ (if releaseLeafDynamicValue then
                    releaseDynamicBufferFieldAtBaseInstrs ARM64Symbolic.X11 8s skipCollisionDynamicValueRelease
                else
@@ -808,9 +837,10 @@ let internal generateDictRefCountDecHelper
         ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X6, 0s)
         ARM64Symbolic.CBNZ (ARM64Symbolic.X7, popOrRet)
     ]
-    @ releaseLeafDynamicKeyInstrs
+    @ releaseLeafKeyInstrs
     @ releaseLeafDynamicValueInstrs
     @ releaseCollisionDynamicPayloadInstrs
+    @ releaseCollisionKeyInstrs
     @ releaseCollisionManagedRootValueInstrs
     @ releaseCollisionGenericValueInstrs
     @ releaseLeafListValueInstrs
@@ -875,12 +905,6 @@ let internal generatePlannedDictRefCountDecHelper
 
     match releasePlan with
     | MemoryModel.RootRelease (_, MemoryModel.DictHeap, MemoryModel.DictPayloadRelease (keyRelease, valueRelease)) ->
-        let releaseLeafDynamicKey =
-            match keyRelease with
-            | MemoryModel.NoReleasePlan -> false
-            | MemoryModel.DynamicBufferRelease _ -> true
-            | other -> unsupported "key" other
-
         let (
             releaseLeafDynamicValue,
             releaseLeafListValue,
@@ -924,7 +948,7 @@ let internal generatePlannedDictRefCountDecHelper
 
         generateDictRefCountDecHelper
             helperLabel
-            releaseLeafDynamicKey
+            keyRelease
             releaseLeafDynamicValue
             releaseLeafListValue
             releaseLeafDictValueHelper

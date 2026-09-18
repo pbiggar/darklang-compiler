@@ -590,9 +590,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/cloud/db.dark"
                 "src/Tests/e2e/upstream/language/big.dark"
                 "src/Tests/e2e/upstream/language/builtin-introspection.dark"
-                "src/Tests/e2e/upstream/language/collections/edict.dark"
-                "src/Tests/e2e/upstream/language/custom-data/aliases.dark"
-                "src/Tests/e2e/upstream/language/custom-data/enums.dark"
                 "src/Tests/e2e/upstream/language/custom-data/values.dark"
                 "src/Tests/e2e/upstream/language/effect-ceiling.dark"
                 "src/Tests/e2e/upstream/language/error-type-names.dark"
@@ -610,11 +607,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/stachu/darklangParser.dark"
                 "src/Tests/e2e/upstream/stachu/parser.dark"
                 "src/Tests/e2e/upstream/stachu/tinyLang.dark"
-                "src/Tests/e2e/upstream/stdlib/bytes.dark"
-                "src/Tests/e2e/upstream/stdlib/char.dark"
                 "src/Tests/e2e/upstream/stdlib/cli-tui-text.dark"
                 "src/Tests/e2e/upstream/stdlib/crypto.dark"
-                "src/Tests/e2e/upstream/stdlib/dict.dark"
                 "src/Tests/e2e/upstream/stdlib/earg.dark"
                 "src/Tests/e2e/upstream/stdlib/eself.dark"
                 "src/Tests/e2e/upstream/stdlib/http.dark"
@@ -626,7 +620,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/stdlib/language-tools/semanticTokenization.dark"
                 "src/Tests/e2e/upstream/stdlib/pretty.dark"
                 "src/Tests/e2e/upstream/stdlib/prettyPrinter.dark"
-                "src/Tests/e2e/upstream/stdlib/result.dark"
                 "src/Tests/e2e/upstream/stdlib/sqlite.dark"
                 "src/Tests/e2e/upstream/stdlib/sse.dark"
                 "src/Tests/e2e/upstream/stdlib/stream.dark"
@@ -636,6 +629,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let disabledUpstreamLines : Map<string, Set<int>> =
         Map.ofList
             [
+                ("src/Tests/e2e/upstream/language/custom-data/aliases.dark", Set.ofList [ 39; 148; 149; 157; 159; 175; 177 ])
+                ("src/Tests/e2e/upstream/language/custom-data/enums.dark", Set.ofList [ 7; 11; 15; 17; 22; 23; 24; 26; 27; 28; 30; 45; 65; 67; 69; 74; 101; 104; 109 ])
                 ("src/Tests/e2e/upstream/language/apply/eapply.dark", Set.ofList [ 120 ])
                 ("src/Tests/e2e/upstream/language/basic/eand.dark", Set.ofList [ 5; 7; 11 ])
                 ("src/Tests/e2e/upstream/language/basic/elet.dark", Set.ofList [ 67 ])
@@ -646,15 +641,17 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 ("src/Tests/e2e/upstream/language/flow-control/eif.dark", Set.ofList [ 1; 12; 13; 14; 20 ])
                 ("src/Tests/e2e/upstream/language/nested-fns.dark", Set.ofList [ 55; 60 ])
                 ("src/Tests/e2e/upstream/stdlib/base64.dark", Set.ofList [ 7; 9; 10; 11; 12; 20; 21; 22; 23; 24; 25; 26; 27; 28; 29; 33; 34; 35; 36; 39; 40; 43; 44; 45; 46; 47 ])
+                ("src/Tests/e2e/upstream/stdlib/dict.dark", Set.ofList [ 21; 30; 32; 59; 61; 74; 144; 145; 146; 147; 159; 227; 237; 242; 245; 251; 273; 279; 282; 311; 315; 322; 327; 332; 334; 351; 353; 357; 387; 389; 391; 394; 396; 398; 400; 402; 404; 406; 408 ])
                 ("src/Tests/e2e/upstream/stdlib/float.dark", Set.ofList [ 45; 47; 51; 55; 58; 59; 64; 65; 71; 73; 76; 79; 81; 87; 89; 106; 107; 110; 111; 113; 124; 125; 127; 133; 134; 136; 160; 173; 176; 179; 203; 225; 227; 236; 238 ])
                 ("src/Tests/e2e/upstream/stdlib/html.dark", Set.ofList [ 42; 44; 66; 69; 72; 75; 83 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int32.dark", Set.ofList [ 126 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int64.dark", Set.ofList [ 45; 60; 90; 210; 368 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int8.dark", Set.ofList [ 47 ])
-                ("src/Tests/e2e/upstream/stdlib/list.dark", Set.ofList [ 22; 23; 24; 53; 61; 65; 71; 75; 81; 87; 92; 93; 101; 109; 129; 130; 136; 140; 161; 162; 174; 180; 201; 206; 216; 218; 223; 224; 250; 264; 269; 302; 314; 322; 323; 324; 325; 326; 346; 354 ])
+                ("src/Tests/e2e/upstream/stdlib/list.dark", Set.ofList [ 22; 23; 24; 53; 61; 65; 71; 75; 81; 87; 92; 93; 101; 109; 129; 130; 136; 140; 161; 162; 174; 180; 201; 206; 216; 218; 223; 224; 250; 264; 269; 302; 314; 346; 354 ])
                 ("src/Tests/e2e/upstream/stdlib/math.dark", Set.ofList [ 27; 30 ])
                 ("src/Tests/e2e/upstream/stdlib/nomodule.dark", Set.ofList [ 302; 304; 365; 366; 367; 368; 369; 370; 371; 372; 373; 374; 375; 377; 418; 419 ])
                 ("src/Tests/e2e/upstream/stdlib/option.dark", Set.ofList [ 44; 75; 119; 138; 148; 158; 170; 176; 190; 204; 211; 218; 234; 242; 255; 260 ])
+                ("src/Tests/e2e/upstream/stdlib/result.dark", Set.ofList [ 19; 24; 57; 67; 79; 85; 91; 97; 110; 117; 124; 139; 147; 155; 178; 185; 188; 277; 294 ])
             ]
 
     let normalizePath (path: string) : string =

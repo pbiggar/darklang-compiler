@@ -422,6 +422,11 @@ let buildStdlibSpecializations
                                 Set.union
                                     registries.SumTypeNames
                                     (LoweringPrimitives.sumTypeNamesFromVariantLookup externalVariantLookup)
+                            RcSumShapeReg =
+                                Map.fold
+                                    (fun acc name shape -> Map.add name shape acc)
+                                    registries.RcSumShapeReg
+                                    (TypeRegistries.rcSumShapeRegistryFromVariantLookup externalVariantLookup)
                     }
                     let localReturnTypes = extractReturnTypes localRegistries.FuncReg
                     let varGen = ANF.VarGen 0

@@ -370,8 +370,11 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         TupleLiteral (List.map (applySubstToExpr subst) elements)
     | TupleAccess (tuple, index) ->
         TupleAccess (applySubstToExpr subst tuple, index)
-    | DictLiteral (valueType, entries) ->
-        DictLiteral (applySubst subst valueType, entries |> List.map (fun (key, value) -> (key, applySubstToExpr subst value)))
+    | DictLiteral (keyType, valueType, entries) ->
+        DictLiteral (
+            applySubst subst keyType,
+            applySubst subst valueType,
+            entries |> List.map (fun (key, value) -> (applySubstToExpr subst key, applySubstToExpr subst value)))
     | RecordLiteral (reference, fields) ->
         RecordLiteral (
             { reference with TypeArgs = List.map (applySubst subst) reference.TypeArgs },

@@ -8,6 +8,11 @@ open LoweringPrimitives
 open SpecializationIdentity
 open TypeSubstitution
 
+let private hasPredefinedKeyIntrinsic (typ: AST.Type) : bool =
+    match typ with
+    | AST.TInt64 | AST.TBool | AST.TString | AST.TBlob -> true
+    | _ -> false
+
 let collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     let rec visit (specs: Set<SpecKey>) (current: AST.Expr) : Set<SpecKey> =
         match current with
@@ -38,8 +43,11 @@ let collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
             let hasTypeVars = List.exists containsTypeVar typeArgs
             if funcName = eqHelperDispatchMarker || funcName = "__compare" then
                 argSpecs
-            elif hasTypeVars && (funcName = "__hash" || funcName = "__key_eq") then
-                argSpecs
+            elif isGenericKeyIntrinsicName funcName then
+                match typeArgs with
+                | [keyType] when not hasTypeVars && hasPredefinedKeyIntrinsic keyType ->
+                    Set.add (funcName, typeArgs) argSpecs
+                | _ -> argSpecs
             elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
                  && exprArgsToList args = [AST.ListLiteral []]
                  && not hasTypeVars then
@@ -50,13 +58,13 @@ let collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         | AST.TupleLiteral elements
         | AST.ListLiteral elements ->
             visitMany specs elements
-        | AST.DictLiteral (valueType, entries) ->
+        | AST.DictLiteral (keyType, valueType, entries) ->
             let entrySpecs =
-                entries |> List.fold (fun acc (_, value) -> visit acc value) specs
+                entries |> List.fold (fun acc (key, value) -> visit (visit acc key) value) specs
             if List.isEmpty entries then entrySpecs
             else
                 Set.add
-                    ("Stdlib.Dict.__setOverwriting", [AST.TString; valueType])
+                    ("Stdlib.Dict.__setOverwriting", [keyType; valueType])
                     entrySpecs
         | AST.RecordLiteral (_, fields) ->
             fields |> List.fold (fun acc (_, value) -> visit acc value) specs
@@ -120,7 +128,7 @@ let rec collectCalledFunctions (expr: AST.Expr) : Set<string> =
         Set.add name (combine (exprArgsToList args))
     | AST.TupleLiteral elements
     | AST.ListLiteral elements -> combine elements
-    | AST.DictLiteral (_, entries) -> entries |> List.map snd |> combine
+    | AST.DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> combine
     | AST.RecordLiteral (_, fields) -> fields |> List.map snd |> combine
     | AST.RecordUpdate (record, fields) ->
         combine (record :: (fields |> List.map snd))
@@ -240,6 +248,18 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         elif isGenericKeyIntrinsicName funcName && hasTypeVars then
             let replacedArgs = args |> exprArgsToList |> List.map replaceTypeApps
             wrapWithIgnoredArgEvaluations replacedArgs (unresolvedKeyIntrinsicTypeArgErrorExpr funcName)
+        elif isGenericKeyIntrinsicName funcName then
+            let replacedArgs = args |> exprArgsToList |> List.map replaceTypeApps
+            match funcName, typeArgs with
+            | "__hash", [keyType] when hasPredefinedKeyIntrinsic keyType ->
+                AST.Call (specName funcName typeArgs, exprArgsFromList replacedArgs)
+            | "__hash", [_] ->
+                wrapWithIgnoredArgEvaluations replacedArgs (AST.Int64Literal 0L)
+            | "__key_eq", [keyType] when hasPredefinedKeyIntrinsic keyType ->
+                AST.Call (specName funcName typeArgs, exprArgsFromList replacedArgs)
+            | "__key_eq", [keyType] ->
+                materializeComparisonPlan keyType replacedArgs |> replaceTypeApps
+            | _ -> Crash.crash $"Invalid generic key intrinsic application: {funcName}"
         else
             let specializedName = specName funcName typeArgs
             AST.Call (specializedName, AST.NonEmptyList.map replaceTypeApps args)
@@ -247,17 +267,17 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.TupleLiteral (List.map replaceTypeApps elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (replaceTypeApps tuple, index)
-    | AST.DictLiteral (valueType, entries) ->
+    | AST.DictLiteral (keyType, valueType, entries) ->
         match entries with
         | [] -> expr
         | _ ->
-            let empty = AST.DictLiteral (valueType, [])
+            let empty = AST.DictLiteral (keyType, valueType, [])
             entries
             |> List.fold (fun dictExpr (key, value) ->
                 AST.TypeApp (
                     "Stdlib.Dict.__setOverwriting",
-                    [AST.TString; valueType],
-                    AST.NonEmptyList.fromList [dictExpr; AST.StringLiteral key; value]
+                    [keyType; valueType],
+                    AST.NonEmptyList.fromList [dictExpr; key; value]
                 )) empty
             |> replaceTypeApps
     | AST.RecordLiteral (typeName, fields) ->
@@ -408,6 +428,19 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                 mapResult replace (exprArgsToList args)
                 |> Result.map (fun args' ->
                     wrapWithIgnoredArgEvaluations args' (unresolvedKeyIntrinsicTypeArgErrorExpr funcName))
+            elif isGenericKeyIntrinsicName funcName then
+                mapResult replace (exprArgsToList args)
+                |> Result.bind (fun args' ->
+                    match funcName, typeArgs with
+                    | "__hash", [keyType] when hasPredefinedKeyIntrinsic keyType ->
+                        Ok (AST.Call (specName funcName typeArgs, exprArgsFromList args'))
+                    | "__hash", [_] ->
+                        Ok (wrapWithIgnoredArgEvaluations args' (AST.Int64Literal 0L))
+                    | "__key_eq", [keyType] when hasPredefinedKeyIntrinsic keyType ->
+                        Ok (AST.Call (specName funcName typeArgs, exprArgsFromList args'))
+                    | "__key_eq", [keyType] ->
+                        replace (materializeComparisonPlan keyType args')
+                    | _ -> Error $"Invalid generic key intrinsic application: {funcName}")
             elif (funcName = eqHelperDispatchMarker || funcName = "__compare") && hasTypeVars then
                 // The original generic template remains in the combined
                 // preamble alongside its callable concrete specializations.
@@ -441,7 +474,7 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
             |> Result.map AST.TupleLiteral
         | AST.TupleAccess (tuple, index) ->
             replace tuple |> Result.map (fun tuple' -> AST.TupleAccess (tuple', index))
-        | AST.DictLiteral (valueType, entries) ->
+        | AST.DictLiteral (keyType, valueType, entries) ->
             match entries with
             | [] -> Ok expr'
             | _ ->
@@ -450,9 +483,9 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                     |> List.fold (fun dictExpr (key, value) ->
                         AST.TypeApp (
                             "Stdlib.Dict.__setOverwriting",
-                            [AST.TString; valueType],
-                            AST.NonEmptyList.fromList [dictExpr; AST.StringLiteral key; value]
-                        )) (AST.DictLiteral (valueType, []))
+                            [keyType; valueType],
+                            AST.NonEmptyList.fromList [dictExpr; key; value]
+                        )) (AST.DictLiteral (keyType, valueType, []))
                 replace lowered
         | AST.RecordLiteral (typeName, fields) ->
             fields

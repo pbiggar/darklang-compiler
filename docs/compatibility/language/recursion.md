@@ -33,6 +33,7 @@ binding syntax corpus, and native completion cases remain in `tailcall.e2e`.
 | Eager value cycle | rejected because an ordinary RHS cannot see its binder | same for expressible local values | shared rejection; eager top-level values are not a compiler facility |
 | Alias-only type cycle | rejected deterministically | expansion could recurse late | shared rejection; declaration validation uses an explicit visiting state |
 | Nominal recursive ADT | accepted | accepted | shared; delayed nominal payload references are not alias edges |
+| Recursive generic ADT | accepts one nominal identity through construction and higher-order folds | accepts with expected-type-aware constructor freshening | shared; pinned `RBTree<'k, 'v>` construction and `List.fold` cases |
 | Type-changing self or mutual call | rejected; active group assumptions are monomorphic | could enter specialization late | shared rejection with an AOT-specific `Polymorphic recursion` diagnostic |
 | Completed generic function used at two types | accepts | accepts | shared; generalization occurs outside the active recursive group |
 | Deep tail recursion | eventually exhausts the execution stack at sufficient depth | native executable completes | intentional AOT completion divergence; compiler failure where the interpreter completes remains a parity defect |

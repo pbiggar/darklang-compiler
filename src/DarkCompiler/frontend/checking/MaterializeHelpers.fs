@@ -55,8 +55,8 @@ let rec private materializeHelperCallsInExpr
         TupleLiteral (List.map recurse elements)
     | TupleAccess (tupleExpr, index) ->
         TupleAccess (recurse tupleExpr, index)
-    | DictLiteral (valueType, entries) ->
-        DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, recurse value)))
+    | DictLiteral (keyType, valueType, entries) ->
+        DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
     | RecordLiteral (typeName, fields) ->
         RecordLiteral (typeName, fields |> List.map (fun (name, fieldExpr) -> (name, recurse fieldExpr)))
     | RecordUpdate (recordExpr, updates) ->

@@ -2,15 +2,16 @@
 // Historical compiler evidence started at 51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3.
 // Current compiler behavior was compared at rebased main 9cf0799fc485a2edc1eb19551826745705cf695e.
 
-// Public typing is String-keyed and exposes exactly one value type parameter.
+// The one-argument spelling remains String-keyed; the public API also infers
+// and preserves non-String key types.
 let dictIdentity<'a> (dict: Dict<a>): Dict<a> = dict; dictIdentity<Int64> (Dict { answer = 42L }) = Dict { answer = 42L }
-Stdlib.Dict.singleton 1L "one" = error="expected String"
+Stdlib.Dict.singleton 1L "one" = Dict { 1L: "one" }
 
 // Empty and non-empty literals are distinct from records. Keys support escaped
 // spelling, with ___ reserved by the public syntax for the empty key.
 Dict { answer = 42L } = Dict { answer = 42L }
 Dict { ``Content-Length`` = "0"; ___ = "empty" } = Dict { ``Content-Length`` = "0"; ___ = "empty" }
-Dict { duplicate = 1L; duplicate = 2L } = error="Cannot add two dictionary entries with the same key `duplicate`"
+Dict { duplicate = 1L; duplicate = 2L } = error="Cannot add two dictionary entries with the same key \"duplicate\""
 Dict { first = 1L; second = "two" } = error="dict values must have one type"
 
 // Construction, lookup, update, removal, and merge match the interpreter.
@@ -27,8 +28,8 @@ Stdlib.Dict.merge (Dict { a = 1L; shared = 2L }) (Dict { shared = 3L; z = 4L }) 
 Stdlib.Dict.setOverridingDuplicates (Dict { a = 1L }) "a" 2L = Dict { a = 2L }
 
 // Rejecting and overwriting paths are observably separate.
-Stdlib.Dict.set (Dict { a = 1L }) "a" 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `a`\n"
-let key = "d" ++ "ynamic" in Stdlib.Dict.set (Dict { dynamic = 1L }) key 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key `dynamic`\n"
+Stdlib.Dict.set (Dict { a = 1L }) "a" 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key\n"
+let key = "d" ++ "ynamic" in Stdlib.Dict.set (Dict { dynamic = 1L }) key 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key\n"
 Stdlib.Dict.fromList ([("a", 1L), ("b", 2L)]) = Some (Dict { a = 1L; b = 2L })
 Stdlib.Dict.fromList ([("a", 1L), ("a", 2L)]) = None
 Stdlib.Dict.fromListOverwritingDuplicates ([("a", 1L), ("b", 2L), ("a", 3L)]) = Dict { a = 3L; b = 2L }

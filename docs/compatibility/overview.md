@@ -25,17 +25,17 @@ python3 scripts/validate-darklang.py
 Public source uses space application (`f a b`, `f ()`), whitespace-separated
 curried parameters (`let f (a: A) (b: B) : C = ...`), unsuffixed `Int`
 literals, parenthesized tuple expressions, and `A -> B -> C` function types.
-Lists accept comma separators, sized integer suffixes and generic angle syntax
-are shared, and strings support interpolation and the full scalar-aware escape
-alphabet.
+Lists accept comma, semicolon, or layout-separated elements, sized integer
+suffixes and generic angle syntax are shared, and strings support interpolation
+and the full scalar-aware escape alphabet.
 
 `^` is right-associative exponentiation. Symbolic `<<`, `>>`, `&`, `|||`,
 `~~~`, and `!` are reserved but unsupported in expressions; source uses named
 functions such as `Stdlib.Int64.shiftLeft`, `Stdlib.Int64.bitwiseAnd`, and
 `Stdlib.Bool.not`. Backend bitwise primitives remain internal compiler IR.
 
-Compiler-generated AST may contain `TupleAccess`, `RawPtr`, the internal
-two-argument Dict representation, and internal bitwise nodes. None has an
+Compiler-generated AST may contain `TupleAccess`, `RawPtr`, and internal
+bitwise nodes. None has an
 `allowInternal` parser spelling: internal mode controls identifier access, not
 a second grammar.
 
@@ -47,6 +47,9 @@ The detailed language comparisons cover [bindings](language/bindings.md),
 [program structure](language/program-structure.md),
 [conditionals and sequences](language/conditionals-and-sequences.md), and
 [recursion](language/recursion.md).
+
+The standard-library ledgers include the generic [Dict contract](stdlib/dicts.md)
+and the [List contract](stdlib/lists.md).
 
 ## Validator skip reasons
 

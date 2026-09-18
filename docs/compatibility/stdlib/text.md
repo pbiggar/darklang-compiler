@@ -58,6 +58,11 @@ mapping which expands one scalar to several (for example `ﬁ` to `FI`) remains
 unchanged. The full mappings are retained in the generated data rather than
 silently discarded.
 
+`Char.isLetter`, `isAlphanumeric`, and `isWhitespace` classify the first
+scalar through those generated Unicode tables. `Char.toCodepoint` returns
+`Some` only when the EGC contains exactly one Unicode scalar, matching the
+interpreter distinction between a character cluster and a codepoint.
+
 ## Regex contract
 
 Regex operations are `isMatch`, `find`, `findAll`, `replace`, `replaceAll`, and

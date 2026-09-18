@@ -26,8 +26,8 @@ let private collectDirectEqHelperDeps
         match resolvedType with
         | TList elemType ->
             [elemType] |> List.choose addIfHelperType
-        | TDict (TString, valueType) ->
-            [TList (TTuple [TString; valueType])] |> List.choose addIfHelperType
+        | TDict (keyType, valueType) ->
+            [TList (TTuple [keyType; valueType])] |> List.choose addIfHelperType
         | TTuple elemTypes ->
             elemTypes |> List.choose addIfHelperType
         | TRecord (recordTypeName, typeArgs) ->
@@ -159,8 +159,8 @@ let private collectDirectCompareHelperDeps
     let deps =
         match resolvedType with
         | TList elemType -> [resolveType aliasReg elemType; resolvedType]
-        | TDict (TString, valueType) ->
-            [TList (TTuple [TString; resolveType aliasReg valueType])]
+        | TDict (keyType, valueType) ->
+            [TList (TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType])]
         | TTuple elemTypes -> elemTypes |> List.map (resolveType aliasReg)
         | TRecord (recordTypeName, typeArgs) ->
             match Map.tryFind recordTypeName typeReg with
@@ -202,8 +202,7 @@ let rec internal ensureCompareHelperForType
     : CompareHelperGenerationState =
     let resolvedType = resolveType aliasReg typ
     let helper = compareHelperName resolvedType
-    if not (canonicalSortableType aliasReg typeReg indexedSumTypeReg resolvedType)
-       || Map.containsKey helper state.Generated
+    if Map.containsKey helper state.Generated
        || Set.contains helper state.InProgress then
         state
     else
@@ -286,7 +285,8 @@ let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (ex
         collectFromExprs (NonEmptyList.toList args)
     | TupleLiteral elements | ListLiteral elements -> collectFromExprs elements
     | TupleAccess (tupleExpr, _) -> recurse tupleExpr
-    | DictLiteral (_, entries) -> entries |> List.map snd |> collectFromExprs
+    | DictLiteral (_, _, entries) ->
+        entries |> List.collect (fun (key, value) -> [key; value]) |> collectFromExprs
     | RecordLiteral (_, fields) -> fields |> List.map snd |> collectFromExprs
     | RecordUpdate (recordExpr, updates) ->
         Set.union (recurse recordExpr) (updates |> List.map snd |> collectFromExprs)
@@ -360,8 +360,8 @@ let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: E
         collectFromExprs elements
     | TupleAccess (tupleExpr, _) ->
         collectEqHelperTypesFromExpr aliasReg tupleExpr
-    | DictLiteral (_, entries) ->
-        entries |> List.map snd |> collectFromExprs
+    | DictLiteral (_, _, entries) ->
+        entries |> List.collect (fun (key, value) -> [key; value]) |> collectFromExprs
     | RecordLiteral (_, fields) ->
         fields |> List.map snd |> collectFromExprs
     | RecordUpdate (recordExpr, updates) ->

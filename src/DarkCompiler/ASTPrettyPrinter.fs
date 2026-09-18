@@ -67,9 +67,7 @@ let rec private formatType (typ: Type) : string =
     | TStream elemType -> $"Stream<{formatType elemType}>"
     | TDict (TString, valueType) -> $"Dict<{formatType valueType}>"
     | TDict (keyType, valueType) ->
-        // Non-String keys can only originate in trusted compiler sources.
-        // Preserve their private HAMT specialization for internal roundtrips;
-        // every public Dict type is rendered with its single value parameter.
+        // Preserve both public type arguments for non-String-keyed Dicts.
         $"Dict<{formatType keyType}, {formatType valueType}>"
     | TTuple elemTypes ->
         let formatElement elemType =
@@ -515,12 +513,11 @@ let rec private formatExpr (expr: Expr) : string =
             | _ ->
                 parenthesizeTupleBaseIfNeeded tupleExpr tupleBaseText
         $"{tupleText}.{index}"
-    | DictLiteral (_, entries) ->
+    | DictLiteral (_, _, entries) ->
         let fieldsText =
             entries
             |> List.map (fun (key, value) ->
-                let keyText = if key = "" then "___" else formatIdentifierSegment key
-                $"{keyText} = {formatExpr value}")
+                $"{formatExpr key}: {formatExpr value}")
             |> String.concat "; "
         $"Dict {{ {fieldsText} }}"
     | RecordLiteral (reference, fields) ->
