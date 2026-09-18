@@ -380,6 +380,7 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | DictToRawPtr dict -> DictToRawPtr (r dict)
     | RawPtrToDict (ptr, tag, dictType) -> RawPtrToDict (r ptr, r tag, dictType)
     | ListToRawPtr list -> ListToRawPtr (r list)
+    | FixedBlockToRawPtr value -> FixedBlockToRawPtr (r value)
     | RawPtrToList (ptr, tag, listType) -> RawPtrToList (r ptr, r tag, listType)
     | RefCountIncString a -> RefCountIncString (r a)
     | RefCountDecString a -> RefCountDecString (r a)

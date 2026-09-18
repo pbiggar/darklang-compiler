@@ -88,7 +88,8 @@ let private insertRCInFunctionInternal
                         index
                         param.Type
                 let internalOwnedAccumulator =
-                    isInternalRecordTailAccumulator func index param
+                    rcShapeNeedsBorrowedRetain shape
+                    && isInternalOwnedTailAccumulator func index param
                 (param, shape, transfersOwnedAccumulator, internalOwnedAccumulator)))
     let internalOwnedParams =
         parameterInfos

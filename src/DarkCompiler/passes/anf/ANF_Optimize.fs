@@ -43,7 +43,13 @@ let private rewriteInvertedBoolLiteralBranchesInProgram (program: Program) : Pro
     Program (List.rev functionsReversed, mainExpr')
 
 /// Optimize a program with explicit options
-let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
+let optimizeProgramWithOptionsAndExternalFunctions
+    (context: OptimizeContext)
+    (options: OptimizeOptions)
+    (eligibleTailRecursionNames: Set<string>)
+    (externalFunctions: Map<string, Function>)
+    (program: Program)
+    : Program =
     let program' =
         if options.EnableConstFolding then
             rewriteInvertedBoolLiteralBranchesInProgram program
@@ -73,10 +79,18 @@ let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOpti
         Program (functions', devirtualizeCaptureFreeClosures mainOptimized.Body)
     if options.EnableTailRecursionModuloOperation then
         optimizedProgram
-        |> transformTailRecursionModuloAddition
-        |> transformTailRecursionModuloMultiplication
+        |> transformTailRecursionModuloAddition eligibleTailRecursionNames
+        |> transformTailRecursionModuloSubtraction eligibleTailRecursionNames
+        |> transformTailRecursionModuloMultiplication eligibleTailRecursionNames
+        |> transformTailRecursionModuloFixedConstructors eligibleTailRecursionNames
+        |> transformTailRecursionModuloListConstructors eligibleTailRecursionNames externalFunctions
     else
         optimizedProgram
+
+let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
+    let (Program (functions, _)) = program
+    let eligible = functions |> List.map (fun func -> func.Name) |> Set.ofList
+    optimizeProgramWithOptionsAndExternalFunctions context options eligible Map.empty program
 
 /// Optimize a program with default options
 let optimizeProgram (context: OptimizeContext) (program: Program) : Program =

@@ -158,6 +158,7 @@ let private tryCSEKey (cexpr: CExpr) : CSEKey option =
     | DictToRawPtr _
     | RawPtrToDict _
     | ListToRawPtr _
+    | FixedBlockToRawPtr _
     | RawPtrToList _
     | RefCountIncString _
     | RefCountDecString _

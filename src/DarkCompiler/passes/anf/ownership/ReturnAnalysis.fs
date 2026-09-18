@@ -270,6 +270,7 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | BlobToRawPtr _ -> true      // RawPtr view is borrowed from the dynamic buffer
     | DictToRawPtr _ -> true       // RawPtr view is borrowed from the tagged container
     | ListToRawPtr _ -> true       // RawPtr view is borrowed from the tagged container
+    | FixedBlockToRawPtr _ -> true // RawPtr view is borrowed from the fixed block
     | BorrowedCall _ -> true       // Callee returns an alias kept alive by one of its arguments
     | Atom (Var _) -> true         // Alias/copy of existing variable - don't double-dec
     | TypedAtom (Var _, _) -> true // TypedAtom wrapping a variable - also borrowed

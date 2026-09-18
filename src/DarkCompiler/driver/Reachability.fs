@@ -81,6 +81,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         userRegistries
                         ANF_Inlining.defaultConfig
                         Map.empty
+                        Map.empty
                         userOnly.NonInlineableFunctionNames
                         printedFunctions
                         false

@@ -1,0 +1,79 @@
+// Tail-recursion-modulo-constructor must keep deep immutable construction on a
+// constant native stack while preserving the source-level result.
+
+let buildTrmcList (remaining: Int64) : List<Int64> =
+    if remaining <= 0L then []
+    else Stdlib.List.push<Int64> (buildTrmcList (remaining - 1L)) remaining
+
+Stdlib.List.length (buildTrmcList 150000L) = 150000
+
+type TrmcChain = TrmcEnd of Int64 | TrmcNext of TrmcChain
+
+let buildTrmcSum (remaining: Int64) : TrmcChain =
+    if remaining <= 0L then TrmcEnd 0L
+    else TrmcNext (buildTrmcSum (remaining - 1L))
+
+let countTrmcSum (chain: TrmcChain) (count: Int64) : Int64 =
+    match chain with
+    | TrmcEnd _ -> count
+    | TrmcNext next -> countTrmcSum next (count + 1L)
+
+countTrmcSum (buildTrmcSum 100000L) 0L = 100000L
+
+type TrmcRecord = { value: Int64, next: Stdlib.Option.Option<TrmcRecord> }
+
+let buildTrmcRecord (remaining: Int64) : TrmcRecord =
+    if remaining <= 0L then TrmcRecord { value = 0L; next = None }
+    else TrmcRecord { value = remaining; next = Some (buildTrmcRecord (remaining - 1L)) }
+
+let countTrmcRecord (record: TrmcRecord) (count: Int64) : Int64 =
+    match record.next with
+    | None -> count
+    | Some next -> countTrmcRecord next (count + 1L)
+
+countTrmcRecord (buildTrmcRecord 100000L) 0L = 100000L
+
+// Native signed and unsigned widths retain their own modular arithmetic. The
+// deep subtraction case also proves that a single wrapped recursive call forms
+// a loop rather than consuming one frame per decrement.
+let trmoInt8 (n: Int64) : Int8 =
+    if n <= 0L then 127y else trmoInt8 (n - 1L) + trmoInt8 (n - 1L)
+
+let trmoInt16Subtract (n: Int64) : Int16 =
+    if n <= 0L then 0s else trmoInt16Subtract (n - 1L) - 1s
+
+let trmoInt32 (n: Int64) : Int32 =
+    if n <= 0L then 1000l else trmoInt32 (n - 1L) + trmoInt32 (n - 1L)
+
+let trmoUInt8Subtract (n: Int64) : UInt8 =
+    if n <= 0L then 0uy else trmoUInt8Subtract (n - 1L) - 1uy
+
+let trmoUInt16Safe (n: Int64) : UInt16 =
+    if n <= 0L then 65535us
+    else Stdlib.UInt16.add (trmoUInt16Safe (n - 1L)) (trmoUInt16Safe (n - 1L))
+
+let trmoUInt32Multiply (n: UInt32) : UInt32 =
+    if n <= 1ul then 1ul else n * trmoUInt32Multiply (n - 1ul)
+
+let trmoUInt64Safe (n: Int64) : UInt64 =
+    if n <= 0L then 18446744073709551615UL
+    else Stdlib.UInt64.add (trmoUInt64Safe (n - 1L)) (trmoUInt64Safe (n - 1L))
+
+let trmoUInt16SafeSubtract (n: Int64) : UInt16 =
+    if n <= 0L then 0us
+    else Stdlib.UInt16.subtract (trmoUInt16SafeSubtract (n - 1L)) 1us
+
+let trmoMultipleBranches (n: Int64) (subtractOne: Bool) : Int32 =
+    if n <= 0L then 0l
+    else if subtractOne then (trmoMultipleBranches (n - 1L) false) - 1l
+    else (trmoMultipleBranches (n - 1L) true) - 2l
+
+trmoInt8 8L = 0y
+trmoInt16Subtract 300000L = 27680s
+trmoInt32 4L = 16000l
+trmoUInt8Subtract 257L = 255uy
+trmoUInt16Safe 4L = 65520us
+trmoUInt32Multiply 13ul = 1932053504ul
+trmoUInt64Safe 6L = 18446744073709551552UL
+trmoUInt16SafeSubtract 300000L = 27680us
+trmoMultipleBranches 300000L true = -450000l

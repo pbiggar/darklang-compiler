@@ -107,6 +107,7 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | DictToRawPtr dict -> DictToRawPtr (s dict)
     | RawPtrToDict (ptr, tag, dictType) -> RawPtrToDict (s ptr, s tag, dictType)
     | ListToRawPtr list -> ListToRawPtr (s list)
+    | FixedBlockToRawPtr value -> FixedBlockToRawPtr (s value)
     | RawPtrToList (ptr, tag, listType) -> RawPtrToList (s ptr, s tag, listType)
     | FloatSqrt atom -> FloatSqrt (s atom)
     | FloatAbs atom -> FloatAbs (s atom)

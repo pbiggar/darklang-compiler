@@ -45,6 +45,20 @@ available, the call stays on the general tail-call path.
 Only direct self-recursion uses this loop lowering. Mutual recursion uses the
 ordinary tail-call mechanism described in [tail calls](tail-calls.md).
 
+Non-tail native-integer recursion can become a loop when the recursive result
+is combined only by modular addition, recursive-left subtraction, or
+multiplication. This applies to every signed and unsigned 8-, 16-, 32-, and
+64-bit width, including the corresponding pure `Stdlib` operator wrappers.
+
+Linear recursion beneath immutable constructors uses destination passing.
+Tuple-backed sum constructors and records allocate their outer block before the
+backedge and fill the recursive slot through a compiler-private raw view. List
+prepending uses a reverse accumulator and the existing `__reverseInto` kernel,
+so it remains linear-time without depending on the skew-list representation.
+The transformation requires every self call to have an eligible constructor
+boundary and does not move effectful field evaluation across recursion.
+
 Focused behavior is covered by `src/Tests/e2e/tailcall.e2e`,
-`src/Tests/e2e/tco-refcounting.e2e`, and the optimization fixtures under
-`src/Tests/optimization/`.
+`src/Tests/e2e/tco-refcounting.e2e`,
+`src/Tests/e2e/tail-recursion-modulo-constructor.e2e`, and the optimization
+fixtures under `src/Tests/optimization/`.
