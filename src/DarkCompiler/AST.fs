@@ -233,23 +233,26 @@ type BinderStructure =
 
 /// Stable semantic identities assigned at the parsed-program boundary. The
 /// representation is private so source spellings cannot be used as identities.
-[<StructuralEquality; StructuralComparison>]
-type BindingId = private BindingId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type BindingId = private BindingId of int
 
-[<StructuralEquality; StructuralComparison>]
-type ScopeBoundaryId = private ScopeBoundaryId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type ScopeBoundaryId = private ScopeBoundaryId of int
 
-[<StructuralEquality; StructuralComparison>]
-type RecursiveGroupId = private RecursiveGroupId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type RecursiveGroupId = private RecursiveGroupId of int
 
-[<StructuralEquality; StructuralComparison>]
-type RecursiveMemberId = private RecursiveMemberId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type RecursiveMemberId = private RecursiveMemberId of int
 
-let bindingId path = BindingId path
-let scopeBoundaryId path = ScopeBoundaryId path
-let recursiveGroupId path = RecursiveGroupId path
-let recursiveMemberId path = RecursiveMemberId path
-let singletonRecursiveGroupId (RecursiveMemberId path) = RecursiveGroupId (1 :: path)
+let bindingId ordinal = BindingId ordinal
+let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
+// Group IDs share one compact namespace: declaration groups are even and
+// singleton local-recursion groups are odd.
+let topLevelRecursiveGroupId ordinal = RecursiveGroupId (ordinal * 2)
+let recursiveMemberId ordinal = RecursiveMemberId ordinal
+let singletonRecursiveGroupId (RecursiveMemberId ordinal) =
+    RecursiveGroupId (ordinal * 2 + 1)
 
 type RecursiveMemberKind =
     | TopLevelFunctionMember

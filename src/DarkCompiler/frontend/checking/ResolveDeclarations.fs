@@ -268,7 +268,7 @@ let internal resolveRecursiveDeclarationGroups (topLevels: TopLevel list) : TopL
             let (sameGroup, laterGroups) =
                 rest |> List.partition (fun candidate -> mutuallyReachable first.Name candidate.Name)
             let members = first :: sameGroup
-            let groupId = recursiveGroupId [0; ordinal]
+            let groupId = topLevelRecursiveGroupId ordinal
             let availability =
                 if not (List.isEmpty sameGroup) then MutualRecursiveMember
                 elif Map.find first.Name graph |> Set.contains first.Name then SelfRecursiveMember
