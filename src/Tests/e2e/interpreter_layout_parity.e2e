@@ -126,3 +126,8 @@ let nestedVariantArm (o: Stdlib.Option.Option<Stdlib.AltJson.Json>) : Int64 =
   | None -> 2L
   | Some(_) -> 3L
 [nestedVariantArm (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.String "x")), nestedVariantArm Stdlib.Option.Option.None, nestedVariantArm (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.Number 1.0))] = [1L, 2L, 3L]
+
+// Stdlib.Result.mapError takes the result first, as every other Result and
+// Option combinator does; it took the function first.
+(Stdlib.Result.Result.Error "e") |> Stdlib.Result.mapError (fun err -> err ++ "!") = Stdlib.Result.Result.Error "e!"
+Stdlib.Result.mapError (Stdlib.Result.Result.Ok 4L) (fun x -> Stdlib.Int64.divide x 2L) = Stdlib.Result.Result.Ok 4L
