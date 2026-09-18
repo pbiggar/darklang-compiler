@@ -25,6 +25,24 @@ type FunctionSignature<'id> = {
     Result: ResultOwnership<'id>
 }
 
+/// Call-site modes include unmanaged positions so they align exactly with the
+/// typed HIR signature. A borrowed result names the borrowed parameter whose
+/// ownership identity it aliases; produced results transfer a fresh unit.
+type CallParameterOwnership =
+    | UnmanagedCallParameter
+    | BorrowedCallParameter
+    | ConsumedCallParameter
+
+type CallResultOwnership =
+    | UnmanagedCallResult
+    | BorrowedCallResult of parameterIndex: int
+    | ProducedCallResult
+
+type CallSignature = {
+    Parameters: CallParameterOwnership list
+    Result: CallResultOwnership
+}
+
 /// Lists retain multiplicity: consuming one unit twice or defining a duplicate
 /// identity is invalid. This is unit ownership, not general RC credit arithmetic.
 type Contract<'id> = {
@@ -46,6 +64,7 @@ and Block<'leaf, 'id> = {
 /// the branch target; Unmanaged means the value has no ownership unit.
 type Semantics<'leaf, 'id when 'id: comparison> = {
     Leaf: 'leaf -> Contract<'id>
+    CallOwnership: HIR.FunctionCall -> CallSignature option
     ScalarUses: HIR.Operand -> Set<'id>
     BlockArgument: HIR.Value -> BlockArgument<'id>
 }
@@ -59,6 +78,11 @@ type VerificationError<'id when 'id: comparison> =
     | InconsistentFunctionResult
     | InvalidBorrowedResult of 'id
     | InvalidProducedResult of 'id
+    | UnknownCallOwnership of target: string
+    | InconsistentCallOwnershipParameters of target: string
+    | InconsistentCallOwnershipArgument of target: string * parameterIndex: int
+    | InconsistentCallOwnershipResult of target: string
+    | InvalidBorrowedCallResult of target: string * parameterIndex: int
     | InconsistentJoin
     | InconsistentBlockArgument
     | UnreleasedValues of Set<'id>

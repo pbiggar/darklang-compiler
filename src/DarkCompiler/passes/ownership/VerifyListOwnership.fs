@@ -15,6 +15,7 @@ let private semantics : Semantics<Operation<Transform * Ownership>, ListId> = {
             let useMode = match ownership with Consume -> Consumed input.Id | BorrowAndCopy -> Borrowed input.Id
             { Inputs = [useMode]; Outputs = [output.Id] }
         | Fold (_, input, _, _) -> { Inputs = [Borrowed input.Id]; Outputs = [] }
+    CallOwnership = fun _ -> None
     ScalarUses = fun operand ->
         operand.Inputs
         |> Map.values
@@ -50,6 +51,7 @@ let verify (OwnedRegion (block, layouts)) : Result<unit, string> =
             output.Type = AST.TInt64 && input.Type = AST.TList AST.TInt64
             && initial.Type = AST.TInt64 && callback.Type = AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)
         | ScalarBinding (output, value) -> output.Type = value.Type && immediate value.Type
+        | Call _ -> false
         | Branch (_, condition, yes, no) ->
             condition.Type = AST.TBool && yes.Body.Result.Type = no.Body.Result.Type
             && blockValid yes && blockValid no

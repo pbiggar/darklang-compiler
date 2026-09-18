@@ -15,10 +15,18 @@ type VerificationError =
     | IncompatibleAliasTypes of result: ValueId * source: ValueId
     | DuplicateAliasSource of result: ValueId * source: ValueId
     | UnaccountedOpaqueEffects
+    | UnknownCallTarget of target: string
+    | MissingCallContract of target: string
+    | InvalidCallArgumentCount of target: string
+    | InvalidCallArgumentType of target: string * parameterIndex: int
+    | InvalidCallResultType of target: string
+    | InconsistentCallContract of target: string
 
 type Dialect<'leaf, 'block> = {
     Body: 'block -> Block<Operation<'leaf, 'block>>
     Leaf: 'leaf -> PrimitiveContract
+    CallSignature: string -> FunctionSignature option
+    CallContract: FunctionCall -> PrimitiveContract option
 }
 
 let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
@@ -62,6 +70,34 @@ let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
     let effects (contract: PrimitiveContract) =
         if List.isEmpty contract.Operands || Set.contains MayEvaluateOpaqueSource contract.Effects then Ok ()
         else Error UnaccountedOpaqueEffects
+    let primitive declared visible (contract: PrimitiveContract) =
+        requireMany visible contract.Inputs |> Result.bind (fun () ->
+            contract.Operands
+            |> List.fold (fun result value -> result |> Result.bind (fun () -> operand visible value)) (Ok ())
+            |> Result.bind (fun () -> effects contract)
+            |> Result.bind (fun () -> aliases contract)
+            |> Result.bind (fun () -> defineMany declared visible (contract.Outputs |> List.map (fun output -> output.Value))))
+    let call declared visible (call: FunctionCall) =
+        match dialect.CallSignature call.Target with
+        | None -> Error (UnknownCallTarget call.Target)
+        | Some signature when List.length signature.Parameters <> List.length call.Arguments ->
+            Error (InvalidCallArgumentCount call.Target)
+        | Some signature ->
+            let invalidArgument =
+                List.zip signature.Parameters call.Arguments
+                |> List.mapi (fun index (expected, actual) -> index, expected, actual.Type)
+                |> List.tryFind (fun (_, expected, actual) -> expected <> actual)
+            match invalidArgument with
+            | Some (index, _, _) -> Error (InvalidCallArgumentType (call.Target, index))
+            | None when signature.Result <> call.Result.Type -> Error (InvalidCallResultType call.Target)
+            | None ->
+                match dialect.CallContract call with
+                | None -> Error (MissingCallContract call.Target)
+                | Some contract when contract.Inputs <> call.Arguments
+                                     || not (List.isEmpty contract.Operands)
+                                     || (contract.Outputs |> List.map (fun output -> output.Value)) <> [call.Result] ->
+                    Error (InconsistentCallContract call.Target)
+                | Some contract -> primitive declared visible contract
     let rec operations declared visible = function
         | [] -> Ok (declared, visible)
         | operation :: rest ->
@@ -69,15 +105,11 @@ let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
                 match operation with
                 | Leaf leaf ->
                     let contract: PrimitiveContract = dialect.Leaf leaf
-                    requireMany visible contract.Inputs |> Result.bind (fun () ->
-                        contract.Operands
-                        |> List.fold (fun result value -> result |> Result.bind (fun () -> operand visible value)) (Ok ())
-                        |> Result.bind (fun () -> effects contract)
-                        |> Result.bind (fun () -> aliases contract)
-                        |> Result.bind (fun () -> defineMany declared visible (contract.Outputs |> List.map (fun output -> output.Value))))
+                    primitive declared visible contract
                 | ScalarBinding (result, value) ->
                     if result.Type <> value.Type then Error (BindingTypeMismatch result.Id)
                     else operand visible value |> Result.bind (fun () -> define declared visible result)
+                | Call functionCall -> call declared visible functionCall
                 | Branch (result, condition, ifTrue, ifFalse) ->
                     if condition.Type <> AST.TBool then Error (InvalidBranchCondition condition.Type)
                     else

@@ -50,6 +50,18 @@ result must remain within the borrowed boundary. Unmanaged parameters and
 results stay outside ownership accounting. Signatures deliberately carry no
 alias provenance or effects; those remain HIR contract responsibilities.
 
+Normalized HIR can also represent a resolved direct call with ordered value
+arguments and a fresh result value. `VerifyHIR` requires an explicit typed
+signature and an independently supplied primitive effect/alias contract for
+every such target. `VerifyOwnership` separately instantiates unmanaged,
+borrowed, and consumed parameter modes plus unmanaged, borrowed, or produced
+result ownership. Borrowed results name their source parameter and therefore
+cannot silently introduce an ownership unit. A recursive call is accepted only
+when its target is explicitly present in the same registries; unknown and
+indirect calls remain opaque evaluation rather than receiving guessed facts.
+The closed-list dialect does not admit these general calls yet, so this boundary
+does not change emitted code or list representation selection.
+
 ## ANF shared continuations
 
 ANF has nonrecursive lexical `Join(parameter, continuation, entry)` blocks and

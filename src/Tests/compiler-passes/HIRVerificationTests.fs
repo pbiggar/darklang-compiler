@@ -21,9 +21,24 @@ let private contractedWithOperands inputs operands outputs effects =
     HIR.Leaf ({ Inputs = inputs; Operands = operands; Outputs = outputs; Effects = Set.ofList effects }: HIR.PrimitiveContract)
 let private contracted inputs outputs effects = contractedWithOperands inputs [] outputs effects
 let private verify root =
+    let signature target =
+        if target = "callee" || target = "recursive" || target = "uncontracted" then
+            Some ({ Parameters = [AST.TInt64]; Result = AST.TBool }: HIR.FunctionSignature)
+        else None
+    let callContract (call: HIR.FunctionCall) =
+        if call.Target = "callee" || call.Target = "recursive" then
+            Some ({
+                Inputs = call.Arguments
+                Operands = []
+                Outputs = [{ Value = call.Result; Alias = HIR.NoManagedAlias }]
+                Effects = Set.singleton HIR.MayInvokeUserCode
+            }: HIR.PrimitiveContract)
+        else None
     let dialect: VerifyHIR.Dialect<HIR.PrimitiveContract, TestBlock> = {
         Body = fun (TestBlock body) -> body
         Leaf = id
+        CallSignature = signature
+        CallContract = callContract
     }
     VerifyHIR.verify dialect root
 let private check expected root () =
@@ -38,6 +53,8 @@ let tests = [
     let branchLocal = value 3 AST.TInt64
     let managedInput = value 5 (AST.TList AST.TInt64)
     let managedResult = value 6 (AST.TList AST.TInt64)
+    let callResult = value 7 AST.TBool
+    let call target arguments result = HIR.Call { Target = target; Arguments = arguments; Result = result }
 
     "HIR accepts normalized parameter and operand identities", check (Ok ())
         (block (Map.ofList ["input", parameter])
@@ -84,4 +101,20 @@ let tests = [
                 [{ Value = result; Alias = HIR.NoManagedAlias }]
                 []]
             result)
+    "HIR accepts registered direct calls", check (Ok ())
+        (block (Map.ofList ["input", parameter]) [call "callee" [parameter] callResult] callResult)
+    "HIR resolves recursive calls through an explicit registry entry", check (Ok ())
+        (block (Map.ofList ["input", parameter]) [call "recursive" [parameter] callResult] callResult)
+    "HIR rejects calls without a typed registry entry", check (Error (VerifyHIR.UnknownCallTarget "opaque"))
+        (block (Map.ofList ["input", parameter]) [call "opaque" [parameter] callResult] callResult)
+    "HIR rejects registered calls without effect and alias contracts", check (Error (VerifyHIR.MissingCallContract "uncontracted"))
+        (block (Map.ofList ["input", parameter]) [call "uncontracted" [parameter] callResult] callResult)
+    "HIR rejects direct-call argument count mismatches", check (Error (VerifyHIR.InvalidCallArgumentCount "callee"))
+        (block Map.empty [call "callee" [] callResult] callResult)
+    "HIR rejects direct-call argument type mismatches", check (Error (VerifyHIR.InvalidCallArgumentType ("callee", 0)))
+        (let boolean = value 8 AST.TBool
+         block (Map.ofList ["input", boolean]) [call "callee" [boolean] callResult] callResult)
+    "HIR rejects direct-call result type mismatches", check (Error (VerifyHIR.InvalidCallResultType "callee"))
+        (let invalidResult = value 9 AST.TInt64
+         block (Map.ofList ["input", parameter]) [call "callee" [parameter] invalidResult] invalidResult)
 ]

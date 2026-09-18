@@ -127,6 +127,7 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
                         lowerRest (Map.add result.Id (id, value.Type) values) buffers next
                         |> Result.map (fun (body, final) -> bindReturns expr (fun _ -> body), final)
                     | _ -> Crash.crash "List HIR: scalar lowering must bind its result")
+            | Call _ -> Crash.crash "List HIR: verified list regions cannot contain general calls"
             | Leaf (Construct (output, Repeat (count, value))) ->
                 lowerValue values vg count |> Result.bind (fun (countExpr, countAtom, afterCount) ->
                     lowerValue values afterCount value |> Result.bind (fun (valueExpr, valueAtom, afterValue) ->
