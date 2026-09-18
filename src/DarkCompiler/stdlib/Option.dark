@@ -46,7 +46,7 @@ let and<'a, 'b> (option1: Stdlib.Option.Option<a>) (option2: Stdlib.Option.Optio
 // Return the first option when it has a value, otherwise return the fallback
 let or<'t> (first: Stdlib.Option.Option<t>) (second: Stdlib.Option.Option<t>) : Stdlib.Option.Option<t> =
     match first with
-    | Some v -> Some v
+    | Some _ -> first
     | None -> second
 
 // Convert Option to a single-element or empty list
@@ -119,9 +119,4 @@ let combine<'a> (options: List<Stdlib.Option.Option<a>>) : Stdlib.Option.Option<
     | None -> None
 
 let values<'a> (options: List<Stdlib.Option.Option<a>>) : List<a> =
-    match options with
-    | [] -> []
-    | option :: rest ->
-        match option with
-        | Some value -> Stdlib.List.push<a> (Stdlib.Option.values<a> rest) value
-        | None -> Stdlib.Option.values<a> rest
+    Stdlib.List.filterMap options (fun option -> option)

@@ -132,12 +132,13 @@ let combine<'t, 'e> (results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.
     Stdlib.Result.collect<t, e> results
 
 let values<'t, 'e> (results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.Result<List<t>, e> =
-    match results with
-    | [] -> Ok ([])
-    | result :: rest ->
-        match Stdlib.Result.values<t, e> rest with
-        | Error error -> Error error
-        | Ok values ->
-            match result with
-            | Ok value -> Ok (Stdlib.List.push<t> values value)
-            | Error _ -> Ok values
+    let folded =
+        Stdlib.List.fold results (Ok ([])) (fun acc result ->
+            match (acc, result) with
+            | (Ok acc, Ok result) -> Ok (Stdlib.List.push acc result)
+            | (Ok _, Error _) -> acc
+            | (Error error, _) -> Error error) in
+
+    match folded with
+    | Ok values -> Ok (Stdlib.List.reverse values)
+    | Error error -> Error error

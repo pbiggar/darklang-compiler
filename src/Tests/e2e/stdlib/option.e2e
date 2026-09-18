@@ -126,3 +126,6 @@ let x = Stdlib.Option.Option.None in Stdlib.Result.isOk (Stdlib.Option.withDefau
 
 // Large combines follow the interpreter's stack-safe fold implementation.
 let options = Stdlib.List.repeatUnsafe 100000 (Stdlib.Option.Option.Some 1L) in match Stdlib.Option.combine options with | Some values -> Stdlib.List.length values | None -> 0 = 100000 isolated=true
+
+// Large value extraction follows the interpreter's filterMap implementation.
+let options = Stdlib.List.repeatUnsafe 100000 (Stdlib.Option.Option.Some 1L) in Stdlib.List.length (Stdlib.Option.values options) = 100000 isolated=true
