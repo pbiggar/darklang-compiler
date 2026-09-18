@@ -163,6 +163,21 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
         | _ -> Error $"Expected Dict<...>, got {typeToString actual}"
 
 /// Check if a type contains type variables
+/// The element variable the checker gives an empty list literal that nothing
+/// has typed yet (Expressions.fs, CheckMatches.fs). Spelled like a freshened
+/// parameter so that inference may bind it; a declared `'t` must stay rigid.
+let emptyListElementVar = "t$empty"
+
+/// A variable inference may bind: a callee's freshened parameter, the open
+/// element of an empty list literal, or one of the checker's own placeholders
+/// (an untyped lambda binding, a call result through a variable, a pattern's
+/// element). A declared type parameter is not one.
+let isInferenceVar (name: string) : bool =
+    name.Contains "$"
+    || name.StartsWith "binding_"
+    || name.StartsWith "__"
+    || name.StartsWith "recursiveParameter"
+
 let rec containsTVar (typ: Type) : bool =
     match typ with
     | TVar _ -> true
@@ -222,8 +237,25 @@ let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Ty
                     // new contains TVars, existing is concrete - keep existing
                     Ok m
                 elif containsTVar existingType && containsTVar typ then
-                    // Both contain TVars - keep the first one (arbitrary choice)
-                    Ok m
+                    // Both contain TVars. Where one side's variables are ones
+                    // inference may bind (a generic seed passed to a generic
+                    // fold: b$0 = Parser<a$1> from the seed and Parser<a> from
+                    // the expected result; or `([], 0)` as a seed next to the
+                    // (List<a>, Int) the lambda returns), bind those to the
+                    // other side and keep the other side; the caller applies
+                    // the map transitively. Otherwise keep the first.
+                    let freshenedOnly (bindings: (string * Type) list) =
+                        bindings |> List.forall (fun (n, _) -> isInferenceVar n)
+                    match matchTypes existingType typ with
+                    | Ok extra when freshenedOnly extra ->
+                        Ok (extra |> List.fold (fun m' (n, t) ->
+                                if Map.containsKey n m' then m' else Map.add n t m') (Map.add name typ m))
+                    | _ ->
+                        match matchTypes typ existingType with
+                        | Ok extra when freshenedOnly extra ->
+                            Ok (extra |> List.fold (fun m' (n, t) ->
+                                    if Map.containsKey n m' then m' else Map.add n t m') m)
+                        | _ -> Ok m
                 else
                     // Both are concrete but different - that's an error
                     Error $"Type variable {name} has conflicting inferences: {typeToString existingType} vs {typeToString typ}"))
@@ -289,10 +321,21 @@ let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type
         | Ok _ -> Some t1'  // Return the concrete type
         | Error _ -> None
     elif containsTVar t1' && containsTVar t2' then
-        // Both have type variables - try to unify
+        // Both have type variables. Bind the side whose variables inference
+        // may bind and keep the other: `(List<t>, Int)` from a `([], 0)` seed
+        // meets `(List<a>, Int)` from the other arm, and the answer is the
+        // arm's, not the seed's, whichever came first.
+        let bindsInferenceVarsOnly (subst: Substitution) =
+            subst |> Map.forall (fun name _ -> isInferenceVar name)
         match unifyTypes t1' t2' with
-        | Ok subst -> Some (applySubst subst t1')
-        | Error _ -> None
+        | Ok subst when bindsInferenceVarsOnly subst -> Some (applySubst subst t1')
+        | firstDirection ->
+            match unifyTypes t2' t1' with
+            | Ok subst when bindsInferenceVarsOnly subst -> Some (applySubst subst t2')
+            | _ ->
+                match firstDirection with
+                | Ok subst -> Some (applySubst subst t1')
+                | Error _ -> None
     else
         None
 
@@ -329,7 +372,7 @@ let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: T
             |> List.fold (fun acc paramName ->
                 acc |> Result.bind (fun args ->
                     match Map.tryFind paramName bindingMap with
-                    | Some typ -> Ok (args @ [typ])
+                    | Some typ -> Ok (args @ [applySubst bindingMap typ])
                     | None -> Ok (args @ [TVar paramName])))
                 (Ok []))
 

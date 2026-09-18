@@ -23,6 +23,8 @@ let internal checkFunctionDefWithSumTypeNames
     (moduleRegistry: ModuleRegistry)
     (aliasReg: AliasRegistry)
     : Result<FunctionDef, TypeError> =
+    resetFreshening ()
+
     let canonicalParams =
         funcDef.Params
         |> NonEmptyList.map (fun (name, typ) ->

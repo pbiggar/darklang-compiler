@@ -481,7 +481,11 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     // complete type arguments. A user unit can request a function already
                                     // supplied by the prebuilt stdlib, with context-specific lowering
                                     // making the allocated bodies differ. Keep the stdlib copy, which is
-                                    // first and has the complete stdlib registries.
+                                    // first and has the complete stdlib registries. The same holds for a
+                                    // user unit that declares a function the stdlib carries under a
+                                    // non-Stdlib name (Darklang.LanguageTools.* is in both).
+                                    let prebuiltStdlibNames =
+                                        reachableStdlib |> List.map (fun func -> func.Name) |> Set.ofList
                                     let mergeFunctionsByName (functions: LIR.Function list) : LIR.Function list =
                                         functions
                                         |> List.fold
@@ -494,7 +498,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 | Some _
                                                     when func.Name.StartsWith("__dark_eq_")
                                                          || func.Name.StartsWith("__dark_compare_")
-                                                         || func.Name.StartsWith("Stdlib.") ->
+                                                         || func.Name.StartsWith("Stdlib.")
+                                                         || Set.contains func.Name prebuiltStdlibNames ->
                                                     (names, retainedRev)
                                                 | Some _ ->
                                                     Crash.crash $"Conflicting allocated LIR functions named '{func.Name}'")

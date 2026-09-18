@@ -1,0 +1,155 @@
+// Layout the interpreter reads from columns: newline-delimited lets without
+// `in`, statement sequences in a block, and a few spellings its pretty-printer
+// emits. Each shape here comes from a package function that failed to compile
+// when darklang/dark's package tree was pushed through this compiler.
+
+// A let's body is the next line at or left of the `let`, even after an
+// application that could have taken more arguments.
+let layoutLetBody (xs: List<Int64>): Int =
+  let doubled = Stdlib.List.map xs (fun x -> x * 2L)
+  Stdlib.List.length doubled
+layoutLetBody [1L, 2L, 3L] = 3
+
+let layoutLetChain (xs: List<Int64>): Int =
+  let a = Stdlib.List.append xs xs
+  let b = Stdlib.List.append a a
+  Stdlib.List.length b
+layoutLetChain [1L] = 4
+
+let layoutLetValueBelow (xs: List<Int64>): Int =
+  let a =
+    Stdlib.List.append xs xs
+  let (b, c) = (a, a)
+  Stdlib.List.length b
+layoutLetValueBelow [1L, 2L] = 4
+
+// A value that continues on the next line with an operator, or closes a
+// literal, is still the same value.
+let layoutOperatorContinuation (a: Int64) (b: Int64): Int64 =
+  let total = a
+    + b
+  total * 2L
+layoutOperatorContinuation 1L 2L = 6L
+
+type LayoutPoint = { x: Int64, y: Int64 }
+let layoutClosingBrace (): Int64 =
+  let p = LayoutPoint {
+    x = 1L,
+    y = 2L
+  }
+  p.x + p.y
+layoutClosingBrace () = 3L
+
+// Two statements at the indent of their block are a sequence.
+let layoutStatements (label: String): String =
+  Stdlib.printLine label
+  Stdlib.printLine (Stdlib.String.toLowercase label)
+  "done"
+layoutStatements "A" = stdout="A\na\n\"done\"\n"
+
+let layoutStatementsThenLet (label: String): Int =
+  Stdlib.printLine label
+  let n = Stdlib.String.length label
+  Stdlib.printLine "second"
+  n
+layoutStatementsThenLet "abc" = stdout="abc\nsecond\n3\n"
+
+let layoutStatementsInArm (o: Stdlib.Option.Option<Int64>): Int64 =
+  match o with
+  | Some v ->
+    Stdlib.printLine "some"
+    v + 1L
+  | None -> 0L
+layoutStatementsInArm (Stdlib.Option.Option.Some 1L) = stdout="some\n2\n"
+
+let layoutStatementsInLambda (xs: List<Int64>): Unit =
+  xs |> Stdlib.List.iter (fun x ->
+    let doubled = x * 2L
+    Stdlib.printLine (Stdlib.Int64.toString doubled)
+    Stdlib.printLine "-")
+layoutStatementsInLambda [1L, 2L] = stdout="2\n-\n4\n-\n"
+
+// Explicit `in` keeps working, mid-line and on a continuation line.
+let layoutExplicitIn (a: Int64): Int64 =
+  let b = a + 1L in let c = b + 1L in
+  let d =
+    c + 1L in
+  d
+layoutExplicitIn 1L = 4L
+
+// A top-level function whose parameters start on the next line is a function,
+// not a value let.
+let layoutMultiLineHeader
+  (a: Int64)
+  (b: Int64)
+  : Int64 =
+  a + b
+layoutMultiLineHeader 1L 2L = 3L
+
+// A `let` inside a string literal declares nothing.
+let layoutLetInString (name: String): String =
+  let header = $"let {name} (x: Int64) : Int64 ="
+  header ++ " x"
+layoutLetInString "f" = "let f (x: Int64) : Int64 = x"
+
+// A function is in scope by its bare name inside its own body.
+let layoutSelfCall (a: List<String>) (b: List<String>): Int =
+  match (a, b) with
+  | (aHead :: aTail, bHead :: bTail) -> if aHead == bHead then 1 + layoutSelfCall aTail bTail else 0
+  | _ -> 0
+layoutSelfCall ["a", "b", "c"] ["a", "b", "x"] = 2
+
+// An unsuffixed Int literal where a type variable is expected.
+Stdlib.List.fold [1L] 9 (fun acc x -> acc) = 9
+Stdlib.Option.withDefault Stdlib.Option.Option.None 9 = 9
+
+// An interpolated string is an argument like any other literal.
+Stdlib.String.toLowercase $"A {"B"} C" = "a b c"
+Stdlib.printLine (Stdlib.String.toLowercase $"  c: `d`") = stdout="  c: `d`\n"
+
+// Doubled braces are literal braces in an interpolated string.
+$"{{ a {"b"} }}" = "{ a b }"
+
+// A constructor with adjacent parenthesized fields is one argument.
+Stdlib.Option.map Stdlib.Option.Option.Some(1L) (fun x -> x + 1L) = Stdlib.Option.Option.Some 2L
+Stdlib.List.length [Stdlib.Option.Option.Some(1L), Stdlib.Option.Option.None] = 2
+
+// A constructor with adjacent empty parentheses carries a unit payload.
+Stdlib.Result.Result.Ok() == Stdlib.Result.Result.Ok () = true
+(match Stdlib.Result.Result.Ok() with | Ok () -> 1L | Error _ -> 2L) = 1L
+
+// A nested constructor pattern is resolved in its payload's type, not the
+// scrutinee's: `String` here is AltJson.Json's, whatever else has a `String` case.
+let nestedVariantArm (o: Stdlib.Option.Option<Stdlib.AltJson.Json>) : Int64 =
+  match o with
+  | Some(String _) -> 1L
+  | None -> 2L
+  | Some(_) -> 3L
+[nestedVariantArm (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.String "x")), nestedVariantArm Stdlib.Option.Option.None, nestedVariantArm (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.Number 1.0))] = [1L, 2L, 3L]
+
+// Stdlib.Result.mapError takes the result first, as every other Result and
+// Option combinator does; it took the function first.
+(Stdlib.Result.Result.Error "e") |> Stdlib.Result.mapError (fun err -> err ++ "!") = Stdlib.Result.Result.Error "e!"
+Stdlib.Result.mapError (Stdlib.Result.Result.Ok 4L) (fun x -> Stdlib.Int64.divide x 2L) = Stdlib.Result.Result.Ok 4L
+
+// An arm's body holds a match after a let: the outer match's later arms are
+// still the outer match's (the body is parenthesized wherever the nested
+// match sits, not only when it is the first line).
+let armBodyWithLaterMatch (json: Stdlib.AltJson.Json): Int64 =
+  match json with
+  | Object(fields) ->
+    let name =
+      match Stdlib.List.findFirst fields (fun (key, _) -> key == "name") with
+      | Some((_, String(name))) -> 1L
+      | _ -> 2L
+    match name with
+    | 1L -> 10L
+    | _ -> 20L
+  | _ -> 3L
+[armBodyWithLaterMatch (Stdlib.AltJson.Json.Object [("name", Stdlib.AltJson.Json.String "x")]), armBodyWithLaterMatch (Stdlib.AltJson.Json.Object []), armBodyWithLaterMatch Stdlib.AltJson.Json.Null] = [10L, 20L, 3L]
+
+// `f x - 1` is subtraction; `f -1` still passes a negative literal.
+let spacedMinus (parts: List<String>) : Int =
+  Stdlib.List.length parts - 1
+[spacedMinus ["a", "b"], spacedMinus []] = [1, -1]
+Stdlib.Int64.add 1L -1L = 0L

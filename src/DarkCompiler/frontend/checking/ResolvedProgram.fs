@@ -264,6 +264,7 @@ let internal checkResolvedProgramInternal
         | ValueDef _ ->
             Ok (None, topLevel)
         | Expression expr ->
+            resetFreshening ()
             checkExprWithParamNamesAndSumTypeNames
                 funcParamNameReg
                 sumTypeNames
@@ -428,6 +429,7 @@ let internal checkResolvedExpressionWithBaseEnv
     }
     let sumTypeNames = baseEnv.SumTypeNames
 
+    resetFreshening ()
     checkExprWithParamNamesAndSumTypeNames
         baseEnv.FuncParamNames
         sumTypeNames

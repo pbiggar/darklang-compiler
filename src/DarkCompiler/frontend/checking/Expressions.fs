@@ -273,7 +273,11 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
     | BigIntLiteral _ ->
         match expectedType with
         | Some TInt | None -> Ok (TInt, expr)
-        | Some other -> Error (TypeMismatch (other, TInt, "Int literal"))
+        | Some other ->
+            // A type variable or an alias of Int, as for the sized literals.
+            match reconcileTypes (Some aliasReg) other TInt with
+            | Some TInt -> Ok (TInt, expr)
+            | _ -> Error (TypeMismatch (other, TInt, "Int literal"))
 
     | Int8Literal _ ->
         match expectedType with
@@ -523,7 +527,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     |> Option.orElseWith (fun () ->
                         tryFindCallArguments name currentBody
                         |> Option.bind (inferFunctionExpectationFromArguments (parameters |> NonEmptyList.toList |> List.length)))
-                | _, ListLiteral [] -> Some (TList (TVar "t"))
+                | _, ListLiteral [] -> Some (TList (TVar emptyListElementVar))
                 | _ -> None
 
             match
@@ -1478,8 +1482,12 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             // Empty list: use expected list type or keep a type variable
             match expectedType |> Option.map (resolveType aliasReg) with
             | Some (TList elemType) -> Ok (TList elemType, ListLiteral [])
-            | Some other -> Error (TypeMismatch (other, TList (TVar "t"), "empty list"))
-            | None -> Ok (TList (TVar "t"), ListLiteral [])
+            // A bare type variable (a generic parameter not yet bound, as the seed
+            // of a fold) takes the list; the element stays open for the other
+            // arguments to fix. `Stdlib.List.fold xs [] (fun acc x -> [x])` was a
+            // mismatch reported as the enclosing function's return value.
+            | Some (TVar _) | None -> Ok (TList (TVar emptyListElementVar), ListLiteral [])
+            | Some other -> Error (TypeMismatch (other, TList (TVar emptyListElementVar), "empty list"))
         | first :: rest ->
             // Use expected list element type for the first element when available, so
             // lambda/list literals in expected contexts reconcile type variables consistently.

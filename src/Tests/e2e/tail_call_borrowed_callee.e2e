@@ -1,0 +1,32 @@
+// A tail call's callee or argument can be a projection of a value the caller
+// releases: the closure read out of a record, the record freed by a release
+// that tail-call detection moved ahead of the call. The record's only field
+// was the closure, so freeing the record freed the closure the call then
+// jumped through (SIGSEGV; Stachu.Parser in darklang/dark, where a parser is
+// a record of one `run` function).
+
+type BorrowedRunner = { run: Int64 -> Int64 }
+
+let borrowedCallViaField (n: Int64): Int64 =
+  let runner = BorrowedRunner { run = fun x -> x + 1L }
+  let f = runner.run
+  f n
+borrowedCallViaField 4L = 5L
+
+let borrowedMake (): BorrowedRunner =
+  BorrowedRunner { run = fun x -> x * 2L }
+
+let borrowedCallFromCallee (n: Int64): Int64 =
+  let runner = borrowedMake ()
+  runner.run n
+borrowedCallFromCallee 4L = 8L
+
+type BorrowedHolder = { xs: List<Int64> }
+
+let borrowedLength (xs: List<Int64>): Int =
+  Stdlib.List.length xs
+
+let borrowedArgFromField (): Int =
+  let holder = BorrowedHolder { xs = [1L, 2L, 3L] }
+  borrowedLength holder.xs
+borrowedArgFromField () = 3

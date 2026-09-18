@@ -43,8 +43,9 @@ let map<'t, 'u, 'e> (result: Stdlib.Result.Result<t, e>) (fn: t -> u) : Stdlib.R
     | Ok v -> Ok (fn v)
     | Error err -> Error err
 
-// Transform the Error value with a function
-let mapError<'t, 'e, 'f> (fn: e -> f) (result: Stdlib.Result.Result<t, e>) : Stdlib.Result.Result<t, f> =
+// Transform the Error value with a function. The result comes first, as in the
+// interpreter, so `r |> Stdlib.Result.mapError f` pipes into the right slot.
+let mapError<'t, 'e, 'f> (result: Stdlib.Result.Result<t, e>) (fn: e -> f) : Stdlib.Result.Result<t, f> =
     match result with
     | Ok v -> Ok v
     | Error err -> Error (fn err)

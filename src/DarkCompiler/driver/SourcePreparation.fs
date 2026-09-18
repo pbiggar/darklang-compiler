@@ -383,7 +383,26 @@ let internal convertTypedProgramToUserOnlyWithMode
     let (typedProgram, monomorphization, nonInlineableFunctionNames) =
         measure "AST -> ANF Dependency Planning" (fun () ->
             let addMissing baseRegistry rebuildMode =
-                let requested = collectLocalSpecs baseContext.GenericFuncDefs typedProgram
+                // A local generic function's body may instantiate a stdlib generic
+                // only once the local one is itself specialized (a fold over
+                // Parser<a> inside choice<'a>, called as choice<String>), so
+                // specialize the local generics first and request what their
+                // specialized bodies reach: specializeFromSpecs reports those as
+                // ExternalSpecs. The later local specialization repeats this work
+                // on the same input and lands on the same names.
+                let localGenericDefs = SpecializationIdentity.extractGenericFuncDefs typedProgram
+                let reachedThroughLocalGenerics =
+                    if Map.isEmpty localGenericDefs then
+                        Set.empty
+                    else
+                        let localSpecs = collectLocalSpecs localGenericDefs typedProgram
+                        (Monomorphization.specializeFromSpecs localGenericDefs localSpecs).ExternalSpecs
+                        |> Set.filter (fun (funcName, _) ->
+                            Map.containsKey funcName baseContext.GenericFuncDefs)
+                let requested =
+                    Set.union
+                        (collectLocalSpecs baseContext.GenericFuncDefs typedProgram)
+                        reachedThroughLocalGenerics
                 let (AST.Program items) = typedProgram
                 let localFunctionNames =
                     items

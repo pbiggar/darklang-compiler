@@ -316,17 +316,29 @@ let internal resolveProgramNames
     (recordTypeNames: Set<string>)
     (program: Program)
     : Result<Program, TypeError> =
-    let resolveName context localNames spelling =
+    // `self` is the enclosing top-level function as (bare name, declared name):
+    // inside its own body a function is in scope by its bare name, as in the
+    // interpreter, where a module's declarations see each other unqualified.
+    let resolveName (self: (string * string) option) context localNames spelling =
         let lexicalHit =
             match context with
             | NameResolution.ResolutionContext.Value
             | NameResolution.ResolutionContext.Callable -> Set.contains spelling localNames
             | NameResolution.ResolutionContext.Constructor
             | NameResolution.ResolutionContext.Type -> false
+        let selfHit =
+            match self, context with
+            | Some (bare, _), (NameResolution.ResolutionContext.Value | NameResolution.ResolutionContext.Callable) ->
+                bare = spelling && bare <> ""
+            | _ -> false
         if lexicalHit then
             // Lexical values have the highest precedence in both applicable
             // contexts, and their canonical spelling is the source spelling.
             Ok spelling
+        elif selfHit then
+            match self with
+            | Some (_, declared) -> Ok declared
+            | None -> Ok spelling
         else
             // A lexical candidate's visible name is exactly its binding name.
             // If none matched above, adding every in-scope binding cannot affect
@@ -338,7 +350,7 @@ let internal resolveProgramNames
     let rec resolveTypeRefs typ =
         let recurse = resolveTypeRefs
         let resolveNamed makeType name typeArgs =
-            resolveName NameResolution.ResolutionContext.Type Set.empty name
+            resolveName None NameResolution.ResolutionContext.Type Set.empty name
             |> Result.bind (fun resolvedName ->
                 ResultList.traverse recurse typeArgs
                 |> Result.bind (fun resolvedArgs ->
@@ -406,22 +418,22 @@ let internal resolveProgramNames
             |> Result.map (NonEmptyList.fromList >> POr)
         | _ -> Ok pattern
 
-    let rec resolveExpr localNames expr =
-        let recurse = resolveExpr localNames
+    let rec resolveExpr self localNames expr =
+        let recurse = resolveExpr self localNames
         let resolveArgs args = ResultList.traverse recurse (NonEmptyList.toList args) |> Result.map NonEmptyList.fromList
         match expr with
         | Var name ->
-            resolveName NameResolution.ResolutionContext.Value localNames name
+            resolveName self NameResolution.ResolutionContext.Value localNames name
             |> Result.map Var
         | Call (name, args) ->
-            resolveName NameResolution.ResolutionContext.Callable localNames name
+            resolveName self NameResolution.ResolutionContext.Callable localNames name
             |> Result.bind (fun resolvedName -> resolveArgs args |> Result.map (fun args' -> Call (resolvedName, args')))
         | TypeApp (name, typeArgs, args) ->
-            resolveName NameResolution.ResolutionContext.Callable localNames name
+            resolveName self NameResolution.ResolutionContext.Callable localNames name
             |> Result.bind (fun resolvedName ->
                 ResultList.traverse resolveTypeRefs typeArgs
                 |> Result.bind (fun types' -> resolveArgs args |> Result.map (fun args' -> TypeApp (resolvedName, types', args'))))
-        | FuncRef name -> resolveName NameResolution.ResolutionContext.Callable localNames name |> Result.map FuncRef
+        | FuncRef name -> resolveName self NameResolution.ResolutionContext.Callable localNames name |> Result.map FuncRef
         | Constructor (constructorReference, variantName, payload) ->
             let resolvedConstructor (resolvedName: string) =
                 let segments = resolvedName.Split('.') |> Array.toList
@@ -444,7 +456,7 @@ let internal resolveProgramNames
                         | Some ([], TSum (target, [])) -> canonicalOwner target
                         | _ -> owner
                     $"{canonicalOwner typeName}.{variantName}"
-            match resolveName NameResolution.ResolutionContext.Constructor localNames spelling with
+            match resolveName self NameResolution.ResolutionContext.Constructor localNames spelling with
             | Ok resolvedName -> resolvedConstructor resolvedName
             | Error (ResolutionFailure (NameResolution.AmbiguousReference (_, _, identities)))
                 when constructorReference = UnresolvedConstructor None ->
@@ -471,7 +483,7 @@ let internal resolveProgramNames
             recurse value
             |> Result.bind (fun value' ->
                 let bindings = letPatternBindings pattern |> Set.ofList
-                resolveExpr (Set.union localNames bindings) body
+                resolveExpr self (Set.union localNames bindings) body
                 |> Result.map (fun body' -> Let (pattern, value', body')))
         | RecursiveLet (recursion, value, body) ->
             let name = recursiveBindingName recursion
@@ -508,9 +520,9 @@ let internal resolveProgramNames
                     | OrdinaryBinding -> localNames
                     | MutualRecursiveMember | CompletedGroupMember | ImportedGroupMember ->
                         Crash.crash "Local recursive candidate received a non-local availability"
-                resolveExpr valueLocals value
+                resolveExpr self valueLocals value
                 |> Result.bind (fun value' ->
-                    resolveExpr (Set.add name localNames) body
+                    resolveExpr self (Set.add name localNames) body
                     |> Result.map (fun body' ->
                         let resolved = {
                             Parsed = parsed
@@ -538,7 +550,7 @@ let internal resolveProgramNames
                     |> Set.ofList
                 resolveOptionalType returnAnnotation
                 |> Result.bind (fun returnAnnotation' ->
-                    resolveExpr (Set.union localNames parameterNames) body
+                    resolveExpr self (Set.union localNames parameterNames) body
                     |> Result.map (fun body' -> Lambda (NonEmptyList.fromList parameters', returnAnnotation', body'))))
         | Match (scrutinee, cases) ->
             recurse scrutinee
@@ -551,15 +563,15 @@ let internal resolveProgramNames
                         let bindings = patterns |> List.map patternBoundNames |> Set.unionMany
                         let caseLocals = Set.union localNames bindings
                         matchCase.Guard
-                        |> Option.map (resolveExpr caseLocals)
+                        |> Option.map (resolveExpr self caseLocals)
                         |> ResultList.sequenceOption
                         |> Result.bind (fun guard' ->
-                            resolveExpr caseLocals matchCase.Body
+                            resolveExpr self caseLocals matchCase.Body
                             |> Result.map (fun body' ->
                                 { Patterns = NonEmptyList.fromList patterns'; Guard = guard'; Body = body' }))))
                 |> Result.map (fun cases' -> Match (scrutinee', cases')))
         | RecordLiteral (reference, fields) ->
-            resolveName NameResolution.ResolutionContext.Type localNames reference.SourceTypeName
+            resolveName None NameResolution.ResolutionContext.Type localNames reference.SourceTypeName
             |> Result.bind (fun resolvedTypeName ->
                 ResultList.traverse resolveTypeRefs reference.TypeArgs
                 |> Result.bind (fun typeArgs ->
@@ -600,7 +612,7 @@ let internal resolveProgramNames
             recurse func
             |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> IndirectApply (func', args')))
         | Closure (name, captures) ->
-            resolveName NameResolution.ResolutionContext.Callable localNames name
+            resolveName self NameResolution.ResolutionContext.Callable localNames name
             |> Result.bind (fun resolvedName -> ResultList.traverse recurse captures |> Result.map (fun captures' -> Closure (resolvedName, captures')))
         | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
         | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
@@ -624,7 +636,8 @@ let internal resolveProgramNames
                 resolveTypeRefs funcDef.ReturnType
                 |> Result.bind (fun returnType' ->
                     let locals = parameters' |> List.map fst |> Set.ofList
-                    resolveExpr locals funcDef.Body
+                    let self = Some (snd (splitDeclaredName funcDef.Name), funcDef.Name)
+                    resolveExpr self locals funcDef.Body
                     |> Result.map (fun body' ->
                         let recursion' =
                             match funcDef.Recursion with
@@ -639,12 +652,12 @@ let internal resolveProgramNames
                                 Recursion = recursion' })))
         | TypeDef typeDef -> resolveTypeDef typeDef |> Result.map TypeDef
         | ValueDef valueDef ->
-            resolveExpr Set.empty (valueDefBody valueDef)
+            resolveExpr None Set.empty (valueDefBody valueDef)
             |> Result.map (fun body ->
                 match valueDef with
                 | UncheckedValueDef (name, _) -> ValueDef (UncheckedValueDef (name, body))
                 | CheckedValueDef (name, typ, _) -> ValueDef (CheckedValueDef (name, typ, body)))
-        | Expression expr -> resolveExpr Set.empty expr |> Result.map Expression
+        | Expression expr -> resolveExpr None Set.empty expr |> Result.map Expression
 
     let (Program topLevels) = program
     ResultList.traverse resolveTopLevel topLevels

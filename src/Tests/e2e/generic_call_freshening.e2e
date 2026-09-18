@@ -1,0 +1,55 @@
+// A generic callee's type parameters are freshened per call site, so two
+// generic calls in one body cannot read each other's bindings. Both shapes
+// are from Stachu.Parser in darklang/dark: a generic seed passed to a generic
+// fold ("expected Parser<a>, got Parser<Parser<a>>"), and a generic function
+// applied inside a lambda that is itself an argument of a generic call.
+
+let freshEmpty<'a> (): List<'a> = []
+
+let freshConcatAll<'a> (xss: List<List<'a>>): List<'a> =
+  Stdlib.List.fold xss (freshEmpty ()) (fun acc xs -> Stdlib.List.append acc xs)
+
+let freshRunConcat (): Int =
+  Stdlib.List.length (freshConcatAll [[1L, 2L], [3L]])
+freshRunConcat () = 3
+
+let freshPairUp<'a, 'b> (xs: List<'a>) (ys: List<'b>): List<('a * 'b)> =
+  Stdlib.List.zipShortest xs ys
+
+let freshFirsts<'a, 'b> (xs: List<'a>) (ys: List<'b>): List<'a> =
+  Stdlib.List.map (freshPairUp xs ys) (fun pair -> Stdlib.Tuple2.first pair)
+
+let freshRunFirsts (): Int64 =
+  Stdlib.List.fold (freshFirsts [1L, 2L] ["a", "b"]) 0L (fun acc x -> acc + x)
+freshRunFirsts () = 3L
+
+// A fold seeded with a tuple holding an empty list: the seed binds the
+// result to (List<t>, Int) with t open, the lambda's arms give (List<a>, Int),
+// and the first binding used to win, so the result did not meet the declared
+// return type (Cli.Listing.cut in darklang/dark).
+let freshTakeWithin<'a> (items: List<'a>) (limit: Int) (cost: 'a -> Int): (List<'a> * Int) =
+  let (shown, spent) =
+    Stdlib.List.fold items ([], 0) (fun acc item ->
+      let (taken, spent) = acc
+      let next = spent + (cost item)
+      if next <= limit then (Stdlib.List.append taken [item], next) else (taken, spent))
+  (shown, spent)
+
+let freshRunTakeWithin (): Int =
+  let (shown, spent) = freshTakeWithin [1L, 2L, 3L] 3 (fun x -> 1)
+  Stdlib.List.length shown + spent
+freshRunTakeWithin () = 6
+
+// An untyped lambda passed before the argument that fixes its parameter: the
+// checker's placeholder for the parameter meets the callee's freshened
+// variable, and the callee's must win, or the tuple pattern inside the lambda
+// has no tuple type to bind against by lambda lifting.
+let freshApplyTo<'a, 'b> (f: 'a -> 'b) (value: 'a): 'b = f value
+
+let freshSecondOfPair (): String =
+  freshApplyTo
+    (fun result ->
+      let (_, (content, _)) = result
+      content)
+    (1L, ("inner", 2L))
+freshSecondOfPair () = "inner"

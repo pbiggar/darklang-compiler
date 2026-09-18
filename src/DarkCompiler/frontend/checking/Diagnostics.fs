@@ -551,11 +551,23 @@ let internal formatLegacyParamTypeError
 
     $"{functionName}'s {ordinal} parameter `{paramName}` expects {typeToString expectedType}, but got {typeToString actualType} ({actualValue})"
 
+/// The call sites freshened so far in the function being checked. Reset per
+/// function so the names a program produces depend only on that function.
+let mutable private freshenedCallSites = 0
+
+/// Start numbering freshened call sites from zero again.
+let resetFreshening () = freshenedCallSites <- 0
+
 /// Freshen type parameters - generate new unique names for each type param
 /// Returns (fresh type params, substitution map from old to fresh names)
-/// Uses index-based naming for deterministic compilation (no global state)
+/// The names carry the call site's number, not the parameter's index: two calls
+/// of generic functions in one body (`map f (andThen p q)`, or a generic seed
+/// passed to a generic fold) would otherwise both bind `a$0`, and one call's
+/// inference would read the other's bindings.
 let freshenTypeParams (typeParams: string list) : string list * Map<string, string> =
-    let freshParams = typeParams |> List.mapi (fun i baseName -> $"{baseName}${i}")
+    let site = freshenedCallSites
+    freshenedCallSites <- freshenedCallSites + 1
+    let freshParams = typeParams |> List.map (fun baseName -> $"{baseName}${site}")
     let subst = List.zip typeParams freshParams |> Map.ofList
     (freshParams, subst)
 

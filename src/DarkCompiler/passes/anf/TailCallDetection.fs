@@ -82,13 +82,64 @@ let private extendAliasRoots
     | None ->
         aliasRoots
 
+/// The temps a projection's result borrows from: a field or element read, a
+/// backing pointer, or a call that returns a value aliased into its arguments.
+/// Such a result is only valid while its sources are, so a release of a source
+/// cannot move ahead of a tail call that passes the result.
+let private borrowSources (cexpr: CExpr) : TempId list =
+    let ofAtom (atom: Atom) : TempId list =
+        match atom with
+        | Var tid -> [tid]
+        | _ -> []
+    match cexpr with
+    | TupleGet (source, _)
+    | RecordGet (_, source, _)
+    | RawGet (source, _, _)
+    | StringToRawPtr source
+    | BlobToRawPtr source
+    | DictToRawPtr source
+    | ListToRawPtr source -> ofAtom source
+    | BorrowedCall (_, args) -> args |> List.collect ofAtom
+    | _ -> []
+
+let private extendBorrowRoots
+    (aliasRoots: Map<TempId, TempId>)
+    (borrowRoots: Map<TempId, Set<TempId>>)
+    (tempId: TempId)
+    (cexpr: CExpr)
+    : Map<TempId, Set<TempId>> =
+    let roots =
+        borrowSources cexpr
+        |> List.fold (fun acc source ->
+            let sourceRoot = canonicalTempId aliasRoots source
+            let inherited =
+                Map.tryFind sourceRoot borrowRoots
+                |> Option.defaultValue Set.empty
+            acc |> Set.add sourceRoot |> Set.union inherited) Set.empty
+    let inheritedByAlias =
+        match cexpr with
+        | Atom (Var tid)
+        | TypedAtom (Var tid, _) ->
+            Map.tryFind (canonicalTempId aliasRoots tid) borrowRoots
+            |> Option.defaultValue Set.empty
+        | _ -> Set.empty
+    let all = Set.union roots inheritedByAlias
+    if Set.isEmpty all then borrowRoots else Map.add tempId all borrowRoots
+
 let private tailCallArgTempIds
     (aliasRoots: Map<TempId, TempId>)
+    (borrowRoots: Map<TempId, Set<TempId>>)
     (cexpr: CExpr)
     : Set<TempId> =
     let addAtom (temps: Set<TempId>) (atom: Atom) : Set<TempId> =
         match atom with
-        | Var tid -> Set.add (canonicalTempId aliasRoots tid) temps
+        | Var tid ->
+            let root = canonicalTempId aliasRoots tid
+            let borrowed =
+                Map.tryFind tid borrowRoots
+                |> Option.orElse (Map.tryFind root borrowRoots)
+                |> Option.defaultValue Set.empty
+            temps |> Set.add root |> Set.union borrowed
         | _ -> temps
     match cexpr with
     | TailCall (_, args) ->
@@ -211,6 +262,7 @@ let rec detectTailCalls
     (releasedTemps: Set<TempId>)
     (inTailPosition: bool)
     (aliasRoots: Map<TempId, TempId>)
+    (borrowRoots: Map<TempId, Set<TempId>>)
     (expr: AExpr)
     : AExpr =
     match expr with
@@ -220,9 +272,9 @@ let rec detectTailCalls
     | Jump _ -> expr
     | Join (parameter, continuation, entry) ->
         let continuation' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots continuation
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots continuation
         let entry' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots entry
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots entry
         Join (parameter, continuation', entry')
 
     | Let (tempId, cexpr, body) ->
@@ -231,7 +283,7 @@ let rec detectTailCalls
         if inTailPosition && isCallExpr cexpr && isReturnOf tempId body then
             // This is a tail call! Convert the call to tail call variant
             let tailCall = convertToTailCall cexpr
-            let tailArgTemps = tailCallArgTempIds aliasRoots tailCall
+            let tailArgTemps = tailCallArgTempIds aliasRoots borrowRoots tailCall
             let (movableDecs, remainingBody) = collectMovableDecPrefix aliasRoots tailArgTemps body
             let transferredBody =
                 match tailCall with
@@ -255,14 +307,16 @@ let rec detectTailCalls
                 // Cleanup remains after the call (typically overlap with a tail argument),
                 // so keep a normal call to preserve the post-call unwind work.
                 let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
+                let borrowRoots' = extendBorrowRoots aliasRoots borrowRoots tempId cexpr
                 let body' =
                     detectTailCalls
-                        currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots' body
+                        currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots' borrowRoots' body
                 Let (tempId, cexpr, body')
         else
             // Not a tail call - recurse into body
             // Body is in tail position if current expression is
             let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
+            let borrowRoots' = extendBorrowRoots aliasRoots borrowRoots tempId cexpr
             let releasedTemps' =
                 match cexpr with
                 | RefCountDec (Var releasedTemp, _, _, _)
@@ -273,15 +327,15 @@ let rec detectTailCalls
                     releasedTemps
             let body' =
                 detectTailCalls
-                    currentFuncName isCurrentMember typedParams ownedParams releasedTemps' inTailPosition aliasRoots' body
+                    currentFuncName isCurrentMember typedParams ownedParams releasedTemps' inTailPosition aliasRoots' borrowRoots' body
             Let (tempId, cexpr, body')
 
     | If (cond, thenBranch, elseBranch) ->
         // If expression: both branches are in tail position if If is
         let thenBranch' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots thenBranch
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots thenBranch
         let elseBranch' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots elseBranch
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots elseBranch
         If (cond, thenBranch', elseBranch')
 
 /// Detect tail calls in a function
@@ -323,7 +377,7 @@ let private detectTailCallsInFunctionWithRegistry
             | _ -> false
         let body' =
             detectTailCalls
-                func.Name isCurrentMember func.TypedParams ownedParams Set.empty true Map.empty func.Body
+                func.Name isCurrentMember func.TypedParams ownedParams Set.empty true Map.empty Map.empty func.Body
         { func with Body = body' }
 
 let detectTailCallsInFunction (func: Function) : Function =
