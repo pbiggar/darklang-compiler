@@ -87,3 +87,6 @@ let x = Stdlib.Result.Result.Error 99L in Stdlib.Result.withDefault x 42L = 42L
 
 // Large collections follow the interpreter's stack-safe fold implementation.
 let results = Stdlib.List.repeatUnsafe 100000 (Stdlib.Result.Result.Ok 1L) in match Stdlib.Result.collect results with | Ok values -> Stdlib.List.length values | Error _ -> 0 = 100000 isolated=true
+
+// Large value extraction follows the interpreter's fold/reverse implementation.
+let results = Stdlib.List.repeatUnsafe 100000 (Stdlib.Result.Result.Ok 1L) in match Stdlib.Result.values results with | Ok values -> Stdlib.List.length values | Error _ -> 0 = 100000 isolated=true
