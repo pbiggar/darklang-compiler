@@ -1,0 +1,16 @@
+#!/bin/bash
+# fuzz - Build and run the interpreter-backed Dark compiler fuzzer.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if ! command -v darklang-interpreter >/dev/null 2>&1; then
+    echo "Error: darklang-interpreter is not on PATH." >&2
+    echo "Install it with './scripts/install-darklang-interpreter.sh'." >&2
+    exit 1
+fi
+
+./build --ai -- src/Fuzzer/Fuzzer.fsproj
+exec dotnet run --no-build --project src/Fuzzer/Fuzzer.fsproj -- "$@"
