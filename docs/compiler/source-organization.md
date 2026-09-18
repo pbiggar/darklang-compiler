@@ -101,12 +101,15 @@ Its block-argument contract distinguishes unmanaged values from managed
 ownership identities. At a branch, each arm transfers its result identity, the
 verifier compares the residual path ownership, and the continuation receives
 one fresh identity.
-`VerifyOwnership.verifyClosed` checks scalar accesses, leaf uses, edge cleanup,
-fresh definitions, join agreement, and final ownership balance. Dialects must
-provide scalar-use accounting explicitly. List extraction proves its opaque
-scalars cannot reference canonical list identities; its adapter still derives
-managed uses from explicit operand inputs, so a future dialect cannot inherit
-the extraction proof by default.
+Function signatures independently classify managed parameters as borrowed or
+consumed and managed results as borrowed or produced.
+`VerifyOwnership.verifyFunction` checks the boundary together with scalar
+accesses, leaf uses, edge cleanup, fresh definitions, join agreement, and final
+ownership balance; `verifyClosed` supplies the empty managed boundary used by
+current list regions. Dialects must provide scalar-use accounting explicitly.
+List extraction proves its opaque scalars cannot reference canonical list
+identities; its adapter still derives managed uses from explicit operand
+inputs, so a future dialect cannot inherit the extraction proof by default.
 
 The old `SemanticIR` container is removed: HIR owns control-flow data,
 `ValueLiveness` owns backward edge transfer, and `DestructionAnalysis` owns
@@ -116,13 +119,13 @@ layout/type verification layered around it.
 
 Future whole-program work must extend this normalized value interface across
 all checked expressions, preserving conservative contracts for opaque source
-evaluation, then add function ownership signatures, loops, and explicit
-borrowed/escaping boundaries. The closed-region
-verifier does not model RC credits, runtime uniqueness, or constructor reset
-tokens. General managed arguments still need lowering through ANF and RC
-insertion. ANF lifetime insertion remains authoritative outside these regions;
-moving generated printing before general ownership is a separate semantic
-migration. No empty future passes or compatibility IR conversions are added.
+evaluation, then carry the ownership signatures through calls, loops, and
+escaping boundaries. The verifier does not model RC credits, runtime
+uniqueness, or constructor reset tokens. General managed arguments still need
+lowering through ANF and RC insertion. ANF lifetime insertion remains
+authoritative outside these regions; moving generated printing before general
+ownership is a separate semantic migration. No empty future passes or
+compatibility IR conversions are added.
 
 Each refactoring chunk preserves algorithms, evaluation order, and emitted-code
 behavior. Semantic migrations require focused failing E2E coverage before their

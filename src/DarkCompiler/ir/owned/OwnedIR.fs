@@ -6,6 +6,25 @@ type Input<'id> = Borrowed of 'id | Consumed of 'id
 
 type BlockArgument<'id> = Unmanaged | Managed of 'id
 
+/// Function boundaries distinguish access from ownership transfer. Borrowed
+/// parameters remain owned by the caller; consumed parameters transfer one
+/// ownership unit into the function.
+type ParameterOwnership<'id> =
+    | BorrowedParameter of 'id
+    | ConsumedParameter of 'id
+
+/// A borrowed result transfers no unit, while a produced result transfers one
+/// unit to the caller. Alias provenance remains a separate HIR contract.
+type ResultOwnership<'id> =
+    | UnmanagedResult
+    | BorrowedResult of 'id
+    | ProducedResult of 'id
+
+type FunctionSignature<'id> = {
+    Parameters: ParameterOwnership<'id> list
+    Result: ResultOwnership<'id>
+}
+
 /// Lists retain multiplicity: consuming one unit twice or defining a duplicate
 /// identity is invalid. This is unit ownership, not general RC credit arithmetic.
 type Contract<'id> = {
@@ -35,6 +54,11 @@ type VerificationError<'id when 'id: comparison> =
     | InvalidUse of 'id
     | InvalidRelease of 'id
     | DuplicateDefinition of 'id
+    | DuplicateParameter of 'id
+    | InconsistentFunctionParameters
+    | InconsistentFunctionResult
+    | InvalidBorrowedResult of 'id
+    | InvalidProducedResult of 'id
     | InconsistentJoin
     | InconsistentBlockArgument
     | UnreleasedValues of Set<'id>

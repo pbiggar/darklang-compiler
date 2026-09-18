@@ -41,6 +41,15 @@ capability for later storage/ownership selection, never a source-visible
 mutation guarantee. Opaque AST operands retain source order and are not
 silently treated as effect-free.
 
+Function ownership signatures are separate from primitive contracts. Managed
+parameters are borrowed or consumed; managed results are borrowed or produced.
+The ownership verifier starts consumed parameters with one transferable unit,
+keeps borrowed parameters accessible but non-consumable, and requires every
+owned unit to be released or transferred as the produced result. A borrowed
+result must remain within the borrowed boundary. Unmanaged parameters and
+results stay outside ownership accounting. Signatures deliberately carry no
+alias provenance or effects; those remain HIR contract responsibilities.
+
 ## ANF shared continuations
 
 ANF has nonrecursive lexical `Join(parameter, continuation, entry)` blocks and
