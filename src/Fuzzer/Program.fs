@@ -9,13 +9,18 @@ open AST
 open CompilationContexts
 open CompilerOptions
 
+type Action =
+    | Fuzz
+    | Replay of sourcePath:string
+    | Minimize of sourcePath:string
+
 type Config = {
     Seed: int
     Cases: int
     MaxDepth: int
     TimeoutMs: int
     ArtifactDirectory: string
-    ReplaySource: string option
+    Action: Action
 }
 
 type ProcessOutcome =
@@ -36,12 +41,13 @@ let defaultConfig : Config = {
     MaxDepth = 6
     TimeoutMs = 2000
     ArtifactDirectory = "fuzz-results"
-    ReplaySource = None
+    Action = Fuzz
 }
 
 let usage =
     "Usage: dotnet run --project src/Fuzzer/Fuzzer.fsproj -- "
-    + "[--seed N] [--cases N] [--max-depth N] [--timeout-ms N] [--artifacts PATH] [--replay FILE]"
+    + "[--seed N] [--cases N] [--max-depth N] [--timeout-ms N] [--artifacts PATH] "
+    + "[--replay FILE | --minimize FILE]"
 
 let private parsePositiveInt (flag: string) (value: string) : Result<int, string> =
     match Int32.TryParse value with
@@ -72,7 +78,13 @@ let rec parseArgs (config: Config) (args: string list) : Result<Config option, s
     | "--artifacts" :: value :: rest when value <> "" ->
         parseArgs { config with ArtifactDirectory = value } rest
     | "--replay" :: value :: rest when value <> "" ->
-        parseArgs { config with ReplaySource = Some value } rest
+        match config.Action with
+        | Fuzz -> parseArgs { config with Action = Replay value } rest
+        | Replay _ | Minimize _ -> Error "Specify only one of --replay and --minimize"
+    | "--minimize" :: value :: rest when value <> "" ->
+        match config.Action with
+        | Fuzz -> parseArgs { config with Action = Minimize value } rest
+        | Replay _ | Minimize _ -> Error "Specify only one of --replay and --minimize"
     | flag :: _ -> Error $"Unknown or incomplete argument '{flag}'"
 
 let private supportedTypes = [TInt64; TBool; TString]
@@ -305,6 +317,173 @@ let private checkCase
                 if interpreterOutput = nativeOutput then Passed
                 else ResultMismatch (interpreterOutput, nativeOutput)
 
+/// Conservatively recognize the exact typed subset emitted by this generator.
+/// The interpreter still decides whether every minimized candidate is valid;
+/// this only prevents a shrink from changing the top-level observation type.
+let rec private inferGeneratedType
+    (environment: (string * Type) list)
+    (expr: Expr)
+    : Type option =
+    let variableType name =
+        environment
+        |> List.tryPick (fun (variableName, typ) ->
+            if variableName = name then Some typ else None)
+
+    let sameOperandTypes left right =
+        match inferGeneratedType environment left, inferGeneratedType environment right with
+        | Some leftType, Some rightType when leftType = rightType -> Some leftType
+        | _ -> None
+
+    match expr with
+    | Int64Literal _ -> Some TInt64
+    | BoolLiteral _ -> Some TBool
+    | StringLiteral _ -> Some TString
+    | Var name -> variableType name
+    | BinOp (op, left, right) ->
+        match op with
+        | Add | Sub | Mul ->
+            match sameOperandTypes left right with
+            | Some TInt64 -> Some TInt64
+            | _ -> None
+        | StringConcat ->
+            match sameOperandTypes left right with
+            | Some TString -> Some TString
+            | _ -> None
+        | And | Or ->
+            match sameOperandTypes left right with
+            | Some TBool -> Some TBool
+            | _ -> None
+        | Eq | Neq | Lt | Gt | Lte | Gte ->
+            sameOperandTypes left right |> Option.map (fun _ -> TBool)
+        | Div | Mod | Pow | Shl | Shr | BitAnd | BitOr | BitXor -> None
+    | Let (LPVariable name, binding, body) ->
+        inferGeneratedType environment binding
+        |> Option.bind (fun bindingType ->
+            inferGeneratedType ((name, bindingType) :: environment) body)
+    | If (condition, thenBranch, elseBranch) ->
+        match
+            inferGeneratedType environment condition,
+            inferGeneratedType environment thenBranch,
+            inferGeneratedType environment elseBranch
+        with
+        | Some TBool, Some thenType, Some elseType when thenType = elseType -> Some thenType
+        | _ -> None
+    | _ -> None
+
+let rec private expressionSize (expr: Expr) : int =
+    match expr with
+    | BinOp (_, left, right) -> 1 + expressionSize left + expressionSize right
+    | Let (_, binding, body) -> 1 + expressionSize binding + expressionSize body
+    | If (condition, thenBranch, elseBranch) ->
+        1 + expressionSize condition + expressionSize thenBranch + expressionSize elseBranch
+    | _ -> 1
+
+/// Enumerate deterministic local rewrites over the compiler AST. The oracle,
+/// not this function, decides whether a rewrite preserves the reported defect.
+let rec private oneStepSimplifications (expr: Expr) : Expr list =
+    let literalSimplifications =
+        match expr with
+        | Int64Literal value when value <> 0L ->
+            let towardSign = if value < 0L then -1L else 1L
+            [Int64Literal 0L; Int64Literal towardSign]
+        | BoolLiteral false -> [BoolLiteral true]
+        | StringLiteral value when value <> "" -> [StringLiteral ""]
+        | _ -> []
+
+    let structuralSimplifications =
+        match expr with
+        | BinOp (op, left, right) ->
+            [left; right]
+            @ (oneStepSimplifications left |> List.map (fun candidate -> BinOp (op, candidate, right)))
+            @ (oneStepSimplifications right |> List.map (fun candidate -> BinOp (op, left, candidate)))
+        | Let (pattern, binding, body) ->
+            [binding; body]
+            @ (oneStepSimplifications binding |> List.map (fun candidate -> Let (pattern, candidate, body)))
+            @ (oneStepSimplifications body |> List.map (fun candidate -> Let (pattern, binding, candidate)))
+        | If (condition, thenBranch, elseBranch) ->
+            [condition; thenBranch; elseBranch]
+            @ (oneStepSimplifications condition
+               |> List.map (fun candidate -> If (candidate, thenBranch, elseBranch)))
+            @ (oneStepSimplifications thenBranch
+               |> List.map (fun candidate -> If (condition, candidate, elseBranch)))
+            @ (oneStepSimplifications elseBranch
+               |> List.map (fun candidate -> If (condition, thenBranch, candidate)))
+        | _ -> []
+
+    literalSimplifications @ structuralSimplifications
+    |> List.filter (fun candidate -> candidate <> expr)
+    |> List.distinct
+
+let private sameFailure (expected: CaseOutcome) (candidate: CaseOutcome) : bool =
+    match expected, candidate with
+    | CompilerRejected expectedMessage, CompilerRejected candidateMessage ->
+        expectedMessage = candidateMessage
+    | NativeFailed (expectedExit, _, expectedError), NativeFailed (candidateExit, _, candidateError) ->
+        expectedExit = candidateExit && expectedError = candidateError
+    | ResultMismatch _, ResultMismatch _ -> true
+    | _ -> false
+
+let private minimize
+    (config: Config)
+    (stdlib: StdlibResult)
+    (source: string)
+    : Result<string * CaseOutcome * int * int, string> =
+    match Parser.parseString false source with
+    | Error message -> Error $"Cannot parse minimizer input: {message}"
+    | Ok (Program [Expression originalExpr]) ->
+        match inferGeneratedType [] originalExpr with
+        | None -> Error "Minimizer input is outside the generated expression subset"
+        | Some originalType ->
+            let originalOutcome = checkCase config stdlib -1 source
+            match originalOutcome with
+            | Passed -> Error "The input does not reproduce a discrepancy"
+            | InterpreterFailed _ -> Error "The interpreter must accept a program before it can be minimized"
+            | CompilerRejected _ | NativeFailed _ | ResultMismatch _ ->
+                let rec tryCandidates attempts candidates =
+                    match candidates with
+                    | [] -> None, attempts
+                    | (candidateExpr, candidateSource) :: rest ->
+                        let outcome = checkCase config stdlib -1 candidateSource
+                        let nextAttempts = attempts + 1
+                        if sameFailure originalOutcome outcome then
+                            Some (candidateExpr, candidateSource, outcome), nextAttempts
+                        else
+                            tryCandidates nextAttempts rest
+
+                let rec reduce
+                    (attempts: int)
+                    (reductions: int)
+                    (currentExpr: Expr)
+                    (currentSource: string)
+                    (currentOutcome: CaseOutcome)
+                    =
+                    let currentMetric = expressionSize currentExpr, currentSource.Length
+                    let candidates =
+                        oneStepSimplifications currentExpr
+                        |> List.choose (fun candidateExpr ->
+                            match inferGeneratedType [] candidateExpr with
+                            | Some candidateType when candidateType = originalType ->
+                                let candidateSource =
+                                    Program [Expression candidateExpr]
+                                    |> ASTPrettyPrinter.formatProgram
+                                let candidateMetric = expressionSize candidateExpr, candidateSource.Length
+                                if candidateMetric < currentMetric then
+                                    Some (candidateExpr, candidateSource)
+                                else
+                                    None
+                            | _ -> None)
+                        |> List.distinctBy snd
+
+                    match tryCandidates attempts candidates with
+                    | Some (smallerExpr, smallerSource, smallerOutcome), nextAttempts ->
+                        printfn $"reduced: {currentSource.Length} -> {smallerSource.Length} bytes"
+                        reduce nextAttempts (reductions + 1) smallerExpr smallerSource smallerOutcome
+                    | None, nextAttempts ->
+                        Ok (currentSource, currentOutcome, nextAttempts, reductions)
+
+                reduce 0 0 originalExpr source originalOutcome
+    | Ok _ -> Error "Minimizer input must contain exactly one top-level expression"
+
 let private describeProcessOutcome (outcome: ProcessOutcome) : string =
     match outcome with
     | TimedOut -> "interpreter timed out"
@@ -334,15 +513,14 @@ let private saveFinding
     File.WriteAllText(
         prefix + ".txt",
         $"seed: {config.Seed}\ncase: {caseIndex}\nmax-depth: {config.MaxDepth}\n"
-        + $"replay: dotnet run --no-build --project src/Fuzzer/Fuzzer.fsproj -- --replay \"{sourcePath}\"\n"
+        + $"replay: ./fuzz --replay \"{sourcePath}\"\n"
+        + $"minimize: ./fuzz --minimize \"{sourcePath}\"\n"
         + $"{describeCaseOutcome outcome}\n")
     prefix
 
 let private run (config: Config) : int =
     Directory.CreateDirectory(config.ArtifactDirectory) |> ignore
     let currentSourcePath = Path.Combine(config.ArtifactDirectory, "current.dark")
-    printfn $"seed: {config.Seed}"
-    printfn $"cases: {config.Cases}"
 
     match Platform.detectHostTarget () with
     | Error message ->
@@ -354,11 +532,11 @@ let private run (config: Config) : int =
             eprintfn $"Standard library compilation failed: {message}"
             1
         | Ok stdlib ->
-            match config.ReplaySource with
-            | Some path when not (File.Exists path) ->
+            match config.Action with
+            | Replay path when not (File.Exists path) ->
                 eprintfn $"Replay source does not exist: {path}"
                 1
-            | Some path ->
+            | Replay path ->
                 let source = File.ReadAllText path
                 match checkCase config stdlib 0 source with
                 | Passed ->
@@ -367,7 +545,25 @@ let private run (config: Config) : int =
                 | failure ->
                     eprintfn $"Replay reproduced: {describeCaseOutcome failure}"
                     1
-            | None ->
+            | Minimize path when not (File.Exists path) ->
+                eprintfn $"Minimizer source does not exist: {path}"
+                1
+            | Minimize path ->
+                let source = File.ReadAllText path
+                match minimize config stdlib source with
+                | Error message ->
+                    eprintfn $"Minimization failed: {message}"
+                    1
+                | Ok (minimizedSource, outcome, attempts, reductions) ->
+                    let outputPath = Path.ChangeExtension(path, ".min.dark")
+                    File.WriteAllText(outputPath, minimizedSource + Environment.NewLine)
+                    printfn $"Minimized in {attempts} oracle attempts and {reductions} reductions."
+                    printfn $"Result: {outputPath}"
+                    printfn $"Preserved failure: {describeCaseOutcome outcome}"
+                    0
+            | Fuzz ->
+                printfn $"seed: {config.Seed}"
+                printfn $"cases: {config.Cases}"
                 let random = Random(config.Seed)
                 let rec loop caseIndex =
                     if caseIndex >= config.Cases then

@@ -8,9 +8,7 @@ oracle; the fuzzer does not implement a second evaluator or language model.
 Build the fuzzer, then run a bounded campaign:
 
 ```bash
-./build --ai -- src/Fuzzer/Fuzzer.fsproj
-dotnet run --no-build --project src/Fuzzer/Fuzzer.fsproj -- \
-  --seed 1234 --cases 1000 --max-depth 6 --timeout-ms 2000
+./fuzz --seed 1234 --cases 1000 --max-depth 6 --timeout-ms 2000
 ```
 
 The seed is always printed. Before compiling each case, the tool writes its
@@ -20,9 +18,20 @@ file and a `.txt` result file named with the seed and case index. Replay an
 artifact through the same oracle and compiler path with:
 
 ```bash
-dotnet run --no-build --project src/Fuzzer/Fuzzer.fsproj -- \
-  --replay fuzz-results/seed-1234-case-5.dark
+./fuzz --replay fuzz-results/seed-1234-case-5.dark
 ```
+
+Minimize a reproducer with the deterministic structural reducer:
+
+```bash
+./fuzz --minimize fuzz-results/seed-1234-case-5.dark
+```
+
+The reducer repeatedly tries smaller compiler ASTs and retains a candidate only
+when the interpreter accepts it and the compiler reproduces the same failure.
+It writes `seed-1234-case-5.min.dark` beside the original. The reducer is local
+and deterministic; it does not use an AI service or implement a second
+evaluator.
 
 The first generator deliberately covers a small, total subset: `Int64`,
 `Bool`, and `String` literals, variables, `let`, `if`, arithmetic, comparisons,
