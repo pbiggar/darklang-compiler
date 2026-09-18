@@ -254,7 +254,7 @@ let testRecursiveCloneKeepsTailCallAndReducedSignature () : TestResult =
         | _ -> Error "Expected each recursive tail call to target its reduced-signature clone"
     | _ -> Error $"Expected two recursive literal clones, found {List.length clones}"
 
-let testManagedLiteralsAreNotSpecialized () : TestResult =
+let testUniformStringLiteralIsSpecialized () : TestResult =
     let text = typedParam 0 AST.TString
     let target =
         { Name = "managed"
@@ -270,7 +270,7 @@ let testManagedLiteralsAreNotSpecialized () : TestResult =
           Body =
             Let (
                 TempId 1,
-                Call ("managed", [StringLiteral "first"]),
+                Call ("managed", [StringLiteral "second"]),
                 Let (
                     TempId 2,
                     Call ("managed", [StringLiteral "second"]),
@@ -280,13 +280,183 @@ let testManagedLiteralsAreNotSpecialized () : TestResult =
     let (Program (functions, _)) =
         ANF_DirectCallSpecialization.specializeProgram
             (Program ([target; caller], Return UnitLiteral))
+    match expectArity "managed" 0 functions with
+    | Error err -> Error err
+    | Ok () -> expectDirectCallArity "caller" "managed" 0 functions
+
+let testImmediateSemanticValuesCreateClones () : TestResult =
+    let cases =
+        [ ("charValue", AST.TChar, StringLiteral "a", StringLiteral "b")
+          ("dateValue", AST.TDateTime, intAtom 10L, intAtom 20L)
+          ("enumValue", AST.TSum ("Mode", []), intAtom 0L, intAtom 1L) ]
+    let checkCase (name, typ, firstValue, secondValue) =
+        let value = typedParam 0 typ
+        let target =
+            { Name = name
+              TypedParams = [value]
+              ReturnType = typ
+              ReturnOwnership = OwnedReturn
+              Body = Return (Var value.Id) }
+        let caller =
+            { Name = $"{name}Caller"
+              TypedParams = []
+              ReturnType = typ
+              ReturnOwnership = OwnedReturn
+              Body =
+                Let (
+                    TempId 1,
+                    Call (name, [firstValue]),
+                    Let (TempId 2, Call (name, [secondValue]), Return (Var (TempId 2)))
+                ) }
+        let (Program (functions, _)) =
+            ANF_DirectCallSpecialization.specializeProgram
+                (Program ([target; caller], Return UnitLiteral))
+        let clones =
+            functions
+            |> List.filter (fun func -> func.Name.StartsWith($"{name}__literal_"))
+        if List.length clones = 2
+           && (clones |> List.forall (fun func -> List.isEmpty func.TypedParams)) then Ok ()
+        else Error $"Expected two literal-specialized clones for {name}, found {List.length clones}"
+    cases
+    |> List.fold (fun result case -> Result.bind (fun () -> checkCase case) result) (Ok ())
+
+let testKnownIndirectTargetBecomesSpecializable () : TestResult =
+    let value = param 0
+    let target =
+        { Name = "knownTarget"
+          TypedParams = [value]
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          Body = Return (Var value.Id) }
+    let caller =
+        { Name = "knownCaller"
+          TypedParams = []
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          Body =
+            Let (
+                TempId 1,
+                IndirectCall (FuncRef "knownTarget", [intAtom 7L]),
+                Return (Var (TempId 1))
+            ) }
+    let (Program (functions, _)) =
+        ANF_DirectCallSpecialization.specializeProgram
+            (Program ([target; caller], Return UnitLiteral))
+    match expectArity "knownTarget" 0 functions with
+    | Error err -> Error err
+    | Ok () -> expectDirectCallArity "knownCaller" "knownTarget" 0 functions
+
+let testMismatchedBottomPlaceholderDoesNotSeedClone () : TestResult =
+    let value = typedParam 0 AST.TString
+    let target =
+        { Name = "bottomTarget"
+          TypedParams = [value]
+          ReturnType = AST.TString
+          ReturnOwnership = OwnedReturn
+          Body = Return (Var value.Id) }
+    let caller =
+        { Name = "bottomCaller"
+          TypedParams = []
+          ReturnType = AST.TString
+          ReturnOwnership = OwnedReturn
+          Body =
+            Let (
+                TempId 1,
+                Call ("bottomTarget", [StringLiteral "first"]),
+                Let (
+                    TempId 2,
+                    Call ("bottomTarget", [StringLiteral "second"]),
+                    Let (
+                        TempId 3,
+                        Call ("bottomTarget", [UnitLiteral]),
+                        Return (Var (TempId 2))
+                    )
+                )
+            ) }
+    let (Program (functions, _)) =
+        ANF_DirectCallSpecialization.specializeProgram
+            (Program ([target; caller], Return UnitLiteral))
     let clones =
         functions
-        |> List.filter (fun func -> func.Name.StartsWith("managed__literal_"))
-    match expectArity "managed" 1 functions with
-    | Error err -> Error err
-    | Ok () when List.isEmpty clones -> expectDirectCallArity "caller" "managed" 1 functions
-    | Ok () -> Error "Expected managed string literals to retain the original calling convention"
+        |> List.filter (fun func -> func.Name.StartsWith("bottomTarget__literal_"))
+    if List.length clones = 2
+       && (clones |> List.forall (fun func -> not (containsAtom UnitLiteral func.Body))) then Ok ()
+    else Error "Expected only representation-compatible String clones"
+
+let testConstructionValuesCreateClones () : TestResult =
+    let checkCase name typ firstConstruction secondConstruction =
+        let value = typedParam 0 typ
+        let target =
+            { Name = name
+              TypedParams = [value]
+              ReturnType = typ
+              ReturnOwnership = OwnedReturn
+              Body = Return (Var value.Id) }
+        let caller =
+            { Name = $"{name}Caller"
+              TypedParams = []
+              ReturnType = typ
+              ReturnOwnership = OwnedReturn
+              Body =
+                Let (
+                    TempId 1,
+                    firstConstruction,
+                    Let (
+                        TempId 2,
+                        Call (name, [Var (TempId 1)]),
+                        Let (
+                            TempId 3,
+                            secondConstruction,
+                            Let (TempId 4, Call (name, [Var (TempId 3)]), Return (Var (TempId 4)))
+                        )
+                    )
+                ) }
+        let (Program (functions, _)) =
+            ANF_DirectCallSpecialization.specializeProgram
+                (Program ([target; caller], Return UnitLiteral))
+        let clones =
+            functions
+            |> List.filter (fun func -> func.Name.StartsWith($"{name}__literal_"))
+        if List.length clones = 2
+           && (clones |> List.forall (fun func -> List.isEmpty func.TypedParams)) then Ok ()
+        else Error $"Expected two construction-specialized clones for {name}, found {List.length clones}"
+    let int128Result =
+        checkCase
+            "wideValue"
+            AST.TInt128
+            (Call ("Stdlib.Int128.__fromWords", [IntLiteral (UInt64 1UL); IntLiteral (UInt64 0UL)]))
+            (Call ("Stdlib.Int128.__fromWords", [IntLiteral (UInt64 2UL); IntLiteral (UInt64 0UL)]))
+    let uint128Result =
+        Result.bind
+            (fun () ->
+                checkCase
+                    "unsignedWideValue"
+                    AST.TUInt128
+                    (Call ("Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 3UL); IntLiteral (UInt64 0UL)]))
+                    (Call ("Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 4UL); IntLiteral (UInt64 0UL)])))
+            int128Result
+    let tupleResult =
+        Result.bind
+            (fun () ->
+                checkCase
+                    "tupleValue"
+                    (AST.TTuple [AST.TInt64; AST.TBool])
+                    (TupleAlloc [intAtom 1L; BoolLiteral true])
+                    (TupleAlloc [intAtom 2L; BoolLiteral false]))
+            uint128Result
+    let descriptor =
+        { SourceTypeName = "SmallRecord"
+          RuntimeTypeName = "SmallRecord"
+          TypeArgs = []
+          Fields = [("count", AST.TInt64); ("enabled", AST.TBool)] }
+    Result.bind
+        (fun () ->
+            checkCase
+                "recordValue"
+                (AST.TRecord ("SmallRecord", []))
+                (RecordAlloc (descriptor, [intAtom 1L; BoolLiteral true]))
+                (RecordAlloc (descriptor, [intAtom 2L; BoolLiteral false])))
+        tupleResult
 
 let testFloatLiteralKeysPreserveDistinctBitPatterns () : TestResult =
     let value = typedParam 0 AST.TFloat64
@@ -485,7 +655,11 @@ let tests = [
     ("Differing literals retain unspecialized fallback", testDifferingLiteralsRetainUnspecializedFallback)
     ("Finite scalar literals create bounded clones", testFiniteScalarLiteralsCreateBoundedClones)
     ("Recursive clones keep tail calls and reduced signatures", testRecursiveCloneKeepsTailCallAndReducedSignature)
-    ("Managed literals are not specialized", testManagedLiteralsAreNotSpecialized)
+    ("Uniform string literals are specialized", testUniformStringLiteralIsSpecialized)
+    ("Immediate semantic values create clones", testImmediateSemanticValuesCreateClones)
+    ("Known indirect targets become specializable", testKnownIndirectTargetBecomesSpecializable)
+    ("Mismatched bottom placeholders do not seed clones", testMismatchedBottomPlaceholderDoesNotSeedClone)
+    ("Construction values create clones", testConstructionValuesCreateClones)
     ("Float literal keys preserve distinct bit patterns", testFloatLiteralKeysPreserveDistinctBitPatterns)
     ("Literal clone count is capped", testLiteralCloneCountIsCapped)
     ("Specialized recursive signatures reach MIR and LIR", testSpecializedRecursiveSignaturesReachMirAndLir)

@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-15T20:46:30+00:00
+**Snapshot timestamp:** 2026-09-18T18:13:14+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `e7954cd317a4e9df891d8ccf93a03e47c243766c` - Optimize public Int64 float conversion
+**Compiler commit:** `1cf3cdaf7b836ecdbd1fcf60374f6ffb5b00aa82` - Persist Herdr configuration in dev image
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -22,7 +22,7 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | fasta | 154,617,366 (225x) | 686,768 | - | - | - | - |
 | fft | 407,133,425 (896x) | 454,262 | - | - | - | - |
 | fib | 8,268,587 (1.37x) | 6,054,417 | - | - | - | - |
-| huffman | 518,415,869 (181x) | 2,868,263 | - | - | - | - |
+| huffman | 518,408,776 (181x) | 2,868,263 | - | - | - | - |
 | leibniz | 17,006,832 (1.19x) | 14,258,894 | - | - | - | - |
 | mandelbrot | 15,227,450 (1.21x) | 12,557,270 | - | - | - | - |
 | matmul | 42,560,591 (65.5x) | 649,416 | - | - | - | - |
@@ -36,9 +36,9 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | quicksort | 188,808,249 (31.0x) | 6,095,209 | - | - | - | - |
 | raytracer | 51,734,416 (12.7x) | 4,067,427 | - | - | - | - |
 | regex_lite | 77,891,592 (190x) | 409,856 | - | - | - | - |
-| spectral_norm | 931,041,805 (182x) | 5,106,524 | - | - | - | - |
+| spectral_norm | 931,017,197 (182x) | 5,106,524 | - | - | - | - |
 | string_equality | 1,219,845 (0.82x) | 1,479,564 | - | - | - | - |
 | sum_to_n | 62,009 (0.24x) | 260,246 | - | - | - | - |
 | tak | 48,017,024 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 5,864,163,848 (13951x) | 420,354 | - | - | - | - |
-| warden | 47,041,942 (174x) | 270,345 | - | - | - | - |
+| tinytemplate | 5,864,163,839 (13951x) | 420,354 | - | - | - | - |
+| warden | 47,041,843 (174x) | 270,345 | - | - | - | - |
