@@ -33,15 +33,39 @@ class MergetrainIntegratorOutputTests(unittest.TestCase):
             """#!/usr/bin/env python3
 import json
 import os
+import pathlib
 import subprocess
 import sys
+import time
 
 command = next(arg for arg in sys.argv if arg in {"daemon", "status", "inspect", "retry"})
 if command == "daemon":
+    if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
+        progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
+        for stage in ("assembling", "gating", "deploying", "done"):
+            progress_file.write_text(stage, encoding="utf-8")
+            time.sleep(0.35)
     for index in range(40):
         print(f"daemon noise {index}")
     raise SystemExit(int(os.environ.get("INTEGRATOR_TEST_DAEMON_EXIT", "0")))
 if command == "status":
+    if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
+        progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
+        stage = progress_file.read_text(encoding="utf-8") if progress_file.exists() else "waiting"
+        running = stage not in {"waiting", "done"}
+        print(json.dumps({
+            "contract_version": 4,
+            "counts": {"attention": 0, "ready": 0, "running": 2 if running else 0, "waiting": 0},
+            "health": "healthy",
+            "next_action": {"code": "wait_for_runner" if running else "enqueue_clean_branch", "target_job_id": None},
+            "recent_jobs": [
+                {"id": 7, "state": "running" if running else "done"},
+                {"id": 8, "state": "running" if running else "done"},
+            ],
+            "state": "running" if running else "idle",
+            "summary": "2 job(s) are running" if running else "Queue is idle",
+        }))
+        raise SystemExit(0)
     next_action = os.environ.get("INTEGRATOR_TEST_NEXT_ACTION", "fix_blocked_job")
     print(json.dumps({
         "contract_version": 4,
@@ -52,6 +76,23 @@ if command == "status":
         "summary": "1 job(s) need attention",
     }))
 elif command == "inspect":
+    if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
+        progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
+        stage = progress_file.read_text(encoding="utf-8")
+        stage_index = ("assembling", "gating", "deploying", "done").index(stage)
+        job_id = int(sys.argv[sys.argv.index("inspect") + 1])
+        shared_events = [
+            {"id": 201, "message": "Assembling train with 2 job(s)", "detail": "", "state": "active"},
+            {"id": 204, "message": "Running gate 1/1: tests", "detail": "./run-tests --ai", "state": "active"},
+            {"id": 205, "message": "Passed gate 1/1: tests", "detail": "./run-tests --ai", "state": "success"},
+            {"id": 206, "message": "Deploying train", "detail": "", "state": "active"},
+            {"id": 207, "message": "Deployed train", "detail": "", "state": "success"},
+        ]
+        merge_event = {"id": 195 + job_id, "message": f"Merged task/progress-{job_id}", "detail": "", "state": "success"}
+        limits = (1, 3, 4, 5)
+        events = [shared_events[0], merge_event, *shared_events[1:limits[stage_index]]]
+        print(json.dumps({"events": events, "job": {"id": job_id}}, indent=2))
+        raise SystemExit(0)
     repo = os.environ["INTEGRATOR_TEST_REPO"]
     head = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"], text=True).strip()
     branch = subprocess.check_output(
@@ -95,10 +136,42 @@ raise SystemExit(1)
         environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
         environment["INTEGRATOR_TEST_REPO"] = str(repo)
         environment["INTEGRATOR_TEST_CODEX_ARGS"] = str(root / "codex-args.txt")
+        environment["INTEGRATOR_TEST_PROGRESS_FILE"] = str(root / "progress.txt")
         environment["INTEGRATOR_SCRIPT"] = str(
             source_root / "scripts" / "run-mergetrain-integrator.sh"
         )
         return repo, environment
+
+    def test_running_daemon_reports_merge_gate_and_deploy_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_PROGRESS"] = "1"
+
+            completed = subprocess.run(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "attempts"),
+                    "--once",
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("Assembling train with 2 job(s)", completed.stderr)
+            self.assertEqual(completed.stderr.count("Assembling train with 2 job(s)"), 1)
+            self.assertIn("Merged task/progress-7", completed.stderr)
+            self.assertIn("Merged task/progress-8", completed.stderr)
+            self.assertIn("Running gate 1/1: tests — ./run-tests --ai", completed.stderr)
+            self.assertIn("Passed gate 1/1: tests — ./run-tests --ai", completed.stderr)
+            self.assertIn("Deploying train", completed.stderr)
+            self.assertIn("Deployed train", completed.stderr)
 
     def test_codex_failure_is_concise_and_links_full_logs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -174,7 +247,7 @@ raise SystemExit(1)
             self.assertIn("Mergetrain daemon command failed", completed.stderr)
             self.assertIn("daemon noise 39", completed.stderr)
             self.assertNotIn("daemon noise 0\n", completed.stderr)
-            self.assertLessEqual(len(completed.stderr.splitlines()), 12)
+            self.assertLessEqual(len(completed.stderr.splitlines()), 13)
             daemon_logs = list(attempts.glob("daemon-failed-*.log"))
             self.assertEqual(len(daemon_logs), 1)
             self.assertIn("daemon noise 0", daemon_logs[0].read_text(encoding="utf-8"))
