@@ -2651,15 +2651,24 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | [] -> []
                 | (firstBindings, firstCond) :: rest -> (bindings @ firstBindings, firstCond) :: rest
             match pattern with
-            | AST.PConstructor (variantName, Some innerPattern) when not (patternAlwaysMatches innerPattern) ->
+            | AST.PConstructor (variantName, fieldPatterns)
+                when not (List.isEmpty fieldPatterns)
+                     && not (List.forall patternAlwaysMatches fieldPatterns) ->
                 match tryFindVariantForType variantName testedType variantLookup with
-                | Some (typeName, typeParams, tag, Some payloadTemplate)
-                    when variantLookup |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome) ->
-                    let payloadType =
+                | Some (typeName, typeParams, tag, fieldTypeTemplates)
+                    when variantLookup
+                         |> Map.exists (fun _ (tName, _, _, fields) ->
+                             tName = typeName && not (List.isEmpty fields)) ->
+                    let fieldTypes =
                         match testedType with
                         | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
-                            substituteTypeParams (List.zip typeParams typeArgs |> Map.ofList) payloadTemplate
-                        | _ -> payloadTemplate
+                            let subst = List.zip typeParams typeArgs |> Map.ofList
+                            fieldTypeTemplates |> List.map (substituteTypeParams subst)
+                        | _ -> fieldTypeTemplates
+                    let innerPattern, payloadType =
+                        match fieldPatterns, fieldTypes with
+                        | [fieldPattern], [fieldType] -> fieldPattern, fieldType
+                        | _ -> AST.PTuple fieldPatterns, AST.TTuple fieldTypes
                     let (tagVar, vg1) = ANF.freshVar vg
                     let (tagCmpVar, vg2) = ANF.freshVar vg1
                     let (payloadVar, vg3) = ANF.freshVar vg2

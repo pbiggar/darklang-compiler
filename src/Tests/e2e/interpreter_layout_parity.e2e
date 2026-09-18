@@ -116,7 +116,7 @@ Stdlib.List.length [Stdlib.Option.Option.Some(1L), Stdlib.Option.Option.None] = 
 
 // A constructor with adjacent empty parentheses carries a unit payload.
 Stdlib.Result.Result.Ok() == Stdlib.Result.Result.Ok () = true
-(match Stdlib.Result.Result.Ok() with | Ok () -> 1L | Error _ -> 2L) = 1L
+Stdlib.printLine (match Stdlib.Result.Result.Ok() with | Ok () -> "ok" | Error _ -> "error") = stdout="ok\n"
 
 // A nested constructor pattern is resolved in its payload's type, not the
 // scrutinee's: `String` here is AltJson.Json's, whatever else has a `String` case.

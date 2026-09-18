@@ -83,7 +83,10 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
         | Some (origTypeParams, _) ->
             // Freshen type params to avoid name clashes with caller's scope
             let (freshTypeParams, renaming) =
-                freshenTypeParamsAvoiding unavailableTypeVars origTypeParams
+                let scopeName =
+                    if resolvedFuncName.StartsWith "Stdlib." then None
+                    else Some resolvedFuncName
+                freshenTypeParamsAvoiding scopeName unavailableTypeVars origTypeParams
             let paramTypes = origParamTypes |> List.map (applyTypeVarRenaming renaming)
             let returnType = applyTypeVarRenaming renaming origReturnType
             let typeParams = freshTypeParams
@@ -337,7 +340,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                 (
             // Freshen type params to avoid name clashes with caller's scope
             let (freshTypeParams, renaming) =
-                freshenTypeParamsAvoiding unavailableTypeVars moduleFunc.TypeParams
+                freshenTypeParamsAvoiding None unavailableTypeVars moduleFunc.TypeParams
             let paramTypes = moduleFunc.ParamTypes |> List.map (applyTypeVarRenaming renaming)
             let returnType = applyTypeVarRenaming renaming moduleFunc.ReturnType
             let typeParams = freshTypeParams

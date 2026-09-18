@@ -1470,6 +1470,10 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
             parseListPattern rest []
         | TIdent typeName :: TLBrace :: _ when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             Error "Record patterns are not supported"
+        | TIdent name :: (TAdjacentLParen | TLParen) :: TRParen :: rest
+            when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
+            // `Ok()` and `Ok ()` both spell a constructor with one Unit field.
+            Ok (PConstructor (name, [PUnit]), rest)
         | TIdent name :: (TAdjacentLParen | TLParen) :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             let rec parseFields remaining acc =
                 parsePattern remaining
