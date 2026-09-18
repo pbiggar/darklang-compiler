@@ -113,3 +113,16 @@ $"{{ a {"b"} }}" = "{ a b }"
 // A constructor with adjacent parenthesized fields is one argument.
 Stdlib.Option.map Stdlib.Option.Option.Some(1L) (fun x -> x + 1L) = Stdlib.Option.Option.Some 2L
 Stdlib.List.length [Stdlib.Option.Option.Some(1L), Stdlib.Option.Option.None] = 2
+
+// A constructor with adjacent empty parentheses carries a unit payload.
+Stdlib.Result.Result.Ok() == Stdlib.Result.Result.Ok () = true
+(match Stdlib.Result.Result.Ok() with | Ok () -> 1L | Error _ -> 2L) = 1L
+
+// A nested constructor pattern is resolved in its payload's type, not the
+// scrutinee's: `String` here is AltJson.Json's, whatever else has a `String` case.
+let nestedVariantArm (o: Stdlib.Option.Option<Stdlib.AltJson.Json>) : Int64 =
+  match o with
+  | Some(String _) -> 1L
+  | None -> 2L
+  | Some(_) -> 3L
+[nestedVariantArm (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.String "x")), nestedVariantArm Stdlib.Option.Option.None, nestedVariantArm (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.Number 1.0))] = [1L, 2L, 3L]

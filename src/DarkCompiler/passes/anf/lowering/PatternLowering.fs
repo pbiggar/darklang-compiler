@@ -908,10 +908,37 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             (finalExpr, vg3))))
 
         // Build comparison expression for a pattern
-        let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+        // A constructor pattern's variant is looked up in the type of the value it
+        // tests, which for a nested pattern is the enclosing variant's payload, not
+        // the match scrutinee. Looked up by bare name, `| Some(String "2.0")` on an
+        // Option<Json> found whatever type registered a `String` variant last, with
+        // that type's tag, and then compared the payload as a string: wrong arm on
+        // a Number, SIGSEGV on a Float payload.
+        let rec substituteTypeParams (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+            match typ with
+            | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
+            | AST.TTuple elems -> AST.TTuple (List.map (substituteTypeParams subst) elems)
+            | AST.TRecord (name, args) -> AST.TRecord (name, List.map (substituteTypeParams subst) args)
+            | AST.TList elem -> AST.TList (substituteTypeParams subst elem)
+            | AST.TDict (k, v) -> AST.TDict (substituteTypeParams subst k, substituteTypeParams subst v)
+            | AST.TSum (name, args) -> AST.TSum (name, List.map (substituteTypeParams subst) args)
+            | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteTypeParams subst) args, substituteTypeParams subst ret)
+            | _ -> typ
+
+        /// `patType` is the static type of the value `scrutAtom` holds, when known;
+        /// None falls back to the match scrutinee's type.
+        let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+            let testedType = defaultArg patType scrutType
+            let variantHere variantName = tryFindVariantForType variantName testedType variantLookup
+            let typeHasAnyPayloadHere (variantName: string) : bool =
+                match variantHere variantName with
+                | Some (typeName, _, _, _) ->
+                    variantLookup
+                    |> Map.exists (fun _ (tName, _, _, fields) -> tName = typeName && not (List.isEmpty fields))
+                | None -> false
             match pattern with
             | AST.POr alternatives ->
-                buildPatternComparison (AST.NonEmptyList.head alternatives) scrutAtom vg
+                buildPatternComparison (AST.NonEmptyList.head alternatives) scrutAtom patType vg
             | AST.PUnit -> Ok None  // Unit pattern always matches unit type
             | AST.PWildcard -> Ok None
             | AST.PVar _ -> Ok None
@@ -1002,9 +1029,28 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.FloatLiteral f)
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
             | AST.PConstructor (variantName, fieldPatterns) ->
-                match tryPatternVariant variantName with
-                | Some (_, _, tag, _) ->
-                    if typeHasAnyPayload variantName then
+                match variantHere variantName with
+                | Some (_, typeParams, tag, variantFieldTypes) ->
+                    let arityMismatch = List.length fieldPatterns <> List.length variantFieldTypes
+                    // The fields' types, with the tested type's arguments substituted.
+                    let fieldTypes =
+                        match testedType with
+                        | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
+                            let subst = List.zip typeParams typeArgs |> Map.ofList
+                            variantFieldTypes |> List.map (substituteTypeParams subst)
+                        | _ -> variantFieldTypes
+                    let payloadType =
+                        match fieldTypes with
+                        | [] -> None
+                        | [fieldType] -> Some fieldType
+                        | _ -> Some (AST.TTuple fieldTypes)
+
+                    if arityMismatch then
+                        // Constructor arity mismatch in pattern should not match.
+                        let (cmpVar, vg1) = ANF.freshVar vg
+                        let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
+                        Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                    elif typeHasAnyPayloadHere variantName then
                         // Mixed or payload-carrying sum type: tag is stored in heap at index 0.
                         let (tagVar, vg1) = ANF.freshVar vg
                         let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
@@ -1020,7 +1066,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             // Extract payload and check inner pattern if needed.
                             let (payloadVar, vg3) = ANF.freshVar vg2
                             let payloadLoadExpr = ANF.TupleGet (scrutAtom, 1)
-                            buildPatternComparison innerPattern (ANF.Var payloadVar) vg3
+                            buildPatternComparison innerPattern (ANF.Var payloadVar) payloadType vg3
                             |> Result.map (fun innerResult ->
                                 match innerResult with
                                 | None ->
@@ -1072,8 +1118,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let (elemVar, vg1) = ANF.freshVar vg
                         let elemLoad = ANF.TupleGet (scrutAtom, index)
                         let newBindings = accBindings @ [(elemVar, elemLoad)]
+                        let elemPatType =
+                            match testedType with
+                            | AST.TTuple elemTypes -> List.tryItem index elemTypes
+                            | _ -> None
                         // Check if this pattern needs comparison
-                        buildPatternComparison p (ANF.Var elemVar) vg1
+                        buildPatternComparison p (ANF.Var elemVar) elemPatType vg1
                         |> Result.bind (fun compResult ->
                             match compResult with
                             | None ->
@@ -1566,7 +1616,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | (AST.PListCons _ as nestedPattern) ->
                         // Structural comparison must run before extracting binders so a
                         // failed nested pattern cannot leak its bindings into this arm.
-                        buildPatternComparison nestedPattern valueAtom vg5'
+                        buildPatternComparison nestedPattern valueAtom (Some elemType) vg5'
                         |> Result.bind (fun comparison ->
                             let (conditionOpt, comparisonBindings, vg6) =
                                 match comparison with
@@ -1667,7 +1717,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                         let (condition, bindings', vg3) = makeFalsePatternCondition vg2'
                                         Ok (Some (condition, bindings', vg3))
                                     else
-                                        buildPatternComparison nestedPattern (ANF.Var valueVar) vg2'
+                                        buildPatternComparison nestedPattern (ANF.Var valueVar) (Some elemType) vg2'
                                 comparisonResult
                                 |> Result.bind (fun comparison ->
                                     let (conditionOpt, comparisonBindings, vg3) =
@@ -1950,7 +2000,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     let (condition, bindings, vg4) = makeFalsePatternCondition vg3'
                                     Ok (Some (condition, bindings, vg4))
                                 else
-                                    buildPatternComparison nestedPattern typedHeadAtom vg3'
+                                    buildPatternComparison nestedPattern typedHeadAtom (Some elemType) vg3'
                             comparisonResult
                             |> Result.bind (fun comparison ->
                                 let (guardOpt, comparisonBindings, vg4) =
@@ -2059,7 +2109,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     let (condition, bindings, vg4) = makeFalsePatternCondition vg3'
                                     Ok (Some (condition, bindings, vg4))
                                 else
-                                    buildPatternComparison nestedPattern typedHeadAtom vg3'
+                                    buildPatternComparison nestedPattern typedHeadAtom (Some elemType) vg3'
                             comparisonResult
                             |> Result.bind (fun comparison ->
                                 let (guardOpt, comparisonBindings, vg4) =
@@ -2236,7 +2286,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     let (condAtom, bindings', vg3) = makeFalsePatternCondition vg2''
                                     Ok (Some (condAtom, bindings', vg3))
                                 else
-                                    buildPatternComparison pat (ANF.Var typedHeadVar) vg2''
+                                    buildPatternComparison pat (ANF.Var typedHeadVar) (Some elemType) vg2''
                             cmpResult
                             |> Result.bind (fun cmpOpt ->
                                 let (cmpCondOpt, cmpBindings, vg3) =
@@ -2312,7 +2362,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     let (condAtom, bindings, vg5) = makeFalsePatternCondition vg4
                                     Ok (Some (condAtom, bindings, vg5))
                                 else
-                                    buildPatternComparison tailPattern (ANF.Var finalTailVar) vg4
+                                    buildPatternComparison tailPattern (ANF.Var finalTailVar) (Some (AST.TList elemType)) vg4
                             comparisonResult
                             |> Result.bind (fun comparison ->
                                 let (conditionAtoms, comparisonBindings, vg5) =
@@ -2397,7 +2447,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let (condAtom, bindings, vg1) = makeFalseCondition vg
                     Ok (Some (condAtom, bindings, vg1))
                 else
-                    buildPatternComparison single scrutAtom vg
+                    buildPatternComparison single scrutAtom (Some scrutType) vg
             | multiple ->
                 // Build comparison for each pattern, then OR them together
                 let rec buildOr (pats: AST.Pattern list) (accCondOpt: ANF.Atom option) (accBindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
@@ -2412,7 +2462,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 let (condAtom, bindings, vg1) = makeFalseCondition vg
                                 Ok (Some (condAtom, bindings, vg1))
                             else
-                                buildPatternComparison pat scrutAtom vg
+                                buildPatternComparison pat scrutAtom (Some scrutType) vg
                         cmpResult
                         |> Result.bind (fun cmpOpt ->
                             match cmpOpt with
