@@ -1,0 +1,40 @@
+// A `when` guard on a list arm that is not the last: the list-pattern
+// compilers took the body without the guard, so `flag :: _ when startsWith
+// flag "--"` matched every non-empty list (Cli.Http.Serve.parseArgs in
+// darklang/dark reported "hello" as an unknown flag).
+
+let guardedConsArm (rest: List<String>): String =
+  match rest with
+  | [] -> "empty"
+  | flag :: _ when Stdlib.String.startsWith flag "--" -> "flag"
+  | positional :: _ -> "positional"
+guardedConsArm ["hello", "x"] = "positional"
+guardedConsArm ["--port", "x"] = "flag"
+guardedConsArm [] = "empty"
+
+let guardedConsAfterLiteralHead (rest: List<String>): String =
+  match rest with
+  | [] -> "empty"
+  | "--port" :: value :: _ -> "port " ++ value
+  | flag :: _ when Stdlib.String.startsWith flag "--" -> "flag"
+  | positional :: _ -> "positional"
+guardedConsAfterLiteralHead ["hello"] = "positional"
+guardedConsAfterLiteralHead ["--port", "8"] = "port 8"
+guardedConsAfterLiteralHead ["--max"] = "flag"
+
+let guardedListArm (xs: List<Int64>): String =
+  match xs with
+  | [a, b] when a < b -> "ascending pair"
+  | [_, _] -> "pair"
+  | _ -> "other"
+guardedListArm [2L, 1L] = "pair"
+guardedListArm [1L, 2L] = "ascending pair"
+guardedListArm [1L] = "other"
+
+let guardedConsBinds (xs: List<Int>): Int =
+  match xs with
+  | head :: tail when head > 0 -> head + Stdlib.List.length tail
+  | _ :: _ -> -1
+  | [] -> 0
+guardedConsBinds [3, 1, 1] = 5
+guardedConsBinds [-3, 1] = -1

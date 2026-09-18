@@ -2968,15 +2968,20 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         |> Result.bind (fun (elseExpr, vg1) ->
                             extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' scrutType env vg1 elseExpr)
                 else
-                    // Non-empty list patterns need special handling with interleaved checks
+                    // Non-empty list patterns need special handling with interleaved
+                    // checks. The list compilers take the body as is, so an arm with a
+                    // `when` guard goes through the stages below, which test the guard
+                    // after the pattern and fall through to the rest when it is false.
                     match firstPattern with
-                    | AST.PList (_ :: _ as listPatterns) when not (listArmNeedsStages firstPattern) ->
+                    | AST.PList (_ :: _ as listPatterns)
+                        when not (listArmNeedsStages firstPattern) && Option.isNone mc.Guard ->
                         // Build the else branch first (rest of cases)
                         buildChain rest vg
                         |> Result.bind (fun (elseExpr, vg1) ->
                             // Use the new interleaved check-and-extract function
                             compileListPatternWithChecks listPatterns scrutineeAtom' scrutType env body elseExpr vg1)
-                    | AST.PListCons (headPatterns, tailPattern) when not (listArmNeedsStages firstPattern) ->
+                    | AST.PListCons (headPatterns, tailPattern)
+                        when not (listArmNeedsStages firstPattern) && Option.isNone mc.Guard ->
                         // List cons pattern - needs interleaved checks
                         buildChain rest vg
                         |> Result.bind (fun (elseExpr, vg1) ->
