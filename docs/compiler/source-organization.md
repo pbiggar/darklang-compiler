@@ -94,9 +94,10 @@ contracts used by verification, rather than a parallel operation table. This is 
 structured-region interface, not a claim that arbitrary source programs have
 been converted to HIR.
 
-`OwnedIR` supplies the shared recursive step/block representation and explicit
-borrow/consume/produce contracts. Contracts retain operand multiplicity so
-duplicate consumes and duplicate definitions cannot disappear into sets.
+`OwnedIR` supplies the shared recursive step/block representation, ordered
+`Evaluate`/`Dup`/`Drop` steps, and explicit borrow/consume/produce contracts.
+Contracts retain operand multiplicity so duplicate consumes cannot disappear
+into sets; duplicate definitions remain invalid.
 Its block-argument contract distinguishes unmanaged values from managed
 ownership identities. At a branch, each arm transfers its result identity, the
 verifier compares the residual path ownership, and the continuation receives
@@ -110,8 +111,10 @@ Borrowed call results identify their borrowed source parameter, produced
 results introduce a fresh ownership unit, and recursive targets require an
 explicit registry entry. Unknown calls stay opaque.
 `VerifyOwnership.verifyFunction` checks the boundary together with scalar
-accesses, leaf uses, edge cleanup, fresh definitions, join agreement, and final
-ownership balance; `verifyClosed` supplies the empty managed boundary used by
+accesses, leaf uses, explicit unit counts, fresh definitions, exact join
+agreement, and final ownership balance. Duplication of a borrowed identity
+creates an owned unit that may be consumed, dropped, or returned; dropping a
+borrow without such a unit is invalid. `verifyClosed` supplies the empty managed boundary used by
 current list regions. Dialects must provide scalar-use accounting explicitly.
 List extraction proves its opaque scalars cannot reference canonical list
 identities; its adapter still derives managed uses from explicit operand
@@ -126,8 +129,8 @@ layout/type verification layered around it.
 Future whole-program work must extend this normalized value and registered-call
 interface across all checked functions, preserving conservative contracts for
 opaque source evaluation, then carry the ownership signatures through loops and
-escaping boundaries. The verifier does not model RC credits, runtime
-uniqueness, or constructor reset tokens. General managed arguments still need
+escaping boundaries. The verifier does not model runtime uniqueness or
+constructor reset tokens. General managed arguments still need
 lowering through ANF and RC insertion. ANF lifetime insertion remains
 authoritative outside these regions; moving generated printing before general
 ownership is a separate semantic migration. No empty future passes or

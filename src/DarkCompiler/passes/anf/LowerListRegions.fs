@@ -95,19 +95,20 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
             wrap (allocations @ List.concat copied @ initialized) (ANF.Return copy), final
 
     let rec lowerBlock values buffers vg block =
-        let releases, next = release buffers block.EntryReleases vg
-        loop block.Body.Result values buffers next block.Body.Operations
-        |> Result.map (fun (body, final) -> wrap releases body, final)
+        loop block.Body.Result values buffers vg block.Body.Operations
     and loop finalValue values buffers vg (steps: OwnedOperation list) =
         match steps with
         | [] ->
             let id, _ = lookup "block result" finalValue.Id values
             Ok (ANF.Return (ANF.Var id), vg)
-        | step :: rest ->
-            let lowerRest values buffers vg =
-                let releases, next = release buffers step.Releases vg
-                loop finalValue values buffers next rest |> Result.map (fun (body, final) -> wrap releases body, final)
-            match step.Operation with
+        | Drop value :: rest ->
+            let releases, next = release buffers [value] vg
+            loop finalValue values buffers next rest
+            |> Result.map (fun (body, final) -> wrap releases body, final)
+        | Dup _ :: _ -> Crash.crash "List HIR: verified unique regions cannot duplicate ownership"
+        | Evaluate operation :: rest ->
+            let lowerRest values buffers vg = loop finalValue values buffers vg rest
+            match operation with
             | Branch (result, condition, yes, no) ->
                 lowerValue values vg condition |> Result.bind (fun (evaluation, condition, next) ->
                     lowerBlock values buffers next yes |> Result.bind (fun (yesExpr, afterYes) ->

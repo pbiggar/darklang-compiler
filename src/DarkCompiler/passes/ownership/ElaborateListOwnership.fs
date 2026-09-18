@@ -26,7 +26,8 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
                         let no, noLive = elaborate no (branchLive no)
                         let before = Set.union yesLive noLive
                         let edge branch required =
-                            { branch with EntryReleases = Set.difference before required |> Set.toList }
+                            let drops = Set.difference before required |> Set.toList |> List.map Drop
+                            { branch with Body = { branch.Body with Operations = drops @ branch.Body.Operations } }
                         let unusedResult =
                             managed result
                             |> Option.filter (fun id -> not (Set.contains id live))
@@ -58,9 +59,8 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
                             | ScalarBinding (name, value) -> ScalarBinding (name, value), []
                             | Branch _ -> Crash.crash "List HIR: branch handled before leaf ownership"
                         owned, releases @ unusedOutput, ValueLiveness.liveBefore (valueContract operation) live
-                { Operation = ownedOperation; Releases = releases } :: tail, before)
+                Evaluate ownedOperation :: ((releases |> List.map Drop) @ tail), before)
                 block.Operations ([], liveAfter)
-        { EntryReleases = []
-          Body = { Parameters = block.Parameters; Operations = operations; Result = block.Result } }, liveBefore
+        { Body = { Parameters = block.Parameters; Operations = operations; Result = block.Result } }, liveBefore
     let owned, _ = elaborate block Set.empty
     OwnedRegion (owned, layouts)

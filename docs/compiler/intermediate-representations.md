@@ -20,8 +20,9 @@ control flow shared by semantic leaf dialects. Primitive contracts expose
 ordered inputs and operands, execution effects, and result alias provenance.
 `passes/hir/VerifyHIR.fs` independently checks definitions, uses, types,
 branch results, and alias sources.
-`ir/owned/OwnedIR.fs` supplies ownership-bearing blocks, explicit
-borrow/consume/produce contracts, and managed block arguments, checked independently by
+`ir/owned/OwnedIR.fs` supplies ownership-bearing blocks, ordered
+`Evaluate`/`Dup`/`Drop` steps, borrow/consume/produce contracts, and managed
+block arguments, checked independently by
 `passes/ownership/VerifyOwnership.fs`. Representation-independent liveness and
 destruction proofs live in `analysis/`. The list dialect uses these interfaces
 for closed collection regions, storage selection, and branch-aware ownership.
@@ -49,6 +50,13 @@ owned unit to be released or transferred as the produced result. A borrowed
 result must remain within the borrowed boundary. Unmanaged parameters and
 results stay outside ownership accounting. Signatures deliberately carry no
 alias provenance or effects; those remain HIR contract responsibilities.
+
+The ownership verifier tracks a nonnegative unit count per identity. `Dup`
+requires an accessible borrowed or owned identity and creates one owned unit;
+`Drop` destroys exactly one owned unit. Consuming inputs also destroy one unit,
+while produced values introduce one. Exact counts must agree at joins, and all
+units must be dropped or transferred at function exit. This is the explicit
+Perceus-style accounting layer, not yet runtime uniqueness or reset/reuse.
 
 Normalized HIR can also represent a resolved direct call with ordered value
 arguments and a fresh result value. `VerifyHIR` requires an explicit typed

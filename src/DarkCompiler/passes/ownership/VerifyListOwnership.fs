@@ -32,27 +32,29 @@ let verifyBlockOwnership (block: OwnedBlock) : Result<unit, string> =
 let verify (OwnedRegion (block, layouts)) : Result<unit, string> =
     let rec blockValid block = immediate block.Body.Result.Type && List.forall typesValid block.Body.Operations
     and typesValid step =
-        match step.Operation with
-        | Leaf (Construct (output, Literal elements)) ->
+        match step with
+        | Dup _ -> false
+        | Drop id -> Map.containsKey id layouts
+        | Evaluate (Leaf (Construct (output, Literal elements))) ->
             elements |> List.forall (fun element -> element.Type = AST.TInt64)
             && output.Type = AST.TList AST.TInt64
             && extent (lookup "construction layout" output.Id layouts) = ConstantLength (List.length elements)
-        | Leaf (Construct (output, Repeat (count, value))) ->
+        | Evaluate (Leaf (Construct (output, Repeat (count, value)))) ->
             count.Type = AST.TInt && value.Type = AST.TInt64
             && output.Type = AST.TList AST.TInt64
             && extent (lookup "repeat layout" output.Id layouts) = RuntimeLength output.Id
-        | Leaf (Transform (output, input, (operation, _))) ->
+        | Evaluate (Leaf (Transform (output, input, (operation, _)))) ->
             output.Type = AST.TList AST.TInt64 && input.Type = AST.TList AST.TInt64
             && lookup "output layout" output.Id layouts = lookup "input layout" input.Id layouts
             && (match operation with
                 | Map callback -> callback.Type = AST.TFunction ([AST.TInt64], AST.TInt64)
                 | Reverse -> true)
-        | Leaf (Fold (output, input, initial, callback)) ->
+        | Evaluate (Leaf (Fold (output, input, initial, callback))) ->
             output.Type = AST.TInt64 && input.Type = AST.TList AST.TInt64
             && initial.Type = AST.TInt64 && callback.Type = AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)
-        | ScalarBinding (output, value) -> output.Type = value.Type && immediate value.Type
-        | Call _ -> false
-        | Branch (_, condition, yes, no) ->
+        | Evaluate (ScalarBinding (output, value)) -> output.Type = value.Type && immediate value.Type
+        | Evaluate (Call _) -> false
+        | Evaluate (Branch (_, condition, yes, no)) ->
             condition.Type = AST.TBool && yes.Body.Result.Type = no.Body.Result.Type
             && blockValid yes && blockValid no
     if layouts |> Map.exists (fun _ layout ->
@@ -63,5 +65,4 @@ let verify (OwnedRegion (block, layouts)) : Result<unit, string> =
         Error "List HIR: unsupported allocation size"
     elif not (blockValid block) then
         Error "List HIR: invalid storage operand types"
-    elif not (List.isEmpty block.EntryReleases) then Error "List HIR: root cannot release incoming values"
     else verifyBlockOwnership block
