@@ -106,8 +106,13 @@ ANF has nonrecursive lexical `Join(parameter, continuation, entry)` blocks and
 `Jump(target, value)` transfers. A target is visible only in its entry; its
 parameter value is visible only in its continuation. Both may capture values
 from the enclosing scope. Nested continuations can transfer to enclosing
-targets. ListHIR emits one continuation per scalar branch, without enumerating
-return paths. The supported block arguments are `Int64` and `Bool`.
+targets. Source lowering uses a typed continuation when a scalar match
+expression supplies an argument, operand, or aggregate element, so the
+enclosing computation is not duplicated across its return paths. ListHIR
+likewise emits one continuation per scalar branch without enumerating return
+paths. Join arguments support the immediate scalar types accepted by the ANF
+join-interface verifier; managed values retain their ownership-aware structured
+lowering.
 
 Inlining freshens block identities along with value identities. Liveness keeps
 continuation captures live; reference counting releases branch-local owners at

@@ -43,10 +43,60 @@ and toANFBoundAtomCore (sumTypeNames: Set<string>) (inertScopes: Set<string>)
         // do not introduce extra temp ids in the common path.
         Ok (wrapBindings bindings (ANF.Return atom), atom, vg1)
     | Error _ ->
-        let (boundVar, vg1) = ANF.freshVar varGen
-        toANFCore sumTypeNames inertScopes expr vg1 env typeReg variantLookup funcReg moduleRegistry
-        |> Result.map (fun (exprA, vg2) ->
-            let boundExpr =
-                bindReturns exprA (fun atom ->
-                    ANF.Let (boundVar, ANF.Atom atom, ANF.Return (ANF.Var boundVar)))
-            (boundExpr, ANF.Var boundVar, vg2))
+        let lowerWithBranchLocalBinding () =
+            let (boundVar, vg1) = ANF.freshVar varGen
+            toANFCore sumTypeNames inertScopes expr vg1 env typeReg variantLookup funcReg moduleRegistry
+            |> Result.map (fun (exprA, vg2) ->
+                let boundExpr =
+                    bindReturns exprA (fun atom ->
+                        ANF.Let (boundVar, ANF.Atom atom, ANF.Return (ANF.Var boundVar)))
+                (boundExpr, ANF.Var boundVar, vg2))
+        match expr with
+        | CheckedAST.Match _ ->
+            inferTypeCore
+                sumTypeNames
+                expr
+                (typeEnvFromVarEnv env)
+                typeReg
+                variantLookup
+                funcReg
+                moduleRegistry
+            |> Result.bind (fun resultType ->
+                if isSupportedJoinArgumentType resultType then
+                    let (boundVar, vg1) = ANF.freshVar varGen
+                    toANFCore sumTypeNames inertScopes expr vg1 env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.map (fun (exprA, vg2) ->
+                        // Pattern-bound generic values can retain a TVar in the recovered
+                        // TypeMap even though checking established the match result type.
+                        // Give each return path an explicit boundary type before it jumps.
+                        let rec returnsToTypedJumps expression vg =
+                            match expression with
+                            | ANF.Return atom ->
+                                let (typedResult, vg1) = ANF.freshVar vg
+                                (ANF.Let (
+                                    typedResult,
+                                    ANF.TypedAtom (atom, resultType),
+                                    ANF.Jump (boundVar, ANF.Var typedResult)
+                                 ), vg1)
+                            | ANF.Jump _ -> (expression, vg)
+                            | ANF.Join (parameter, continuation, entry) ->
+                                let (continuation', vg1) = returnsToTypedJumps continuation vg
+                                let (entry', vg2) = returnsToTypedJumps entry vg1
+                                (ANF.Join (parameter, continuation', entry'), vg2)
+                            | ANF.Let (id, cexpr, rest) ->
+                                let (rest', vg1) = returnsToTypedJumps rest vg
+                                (ANF.Let (id, cexpr, rest'), vg1)
+                            | ANF.If (condition, thenBranch, elseBranch) ->
+                                let (thenBranch', vg1) = returnsToTypedJumps thenBranch vg
+                                let (elseBranch', vg2) = returnsToTypedJumps elseBranch vg1
+                                (ANF.If (condition, thenBranch', elseBranch'), vg2)
+                        let (entry, vg3) = returnsToTypedJumps exprA vg2
+                        let boundExpr =
+                            ANF.Join (
+                                { Id = boundVar; Type = resultType },
+                                ANF.Return (ANF.Var boundVar),
+                                entry
+                            )
+                        (boundExpr, ANF.Var boundVar, vg3))
+                else lowerWithBranchLocalBinding ())
+        | _ -> lowerWithBranchLocalBinding ()
