@@ -7,3 +7,39 @@ let specializedLoop (n: Int64) (mode: Int64) (acc: Int64) : Int64 =
     else specializedLoop (n - 1L) mode (acc + mode)
 
 specializedLoop 5L 2L 0L + specializedLoop 5L 3L 0L = 25L
+
+// Literal specialization preserves the runtime representation of managed text,
+// immediate temporal values, and nullary constructor tags.
+type SpecializationMode = First | Second
+
+let stringSpecializedLoop (n: Int64) (suffix: String) (acc: String) : String =
+    if n <= 0L then acc
+    else stringSpecializedLoop (n - 1L) suffix (acc ++ suffix)
+
+let stringComparisonSpecializedLoop (n: Int64) (value: String) : Bool =
+    if n <= 0L then value == "x"
+    else stringComparisonSpecializedLoop (n - 1L) value
+
+let charSpecializedLoop (n: Int64) (value: Char) : Char =
+    if n <= 0L then value else charSpecializedLoop (n - 1L) value
+
+let dateTimeSpecializedLoop (n: Int64) (value: DateTime) : DateTime =
+    if n <= 0L then value else dateTimeSpecializedLoop (n - 1L) value
+
+let constructorSpecializedLoop (n: Int64) (mode: SpecializationMode) : SpecializationMode =
+    if n <= 0L then mode else constructorSpecializedLoop (n - 1L) mode
+
+let wideSpecializedLoop (n: Int64) (value: Int128) : Int128 =
+    if n <= 0L then value else wideSpecializedLoop (n - 1L) value
+
+let tupleSpecializedLoop (n: Int64) (value: (Int64 * Bool)) : (Int64 * Bool) =
+    if n <= 0L then value else tupleSpecializedLoop (n - 1L) value
+
+stringSpecializedLoop 3L "x" "" ++ stringSpecializedLoop 2L "yz" "" = "xxxyzyz"
+stringComparisonSpecializedLoop 2L "x" = true
+stringComparisonSpecializedLoop 2L "y" = false
+charSpecializedLoop 2L 'a' = 'a'
+dateTimeSpecializedLoop 2L (Stdlib.DateTime.fromMilliseconds 1234) = Stdlib.DateTime.fromMilliseconds 1234
+constructorSpecializedLoop 2L First = First
+wideSpecializedLoop 2L 170141183460469231731687303715884105727Q = 170141183460469231731687303715884105727Q
+tupleSpecializedLoop 2L (42L, true) = (42L, true)

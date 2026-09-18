@@ -71,12 +71,21 @@ negative fixtures are part of each transformation's contract.
 
 ## Direct-call specialization
 
-`passes/anf/ANF_DirectCallSpecialization.fs` specializes internal direct
-calls when callee identity and scalar literal arguments are statically known.
-It supports uniform literal parameter removal and bounded scalar-literal
-cloning while retaining fallbacks and excluding address-taken, closure, and
-managed-string cases. The focused specialization tests own caps, recursive
-signatures, float-bit identity, indirect-use exclusions, and ownership rules.
+`passes/anf/ANF_DirectCallSpecialization.fs` specializes internal calls when
+the callee identity and argument values are statically known. Uniform
+parameters are removed, while differing values create bounded clones selected
+by estimated argument-setup savings. Facts cover scalar and text literals,
+Char and DateTime immediates, nullary constructor tags, Int128 and UInt128 word
+constructions, and tuples or records of at most three literal fields. Exact
+construction values are rematerialized inside the clone, and only the matching
+now-unused caller construction is removed.
+
+Calls through an explicit function reference become direct before analysis.
+The original function remains as a fallback, with limits of four clones per
+function and sixteen per program. Address-taken functions, closures, larger or
+dynamic aggregates, and non-exact ranges remain excluded. Focused tests own
+caps, recursive signatures, float-bit identity, known indirect targets,
+construction ownership, fallback routing, and exclusions.
 
 ## Escape analysis and scalar replacement
 

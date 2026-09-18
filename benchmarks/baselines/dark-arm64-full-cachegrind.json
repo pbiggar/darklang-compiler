@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-15T20:46:30+00:00",
+  "generated_at": "2026-09-18T18:13:14+00:00",
   "compiler": {
-    "commit": "e7954cd317a4e9df891d8ccf93a03e47c243766c",
-    "subject": "Optimize public Int64 float conversion"
+    "commit": "1cf3cdaf7b836ecdbd1fcf60374f6ffb5b00aa82",
+    "subject": "Persist Herdr configuration in dev image"
   },
   "benchmarks": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "name": "huffman",
-      "instructions": 518415869
+      "instructions": 518408776
     },
     {
       "name": "leibniz",
@@ -110,7 +110,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 931041805
+      "instructions": 931017197
     },
     {
       "name": "string_equality",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 5864163848
+      "instructions": 5864163839
     },
     {
       "name": "warden",
-      "instructions": 47041942
+      "instructions": 47041843
     }
   ]
 }

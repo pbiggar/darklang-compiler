@@ -9,6 +9,7 @@ module ANF_DirectCallSpecialization
 open MemoryModel
 
 open ANF
+open ANFEffects
 
 type private ParameterRewrite =
     | KeepParameter
@@ -24,8 +25,16 @@ type private ScalarLiteral =
     | IntScalar of SizedInt
     | BoolScalar of bool
     | FloatScalar of int64
+    | StringScalar of string
 
-type private LiteralPattern = (int * ScalarLiteral) list
+type private KnownValue =
+    | LiteralValue of ScalarLiteral
+    | Int128Value of low:uint64 * high:uint64
+    | UInt128Value of low:uint64 * high:uint64
+    | TupleValue of ScalarLiteral list
+    | RecordValue of RecordDescriptor * ScalarLiteral list
+
+type private LiteralPattern = (int * KnownValue) list
 
 type private LiteralClone = {
     OriginalName: string
@@ -42,6 +51,41 @@ let private emptyAnalysis = {
     DirectCalls = Map.empty
     IndirectTargets = Set.empty
 }
+
+// A function reference already names the complete target, so retaining an
+// indirect call would hide a direct-call specialization opportunity without
+// preserving any dynamic dispatch. Closure calls remain indirect because their
+// hidden capture argument uses a different calling convention.
+let private exposeKnownIndirectCExpr (cexpr: CExpr) : CExpr =
+    match cexpr with
+    | IndirectCall (FuncRef name, args) -> Call (name, args)
+    | IndirectTailCall (FuncRef name, args) -> TailCall (name, args)
+    | _ -> cexpr
+
+let rec private exposeKnownIndirectExpr (expr: AExpr) : AExpr =
+    match expr with
+    | Let (id, cexpr, body) ->
+        Let (id, exposeKnownIndirectCExpr cexpr, exposeKnownIndirectExpr body)
+    | Return _
+    | Jump _ -> expr
+    | Join (parameter, continuation, entry) ->
+        Join (
+            parameter,
+            exposeKnownIndirectExpr continuation,
+            exposeKnownIndirectExpr entry
+        )
+    | If (condition, thenBranch, elseBranch) ->
+        If (
+            condition,
+            exposeKnownIndirectExpr thenBranch,
+            exposeKnownIndirectExpr elseBranch
+        )
+
+let private exposeKnownIndirectTargets (Program (functions, main)) : Program =
+    let functions' =
+        functions
+        |> List.map (fun func -> { func with Body = exposeKnownIndirectExpr func.Body })
+    Program (functions', exposeKnownIndirectExpr main)
 
 let private addDirectCall
     (name: string)
@@ -161,7 +205,7 @@ let private scalarLiteralAtom (atom: Atom) : ScalarLiteral option =
     | IntLiteral value -> Some (IntScalar value)
     | BoolLiteral value -> Some (BoolScalar value)
     | FloatLiteral value -> Some (FloatScalar (System.BitConverter.DoubleToInt64Bits value))
-    | StringLiteral _
+    | StringLiteral value -> Some (StringScalar value)
     | Var _
     | FuncRef _ -> None
 
@@ -171,6 +215,7 @@ let private atomForScalarLiteral (literal: ScalarLiteral) : Atom =
     | IntScalar value -> IntLiteral value
     | BoolScalar value -> BoolLiteral value
     | FloatScalar bits -> FloatLiteral (System.BitConverter.Int64BitsToDouble bits)
+    | StringScalar value -> StringLiteral value
 
 let private isScalarLiteralType (typ: AST.Type) : bool =
     match typ with
@@ -184,7 +229,59 @@ let private isScalarLiteralType (typ: AST.Type) : bool =
     | AST.TUInt64
     | AST.TBool
     | AST.TFloat64
-    | AST.TUnit -> true
+    | AST.TString
+    | AST.TChar
+    | AST.TDateTime
+    | AST.TUnit
+    | AST.TSum _ -> true
+    | _ -> false
+
+let private isConstructionValueType (typ: AST.Type) : bool =
+    match typ with
+    | AST.TInt128
+    | AST.TUInt128 -> true
+    | AST.TTuple fields -> List.length fields <= 3
+    | AST.TRecord _ -> true
+    | _ -> false
+
+let private isSpecializableValueType (typ: AST.Type) : bool =
+    isScalarLiteralType typ || isConstructionValueType typ
+
+let rec private scalarLiteralMatchesType (typ: AST.Type) (literal: ScalarLiteral) : bool =
+    match typ, literal with
+    | AST.TUnit, UnitScalar
+    | AST.TInt8, IntScalar (Int8 _)
+    | AST.TInt16, IntScalar (Int16 _)
+    | AST.TInt32, IntScalar (Int32 _)
+    | AST.TInt64, IntScalar (Int64 _)
+    | AST.TUInt8, IntScalar (UInt8 _)
+    | AST.TUInt16, IntScalar (UInt16 _)
+    | AST.TUInt32, IntScalar (UInt32 _)
+    | AST.TUInt64, IntScalar (UInt64 _)
+    | AST.TBool, BoolScalar _
+    | AST.TFloat64, FloatScalar _
+    | AST.TString, StringScalar _
+    | AST.TChar, StringScalar _
+    | AST.TDateTime, IntScalar (Int64 _)
+    | AST.TSum _, IntScalar (Int64 _) -> true
+    | _ -> false
+
+let private knownValueMatchesType (typ: AST.Type) (value: KnownValue) : bool =
+    match typ, value with
+    | _, LiteralValue literal -> scalarLiteralMatchesType typ literal
+    | AST.TInt128, Int128Value _
+    | AST.TUInt128, UInt128Value _ -> true
+    | AST.TTuple fieldTypes, TupleValue fields ->
+        List.length fieldTypes = List.length fields
+        && List.forall2 scalarLiteralMatchesType fieldTypes fields
+    | AST.TRecord (typeName, _), RecordValue (descriptor, fields) ->
+        (typeName = descriptor.SourceTypeName || typeName = descriptor.RuntimeTypeName)
+        && List.length descriptor.Fields = List.length fields
+        && List.forall2
+            scalarLiteralMatchesType
+            (descriptor.Fields |> List.map snd)
+            fields
+    | AST.TSum _, TupleValue [_; _] -> true
     | _ -> false
 
 let private uniformLiteralAt (index: int) (calls: Atom list list) : Atom option =
@@ -208,7 +305,11 @@ let private rewritesForFunction
         |> List.mapi (fun index parameter ->
             match isScalarLiteralType parameter.Type, uniformLiteralAt index calls with
             | false, _ -> KeepParameter
-            | true, Some literal -> ReplaceParameterWith literal
+            | true, Some literal ->
+                match scalarLiteralAtom literal with
+                | Some value when scalarLiteralMatchesType parameter.Type value ->
+                    ReplaceParameterWith literal
+                | _ -> KeepParameter
             | true, None -> KeepParameter)
         |> Some
 
@@ -279,7 +380,10 @@ let private rewriteCExpr
         RecordReuse (descriptor, rewrite record, rewriteMany fields)
     | StringConcat (left, right) -> StringConcat (rewrite left, rewrite right)
     | CanonicalBufferEq (kind, left, right) ->
-        CanonicalBufferEq (kind, rewrite left, rewrite right)
+        match rewrite left, rewrite right with
+        | StringLiteral leftValue, StringLiteral rightValue ->
+            Atom (BoolLiteral (leftValue = rightValue))
+        | left', right' -> CanonicalBufferEq (kind, left', right')
     | RefCountInc (atom, size, kind, metadata) -> RefCountInc (rewrite atom, size, kind, metadata)
     | RefCountDec (atom, size, kind, metadata) -> RefCountDec (rewrite atom, size, kind, metadata)
     | Print (atom, typ) -> Print (rewrite atom, typ)
@@ -380,11 +484,95 @@ let private rewriteFunction
             TypedParams = parameters
             Body = rewriteExpr rewriteMap substitutions func.Body }
 
-let private literalPatternAt (eligibleIndices: Set<int>) (args: Atom list) : LiteralPattern =
-    args
-    |> List.mapi (fun index atom ->
+type private ValueEnv = Map<TempId, KnownValue>
+
+let private knownValueForAtom (env: ValueEnv) (atom: Atom) : KnownValue option =
+    match scalarLiteralAtom atom with
+    | Some literal -> Some (LiteralValue literal)
+    | None ->
+        match atom with
+        | Var id -> Map.tryFind id env
+        | _ -> None
+
+let private knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLiteral list option =
+    let rec loop remaining literals =
+        match remaining with
+        | [] -> Some (List.rev literals)
+        | atom :: rest ->
+            match knownValueForAtom env atom with
+            | Some (LiteralValue literal) -> loop rest (literal :: literals)
+            | _ -> None
+    loop atoms []
+
+let private knownValueForCExpr (env: ValueEnv) (cexpr: CExpr) : KnownValue option =
+    let words name =
+        match name with
+        | "Stdlib.Int128.__fromWords" -> Some (fun low high -> Int128Value (low, high))
+        | "Stdlib.UInt128.__fromWords" -> Some (fun low high -> UInt128Value (low, high))
+        | _ -> None
+    match cexpr with
+    | Atom atom
+    | TypedAtom (atom, _) -> knownValueForAtom env atom
+    | Call (name, [IntLiteral (UInt64 low); IntLiteral (UInt64 high)]) ->
+        words name |> Option.map (fun build -> build low high)
+    | TupleAlloc atoms when List.length atoms <= 3 ->
+        knownLiteralsForAtoms env atoms |> Option.map TupleValue
+    | RecordAlloc (descriptor, fields) when List.length fields <= 3 ->
+        knownLiteralsForAtoms env fields
+        |> Option.map (fun literals -> RecordValue (descriptor, literals))
+    | _ -> None
+
+let private addKnownBinding (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueEnv =
+    match knownValueForCExpr env cexpr with
+    | Some value -> Map.add id value env
+    | None -> Map.remove id env
+
+let private addKnownCall
+    (name: string)
+    (args: Atom list)
+    (env: ValueEnv)
+    (calls: Map<string, KnownValue option list list>)
+    : Map<string, KnownValue option list list> =
+    let values = args |> List.map (knownValueForAtom env)
+    let existing = Map.tryFind name calls |> Option.defaultValue []
+    Map.add name (values :: existing) calls
+
+let rec private collectKnownCalls
+    (env: ValueEnv)
+    (expr: AExpr)
+    (calls: Map<string, KnownValue option list list>)
+    : Map<string, KnownValue option list list> =
+    match expr with
+    | Return _
+    | Jump _ -> calls
+    | Let (id, cexpr, body) ->
+        let calls' =
+            match cexpr with
+            | Call (name, args)
+            | BorrowedCall (name, args)
+            | TailCall (name, args) -> addKnownCall name args env calls
+            | _ -> calls
+        collectKnownCalls (addKnownBinding id cexpr env) body calls'
+    | Join (parameter, continuation, entry) ->
+        let calls' = collectKnownCalls (Map.remove parameter.Id env) continuation calls
+        collectKnownCalls env entry calls'
+    | If (_, thenBranch, elseBranch) ->
+        let calls' = collectKnownCalls env thenBranch calls
+        collectKnownCalls env elseBranch calls'
+
+let private knownCallsInProgram (functions: Function list) (main: AExpr) =
+    functions
+    |> List.fold (fun calls func -> collectKnownCalls Map.empty func.Body calls) Map.empty
+    |> collectKnownCalls Map.empty main
+
+let private literalPatternAt
+    (eligibleIndices: Set<int>)
+    (values: KnownValue option list)
+    : LiteralPattern =
+    values
+    |> List.mapi (fun index value ->
         if Set.contains index eligibleIndices then
-            scalarLiteralAtom atom |> Option.map (fun literal -> (index, literal))
+            value |> Option.map (fun known -> (index, known))
         else
             None)
     |> List.choose id
@@ -408,7 +596,7 @@ let private cloneableParameterIndices (func: Function) : Set<int> =
     let allIndices =
         func.TypedParams
         |> List.mapi (fun index parameter ->
-            if isScalarLiteralType parameter.Type then Some index else None)
+            if isSpecializableValueType parameter.Type then Some index else None)
         |> List.choose id
         |> Set.ofList
     match directCallsTo func.Name func.Body with
@@ -417,7 +605,7 @@ let private cloneableParameterIndices (func: Function) : Set<int> =
         func.TypedParams
         |> List.mapi (fun index parameter ->
             let isPassedThrough =
-                isScalarLiteralType parameter.Type
+                isSpecializableValueType parameter.Type
                 && (selfCalls
                     |> List.forall (fun args ->
                         List.tryItem index args = Some (Var parameter.Id)))
@@ -427,21 +615,57 @@ let private cloneableParameterIndices (func: Function) : Set<int> =
 
 let private cloneGroups
     (analysis: ProgramAnalysis)
+    (knownCalls: Map<string, KnownValue option list list>)
     (functions: Function list)
     : (string * LiteralPattern list) list =
     functions
     |> List.choose (fun func ->
-        match Map.tryFind func.Name analysis.DirectCalls with
+        match Map.tryFind func.Name knownCalls with
         | None -> None
         | Some _ when Set.contains func.Name analysis.IndirectTargets -> None
         | Some calls ->
             let eligibleIndices = cloneableParameterIndices func
+            let isRecursive = not (List.isEmpty (directCallsTo func.Name func.Body))
+            let valueBenefit value =
+                match value with
+                | LiteralValue _ -> 1
+                | Int128Value _
+                | UInt128Value _ -> 2
+                | TupleValue fields
+                | RecordValue (_, fields) -> 1 + List.length fields
             let patterns =
                 calls
                 |> List.map (literalPatternAt eligibleIndices)
+                |> List.map (fun pattern ->
+                    pattern
+                    |> List.filter (fun (index, value) ->
+                        match List.tryItem index func.TypedParams with
+                        | Some parameter -> knownValueMatchesType parameter.Type value
+                        | None -> false))
+                // Rematerializing an allocated value at the top of a recursive
+                // clone would allocate once per iteration instead of once per
+                // entry call. Recursive cloning therefore remains immediate-
+                // value only; construction facts still specialize leaf calls.
+                |> List.map (fun pattern ->
+                    if isRecursive then
+                        pattern
+                        |> List.filter (fun (_, value) ->
+                            match value with
+                            | LiteralValue _ -> true
+                            | _ -> false)
+                    else
+                        pattern)
                 |> List.filter (not << List.isEmpty)
-                |> List.distinct
-                |> List.sort
+                |> List.countBy id
+                // Spend the bounded clone budget on call-site savings first;
+                // the pattern tie-break keeps names and output deterministic.
+                |> List.sortBy (fun (pattern, occurrences) ->
+                    let savedWork =
+                        pattern
+                        |> List.sumBy (fun (_, value) -> valueBenefit value)
+                        |> (*) occurrences
+                    (-savedWork, pattern))
+                |> List.map fst
                 |> List.truncate maxLiteralClonesPerFunction
             if List.length patterns < 2 then None
             else Some (func.Name, patterns))
@@ -493,13 +717,14 @@ let private removePatternArguments
 
 let private routeDirectCall
     (clonesByName: Map<string, LiteralClone list>)
+    (env: ValueEnv)
     (name: string)
     (args: Atom list)
     : string * Atom list =
     let matchesPattern pattern =
         pattern
-        |> List.forall (fun (index, literal) ->
-            List.tryItem index args |> Option.bind scalarLiteralAtom = Some literal)
+        |> List.forall (fun (index, value) ->
+            List.tryItem index args |> Option.bind (knownValueForAtom env) = Some value)
     let matchingClone =
         Map.tryFind name clonesByName
         |> Option.bind (List.tryFind (fun clone -> matchesPattern clone.Pattern))
@@ -509,33 +734,55 @@ let private routeDirectCall
 
 let private routeCExpr
     (clonesByName: Map<string, LiteralClone list>)
+    (env: ValueEnv)
     (cexpr: CExpr)
     : CExpr =
     match cexpr with
     | Call (name, args) ->
-        let (target, routedArgs) = routeDirectCall clonesByName name args
+        let (target, routedArgs) = routeDirectCall clonesByName env name args
         Call (target, routedArgs)
     | BorrowedCall (name, args) ->
-        let (target, routedArgs) = routeDirectCall clonesByName name args
+        let (target, routedArgs) = routeDirectCall clonesByName env name args
         BorrowedCall (target, routedArgs)
     | TailCall (name, args) ->
-        let (target, routedArgs) = routeDirectCall clonesByName name args
+        let (target, routedArgs) = routeDirectCall clonesByName env name args
         TailCall (target, routedArgs)
     | _ -> cexpr
 
 let rec private routeExpr
     (clonesByName: Map<string, LiteralClone list>)
+    (env: ValueEnv)
     (expr: AExpr)
     : AExpr =
     match expr with
     | Jump _ -> expr
     | Join (parameter, continuation, entry) ->
-        Join (parameter, routeExpr clonesByName continuation, routeExpr clonesByName entry)
+        Join (
+            parameter,
+            routeExpr clonesByName (Map.remove parameter.Id env) continuation,
+            routeExpr clonesByName env entry
+        )
     | Let (id, cexpr, body) ->
-        Let (id, routeCExpr clonesByName cexpr, routeExpr clonesByName body)
+        let cexpr' = routeCExpr clonesByName env cexpr
+        Let (id, cexpr', routeExpr clonesByName (addKnownBinding id cexpr env) body)
     | Return atom -> Return atom
     | If (condition, thenBranch, elseBranch) ->
-        If (condition, routeExpr clonesByName thenBranch, routeExpr clonesByName elseBranch)
+        If (
+            condition,
+            routeExpr clonesByName env thenBranch,
+            routeExpr clonesByName env elseBranch
+        )
+
+let private cexprForKnownValue (value: KnownValue) : CExpr =
+    let atoms literals = literals |> List.map atomForScalarLiteral
+    match value with
+    | LiteralValue literal -> Atom (atomForScalarLiteral literal)
+    | Int128Value (low, high) ->
+        Call ("Stdlib.Int128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
+    | UInt128Value (low, high) ->
+        Call ("Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
+    | TupleValue fields -> TupleAlloc (atoms fields)
+    | RecordValue (descriptor, fields) -> RecordAlloc (descriptor, atoms fields)
 
 let private cloneFunction
     (clonesByName: Map<string, LiteralClone list>)
@@ -556,19 +803,77 @@ let private cloneFunction
         original.TypedParams
         |> List.mapi (fun index parameter ->
             Map.tryFind index literalsByIndex
-            |> Option.map (fun literal -> (parameter.Id, atomForScalarLiteral literal)))
+            |> Option.bind (fun value ->
+                match value with
+                | LiteralValue literal -> Some (parameter.Id, atomForScalarLiteral literal)
+                | _ -> None))
         |> List.choose id
         |> Map.ofList
-    let substitutedBody = rewriteExpr Map.empty substitutions original.Body
+    let materializations =
+        original.TypedParams
+        |> List.mapi (fun index parameter ->
+            Map.tryFind index literalsByIndex
+            |> Option.bind (fun value ->
+                match value with
+                | LiteralValue _ -> None
+                | _ -> Some (parameter.Id, cexprForKnownValue value)))
+        |> List.choose id
+    let substitutedBody =
+        let body = rewriteExpr Map.empty substitutions original.Body
+        List.foldBack (fun (id, cexpr) nested -> Let (id, cexpr, nested)) materializations body
     { original with
         Name = clone.CloneName
         TypedParams = parameters
-        Body = routeExpr clonesByName substitutedBody }
+        Body = routeExpr clonesByName Map.empty substitutedBody }
+
+let rec private exprUsesTemp (id: TempId) (expr: AExpr) : bool =
+    match expr with
+    | Return atom
+    | Jump (_, atom) -> atomUsesTemp id atom
+    | Let (boundId, cexpr, body) ->
+        cexprUsesTemp id cexpr || (boundId <> id && exprUsesTemp id body)
+    | Join (parameter, continuation, entry) ->
+        (parameter.Id <> id && exprUsesTemp id continuation)
+        || exprUsesTemp id entry
+    | If (condition, thenBranch, elseBranch) ->
+        atomUsesTemp id condition
+        || exprUsesTemp id thenBranch
+        || exprUsesTemp id elseBranch
+
+let private isRematerializedValue (cexpr: CExpr) : bool =
+    match knownValueForCExpr Map.empty cexpr with
+    | Some _ -> true
+    | None -> false
+
+// Routing a construction-valued argument removes its sole use. Eliminate only
+// the exact, side-effect-free recipes that this pass knows how to recreate;
+// arbitrary calls and allocations retain their original evaluation boundary.
+let rec private removeUnusedRematerializedValues (expr: AExpr) : AExpr =
+    match expr with
+    | Return _
+    | Jump _ -> expr
+    | Let (id, cexpr, body) ->
+        let body' = removeUnusedRematerializedValues body
+        if isRematerializedValue cexpr && not (exprUsesTemp id body') then body'
+        else Let (id, cexpr, body')
+    | Join (parameter, continuation, entry) ->
+        Join (
+            parameter,
+            removeUnusedRematerializedValues continuation,
+            removeUnusedRematerializedValues entry
+        )
+    | If (condition, thenBranch, elseBranch) ->
+        If (
+            condition,
+            removeUnusedRematerializedValues thenBranch,
+            removeUnusedRematerializedValues elseBranch
+        )
 
 let private specializeFiniteLiterals (Program (functions, main)) : Program =
     let analysis = analyzeProgram functions main
+    let knownCalls = knownCallsInProgram functions main
     let clones =
-        cloneGroups analysis functions
+        cloneGroups analysis knownCalls functions
         |> boundedCloneGroups
         |> buildLiteralClones (functions |> List.map (fun func -> func.Name) |> Set.ofList)
     let clonesByName =
@@ -579,10 +884,18 @@ let private specializeFiniteLiterals (Program (functions, main)) : Program =
     let clonedFunctions = clones |> List.map (cloneFunction clonesByName functionsByName)
     let routedFunctions =
         functions
-        |> List.map (fun func -> { func with Body = routeExpr clonesByName func.Body })
-    Program (clonedFunctions @ routedFunctions, routeExpr clonesByName main)
+        |> List.map (fun func ->
+            { func with
+                Body =
+                    routeExpr clonesByName Map.empty func.Body
+                    |> removeUnusedRematerializedValues })
+    let main' =
+        routeExpr clonesByName Map.empty main
+        |> removeUnusedRematerializedValues
+    Program (clonedFunctions @ routedFunctions, main')
 
-let specializeProgram (Program (functions, main)) : Program =
+let specializeProgram (program: Program) : Program =
+    let (Program (functions, main)) = exposeKnownIndirectTargets program
     let analysis = analyzeProgram functions main
     let rewriteMap = buildRewriteMap analysis functions
     let functions' = functions |> List.map (rewriteFunction rewriteMap)
