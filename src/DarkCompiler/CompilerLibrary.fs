@@ -60,6 +60,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
         Verbosity = request.Verbosity
         Options = request.Options
         PackageValues = request.PackageValues
+        PackageManager = request.PackageManager
         PassTimingRecorder = request.PassTimingRecorder
         Session = request.Session
         Stdlib = stdlib

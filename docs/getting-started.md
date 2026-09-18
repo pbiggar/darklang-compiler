@@ -75,6 +75,7 @@ launching the produced executable.
 - `-r` / `--run`           — compile and execute
 - `-e EXPR` / `--expression` — compile an inline expression
 - `-o PATH` / `--output`     — output path (default `dark.out`)
+- `--package-server URL`     — resolve referenced hosted packages from an HTTP server
 - `-q` / `--quiet`           — suppress progress output
 - `-v`, `-vv`, `-vvv`        — verbose (pass names, timing, all IRs)
 
@@ -87,6 +88,12 @@ array of `{ "kind", "name", "source", "output" }` objects. Add
 `--keep-going` to attempt later items after a failure and `--report FILE` to
 write one JSON result per line. The process prepares the standard library once
 for the complete batch.
+
+To audit hosted packages against the compiler, run the catalog-driven helper:
+
+```bash
+python3 scripts/compile-packages.py --server http://127.0.0.1:9090 --limit 10
+```
 
 ## Dump intermediate representations
 

@@ -224,6 +224,8 @@ type CompileRequest = {
     Verbosity: int
     Options: CompilerOptions
     PackageValues: PackageValueCatalog
+    /// Hosted ProgramTypes package resolver. None explicitly disables package loading.
+    PackageManager: PackageManager.Config option
     PassTimingRecorder: PassTimingRecorder option
     /// Optional caller-owned bounded reuse scope.
     Session: CompilationSession option

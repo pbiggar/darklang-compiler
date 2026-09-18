@@ -27,6 +27,7 @@ type internal UserCompilePlan = {
     Verbosity: int
     Options: CompilerOptions
     PackageValues: PackageValueCatalog
+    PackageManager: PackageManager.Config option
     PassTimingRecorder: PassTimingRecorder option
     Session: CompilationSession option
     Stdlib: StdlibResult

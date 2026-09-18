@@ -31,7 +31,23 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
             if plan.Verbosity >= 1 then println plan.Labels.Parse
             let parseResult =
                 parseSourceProgram plan.AllowInternal plan.Sources
-                |> Result.map snd
+                |> Result.bind (fun (_, originalProgram) ->
+                    match plan.PackageManager with
+                    | None -> Ok originalProgram
+                    | Some config ->
+                        PackageManager.resolve config originalProgram
+                        |> Result.bind (fun packages ->
+                            let originalSources = AST.NonEmptyList.toList plan.Sources
+                            packages
+                            |> List.map (fun package ->
+                                { SourceUnit.Name = package.Name
+                                  Purpose = NameSyntax.SourceUnitPurpose.Package
+                                  Source = package.Source })
+                            |> fun packageSources ->
+                                AST.NonEmptyList.tryFromList (packageSources @ originalSources)
+                                |> Option.map (parseSourceProgram plan.AllowInternal)
+                                |> Option.defaultValue (Error "Package resolution produced an empty source program")
+                                |> Result.map snd))
             let parseTime = sw.Elapsed.TotalMilliseconds
             recordPassTiming plan.PassTimingRecorder "Parse" parseTime
             if plan.Verbosity >= 2 then

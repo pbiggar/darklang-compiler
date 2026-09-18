@@ -285,6 +285,7 @@ let private compilerRequest
         Verbosity = 0
         Options = { defaultOptions with EnableLeakCheck = true }
         PackageValues = emptyPackageValueCatalog
+        PackageManager = None
         PassTimingRecorder = None
         Session = None
     }

@@ -279,6 +279,7 @@ let private compile
         Verbosity = 0
         Options = { CompilerLibrary.defaultOptions with EnableLeakCheck = enableLeakCheck }
         PackageValues = CompilerLibrary.emptyPackageValueCatalog
+        PackageManager = None
         PassTimingRecorder = None
         Session = Some session
     }

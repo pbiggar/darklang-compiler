@@ -31,6 +31,21 @@ let testEmitResultModeIsExplicit () : TestResult =
     | Ok _ -> Error "Expected --emit-result to select observable file-result compilation"
     | Error error -> Error $"Expected --emit-result parsing to succeed, got: {error}"
 
+let testPackageServerIsExplicit () : TestResult =
+    match Program.parseArgs [| "--package-server=http://127.0.0.1:9090"; "program.dark" |] with
+    | Ok options when
+        options.PackageServer
+        |> Option.exists (fun server -> server.AbsoluteUri = "http://127.0.0.1:9090/") ->
+        Ok ()
+    | Ok options -> Error $"Unexpected package server options: {options}"
+    | Error error -> Error $"Expected package server parsing to succeed, got: {error}"
+
+let testPackageServerRejectsNonHttpUrl () : TestResult =
+    match Program.parseArgs [| "--package-server=file:///tmp/packages"; "program.dark" |] with
+    | Error error when error.Contains "HTTP(S)" -> Ok ()
+    | Error error -> Error $"Expected HTTP(S) package server guidance, got: {error}"
+    | Ok _ -> Error "Expected a non-HTTP package server URL to be rejected"
+
 let testScopedIRDumpOptions () : TestResult =
     match
         Program.parseArgs
@@ -70,6 +85,7 @@ let testBatchCompileParsesIndependentOutputs () : TestResult =
         Program.parseCommand
             [| "--batch"
                "--quiet"
+               "--package-server=http://127.0.0.1:9090"
                "--"
                "first.dark"
                "first.out"
@@ -82,6 +98,8 @@ let testBatchCompileParsesIndependentOutputs () : TestResult =
             match fst items :: snd items with
             | [ first; second ] when
                 options.Verbosity = Program.Quiet
+                && (options.PackageServer
+                    |> Option.exists (fun server -> server.AbsoluteUri = "http://127.0.0.1:9090/"))
                 && first.SourceFile = "first.dark"
                 && first.OutputFile = "first.out"
                 && second.SourceFile = "second.dark"
@@ -133,6 +151,8 @@ let tests = [
     ("reject unknown compiler target", testUnknownTargetRejected)
     ("reject cross-target run mode", testCrossTargetRunRejected)
     ("parse explicit file-result mode", testEmitResultModeIsExplicit)
+    ("parse explicit package server", testPackageServerIsExplicit)
+    ("reject non-HTTP package server", testPackageServerRejectsNonHttpUrl)
     ("parse scoped IR dump options", testScopedIRDumpOptions)
     ("require an IR selection for dump modifiers", testIRDumpModifiersRequireDumpSelection)
     ("reject empty IR dump values", testEmptyIRDumpValuesRejected)

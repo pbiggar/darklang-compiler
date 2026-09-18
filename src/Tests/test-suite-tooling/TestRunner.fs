@@ -602,7 +602,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/scm/branch-identity.dark"
                 "src/Tests/e2e/upstream/scm/commit-hash.dark"
                 "src/Tests/e2e/upstream/scm/conflicts.dark"
-                "src/Tests/e2e/upstream/scm/constraint-kinds.dark"
                 "src/Tests/e2e/upstream/scm/lww.dark"
                 "src/Tests/e2e/upstream/scm/matter-routes.dark"
                 "src/Tests/e2e/upstream/scm/propagation-policy.dark"
