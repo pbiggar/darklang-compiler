@@ -125,10 +125,37 @@ let testLibraryRedeclaresStdlibCarriedFunction (stdlib: CompilationContexts.Stdl
             if output.ExitCode = 0 && output.Stdout = "2\n" then Ok ()
             else Error $"Unexpected redeclaring output: exit={output.ExitCode}; stdout={output.Stdout}; stderr={output.Stderr}"
 
+/// A library unit's generic function instantiates a stdlib generic only once it
+/// is itself specialized by the executable unit. In TestExpression mode the
+/// stdlib specialization was never requested ("Missing specialization for
+/// Stdlib.List.flatten<str>").
+let testLibraryGenericReachesStdlibSpecialization (stdlib: CompilationContexts.StdlibResult) () : TestResult =
+    let report =
+        compile
+            stdlib
+            CompilerOptions.TestExpression
+            [ source "library.dark" NameSyntax.SourceUnitPurpose.Library
+                (String.concat "\n" [
+                    "type Located<'a> = { entity: 'a, modules: List<String> }"
+                    ""
+                    "let fullPathOf<'a> (item: Located<'a>): String ="
+                    "  [[\"root\"], item.modules] |> Stdlib.List.flatten |> Stdlib.String.join \".\"" ])
+              source "entry.dark" NameSyntax.SourceUnitPurpose.Executable
+                "fullPathOf (Located { entity = 5L, modules = [\"a\", \"b\"] })" ]
+    match report.Result with
+    | Error error -> Error error
+    | Ok binary ->
+        match execute report binary with
+        | Error error -> Error $"Generic library program did not execute: {error}"
+        | Ok output ->
+            if output.ExitCode = 0 && output.Stdout = "\"root.a.b\"\n" then Ok ()
+            else Error $"Unexpected generic library output: exit={output.ExitCode}; stdout={output.Stdout}; stderr={output.Stderr}"
+
 let tests (stdlib: CompilationContexts.StdlibResult) = [
     ("compose ordered named source units", testOrderedSourceComposition stdlib)
     ("last function declaration wins", testLastFunctionDeclarationWins stdlib)
     ("a library may redeclare a function the stdlib carries", testLibraryRedeclaresStdlibCarriedFunction stdlib)
+    ("a library generic reaches its stdlib specializations", testLibraryGenericReachesStdlibSpecialization stdlib)
     ("dependency entry is rejected", testDependencyEntryRejected stdlib)
     ("missing entry is rejected", testMissingEntryRejected stdlib)
     ("multiple entries are rejected", testMultipleEntriesRejected stdlib)
