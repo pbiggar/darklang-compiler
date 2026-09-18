@@ -59,8 +59,8 @@ layouts and ANF.
 Opaque scalar expressions retain their checked AST evaluation payload while
 their local inputs use normalized identities. `passes/hir/VerifyHIR.fs` checks
 definitions, uses, types, and structured branch results independently.
-`ir/owned/OwnedIR.fs` defines
-ownership-bearing steps/blocks and explicit unit-transfer contracts. Value-edge
+`ir/owned/OwnedIR.fs` defines ownership-bearing blocks with ordered
+`Evaluate`, `Dup`, and `Drop` steps plus explicit unit-transfer contracts. Value-edge
 liveness and destruction proofs live separately in `analysis/`. These interfaces
 are used by the list dialect, not yet a whole-program semantic IR
 or a primitive effect registry. Opaque scalar expressions and callbacks retain
@@ -95,6 +95,13 @@ has one physical ownership unit, while all logical aliases are visible in the
 region graph. A borrowed parameter with RC=1 is **not** evidence of uniqueness;
 borrowed external lists are ineligible.
 
+The list ownership solver now emits each destruction as an explicit `Drop` in
+the same ordered position used by native lowering. The shared verifier tracks
+unit multiplicity, so `Dup` can justify repeated consuming uses and exact unit
+counts must agree at branch joins and function returns. Closed list regions
+remain statically unique and therefore reject `Dup`; enabling it for escaping
+arrays first requires a shareable representation and corresponding lowering.
+
 The shared ownership interface also models managed block arguments beyond the
 current list extraction grammar. Mutually exclusive arms transfer their
 path-local ownership units to a fresh continuation identity after their
@@ -118,8 +125,8 @@ work.
 `verifyFunctional` checks the closed region's incoming collection interface
 using representation-independent value contracts. `verifyBlockOwnership`
 supplies list operation contracts to the shared `VerifyOwnership.verifyClosed`, which checks
-live inputs, globally unique identities (including between sibling branches),
-balanced releases, identical surviving ownership at joins, and absence of
+live inputs, globally unique definitions (including between sibling branches),
+balanced dup/drop units, identical surviving ownership counts at joins, and absence of
 leaked region roots. The stage verifier also checks
 operand types, layout agreement, and allocation bounds. Construction is atomic
 at the region level: element expressions run first in source order, then the

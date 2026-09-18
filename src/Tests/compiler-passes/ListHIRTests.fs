@@ -70,16 +70,16 @@ let private testLoweredBudget () =
 let private rejectsOwnership operations () =
     let result: HIR.Value = { Id = HIR.ValueId 1000; Type = AST.TInt64 }
     let block : ListRegion.OwnedBlock =
-        { EntryReleases = []
-          Body = { Parameters = Map.empty; Operations = operations; Result = result } }
+        { Body = { Parameters = Map.empty; Operations = List.concat operations; Result = result } }
     match VerifyListOwnership.verifyBlockOwnership block with
     | Error _ -> Ok ()
     | Ok () -> Error "Ownership verifier accepted an invalid lifetime"
 
 let private root = HIR.ValueId 0
 let private rootValue: HIR.Value = { Id = root; Type = AST.TList AST.TInt64 }
-let private construct releases : ListRegion.OwnedOperation =
-    { Operation = HIR.Leaf (ListRegion.Construct (rootValue, ListRegion.Literal [])); Releases = releases }
+let private drops values = values |> List.map OwnedIR.Drop
+let private construct releases : ListRegion.OwnedOperation list =
+    OwnedIR.Evaluate (HIR.Leaf (ListRegion.Construct (rootValue, ListRegion.Literal []))) :: drops releases
 
 let private zero : ListRegion.AllocationSummary = { Allocations = 0; AllocatedBytes = bytes 0L; Copies = 0; ReusedTransforms = 0; Releases = 0 }
 let private allocated = { zero with Allocations = 1; AllocatedBytes = bytes 56L }
@@ -91,12 +91,14 @@ let private manyBranches count =
         (List.foldBack (fun index body -> bind $"branch{index}" (choice (fold (CheckedAST.Var "xs")) (CheckedAST.Int64Literal 7L)) body) [1 .. count] (fold (CheckedAST.Var "xs")))
 let private ownedBlock releases operations : ListRegion.OwnedBlock =
     let result: HIR.Value = { Id = HIR.ValueId 1001; Type = AST.TInt64 }
-    { EntryReleases = releases
-      Body = { Parameters = Map.empty; Operations = operations; Result = result } }
-let private ownedBranch yes no : ListRegion.OwnedOperation =
+    { Body = { Parameters = Map.empty; Operations = drops releases @ List.concat operations; Result = result } }
+let private ownedBranch yes no : ListRegion.OwnedOperation list =
     let result: HIR.Value = { Id = HIR.ValueId 1002; Type = AST.TInt64 }
     let condition: HIR.Operand = { Expression = CheckedAST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }
-    { Operation = HIR.Branch (result, condition, yes, no); Releases = [] }
+    [OwnedIR.Evaluate (HIR.Branch (result, condition, yes, no))]
+let private transform releases : ListRegion.OwnedOperation list =
+    OwnedIR.Evaluate (HIR.Leaf (ListRegion.Transform ({ Id = HIR.ValueId 1; Type = AST.TList AST.TInt64 }, rootValue, (ListRegion.Reverse, ListRegion.Consume))))
+    :: drops releases
 
 let private testPrimitiveContracts () =
     let listValue id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
@@ -185,8 +187,8 @@ let tests = [
     "List HIR declares primitive effects and alias provenance", testPrimitiveContracts
     "List HIR rejects managed elements", rejects (bind "xs" (CheckedAST.ListLiteral [CheckedAST.StringLiteral "a"]) (CheckedAST.Int64Literal 0L))
     "List HIR rejects callbacks capturing region lists", rejects (bind "xs" (values 3) (fold (call "Stdlib.List.map_i64_i64" [CheckedAST.Var "xs"; CheckedAST.Closure ("mapCallback", [CheckedAST.Var "xs"])])))
-    "List HIR verifier rejects duplicate release", rejectsOwnership [construct [root; root]]
+    "List HIR verifier rejects duplicate drop", rejectsOwnership [construct [root; root]]
     "List HIR verifier rejects leaked roots", rejectsOwnership [construct []]
     "List HIR verifier rejects reused identities", rejectsOwnership [construct [root]; construct [root]]
-    "List HIR verifier rejects mutation after release", rejectsOwnership [construct [root]; { Operation = HIR.Leaf (ListRegion.Transform ({ Id = HIR.ValueId 1; Type = AST.TList AST.TInt64 }, rootValue, (ListRegion.Reverse, ListRegion.Consume))); Releases = [HIR.ValueId 1] }]
+    "List HIR verifier rejects mutation after drop", rejectsOwnership [construct [root]; transform [HIR.ValueId 1]]
 ]

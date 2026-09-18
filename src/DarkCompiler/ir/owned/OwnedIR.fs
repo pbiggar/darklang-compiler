@@ -43,19 +43,21 @@ type CallSignature = {
     Result: CallResultOwnership
 }
 
-/// Lists retain multiplicity: consuming one unit twice or defining a duplicate
-/// identity is invalid. This is unit ownership, not general RC credit arithmetic.
+/// Lists retain multiplicity: a duplicated unit can satisfy two consuming
+/// inputs, while duplicate value definitions remain invalid.
 type Contract<'id> = {
     Inputs: Input<'id> list
     Outputs: 'id list
 }
 
-type Step<'leaf, 'id> = {
-    Operation: HIR.Operation<'leaf, Block<'leaf, 'id>>
-    Releases: 'id list
-}
+/// Ownership actions are ordered alongside evaluation. Dup creates one
+/// additional unit for an accessible identity; Drop destroys one owned unit.
+/// Evaluation contracts may borrow or consume units and produce fresh ones.
+type Step<'leaf, 'id> =
+    | Evaluate of HIR.Operation<'leaf, Block<'leaf, 'id>>
+    | Dup of 'id
+    | Drop of 'id
 and Block<'leaf, 'id> = {
-    EntryReleases: 'id list
     Body: HIR.Block<Step<'leaf, 'id>>
 }
 
@@ -71,7 +73,7 @@ type Semantics<'leaf, 'id when 'id: comparison> = {
 
 type VerificationError<'id when 'id: comparison> =
     | InvalidUse of 'id
-    | InvalidRelease of 'id
+    | InvalidDrop of 'id
     | DuplicateDefinition of 'id
     | DuplicateParameter of 'id
     | InconsistentFunctionParameters
@@ -85,4 +87,4 @@ type VerificationError<'id when 'id: comparison> =
     | InvalidBorrowedCallResult of target: string * parameterIndex: int
     | InconsistentJoin
     | InconsistentBlockArgument
-    | UnreleasedValues of Set<'id>
+    | UndroppedValues of Set<'id>
