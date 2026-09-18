@@ -1,0 +1,21 @@
+// Nested matches produce values for ANF atom positions.
+
+let addOne (value: Int64): Int64 = value + 1L; addOne (match true with | true -> 41L | false -> 0L) = 42L
+
+(match false with | true -> 0L | false -> 41L) + 1L = 42L
+
+((match true with | true -> 40L | false -> 0L), 2L) = (40L, 2L)
+
+[(match false with | true -> 0L | false -> 42L)] = [42L]
+
+[(match true with | true -> "forty-two" | false -> "zero")] = ["forty-two"]
+
+(match true with | true -> (40L, 2L) | false -> (0L, 0L)).0 = 40L
+
+type MatchAtomRecord = { value: Int64 } (match false with | true -> MatchAtomRecord { value = 0L } | false -> MatchAtomRecord { value = 42L }).value = 42L
+
+type MatchAtomField = { value: Int64 } MatchAtomField { value = (match true with | true -> 42L | false -> 0L) }.value = 42L
+
+type MatchAtomOption = MatchAtomNone | MatchAtomSome of Int64 match MatchAtomSome (match true with | true -> 42L | false -> 0L) with | MatchAtomSome value -> value | MatchAtomNone -> 0L = 42L
+
+if (match false with | true -> false | false -> true) then 42L else 0L = 42L
