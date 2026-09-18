@@ -35,3 +35,33 @@ guardedDeep (Stdlib.Option.Option.Some((2L, Stdlib.Option.Option.None))) = 2L
 guardedDeep (Stdlib.Option.Option.Some((9L, Stdlib.Option.Option.Some "b"))) = 3L
 guardedDeep Stdlib.Option.Option.None = 4L
 guardedDeep (Stdlib.Option.Option.Some((1L, Stdlib.Option.Option.Some "b"))) = 4L
+
+// A list pattern below the top of an arm tested only the length, so
+// `("Stdlib" :: _, x)` matched every non-empty list (NameResolver.namesToTry
+// in darklang/dark took its Stdlib arm for everything). Heads are tested now,
+// at the top of an arm too, where a string or constructor head used to be
+// "Unsupported head pattern in list cons".
+let listHeadsInTuple (xs: List<String>) (n: String) : Int64 =
+  match (xs, n) with
+  | ("Stdlib" :: _, _) -> 1L
+  | ([], "Result") -> 2L
+  | (["a", "b"], _) -> 4L
+  | (_ :: "z" :: rest, _) when Stdlib.List.length rest > 0 -> 5L
+  | _ -> 3L
+[listHeadsInTuple ["Stdlib", "a"] "x", listHeadsInTuple ["hello"] "x", listHeadsInTuple [] "Result", listHeadsInTuple [] "x", listHeadsInTuple ["a", "b"] "x", listHeadsInTuple ["a", "b", "c"] "x", listHeadsInTuple ["q", "z", "w"] "x", listHeadsInTuple ["q", "z"] "x"] = [1L, 3L, 2L, 3L, 4L, 3L, 5L, 3L]
+
+let listHeadsAtTop (xs: List<String>) : Int =
+  match xs with
+  | "Stdlib" :: rest -> Stdlib.List.length rest
+  | ["PACKAGE", x] -> 20
+  | [] -> 2
+  | _ -> 3
+[listHeadsAtTop ["Stdlib", "a", "b"], listHeadsAtTop ["hello"], listHeadsAtTop [], listHeadsAtTop ["PACKAGE", "q"], listHeadsAtTop ["PACKAGE"]] = [2, 3, 2, 20, 3]
+
+// `Ctor x :: rest` is `(Ctor x) :: rest`.
+let consHeadConstructor (xs: List<Stdlib.AltJson.Json>) : Int =
+  match xs with
+  | [String s] -> Stdlib.String.length s
+  | Number n :: _ -> 100
+  | _ -> 0
+[consHeadConstructor [Stdlib.AltJson.Json.String "abc"], consHeadConstructor [Stdlib.AltJson.Json.Number 1.0, Stdlib.AltJson.Json.Null], consHeadConstructor [], consHeadConstructor [Stdlib.AltJson.Json.Null]] = [3, 100, 0, 0]

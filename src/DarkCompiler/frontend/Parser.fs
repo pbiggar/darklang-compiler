@@ -1480,9 +1480,11 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
             |> Result.map (fun (fields, remaining) ->
                 (PConstructor (name, fields), remaining))
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
-            // Constructor pattern, optionally with a space-applied payload: Some x
+            // Constructor pattern, optionally with a space-applied payload: Some x.
+            // The payload is one pattern without a cons tail: `Some x :: rest` is
+            // `(Some x) :: rest`, as in the interpreter, not `Some (x :: rest)`.
             if canStartPatternPayload rest then
-                parsePattern rest
+                parsePatternBase rest
                 |> Result.map (fun (payloadPattern, remaining) ->
                     (PConstructor (name, [payloadPattern]), remaining))
             else
