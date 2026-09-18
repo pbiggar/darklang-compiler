@@ -389,6 +389,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "List HIR Tests"; Tests = ListHIRTests.tests }
         { Name = "HIR Verification Tests"; Tests = HIRVerificationTests.tests }
         { Name = "Region Ownership Contracts"; Tests = RegionContractTests.tests }
+        { Name = "Owned HIR Verification"; Tests = OwnedHIRVerificationTests.tests }
         { Name = "Runtime Data Layout Tests"; Tests = RuntimeDataLayoutTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }

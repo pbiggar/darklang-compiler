@@ -249,6 +249,67 @@ let verifyFunction
             resultOwnership |> Result.bind (fun state ->
                 if Map.isEmpty state.Units then Ok () else Error (UndroppedValues (owned state))))
 
+/// Verify a mutually visible owned-function group. Internal call ownership is
+/// derived from the paired definitions, so direct and recursive calls cannot
+/// drift from their function boundaries. External registrations remain
+/// available only for targets outside the group.
+let verifyFunctions
+    (semantics: Semantics<'leaf, 'id>)
+    (functions: Function<'leaf, 'id> list) =
+    let duplicateName =
+        functions
+        |> List.countBy (fun functionDefinition -> functionDefinition.Definition.Name)
+        |> List.tryFind (fun (_, count) -> count > 1)
+        |> Option.map fst
+    match duplicateName with
+    | Some name -> Error (DuplicateFunctionName name)
+    | None ->
+        let derived =
+            functions
+            |> List.fold (fun result functionDefinition ->
+                result
+                |> Result.bind (fun signatures ->
+                    callSignatureOfFunction functionDefinition.Ownership
+                    |> Result.map (fun signature -> (functionDefinition, signature) :: signatures))) (Ok [])
+            |> Result.map List.rev
+        derived |> Result.bind (fun signatures ->
+            let conflictingRegistration =
+                signatures
+                |> List.tryPick (fun (functionDefinition, expected) ->
+                    let body = functionDefinition.Definition.Body.Body
+                    let boundaryCall : HIR.FunctionCall = {
+                        Target = functionDefinition.Definition.Name
+                        Arguments = body.Parameters |> List.map (fun parameter -> parameter.Value)
+                        Result = body.Result
+                    }
+                    match semantics.CallOwnership boundaryCall with
+                    | Some registered when registered <> expected ->
+                        Some functionDefinition.Definition.Name
+                    | _ -> None)
+            match conflictingRegistration with
+            | Some target -> Error (InconsistentRegisteredCallOwnership target)
+            | None ->
+                let registry =
+                    signatures
+                    |> List.map (fun (functionDefinition, signature) ->
+                        functionDefinition.Definition.Name, signature)
+                    |> Map.ofList
+                let programSemantics = {
+                    semantics with
+                        CallOwnership = fun call ->
+                            match Map.tryFind call.Target registry with
+                            | Some signature -> Some signature
+                            | None -> semantics.CallOwnership call
+                }
+                functions
+                |> List.fold (fun result functionDefinition ->
+                    result
+                    |> Result.bind (fun () ->
+                        verifyFunction
+                            programSemantics
+                            functionDefinition.Ownership
+                            functionDefinition.Definition.Body)) (Ok ()))
+
 /// Closed regions are functions with no managed parameters and an unmanaged
 /// result. Keeping this as a wrapper makes the existing boundary explicit.
 let verifyClosed (semantics: Semantics<'leaf, 'id>) (root: Block<'leaf, 'id>) =

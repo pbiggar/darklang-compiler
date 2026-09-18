@@ -56,6 +56,13 @@ produced result. A borrowed result must remain within the borrowed boundary.
 Unmanaged parameters and results stay outside ownership accounting. Signatures
 deliberately carry no HIR alias or effect facts.
 
+An owned function pairs a typed HIR definition with one positional ownership
+signature. Group verification first checks typed value flow and the independent
+primitive effect/alias contracts, then derives ownership call signatures from
+the paired definitions and verifies unit transfer. Direct and recursive calls
+therefore share one function boundary without allowing ownership information to
+stand in for type, effect, or alias facts.
+
 The ownership verifier tracks a nonnegative unit count and separate
 exclusivity provenance per identity. A value is certified unique only when it
 has provenance and exactly one local unit; an ordinary consumed parameter with

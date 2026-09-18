@@ -78,6 +78,14 @@ and Block<'leaf, 'id> = {
     Body: HIR.Block<Step<'leaf, 'id>>
 }
 
+/// An owned function pairs one typed HIR definition with its independent
+/// ownership boundary. Parameter order comes from the HIR entry block; the
+/// ownership signature classifies those same positions without copying types.
+type Function<'leaf, 'id> = {
+    Definition: HIR.Function<Block<'leaf, 'id>>
+    Ownership: FunctionSignature<'id>
+}
+
 /// A dialect must describe every access and possible escape, including opaque
 /// scalar operands and typed block results. A managed result transfers its
 /// ownership identity to the branch target; Unmanaged means the value has no
@@ -107,6 +115,8 @@ type VerificationError<'id when 'id: comparison> =
     | InconsistentCallOwnershipArgument of target: string * parameterIndex: int
     | InconsistentCallOwnershipResult of target: string
     | InvalidBorrowedCallResult of target: string * parameterIndex: int
+    | DuplicateFunctionName of name: string
+    | InconsistentRegisteredCallOwnership of target: string
     | InconsistentJoin
     | InconsistentBlockArgument
     | UndroppedValues of Set<'id>

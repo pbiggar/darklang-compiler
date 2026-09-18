@@ -108,6 +108,11 @@ uniquely consumed. Managed results are borrowed, produced, or uniquely
 produced. A checked conversion derives the positional call ownership contract
 from this boundary; borrowed results resolve to their unique borrowed parameter
 index rather than carrying a callee-local identity across the call.
+`OwnedIR.Function` pairs that signature with an ordered HIR definition without
+copying its typed boundary. `VerifyOwnedHIR` projects out ownership-only steps,
+verifies HIR types and primitive effect/alias contracts, then derives internal
+call ownership from the paired definitions before checking direct and recursive
+unit transfer.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
