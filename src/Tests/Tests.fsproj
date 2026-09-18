@@ -88,6 +88,7 @@
     <Compile Include="compiler-passes/HIRVerificationTests.fs" />
     <Compile Include="compiler-passes/HIRConstructionTests.fs" />
     <Compile Include="compiler-passes/ownership/RegionContractTests.fs" />
+    <Compile Include="compiler-passes/ownership/OwnedHIRVerificationTests.fs" />
     <Compile Include="compiler-passes/RuntimeDataLayoutTests.fs" />
     <Compile Include="compiler-passes/MonomorphizationTests.fs" />
     <Compile Include="compiler-passes/ownership/MemoryShapeTests.fs" />

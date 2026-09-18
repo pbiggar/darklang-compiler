@@ -64,6 +64,7 @@
     <Compile Include="passes/hir/ConstructFunctions.fs" />
     <Compile Include="ir/owned/OwnedIR.fs" />
     <Compile Include="passes/ownership/VerifyOwnership.fs" />
+    <Compile Include="passes/ownership/VerifyOwnedHIR.fs" />
     <Compile Include="ir/hir/ListRegion.fs" />
     <Compile Include="passes/ownership/ListAllocationBudget.fs" />
     <Compile Include="passes/hir/ExtractListRegions.fs" />
