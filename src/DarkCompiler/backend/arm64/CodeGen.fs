@@ -863,13 +863,13 @@ let private generatePreparedARM64WithOptionsAndCache
                    |> Map.toList
                    |> List.collect (fun (helperLabel, releasePlan) ->
                        generatePlannedDictRefCountDecHelper helperLabel releasePlan ctx))
-                @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false false None false false false ctx else [])
-                @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false false None false false false ctx else [])
-                @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false false None false false false ctx else [])
-                @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false false None false false false ctx else [])
-                @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false false None true false false ctx else [])
-                @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false false None false true false ctx else [])
-                @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false None false false true ctx else [])
+                @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel MemoryModel.NoReleasePlan false false None false false None false false false ctx else [])
+                @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel MemoryModel.NoReleasePlan false true None false false None false false false ctx else [])
+                @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel MemoryModel.NoReleasePlan false false (Some dictRefCountDecHelperLabel) false false None false false false ctx else [])
+                @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel MemoryModel.NoReleasePlan false false (Some dictRefCountDecListValueHelperLabel) false false None false false false ctx else [])
+                @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel MemoryModel.NoReleasePlan false false None false false None true false false ctx else [])
+                @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel MemoryModel.NoReleasePlan false false None false false None false true false ctx else [])
+                @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel MemoryModel.NoReleasePlan false false None false false None false false true ctx else [])
             recordPhase "ARM64 Helper Dict Generation" dictHelperTimer
             let closureHelperTimer = startPhase ()
             let closureRcHelpers =

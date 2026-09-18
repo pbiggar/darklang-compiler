@@ -222,7 +222,8 @@ let rec internal substituteInterpolationLiteral (name: string) (literal: Expr) (
     | TypeApp (functionName, typeArgs, callArgs) -> TypeApp (functionName, typeArgs, NonEmptyList.map recurse callArgs)
     | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
     | TupleAccess (tuple, index) -> TupleAccess (recurse tuple, index)
-    | DictLiteral (valueType, entries) -> DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, recurse value)))
+    | DictLiteral (keyType, valueType, entries) ->
+        DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
     | RecordLiteral (typeName, fields) -> RecordLiteral (typeName, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordUpdate (record, updates) -> RecordUpdate (recurse record, updates |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordAccess (record, field) -> RecordAccess (recurse record, field)
@@ -554,8 +555,19 @@ let internal formatLegacyParamTypeError
 /// Freshen type parameters - generate new unique names for each type param
 /// Returns (fresh type params, substitution map from old to fresh names)
 /// Uses index-based naming for deterministic compilation (no global state)
-let freshenTypeParams (typeParams: string list) : string list * Map<string, string> =
-    let freshParams = typeParams |> List.mapi (fun i baseName -> $"{baseName}${i}")
+let freshenTypeParamsAvoiding
+    (unavailableNames: Set<string>)
+    (typeParams: string list)
+    : string list * Map<string, string> =
+    let freshName index baseName =
+        let rec find suffix =
+            let candidate =
+                if suffix = 0 then $"{baseName}${index}"
+                else $"{baseName}${index}${suffix}"
+            if Set.contains candidate unavailableNames then find (suffix + 1)
+            else candidate
+        find 0
+    let freshParams = typeParams |> List.mapi freshName
     let subst = List.zip typeParams freshParams |> Map.ofList
     (freshParams, subst)
 

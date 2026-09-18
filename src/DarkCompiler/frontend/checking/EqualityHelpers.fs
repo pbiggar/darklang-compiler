@@ -107,11 +107,14 @@ let rec internal buildEqHelperExpr
     | _, TInt ->
         Call ("Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
 
-    | ExpandCurrent, TDict (TString, valueType) ->
-        let entryType = TTuple [TString; resolveType aliasReg valueType]
+    | ExpandCurrent, TDict (keyType, valueType) ->
+        let entryType =
+            TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
         let listType = TList entryType
-        let leftEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton leftExpr)
-        let rightEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton rightExpr)
+        let leftEntries =
+            TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton leftExpr)
+        let rightEntries =
+            TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton rightExpr)
         buildEqHelperExpr
             aliasReg
             typeReg

@@ -1157,7 +1157,7 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
         let mutable pendingStartLine = 0
         let mutable pendingExprIndentShift = 0
         let mutable inMultilineExpr = false
-        let mutable moduleIndentStack : int list = []
+        let mutable moduleScopes : (int * string list * Map<string, int>) list = []
         let mutable skipUntilIndex = -1
 
         let countLeadingSpaces (lineText: string) : int =
@@ -1273,17 +1273,23 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
                     else
                         let lineWithoutComment = stripComment trimmedLine
                         let lineIndent = countLeadingSpaces line
-                        let rec popCompletedModules (stack: int list) : int list =
-                            match stack with
+                        let rec popCompletedModules scopes currentPreamble currentFunctionLines =
+                            match scopes with
                             // When indentation returns to or above a module declaration's
-                            // indent level, that module block has ended.
-                            | top :: rest when lineIndent <= top -> popCompletedModules rest
-                            | _ -> stack
-                        moduleIndentStack <- popCompletedModules moduleIndentStack
+                            // indent level, restore the enclosing module's definitions.
+                            | (moduleIndent, parentPreamble, parentFunctionLines) :: rest
+                                when lineIndent <= moduleIndent ->
+                                popCompletedModules rest parentPreamble parentFunctionLines
+                            | _ -> (scopes, currentPreamble, currentFunctionLines)
+                        let (activeScopes, activePreamble, activeFunctionLines) =
+                            popCompletedModules moduleScopes preambleLines functionLineMap
+                        moduleScopes <- activeScopes
+                        preambleLines <- activePreamble
+                        functionLineMap <- activeFunctionLines
 
                         // Check if this starts a multi-line expression: starts with ( but isn't a complete test
                         let isTopLevel = line.Length > 0 && not (Char.IsWhiteSpace(line.[0]))
-                        let moduleShift = moduleIndentStack.Length * 2
+                        let moduleShift = moduleScopes.Length * 2
                         let isModuleLevelIndented = allowIndentedTests && lineIndent = moduleShift
                         let mayStartOrBeTest = isTopLevel || isModuleLevelIndented
                         let isDefinitionStart =
@@ -1383,11 +1389,8 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
 
                             if isDarkModuleDecl then
                                 let moduleIndent = countLeadingSpaces line
-                                let rec popToParent (stack: int list) : int list =
-                                    match stack with
-                                    | top :: rest when moduleIndent <= top -> popToParent rest
-                                    | _ -> stack
-                                moduleIndentStack <- moduleIndent :: popToParent moduleIndentStack
+                                moduleScopes <-
+                                    (moduleIndent, preambleLines, functionLineMap) :: moduleScopes
                             else
                             // This is a definition line - add to preamble
                             // Preserve original indentation for multi-line definitions

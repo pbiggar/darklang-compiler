@@ -61,8 +61,10 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         elements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
     | TupleAccess (tuple, _) ->
         collectFreeVars tuple bound
-    | DictLiteral (_, entries) ->
-        entries |> List.map (fun (_, e) -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | DictLiteral (_, _, entries) ->
+        entries
+        |> List.collect (fun (key, value) -> [collectFreeVars key bound; collectFreeVars value bound])
+        |> List.fold Set.union Set.empty
     | RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> collectFreeVars e bound) |> List.fold Set.union Set.empty
     | RecordUpdate (record, updates) ->

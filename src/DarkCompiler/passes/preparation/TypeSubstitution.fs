@@ -216,10 +216,13 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.TupleLiteral (List.map (applySubstToExpr subst) elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (applySubstToExpr subst tuple, index)
-    | AST.DictLiteral (valueType, entries) ->
+    | AST.DictLiteral (keyType, valueType, entries) ->
         AST.DictLiteral (
+            applySubstToType subst keyType,
             applySubstToType subst valueType,
-            entries |> List.map (fun (key, value) -> (key, applySubstToExpr subst value))
+            entries
+            |> List.map (fun (key, value) ->
+                (applySubstToExpr subst key, applySubstToExpr subst value))
         )
     | AST.RecordLiteral (reference, fields) ->
         AST.RecordLiteral (
@@ -312,7 +315,12 @@ let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: AST.FunctionDef
 /// Specialize a generic function definition with specific type arguments
 let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
     // Build substitution from type parameters to type args
-    let subst = List.zip funcDef.TypeParams typeArgs |> Map.ofList
+    let subst =
+        if List.length funcDef.TypeParams <> List.length typeArgs then
+            Crash.crash
+                $"Specialization arity mismatch for {funcDef.Name}: expected {List.length funcDef.TypeParams}, got {List.length typeArgs}"
+        else
+            List.zip funcDef.TypeParams typeArgs |> Map.ofList
     // Generate specialized name
     let specializedName = specName funcDef.Name typeArgs
     // Apply substitution to parameters, return type, and body

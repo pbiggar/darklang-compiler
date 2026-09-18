@@ -431,7 +431,7 @@ and Expr =
     | TypeApp of funcName:string * typeArgs:Type list * args:NonEmptyList<Expr>  // Generic call: funcName<T, U>(args)
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
-    | DictLiteral of valueType:Type * entries:(string * Expr) list  // Dict { key = value; ... }
+    | DictLiteral of keyType:Type * valueType:Type * entries:(Expr * Expr) list
     | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
     | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y

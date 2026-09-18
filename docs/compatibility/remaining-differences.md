@@ -14,26 +14,20 @@ resource representation. It also excludes performance and diagnostic wording.
 
 | Area | Interpreter behavior | Current compiler boundary | Evidence |
 | --- | --- | --- | --- |
-| Dictionary keys | `Dict<key, value>` and `Dict { expression: value }` admit supported non-String key types | The public type is `Dict<value>`, APIs take `String` keys, and literals store String keys | `upstream/stdlib/dict.dark` fails at `val valDict = Dict { 1L: "a"; 2L: "b" }`; `interop.syntax` explicitly rejects two Dict type arguments |
 | Effect ceilings | Function return annotations may contain permission ceilings such as `:{}` and `:{Clock}` | Effect-row syntax and permission-ceiling enforcement are absent | `upstream/language/effect-ceiling.dark` fails while parsing the return annotation |
 | Qualified user values | A `val` declared in a module is available both bare inside the module and by its qualified module name | Unqualified top-level values work, but the imported nested-module value corpus cannot resolve names such as `UserDefined.stringValue`; package values exist only when explicitly catalogued | `upstream/language/custom-data/values.dark`: 19/72 cases pass when enabled, with qualified user and package values accounting for the failures |
-| Generic aliases | Aliases preserve the structure and type arguments of the aliased record, tuple, list, or sum | A generic record alias is not recognized as a record during field access | `upstream/language/custom-data/aliases.dark` fails on `Inner<'a, 'b>.b` while building its preamble |
-| Recursive generic sums | Recursive generic ADTs retain one nominal identity through construction, folds, and recursion | Some recursive generic uses acquire incompatible identities that render identically | `upstream/language/custom-data/enums.dark` reports `expected RBTree<a>, got RBTree<a>` in `ofList` |
 | Application grouping | Space application remains left-associative when a bare value argument is followed by a parenthesized argument: `f value (g x)` | Some such calls are grouped as though `value` were applied to the parenthesized expression | The unchanged Crypto AWS chain reports `signing is not a function`; Stream transforms report `s is not a function` |
-| Layout-separated list elements | Newline-separated list elements do not require commas | Some adjacent applications in a newline-separated list are consumed as additional arguments | The Blob concat case in `upstream/stdlib/bytes.dark` reports that `Blob.fromString` received five arguments; the other 17 cases pass |
 | Module environments | Opened modules and content-addressed packages participate in interpreter name resolution | Module-open environments and live content-addressed package loading are absent; compilation uses explicit units and snapshots | The identifier and name-resolution ledgers document this boundary |
 | Runtime reflection | Interpreter runtime values, builtin metadata, parser services, and runtime-value-to-expression conversion are available to language tooling | `Builtin.getAllBuiltinFns`, `Builtin.parserParseToWrittenTypes`, `RuntimeTypes.Dval`, and `RuntimeTypesToProgramTypes.dvalToExpr` are absent | The builtin-introspection, parsed-file-shape, semantic-tokenization, and runtime-to-program-types upstream files fail on those names or types |
 
-The application-grouping and layout-list rows are frontend gaps, not Crypto,
-Stream, or Blob algorithm differences. Focused compiler-authored tests that use
-unambiguous parentheses exercise those implementations successfully.
+The application-grouping row is a frontend gap, not a Crypto or Stream
+algorithm difference. Focused compiler-authored tests that use unambiguous
+parentheses exercise those implementations successfully.
 
 ## Standard-library differences
 
 | Surface | Remaining difference |
 | --- | --- |
-| `List` | `Stdlib.List.dedup` is absent. Unlike `unique`, it must retain the first occurrence and preserve input order. All five pinned upstream `dedup` cases fail name resolution. |
-| `Char` | `isLetter`, `isAlphanumeric`, `isWhitespace`, and `toCodepoint` are absent. The other enabled Char operations pass their upstream cases. |
 | `Pretty` | Only the `Doc`/`Mode` types and `empty`, `line`, `hardLine`, and `softLine` values are present. `text`, `concat`, `nest`, `group`, `styled`, `join`, `hsep`, `vsep`, and `render` are absent. |
 | HTTP client | Content-type constants exist, but the request model and `basicAuth`, `bearerToken`, `get`, and `request` operations are absent. |
 | HTTP server | The default body-size value exists, but `getMethod`, `get`, and `post` route helpers are absent. |
@@ -54,9 +48,9 @@ shared frontend gap listed above.
 
 The imported corpus matches the pinned upstream sources except for local
 `#compileerror` metadata and insignificant trailing-newline differences. At the
-compiler revision above it contains 105 files. The default runner disables 53
-whole files and individual cases in 22 more files (202 source lines). Those
-denysets are an enablement queue, not a list of 255 independent semantic gaps.
+compiler revision above it contains 105 files. The default runner disables 46
+whole files and individual cases in 23 more files (258 source lines). Those
+denysets are an enablement queue, not a count of independent semantic gaps.
 
 A diagnostic run removed only the individual-line denyset and used
 `--e2e-batch-size=1` so one compile error could not invalidate neighboring
@@ -68,9 +62,10 @@ cases:
 The remaining failures in those runs were classified into the gaps above,
 intentional AOT boundaries, interpreter-only test infrastructure, or expected
 presentation differences. Whole disabled files were then enabled one at a time
-to avoid cross-file preamble failures. For example, the formerly disabled Dict
-literal smoke file passed 3/3 unchanged, demonstrating why a disabled file must
-not be treated as proof that its entire feature is missing.
+to avoid cross-file preamble failures. The aliases, enums, bytes, Char, Dict,
+and Dict-literal smoke files are now enabled; unsupported cases in the mixed
+files remain line-gated. A disabled file must not be treated as proof that its
+entire feature is missing.
 
 The authoritative live denysets remain in
 `src/Tests/test-suite-tooling/TestRunner.fs`. When a gap closes, enable its

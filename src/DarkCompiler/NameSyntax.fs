@@ -376,8 +376,13 @@ let private assignParsedRecursiveIdentities (Program topLevels) : Program =
         | TypeApp (name, types, args) -> TypeApp (name, types, mapArgs 0 args)
         | TupleLiteral values -> TupleLiteral (values |> List.mapi child)
         | TupleAccess (tuple, index) -> TupleAccess (child 0 tuple, index)
-        | DictLiteral (typ, entries) ->
-            DictLiteral (typ, entries |> List.mapi (fun index (key, value) -> (key, child index value)))
+        | DictLiteral (keyType, valueType, entries) ->
+            DictLiteral (
+                keyType,
+                valueType,
+                entries
+                |> List.mapi (fun index (key, value) ->
+                    (child (index * 2) key, child (index * 2 + 1) value)))
         | RecordLiteral (name, fields) ->
             RecordLiteral (name, fields |> List.mapi (fun index (field, value) -> (field, child index value)))
         | RecordUpdate (record, fields) ->

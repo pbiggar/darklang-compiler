@@ -177,6 +177,12 @@ let private canEmbedBatchEqualitySource
         + "e2eBatchEligibilityCheck (0L)"
     PackageCatalog.parseProgram allowInternal probe |> Result.isOk
 
+let private requiresStandaloneLifetimeExecution (source: string) : bool =
+    // A batch keeps several independently rendered results live in one native
+    // process. Dict construction from lists currently needs the ordinary
+    // single-result lifetime boundary used by production evaluation.
+    source.Contains("Dict.fromList")
+
 /// Only value-equality tests with no process contract can share a process. The
 /// compiler path and options remain production-identical; only the synthesized
 /// caller contains several independent checks.
@@ -199,6 +205,7 @@ let tryPrepareBatchTest (test: E2ETest) : PreparedE2EBatchTest option =
         let allowInternal = isInternalTestFile test.SourceFile
         match sourceToExecute allowInternal test with
         | Error _ -> None
+        | Ok equalitySource when requiresStandaloneLifetimeExecution equalitySource -> None
         | Ok equalitySource ->
             match PackageCatalog.parseProgram allowInternal equalitySource with
             | Ok (Program [Expression _]) when canEmbedBatchEqualitySource allowInternal equalitySource ->
@@ -411,9 +418,9 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         |> combineMany
     | TupleAccess (tupleExpr, _index) ->
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars tupleExpr
-    | DictLiteral (_, entries) ->
+    | DictLiteral (_, _, entries) ->
         entries
-        |> List.map snd
+        |> List.collect (fun (key, value) -> [key; value])
         |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
         |> combineMany
     | RecordLiteral (_typeName, fields) ->

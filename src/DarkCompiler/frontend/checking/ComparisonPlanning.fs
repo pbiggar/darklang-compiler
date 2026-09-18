@@ -305,7 +305,7 @@ let internal canonicalSortableType
             | TEnumFields elementTypes -> List.forall recurse elementTypes
             | TList elementType -> recurse elementType
             | TStream _ -> false
-            | TDict (TString, valueType) -> recurse valueType
+            | TDict (keyType, valueType) -> recurse keyType && recurse valueType
             | TRecord (recordName, typeArgs) ->
                 match Map.tryFind recordName typeReg with
                 | None -> false
@@ -332,6 +332,79 @@ let internal canonicalSortableType
             | TDict _ | TFunction _ | TBlob | TRawPtr | TRuntimeError -> false
 
     sortable Set.empty typ
+
+/// Dict keys use structural equality and therefore must not retain executable,
+/// streaming, opaque, or compiler-internal values anywhere in their shape.
+let internal dictKeyAdmissibleType
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (indexedSumTypeReg: IndexedSumTypeRegistry)
+    (typ: Type)
+    : bool =
+    let rec admissible (seen: Set<Type>) (candidate: Type) : bool =
+        let resolved = resolveType aliasReg candidate
+        if Set.contains resolved seen then
+            true
+        else
+            let seen = Set.add resolved seen
+            let recurse = admissible seen
+            match resolved with
+            | TVar _ -> true
+            | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+            | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+            | TFloat64 | TChar | TString | TDateTime -> true
+            | TTuple elementTypes
+            | TEnumFields elementTypes -> List.forall recurse elementTypes
+            | TList elementType -> recurse elementType
+            | TDict (keyType, valueType) -> recurse keyType && recurse valueType
+            | TRecord (recordName, typeArgs) ->
+                match Map.tryFind recordName typeReg with
+                | None when Map.containsKey recordName indexedSumTypeReg ->
+                    recurse (TSum (recordName, typeArgs))
+                | None -> false
+                | Some recordInfo ->
+                    match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                    | Error _ -> false
+                    | Ok subst ->
+                        recordInfo.Fields
+                        |> List.forall (fun (_, fieldType) -> recurse (applySubst subst fieldType))
+            | TSum (sumName, typeArgs) ->
+                match Map.tryFind sumName indexedSumTypeReg with
+                | None -> true
+                | Some info ->
+                    let subst =
+                        if List.length info.TypeParams = List.length typeArgs then
+                            List.zip info.TypeParams typeArgs |> Map.ofList
+                        else
+                            Map.empty
+                    info.Variants
+                    |> List.forall (fun variant ->
+                        variant.Payload
+                        |> Option.map (fun payload -> recurse (applySubst subst payload))
+                        |> Option.defaultValue true)
+            | TFunction _ | TStream _ | TBlob | TRawPtr | TRuntimeError -> false
+
+    admissible Set.empty typ
+
+let internal validateDictKeyCall
+    (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (indexedSumTypeReg: IndexedSumTypeRegistry)
+    (funcName: string)
+    (typeArgs: Type list)
+    : Result<unit, TypeError> =
+    match funcName, typeArgs with
+    | name, keyType :: _ when
+        (name.StartsWith("Stdlib.Dict.") && not (name.StartsWith("Stdlib.Dict.__")))
+        || (name.StartsWith("Dict.") && not (name.StartsWith("Dict.__"))) ->
+        if dictKeyAdmissibleType aliasReg typeReg indexedSumTypeReg keyType then
+            Ok ()
+        else
+            Error (
+                GenericError
+                    $"Type {typeToString (resolveType aliasReg keyType)} cannot be used as a Dict key"
+            )
+    | _ -> Ok ()
 
 let internal validateCanonicalSortableCall
     (aliasReg: AliasRegistry)

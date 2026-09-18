@@ -24,6 +24,12 @@ differences are excluded.
 | Equality | generated equality helpers | `NoModule.fs:80-94` | Nominal compatibility AOT; aliases resolve together; recursive named fields |
 | Rendering | `frontend/ValueRendering.fs` | `prettyPrinter/runtimeTypes.dark:500-525` | Resolved name/args, ordinal keys, recursive values, 80-character layout |
 
+Generic aliases preserve their declared arguments while resolving the nominal
+record or sum owner. Field access and constructors therefore work through
+record, tuple, list, and sum aliases, including nested aliases imported from
+sibling modules. The pinned aliases corpus is enabled except for seven
+individually catalogued diagnostic and unrelated string-codegen cases.
+
 Focused same-source evidence remains unchanged in
 `src/Tests/e2e/upstream/language/custom-data/records.dark` and
 `record-field-acess.dark`. Their supported success, evaluation-order, and

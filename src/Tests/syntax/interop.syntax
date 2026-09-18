@@ -51,11 +51,10 @@ let inc = (x: Int64) => x + 1 in inc 4L
 does not use '=>'
 
 ---NAME---
-public Dict type rejects a key type argument
+public Dict type accepts key and value type arguments
 ---SOURCE---
-let badDictArity (dict: Dict<String, Int64>): Int64 = 0
----EXPECT-ERROR---
-Dict expects exactly one type argument
+let genericDict (dict: Dict<String, Int64>): Dict<String, Int64> = dict
+---ROUNDTRIP---
 
 ---NAME---
 implicit curried lambda survives roundtrip

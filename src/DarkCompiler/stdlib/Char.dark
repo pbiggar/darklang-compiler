@@ -31,6 +31,26 @@ let isASCIILetter (char: Char) : Bool =
     | Some codepoint -> (codepoint >= 65L && codepoint <= 90L) || (codepoint >= 97L && codepoint <= 122L)
     | None -> false
 
+let isLetter (char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Unicode.isLetter codepoint
+    | None -> false
+
+let isAlphanumeric (char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Unicode.isLetter codepoint || Unicode.isNumber codepoint
+    | None -> false
+
+let isWhitespace (char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Unicode.isWhitespace codepoint
+    | None -> false
+
+let toCodepoint (char: Char) : Stdlib.Option.Option<Int> =
+    match Stdlib.String.__toCodepoints (Stdlib.Char.toString char) with
+    | [codepoint] -> Some (Stdlib.Int.fromInt64 codepoint)
+    | _ -> None
+
 let toAsciiCode (char: Char) : Stdlib.Option.Option<Int> =
     match Stdlib.Char.__firstCodepoint char with
     | Some codepoint ->

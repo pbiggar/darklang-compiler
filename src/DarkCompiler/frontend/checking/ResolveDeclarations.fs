@@ -203,7 +203,8 @@ let rec private collectDeclarationCalls (expr: Expr) : Set<string> =
     | Call (name, args) | TypeApp (name, _, args) ->
         Set.add name (combine (NonEmptyList.toList args))
     | TupleLiteral values | ListLiteral values -> combine values
-    | DictLiteral (_, entries) | RecordLiteral (_, entries) -> entries |> List.map snd |> combine
+    | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> combine
+    | RecordLiteral (_, entries) -> entries |> List.map snd |> combine
     | RecordUpdate (record, fields) -> combine (record :: (fields |> List.map snd))
     | Constructor (_, _, payload) ->
         payload |> Option.map collectDeclarationCalls |> Option.defaultValue Set.empty
@@ -440,8 +441,8 @@ let internal resolveProgramNames
                 | Some typeName ->
                     let rec canonicalOwner owner =
                         match Map.tryFind owner aliasReg with
-                        | Some ([], TRecord (target, []))
-                        | Some ([], TSum (target, [])) -> canonicalOwner target
+                        | Some (_, TRecord (target, _))
+                        | Some (_, TSum (target, _)) -> canonicalOwner target
                         | _ -> owner
                     $"{canonicalOwner typeName}.{variantName}"
             match resolveName NameResolution.ResolutionContext.Constructor localNames spelling with
@@ -572,10 +573,12 @@ let internal resolveProgramNames
                               TypeArgs = typeArgs },
                             fields'
                         ))))
-        | DictLiteral (valueType, entries) ->
+        | DictLiteral (keyType, valueType, entries) ->
             entries
-            |> ResultList.traverse (fun (key, value) -> recurse value |> Result.map (fun value' -> (key, value')))
-            |> Result.map (fun entries' -> DictLiteral (valueType, entries'))
+            |> ResultList.traverse (fun (key, value) ->
+                recurse key
+                |> Result.bind (fun key' -> recurse value |> Result.map (fun value' -> (key', value'))))
+            |> Result.map (fun entries' -> DictLiteral (keyType, valueType, entries'))
         | BoundaryRender (renderer, value) -> recurse value |> Result.map (fun value' -> BoundaryRender (renderer, value'))
         | BinOp (op, left, right) -> recurse left |> Result.bind (fun l -> recurse right |> Result.map (fun r -> BinOp (op, l, r)))
         | UnaryOp (op, inner) -> recurse inner |> Result.map (fun inner' -> UnaryOp (op, inner'))

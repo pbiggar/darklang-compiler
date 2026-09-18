@@ -1,15 +1,14 @@
 // __HAMT.dark - private generic Stdlib.Dict HAMT helpers.
 //
-// The public String-keyed API lives in Dict.dark; `Stdlib.Dict.__*` functions
-// provide its generic persistent representation and compiler-owned extensions.
+// The public generic API lives in Dict.dark; `Stdlib.Dict.__*` functions
+// provide its persistent representation and compiler-owned extensions.
 
 module Stdlib.Dict
 
 // Internal Hash Array Mapped Trie helpers
 // =============================================================================
 
-// Private generic entry points. Public Dict wrappers specialize these to
-// String keys; compiler-owned tables may continue to use other key types.
+// Private generic entry points shared by public Dicts and compiler-owned tables.
 let __empty<'k, 'v> () : Dict<k, v> = __empty_dict<k, v> ()
 
 let __get<'k, 'v> (dict: Dict<k, v>) (key: k) : Stdlib.Option.Option<v> =

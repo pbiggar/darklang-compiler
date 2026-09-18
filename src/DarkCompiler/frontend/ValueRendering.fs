@@ -197,12 +197,13 @@ and private ensureListItemsRenderer
 
 and private ensureDictItemsRenderer
     (env: RenderEnv)
+    (keyType: Type)
     (valueType: Type)
     (state: RenderState)
     : string * RenderState =
-    let entryType = TTuple [TString; valueType]
+    let entryType = TTuple [keyType; valueType]
     let listType = TList entryType
-    let name = dictItemsRendererName (TDict (TString, valueType))
+    let name = dictItemsRendererName (TDict (keyType, valueType))
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
@@ -215,12 +216,18 @@ and private ensureDictItemsRenderer
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
+        let entryKey = TupleAccess (Var "__entry", 0)
         let entryValue = TupleAccess (Var "__entry", 1)
-        let (renderedValue, withValueRenderer) = renderCall env valueType entryValue reserved
+        let (renderedKey, withKeyRenderer) =
+            match keyType with
+            | TString -> (call "Stdlib.Dict.__renderKey" [entryKey], reserved)
+            | _ -> renderCall env keyType entryKey reserved
+        let separator = if keyType = TString then " = " else ": "
+        let (renderedValue, withValueRenderer) = renderCall env valueType entryValue withKeyRenderer
         let renderedEntry =
             concat [
-                call "Stdlib.Dict.__renderKey" [TupleAccess (Var "__entry", 0)]
-                StringLiteral " = "
+                renderedKey
+                StringLiteral separator
                 renderedValue
             ]
         let tailBody =
@@ -290,10 +297,10 @@ and private renderBody
         (StringLiteral "<stream>", state)
     // An unconstrained Dict value can only be the polymorphic empty literal;
     // no value renderer is needed because there are no entries to inspect.
-    | TDict (TString, TVar _) -> (StringLiteral "Dict { }", state)
-    | TDict (TString, valueType) ->
-        let (itemsName, nextState) = ensureDictItemsRenderer env valueType state
-        let entries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton value)
+    | TDict (TVar _, TVar _) -> (StringLiteral "Dict { }", state)
+    | TDict (keyType, valueType) ->
+        let (itemsName, nextState) = ensureDictItemsRenderer env keyType valueType state
+        let entries = TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton value)
         let body =
             Let (
                 LPVariable "__dict_entries",
@@ -417,8 +424,6 @@ and private renderBody
         (StringLiteral "<Blob: ephemeral>", state)
     | TRawPtr ->
         (call "Stdlib.Int64.toString" [value], state)
-    | TDict (keyType, _) ->
-        Crash.crash $"Public Dict renderer received non-String key type {CheckingDiagnostics.typeToString keyType}"
     | TRuntimeError -> (StringLiteral "()", state)
     | TVar name -> Crash.crash $"Unresolved type variable in value renderer: {name}"
 

@@ -494,7 +494,8 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
     | TDict (TString, valueType) ->
         ensureDictSerializer env valueType state
         |> Result.map (fun (name, nextState) ->
-            let entries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton value)
+            let entries =
+                TypeApp ("Stdlib.Dict.toList", [TString; valueType], NonEmptyList.singleton value)
             let encoded = call name [Var "__entries"; writerBeginObject writer; BoolLiteral true]
             (Let (LPVariable "__entries", entries, writerEndObject encoded),
              nextState))
@@ -721,7 +722,7 @@ and private ensureDictDecoder env valueType state =
             let withValue =
                 TypeApp (
                     "Stdlib.Dict.setOverridingDuplicates",
-                    [valueType],
+                    [TString; valueType],
                     args [Var "__dict"; key; Var "__decoded_value"])
             let body =
                 Match (
@@ -917,7 +918,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         let matches =
                             TypeApp (
                                 "Stdlib.Dict.get",
-                                [valueViewType],
+                                [TString; valueViewType],
                                 args [Var "__object_field_map"; StringLiteral fieldName])
                         let fieldPath =
                             listPush
@@ -951,7 +952,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
     | TDict (TString, valueType) ->
         ensureDictDecoder env valueType state
         |> Result.map (fun (dictDecoder, nextState) ->
-            let empty = DictLiteral (valueType, [])
+            let empty = DictLiteral (TString, valueType, [])
             (Match (
                 call "Stdlib.Json.__objectFields" [Var "__source"; Var "__view"],
                 [ makeCase
@@ -1029,7 +1030,8 @@ let rec private mapExpr rewrite expr =
         | TypeApp (name, types, values) -> TypeApp (name, types, NonEmptyList.map recurse values)
         | TupleLiteral values -> TupleLiteral (List.map recurse values)
         | TupleAccess (value, index) -> TupleAccess (recurse value, index)
-        | DictLiteral (typ, entries) -> DictLiteral (typ, entries |> List.map (fun (key, value) -> (key, recurse value)))
+        | DictLiteral (keyType, valueType, entries) ->
+            DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
         | RecordLiteral (name, fields) -> RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
         | RecordUpdate (record, fields) -> RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
         | RecordAccess (record, field) -> RecordAccess (recurse record, field)
@@ -1068,7 +1070,8 @@ let rewriteProgramWithSession
                 | If (a, b, c) -> capture c (capture b (capture a collected))
                 | Call (_, values) | TypeApp (_, _, values) -> NonEmptyList.toList values |> List.fold (fun s e -> capture e s) collected
                 | TupleLiteral values | ListLiteral values | Closure (_, values) -> List.fold (fun s e -> capture e s) collected values
-                | DictLiteral (_, entries) -> entries |> List.fold (fun s (_, e) -> capture e s) collected
+                | DictLiteral (_, _, entries) ->
+                    entries |> List.fold (fun state (key, value) -> capture value (capture key state)) collected
                 | RecordLiteral (_, fields) -> fields |> List.fold (fun s (_, e) -> capture e s) collected
                 | RecordUpdate (record, fields) -> fields |> List.fold (fun s (_, e) -> capture e s) (capture record collected)
                 | Constructor (_, _, payload) -> payload |> Option.map (fun e -> capture e collected) |> Option.defaultValue collected

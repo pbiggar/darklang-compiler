@@ -1,36 +1,32 @@
-// Stdlib/Dict.dark - Public String-keyed Dict contract.
-//
-// The generic HAMT lives behind private `Stdlib.Dict.__*` helpers. The public
-// surface intentionally exposes only the interpreter-compatible Dict<value>
-// contract pinned at darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+// Stdlib/Dict.dark - Generic persistent dictionary operations.
 
 module Stdlib.Dict
 
 val empty = Dict { }
 
-let isEmpty<'v> (dict: Dict<v>) : Bool =
-    __dict_is_null<String, v> dict
+let isEmpty<'k, 'v> (dict: Dict<k, v>) : Bool =
+    __dict_is_null<k, v> dict
 
-let singleton<'v> (key: String) (value: v) : Dict<v> =
-    Stdlib.Dict.__setOverwriting<String, v> (Stdlib.Dict.__empty<String, v> ()) key value
+let singleton<'k, 'v> (key: k) (value: v) : Dict<k, v> =
+    Stdlib.Dict.__setOverwriting<k, v> (Stdlib.Dict.__empty<k, v> ()) key value
 
-let size<'v> (dict: Dict<v>) : Int =
-    Stdlib.Int.fromInt64 (Stdlib.Dict.__size<String, v> dict)
+let size<'k, 'v> (dict: Dict<k, v>) : Int =
+    Stdlib.Int.fromInt64 (Stdlib.Dict.__size<k, v> dict)
 
-let get<'v> (dict: Dict<v>) (key: String) : Stdlib.Option.Option<v> =
-    Stdlib.Dict.__get<String, v> dict key
+let get<'k, 'v> (dict: Dict<k, v>) (key: k) : Stdlib.Option.Option<v> =
+    Stdlib.Dict.__get<k, v> dict key
 
-let set<'v> (dict: Dict<v>) (key: String) (value: v) : Dict<v> =
-    if Stdlib.Dict.__contains<String, v> dict key then
-        Builtin.testRuntimeError ("Cannot add two dictionary entries with the same key `" ++ key ++ "`")
+let set<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
+    if Stdlib.Dict.__contains<k, v> dict key then
+        Builtin.testRuntimeError "Cannot add two dictionary entries with the same key"
     else
-        Stdlib.Dict.__setOverwriting<String, v> dict key value
+        Stdlib.Dict.__setOverwriting<k, v> dict key value
 
-let setOverridingDuplicates<'v> (dict: Dict<v>) (key: String) (value: v) : Dict<v> =
-    Stdlib.Dict.__setOverwriting<String, v> dict key value
+let setOverridingDuplicates<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
+    Stdlib.Dict.__setOverwriting<k, v> dict key value
 
-let remove<'v> (dict: Dict<v>) (key: String) : Dict<v> =
-    Stdlib.Dict.__remove<String, v> dict key
+let remove<'k, 'v> (dict: Dict<k, v>) (key: k) : Dict<k, v> =
+    Stdlib.Dict.__remove<k, v> dict key
 
 let __toUtf16Units (codepoints: List<Int64>) : List<Int64> =
     match codepoints with
@@ -77,123 +73,101 @@ let __renderKey (key: String) : String =
 let __copyKey (key: String) : String =
     Stdlib.String.__byteSlice key 0L (Stdlib.String.__byteLength key)
 
-let __findNextKey<'v> (entries: List<(String * v)>) (after: Stdlib.Option.Option<String>) (candidate: Stdlib.Option.Option<String>) : Stdlib.Option.Option<String> =
+let __insertEntry<'k, 'v> (entry: (k * v)) (sorted: List<(k * v)>) : List<(k * v)> =
+    match sorted with
+    | [] -> [entry]
+    | head :: tail ->
+        if __compare<k> (entry.0) (head.0) < 0L then Stdlib.List.push sorted entry
+        else Stdlib.List.push (Stdlib.Dict.__insertEntry<k, v> entry tail) head
+
+let __sortEntries<'k, 'v> (entries: List<(k * v)>) (sorted: List<(k * v)>) : List<(k * v)> =
     match entries with
-    | [] -> candidate
-    | entry :: tail ->
-        let isAfter =
-            match after with
-            | None -> true
-            | Some previousKey -> Stdlib.Dict.__compareString (entry.0) previousKey > 0l in
-        let nextCandidate =
-            if Stdlib.Bool.not isAfter then candidate
-            else
-                match candidate with
-                | None -> Some (Stdlib.Dict.__copyKey (entry.0))
-                | Some currentKey ->
-                    if Stdlib.Dict.__compareString (entry.0) currentKey < 0l then
-                        Some (Stdlib.Dict.__copyKey (entry.0))
-                    else candidate in
-        Stdlib.Dict.__findNextKey<v> tail after nextCandidate
+    | [] -> sorted
+    | head :: tail -> Stdlib.Dict.__sortEntries<k, v> tail (Stdlib.Dict.__insertEntry<k, v> head sorted)
 
-let __orderedEntries<'v> (dict: Dict<v>) (entries: List<(String * v)>) (remaining: Int64) (after: Stdlib.Option.Option<String>) : List<(String * v)> =
-    if remaining == 0L then []
-    else
-        match Stdlib.Dict.__findNextKey<v> entries after None with
-        | None -> Builtin.testRuntimeError "Dict traversal could not find its next entry"
-        | Some key ->
-            match Stdlib.Dict.__get<String, v> dict key with
-            | None -> Builtin.testRuntimeError "Dict traversal key was unexpectedly absent"
-            | Some value ->
-                let ownedKey = Stdlib.Dict.__copyKey key in
-                let nextKey = Stdlib.Dict.__copyKey key in
-                let tail = Stdlib.Dict.__orderedEntries<v> dict entries (remaining - 1L) (Some nextKey) in
-                Stdlib.List.push<(String * v)> tail ((ownedKey, value))
+let toList<'k, 'v> (dict: Dict<k, v>) : List<(k * v)> =
+    Stdlib.Dict.__sortEntries (Stdlib.Dict.__entries<k, v> dict) []
 
-let toList<'v> (dict: Dict<v>) : List<(String * v)> =
-    let entries = Stdlib.Dict.__entries<String, v> dict in
-    Stdlib.Dict.__orderedEntries<v> dict entries (Stdlib.List.__length<(String * v)> entries) None
-
-let __keysFromEntries<'v> (entries: List<(String * v)>) : List<String> =
+let __keysFromEntries<'k, 'v> (entries: List<(k * v)>) : List<k> =
     match entries with
     | [] -> []
-    | head :: tail -> Stdlib.List.push (Stdlib.Dict.__keysFromEntries tail) (head.0)
+    | head :: tail -> Stdlib.List.push (Stdlib.Dict.__keysFromEntries<k, v> tail) (head.0)
 
-let keys<'v> (dict: Dict<v>) : List<String> =
-    Stdlib.Dict.__keysFromEntries<v> (Stdlib.Dict.toList<v> dict)
+let keys<'k, 'v> (dict: Dict<k, v>) : List<k> =
+    Stdlib.Dict.__keysFromEntries<k, v> (Stdlib.Dict.toList<k, v> dict)
 
-let __valuesFromEntries<'v> (entries: List<(String * v)>) : List<v> =
+let __valuesFromEntries<'k, 'v> (entries: List<(k * v)>) : List<v> =
     match entries with
     | [] -> []
-    | head :: tail -> Stdlib.List.push (Stdlib.Dict.__valuesFromEntries tail) (head.1)
+    | head :: tail -> Stdlib.List.push (Stdlib.Dict.__valuesFromEntries<k, v> tail) (head.1)
 
-let values<'v> (dict: Dict<v>) : List<v> =
-    Stdlib.Dict.__valuesFromEntries<v> (Stdlib.Dict.toList<v> dict)
+let values<'k, 'v> (dict: Dict<k, v>) : List<v> =
+    Stdlib.Dict.__valuesFromEntries<k, v> (Stdlib.Dict.toList<k, v> dict)
 
-let __fromListOverwritingString<'v> (entries: List<(String * v)>) (dict: Dict<v>) : Dict<v> =
+let __fromListOverwritingPublic<'k, 'v> (entries: List<(k * v)>) (dict: Dict<k, v>) : Dict<k, v> =
     match entries with
     | [] -> dict
     | head :: tail ->
-        Stdlib.Dict.__fromListOverwritingString tail (Stdlib.Dict.__setOverwriting dict (head.0) (head.1))
+        Stdlib.Dict.__fromListOverwritingPublic<k, v> tail (Stdlib.Dict.__setOverwriting dict (head.0) (head.1))
 
-let fromListOverwritingDuplicates<'v> (entries: List<(String * v)>) : Dict<v> =
-    Stdlib.Dict.__fromListOverwritingString<v> entries (Stdlib.Dict.__empty<String, v> ())
+let fromListOverwritingDuplicates<'k, 'v> (entries: List<(k * v)>) : Dict<k, v> =
+    Stdlib.Dict.__fromListOverwritingPublic<k, v> entries (Stdlib.Dict.__empty<k, v> ())
 
-let __fromListRejecting<'v> (entries: List<(String * v)>) (dict: Dict<v>) : Stdlib.Option.Option<Dict<v>> =
+let __fromListRejecting<'k, 'v> (entries: List<(k * v)>) (dict: Dict<k, v>) : Stdlib.Option.Option<Dict<k, v>> =
     match entries with
     | [] -> Some dict
     | head :: tail ->
         if Stdlib.Dict.__contains dict (head.0) then None
         else
-            Stdlib.Dict.__fromListRejecting tail (Stdlib.Dict.__setOverwriting dict (head.0) (head.1))
+            Stdlib.Dict.__fromListRejecting<k, v> tail (Stdlib.Dict.__setOverwriting dict (head.0) (head.1))
 
-let fromList<'v> (entries: List<(String * v)>) : Stdlib.Option.Option<Dict<v>> =
-    Stdlib.Dict.__fromListRejecting<v> entries (Stdlib.Dict.__empty<String, v> ())
+let fromList<'k, 'v> (entries: List<(k * v)>) : Stdlib.Option.Option<Dict<k, v>> =
+    Stdlib.Dict.__fromListRejecting<k, v> entries (Stdlib.Dict.__empty<k, v> ())
 
-let member<'v> (dict: Dict<v>) (key: String) : Bool =
-    Stdlib.Dict.__contains<String, v> dict key
+let member<'k, 'v> (dict: Dict<k, v>) (key: k) : Bool =
+    Stdlib.Dict.__contains<k, v> dict key
 
-let __mergeEntries<'v> (entries: List<(String * v)>) (result: Dict<v>) : Dict<v> =
+let __mergeEntries<'k, 'v> (entries: List<(k * v)>) (result: Dict<k, v>) : Dict<k, v> =
     match entries with
     | [] -> result
     | head :: tail ->
-        Stdlib.Dict.__mergeEntries tail (Stdlib.Dict.__setOverwriting result (head.0) (head.1))
+        Stdlib.Dict.__mergeEntries<k, v> tail (Stdlib.Dict.__setOverwriting result (head.0) (head.1))
 
-let merge<'v> (left: Dict<v>) (right: Dict<v>) : Dict<v> =
-    Stdlib.Dict.__mergeEntries<v> (Stdlib.Dict.toList<v> right) left
+let merge<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Dict<k, v> =
+    Stdlib.Dict.__mergeEntries<k, v> (Stdlib.Dict.toList<k, v> right) left
 
-let __mapEntries<'a, 'b> (entries: List<(String * a)>) (fn: String -> a -> b) (result: Dict<b>) : Dict<b> =
+let __mapEntries<'k, 'a, 'b> (entries: List<(k * a)>) (fn: k -> a -> b) (result: Dict<k, b>) : Dict<k, b> =
     match entries with
     | [] -> result
     | head :: tail ->
-        Stdlib.Dict.__mapEntries tail fn (Stdlib.Dict.__setOverwriting result (head.0) (fn (head.0)(head.1)))
+        Stdlib.Dict.__mapEntries<k, a, b> tail fn (Stdlib.Dict.__setOverwriting result (head.0) (fn (head.0)(head.1)))
 
-let map<'a, 'b> (dict: Dict<a>) (fn: String -> a -> b) : Dict<b> =
-    Stdlib.Dict.__mapEntries<a, b> (Stdlib.Dict.toList<a> dict) fn (Stdlib.Dict.__empty<String, b> ())
+let map<'k, 'a, 'b> (dict: Dict<k, a>) (fn: k -> a -> b) : Dict<k, b> =
+    Stdlib.Dict.__mapEntries<k, a, b> (Stdlib.Dict.toList<k, a> dict) fn (Stdlib.Dict.__empty<k, b> ())
 
-let __iterEntries<'a> (entries: List<(String * a)>) (fn: (String) -> (a) -> Unit) : Unit =
+let __iterEntries<'k, 'a> (entries: List<(k * a)>) (fn: k -> a -> Unit) : Unit =
     match entries with
     | [] -> ()
     | head :: tail ->
         let _ = fn (head.0)(head.1) in
-        Stdlib.Dict.__iterEntries<a> tail fn
+        Stdlib.Dict.__iterEntries<k, a> tail fn
 
-let iter<'a> (dict: Dict<a>) (fn: (String) -> (a) -> Unit) : Unit =
-    Stdlib.Dict.__iterEntries<a> (Stdlib.Dict.toList<a> dict) fn
+let iter<'k, 'a> (dict: Dict<k, a>) (fn: k -> a -> Unit) : Unit =
+    Stdlib.Dict.__iterEntries<k, a> (Stdlib.Dict.toList<k, a> dict) fn
 
-let __filterEntries<'a> (entries: List<(String * a)>) (fn: (String) -> (a) -> Bool) (result: Dict<a>) : Dict<a> =
+let __filterEntries<'k, 'a> (entries: List<(k * a)>) (fn: k -> a -> Bool) (result: Dict<k, a>) : Dict<k, a> =
     match entries with
     | [] -> result
     | head :: tail ->
         let next =
             if fn (head.0)(head.1) then Stdlib.Dict.__setOverwriting result (head.0) (head.1)
             else result in
-        Stdlib.Dict.__filterEntries<a> tail fn next
+        Stdlib.Dict.__filterEntries<k, a> tail fn next
 
-let filter<'a> (dict: Dict<a>) (fn: (String) -> (a) -> Bool) : Dict<a> =
-    Stdlib.Dict.__filterEntries<a> (Stdlib.Dict.toList<a> dict) fn (Stdlib.Dict.__empty<String, a> ())
+let filter<'k, 'a> (dict: Dict<k, a>) (fn: k -> a -> Bool) : Dict<k, a> =
+    Stdlib.Dict.__filterEntries<k, a> (Stdlib.Dict.toList<k, a> dict) fn (Stdlib.Dict.__empty<k, a> ())
 
-let __filterMapEntries<'a, 'b> (entries: List<(String * a)>) (fn: String -> a -> Stdlib.Option.Option<b>) (result: Dict<b>) : Dict<b> =
+let __filterMapEntries<'k, 'a, 'b> (entries: List<(k * a)>) (fn: k -> a -> Stdlib.Option.Option<b>) (result: Dict<k, b>) : Dict<k, b> =
     match entries with
     | [] -> result
     | head :: tail ->
@@ -201,7 +175,7 @@ let __filterMapEntries<'a, 'b> (entries: List<(String * a)>) (fn: String -> a ->
             match fn (head.0)(head.1) with
             | None -> result
             | Some value -> Stdlib.Dict.__setOverwriting result (head.0) value in
-        Stdlib.Dict.__filterMapEntries<a, b> tail fn next
+        Stdlib.Dict.__filterMapEntries<k, a, b> tail fn next
 
-let filterMap<'a, 'b> (dict: Dict<a>) (fn: String -> a -> Stdlib.Option.Option<b>) : Dict<b> =
-    Stdlib.Dict.__filterMapEntries<a, b> (Stdlib.Dict.toList<a> dict) fn (Stdlib.Dict.__empty<String, b> ())
+let filterMap<'k, 'a, 'b> (dict: Dict<k, a>) (fn: k -> a -> Stdlib.Option.Option<b>) : Dict<k, b> =
+    Stdlib.Dict.__filterMapEntries<k, a, b> (Stdlib.Dict.toList<k, a> dict) fn (Stdlib.Dict.__empty<k, b> ())

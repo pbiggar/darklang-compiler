@@ -147,8 +147,10 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     | AST.TupleLiteral elems | AST.ListLiteral elems ->
         elems |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
     | AST.TupleAccess (tuple, _) -> freeVars tuple bound
-    | AST.DictLiteral (_, entries) ->
-        entries |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
+    | AST.DictLiteral (_, _, entries) ->
+        entries
+        |> List.collect (fun (key, value) -> [freeVars key bound; freeVars value bound])
+        |> List.fold Set.union Set.empty
     | AST.RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
     | AST.RecordUpdate (record, updates) ->
@@ -349,8 +351,8 @@ let rec simpleInferType
         | Some (AST.TTuple elemTypes) when index >= 0 && index < List.length elemTypes ->
             Some (List.item index elemTypes)
         | _ -> None
-    | AST.DictLiteral (valueType, _) ->
-        Some (AST.TDict (AST.TString, valueType))
+    | AST.DictLiteral (keyType, valueType, _) ->
+        Some (AST.TDict (keyType, valueType))
     | AST.RecordLiteral (reference, fields) ->
             let typeName = reference.ResolvedTypeName
             match Map.tryFind typeName typeReg with
