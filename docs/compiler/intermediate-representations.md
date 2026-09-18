@@ -21,7 +21,11 @@ ordered inputs and operands, execution effects, and result alias provenance.
 Block parameters retain both declaration order and source names, so function
 signatures and lexical operand environments do not depend on map iteration.
 Normalized function definitions own one entry block and derive their typed
-signature from that interface rather than storing a second copy.
+signature from that interface rather than storing a second copy. Checked
+functions can now cross this boundary with ordered parameters and explicit
+lexical `let`, sequence, and conditional edges. Other checked expressions stay
+as opaque scalar evaluation until a later normalization pass can supply their
+effect and alias contracts.
 `passes/hir/VerifyHIR.fs` independently checks definitions, uses, types,
 branch results, and alias sources.
 `ir/owned/OwnedIR.fs` supplies ownership-bearing blocks, ordered
@@ -31,9 +35,10 @@ block arguments, checked independently by
 destruction proofs live in `analysis/`. The list dialect uses these interfaces
 for closed collection regions, storage selection, and branch-aware ownership.
 Opaque operands still contain checked AST evaluation payloads, but their local
-inputs are normalized identities rather than lexical-name lookups. HIR coverage
-is still limited to extracted closed regions; this is not yet a whole-program
-semantic HIR or a general RC solver. See
+inputs are normalized identities rather than lexical-name lookups. The
+whole-function constructor is not yet scheduled in code generation, and calls
+and primitives outside extracted list regions remain opaque; this is not yet a
+whole-program storage pipeline or a general RC solver. See
 [compiler-selected list arrays](runtime/list-array-reuse.md) for its boundary
 and the remaining general ownership work.
 

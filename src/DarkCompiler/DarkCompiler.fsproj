@@ -61,6 +61,7 @@
     <Compile Include="analysis/ValueLiveness.fs" />
     <Compile Include="ir/hir/HIR.fs" />
     <Compile Include="passes/hir/VerifyHIR.fs" />
+    <Compile Include="passes/hir/ConstructFunctions.fs" />
     <Compile Include="ir/owned/OwnedIR.fs" />
     <Compile Include="passes/ownership/VerifyOwnership.fs" />
     <Compile Include="ir/hir/ListRegion.fs" />
