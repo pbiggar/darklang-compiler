@@ -419,6 +419,10 @@ let buildStdlibSpecializations
                             stdlib.Context.Registries
                             preparedTypeDefs
                             preparedFunctions
+                    let externalRecordFieldsReg =
+                        TypeRegistries.recordFieldsRegistry externalTypeReg
+                    let externalRecordTypeParamsReg =
+                        TypeRegistries.recordTypeParamsRegistry externalTypeReg
                     let registries = {
                         registries with
                             TypeReg =
@@ -426,6 +430,16 @@ let buildStdlibSpecializations
                                     (fun acc name recordInfo -> Map.add name recordInfo acc)
                                     registries.TypeReg
                                     externalTypeReg
+                            RecordFieldsReg =
+                                Map.fold
+                                    (fun acc name fields -> Map.add name fields acc)
+                                    registries.RecordFieldsReg
+                                    externalRecordFieldsReg
+                            RecordTypeParamsReg =
+                                Map.fold
+                                    (fun acc name typeParams -> Map.add name typeParams acc)
+                                    registries.RecordTypeParamsReg
+                                    externalRecordTypeParamsReg
                             VariantLookup =
                                 Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
                             SumTypeNames =

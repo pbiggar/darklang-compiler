@@ -1,0 +1,9 @@
+// Preamble-defined record metadata must be available while compiling demanded
+// stdlib specializations whose ownership shape contains that record.
+
+type PreambleIdentityRecord = { value: String }
+
+let preambleRecordList (): List<PreambleIdentityRecord> =
+  Stdlib.List.singleton<PreambleIdentityRecord> (PreambleIdentityRecord { value = "managed" })
+
+Stdlib.List.length (preambleRecordList ()) = 1
