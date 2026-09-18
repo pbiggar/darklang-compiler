@@ -1,0 +1,19 @@
+# config.toml - Reproducible Herdr UI, terminal, and plugin key configuration.
+
+onboarding = false
+
+[terminal]
+default_shell = "/bin/bash"
+
+[ui]
+status_indicators = "symbols"
+
+[theme]
+name = "vesper"
+auto_switch = false
+
+[[keys.command]]
+key = "prefix+p"
+type = "plugin_action"
+command = "ray.plugin-manager.open"
+description = "open plugin manager"

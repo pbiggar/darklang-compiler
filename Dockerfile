@@ -3,6 +3,7 @@
 
 ARG QEMU_VERSION=11.1.1
 ARG QEMU_COMMIT=c3d48b7d1e89604920e5b81b91140c2ad39a1943
+ARG HERDR_VERSION=0.9.0
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS dotnet
 FROM node:26-bookworm-slim AS node
 FROM docker.io/docker/sandbox-templates:claude-code AS claude
@@ -55,6 +56,7 @@ RUN strip --strip-unneeded qemu-aarch64 qemu-x86_64 tests/tcg/plugins/libinsn.so
 FROM docker.io/docker/sandbox-templates:codex
 ARG TARGETARCH
 ARG PROXY_CA_CERT_B64
+ARG HERDR_VERSION
 
 USER root
 
@@ -121,12 +123,37 @@ ENV PATH=/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:/usr
 RUN --mount=type=bind,source=scripts/install-darklang-interpreter.sh,target=/tmp/install-darklang-interpreter.sh \
     bash /tmp/install-darklang-interpreter.sh
 
+RUN --mount=type=bind,source=scripts/install-herdr.sh,target=/tmp/install-herdr.sh \
+    bash /tmp/install-herdr.sh "$TARGETARCH" "$HERDR_VERSION"
+
+COPY --chown=agent:agent config/herdr/config.toml /home/agent/.config/herdr/config.toml
+COPY --chown=agent:agent config/herdr/plugins/auto-codex /home/agent/.local/share/herdr-plugins/auto-codex
+RUN herdr plugin install szrenwei/herdr-agent-metrics \
+      --ref 61fbcc0bddf399728191822458f07e719c506873 --yes && \
+    herdr plugin install ryanlewis/herdr-workspace-renamer \
+      --ref 7a9d8717f55eee59a515b674f6d552d5614a7ea1 --yes && \
+    herdr plugin install persiyanov/herdr-reviewr \
+      --ref 68f2faca2c203c536c25109a0c6e9a8c5d0b21ef --yes && \
+    herdr plugin install speardragon/herdr-plugin-manager \
+      --ref abba90a6b8cc414cbc70e76e7bf4ff721c7a9bf9 --yes && \
+    herdr plugin link /home/agent/.local/share/herdr-plugins/auto-codex --enabled && \
+    herdr integration install codex
+
 RUN git config --global alias.ci commit && \
     git config --global alias.co checkout && \
     git config --global alias.st status
 RUN echo 'parse_git_branch() { git branch 2>/dev/null | grep "^*" | sed "s/* //"; }' >> ~/.bashrc && \
     echo 'short_path() { pwd | sed "s|$HOME|~|"; }' >> ~/.bashrc && \
     echo 'PS1="\[\033[1;32m\]\u@dark\[\033[0m\]:\[\033[1;34m\]\$(short_path)\[\033[0m\]\[\033[1;33m\]\$(parse_git_branch | sed \"s/.*/ (&)/\")\[\033[0m\]\$ "' >> ~/.bashrc && \
-    echo 'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi' >> ~/.bashrc
+    echo 'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi' >> ~/.bashrc && \
+    echo '/usr/local/bin/start-herdr-server >/dev/null 2>&1 || true' >> ~/.bashrc
+
+USER root
+COPY --chmod=0755 scripts/start-herdr-server.sh /usr/local/bin/start-herdr-server
+USER agent
+
+VOLUME ["/home/agent/.config/herdr", "/home/agent/.local/state/herdr"]
 
 WORKDIR /workspace
+
+CMD ["bash", "-lc", "/usr/local/bin/start-herdr-server && exec sleep infinity"]

@@ -1,0 +1,12 @@
+# herdr-plugin.toml - Start Codex in the root pane of each new Herdr workspace.
+
+id = "local.auto-codex"
+name = "Auto-start Codex"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Start Codex in every newly created workspace"
+platforms = ["linux", "macos"]
+
+[[events]]
+on = "workspace.created"
+command = ["bash", "start-codex.sh"]
