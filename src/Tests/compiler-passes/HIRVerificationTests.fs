@@ -9,8 +9,14 @@ let private literal typ expression : HIR.Operand =
     { Expression = expression; Type = typ; Inputs = Map.empty }
 let private reference name input typ : HIR.Operand =
     { Expression = CheckedAST.Var name; Type = typ; Inputs = Map.ofList [name, input] }
-let private block parameters operations result =
+let private namedParameter name value : HIR.Parameter = { Name = name; Value = value }
+let private orderedBlock parameters operations result =
     TestBlock { Parameters = parameters; Operations = operations; Result = result }
+let private block parameters operations result =
+    orderedBlock
+        (parameters |> Map.toList |> List.map (fun (name, value) -> namedParameter name value))
+        operations
+        result
 let private leaf inputs operands outputs =
     let outputs =
         outputs
@@ -20,29 +26,33 @@ let private leaf inputs operands outputs =
 let private contractedWithOperands inputs operands outputs effects =
     HIR.Leaf ({ Inputs = inputs; Operands = operands; Outputs = outputs; Effects = Set.ofList effects }: HIR.PrimitiveContract)
 let private contracted inputs outputs effects = contractedWithOperands inputs [] outputs effects
-let private verify root =
-    let signature target =
-        if target = "callee" || target = "recursive" || target = "uncontracted" then
-            Some ({ Parameters = [AST.TInt64]; Result = AST.TBool }: HIR.FunctionSignature)
-        else None
-    let callContract (call: HIR.FunctionCall) =
-        if call.Target = "callee" || call.Target = "recursive" then
-            Some ({
-                Inputs = call.Arguments
-                Operands = []
-                Outputs = [{ Value = call.Result; Alias = HIR.NoManagedAlias }]
-                Effects = Set.singleton HIR.MayInvokeUserCode
-            }: HIR.PrimitiveContract)
-        else None
-    let dialect: VerifyHIR.Dialect<HIR.PrimitiveContract, TestBlock> = {
+let private signature target =
+    if target = "callee" || target = "recursive" || target = "uncontracted" then
+        Some ({ Parameters = [AST.TInt64]; Result = AST.TBool }: HIR.FunctionSignature)
+    else None
+let private callContract (call: HIR.FunctionCall) =
+    if call.Target = "callee" || call.Target = "recursive" || call.Target = "derivedRecursive" then
+        Some ({
+            Inputs = call.Arguments
+            Operands = []
+            Outputs = [{ Value = call.Result; Alias = HIR.NoManagedAlias }]
+            Effects = Set.singleton HIR.MayInvokeUserCode
+        }: HIR.PrimitiveContract)
+    else None
+let private dialect callSignature : VerifyHIR.Dialect<HIR.PrimitiveContract, TestBlock> =
+    {
         Body = fun (TestBlock body) -> body
         Leaf = id
-        CallSignature = signature
+        CallSignature = callSignature
         CallContract = callContract
     }
-    VerifyHIR.verify dialect root
+let private verify root =
+    VerifyHIR.verify (dialect signature) root
 let private check expected root () =
     let actual = verify root
+    if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
+let private checkFunctions expected callSignature definitions () =
+    let actual = VerifyHIR.verifyFunctions (dialect callSignature) definitions
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
 
 let tests = [
@@ -117,4 +127,40 @@ let tests = [
     "HIR rejects direct-call result type mismatches", check (Error (VerifyHIR.InvalidCallResultType "callee"))
         (let invalidResult = value 9 AST.TInt64
          block (Map.ofList ["input", parameter]) [call "callee" [parameter] invalidResult] invalidResult)
+    "HIR rejects duplicate ordered parameter names", check (Error (VerifyHIR.DuplicateParameterName "input"))
+        (orderedBlock
+            [namedParameter "input" parameter; namedParameter "input" (value 10 AST.TBool)]
+            []
+            parameter)
+    "HIR function signatures retain parameter order", (fun () ->
+        let boolean = value 10 AST.TBool
+        let definition: HIR.Function<TestBlock> = {
+            Name = "ordered"
+            Body = orderedBlock [namedParameter "integer" parameter; namedParameter "boolean" boolean] [] boolean
+        }
+        let actual = VerifyHIR.functionSignature (dialect (fun _ -> None)) definition
+        let expected: HIR.FunctionSignature = { Parameters = [AST.TInt64; AST.TBool]; Result = AST.TBool }
+        if actual = expected then Ok () else Error $"Expected {expected}, got {actual}")
+    "HIR function groups derive recursive call signatures", checkFunctions (Ok ()) (fun _ -> None)
+        [{ Name = "derivedRecursive"
+           Body = orderedBlock
+               [namedParameter "input" parameter]
+               [call "derivedRecursive" [parameter] callResult]
+               callResult }]
+    "HIR function groups reject duplicate definitions", checkFunctions
+        (Error (VerifyHIR.DuplicateFunctionName "duplicate"))
+        (fun _ -> None)
+        [{ Name = "duplicate"; Body = block (Map.ofList ["result", result]) [] result }
+         { Name = "duplicate"; Body = block (Map.ofList ["result", result]) [] result }]
+    "HIR function groups reject conflicting registered signatures", checkFunctions
+        (Error (VerifyHIR.InconsistentRegisteredFunctionSignature "derivedRecursive"))
+        (fun target ->
+            if target = "derivedRecursive" then
+                Some ({ Parameters = [AST.TBool]; Result = AST.TBool }: HIR.FunctionSignature)
+            else None)
+        [{ Name = "derivedRecursive"
+           Body = orderedBlock
+               [namedParameter "input" parameter]
+               [leaf [] [] [callResult]]
+               callResult }]
 ]

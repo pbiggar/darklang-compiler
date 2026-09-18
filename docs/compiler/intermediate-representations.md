@@ -18,6 +18,10 @@ ANF → MIR → LIR → target ISA → Binary
 Before ANF, `ir/hir/HIR.fs` supplies typed value identities and structured
 control flow shared by semantic leaf dialects. Primitive contracts expose
 ordered inputs and operands, execution effects, and result alias provenance.
+Block parameters retain both declaration order and source names, so function
+signatures and lexical operand environments do not depend on map iteration.
+Normalized function definitions own one entry block and derive their typed
+signature from that interface rather than storing a second copy.
 `passes/hir/VerifyHIR.fs` independently checks definitions, uses, types,
 branch results, and alias sources.
 `ir/owned/OwnedIR.fs` supplies ownership-bearing blocks, ordered
@@ -67,15 +71,20 @@ whole-program reset/reuse implementation.
 Normalized HIR can also represent a resolved direct call with ordered value
 arguments and a fresh result value. `VerifyHIR` requires an explicit typed
 signature and an independently supplied primitive effect/alias contract for
-every such target. `VerifyOwnership` separately instantiates unmanaged,
+every external target. For a mutually visible HIR function group, it derives
+internal typed signatures from the definitions, rejects duplicate function or
+parameter names and conflicting registered signatures, and uses that registry
+for direct and recursive calls. Primitive effect/alias contracts remain
+independent and mandatory. `VerifyOwnership` separately instantiates unmanaged,
 borrowed, consumed, and uniquely consumed parameter modes plus unmanaged,
 borrowed, produced, or uniquely produced result ownership. Borrowed results
 name their source parameter and therefore cannot silently introduce an
 ownership unit. A recursive call is accepted only
-when its target is explicitly present in the same registries; unknown and
-indirect calls remain opaque evaluation rather than receiving guessed facts.
-The closed-list dialect does not admit these general calls yet, so this boundary
-does not change emitted code or list representation selection.
+when its target is present in the verified function group and its independent
+effect/alias and ownership registries; unknown and indirect calls remain opaque
+evaluation rather than receiving guessed facts. Checked-source whole-function
+construction and the closed-list dialect still do not admit these general calls,
+so this boundary does not change emitted code or list representation selection.
 
 ## ANF shared continuations
 

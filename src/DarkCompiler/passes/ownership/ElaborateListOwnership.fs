@@ -25,7 +25,7 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
                         let yes, yesLive = elaborate yes (branchLive yes)
                         let no, noLive = elaborate no (branchLive no)
                         let before = Set.union yesLive noLive
-                        let edge branch required =
+                        let edge (branch: OwnedBlock) required =
                             let drops = Set.difference before required |> Set.toList |> List.map Drop
                             { branch with Body = { branch.Body with Operations = drops @ branch.Body.Operations } }
                         let unusedResult =

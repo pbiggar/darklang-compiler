@@ -60,12 +60,12 @@ let private stepWithUniqueness inputs outputs required uniqueOutputs releases : 
 let private step inputs outputs releases : Step<TestLeaf, string> list =
     stepWithUniqueness inputs outputs [] outputs releases
 let private block entry operations : Block<TestLeaf, string> =
-    { Body = { Parameters = Map.empty; Operations = drops entry @ List.concat operations; Result = unitValue } }
+    { Body = { Parameters = []; Operations = drops entry @ List.concat operations; Result = unitValue } }
 let private blockResult entry operations result : Block<TestLeaf, string> =
-    { Body = { Parameters = Map.empty; Operations = drops entry @ List.concat operations; Result = result } }
+    { Body = { Parameters = []; Operations = drops entry @ List.concat operations; Result = result } }
 let private functionBlock parameters operations result : Block<TestLeaf, string> =
     { Body =
-        { Parameters = parameters |> List.map (fun name -> name, value name) |> Map.ofList
+        { Parameters = parameters |> List.map (fun name -> ({ Name = name; Value = value name }: HIR.Parameter))
           Operations = List.concat operations
           Result = result } }
 let private branch predicate yes no : Step<TestLeaf, string> list =

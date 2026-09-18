@@ -7,6 +7,8 @@ open HIR
 type VerificationError =
     | UnknownValue of ValueId
     | DuplicateDefinition of ValueId
+    | DuplicateParameterName of string
+    | DuplicateFunctionName of string
     | InconsistentValueType of ValueId
     | BindingTypeMismatch of result: ValueId
     | InvalidBranchCondition of AST.Type
@@ -21,6 +23,7 @@ type VerificationError =
     | InvalidCallArgumentType of target: string * parameterIndex: int
     | InvalidCallResultType of target: string
     | InconsistentCallContract of target: string
+    | InconsistentRegisteredFunctionSignature of target: string
 
 type Dialect<'leaf, 'block> = {
     Body: 'block -> Block<Operation<'leaf, 'block>>
@@ -45,6 +48,10 @@ let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
     let defineMany declared visible (values: Value list) =
         values
         |> List.fold (fun result value -> result |> Result.bind (fun (declared, visible) -> define declared visible value)) (Ok (declared, visible))
+    let parameters (values: Parameter list) =
+        match values |> List.countBy (fun parameter -> parameter.Name) |> List.tryFind (fun (_, count) -> count > 1) with
+        | Some (name, _) -> Error (DuplicateParameterName name)
+        | None -> Ok (values |> List.map (fun parameter -> parameter.Value))
     let aliases (contract: PrimitiveContract) =
         let inputs = contract.Inputs |> List.map (fun value -> value.Id, value) |> Map.ofList
         let validate output source =
@@ -122,8 +129,52 @@ let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
             next |> Result.bind (fun (declared, visible) -> operations declared visible rest)
     and block declared visible block =
         let body: Block<Operation<'leaf, 'block>> = dialect.Body block
-        defineMany declared visible (body.Parameters |> Map.values |> Seq.toList)
-        |> Result.bind (fun (declared, visible) ->
-            operations declared visible body.Operations |> Result.bind (fun (declared, visible) ->
-                require visible body.Result |> Result.map (fun () -> declared, body.Result)))
+        parameters body.Parameters
+        |> Result.bind (fun values ->
+            defineMany declared visible values
+            |> Result.bind (fun (declared, visible) ->
+                operations declared visible body.Operations |> Result.bind (fun (declared, visible) ->
+                    require visible body.Result |> Result.map (fun () -> declared, body.Result))))
     block Map.empty Map.empty root |> Result.map ignore
+
+let functionSignature (dialect: Dialect<'leaf, 'block>) (definition: Function<'block>) : FunctionSignature =
+    let body = dialect.Body definition.Body
+    {
+        Parameters = body.Parameters |> List.map (fun parameter -> parameter.Value.Type)
+        Result = body.Result.Type
+    }
+
+let verifyFunction (dialect: Dialect<'leaf, 'block>) (definition: Function<'block>) =
+    verify dialect definition.Body
+
+/// Verify a mutually visible function group. Internal typed signatures are
+/// derived from definitions; independently registered signatures for the same
+/// names must agree. Primitive call contracts remain a separate dialect input.
+let verifyFunctions (dialect: Dialect<'leaf, 'block>) (definitions: Function<'block> list) =
+    match definitions |> List.countBy (fun definition -> definition.Name) |> List.tryFind (fun (_, count) -> count > 1) with
+    | Some (name, _) -> Error (DuplicateFunctionName name)
+    | None ->
+        let signatures =
+            definitions
+            |> List.map (fun definition -> definition.Name, functionSignature dialect definition)
+            |> Map.ofList
+        let inconsistentRegistration =
+            definitions
+            |> List.tryPick (fun definition ->
+                match dialect.CallSignature definition.Name with
+                | Some registered when registered <> functionSignature dialect definition ->
+                    Some (InconsistentRegisteredFunctionSignature definition.Name)
+                | _ -> None)
+        match inconsistentRegistration with
+        | Some error -> Error error
+        | None ->
+            let programDialect = {
+                dialect with
+                    CallSignature = fun target ->
+                        match Map.tryFind target signatures with
+                        | Some signature -> Some signature
+                        | None -> dialect.CallSignature target
+            }
+            definitions
+            |> List.fold (fun result definition ->
+                result |> Result.bind (fun () -> verifyFunction programDialect definition)) (Ok ())

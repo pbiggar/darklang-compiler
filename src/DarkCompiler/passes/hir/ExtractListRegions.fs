@@ -224,7 +224,7 @@ let tryExtract
             |> Option.bind (fun next ->
                 Map.tryFind finalName next.Values
                 |> Option.map (fun result ->
-                    FunctionalBlock { Parameters = Map.empty
+                    FunctionalBlock { Parameters = []
                                       Operations = List.rev next.Operations
                                       Result = result }, next.NextId))
 
@@ -268,7 +268,11 @@ let tryExtract
                     | Branch (_, _, ifTrue, ifFalse) -> containsListOperation ifTrue || containsListOperation ifFalse
                     | Call _ -> false
                     | ScalarBinding _ -> false)
-            let root = FunctionalBlock { block with Parameters = parameters }
+            let blockParameters =
+                parameters
+                |> Map.toList
+                |> List.map (fun (name, value) -> ({ Name = name; Value = value }: HIR.Parameter))
+            let root = FunctionalBlock { block with Parameters = blockParameters }
             if not (containsListOperation root) then None
             else Some (FunctionalRegion root))
     else None
