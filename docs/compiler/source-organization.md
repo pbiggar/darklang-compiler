@@ -143,19 +143,23 @@ layout/type verification layered around it.
 
 `passes/hir/ConstructFunctions.fs` extends the normalized value interface across
 checked functions: it constructs ordered function entries and normalizes
-lexical `let`, sequence, and conditional structure while retaining all other
-evaluation as conservative opaque scalar bindings. Resolved ordinary calls are
+lexical `let`, sequence, and conditional structure. Native immediate literals
+and scalar operators become identity-preserving primitive leaves with explicit
+effect and alias contracts; integer division and modulo may fail, while their
+immediate results cannot alias managed storage. Managed, structural,
+arbitrary-precision, and call-lowered operations remain conservative opaque
+scalar bindings. Resolved ordinary calls are
 normalized only when the group-derived or external typed signature and a
 separate effect/alias contract are available; arguments retain left-to-right
 evaluation order. It is not scheduled in code generation yet. The next
-normalization work must expose primitives alongside their effect and alias
-contracts, then infer and carry unique boundary modes through loops and escaping
-boundaries. The verifier does not insert runtime uniqueness tests or model
-constructor reset tokens. General managed arguments still need lowering through
-ANF and RC insertion. ANF lifetime insertion remains authoritative outside list
-regions. Generated result printing is an explicit consuming effect before that
-boundary; ownership insertion finalizes unrelated cleanup before the effect and
-instruction lowering emits the printed root's shape-specific release. No empty
+normalization work must infer and carry unique boundary modes through loops and
+escaping boundaries. The verifier does not insert runtime uniqueness tests or
+model constructor reset tokens. General managed arguments still need lowering
+through ANF and RC insertion. ANF lifetime insertion remains authoritative
+outside list regions. Generated result printing is an explicit consuming effect
+before that boundary; ownership insertion finalizes unrelated cleanup before
+the effect and instruction lowering emits the printed root's shape-specific
+release. No empty
 future passes or compatibility IR conversions are added.
 
 Each refactoring chunk preserves algorithms, evaluation order, and emitted-code
