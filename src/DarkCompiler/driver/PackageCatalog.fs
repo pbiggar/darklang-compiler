@@ -180,24 +180,24 @@ let private catalogFunction
         Recursion = None
     }
 
-let private collectProgramSpecs (program: AST.Program) : Set<SpecializationIdentity.SpecKey> =
-    let (AST.Program topLevels) = program
+let private collectProgramSpecs (program: CheckedAST.Program) : Set<SpecializationIdentity.SpecKey> =
+    let (CheckedAST.Program topLevels) = program
     topLevels
     |> List.map (function
-        | AST.FunctionDef func when List.isEmpty func.TypeParams ->
+        | CheckedAST.FunctionDef func when List.isEmpty func.TypeParams ->
             Monomorphization.collectTypeAppsFromFunc func
-        | AST.Expression expr -> Monomorphization.collectTypeApps expr
+        | CheckedAST.Expression expr -> Monomorphization.collectTypeApps expr
         | _ -> Set.empty)
     |> List.fold Set.union Set.empty
 
-let private collectProgramCalls (program: AST.Program) : Set<string> =
-    let (AST.Program topLevels) = program
+let private collectProgramCalls (program: CheckedAST.Program) : Set<string> =
+    let (CheckedAST.Program topLevels) = program
     topLevels
     |> List.map (function
-        | AST.FunctionDef func -> Monomorphization.collectCalledFunctions func.Body
-        | AST.ValueDef valueDef -> Monomorphization.collectCalledFunctions (AST.valueDefBody valueDef)
-        | AST.Expression expr -> Monomorphization.collectCalledFunctions expr
-        | AST.TypeDef _ -> Set.empty)
+        | CheckedAST.FunctionDef func -> Monomorphization.collectCalledFunctions func.Body
+        | CheckedAST.ValueDef valueDef -> Monomorphization.collectCalledFunctions valueDef.Body
+        | CheckedAST.Expression expr -> Monomorphization.collectCalledFunctions expr
+        | CheckedAST.TypeDef _ -> Set.empty)
     |> List.fold Set.union Set.empty
 
 let private validateDistinctCatalogHashes
@@ -218,8 +218,8 @@ let private materializeReachablePackageValueCatalog
     (baseContext: PipelineContext)
     (warningSettings: AST.WarningSettings)
     (catalog: PackageValueCatalog)
-    (typedProgram: AST.Program)
-    : Result<AST.Program, string> =
+    (typedProgram: CheckedAST.Program)
+    : Result<CheckedAST.Program, string> =
     let (PackageValueCatalog entries) = catalog
     validateDistinctCatalogHashes entries
     |> Result.bind (fun () ->
@@ -370,16 +370,16 @@ let private materializeReachablePackageValueCatalog
                 syntheticProgram
             |> Result.mapError (fun error ->
                 $"Package value catalog validation failed: {CheckingDiagnostics.typeErrorToString error}")
-            |> Result.map (fun (_, AST.Program generatedTopLevels, _) ->
-                let (AST.Program userTopLevels) = typedProgram
-                AST.Program (generatedTopLevels @ userTopLevels)))
+            |> Result.map (fun (_, CheckedAST.Program generatedTopLevels, _) ->
+                let (CheckedAST.Program userTopLevels) = typedProgram
+                CheckedAST.Program (generatedTopLevels @ userTopLevels)))
 
 let internal materializePackageValueCatalog
     (baseContext: PipelineContext)
     (warningSettings: AST.WarningSettings)
     (catalog: PackageValueCatalog)
-    (typedProgram: AST.Program)
-    : Result<AST.Program, string> =
+    (typedProgram: CheckedAST.Program)
+    : Result<CheckedAST.Program, string> =
     let programCalls = collectProgramCalls typedProgram
     let mightReachCatalog =
         programCalls

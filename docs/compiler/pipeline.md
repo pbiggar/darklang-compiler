@@ -16,9 +16,9 @@ The Dark compiler transforms source code through a series of passes, each with a
 
 | #    | Pass                    | File                                                        | Transform                                     |
 |------|-------------------------|-------------------------------------------------------------|-----------------------------------------------|
-| 1    | Parser                  | `frontend/Parser.fs`                             | Source → AST                                  |
-| 1.5  | Type checking           | `frontend/TypeChecking.fs`                                | AST → Typed AST                               |
-| 2    | AST → ANF               | `passes/anf/AST_to_ANF.fs`                                    | AST → ANF                                     |
+| 1    | Parser                  | `frontend/Parser.fs`                             | Source → parsed AST                           |
+| 1.5  | Type checking           | `frontend/TypeChecking.fs`                       | Parsed AST → checked AST                      |
+| 2    | AST → ANF               | `passes/anf/AST_to_ANF.fs`                       | Checked AST → ANF                             |
 | 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `passes/anf/LowerListRegions.fs` | Closed semantic lists → storage → owned arrays → ANF |
 | 2.3  | ANF optimizations       | `passes/anf/ANF_Optimize.fs`                                | ANF → ANF                                     |
 | 2.4  | ANF inlining            | `passes/anf/ANF_Inlining.fs`                                | ANF → ANF                                     |
@@ -73,8 +73,8 @@ Output: Let("x", BinOp(Add, IntLiteral(1), IntLiteral(2)),
 
 ## Pass 1.5: Type Checking (`TypeChecking.fs`)
 
-**Input**: AST
-**Output**: Type-checked AST (same structure, validated)
+**Input**: Parsed AST
+**Output**: Checked AST with phase invariants represented by node shape
 
 ### Responsibilities
 - **Type validation**: Ensure expressions have consistent types
@@ -88,6 +88,9 @@ Output: Let("x", BinOp(Add, IntLiteral(1), IntLiteral(2)),
 - **Result-based errors**: No exceptions, explicit error propagation
 - **Environment threading**: Track variable types through expressions
 - **Control-flow checking**: Require Boolean conditions, unify conditional arms, and use a sequence's Unit head and final-result type
+- **Phase boundary construction**: Require inferred lambda parameter types,
+  typed recursive identities, resolved nominal references, and checked value
+  bodies before producing `CheckedAST.Program`
 
 ### Example Error
 ```
@@ -99,7 +102,7 @@ Error:  Type mismatch: expected Int64, got String in binary operator
 
 ## Pass 2: AST to ANF (`AST_to_ANF.fs`)
 
-**Input**: AST
+**Input**: Checked AST
 **Output**: A-Normal Form (ANF)
 
 ### Responsibilities

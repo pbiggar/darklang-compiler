@@ -8,7 +8,7 @@ open OwnedIR
 open ListRegion
 open VerifyListOwnership
 
-type LowerScalar = AST.Expr -> ANF.VarGen -> Map<string, ANF.TempId * AST.Type> -> Result<ANF.AExpr * ANF.VarGen, string>
+type LowerScalar = CheckedAST.Expr -> ANF.VarGen -> Map<string, ANF.TempId * AST.Type> -> Result<ANF.AExpr * ANF.VarGen, string>
 
 let private word value = ANF.IntLiteral (ANF.Int64 (int64 value))
 

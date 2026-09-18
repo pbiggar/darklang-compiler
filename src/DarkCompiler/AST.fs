@@ -1,8 +1,9 @@
 // AST.fs - Abstract Syntax Tree
 //
 // Defines the abstract syntax tree data structures that represent the parsed
-// program structure. The AST is the output of the Parser and input to the ANF
-// transformation.
+// program structure. The AST is the output of parsing and the internal input
+// to name resolution and semantic checking. Successful checking constructs the
+// phase-safe CheckedAST consumed by compiler preparation and ANF lowering.
 // Keep this file as the structural source of truth for syntax-facing compiler
 // nodes; language support and compatibility boundaries belong in
 // docs/compatibility/overview.md.

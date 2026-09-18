@@ -11,7 +11,7 @@ open LiftFunctions
 open LoweringTypeInference
 open ANFContinuations
 
-let rec toANFCore (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let rec toANFCore (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     let infer localTypes value =
         let types = Map.fold (fun types name typ -> Map.add name typ types) (typeEnvFromVarEnv env) localTypes
         inferTypeCore sumTypeNames value types typeReg variantLookup funcReg moduleRegistry
@@ -22,14 +22,14 @@ let rec toANFCore (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: 
             region |> SelectListStorage.selectStorage |> ElaborateListOwnership.elaborateOwnership |> LowerListRegions.lower lower env varGen)
     | None -> toANFUnplannedCore sumTypeNames inertScopes expr varGen env typeReg variantLookup funcReg moduleRegistry
 
-and private toANFUnplannedCore (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+and private toANFUnplannedCore (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     ExpressionLowering.lowerExpression toANFCore toAtomCore toANFBoundAtomCore sumTypeNames inertScopes expr varGen env typeReg variantLookup funcReg moduleRegistry
 
-and toAtomCore (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+and toAtomCore (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     AtomLowering.lowerAtom toANFCore toAtomCore toANFBoundAtomCore sumTypeNames inertScopes expr varGen env typeReg variantLookup funcReg moduleRegistry
 
 and toANFBoundAtomCore (sumTypeNames: Set<string>) (inertScopes: Set<string>)
-    (expr: AST.Expr)
+    (expr: CheckedAST.Expr)
     (varGen: ANF.VarGen)
     (env: VarEnv)
     (typeReg: TypeRegistry)

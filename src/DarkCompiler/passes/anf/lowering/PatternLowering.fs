@@ -15,7 +15,7 @@ open LoweringTypeInference
 open ANFContinuations
 open LoweringCallbacks
 
-let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<string>) (scrutinee: AST.Expr) (cases: AST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<string>) (scrutinee: CheckedAST.Expr) (cases: CheckedAST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     // Infer scrutinee type to pass to pattern extraction for correct typing
     let typeEnv = typeEnvFromVarEnv env
     match inferTypeCore sumTypeNames scrutinee typeEnv typeReg variantLookup funcReg moduleRegistry with
@@ -70,7 +70,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         let constructorPatternCoverage (pattern: AST.Pattern) : int option =
             match scrutType, pattern with
             | AST.TSum (typeName, _), AST.PConstructor (constructorName, payloadPattern) ->
-                match tryFindVariant (AST.resolvedConstructorReference typeName) constructorName variantLookup, payloadPattern with
+                match tryFindVariant (CheckedAST.resolvedConstructorReference typeName) constructorName variantLookup, payloadPattern with
                 | Some (variantTypeName, _, tag, None), None when variantTypeName = typeName ->
                     Some tag
                 | Some (variantTypeName, _, tag, Some _), Some innerPattern
@@ -81,7 +81,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             | _ ->
                 None
 
-        let constructorMatchIsExhaustive (matchCases: AST.MatchCase list) : bool =
+        let constructorMatchIsExhaustive (matchCases: CheckedAST.MatchCase list) : bool =
             let coveredConstructors =
                 matchCases
                 |> List.fold (fun coveredOpt mc ->
@@ -120,7 +120,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
         // Extract pattern bindings and compile body with extended environment
         // scrutType is the type of the scrutinee, used to determine correct types for pattern variables
-        let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+        let rec extractAndCompileBody (pattern: AST.Pattern) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
             match pattern with
             | AST.POr alternatives ->
                 extractAndCompileBody (AST.NonEmptyList.head alternatives) body scrutAtom scrutType currentEnv vg
@@ -681,7 +681,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // Extract pattern bindings, check guard, and compile body
         // Returns: if guard is true, execute body; otherwise execute elseExpr
         // scrutType is the type of the scrutinee for correct pattern variable typing
-        and extractAndCompileBodyWithGuard (pattern: AST.Pattern) (guardExpr: AST.Expr) (body: AST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
+        and extractAndCompileBodyWithGuard (pattern: AST.Pattern) (guardExpr: CheckedAST.Expr) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
             // First, we need to extract bindings from the pattern
             // Then compile the guard with those bindings in scope
             // Then compile the body with those bindings in scope
@@ -1478,7 +1478,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             (listAtom: ANF.Atom)
             (listType: AST.Type)
             (currentEnv: VarEnv)
-            (body: AST.Expr)
+            (body: CheckedAST.Expr)
             (elseExpr: ANF.AExpr)
             (vg: ANF.VarGen)
             : Result<ANF.AExpr * ANF.VarGen, string> =
@@ -1847,7 +1847,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             (listAtom: ANF.Atom)
             (listType: AST.Type)
             (currentEnv: VarEnv)
-            (body: AST.Expr)
+            (body: CheckedAST.Expr)
             (elseExpr: ANF.AExpr)
             (vg: ANF.VarGen)
             : Result<ANF.AExpr * ANF.VarGen, string> =
@@ -2514,8 +2514,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | '\t' -> "\\t"
                 | _ -> string ch)
 
-        let rec formatMatchValueForError (expr: AST.Expr) : string option =
-            let rec formatAll (expressions: AST.Expr list) (acc: string list) : string list option =
+        let rec formatMatchValueForError (expr: CheckedAST.Expr) : string option =
+            let rec formatAll (expressions: CheckedAST.Expr list) (acc: string list) : string list option =
                 match expressions with
                 | [] -> Some (List.rev acc)
                 | expression :: rest ->
@@ -2523,36 +2523,33 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     |> Option.bind (fun formatted -> formatAll rest (formatted :: acc))
 
             match expr with
-            | AST.Int64Literal n -> Some $"{n}"
-            | AST.Int128Literal n -> Some (int128ToCanonicalString n)
-            | AST.Int8Literal n -> Some $"{n}"
-            | AST.Int16Literal n -> Some $"{n}"
-            | AST.Int32Literal n -> Some $"{n}"
-            | AST.UInt8Literal n -> Some $"{n}"
-            | AST.UInt16Literal n -> Some $"{n}"
-            | AST.UInt32Literal n -> Some $"{n}"
-            | AST.UInt64Literal n -> Some $"{n}"
-            | AST.UInt128Literal n -> Some (uint128ToCanonicalString n)
-            | AST.BoolLiteral b -> Some (if b then "true" else "false")
-            | AST.FloatLiteral f -> Some $"{f}"
-            | AST.UnitLiteral -> Some "()"
-            | AST.StringLiteral s -> Some $"\"{escapeForRuntimeError s}\""
-            | AST.CharLiteral c -> Some $"'{escapeForRuntimeError c}'"
-            | AST.TupleLiteral elements ->
+            | CheckedAST.Int64Literal n -> Some $"{n}"
+            | CheckedAST.Int128Literal n -> Some (int128ToCanonicalString n)
+            | CheckedAST.Int8Literal n -> Some $"{n}"
+            | CheckedAST.Int16Literal n -> Some $"{n}"
+            | CheckedAST.Int32Literal n -> Some $"{n}"
+            | CheckedAST.UInt8Literal n -> Some $"{n}"
+            | CheckedAST.UInt16Literal n -> Some $"{n}"
+            | CheckedAST.UInt32Literal n -> Some $"{n}"
+            | CheckedAST.UInt64Literal n -> Some $"{n}"
+            | CheckedAST.UInt128Literal n -> Some (uint128ToCanonicalString n)
+            | CheckedAST.BoolLiteral b -> Some (if b then "true" else "false")
+            | CheckedAST.FloatLiteral f -> Some $"{f}"
+            | CheckedAST.UnitLiteral -> Some "()"
+            | CheckedAST.StringLiteral s -> Some $"\"{escapeForRuntimeError s}\""
+            | CheckedAST.CharLiteral c -> Some $"'{escapeForRuntimeError c}'"
+            | CheckedAST.TupleLiteral elements ->
                 formatAll elements []
                 |> Option.map (fun rendered ->
                     let joined = String.concat ", " rendered
                     $"({joined})")
-            | AST.ListLiteral elements ->
+            | CheckedAST.ListLiteral elements ->
                 formatAll elements []
                 |> Option.map (fun rendered ->
                     let joined = String.concat ", " rendered
                     $"[{joined}]")
-            | AST.Constructor (constructorReference, variantName, payload) ->
-                let fullName =
-                    match AST.constructorReferenceTypeName constructorReference with
-                    | None -> variantName
-                    | Some typeName -> $"{typeName}.{variantName}"
+            | CheckedAST.Constructor (constructorReference, variantName, payload) ->
+                let fullName = $"{constructorReference.TypeName}.{variantName}"
                 match payload with
                 | None -> Some fullName
                 | Some payloadExpr ->
@@ -2570,7 +2567,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             (ANF.Let (errorVar, errorExpr, ANF.Return (ANF.Var errorVar)), vg1)
 
         // Build the if-else chain from cases
-        let rec buildChain (remaining: AST.MatchCase list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+        let rec buildChain (remaining: CheckedAST.MatchCase list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
             match remaining with
             | [] ->
                 // No cases left - shouldn't happen if we have wildcard/var

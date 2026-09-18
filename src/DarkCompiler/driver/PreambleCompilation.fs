@@ -76,9 +76,13 @@ let buildPreambleContext
                             (fun names func -> Set.add func.Name names)
                             stdlib.Context.BaseFuncNames
                     let pipelineContext =
+                        let checkedValues =
+                            CheckedAST.programValues typedPreambleAst
+                            |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
                         buildContext
                             stdlib.Context.Target
                             preambleTypeCheckEnv
+                            checkedValues
                             mergedGenericDefs
                             Map.empty
                             preambleRegistries
@@ -165,17 +169,17 @@ let buildPreambleContextFromAnalysis
     let mergedGenericDefs =
         Map.fold (fun acc k v -> Map.add k v acc) stdlib.Context.GenericFuncDefs analysis.GenericFuncDefs
 
-    let (AST.Program items) = analysis.TypedAST
-    let specializedTopLevels = specialization.SpecializedFuncs |> List.map AST.FunctionDef
+    let (CheckedAST.Program items) = analysis.TypedAST
+    let specializedTopLevels = specialization.SpecializedFuncs |> List.map CheckedAST.FunctionDef
     let specializedAndOriginalTopLevels = specializedTopLevels @ items
     let materializedTopLevels =
-        MaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+        CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
             analysis.TypeCheckEnv.AliasReg
             analysis.TypeCheckEnv.IndexedTypeReg
             analysis.TypeCheckEnv.VariantLookup
             analysis.TypeCheckEnv.IndexedSumTypeReg
             specializedAndOriginalTopLevels
-    let programWithSpecializations = AST.Program materializedTopLevels
+    let programWithSpecializations = CheckedAST.Program materializedTopLevels
 
     convertTypedDeclarations
         (Some stdlib.Context)
@@ -193,9 +197,13 @@ let buildPreambleContextFromAnalysis
                 (fun names func -> Set.add func.Name names)
                 stdlib.Context.BaseFuncNames
         let pipelineContext =
+            let checkedValues =
+                CheckedAST.programValues analysis.TypedAST
+                |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
             buildContext
                 stdlib.Context.Target
                 analysis.TypeCheckEnv
+                checkedValues
                 mergedGenericDefs
                 combinedSpecRegistry
                 preambleRegistries

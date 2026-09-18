@@ -66,6 +66,7 @@ let private buildPackageCatalogGenericCallers
 type PipelineContext = {
     Target: Platform.Target
     TypeCheckEnv: CheckingTypes.TypeCheckEnv
+    CheckedValues: Map<string, AST.Type * CheckedAST.Expr>
     GenericFuncDefs: SpecializationIdentity.GenericFuncDefs
     SpecRegistry: SpecializationIdentity.SpecRegistry
     Registries: AST_to_ANF.Registries
@@ -81,6 +82,7 @@ type PipelineContext = {
 let internal buildContext
     (target: Platform.Target)
     (typeCheckEnv: CheckingTypes.TypeCheckEnv)
+    (checkedValues: Map<string, AST.Type * CheckedAST.Expr>)
     (genericFuncDefs: SpecializationIdentity.GenericFuncDefs)
     (specRegistry: SpecializationIdentity.SpecRegistry)
     (registries: AST_to_ANF.Registries)
@@ -94,6 +96,7 @@ let internal buildContext
     {
         Target = target
         TypeCheckEnv = typeCheckEnv
+        CheckedValues = checkedValues
         GenericFuncDefs = genericFuncDefs
         SpecRegistry = specRegistry
         Registries = registries
@@ -125,7 +128,7 @@ type PreambleContext = {
 
 /// Parsed and typechecked preamble analysis for suite-level specialization
 type PreambleAnalysis = {
-    TypedAST: AST.Program
+    TypedAST: CheckedAST.Program
     TypeCheckEnv: CheckingTypes.TypeCheckEnv
     GenericFuncDefs: SpecializationIdentity.GenericFuncDefs
 }
@@ -135,7 +138,7 @@ type StdlibResult = {
     /// Parsed stdlib AST (for merging with user AST)
     AST: AST.Program
     /// Type-checked stdlib with inferred types
-    TypedAST: AST.Program
+    TypedAST: CheckedAST.Program
     /// Shared compilation context (typecheck env + registries)
     Context: PipelineContext
     /// Pre-allocated stdlib functions (physical registers assigned, ready for merge)

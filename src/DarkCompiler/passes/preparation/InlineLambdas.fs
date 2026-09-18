@@ -6,127 +6,134 @@ open MemoryModel
 open ANF
 open SpecializationIdentity
 
-type LambdaEnv = Map<string, AST.Expr>
+type LambdaEnv = Map<string, CheckedAST.Expr>
 
 /// Check if a variable occurs in an expression (for dead code elimination)
-let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
+let rec varOccursInExpr (name: string) (expr: CheckedAST.Expr) : bool =
     match expr with
-    | AST.BoundaryRender (_, value) -> varOccursInExpr name value
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.RuntimeError _ -> false
-    | AST.Var n -> n = name
-    | AST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
-    | AST.UnaryOp (_, inner) -> varOccursInExpr name inner
-    | AST.Let (pattern, value, body) ->
+    | CheckedAST.BoundaryRender (_, value) -> varOccursInExpr name value
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ -> false
+    | CheckedAST.Var n -> n = name
+    | CheckedAST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
+    | CheckedAST.UnaryOp (_, inner) -> varOccursInExpr name inner
+    | CheckedAST.Let (pattern, value, body) ->
         varOccursInExpr name value
-        || (not (AST.letPatternBindings pattern |> List.contains name)
+        || (not (CheckedAST.letPatternBindings pattern |> List.contains name)
             && varOccursInExpr name body)
-    | AST.RecursiveLet (recursion, value, body) ->
-        if AST.recursiveBindingName recursion = name then false
+    | CheckedAST.RecursiveLet (recursion, value, body) ->
+        if CheckedAST.recursiveBindingName recursion = name then false
         else varOccursInExpr name value || varOccursInExpr name body
-    | AST.If (cond, thenBranch, elseBranch) ->
+    | CheckedAST.If (cond, thenBranch, elseBranch) ->
         varOccursInExpr name cond || varOccursInExpr name thenBranch || varOccursInExpr name elseBranch
-    | AST.Sequence (first, next) ->
+    | CheckedAST.Sequence (first, next) ->
         varOccursInExpr name first || varOccursInExpr name next
-    | AST.Call (funcName, args) ->
+    | CheckedAST.Call (funcName, args) ->
         // funcName could be a lambda variable reference (parser can't distinguish)
         funcName = name || (args |> exprArgsToList |> List.exists (varOccursInExpr name))
-    | AST.TypeApp (_, _, args) -> args |> exprArgsToList |> List.exists (varOccursInExpr name)
-    | AST.TupleLiteral elements -> List.exists (varOccursInExpr name) elements
-    | AST.TupleAccess (tuple, _) -> varOccursInExpr name tuple
-    | AST.DictLiteral (_, _, entries) -> List.exists (fun (key, value) -> varOccursInExpr name key || varOccursInExpr name value) entries
-    | AST.RecordLiteral (_, fields) -> List.exists (fun (_, e) -> varOccursInExpr name e) fields
-    | AST.RecordUpdate (record, updates) ->
+    | CheckedAST.TypeApp (_, _, args) -> args |> exprArgsToList |> List.exists (varOccursInExpr name)
+    | CheckedAST.TupleLiteral elements -> List.exists (varOccursInExpr name) elements
+    | CheckedAST.TupleAccess (tuple, _) -> varOccursInExpr name tuple
+    | CheckedAST.DictLiteral (_, _, entries) ->
+        List.exists (fun (key, value) -> varOccursInExpr name key || varOccursInExpr name value) entries
+    | CheckedAST.RecordLiteral (_, fields) -> List.exists (fun (_, e) -> varOccursInExpr name e) fields
+    | CheckedAST.RecordUpdate (record, updates) ->
         varOccursInExpr name record || List.exists (fun (_, e) -> varOccursInExpr name e) updates
-    | AST.RecordAccess (record, _) -> varOccursInExpr name record
-    | AST.Constructor (_, _, payload) -> Option.exists (varOccursInExpr name) payload
-    | AST.Match (scrutinee, cases) ->
+    | CheckedAST.RecordAccess (record, _) -> varOccursInExpr name record
+    | CheckedAST.Constructor (_, _, payload) -> Option.exists (varOccursInExpr name) payload
+    | CheckedAST.Match (scrutinee, cases) ->
         varOccursInExpr name scrutinee ||
-        List.exists (fun (mc: AST.MatchCase) ->
+        List.exists (fun (mc: CheckedAST.MatchCase) ->
             (mc.Guard |> Option.map (varOccursInExpr name) |> Option.defaultValue false) ||
             varOccursInExpr name mc.Body) cases
-    | AST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
-    | AST.Lambda (parameters, returnAnnotation, body) ->
+    | CheckedAST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         // If name is shadowed by a parameter, it doesn't occur
         let paramNames =
             parameters
             |> AST.NonEmptyList.toList
-            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> List.collect (fun parameter -> CheckedAST.letPatternBindings parameter.Pattern)
             |> Set.ofList
         if Set.contains name paramNames then false
         else varOccursInExpr name body
-    | AST.Apply (func, args)
-    | AST.IndirectApply (func, args) ->
+    | CheckedAST.Apply (func, args)
+    | CheckedAST.IndirectApply (func, args) ->
         varOccursInExpr name func || (args |> exprArgsToList |> List.exists (varOccursInExpr name))
-    | AST.FuncRef _ ->
+    | CheckedAST.FuncRef _ ->
         false  // Function references don't contain variable references
-    | AST.Closure (_, captures) ->
+    | CheckedAST.Closure (_, captures) ->
         // Check if name occurs in captured expressions
         List.exists (varOccursInExpr name) captures
-    | AST.InterpolatedString parts ->
+    | CheckedAST.InterpolatedString parts ->
         parts |> List.exists (fun part ->
             match part with
-            | AST.StringText _ -> false
-            | AST.StringExpr e -> varOccursInExpr name e)
+            | CheckedAST.StringText _ -> false
+            | CheckedAST.StringExpr e -> varOccursInExpr name e)
 
 /// Inline lambdas at Apply sites
 /// lambdaEnv: maps variable names to their lambda expressions
-let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
+let rec inlineLambdas (expr: CheckedAST.Expr) (lambdaEnv: LambdaEnv) : CheckedAST.Expr =
     match expr with
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.RuntimeError _ ->
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ ->
         expr
-    | AST.BoundaryRender (renderer, value) ->
-        AST.BoundaryRender (renderer, inlineLambdas value lambdaEnv)
-    | AST.Var _ -> expr  // Variable references stay as-is (not at call position)
-    | AST.BinOp (op, left, right) ->
-        AST.BinOp (op, inlineLambdas left lambdaEnv, inlineLambdas right lambdaEnv)
-    | AST.UnaryOp (op, inner) ->
-        AST.UnaryOp (op, inlineLambdas inner lambdaEnv)
-    | AST.Let (pattern, value, body) ->
+    | CheckedAST.BoundaryRender (renderer, value) ->
+        CheckedAST.BoundaryRender (renderer, inlineLambdas value lambdaEnv)
+    | CheckedAST.Var _ -> expr  // Variable references stay as-is (not at call position)
+    | CheckedAST.BinOp (op, left, right) ->
+        CheckedAST.BinOp (op, inlineLambdas left lambdaEnv, inlineLambdas right lambdaEnv)
+    | CheckedAST.UnaryOp (op, inner) ->
+        CheckedAST.UnaryOp (op, inlineLambdas inner lambdaEnv)
+    | CheckedAST.Let (pattern, value, body) ->
         let value' = inlineLambdas value lambdaEnv
         let childEnv =
-            AST.letPatternBindings pattern
+            CheckedAST.letPatternBindings pattern
             |> List.fold (fun current name -> Map.remove name current) lambdaEnv
         // If the value is a lambda, make the name callable only in the body.
         let lambdaEnv' =
             match pattern, value' with
-            | AST.LPVariable name, AST.Lambda _ -> Map.add name value' childEnv
+            | CheckedAST.LPVariable name, CheckedAST.Lambda _ -> Map.add name value' childEnv
             | _ -> childEnv
         let body' = inlineLambdas body lambdaEnv'
-        AST.Let (pattern, value', body')
-    | AST.RecursiveLet (recursion, value, body) ->
-        let childEnv = Map.remove (AST.recursiveBindingName recursion) lambdaEnv
-        AST.RecursiveLet (recursion, inlineLambdas value childEnv, inlineLambdas body childEnv)
-    | AST.If (cond, thenBranch, elseBranch) ->
-        AST.If (inlineLambdas cond lambdaEnv, inlineLambdas thenBranch lambdaEnv, inlineLambdas elseBranch lambdaEnv)
-    | AST.Sequence (first, next) ->
-        AST.Sequence (inlineLambdas first lambdaEnv, inlineLambdas next lambdaEnv)
-    | AST.Call (funcName, args) ->
+        CheckedAST.Let (pattern, value', body')
+    | CheckedAST.RecursiveLet (recursion, value, body) ->
+        let childEnv = Map.remove (CheckedAST.recursiveBindingName recursion) lambdaEnv
+        CheckedAST.RecursiveLet (recursion, inlineLambdas value childEnv, inlineLambdas body childEnv)
+    | CheckedAST.If (cond, thenBranch, elseBranch) ->
+        CheckedAST.If (inlineLambdas cond lambdaEnv, inlineLambdas thenBranch lambdaEnv, inlineLambdas elseBranch lambdaEnv)
+    | CheckedAST.Sequence (first, next) ->
+        CheckedAST.Sequence (inlineLambdas first lambdaEnv, inlineLambdas next lambdaEnv)
+    | CheckedAST.Call (funcName, args) ->
         let args' = AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args
         // Check if funcName is actually a lambda variable (parser can't distinguish)
         match Map.tryFind funcName lambdaEnv with
-        | Some _ -> AST.Apply (AST.Var funcName, args')
-        | None -> AST.Call (funcName, args')
-    | AST.TypeApp (funcName, typeArgs, args) ->
-        AST.TypeApp (funcName, typeArgs, AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args)
-    | AST.TupleLiteral elements ->
-        AST.TupleLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
-    | AST.TupleAccess (tuple, index) ->
-        AST.TupleAccess (inlineLambdas tuple lambdaEnv, index)
-    | AST.DictLiteral (keyType, valueType, entries) ->
-        AST.DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (inlineLambdas key lambdaEnv, inlineLambdas value lambdaEnv)))
-    | AST.RecordLiteral (typeName, fields) ->
-        AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) fields)
-    | AST.RecordUpdate (record, updates) ->
-        AST.RecordUpdate (inlineLambdas record lambdaEnv, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) updates)
-    | AST.RecordAccess (record, fieldName) ->
-        AST.RecordAccess (inlineLambdas record lambdaEnv, fieldName)
-    | AST.Constructor (typeName, variantName, payload) ->
-        AST.Constructor (typeName, variantName, Option.map (fun e -> inlineLambdas e lambdaEnv) payload)
-    | AST.Match (scrutinee, cases) ->
+        | Some _ -> CheckedAST.Apply (CheckedAST.Var funcName, args')
+        | None -> CheckedAST.Call (funcName, args')
+    | CheckedAST.TypeApp (funcName, typeArgs, args) ->
+        CheckedAST.TypeApp (funcName, typeArgs, AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args)
+    | CheckedAST.TupleLiteral elements ->
+        CheckedAST.TupleLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
+    | CheckedAST.TupleAccess (tuple, index) ->
+        CheckedAST.TupleAccess (inlineLambdas tuple lambdaEnv, index)
+    | CheckedAST.DictLiteral (keyType, valueType, entries) ->
+        CheckedAST.DictLiteral (
+            keyType,
+            valueType,
+            entries
+            |> List.map (fun (key, value) ->
+                (inlineLambdas key lambdaEnv, inlineLambdas value lambdaEnv))
+        )
+    | CheckedAST.RecordLiteral (typeName, fields) ->
+        CheckedAST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) fields)
+    | CheckedAST.RecordUpdate (record, updates) ->
+        CheckedAST.RecordUpdate (inlineLambdas record lambdaEnv, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) updates)
+    | CheckedAST.RecordAccess (record, fieldName) ->
+        CheckedAST.RecordAccess (inlineLambdas record lambdaEnv, fieldName)
+    | CheckedAST.Constructor (typeName, variantName, payload) ->
+        CheckedAST.Constructor (typeName, variantName, Option.map (fun e -> inlineLambdas e lambdaEnv) payload)
+    | CheckedAST.Match (scrutinee, cases) ->
         let cases' =
             cases
             |> List.map (fun mc ->
@@ -142,67 +149,65 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
                 { mc with
                     Guard = mc.Guard |> Option.map (fun g -> inlineLambdas g caseEnv)
                     Body = inlineLambdas mc.Body caseEnv })
-        AST.Match (inlineLambdas scrutinee lambdaEnv, cases')
-    | AST.ListLiteral elements ->
-        AST.ListLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
-    | AST.Lambda (parameters, returnAnnotation, body) ->
+        CheckedAST.Match (inlineLambdas scrutinee lambdaEnv, cases')
+    | CheckedAST.ListLiteral elements ->
+        CheckedAST.ListLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         let bodyEnv =
             parameters
             |> AST.NonEmptyList.toList
-            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> List.collect (fun parameter -> CheckedAST.letPatternBindings parameter.Pattern)
             |> List.fold (fun current name -> Map.remove name current) lambdaEnv
-        AST.Lambda (parameters, returnAnnotation, inlineLambdas body bodyEnv)
-    | AST.Apply (func, args) ->
+        CheckedAST.Lambda (parameters, returnAnnotation, inlineLambdas body bodyEnv)
+    | CheckedAST.Apply (func, args) ->
         let args' = AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args
         match func with
-        | AST.Var name ->
+        | CheckedAST.Var name ->
             // Check if this variable is a known lambda
             match Map.tryFind name lambdaEnv with
             | Some _ ->
-                AST.Apply (AST.Var name, args')
+                CheckedAST.Apply (CheckedAST.Var name, args')
             | None ->
                 // Unknown function variable - keep as-is (will error later if not valid)
-                AST.Apply (AST.Var name, args')
+                CheckedAST.Apply (CheckedAST.Var name, args')
         | _ ->
             // Non-variable function (could be lambda or other expr)
-            AST.Apply (inlineLambdas func lambdaEnv, args')
-    | AST.IndirectApply (func, args) ->
-        AST.IndirectApply (
+            CheckedAST.Apply (inlineLambdas func lambdaEnv, args')
+    | CheckedAST.IndirectApply (func, args) ->
+        CheckedAST.IndirectApply (
             inlineLambdas func lambdaEnv,
             AST.NonEmptyList.map (fun arg -> inlineLambdas arg lambdaEnv) args
         )
-    | AST.FuncRef _ ->
+    | CheckedAST.FuncRef _ ->
         // Function references don't need lambda inlining
         expr
-    | AST.Closure (funcName, captures) ->
+    | CheckedAST.Closure (funcName, captures) ->
         // Inline lambdas in captured expressions
-        AST.Closure (funcName, List.map (fun c -> inlineLambdas c lambdaEnv) captures)
-    | AST.InterpolatedString parts ->
+        CheckedAST.Closure (funcName, List.map (fun c -> inlineLambdas c lambdaEnv) captures)
+    | CheckedAST.InterpolatedString parts ->
         let inlinePart part =
             match part with
-            | AST.StringText s -> AST.StringText s
-            | AST.StringExpr e -> AST.StringExpr (inlineLambdas e lambdaEnv)
-        AST.InterpolatedString (List.map inlinePart parts)
+            | CheckedAST.StringText s -> CheckedAST.StringText s
+            | CheckedAST.StringExpr e -> CheckedAST.StringExpr (inlineLambdas e lambdaEnv)
+        CheckedAST.InterpolatedString (List.map inlinePart parts)
 
 /// Inline lambdas in a function definition
-let inlineLambdasInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
+let inlineLambdasInFunc (funcDef: CheckedAST.FunctionDef) : CheckedAST.FunctionDef =
     { funcDef with Body = inlineLambdas funcDef.Body Map.empty }
 
 /// Inline lambdas in a program
-let inlineLambdasInProgram (program: AST.Program) : AST.Program =
-    let (AST.Program topLevels) = program
+let inlineLambdasInProgram (program: CheckedAST.Program) : CheckedAST.Program =
+    let (CheckedAST.Program topLevels) = program
     let topLevels' =
         topLevels
         |> List.map (function
-            | AST.FunctionDef f -> AST.FunctionDef (inlineLambdasInFunc f)
-            | AST.Expression e -> AST.Expression (inlineLambdas e Map.empty)
-            | AST.ValueDef valueDef ->
-                let body = inlineLambdas (AST.valueDefBody valueDef) Map.empty
-                match valueDef with
-                | AST.UncheckedValueDef (name, _) -> AST.ValueDef (AST.UncheckedValueDef (name, body))
-                | AST.CheckedValueDef (name, typ, _) -> AST.ValueDef (AST.CheckedValueDef (name, typ, body))
-            | AST.TypeDef t -> AST.TypeDef t)
-    AST.Program topLevels'
+            | CheckedAST.FunctionDef f -> CheckedAST.FunctionDef (inlineLambdasInFunc f)
+            | CheckedAST.Expression e -> CheckedAST.Expression (inlineLambdas e Map.empty)
+            | CheckedAST.ValueDef valueDef ->
+                let body = inlineLambdas (CheckedAST.valueDefBody valueDef) Map.empty
+                CheckedAST.ValueDef { valueDef with Body = body }
+            | CheckedAST.TypeDef t -> CheckedAST.TypeDef t)
+    CheckedAST.Program topLevels'
 
 // ============================================================================
 // Lambda Lifting: Convert Lambdas to Top-Level Functions with Closures

@@ -237,6 +237,7 @@ let buildStdlibWithTrace
                     buildContext
                         target
                         typeCheckEnv
+                        (CheckedAST.programValues typedStdlib)
                         genericFuncDefs
                         Map.empty
                         registries
@@ -355,13 +356,13 @@ let buildStdlibSpecializations
                 let initiallyMaterializedFunctions =
                     newSpecializedFuncs
                     |> List.collect (fun funcDef ->
-                        [AST.FunctionDef funcDef]
-                        |> MaterializeHelpers.materializeEqHelpersInTopLevels
+                        [CheckedAST.FunctionDef funcDef]
+                        |> CheckedMaterializeHelpers.materializeEqHelpersInTopLevels
                             stdlib.Context.TypeCheckEnv.AliasReg
                             materializationTypeReg
                             materializationVariantLookup)
                     |> List.choose (function
-                        | AST.FunctionDef funcDef -> Some funcDef
+                        | CheckedAST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)
                 let helperSpecs =
                     initiallyMaterializedFunctions
@@ -376,19 +377,19 @@ let buildStdlibSpecializations
                 let materializedFunctions =
                     (helperSpecialization.SpecializedFuncs @ initiallyMaterializedFunctions)
                     |> List.filter (fun f -> not (Set.contains f.Name existingNames))
-                    |> List.map AST.FunctionDef
-                    |> MaterializeHelpers.materializeEqHelpersInTopLevels
+                    |> List.map CheckedAST.FunctionDef
+                    |> CheckedMaterializeHelpers.materializeEqHelpersInTopLevels
                         stdlib.Context.TypeCheckEnv.AliasReg
                         materializationTypeReg
                         materializationVariantLookup
                     |> List.choose (function
-                        | AST.FunctionDef funcDef -> Some funcDef
+                        | CheckedAST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)
                     |> List.distinctBy (fun funcDef -> funcDef.Name)
                 let specializationProgram =
-                    AST.Program (
-                        (typeDefs |> List.map AST.TypeDef)
-                        @ (materializedFunctions |> List.map AST.FunctionDef)
+                    CheckedAST.Program (
+                        (typeDefs |> List.map CheckedAST.TypeDef)
+                        @ (materializedFunctions |> List.map CheckedAST.FunctionDef)
                     )
                 prepareProgramForAnf
                     (ReplaceTypeApps combinedSpecRegistry)
@@ -397,7 +398,7 @@ let buildStdlibSpecializations
                     stdlib.Context.BaseFuncNames
                     stdlib.Context.LambdaLiftFuncParams
                     stdlib.Context.ReturnTypes
-                    stdlib.Context.TypeCheckEnv.Values
+                    stdlib.Context.CheckedValues
                     passTimingRecorder
                     specializationProgram
                 |> Result.bind AST_to_ANF.splitDeclarations

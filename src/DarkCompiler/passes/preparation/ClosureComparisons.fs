@@ -13,8 +13,8 @@ type internal LambdaComparisonPlan = {
     Identity: string option
     CaptureNames: string list
     CaptureTypes: AST.Type list
-    CaptureExprs: AST.Expr list
-    Body: AST.Expr
+    CaptureExprs: CheckedAST.Expr list
+    Body: CheckedAST.Expr
     CompareCaptures: bool
 }
 
@@ -41,8 +41,8 @@ let internal comparisonNameForIdentity
 /// already-applied arguments are semantic identity, unlike ordinary lexical
 /// captures, and must therefore become explicit closure payload slots.
 let internal planLambdaComparison
-    (parameters: AST.NonEmptyList<AST.LambdaParameter>)
-    (body: AST.Expr)
+    (parameters: AST.NonEmptyList<CheckedAST.LambdaParameter>)
+    (body: CheckedAST.Expr)
     (state: LiftState)
     : Result<LambdaComparisonPlan, string> =
     let parameterBindings =
@@ -55,7 +55,7 @@ let internal planLambdaComparison
         |> AST.NonEmptyList.toList
         |> List.fold (fun names parameter ->
             match names, parameter.Pattern with
-            | Some names, AST.LPVariable name -> Some (name :: names)
+            | Some names, CheckedAST.LPVariable name -> Some (name :: names)
             | _ -> None) (Some [])
         |> Option.map List.rev
     let tryNamedPartial targetName args rebuild =
@@ -74,7 +74,7 @@ let internal planLambdaComparison
                 simpleParameterNames
                 |> Option.exists (fun names ->
                     List.map2
-                        (fun parameterName argument -> argument = AST.Var parameterName)
+                        (fun parameterName argument -> argument = CheckedAST.Var parameterName)
                         names
                         remainingArgs
                     |> List.forall id)
@@ -85,7 +85,7 @@ let internal planLambdaComparison
                     |> List.map (fun index -> $"__comparison_applied_{index}")
                 let captureTypes = targetParams |> List.take providedCount |> List.map snd
                 let replacementArgs =
-                    (captureNames |> List.map AST.Var) @ remainingArgs
+                    (captureNames |> List.map CheckedAST.Var) @ remainingArgs
                     |> exprArgsFromList
                 Some {
                     Identity = Some targetName
@@ -99,10 +99,10 @@ let internal planLambdaComparison
 
     let partialPlan =
         match body with
-        | AST.Call (targetName, args) ->
-            tryNamedPartial targetName args (fun rebuiltArgs -> AST.Call (targetName, rebuiltArgs))
-        | AST.TypeApp (targetName, typeArgs, args) ->
-            tryNamedPartial targetName args (fun rebuiltArgs -> AST.TypeApp (targetName, typeArgs, rebuiltArgs))
+        | CheckedAST.Call (targetName, args) ->
+            tryNamedPartial targetName args (fun rebuiltArgs -> CheckedAST.Call (targetName, rebuiltArgs))
+        | CheckedAST.TypeApp (targetName, typeArgs, args) ->
+            tryNamedPartial targetName args (fun rebuiltArgs -> CheckedAST.TypeApp (targetName, typeArgs, rebuiltArgs))
         | _ -> None
 
     match partialPlan with
@@ -126,7 +126,7 @@ let internal planLambdaComparison
             Identity = None
             CaptureNames = captures
             CaptureTypes = captureTypes
-            CaptureExprs = captures |> List.map AST.Var
+            CaptureExprs = captures |> List.map CheckedAST.Var
             Body = body
             CompareCaptures = false
         })
@@ -134,28 +134,28 @@ let internal planLambdaComparison
 let private comparisonForCapturedValue
     (_variantLookup: VariantLookup)
     (typ: AST.Type)
-    (left: AST.Expr)
-    (right: AST.Expr)
-    : AST.Expr =
+    (left: CheckedAST.Expr)
+    (right: CheckedAST.Expr)
+    : CheckedAST.Expr =
     let needsStructuralHelper =
         match typ with
         | AST.TFunction _ | AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> true
         | _ -> false
     if needsStructuralHelper then
-        AST.Call (ComparisonPlanning.eqHelperName typ, exprArgsFromList [left; right])
+        CheckedAST.Call (ComparisonPlanning.eqHelperName typ, exprArgsFromList [left; right])
     elif typ = AST.TString then
-        AST.BinOp (AST.Eq, left, right)
+        CheckedAST.BinOp (AST.Eq, left, right)
     elif typ = AST.TInt then
-        AST.Call ("Stdlib.Int.__equals", exprArgsFromList [left; right])
+        CheckedAST.Call ("Stdlib.Int.__equals", exprArgsFromList [left; right])
     else
-        AST.BinOp (AST.Eq, left, right)
+        CheckedAST.BinOp (AST.Eq, left, right)
 
 let internal makeClosureComparator
     (comparisonName: string)
     (captureTypes: AST.Type list)
     (compareCaptures: bool)
     (variantLookup: VariantLookup)
-    : AST.FunctionDef =
+    : CheckedAST.FunctionDef =
     let comparatorStorageType = AST.TRawPtr
     let runtimeClosureType =
         AST.TTuple (AST.TInt64 :: comparatorStorageType :: captureTypes)
@@ -168,13 +168,13 @@ let internal makeClosureComparator
                 comparisonForCapturedValue
                     variantLookup
                     captureType
-                    (AST.TupleAccess (AST.Var leftName, index + 2))
-                    (AST.TupleAccess (AST.Var rightName, index + 2)))
+                    (CheckedAST.TupleAccess (CheckedAST.Var leftName, index + 2))
+                    (CheckedAST.TupleAccess (CheckedAST.Var rightName, index + 2)))
         else []
     let body =
         match comparisons with
-        | [] -> AST.BoolLiteral true
-        | first :: rest -> rest |> List.fold (fun acc item -> AST.BinOp (AST.And, acc, item)) first
+        | [] -> CheckedAST.BoolLiteral true
+        | first :: rest -> rest |> List.fold (fun acc item -> CheckedAST.BinOp (AST.And, acc, item)) first
     {
         Name = comparisonName
         TypeParams = []
@@ -193,30 +193,30 @@ let internal makeClosureComparator
 /// Replace references already resolved to a singleton recursive binder with
 /// the closure value passed to its lifted code. This creates no closure-to-self
 /// capture edge: the operational closure parameter is reused directly.
-let rec internal rewriteRecursiveSelfReferences (selfName: string) (expr: AST.Expr) : AST.Expr =
+let rec internal rewriteRecursiveSelfReferences (selfName: string) (expr: CheckedAST.Expr) : CheckedAST.Expr =
     let recurse = rewriteRecursiveSelfReferences selfName
     let mapArgs = AST.NonEmptyList.map recurse
-    let patternShadows pattern = AST.letPatternBindings pattern |> List.contains selfName
+    let patternShadows pattern = CheckedAST.letPatternBindings pattern |> List.contains selfName
     match expr with
-    | AST.Var name when name = selfName -> AST.Var "__closure"
-    | AST.Call (name, args) when name = selfName -> AST.Apply (AST.Var "__closure", mapArgs args)
-    | AST.FuncRef name when name = selfName -> AST.Var "__closure"
-    | AST.Let (pattern, value, body) ->
-        AST.Let (pattern, recurse value, if patternShadows pattern then body else recurse body)
-    | AST.RecursiveLet (recursion, value, body) when AST.recursiveBindingName recursion = selfName ->
-        match AST.recursiveBindingAvailability recursion with
-        | Some AST.OrdinaryBinding -> AST.RecursiveLet (recursion, recurse value, body)
+    | CheckedAST.Var name when name = selfName -> CheckedAST.Var "__closure"
+    | CheckedAST.Call (name, args) when name = selfName -> CheckedAST.Apply (CheckedAST.Var "__closure", mapArgs args)
+    | CheckedAST.FuncRef name when name = selfName -> CheckedAST.Var "__closure"
+    | CheckedAST.Let (pattern, value, body) ->
+        CheckedAST.Let (pattern, recurse value, if patternShadows pattern then body else recurse body)
+    | CheckedAST.RecursiveLet (recursion, value, body) when CheckedAST.recursiveBindingName recursion = selfName ->
+        match CheckedAST.recursiveBindingAvailability recursion with
+        | AST.OrdinaryBinding -> CheckedAST.RecursiveLet (recursion, recurse value, body)
         | _ -> expr
-    | AST.RecursiveLet (recursion, value, body) ->
-        AST.RecursiveLet (recursion, recurse value, recurse body)
-    | AST.Lambda (parameters, returnAnnotation, body) ->
+    | CheckedAST.RecursiveLet (recursion, value, body) ->
+        CheckedAST.RecursiveLet (recursion, recurse value, recurse body)
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         let shadows =
             parameters
             |> AST.NonEmptyList.toList
-            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> List.collect (fun parameter -> CheckedAST.letPatternBindings parameter.Pattern)
             |> List.contains selfName
-        AST.Lambda (parameters, returnAnnotation, if shadows then body else recurse body)
-    | AST.Match (scrutinee, cases) ->
+        CheckedAST.Lambda (parameters, returnAnnotation, if shadows then body else recurse body)
+    | CheckedAST.Match (scrutinee, cases) ->
         let cases' =
             cases
             |> List.map (fun case ->
@@ -229,72 +229,82 @@ let rec internal rewriteRecursiveSelfReferences (selfName: string) (expr: AST.Ex
                     |> List.contains selfName
                 if shadows then case
                 else { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body })
-        AST.Match (recurse scrutinee, cases')
-    | AST.BoundaryRender (renderer, value) -> AST.BoundaryRender (renderer, recurse value)
-    | AST.BinOp (op, left, right) -> AST.BinOp (op, recurse left, recurse right)
-    | AST.UnaryOp (op, value) -> AST.UnaryOp (op, recurse value)
-    | AST.If (condition, thenBranch, elseBranch) -> AST.If (recurse condition, recurse thenBranch, recurse elseBranch)
-    | AST.Sequence (first, next) -> AST.Sequence (recurse first, recurse next)
-    | AST.Call (name, args) -> AST.Call (name, mapArgs args)
-    | AST.TypeApp (name, types, args) -> AST.TypeApp (name, types, mapArgs args)
-    | AST.TupleLiteral values -> AST.TupleLiteral (List.map recurse values)
-    | AST.TupleAccess (tuple, index) -> AST.TupleAccess (recurse tuple, index)
-    | AST.DictLiteral (keyType, valueType, entries) -> AST.DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
-    | AST.RecordLiteral (name, fields) -> AST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
-    | AST.RecordUpdate (record, fields) -> AST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
-    | AST.RecordAccess (record, field) -> AST.RecordAccess (recurse record, field)
-    | AST.Constructor (reference, name, payload) -> AST.Constructor (reference, name, Option.map recurse payload)
-    | AST.ListLiteral values -> AST.ListLiteral (List.map recurse values)
-    | AST.Apply (func, args) -> AST.Apply (recurse func, mapArgs args)
-    | AST.IndirectApply (func, args) -> AST.IndirectApply (recurse func, mapArgs args)
-    | AST.Closure (name, captures) -> AST.Closure (name, List.map recurse captures)
-    | AST.InterpolatedString parts ->
-        AST.InterpolatedString (parts |> List.map (function AST.StringText _ as text -> text | AST.StringExpr value -> AST.StringExpr (recurse value)))
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _
-    | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _
-    | AST.UInt64Literal _ | AST.UInt128Literal _ | AST.BoolLiteral _
-    | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
-    | AST.Var _ | AST.FuncRef _ | AST.RuntimeError _ -> expr
+        CheckedAST.Match (recurse scrutinee, cases')
+    | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
+    | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, recurse left, recurse right)
+    | CheckedAST.UnaryOp (op, value) -> CheckedAST.UnaryOp (op, recurse value)
+    | CheckedAST.If (condition, thenBranch, elseBranch) -> CheckedAST.If (recurse condition, recurse thenBranch, recurse elseBranch)
+    | CheckedAST.Sequence (first, next) -> CheckedAST.Sequence (recurse first, recurse next)
+    | CheckedAST.Call (name, args) -> CheckedAST.Call (name, mapArgs args)
+    | CheckedAST.TypeApp (name, types, args) -> CheckedAST.TypeApp (name, types, mapArgs args)
+    | CheckedAST.TupleLiteral values -> CheckedAST.TupleLiteral (List.map recurse values)
+    | CheckedAST.TupleAccess (tuple, index) -> CheckedAST.TupleAccess (recurse tuple, index)
+    | CheckedAST.DictLiteral (keyType, valueType, entries) ->
+        CheckedAST.DictLiteral (
+            keyType,
+            valueType,
+            entries |> List.map (fun (key, value) -> (recurse key, recurse value))
+        )
+    | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
+    | CheckedAST.Constructor (reference, name, payload) -> CheckedAST.Constructor (reference, name, Option.map recurse payload)
+    | CheckedAST.ListLiteral values -> CheckedAST.ListLiteral (List.map recurse values)
+    | CheckedAST.Apply (func, args) -> CheckedAST.Apply (recurse func, mapArgs args)
+    | CheckedAST.IndirectApply (func, args) -> CheckedAST.IndirectApply (recurse func, mapArgs args)
+    | CheckedAST.Closure (name, captures) -> CheckedAST.Closure (name, List.map recurse captures)
+    | CheckedAST.InterpolatedString parts ->
+        CheckedAST.InterpolatedString (parts |> List.map (function CheckedAST.StringText _ as text -> text | CheckedAST.StringExpr value -> CheckedAST.StringExpr (recurse value)))
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _
+    | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
+    | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
+    | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
 
 /// Once the lifted member has a code identity, recursive closure calls become
 /// direct calls with the existing group environment as their first argument.
-let rec internal rewriteLiftedSelfCalls (liftedName: string) (expr: AST.Expr) : AST.Expr =
+let rec internal rewriteLiftedSelfCalls (liftedName: string) (expr: CheckedAST.Expr) : CheckedAST.Expr =
     let recurse = rewriteLiftedSelfCalls liftedName
     let mapArgs = AST.NonEmptyList.map recurse
     match expr with
-    | AST.Apply (AST.Var "__closure", args) ->
-        AST.Call (liftedName, AST.NonEmptyList.cons (AST.Var "__closure") (mapArgs args))
-    | AST.BoundaryRender (renderer, value) -> AST.BoundaryRender (renderer, recurse value)
-    | AST.BinOp (op, left, right) -> AST.BinOp (op, recurse left, recurse right)
-    | AST.UnaryOp (op, value) -> AST.UnaryOp (op, recurse value)
-    | AST.Let (pattern, value, body) -> AST.Let (pattern, recurse value, recurse body)
-    | AST.RecursiveLet (recursion, value, body) -> AST.RecursiveLet (recursion, recurse value, recurse body)
-    | AST.If (condition, thenBranch, elseBranch) -> AST.If (recurse condition, recurse thenBranch, recurse elseBranch)
-    | AST.Sequence (first, next) -> AST.Sequence (recurse first, recurse next)
-    | AST.Call (name, args) -> AST.Call (name, mapArgs args)
-    | AST.TypeApp (name, types, args) -> AST.TypeApp (name, types, mapArgs args)
-    | AST.TupleLiteral values -> AST.TupleLiteral (List.map recurse values)
-    | AST.TupleAccess (tuple, index) -> AST.TupleAccess (recurse tuple, index)
-    | AST.DictLiteral (keyType, valueType, entries) -> AST.DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
-    | AST.RecordLiteral (name, fields) -> AST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
-    | AST.RecordUpdate (record, fields) -> AST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
-    | AST.RecordAccess (record, field) -> AST.RecordAccess (recurse record, field)
-    | AST.Constructor (reference, name, payload) -> AST.Constructor (reference, name, Option.map recurse payload)
-    | AST.Match (scrutinee, cases) ->
-        AST.Match (recurse scrutinee, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
-    | AST.ListLiteral values -> AST.ListLiteral (List.map recurse values)
-    | AST.Lambda (parameters, returnAnnotation, body) -> AST.Lambda (parameters, returnAnnotation, recurse body)
-    | AST.Apply (func, args) -> AST.Apply (recurse func, mapArgs args)
-    | AST.IndirectApply (func, args) -> AST.IndirectApply (recurse func, mapArgs args)
-    | AST.Closure (name, captures) -> AST.Closure (name, List.map recurse captures)
-    | AST.InterpolatedString parts ->
-        AST.InterpolatedString (parts |> List.map (function AST.StringText _ as text -> text | AST.StringExpr value -> AST.StringExpr (recurse value)))
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _
-    | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _
-    | AST.UInt64Literal _ | AST.UInt128Literal _ | AST.BoolLiteral _
-    | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
-    | AST.Var _ | AST.FuncRef _ | AST.RuntimeError _ -> expr
+    | CheckedAST.Apply (CheckedAST.Var "__closure", args) ->
+        CheckedAST.Call (liftedName, AST.NonEmptyList.cons (CheckedAST.Var "__closure") (mapArgs args))
+    | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
+    | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, recurse left, recurse right)
+    | CheckedAST.UnaryOp (op, value) -> CheckedAST.UnaryOp (op, recurse value)
+    | CheckedAST.Let (pattern, value, body) -> CheckedAST.Let (pattern, recurse value, recurse body)
+    | CheckedAST.RecursiveLet (recursion, value, body) -> CheckedAST.RecursiveLet (recursion, recurse value, recurse body)
+    | CheckedAST.If (condition, thenBranch, elseBranch) -> CheckedAST.If (recurse condition, recurse thenBranch, recurse elseBranch)
+    | CheckedAST.Sequence (first, next) -> CheckedAST.Sequence (recurse first, recurse next)
+    | CheckedAST.Call (name, args) -> CheckedAST.Call (name, mapArgs args)
+    | CheckedAST.TypeApp (name, types, args) -> CheckedAST.TypeApp (name, types, mapArgs args)
+    | CheckedAST.TupleLiteral values -> CheckedAST.TupleLiteral (List.map recurse values)
+    | CheckedAST.TupleAccess (tuple, index) -> CheckedAST.TupleAccess (recurse tuple, index)
+    | CheckedAST.DictLiteral (keyType, valueType, entries) ->
+        CheckedAST.DictLiteral (
+            keyType,
+            valueType,
+            entries |> List.map (fun (key, value) -> (recurse key, recurse value))
+        )
+    | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
+    | CheckedAST.Constructor (reference, name, payload) -> CheckedAST.Constructor (reference, name, Option.map recurse payload)
+    | CheckedAST.Match (scrutinee, cases) ->
+        CheckedAST.Match (recurse scrutinee, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
+    | CheckedAST.ListLiteral values -> CheckedAST.ListLiteral (List.map recurse values)
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) -> CheckedAST.Lambda (parameters, returnAnnotation, recurse body)
+    | CheckedAST.Apply (func, args) -> CheckedAST.Apply (recurse func, mapArgs args)
+    | CheckedAST.IndirectApply (func, args) -> CheckedAST.IndirectApply (recurse func, mapArgs args)
+    | CheckedAST.Closure (name, captures) -> CheckedAST.Closure (name, List.map recurse captures)
+    | CheckedAST.InterpolatedString parts ->
+        CheckedAST.InterpolatedString (parts |> List.map (function CheckedAST.StringText _ as text -> text | CheckedAST.StringExpr value -> CheckedAST.StringExpr (recurse value)))
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _
+    | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
+    | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
+    | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
 
 /// Lift lambdas in an expression, returning (transformed expr, new state)

@@ -16,7 +16,7 @@ model, context precedence, diagnostics, and pinned interpreter evidence.
 ## IR Pipeline
 
 ```
-Source -> AST -> ANF -> MIR -> LIR -> RegAlloc -> CodeGen -> Encode -> Binary
+Source -> Parsed AST -> Checked AST -> ANF -> MIR -> LIR -> RegAlloc -> CodeGen -> Encode -> Binary
 ```
 
 Passes 1-5 run through parsing, type checking, target-independent IR lowering,
@@ -35,11 +35,15 @@ Each IR is designed to make specific transformations easier:
 | LIR | Close to machine code  | Register constraints, instruction selection               |
 | ISA | Architecture-specific  | Encoding, branch offset calculation (ARM64 or x86-64)     |
 
-### AST (Abstract Syntax Tree)
+### Parsed and checked ASTs
 
-- Closely mirrors source code structure
-- Used for type checking and error reporting
-- Types defined in `AST.fs`
+- `AST.fs` closely mirrors source syntax and is used for name resolution,
+  checking, and source diagnostics.
+- Successful checking constructs the distinct recursive nodes in
+  `CheckedAST.fs`. Required lambda types, typed recursion evidence, canonical
+  nominal references, and checked value definitions are structural there,
+  rather than optional phase flags.
+- Compiler preparation and ANF lowering accept only `CheckedAST.Program`.
 
 ### ANF (A-Normal Form)
 
@@ -148,9 +152,9 @@ Each pass must maintain certain properties:
 
 | Pass        | Input Invariant     | Output Guarantee                         |
 |-------------|---------------------|------------------------------------------|
-| Parser      | Valid source string | Well-formed AST                          |
-| TypeChecker | Well-formed AST     | Type-consistent AST                      |
-| AST->ANF    | Typed AST           | All expressions named, lambdas lifted    |
+| Parser      | Valid source string | Well-formed parsed AST                   |
+| TypeChecker | Well-formed parsed AST | Structurally valid checked AST        |
+| AST->ANF    | Checked AST         | All expressions named, lambdas lifted    |
 | ANF->MIR    | Named expressions   | Valid CFG with basic blocks              |
 | MIR->LIR    | Valid CFG           | Target-compatible LIR instructions       |
 | RegAlloc    | Virtual registers   | Physical registers assigned              |

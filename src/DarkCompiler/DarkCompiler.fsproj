@@ -20,6 +20,7 @@
     <Compile Include="Stdlib.fs" />
     <Compile Include="NameResolution.fs" />
     <Compile Include="ResultList.fs" />
+    <Compile Include="CheckedAST.fs" />
     <Compile Include="CallGraphReachability.fs" />
     <Compile Include="Bitset.fs" />
 
@@ -81,6 +82,7 @@
     <Compile Include="passes/preparation/LiftExpressions.fs" />
     <Compile Include="passes/preparation/LiftFunctions.fs" />
     <Compile Include="passes/preparation/PrepareFunctions.fs" />
+    <Compile Include="passes/preparation/CheckedMaterializeHelpers.fs" />
     <Compile Include="passes/anf/lowering/Operators.fs" />
     <Compile Include="passes/anf/lowering/TypeInference.fs" />
     <Compile Include="passes/anf/lowering/Aggregates.fs" />

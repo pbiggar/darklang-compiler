@@ -2,13 +2,13 @@
 
 module ListHIRTests
 
-let private call name args = AST.Call (name, AST.NonEmptyList.fromList args)
-let private bind name value body = AST.Let (AST.LPVariable name, value, body)
-let private values count = AST.ListLiteral ([1 .. count] |> List.map (int64 >> AST.Int64Literal))
-let private map input = call "Stdlib.List.map_i64_i64" [input; AST.Closure ("mapCallback", [])]
+let private call name args = CheckedAST.Call (name, AST.NonEmptyList.fromList args)
+let private bind name value body = CheckedAST.Let (CheckedAST.LPVariable name, value, body)
+let private values count = CheckedAST.ListLiteral ([1 .. count] |> List.map (int64 >> CheckedAST.Int64Literal))
+let private map input = call "Stdlib.List.map_i64_i64" [input; CheckedAST.Closure ("mapCallback", [])]
 let private reverse input = call "Stdlib.List.reverse_i64" [input]
-let private fold input = call "Stdlib.List.fold_i64_i64" [input; AST.Int64Literal 0L; AST.Closure ("foldCallback", [])]
-let private repeat = call "Stdlib.List.repeatUnsafe_i64" [AST.BigIntLiteral 3I; AST.Int64Literal 7L]
+let private fold input = call "Stdlib.List.fold_i64_i64" [input; CheckedAST.Int64Literal 0L; CheckedAST.Closure ("foldCallback", [])]
+let private repeat = call "Stdlib.List.repeatUnsafe_i64" [CheckedAST.BigIntLiteral 3I; CheckedAST.Int64Literal 7L]
 let private bytes constant : ListRegion.AllocationBytes = { ConstantBytes = constant; RuntimeBuffers = Map.empty }
 let private runtimeBytes constant terms : ListRegion.AllocationBytes = { ConstantBytes = constant; RuntimeBuffers = Map.ofList terms }
 
@@ -39,11 +39,11 @@ let private checkBudget expression expected () =
 
 let private checkSummary expression expected = checkBudget expression (ListRegion.Complete expected)
 
-let private unique = bind "xs" (values 3) (bind "ys" (map (AST.Var "xs")) (fold (reverse (AST.Var "ys"))))
+let private unique = bind "xs" (values 3) (bind "ys" (map (CheckedAST.Var "xs")) (fold (reverse (CheckedAST.Var "ys"))))
 let private shared =
     bind "xs" (values 3)
-        (bind "ys" (map (AST.Var "xs"))
-            (bind "old" (fold (AST.Var "xs")) (fold (AST.Var "ys"))))
+        (bind "ys" (map (CheckedAST.Var "xs"))
+            (bind "old" (fold (CheckedAST.Var "xs")) (fold (CheckedAST.Var "ys"))))
 
 let private rejects expression () =
     match extract expression with
@@ -83,28 +83,28 @@ let private construct releases : ListRegion.OwnedOperation =
 
 let private zero : ListRegion.AllocationSummary = { Allocations = 0; AllocatedBytes = bytes 0L; Copies = 0; ReusedTransforms = 0; Releases = 0 }
 let private allocated = { zero with Allocations = 1; AllocatedBytes = bytes 56L }
-let private choice yes no = AST.If (AST.BoolLiteral true, yes, no)
-let private branchUses = bind "xs" (values 3) (choice (fold (map (AST.Var "xs"))) (fold (reverse (AST.Var "xs"))))
-let private branchJoin = bind "xs" (values 3) (bind "selected" (choice (fold (reverse (AST.Var "xs"))) (AST.Int64Literal 7L)) (fold (AST.Var "xs")))
+let private choice yes no = CheckedAST.If (CheckedAST.BoolLiteral true, yes, no)
+let private branchUses = bind "xs" (values 3) (choice (fold (map (CheckedAST.Var "xs"))) (fold (reverse (CheckedAST.Var "xs"))))
+let private branchJoin = bind "xs" (values 3) (bind "selected" (choice (fold (reverse (CheckedAST.Var "xs"))) (CheckedAST.Int64Literal 7L)) (fold (CheckedAST.Var "xs")))
 let private manyBranches count =
     bind "xs" (values 3)
-        (List.foldBack (fun index body -> bind $"branch{index}" (choice (fold (AST.Var "xs")) (AST.Int64Literal 7L)) body) [1 .. count] (fold (AST.Var "xs")))
+        (List.foldBack (fun index body -> bind $"branch{index}" (choice (fold (CheckedAST.Var "xs")) (CheckedAST.Int64Literal 7L)) body) [1 .. count] (fold (CheckedAST.Var "xs")))
 let private ownedBlock releases operations : ListRegion.OwnedBlock =
     let result: HIR.Value = { Id = HIR.ValueId 1001; Type = AST.TInt64 }
     { EntryReleases = releases
       Body = { Parameters = Map.empty; Operations = operations; Result = result } }
 let private ownedBranch yes no : ListRegion.OwnedOperation =
     let result: HIR.Value = { Id = HIR.ValueId 1002; Type = AST.TInt64 }
-    let condition: HIR.Operand = { Expression = AST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }
+    let condition: HIR.Operand = { Expression = CheckedAST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }
     { Operation = HIR.Branch (result, condition, yes, no); Releases = [] }
 
 let private testPrimitiveContracts () =
     let listValue id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
     let scalarValue: HIR.Value = { Id = HIR.ValueId 2; Type = AST.TInt64 }
     let input, output = listValue 0, listValue 1
-    let scalar: HIR.Operand = { Expression = AST.Int64Literal 0L; Type = AST.TInt64; Inputs = Map.empty }
+    let scalar: HIR.Operand = { Expression = CheckedAST.Int64Literal 0L; Type = AST.TInt64; Inputs = Map.empty }
     let callback: HIR.Operand =
-        { Expression = AST.Closure ("mapCallback", [])
+        { Expression = CheckedAST.Closure ("mapCallback", [])
           Type = AST.TFunction ([AST.TInt64], AST.TInt64)
           Inputs = Map.empty }
     let construct = ListRegion.primitiveContract (ListRegion.Construct (output, ListRegion.Literal [scalar]))
@@ -154,11 +154,11 @@ let tests = [
         match extract (manyBranches 64) with
         | None -> Error "Expected a region with sixty-four scalar joins"
         | Some region -> region |> SelectListStorage.selectStorage |> ElaborateListOwnership.elaborateOwnership |> VerifyListOwnership.verify)
-    "List HIR rejects list-valued branch joins", rejects (bind "xs" (values 3) (bind "selected" (choice (reverse (AST.Var "xs")) (AST.Var "xs")) (fold (AST.Var "selected"))))
-    "List HIR rejects branch callbacks hiding aliases", rejects (bind "xs" (values 3) (choice (fold (call "Stdlib.List.map_i64_i64" [AST.Var "xs"; AST.Closure ("mapCallback", [AST.Var "xs"])])) (AST.Int64Literal 7L)))
+    "List HIR rejects list-valued branch joins", rejects (bind "xs" (values 3) (bind "selected" (choice (reverse (CheckedAST.Var "xs")) (CheckedAST.Var "xs")) (fold (CheckedAST.Var "selected"))))
+    "List HIR rejects branch callbacks hiding aliases", rejects (bind "xs" (values 3) (choice (fold (call "Stdlib.List.map_i64_i64" [CheckedAST.Var "xs"; CheckedAST.Closure ("mapCallback", [CheckedAST.Var "xs"])])) (CheckedAST.Int64Literal 7L)))
     "List HIR consumes independently on mutually exclusive paths", checkBudget branchUses (ListRegion.Conditional (allocated, ListRegion.Complete { zero with ReusedTransforms = 1; Releases = 1 }, ListRegion.Complete { zero with ReusedTransforms = 1; Releases = 1 }, ListRegion.Complete zero))
     "List HIR preserves a source needed after the join", checkBudget branchJoin (ListRegion.Conditional (allocated, ListRegion.Complete { allocated with Copies = 1; Releases = 1 }, ListRegion.Complete zero, ListRegion.Complete { zero with Releases = 1 }))
-    "List HIR releases unused inputs on the other edge", checkBudget (bind "xs" (values 3) (choice (fold (AST.Var "xs")) (AST.Int64Literal 7L))) (ListRegion.Conditional (allocated, ListRegion.Complete { zero with Releases = 1 }, ListRegion.Complete { zero with Releases = 1 }, ListRegion.Complete zero))
+    "List HIR releases unused inputs on the other edge", checkBudget (bind "xs" (values 3) (choice (fold (CheckedAST.Var "xs")) (CheckedAST.Int64Literal 7L))) (ListRegion.Conditional (allocated, ListRegion.Complete { zero with Releases = 1 }, ListRegion.Complete { zero with Releases = 1 }, ListRegion.Complete zero))
     "List HIR budgets branch-local constructors separately", checkBudget (bind "xs" (values 3) (choice (fold repeat) (fold (values 3)))) (ListRegion.Conditional ({ allocated with Releases = 1 }, ListRegion.Complete { zero with Allocations = 1; AllocatedBytes = runtimeBytes 0L [HIR.ValueId 1, 1L]; Releases = 1 }, ListRegion.Complete { allocated with Releases = 1 }, ListRegion.Complete zero))
     "List HIR verifier rejects mismatched branch ownership", rejectsOwnership [construct []; ownedBranch (ownedBlock [root] []) (ownedBlock [] [])]
     "List HIR verifier rejects branch-local leaked values", rejectsOwnership [ownedBranch (ownedBlock [] [construct []]) (ownedBlock [] [])]
@@ -166,25 +166,25 @@ let tests = [
     "List HIR verifier rejects double edge cleanup", rejectsOwnership [construct []; ownedBranch (ownedBlock [root; root] []) (ownedBlock [root] [])]
     "List HIR consumes unique map/reverse storage", checkSummary unique { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 2; Releases = 1 }
     "List HIR copies a surviving source version", checkSummary shared { Allocations = 2; AllocatedBytes = bytes 112L; Copies = 1; ReusedTransforms = 0; Releases = 2 }
-    "List HIR normalizes aliases before last-use solving", checkSummary (bind "xs" (values 3) (bind "alias" (AST.Var "xs") (fold (reverse (AST.Var "alias"))))) { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 1; Releases = 1 }
-    "List HIR releases unused construction", checkSummary (bind "xs" (values 3) (AST.Int64Literal 1L)) { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 0; Releases = 1 }
+    "List HIR normalizes aliases before last-use solving", checkSummary (bind "xs" (values 3) (bind "alias" (CheckedAST.Var "xs") (fold (reverse (CheckedAST.Var "alias"))))) { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 1; Releases = 1 }
+    "List HIR releases unused construction", checkSummary (bind "xs" (values 3) (CheckedAST.Int64Literal 1L)) { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 0; Releases = 1 }
     "List HIR supports the largest recyclable array", checkSummary (fold (reverse (values 28))) { Allocations = 1; AllocatedBytes = bytes 256L; Copies = 0; ReusedTransforms = 1; Releases = 1 }
     "List HIR budgets runtime construction and consuming transforms", checkSummary (fold (reverse (map repeat))) { Allocations = 1; AllocatedBytes = runtimeBytes 0L [root, 1L]; Copies = 0; ReusedTransforms = 2; Releases = 1 }
-    "List HIR budgets runtime copies through aliases", checkSummary (bind "xs" repeat (bind "alias" (AST.Var "xs") (bind "ys" (map (AST.Var "xs")) (bind "old" (fold (AST.Var "alias")) (fold (AST.Var "ys")))))) { Allocations = 2; AllocatedBytes = runtimeBytes 0L [root, 2L]; Copies = 1; ReusedTransforms = 0; Releases = 2 }
-    "List HIR keeps independent runtime extents distinct", checkSummary (bind "xs" repeat (bind "xs" repeat (fold (reverse (AST.Var "xs"))))) { Allocations = 2; AllocatedBytes = runtimeBytes 0L [root, 1L; HIR.ValueId 1, 1L]; Copies = 0; ReusedTransforms = 1; Releases = 2 }
-    "List HIR retains runtime origin when copying a consumed transform", checkSummary (bind "ys" (map repeat) (bind "zs" (map (AST.Var "ys")) (bind "old" (fold (AST.Var "ys")) (fold (AST.Var "zs"))))) { Allocations = 2; AllocatedBytes = runtimeBytes 0L [root, 2L]; Copies = 1; ReusedTransforms = 1; Releases = 2 }
+    "List HIR budgets runtime copies through aliases", checkSummary (bind "xs" repeat (bind "alias" (CheckedAST.Var "xs") (bind "ys" (map (CheckedAST.Var "xs")) (bind "old" (fold (CheckedAST.Var "alias")) (fold (CheckedAST.Var "ys")))))) { Allocations = 2; AllocatedBytes = runtimeBytes 0L [root, 2L]; Copies = 1; ReusedTransforms = 0; Releases = 2 }
+    "List HIR keeps independent runtime extents distinct", checkSummary (bind "xs" repeat (bind "xs" repeat (fold (reverse (CheckedAST.Var "xs"))))) { Allocations = 2; AllocatedBytes = runtimeBytes 0L [root, 1L; HIR.ValueId 1, 1L]; Copies = 0; ReusedTransforms = 1; Releases = 2 }
+    "List HIR retains runtime origin when copying a consumed transform", checkSummary (bind "ys" (map repeat) (bind "zs" (map (CheckedAST.Var "ys")) (bind "old" (fold (CheckedAST.Var "ys")) (fold (CheckedAST.Var "zs"))))) { Allocations = 2; AllocatedBytes = runtimeBytes 0L [root, 2L]; Copies = 1; ReusedTransforms = 1; Releases = 2 }
     "List HIR preserves native allocation budget", testLoweredBudget
-    "List HIR rejects escaping lists", rejects (bind "xs" (values 3) (AST.Var "xs"))
+    "List HIR rejects escaping lists", rejects (bind "xs" (values 3) (CheckedAST.Var "xs"))
     "List HIR reclaims arrays beyond the fixed heap classes", checkSummary (fold (reverse (values 29))) { Allocations = 1; AllocatedBytes = bytes 272L; Copies = 0; ReusedTransforms = 1; Releases = 1 }
-    "List HIR rejects borrowed input lists", rejects (fold (reverse (AST.Var "external")))
+    "List HIR rejects borrowed input lists", rejects (fold (reverse (CheckedAST.Var "external")))
     "List HIR rejects scalar wrappers around borrowed managed inputs", (fun () ->
-        let expression = AST.Let (AST.LPWildcard, reverse (AST.Var "external"), AST.Int64Literal 1L)
+        let expression = CheckedAST.Let (CheckedAST.LPWildcard, reverse (CheckedAST.Var "external"), CheckedAST.Int64Literal 1L)
         match extractWithParameters (Map.ofList ["external", AST.TList AST.TInt64]) expression with
         | None -> Ok ()
         | Some _ -> Error "A scalar wrapper admitted a borrowed list parameter")
     "List HIR declares primitive effects and alias provenance", testPrimitiveContracts
-    "List HIR rejects managed elements", rejects (bind "xs" (AST.ListLiteral [AST.StringLiteral "a"]) (AST.Int64Literal 0L))
-    "List HIR rejects callbacks capturing region lists", rejects (bind "xs" (values 3) (fold (call "Stdlib.List.map_i64_i64" [AST.Var "xs"; AST.Closure ("mapCallback", [AST.Var "xs"])])))
+    "List HIR rejects managed elements", rejects (bind "xs" (CheckedAST.ListLiteral [CheckedAST.StringLiteral "a"]) (CheckedAST.Int64Literal 0L))
+    "List HIR rejects callbacks capturing region lists", rejects (bind "xs" (values 3) (fold (call "Stdlib.List.map_i64_i64" [CheckedAST.Var "xs"; CheckedAST.Closure ("mapCallback", [CheckedAST.Var "xs"])])))
     "List HIR verifier rejects duplicate release", rejectsOwnership [construct [root; root]]
     "List HIR verifier rejects leaked roots", rejectsOwnership [construct []]
     "List HIR verifier rejects reused identities", rejectsOwnership [construct [root]; construct [root]]

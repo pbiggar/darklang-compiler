@@ -5,6 +5,7 @@
 module MonomorphizationTests
 
 open AST
+open CheckedAST
 open TypeRegistries
 open SpecializationIdentity
 open Monomorphization

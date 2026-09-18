@@ -11,7 +11,7 @@ open TypeSubstitution
 
 type LiftState = {
     Counter: int
-    LiftedFunctions: AST.FunctionDef list
+    LiftedFunctions: CheckedAST.FunctionDef list
     ComparisonFuncs: Map<string * AST.Type list, string>
     ComparableFunctionParams: Set<AST.Type list>
     TypeEnv: Map<string, AST.Type>  // Variable name -> Type (for tracking types of captured variables)
@@ -102,7 +102,7 @@ let rec internal matchPatternBindingTypes
         | _ -> Map.empty
 
 let internal lambdaNeedsComparison
-    (parameters: AST.NonEmptyList<AST.LambdaParameter>)
+    (parameters: AST.NonEmptyList<CheckedAST.LambdaParameter>)
     (state: LiftState)
     : bool =
     parameters
@@ -111,28 +111,28 @@ let internal lambdaNeedsComparison
     |> fun paramTypes -> Set.contains paramTypes state.ComparableFunctionParams
 
 /// Collect free variables in an expression (variables not bound by let or lambda parameters)
-let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
+let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string> =
     match expr with
-    | AST.BoundaryRender (_, value) -> freeVars value bound
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.BigIntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-    | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.RuntimeError _ -> Set.empty
-    | AST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
-    | AST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
-    | AST.UnaryOp (_, inner) -> freeVars inner bound
-    | AST.Let (pattern, value, body) ->
+    | CheckedAST.BoundaryRender (_, value) -> freeVars value bound
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ -> Set.empty
+    | CheckedAST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
+    | CheckedAST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
+    | CheckedAST.UnaryOp (_, inner) -> freeVars inner bound
+    | CheckedAST.Let (pattern, value, body) ->
         let valueVars = freeVars value bound
         let bodyVars =
-            freeVars body (Set.union bound (AST.letPatternBindings pattern |> Set.ofList))
+            freeVars body (Set.union bound (CheckedAST.letPatternBindings pattern |> Set.ofList))
         Set.union valueVars bodyVars
-    | AST.RecursiveLet (recursion, value, body) ->
-        let recursiveBound = Set.add (AST.recursiveBindingName recursion) bound
+    | CheckedAST.RecursiveLet (recursion, value, body) ->
+        let recursiveBound = Set.add (CheckedAST.recursiveBindingName recursion) bound
         Set.union (freeVars value recursiveBound) (freeVars body recursiveBound)
-    | AST.If (cond, thenBr, elseBr) ->
+    | CheckedAST.If (cond, thenBr, elseBr) ->
         Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
-    | AST.Sequence (first, next) ->
+    | CheckedAST.Sequence (first, next) ->
         Set.union (freeVars first bound) (freeVars next bound)
-    | AST.Call (funcName, args) ->
+    | CheckedAST.Call (funcName, args) ->
         // Check if funcName is a local variable (not in bound) - if so, it's a free variable
         // Top-level function names will be filtered out later since they won't be in TypeEnv
         let funcFree = if Set.contains funcName bound then Set.empty else Set.singleton funcName
@@ -142,25 +142,25 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
             |> List.map (fun a -> freeVars a bound)
             |> List.fold Set.union Set.empty
         Set.union funcFree argsFree
-    | AST.TypeApp (_, _, args) ->
+    | CheckedAST.TypeApp (_, _, args) ->
         args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
-    | AST.TupleLiteral elems | AST.ListLiteral elems ->
+    | CheckedAST.TupleLiteral elems | CheckedAST.ListLiteral elems ->
         elems |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
-    | AST.TupleAccess (tuple, _) -> freeVars tuple bound
-    | AST.DictLiteral (_, _, entries) ->
+    | CheckedAST.TupleAccess (tuple, _) -> freeVars tuple bound
+    | CheckedAST.DictLiteral (_, _, entries) ->
         entries
         |> List.collect (fun (key, value) -> [freeVars key bound; freeVars value bound])
         |> List.fold Set.union Set.empty
-    | AST.RecordLiteral (_, fields) ->
+    | CheckedAST.RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
-    | AST.RecordUpdate (record, updates) ->
+    | CheckedAST.RecordUpdate (record, updates) ->
         let recordVars = freeVars record bound
         let updateVars = updates |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
         Set.union recordVars updateVars
-    | AST.RecordAccess (record, _) -> freeVars record bound
-    | AST.Constructor (_, _, payload) ->
+    | CheckedAST.RecordAccess (record, _) -> freeVars record bound
+    | CheckedAST.Constructor (_, _, payload) ->
         payload |> Option.map (fun e -> freeVars e bound) |> Option.defaultValue Set.empty
-    | AST.Match (scrutinee, cases) ->
+    | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeVars = freeVars scrutinee bound
         let caseVars =
             cases
@@ -180,33 +180,33 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
                 Set.union guardVars (freeVars mc.Body caseBound))
             |> List.fold Set.union Set.empty
         Set.union scrutineeVars caseVars
-    | AST.Lambda (parameters, returnAnnotation, body) ->
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         let paramNames =
             parameters
             |> AST.NonEmptyList.toList
-            |> List.collect (fun parameter -> AST.letPatternBindings parameter.Pattern)
+            |> List.collect (fun parameter -> CheckedAST.letPatternBindings parameter.Pattern)
             |> Set.ofList
         freeVars body (Set.union bound paramNames)
-    | AST.Apply (func, args)
-    | AST.IndirectApply (func, args) ->
+    | CheckedAST.Apply (func, args)
+    | CheckedAST.IndirectApply (func, args) ->
         let funcVars = freeVars func bound
         let argVars = args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
         Set.union funcVars argVars
-    | AST.FuncRef _ -> Set.empty
-    | AST.Closure (_, captures) ->
+    | CheckedAST.FuncRef _ -> Set.empty
+    | CheckedAST.Closure (_, captures) ->
         // Closure captures may contain free variables
         captures |> List.map (fun c -> freeVars c bound) |> List.fold Set.union Set.empty
-    | AST.InterpolatedString parts ->
+    | CheckedAST.InterpolatedString parts ->
         parts |> List.choose (fun part ->
             match part with
-            | AST.StringText _ -> None
-            | AST.StringExpr e -> Some (freeVars e bound))
+            | CheckedAST.StringText _ -> None
+            | CheckedAST.StringExpr e -> Some (freeVars e bound))
         |> List.fold Set.union Set.empty
 
 /// Simple type inference for lambda lifting - infers types of simple expressions
 /// This allows let-bound variables to be captured in nested lambdas
 let rec simpleInferType
-    (expr: AST.Expr)
+    (expr: CheckedAST.Expr)
     (typeEnv: Map<string, AST.Type>)
     (funcParams: Map<string, (string * AST.Type) list>)
     (funcReturnTypes: Map<string, AST.Type>)
@@ -285,24 +285,24 @@ let rec simpleInferType
             | _ -> Map.empty
 
     match expr with
-    | AST.Int64Literal _ -> Some AST.TInt64
-    | AST.Int128Literal _ -> Some AST.TInt128
-    | AST.BigIntLiteral _ -> Some AST.TInt
-    | AST.Int8Literal _ -> Some AST.TInt8
-    | AST.Int16Literal _ -> Some AST.TInt16
-    | AST.Int32Literal _ -> Some AST.TInt32
-    | AST.UInt8Literal _ -> Some AST.TUInt8
-    | AST.UInt16Literal _ -> Some AST.TUInt16
-    | AST.UInt32Literal _ -> Some AST.TUInt32
-    | AST.UInt64Literal _ -> Some AST.TUInt64
-    | AST.UInt128Literal _ -> Some AST.TUInt128
-    | AST.BoolLiteral _ -> Some AST.TBool
-    | AST.StringLiteral _ -> Some AST.TString
-    | AST.InterpolatedString _ -> Some AST.TString
-    | AST.CharLiteral _ -> Some AST.TChar
-    | AST.FloatLiteral _ -> Some AST.TFloat64
-    | AST.UnitLiteral -> Some AST.TUnit
-    | AST.Var name ->
+    | CheckedAST.Int64Literal _ -> Some AST.TInt64
+    | CheckedAST.Int128Literal _ -> Some AST.TInt128
+    | CheckedAST.BigIntLiteral _ -> Some AST.TInt
+    | CheckedAST.Int8Literal _ -> Some AST.TInt8
+    | CheckedAST.Int16Literal _ -> Some AST.TInt16
+    | CheckedAST.Int32Literal _ -> Some AST.TInt32
+    | CheckedAST.UInt8Literal _ -> Some AST.TUInt8
+    | CheckedAST.UInt16Literal _ -> Some AST.TUInt16
+    | CheckedAST.UInt32Literal _ -> Some AST.TUInt32
+    | CheckedAST.UInt64Literal _ -> Some AST.TUInt64
+    | CheckedAST.UInt128Literal _ -> Some AST.TUInt128
+    | CheckedAST.BoolLiteral _ -> Some AST.TBool
+    | CheckedAST.StringLiteral _ -> Some AST.TString
+    | CheckedAST.InterpolatedString _ -> Some AST.TString
+    | CheckedAST.CharLiteral _ -> Some AST.TChar
+    | CheckedAST.FloatLiteral _ -> Some AST.TFloat64
+    | CheckedAST.UnitLiteral -> Some AST.TUnit
+    | CheckedAST.Var name ->
         match Map.tryFind name typeEnv with
         | Some typ -> Some typ
         | None ->
@@ -310,12 +310,12 @@ let rec simpleInferType
             | Some parameters, Some returnType ->
                 Some (AST.TFunction (parameters |> List.map snd, returnType))
             | _ -> None
-    | AST.FuncRef name ->
+    | CheckedAST.FuncRef name ->
         match Map.tryFind name funcParams, Map.tryFind name funcReturnTypes with
         | Some parameters, Some returnType ->
             Some (AST.TFunction (parameters |> List.map snd, returnType))
         | _ -> None
-    | AST.Let (pattern, value, body) ->
+    | CheckedAST.Let (pattern, value, body) ->
         let valueType = simpleInferType value typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let typeEnv' =
             match valueType with
@@ -324,17 +324,14 @@ let rec simpleInferType
                 |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) typeEnv
             | None -> typeEnv
         simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
-    | AST.RecursiveLet (recursion, value, body) ->
-        let valueType =
-            match recursion with
-            | AST.TypedRecursiveBinding typed -> Some typed.MonomorphicType
-            | _ -> simpleInferType value typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
+    | CheckedAST.RecursiveLet (recursion, value, body) ->
+        let valueType = Some recursion.MonomorphicType
         let typeEnv' =
             valueType
-            |> Option.map (fun typ -> Map.add (AST.recursiveBindingName recursion) typ typeEnv)
+            |> Option.map (fun typ -> Map.add (CheckedAST.recursiveBindingName recursion) typ typeEnv)
             |> Option.defaultValue typeEnv
         simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
-    | AST.TupleLiteral elements ->
+    | CheckedAST.TupleLiteral elements ->
         // Recursively infer types of tuple elements
         let elemTypes = elements |> List.map (fun e -> simpleInferType e typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup)
         let rec collectTypes remaining acc =
@@ -346,15 +343,15 @@ let rec simpleInferType
         match collectTypes elemTypes [] with
         | Some types -> Some (AST.TTuple types)
         | None -> None
-    | AST.TupleAccess (tupleExpr, index) ->
+    | CheckedAST.TupleAccess (tupleExpr, index) ->
         match simpleInferType tupleExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some (AST.TTuple elemTypes) when index >= 0 && index < List.length elemTypes ->
             Some (List.item index elemTypes)
         | _ -> None
-    | AST.DictLiteral (keyType, valueType, _) ->
+    | CheckedAST.DictLiteral (keyType, valueType, _) ->
         Some (AST.TDict (keyType, valueType))
-    | AST.RecordLiteral (reference, fields) ->
-            let typeName = reference.ResolvedTypeName
+    | CheckedAST.RecordLiteral (reference, fields) ->
+            let typeName = reference.TypeName
             match Map.tryFind typeName typeReg with
             | None ->
                 Some (AST.TRecord (typeName, []))
@@ -396,7 +393,7 @@ let rec simpleInferType
                                 |> List.map (fun name -> Map.tryFind name subst |> Option.defaultValue (AST.TVar name))
                             else reference.TypeArgs
                         Some (AST.TRecord (typeName, typeArgs))
-    | AST.RecordAccess (recordExpr, fieldName) ->
+    | CheckedAST.RecordAccess (recordExpr, fieldName) ->
         match simpleInferType recordExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some (AST.TRecord (typeName, typeArgs)) ->
             match Map.tryFind typeName typeReg with
@@ -409,7 +406,7 @@ let rec simpleInferType
                     | None -> fieldTypePattern)
             | None -> None
         | _ -> None
-    | AST.Constructor (constructorReference, variantName, payload) ->
+    | CheckedAST.Constructor (constructorReference, variantName, payload) ->
         // Sum type constructor has the sum type; infer generic args from payload when possible.
         match tryFindVariant constructorReference variantName variantLookup with
         | Some (sumTypeName, typeParams, _, payloadPattern) ->
@@ -436,9 +433,8 @@ let rec simpleInferType
             | _ ->
                 Some (AST.TSum (sumTypeName, defaultTypeArgs))
         | None ->
-            AST.constructorReferenceTypeName constructorReference
-            |> Option.map (fun typeName -> AST.TSum (typeName, []))
-    | AST.BinOp (op, left, right) ->
+            Some (AST.TSum (constructorReference.TypeName, []))
+    | CheckedAST.BinOp (op, left, right) ->
         let leftType = simpleInferType left typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let rightType = simpleInferType right typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         match op with
@@ -454,7 +450,7 @@ let rec simpleInferType
             | _ -> None
         | AST.Eq | AST.Neq | AST.Lt | AST.Gt | AST.Lte | AST.Gte | AST.And | AST.Or -> Some AST.TBool
         | AST.StringConcat -> Some AST.TString
-    | AST.Call (funcName, args) ->
+    | CheckedAST.Call (funcName, args) ->
         // Look up the function's return type, checking local bindings first
         if isRuntimeFailureName funcName then
             Some AST.TRuntimeError
@@ -475,7 +471,7 @@ let rec simpleInferType
                 Some (AST.TVar $"__call_result_{funcTypeVar}")
             | _ ->
                 Map.tryFind funcName funcReturnTypes
-    | AST.TypeApp (funcName, typeArgs, _) ->
+    | CheckedAST.TypeApp (funcName, typeArgs, _) ->
         // Look up the generic function's definition and apply type substitution
         match Map.tryFind funcName genericFuncDefs with
         | Some (typeParams, returnType) when List.length typeParams = List.length typeArgs ->
@@ -485,7 +481,7 @@ let rec simpleInferType
         | _ ->
             // Fall back to funcReturnTypes for non-generic or arity mismatch
             Map.tryFind funcName funcReturnTypes
-    | AST.If (_, thenExpr, elseExpr) ->
+    | CheckedAST.If (_, thenExpr, elseExpr) ->
         let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type option =
             if left = right then Some left
             else
@@ -516,9 +512,9 @@ let rec simpleInferType
         | Some thenType, Some AST.TRuntimeError -> Some thenType
         | Some thenType, Some elseType -> reconcileBranchTypes thenType elseType
         | _ -> None
-    | AST.Sequence (_, next) ->
+    | CheckedAST.Sequence (_, next) ->
         simpleInferType next typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
-    | AST.Match (scrutinee, cases) ->
+    | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeType = simpleInferType scrutinee typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let caseTypes =
             cases
@@ -539,7 +535,7 @@ let rec simpleInferType
             | _ -> None
         else
             None
-    | AST.Lambda (parameters, returnAnnotation, body) ->
+    | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         let paramTypes =
             parameters |> AST.NonEmptyList.toList |> List.map lambdaParameterType
         let lambdaParamTypes =
@@ -551,7 +547,7 @@ let rec simpleInferType
         match simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some returnType -> Some (AST.TFunction (paramTypes, returnType))
         | None -> None
-    | AST.Apply (funcExpr, args) ->
+    | CheckedAST.Apply (funcExpr, args) ->
         match simpleInferType funcExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some (AST.TFunction (paramTypes, returnType)) ->
             let argCount = args |> exprArgsToList |> List.length
@@ -563,10 +559,10 @@ let rec simpleInferType
             else
                 None
         | _ -> None
-    | AST.IndirectApply _ -> Some AST.TBool
+    | CheckedAST.IndirectApply _ -> Some AST.TBool
     | _ -> None  // Complex expressions require full type inference
 
-let inferLambdaReturnType (body: AST.Expr) (state: LiftState) : Result<AST.Type, string> =
+let inferLambdaReturnType (body: CheckedAST.Expr) (state: LiftState) : Result<AST.Type, string> =
     match simpleInferType body state.TypeEnv state.FuncParams state.FuncReturnTypes state.GenericFuncDefs state.TypeReg state.VariantLookup with
     | Some AST.TRuntimeError -> Ok AST.TUnit
     | Some returnType -> Ok returnType

@@ -16,7 +16,7 @@ let internal checkProgramWithBaseEnv
     (warningSettings: AST.WarningSettings)
     (baseEnv: CheckingTypes.TypeCheckEnv)
     (program: AST.Program)
-    : Result<AST.Type * AST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
+    : Result<AST.Type * CheckedAST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
     match passTimingRecorder with
     | None ->
         TypeChecking.checkProgramWithBaseEnvAndSettings baseEnv true warningSettings program
@@ -36,7 +36,7 @@ let private checkSyntheticPreambleWithBaseEnv
     (warningSettings: AST.WarningSettings)
     (baseEnv: CheckingTypes.TypeCheckEnv)
     (program: AST.Program)
-    : Result<AST.Type * AST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
+    : Result<AST.Type * CheckedAST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
     TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
         baseEnv
         true

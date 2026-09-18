@@ -68,7 +68,7 @@ closure layout, so higher-order code pays no comparison-metadata cost. The raw
 pointer is unmanaged; reference-count traversal continues to cover only the
 operational captures.
 
-Generic equality is a typed plan. It remains in the typed AST while type
+Generic equality is a typed plan. It remains in the checked AST while type
 variables are unresolved, is substituted during monomorphization, and is
 materialized with its concrete helpers after specialization. It therefore has
 the same behavior as a direct comparison and performs no runtime type dispatch.

@@ -31,8 +31,8 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
     match AST.NonEmptyList.tryFromList [pattern] with
     | None -> Error "NonEmptyList.tryFromList returned None for a non-empty list"
     | Some patterns ->
-        let matchCase : AST.MatchCase = { Patterns = patterns; Guard = None; Body = AST.Var "payload" }
-        let expr = AST.Match (AST.Var "x", [matchCase])
+        let matchCase : CheckedAST.MatchCase = { Patterns = patterns; Guard = None; Body = CheckedAST.Var "payload" }
+        let expr = CheckedAST.Match (CheckedAST.Var "x", [matchCase])
 
         match toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup emptyFuncReg emptyModuleRegistry with
         | Ok _ -> Error "Expected error when constructor payload type is missing from variant lookup"
@@ -42,8 +42,8 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
 
 let testNeedsLambdaLoweringIgnoresShadowedFunc () : TestResult =
     let knownFuncs = Set.ofList ["f"]
-    let expr = AST.Let (AST.LPVariable "f", AST.Int64Literal 1L, AST.Var "f")
-    let program = AST.Program [AST.Expression expr]
+    let expr = CheckedAST.Let (CheckedAST.LPVariable "f", CheckedAST.Int64Literal 1L, CheckedAST.Var "f")
+    let program = CheckedAST.Program [CheckedAST.Expression expr]
     if programNeedsLambdaLowering knownFuncs program then
         Error "Expected shadowed function name to not trigger lambda lowering"
     else
@@ -51,19 +51,21 @@ let testNeedsLambdaLoweringIgnoresShadowedFunc () : TestResult =
 
 let testNeedsLambdaLoweringDetectsFuncValue () : TestResult =
     let knownFuncs = Set.ofList ["f"]
-    let program = AST.Program [AST.Expression (AST.Var "f")]
+    let program = CheckedAST.Program [CheckedAST.Expression (CheckedAST.Var "f")]
     if programNeedsLambdaLowering knownFuncs program then Ok ()
     else Error "Expected function value usage to trigger lambda lowering"
 
 let testNeedsLambdaLoweringDetectsLambda () : TestResult =
     let knownFuncs = Set.empty
     let expr =
-        AST.Lambda (
-            AST.NonEmptyList.singleton (AST.typedLambdaVariable "x" AST.TInt64),
+        CheckedAST.Lambda (
+            AST.NonEmptyList.singleton
+                ({ Pattern = CheckedAST.LPVariable "x"; Type = AST.TInt64 }
+                    : CheckedAST.LambdaParameter),
             None,
-            AST.Var "x"
+            CheckedAST.Var "x"
         )
-    let program = AST.Program [AST.Expression expr]
+    let program = CheckedAST.Program [CheckedAST.Expression expr]
     if programNeedsLambdaLowering knownFuncs program then Ok ()
     else Error "Expected lambda to trigger lambda lowering"
 
@@ -115,14 +117,14 @@ let private lowerTwoElementListPattern (elementType: AST.Type) : Result<ANF.AExp
     let listType = AST.TList elementType
     let env : VarEnv =
         Map.ofList [("value", (ANF.TempId 0, AST.TTuple [listType; AST.TInt64]))]
-    let matchCase : AST.MatchCase = {
+    let matchCase : CheckedAST.MatchCase = {
         Patterns =
             AST.NonEmptyList.singleton
                 (AST.PTuple [AST.PList [AST.PVar "head"; AST.PWildcard]; AST.PWildcard])
         Guard = None
-        Body = AST.Var "head"
+        Body = CheckedAST.Var "head"
     }
-    let expr = AST.Match (AST.Var "value", [matchCase])
+    let expr = CheckedAST.Match (CheckedAST.Var "value", [matchCase])
 
     toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup emptyFuncReg emptyModuleRegistry
     |> Result.map fst
@@ -175,7 +177,7 @@ let testTypedListHeadPatternRemainsOwnedCall () : TestResult =
 
 let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
     let funcName = "Stdlib.List.__TAG_SINGLE"
-    let expr = AST.Call (funcName, AST.NonEmptyList.singleton AST.UnitLiteral)
+    let expr = CheckedAST.Call (funcName, AST.NonEmptyList.singleton CheckedAST.UnitLiteral)
     let env : VarEnv = Map.empty
     let funcReg : FunctionRegistry =
         Map.ofList [ (funcName, AST.TFunction ([], AST.TInt64)) ]
@@ -193,12 +195,12 @@ let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
             Error $"Expected synthetic nullary call to lower to zero args, got {List.length args}"
 
 let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
-    let funcDef : AST.FunctionDef = {
+    let funcDef : CheckedAST.FunctionDef = {
         Name = "syntheticNullary"
         TypeParams = []
         Params = AST.NonEmptyList.singleton ("$unit0", AST.TUnit)
         ReturnType = AST.TInt64
-        Body = AST.Int64Literal 1L
+        Body = CheckedAST.Int64Literal 1L
         Recursion = None
     }
     let funcReg : FunctionRegistry =

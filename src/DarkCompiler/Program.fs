@@ -8,8 +8,8 @@
 // - Handles errors and provides user feedback
 //
 // Compilation pipeline:
-//   1. Parser: Source → AST
-//   2. AST_to_ANF: AST → ANF
+//   1. Parser and checking: Source → parsed AST → CheckedAST
+//   2. AST_to_ANF: CheckedAST → ANF
 //   3. ANF_to_MIR: ANF → MIR
 //   4. MIR_to_LIR: MIR → LIR
 //   5. RegisterAllocation: LIR (virtual) → LIR (physical)

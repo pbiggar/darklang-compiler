@@ -9,7 +9,7 @@ open ClosureAnalysis
 open LiftExpressions
 open LiftFunctions
 
-let monomorphize (program: AST.Program) : AST.Program =
+let monomorphize (program: CheckedAST.Program) : CheckedAST.Program =
     monomorphizeWithGenericFuncDefs (extractGenericFuncDefs program) program
 
 /// Monomorphize a program with access to external generic function definitions.
@@ -17,7 +17,7 @@ let monomorphize (program: AST.Program) : AST.Program =
 /// function bodies are passed in as externalGenericDefs so they can be specialized
 /// without merging the full stdlib AST with user code.
 /// Uses iterative approach: keep specializing until no new concrete TypeApps are found
-let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program: AST.Program) : AST.Program =
+let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program: CheckedAST.Program) : CheckedAST.Program =
     let localGenericDefs =
         extractGenericFuncDefs program
 
@@ -27,5 +27,5 @@ let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program
 
     monomorphizeWithGenericFuncDefs genericFuncDefs program
 
-/// Convert AST.BinOp to ANF.BinOp
+/// Convert CheckedAST.BinOp to ANF.BinOp
 /// Note: StringConcat is handled separately as ANF.StringConcat CExpr

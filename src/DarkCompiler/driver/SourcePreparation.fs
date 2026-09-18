@@ -50,8 +50,8 @@ let private liftLambdasWithBase
     (baseFuncParams: Map<string, (string * AST.Type) list>)
     (baseFuncReturnTypes: Map<string, AST.Type>)
     (passTimingRecorder: PassTimingRecorder option)
-    (program: AST.Program)
-    : Result<AST.Program, string> =
+    (program: CheckedAST.Program)
+    : Result<CheckedAST.Program, string> =
     let measure name operation =
         let timer = Stopwatch.StartNew()
         let result = operation ()
@@ -74,15 +74,15 @@ let internal mergeSpecRegistries
 
 let private collectLocalSpecs
     (genericDefs: SpecializationIdentity.GenericFuncDefs)
-    (program: AST.Program)
+    (program: CheckedAST.Program)
     : Set<SpecializationIdentity.SpecKey> =
-    let (AST.Program topLevels) = program
+    let (CheckedAST.Program topLevels) = program
     let allSpecs =
         topLevels
         |> List.map (function
-            | AST.FunctionDef f when List.isEmpty f.TypeParams -> Monomorphization.collectTypeAppsFromFunc f
-            | AST.ValueDef valueDef -> Monomorphization.collectTypeApps (AST.valueDefBody valueDef)
-            | AST.Expression e -> Monomorphization.collectTypeApps e
+            | CheckedAST.FunctionDef f when List.isEmpty f.TypeParams -> Monomorphization.collectTypeAppsFromFunc f
+            | CheckedAST.ValueDef valueDef -> Monomorphization.collectTypeApps (CheckedAST.valueDefBody valueDef)
+            | CheckedAST.Expression e -> Monomorphization.collectTypeApps e
             | _ -> Set.empty)
         |> List.fold Set.union Set.empty
     allSpecs
@@ -97,15 +97,13 @@ type internal MonomorphizationMode =
 /// scope. This gives every reference ordinary value semantics through the
 /// existing ANF ownership pipeline and leaves no value-only lowering cases.
 let private materializeProgramValues
-    (inheritedValues: Map<string, AST.Type * AST.Expr>)
-    (AST.Program topLevels)
-    : AST.Program =
+    (inheritedValues: Map<string, AST.Type * CheckedAST.Expr>)
+    (CheckedAST.Program topLevels)
+    : CheckedAST.Program =
     let currentValues =
         topLevels
         |> List.choose (function
-            | AST.ValueDef (AST.CheckedValueDef (name, typ, body)) -> Some (name, (typ, body))
-            | AST.ValueDef (AST.UncheckedValueDef (name, _)) ->
-                Crash.crash $"Unchecked value '{name}' reached ANF preparation"
+            | CheckedAST.ValueDef valueDef -> Some (valueDef.Name, (valueDef.Type, valueDef.Body))
             | _ -> None)
     let currentNames = currentValues |> List.map fst |> Set.ofList
     let bindings =
@@ -155,21 +153,21 @@ let private materializeProgramValues
         let ordered = orderByDependencies [] selected
         List.foldBack (fun (name, value) result ->
             if Set.contains name excluded then result
-            else AST.Let (AST.LPVariable name, value, result)) ordered body
+            else CheckedAST.Let (CheckedAST.LPVariable name, value, result)) ordered body
     let materialized =
         topLevels
         |> List.choose (function
-            | AST.ValueDef _ -> None
-            | AST.FunctionDef funcDef ->
+            | CheckedAST.ValueDef _ -> None
+            | CheckedAST.FunctionDef funcDef ->
                 let parameters =
                     funcDef.Params
                     |> AST.NonEmptyList.toList
                     |> List.map fst
                     |> Set.ofList
-                Some (AST.FunctionDef { funcDef with Body = wrap parameters funcDef.Body })
-            | AST.Expression expr -> Some (AST.Expression (wrap Set.empty expr))
-            | AST.TypeDef typeDef -> Some (AST.TypeDef typeDef))
-    AST.Program materialized
+                Some (CheckedAST.FunctionDef { funcDef with Body = wrap parameters funcDef.Body })
+            | CheckedAST.Expression expr -> Some (CheckedAST.Expression (wrap Set.empty expr))
+            | CheckedAST.TypeDef typeDef -> Some (CheckedAST.TypeDef typeDef))
+    CheckedAST.Program materialized
 
 let internal prepareProgramForAnf
     (monomorphization: MonomorphizationMode)
@@ -178,10 +176,10 @@ let internal prepareProgramForAnf
     (baseFuncNames: Set<string>)
     (baseFuncParams: Map<string, (string * AST.Type) list>)
     (baseFuncReturnTypes: Map<string, AST.Type>)
-    (inheritedValues: Map<string, AST.Type * AST.Expr>)
+    (inheritedValues: Map<string, AST.Type * CheckedAST.Expr>)
     (passTimingRecorder: PassTimingRecorder option)
-    (program: AST.Program)
-    : Result<AST.Program, string> =
+    (program: CheckedAST.Program)
+    : Result<CheckedAST.Program, string> =
     let program = materializeProgramValues inheritedValues program
     let measure name operation =
         let timer = Stopwatch.StartNew()
@@ -207,19 +205,19 @@ let internal prepareProgramForAnf
                     let specialization = Monomorphization.specializeFromSpecs localGenericDefs localSpecs
                     let combinedSpecRegistry =
                         mergeSpecRegistries specRegistry specialization.SpecRegistry
-                    let (AST.Program items) = program
-                    let specializedTopLevels = specialization.SpecializedFuncs |> List.map AST.FunctionDef
-                    let programWithSpecializations = AST.Program (specializedTopLevels @ items)
+                    let (CheckedAST.Program items) = program
+                    let specializedTopLevels = specialization.SpecializedFuncs |> List.map CheckedAST.FunctionDef
+                    let programWithSpecializations = CheckedAST.Program (specializedTopLevels @ items)
                     Monomorphization.replaceTypeAppsInProgramWithRegistry combinedSpecRegistry programWithSpecializations)
     match monomorphizedResult with
     | Error err -> Error err
     | Ok monomorphized ->
         let needsLowering =
             measure "AST -> ANF Preparation: Lambda Analysis" (fun () ->
-                let (AST.Program topLevels) = monomorphized
+                let (CheckedAST.Program topLevels) = monomorphized
                 let localFuncNames =
                     topLevels
-                    |> List.choose (function AST.FunctionDef f -> Some f.Name | _ -> None)
+                    |> List.choose (function CheckedAST.FunctionDef f -> Some f.Name | _ -> None)
                     |> Set.ofList
                 let knownFuncNames = Set.union baseFuncNames localFuncNames
                 Monomorphization.programNeedsLambdaLowering knownFuncNames monomorphized)
@@ -243,8 +241,8 @@ let internal buildRegistriesForProgram
     (moduleRegistry: AST.ModuleRegistry)
     (baseRegistries: AST_to_ANF.Registries)
     (typeDefs: AST.TypeDef list)
-    (functions: AST.FunctionDef list)
-    : AST_to_ANF.Registries * AST_to_ANF.Registries * AST.FunctionDef list =
+    (functions: CheckedAST.FunctionDef list)
+    : AST_to_ANF.Registries * AST_to_ANF.Registries * CheckedAST.FunctionDef list =
     let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
     let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
     let localRegistries =
@@ -262,22 +260,22 @@ type internal DeclarationConversion = {
 }
 
 let internal splitDeclarations
-    (AST.Program topLevels)
-    : Result<AST.TypeDef list * AST.FunctionDef list, string> =
+    (CheckedAST.Program topLevels)
+    : Result<AST.TypeDef list * CheckedAST.FunctionDef list, string> =
     let expressions =
-        topLevels |> List.choose (function AST.Expression expression -> Some expression | _ -> None)
+        topLevels |> List.choose (function CheckedAST.Expression expression -> Some expression | _ -> None)
     if not (List.isEmpty expressions) then
         Error $"Declaration-only program must not contain entry expressions; found {expressions.Length}"
     else
         Ok (
-            topLevels |> List.choose (function AST.TypeDef definition -> Some definition | _ -> None),
-            topLevels |> List.choose (function AST.FunctionDef definition -> Some definition | _ -> None)
+            topLevels |> List.choose (function CheckedAST.TypeDef definition -> Some definition | _ -> None),
+            topLevels |> List.choose (function CheckedAST.FunctionDef definition -> Some definition | _ -> None)
         )
 
 let internal convertTypedDeclarations
     (baseContext: PipelineContext option)
     (monomorphization: MonomorphizationMode)
-    (typedProgram: AST.Program)
+    (typedProgram: CheckedAST.Program)
     : Result<DeclarationConversion, string> =
     let moduleRegistry =
         baseContext
@@ -315,7 +313,7 @@ let internal convertTypedDeclarations
         baseFuncNames
         baseFuncParams
         baseFuncReturnTypes
-        (baseContext |> Option.map (fun context -> context.TypeCheckEnv.Values) |> Option.defaultValue Map.empty)
+        (baseContext |> Option.map (fun context -> context.CheckedValues) |> Option.defaultValue Map.empty)
         None
         typedProgram
     |> Result.bind (fun liftedProgram ->
@@ -336,7 +334,7 @@ let internal convertTypedDeclarations
 
 let private convertTypedProgramToConversionResult
     (moduleRegistry: AST.ModuleRegistry)
-    (typedProgram: AST.Program)
+    (typedProgram: CheckedAST.Program)
     : Result<AST_to_ANF.ConversionResult, string> =
     let baseRegistries = emptyRegistries moduleRegistry
     let baseFuncNames = buildBaseFuncNames baseRegistries
@@ -368,7 +366,7 @@ let internal convertTypedProgramToUserOnlyWithMode
     (typeCheckEnv: CheckingTypes.TypeCheckEnv)
     (session: CompilationSession option)
     (passTimingRecorder: PassTimingRecorder option)
-    (typedProgram: AST.Program)
+    (typedProgram: CheckedAST.Program)
     : Result<AST_to_ANF.UserOnlyResult * obj, string> =
     let measure name operation =
         let timer = Stopwatch.StartNew()
@@ -384,11 +382,11 @@ let internal convertTypedProgramToUserOnlyWithMode
         measure "AST -> ANF Dependency Planning" (fun () ->
             let addMissing baseRegistry rebuildMode =
                 let requested = collectLocalSpecs baseContext.GenericFuncDefs typedProgram
-                let (AST.Program items) = typedProgram
+                let (CheckedAST.Program items) = typedProgram
                 let localFunctionNames =
                     items
                     |> List.choose (function
-                        | AST.FunctionDef fn -> Some fn.Name
+                        | CheckedAST.FunctionDef fn -> Some fn.Name
                         | _ -> None)
                     |> Set.ofList
                 let isKnownFunctionName localNames name =
@@ -398,8 +396,8 @@ let internal convertTypedProgramToUserOnlyWithMode
                     (specRegistry: SpecializationIdentity.SpecRegistry)
                     (localFunctionNames: Set<string>)
                     (pendingSpecs: Set<SpecializationIdentity.SpecKey>)
-                    (accFunctions: AST.FunctionDef list)
-                    : SpecializationIdentity.SpecRegistry * AST.FunctionDef list =
+                    (accFunctions: CheckedAST.FunctionDef list)
+                    : SpecializationIdentity.SpecRegistry * CheckedAST.FunctionDef list =
                     let missingSpecs =
                         pendingSpecs
                         |> Set.filter (fun key -> not (Map.containsKey key specRegistry))
@@ -414,8 +412,8 @@ let internal convertTypedProgramToUserOnlyWithMode
                             specialization.SpecializedFuncs
                             |> List.filter (fun fn ->
                                 not (isKnownFunctionName localFunctionNames fn.Name))
-                            |> List.map AST.FunctionDef
-                            |> MaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+                            |> List.map CheckedAST.FunctionDef
+                            |> CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
                                 typeCheckEnv.AliasReg
                                 typeCheckEnv.IndexedTypeReg
                                 typeCheckEnv.VariantLookup
@@ -423,7 +421,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                         let newFunctions =
                             materializedTopLevels
                             |> List.choose (function
-                                | AST.FunctionDef fn
+                                | CheckedAST.FunctionDef fn
                                     when not (isKnownFunctionName localFunctionNames fn.Name) ->
                                     Some fn
                                 | _ -> None)
@@ -432,7 +430,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                             |> List.fold (fun names fn -> Set.add fn.Name names) localFunctionNames
                         let nextSpecs =
                             materializedTopLevels
-                            |> AST.Program
+                            |> CheckedAST.Program
                             |> collectLocalSpecs baseContext.GenericFuncDefs
                         materialize
                             combinedRegistry
@@ -443,7 +441,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                 let (combinedRegistry, newFunctions) =
                     materialize baseRegistry localFunctionNames requested []
                 let programWithSpecializations =
-                    AST.Program ((newFunctions |> List.map AST.FunctionDef) @ items)
+                    CheckedAST.Program ((newFunctions |> List.map CheckedAST.FunctionDef) @ items)
                 let specializedFunctionNames =
                     newFunctions |> List.map (fun fn -> fn.Name) |> Set.ofList
                 (programWithSpecializations, rebuildMode combinedRegistry, specializedFunctionNames)
@@ -460,7 +458,7 @@ let internal convertTypedProgramToUserOnlyWithMode
             baseFuncNames
             baseContext.LambdaLiftFuncParams
             baseContext.ReturnTypes
-            baseContext.TypeCheckEnv.Values
+            baseContext.CheckedValues
             passTimingRecorder
             typedProgram)
     |> Result.bind (fun liftedProgram ->
@@ -526,7 +524,7 @@ let internal convertTypedProgramToUserOnlyWithMode
 
 let internal convertTypedProgramToUserOnly
     (baseContext: PipelineContext)
-    (typedProgram: AST.Program)
+    (typedProgram: CheckedAST.Program)
     : Result<AST_to_ANF.UserOnlyResult, string> =
     convertTypedProgramToUserOnlyWithMode
         baseContext

@@ -30,7 +30,7 @@ let private externalReturnTypes : Map<string, AST.Type> =
         ("__string_hash", TInt64)
     ]
 
-let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast: AST.Program) : Result<AST.Type * AST.Program, string> =
+let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast: AST.Program) : Result<AST.Type * CheckedAST.Program, string> =
     match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv ast with
     | Error e -> Error $"Type error: {CheckingDiagnostics.typeErrorToString e}"
     | Ok (programType, typedAst, _env) -> Ok (programType, typedAst)
@@ -52,7 +52,7 @@ let private parseOptimizationSource (source: string) : Result<AST.Program * bool
     | Error e -> Error $"Parse error: {e}"
     | Ok ast -> Ok (addSyntheticMainExpressionIfNeeded ast)
 
-let private convertTypedProgram (typedAst: AST.Program) : Result<AST_to_ANF.ConversionResult, string> =
+let private convertTypedProgram (typedAst: CheckedAST.Program) : Result<AST_to_ANF.ConversionResult, string> =
     let moduleRegistry = Stdlib.buildModuleRegistry ()
     let monomorphized = PrepareFunctions.monomorphize typedAst
     let inlined = InlineLambdas.inlineLambdasInProgram monomorphized

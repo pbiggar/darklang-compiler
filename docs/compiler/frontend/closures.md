@@ -44,7 +44,7 @@ Implemented in `AST_to_ANF.fs`:
 
 ```fsharp
 // freeVars collects variables used but not bound in scope
-let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string>
+let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string>
 ```
 
 Walk the expression tree, tracking bound variables. A variable is free if it's

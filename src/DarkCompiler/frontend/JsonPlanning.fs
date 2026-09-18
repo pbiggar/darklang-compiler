@@ -8,6 +8,7 @@
 module JsonPlanning
 
 open AST
+open CheckedAST
 open System.Collections.Generic
 
 /// Bounded, caller-owned cache of generated typed JSON codec declarations.
@@ -141,7 +142,7 @@ let private makeCase pattern body =
     { Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }
 
 let private constructor owner caseName payload =
-    Constructor (UnresolvedConstructor (Some owner), caseName, payload)
+    Constructor ({ TypeName = owner }, caseName, payload)
 
 let private tuplePayload values = TupleLiteral values |> Some
 let private ok value = constructor "Stdlib.Result.Result" "Ok" (Some value)
@@ -180,9 +181,10 @@ let rec private typeReference typ =
         let resolved = ok fqName
         let resolution =
             RecordLiteral (
-                unresolvedRecordReference
-                    "Darklang.LanguageTools.RuntimeTypes.NameResolution"
-                    [fqNameType],
+                {
+                    TypeName = "Darklang.LanguageTools.RuntimeTypes.NameResolution"
+                    TypeArgs = [fqNameType]
+                },
                 ["originalName", originalName; "resolved", resolved])
         constructor owner "TCustomType" (tuplePayload [resolution; ListLiteral (List.map typeReference typeArgs)])
     match typ with
@@ -907,7 +909,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         Ok (
                             ok (
                                 RecordLiteral (
-                                    unresolvedRecordReference typeName typeArgs,
+                                    { TypeName = typeName; TypeArgs = typeArgs },
                                     List.rev decodedFields
                                 )
                             ),

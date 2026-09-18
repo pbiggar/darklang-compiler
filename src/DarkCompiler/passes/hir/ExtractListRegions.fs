@@ -17,7 +17,7 @@ type private Extraction = {
 }
 
 let private listCall = function
-    | AST.Call (name, args) -> Some (name, AST.NonEmptyList.toList args)
+    | CheckedAST.Call (name, args) -> Some (name, AST.NonEmptyList.toList args)
     | _ -> None
 
 /// Prove scope destruction separately from evaluation effects. Calls use an
@@ -31,9 +31,9 @@ let private inertExpression infer callIsInert =
             | Error _ -> false
         let recur = check types
         match expr with
-        | AST.FuncRef _ -> true
-        | AST.Closure (_, captures) -> List.forall recur captures
-        | AST.Let (AST.LPVariable name, value, body) ->
+        | CheckedAST.FuncRef _ -> true
+        | CheckedAST.Closure (_, captures) -> List.forall recur captures
+        | CheckedAST.Let (CheckedAST.LPVariable name, value, body) ->
             // Reject unsupported syntax before inference: declaration overlays
             // need not contain the pattern/layout metadata of their base context.
             if not (recur value) then false
@@ -41,37 +41,37 @@ let private inertExpression infer callIsInert =
                 match infer types value with
                 | Ok typ when inertType typ -> check (Map.add name typ types) body
                 | _ -> false
-        | AST.Let ((AST.LPUnit | AST.LPWildcard), value, body)
-        | AST.Sequence (value, body) -> recur value && recur body
-        | AST.If (condition, yes, no) -> recur condition && recur yes && recur no
-        | AST.BinOp (_, left, right) -> recur left && recur right
-        | AST.UnaryOp (_, value) | AST.TupleAccess (value, _) -> recur value
-        | AST.Call (name, args) ->
+        | CheckedAST.Let ((CheckedAST.LPUnit | CheckedAST.LPWildcard), value, body)
+        | CheckedAST.Sequence (value, body) -> recur value && recur body
+        | CheckedAST.If (condition, yes, no) -> recur condition && recur yes && recur no
+        | CheckedAST.BinOp (_, left, right) -> recur left && recur right
+        | CheckedAST.UnaryOp (_, value) | CheckedAST.TupleAccess (value, _) -> recur value
+        | CheckedAST.Call (name, args) ->
             callIsInert name && (AST.NonEmptyList.toList args |> List.forall recur) && typedInert ()
-        | AST.TupleLiteral values | AST.ListLiteral values -> List.forall recur values
-        | AST.Var _ -> typedInert ()
-        | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _
-        | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
-        | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _
-        | AST.UInt64Literal _ | AST.UInt128Literal _ | AST.BigIntLiteral _
-        | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _
-        | AST.FloatLiteral _ | AST.RuntimeError _ -> true
+        | CheckedAST.TupleLiteral values | CheckedAST.ListLiteral values -> List.forall recur values
+        | CheckedAST.Var _ -> typedInert ()
+        | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _
+        | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+        | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
+        | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BigIntLiteral _
+        | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _
+        | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ -> true
         | _ -> false
     check
 
 /// Retain dependencies with each local proof so registry composition can revoke
 /// transitive proofs when a definition changes. Recursive components need no
 /// unrolling: the consumer rejects the backwards closure of unproven callees.
-let scopeContracts infer (functions: AST.FunctionDef list) =
+let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
     let rec calls expr =
         let many expressions = expressions |> List.map calls |> Set.unionMany
         match expr with
-        | AST.Call (name, args) -> Set.add name (many (AST.NonEmptyList.toList args))
-        | AST.Closure (_, captures) | AST.TupleLiteral captures | AST.ListLiteral captures -> many captures
-        | AST.Let (_, value, body) | AST.Sequence (value, body)
-        | AST.BinOp (_, value, body) -> many [value; body]
-        | AST.If (condition, yes, no) -> many [condition; yes; no]
-        | AST.UnaryOp (_, value) | AST.TupleAccess (value, _) -> calls value
+        | CheckedAST.Call (name, args) -> Set.add name (many (AST.NonEmptyList.toList args))
+        | CheckedAST.Closure (_, captures) | CheckedAST.TupleLiteral captures | CheckedAST.ListLiteral captures -> many captures
+        | CheckedAST.Let (_, value, body) | CheckedAST.Sequence (value, body)
+        | CheckedAST.BinOp (_, value, body) -> many [value; body]
+        | CheckedAST.If (condition, yes, no) -> many [condition; yes; no]
+        | CheckedAST.UnaryOp (_, value) | CheckedAST.TupleAccess (value, _) -> calls value
         | _ -> Set.empty
     functions |> List.map (fun func ->
         let parameters = AST.NonEmptyList.toList func.Params
@@ -90,9 +90,9 @@ let scopeContracts infer (functions: AST.FunctionDef list) =
 let tryExtract
     (inertScopes: Set<string>)
     (parameterTypes: Map<string, AST.Type>)
-    (infer: Map<string, AST.Type> -> AST.Expr -> Result<AST.Type, string>)
-    (freeVariables: AST.Expr -> Set<string>)
-    (expression: AST.Expr)
+    (infer: Map<string, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
+    (freeVariables: CheckedAST.Expr -> Set<string>)
+    (expression: CheckedAST.Expr)
     : FunctionalRegion option =
     let inertExpression = inertExpression infer (fun name -> Set.contains name inertScopes)
     let types state = state.Values |> Map.map (fun _ value -> value.Type)
@@ -123,17 +123,17 @@ let tryExtract
         let scopeIsInert =
             match state.Lifetime, expr with
             | EnclosingLifetime, _ -> true
-            | JoinEntryLifetime, AST.FuncRef name
-            | JoinEntryLifetime, AST.Closure (name, _) -> Set.contains name inertScopes
+            | JoinEntryLifetime, CheckedAST.FuncRef name
+            | JoinEntryLifetime, CheckedAST.Closure (name, _) -> Set.contains name inertScopes
             | JoinEntryLifetime, _ -> false
         // A closure may not hide a region alias or an effectful destructor.
         let capturesAreImmediate =
             match expr with
-            | AST.Closure (_, captures) ->
+            | CheckedAST.Closure (_, captures) ->
                 captures |> List.forall (function
-                    | AST.FuncRef _ -> true // Static code addresses, including closure comparators.
+                    | CheckedAST.FuncRef _ -> true // Static code addresses, including closure comparators.
                     | capture -> Option.isSome (scalar state capture))
-            | AST.FuncRef _ -> true
+            | CheckedAST.FuncRef _ -> true
             | _ -> false
         if not capturesAreImmediate || not scopeIsInert then None
         else
@@ -150,8 +150,8 @@ let tryExtract
 
     let rec list state expr =
         match expr with
-        | AST.Var name -> Map.tryFind name state.Lists |> Option.map (fun id -> id, state)
-        | AST.ListLiteral elements when List.length elements <= maxCapacity ->
+        | CheckedAST.Var name -> Map.tryFind name state.Lists |> Option.map (fun id -> id, state)
+        | CheckedAST.ListLiteral elements when List.length elements <= maxCapacity ->
             let values = elements |> List.map (fun value -> scalar state value |> Option.filter (fun typed -> typed.Type = AST.TInt64))
             if values |> List.forall Option.isSome then
                 Some (addList state (fun output -> Leaf (Construct (output, Literal (List.choose id values)))))
@@ -174,7 +174,7 @@ let tryExtract
 
     let rec bindScalar state name expr =
         match expr with
-        | AST.If (condition, yes, no) ->
+        | CheckedAST.If (condition, yes, no) ->
             operand state ((=) AST.TBool) condition
             |> Option.bind (fun condition ->
                 region name { state with Operations = []; Lifetime = JoinEntryLifetime } yes
@@ -213,7 +213,7 @@ let tryExtract
 
     and region finalName state expr =
         match expr with
-        | AST.Let (AST.LPVariable name, value, body) ->
+        | CheckedAST.Let (CheckedAST.LPVariable name, value, body) ->
             match list state value with
             | Some (id, next) ->
                 region finalName { next with Lists = Map.add name id next.Lists
@@ -230,8 +230,8 @@ let tryExtract
 
     let rec collectNames expr =
         match expr with
-        | AST.Let (AST.LPVariable name, value, body) -> Set.add name (Set.union (collectNames value) (collectNames body))
-        | AST.If (condition, yes, no) -> Set.unionMany [collectNames condition; collectNames yes; collectNames no]
+        | CheckedAST.Let (CheckedAST.LPVariable name, value, body) -> Set.add name (Set.union (collectNames value) (collectNames body))
+        | CheckedAST.If (condition, yes, no) -> Set.unionMany [collectNames condition; collectNames yes; collectNames no]
         | _ -> freeVariables expr
     let rec resultName names index =
         let name = $"__list_hir_result_{index}"
@@ -246,8 +246,8 @@ let tryExtract
         | _ -> false
     let candidate =
         match expression with
-        | AST.Let (_, AST.ListLiteral _, _) -> true
-        | AST.Let (_, value, _) -> isListOperation value
+        | CheckedAST.Let (_, CheckedAST.ListLiteral _, _) -> true
+        | CheckedAST.Let (_, value, _) -> isListOperation value
         | _ -> isListOperation expression
     if candidate then
         let finalName = resultName (collectNames expression) 0
