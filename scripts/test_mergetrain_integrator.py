@@ -45,7 +45,11 @@ if command == "status":
     next_action = os.environ.get("INTEGRATOR_TEST_NEXT_ACTION", "fix_blocked_job")
     print(json.dumps({
         "contract_version": 4,
+        "counts": {"attention": 1, "ready": 0, "running": 0, "waiting": 2},
+        "health": "healthy",
         "next_action": {"code": next_action, "target_job_id": 4},
+        "state": "attention",
+        "summary": "1 job(s) need attention",
     }))
 elif command == "inspect":
     repo = os.environ["INTEGRATOR_TEST_REPO"]
@@ -119,6 +123,9 @@ raise SystemExit(1)
 
             self.assertEqual(completed.returncode, 1)
             self.assertEqual(completed.stdout, "")
+            self.assertIn("Integrator started", completed.stderr)
+            self.assertIn("Repairing job #4", completed.stderr)
+            self.assertIn("Starting Codex repair", completed.stderr)
             self.assertIn("Codex repair failed for job #4 (merge_conflict)", completed.stderr)
             self.assertIn("Codex summary: Could not resolve safely.", completed.stderr)
             self.assertIn("Final message:", completed.stderr)
@@ -172,7 +179,9 @@ raise SystemExit(1)
             self.assertEqual(len(daemon_logs), 1)
             self.assertIn("daemon noise 0", daemon_logs[0].read_text(encoding="utf-8"))
 
-    def test_successful_idle_tick_suppresses_subprocess_output(self) -> None:
+    def test_successful_idle_tick_reports_readable_status_without_subprocess_noise(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             repo, environment = self.make_fixture(root)
@@ -196,8 +205,55 @@ raise SystemExit(1)
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(completed.stdout, "")
-            self.assertEqual(completed.stderr, "")
+            self.assertIn("Integrator started", completed.stderr)
+            self.assertIn("Queue: 1 attention, 0 running, 2 waiting", completed.stderr)
+            self.assertIn("1 job(s) need attention", completed.stderr)
+            self.assertNotIn("daemon noise", completed.stderr)
             self.assertEqual(list(attempts.iterdir()), [])
+
+    def test_color_mode_controls_ansi_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_NEXT_ACTION"] = "enqueue_clean_branch"
+
+            colored = subprocess.run(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "colored-attempts"),
+                    "--color",
+                    "always",
+                    "--once",
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            plain = subprocess.run(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "plain-attempts"),
+                    "--color",
+                    "never",
+                    "--once",
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(colored.returncode, 0, colored.stderr)
+            self.assertIn("\x1b[", colored.stderr)
+            self.assertEqual(plain.returncode, 0, plain.stderr)
+            self.assertNotIn("\x1b[", plain.stderr)
 
 
 if __name__ == "__main__":

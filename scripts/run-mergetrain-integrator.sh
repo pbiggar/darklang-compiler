@@ -7,6 +7,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 interval_seconds=15
 attempt_dir="/tmp/dark-compiler-mergetrain-codex-attempts"
 run_once=false
+color_mode=auto
 
 usage() {
   cat <<EOF
@@ -23,13 +24,15 @@ Options:
                        Default: $interval_seconds
   --attempt-dir PATH   Directory for Codex attempt markers and final messages.
                        Default: $attempt_dir
+  --color MODE         Colorize status output: auto, always, or never.
+                       Default: $color_mode
   --once               Run one daemon/status/repair pass, then exit.
   -h, --help           Show this help and exit.
 
 The integrator processes only jobs enqueued with --auto. It stops for manual
 jobs, unknown states, non-conflict failures, or a repeated Codex repair attempt.
-Daemon and Codex output is quiet by default. Failures print a bounded summary
-and paths to complete logs under --attempt-dir.
+Daemon and Codex output stays in log files. The console reports readable phase
+changes and bounded failure summaries, with color when attached to a terminal.
 
 Example:
   $0 --repo /Users/paulbiggar/projects/c4d-for-dcb
@@ -48,6 +51,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --attempt-dir)
       attempt_dir="$2"
+      shift 2
+      ;;
+    --color)
+      color_mode="$2"
       shift 2
       ;;
     --once)
@@ -71,6 +78,11 @@ if [[ ! "$interval_seconds" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
+if [[ "$color_mode" != auto && "$color_mode" != always && "$color_mode" != never ]]; then
+  echo "--color must be auto, always, or never" >&2
+  exit 2
+fi
+
 for required_command in codex git mergetrain python3; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     echo "Required command not found: $required_command" >&2
@@ -81,6 +93,57 @@ done
 repo_root="$(cd "$repo_root" && pwd -P)"
 mkdir -p "$attempt_dir"
 attempt_dir="$(cd "$attempt_dir" && pwd -P)"
+
+color_enabled=false
+if [[ "$color_mode" == always ]] ||
+  [[ "$color_mode" == auto && -t 2 && -z "${NO_COLOR:-}" && "${TERM:-}" != dumb ]]; then
+  color_enabled=true
+fi
+
+if [[ "$color_enabled" == true ]]; then
+  color_reset=$'\033[0m'
+  color_dim=$'\033[2m'
+  color_blue=$'\033[36m'
+  color_green=$'\033[32m'
+  color_yellow=$'\033[33m'
+  color_red=$'\033[31m'
+else
+  color_reset=""
+  color_dim=""
+  color_blue=""
+  color_green=""
+  color_yellow=""
+  color_red=""
+fi
+
+log_event() {
+  local label="$1"
+  local color="$2"
+  shift 2
+  printf '%s[%s]%s %s%-5s%s %s\n' \
+    "$color_dim" "$(date '+%H:%M:%S')" "$color_reset" \
+    "$color" "$label" "$color_reset" "$*" >&2
+}
+
+log_info() {
+  log_event INFO "$color_blue" "$@"
+}
+
+log_run() {
+  log_event RUN "$color_yellow" "$@"
+}
+
+log_ok() {
+  log_event OK "$color_green" "$@"
+}
+
+log_warn() {
+  log_event WARN "$color_yellow" "$@"
+}
+
+log_error() {
+  log_event ERROR "$color_red" "$@"
+}
 
 json_value() {
   local path="$1"
@@ -105,7 +168,7 @@ print_log_excerpt() {
   local line_count="${2:-8}"
 
   if [[ -s "$log_file" ]]; then
-    echo "Last $line_count log line(s):" >&2
+    log_warn "Last $line_count log line(s):"
     tail -n "$line_count" "$log_file" | sed 's/^/  /' >&2
   fi
 }
@@ -134,8 +197,8 @@ repair_job() {
   if [[ -z "$job_id" ]]; then
     daemon_log="$attempt_dir/unknown-job-$(date -u +%Y%m%dT%H%M%SZ)-$$.daemon.log"
     mv "$daemon_output" "$daemon_log"
-    echo "Mergetrain requested conflict repair without a target job" >&2
-    echo "Daemon log: $daemon_log" >&2
+    log_error "Mergetrain requested conflict repair without a target job"
+    log_info "Daemon log: $daemon_log"
     exit 1
   fi
 
@@ -145,10 +208,10 @@ repair_job() {
   )"; then
     daemon_log="$attempt_dir/$job_id-unknown.daemon.log"
     mv "$daemon_output" "$daemon_log"
-    echo "Mergetrain inspection failed for job #$job_id" >&2
+    log_error "Mergetrain inspection failed for job #$job_id"
     print_log_excerpt "$inspect_log"
-    echo "Full inspection log: $inspect_log" >&2
-    echo "Daemon log: $daemon_log" >&2
+    log_info "Full inspection log: $inspect_log"
+    log_info "Daemon log: $daemon_log"
     exit 1
   fi
   rm -f "$inspect_log"
@@ -157,28 +220,29 @@ repair_job() {
   old_head="$(json_value job.head_sha <<<"$details")"
   daemon_log="$attempt_dir/$job_id-${old_head:-unknown}.daemon.log"
   mv "$daemon_output" "$daemon_log"
+  branch="$(json_value job.branch <<<"$details")"
+  log_run "Repairing job #$job_id ($branch) after ${category//_/ }"
   case "$category" in
     merge_conflict|semantic_conflict)
       ;;
     push_rejected)
       if [[ "$reason" != *non-fast-forward* ]]; then
-        echo "Job #$job_id has a non-recoverable push rejection: $reason" >&2
-        echo "Daemon log: $daemon_log" >&2
+        log_error "Job #$job_id has a non-recoverable push rejection: $reason"
+        log_info "Daemon log: $daemon_log"
         exit 1
       fi
       ;;
     *)
-      echo "Job #$job_id needs operator attention ($category); refusing an automatic repair" >&2
-      echo "Daemon log: $daemon_log" >&2
+      log_error "Job #$job_id needs operator attention ($category); refusing an automatic repair"
+      log_info "Daemon log: $daemon_log"
       exit 1
       ;;
   esac
 
   worktree="$(json_value job.worktree_path <<<"$details")"
-  branch="$(json_value job.branch <<<"$details")"
   if [[ -z "$worktree" || -z "$branch" || -z "$old_head" || ! -d "$worktree" ]]; then
-    echo "Job #$job_id does not identify a usable owning worktree" >&2
-    echo "Daemon log: $daemon_log" >&2
+    log_error "Job #$job_id does not identify a usable owning worktree"
+    log_info "Daemon log: $daemon_log"
     exit 1
   fi
 
@@ -186,13 +250,14 @@ repair_job() {
   output_file="$attempt_dir/$job_id-$old_head.last-message.txt"
   codex_log="$attempt_dir/$job_id-$old_head.codex.log"
   if [[ -e "$attempt_marker" ]]; then
-    echo "Codex already attempted job #$job_id at $old_head; operator review required" >&2
-    echo "Daemon log: $daemon_log" >&2
+    log_error "Codex already attempted job #$job_id at $old_head; operator review required"
+    log_info "Daemon log: $daemon_log"
     exit 1
   fi
   touch "$attempt_marker"
 
   git_common_dir="$(git -C "$worktree" rev-parse --path-format=absolute --git-common-dir)"
+  log_run "Starting Codex repair; full output: $codex_log"
 
   if ! printf '%s\n' "$details" |
     codex exec \
@@ -223,42 +288,82 @@ For this recovery run, do not invoke ./land. Do not push, deploy, enqueue,
 retry, reconcile, cancel, dismiss, or modify mergetrain queue state; the
 integrator owns the retry. If a confident repair is not possible, leave the
 branch unchanged and explain the blocker." >"$codex_log" 2>&1; then
-    echo "Codex repair failed for job #$job_id ($category)" >&2
+    log_error "Codex repair failed for job #$job_id ($category)"
     if [[ -s "$output_file" ]]; then
       summary="$(last_message_summary "$output_file")"
       if [[ -n "$summary" ]]; then
-        echo "Codex summary: $summary" >&2
+        log_warn "Codex summary: $summary"
       fi
-      echo "Final message: $output_file" >&2
+      log_info "Final message: $output_file"
     else
       print_log_excerpt "$codex_log"
     fi
-    echo "Full execution log: $codex_log" >&2
-    echo "Daemon log: $daemon_log" >&2
+    log_info "Full execution log: $codex_log"
+    log_info "Daemon log: $daemon_log"
     exit 1
   fi
 
+  log_run "Codex finished; verifying the committed repair"
   current_branch="$(git -C "$worktree" branch --show-current)"
   new_head="$(git -C "$worktree" rev-parse HEAD)"
   dirty="$(git -C "$worktree" status --porcelain)"
   if [[ "$current_branch" != "$branch" || "$new_head" == "$old_head" || -n "$dirty" ]]; then
-    echo "Codex did not leave job #$job_id on a clean, newly committed $branch" >&2
-    echo "Final message: $output_file" >&2
-    echo "Full execution log: $codex_log" >&2
-    echo "Daemon log: $daemon_log" >&2
+    log_error "Codex did not leave job #$job_id on a clean, newly committed $branch"
+    log_info "Final message: $output_file"
+    log_info "Full execution log: $codex_log"
+    log_info "Daemon log: $daemon_log"
     exit 1
   fi
 
   retry_log="$attempt_dir/$job_id-$new_head.retry.log"
+  log_run "Retrying job #$job_id at ${new_head:0:10}"
   if ! mergetrain --repo "$repo_root" retry "$job_id" --json >"$retry_log" 2>&1; then
-    echo "Mergetrain retry failed for job #$job_id" >&2
+    log_error "Mergetrain retry failed for job #$job_id"
     print_log_excerpt "$retry_log"
-    echo "Full retry log: $retry_log" >&2
+    log_info "Full retry log: $retry_log"
     exit 1
   fi
   rm -f "$retry_log"
-  echo "Retried job #$job_id after Codex committed a repair"
+  log_ok "Retried job #$job_id after Codex committed a repair"
 }
+
+last_queue_signature=""
+
+report_queue_status() {
+  local snapshot="$1"
+  local state summary health attention running waiting ready signature message
+
+  state="$(json_value state <<<"$snapshot")"
+  summary="$(json_value summary <<<"$snapshot")"
+  health="$(json_value health <<<"$snapshot")"
+  attention="$(json_value counts.attention <<<"$snapshot")"
+  running="$(json_value counts.running <<<"$snapshot")"
+  waiting="$(json_value counts.waiting <<<"$snapshot")"
+  ready="$(json_value counts.ready <<<"$snapshot")"
+  signature="$state|$summary|$health|$attention|$running|$waiting|$ready"
+
+  if [[ "$signature" == "$last_queue_signature" ]]; then
+    return
+  fi
+  last_queue_signature="$signature"
+
+  if [[ -n "$attention" && -n "$running" && -n "$waiting" && -n "$ready" ]]; then
+    message="Queue: $attention attention, $running running, $waiting waiting, $ready ready"
+  else
+    message="Queue state: ${state:-unknown}"
+  fi
+  if [[ -n "$summary" ]]; then
+    message="$message — $summary"
+  fi
+
+  if [[ "$state" == attention || "$health" != healthy ]]; then
+    log_warn "$message"
+  else
+    log_info "$message"
+  fi
+}
+
+log_info "Integrator started • repo $repo_root • interval ${interval_seconds}s • color $color_mode"
 
 while true; do
   # The native one-shot daemon owns queue locking, validation, and deployment.
@@ -266,9 +371,9 @@ while true; do
   if ! mergetrain --repo "$repo_root" daemon --once >"$daemon_output" 2>&1; then
     daemon_log="$attempt_dir/daemon-failed-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
     mv "$daemon_output" "$daemon_log"
-    echo "Mergetrain daemon command failed" >&2
+    log_error "Mergetrain daemon command failed"
     print_log_excerpt "$daemon_log"
-    echo "Full daemon log: $daemon_log" >&2
+    log_info "Full daemon log: $daemon_log"
     exit 1
   fi
   status_log="$(mktemp "$attempt_dir/.status.XXXXXX.log")"
@@ -277,10 +382,10 @@ while true; do
     daemon_log="$attempt_dir/status-failed-$(date -u +%Y%m%dT%H%M%SZ)-$$.daemon.log"
     mv "$status_log" "$failed_status_log"
     mv "$daemon_output" "$daemon_log"
-    echo "Mergetrain status command failed" >&2
+    log_error "Mergetrain status command failed"
     print_log_excerpt "$failed_status_log"
-    echo "Full status log: $failed_status_log" >&2
-    echo "Daemon log: $daemon_log" >&2
+    log_info "Full status log: $failed_status_log"
+    log_info "Daemon log: $daemon_log"
     exit 1
   fi
   rm -f "$status_log"
@@ -288,9 +393,10 @@ while true; do
   next_action="$(json_value next_action.code <<<"$snapshot")"
 
   if [[ "$contract_version" != "4" ]]; then
-    echo "Unsupported mergetrain contract version: $contract_version" >&2
+    log_error "Unsupported mergetrain contract version: $contract_version"
     exit 1
   fi
+  report_queue_status "$snapshot"
 
   case "$next_action" in
     fix_blocked_job)
@@ -304,7 +410,7 @@ while true; do
       ;;
     *)
       rm -f "$daemon_output"
-      echo "Mergetrain requires operator action: $next_action" >&2
+      log_error "Mergetrain requires operator action: $next_action"
       exit 1
       ;;
   esac
