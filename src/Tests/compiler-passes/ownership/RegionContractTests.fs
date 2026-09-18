@@ -9,6 +9,7 @@ let private identity = function
     | "b" -> HIR.ValueId 1
     | "c" -> HIR.ValueId 2
     | "aAlias" -> HIR.ValueId 3
+    | "scalar" -> HIR.ValueId 4
     | name -> Crash.crash $"Unsupported ownership fixture identity {name}"
 let private value name : HIR.Value = { Id = identity name; Type = AST.TInt64 }
 let private unitValue : HIR.Value = { Id = HIR.ValueId 100; Type = AST.TUnit }
@@ -87,11 +88,37 @@ let private check expected region () =
 let private checkFunction expected signature body () =
     let actual = VerifyOwnership.verifyFunction semantics signature body
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
+let private checkCallSignature expected signature () =
+    let actual = VerifyOwnership.callSignatureOfFunction signature
+    if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
 
 let tests = [
     "Function ownership signatures permit borrowed results from borrowed parameters", checkFunction (Ok ())
         { Parameters = [BorrowedParameter "a"]; Result = BorrowedResult "a" }
         (functionBlock ["a"] [] (value "a"))
+    "Function ownership signatures cover unmanaged parameters explicitly", checkFunction (Ok ())
+        { Parameters = [UnmanagedParameter]; Result = UnmanagedResult }
+        (functionBlock ["scalar"] [] unitValue)
+    "Function ownership signatures reject omitted unmanaged parameters", checkFunction
+        (Error InconsistentFunctionParameters)
+        { Parameters = []; Result = UnmanagedResult }
+        (functionBlock ["scalar"] [] unitValue)
+    "Function ownership signatures reject ownership in the wrong parameter position", checkFunction
+        (Error InconsistentFunctionParameters)
+        { Parameters = [BorrowedParameter "a"; UnmanagedParameter]; Result = UnmanagedResult }
+        (functionBlock ["scalar"; "a"] [dropOne "a"] unitValue)
+    "Function ownership signatures derive positional call contracts", checkCallSignature
+        (Ok {
+            Parameters = [UnmanagedCallParameter; BorrowedCallParameter; UniqueCallParameter]
+            Result = BorrowedCallResult 1
+        })
+        {
+            Parameters = [UnmanagedParameter; BorrowedParameter "a"; UniqueParameter "b"]
+            Result = BorrowedResult "a"
+        }
+    "Function ownership signatures reject borrowed calls from transferred parameters", checkCallSignature
+        (Error (InvalidBorrowedResult "a"))
+        { Parameters = [ConsumedParameter "a"]; Result = BorrowedResult "a" }
     "Function ownership signatures reject consuming borrowed parameters", checkFunction (Error (InvalidDrop "a"))
         { Parameters = [BorrowedParameter "a"]; Result = UnmanagedResult }
         (functionBlock ["a"] [step [Consumed "a"] [] []] unitValue)

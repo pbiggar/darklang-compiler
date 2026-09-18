@@ -6,11 +6,13 @@ type Input<'id> = Borrowed of 'id | Consumed of 'id
 
 type BlockArgument<'id> = Unmanaged | Managed of 'id
 
-/// Function boundaries distinguish access, ownership transfer, and exclusive
-/// ownership transfer. Borrowed parameters remain owned by the caller;
-/// consumed parameters transfer one unit without proving that external aliases
-/// are absent; unique parameters additionally establish exclusivity provenance.
+/// Function parameters retain every typed call position. Unmanaged positions
+/// stay outside ownership accounting; borrowed parameters remain owned by the
+/// caller; consumed parameters transfer one unit without proving that external
+/// aliases are absent; unique parameters additionally establish exclusivity
+/// provenance.
 type ParameterOwnership<'id> =
+    | UnmanagedParameter
     | BorrowedParameter of 'id
     | ConsumedParameter of 'id
     | UniqueParameter of 'id

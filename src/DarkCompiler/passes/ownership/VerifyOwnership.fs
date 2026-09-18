@@ -9,6 +9,48 @@ type private OwnershipState<'id when 'id: comparison> = {
     Exclusive: Set<'id>
 }
 
+let private parameterId = function
+    | UnmanagedParameter -> None
+    | BorrowedParameter id | ConsumedParameter id | UniqueParameter id -> Some id
+
+/// Translate a verified function boundary into the positional ownership
+/// contract used by calls. Borrowed results name their unique borrowed source
+/// position; produced results do not expose the callee-local result identity.
+let callSignatureOfFunction (signature: FunctionSignature<'id>) =
+    let parameterIds = signature.Parameters |> List.choose parameterId
+    let duplicateParameter =
+        parameterIds
+        |> List.countBy id
+        |> List.tryFind (fun (_, count) -> count > 1)
+        |> Option.map fst
+    match duplicateParameter with
+    | Some id -> Error (DuplicateParameter id)
+    | None ->
+        let parameters =
+            signature.Parameters
+            |> List.map (function
+                | UnmanagedParameter -> UnmanagedCallParameter
+                | BorrowedParameter _ -> BorrowedCallParameter
+                | ConsumedParameter _ -> ConsumedCallParameter
+                | UniqueParameter _ -> UniqueCallParameter)
+        let result =
+            match signature.Result with
+            | UnmanagedResult -> Ok UnmanagedCallResult
+            | ProducedResult _ -> Ok ProducedCallResult
+            | UniqueProducedResult _ -> Ok UniqueProducedCallResult
+            | BorrowedResult source ->
+                let sources =
+                    signature.Parameters
+                    |> List.indexed
+                    |> List.choose (fun (index, parameter) ->
+                        match parameter with
+                        | BorrowedParameter id when id = source -> Some index
+                        | _ -> None)
+                match sources with
+                | [index] -> Ok (BorrowedCallResult index)
+                | _ -> Error (InvalidBorrowedResult source)
+        result |> Result.map (fun result -> { Parameters = parameters; Result = result })
+
 /// Definitions are globally fresh even across mutually exclusive branches;
 /// live ownership is path-local and must agree at every shared continuation.
 /// The function signature owns boundary transfer; primitive contracts continue
@@ -146,34 +188,37 @@ let verifyFunction
         loop declared borrowed state body.Body.Operations |> Result.bind (fun (declared, state) ->
             requireManaged borrowed state body.Body.Result
             |> Result.map (fun () -> declared, state, body.Body.Result))
-    let parameterId = function
-        | BorrowedParameter id | ConsumedParameter id | UniqueParameter id -> id
-    let parameterIds = signature.Parameters |> List.map parameterId
+    let parameterIds = signature.Parameters |> List.choose parameterId
     let duplicateParameter =
         parameterIds
         |> List.countBy id
         |> List.tryFind (fun (_, count) -> count > 1)
         |> Option.map fst
-    let managedParameters =
-        root.Body.Parameters
-        |> List.choose (fun parameter -> managed parameter.Value)
+    let rec parametersMatch ownership (parameters: HIR.Parameter list) =
+        match ownership, parameters with
+        | [], [] -> true
+        | UnmanagedParameter :: ownership, parameter :: parameters ->
+            managed parameter.Value = None && parametersMatch ownership parameters
+        | (BorrowedParameter expected | ConsumedParameter expected | UniqueParameter expected) :: ownership,
+          parameter :: parameters ->
+            managed parameter.Value = Some expected && parametersMatch ownership parameters
+        | _ -> false
     match duplicateParameter with
     | Some id -> Error (DuplicateParameter id)
-    | None when Set.ofList parameterIds <> Set.ofList managedParameters
-                || List.length parameterIds <> List.length managedParameters ->
+    | None when not (parametersMatch signature.Parameters root.Body.Parameters) ->
         Error InconsistentFunctionParameters
     | None ->
         let borrowed =
             signature.Parameters
             |> List.choose (function
                 | BorrowedParameter id -> Some id
-                | ConsumedParameter _ | UniqueParameter _ -> None)
+                | UnmanagedParameter | ConsumedParameter _ | UniqueParameter _ -> None)
             |> Set.ofList
         let ownedParameters =
             signature.Parameters
             |> List.choose (function
                 | ConsumedParameter id | UniqueParameter id -> Some id
-                | BorrowedParameter _ -> None)
+                | UnmanagedParameter | BorrowedParameter _ -> None)
         let initial =
             ownedParameters
             |> List.fold (fun state id -> addUnit id state) { Units = Map.empty; Exclusive = Set.empty }
@@ -207,4 +252,7 @@ let verifyFunction
 /// Closed regions are functions with no managed parameters and an unmanaged
 /// result. Keeping this as a wrapper makes the existing boundary explicit.
 let verifyClosed (semantics: Semantics<'leaf, 'id>) (root: Block<'leaf, 'id>) =
-    verifyFunction semantics { Parameters = []; Result = UnmanagedResult } root
+    let parameters =
+        root.Body.Parameters
+        |> List.map (fun _ -> UnmanagedParameter)
+    verifyFunction semantics { Parameters = parameters; Result = UnmanagedResult } root

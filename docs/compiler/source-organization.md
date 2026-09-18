@@ -102,9 +102,12 @@ Its block-argument contract distinguishes unmanaged values from managed
 ownership identities. At a branch, each arm transfers its result identity, the
 verifier compares the residual path ownership, and the continuation receives
 one fresh identity.
-Function signatures independently classify managed parameters as borrowed,
-consumed, or uniquely consumed and managed results as borrowed, produced, or
-uniquely produced.
+Function signatures retain every typed parameter position: unmanaged entries
+stay outside accounting, while managed entries are borrowed, consumed, or
+uniquely consumed. Managed results are borrowed, produced, or uniquely
+produced. A checked conversion derives the positional call ownership contract
+from this boundary; borrowed results resolve to their unique borrowed parameter
+index rather than carrying a callee-local identity across the call.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
@@ -120,8 +123,9 @@ provenance but suspends uniqueness until a balancing drop; a scalar escape
 revokes provenance. Duplication of a borrowed identity creates an owned unit
 that may be consumed, dropped, or returned, but does not establish uniqueness;
 dropping a borrow without such a unit is invalid. `verifyClosed` supplies the
-empty managed boundary used by current list regions. Dialects must provide
-scalar-use and scalar-escape accounting explicitly.
+empty managed boundary used by current list regions while explicitly covering
+their unmanaged scalar parameters. Dialects must provide scalar-use and
+scalar-escape accounting explicitly.
 List extraction proves its opaque scalars cannot reference canonical list
 identities; its adapter still derives managed uses from explicit operand
 inputs, so a future dialect cannot inherit the extraction proof by default.
