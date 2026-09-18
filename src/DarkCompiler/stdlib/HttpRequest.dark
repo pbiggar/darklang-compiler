@@ -23,3 +23,15 @@ let queryParam (req: Stdlib.Http.Request) (key: String) : Stdlib.Option.Option<S
     | [] -> None
     | [value] -> Some value
     | values -> Some (Stdlib.String.join values ",")
+
+/// The value of `key`, matched case-insensitively as HTTP requires.
+let header
+    (req: Stdlib.Http.Request)
+    (key: String)
+    : Stdlib.Option.Option<String> =
+    let wanted = Stdlib.String.toLowercase key in
+    req.headers
+    |> Stdlib.List.filterMap (fun pair ->
+        let (k, v) = pair in
+        if Stdlib.String.toLowercase k == wanted then Some v else None)
+    |> Stdlib.List.head

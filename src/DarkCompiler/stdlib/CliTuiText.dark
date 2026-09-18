@@ -1,0 +1,21 @@
+// CliTuiText.dark - upstream terminal text width and marked clipping helpers.
+
+module Stdlib.Cli.Tui.Text
+
+/// Clip a row to a column width without splitting a grapheme cluster.
+let clipToWidth (text: String) (maxWidth: Int) : String =
+    if maxWidth <= 0 then ""
+    else Stdlib.Cli.Tui.Text.__clipToWidth (Stdlib.String.toList text) maxWidth ""
+
+/// Terminal columns occupied by a row that may carry SGR styling.
+let styledWidth (text: String) : Int =
+    Stdlib.Cli.Tui.Text.__styledWidth (Stdlib.String.toList text) 0
+
+/// Clip to `maxWidth`, marking a cut so a truncated row reads as truncated.
+let clipMarked (text: String) (maxWidth: Int) : String =
+    if Stdlib.Cli.Tui.Text.styledWidth text <= maxWidth then
+        text
+    else if maxWidth <= 1 then
+        Stdlib.Cli.Tui.Text.clipToWidth text maxWidth
+    else
+        Stdlib.Cli.Tui.Text.clipToWidth text (maxWidth - 1) ++ "…"

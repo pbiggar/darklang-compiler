@@ -28,28 +28,27 @@ parentheses exercise those implementations successfully.
 
 | Surface | Remaining difference |
 | --- | --- |
-| `Pretty` | Only the `Doc`/`Mode` types and `empty`, `line`, `hardLine`, and `softLine` values are present. `text`, `concat`, `nest`, `group`, `styled`, `join`, `hsep`, `vsep`, and `render` are absent. |
-| HTTP client | Content-type constants exist, but the request model and `basicAuth`, `bearerToken`, `get`, and `request` operations are absent. |
-| HTTP server | The default body-size value exists, but `getMethod`, `get`, and `post` route helpers are absent. |
-| Server-sent events | `Stdlib.HttpClient.Sse.Event` and `parse` are absent. |
+| HTTP client | The pure response/error types, content-type and authorization-header helpers are present. Operations that perform requests (`request`, `get`, `post`, `put`, `options`, `delete`, `head`, and `stream`) remain absent because there is no HTTP client host. |
+| HTTP server | Pure `getMethod`, `get`, and `post` route construction is present. `serve` remains absent because there is no HTTP server host. |
 | SQLite | The upstream `Stdlib.Sqlite` value, query, execution, column, and conversion API is absent. |
-| CLI TUI text | `Stdlib.Cli.Tui.Text.clipMarked` and `styledWidth` are absent. |
 | Language tooling | Parsed-file shape, semantic tokenization, builtin introspection, runtime-value pretty printing, and runtime-value promotion are incomplete or absent. The snapshot-backed `ValueSearch` subset does not provide the interpreter's live package service. |
 | Host APIs | Only the explicitly documented CLI/POSIX subset is implemented. The broader interpreter filesystem, environment, descriptor, download, watch, lock, and daemon surfaces have no parity claim. |
 | Float presentation | Finite `Float.toString` intentionally emits the shortest round-tripping decimal, while the pinned interpreter uses lossy `G12` formatting. This is a deliberate observable improvement, not an AOT requirement. |
 
-Pure HTTP response helpers, JSON, Option, Result, Base64, Crypto, Streams, and
-String have focused parity coverage. Their disabled upstream files or lines do
-not by themselves establish an API difference: several depend on interpreter
-test-only values, dynamic error propagation, Blob-handle expectations, or a
+Pretty layout/rendering, SGR-aware CLI text measurement and marked clipping,
+lazy SSE parsing, pure HTTP construction helpers, HTTP response helpers, JSON,
+Option, Result, Base64, Crypto, Streams, and String have focused parity
+coverage. Their disabled upstream files or lines do not by themselves
+establish an API difference: several depend on interpreter test-only values,
+dynamic error propagation, Blob-handle expectations, an unavailable host, or a
 shared frontend gap listed above.
 
 ## Upstream-test audit
 
 The imported corpus matches the pinned upstream sources except for local
 `#compileerror` metadata and insignificant trailing-newline differences. At the
-compiler revision above it contains 105 files. The default runner disables 46
-whole files and individual cases in 23 more files (258 source lines). Those
+compiler revision above it contains 105 files. The default runner disables 44
+whole files and individual cases in 24 more files (261 source lines). Those
 denysets are an enablement queue, not a count of independent semantic gaps.
 
 A diagnostic run removed only the individual-line denyset and used
@@ -63,9 +62,14 @@ The remaining failures in those runs were classified into the gaps above,
 intentional AOT boundaries, interpreter-only test infrastructure, or expected
 presentation differences. Whole disabled files were then enabled one at a time
 to avoid cross-file preamble failures. The aliases, enums, bytes, Char, Dict,
-and Dict-literal smoke files are now enabled; unsupported cases in the mixed
-files remain line-gated. A disabled file must not be treated as proof that its
-entire feature is missing.
+Dict-literal smoke, and CLI TUI text files are now enabled. The pure
+HTTP-server cases are enabled while three fixture expressions whose response
+literals use the interpreter's former `Int64` status-code shape remain
+line-gated. Pretty and SSE remain whole-file gated because their shared fixture
+preambles trigger the application-grouping frontend gap; focused tests exercise
+the copied implementations. The HTTP-client fixture also calls the
+intentionally absent network host from its shared preamble. A disabled file
+must not be treated as proof that its entire feature is missing.
 
 The authoritative live denysets remain in
 `src/Tests/test-suite-tooling/TestRunner.fs`. When a gap closes, enable its

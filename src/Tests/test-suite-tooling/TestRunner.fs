@@ -607,13 +607,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/stachu/darklangParser.dark"
                 "src/Tests/e2e/upstream/stachu/parser.dark"
                 "src/Tests/e2e/upstream/stachu/tinyLang.dark"
-                "src/Tests/e2e/upstream/stdlib/cli-tui-text.dark"
                 "src/Tests/e2e/upstream/stdlib/crypto.dark"
                 "src/Tests/e2e/upstream/stdlib/earg.dark"
                 "src/Tests/e2e/upstream/stdlib/eself.dark"
                 "src/Tests/e2e/upstream/stdlib/http.dark"
                 "src/Tests/e2e/upstream/stdlib/httpclient.dark"
-                "src/Tests/e2e/upstream/stdlib/httpserver.dark"
                 "src/Tests/e2e/upstream/stdlib/json.dark"
                 "src/Tests/e2e/upstream/stdlib/language-tools/parsedFileShape.dark"
                 "src/Tests/e2e/upstream/stdlib/language-tools/pickLocation.dark"
@@ -644,6 +642,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 ("src/Tests/e2e/upstream/stdlib/dict.dark", Set.ofList [ 21; 30; 32; 59; 61; 74; 144; 145; 146; 147; 159; 227; 237; 242; 245; 251; 273; 279; 282; 311; 315; 322; 327; 332; 334; 351; 353; 357; 387; 389; 391; 394; 396; 398; 400; 402; 404; 406; 408 ])
                 ("src/Tests/e2e/upstream/stdlib/float.dark", Set.ofList [ 45; 47; 51; 55; 58; 59; 64; 65; 71; 73; 76; 79; 81; 87; 89; 106; 107; 110; 111; 113; 124; 125; 127; 133; 134; 136; 160; 173; 176; 179; 203; 225; 227; 236; 238 ])
                 ("src/Tests/e2e/upstream/stdlib/html.dark", Set.ofList [ 42; 44; 66; 69; 72; 75; 83 ])
+                ("src/Tests/e2e/upstream/stdlib/httpserver.dark", Set.ofList [ 29; 33; 37 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int32.dark", Set.ofList [ 126 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int64.dark", Set.ofList [ 45; 60; 90; 210; 368 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int8.dark", Set.ofList [ 47 ])

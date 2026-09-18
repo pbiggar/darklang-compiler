@@ -1,0 +1,18 @@
+// CliTuiTextWidth.dark - copied upstream SGR-aware terminal width loop.
+
+module Stdlib.Cli.Tui.Text
+
+let __styledWidth (remaining: List<Char>) (total: Int) : Int =
+    match remaining with
+    | [] -> total
+    | cluster :: rest ->
+        if Stdlib.Cli.Tui.Text.__isEscape cluster then
+            Stdlib.Cli.Tui.Text.__styledWidth
+                (Stdlib.Tuple2.first (Stdlib.Cli.Tui.Text.__skipEscape cluster rest))
+                total
+        else if Stdlib.Cli.Tui.Text.__isControl cluster then
+            Stdlib.Cli.Tui.Text.__styledWidth rest total
+        else
+            Stdlib.Cli.Tui.Text.__styledWidth
+                rest
+                (total + Stdlib.String.displayWidth cluster)

@@ -58,3 +58,25 @@ creates a new ephemeral Blob identity for each `String.toBlob` call
 (`backend/src/Builtins/Builtins.Pure/Libs/String.fs:402-411`), represents that
 identity in `backend/src/LibExecution/RuntimeTypes.fs:678-700`, and compares Blob
 identities in `backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs:119-130`.
+
+## Additional pure HTTP surfaces
+
+The later pure-surface audit is pinned to darklang/dark release `v0.0.35`,
+revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. The compiler copies the
+upstream `HttpClient` response and request-error types, `basicAuth`,
+`bearerToken`, and the four `ContentType` header values. Calls that perform
+network I/O (`request`, its method wrappers, and `stream`) remain outside the
+surface because the compiler has no HTTP-client host.
+
+`Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
+`Stdlib.HttpServer.get` and `post` construct handler records and `getMethod`
+reads that header with the upstream GET default. Starting a server remains a
+host boundary, so `serve` is not present.
+
+`Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
+The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
+next complete event, preserves `id` across blocks, joins repeated `data`
+fields, ignores comments and non-data blocks, and flushes a final unterminated
+block at end of stream. The source is split and qualified where required by the
+compiler's module grammar; that does not change the public API or consumption
+behavior.

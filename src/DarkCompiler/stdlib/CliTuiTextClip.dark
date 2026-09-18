@@ -1,0 +1,28 @@
+// CliTuiTextClip.dark - copied upstream SGR-aware terminal clipping loop.
+
+module Stdlib.Cli.Tui.Text
+
+let __clipToWidth
+    (remaining: List<Char>)
+    (available: Int)
+    (result: String)
+    : String =
+    if available <= 0 then
+        result
+    else
+        match remaining with
+        | [] -> result
+        | cluster :: rest ->
+            if Stdlib.Cli.Tui.Text.__isEscape cluster then
+                let (afterEscape, sgr) = Stdlib.Cli.Tui.Text.__skipEscape cluster rest in
+                let nextResult =
+                    match sgr with
+                    | None -> result
+                    | Some sequence -> result ++ sequence in
+                Stdlib.Cli.Tui.Text.__clipToWidth afterEscape available nextResult
+            else if Stdlib.Cli.Tui.Text.__isControl cluster then
+                Stdlib.Cli.Tui.Text.__clipToWidth rest available result
+            else
+                let width = Stdlib.String.displayWidth cluster in
+                if width > available then result
+                else Stdlib.Cli.Tui.Text.__clipToWidth rest (available - width) (result ++ cluster)
