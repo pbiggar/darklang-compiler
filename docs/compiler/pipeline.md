@@ -293,6 +293,9 @@ Output: block0:
 
 ### Responsibilities
 - **Constant folding**: Fold literal computations
+- **Sparse conditional constant propagation**: Jointly solve explicitly typed
+  integer and Boolean SSA values with executable CFG edges, then prune
+  unreachable blocks and phi inputs
 - **CSE**: Eliminate duplicate pure expressions
 - **Copy propagation**: Simplify moves and trivial phis
 - **DCE**: Remove unused instructions
@@ -300,7 +303,7 @@ Output: block0:
 - **LICM**: Hoist loop-invariant expressions
 
 ### Sub-passes (grouped)
-- `const_folding`, `cse`, `copy_prop`, `dce`, `cfg_simplify`, `licm`
+- `sccp`, `const_folding`, `cse`, `copy_prop`, `dce`, `cfg_simplify`, `licm`
 
 ---
 

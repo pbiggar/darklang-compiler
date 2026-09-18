@@ -13,6 +13,7 @@ open MIRDeadCode
 open MIRCopyPropagation
 open MIRControlFlow
 open MIRConstants
+open MIRSparseConditionalConstants
 open MIRCommonExpressions
 
 /// Try to fold a unary operation on a constant
@@ -70,22 +71,29 @@ let private optimizeCFGOnceWithEffectFreeCalls
             let result = operation ()
             record name (System.Diagnostics.Stopwatch.GetTimestamp() - started)
             result
-    let (cfg1, changed1) =
-        if options.EnableConstFolding then
-            measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg)
+    let (cfg0, changed0) =
+        if options.EnableConstFolding && options.EnableCFGSimplify then
+            measure "MIR Sparse Conditional Constant Propagation" (fun () ->
+                applySparseConditionalConstantPropagation cfg)
         else
             (cfg, false)
+    let topologyForCse = if changed0 then None else existingTopology
+    let (cfg1, changed1) =
+        if options.EnableConstFolding then
+            measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg0)
+        else
+            (cfg0, false)
     let (cfg2, changed2, cseTopology) =
         if options.EnableCSE then
             measure "MIR Common Subexpression Elimination" (fun () ->
                 let (optimized, changed, topology) =
                     applyCSEWithEffectFreeCallsAndTopology
-                        existingTopology
+                        topologyForCse
                         effectFreeFunctions
                         cfg1
                 (optimized, changed, Some topology))
         else
-            (cfg1, false, existingTopology)
+            (cfg1, false, topologyForCse)
     let (cfg3, changed3) =
         if options.EnableCopyProp then
             measure "MIR Copy Propagation" (fun () ->
@@ -168,9 +176,10 @@ let private optimizeCFGOnceWithEffectFreeCalls
             measure "MIR Merge Linear Blocks" (fun () -> mergeLinearBlocks cfg13)
         else
             (cfg13, false)
-    let changed = changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12 || changed13 || changed14
+    let changed = changed0 || changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12 || changed13 || changed14
     let topologyChanged =
-        changed6
+        changed0
+        || changed6
         || changed7
         || changed9
         || changed10

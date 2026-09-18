@@ -127,6 +127,7 @@
     <Compile Include="passes/mir/optimization/CopyPropagation.fs" />
     <Compile Include="passes/mir/optimization/ControlFlow.fs" />
     <Compile Include="passes/mir/optimization/Constants.fs" />
+    <Compile Include="passes/mir/optimization/SparseConditionalConstants.fs" />
     <Compile Include="passes/mir/optimization/CommonExpressions.fs" />
     <Compile Include="passes/mir/MIR_Optimize.fs" />
 

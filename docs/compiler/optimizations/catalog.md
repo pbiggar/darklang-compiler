@@ -124,6 +124,9 @@ conservative call and managed-field boundaries.
 
 `passes/mir/MIR_Optimize.fs` and `src/Tests/optimization/mir.opt` own:
 
+- sparse conditional constant propagation over explicitly typed integer and
+  Boolean SSA values and executable CFG edges, including phi constants and
+  non-executable predecessor removal;
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
 - barrier-aware exact scalar heap-load reuse through `FloatSqrt`, `FloatAbs`, `FloatNeg`,
   `Int64ToFloat`, `FloatToInt64`, and `FloatToBits` locally, without exporting
@@ -136,6 +139,9 @@ conservative call and managed-field boundaries.
 
 Memory, allocation, ownership, unknown-call, managed-result, and aliasing
 barriers remain conservative unless a focused proof says otherwise.
+Functions containing float-producing MIR remain on the existing local
+optimizer because float error paths currently carry integer return placeholders
+that are valid only while they remain terminator operands.
 
 Before ANF, semantic HIR leaf operations carry typed effect and alias
 contracts. These contracts currently drive list-region verification and

@@ -1,0 +1,5 @@
+// SCCP must preserve effects in both executable predecessors while removing a
+// branch made unreachable by their common scalar result.
+
+let choose (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 7L else let _ = Builtin.print "right" in 7L in if value == 7L then value + 35L else let _ = Builtin.print "unreachable" in 0L choose (true) = stdout="left42\n" stderr="" exact_bytes=true
+let choose (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 7L else let _ = Builtin.print "right" in 7L in if value == 7L then value + 35L else let _ = Builtin.print "unreachable" in 0L choose (false) = stdout="right42\n" stderr="" exact_bytes=true
