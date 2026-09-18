@@ -2439,6 +2439,95 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
             (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1)
 
+        // The tests a pattern makes on a value, in the order they must run. A
+        // stage's bindings are only safe once every earlier stage's condition
+        // held: a variant's payload slot is a payload only when its tag matched,
+        // and past a smaller variant it is whatever the heap holds there. The
+        // flat comparison above runs every load and test at once, so a nested
+        // pattern that dereferences the payload (a constructor's tag load, a
+        // string compare) reads through garbage: `| Some((_, String "2.0"))` on a
+        // None or on a Some(Number) was a SIGSEGV. An arm compiled from stages
+        // nests one `If` per stage instead. The else branch is repeated per
+        // stage, which is what the list-pattern compilers already do.
+        let rec buildPatternStages (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<((ANF.TempId * ANF.CExpr) list * ANF.Atom) list * ANF.VarGen, string> =
+            let testedType = defaultArg patType scrutType
+            let prependBindings (bindings: (ANF.TempId * ANF.CExpr) list) (stages: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
+                match stages with
+                | [] -> []
+                | (firstBindings, firstCond) :: rest -> (bindings @ firstBindings, firstCond) :: rest
+            match pattern with
+            | AST.PConstructor (variantName, Some innerPattern) when not (patternAlwaysMatches innerPattern) ->
+                match tryFindVariantForType variantName testedType variantLookup with
+                | Some (typeName, typeParams, tag, Some payloadTemplate)
+                    when variantLookup |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome) ->
+                    let payloadType =
+                        match testedType with
+                        | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
+                            substituteTypeParams (List.zip typeParams typeArgs |> Map.ofList) payloadTemplate
+                        | _ -> payloadTemplate
+                    let (tagVar, vg1) = ANF.freshVar vg
+                    let (tagCmpVar, vg2) = ANF.freshVar vg1
+                    let (payloadVar, vg3) = ANF.freshVar vg2
+                    let tagStage =
+                        ([(tagVar, ANF.TupleGet (scrutAtom, 0))
+                          (tagCmpVar, ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 (int64 tag))))],
+                         ANF.Var tagCmpVar)
+                    buildPatternStages innerPattern (ANF.Var payloadVar) (Some payloadType) vg3
+                    |> Result.map (fun (innerStages, vg4) ->
+                        (tagStage :: prependBindings [(payloadVar, ANF.TupleGet (scrutAtom, 1))] innerStages, vg4))
+                | _ ->
+                    // Nullary, enum-only or unknown: the flat comparison is one stage.
+                    buildPatternComparison pattern scrutAtom patType vg
+                    |> Result.map (function
+                        | None -> ([], vg)
+                        | Some (cond, bindings, vg') -> ([(bindings, cond)], vg'))
+            | AST.PTuple innerPatterns ->
+                let rec elements (patterns: AST.Pattern list) (index: int) (vg: ANF.VarGen) (acc: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
+                    match patterns with
+                    | [] -> Ok (acc, vg)
+                    | p :: rest ->
+                        let elemType =
+                            match testedType with
+                            | AST.TTuple elemTypes -> List.tryItem index elemTypes
+                            | _ -> None
+                        let (elemVar, vg1) = ANF.freshVar vg
+                        buildPatternStages p (ANF.Var elemVar) elemType vg1
+                        |> Result.bind (fun (elemStages, vg2) ->
+                            let staged = prependBindings [(elemVar, ANF.TupleGet (scrutAtom, index))] elemStages
+                            elements rest (index + 1) vg2 (acc @ staged))
+                elements innerPatterns 0 vg []
+            | _ ->
+                buildPatternComparison pattern scrutAtom patType vg
+                |> Result.map (function
+                    | None -> ([], vg)
+                    | Some (cond, bindings, vg') -> ([(bindings, cond)], vg'))
+
+        /// `thenExpr` under every stage's condition, `elseExpr` when any fails,
+        /// each used once. One stage is a plain `If`. Several become a Bool join:
+        /// the entry runs the stages in order, jumping out with `false` at the
+        /// first failed test and with the last condition otherwise, and the
+        /// continuation is the `If` on that Bool. Nesting `If`s instead would
+        /// repeat `elseExpr` per stage, and it is the rest of the match: a match
+        /// with n such arms would copy its tail 2^n times.
+        let stagesToIf (stages: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) (thenExpr: ANF.AExpr) (elseExpr: ANF.AExpr) (vg: ANF.VarGen) : ANF.AExpr * ANF.VarGen =
+            match stages with
+            | [] -> (thenExpr, vg)
+            | [ (bindings, cond) ] -> (wrapBindings bindings (ANF.If (cond, thenExpr, elseExpr)), vg)
+            | _ ->
+                let (resultVar, vg1) = ANF.freshVar vg
+                let rec entry (remaining: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) : ANF.AExpr =
+                    match remaining with
+                    | [] -> ANF.Jump (resultVar, ANF.BoolLiteral true)
+                    | [ (bindings, cond) ] -> wrapBindings bindings (ANF.Jump (resultVar, cond))
+                    | (bindings, cond) :: rest ->
+                        wrapBindings bindings (ANF.If (cond, entry rest, ANF.Jump (resultVar, ANF.BoolLiteral false)))
+                let join =
+                    ANF.Join (
+                        { ANF.TypedParam.Id = resultVar; ANF.TypedParam.Type = AST.TBool },
+                        ANF.If (ANF.Var resultVar, thenExpr, elseExpr),
+                        entry stages)
+                (join, vg1)
+
         let buildPatternGroupComparison (patterns: AST.Pattern list) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
             match patterns with
             | [] -> Ok None
@@ -2600,19 +2689,21 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     compileBodyWithGuard vg1
                 elif finalCaseIsKnownExhaustive then
                     extractAndCompileBody pattern body scrutineeAtom' scrutType env vg1
+                elif patternStaticallyCannotMatchScrutinee pattern then
+                    // Never taken, but the arm is still compiled: an unknown
+                    // constructor or an ill-typed body must still be an error.
+                    compileBodyWithGuard vg1 |> Result.map (fun (_, vg2) -> (fallbackExpr, vg2))
                 else
-                    buildPatternGroupComparison (AST.NonEmptyList.toList mc.Patterns) scrutineeAtom' vg1
-                    |> Result.bind (fun cmpOpt ->
-                        match cmpOpt with
-                        | None ->
+                    buildPatternStages pattern scrutineeAtom' (Some scrutType) vg1
+                    |> Result.bind (fun (stages, vg2) ->
+                        match stages with
+                        | [] ->
                             // Pattern always matches; guard (if any) decides between body/fallback.
                             compileBodyWithGuard vg1
-                        | Some (condAtom, bindings, vg2) ->
+                        | _ ->
                             compileBodyWithGuard vg2
                             |> Result.map (fun (thenExpr, vg3) ->
-                                let ifExpr = ANF.If (condAtom, thenExpr, fallbackExpr)
-                                let finalExpr = wrapBindings bindings ifExpr
-                                (finalExpr, vg3)))
+                                stagesToIf stages thenExpr fallbackExpr vg3))
             | mc :: rest ->
                 // For pattern grouping, use first pattern for bindings but OR all patterns for comparison
                 let firstPattern = AST.NonEmptyList.head mc.Patterns
@@ -2641,6 +2732,28 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         buildChain rest vg
                         |> Result.bind (fun (elseExpr, vg1) ->
                             compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' scrutType env body elseExpr vg1)
+                    | _ when List.isEmpty mc.Patterns.Tail && not (patternStaticallyCannotMatchScrutinee firstPattern) ->
+                        buildPatternStages firstPattern scrutineeAtom' (Some scrutType) vg
+                        |> Result.bind (fun (stages, vg1) ->
+                            match stages, mc.Guard with
+                            | [], None ->
+                                extractAndCompileBody firstPattern body scrutineeAtom' scrutType env vg1
+                            | [], Some guardExpr ->
+                                buildChain rest vg1
+                                |> Result.bind (fun (elseExpr, vg2) ->
+                                    extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' scrutType env vg2 elseExpr)
+                            | _, None ->
+                                extractAndCompileBody firstPattern body scrutineeAtom' scrutType env vg1
+                                |> Result.bind (fun (thenExpr, vg2) ->
+                                    buildChain rest vg2
+                                    |> Result.map (fun (elseExpr, vg3) ->
+                                        stagesToIf stages thenExpr elseExpr vg3))
+                            | _, Some guardExpr ->
+                                buildChain rest vg1
+                                |> Result.bind (fun (elseExpr, vg2) ->
+                                    extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' scrutType env vg2 elseExpr
+                                    |> Result.map (fun (guardedBody, vg3) ->
+                                        stagesToIf stages guardedBody elseExpr vg3)))
                     | _ ->
                         // Use pattern grouping: OR all patterns in the group
                         buildPatternGroupComparison (AST.NonEmptyList.toList mc.Patterns) scrutineeAtom' vg

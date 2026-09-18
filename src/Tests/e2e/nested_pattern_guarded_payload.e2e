@@ -1,0 +1,37 @@
+// A nested pattern's loads and tests run only after the enclosing variant's
+// tag matched. Flat, they ran regardless, and past a smaller variant the payload
+// slot is whatever the heap holds: a string compare through a Float's bits, a
+// tag load through a None, both SIGSEGV (20 fns in darklang/dark, JSON parsers
+// and their friends).
+
+let guardedNestedLiteral (o: Stdlib.Option.Option<Stdlib.AltJson.Json>) : Int64 =
+  match o with
+  | Some(String "2.0") -> 1L
+  | None -> 2L
+  | Some(_) -> 3L
+guardedNestedLiteral (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.String "2.0")) = 1L
+guardedNestedLiteral Stdlib.Option.Option.None = 2L
+guardedNestedLiteral (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.Number 1.0)) = 3L
+guardedNestedLiteral (Stdlib.Option.Option.Some(Stdlib.AltJson.Json.String "3")) = 3L
+
+type GuardedErr = | Missing | Invalid of Stdlib.AltJson.Json
+let guardedTuplePayload (fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Result.Result<Unit, GuardedErr> =
+  match Stdlib.List.findFirst fields (fun (k, v) -> k == "jsonrpc") with
+  | Some((_, String "2.0")) -> Stdlib.Result.Result.Ok ()
+  | None -> Stdlib.Result.Result.Error(GuardedErr.Missing)
+  | Some((_, invalid)) -> Stdlib.Result.Result.Error(GuardedErr.Invalid invalid)
+guardedTuplePayload [("jsonrpc", Stdlib.AltJson.Json.String "2.0")] = Stdlib.Result.Result.Ok ()
+guardedTuplePayload [] = Stdlib.Result.Result.Error(GuardedErr.Missing)
+guardedTuplePayload [("jsonrpc", Stdlib.AltJson.Json.Number 1.0)] = Stdlib.Result.Result.Error(GuardedErr.Invalid (Stdlib.AltJson.Json.Number 1.0))
+
+let guardedDeep (o: Stdlib.Option.Option<(Int64 * Stdlib.Option.Option<String>)>) : Int64 =
+  match o with
+  | Some((1L, Some "a")) -> 1L
+  | Some((_, None)) -> 2L
+  | Some((n, Some _)) when n > 5L -> 3L
+  | _ -> 4L
+guardedDeep (Stdlib.Option.Option.Some((1L, Stdlib.Option.Option.Some "a"))) = 1L
+guardedDeep (Stdlib.Option.Option.Some((2L, Stdlib.Option.Option.None))) = 2L
+guardedDeep (Stdlib.Option.Option.Some((9L, Stdlib.Option.Option.Some "b"))) = 3L
+guardedDeep Stdlib.Option.Option.None = 4L
+guardedDeep (Stdlib.Option.Option.Some((1L, Stdlib.Option.Option.Some "b"))) = 4L
