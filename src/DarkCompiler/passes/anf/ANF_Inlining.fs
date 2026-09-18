@@ -497,6 +497,28 @@ let buildExternalCandidateInfoMap
         else
             candidates) Map.empty
 
+/// How many `Return`s an expression has: the number of copies of the
+/// continuation `substituteReturn` would make.
+let rec private countReturns (expr: AExpr) : int =
+    match expr with
+    | Jump _ -> 0
+    | Return _ -> 1
+    | Let (_, _, body) -> countReturns body
+    | Join (_, continuation, entry) -> countReturns continuation + countReturns entry
+    | If (_, thenBranch, elseBranch) -> countReturns thenBranch + countReturns elseBranch
+
+/// Every `Return atom` becomes `Jump (target, atom)`: the inlined body enters a
+/// join whose continuation is the caller's rest.
+let rec private returnsToJumps (target: TempId) (expr: AExpr) : AExpr =
+    match expr with
+    | Jump _ -> expr
+    | Return atom -> Jump (target, atom)
+    | Let (tid, cexpr, body) -> Let (tid, cexpr, returnsToJumps target body)
+    | Join (parameter, continuation, entry) ->
+        Join (parameter, returnsToJumps target continuation, returnsToJumps target entry)
+    | If (cond, thenBranch, elseBranch) ->
+        If (cond, returnsToJumps target thenBranch, returnsToJumps target elseBranch)
+
 /// Substitute Return with a continuation expression
 /// This replaces `Return atom` with a binding and continues with the rest
 let rec substituteReturn (resultTid: TempId) (continuation: AExpr) (expr: AExpr) : AExpr =
@@ -885,7 +907,21 @@ let rec inlineInExpr (scope: InlineScope) (funcs: Map<string, FunctionInfo>) (co
             let (inlinedBody, varGen'') = inlineCallBody info args varGen'
             let (inlinedBody', varGen''') =
                 inlineInExpr scope funcs config (depth + 1) varGen'' inlinedBody
-            let result = substituteReturn tid body' inlinedBody'
+            // A body with one return takes the continuation in place. One with
+            // several returns (a match, a chain of ifs) gets a join instead:
+            // splicing the continuation into each return copies it, and a chain
+            // of such calls (a derived record equality is fourteen of them) grows
+            // as the product of the return counts. A join carries an Int64 or a
+            // Bool (RefCountInsertion.verifyJoinInterfaces), and the verifier
+            // wants the jumped atom's inferred type to match, which an Int64
+            // result may not (a temp typed by an unresolved variable); Bool
+            // results do, and they are the equality helpers that blew up.
+            let joinable = info.Func.ReturnType = AST.TBool
+            let result =
+                if countReturns inlinedBody' <= 1 || not joinable then
+                    substituteReturn tid body' inlinedBody'
+                else
+                    Join ({ Id = tid; Type = info.Func.ReturnType }, body', returnsToJumps tid inlinedBody')
             (result, varGen''')
         | _ ->
             // Don't inline - continue processing body

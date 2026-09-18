@@ -1,0 +1,41 @@
+// Inlining a callee with several returns must not copy the caller's
+// continuation into each of them: a derived record equality over Option
+// fields is a chain of such calls, and the copies multiplied to tens of
+// millions of ANF nodes (WIP.AI.Anthropic.Content.Citation in darklang/dark).
+
+type InlineJoinRecord =
+  { a: Stdlib.Option.Option<Int64>
+    b: Stdlib.Option.Option<String>
+    c: Stdlib.Option.Option<Int64>
+    d: Stdlib.Option.Option<Int64>
+    e: Stdlib.Option.Option<String>
+    f: Stdlib.Option.Option<Int64>
+    g: Stdlib.Option.Option<Int64>
+    h: Stdlib.Option.Option<String>
+    i: Stdlib.Option.Option<Int64>
+    j: Stdlib.Option.Option<Int64>
+    k: Stdlib.Option.Option<String>
+    l: Stdlib.Option.Option<Int64>
+    m: Stdlib.Option.Option<Int64>
+    n: Stdlib.Option.Option<String> }
+
+let inlineJoinSample (x: Int64) : InlineJoinRecord =
+  InlineJoinRecord
+    { a = Stdlib.Option.Option.Some x
+      b = Stdlib.Option.Option.None
+      c = Stdlib.Option.Option.Some 3L
+      d = Stdlib.Option.Option.None
+      e = Stdlib.Option.Option.Some "e"
+      f = Stdlib.Option.Option.Some 6L
+      g = Stdlib.Option.Option.None
+      h = Stdlib.Option.Option.None
+      i = Stdlib.Option.Option.Some 9L
+      j = Stdlib.Option.Option.Some 10L
+      k = Stdlib.Option.Option.Some "k"
+      l = Stdlib.Option.Option.None
+      m = Stdlib.Option.Option.Some 13L
+      n = Stdlib.Option.Option.None }
+
+inlineJoinSample 1L == inlineJoinSample 1L = true
+inlineJoinSample 1L == inlineJoinSample 2L = false
+[inlineJoinSample 1L, inlineJoinSample 2L] == [inlineJoinSample 1L, inlineJoinSample 2L] = true
