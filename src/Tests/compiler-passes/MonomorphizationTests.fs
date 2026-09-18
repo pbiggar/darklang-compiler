@@ -19,25 +19,29 @@ open AST_to_ANF
 type TestResult = Result<unit, string>
 
 let testPreservesTypeVarsInSpecialization () : TestResult =
-    let funcDef : FunctionDef =
+    let xId, symbols = CheckedAST.allocateBinding "x" (CheckedAST.emptySymbols ())
+    let funcDef : CheckedAST.FunctionDef =
         { Name = "id"
           TypeParams = ["t"]
-          Params = NonEmptyList.singleton ("x", TVar "t")
+          Params = NonEmptyList.singleton (xId, TVar "t")
           ReturnType = TVar "t"
-          Body = Var "x"
+          Body = CheckedAST.Local xId
           Recursion = None }
 
     let program =
-        Program [
-            FunctionDef funcDef
-            Expression (TypeApp ("id", [TVar "t"], NonEmptyList.singleton (Int64Literal 1L)))
-        ]
+        CheckedAST.Program (
+            symbols,
+            [ CheckedAST.FunctionDef funcDef
+              CheckedAST.Expression (
+                  CheckedAST.TypeApp ("id", [TVar "t"], NonEmptyList.singleton (CheckedAST.Int64Literal 1L))
+              ) ]
+        )
 
-    let (Program topLevels) = monomorphize program
+    let (CheckedAST.Program (_, topLevels)) = monomorphize program
     let funcNames =
         topLevels
         |> List.choose (function
-            | FunctionDef f -> Some f.Name
+            | CheckedAST.FunctionDef f -> Some f.Name
             | _ -> None)
 
     if List.contains "id_t" funcNames && not (List.contains "id_i64" funcNames) then
@@ -63,20 +67,22 @@ let testReplaceTypeAppsWithRegistryMissingSpec () : TestResult =
     | Error _ -> Ok ()
 
 let testSpecializeFromSpecs () : TestResult =
-    let funcDef : FunctionDef =
+    let xId, symbols = CheckedAST.allocateBinding "x" (CheckedAST.emptySymbols ())
+    let funcDef : CheckedAST.FunctionDef =
         { Name = "id"
           TypeParams = ["t"]
-          Params = NonEmptyList.singleton ("x", TVar "t")
+          Params = NonEmptyList.singleton (xId, TVar "t")
           ReturnType = TVar "t"
-          Body = Var "x"
+          Body = CheckedAST.Local xId
           Recursion = None }
 
-    let genericDefs : GenericFuncDefs = Map.ofList [ ("id", funcDef) ]
+    let genericDefs : GenericFuncDefs =
+        Map.ofList [ ("id", { Symbols = symbols; Function = funcDef }) ]
     let initialSpecs : Set<SpecKey> = Set.ofList [ ("id", [TInt64]) ]
     let result = specializeFromSpecs genericDefs initialSpecs
     let hasFunction =
         result.SpecializedFuncs
-        |> List.exists (fun f -> f.Name = "id_i64")
+        |> List.exists (fun artifact -> artifact.Function.Name = "id_i64")
     let hasRegistry = Map.containsKey ("id", [TInt64]) result.SpecRegistry
     if hasFunction && hasRegistry then
         Ok ()

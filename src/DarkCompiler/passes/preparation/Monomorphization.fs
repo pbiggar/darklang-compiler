@@ -27,7 +27,7 @@ let collectTypeApps (expr: CheckedAST.Expr) : Set<SpecKey> =
         | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
         | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
         | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-        | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
+        | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
             specs
         | CheckedAST.BinOp (_, left, right)
         | CheckedAST.Let (_, left, right)
@@ -112,7 +112,7 @@ let rec collectCalledFunctions (expr: CheckedAST.Expr) : Set<string> =
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
     | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
     | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-    | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> Set.empty
+    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> Set.empty
     | CheckedAST.BoundaryRender (_, value)
     | CheckedAST.UnaryOp (_, value)
     | CheckedAST.TupleAccess (value, _)
@@ -157,7 +157,7 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
     let rec iterate
         (pendingSpecs: Set<SpecKey>)
         (processedSpecs: Set<SpecKey>)
-        (accFuncs: CheckedAST.FunctionDef list)
+        (accFuncs: GenericFunctionArtifact list)
         (specRegistry: SpecRegistry)
         (externalSpecs: Set<SpecKey>)
         : SpecializationResult =
@@ -173,11 +173,12 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
                 |> List.fold
                     (fun (funcs, pending, registry, external) (funcName, typeArgs) ->
                         match Map.tryFind funcName genericFuncDefs with
-                        | Some funcDef ->
-                            let specialized = specializeFunction funcDef typeArgs
+                        | Some artifact ->
+                            let specialized = specializeFunction artifact.Function typeArgs
+                            let specializedArtifact = { artifact with Function = specialized }
                             let registry' = Map.add (funcName, typeArgs) specialized.Name registry
                             let bodySpecs = collectTypeAppsFromFunc specialized
-                            (specialized :: funcs, Set.union pending bodySpecs, registry', external)
+                            (specializedArtifact :: funcs, Set.union pending bodySpecs, registry', external)
                         | None ->
                             (funcs, pending, registry, Set.add (funcName, typeArgs) external))
                     ([], Set.empty, specRegistry, externalSpecs)
@@ -196,7 +197,8 @@ let rec replaceTypeApps (expr: CheckedAST.Expr) : CheckedAST.Expr =
     match expr with
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
-    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
         expr
     | CheckedAST.BoundaryRender (renderer, value) ->
         CheckedAST.BoundaryRender (renderer, replaceTypeApps value)
@@ -360,7 +362,7 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: CheckedAST.E
         | CheckedAST.StringLiteral _
         | CheckedAST.CharLiteral _
         | CheckedAST.FloatLiteral _
-        | CheckedAST.Var _
+        | CheckedAST.Local _ | CheckedAST.NamedValue _
         | CheckedAST.FuncRef _
         | CheckedAST.Closure _
         | CheckedAST.RuntimeError _ -> Ok expr'
@@ -552,12 +554,162 @@ let replaceTypeAppsInFuncWithRegistry (specRegistry: SpecRegistry) (funcDef: Che
     replaceTypeAppsWithRegistry specRegistry funcDef.Body
     |> Result.map (fun body' -> { funcDef with Body = body' })
 
+let private materializeFunctionComparisons (program: CheckedAST.Program) : CheckedAST.Program =
+    let rec rewriteList symbols expressions =
+        expressions
+        |> List.mapFold (fun symbols expression ->
+            let expression, symbols = rewrite symbols expression
+            (expression, symbols)) symbols
+    and rewrite symbols expression =
+        let rewriteArgs symbols args =
+            let values, symbols = rewriteList symbols (exprArgsToList args)
+            (exprArgsFromList values, symbols)
+        match expression with
+        | CheckedAST.BoundaryRender (renderer, value) ->
+            let value, symbols = rewrite symbols value
+            (CheckedAST.BoundaryRender (renderer, value), symbols)
+        | CheckedAST.BinOp (op, left, right) ->
+            let left, symbols = rewrite symbols left
+            let right, symbols = rewrite symbols right
+            (CheckedAST.BinOp (op, left, right), symbols)
+        | CheckedAST.UnaryOp (op, value) ->
+            let value, symbols = rewrite symbols value
+            (CheckedAST.UnaryOp (op, value), symbols)
+        | CheckedAST.Let (pattern, value, body) ->
+            let value, symbols = rewrite symbols value
+            let body, symbols = rewrite symbols body
+            (CheckedAST.Let (pattern, value, body), symbols)
+        | CheckedAST.RecursiveLet (recursion, value, body) ->
+            let value, symbols = rewrite symbols value
+            let body, symbols = rewrite symbols body
+            (CheckedAST.RecursiveLet (recursion, value, body), symbols)
+        | CheckedAST.If (condition, thenBranch, elseBranch) ->
+            let condition, symbols = rewrite symbols condition
+            let thenBranch, symbols = rewrite symbols thenBranch
+            let elseBranch, symbols = rewrite symbols elseBranch
+            (CheckedAST.If (condition, thenBranch, elseBranch), symbols)
+        | CheckedAST.Sequence (first, next) ->
+            let first, symbols = rewrite symbols first
+            let next, symbols = rewrite symbols next
+            (CheckedAST.Sequence (first, next), symbols)
+        | CheckedAST.Call (name, args) ->
+            let args, symbols = rewriteArgs symbols args
+            (CheckedAST.Call (name, args), symbols)
+        | CheckedAST.TypeApp (name, types, args) ->
+            let args, symbols = rewriteArgs symbols args
+            let functionComparisonType =
+                match name, types with
+                | marker, [AST.TFunction _ as targetType] when marker = eqHelperDispatchMarker -> Some targetType
+                | "__key_eq", [AST.TFunction _ as targetType] -> Some targetType
+                | _ -> None
+            match functionComparisonType with
+            | None -> (CheckedAST.TypeApp (name, types, args), symbols)
+            | Some _ ->
+                let leftId, symbols = CheckedAST.allocateBinding "__comparison_left" symbols
+                let rightId, symbols = CheckedAST.allocateBinding "__comparison_right" symbols
+                (materializeFunctionComparisonPlan leftId rightId (exprArgsToList args), symbols)
+        | CheckedAST.TupleLiteral values ->
+            let values, symbols = rewriteList symbols values
+            (CheckedAST.TupleLiteral values, symbols)
+        | CheckedAST.TupleAccess (tuple, index) ->
+            let tuple, symbols = rewrite symbols tuple
+            (CheckedAST.TupleAccess (tuple, index), symbols)
+        | CheckedAST.DictLiteral (keyType, valueType, entries) ->
+            let entries, symbols =
+                entries
+                |> List.mapFold (fun symbols (key, value) ->
+                    let key, symbols = rewrite symbols key
+                    let value, symbols = rewrite symbols value
+                    ((key, value), symbols)) symbols
+            (CheckedAST.DictLiteral (keyType, valueType, entries), symbols)
+        | CheckedAST.RecordLiteral (reference, fields) ->
+            let fields, symbols =
+                fields
+                |> List.mapFold (fun symbols (name, value) ->
+                    let value, symbols = rewrite symbols value
+                    ((name, value), symbols)) symbols
+            (CheckedAST.RecordLiteral (reference, fields), symbols)
+        | CheckedAST.RecordUpdate (record, fields) ->
+            let record, symbols = rewrite symbols record
+            let fields, symbols =
+                fields
+                |> List.mapFold (fun symbols (name, value) ->
+                    let value, symbols = rewrite symbols value
+                    ((name, value), symbols)) symbols
+            (CheckedAST.RecordUpdate (record, fields), symbols)
+        | CheckedAST.RecordAccess (record, field) ->
+            let record, symbols = rewrite symbols record
+            (CheckedAST.RecordAccess (record, field), symbols)
+        | CheckedAST.Constructor (reference, name, fields) ->
+            let fields, symbols = fields |> List.mapFold rewrite symbols
+            (CheckedAST.Constructor (reference, name, fields), symbols)
+        | CheckedAST.Match (scrutinee, cases) ->
+            let scrutinee, symbols = rewrite symbols scrutinee
+            let cases, symbols =
+                cases
+                |> List.mapFold (fun symbols case ->
+                    let guard, symbols =
+                        match case.Guard with
+                        | None -> (None, symbols)
+                        | Some guard ->
+                            let guard, symbols = rewrite symbols guard
+                            (Some guard, symbols)
+                    let body, symbols = rewrite symbols case.Body
+                    ({ case with Guard = guard; Body = body }, symbols)) symbols
+            (CheckedAST.Match (scrutinee, cases), symbols)
+        | CheckedAST.ListLiteral values ->
+            let values, symbols = rewriteList symbols values
+            (CheckedAST.ListLiteral values, symbols)
+        | CheckedAST.Lambda (parameters, annotation, body) ->
+            let body, symbols = rewrite symbols body
+            (CheckedAST.Lambda (parameters, annotation, body), symbols)
+        | CheckedAST.Apply (func, args) ->
+            let func, symbols = rewrite symbols func
+            let args, symbols = rewriteArgs symbols args
+            (CheckedAST.Apply (func, args), symbols)
+        | CheckedAST.IndirectApply (func, args) ->
+            let func, symbols = rewrite symbols func
+            let args, symbols = rewriteArgs symbols args
+            (CheckedAST.IndirectApply (func, args), symbols)
+        | CheckedAST.Closure (name, captures) ->
+            let captures, symbols = rewriteList symbols captures
+            (CheckedAST.Closure (name, captures), symbols)
+        | CheckedAST.InterpolatedString parts ->
+            let parts, symbols =
+                parts
+                |> List.mapFold (fun symbols part ->
+                    match part with
+                    | CheckedAST.StringText _ -> (part, symbols)
+                    | CheckedAST.StringExpr value ->
+                        let value, symbols = rewrite symbols value
+                        (CheckedAST.StringExpr value, symbols)) symbols
+            (CheckedAST.InterpolatedString parts, symbols)
+        | _ -> (expression, symbols)
+    let symbols = CheckedAST.programSymbols program
+    let topLevels, symbols =
+        CheckedAST.programTopLevels program
+        |> List.mapFold (fun symbols topLevel ->
+            match topLevel with
+            | CheckedAST.FunctionDef functionDef ->
+                let body, symbols = rewrite symbols functionDef.Body
+                (CheckedAST.FunctionDef { functionDef with Body = body }, symbols)
+            | CheckedAST.ValueDef valueDef ->
+                let body, symbols = rewrite symbols valueDef.Body
+                (CheckedAST.ValueDef { valueDef with Body = body }, symbols)
+            | CheckedAST.Expression expression ->
+                let expression, symbols = rewrite symbols expression
+                (CheckedAST.Expression expression, symbols)
+            | CheckedAST.TypeDef _ -> (topLevel, symbols)) symbols
+    CheckedAST.Program (symbols, topLevels)
+
 /// Replace TypeApp with Call across a program using a registry (drops generic defs)
 let replaceTypeAppsInProgramWithRegistry (specRegistry: SpecRegistry) (program: CheckedAST.Program) : Result<CheckedAST.Program, string> =
-    let (CheckedAST.Program topLevels) = program
+    let program = materializeFunctionComparisons program
+    let symbols = CheckedAST.programSymbols program
+    let topLevels = CheckedAST.programTopLevels program
     let rec loop (remaining: CheckedAST.TopLevel list) (acc: CheckedAST.TopLevel list) : Result<CheckedAST.Program, string> =
         match remaining with
-        | [] -> Ok (CheckedAST.Program (List.rev acc))
+        | [] -> Ok (CheckedAST.Program (symbols, List.rev acc))
         | tl :: rest ->
             match tl with
             | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
@@ -579,7 +731,7 @@ let replaceTypeAppsInProgramWithRegistry (specRegistry: SpecRegistry) (program: 
     loop topLevels []
 
 let private collectInitialMonomorphizationSpecs (program: CheckedAST.Program) : Set<SpecKey> =
-    let (CheckedAST.Program topLevels) = program
+    let topLevels = CheckedAST.programTopLevels program
     topLevels
     |> List.map (function
         | CheckedAST.FunctionDef f when List.isEmpty f.TypeParams -> collectTypeAppsFromFunc f
@@ -598,9 +750,12 @@ let private registryWithExternalSpecs (specialization: SpecializationResult) : S
 let internal monomorphizeWithGenericFuncDefs (genericFuncDefs: GenericFuncDefs) (program: CheckedAST.Program) : CheckedAST.Program =
     let initialSpecs = collectInitialMonomorphizationSpecs program
     let specialization = specializeFromSpecs genericFuncDefs initialSpecs
-    let (CheckedAST.Program topLevels) = program
-    let specializedTopLevels = specialization.SpecializedFuncs |> List.map CheckedAST.FunctionDef
-    let programWithSpecializations = CheckedAST.Program (specializedTopLevels @ topLevels)
+    let symbols = CheckedAST.programSymbols program
+    let topLevels = CheckedAST.programTopLevels program
+    let symbols, specializedFunctions =
+        importSpecializedFunctions symbols specialization.SpecializedFuncs
+    let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
+    let programWithSpecializations = CheckedAST.Program (symbols, specializedTopLevels @ topLevels)
     match replaceTypeAppsInProgramWithRegistry (registryWithExternalSpecs specialization) programWithSpecializations with
     | Ok monomorphized -> monomorphized
     | Error err -> Crash.crash $"monomorphizeWithGenericFuncDefs: {err}"
@@ -608,12 +763,12 @@ let internal monomorphizeWithGenericFuncDefs (genericFuncDefs: GenericFuncDefs) 
 /// Check if a program needs lambda lowering (lambda inlining + lifting)
 /// based on lambdas, closures, or function values.
 let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: CheckedAST.Program) : bool =
-    let rec exprNeedsLambdaLowering (bound: Set<string>) (expr: CheckedAST.Expr) : bool =
+    let rec exprNeedsLambdaLowering (bound: Set<AST.BindingId>) (expr: CheckedAST.Expr) : bool =
         match expr with
         | CheckedAST.Lambda _ | CheckedAST.Apply _ | CheckedAST.IndirectApply _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ ->
             true
-        | CheckedAST.Var name ->
-            Set.contains name knownFuncNames && not (Set.contains name bound)
+        | CheckedAST.NamedValue name -> Set.contains name knownFuncNames
+        | CheckedAST.Local _ -> false
         | CheckedAST.BoundaryRender (_, value) ->
             exprNeedsLambdaLowering bound value
         | CheckedAST.Let (pattern, value, body) ->
@@ -622,7 +777,7 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: CheckedAS
                 (Set.union bound (CheckedAST.letPatternBindings pattern |> Set.ofList))
                 body
         | CheckedAST.RecursiveLet (recursion, value, body) ->
-            let recursiveBound = Set.add (CheckedAST.recursiveBindingName recursion) bound
+            let recursiveBound = Set.add (CheckedAST.recursiveBindingId recursion) bound
             exprNeedsLambdaLowering recursiveBound value
             || exprNeedsLambdaLowering recursiveBound body
         | CheckedAST.If (cond, thenBranch, elseBranch) ->
@@ -666,7 +821,7 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: CheckedAS
         | _ ->
             false
 
-    let (CheckedAST.Program topLevels) = program
+    let topLevels = CheckedAST.programTopLevels program
     let rec loop (remaining: CheckedAST.TopLevel list) : bool =
         match remaining with
         | [] -> false

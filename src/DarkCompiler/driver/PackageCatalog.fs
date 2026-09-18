@@ -181,7 +181,7 @@ let private catalogFunction
     }
 
 let private collectProgramSpecs (program: CheckedAST.Program) : Set<SpecializationIdentity.SpecKey> =
-    let (CheckedAST.Program topLevels) = program
+    let (CheckedAST.Program (_, topLevels)) = program
     topLevels
     |> List.map (function
         | CheckedAST.FunctionDef func when List.isEmpty func.TypeParams ->
@@ -191,7 +191,7 @@ let private collectProgramSpecs (program: CheckedAST.Program) : Set<Specializati
     |> List.fold Set.union Set.empty
 
 let private collectProgramCalls (program: CheckedAST.Program) : Set<string> =
-    let (CheckedAST.Program topLevels) = program
+    let (CheckedAST.Program (_, topLevels)) = program
     topLevels
     |> List.map (function
         | CheckedAST.FunctionDef func -> Monomorphization.collectCalledFunctions func.Body
@@ -242,7 +242,8 @@ let private materializeReachablePackageValueCatalog
             |> Set.ofList
         let specializedCalls =
             specialization.SpecializedFuncs
-            |> List.map (fun func -> Monomorphization.collectCalledFunctions func.Body)
+            |> List.map (fun artifact ->
+                Monomorphization.collectCalledFunctions artifact.Function.Body)
             |> List.fold Set.union Set.empty
         let reachableCalls = Set.union (collectProgramCalls typedProgram) specializedCalls
         let needsFind = Set.contains "Builtin.pmFindValuesByValueType" reachableCalls
@@ -370,9 +371,11 @@ let private materializeReachablePackageValueCatalog
                 syntheticProgram
             |> Result.mapError (fun error ->
                 $"Package value catalog validation failed: {CheckingDiagnostics.typeErrorToString error}")
-            |> Result.map (fun (_, CheckedAST.Program generatedTopLevels, _) ->
-                let (CheckedAST.Program userTopLevels) = typedProgram
-                CheckedAST.Program (generatedTopLevels @ userTopLevels)))
+            |> Result.map (fun (_, CheckedAST.Program (generatedSymbols, generatedTopLevels), _) ->
+                let (CheckedAST.Program (userSymbols, userTopLevels)) = typedProgram
+                let symbols, importedGenerated =
+                    CheckedAST.importTopLevels generatedSymbols userSymbols generatedTopLevels
+                CheckedAST.Program (symbols, importedGenerated @ userTopLevels)))
 
 let internal materializePackageValueCatalog
     (baseContext: PipelineContext)

@@ -263,10 +263,10 @@ let expandTypeRegWithAliases (typeReg: TypeRegistry) (aliasReg: AliasRegistry) :
 
 /// Variable environment - maps variable names to their TempIds and types
 /// The type information is used for type-directed field lookup in record access
-type VarEnv = Map<string, ANF.TempId * AST.Type>
+type VarEnv = Map<AST.BindingId, ANF.TempId * AST.Type>
 
 /// Extract just the type environment from VarEnv for use with inferType
-let typeEnvFromVarEnv (varEnv: VarEnv) : Map<string, AST.Type> =
+let typeEnvFromVarEnv (varEnv: VarEnv) : Map<AST.BindingId, AST.Type> =
     varEnv |> Map.map (fun _ (_, t) -> t)
 
 // ============================================================================

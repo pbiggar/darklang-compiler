@@ -76,7 +76,7 @@ let private collectLocalSpecs
     (genericDefs: SpecializationIdentity.GenericFuncDefs)
     (program: CheckedAST.Program)
     : Set<SpecializationIdentity.SpecKey> =
-    let (CheckedAST.Program topLevels) = program
+    let (CheckedAST.Program (_, topLevels)) = program
     let allSpecs =
         topLevels
         |> List.map (function
@@ -93,67 +93,124 @@ type internal MonomorphizationMode =
     | ReplaceTypeApps of SpecializationIdentity.SpecRegistry
     | SpecializeLocalAndReplace of SpecializationIdentity.SpecRegistry
 
+/// Import inherited checked values before specialization so their bodies cross
+/// every preparation boundary together with local declarations.
+let private importInheritedValues
+    (inheritedValues: Map<string, CheckedValueArtifact>)
+    (CheckedAST.Program (symbols, topLevels))
+    : CheckedAST.Program =
+    let currentNames =
+        topLevels
+        |> List.choose (function
+            | CheckedAST.ValueDef valueDef -> Some valueDef.Name
+            | _ -> None)
+        |> Set.ofList
+    let inheritedEntries =
+        inheritedValues
+        |> Map.toList
+        |> List.filter (fun (name, _) -> not (Set.contains name currentNames))
+    let rec groupBySymbolNamespace entries =
+        match entries with
+        | [] -> []
+        | (_, first) :: _ ->
+            let same, rest =
+                entries
+                |> List.partition (fun (_, artifact) ->
+                    CheckedAST.sameSymbolNamespace first.Symbols artifact.Symbols)
+            same :: groupBySymbolNamespace rest
+    let inheritedDefinitions, symbols =
+        groupBySymbolNamespace inheritedEntries
+        |> List.fold (fun (collected, symbols) group ->
+            let sourceSymbols = (group |> List.head |> snd).Symbols
+            let symbols, imported =
+                group
+                |> List.map (fun (_, artifact) -> CheckedAST.Expression artifact.Body)
+                |> CheckedAST.importTopLevels sourceSymbols symbols
+            let importedBodies =
+                imported
+                |> List.map (function
+                    | CheckedAST.Expression body -> body
+                    | _ -> Crash.crash "Checked value import changed its top-level shape")
+            let importedEntries =
+                List.zip3
+                    (group |> List.map fst)
+                    (group |> List.map (fun (_, artifact) -> artifact.Type))
+                    importedBodies
+            let definitions, symbols =
+                importedEntries
+                |> List.mapFold (fun symbols (name, typ, body) ->
+                    let (id, symbols) = CheckedAST.allocateBinding name symbols
+                    (CheckedAST.ValueDef { Id = id; Name = name; Type = typ; Body = body }, symbols)) symbols
+            (collected @ definitions, symbols)) ([], symbols)
+    CheckedAST.Program (symbols, inheritedDefinitions @ topLevels)
+
 /// Materialize checked module values as one lexical binding per execution
 /// scope. This gives every reference ordinary value semantics through the
 /// existing ANF ownership pipeline and leaves no value-only lowering cases.
 let private materializeProgramValues
-    (inheritedValues: Map<string, AST.Type * CheckedAST.Expr>)
-    (CheckedAST.Program topLevels)
+    (CheckedAST.Program (symbols, topLevels))
     : CheckedAST.Program =
     let currentValues =
         topLevels
         |> List.choose (function
-            | CheckedAST.ValueDef valueDef -> Some (valueDef.Name, (valueDef.Type, valueDef.Body))
+            | CheckedAST.ValueDef valueDef ->
+                Some (valueDef.Name, (valueDef.Id, valueDef.Type, valueDef.Body))
             | _ -> None)
-    let currentNames = currentValues |> List.map fst |> Set.ofList
+    let rawBindings =
+        currentValues
+        |> List.map (fun (name, (id, _, body)) -> (name, (id, body)))
+        |> List.map (fun (name, (id, body)) -> (name, id, body))
+    let valueIds =
+        rawBindings |> List.map (fun (name, id, _) -> name, id) |> Map.ofList
     let bindings =
-        (inheritedValues
-         |> Map.toList
-         |> List.filter (fun (name, _) -> not (Set.contains name currentNames)))
-        @ currentValues
-        |> List.map (fun (name, (_, body)) -> (name, body))
+        rawBindings
+        |> List.map (fun (name, id, body) ->
+            let body = CheckedAST.resolveNamedValues valueIds body
+            (name, id, CheckedAST.resolveUnboundValueLocals symbols valueIds body))
     let wrap excluded body =
-        let eligible = bindings |> List.filter (fun (name, _) -> not (Set.contains name excluded))
+        let body = CheckedAST.resolveNamedValues valueIds body
+        let body = CheckedAST.resolveUnboundValueLocals symbols valueIds body
+        let eligible = bindings |> List.filter (fun (_, id, _) -> not (Set.contains id excluded))
         let rec required fixedPoint =
             let next =
                 eligible
-                |> List.fold (fun names (name, value) ->
-                    if Set.contains name names then
+                |> List.fold (fun names (_, id, value) ->
+                    if Set.contains id names then
                         eligible
-                        |> List.fold (fun dependencies (candidate, _) ->
-                            if InlineLambdas.varOccursInExpr candidate value then Set.add candidate dependencies
+                        |> List.fold (fun dependencies (_, candidateId, _) ->
+                            if InlineLambdas.varOccursInExpr candidateId value then Set.add candidateId dependencies
                             else dependencies) names
                     else names) fixedPoint
             if Set.count next = Set.count fixedPoint then next else required next
         let direct =
             eligible
-            |> List.fold (fun names (name, _) ->
-                if InlineLambdas.varOccursInExpr name body then Set.add name names else names) Set.empty
+            |> List.fold (fun names (_, id, _) ->
+                if InlineLambdas.varOccursInExpr id body then Set.add id names else names) Set.empty
         let needed = required direct
-        let selected = eligible |> List.filter (fun (name, _) -> Set.contains name needed)
+        let selected = eligible |> List.filter (fun (_, id, _) -> Set.contains id needed)
         let rec orderByDependencies ordered remaining =
             match remaining with
             | [] -> ordered
             | _ ->
-                let remainingNames = remaining |> List.map fst |> Set.ofList
+                let remainingNames = remaining |> List.map (fun (_, id, _) -> id) |> Set.ofList
                 let ready =
                     remaining
-                    |> List.filter (fun (name, value) ->
+                    |> List.filter (fun (_, id, value) ->
                         remainingNames
-                        |> Set.remove name
+                        |> Set.remove id
                         |> Set.forall (fun candidate ->
                             not (InlineLambdas.varOccursInExpr candidate value)))
                 match ready with
                 | [] ->
                     Crash.crash "Checked top-level values contain a cyclic materialization dependency"
                 | _ ->
-                    let readyNames = ready |> List.map fst |> Set.ofList
-                    let pending = remaining |> List.filter (fun (name, _) -> not (Set.contains name readyNames))
+                    let readyNames = ready |> List.map (fun (_, id, _) -> id) |> Set.ofList
+                    let pending = remaining |> List.filter (fun (_, id, _) -> not (Set.contains id readyNames))
                     orderByDependencies (ordered @ ready) pending
         let ordered = orderByDependencies [] selected
-        List.foldBack (fun (name, value) result ->
-            if Set.contains name excluded then result
-            else CheckedAST.Let (CheckedAST.LPVariable name, value, result)) ordered body
+        List.foldBack (fun (_, id, value) result ->
+            if Set.contains id excluded then result
+            else CheckedAST.Let (CheckedAST.LPVariable id, value, result)) ordered body
     let materialized =
         topLevels
         |> List.choose (function
@@ -167,7 +224,7 @@ let private materializeProgramValues
                 Some (CheckedAST.FunctionDef { funcDef with Body = wrap parameters funcDef.Body })
             | CheckedAST.Expression expr -> Some (CheckedAST.Expression (wrap Set.empty expr))
             | CheckedAST.TypeDef typeDef -> Some (CheckedAST.TypeDef typeDef))
-    CheckedAST.Program materialized
+    CheckedAST.Program (symbols, materialized)
 
 let internal prepareProgramForAnf
     (monomorphization: MonomorphizationMode)
@@ -176,17 +233,17 @@ let internal prepareProgramForAnf
     (baseFuncNames: Set<string>)
     (baseFuncParams: Map<string, (string * AST.Type) list>)
     (baseFuncReturnTypes: Map<string, AST.Type>)
-    (inheritedValues: Map<string, AST.Type * CheckedAST.Expr>)
+    (inheritedValues: Map<string, CheckedValueArtifact>)
     (passTimingRecorder: PassTimingRecorder option)
     (program: CheckedAST.Program)
     : Result<CheckedAST.Program, string> =
-    let program = materializeProgramValues inheritedValues program
     let measure name operation =
         let timer = Stopwatch.StartNew()
         let result = operation ()
         timer.Stop()
         recordPassTiming passTimingRecorder name timer.Elapsed.TotalMilliseconds
         result
+    let program = importInheritedValues inheritedValues program
     let monomorphizedResult =
         measure "AST -> ANF Preparation: Monomorphization" (fun () ->
             match monomorphization with
@@ -205,16 +262,19 @@ let internal prepareProgramForAnf
                     let specialization = Monomorphization.specializeFromSpecs localGenericDefs localSpecs
                     let combinedSpecRegistry =
                         mergeSpecRegistries specRegistry specialization.SpecRegistry
-                    let (CheckedAST.Program items) = program
-                    let specializedTopLevels = specialization.SpecializedFuncs |> List.map CheckedAST.FunctionDef
-                    let programWithSpecializations = CheckedAST.Program (specializedTopLevels @ items)
+                    let (CheckedAST.Program (symbols, items)) = program
+                    let symbols, specializedFunctions =
+                        SpecializationIdentity.importSpecializedFunctions symbols specialization.SpecializedFuncs
+                    let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
+                    let programWithSpecializations = CheckedAST.Program (symbols, specializedTopLevels @ items)
                     Monomorphization.replaceTypeAppsInProgramWithRegistry combinedSpecRegistry programWithSpecializations)
     match monomorphizedResult with
     | Error err -> Error err
     | Ok monomorphized ->
+        let monomorphized = materializeProgramValues monomorphized
         let needsLowering =
             measure "AST -> ANF Preparation: Lambda Analysis" (fun () ->
-                let (CheckedAST.Program topLevels) = monomorphized
+                let (CheckedAST.Program (_, topLevels)) = monomorphized
                 let localFuncNames =
                     topLevels
                     |> List.choose (function CheckedAST.FunctionDef f -> Some f.Name | _ -> None)
@@ -237,6 +297,7 @@ let internal prepareProgramForAnf
             Ok monomorphized
 
 let internal buildRegistriesForProgram
+    (symbols: CheckedAST.Symbols)
     (baseProvidesModuleFunctionParams: bool)
     (moduleRegistry: AST.ModuleRegistry)
     (baseRegistries: AST_to_ANF.Registries)
@@ -247,9 +308,9 @@ let internal buildRegistriesForProgram
     let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
     let localRegistries =
         if baseProvidesModuleFunctionParams then
-            AST_to_ANF.buildOverlayRegistries moduleRegistry typeDefs aliasReg resolvedFunctions
+            AST_to_ANF.buildOverlayRegistries symbols moduleRegistry typeDefs aliasReg resolvedFunctions
         else
-            AST_to_ANF.buildRegistries moduleRegistry typeDefs aliasReg resolvedFunctions
+            AST_to_ANF.buildRegistries symbols moduleRegistry typeDefs aliasReg resolvedFunctions
     let mergedRegistries = AST_to_ANF.mergeRegistries baseRegistries localRegistries
     (mergedRegistries, localRegistries, resolvedFunctions)
 
@@ -260,7 +321,7 @@ type internal DeclarationConversion = {
 }
 
 let internal splitDeclarations
-    (CheckedAST.Program topLevels)
+    (CheckedAST.Program (_, topLevels))
     : Result<AST.TypeDef list * CheckedAST.FunctionDef list, string> =
     let expressions =
         topLevels |> List.choose (function CheckedAST.Expression expression -> Some expression | _ -> None)
@@ -321,12 +382,17 @@ let internal convertTypedDeclarations
         |> Result.bind (fun (typeDefs, functions) ->
             let (registries, localRegistries, resolvedFunctions) =
                 buildRegistriesForProgram
+                    (CheckedAST.programSymbols liftedProgram)
                     (Option.isSome baseContext)
                     moduleRegistry
                     baseRegistries
                     typeDefs
                     functions
-            AST_to_ANF.convertFunctions registries (ANF.VarGen 0) resolvedFunctions
+            AST_to_ANF.convertFunctions
+                (CheckedAST.programSymbols liftedProgram)
+                registries
+                (ANF.VarGen 0)
+                resolvedFunctions
             |> Result.map (fun (anfFunctions, _) ->
                 { Functions = anfFunctions
                   Registries = registries
@@ -352,9 +418,19 @@ let private convertTypedProgramToConversionResult
         AST_to_ANF.splitTopLevels liftedProgram
         |> Result.bind (fun (typeDefs, functions, expr) ->
             let (registries, _localRegistries, resolvedFunctions) =
-                buildRegistriesForProgram false moduleRegistry baseRegistries typeDefs functions
+                buildRegistriesForProgram
+                    (CheckedAST.programSymbols liftedProgram)
+                    false
+                    moduleRegistry
+                    baseRegistries
+                    typeDefs
+                    functions
             let varGen = ANF.VarGen 0
-            AST_to_ANF.convertFunctions registries varGen resolvedFunctions
+            AST_to_ANF.convertFunctions
+                (CheckedAST.programSymbols liftedProgram)
+                registries
+                varGen
+                resolvedFunctions
             |> Result.bind (fun (anfFuncs, varGen1) ->
                 AST_to_ANF.convertExprToAnf registries varGen1 expr
                 |> Result.map (fun (anfExpr, _) ->
@@ -401,7 +477,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                     Set.union
                         (collectLocalSpecs baseContext.GenericFuncDefs typedProgram)
                         reachedThroughLocalGenerics
-                let (CheckedAST.Program items) = typedProgram
+                let (CheckedAST.Program (initialSymbols, items)) = typedProgram
                 let localFunctionNames =
                     items
                     |> List.choose (function
@@ -412,27 +488,31 @@ let internal convertTypedProgramToUserOnlyWithMode
                     Set.contains name localNames
                     || Set.contains name baseContext.BaseFuncNames
                 let rec materialize
+                    (symbols: CheckedAST.Symbols)
                     (specRegistry: SpecializationIdentity.SpecRegistry)
                     (localFunctionNames: Set<string>)
                     (pendingSpecs: Set<SpecializationIdentity.SpecKey>)
                     (accFunctions: CheckedAST.FunctionDef list)
-                    : SpecializationIdentity.SpecRegistry * CheckedAST.FunctionDef list =
+                    : SpecializationIdentity.SpecRegistry * CheckedAST.FunctionDef list * CheckedAST.Symbols =
                     let missingSpecs =
                         pendingSpecs
                         |> Set.filter (fun key -> not (Map.containsKey key specRegistry))
                     if Set.isEmpty missingSpecs then
-                        (specRegistry, accFunctions)
+                        (specRegistry, accFunctions, symbols)
                     else
                         let specialization =
                             Monomorphization.specializeFromSpecs baseContext.GenericFuncDefs missingSpecs
                         let combinedRegistry =
                             mergeSpecRegistries specRegistry specialization.SpecRegistry
-                        let materializedTopLevels =
-                            specialization.SpecializedFuncs
+                        let symbols, specializedFunctions =
+                            SpecializationIdentity.importSpecializedFunctions symbols specialization.SpecializedFuncs
+                        let symbols, materializedTopLevels =
+                            specializedFunctions
                             |> List.filter (fun fn ->
                                 not (isKnownFunctionName localFunctionNames fn.Name))
                             |> List.map CheckedAST.FunctionDef
                             |> CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+                                symbols
                                 typeCheckEnv.AliasReg
                                 typeCheckEnv.IndexedTypeReg
                                 typeCheckEnv.VariantLookup
@@ -448,19 +528,19 @@ let internal convertTypedProgramToUserOnlyWithMode
                             newFunctions
                             |> List.fold (fun names fn -> Set.add fn.Name names) localFunctionNames
                         let nextSpecs =
-                            materializedTopLevels
-                            |> CheckedAST.Program
+                            CheckedAST.Program (symbols, materializedTopLevels)
                             |> collectLocalSpecs baseContext.GenericFuncDefs
                         materialize
+                            symbols
                             combinedRegistry
                             nextLocalFunctionNames
                             nextSpecs
                             (accFunctions @ newFunctions)
 
-                let (combinedRegistry, newFunctions) =
-                    materialize baseRegistry localFunctionNames requested []
+                let (combinedRegistry, newFunctions, symbols) =
+                    materialize initialSymbols baseRegistry localFunctionNames requested []
                 let programWithSpecializations =
-                    CheckedAST.Program ((newFunctions |> List.map CheckedAST.FunctionDef) @ items)
+                    CheckedAST.Program (symbols, (newFunctions |> List.map CheckedAST.FunctionDef) @ items)
                 let specializedFunctionNames =
                     newFunctions |> List.map (fun fn -> fn.Name) |> Set.ofList
                 (programWithSpecializations, rebuildMode combinedRegistry, specializedFunctionNames)
@@ -486,14 +566,15 @@ let internal convertTypedProgramToUserOnlyWithMode
             |> Result.map (fun (typeDefs, functions, expr) ->
                 let (registries, localRegistries, resolvedFunctions) =
                     buildRegistriesForProgram
+                        (CheckedAST.programSymbols liftedProgram)
                         true
                         baseContext.Registries.ModuleRegistry
                         baseContext.Registries
                         typeDefs
                         functions
                 let localReturnTypes = extractReturnTypes localRegistries.FuncReg
-                (registries, localRegistries, resolvedFunctions, localReturnTypes, expr)))
-        |> Result.bind (fun (registries, localRegistries, resolvedFunctions, localReturnTypes, expr) ->
+                (CheckedAST.programSymbols liftedProgram, registries, localRegistries, resolvedFunctions, localReturnTypes, expr)))
+        |> Result.bind (fun (symbols, registries, localRegistries, resolvedFunctions, localReturnTypes, expr) ->
             let varGen = ANF.VarGen 0
             let conversionKey = {
                 Functions = resolvedFunctions
@@ -502,7 +583,7 @@ let internal convertTypedProgramToUserOnlyWithMode
             }
             let convert () =
                 measure "AST -> ANF Dependency Conversion" (fun () ->
-                    AST_to_ANF.convertFunctions registries varGen resolvedFunctions)
+                    AST_to_ANF.convertFunctions symbols registries varGen resolvedFunctions)
             let convertedDependencies =
                 measure "AST -> ANF Dependency Lookup" (fun () ->
                     match session with

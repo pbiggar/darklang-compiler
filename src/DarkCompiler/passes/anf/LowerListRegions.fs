@@ -8,7 +8,7 @@ open OwnedIR
 open ListRegion
 open VerifyListOwnership
 
-type LowerScalar = CheckedAST.Expr -> ANF.VarGen -> Map<string, ANF.TempId * AST.Type> -> Result<ANF.AExpr * ANF.VarGen, string>
+type LowerScalar = CheckedAST.Expr -> ANF.VarGen -> Map<AST.BindingId, ANF.TempId * AST.Type> -> Result<ANF.AExpr * ANF.VarGen, string>
 
 let private word value = ANF.IntLiteral (ANF.Int64 (int64 value))
 
@@ -216,5 +216,5 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
     let initialValues =
         block.Body.Parameters
         |> List.fold (fun values parameter ->
-            Map.add parameter.Value.Id (lookup "root parameter" parameter.Name env) values) Map.empty
+            Map.add parameter.Value.Id (lookup "root parameter" parameter.Binding env) values) Map.empty
     verify region |> Result.bind (fun () -> lowerBlock initialValues Map.empty vg block)

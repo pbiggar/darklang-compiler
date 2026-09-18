@@ -4,6 +4,9 @@ module OwnershipUniquenessInferenceTests
 
 open OwnedIR
 
+let private binding name =
+    name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
+
 type private TestLeaf =
     | Reuse of input: string * output: string
 
@@ -54,7 +57,8 @@ let private semantics mappings : Semantics<TestLeaf, string> =
             | None -> Unmanaged
     }
 
-let private parameter name value : HIR.Parameter = { Name = name; Value = value }
+let private parameter name value : HIR.Parameter =
+    { Name = name; Binding = binding name; Value = value }
 
 let private block parameters operations result : Block<TestLeaf, string> = {
     Body = {
@@ -105,9 +109,9 @@ let private testRetainsInputOutputTradeoffs () =
 let private testEscapeRevokesUniqueResult () =
     let semantics = semantics [(inputValue, "input"); (outputValue, "output")]
     let escapeOperand : HIR.Operand = {
-        Expression = CheckedAST.Var "escape"
+        Expression = CheckedAST.Local (binding "escape")
         Type = AST.TUnit
-        Inputs = Map.ofList [("output", outputValue)]
+        Inputs = Map.ofList [(binding "output", outputValue)]
     }
     let body =
         block

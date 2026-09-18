@@ -62,9 +62,10 @@ let private convertTypedProgram (typedAst: CheckedAST.Program) : Result<AST_to_A
         |> Result.bind (fun (typeDefs, functions, expr) ->
             let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
             let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
-            let registries = AST_to_ANF.buildRegistries moduleRegistry typeDefs aliasReg resolvedFunctions
+            let symbols = CheckedAST.programSymbols lifted
+            let registries = AST_to_ANF.buildRegistries symbols moduleRegistry typeDefs aliasReg resolvedFunctions
             let varGen = ANF.VarGen 0
-            AST_to_ANF.convertFunctions registries varGen resolvedFunctions
+            AST_to_ANF.convertFunctions symbols registries varGen resolvedFunctions
             |> Result.bind (fun (anfFuncs, varGen1) ->
                 AST_to_ANF.convertExprToAnf registries varGen1 expr
                 |> Result.map (fun (anfExpr, _) ->

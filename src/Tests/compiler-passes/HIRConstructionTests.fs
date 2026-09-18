@@ -4,8 +4,14 @@ module HIRConstructionTests
 
 open HIR
 
+let private binding name =
+    name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
+let private local name = CheckedAST.Local (binding name)
+let private variable name = CheckedAST.LPVariable (binding name)
+let private parameter name typ = binding name, typ
+
 let rec private dependencies = function
-    | CheckedAST.Var name -> Set.singleton name
+    | CheckedAST.Local id -> Set.singleton id
     | CheckedAST.Let (pattern, value, body) ->
         let bound = CheckedAST.letPatternBindings pattern |> Set.ofList
         Set.union (dependencies value) (Set.difference (dependencies body) bound)
@@ -35,14 +41,14 @@ let rec private infer types = function
     | CheckedAST.FloatLiteral _ -> Ok AST.TFloat64
     | CheckedAST.StringLiteral _ -> Ok AST.TString
     | CheckedAST.BigIntLiteral _ -> Ok AST.TInt
-    | CheckedAST.Var name ->
-        match Map.tryFind name types with
+    | CheckedAST.Local id ->
+        match Map.tryFind id types with
         | Some typ -> Ok typ
-        | None -> Error $"unknown value {name}"
+        | None -> Error $"unknown value {id}"
     | CheckedAST.If (_, ifTrue, _) -> infer types ifTrue
-    | CheckedAST.Let (CheckedAST.LPVariable name, value, body) ->
+    | CheckedAST.Let (CheckedAST.LPVariable id, value, body) ->
         infer types value
-        |> Result.bind (fun valueType -> infer (Map.add name valueType types) body)
+        |> Result.bind (fun valueType -> infer (Map.add id valueType types) body)
     | CheckedAST.Let (_, _, body) -> infer types body
     | CheckedAST.UnaryOp (_, operand) -> infer types operand
     | CheckedAST.BinOp (op, left, _) ->
@@ -57,8 +63,8 @@ let private functionDefinition body : CheckedAST.FunctionDef = {
     Name = "choose"
     TypeParams = []
     Params = {
-        Head = ("flag", AST.TBool)
-        Tail = [("first", AST.TInt64); ("second", AST.TInt64)]
+        Head = parameter "flag" AST.TBool
+        Tail = [parameter "first" AST.TInt64; parameter "second" AST.TInt64]
     }
     ReturnType = AST.TInt64
     Body = body
@@ -74,12 +80,12 @@ let private testConstructsOrderedStructuredFunction () =
     let definition =
         functionDefinition
             (CheckedAST.Let (
-                CheckedAST.LPVariable "selected",
+                variable "selected",
                 CheckedAST.If (
-                    CheckedAST.Var "flag",
-                    CheckedAST.Var "first",
-                    CheckedAST.Var "second"),
-                CheckedAST.Sequence (CheckedAST.UnitLiteral, CheckedAST.Var "selected")))
+                    local "flag",
+                    local "first",
+                    local "second"),
+                CheckedAST.Sequence (CheckedAST.UnitLiteral, local "selected")))
     match ConstructHIRFunctions.constructFunction infer dependencies noCalls definition with
     | Error error -> Error $"Unexpected HIR construction failure: {error}"
     | Ok constructed ->
@@ -91,12 +97,12 @@ let private testConstructsOrderedStructuredFunction () =
             let trueBlock = ConstructHIRFunctions.body ifTrue
             let falseBlock = ConstructHIRFunctions.body ifFalse
             let actualParameters =
-                [(flag.Name, flag.Value.Type); (first.Name, first.Value.Type); (second.Name, second.Value.Type)]
+                [(flag.Binding, flag.Value.Type); (first.Binding, first.Value.Type); (second.Binding, second.Value.Type)]
             let expectedParameters =
-                [("flag", AST.TBool); ("first", AST.TInt64); ("second", AST.TInt64)]
+                [parameter "flag" AST.TBool; parameter "first" AST.TInt64; parameter "second" AST.TInt64]
             let orderedParameters = actualParameters = expectedParameters
             let structuredEdges =
-                condition.Inputs = Map.ofList [("flag", flag.Value)]
+                condition.Inputs = Map.ofList [(binding "flag", flag.Value)]
                 && trueBlock.Result = first.Value
                 && falseBlock.Result = second.Value
                 && block.Result = result
@@ -111,9 +117,9 @@ let private testReportsBindingInferenceFailure () =
     let definition =
         functionDefinition
             (CheckedAST.Let (
-                CheckedAST.LPVariable "unsupported",
+                variable "unsupported",
                 CheckedAST.TupleLiteral [CheckedAST.Int64Literal 1L],
-                CheckedAST.Var "first"))
+                local "first"))
     match ConstructHIRFunctions.constructFunction infer dependencies noCalls definition with
     | Error (ConstructHIRFunctions.CannotInferExpression ("choose", _)) -> Ok ()
     | actual -> Error $"Expected a scoped inference failure, got {actual}"
@@ -151,13 +157,13 @@ let private testNormalizesContractedCallsInArgumentOrder () =
     let callee =
         callFunction
             "callee"
-            ("first", AST.TInt64)
-            [("second", AST.TInt64)]
-            (CheckedAST.Var "first")
+            (parameter "first" AST.TInt64)
+            [parameter "second" AST.TInt64]
+            (local "first")
     let caller =
         callFunction
             "caller"
-            ("unit", AST.TUnit)
+            (parameter "unit" AST.TUnit)
             []
             (CheckedAST.Call (
                 "callee",
@@ -186,33 +192,33 @@ let private testNormalizesContractedCallsInArgumentOrder () =
 
 let private testKeepsUncontractedCallsOpaque () =
     let callee =
-        callFunction "callee" ("value", AST.TInt64) [] (CheckedAST.Var "value")
+        callFunction "callee" (parameter "value" AST.TInt64) [] (local "value")
     let caller =
         callFunction
             "caller"
-            ("value", AST.TInt64)
+            (parameter "value" AST.TInt64)
             []
-            (CheckedAST.Call ("callee", AST.NonEmptyList.singleton (CheckedAST.Var "value")))
+            (CheckedAST.Call ("callee", AST.NonEmptyList.singleton (local "value")))
     match ConstructHIRFunctions.constructFunctions infer dependencies noCalls [callee; caller] with
     | Ok [_; constructedCaller] ->
         let block = ConstructHIRFunctions.body constructedCaller.Body
         match block.Parameters, block.Operations with
         | [parameter], [HIR.ScalarBinding (_, operand)]
             when operand.Expression = caller.Body
-                 && operand.Inputs = Map.ofList [("value", parameter.Value)] -> Ok ()
+                 && operand.Inputs = Map.ofList [(binding "value", parameter.Value)] -> Ok ()
         | _ -> Error $"Uncontracted direct call did not remain an opaque checked operand: {block}"
     | Ok actual -> Error $"Expected two constructed functions, got {actual}"
     | Error error -> Error $"Unexpected opaque-call construction failure: {error}"
 
 let private testRejectsInvalidCallAliasContract () =
     let callee =
-        callFunction "callee" ("value", AST.TInt64) [] (CheckedAST.Var "value")
+        callFunction "callee" (parameter "value" AST.TInt64) [] (local "value")
     let caller =
         callFunction
             "caller"
-            ("value", AST.TInt64)
+            (parameter "value" AST.TInt64)
             []
-            (CheckedAST.Call ("callee", AST.NonEmptyList.singleton (CheckedAST.Var "value")))
+            (CheckedAST.Call ("callee", AST.NonEmptyList.singleton (local "value")))
     let calls = contractedCalls true
     match ConstructHIRFunctions.constructFunctions infer dependencies calls [callee; caller] with
     | Error error -> Error $"Unexpected direct-call construction failure: {error}"
@@ -240,7 +246,7 @@ let private testNormalizesScalarPrimitivesWithContracts () =
     let definition =
         scalarFunction
             "calculate"
-            ("unit", AST.TUnit)
+            (parameter "unit" AST.TUnit)
             AST.TInt64
             (CheckedAST.BinOp (
                 AST.Div,
@@ -294,15 +300,15 @@ let private testRestoresLexicalScopeBetweenPrimitiveOperands () =
     let definition =
         scalarFunction
             "shadow"
-            ("value", AST.TInt64)
+            (parameter "value" AST.TInt64)
             AST.TInt64
             (CheckedAST.BinOp (
                 AST.Add,
                 CheckedAST.Let (
-                    CheckedAST.LPVariable "value",
+                    variable "value",
                     CheckedAST.Int64Literal 1L,
-                    CheckedAST.Var "value"),
-                CheckedAST.Var "value"))
+                    local "value"),
+                local "value"))
     match ConstructHIRFunctions.constructFunction infer dependencies noCalls definition with
     | Error error -> Error $"Unexpected scoped primitive construction failure: {error}"
     | Ok constructed ->
@@ -318,9 +324,9 @@ let private testNormalizesUnsignedBitwiseNot () =
     let definition =
         scalarFunction
             "invert"
-            ("value", AST.TUInt64)
+            (parameter "value" AST.TUInt64)
             AST.TUInt64
-            (CheckedAST.UnaryOp (AST.BitNot, CheckedAST.Var "value"))
+            (CheckedAST.UnaryOp (AST.BitNot, local "value"))
     match ConstructHIRFunctions.constructFunction infer dependencies noCalls definition with
     | Error error -> Error $"Unexpected unsigned primitive construction failure: {error}"
     | Ok constructed ->
@@ -334,18 +340,18 @@ let private testKeepsUnsupportedPrimitivesOpaque () =
     let managedBody =
         CheckedAST.BinOp (
             AST.StringConcat,
-            CheckedAST.Var "value",
+            local "value",
             CheckedAST.StringLiteral "suffix")
     let managedDefinition =
-        scalarFunction "append" ("value", AST.TString) AST.TString managedBody
+        scalarFunction "append" (parameter "value" AST.TString) AST.TString managedBody
     let arbitraryPrecisionBody =
         CheckedAST.BinOp (
             AST.Add,
             CheckedAST.BigIntLiteral 1I,
             CheckedAST.BigIntLiteral 2I)
     let arbitraryPrecisionDefinition =
-        scalarFunction "addInts" ("unit", AST.TUnit) AST.TInt arbitraryPrecisionBody
-    let opaqueBlock definition expectedExpression expectedInputNames =
+        scalarFunction "addInts" (parameter "unit" AST.TUnit) AST.TInt arbitraryPrecisionBody
+    let opaqueBlock definition expectedExpression (expectedInputNames: Set<string>) =
         match ConstructHIRFunctions.constructFunction infer dependencies noCalls definition with
         | Error error -> Error $"Unexpected opaque primitive construction failure: {error}"
         | Ok constructed ->
@@ -353,8 +359,8 @@ let private testKeepsUnsupportedPrimitivesOpaque () =
             let expectedInputs =
                 block.Parameters
                 |> List.choose (fun parameter ->
-                    if Set.contains parameter.Name expectedInputNames then
-                        Some (parameter.Name, parameter.Value)
+                    if Set.contains parameter.Binding (expectedInputNames |> Set.map binding) then
+                        Some (parameter.Binding, parameter.Value)
                     else None)
                 |> Map.ofList
             match block.Operations with

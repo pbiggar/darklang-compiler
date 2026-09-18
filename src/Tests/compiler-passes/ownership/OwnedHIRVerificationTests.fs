@@ -14,7 +14,7 @@ let private call target result =
 
 let private block operations result : Block<TestLeaf, string> = {
     Body = {
-        Parameters = [{ Name = "value"; Value = parameter }]
+        Parameters = [{ Name = "value"; Binding = AST.bindingId 0; Value = parameter }]
         Operations = operations
         Result = result
     }
@@ -50,7 +50,7 @@ let private ownership registered : Semantics<TestLeaf, string> = {
     Leaf = fun TestLeaf -> { Inputs = []; Outputs = [] }
     LeafUniqueness = fun TestLeaf -> { RequiredInputs = Set.empty; UniqueOutputs = Set.empty }
     CallOwnership = registered
-    ScalarUses = fun operand -> operand.Inputs |> Map.keys |> Set.ofSeq
+    ScalarUses = fun operand -> operand.Inputs |> Map.values |> Seq.map (fun _ -> "value") |> Set.ofSeq
     ScalarEscapes = fun _ -> Set.empty
     BlockArgument = fun value ->
         match value.Id with

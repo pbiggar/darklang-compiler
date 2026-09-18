@@ -37,7 +37,7 @@ let private definition name operations : Function<TestLeaf, string> = {
         Name = name
         Body = {
             Body = {
-                Parameters = [{ Name = "unit"; Value = unitValue }]
+                Parameters = [{ Name = "unit"; Binding = AST.bindingId 0; Value = unitValue }]
                 Operations = operations
                 Result = unitValue
             }

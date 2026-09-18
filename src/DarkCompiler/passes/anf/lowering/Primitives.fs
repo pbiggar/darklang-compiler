@@ -7,13 +7,45 @@ open ANF
 
 let internal eqHelperDispatchMarker = "__dark_internal_eq_helper_dispatch"
 
+let internal materializeFunctionComparisonPlan
+    (leftId: AST.BindingId)
+    (rightId: AST.BindingId)
+    (args: CheckedAST.Expr list)
+    : CheckedAST.Expr =
+    match args with
+    | [leftExpr; rightExpr] ->
+        CheckedAST.Let (
+            CheckedAST.LPVariable leftId,
+            leftExpr,
+            CheckedAST.Let (
+                CheckedAST.LPVariable rightId,
+                rightExpr,
+                CheckedAST.If (
+                    CheckedAST.BinOp (
+                        AST.Eq,
+                        CheckedAST.TupleAccess (CheckedAST.Local leftId, 1),
+                        CheckedAST.TupleAccess (CheckedAST.Local rightId, 1)
+                    ),
+                    CheckedAST.IndirectApply (
+                        CheckedAST.TupleAccess (CheckedAST.Local leftId, 1),
+                        AST.NonEmptyList.fromList [CheckedAST.Local leftId; CheckedAST.Local rightId]
+                    ),
+                    CheckedAST.BoolLiteral false
+                )
+            )
+        )
+    | _ -> Crash.crash "Function comparison plan expected exactly two operands"
+
 let internal canonicalBufferKindForType (typ: AST.Type) : MemoryModel.CanonicalBufferKind option =
     match typ with
     | AST.TString -> Some MemoryModel.Utf8String
     | AST.TChar -> Some MemoryModel.GraphemeCluster
     | _ -> None
 
-let internal materializeComparisonPlan (targetType: AST.Type) (args: CheckedAST.Expr list) : CheckedAST.Expr =
+let internal materializeComparisonPlan
+    (targetType: AST.Type)
+    (args: CheckedAST.Expr list)
+    : CheckedAST.Expr =
     match args with
     | [leftExpr; rightExpr] ->
         match targetType with
@@ -27,28 +59,7 @@ let internal materializeComparisonPlan (targetType: AST.Type) (args: CheckedAST.
                 AST.NonEmptyList.fromList [leftExpr; rightExpr]
             )
         | AST.TFunction _ ->
-            let leftName = "__comparison_plan_left"
-            let rightName = "__comparison_plan_right"
-            CheckedAST.Let (
-                CheckedAST.LPVariable leftName,
-                leftExpr,
-                CheckedAST.Let (
-                    CheckedAST.LPVariable rightName,
-                    rightExpr,
-                    CheckedAST.If (
-                        CheckedAST.BinOp (
-                            AST.Eq,
-                            CheckedAST.TupleAccess (CheckedAST.Var leftName, 1),
-                            CheckedAST.TupleAccess (CheckedAST.Var rightName, 1)
-                        ),
-                        CheckedAST.IndirectApply (
-                            CheckedAST.TupleAccess (CheckedAST.Var leftName, 1),
-                            AST.NonEmptyList.fromList [CheckedAST.Var leftName; CheckedAST.Var rightName]
-                        ),
-                        CheckedAST.BoolLiteral false
-                    )
-                )
-            )
+            Crash.crash "Function comparison bindings must be allocated from the checked symbol table"
         | AST.TInt ->
             CheckedAST.Call (
                 "Darklang.Stdlib.Int.__equals",
@@ -145,16 +156,16 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TTuple types -> "(" + (types |> List.map typeToString |> String.concat "*") + ")"
 
 /// Convert a literal pattern into an ANF sized integer
-let patternLiteralToSizedInt (pattern: AST.Pattern) : ANF.SizedInt option =
+let patternLiteralToSizedInt (pattern: CheckedAST.Pattern) : ANF.SizedInt option =
     match pattern with
-    | AST.PInt64 n -> Some (ANF.Int64 n)
-    | AST.PInt8Literal n -> Some (ANF.Int8 n)
-    | AST.PInt16Literal n -> Some (ANF.Int16 n)
-    | AST.PInt32Literal n -> Some (ANF.Int32 n)
-    | AST.PUInt8Literal n -> Some (ANF.UInt8 n)
-    | AST.PUInt16Literal n -> Some (ANF.UInt16 n)
-    | AST.PUInt32Literal n -> Some (ANF.UInt32 n)
-    | AST.PUInt64Literal n -> Some (ANF.UInt64 n)
+    | CheckedAST.PInt64 n -> Some (ANF.Int64 n)
+    | CheckedAST.PInt8Literal n -> Some (ANF.Int8 n)
+    | CheckedAST.PInt16Literal n -> Some (ANF.Int16 n)
+    | CheckedAST.PInt32Literal n -> Some (ANF.Int32 n)
+    | CheckedAST.PUInt8Literal n -> Some (ANF.UInt8 n)
+    | CheckedAST.PUInt16Literal n -> Some (ANF.UInt16 n)
+    | CheckedAST.PUInt32Literal n -> Some (ANF.UInt32 n)
+    | CheckedAST.PUInt64Literal n -> Some (ANF.UInt64 n)
     | _ -> None
 
 /// Try to convert a function call to a file I/O intrinsic CExpr

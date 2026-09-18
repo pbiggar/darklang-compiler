@@ -14,6 +14,9 @@ let private value id : HIR.Value = {
 
 let private unitValue : HIR.Value = { Id = HIR.ValueId 100; Type = AST.TUnit }
 
+let private binding name =
+    name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
+
 let private semantics mappings : Semantics<TestLeaf, string> =
     let ownershipByValue =
         mappings
@@ -52,7 +55,8 @@ let private block parameters operations result : Block<TestLeaf, string> = {
     }
 }
 
-let private parameter name value : HIR.Parameter = { Name = name; Value = value }
+let private parameter name value : HIR.Parameter =
+    { Name = name; Binding = binding name; Value = value }
 
 let private functionDefinition name ownership body : Function<TestLeaf, string> = {
     Definition = { Name = name; Body = body }

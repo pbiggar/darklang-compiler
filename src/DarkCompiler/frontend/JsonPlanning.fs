@@ -55,7 +55,31 @@ type private Env = {
     Aliases: CheckingTypes.AliasRegistry
 }
 
-type private State = { Functions: Map<string, FunctionDef> }
+type private State = {
+    Functions: Map<string, FunctionDef>
+    Symbols: Symbols
+}
+
+let private freshBinding name state =
+    let (id, symbols) = allocateBinding name state.Symbols
+    (id, { state with Symbols = symbols })
+
+let private freshBindings names state =
+    names
+    |> List.mapFold (fun current name ->
+        let (id, next) = freshBinding name current
+        ((name, id), next)) state
+    |> fun (bindings, next) -> (Map.ofList bindings, next)
+
+let private local name bindings =
+    match Map.tryFind name bindings with
+    | Some id -> Local id
+    | None -> Crash.crash $"Generated JSON binding was not allocated: {name}"
+
+let private patternLocal name bindings =
+    match Map.tryFind name bindings with
+    | Some id -> PVariable id
+    | None -> Crash.crash $"Generated JSON pattern binding was not allocated: {name}"
 
 let private args values = NonEmptyList.fromList values
 let private call name values = Call (name, args values)
@@ -231,9 +255,9 @@ let private cantMatch typ raw path =
 
 let private rawSource source raw = call "Darklang.Stdlib.Json.__copyRaw" [source; raw]
 
-let private resultCases okName okBody errorName =
-    [ makeCase (PConstructor ("Ok", [PVar okName])) okBody
-      makeCase (PConstructor ("Error", [PVar errorName])) (error (Var errorName)) ]
+let private resultCases okId okBody errorId =
+    [ makeCase (PConstructor ("Ok", [PVariable okId])) okBody
+      makeCase (PConstructor ("Error", [PVariable errorId])) (error (Local errorId)) ]
 
 let private applySubstitution subst typ =
     let rec apply typ =
@@ -350,16 +374,25 @@ let rec private ensureSerializer (env: Env) typ state : Result<string * State, s
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
+        let (bindings, state) = freshBindings ["__writer"; "__value"] state
+        let writerId =
+            match Map.tryFind "__writer" bindings with
+            | Some id -> id
+            | None -> Crash.crash "JSON serializer writer binding was not allocated"
+        let valueId =
+            match Map.tryFind "__value" bindings with
+            | Some id -> id
+            | None -> Crash.crash "JSON serializer value binding was not allocated"
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = args [("__writer", writerType); ("__value", typ)]
+            Params = args [(writerId, writerType); (valueId, typ)]
             ReturnType = writerType
-            Body = Var "__writer"
+            Body = Local writerId
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        serializeBody env typ (Var "__value") (Var "__writer") reserved
+        serializeBody env typ (Local valueId) (Local writerId) reserved
         |> Result.map (fun (body, nextState) ->
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
@@ -384,30 +417,36 @@ and private ensureListSerializer env elemType state =
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
+        let (bindings, state) =
+            freshBindings ["__items"; "__writer"; "__first"; "__head"; "__tail"] state
+        let binding name =
+            match Map.tryFind name bindings with
+            | Some id -> id
+            | None -> Crash.crash $"JSON list serializer binding was not allocated: {name}"
         let placeholder = {
             Name = name
             TypeParams = []
             Params =
                 args
-                    [("__items", typ)
-                     ("__writer", writerType)
-                     ("__first", TBool)]
+                    [(binding "__items", typ)
+                     (binding "__writer", writerType)
+                     (binding "__first", TBool)]
             ReturnType = writerType
-            Body = Var "__writer"
+            Body = local "__writer" bindings
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let separated =
-            If (Var "__first", Var "__writer", writerSeparator (Var "__writer"))
-        serializeCall env elemType separated (Var "__head") reserved
+            If (local "__first" bindings, local "__writer" bindings, writerSeparator (local "__writer" bindings))
+        serializeCall env elemType separated (local "__head" bindings) reserved
         |> Result.map (fun (encoded, nextState) ->
             let body =
                 Match (
-                    Var "__items",
-                    [ makeCase (PList []) (Var "__writer")
+                    local "__items" bindings,
+                    [ makeCase (PList []) (local "__writer" bindings)
                       makeCase
-                          (PListCons ([PVar "__head"], PVar "__tail"))
-                          (call name [Var "__tail"; encoded; BoolLiteral false]) ])
+                          (PListCons ([patternLocal "__head" bindings], patternLocal "__tail" bindings))
+                          (call name [local "__tail" bindings; encoded; BoolLiteral false]) ])
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
@@ -420,31 +459,37 @@ and private ensureDictSerializer env valueType state =
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
+        let (bindings, state) =
+            freshBindings ["__entries"; "__writer"; "__first"; "__entry"; "__tail"] state
+        let binding name =
+            match Map.tryFind name bindings with
+            | Some id -> id
+            | None -> Crash.crash $"JSON dictionary serializer binding was not allocated: {name}"
         let placeholder = {
             Name = name
             TypeParams = []
             Params =
                 args
-                    [("__entries", listType)
-                     ("__writer", writerType)
-                     ("__first", TBool)]
+                    [(binding "__entries", listType)
+                     (binding "__writer", writerType)
+                     (binding "__first", TBool)]
             ReturnType = writerType
-            Body = Var "__writer"
+            Body = local "__writer" bindings
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let separated =
-            If (Var "__first", Var "__writer", writerSeparator (Var "__writer"))
-        let withName = writerFieldName separated (TupleAccess (Var "__entry", 0))
-        serializeCall env valueType withName (TupleAccess (Var "__entry", 1)) reserved
+            If (local "__first" bindings, local "__writer" bindings, writerSeparator (local "__writer" bindings))
+        let withName = writerFieldName separated (TupleAccess (local "__entry" bindings, 0))
+        serializeCall env valueType withName (TupleAccess (local "__entry" bindings, 1)) reserved
         |> Result.map (fun (encoded, nextState) ->
             let body =
                 Match (
-                    Var "__entries",
-                    [ makeCase (PList []) (Var "__writer")
+                    local "__entries" bindings,
+                    [ makeCase (PList []) (local "__writer" bindings)
                       makeCase
-                          (PListCons ([PVar "__entry"], PVar "__tail"))
-                          (call name [Var "__tail"; encoded; BoolLiteral false]) ])
+                          (PListCons ([patternLocal "__entry" bindings], patternLocal "__tail" bindings))
+                          (call name [local "__tail" bindings; encoded; BoolLiteral false]) ])
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
@@ -488,10 +533,11 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
     | TDict (TString, valueType) ->
         ensureDictSerializer env valueType state
         |> Result.map (fun (name, nextState) ->
+            let (entriesId, nextState) = freshBinding "__entries" nextState
             let entries =
                 TypeApp ("Darklang.Stdlib.Dict.toList", [TString; valueType], NonEmptyList.singleton value)
-            let encoded = call name [Var "__entries"; writerBeginObject writer; BoolLiteral true]
-            (Let (LPVariable "__entries", entries, writerEndObject encoded),
+            let encoded = call name [Local entriesId; writerBeginObject writer; BoolLiteral true]
+            (Let (LPVariable entriesId, entries, writerEndObject encoded),
              nextState))
     | TRecord (typeName, typeArgs) ->
         match Map.tryFind typeName env.Records with
@@ -537,7 +583,10 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                         | fieldTypes ->
                             let concreteFields = fieldTypes |> List.map (applySubstitution subst >> resolveJsonType env)
                             let fieldNames = fieldTypes |> List.mapi (fun index _ -> $"__field_{variant.Tag}_{index}")
-                            let fields = List.zip concreteFields (List.map Var fieldNames)
+                            let (fieldIds, current) =
+                                fieldNames
+                                |> List.mapFold (fun state fieldName -> freshBinding fieldName state) current
+                            let fields = List.zip concreteFields (List.map Local fieldIds)
                             let initialWriter =
                                 writer
                                 |> writerBeginObject
@@ -553,7 +602,7 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                                 (Ok (initialWriter, current))
                             |> Result.bind (fun (encoded, next) ->
                                 let body = encoded |> writerEndArray |> writerEndObject
-                                loop rest next (makeCase (PConstructor (variant.Name, List.map PVar fieldNames)) body :: acc))
+                                loop rest next (makeCase (PConstructor (variant.Name, List.map PVariable fieldIds)) body :: acc))
                 loop (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
                 |> Result.map (fun (cases, nextState) -> (Match (value, cases), nextState)))
     | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _
@@ -561,12 +610,14 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
         Error
             $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
 
-let private optionDecoder typ functionName =
-    let failure = cantMatch typ (rawSource (Var "__source") (Var "__view")) (Var "__path")
-    Match (
-        call functionName [Var "__source"; Var "__view"],
-        [ makeCase (PConstructor ("Some", [PVar "__value"])) (ok (Var "__value"))
-          makeCase (PConstructor ("None", [])) failure ])
+let private optionDecoder typ functionName source view path state =
+    let (valueId, state) = freshBinding "__value" state
+    let failure = cantMatch typ (rawSource source view) path
+    (Match (
+        call functionName [source; view],
+        [ makeCase (PConstructor ("Some", [PVariable valueId])) (ok (Local valueId))
+          makeCase (PConstructor ("None", [])) failure ]),
+     state)
 
 let rec private ensureDecoder (env: Env) typ state : Result<string * State, string> =
     let typ = resolveJsonType env typ
@@ -574,34 +625,50 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
+        let (bindings, state) = freshBindings ["__source"; "__view"; "__path"] state
+        let binding name =
+            match Map.tryFind name bindings with
+            | Some id -> id
+            | None -> Crash.crash $"JSON decoder binding was not allocated: {name}"
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.fromList ["__source", TString; "__view", valueViewType; "__path", pathType]
+            Params =
+                NonEmptyList.fromList
+                    [binding "__source", TString
+                     binding "__view", valueViewType
+                     binding "__path", pathType]
             ReturnType = resultType typ
             Body = RuntimeError "unfinished JSON decoder"
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        decodeBody env typ reserved
+        decodeBody
+            env
+            typ
+            (local "__source" bindings)
+            (local "__view" bindings)
+            (local "__path" bindings)
+            reserved
         |> Result.map (fun (body, nextState) ->
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
-and private decodeCall env typ view path state =
+and private decodeCall env typ source view path state =
     ensureDecoder env typ state
-    |> Result.map (fun (name, nextState) -> (call name [Var "__source"; view; path], nextState))
+    |> Result.map (fun (name, nextState) -> (call name [source; view; path], nextState))
 
-and private sequenceDecoded env items build state =
+and private sequenceDecoded env source items build state =
     let rec loop remaining current bindings =
         match remaining with
         | [] -> Ok (build (List.rev bindings), current)
         | (typ, view, path, bindingName) :: rest ->
-            decodeCall env typ view path current
+            decodeCall env typ source view path current
             |> Result.bind (fun (decoded, next) ->
+                let (errorId, next) = freshBinding "__decode_error" next
                 loop rest next ((bindingName, typ) :: bindings)
                 |> Result.map (fun (tail, finalState) ->
-                    (Match (decoded, resultCases bindingName tail "__decode_error"), finalState)))
+                    (Match (decoded, resultCases bindingName tail errorId), finalState)))
     loop items state []
 
 and private ensureListDecoder env elemType state =
@@ -611,16 +678,26 @@ and private ensureListDecoder env elemType state =
     match Map.tryFind name state.Functions with
     | Some _ -> Ok (name, state)
     | None ->
+        let (bindings, state) =
+            freshBindings
+                ["__source"; "__array_view"; "__next_index"; "__path"; "__index"
+                 "__head"; "__after_item"; "__decoded_head"; "__decoded_tail"
+                 "__tail_error"; "__head_error"]
+                state
+        let binding name =
+            match Map.tryFind name bindings with
+            | Some id -> id
+            | None -> Crash.crash $"JSON list decoder binding was not allocated: {name}"
         let placeholder = {
             Name = name
             TypeParams = []
             Params =
                 NonEmptyList.fromList
-                    ["__source", TString
-                     "__array_view", valueViewType
-                     "__next_index", TInt64
-                     "__path", pathType
-                     "__index", TInt64]
+                    [binding "__source", TString
+                     binding "__array_view", valueViewType
+                     binding "__next_index", TInt64
+                     binding "__path", pathType
+                     binding "__index", TInt64]
             ReturnType = resultType listType
             Body = RuntimeError "unfinished JSON list decoder"
             Recursion = None
@@ -629,50 +706,54 @@ and private ensureListDecoder env elemType state =
         let itemPath =
             listPush
                 pathPartType
-                (Var "__path")
-                (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (call "Darklang.Stdlib.Int.fromInt64" [Var "__index"])))
-        decodeCall env elemType (Var "__head") itemPath reserved
+                (local "__path" bindings)
+                (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (call "Darklang.Stdlib.Int.fromInt64" [local "__index" bindings])))
+        decodeCall env elemType (local "__source" bindings) (local "__head" bindings) itemPath reserved
         |> Result.map (fun (decodedHead, nextState) ->
             let decodedTail =
                 call
                     name
-                    [ Var "__source"
-                      Var "__array_view"
-                      Var "__after_item"
-                      Var "__path"
-                      BinOp (Add, Var "__index", Int64Literal 1L) ]
+                    [ local "__source" bindings
+                      local "__array_view" bindings
+                      local "__after_item" bindings
+                      local "__path" bindings
+                      BinOp (Add, local "__index" bindings, Int64Literal 1L) ]
             let invalid =
                 cantMatch
                     listType
-                    (rawSource (Var "__source") (Var "__array_view"))
-                    (Var "__path")
+                    (rawSource (local "__source" bindings) (local "__array_view" bindings))
+                    (local "__path" bindings)
+            let decodedTailResult =
+                Match (
+                    decodedTail,
+                    resultCases
+                        (binding "__decoded_tail")
+                        (ok (listPush elemType (local "__decoded_tail" bindings) (local "__decoded_head" bindings)))
+                        (binding "__tail_error"))
+            let decodedHeadResult =
+                Match (
+                    decodedHead,
+                    resultCases
+                        (binding "__decoded_head")
+                        decodedTailResult
+                        (binding "__head_error"))
             let body =
                 Let (
-                    LPVariable "__head",
-                    call "Darklang.Stdlib.Json.__arrayNext" [Var "__source"; Var "__array_view"; Var "__next_index"],
+                    LPVariable (binding "__head"),
+                    call "Darklang.Stdlib.Json.__arrayNext" [local "__source" bindings; local "__array_view" bindings; local "__next_index" bindings],
                     If (
-                        BinOp (Eq, Var "__head", Int64Literal -1L),
+                        BinOp (Eq, local "__head" bindings, Int64Literal -1L),
                         ok (ListLiteral []),
                         If (
-                            BinOp (Eq, Var "__head", Int64Literal -2L),
+                            BinOp (Eq, local "__head" bindings, Int64Literal -2L),
                             invalid,
                             Let (
-                                LPVariable "__after_item",
-                                call "Darklang.Stdlib.Json.__arrayAfter" [Var "__source"; Var "__array_view"; Var "__head"],
+                                LPVariable (binding "__after_item"),
+                                call "Darklang.Stdlib.Json.__arrayAfter" [local "__source" bindings; local "__array_view" bindings; local "__head" bindings],
                                 If (
-                                    BinOp (Lt, Var "__after_item", Int64Literal 0L),
+                                    BinOp (Lt, local "__after_item" bindings, Int64Literal 0L),
                                     invalid,
-                                    Match (
-                                        decodedHead,
-                                        resultCases
-                                            "__decoded_head"
-                                            (Match (
-                                                decodedTail,
-                                                resultCases
-                                                    "__decoded_tail"
-                                                    (ok (listPush elemType (Var "__decoded_tail") (Var "__decoded_head")))
-                                                    "__tail_error"))
-                                            "__head_error"))))))
+                                    decodedHeadResult)))))
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
@@ -684,51 +765,60 @@ and private ensureDictDecoder env valueType state =
     | Some _ -> Ok (name, state)
     | None ->
         let viewFieldsType = TList (TTuple [TString; valueViewType])
+        let (bindings, state) =
+            freshBindings
+                ["__source"; "__fields"; "__path"; "__dict"; "__entry"; "__tail"
+                 "__decoded_value"; "__decoded_dict"; "__dict_tail_error"; "__dict_error"]
+                state
+        let binding name =
+            match Map.tryFind name bindings with
+            | Some id -> id
+            | None -> Crash.crash $"JSON dictionary decoder binding was not allocated: {name}"
         let placeholder = {
             Name = name
             TypeParams = []
             Params =
                 NonEmptyList.fromList
-                    ["__source", TString
-                     "__fields", viewFieldsType
-                     "__path", pathType
-                     "__dict", dictType]
+                    [binding "__source", TString
+                     binding "__fields", viewFieldsType
+                     binding "__path", pathType
+                     binding "__dict", dictType]
             ReturnType = resultType dictType
             Body = RuntimeError "unfinished JSON dictionary decoder"
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        let key = call "Darklang.Stdlib.Json.__viewFieldName" [Var "__entry"]
-        let fieldView = call "Darklang.Stdlib.Json.__viewFieldValue" [Var "__entry"]
+        let key = call "Darklang.Stdlib.Json.__viewFieldName" [local "__entry" bindings]
+        let fieldView = call "Darklang.Stdlib.Json.__viewFieldValue" [local "__entry" bindings]
         let fieldPath =
             listPush
                 pathPartType
-                (Var "__path")
+                (local "__path" bindings)
                 (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some key))
-        decodeCall env valueType fieldView fieldPath reserved
+        decodeCall env valueType (local "__source" bindings) fieldView fieldPath reserved
         |> Result.map (fun (decoded, nextState) ->
             let withValue =
                 TypeApp (
                     "Darklang.Stdlib.Dict.setOverridingDuplicates",
                     [TString; valueType],
-                    args [Var "__dict"; key; Var "__decoded_value"])
+                    args [local "__dict" bindings; key; local "__decoded_value" bindings])
             let body =
                 Match (
-                    Var "__fields",
-                    [ makeCase (PList []) (ok (Var "__dict"))
+                    local "__fields" bindings,
+                    [ makeCase (PList []) (ok (local "__dict" bindings))
                       makeCase
-                          (PListCons ([PVar "__entry"], PVar "__tail"))
+                          (PListCons ([patternLocal "__entry" bindings], patternLocal "__tail" bindings))
                           (Match (
                               decoded,
                               resultCases
-                                  "__decoded_value"
+                                  (binding "__decoded_value")
                                   (Match (
-                                      call name [Var "__source"; Var "__tail"; Var "__path"; withValue],
+                                      call name [local "__source" bindings; local "__tail" bindings; local "__path" bindings; withValue],
                                       resultCases
-                                          "__decoded_dict"
-                                          (ok (Var "__decoded_dict"))
-                                          "__dict_tail_error"))
-                                  "__dict_error")) ])
+                                          (binding "__decoded_dict")
+                                          (ok (local "__decoded_dict" bindings))
+                                          (binding "__dict_tail_error")))
+                                  (binding "__dict_error"))) ])
             let completed = { placeholder with Body = body }
             (name, { nextState with Functions = Map.add name completed nextState.Functions }))
 
@@ -737,12 +827,15 @@ and private decodeEnumCase
     typ
     typeName
     subst
+    source
+    path
+    caseRaw
     (variant: SumVariant)
     state =
     let casePath =
         listPush
             pathPartType
-            (Var "__path")
+            path
             (constructor
                 "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part"
                 "Field"
@@ -751,6 +844,8 @@ and private decodeEnumCase
         variant.Fields |> List.map (applySubstitution subst >> resolveJsonType env)
     let rawNames = fieldTypes |> List.mapi (fun index _ -> $"__enum_raw_{variant.Tag}_{index}")
     let valueNames = fieldTypes |> List.mapi (fun index _ -> $"__enum_value_{variant.Tag}_{index}")
+    let extraName = $"__enum_extra_{variant.Tag}"
+    let (bindings, state) = freshBindings (rawNames @ valueNames @ [extraName; "__enum_args"]) state
     let decodedItems count =
         fieldTypes
         |> List.take count
@@ -763,11 +858,15 @@ and private decodeEnumCase
                         "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part"
                         "Index"
                         (Some (BigIntLiteral (bigint index))))
-            (fieldType, Var rawNames[index], argumentPath, valueNames[index]))
+            let valueId =
+                match Map.tryFind valueNames[index] bindings with
+                | Some id -> id
+                | None -> Crash.crash "JSON enum value binding was not allocated"
+            (fieldType, local rawNames[index] bindings, argumentPath, valueId))
     let constructed =
-        let values = valueNames |> List.map Var
+        let values = valueNames |> List.map (fun name -> local name bindings)
         Constructor ({ TypeName = typeName }, variant.Name, values) |> ok
-    let exactResult = sequenceDecoded env (decodedItems fieldTypes.Length) (fun _ -> constructed) state
+    let exactResult = sequenceDecoded env source (decodedItems fieldTypes.Length) (fun _ -> constructed) state
     exactResult
     |> Result.bind (fun (exactBody, exactState) ->
         let rec missingCases count current acc =
@@ -782,12 +881,17 @@ and private decodeEnumCase
                              BigIntLiteral (bigint count)
                              casePath])
                     |> error
-                sequenceDecoded env (decodedItems count) (fun _ -> missing) current
+                sequenceDecoded env source (decodedItems count) (fun _ -> missing) current
                 |> Result.bind (fun (body, next) ->
-                    missingCases (count + 1) next (makeCase (PList (rawNames |> List.take count |> List.map PVar)) body :: acc))
+                    missingCases
+                        (count + 1)
+                        next
+                        (makeCase
+                            (PList (rawNames |> List.take count |> List.map (fun name -> patternLocal name bindings)))
+                            body
+                         :: acc))
         missingCases 0 exactState []
         |> Result.bind (fun (missing, missingState) ->
-            let extraName = $"__enum_extra_{variant.Tag}"
             let extraPath =
                 listPush
                     pathPartType
@@ -800,73 +904,84 @@ and private decodeEnumCase
                 constructor
                     "Darklang.Stdlib.Json.ParseError.ParseError"
                     "EnumExtraField"
-                    (tuplePayload [rawSource (Var "__source") (Var extraName); extraPath])
+                    (tuplePayload [rawSource source (local extraName bindings); extraPath])
                 |> error
-            sequenceDecoded env (decodedItems fieldTypes.Length) (fun _ -> extra) missingState
+            sequenceDecoded env source (decodedItems fieldTypes.Length) (fun _ -> extra) missingState
             |> Result.map (fun (extraBody, finalState) ->
-                let exact = makeCase (PList (List.map PVar rawNames)) exactBody
+                let exact =
+                    makeCase (PList (rawNames |> List.map (fun name -> patternLocal name bindings))) exactBody
                 let extraPattern =
-                    PListCons (List.map PVar rawNames @ [PVar extraName], PWildcard)
+                    PListCons (
+                        (rawNames |> List.map (fun name -> patternLocal name bindings))
+                        @ [patternLocal extraName bindings],
+                        PWildcard)
                 let arrayBody =
                     Match (
-                        Var "__enum_args",
+                        local "__enum_args" bindings,
                         missing @ [exact; makeCase extraPattern extraBody])
                 let body =
                     Match (
-                        call "Darklang.Stdlib.Json.__arrayItems" [Var "__source"; Var "__case_raw"],
+                        call "Darklang.Stdlib.Json.__arrayItems" [source; caseRaw],
                         [ makeCase
-                              (PConstructor ("Some", [PVar "__enum_args"]))
+                              (PConstructor ("Some", [patternLocal "__enum_args" bindings]))
                               arrayBody
-                          makeCase PWildcard (cantMatch typ (rawSource (Var "__source") (Var "__case_raw")) casePath) ])
+                          makeCase PWildcard (cantMatch typ (rawSource source caseRaw) casePath) ])
                 (body, finalState))))
 
-and private decodeBody env typ state : Result<Expr * State, string> =
-    let failure = cantMatch typ (rawSource (Var "__source") (Var "__view")) (Var "__path")
+and private decodeBody env typ source view path state : Result<Expr * State, string> =
+    let failure = cantMatch typ (rawSource source view) path
     match typ with
     | TUnit ->
-        Ok (If (call "Darklang.Stdlib.Json.__isNull" [Var "__source"; Var "__view"], ok UnitLiteral, failure), state)
-    | TBool -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__boolValue", state)
-    | TString -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__stringValue", state)
-    | TChar -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewChar", state)
-    | TInt8 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt8", state)
-    | TInt16 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt16", state)
-    | TInt32 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt32", state)
-    | TInt64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt64", state)
-    | TInt128 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt128", state)
-    | TInt -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt", state)
-    | TUInt8 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt8", state)
-    | TUInt16 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt16", state)
-    | TUInt32 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt32", state)
-    | TUInt64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt64", state)
-    | TUInt128 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt128", state)
-    | TFloat64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewFloat", state)
-    | TSum ("Uuid", []) -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUuid", state)
-    | TDateTime -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewDateTime", state)
+        Ok (If (call "Darklang.Stdlib.Json.__isNull" [source; view], ok UnitLiteral, failure), state)
+    | TBool -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__boolValue" source view path state)
+    | TString -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__stringValue" source view path state)
+    | TChar -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewChar" source view path state)
+    | TInt8 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt8" source view path state)
+    | TInt16 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt16" source view path state)
+    | TInt32 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt32" source view path state)
+    | TInt64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt64" source view path state)
+    | TInt128 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt128" source view path state)
+    | TInt -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt" source view path state)
+    | TUInt8 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt8" source view path state)
+    | TUInt16 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt16" source view path state)
+    | TUInt32 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt32" source view path state)
+    | TUInt64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt64" source view path state)
+    | TUInt128 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt128" source view path state)
+    | TFloat64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewFloat" source view path state)
+    | TSum ("Uuid", []) -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUuid" source view path state)
+    | TDateTime -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewDateTime" source view path state)
     | TList elemType ->
         ensureListDecoder env elemType state
         |> Result.map (fun (listDecoder, nextState) ->
+            let (arrayStartId, nextState) = freshBinding "__array_start" nextState
             (Let (
-                LPVariable "__array_start",
-                call "Darklang.Stdlib.Json.__arrayStart" [Var "__source"; Var "__view"],
+                LPVariable arrayStartId,
+                call "Darklang.Stdlib.Json.__arrayStart" [source; view],
                 If (
-                    BinOp (Lt, Var "__array_start", Int64Literal 0L),
+                    BinOp (Lt, Local arrayStartId, Int64Literal 0L),
                     failure,
-                    call listDecoder [Var "__source"; Var "__view"; Var "__array_start"; Var "__path"; Int64Literal 0L])),
+                    call listDecoder [source; view; Local arrayStartId; path; Int64Literal 0L])),
              nextState))
     | TTuple elementTypes ->
         let names = elementTypes |> List.mapi (fun index _ -> $"__tuple_raw_{index}")
-        let patterns = names |> List.map PVar
+        let valueNames = elementTypes |> List.mapi (fun index _ -> $"__tuple_value_{index}")
+        let (bindings, state) = freshBindings (names @ valueNames) state
+        let patterns = names |> List.map (fun name -> patternLocal name bindings)
         let items = elementTypes |> List.mapi (fun index elemType ->
-            let path =
+            let itemPath =
                 listPush
                     pathPartType
-                    (Var "__path")
+                    path
                     (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (BigIntLiteral (bigint index))))
-            (elemType, Var names[index], path, $"__tuple_value_{index}"))
-        sequenceDecoded env items (fun bindings -> ok (TupleLiteral (bindings |> List.map (fst >> Var)))) state
+            let valueId =
+                match Map.tryFind valueNames[index] bindings with
+                | Some id -> id
+                | None -> Crash.crash "JSON tuple value binding was not allocated"
+            (elemType, local names[index] bindings, itemPath, valueId))
+        sequenceDecoded env source items (fun decoded -> ok (TupleLiteral (decoded |> List.map (fst >> Local)))) state
         |> Result.map (fun (decoded, nextState) ->
             (Match (
-                call "Darklang.Stdlib.Json.__arrayItems" [Var "__source"; Var "__view"],
+                call "Darklang.Stdlib.Json.__arrayItems" [source; view],
                 [ makeCase (PConstructor ("Some", [PList patterns])) decoded
                   makeCase PWildcard failure ]),
              nextState))
@@ -876,6 +991,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
         | Some recordInfo ->
             substitution recordInfo.TypeParams typeArgs
             |> Result.bind (fun subst ->
+                let (objectMapId, state) = freshBinding "__object_field_map" state
                 // Conversion checks required fields in declaration order; wire
                 // serialization is independently ordinal-by-name.
                 let fields = recordInfo.Fields
@@ -893,49 +1009,53 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         )
                     | (fieldName, fieldType) :: rest ->
                         let concrete = applySubstitution subst fieldType |> resolveJsonType env
+                        let (fieldRawId, current) = freshBinding "__field_raw" current
+                        let (fieldValueId, current) = freshBinding $"__field_{fieldName}" current
+                        let (fieldErrorId, current) = freshBinding "__field_error" current
                         let matches =
                             TypeApp (
                                 "Darklang.Stdlib.Dict.get",
                                 [TString; valueViewType],
-                                args [Var "__object_field_map"; StringLiteral fieldName])
+                                args [Local objectMapId; StringLiteral fieldName])
                         let fieldPath =
                             listPush
                                 pathPartType
-                                (Var "__path")
+                                path
                                 (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some (StringLiteral fieldName)))
-                        decodeCall env concrete (Var "__field_raw") fieldPath current
+                        decodeCall env concrete source (Local fieldRawId) fieldPath current
                         |> Result.bind (fun (decoded, next) ->
-                            build rest next ((fieldName, Var $"__field_{fieldName}") :: decodedFields)
+                            build rest next ((fieldName, Local fieldValueId) :: decodedFields)
                             |> Result.map (fun (tail, finalState) ->
-                                let missing = constructor "Darklang.Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
-                                let duplicate = constructor "Darklang.Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
-                                let one = Match (decoded, resultCases $"__field_{fieldName}" tail "__field_error")
+                                let missing = constructor "Darklang.Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; path]) |> error
+                                let duplicate = constructor "Darklang.Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; path]) |> error
+                                let one = Match (decoded, resultCases fieldValueId tail fieldErrorId)
                                 (Match (
                                     matches,
                                     [ makeCase (PConstructor ("None", [])) missing
                                       makeCase
-                                        (PConstructor ("Some", [PVar "__field_raw"]))
+                                        (PConstructor ("Some", [PVariable fieldRawId]))
                                         (If (
-                                            call "Darklang.Stdlib.Json.__viewIsDuplicate" [Var "__field_raw"],
+                                            call "Darklang.Stdlib.Json.__viewIsDuplicate" [Local fieldRawId],
                                             duplicate,
                                             one)) ]),
                                  finalState)))
                 build fields state []
                 |> Result.map (fun (decoded, nextState) ->
                     (Match (
-                        call "Darklang.Stdlib.Json.__objectFieldMap" [Var "__source"; Var "__view"],
-                        [ makeCase (PConstructor ("Some", [PVar "__object_field_map"])) decoded
+                        call "Darklang.Stdlib.Json.__objectFieldMap" [source; view],
+                        [ makeCase (PConstructor ("Some", [PVariable objectMapId])) decoded
                           makeCase PWildcard failure ]),
                      nextState)))
     | TDict (TString, valueType) ->
         ensureDictDecoder env valueType state
         |> Result.map (fun (dictDecoder, nextState) ->
+            let (objectFieldsId, nextState) = freshBinding "__object_fields" nextState
             let empty = DictLiteral (TString, valueType, [])
             (Match (
-                call "Darklang.Stdlib.Json.__objectFields" [Var "__source"; Var "__view"],
+                call "Darklang.Stdlib.Json.__objectFields" [source; view],
                 [ makeCase
-                      (PConstructor ("Some", [PVar "__object_fields"]))
-                      (call dictDecoder [Var "__source"; Var "__object_fields"; Var "__path"; empty])
+                      (PConstructor ("Some", [PVariable objectFieldsId]))
+                      (call dictDecoder [source; Local objectFieldsId; path; empty])
                   makeCase PWildcard failure ]),
              nextState))
     | TSum (typeName, typeArgs) ->
@@ -944,11 +1064,14 @@ and private decodeBody env typ state : Result<Expr * State, string> =
         | Some sumInfo ->
             substitution sumInfo.TypeParams typeArgs
             |> Result.bind (fun subst ->
+                let (caseNameId, state) = freshBinding "__case_name" state
+                let (caseRawId, state) = freshBinding "__case_raw" state
+                let (caseNamesId, state) = freshBinding "__case_names" state
                 let rec buildCases (remaining: SumVariant list) current acc =
                     match remaining with
                     | [] -> Ok (List.rev acc, current)
                     | variant :: rest ->
-                        decodeEnumCase env typ typeName subst variant current
+                        decodeEnumCase env typ typeName subst source path (Local caseRawId) variant current
                         |> Result.bind (fun (body, next) ->
                             buildCases rest next (makeCase (PString variant.Name) body :: acc))
                 buildCases (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
@@ -957,77 +1080,160 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         constructor
                             "Darklang.Stdlib.Json.ParseError.ParseError"
                             "EnumInvalidCasename"
-                            (tuplePayload [typeReference typ; Var "__case_name"; Var "__path"])
+                            (tuplePayload [typeReference typ; Local caseNameId; path])
                         |> error
                     let oneField =
                         Match (
-                            Var "__case_name",
+                            Local caseNameId,
                             caseMatches @ [makeCase PWildcard invalidCase])
                     let tooMany =
                         constructor
                             "Darklang.Stdlib.Json.ParseError.ParseError"
                             "EnumTooManyCases"
-                            (tuplePayload [typeReference typ; Var "__case_names"; Var "__path"])
+                            (tuplePayload [typeReference typ; Local caseNamesId; path])
                         |> error
                     let checkedOneField = oneField
                     let objectBody =
                         Match (
-                            call "Darklang.Stdlib.Json.__enumCandidate" [Var "__source"; Var "__view"],
+                            call "Darklang.Stdlib.Json.__enumCandidate" [source; view],
                             [ makeCase (PConstructor ("EnumNoFields", [])) failure
                               makeCase
                                   (PConstructor (
                                       "EnumOneField",
-                                      [PVar "__case_name"; PVar "__case_raw"]))
+                                      [PVariable caseNameId; PVariable caseRawId]))
                                   checkedOneField
                               makeCase
-                                  (PConstructor ("EnumManyFields", [PVar "__case_names"]))
+                                  (PConstructor ("EnumManyFields", [PVariable caseNamesId]))
                                   tooMany
                               makeCase PWildcard failure ])
                     (objectBody, nextState)))
     | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TDict _ ->
         Error $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
 
-let rec private mapExpr rewrite expr =
-    let recurse = mapExpr rewrite
-    let mapped =
+let rec private mapExpr rewrite symbols expr =
+    let mapList values state =
+        values
+        |> List.mapFold (fun current value -> mapExpr rewrite current value) state
+    let mapNonEmpty values state =
+        let (mapped, next) = mapList (NonEmptyList.toList values) state
+        (NonEmptyList.fromList mapped, next)
+    let mapPair first second state =
+        let (first', afterFirst) = mapExpr rewrite state first
+        let (second', next) = mapExpr rewrite afterFirst second
+        (first', second', next)
+    let (mapped, symbols) =
         match expr with
         | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _
         | Int16Literal _ | Int32Literal _ | UInt8Literal _ | UInt16Literal _ | UInt32Literal _
         | UInt64Literal _ | UInt128Literal _ | BoolLiteral _ | StringLiteral _ | CharLiteral _
-        | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> expr
+        | FloatLiteral _ | Local _ | NamedValue _ | FuncRef _ | RuntimeError _ -> (expr, symbols)
         | InterpolatedString parts ->
-            InterpolatedString (parts |> List.map (function StringText text -> StringText text | StringExpr e -> StringExpr (recurse e)))
-        | BinOp (op, left, right) -> BinOp (op, recurse left, recurse right)
-        | UnaryOp (op, inner) -> UnaryOp (op, recurse inner)
-        | Let (pattern, value, body) -> Let (pattern, recurse value, recurse body)
+            let (parts', next) =
+                parts
+                |> List.mapFold (fun current part ->
+                    match part with
+                    | StringText _ -> (part, current)
+                    | StringExpr value ->
+                        let (value', following) = mapExpr rewrite current value
+                        (StringExpr value', following)) symbols
+            (InterpolatedString parts', next)
+        | BinOp (op, left, right) ->
+            let (left', right', next) = mapPair left right symbols
+            (BinOp (op, left', right'), next)
+        | UnaryOp (op, inner) ->
+            let (inner', next) = mapExpr rewrite symbols inner
+            (UnaryOp (op, inner'), next)
+        | Let (pattern, value, body) ->
+            let (value', body', next) = mapPair value body symbols
+            (Let (pattern, value', body'), next)
         | RecursiveLet (recursion, value, body) ->
-            RecursiveLet (recursion, recurse value, recurse body)
-        | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
-        | Sequence (first, next) -> Sequence (recurse first, recurse next)
-        | Call (name, values) -> Call (name, NonEmptyList.map recurse values)
-        | TypeApp (name, types, values) -> TypeApp (name, types, NonEmptyList.map recurse values)
-        | TupleLiteral values -> TupleLiteral (List.map recurse values)
-        | TupleAccess (value, index) -> TupleAccess (recurse value, index)
+            let (value', body', next) = mapPair value body symbols
+            (RecursiveLet (recursion, value', body'), next)
+        | If (condition, thenBranch, elseBranch) ->
+            let (condition', afterCondition) = mapExpr rewrite symbols condition
+            let (thenBranch', elseBranch', next) = mapPair thenBranch elseBranch afterCondition
+            (If (condition', thenBranch', elseBranch'), next)
+        | Sequence (first, nextExpr) ->
+            let (first', next', next) = mapPair first nextExpr symbols
+            (Sequence (first', next'), next)
+        | Call (name, values) ->
+            let (values', next) = mapNonEmpty values symbols
+            (Call (name, values'), next)
+        | TypeApp (name, types, values) ->
+            let (values', next) = mapNonEmpty values symbols
+            (TypeApp (name, types, values'), next)
+        | TupleLiteral values ->
+            let (values', next) = mapList values symbols
+            (TupleLiteral values', next)
+        | TupleAccess (value, index) ->
+            let (value', next) = mapExpr rewrite symbols value
+            (TupleAccess (value', index), next)
         | DictLiteral (keyType, valueType, entries) ->
-            DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
-        | RecordLiteral (name, fields) -> RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
-        | RecordUpdate (record, fields) -> RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
-        | RecordAccess (record, field) -> RecordAccess (recurse record, field)
-        | Constructor (reference, name, fields) -> Constructor (reference, name, List.map recurse fields)
+            let (entries', next) =
+                entries
+                |> List.mapFold (fun current (key, value) ->
+                    let (key', value', following) = mapPair key value current
+                    ((key', value'), following)) symbols
+            (DictLiteral (keyType, valueType, entries'), next)
+        | RecordLiteral (name, fields) ->
+            let (fields', next) =
+                fields
+                |> List.mapFold (fun current (field, value) ->
+                    let (value', following) = mapExpr rewrite current value
+                    ((field, value'), following)) symbols
+            (RecordLiteral (name, fields'), next)
+        | RecordUpdate (record, fields) ->
+            let (record', afterRecord) = mapExpr rewrite symbols record
+            let (fields', next) =
+                fields
+                |> List.mapFold (fun current (field, value) ->
+                    let (value', following) = mapExpr rewrite current value
+                    ((field, value'), following)) afterRecord
+            (RecordUpdate (record', fields'), next)
+        | RecordAccess (record, field) ->
+            let (record', next) = mapExpr rewrite symbols record
+            (RecordAccess (record', field), next)
+        | Constructor (reference, name, fields) ->
+            let (fields', next) = mapList fields symbols
+            (Constructor (reference, name, fields'), next)
         | Match (value, cases) ->
-            Match (recurse value, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
-        | ListLiteral values -> ListLiteral (List.map recurse values)
-        | Lambda (parameters, annotation, body) -> Lambda (parameters, annotation, recurse body)
-        | Apply (fn, values) -> Apply (recurse fn, NonEmptyList.map recurse values)
-        | IndirectApply (fn, values) -> IndirectApply (recurse fn, NonEmptyList.map recurse values)
-        | Closure (name, captures) -> Closure (name, List.map recurse captures)
-        | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
-    rewrite mapped
+            let (value', afterValue) = mapExpr rewrite symbols value
+            let (cases', next) =
+                cases
+                |> List.mapFold (fun current case ->
+                    let (guard', afterGuard) =
+                        match case.Guard with
+                        | None -> (None, current)
+                        | Some guard ->
+                            let (guard', following) = mapExpr rewrite current guard
+                            (Some guard', following)
+                    let (body', following) = mapExpr rewrite afterGuard case.Body
+                    ({ case with Guard = guard'; Body = body' }, following)) afterValue
+            (Match (value', cases'), next)
+        | ListLiteral values ->
+            let (values', next) = mapList values symbols
+            (ListLiteral values', next)
+        | Lambda (parameters, annotation, body) ->
+            let (body', next) = mapExpr rewrite symbols body
+            (Lambda (parameters, annotation, body'), next)
+        | Apply (fn, values) | IndirectApply (fn, values) ->
+            let (fn', afterFn) = mapExpr rewrite symbols fn
+            let (values', next) = mapNonEmpty values afterFn
+            match expr with
+            | Apply _ -> (Apply (fn', values'), next)
+            | _ -> (IndirectApply (fn', values'), next)
+        | Closure (name, captures) ->
+            let (captures', next) = mapList captures symbols
+            (Closure (name, captures'), next)
+        | BoundaryRender (renderer, value) ->
+            let (value', next) = mapExpr rewrite symbols value
+            (BoundaryRender (renderer, value'), next)
+    rewrite symbols mapped
 
 let rewriteProgramWithSession
     (session: PlanningSession option)
     (env: CheckingTypes.TypeCheckEnv)
-    (Program topLevels)
+    (Program (symbols, topLevels))
     : Program =
     let (serializerTypes, parserTypes) =
         let collect expr acc =
@@ -1060,7 +1266,7 @@ let rewriteProgramWithSession
                 | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _
                 | Int16Literal _ | Int32Literal _ | UInt8Literal _ | UInt16Literal _ | UInt32Literal _
                 | UInt64Literal _ | UInt128Literal _ | BoolLiteral _ | StringLiteral _ | CharLiteral _
-                | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> collected
+                | FloatLiteral _ | Local _ | NamedValue _ | FuncRef _ | RuntimeError _ -> collected
             walk expr initialResult
         topLevels
         |> List.fold (fun acc topLevel ->
@@ -1101,16 +1307,18 @@ let rewriteProgramWithSession
         let concrete = resolveJsonType planningEnv typ
         let key = $"{direction}|{canonicalCodecTypeKey planningEnv concrete}"
         match session |> Option.bind (fun current -> current.TryFind key) with
-        | Some functions -> mergeArtifact state functions
+        | Some _ -> ensure planningEnv concrete state |> Result.map snd
         | None ->
-            ensure planningEnv concrete { Functions = Map.empty }
+            let existingNames = state.Functions |> Map.keys |> Set.ofSeq
+            ensure planningEnv concrete state
             |> Result.bind (fun (_, artifactState) ->
                 let functions =
                     artifactState.Functions
                     |> Map.toList
-                    |> List.map snd
+                    |> List.choose (fun (name, fn) ->
+                        if Set.contains name existingNames then None else Some fn)
                 session |> Option.iter (fun current -> current.Store(key, functions))
-                mergeArtifact state functions)
+                Ok artifactState)
 
     let planned =
         match session with
@@ -1122,7 +1330,7 @@ let rewriteProgramWithSession
                 |> List.fold (fun result typ ->
                     result
                     |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
-                    (Ok { Functions = Map.empty })
+                    (Ok { Functions = Map.empty; Symbols = symbols })
             parserTypes
             |> List.fold (fun result typ ->
                 result
@@ -1132,64 +1340,79 @@ let rewriteProgramWithSession
                 serializerTypes
                 |> List.fold (fun result typ ->
                     result |> Result.bind (planCached "serialize" ensureSerializer typ))
-                    (Ok { Functions = Map.empty })
+                    (Ok { Functions = Map.empty; Symbols = symbols })
             parserTypes
             |> List.fold (fun result typ ->
                 result |> Result.bind (planCached "parse" ensureDecoder typ)) serializersPlanned
 
     if not hasJsonCalls then
-        Program topLevels
+        Program (symbols, topLevels)
     else
         match planned with
         | Error error ->
-            let rewrite expr =
+            let rewrite currentSymbols expr =
                 match expr with
                 | TypeApp ("Darklang.Stdlib.Json.serialize", _, _)
-                | TypeApp ("Darklang.Stdlib.Json.parse", _, _) -> RuntimeError error
-                | _ -> expr
-            Program (
+                | TypeApp ("Darklang.Stdlib.Json.parse", _, _) -> (RuntimeError error, currentSymbols)
+                | _ -> (expr, currentSymbols)
+            let (rewritten, symbols') =
                 topLevels
-                |> List.map (function
-                    | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
-                    | Expression expr -> Expression (mapExpr rewrite expr)
-                    | other -> other))
+                |> List.mapFold (fun currentSymbols topLevel ->
+                    match topLevel with
+                    | FunctionDef fn ->
+                        let (body, next) = mapExpr rewrite currentSymbols fn.Body
+                        (FunctionDef { fn with Body = body }, next)
+                    | Expression expr ->
+                        let (expr', next) = mapExpr rewrite currentSymbols expr
+                        (Expression expr', next)
+                    | other -> (other, currentSymbols)) symbols
+            Program (symbols', rewritten)
         | Ok state ->
-            let rewrite expr =
+            let rewrite currentSymbols expr =
                 match expr with
                 | TypeApp ("Darklang.Stdlib.Json.serialize", [typ], values) ->
                     let written =
                         call
                             (serializeName (resolveJsonType planningEnv typ))
                             (writerEmpty :: NonEmptyList.toList values)
-                    writerFinish written
+                    (writerFinish written, currentSymbols)
                 | TypeApp ("Darklang.Stdlib.Json.parse", [typ], values) ->
                     let concrete = resolveJsonType planningEnv typ
                     let source = NonEmptyList.head values
-                    let parsed = call "Darklang.Stdlib.Json.__parseRoot" [Var "__json_source"]
+                    let (sourceId, symbols1) = allocateBinding "__json_source" currentSymbols
+                    let (parseResultId, symbols2) = allocateBinding "__json_parse_result" symbols1
+                    let (viewId, symbols3) = allocateBinding "__json_view" symbols2
+                    let parsed = call "Darklang.Stdlib.Json.__parseRoot" [Local sourceId]
                     let rootPath = ListLiteral [constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Root" None]
-                    Let (
-                        LPVariable "__json_source",
+                    (Let (
+                        LPVariable sourceId,
                         source,
                         Let (
-                            LPVariable "__json_parse_result",
+                            LPVariable parseResultId,
                             parsed,
                             Match (
-                                Var "__json_parse_result",
+                                Local parseResultId,
                                 [ makeCase
-                                      (PConstructor ("Ok", [PVar "__json_view"]))
-                                      (call (decoderName concrete) [Var "__json_source"; Var "__json_view"; rootPath])
+                                      (PConstructor ("Ok", [PVariable viewId]))
+                                      (call (decoderName concrete) [Local sourceId; Local viewId; rootPath])
                                   makeCase
                                       (PConstructor ("Error", [PWildcard]))
-                                      (constructor "Darklang.Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ])))
-                | _ -> expr
-            let rewritten =
+                                      (constructor "Darklang.Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ]))),
+                     symbols3)
+                | _ -> (expr, currentSymbols)
+            let (rewritten, finalSymbols) =
                 topLevels
-                |> List.map (function
-                    | FunctionDef fn -> FunctionDef { fn with Body = mapExpr rewrite fn.Body }
-                    | Expression expr -> Expression (mapExpr rewrite expr)
-                    | other -> other)
+                |> List.mapFold (fun currentSymbols topLevel ->
+                    match topLevel with
+                    | FunctionDef fn ->
+                        let (body, next) = mapExpr rewrite currentSymbols fn.Body
+                        (FunctionDef { fn with Body = body }, next)
+                    | Expression expr ->
+                        let (expr', next) = mapExpr rewrite currentSymbols expr
+                        (Expression expr', next)
+                    | other -> (other, currentSymbols)) state.Symbols
             let generated = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
-            Program (generated @ rewritten)
+            Program (finalSymbols, generated @ rewritten)
 
 let rewriteProgram (env: CheckingTypes.TypeCheckEnv) (program: Program) : Program =
     rewriteProgramWithSession None env program

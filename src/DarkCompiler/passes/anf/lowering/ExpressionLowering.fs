@@ -94,7 +94,12 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         // Float literal becomes return
         Ok (ANF.Return (ANF.FloatLiteral f), varGen)
 
-    | CheckedAST.Var name ->
+    | CheckedAST.Local id ->
+        match Map.tryFind id env with
+        | Some (tempId, _) -> Ok (ANF.Return (ANF.Var tempId), varGen)
+        | None -> Error "Undefined local binding identity"
+
+    | CheckedAST.NamedValue name ->
         if isBuiltinTestNanName name then
             Ok (ANF.Return (ANF.FloatLiteral System.Double.NaN), varGen)
         else if isBuiltinTestInfinityName name then
@@ -112,25 +117,21 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             // The empty skew-list is the null pointer with tag zero.
             Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
         else
-            // Variable reference: look up in environment
-            match tryLookupResolved name env with
-            | Some ((tempId, _), _) -> Ok (ANF.Return (ANF.Var tempId), varGen)
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            match Stdlib.tryGetFunction moduleRegistry name with
+            | Some (_, resolvedName) ->
+                let (closureId, varGen') = ANF.freshVar varGen
+                let closureAlloc = ANF.ClosureAlloc (resolvedName, [])
+                Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
             | None ->
-                // Check if it's a module function (e.g., Stdlib.Int64.add)
-                match Stdlib.tryGetFunction moduleRegistry name with
+                // Check if it's a function reference (function name used as value)
+                match tryLookupResolved name funcReg with
                 | Some (_, resolvedName) ->
                     let (closureId, varGen') = ANF.freshVar varGen
                     let closureAlloc = ANF.ClosureAlloc (resolvedName, [])
                     Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
                 | None ->
-                    // Check if it's a function reference (function name used as value)
-                    match tryLookupResolved name funcReg with
-                    | Some (_, resolvedName) ->
-                        let (closureId, varGen') = ANF.freshVar varGen
-                        let closureAlloc = ANF.ClosureAlloc (resolvedName, [])
-                        Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
-                    | None ->
-                        Error $"Undefined variable: {name}"
+                    Error $"Undefined named value: {name}"
 
     | CheckedAST.FuncRef name ->
         // Explicit function reference - wrap in closure for uniform calling convention
@@ -667,93 +668,75 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     argSetupExprs
                     finalExpr
             // Check if funcName is a variable (indirect call) or a defined function (direct call)
-            match Map.tryFind funcName env with
-            | Some (tempId, AST.TFunction (paramTypes, _)) ->
-                // Variable with function type - use closure call
-                // All function values are now closures (even non-capturing ones)
-                let normalizedArgAtoms = normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms
-                let callExpr = ANF.ClosureCall (ANF.Var tempId, normalizedArgAtoms)
-                let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+            // Not a variable - check explicit presentation effects first.
+            match tryPresentationIntrinsic funcName argAtoms with
+            | Some intrinsicExpr ->
+                let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                 Ok (withArgSetups finalExpr, varGen2)
-            | Some (tempId, AST.TVar _) ->
-                // Higher-order generic values can remain unresolved (TVar) until
-                // surrounding inference finalizes concrete shapes.
-                let callExpr = ANF.ClosureCall (ANF.Var tempId, argAtoms)
-                let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
-                Ok (withArgSetups finalExpr, varGen2)
-            | Some (_, varType) ->
-                // Variable exists but is not a function type
-                Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
             | None ->
-                // Not a variable - check explicit presentation effects first.
-                match tryPresentationIntrinsic funcName argAtoms with
+            match tryCliIntrinsic funcName (normalizeNullaryIntrinsicArgs argAtoms) with
+            | Some intrinsicExpr ->
+                let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                Ok (withArgSetups finalExpr, varGen2)
+            | None ->
+            // Check if it's a file intrinsic.
+            match tryFileIntrinsic funcName argAtoms with
+            | Some intrinsicExpr ->
+                let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                Ok (withArgSetups finalExpr, varGen2)
+            | None ->
+                // Check if it's a raw memory intrinsic
+                match tryRawMemoryIntrinsic sumTypeNames funcName argAtoms with
+                | Some intrinsicExpr ->
+                    // Raw memory intrinsic call
+                    let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                    Ok (withArgSetups finalExpr, varGen2)
+                | None ->
+                match tryCanonicalPrimitiveIntrinsic funcName argAtoms with
                 | Some intrinsicExpr ->
                     let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                     Ok (withArgSetups finalExpr, varGen2)
                 | None ->
-                match tryCliIntrinsic funcName (normalizeNullaryIntrinsicArgs argAtoms) with
+                // Check if it's a Float intrinsic
+                match tryFloatIntrinsic funcName argAtoms with
                 | Some intrinsicExpr ->
+                    // Float intrinsic call
                     let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                     Ok (withArgSetups finalExpr, varGen2)
                 | None ->
-                // Check if it's a file intrinsic.
-                match tryFileIntrinsic funcName argAtoms with
+                // Check if it's a random intrinsic
+                match tryRandomIntrinsic funcName argAtoms with
                 | Some intrinsicExpr ->
+                    // Random intrinsic call
                     let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                     Ok (withArgSetups finalExpr, varGen2)
                 | None ->
-                    // Check if it's a raw memory intrinsic
-                    match tryRawMemoryIntrinsic sumTypeNames funcName argAtoms with
-                    | Some intrinsicExpr ->
-                        // Raw memory intrinsic call
-                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | None ->
-                    match tryCanonicalPrimitiveIntrinsic funcName argAtoms with
-                    | Some intrinsicExpr ->
-                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | None ->
-                    // Check if it's a Float intrinsic
-                    match tryFloatIntrinsic funcName argAtoms with
-                    | Some intrinsicExpr ->
-                        // Float intrinsic call
-                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | None ->
-                    // Check if it's a random intrinsic
-                    match tryRandomIntrinsic funcName argAtoms with
-                    | Some intrinsicExpr ->
-                        // Random intrinsic call
-                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | None ->
-                    // Check if it's a DateTime intrinsic.
-                    match tryDateTimeIntrinsic funcName argAtoms with
-                    | Some intrinsicExpr ->
-                        // DateTime intrinsic call.
-                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | None ->
-                    // Check if it's a defined function
-                    match Map.tryFind funcName funcReg with
-                    | Some (AST.TFunction (paramTypes, _)) ->
-                        // Direct call to defined function
-                        let normalizedArgAtoms = normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms
-                        let callExpr = ANF.Call (funcName, normalizedArgAtoms)
-                        let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | Some _ ->
-                        // Preserve existing behavior for malformed registry entries.
-                        let callExpr = ANF.Call (funcName, argAtoms)
-                        let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2)
-                    | None ->
-                        // Unknown function - could be error or forward reference
-                        // For now, assume it's a valid function (will fail at link time if not)
-                        let callExpr = ANF.Call (funcName, argAtoms)
-                        let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
-                        Ok (withArgSetups finalExpr, varGen2))
+                // Check if it's a DateTime intrinsic.
+                match tryDateTimeIntrinsic funcName argAtoms with
+                | Some intrinsicExpr ->
+                    // DateTime intrinsic call.
+                    let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                    Ok (withArgSetups finalExpr, varGen2)
+                | None ->
+                // Check if it's a defined function
+                match Map.tryFind funcName funcReg with
+                | Some (AST.TFunction (paramTypes, _)) ->
+                    // Direct call to defined function
+                    let normalizedArgAtoms = normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms
+                    let callExpr = ANF.Call (funcName, normalizedArgAtoms)
+                    let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                    Ok (withArgSetups finalExpr, varGen2)
+                | Some _ ->
+                    // Preserve existing behavior for malformed registry entries.
+                    let callExpr = ANF.Call (funcName, argAtoms)
+                    let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                    Ok (withArgSetups finalExpr, varGen2)
+                | None ->
+                    // Unknown function - could be error or forward reference
+                    // For now, assume it's a valid function (will fail at link time if not)
+                    let callExpr = ANF.Call (funcName, argAtoms)
+                    let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                    Ok (withArgSetups finalExpr, varGen2))
 
     | CheckedAST.TypeApp (_funcName, _typeArgs, _args) ->
         // Generic function call - not yet implemented
@@ -1305,7 +1288,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     | _ -> body  // Should not happen due to length check
                 let desugared = buildLets parameterList argsList
                 toANFCore sumTypeNames inertScopes desugared varGen env typeReg variantLookup funcReg moduleRegistry
-        | CheckedAST.Var name ->
+        | CheckedAST.Local name ->
             // Calling a variable that might hold a closure
             match Map.tryFind name env with
             | Some (tempId, _) ->

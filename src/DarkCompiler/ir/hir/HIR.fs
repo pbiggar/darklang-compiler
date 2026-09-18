@@ -15,7 +15,7 @@ type Value = {
 type Operand = {
     Expression: CheckedAST.Expr
     Type: AST.Type
-    Inputs: Map<string, Value>
+    Inputs: Map<AST.BindingId, Value>
 }
 
 /// Function signatures describe only the typed call boundary. Effects and
@@ -45,6 +45,7 @@ type Operation<'leaf, 'block> =
 /// authority after construction.
 type Parameter = {
     Name: string
+    Binding: AST.BindingId
     Value: Value
 }
 

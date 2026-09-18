@@ -77,7 +77,12 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
     | CheckedAST.FloatLiteral f ->
         Ok (ANF.FloatLiteral f, [], varGen)
 
-    | CheckedAST.Var name ->
+    | CheckedAST.Local id ->
+        match Map.tryFind id env with
+        | Some (tempId, _) -> Ok (ANF.Var tempId, [], varGen)
+        | None -> Error "Undefined local binding identity"
+
+    | CheckedAST.NamedValue name ->
         if isBuiltinTestNanName name then
             Ok (ANF.FloatLiteral System.Double.NaN, [], varGen)
         else if isBuiltinTestInfinityName name then
@@ -94,25 +99,21 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
         else if name = "Darklang.Stdlib.List.empty" || name = "Darklang.Stdlib.List.empty_v0" then
             Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
         else
-            // Variable reference: look up in environment
-            match tryLookupResolved name env with
-            | Some ((tempId, _), _) -> Ok (ANF.Var tempId, [], varGen)
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            match Stdlib.tryGetFunction moduleRegistry name with
+            | Some (_, resolvedName) ->
+                let (closureId, varGen') = ANF.freshVar varGen
+                let closureAlloc = ANF.ClosureAlloc (resolvedName, [])
+                Ok (ANF.Var closureId, [(closureId, closureAlloc)], varGen')
             | None ->
-                // Check if it's a module function (e.g., Stdlib.Int64.add)
-                match Stdlib.tryGetFunction moduleRegistry name with
+                // Check if it's a function reference (function name used as value)
+                match tryLookupResolved name funcReg with
                 | Some (_, resolvedName) ->
                     let (closureId, varGen') = ANF.freshVar varGen
                     let closureAlloc = ANF.ClosureAlloc (resolvedName, [])
                     Ok (ANF.Var closureId, [(closureId, closureAlloc)], varGen')
                 | None ->
-                    // Check if it's a function reference (function name used as value)
-                    match tryLookupResolved name funcReg with
-                    | Some (_, resolvedName) ->
-                        let (closureId, varGen') = ANF.freshVar varGen
-                        let closureAlloc = ANF.ClosureAlloc (resolvedName, [])
-                        Ok (ANF.Var closureId, [(closureId, closureAlloc)], varGen')
-                    | None ->
-                        Error $"Undefined variable: {name}"
+                    Error $"Undefined named value: {name}"
 
     | CheckedAST.FuncRef name ->
         // Explicit function reference - wrap in closure for uniform calling convention
@@ -450,83 +451,66 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 // Create a temporary for the call result
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 // Check if funcName is a variable (indirect call) or a defined function (direct call)
-                match Map.tryFind funcName env with
-                | Some (tempId, AST.TFunction (paramTypes, _)) ->
-                    // Variable with function type - use closure call
-                    // All function values are now closures (even non-capturing ones)
-                    let normalizedArgAtoms = normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms
-                    let callCExpr = ANF.ClosureCall (ANF.Var tempId, normalizedArgAtoms)
-                    let allBindings = argBindings @ [(tempVar, callCExpr)]
+                // Not a variable - check explicit presentation effects first.
+                match tryPresentationIntrinsic funcName argAtoms with
+                | Some intrinsicExpr ->
+                    let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                     Ok (ANF.Var tempVar, allBindings, varGen2)
-                | Some (tempId, AST.TVar _) ->
-                    // Keep unresolved higher-order generic values callable in atom position.
-                    let callCExpr = ANF.ClosureCall (ANF.Var tempId, argAtoms)
-                    let allBindings = argBindings @ [(tempVar, callCExpr)]
-                    Ok (ANF.Var tempVar, allBindings, varGen2)
-                | Some (_, varType) ->
-                    // Variable exists but is not a function type
-                    Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
                 | None ->
-                    // Not a variable - check explicit presentation effects first.
-                    match tryPresentationIntrinsic funcName argAtoms with
+                    match tryCliIntrinsic funcName (normalizeNullaryIntrinsicArgs argAtoms) with
                     | Some intrinsicExpr ->
                         let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                         Ok (ANF.Var tempVar, allBindings, varGen2)
                     | None ->
-                        match tryCliIntrinsic funcName (normalizeNullaryIntrinsicArgs argAtoms) with
+                    // Check if it's a file intrinsic.
+                    match tryFileIntrinsic funcName argAtoms with
+                    | Some intrinsicExpr ->
+                        let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
+                        Ok (ANF.Var tempVar, allBindings, varGen2)
+                    | None ->
+                    // Check if it's a raw memory intrinsic
+                    match tryRawMemoryIntrinsic sumTypeNames funcName argAtoms with
+                    | Some intrinsicExpr ->
+                        // Raw memory intrinsic call
+                        let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
+                        Ok (ANF.Var tempVar, allBindings, varGen2)
+                    | None ->
+                        match tryCanonicalPrimitiveIntrinsic funcName argAtoms with
                         | Some intrinsicExpr ->
                             let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                             Ok (ANF.Var tempVar, allBindings, varGen2)
                         | None ->
-                        // Check if it's a file intrinsic.
-                        match tryFileIntrinsic funcName argAtoms with
+                        // Check if it's a Float intrinsic
+                        match tryFloatIntrinsic funcName argAtoms with
                         | Some intrinsicExpr ->
+                            // Float intrinsic call
                             let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                             Ok (ANF.Var tempVar, allBindings, varGen2)
                         | None ->
-                        // Check if it's a raw memory intrinsic
-                        match tryRawMemoryIntrinsic sumTypeNames funcName argAtoms with
-                        | Some intrinsicExpr ->
-                            // Raw memory intrinsic call
-                            let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
-                            Ok (ANF.Var tempVar, allBindings, varGen2)
-                        | None ->
-                            match tryCanonicalPrimitiveIntrinsic funcName argAtoms with
+                            // Check if it's a random intrinsic
+                            match tryRandomIntrinsic funcName argAtoms with
                             | Some intrinsicExpr ->
+                                // Random intrinsic call
                                 let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                                 Ok (ANF.Var tempVar, allBindings, varGen2)
                             | None ->
-                            // Check if it's a Float intrinsic
-                            match tryFloatIntrinsic funcName argAtoms with
-                            | Some intrinsicExpr ->
-                                // Float intrinsic call
-                                let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
-                                Ok (ANF.Var tempVar, allBindings, varGen2)
-                            | None ->
-                                // Check if it's a random intrinsic
-                                match tryRandomIntrinsic funcName argAtoms with
+                                // Check if it's a DateTime intrinsic.
+                                match tryDateTimeIntrinsic funcName argAtoms with
                                 | Some intrinsicExpr ->
-                                    // Random intrinsic call
+                                    // DateTime intrinsic call.
                                     let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                                     Ok (ANF.Var tempVar, allBindings, varGen2)
                                 | None ->
-                                    // Check if it's a DateTime intrinsic.
-                                    match tryDateTimeIntrinsic funcName argAtoms with
-                                    | Some intrinsicExpr ->
-                                        // DateTime intrinsic call.
-                                        let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
-                                        Ok (ANF.Var tempVar, allBindings, varGen2)
-                                    | None ->
-                                            // Assume it's a defined function (direct call)
-                                            let callArgAtoms =
-                                                match Map.tryFind funcName funcReg with
-                                                | Some (AST.TFunction (paramTypes, _)) ->
-                                                    normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms
-                                                | _ ->
-                                                    argAtoms
-                                            let callCExpr = ANF.Call (funcName, callArgAtoms)
-                                            let allBindings = argBindings @ [(tempVar, callCExpr)]
-                                            Ok (ANF.Var tempVar, allBindings, varGen2))
+                                        // Assume it's a defined function (direct call)
+                                        let callArgAtoms =
+                                            match Map.tryFind funcName funcReg with
+                                            | Some (AST.TFunction (paramTypes, _)) ->
+                                                normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms
+                                            | _ ->
+                                                argAtoms
+                                        let callCExpr = ANF.Call (funcName, callArgAtoms)
+                                        let allBindings = argBindings @ [(tempVar, callCExpr)]
+                                        Ok (ANF.Var tempVar, allBindings, varGen2))
 
     | CheckedAST.TypeApp (_, _, _) ->
         // Placeholder: Generic instantiation not yet implemented
@@ -1102,7 +1086,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             // Float the let out and recurse
             toAtomCore sumTypeNames inertScopes (CheckedAST.Let (letName, letValue, CheckedAST.Apply (letBody, args))) varGen env typeReg variantLookup funcReg moduleRegistry
 
-        | CheckedAST.Var name ->
+        | CheckedAST.Local name ->
             // Variable call in atom position - treat as closure call
             match Map.tryFind name env with
             | Some (tempId, _) ->

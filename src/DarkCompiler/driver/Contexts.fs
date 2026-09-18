@@ -48,7 +48,7 @@ let private buildPackageCatalogGenericCallers
     let callsByFunction =
         genericFuncDefs
         |> Map.map (fun _ definition ->
-            Monomorphization.collectCalledFunctions definition.Body)
+            Monomorphization.collectCalledFunctions definition.Function.Body)
     let rec findFixedPoint callers =
         let targets = Set.union packageCatalogFunctionNames callers
         let next =
@@ -63,10 +63,21 @@ let private buildPackageCatalogGenericCallers
     findFixedPoint Set.empty
 
 /// Shared compilation context used across pipeline steps
+type CheckedValueArtifact = {
+    Symbols: CheckedAST.Symbols
+    Type: AST.Type
+    Body: CheckedAST.Expr
+}
+
+let internal checkedValueArtifacts (program: CheckedAST.Program) : Map<string, CheckedValueArtifact> =
+    let symbols = CheckedAST.programSymbols program
+    CheckedAST.programValues program
+    |> Map.map (fun _ (typ, body) -> { Symbols = symbols; Type = typ; Body = body })
+
 type PipelineContext = {
     Target: Platform.Target
     TypeCheckEnv: CheckingTypes.TypeCheckEnv
-    CheckedValues: Map<string, AST.Type * CheckedAST.Expr>
+    CheckedValues: Map<string, CheckedValueArtifact>
     GenericFuncDefs: SpecializationIdentity.GenericFuncDefs
     SpecRegistry: SpecializationIdentity.SpecRegistry
     Registries: AST_to_ANF.Registries
@@ -82,7 +93,7 @@ type PipelineContext = {
 let internal buildContext
     (target: Platform.Target)
     (typeCheckEnv: CheckingTypes.TypeCheckEnv)
-    (checkedValues: Map<string, AST.Type * CheckedAST.Expr>)
+    (checkedValues: Map<string, CheckedValueArtifact>)
     (genericFuncDefs: SpecializationIdentity.GenericFuncDefs)
     (specRegistry: SpecializationIdentity.SpecRegistry)
     (registries: AST_to_ANF.Registries)

@@ -12,7 +12,7 @@ open ClosureAnalysis
 open LiftExpressions
 open LiftFunctions
 
-let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.Type, string> =
+let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeEnv: Map<AST.BindingId, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.Type, string> =
     match expr with
     | CheckedAST.BoundaryRender _ -> Ok AST.TString
     | CheckedAST.RuntimeError _ -> Ok AST.TRuntimeError
@@ -32,19 +32,20 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
     | CheckedAST.StringLiteral _ -> Ok AST.TString
     | CheckedAST.CharLiteral _ -> Ok AST.TChar
     | CheckedAST.FloatLiteral _ -> Ok AST.TFloat64
-    | CheckedAST.Var name ->
+    | CheckedAST.Local id ->
+        match Map.tryFind id typeEnv with
+        | Some typ -> Ok typ
+        | None -> Error "Cannot infer type: undefined local binding identity"
+    | CheckedAST.NamedValue name ->
         if isBuiltinTestNanName name || isBuiltinTestInfinityName name then
             Ok AST.TFloat64
         else if isBuiltinBlobEmptyName name then
             Ok AST.TBlob
         else
-            match tryLookupResolved name typeEnv with
-            | Some (t, _) -> Ok t
-            | None ->
-                // Check if it's a module function (e.g., Stdlib.Int64.add)
-                match Stdlib.tryGetFunction moduleRegistry name with
-                | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
-                | None -> Error $"Cannot infer type: undefined variable '{name}'"
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            match Stdlib.tryGetFunction moduleRegistry name with
+            | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
+            | None -> Error $"Cannot infer type: undefined named value '{name}'"
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
         Ok (AST.TDict (keyType, valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
@@ -173,7 +174,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
         |> Result.bind (fun valueType ->
             inferTypeCore sumTypeNames
                 body
-                (Map.add (CheckedAST.recursiveBindingName recursion) valueType typeEnv)
+                (Map.add (CheckedAST.recursiveBindingId recursion) valueType typeEnv)
                 typeReg
                 variantLookup
                 funcReg
@@ -418,7 +419,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             let patBindings =
                 mc.Patterns
                 |> AST.NonEmptyList.toList
-                |> List.fold (fun acc pat -> Map.fold (fun m k v -> Map.add k v m) acc (extractPatternBindings pat patternType)) Map.empty
+                |> List.fold (fun acc pat ->
+                    matchPatternBindingTypes typeReg variantLookup pat patternType
+                    |> Map.fold (fun current id typ -> Map.add id typ current) acc) Map.empty
             let typeEnv' = Map.fold (fun m k v -> Map.add k v m) typeEnv patBindings
             inferTypeCore sumTypeNames mc.Body typeEnv' typeReg variantLookup funcReg moduleRegistry
 
@@ -483,10 +486,6 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             | Some (AST.TFunction (_, returnType)) -> Ok returnType
             | Some _ -> Error $"Expected function type for {funcName} in funcReg"
             | None ->
-                // Check if it's a function parameter (variable with function type)
-                match Map.tryFind funcName typeEnv with
-                | Some (AST.TFunction (_, returnType)) -> Ok returnType
-                | _ ->
                 // Check if it's a module function (e.g., Stdlib.File.exists)
                 match Stdlib.tryGetFunction moduleRegistry funcName with
                 | Some (moduleFunc, _) -> Ok moduleFunc.ReturnType

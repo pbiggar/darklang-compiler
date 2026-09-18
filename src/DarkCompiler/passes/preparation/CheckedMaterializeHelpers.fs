@@ -33,7 +33,7 @@ let rec private collectHelperTypes
     | CheckedAST.Int32Literal _ | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _
     | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
     | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _
-    | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _
+    | CheckedAST.FloatLiteral _ | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _
     | CheckedAST.RuntimeError _ -> (Set.empty, Set.empty)
     | CheckedAST.BoundaryRender (_, value)
     | CheckedAST.UnaryOp (_, value)
@@ -110,7 +110,7 @@ let rec private rewriteHelperCalls
     | CheckedAST.Int32Literal _ | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _
     | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
     | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _
-    | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _
+    | CheckedAST.FloatLiteral _ | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _
     | CheckedAST.RuntimeError _ -> expr
     | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
     | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, recurse left, recurse right)
@@ -177,18 +177,19 @@ let rec private rewriteHelperCalls
                 | CheckedAST.StringExpr partExpr -> CheckedAST.StringExpr (recurse partExpr))
         )
 
-let private checkedGeneratedFunction (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef =
-    match CheckedAST.ofTypedFunction funcDef with
-    | Ok checkedFunction -> checkedFunction
+let private checkedGeneratedFunction symbols (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef * CheckedAST.Symbols =
+    match CheckedAST.ofTypedFunction symbols funcDef with
+    | Ok result -> result
     | Error error -> Crash.crash error
 
 let materializeEqHelpersInTopLevelsWithIndexedSums
+    (symbols: CheckedAST.Symbols)
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (topLevels: CheckedAST.TopLevel list)
-    : CheckedAST.TopLevel list =
+    : CheckedAST.Symbols * CheckedAST.TopLevel list =
     let concreteTopLevels =
         topLevels
         |> List.choose (function
@@ -227,7 +228,9 @@ let materializeEqHelpersInTopLevelsWithIndexedSums
         |> Map.toList
         |> List.map snd
         |> List.filter (fun helper -> not (Set.contains helper.Name existingNames))
-        |> List.map (checkedGeneratedFunction >> CheckedAST.FunctionDef)
+        |> List.mapFold (fun symbols helper ->
+            let (checkedFunction, symbols) = checkedGeneratedFunction symbols helper
+            (CheckedAST.FunctionDef checkedFunction, symbols)) symbols
     let rewritten =
         topLevels
         |> List.map (function
@@ -240,15 +243,18 @@ let materializeEqHelpersInTopLevelsWithIndexedSums
                 CheckedAST.ValueDef
                     { valueDef with Body = rewriteHelperCalls aliasReg variantLookup valueDef.Body }
             | other -> other)
-    helpers @ rewritten
+    let (helpers, symbols) = helpers
+    (symbols, helpers @ rewritten)
 
 let materializeEqHelpersInTopLevels
+    (symbols: CheckedAST.Symbols)
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (topLevels: CheckedAST.TopLevel list)
-    : CheckedAST.TopLevel list =
+    : CheckedAST.Symbols * CheckedAST.TopLevel list =
     materializeEqHelpersInTopLevelsWithIndexedSums
+        symbols
         aliasReg
         typeReg
         variantLookup

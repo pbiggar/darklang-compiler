@@ -77,7 +77,7 @@ let buildPreambleContext
                             stdlib.Context.BaseFuncNames
                     let pipelineContext =
                         let checkedValues =
-                            CheckedAST.programValues typedPreambleAst
+                            checkedValueArtifacts typedPreambleAst
                             |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
                         buildContext
                             stdlib.Context.Target
@@ -169,17 +169,20 @@ let buildPreambleContextFromAnalysis
     let mergedGenericDefs =
         Map.fold (fun acc k v -> Map.add k v acc) stdlib.Context.GenericFuncDefs analysis.GenericFuncDefs
 
-    let (CheckedAST.Program items) = analysis.TypedAST
-    let specializedTopLevels = specialization.SpecializedFuncs |> List.map CheckedAST.FunctionDef
+    let (CheckedAST.Program (symbols, items)) = analysis.TypedAST
+    let symbols, specializedFunctions =
+        SpecializationIdentity.importSpecializedFunctions symbols specialization.SpecializedFuncs
+    let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
     let specializedAndOriginalTopLevels = specializedTopLevels @ items
-    let materializedTopLevels =
+    let symbols, materializedTopLevels =
         CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+            symbols
             analysis.TypeCheckEnv.AliasReg
             analysis.TypeCheckEnv.IndexedTypeReg
             analysis.TypeCheckEnv.VariantLookup
             analysis.TypeCheckEnv.IndexedSumTypeReg
             specializedAndOriginalTopLevels
-    let programWithSpecializations = CheckedAST.Program materializedTopLevels
+    let programWithSpecializations = CheckedAST.Program (symbols, materializedTopLevels)
 
     convertTypedDeclarations
         (Some stdlib.Context)
@@ -198,7 +201,7 @@ let buildPreambleContextFromAnalysis
                 stdlib.Context.BaseFuncNames
         let pipelineContext =
             let checkedValues =
-                CheckedAST.programValues analysis.TypedAST
+                checkedValueArtifacts analysis.TypedAST
                 |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
             buildContext
                 stdlib.Context.Target

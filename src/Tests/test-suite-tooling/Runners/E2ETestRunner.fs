@@ -268,7 +268,7 @@ let private buildPreambleBuildSpec (sourceFile: string) (tests: E2ETest list) : 
         Error $"Multiple preambles found for {sourceFile}"
 
 let private collectTypeAppsFromProgram (program: CheckedAST.Program) : Set<SpecKey> =
-    let (CheckedAST.Program topLevels) = program
+    let (CheckedAST.Program (_, topLevels)) = program
     topLevels
     |> List.map (function
         | CheckedAST.FunctionDef f when List.isEmpty f.TypeParams -> collectTypeAppsFromFunc f
@@ -754,7 +754,13 @@ let private buildPreamblePlan
                 | Ok (typeDefs, functions) ->
                     let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
                     let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
-                    let registries = AST_to_ANF.buildRegistries Map.empty typeDefs aliasReg resolvedFunctions
+                    let registries =
+                        AST_to_ANF.buildRegistries
+                            (CheckedAST.programSymbols analysis.TypedAST)
+                            Map.empty
+                            typeDefs
+                            aliasReg
+                            resolvedFunctions
                     (registries.TypeReg, registries.VariantLookup)
                 | Error _ ->
                     (Map.empty, Map.empty)

@@ -59,7 +59,8 @@ let rec countMatches (expr: CheckedAST.Expr) : int =
         | CheckedAST.StringLiteral _
         | CheckedAST.CharLiteral _
         | CheckedAST.FloatLiteral _
-        | CheckedAST.Var _
+        | CheckedAST.Local _
+        | CheckedAST.NamedValue _
         | CheckedAST.FuncRef _
         | CheckedAST.RuntimeError _ ->
             []
@@ -141,7 +142,7 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
     let program = Program [sumDef; Expression ([], eqExpr)]
 
     match checkProgram program with
-    | Ok (actualType, CheckedAST.Program topLevels) ->
+    | Ok (actualType, CheckedAST.Program (_, topLevels)) ->
         if actualType <> TBool then
             Error $"Expected Bool result type, got {typeToString actualType}"
         else
@@ -345,7 +346,7 @@ let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
     |> Result.bind (fun program ->
         checkProgram program
         |> Result.mapError (fun error -> $"Recursive group type check failed: {typeErrorToString error}"))
-    |> Result.bind (fun (_, CheckedAST.Program topLevels) ->
+    |> Result.bind (fun (_, CheckedAST.Program (_, topLevels)) ->
         let recursionByName =
             topLevels
             |> List.choose (function

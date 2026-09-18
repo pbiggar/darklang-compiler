@@ -244,7 +244,7 @@ let buildStdlibWithTrace
                     buildContext
                         target
                         typeCheckEnv
-                        (CheckedAST.programValues typedStdlib)
+                        (checkedValueArtifacts typedStdlib)
                         genericFuncDefs
                         Map.empty
                         registries
@@ -351,7 +351,8 @@ let buildStdlibSpecializations
             |> Set.ofSeq
         let newSpecializedFuncs =
             specialization.SpecializedFuncs
-            |> List.filter (fun f -> not (Set.contains f.Name existingNames))
+            |> List.filter (fun artifact ->
+                not (Set.contains artifact.Function.Name existingNames))
 
         if List.isEmpty newSpecializedFuncs then
             let updatedContext = { stdlib.Context with SpecRegistry = initialCombinedSpecRegistry }
@@ -362,14 +363,24 @@ let buildStdlibSpecializations
         else
             AST_to_ANF.splitDeclarations stdlib.TypedAST
             |> Result.bind (fun (typeDefs, _functions) ->
+                let symbols, newSpecializedFunctions =
+                    SpecializationIdentity.importSpecializedFunctions
+                        (CheckedAST.programSymbols stdlib.TypedAST)
+                        newSpecializedFuncs
+                let initiallyMaterializedTopLevels, symbols =
+                    newSpecializedFunctions
+                    |> List.mapFold (fun symbols funcDef ->
+                        let symbols, topLevels =
+                            CheckedMaterializeHelpers.materializeEqHelpersInTopLevels
+                                symbols
+                                stdlib.Context.TypeCheckEnv.AliasReg
+                                materializationTypeReg
+                                materializationVariantLookup
+                                [CheckedAST.FunctionDef funcDef]
+                        (topLevels, symbols)) symbols
                 let initiallyMaterializedFunctions =
-                    newSpecializedFuncs
-                    |> List.collect (fun funcDef ->
-                        [CheckedAST.FunctionDef funcDef]
-                        |> CheckedMaterializeHelpers.materializeEqHelpersInTopLevels
-                            stdlib.Context.TypeCheckEnv.AliasReg
-                            materializationTypeReg
-                            materializationVariantLookup)
+                    initiallyMaterializedTopLevels
+                    |> List.collect id
                     |> List.choose (function
                         | CheckedAST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)
@@ -383,20 +394,26 @@ let buildStdlibSpecializations
                     Monomorphization.specializeFromSpecs stdlib.Context.GenericFuncDefs helperSpecs
                 let combinedSpecRegistry =
                     mergeSpecRegistries initialCombinedSpecRegistry helperSpecialization.SpecRegistry
-                let materializedFunctions =
-                    (helperSpecialization.SpecializedFuncs @ initiallyMaterializedFunctions)
+                let symbols, helperSpecializedFunctions =
+                    SpecializationIdentity.importSpecializedFunctions symbols helperSpecialization.SpecializedFuncs
+                let symbols, materializedTopLevels =
+                    (helperSpecializedFunctions @ initiallyMaterializedFunctions)
                     |> List.filter (fun f -> not (Set.contains f.Name existingNames))
                     |> List.map CheckedAST.FunctionDef
                     |> CheckedMaterializeHelpers.materializeEqHelpersInTopLevels
+                        symbols
                         stdlib.Context.TypeCheckEnv.AliasReg
                         materializationTypeReg
                         materializationVariantLookup
+                let materializedFunctions =
+                    materializedTopLevels
                     |> List.choose (function
                         | CheckedAST.FunctionDef funcDef -> Some funcDef
                         | _ -> None)
                     |> List.distinctBy (fun funcDef -> funcDef.Name)
                 let specializationProgram =
                     CheckedAST.Program (
+                        symbols,
                         (typeDefs |> List.map CheckedAST.TypeDef)
                         @ (materializedFunctions |> List.map CheckedAST.FunctionDef)
                     )
@@ -410,10 +427,12 @@ let buildStdlibSpecializations
                     stdlib.Context.CheckedValues
                     passTimingRecorder
                     specializationProgram
-                |> Result.bind AST_to_ANF.splitDeclarations
-                |> Result.bind (fun (preparedTypeDefs, preparedFunctions) ->
+                |> Result.bind (fun preparedProgram ->
+                    AST_to_ANF.splitDeclarations preparedProgram
+                    |> Result.bind (fun (preparedTypeDefs, preparedFunctions) ->
                     let (registries, localRegistries, resolvedFunctions) =
                         buildRegistriesForProgram
+                            (CheckedAST.programSymbols preparedProgram)
                             true
                             stdlib.Context.Registries.ModuleRegistry
                             stdlib.Context.Registries
@@ -454,7 +473,11 @@ let buildStdlibSpecializations
                     }
                     let localReturnTypes = extractReturnTypes localRegistries.FuncReg
                     let varGen = ANF.VarGen 0
-                    AST_to_ANF.convertFunctions registries varGen resolvedFunctions
+                    AST_to_ANF.convertFunctions
+                        (CheckedAST.programSymbols preparedProgram)
+                        registries
+                        varGen
+                        resolvedFunctions
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = defaultOptions
                         let sw = Stopwatch.StartNew()
@@ -538,5 +561,5 @@ let buildStdlibSpecializations
                             )
                         )
                     )
-                )
+                ))
             )

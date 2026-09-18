@@ -521,7 +521,7 @@ let testExpressionTypeCheckingReusesBaseRegistries
             CompilerOptions.defaultWarningSettings
             program
         |> Result.mapError CheckingDiagnostics.typeErrorToString)
-    |> Result.bind (fun (programType, CheckedAST.Program topLevels, checkedEnv) ->
+    |> Result.bind (fun (programType, CheckedAST.Program (_, topLevels), checkedEnv) ->
         let hasEqualityHelper =
             topLevels
             |> List.exists (function

@@ -20,7 +20,12 @@ type private RenderEnv = {
 
 type private RenderState = {
     Functions: Map<string, FunctionDef>
+    Symbols: Symbols
 }
+
+let private freshBinding name state =
+    let (id, symbols) = allocateBinding name state.Symbols
+    (id, { state with Symbols = symbols })
 
 let private args (values: Expr list) : NonEmptyList<Expr> =
     NonEmptyList.fromList values
@@ -121,17 +126,18 @@ let rec private ensureRenderer
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
+        let (valueId, state) = freshBinding "__value" state
         // Reserve the name before descending so recursive sum types terminate.
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton ("__value", typ)
+            Params = NonEmptyList.singleton (valueId, typ)
             ReturnType = TString
             Body = StringLiteral ""
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        let (body, withDependencies) = renderBody env typ (Var "__value") reserved
+        let (body, withDependencies) = renderBody env typ (Local valueId) reserved
         let completed = { placeholder with Body = body }
         (name, { withDependencies with Functions = Map.add name completed withDependencies.Functions })
 
@@ -167,28 +173,31 @@ and private ensureListItemsRenderer
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
+        let (itemsId, state) = freshBinding "__items" state
+        let (headId, state) = freshBinding "__head" state
+        let (tailId, state) = freshBinding "__tail" state
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton ("__items", listType)
+            Params = NonEmptyList.singleton (itemsId, listType)
             ReturnType = TString
             Body = StringLiteral ""
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        let (renderedHead, withElemRenderer) = renderCall env elemType (Var "__head") reserved
+        let (renderedHead, withElemRenderer) = renderCall env elemType (Local headId) reserved
         let tailBody =
             Match (
-                Var "__tail",
+                Local tailId,
                 [ makeCase (PList []) (StringLiteral "")
-                  makeCase PWildcard (concat [StringLiteral ", "; call name [Var "__tail"]]) ]
+                  makeCase PWildcard (concat [StringLiteral ", "; call name [Local tailId]]) ]
             )
         let body =
             Match (
-                Var "__items",
+                Local itemsId,
                 [ makeCase (PList []) (StringLiteral "")
                   makeCase
-                      (PListCons ([PVar "__head"], PVar "__tail"))
+                      (PListCons ([PVariable headId], PVariable tailId))
                       (concat [renderedHead; tailBody]) ]
             )
         let completed = { placeholder with Body = body }
@@ -206,17 +215,20 @@ and private ensureDictItemsRenderer
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
+        let (entriesId, state) = freshBinding "__entries" state
+        let (entryId, state) = freshBinding "__entry" state
+        let (tailId, state) = freshBinding "__tail" state
         let placeholder = {
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton ("__entries", listType)
+            Params = NonEmptyList.singleton (entriesId, listType)
             ReturnType = TString
             Body = StringLiteral ""
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        let entryKey = TupleAccess (Var "__entry", 0)
-        let entryValue = TupleAccess (Var "__entry", 1)
+        let entryKey = TupleAccess (Local entryId, 0)
+        let entryValue = TupleAccess (Local entryId, 1)
         let (renderedKey, withKeyRenderer) =
             match keyType with
             | TString -> (call "Darklang.Stdlib.Dict.__renderKey" [entryKey], reserved)
@@ -231,16 +243,16 @@ and private ensureDictItemsRenderer
             ]
         let tailBody =
             Match (
-                Var "__tail",
+                Local tailId,
                 [ makeCase (PList []) (StringLiteral "")
-                  makeCase PWildcard (concat [StringLiteral "; "; call name [Var "__tail"]]) ]
+                  makeCase PWildcard (concat [StringLiteral "; "; call name [Local tailId]]) ]
             )
         let body =
             Match (
-                Var "__entries",
+                Local entriesId,
                 [ makeCase (PList []) (StringLiteral "")
                   makeCase
-                      (PListCons ([PVar "__entry"], PVar "__tail"))
+                      (PListCons ([PVariable entryId], PVariable tailId))
                       (concat [renderedEntry; tailBody]) ]
             )
         let completed = { placeholder with Body = body }
@@ -297,19 +309,20 @@ and private renderBody
     | TDict (TVar _, TVar _) -> (StringLiteral "Dict { }", state)
     | TDict (keyType, valueType) ->
         let (itemsName, nextState) = ensureDictItemsRenderer env keyType valueType state
+        let (entriesId, nextState) = freshBinding "__dict_entries" nextState
         let entries = TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton value)
         let body =
             Let (
-                LPVariable "__dict_entries",
+                LPVariable entriesId,
                 entries,
                 Match (
-                    Var "__dict_entries",
+                    Local entriesId,
                     [ makeCase (PList []) (StringLiteral "Dict { }")
                       makeCase
                           PWildcard
                           (concat
                               [ StringLiteral "Dict { "
-                                call itemsName [Var "__dict_entries"]
+                                call itemsName [Local entriesId]
                                 StringLiteral " }" ]) ]
                 )
             )
@@ -362,16 +375,17 @@ and private renderBody
                 |> List.concat
             let long = concat (StringLiteral $"{typeText} {{\n  " :: longParts @ [StringLiteral "\n}"])
             let shortName = "__record_short"
+            let (shortId, nextState) = freshBinding shortName nextState
             (Let (
-                LPVariable shortName,
+                LPVariable shortId,
                 short,
                 If (
                     BinOp (
                         Lte,
-                        call "Darklang.Stdlib.String.length" [Var shortName],
+                        call "Darklang.Stdlib.String.length" [Local shortId],
                         BigIntLiteral (System.Numerics.BigInteger 80)
                     ),
-                    Var shortName,
+                    Local shortId,
                     long
                 )
              ), nextState)
@@ -393,9 +407,12 @@ and private renderBody
                     | fieldTypes ->
                         let concreteTypes = fieldTypes |> List.map (applySubstitution subst)
                         let fieldNames = fieldTypes |> List.mapi (fun index _ -> $"__field_{variant.Tag}_{index}")
+                        let (fieldIds, currentState) =
+                            fieldNames
+                            |> List.mapFold (fun state fieldName -> freshBinding fieldName state) currentState
                         let (renderedFields, nextState) =
-                            List.zip concreteTypes fieldNames
-                            |> List.map (fun (fieldType, fieldName) -> (fieldType, Var fieldName))
+                            List.zip concreteTypes fieldIds
+                            |> List.map (fun (fieldType, fieldId) -> (fieldType, Local fieldId))
                             |> fun items -> renderDelimited env items currentState
                         let separated =
                             renderedFields
@@ -404,7 +421,7 @@ and private renderBody
                             |> List.concat
                         let body =
                             concat (StringLiteral $"{typeText}.{variant.Name}(" :: separated @ [StringLiteral ")"])
-                        let case = makeCase (PConstructor (variant.Name, List.map PVar fieldNames)) body
+                        let case = makeCase (PConstructor (variant.Name, List.map PVariable fieldIds)) body
                         buildCases rest nextState (case :: acc)
             let (cases, nextState) = buildCases (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
             (Match (value, cases), nextState)
@@ -423,7 +440,7 @@ let rewriteProgram
     (sumMetadata: CheckingTypes.IndexedSumTypeRegistry)
     (baseFunctions: Map<string, Type>)
     (programType: Type)
-    (Program topLevels)
+    (Program (symbols, topLevels))
     : Program =
     // Type checking already built and overlaid these immutable indexes. Keep
     // them lazy so primitive renderers do not inspect declaration metadata.
@@ -439,64 +456,74 @@ let rewriteProgram
     let env = { Records = records; Sums = sums }
     let (renderName, state) =
         match programType with
-        | TDateTime -> (None, { Functions = Map.empty })
+        | TDateTime -> (None, { Functions = Map.empty; Symbols = symbols })
         | _ ->
-            let (name, generatedState) = ensureRenderer env programType { Functions = Map.empty }
+            let (name, generatedState) =
+                ensureRenderer env programType { Functions = Map.empty; Symbols = symbols }
             (Some name, generatedState)
 
     let tryNamedPartialName expr =
         match expr with
         | Lambda (parameters, returnAnnotation, body) ->
-            let parameterNames =
+            let parameterIds =
                 parameters
                 |> NonEmptyList.toList
                 |> List.choose (fun parameter ->
                     match parameter.Pattern with
-                    | LPVariable name -> Some name
+                    | LPVariable id -> Some id
                     | _ -> None)
             let generatedPartial =
-                List.length parameterNames = NonEmptyList.length parameters
-                && (parameterNames |> List.forall (fun name -> name.StartsWith "__partial_"))
+                List.length parameterIds = NonEmptyList.length parameters
+                && (parameterIds
+                    |> List.forall (fun id ->
+                        bindingName id symbols
+                        |> Option.map (fun name -> name.StartsWith "__partial_")
+                        |> Option.defaultValue false))
             let callNameAndArgs =
                 match body with
                 | Call (name, callArgs) -> Some (name, NonEmptyList.toList callArgs)
                 | TypeApp (name, _, callArgs) -> Some (name, NonEmptyList.toList callArgs)
                 | _ -> None
             match generatedPartial, callNameAndArgs with
-            | true, Some (name, callArgs) when List.length callArgs > List.length parameterNames ->
-                let trailingArgs = callArgs |> List.skip (List.length callArgs - List.length parameterNames)
-                if List.forall2 (fun arg parameterName -> arg = Var parameterName) trailingArgs parameterNames then
+            | true, Some (name, callArgs) when List.length callArgs > List.length parameterIds ->
+                let trailingArgs = callArgs |> List.skip (List.length callArgs - List.length parameterIds)
+                if List.forall2 (fun arg parameterId -> arg = Local parameterId) trailingArgs parameterIds then
                     Some name
                 else
                     None
             | _ -> None
         | _ -> None
 
-    let rewriteExpression expr =
+    let rewriteExpression state expr =
         let rendered =
             match programType, expr, tryNamedPartialName expr with
             | TDateTime, _, _ ->
-                BoundaryRender ("Darklang.Stdlib.DateTime.toString", expr)
+                (BoundaryRender ("Darklang.Stdlib.DateTime.toString", expr), state)
             | TFunction _, _, Some name ->
-                Let (LPVariable "__rendered_named_partial", expr, StringLiteral name)
-            | TFunction _, Var name, _ when Set.contains name namedFunctions.Value ->
-                Let (LPVariable "__rendered_named_function", expr, StringLiteral name)
+                let (id, next) = freshBinding "__rendered_named_partial" state
+                (Let (LPVariable id, expr, StringLiteral name), next)
+            | TFunction _, NamedValue name, _ when Set.contains name namedFunctions.Value ->
+                let (id, next) = freshBinding "__rendered_named_function" state
+                (Let (LPVariable id, expr, StringLiteral name), next)
             | TFunction _, FuncRef name, _ ->
-                Let (LPVariable "__rendered_named_function", expr, StringLiteral name)
+                let (id, next) = freshBinding "__rendered_named_function" state
+                (Let (LPVariable id, expr, StringLiteral name), next)
             | TFunction _, Lambda _, _ ->
-                Let (LPVariable "__rendered_lambda", expr, StringLiteral "(lambda)")
+                let (id, next) = freshBinding "__rendered_lambda" state
+                (Let (LPVariable id, expr, StringLiteral "(lambda)"), next)
             | _ ->
-                BoundaryRender (
+                (BoundaryRender (
                     renderName |> Option.defaultWith (fun () -> Crash.crash "Missing boundary value renderer"),
                     expr
-                )
-        Expression rendered
+                 ), state)
+        let (expression, next) = rendered
+        (Expression expression, next)
 
-    let rewrittenTopLevels =
+    let (rewrittenTopLevels, finalState) =
         topLevels
-        |> List.map (function
-            | Expression expr ->
-                rewriteExpression expr
-            | other -> other)
+        |> List.mapFold (fun currentState topLevel ->
+            match topLevel with
+            | Expression expr -> rewriteExpression currentState expr
+            | other -> (other, currentState)) state
     let generatedFunctions = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
-    Program (generatedFunctions @ rewrittenTopLevels)
+    Program (finalState.Symbols, generatedFunctions @ rewrittenTopLevels)
