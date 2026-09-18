@@ -54,7 +54,8 @@ FunctionalRegion: typed blocks + semantic collection edges + scalar joins
 ```
 
 `ir/hir/HIR.fs` defines shared typed value identities, operands, scalar
-bindings, branches, and blocks independent of array layouts and ANF.
+bindings, resolved direct calls, branches, and blocks independent of array
+layouts and ANF.
 Opaque scalar expressions retain their checked AST evaluation payload while
 their local inputs use normalized identities. `passes/hir/VerifyHIR.fs` checks
 definitions, uses, types, and structured branch results independently.
@@ -104,10 +105,15 @@ enabled by this architecture change.
 The same verifier accepts explicit function ownership signatures. Borrowed
 parameters are readable but cannot be released or consumed; consumed
 parameters enter with one ownership unit; produced results transfer one unit
-back to the caller. Current list regions intentionally use the closed signature
-because external source lists still have the persistent skew-list
-representation. Carrying these signatures across general calls and selecting
-an escaping array representation remain later work.
+back to the caller. Resolved HIR calls now require typed, primitive, and
+ownership registry entries: unmanaged positions align with the typed arity,
+borrowed results identify a borrowed parameter, and produced results create a
+fresh caller-owned unit. Unknown calls remain opaque, and recursion is enabled
+only by an explicit self-entry. Current list regions intentionally reject this
+general call node and use the closed signature because external source lists
+still have the persistent skew-list representation. Constructing whole
+functions in HIR and selecting an escaping array representation remain later
+work.
 
 `verifyFunctional` checks the closed region's incoming collection interface
 using representation-independent value contracts. `verifyBlockOwnership`
@@ -229,9 +235,9 @@ ANF pipeline or a complete Perceus implementation. The next boundaries are:
    with primitive effect/alias/ownership contracts and general block interfaces;
    layout/destruction metadata independent of ANF; stage verifiers throughout
    the pipeline. Generated printing must precede general ownership elaboration.
-3. Carry function ownership signatures through general HIR calls, then add
-   representation interfaces, bounded specialization, explicit conversion
-   profitability, recursive solving, and cache identities.
+3. Carry the registered HIR call boundary through whole-function construction,
+   then add representation interfaces, bounded specialization, explicit
+   conversion profitability, recursive solving, and cache identities.
 4. Runtime uniqueness tests for consumed arrays whose sharing is not statically
    known; surviving borrowed aliases must remain protected.
 5. Managed elements and destruction-effect propagation. Stream finalizers are

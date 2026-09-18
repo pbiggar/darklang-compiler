@@ -17,9 +17,26 @@ type Operand = {
     Inputs: Map<string, Value>
 }
 
+/// Function signatures describe only the typed call boundary. Effects and
+/// alias provenance remain separate primitive contracts, while ownership is
+/// supplied by OwnedIR.
+type FunctionSignature = {
+    Parameters: AST.Type list
+    Result: AST.Type
+}
+
+/// Only resolved direct calls enter normalized HIR. Unknown and indirect calls
+/// remain inside opaque scalar evaluation until their boundaries are known.
+type FunctionCall = {
+    Target: string
+    Arguments: Value list
+    Result: Value
+}
+
 type Operation<'leaf, 'block> =
     | Leaf of 'leaf
     | ScalarBinding of result: Value * value: Operand
+    | Call of FunctionCall
     | Branch of result: Value * condition: Operand * ifTrue: 'block * ifFalse: 'block
 
 /// Each branch produces the binding consumed by the enclosing continuation.

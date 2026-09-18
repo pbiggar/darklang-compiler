@@ -33,12 +33,38 @@ let verifyFunction
         match managed value with
         | None -> Ok ()
         | Some id -> require borrowed live (Set.singleton id)
-    let leaf declared borrowed live operation =
-        let contract = semantics.Leaf operation
+    let contract declared borrowed live (contract: Contract<'id>) =
         let uses = contract.Inputs |> List.map (function Borrowed id | Consumed id -> id) |> Set.ofList
         let consumes = contract.Inputs |> List.choose (function Consumed id -> Some id | Borrowed _ -> None)
         require borrowed live uses |> Result.bind (fun () ->
             release live consumes |> Result.bind (fun live -> define declared live contract.Outputs))
+    let leaf declared borrowed live operation = contract declared borrowed live (semantics.Leaf operation)
+    let call declared borrowed live (call: HIR.FunctionCall) =
+        match semantics.CallOwnership call with
+        | None -> Error (UnknownCallOwnership call.Target)
+        | Some signature when List.length signature.Parameters <> List.length call.Arguments ->
+            Error (InconsistentCallOwnershipParameters call.Target)
+        | Some signature ->
+            let arguments = call.Arguments |> List.map managed
+            let rec inputs index acc modes values =
+                match modes, values with
+                | [], [] -> Ok (List.rev acc)
+                | UnmanagedCallParameter :: modes, None :: values -> inputs (index + 1) acc modes values
+                | BorrowedCallParameter :: modes, Some id :: values -> inputs (index + 1) (Borrowed id :: acc) modes values
+                | ConsumedCallParameter :: modes, Some id :: values -> inputs (index + 1) (Consumed id :: acc) modes values
+                | _ -> Error (InconsistentCallOwnershipArgument (call.Target, index))
+            inputs 0 [] signature.Parameters arguments |> Result.bind (fun callInputs ->
+                match signature.Result, managed call.Result with
+                | UnmanagedCallResult, None -> contract declared borrowed live { Inputs = callInputs; Outputs = [] }
+                | ProducedCallResult, Some result -> contract declared borrowed live { Inputs = callInputs; Outputs = [result] }
+                | BorrowedCallResult index, Some result when index >= 0 ->
+                    match List.tryItem index signature.Parameters, List.tryItem index arguments with
+                    | Some BorrowedCallParameter, Some (Some source) when source = result ->
+                        contract declared borrowed live { Inputs = callInputs; Outputs = [] }
+                    | Some BorrowedCallParameter, Some (Some _) -> Error (InconsistentCallOwnershipResult call.Target)
+                    | _ -> Error (InvalidBorrowedCallResult (call.Target, index))
+                | BorrowedCallResult index, Some _ -> Error (InvalidBorrowedCallResult (call.Target, index))
+                | _ -> Error (InconsistentCallOwnershipResult call.Target))
     let rec loop declared borrowed live = function
         | [] -> Ok (declared, live)
         | step :: rest ->
@@ -46,6 +72,7 @@ let verifyFunction
                 match step.Operation with
                 | HIR.Leaf operation -> leaf declared borrowed live operation
                 | HIR.ScalarBinding (_, value) -> scalar borrowed live value |> Result.map (fun () -> declared, live)
+                | HIR.Call functionCall -> call declared borrowed live functionCall
                 | HIR.Branch (result, condition, yes, no) ->
                     scalar borrowed live condition |> Result.bind (fun () ->
                         block declared borrowed live yes |> Result.bind (fun (afterYes, yesLive, yesResult) ->

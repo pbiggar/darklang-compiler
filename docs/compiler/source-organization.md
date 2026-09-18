@@ -103,6 +103,12 @@ verifier compares the residual path ownership, and the continuation receives
 one fresh identity.
 Function signatures independently classify managed parameters as borrowed or
 consumed and managed results as borrowed or produced.
+Resolved direct-call nodes use a typed HIR signature registry and a separate
+ownership signature registry. HIR still requires the call's ordinary primitive
+effect and alias contract; an ownership signature cannot supply either fact.
+Borrowed call results identify their borrowed source parameter, produced
+results introduce a fresh ownership unit, and recursive targets require an
+explicit registry entry. Unknown calls stay opaque.
 `VerifyOwnership.verifyFunction` checks the boundary together with scalar
 accesses, leaf uses, edge cleanup, fresh definitions, join agreement, and final
 ownership balance; `verifyClosed` supplies the empty managed boundary used by
@@ -117,9 +123,9 @@ inert-destruction proofs. Storage layouts and consume-or-copy selection remain
 in the list dialect. Region ownership accounting has one verifier, with list
 layout/type verification layered around it.
 
-Future whole-program work must extend this normalized value interface across
-all checked expressions, preserving conservative contracts for opaque source
-evaluation, then carry the ownership signatures through calls, loops, and
+Future whole-program work must extend this normalized value and registered-call
+interface across all checked functions, preserving conservative contracts for
+opaque source evaluation, then carry the ownership signatures through loops and
 escaping boundaries. The verifier does not model RC credits, runtime
 uniqueness, or constructor reset tokens. General managed arguments still need
 lowering through ANF and RC insertion. ANF lifetime insertion remains

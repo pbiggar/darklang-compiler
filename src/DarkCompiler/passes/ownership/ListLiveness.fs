@@ -21,6 +21,9 @@ let rec internal valueContract operation : ValueLiveness.Contract<ListId> =
             let contract = primitiveContract leaf
             contract.Inputs |> List.map (fun value -> value.Id) |> Set.ofList,
             HIR.managedOutputs contract |> List.map (fun value -> value.Id) |> Set.ofList
+        | Call call ->
+            call.Arguments |> List.collect (managed >> Set.toList) |> Set.ofList,
+            managed call.Result
         | ScalarBinding _ -> Set.empty, Set.empty
     { Uses = uses; Defines = defines }
 and private entryLive (FunctionalBlock block) liveAfter =
@@ -32,6 +35,8 @@ let verifyFunctional (FunctionalRegion block) : Result<unit, string> =
     let dialect : VerifyHIR.Dialect<Operation<Transform>, FunctionalBlock> = {
         Body = fun (FunctionalBlock block) -> block
         Leaf = primitiveContract
+        CallSignature = fun _ -> None
+        CallContract = fun _ -> None
     }
     VerifyHIR.verify dialect block
     |> Result.mapError (fun error -> $"List HIR: {error}")

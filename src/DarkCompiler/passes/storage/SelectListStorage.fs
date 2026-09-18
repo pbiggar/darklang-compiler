@@ -18,5 +18,5 @@ let selectStorage (FunctionalRegion block as region) : StorageRegion =
             | Leaf (Construct (id, Repeat _)) -> Map.add id.Id (RuntimeArray id.Id) layouts
             | Leaf (Transform (id, input, _)) -> Map.add id.Id (lookup "layout" input.Id layouts) layouts
             | Branch (_, _, yes, no) -> select (select layouts yes) no
-            | Leaf (Fold _) | ScalarBinding _ -> layouts) layouts
+            | Leaf (Fold _) | ScalarBinding _ | Call _ -> layouts) layouts
     StorageRegion (region, select Map.empty block)

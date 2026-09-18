@@ -40,6 +40,10 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
                                 |> HIR.managedOutputs
                                 |> List.map (fun output -> output.Id)
                                 |> List.filter (fun output -> not (Set.contains output live))
+                            | Call call ->
+                                if call.Result.Type = AST.TList AST.TInt64
+                                   && not (Set.contains call.Result.Id live) then [call.Result.Id]
+                                else []
                             | ScalarBinding _ -> []
                             | Branch _ -> Crash.crash "List HIR: branch handled before output accounting"
                         let owned, releases =
@@ -50,6 +54,7 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
                                 Leaf (Transform (output, input, (transform, ownership))), []
                             | Leaf (Fold (name, input, initial, callback)) ->
                                 Leaf (Fold (name, input, initial, callback)), (if Set.contains input.Id live then [] else [input.Id])
+                            | Call call -> Call call, []
                             | ScalarBinding (name, value) -> ScalarBinding (name, value), []
                             | Branch _ -> Crash.crash "List HIR: branch handled before leaf ownership"
                         owned, releases @ unusedOutput, ValueLiveness.liveBefore (valueContract operation) live

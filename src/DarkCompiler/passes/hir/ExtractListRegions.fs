@@ -266,6 +266,7 @@ let tryExtract
                 |> List.exists (function
                     | Leaf _ -> true
                     | Branch (_, _, ifTrue, ifFalse) -> containsListOperation ifTrue || containsListOperation ifFalse
+                    | Call _ -> false
                     | ScalarBinding _ -> false)
             let root = FunctionalBlock { block with Parameters = parameters }
             if not (containsListOperation root) then None
