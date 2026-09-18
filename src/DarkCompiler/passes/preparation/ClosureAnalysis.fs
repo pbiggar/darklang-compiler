@@ -493,6 +493,12 @@ let rec simpleInferType
             | _ -> None
         | AST.Eq | AST.Neq | AST.Lt | AST.Gt | AST.Lte | AST.Gte | AST.And | AST.Or -> Some AST.TBool
         | AST.StringConcat -> Some AST.TString
+    | CheckedAST.UnaryOp (op, operand) ->
+        // `a != b` parses as Not (a == b), so a lambda ending in it is common.
+        match op with
+        | AST.Not -> Some AST.TBool
+        | AST.Neg | AST.BitNot ->
+            simpleInferType operand typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
     | CheckedAST.Call (funcName, args) ->
         // Look up the function's return type, checking local bindings first
         if isRuntimeFailureName funcName then

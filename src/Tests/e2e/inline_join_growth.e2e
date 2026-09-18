@@ -78,3 +78,12 @@ type InlineJsonRecord =
     i: Stdlib.Option.Option<Int64>
     j: Stdlib.Option.Option<String> }
 Stdlib.Json.serialize<InlineJsonRecord> (InlineJsonRecord { a = Stdlib.Option.Option.Some "a", b = Stdlib.Option.Option.None, c = Stdlib.Option.Option.Some 3L, d = Stdlib.Option.Option.None, e = Stdlib.Option.Option.None, f = Stdlib.Option.Option.Some "f", g = Stdlib.Option.Option.None, h = Stdlib.Option.Option.None, i = Stdlib.Option.Option.Some 9L, j = Stdlib.Option.Option.None }) = "{\"a\":{\"Some\":[\"a\"]},\"b\":{\"None\":[]},\"c\":{\"Some\":[3]},\"d\":{\"None\":[]},\"e\":{\"None\":[]},\"f\":{\"Some\":[\"f\"]},\"g\":{\"None\":[]},\"h\":{\"None\":[]},\"i\":{\"Some\":[9]},\"j\":{\"None\":[]}}"
+
+// A lambda whose body is `a != b`: the parser spells it Not (a == b), and
+// inference had no case for a unary operator (32 fns of darklang/dark's
+// package tree, every `List.filter (fun s -> Stdlib.String.trim s != "")`).
+let inferNotEqualLambda (xs: List<String>): Int =
+  xs
+  |> Stdlib.List.filter (fun s -> Stdlib.String.trim s != "")
+  |> Stdlib.List.length
+inferNotEqualLambda ["a", " ", "b"] = 2
