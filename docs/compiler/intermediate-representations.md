@@ -43,28 +43,35 @@ mutation guarantee. Opaque AST operands retain source order and are not
 silently treated as effect-free.
 
 Function ownership signatures are separate from primitive contracts. Managed
-parameters are borrowed or consumed; managed results are borrowed or produced.
-The ownership verifier starts consumed parameters with one transferable unit,
-keeps borrowed parameters accessible but non-consumable, and requires every
-owned unit to be released or transferred as the produced result. A borrowed
-result must remain within the borrowed boundary. Unmanaged parameters and
-results stay outside ownership accounting. Signatures deliberately carry no
-alias provenance or effects; those remain HIR contract responsibilities.
+parameters are borrowed, consumed, or uniquely consumed; managed results are
+borrowed, produced, or uniquely produced. The ownership verifier starts both
+consumed modes with one transferable unit, but only a unique parameter starts
+with exclusivity provenance. Borrowed parameters remain accessible but
+non-consumable, and every owned unit must be released or transferred as the
+produced result. A borrowed result must remain within the borrowed boundary.
+Unmanaged parameters and results stay outside ownership accounting. Signatures
+deliberately carry no HIR alias or effect facts.
 
-The ownership verifier tracks a nonnegative unit count per identity. `Dup`
-requires an accessible borrowed or owned identity and creates one owned unit;
-`Drop` destroys exactly one owned unit. Consuming inputs also destroy one unit,
-while produced values introduce one. Exact counts must agree at joins, and all
-units must be dropped or transferred at function exit. This is the explicit
-Perceus-style accounting layer, not yet runtime uniqueness or reset/reuse.
+The ownership verifier tracks a nonnegative unit count and separate
+exclusivity provenance per identity. A value is certified unique only when it
+has provenance and exactly one local unit; an ordinary consumed parameter with
+one unit is not enough because aliases may remain outside the function. `Dup`
+creates another unit without discarding provenance, so uniqueness is suspended
+until a balancing `Drop` restores the count to one. Scalar escape contracts
+revoke provenance. Fresh primitive results, verified unique calls, and unique
+function parameters can establish it. Exact states agree at joins; a managed
+join result is unique only when both incoming results are unique. This is a
+static Perceus-style uniqueness certificate, not a runtime RC==1 test or a
+whole-program reset/reuse implementation.
 
 Normalized HIR can also represent a resolved direct call with ordered value
 arguments and a fresh result value. `VerifyHIR` requires an explicit typed
 signature and an independently supplied primitive effect/alias contract for
 every such target. `VerifyOwnership` separately instantiates unmanaged,
-borrowed, and consumed parameter modes plus unmanaged, borrowed, or produced
-result ownership. Borrowed results name their source parameter and therefore
-cannot silently introduce an ownership unit. A recursive call is accepted only
+borrowed, consumed, and uniquely consumed parameter modes plus unmanaged,
+borrowed, produced, or uniquely produced result ownership. Borrowed results
+name their source parameter and therefore cannot silently introduce an
+ownership unit. A recursive call is accepted only
 when its target is explicitly present in the same registries; unknown and
 indirect calls remain opaque evaluation rather than receiving guessed facts.
 The closed-list dialect does not admit these general calls yet, so this boundary

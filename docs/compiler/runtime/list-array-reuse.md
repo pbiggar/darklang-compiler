@@ -93,7 +93,11 @@ reader's last use releases its source, and unused results are released.
 This closed grammar proves physical uniqueness statically: a buffer
 has one physical ownership unit, while all logical aliases are visible in the
 region graph. A borrowed parameter with RC=1 is **not** evidence of uniqueness;
-borrowed external lists are ineligible.
+borrowed external lists are ineligible. The shared verifier now records this as
+exclusivity provenance independent of the local unit count. Every consuming
+map/reverse requires both that provenance and exactly one unit, and its result
+inherits a fresh certificate. Construction and borrow-and-copy results also
+establish fresh certificates.
 
 The list ownership solver now emits each destruction as an explicit `Drop` in
 the same ordered position used by native lowering. The shared verifier tracks
@@ -105,29 +109,31 @@ arrays first requires a shareable representation and corresponding lowering.
 The shared ownership interface also models managed block arguments beyond the
 current list extraction grammar. Mutually exclusive arms transfer their
 path-local ownership units to a fresh continuation identity after their
-residual live sets agree. Current list regions still return only immediate
-scalars from branches; managed ANF joins and escaping list boundaries are not
-enabled by this architecture change.
+residual ownership states agree. The continuation receives exclusivity only
+when both incoming results are unique. Current list regions still return only
+immediate scalars from branches; managed ANF joins and escaping list boundaries
+are not enabled by this architecture change.
 
 The same verifier accepts explicit function ownership signatures. Borrowed
 parameters are readable but cannot be released or consumed; consumed
-parameters enter with one ownership unit; produced results transfer one unit
-back to the caller. Resolved HIR calls now require typed, primitive, and
-ownership registry entries: unmanaged positions align with the typed arity,
-borrowed results identify a borrowed parameter, and produced results create a
-fresh caller-owned unit. Unknown calls remain opaque, and recursion is enabled
-only by an explicit self-entry. Current list regions intentionally reject this
-general call node and use the closed signature because external source lists
-still have the persistent skew-list representation. Constructing whole
-functions in HIR and selecting an escaping array representation remain later
-work.
+parameters enter with one ownership unit but no assumption about outside
+aliases; unique parameters additionally establish exclusivity. Produced results
+transfer one unit back to the caller, while unique results also transfer an
+exclusivity certificate. Resolved HIR calls require matching typed, primitive,
+and ownership registry entries. Unknown calls remain opaque, and recursion is
+enabled only by an explicit self-entry. Current list regions intentionally
+reject this general call node and use the closed signature because external
+source lists still have the persistent skew-list representation. Constructing
+whole functions in HIR and inferring unique modes for escaping array values
+remain later work.
 
 `verifyFunctional` checks the closed region's incoming collection interface
 using representation-independent value contracts. `verifyBlockOwnership`
 supplies list operation contracts to the shared `VerifyOwnership.verifyClosed`, which checks
 live inputs, globally unique definitions (including between sibling branches),
-balanced dup/drop units, identical surviving ownership counts at joins, and absence of
-leaked region roots. The stage verifier also checks
+balanced dup/drop units, valid uniqueness contracts, identical surviving
+ownership and exclusivity states at joins, and absence of leaked region roots.
+The stage verifier also checks
 operand types, layout agreement, and allocation bounds. Construction is atomic
 at the region level: element expressions run first in source order, then the
 compiler allocates and initializes the buffer before exposing its identity.

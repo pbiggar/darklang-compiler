@@ -15,12 +15,26 @@ let private semantics : Semantics<Operation<Transform * Ownership>, ListId> = {
             let useMode = match ownership with Consume -> Consumed input.Id | BorrowAndCopy -> Borrowed input.Id
             { Inputs = [useMode]; Outputs = [output.Id] }
         | Fold (_, input, _, _) -> { Inputs = [Borrowed input.Id]; Outputs = [] }
+    LeafUniqueness = function
+        | Construct (output, _) ->
+            { RequiredInputs = Set.empty
+              UniqueOutputs = Set.singleton output.Id }
+        | Transform (output, input, (_, Consume)) ->
+            { RequiredInputs = Set.singleton input.Id
+              UniqueOutputs = Set.singleton output.Id }
+        | Transform (output, _, (_, BorrowAndCopy)) ->
+            { RequiredInputs = Set.empty
+              UniqueOutputs = Set.singleton output.Id }
+        | Fold _ ->
+            { RequiredInputs = Set.empty
+              UniqueOutputs = Set.empty }
     CallOwnership = fun _ -> None
     ScalarUses = fun operand ->
         operand.Inputs
         |> Map.values
         |> Seq.choose (fun value -> if value.Type = AST.TList AST.TInt64 then Some value.Id else None)
         |> Set.ofSeq
+    ScalarEscapes = fun _ -> Set.empty
     BlockArgument = fun value ->
         if value.Type = AST.TList AST.TInt64 then Managed value.Id else Unmanaged
 }

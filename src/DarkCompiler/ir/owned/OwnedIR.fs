@@ -6,19 +6,23 @@ type Input<'id> = Borrowed of 'id | Consumed of 'id
 
 type BlockArgument<'id> = Unmanaged | Managed of 'id
 
-/// Function boundaries distinguish access from ownership transfer. Borrowed
-/// parameters remain owned by the caller; consumed parameters transfer one
-/// ownership unit into the function.
+/// Function boundaries distinguish access, ownership transfer, and exclusive
+/// ownership transfer. Borrowed parameters remain owned by the caller;
+/// consumed parameters transfer one unit without proving that external aliases
+/// are absent; unique parameters additionally establish exclusivity provenance.
 type ParameterOwnership<'id> =
     | BorrowedParameter of 'id
     | ConsumedParameter of 'id
+    | UniqueParameter of 'id
 
 /// A borrowed result transfers no unit, while a produced result transfers one
-/// unit to the caller. Alias provenance remains a separate HIR contract.
+/// unit to the caller. A unique produced result additionally certifies that no
+/// aliases remain. HIR alias provenance remains a separate semantic contract.
 type ResultOwnership<'id> =
     | UnmanagedResult
     | BorrowedResult of 'id
     | ProducedResult of 'id
+    | UniqueProducedResult of 'id
 
 type FunctionSignature<'id> = {
     Parameters: ParameterOwnership<'id> list
@@ -27,16 +31,19 @@ type FunctionSignature<'id> = {
 
 /// Call-site modes include unmanaged positions so they align exactly with the
 /// typed HIR signature. A borrowed result names the borrowed parameter whose
-/// ownership identity it aliases; produced results transfer a fresh unit.
+/// ownership identity it aliases; produced results transfer a fresh unit, with
+/// unique modes carrying the exclusivity certificate across the call boundary.
 type CallParameterOwnership =
     | UnmanagedCallParameter
     | BorrowedCallParameter
     | ConsumedCallParameter
+    | UniqueCallParameter
 
 type CallResultOwnership =
     | UnmanagedCallResult
     | BorrowedCallResult of parameterIndex: int
     | ProducedCallResult
+    | UniqueProducedCallResult
 
 type CallSignature = {
     Parameters: CallParameterOwnership list
@@ -50,6 +57,14 @@ type Contract<'id> = {
     Outputs: 'id list
 }
 
+/// Exclusivity provenance is independent of unit transfer. Required inputs
+/// must have one local unit and no untracked aliases. Unique outputs establish
+/// that fact for fresh storage or a verified ownership-preserving transfer.
+type UniquenessContract<'id when 'id: comparison> = {
+    RequiredInputs: Set<'id>
+    UniqueOutputs: Set<'id>
+}
+
 /// Ownership actions are ordered alongside evaluation. Dup creates one
 /// additional unit for an accessible identity; Drop destroys one owned unit.
 /// Evaluation contracts may borrow or consume units and produce fresh ones.
@@ -61,19 +76,24 @@ and Block<'leaf, 'id> = {
     Body: HIR.Block<Step<'leaf, 'id>>
 }
 
-/// A dialect must describe every access, including opaque scalar operands and
-/// typed block results. A managed result transfers its ownership identity to
-/// the branch target; Unmanaged means the value has no ownership unit.
+/// A dialect must describe every access and possible escape, including opaque
+/// scalar operands and typed block results. A managed result transfers its
+/// ownership identity to the branch target; Unmanaged means the value has no
+/// ownership unit.
 type Semantics<'leaf, 'id when 'id: comparison> = {
     Leaf: 'leaf -> Contract<'id>
+    LeafUniqueness: 'leaf -> UniquenessContract<'id>
     CallOwnership: HIR.FunctionCall -> CallSignature option
     ScalarUses: HIR.Operand -> Set<'id>
+    ScalarEscapes: HIR.Operand -> Set<'id>
     BlockArgument: HIR.Value -> BlockArgument<'id>
 }
 
 type VerificationError<'id when 'id: comparison> =
     | InvalidUse of 'id
     | InvalidDrop of 'id
+    | NonUniqueUse of 'id
+    | InvalidUniquenessContract of 'id
     | DuplicateDefinition of 'id
     | DuplicateParameter of 'id
     | InconsistentFunctionParameters

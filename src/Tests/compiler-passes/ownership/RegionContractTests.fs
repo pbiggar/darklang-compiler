@@ -16,12 +16,21 @@ let private reference name : HIR.Operand =
     { Expression = CheckedAST.Var name; Type = AST.TInt64; Inputs = Map.ofList [name, value name] }
 let private condition : HIR.Operand = { Expression = CheckedAST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }
 
-let private semantics : Semantics<Contract<string>, string> = {
-    Leaf = id
+type private TestLeaf = {
+    Ownership: Contract<string>
+    Uniqueness: UniquenessContract<string>
+}
+
+let private semantics : Semantics<TestLeaf, string> = {
+    Leaf = fun leaf -> leaf.Ownership
+    LeafUniqueness = fun leaf -> leaf.Uniqueness
     CallOwnership = fun call ->
         match call.Target with
         | "borrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult 0 }
         | "consume" -> Some { Parameters = [ConsumedCallParameter]; Result = ProducedCallResult }
+        | "produce" -> Some { Parameters = []; Result = ProducedCallResult }
+        | "consumeUnique" -> Some { Parameters = [UniqueCallParameter]; Result = UnmanagedCallResult }
+        | "produceUnique" -> Some { Parameters = []; Result = UniqueProducedCallResult }
         | "consumeTwice" -> Some { Parameters = [ConsumedCallParameter; ConsumedCallParameter]; Result = UnmanagedCallResult }
         | "discard" -> Some { Parameters = [ConsumedCallParameter]; Result = UnmanagedCallResult }
         | "invalidBorrow" -> Some { Parameters = [ConsumedCallParameter]; Result = BorrowedCallResult 0 }
@@ -29,6 +38,10 @@ let private semantics : Semantics<Contract<string>, string> = {
         | _ -> None
     ScalarUses = fun value ->
         value.Inputs |> Map.keys |> Set.ofSeq
+    ScalarEscapes = fun value ->
+        match value.Expression with
+        | CheckedAST.Var "escape" -> value.Inputs |> Map.keys |> Set.ofSeq
+        | _ -> Set.empty
     BlockArgument = fun value ->
         match value.Id with
         | HIR.ValueId 0 -> Managed "a"
@@ -39,27 +52,35 @@ let private semantics : Semantics<Contract<string>, string> = {
 }
 
 let private drops values = values |> List.map Drop
-let private step inputs outputs releases : Step<Contract<string>, string> list =
-    Evaluate (HIR.Leaf { Inputs = inputs; Outputs = outputs }) :: drops releases
-let private block entry operations : Block<Contract<string>, string> =
+let private leaf inputs outputs required uniqueOutputs : TestLeaf =
+    { Ownership = { Inputs = inputs; Outputs = outputs }
+      Uniqueness = { RequiredInputs = Set.ofList required; UniqueOutputs = Set.ofList uniqueOutputs } }
+let private stepWithUniqueness inputs outputs required uniqueOutputs releases : Step<TestLeaf, string> list =
+    Evaluate (HIR.Leaf (leaf inputs outputs required uniqueOutputs)) :: drops releases
+let private step inputs outputs releases : Step<TestLeaf, string> list =
+    stepWithUniqueness inputs outputs [] outputs releases
+let private block entry operations : Block<TestLeaf, string> =
     { Body = { Parameters = Map.empty; Operations = drops entry @ List.concat operations; Result = unitValue } }
-let private blockResult entry operations result : Block<Contract<string>, string> =
+let private blockResult entry operations result : Block<TestLeaf, string> =
     { Body = { Parameters = Map.empty; Operations = drops entry @ List.concat operations; Result = result } }
-let private functionBlock parameters operations result : Block<Contract<string>, string> =
+let private functionBlock parameters operations result : Block<TestLeaf, string> =
     { Body =
         { Parameters = parameters |> List.map (fun name -> name, value name) |> Map.ofList
           Operations = List.concat operations
           Result = result } }
-let private branch predicate yes no : Step<Contract<string>, string> list =
+let private branch predicate yes no : Step<TestLeaf, string> list =
     [Evaluate (HIR.Branch ({ Id = HIR.ValueId 101; Type = AST.TUnit }, predicate, yes, no))]
-let private managedBranch result predicate yes no : Step<Contract<string>, string> list =
+let private managedBranch result predicate yes no : Step<TestLeaf, string> list =
     [Evaluate (HIR.Branch (result, predicate, yes, no))]
-let private read name releases : Step<Contract<string>, string> list =
+let private read name releases : Step<TestLeaf, string> list =
     Evaluate (HIR.ScalarBinding ({ Id = HIR.ValueId 102; Type = AST.TInt64 }, reference name)) :: drops releases
-let private call target arguments result : Step<Contract<string>, string> list =
+let private escape name releases : Step<TestLeaf, string> list =
+    let operand = { reference name with Expression = CheckedAST.Var "escape" }
+    Evaluate (HIR.ScalarBinding ({ Id = HIR.ValueId 103; Type = AST.TInt64 }, operand)) :: drops releases
+let private call target arguments result : Step<TestLeaf, string> list =
     [Evaluate (HIR.Call { Target = target; Arguments = arguments; Result = result })]
-let private duplicate value : Step<Contract<string>, string> list = [Dup value]
-let private dropOne value : Step<Contract<string>, string> list = [Drop value]
+let private duplicate value : Step<TestLeaf, string> list = [Dup value]
+let private dropOne value : Step<TestLeaf, string> list = [Drop value]
 let private check expected region () =
     let actual = VerifyOwnership.verifyClosed semantics region
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
@@ -80,6 +101,18 @@ let tests = [
     "Function ownership signatures transfer locally produced results", checkFunction (Ok ())
         { Parameters = []; Result = ProducedResult "a" }
         (functionBlock [] [step [] ["a"] []] (value "a"))
+    "Unique function results accept locally exclusive values", checkFunction (Ok ())
+        { Parameters = []; Result = UniqueProducedResult "a" }
+        (functionBlock [] [step [] ["a"] []] (value "a"))
+    "Unique function results reject ordinary consumed parameters", checkFunction (Error (NonUniqueUse "a"))
+        { Parameters = [ConsumedParameter "a"]; Result = UniqueProducedResult "a" }
+        (functionBlock ["a"] [] (value "a"))
+    "Unique function parameters satisfy unique-consuming operations", checkFunction (Ok ())
+        { Parameters = [UniqueParameter "a"]; Result = UnmanagedResult }
+        (functionBlock ["a"] [stepWithUniqueness [Consumed "a"] [] ["a"] [] []] unitValue)
+    "Ordinary consumed parameters do not satisfy unique-consuming operations", checkFunction (Error (NonUniqueUse "a"))
+        { Parameters = [ConsumedParameter "a"]; Result = UnmanagedResult }
+        (functionBlock ["a"] [stepWithUniqueness [Consumed "a"] [] ["a"] [] []] unitValue)
     "Function ownership signatures require consumed parameters to leave the function", checkFunction (Error (UndroppedValues (Set.singleton "a")))
         { Parameters = [ConsumedParameter "a"]; Result = UnmanagedResult }
         (functionBlock ["a"] [] unitValue)
@@ -105,6 +138,10 @@ let tests = [
         (block [] [step [] ["a"] []; call "borrow" [value "a"] (value "aAlias"); step [Consumed "a"] [] []])
     "Call ownership signatures transfer consumed arguments into produced results", check (Ok ())
         (block [] [step [] ["a"] []; call "consume" [value "a"] (value "b"); step [Consumed "b"] [] []])
+    "Unique call parameters reject results without exclusivity provenance", check (Error (NonUniqueUse "a"))
+        (block [] [call "produce" [] (value "a"); call "consumeUnique" [value "a"] unitValue])
+    "Unique call results satisfy unique call parameters", check (Ok ())
+        (block [] [call "produceUnique" [] (value "a"); call "consumeUnique" [value "a"] unitValue])
     "Explicit dup satisfies repeated consumed call arguments", check (Ok ())
         (block [] [step [] ["a"] []; duplicate "a"; call "consumeTwice" [value "a"; value "aAlias"] unitValue])
     "Repeated consumed call arguments reject missing dup", check (Error (InvalidDrop "a"))
@@ -123,6 +160,12 @@ let tests = [
         (block [] [step [] ["a"] []; step [Consumed "a"; Consumed "a"] [] []])
     "Explicit dup permits multiple consuming uses", check (Ok ())
         (block [] [step [] ["a"] []; duplicate "a"; step [Consumed "a"; Consumed "a"] [] []])
+    "Fresh outputs satisfy unique-consuming operations", check (Ok ())
+        (block [] [step [] ["a"] []; stepWithUniqueness [Consumed "a"] [] ["a"] [] []])
+    "Explicit dup temporarily prevents unique use", check (Error (NonUniqueUse "a"))
+        (block [] [step [] ["a"] []; duplicate "a"; stepWithUniqueness [Consumed "a"] [] ["a"] [] []])
+    "Explicit drop restores unique use after dup", check (Ok ())
+        (block [] [step [] ["a"] []; duplicate "a"; dropOne "a"; stepWithUniqueness [Consumed "a"] [] ["a"] [] []])
     "Explicit dup of a borrowed parameter creates a droppable unit", checkFunction (Ok ())
         { Parameters = [BorrowedParameter "a"]; Result = UnmanagedResult }
         (functionBlock ["a"] [duplicate "a"; step [Consumed "a"] [] []] unitValue)
@@ -134,6 +177,8 @@ let tests = [
         (block [] [step [] ["a"] []; step [Consumed "a"] [] ["a"]])
     "Ownership contracts account for scalar operand reads", check (Ok ())
         (block [] [step [] ["a"] []; read "a" ["a"]])
+    "Scalar escape revokes exclusivity provenance", check (Error (NonUniqueUse "a"))
+        (block [] [step [] ["a"] []; escape "a" []; stepWithUniqueness [Consumed "a"] [] ["a"] [] []])
     "Ownership contracts reject scalar use after release", check (Error (InvalidUse "a"))
         (block [] [step [] ["a"] ["a"]; read "a" []])
     "Ownership contracts check branch conditions", check (Error (InvalidUse "a"))
@@ -168,6 +213,20 @@ let tests = [
                 (blockResult [] [step [] ["a"] []] (value "a"))
                 (blockResult [] [step [] ["b"] []] (value "b"))
             step [Consumed "c"] [] []
+        ])
+    "Managed joins preserve exclusivity from both incoming values", check (Ok ())
+        (block [] [
+            managedBranch (value "c") condition
+                (blockResult [] [step [] ["a"] []] (value "a"))
+                (blockResult [] [step [] ["b"] []] (value "b"))
+            stepWithUniqueness [Consumed "c"] [] ["c"] [] []
+        ])
+    "Managed joins reject uniqueness from only one incoming value", check (Error (NonUniqueUse "c"))
+        (block [] [
+            managedBranch (value "c") condition
+                (blockResult [] [step [] ["a"] []] (value "a"))
+                (blockResult [] [stepWithUniqueness [] ["b"] [] [] []] (value "b"))
+            stepWithUniqueness [Consumed "c"] [] ["c"] [] []
         ])
     "Ownership contracts rename one incoming value on exclusive edges", check (Ok ())
         (block [] [

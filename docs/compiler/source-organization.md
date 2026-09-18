@@ -102,20 +102,26 @@ Its block-argument contract distinguishes unmanaged values from managed
 ownership identities. At a branch, each arm transfers its result identity, the
 verifier compares the residual path ownership, and the continuation receives
 one fresh identity.
-Function signatures independently classify managed parameters as borrowed or
-consumed and managed results as borrowed or produced.
+Function signatures independently classify managed parameters as borrowed,
+consumed, or uniquely consumed and managed results as borrowed, produced, or
+uniquely produced.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
 Borrowed call results identify their borrowed source parameter, produced
-results introduce a fresh ownership unit, and recursive targets require an
+results introduce a fresh ownership unit, unique modes carry an exclusivity
+certificate across the call boundary, and recursive targets require an
 explicit registry entry. Unknown calls stay opaque.
 `VerifyOwnership.verifyFunction` checks the boundary together with scalar
 accesses, leaf uses, explicit unit counts, fresh definitions, exact join
-agreement, and final ownership balance. Duplication of a borrowed identity
-creates an owned unit that may be consumed, dropped, or returned; dropping a
-borrow without such a unit is invalid. `verifyClosed` supplies the empty managed boundary used by
-current list regions. Dialects must provide scalar-use accounting explicitly.
+agreement, exclusivity provenance, and final ownership balance. Unique use
+requires both provenance and exactly one local unit. Duplication retains
+provenance but suspends uniqueness until a balancing drop; a scalar escape
+revokes provenance. Duplication of a borrowed identity creates an owned unit
+that may be consumed, dropped, or returned, but does not establish uniqueness;
+dropping a borrow without such a unit is invalid. `verifyClosed` supplies the
+empty managed boundary used by current list regions. Dialects must provide
+scalar-use and scalar-escape accounting explicitly.
 List extraction proves its opaque scalars cannot reference canonical list
 identities; its adapter still derives managed uses from explicit operand
 inputs, so a future dialect cannot inherit the extraction proof by default.
@@ -128,9 +134,9 @@ layout/type verification layered around it.
 
 Future whole-program work must extend this normalized value and registered-call
 interface across all checked functions, preserving conservative contracts for
-opaque source evaluation, then carry the ownership signatures through loops and
-escaping boundaries. The verifier does not model runtime uniqueness or
-constructor reset tokens. General managed arguments still need
+opaque source evaluation, then infer and carry unique boundary modes through
+loops and escaping boundaries. The verifier does not insert runtime uniqueness
+tests or model constructor reset tokens. General managed arguments still need
 lowering through ANF and RC insertion. ANF lifetime insertion remains
 authoritative outside these regions; moving generated printing before general
 ownership is a separate semantic migration. No empty future passes or
