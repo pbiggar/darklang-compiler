@@ -388,6 +388,8 @@ let internal resolveProgramNames
         match pattern with
         | PVar name -> Set.singleton name
         | PConstructor (_, fields) -> fields |> List.map patternBoundNames |> Set.unionMany
+        | PResolvedConstructor (_, _, _, fields) ->
+            fields |> List.map patternBoundNames |> Set.unionMany
         | PTuple patterns | PList patterns -> patterns |> List.map patternBoundNames |> Set.unionMany
         | PListCons (heads, tail) -> Set.union (heads |> List.map patternBoundNames |> Set.unionMany) (patternBoundNames tail)
         | POr alternatives -> alternatives |> NonEmptyList.head |> patternBoundNames

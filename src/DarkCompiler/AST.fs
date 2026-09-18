@@ -180,6 +180,7 @@ type Pattern =
     | PWildcard                                            // _
     | PVar of string                                       // x (binds value to variable)
     | PConstructor of variantName:string * fields:Pattern list  // Red, Some(x), Pair(a, b)
+    | PResolvedConstructor of declaringType:string * variantName:string * tag:int * fields:Pattern list
     | PInt64 of int64                                      // 42 (Int64 literal)
     | PBigInt of System.Numerics.BigInteger                // 42 (Int literal)
     | PInt128Literal of System.Int128                      // 42Q
@@ -260,7 +261,7 @@ type FunctionId = private FunctionId of int
 type TypeId = private TypeId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type ConstructorId = private ConstructorId of int
+type ConstructorId = private ConstructorId of identity:int * tag:int
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type FieldId = private FieldId of identity:int * index:int
@@ -277,7 +278,8 @@ type RecursiveMemberId = private RecursiveMemberId of int
 let bindingId ordinal = BindingId ordinal
 let functionId ordinal = FunctionId ordinal
 let typeId ordinal = TypeId ordinal
-let constructorId ordinal = ConstructorId ordinal
+let constructorId identity tag = ConstructorId (identity, tag)
+let constructorTag (ConstructorId (_, tag)) = tag
 let fieldId identity index = FieldId (identity, index)
 let fieldIndex (FieldId (_, index)) = index
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
@@ -398,6 +400,8 @@ let validateBinders (structure: BinderStructure) : Result<string list, string> =
         match pattern with
         | PVar name -> [name]
         | PConstructor (_, fields) ->
+            fields |> List.collect matchPatternBindings
+        | PResolvedConstructor (_, _, _, fields) ->
             fields |> List.collect matchPatternBindings
         | PTuple patterns | PList patterns -> patterns |> List.collect matchPatternBindings
         | PListCons (heads, tail) ->

@@ -97,8 +97,7 @@ let rec countMatches (expr: CheckedAST.Expr) : int =
             recordExpr :: (updates |> List.map snd)
         | CheckedAST.RecordAccess (recordExpr, _) ->
             [recordExpr]
-        | CheckedAST.Constructor (_, _, fields) ->
-            fields
+        | CheckedAST.Constructor (_, fields) -> fields
         | CheckedAST.Match (scrutinee, cases) ->
             scrutinee :: (cases |> List.map (fun c -> c.Body))
         | CheckedAST.Lambda (_, _, body) ->

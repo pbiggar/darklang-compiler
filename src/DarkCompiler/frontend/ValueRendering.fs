@@ -27,6 +27,11 @@ let private freshBinding name state =
     let (id, symbols) = allocateBinding name state.Symbols
     (id, { state with Symbols = symbols })
 
+let private constructorPattern typeName (variant: SumVariant) symbols fields =
+    match tryFindConstructorId typeName variant.Name symbols with
+    | Some id -> PConstructor (id, fields)
+    | None -> Crash.crash $"Value renderer constructor was not interned: {typeName}.{variant.Name}"
+
 let private args (values: Expr list) : NonEmptyList<Expr> =
     NonEmptyList.fromList values
 
@@ -412,7 +417,10 @@ and private renderBody
                 | variant :: rest ->
                     match variant.Fields with
                     | [] ->
-                        let case = makeCase (PConstructor (variant.Name, [])) (StringLiteral $"{typeText}.{variant.Name}")
+                        let case =
+                            makeCase
+                                (constructorPattern typeName variant currentState.Symbols [])
+                                (StringLiteral $"{typeText}.{variant.Name}")
                         buildCases rest currentState (case :: acc)
                     | fieldTypes ->
                         let concreteTypes = fieldTypes |> List.map (applySubstitution subst)
@@ -431,7 +439,10 @@ and private renderBody
                             |> List.concat
                         let body =
                             concat (StringLiteral $"{typeText}.{variant.Name}(" :: separated @ [StringLiteral ")"])
-                        let case = makeCase (PConstructor (variant.Name, List.map PVariable fieldIds)) body
+                        let case =
+                            makeCase
+                                (constructorPattern typeName variant nextState.Symbols (List.map PVariable fieldIds))
+                                body
                         buildCases rest nextState (case :: acc)
             let (cases, nextState) = buildCases (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
             (Match (value, cases), nextState)

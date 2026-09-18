@@ -94,6 +94,40 @@ let internal tryFindVariantForType
         |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
     | _ -> Map.tryFind variantName variantLookup
 
+let internal tryFindVariantByTag
+    (typeName: string)
+    (tag: int)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * AST.Type list) option =
+    variantLookup
+    |> Map.toSeq
+    |> Seq.tryPick (fun (_, ((declaringType, _, variantTag, _) as variant)) ->
+        if declaringType = typeName && variantTag = tag then Some variant else None)
+
+let internal tryFindVariantForTypeById
+    (constructorId: AST.ConstructorId)
+    (sourceType: AST.Type)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * AST.Type list) option =
+    match sourceType with
+    | AST.TSum (typeName, _)
+    | AST.TRecord (typeName, _) ->
+        tryFindVariantByTag typeName (AST.constructorTag constructorId) variantLookup
+    | _ -> None
+
+let internal constructorReferenceMatches
+    (typeName: string)
+    (variantName: string)
+    (reference: CheckedAST.ConstructorReference)
+    (variantLookup: VariantLookup)
+    : bool =
+    match Map.tryFind variantName variantLookup with
+    | Some (declaringType, _, tag, _) ->
+        declaringType = typeName
+        && reference.TypeName = typeName
+        && AST.constructorTag reference.ConstructorId = tag
+    | None -> false
+
 let internal int128ToCanonicalString (value: System.Int128) : string =
     value.ToString(System.Globalization.CultureInfo.InvariantCulture)
 

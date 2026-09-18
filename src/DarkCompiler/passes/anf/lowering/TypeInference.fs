@@ -129,10 +129,15 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                 Ok (List.item index elemTypes)
             | AST.TTuple _ -> Error $"Tuple index {index} out of bounds"
             | _ -> Error "Cannot access index on non-tuple type")
-    | CheckedAST.Constructor (constructorTypeName, variantName, fields) ->
-        match tryFindVariant constructorTypeName variantName variantLookup with
+    | CheckedAST.Constructor (constructorReference, fields) ->
+        match
+            tryFindVariantByTag
+                constructorReference.TypeName
+                (AST.constructorTag constructorReference.ConstructorId)
+                variantLookup
+        with
         | None ->
-            Error $"Unknown constructor: {variantName}"
+            Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
         | Some (typeName, typeParams, _, fieldPatterns) ->
             let defaultTypeArgs = typeParams |> List.map AST.TVar
             if List.length fieldPatterns <> List.length fields then
@@ -352,6 +357,23 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                             (extractPatternBindings fieldPattern (substituteType subst fieldType))) Map.empty
                 | Some _ -> Map.empty
                 | None -> Crash.crash $"Unknown constructor '{variantName}' in pattern"
+            | AST.PResolvedConstructor (declaringType, _, tag, fieldPatterns) ->
+                match tryFindVariantByTag declaringType tag variantLookup with
+                | Some (_, typeParams, _, fieldTypes)
+                    when List.length fieldPatterns = List.length fieldTypes ->
+                    let subst =
+                        match scrutType with
+                        | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
+                            List.zip typeParams typeArgs |> Map.ofList
+                        | _ -> Map.empty
+                    List.zip fieldPatterns fieldTypes
+                    |> List.fold (fun acc (fieldPattern, fieldType) ->
+                        Map.fold
+                            (fun current name typ -> Map.add name typ current)
+                            acc
+                            (extractPatternBindings fieldPattern (substituteType subst fieldType))) Map.empty
+                | Some _ -> Map.empty
+                | None -> Crash.crash $"Unknown resolved constructor tag '{tag}' for '{declaringType}'"
             | AST.PList innerPats ->
                 let elemTypeOpt =
                     match scrutType with
@@ -455,7 +477,12 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                     | AST.TSum ("Darklang.Stdlib.Result.Result", [okType; _]) -> Ok okType
                     | AST.TSum ("Darklang.Stdlib.Option.Option", []) ->
                         match argExpr with
-                        | CheckedAST.Constructor (_, "Some", [payloadExpr]) ->
+                        | CheckedAST.Constructor (reference, [payloadExpr])
+                            when constructorReferenceMatches
+                                "Darklang.Stdlib.Option.Option"
+                                "Some"
+                                reference
+                                variantLookup ->
                             inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                         | _ ->
                             // Type args may be unavailable in ANF inferType.
@@ -463,7 +490,12 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                             Ok AST.TUnit
                     | AST.TSum ("Darklang.Stdlib.Result.Result", []) ->
                         match argExpr with
-                        | CheckedAST.Constructor (_, "Ok", [payloadExpr]) ->
+                        | CheckedAST.Constructor (reference, [payloadExpr])
+                            when constructorReferenceMatches
+                                "Darklang.Stdlib.Result.Result"
+                                "Ok"
+                                reference
+                                variantLookup ->
                             inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                         | _ ->
                             // Type args may be unavailable in ANF inferType.

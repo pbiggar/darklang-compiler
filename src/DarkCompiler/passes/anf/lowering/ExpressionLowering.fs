@@ -493,6 +493,15 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     | None ->
                         Error $"Builtin.unwrap could not find variant tag for {expectedTypeName}.{variantName}"
 
+                let tryConstructorPayload expectedTypeName expectedVariantName expression =
+                    match Map.tryFind expectedVariantName variantLookup, expression with
+                    | Some (typeName, _, tag, _), CheckedAST.Constructor (reference, [payload])
+                        when typeName = expectedTypeName
+                             && reference.TypeName = expectedTypeName
+                             && AST.constructorTag reference.ConstructorId = tag ->
+                        Some payload
+                    | _ -> None
+
                 let buildUnwrapExpr (successTag: int) (payloadType: AST.Type) (failureMessage: string) : Result<ANF.AExpr * ANF.VarGen, string> =
                     toAtomCore sumTypeNames inertScopes argExpr varGen env typeReg variantLookup funcReg moduleRegistry
                     |> Result.map (fun (argAtom0, argBindings0, vg1) ->
@@ -547,8 +556,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     lookupVariantInfo "Darklang.Stdlib.Option.Option" "Some"
                     |> Result.bind (fun (successTag, fieldTypes) ->
                         let payloadTypeResult =
-                            match argExpr with
-                            | CheckedAST.Constructor (_, "Some", [payloadExpr]) ->
+                            match tryConstructorPayload "Darklang.Stdlib.Option.Option" "Some" argExpr with
+                            | Some payloadExpr ->
                                 inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                             | _ ->
                                 match fieldTypes with
@@ -561,8 +570,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     lookupVariantInfo "Darklang.Stdlib.Result.Result" "Ok"
                     |> Result.bind (fun (successTag, _) ->
                         let failureMessage =
-                            match argExpr with
-                            | CheckedAST.Constructor (_, "Error", [payloadExpr]) ->
+                            match tryConstructorPayload "Darklang.Stdlib.Result.Result" "Error" argExpr with
+                            | Some payloadExpr ->
                                 match unwrapErrorPayloadToString payloadExpr with
                                 | Some payloadText -> $"Cannot unwrap Error: {payloadText}"
                                 | None -> "Cannot unwrap Error"
@@ -573,16 +582,16 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     lookupVariantInfo "Darklang.Stdlib.Result.Result" "Ok"
                     |> Result.bind (fun (successTag, fieldTypes) ->
                         let payloadTypeResult =
-                            match argExpr with
-                            | CheckedAST.Constructor (_, "Ok", [payloadExpr]) ->
+                            match tryConstructorPayload "Darklang.Stdlib.Result.Result" "Ok" argExpr with
+                            | Some payloadExpr ->
                                 inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                             | _ ->
                                 match fieldTypes with
                                 | [payloadType] -> Ok payloadType
                                 | _ -> Ok AST.TUnit
                         let failureMessage =
-                            match argExpr with
-                            | CheckedAST.Constructor (_, "Error", [payloadExpr]) ->
+                            match tryConstructorPayload "Darklang.Stdlib.Result.Result" "Error" argExpr with
+                            | Some payloadExpr ->
                                 match unwrapErrorPayloadToString payloadExpr with
                                 | Some payloadText -> $"Cannot unwrap Error: {payloadText}"
                                 | None -> "Cannot unwrap Error"
@@ -938,10 +947,15 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             | _ ->
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
-    | CheckedAST.Constructor (constructorTypeName, variantName, fields) ->
-        match tryFindVariant constructorTypeName variantName variantLookup with
+    | CheckedAST.Constructor (constructorReference, fields) ->
+        match
+            tryFindVariantByTag
+                constructorReference.TypeName
+                (AST.constructorTag constructorReference.ConstructorId)
+                variantLookup
+        with
         | None ->
-            Error $"Unknown constructor: {variantName}"
+            Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
         | Some (typeName, _, tag, _) ->
             // Check if ANY variant in this type has a payload
             // If so, all variants must be heap-allocated for consistency

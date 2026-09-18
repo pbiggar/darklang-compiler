@@ -110,7 +110,7 @@ let rec private containsIndirectApply (expr: CheckedAST.Expr) : bool =
     | CheckedAST.RecordUpdate (record, updates) ->
         containsIndirectApply record || (updates |> List.map snd |> anyExpr)
     | CheckedAST.RecordAccess (record, _) -> containsIndirectApply record
-    | CheckedAST.Constructor (_, _, fields) -> List.exists containsIndirectApply fields
+    | CheckedAST.Constructor (_, fields) -> List.exists containsIndirectApply fields
     | CheckedAST.Match (scrutinee, cases) ->
         containsIndirectApply scrutinee
         || (cases
@@ -512,7 +512,7 @@ and collectFuncRefsInExpr (expr: CheckedAST.Expr) (knownFuncs: Map<string, (AST.
             entries |> List.collect (fun (key, value) -> [key; value]) |> collectChildren
         | CheckedAST.RecordLiteral (_, fields) -> fields |> List.map snd |> collectChildren
         | CheckedAST.RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd))
-        | CheckedAST.Constructor (_, _, fields) -> fields |> List.collect (collect bound)
+        | CheckedAST.Constructor (_, fields) -> fields |> List.collect (collect bound)
         | CheckedAST.Match (scrutinee, cases) ->
             collect bound scrutinee
             @ (cases
@@ -600,8 +600,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: CheckedAST.Expr) : Ch
         | CheckedAST.RecordUpdate (record, fields) ->
             CheckedAST.RecordUpdate (replace bound record, fields |> List.map (fun (name, value) -> (name, replace bound value)))
         | CheckedAST.RecordAccess (value, field) -> CheckedAST.RecordAccess (replace bound value, field)
-        | CheckedAST.Constructor (typeName, variant, fields) ->
-            CheckedAST.Constructor (typeName, variant, fields |> List.map (replace bound))
+        | CheckedAST.Constructor (reference, fields) ->
+            CheckedAST.Constructor (reference, fields |> List.map (replace bound))
         | CheckedAST.Match (scrutinee, cases) ->
             let cases' =
                 cases

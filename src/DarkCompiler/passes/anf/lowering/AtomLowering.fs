@@ -698,10 +698,15 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             | _ ->
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
-    | CheckedAST.Constructor (constructorTypeName, variantName, fields) ->
-        match tryFindVariant constructorTypeName variantName variantLookup with
+    | CheckedAST.Constructor (constructorReference, fields) ->
+        match
+            tryFindVariantByTag
+                constructorReference.TypeName
+                (AST.constructorTag constructorReference.ConstructorId)
+                variantLookup
+        with
         | None ->
-            Error $"Unknown constructor: {variantName}"
+            Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
         | Some (typeName, _, tag, _) ->
             // Check if ANY variant in this type has a payload
             // Note: We get typeName from variantLookup, not from AST (which may be empty)

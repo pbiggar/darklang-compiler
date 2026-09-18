@@ -19,7 +19,7 @@ type Pattern =
     | PUnit
     | PWildcard
     | PVariable of AST.BindingId
-    | PConstructor of variantName:string * fields:Pattern list
+    | PConstructor of constructor:AST.ConstructorId * fields:Pattern list
     | PInt64 of int64
     | PBigInt of System.Numerics.BigInteger
     | PInt128Literal of System.Int128
@@ -52,6 +52,7 @@ type RecordReference = {
 
 type ConstructorReference = {
     TypeName: string
+    ConstructorId: AST.ConstructorId
 }
 
 type StringPart =
@@ -92,7 +93,7 @@ and Expr =
     | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
     | RecordUpdate of record:Expr * updates:(string * Expr) list
     | RecordAccess of record:Expr * field:AST.FieldId
-    | Constructor of reference:ConstructorReference * variantName:string * fields:Expr list
+    | Constructor of reference:ConstructorReference * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list
     | ListLiteral of Expr list
     | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:AST.Type option * body:Expr
@@ -141,7 +142,7 @@ type Symbols = private {
     TypeNames: Map<AST.TypeId, string>
     TypeIds: Map<string, AST.TypeId>
     NextTypeOrdinal: int
-    ConstructorNames: Map<AST.ConstructorId, string>
+    ConstructorNames: Map<AST.ConstructorId, string * string>
     ConstructorIds: Map<string * string, AST.ConstructorId>
     NextConstructorOrdinal: int
     FieldNames: Map<AST.FieldId, string * string>
@@ -203,9 +204,17 @@ let internType name symbols =
     intern AST.typeId name name symbols.TypeIds symbols.TypeNames symbols.NextTypeOrdinal
         (fun ids names next -> { symbols with TypeIds = ids; TypeNames = names; NextTypeOrdinal = next })
 
-let internConstructor typeName name symbols =
-    intern AST.constructorId (typeName, name) name symbols.ConstructorIds symbols.ConstructorNames symbols.NextConstructorOrdinal
-        (fun ids names next -> { symbols with ConstructorIds = ids; ConstructorNames = names; NextConstructorOrdinal = next })
+let internConstructor typeName name tag symbols =
+    match Map.tryFind (typeName, name) symbols.ConstructorIds with
+    | Some id -> (id, symbols)
+    | None ->
+        let id = AST.constructorId symbols.NextConstructorOrdinal tag
+        let symbols =
+            { symbols with
+                ConstructorIds = Map.add (typeName, name) id symbols.ConstructorIds
+                ConstructorNames = Map.add id (typeName, name) symbols.ConstructorNames
+                NextConstructorOrdinal = symbols.NextConstructorOrdinal + 1 }
+        (id, symbols)
 
 let internField typeName name index symbols =
     match Map.tryFind (typeName, name) symbols.FieldIds with
@@ -221,7 +230,10 @@ let internField typeName name index symbols =
 
 let functionName id symbols = Map.tryFind id symbols.FunctionNames
 let typeName id symbols = Map.tryFind id symbols.TypeNames
-let constructorName id symbols = Map.tryFind id symbols.ConstructorNames
+let constructorInfo id symbols = Map.tryFind id symbols.ConstructorNames
+
+let tryFindConstructorId typeName name symbols =
+    Map.tryFind (typeName, name) symbols.ConstructorIds
 let fieldInfo id symbols = Map.tryFind id symbols.FieldNames
 
 let sameSymbolNamespace first second =
@@ -263,6 +275,14 @@ let importTopLevels
             let (targetId, symbols) = internField typeName fieldName (AST.fieldIndex sourceId) symbols
             ((sourceId, targetId), symbols)) symbols
         |> fun (entries, symbols) -> (Map.ofList entries, symbols)
+    let (constructorRemap, symbols) =
+        sourceSymbols.ConstructorNames
+        |> Map.toList
+        |> List.mapFold (fun symbols (sourceId, (typeName, constructorName)) ->
+            let (targetId, symbols) =
+                internConstructor typeName constructorName (AST.constructorTag sourceId) symbols
+            ((sourceId, targetId), symbols)) symbols
+        |> fun (entries, symbols) -> (Map.ofList entries, symbols)
     let mapId id =
         match Map.tryFind id remap with
         | Some mapped -> mapped
@@ -275,6 +295,10 @@ let importTopLevels
         match Map.tryFind id fieldRemap with
         | Some mapped -> mapped
         | None -> Crash.crash "Imported checked field is absent from its source symbol table"
+    let mapConstructorId id =
+        match Map.tryFind id constructorRemap with
+        | Some mapped -> mapped
+        | None -> Crash.crash "Imported checked constructor is absent from its source symbol table"
     let mapRecursion (typed: AST.TypedRecursiveMember) =
         { typed with
             Resolved =
@@ -295,7 +319,7 @@ let importTopLevels
         | PTuple patterns -> PTuple (List.map mapPattern patterns)
         | PList patterns -> PList (List.map mapPattern patterns)
         | PListCons (heads, tail) -> PListCons (List.map mapPattern heads, mapPattern tail)
-        | PConstructor (name, fields) -> PConstructor (name, List.map mapPattern fields)
+        | PConstructor (id, fields) -> PConstructor (mapConstructorId id, List.map mapPattern fields)
         | POr alternatives -> POr (AST.NonEmptyList.map mapPattern alternatives)
         | PUnit | PWildcard | PInt64 _ | PBigInt _ | PInt128Literal _ | PInt8Literal _
         | PInt16Literal _ | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _
@@ -342,7 +366,11 @@ let importTopLevels
         | RecordUpdate (record, fields) ->
             RecordUpdate (mapExpr record, fields |> List.map (fun (name, value) -> name, mapExpr value))
         | RecordAccess (record, field) -> RecordAccess (mapExpr record, mapFieldId field)
-        | Constructor (reference, name, fields) -> Constructor (reference, name, List.map mapExpr fields)
+        | Constructor (reference, fields) ->
+            Constructor (
+                { reference with ConstructorId = mapConstructorId reference.ConstructorId },
+                List.map mapExpr fields
+            )
         | ListLiteral values -> ListLiteral (List.map mapExpr values)
         | Apply (func, args) -> Apply (mapExpr func, mapArgs args)
         | IndirectApply (func, args) -> IndirectApply (mapExpr func, mapArgs args)
@@ -404,7 +432,7 @@ let rec resolveNamedValues (values: Map<string, AST.BindingId>) (expr: Expr) : E
     | RecordUpdate (record, fields) ->
         RecordUpdate (recurse record, fields |> List.map (fun (name, value) -> name, recurse value))
     | RecordAccess (record, field) -> RecordAccess (recurse record, field)
-    | Constructor (reference, name, fields) -> Constructor (reference, name, List.map recurse fields)
+    | Constructor (reference, fields) -> Constructor (reference, List.map recurse fields)
     | Match (scrutinee, cases) ->
         Match (
             recurse scrutinee,
@@ -509,7 +537,7 @@ let resolveUnboundValueLocals
         | RecordUpdate (record, fields) ->
             RecordUpdate (recurse record, fields |> List.map (fun (name, value) -> name, recurse value))
         | RecordAccess (record, field) -> RecordAccess (recurse record, field)
-        | Constructor (reference, name, fields) -> Constructor (reference, name, List.map recurse fields)
+        | Constructor (reference, fields) -> Constructor (reference, List.map recurse fields)
         | ListLiteral elements -> ListLiteral (List.map recurse elements)
         | Apply (func, args) -> Apply (recurse func, mapArgs args)
         | IndirectApply (func, args) -> IndirectApply (recurse func, mapArgs args)
@@ -582,9 +610,6 @@ let recursiveBindingAvailability
 let constructorReferenceTypeName (reference: ConstructorReference) : string =
     reference.TypeName
 
-let resolvedConstructorReference (typeName: string) : ConstructorReference =
-    { TypeName = typeName }
-
 let private conversionError location detail =
     Error $"Checked AST construction failed at {location}: {detail}"
 
@@ -599,11 +624,16 @@ let private convertRecordReference (reference: AST.RecordReference) : RecordRefe
 let private convertConstructorReference
     (location: string)
     (reference: AST.ConstructorReference)
+    (variantName: string)
+    (symbols: Symbols)
     : Result<ConstructorReference, string> =
     match reference with
     | AST.ResolvedConstructor _ ->
         match AST.constructorReferenceTypeName reference with
-        | Some typeName -> Ok { TypeName = typeName }
+        | Some typeName ->
+            match tryFindConstructorId typeName variantName symbols with
+            | Some id -> Ok { TypeName = typeName; ConstructorId = id }
+            | None -> conversionError location "resolved constructor has no semantic identity"
         | None -> conversionError location "resolved constructor has no declaring type"
     | AST.UnresolvedConstructor _ ->
         conversionError location "constructor reference was not resolved"
@@ -629,8 +659,8 @@ let rec private allocateLetPattern symbols pattern =
                 (item' :: converted, bindings @ itemBindings, nextSymbols)) ([], [], afterSecond)
         (LPTuple (first', second', List.rev rest'), firstBindings @ secondBindings @ restBindings, following)
 
-let rec private convertPattern bindingIds pattern =
-    let convert = convertPattern bindingIds
+let rec private convertPattern bindingIds symbols pattern =
+    let convert = convertPattern bindingIds symbols
     match pattern with
     | AST.PUnit -> PUnit
     | AST.PWildcard -> PWildcard
@@ -638,7 +668,12 @@ let rec private convertPattern bindingIds pattern =
         match Map.tryFind name bindingIds with
         | Some id -> PVariable id
         | None -> PWildcard
-    | AST.PConstructor (name, fields) -> PConstructor (name, List.map convert fields)
+    | AST.PConstructor (name, _) ->
+        Crash.crash $"Unresolved constructor pattern '{name}' crossed the checked boundary"
+    | AST.PResolvedConstructor (typeName, name, _, fields) ->
+        match tryFindConstructorId typeName name symbols with
+        | Some id -> PConstructor (id, List.map convert fields)
+        | None -> Crash.crash "Resolved constructor pattern has no semantic identity"
     | AST.PInt64 value -> PInt64 value
     | AST.PBigInt value -> PBigInt value
     | AST.PInt128Literal value -> PInt128Literal value
@@ -669,6 +704,7 @@ let private allocateMatchBindings symbols pattern =
         match pattern with
         | AST.PVar name -> [name]
         | AST.PConstructor (_, fields) -> fields |> List.collect allBindings
+        | AST.PResolvedConstructor (_, _, _, fields) -> fields |> List.collect allBindings
         | AST.PTuple patterns | AST.PList patterns -> List.collect allBindings patterns
         | AST.PListCons (heads, tail) -> List.collect allBindings heads @ allBindings tail
         | AST.POr alternatives -> alternatives |> AST.NonEmptyList.head |> allBindings
@@ -818,10 +854,10 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                 Ok (RecordAccess (value, fieldId), state)
             | _ -> conversionError location "record field reference was not resolved")
     | AST.Constructor (reference, variantName, fields) ->
-        convertConstructorReference location reference
+        convertConstructorReference location reference variantName symbols
         |> Result.bind (fun reference' ->
             convertList fields symbols
-            |> Result.map (fun (fields', state) -> (Constructor (reference', variantName, fields'), state)))
+            |> Result.map (fun (fields', state) -> (Constructor (reference', fields'), state)))
     | AST.Match (scrutinee, cases) ->
         convert symbols scrutinee
         |> Result.bind (fun (scrutinee', afterScrutinee) ->
@@ -835,7 +871,7 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                         let patterns =
                             case.Patterns
                             |> AST.NonEmptyList.toList
-                            |> List.map (convertPattern bindingIds)
+                            |> List.map (convertPattern bindingIds afterBindings)
                             |> AST.NonEmptyList.fromList
                         let caseEnvironment =
                             extendEnvironment (Map.toList bindingIds) environment
@@ -926,10 +962,22 @@ let private convertFunctionWithEnvironment
                    Recursion = recursion' },
                  following)))
 
-let ofTypedFunction symbols funcDef : Result<FunctionDef * Symbols, string> =
+let ofTypedFunction
+    (variantLookup: Map<string, string * string list * int * AST.Type list>)
+    symbols
+    funcDef
+    : Result<FunctionDef * Symbols, string> =
+    let symbols =
+        variantLookup
+        |> Map.fold (fun symbols lookupName (typeName, _, tag, _) ->
+            let variantName = lookupName.Split('.') |> Array.last
+            internConstructor typeName variantName tag symbols |> snd) symbols
     convertFunctionWithEnvironment Map.empty symbols funcDef
 
-let ofTypedProgram (AST.Program topLevels) : Result<Program, string> =
+let ofTypedProgram
+    (variantLookup: Map<string, string * string list * int * AST.Type list>)
+    (AST.Program topLevels)
+    : Result<Program, string> =
     let valueEnvironment, initialSymbols =
         topLevels
         |> List.choose (function
@@ -938,6 +986,11 @@ let ofTypedProgram (AST.Program topLevels) : Result<Program, string> =
         |> List.fold (fun (environment, symbols) name ->
             let (id, symbols) = allocateBinding name symbols
             (Map.add name id environment, symbols)) (Map.empty, emptySymbols ())
+    let initialSymbols =
+        variantLookup
+        |> Map.fold (fun symbols lookupName (typeName, _, tag, _) ->
+            let variantName = lookupName.Split('.') |> Array.last
+            internConstructor typeName variantName tag symbols |> snd) initialSymbols
     let convertTopLevel symbols topLevel =
         match topLevel with
         | AST.FunctionDef funcDef ->

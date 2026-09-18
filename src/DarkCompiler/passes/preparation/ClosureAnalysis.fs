@@ -67,8 +67,8 @@ let rec internal matchPatternBindingTypes
             |> List.fold (fun current (innerPattern, elementType) ->
                 merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
         | _ -> Map.empty
-    | CheckedAST.PConstructor (variantName, fieldPatterns) ->
-        match Map.tryFind variantName variantLookup with
+    | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
+        match tryFindVariantForTypeById constructorId scrutineeType variantLookup with
         | Some (typeName, typeParameters, _, fieldTypes)
             when List.length fieldPatterns = List.length fieldTypes ->
             let substitution =
@@ -154,7 +154,7 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<AST.BindingId>) : Set<AST.B
         let updateVars = updates |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
         Set.union recordVars updateVars
     | CheckedAST.RecordAccess (record, _) -> freeVars record bound
-    | CheckedAST.Constructor (_, _, fields) ->
+    | CheckedAST.Constructor (_, fields) ->
         fields |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
     | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeVars = freeVars scrutinee bound
@@ -277,8 +277,8 @@ let rec simpleInferType
                 List.zip innerPats elemTypes
                 |> List.fold (fun acc (pat, typ) -> mergeBindings acc (extractPatternBindings pat typ)) Map.empty
             | _ -> Map.empty
-        | CheckedAST.PConstructor (variantName, fieldPatterns) ->
-            match Map.tryFind variantName variantLookup with
+        | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
+            match tryFindVariantForTypeById constructorId scrutType variantLookup with
             | Some (typeName, typeParams, _, fieldTypes)
                 when List.length fieldPatterns = List.length fieldTypes ->
                 let subst =
@@ -434,9 +434,14 @@ let rec simpleInferType
                     | None -> fieldTypePattern)
             | None -> None
         | _ -> None
-    | CheckedAST.Constructor (constructorReference, variantName, fields) ->
+    | CheckedAST.Constructor (constructorReference, fields) ->
         // Sum type constructor has the sum type; infer generic args from fields when possible.
-        match tryFindVariant constructorReference variantName variantLookup with
+        match
+            tryFindVariantByTag
+                constructorReference.TypeName
+                (AST.constructorTag constructorReference.ConstructorId)
+                variantLookup
+        with
         | Some (sumTypeName, typeParams, _, fieldPatterns) ->
             let defaultTypeArgs = typeParams |> List.map AST.TVar
             if List.length fieldPatterns <> List.length fields then

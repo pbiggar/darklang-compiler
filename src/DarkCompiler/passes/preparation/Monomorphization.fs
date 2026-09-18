@@ -71,7 +71,7 @@ let collectTypeApps (expr: CheckedAST.Expr) : Set<SpecKey> =
         | CheckedAST.RecordUpdate (record, updates) ->
             updates
             |> List.fold (fun acc (_, value) -> visit acc value) (visit specs record)
-        | CheckedAST.Constructor (_, _, fields) ->
+        | CheckedAST.Constructor (_, fields) ->
             fields |> List.fold visit specs
         | CheckedAST.Match (scrutinee, cases) ->
             cases
@@ -133,7 +133,7 @@ let rec collectCalledFunctions (expr: CheckedAST.Expr) : Set<string> =
     | CheckedAST.RecordLiteral (_, fields) -> fields |> List.map snd |> combine
     | CheckedAST.RecordUpdate (record, fields) ->
         combine (record :: (fields |> List.map snd))
-    | CheckedAST.Constructor (_, _, fields) ->
+    | CheckedAST.Constructor (_, fields) ->
         fields |> List.map collectCalledFunctions |> List.fold Set.union Set.empty
     | CheckedAST.Match (scrutinee, cases) ->
         let caseCalls =
@@ -289,8 +289,8 @@ let rec replaceTypeApps (expr: CheckedAST.Expr) : CheckedAST.Expr =
         CheckedAST.RecordUpdate (replaceTypeApps record, List.map (fun (n, e) -> (n, replaceTypeApps e)) updates)
     | CheckedAST.RecordAccess (record, fieldName) ->
         CheckedAST.RecordAccess (replaceTypeApps record, fieldName)
-    | CheckedAST.Constructor (typeName, variantName, fields) ->
-        CheckedAST.Constructor (typeName, variantName, List.map replaceTypeApps fields)
+    | CheckedAST.Constructor (reference, fields) ->
+        CheckedAST.Constructor (reference, List.map replaceTypeApps fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (replaceTypeApps scrutinee,
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map replaceTypeApps; Body = replaceTypeApps mc.Body }))
@@ -504,10 +504,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: CheckedAST.E
                 |> Result.map (fun updates' -> CheckedAST.RecordUpdate (record', updates')))
         | CheckedAST.RecordAccess (record, fieldName) ->
             replace record |> Result.map (fun record' -> CheckedAST.RecordAccess (record', fieldName))
-        | CheckedAST.Constructor (typeName, variantName, fields) ->
+        | CheckedAST.Constructor (reference, fields) ->
             fields
             |> mapResult replace
-            |> Result.map (fun fields' -> CheckedAST.Constructor (typeName, variantName, fields'))
+            |> Result.map (fun fields' -> CheckedAST.Constructor (reference, fields'))
         | CheckedAST.Match (scrutinee, cases) ->
             replace scrutinee
             |> Result.bind (fun scrutinee' ->
@@ -640,9 +640,9 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
         | CheckedAST.RecordAccess (record, field) ->
             let record, symbols = rewrite symbols record
             (CheckedAST.RecordAccess (record, field), symbols)
-        | CheckedAST.Constructor (reference, name, fields) ->
+        | CheckedAST.Constructor (reference, fields) ->
             let fields, symbols = fields |> List.mapFold rewrite symbols
-            (CheckedAST.Constructor (reference, name, fields), symbols)
+            (CheckedAST.Constructor (reference, fields), symbols)
         | CheckedAST.Match (scrutinee, cases) ->
             let scrutinee, symbols = rewrite symbols scrutinee
             let cases, symbols =
@@ -806,7 +806,7 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: CheckedAS
             || (updates |> List.exists (fun (_, e) -> exprNeedsLambdaLowering bound e))
         | CheckedAST.RecordAccess (record, _) ->
             exprNeedsLambdaLowering bound record
-        | CheckedAST.Constructor (_, _, fields) ->
+        | CheckedAST.Constructor (_, fields) ->
             fields |> List.exists (exprNeedsLambdaLowering bound)
         | CheckedAST.Match (scrutinee, cases) ->
             exprNeedsLambdaLowering bound scrutinee

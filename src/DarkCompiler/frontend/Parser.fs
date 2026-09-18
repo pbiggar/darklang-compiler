@@ -2792,6 +2792,9 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
     | PConstructor (_, fields) ->
         fields
         |> List.fold (fun acc field -> Result.bind (fun () -> validatePattern field) acc) (Ok ())
+    | PResolvedConstructor (_, _, _, fields) ->
+        fields
+        |> List.fold (fun acc field -> Result.bind (fun () -> validatePattern field) acc) (Ok ())
     | PTuple patterns ->
         patterns
         |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())

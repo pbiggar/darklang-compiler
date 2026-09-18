@@ -136,11 +136,15 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                             | Ok bindings, Ok more -> Ok (bindings @ more)
                             | Error error, _ -> Error error
                             | _, Error error -> Error error) (Ok [])
+            | PResolvedConstructor _ ->
+                Crash.crash "Resolved constructor pattern re-entered match checking"
             | PTuple patterns ->
                 let rec containsVariableBinding (innerPattern: Pattern) : bool =
                     match innerPattern with
                     | PVar _ -> true
                     | PConstructor (_, fields) -> List.exists containsVariableBinding fields
+                    | PResolvedConstructor (_, _, _, fields) ->
+                        List.exists containsVariableBinding fields
                     | PTuple nestedPatterns
                     | PList nestedPatterns ->
                         nestedPatterns |> List.exists containsVariableBinding
@@ -366,6 +370,8 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
             | PVar name ->
                 [name]
             | PConstructor (_, fields) ->
+                fields |> List.collect patternBindingNames
+            | PResolvedConstructor (_, _, _, fields) ->
                 fields |> List.collect patternBindingNames
             | PTuple patterns
             | PList patterns ->
@@ -816,6 +822,77 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
 
         // Type check each case and ensure they all return the same type
         // Returns (resultType, transformedCases)
+        let rec resolvePatternConstructors (patternType: Type) (pattern: Pattern) : Pattern =
+            let recurse = resolvePatternConstructors
+            match pattern with
+            | PConstructor (variantName, fields) ->
+                let resolved =
+                    match resolveType aliasReg patternType with
+                    | TSum (typeName, _) ->
+                        Map.tryFind $"{typeName}.{variantName}" variantLookup
+                        |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
+                    | _ -> Map.tryFind variantName variantLookup
+                match resolved with
+                | Some (typeName, typeParams, tag, fieldTypes) ->
+                    let typeArgs =
+                        match resolveType aliasReg patternType with
+                        | TSum (_, args) -> args
+                        | _ -> []
+                    let subst =
+                        if List.length typeParams = List.length typeArgs then
+                            List.zip typeParams typeArgs |> Map.ofList
+                        else Map.empty
+                    let concreteFieldTypes = fieldTypes |> List.map (applySubst subst)
+                    let fields' =
+                        if List.length fields = List.length concreteFieldTypes then
+                            List.map2 recurse concreteFieldTypes fields
+                        else
+                            List.map (recurse TRuntimeError) fields
+                    PResolvedConstructor (typeName, variantName, tag, fields')
+                | None -> Crash.crash $"Validated constructor pattern '{variantName}' was not resolved"
+            | PResolvedConstructor _ -> pattern
+            | PTuple patterns ->
+                match resolveType aliasReg patternType with
+                | TTuple types when List.length types = List.length patterns ->
+                    PTuple (List.map2 recurse types patterns)
+                | _ -> PTuple (List.map (recurse TRuntimeError) patterns)
+            | PList patterns ->
+                match resolveType aliasReg patternType with
+                | TList elementType -> PList (List.map (recurse elementType) patterns)
+                | _ -> PList (List.map (recurse TRuntimeError) patterns)
+            | PListCons (heads, tail) ->
+                match resolveType aliasReg patternType with
+                | TList elementType ->
+                    PListCons (List.map (recurse elementType) heads, recurse patternType tail)
+                | _ ->
+                    PListCons (
+                        List.map (recurse TRuntimeError) heads,
+                        recurse TRuntimeError tail
+                    )
+            | POr alternatives -> POr (NonEmptyList.map (recurse patternType) alternatives)
+            | _ -> pattern
+
+        // Specialized checked functions can re-enter checking. Reopen their
+        // resolved patterns for validation, then resolve them again at this
+        // checked boundary so all ordinary pattern rules remain centralized.
+        let rec reopenResolvedPattern pattern =
+            match pattern with
+            | PResolvedConstructor (_, variantName, _, fields) ->
+                PConstructor (variantName, List.map reopenResolvedPattern fields)
+            | PConstructor (variantName, fields) ->
+                PConstructor (variantName, List.map reopenResolvedPattern fields)
+            | PTuple patterns -> PTuple (List.map reopenResolvedPattern patterns)
+            | PList patterns -> PList (List.map reopenResolvedPattern patterns)
+            | PListCons (heads, tail) ->
+                PListCons (List.map reopenResolvedPattern heads, reopenResolvedPattern tail)
+            | POr alternatives -> POr (NonEmptyList.map reopenResolvedPattern alternatives)
+            | _ -> pattern
+
+        let casesForChecking =
+            cases
+            |> List.map (fun case ->
+                { case with Patterns = NonEmptyList.map reopenResolvedPattern case.Patterns })
+
         let rec checkCases (remaining: MatchCase list) (resultType: Type option) (accCases: MatchCase list) : Result<Type * MatchCase list, TypeError> =
             match remaining with
             | [] ->
@@ -835,6 +912,9 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                         scrutineeType
                         allowNoMatchForKnownListLengthMismatch
                     |> Result.bind (fun bindings ->
+                        let resolvedPatterns =
+                            matchCase.Patterns
+                            |> NonEmptyList.map (resolvePatternConstructors scrutineeType)
                         let caseEnv = List.fold (fun e (name, ty) -> Map.add name ty e) env bindings
                         // Type check guard if present (must be Bool)
                         let guardResult =
@@ -898,7 +978,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                                     checkedBodyResult
                             normalizedBodyResult
                             |> Result.bind (fun (bodyType, body') ->
-                                let newCase = { Patterns = matchCase.Patterns; Guard = guard'; Body = body' }
+                                let newCase = { Patterns = resolvedPatterns; Guard = guard'; Body = body' }
                                 match resultType with
                                 | None ->
                                     checkCases rest (Some bodyType) (newCase :: accCases)
@@ -912,9 +992,9 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                                         Error (TypeMismatch (expected, bodyType, "match body"))))))
 
         // Pass expectedType to first case so empty lists, None, etc. get the right type
-        checkCases cases expectedType []
+        checkCases casesForChecking expectedType []
         |> Result.bind (fun (matchType, cases') ->
-            if not (matchIsExhaustive cases') then
+            if not (matchIsExhaustive casesForChecking) then
                 Error (GenericError $"Non-exhaustive match expression for {typeToString scrutineeType}")
             else
                 match expectedType with

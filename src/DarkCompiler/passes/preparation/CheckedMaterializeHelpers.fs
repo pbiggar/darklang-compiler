@@ -78,7 +78,7 @@ let rec private collectHelperTypes
     | CheckedAST.RecordLiteral (_, entries) -> entries |> List.map snd |> combine
     | CheckedAST.RecordUpdate (record, updates) ->
         combine (record :: (updates |> List.map snd))
-    | CheckedAST.Constructor (_, _, fields) ->
+    | CheckedAST.Constructor (_, fields) ->
         combine fields
     | CheckedAST.Match (scrutinee, cases) ->
         let caseExpressions =
@@ -154,8 +154,8 @@ let rec private rewriteHelperCalls
     | CheckedAST.RecordUpdate (record, updates) ->
         CheckedAST.RecordUpdate (recurse record, updates |> List.map (fun (name, value) -> name, recurse value))
     | CheckedAST.RecordAccess (record, fieldName) -> CheckedAST.RecordAccess (recurse record, fieldName)
-    | CheckedAST.Constructor (reference, variantName, fields) ->
-        CheckedAST.Constructor (reference, variantName, List.map recurse fields)
+    | CheckedAST.Constructor (reference, fields) ->
+        CheckedAST.Constructor (reference, List.map recurse fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (
             recurse scrutinee,
@@ -177,8 +177,8 @@ let rec private rewriteHelperCalls
                 | CheckedAST.StringExpr partExpr -> CheckedAST.StringExpr (recurse partExpr))
         )
 
-let private checkedGeneratedFunction symbols (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef * CheckedAST.Symbols =
-    match CheckedAST.ofTypedFunction symbols funcDef with
+let private checkedGeneratedFunction variantLookup symbols (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef * CheckedAST.Symbols =
+    match CheckedAST.ofTypedFunction variantLookup symbols funcDef with
     | Ok result -> result
     | Error error -> Crash.crash error
 
@@ -229,7 +229,7 @@ let materializeEqHelpersInTopLevelsWithIndexedSums
         |> List.map snd
         |> List.filter (fun helper -> not (Set.contains helper.Name existingNames))
         |> List.mapFold (fun symbols helper ->
-            let (checkedFunction, symbols) = checkedGeneratedFunction symbols helper
+            let (checkedFunction, symbols) = checkedGeneratedFunction variantLookup symbols helper
             (CheckedAST.FunctionDef checkedFunction, symbols)) symbols
     let rewritten =
         topLevels

@@ -28,7 +28,8 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
     let env : VarEnv =
         Map.ofList [(xId, (ANF.TempId 0, AST.TSum ("MissingType", [])))]
 
-    let pattern = CheckedAST.PConstructor ("MissingCtor", [CheckedAST.PVariable payloadId])
+    let pattern =
+        CheckedAST.PConstructor (AST.constructorId 0 0, [CheckedAST.PVariable payloadId])
 
     match AST.NonEmptyList.tryFromList [pattern] with
     | None -> Error "NonEmptyList.tryFromList returned None for a non-empty list"
@@ -39,7 +40,7 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
         match toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup emptyFuncReg emptyModuleRegistry with
         | Ok _ -> Error "Expected error when constructor payload type is missing from variant lookup"
         | Error msg ->
-            if msg.Contains "MissingCtor" then Ok ()
+            if msg.Contains "Constructor tag" then Ok ()
             else Error $"Unexpected error message: {msg}"
 
 let testNeedsLambdaLoweringIgnoresShadowedFunc () : TestResult =

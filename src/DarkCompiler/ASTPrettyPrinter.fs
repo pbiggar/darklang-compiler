@@ -254,6 +254,17 @@ let rec private formatPattern (pattern: Pattern) : string =
         |> List.map formatPattern
         |> String.concat ", "
         |> fun fieldText -> $"{formatIdentifierPath name}({fieldText})"
+    | PResolvedConstructor (_, name, _, []) -> formatIdentifierPath name
+    | PResolvedConstructor (_, name, _, [field]) ->
+        let fieldText = formatPattern field
+        match field with
+        | PTuple _ -> $"{formatIdentifierPath name} ({fieldText})"
+        | _ -> $"{formatIdentifierPath name} {fieldText}"
+    | PResolvedConstructor (_, name, _, fields) ->
+        fields
+        |> List.map formatPattern
+        |> String.concat ", "
+        |> fun fieldText -> $"{formatIdentifierPath name}({fieldText})"
     | POr alternatives ->
         alternatives
         |> NonEmptyList.toList

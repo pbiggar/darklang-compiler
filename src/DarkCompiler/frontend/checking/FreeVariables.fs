@@ -144,6 +144,8 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
     | PFloat _ -> Set.empty
     | PConstructor (_, fields) ->
         fields |> List.map collectPatternBindings |> List.fold Set.union Set.empty
+    | PResolvedConstructor (_, _, _, fields) ->
+        fields |> List.map collectPatternBindings |> List.fold Set.union Set.empty
     | PTuple patterns ->
         patterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
     | PList patterns ->
