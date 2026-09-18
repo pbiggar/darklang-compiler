@@ -21,8 +21,6 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TFunction (List.map (applySubstToType subst) paramTypes, applySubstToType subst returnType)
     | AST.TTuple elemTypes ->
         AST.TTuple (List.map (applySubstToType subst) elemTypes)
-    | AST.TEnumFields fieldTypes ->
-        AST.TEnumFields (List.map (applySubstToType subst) fieldTypes)
     | AST.TList elemType ->
         AST.TList (applySubstToType subst elemType)
     | AST.TStream elemType ->
@@ -233,8 +231,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         CheckedAST.RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
     | CheckedAST.RecordAccess (record, fieldName) ->
         CheckedAST.RecordAccess (applySubstToExpr subst record, fieldName)
-    | CheckedAST.Constructor (typeName, variantName, payload) ->
-        CheckedAST.Constructor (typeName, variantName, Option.map (applySubstToExpr subst) payload)
+    | CheckedAST.Constructor (typeName, variantName, fields) ->
+        CheckedAST.Constructor (typeName, variantName, List.map (applySubstToExpr subst) fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (applySubstToExpr subst scrutinee,
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))

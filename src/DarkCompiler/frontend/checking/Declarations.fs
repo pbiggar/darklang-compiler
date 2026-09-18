@@ -77,8 +77,7 @@ let internal validateTopLevelTypeDeclarations
                 )
             | Some _ -> validateAll typeArgs
         | TFunction (parameters, result) -> validateAll (parameters @ [result])
-        | TTuple types
-        | TEnumFields types -> validateAll types
+        | TTuple types -> validateAll types
         | TList element -> validateTypeReference owner element
         | TStream element -> validateTypeReference owner element
         | TDict (key, value) -> validateAll [key; value]
@@ -107,7 +106,7 @@ let internal validateTopLevelTypeDeclarations
                 let nested = combine args
                 if Set.contains name aliasNames then Set.add name nested else nested
             | TFunction (parameters, result) -> combine (result :: parameters)
-            | TTuple types | TEnumFields types -> combine types
+            | TTuple types -> combine types
             | TList element
             | TStream element -> referencedAliases element
             | TDict (key, value) -> combine [key; value]
@@ -190,9 +189,9 @@ let internal validateTopLevelTypeDeclarations
                         | SumTypeDef (_, _, variants) ->
                             variants
                             |> List.fold (fun acc variant ->
-                                match variant.Payload with
-                                | Some payloadType -> collectTypeVarsInType payloadType acc
-                                | None -> acc) []
+                                variant.Fields
+                                |> List.fold (fun fieldsAcc fieldType ->
+                                    collectTypeVarsInType fieldType fieldsAcc) acc) []
                         | TypeAlias (_, _, targetType) ->
                             collectTypeVarsInType targetType []
                     let undeclaredTypeParam =
@@ -206,7 +205,7 @@ let internal validateTopLevelTypeDeclarations
                     let referencedTypes =
                         match typeDef with
                         | RecordDef (_, _, fields) -> List.map snd fields
-                        | SumTypeDef (_, _, variants) -> variants |> List.choose (fun variant -> variant.Payload)
+                        | SumTypeDef (_, _, variants) -> variants |> List.collect (fun variant -> variant.Fields)
                         | TypeAlias (_, _, targetType) -> [targetType]
                     let referenceResult =
                         referencedTypes
@@ -306,7 +305,7 @@ let internal summarizeTopLevelDeclarations
                             constructorRuntimeIdentity typeName variant.Name
                         else
                             ordinal
-                    let info = (typeName, typeParams, tag, variant.Payload)
+                    let info = (typeName, typeParams, tag, variant.Fields)
                     lookup
                     |> Map.add variant.Name info
                     |> Map.add $"{typeName}.{variant.Name}" info) summary.VariantLookup

@@ -35,7 +35,6 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
         | AST.TFunction (paramTypes, returnType) ->
             AST.TFunction (List.map canonicalizePayloadType paramTypes, canonicalizePayloadType returnType)
         | AST.TTuple elementTypes -> AST.TTuple (List.map canonicalizePayloadType elementTypes)
-        | AST.TEnumFields fieldTypes -> AST.TEnumFields (List.map canonicalizePayloadType fieldTypes)
         | AST.TList elementType -> AST.TList (canonicalizePayloadType elementType)
         | AST.TDict (keyType, valueType) ->
             AST.TDict (canonicalizePayloadType keyType, canonicalizePayloadType valueType)
@@ -43,8 +42,13 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
 
     let addVariant
         (acc: Map<string, string list * (int * AST.Type option) list>)
-        (_variantName: string, (typeName, typeParams, tag, payloadType))
+        (_variantName: string, (typeName, typeParams, tag, fieldTypes))
         =
+        let payloadType =
+            match fieldTypes with
+            | [] -> None
+            | [fieldType] -> Some fieldType
+            | _ -> Some (AST.TTuple fieldTypes)
         match Map.tryFind typeName acc with
         | None ->
             Map.add typeName (typeParams, [(tag, payloadType)]) acc
@@ -126,8 +130,6 @@ let private canonicalizeBareSumTypeRefsWithPredicate
             AST.TFunction (List.map canonicalize paramTypes, canonicalize returnType)
         | AST.TTuple elemTypes ->
             AST.TTuple (List.map canonicalize elemTypes)
-        | AST.TEnumFields fieldTypes ->
-            AST.TEnumFields (List.map canonicalize fieldTypes)
         | AST.TList elemType ->
             AST.TList (canonicalize elemType)
         | AST.TStream elemType ->
@@ -170,7 +172,6 @@ let internal canonicalizeNamedTypeRefs
         | AST.TFunction (args, result) ->
             AST.TFunction (List.map canonicalize args, canonicalize result)
         | AST.TTuple elements -> AST.TTuple (List.map canonicalize elements)
-        | AST.TEnumFields fields -> AST.TEnumFields (List.map canonicalize fields)
         | AST.TList element -> AST.TList (canonicalize element)
         | AST.TDict (key, value) -> AST.TDict (canonicalize key, canonicalize value)
         | _ -> current
@@ -201,8 +202,6 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
         AST.TSum (name, List.map (resolveAliasTypeForRegistry aliasReg) typeArgs)
     | AST.TTuple elemTypes ->
         AST.TTuple (List.map (resolveAliasTypeForRegistry aliasReg) elemTypes)
-    | AST.TEnumFields fieldTypes ->
-        AST.TEnumFields (List.map (resolveAliasTypeForRegistry aliasReg) fieldTypes)
     | AST.TList elemType ->
         AST.TList (resolveAliasTypeForRegistry aliasReg elemType)
     | AST.TStream elemType ->

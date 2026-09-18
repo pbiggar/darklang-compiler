@@ -412,7 +412,7 @@ let __enumCandidate (source: String) (view: Stdlib.Json.InternalValueView) : Std
                     if valueStart < 0L || valueStart >= valueEnd then
                         Stdlib.Json.InternalEnumObject.EnumNotObject
                     else
-                        Stdlib.Json.InternalEnumObject.EnumOneField (
+                        Stdlib.Json.InternalEnumObject.EnumOneField(
                             key,
                             Stdlib.Json.__makeView valueStart valueEnd)
 
@@ -423,7 +423,7 @@ let __enumObject (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib
         match fields with
         | [] -> Stdlib.Json.InternalEnumObject.EnumNoFields
         | [field] ->
-            Stdlib.Json.InternalEnumObject.EnumOneField (
+            Stdlib.Json.InternalEnumObject.EnumOneField(
                 Stdlib.Tuple2.first field,
                 Stdlib.Tuple2.second field)
         | _ ->

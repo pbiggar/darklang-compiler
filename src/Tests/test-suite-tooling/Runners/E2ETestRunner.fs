@@ -289,10 +289,8 @@ let rec private collectPatternBoundNames (pattern: Pattern) : Set<string> =
     match pattern with
     | PVar name ->
         Set.singleton name
-    | PConstructor (_, payloadOpt) ->
-        payloadOpt
-        |> Option.map collectPatternBoundNames
-        |> Option.defaultValue Set.empty
+    | PConstructor (_, fields) ->
+        fields |> List.map collectPatternBoundNames |> List.fold Set.union Set.empty
     | PTuple patterns ->
         patterns
         |> List.map collectPatternBoundNames
@@ -439,10 +437,10 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         Set.union recordRefs updateRefs
     | RecordAccess (recordExpr, _fieldName) ->
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars recordExpr
-    | Constructor (_typeName, _variantName, payloadOpt) ->
-        payloadOpt
-        |> Option.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-        |> Option.defaultValue Set.empty
+    | Constructor (_typeName, _variantName, fields) ->
+        fields
+        |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
+        |> List.fold Set.union Set.empty
     | Match (scrutineeExpr, cases) ->
         let scrutineeRefs =
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars scrutineeExpr

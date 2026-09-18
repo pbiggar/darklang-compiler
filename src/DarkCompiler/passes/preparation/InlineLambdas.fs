@@ -41,7 +41,7 @@ let rec varOccursInExpr (name: string) (expr: CheckedAST.Expr) : bool =
     | CheckedAST.RecordUpdate (record, updates) ->
         varOccursInExpr name record || List.exists (fun (_, e) -> varOccursInExpr name e) updates
     | CheckedAST.RecordAccess (record, _) -> varOccursInExpr name record
-    | CheckedAST.Constructor (_, _, payload) -> Option.exists (varOccursInExpr name) payload
+    | CheckedAST.Constructor (_, _, fields) -> List.exists (varOccursInExpr name) fields
     | CheckedAST.Match (scrutinee, cases) ->
         varOccursInExpr name scrutinee ||
         List.exists (fun (mc: CheckedAST.MatchCase) ->
@@ -131,8 +131,8 @@ let rec inlineLambdas (expr: CheckedAST.Expr) (lambdaEnv: LambdaEnv) : CheckedAS
         CheckedAST.RecordUpdate (inlineLambdas record lambdaEnv, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) updates)
     | CheckedAST.RecordAccess (record, fieldName) ->
         CheckedAST.RecordAccess (inlineLambdas record lambdaEnv, fieldName)
-    | CheckedAST.Constructor (typeName, variantName, payload) ->
-        CheckedAST.Constructor (typeName, variantName, Option.map (fun e -> inlineLambdas e lambdaEnv) payload)
+    | CheckedAST.Constructor (typeName, variantName, fields) ->
+        CheckedAST.Constructor (typeName, variantName, List.map (fun e -> inlineLambdas e lambdaEnv) fields)
     | CheckedAST.Match (scrutinee, cases) ->
         let cases' =
             cases

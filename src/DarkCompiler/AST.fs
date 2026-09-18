@@ -47,10 +47,6 @@ type Type =
     | TRuntimeError                 // Bottom-like type for guaranteed runtime-failing expressions
     | TFunction of Type list * Type  // parameter types * return type
     | TTuple of Type list             // tuple type: (Int, Bool, String)
-    /// Ordered fields of an enum case. Unlike TTuple, these are separate
-    /// constructor arguments (`Case of A * B`), not one tuple argument
-    /// (`Case of (A * B)`). This syntax-only shape is lowered as a tuple block.
-    | TEnumFields of Type list
     | TRecord of string * Type list   // record type by name with type args: Point<T>, Pair<A, B>, etc.
     | TSum of string * Type list      // sum type by name with type args: Result<Int64, String>
     | TList of Type                    // List<T> - polymorphic list type
@@ -166,7 +162,7 @@ type Pattern =
     | PUnit                                                // () - matches unit value
     | PWildcard                                            // _
     | PVar of string                                       // x (binds value to variable)
-    | PConstructor of variantName:string * payload:Pattern option  // Red, Some(x)
+    | PConstructor of variantName:string * fields:Pattern list  // Red, Some(x), Pair(a, b)
     | PInt64 of int64                                      // 42 (Int64 literal)
     | PBigInt of System.Numerics.BigInteger                // 42 (Int literal)
     | PInt128Literal of System.Int128                      // 42Q
@@ -364,8 +360,8 @@ let validateBinders (structure: BinderStructure) : Result<string list, string> =
     let rec matchPatternBindings pattern =
         match pattern with
         | PVar name -> [name]
-        | PConstructor (_, payload) ->
-            payload |> Option.map matchPatternBindings |> Option.defaultValue []
+        | PConstructor (_, fields) ->
+            fields |> List.collect matchPatternBindings
         | PTuple patterns | PList patterns -> patterns |> List.collect matchPatternBindings
         | PListCons (heads, tail) ->
             (heads |> List.collect matchPatternBindings) @ matchPatternBindings tail
@@ -436,7 +432,7 @@ and Expr =
     | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
     | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
-    | Constructor of reference:ConstructorReference * variantName:string * payload:Expr option
+    | Constructor of reference:ConstructorReference * variantName:string * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]
     | Lambda of parameters:NonEmptyList<LambdaParameter> * returnAnnotation:Type option * body:Expr
@@ -465,10 +461,10 @@ type FunctionDef = {
     Recursion: RecursiveBindingInfo option
 }
 
-/// Variant in a sum type, optionally carrying one payload type.
+/// Variant in a sum type with zero or more ordered constructor fields.
 type Variant = {
     Name: string
-    Payload: Type option  // None for simple enums, Some for payload-carrying variants
+    Fields: Type list
 }
 
 /// Type definition (record types, sum types, etc.)

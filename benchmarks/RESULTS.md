@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-18T18:13:14+00:00
+**Snapshot timestamp:** 2026-09-18T20:26:22+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `1cf3cdaf7b836ecdbd1fcf60374f6ffb5b00aa82` - Persist Herdr configuration in dev image
+**Compiler commit:** `1ea60810f10e81e8a282a20600549962497ba1a6` - Merge commit '86a26c383b243d8306bdbe8de5c62c5b38fc45eb' into HEAD
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -40,5 +40,5 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | string_equality | 1,219,845 (0.82x) | 1,479,564 | - | - | - | - |
 | sum_to_n | 62,009 (0.24x) | 260,246 | - | - | - | - |
 | tak | 48,017,024 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 5,864,163,839 (13951x) | 420,354 | - | - | - | - |
+| tinytemplate | 5,864,163,741 (13951x) | 420,354 | - | - | - | - |
 | warden | 47,041,843 (174x) | 270,345 | - | - | - | - |

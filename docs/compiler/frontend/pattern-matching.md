@@ -18,7 +18,7 @@ type Pattern =
     | PUnit
     | PWildcard
     | PVar of string
-    | PConstructor of variantName:string * payload:Pattern option
+    | PConstructor of variantName:string * fields:Pattern list
     | PInt64 of int64
     | PInt128Literal of System.Int128
     | PInt8Literal of sbyte
@@ -89,7 +89,8 @@ Binds `a` to `scrutinee.0`, `b` to `scrutinee.1`.
 | Some(x) -> x
 | None -> 0
 ```
-Checks tag, then extracts payload if present.
+Checks the tag, then extracts each declared field in order. A single tuple
+field remains one `PTuple` element in the constructor's field list.
 
 ### Record Pattern Type Preservation
 

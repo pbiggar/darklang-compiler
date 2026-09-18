@@ -128,31 +128,32 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                 Ok (List.item index elemTypes)
             | AST.TTuple _ -> Error $"Tuple index {index} out of bounds"
             | _ -> Error "Cannot access index on non-tuple type")
-    | CheckedAST.Constructor (constructorTypeName, variantName, payload) ->
+    | CheckedAST.Constructor (constructorTypeName, variantName, fields) ->
         match tryFindVariant constructorTypeName variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
-        | Some (typeName, typeParams, _, payloadPattern) ->
+        | Some (typeName, typeParams, _, fieldPatterns) ->
             let defaultTypeArgs = typeParams |> List.map AST.TVar
-            match payloadPattern, payload with
-            | Some expectedPayloadType, Some payloadExpr ->
-                inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
-                |> Result.bind (fun actualPayloadType ->
-                    match matchTypePattern expectedPayloadType actualPayloadType with
-                    | Error _ ->
-                        Ok (AST.TSum (typeName, defaultTypeArgs))
-                    | Ok bindings ->
-                        match consolidateTypeBindings bindings with
-                        | Error _ ->
-                            Ok (AST.TSum (typeName, defaultTypeArgs))
-                        | Ok subst ->
-                            let typeArgs =
-                                typeParams
-                                |> List.map (fun typeParam ->
-                                    Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
-                            Ok (AST.TSum (typeName, typeArgs)))
-            | _ ->
+            if List.length fieldPatterns <> List.length fields then
                 Ok (AST.TSum (typeName, defaultTypeArgs))
+            else
+                List.zip fieldPatterns fields
+                |> List.fold (fun result (fieldPattern, fieldExpr) ->
+                    result
+                    |> Result.bind (fun bindings ->
+                        inferTypeCore sumTypeNames fieldExpr typeEnv typeReg variantLookup funcReg moduleRegistry
+                        |> Result.map (fun actualFieldType ->
+                            match matchTypePattern fieldPattern actualFieldType with
+                            | Ok fieldBindings -> bindings @ fieldBindings
+                            | Error _ -> bindings))) (Ok [])
+                |> Result.map (fun bindings ->
+                    match consolidateTypeBindings bindings with
+                    | Error _ -> AST.TSum (typeName, defaultTypeArgs)
+                    | Ok subst ->
+                        typeParams
+                        |> List.map (fun typeParam ->
+                            Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
+                        |> fun typeArgs -> AST.TSum (typeName, typeArgs))
     | CheckedAST.ListLiteral elements ->
         match elements with
         | [] -> Ok (AST.TList (AST.TVar "t"))  // Preserve unknown element type for empty lists
@@ -334,23 +335,22 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                     // Non-matching tuple patterns must not introduce bindings with fabricated types.
                     // Type checking treats these as non-matching alternatives.
                     Map.empty
-            | AST.PConstructor (variantName, payloadPat) ->
-                match payloadPat with
-                | None -> Map.empty
-                | Some payloadPattern ->
-                    let payloadType =
-                        match Map.tryFind variantName variantLookup with
-                        | Some (_, typeParams, _, Some payloadTypeTemplate) ->
-                            match scrutType with
-                            | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
-                                let subst = List.zip typeParams typeArgs |> Map.ofList
-                                substituteType subst payloadTypeTemplate
-                            | _ -> payloadTypeTemplate
-                        | Some (_, _, _, None) ->
-                            Crash.crash $"Constructor '{variantName}' has no payload type"
-                        | None ->
-                            Crash.crash $"Unknown constructor '{variantName}' in pattern"
-                    extractPatternBindings payloadPattern payloadType
+            | AST.PConstructor (variantName, fieldPatterns) ->
+                match Map.tryFind variantName variantLookup with
+                | Some (_, typeParams, _, fieldTypes)
+                    when List.length fieldPatterns = List.length fieldTypes ->
+                    let subst =
+                        match scrutType with
+                        | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
+                            List.zip typeParams typeArgs |> Map.ofList
+                        | _ -> Map.empty
+                    List.zip fieldPatterns fieldTypes
+                    |> List.fold (fun acc (fieldPattern, fieldType) ->
+                        Map.fold (fun current name typ -> Map.add name typ current)
+                            acc
+                            (extractPatternBindings fieldPattern (substituteType subst fieldType))) Map.empty
+                | Some _ -> Map.empty
+                | None -> Crash.crash $"Unknown constructor '{variantName}' in pattern"
             | AST.PList innerPats ->
                 let elemTypeOpt =
                     match scrutType with
@@ -452,7 +452,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                     | AST.TSum ("Stdlib.Result.Result", [okType; _]) -> Ok okType
                     | AST.TSum ("Stdlib.Option.Option", []) ->
                         match argExpr with
-                        | CheckedAST.Constructor (_, "Some", Some payloadExpr) ->
+                        | CheckedAST.Constructor (_, "Some", [payloadExpr]) ->
                             inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                         | _ ->
                             // Type args may be unavailable in ANF inferType.
@@ -460,7 +460,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                             Ok AST.TUnit
                     | AST.TSum ("Stdlib.Result.Result", []) ->
                         match argExpr with
-                        | CheckedAST.Constructor (_, "Ok", Some payloadExpr) ->
+                        | CheckedAST.Constructor (_, "Ok", [payloadExpr]) ->
                             inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                         | _ ->
                             // Type args may be unavailable in ANF inferType.

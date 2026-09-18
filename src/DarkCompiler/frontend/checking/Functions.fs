@@ -108,7 +108,6 @@ let internal checkFunctionDefWithSumTypeNames
                 List.forall2 nominallyIdentical leftParams rightParams
                 && nominallyIdentical leftReturn rightReturn
             | TTuple leftTypes, TTuple rightTypes
-            | TEnumFields leftTypes, TEnumFields rightTypes
                 when List.length leftTypes = List.length rightTypes ->
                 List.forall2 nominallyIdentical leftTypes rightTypes
             | TList leftType, TList rightType -> nominallyIdentical leftType rightType
@@ -195,8 +194,8 @@ let rec internal collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
             (updates |> List.map (snd >> collectTypeAppSpecs) |> List.fold Set.union Set.empty)
     | RecordAccess (record, _) ->
         collectTypeAppSpecs record
-    | Constructor (_, _, payload) ->
-        payload |> Option.map collectTypeAppSpecs |> Option.defaultValue Set.empty
+    | Constructor (_, _, fields) ->
+        fields |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
     | Match (scrutinee, cases) ->
         let scrutineeSpecs = collectTypeAppSpecs scrutinee
         let caseSpecs =

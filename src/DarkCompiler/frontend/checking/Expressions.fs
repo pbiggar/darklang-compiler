@@ -126,7 +126,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> tryChildren
         | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
-        | Constructor (_, _, payload) -> payload |> Option.bind (tryFindCallArguments targetName)
+        | Constructor (_, _, fields) -> tryChildren fields
         | Apply (func, args)
         | IndirectApply (func, args) -> func :: NonEmptyList.toList args |> tryChildren
         | Closure (_, captures) -> tryChildren captures
@@ -223,7 +223,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> tryChildren
         | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
-        | Constructor (_, _, payload) -> payload |> Option.bind (tryFindFunctionValueExpectation targetName)
+        | Constructor (_, _, fields) -> tryChildren fields
         | Match (scrutinee, cases) ->
             scrutinee
             :: (cases |> List.collect (fun case -> Option.toList case.Guard @ [case.Body]))
@@ -1298,140 +1298,74 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         match resolvedVariant with
         | None ->
             Error (GenericError $"Unknown constructor: {variantName}")
-        | Some (typeName, typeParams, _tag, expectedPayload) ->
+        | Some (typeName, typeParams, _tag, expectedFields) ->
             let resolvedReference = resolvedConstructorReference typeName
-            let resolvedExpr payload = Constructor (resolvedReference, variantName, payload)
-            let payloadArityError =
-                match expectedPayload, payload with
-                | Some (TEnumFields expectedFields), Some (TupleLiteral actualFields)
-                    when List.length expectedFields <> List.length actualFields ->
-                    Some (
-                        GenericError
-                            $"Expected {List.length expectedFields} fields in {typeName}.`{variantName}`, but got {List.length actualFields}"
-                    )
-                | Some (TEnumFields expectedFields), Some actualPayload
-                    when (match actualPayload with | TupleLiteral _ -> false | _ -> true)
-                         && List.length expectedFields <> 1 ->
-                    Some (
-                        GenericError
-                            $"Expected {List.length expectedFields} fields in {typeName}.`{variantName}`, but got 1"
-                    )
-                | _ -> None
-
-            let normalizedExpectedPayload =
-                expectedPayload
-                |> Option.map (function
-                    | TEnumFields fieldTypes -> TTuple fieldTypes
-                    | payloadType -> payloadType)
-
-            (match payloadArityError with
-             | Some error -> Error error
-             | None -> Ok (normalizedExpectedPayload, payload))
-            |> Result.bind (fun (expectedPayload, payload) ->
-            match expectedPayload, payload with
-            | None, None ->
-                // Variant without payload, no payload provided - OK
-                if List.isEmpty typeParams then
-                    // Non-generic type - simple case
-                    let sumType = TSum (typeName, [])
+            if List.length expectedFields <> List.length payload then
+                Error (
+                    GenericError
+                        $"Expected {List.length expectedFields} fields in {typeName}.`{variantName}`, but got {List.length payload}"
+                )
+            else
+                let expectedArgs =
+                    match expectedType |> Option.map (resolveType aliasReg) with
+                    | Some (TSum (expectedName, args))
+                        when expectedName = typeName && List.length args = List.length typeParams -> args
+                    | _ -> typeParams |> List.map TVar
+                let initialSubst =
+                    List.zip typeParams expectedArgs
+                    |> List.filter (fun (_, argument) ->
+                        match argument with
+                        | TVar _ -> false
+                        | _ -> true)
+                    |> Map.ofList
+                let rec checkFields fieldTypes fieldExprs subst checkedFields =
+                    match fieldTypes, fieldExprs with
+                    | [], [] -> Ok (subst, List.rev checkedFields)
+                    | fieldType :: remainingTypes, fieldExpr :: remainingExprs ->
+                        let expectedFieldType =
+                            fieldType
+                            |> applySubst subst
+                            |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
+                        let fieldExpectedType =
+                            match expectedFieldType with
+                            | TVar _ -> None
+                            | _ -> Some expectedFieldType
+                        checkExpr
+                            fieldExpr
+                            env
+                            typeReg
+                            variantLookup
+                            genericFuncReg
+                            warningSettings
+                            moduleRegistry
+                            aliasReg
+                            fieldExpectedType
+                        |> Result.bind (fun (actualFieldType, checkedField) ->
+                            let actualFieldType =
+                                canonicalizeBareSumTypeRefsWithNames sumTypeNames actualFieldType
+                            unifyTypes expectedFieldType actualFieldType
+                            |> Result.mapError (fun msg -> GenericError $"Type mismatch in {variantName} field: {msg}")
+                            |> Result.bind (fun fieldSubst ->
+                                consolidateBindings (Map.toList subst @ Map.toList fieldSubst)
+                                |> Result.mapError GenericError)
+                            |> Result.bind (fun combinedSubst ->
+                                checkFields remainingTypes remainingExprs combinedSubst (checkedField :: checkedFields)))
+                    | _ -> Crash.crash "Constructor field arity was validated before field checking"
+                checkFields expectedFields payload initialSubst []
+                |> Result.bind (fun (subst, checkedFields) ->
+                    let typeArgs =
+                        List.zip typeParams expectedArgs
+                        |> List.map (fun (parameter, expectedArgument) ->
+                            let inferredArgument = applySubst subst (TVar parameter)
+                            if inferredArgument = TVar parameter then expectedArgument
+                            else inferredArgument)
+                    let sumType = TSum (typeName, typeArgs)
                     match expectedType with
-                    | Some expected when expected <> sumType ->
-                        Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                    | _ -> Ok (sumType, resolvedExpr None)
-                else
-                    // Generic type with nullary constructor (e.g., None in Option<t>)
-                    // Try to get type arguments from expectedType
-                    match expectedType with
-                    | Some (TSum (expectedName, args)) when expectedName = typeName && List.length args = List.length typeParams ->
-                        // Use type args from expected type
-                        let sumType = TSum (typeName, args)
-                        Ok (sumType, resolvedExpr None)
                     | Some expected ->
-                        let sumTypeWithVars = TSum (typeName, typeParams |> List.map TVar)
-                        match reconcileTypes (Some aliasReg) expected sumTypeWithVars with
-                        | Some reconciledType -> Ok (reconciledType, resolvedExpr None)
-                        | None -> Error (TypeMismatch (expected, sumTypeWithVars, $"constructor {variantName}"))
-                    | None ->
-                        // No expected type - return type with unresolved type variables
-                        // This allows type inference to resolve them later from context
-                        let sumType = TSum (typeName, typeParams |> List.map TVar)
-                        Ok (sumType, resolvedExpr None)
-            | None, Some _ ->
-                // Variant doesn't take payload but one was provided
-                Error (GenericError $"Constructor {variantName} does not take a payload")
-            | Some _, None ->
-                // Variant requires payload but none provided
-                Error (GenericError $"Constructor {variantName} requires a payload")
-            | Some payloadType, Some payloadExpr ->
-                // Variant with payload - check payload type
-                // For generic types, infer type variables from the payload
-                let payloadType = canonicalizeBareSumTypeRefsWithNames sumTypeNames payloadType
-
-                if List.isEmpty typeParams then
-                    // Non-generic type - check payload has exact type
-                    checkExpr payloadExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some payloadType)
-                    |> Result.bind (fun (actualPayloadType, payloadExpr') ->
-                        let actualPayloadType =
-                            canonicalizeBareSumTypeRefsWithNames sumTypeNames actualPayloadType
-
-                        // Use typesCompatible to allow type variables to match concrete types
-                        if not (typesCompatible payloadType actualPayloadType) then
-                            Error (TypeMismatch (payloadType, actualPayloadType, $"payload of {variantName}"))
-                        else
-                            let sumType = TSum (typeName, [])
-                            match expectedType with
-                            | Some expected ->
-                                // Use reconcileTypes to allow type variables to unify with concrete types
-                                match reconcileTypes (Some aliasReg) expected sumType with
-                                | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                                | Some reconciledType -> Ok (reconciledType, resolvedExpr (Some payloadExpr'))
-                            | None -> Ok (sumType, resolvedExpr (Some payloadExpr')))
-                else
-                    // Generic type - infer type variables from payload
-                    // First, check the payload expression without expected type
-                    checkExpr payloadExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
-                    |> Result.bind (fun (actualPayloadType, payloadExpr') ->
-                        let actualPayloadType =
-                            canonicalizeBareSumTypeRefsWithNames sumTypeNames actualPayloadType
-
-                        // Try to unify payloadType (may contain TVar) with actualPayloadType
-                        match unifyTypes payloadType actualPayloadType with
-                        | Error msg ->
-                            Error (GenericError $"Type mismatch in {variantName} payload: {msg}")
-                        | Ok subst ->
-                            // Apply substitution to verify all type vars are resolved
-                            let concretePayloadType =
-                                payloadType
-                                |> applySubst subst
-                                |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
-
-                            // Use typesCompatible to allow type variables to match concrete types
-                            if not (typesCompatible concretePayloadType actualPayloadType) then
-                                Error (TypeMismatch (concretePayloadType, actualPayloadType, $"payload of {variantName}"))
-                            else
-                                // Build concrete type arguments from substitution
-                                // For unresolved type vars, try to get them from expectedType
-                                let expectedArgs =
-                                    match expectedType with
-                                    | Some (TSum (expectedName, args)) when expectedName = typeName && List.length args = List.length typeParams ->
-                                        Some args
-                                    | _ -> None
-                                let typeArgs = typeParams |> List.mapi (fun i p ->
-                                    match Map.tryFind p subst with
-                                    | Some t -> t
-                                    | None ->
-                                        // Try to get from expected type args
-                                        match expectedArgs with
-                                        | Some args -> List.item i args
-                                        | None -> TVar p)
-                                let sumType = TSum (typeName, typeArgs)
-                                match expectedType with
-                                | Some expected ->
-                                    // Use reconcileTypes to allow type variables to unify with concrete types
-                                    match reconcileTypes (Some aliasReg) expected sumType with
-                                    | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                                    | Some reconciledType -> Ok (reconciledType, resolvedExpr (Some payloadExpr'))
-                                | None -> Ok (sumType, resolvedExpr (Some payloadExpr'))))
+                        match reconcileTypes (Some aliasReg) expected sumType with
+                        | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                        | Some reconciledType -> Ok (reconciledType, Constructor (resolvedReference, variantName, checkedFields))
+                    | None -> Ok (sumType, Constructor (resolvedReference, variantName, checkedFields)))
 
     | Match (scrutinee, cases) ->
         CheckMatches.check checkExpr sumTypeNames indexedSumTypeReg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType scrutinee cases

@@ -57,8 +57,8 @@ let internal materializeComparisonPlan (targetType: AST.Type) (args: CheckedAST.
         | _ -> CheckedAST.BinOp (AST.Eq, leftExpr, rightExpr)
     | _ -> Crash.crash "Comparison plan expected exactly two operands"
 
-/// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
-type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
+/// Variant lookup - maps variant names to (type name, type params, tag index, field types)
+type VariantLookup = Map<string, (string * string list * int * AST.Type list)>
 
 let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
     variantLookup
@@ -68,14 +68,14 @@ let internal tryFindVariant
     (constructorReference: CheckedAST.ConstructorReference)
     (variantName: string)
     (variantLookup: VariantLookup)
-    : (string * string list * int * AST.Type option) option =
+    : (string * string list * int * AST.Type list) option =
     Map.tryFind $"{constructorReference.TypeName}.{variantName}" variantLookup
 
 let internal tryFindVariantForType
     (variantName: string)
     (sourceType: AST.Type)
     (variantLookup: VariantLookup)
-    : (string * string list * int * AST.Type option) option =
+    : (string * string list * int * AST.Type list) option =
     match sourceType with
     | AST.TSum (typeName, _)
     | AST.TRecord (typeName, _) ->
@@ -143,7 +143,6 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TFunction (paramTypes, retType) ->
         "(" + (paramTypes |> List.map typeToString |> String.concat ",") + ")->" + typeToString retType
     | AST.TTuple types -> "(" + (types |> List.map typeToString |> String.concat "*") + ")"
-    | AST.TEnumFields fields -> fields |> List.map typeToString |> String.concat "*"
 
 /// Convert a literal pattern into an ANF sized integer
 let patternLiteralToSizedInt (pattern: AST.Pattern) : ANF.SizedInt option =

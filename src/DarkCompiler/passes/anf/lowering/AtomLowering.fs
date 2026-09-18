@@ -685,7 +685,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             | _ ->
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
-    | CheckedAST.Constructor (constructorTypeName, variantName, payload) ->
+    | CheckedAST.Constructor (constructorTypeName, variantName, fields) ->
         match tryFindVariant constructorTypeName variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
@@ -694,13 +694,14 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             // Note: We get typeName from variantLookup, not from AST (which may be empty)
             let typeHasPayloadVariants =
                 variantLookup
-                |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
+                |> Map.exists (fun _ (tName, _, _, variantFields) ->
+                    tName = typeName && not (List.isEmpty variantFields))
 
-            match payload with
-            | None when not typeHasPayloadVariants ->
+            match fields with
+            | [] when not typeHasPayloadVariants ->
                 // Pure enum type: return tag as an integer (no bindings needed)
                 Ok (ANF.IntLiteral (ANF.Int64 (int64 tag)), [], varGen)
-            | None ->
+            | [] ->
                 // No payload but type has other variants with payloads
                 // Heap-allocate as [tag, 0] for uniform 2-element structure
                 // This enables consistent structural equality comparison
@@ -709,8 +710,12 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 let (tempVar, varGen1) = ANF.freshVar varGen
                 let tupleCExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
                 Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
-            | Some payloadExpr ->
+            | _ ->
                 // Variant with payload: allocate [tag, payload] on heap
+                let payloadExpr =
+                    match fields with
+                    | [field] -> field
+                    | _ -> CheckedAST.TupleLiteral fields
                 toAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
                 |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
                     let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))

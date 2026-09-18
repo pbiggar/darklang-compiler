@@ -24,10 +24,10 @@ type RecordTypeInfo = {
 /// Indexed view retained in TypeCheckEnv for reuse by separate compilations.
 type IndexedTypeRegistry = Map<string, RecordTypeInfo>
 
-/// Sum type registry - maps sum type names to their variant lists (name, tag, payload)
-type SumTypeRegistry = Map<string, (string * int * Type option) list>
+/// Sum type registry - maps sum type names to their variant lists (name, tag, fields)
+type SumTypeRegistry = Map<string, (string * int * Type list) list>
 
-type SumVariantInfo = { Name: string; Tag: int; Payload: Type option }
+type SumVariantInfo = { Name: string; Tag: int; Fields: Type list }
 
 type SumTypeInfo = {
     TypeParams: string list
@@ -38,15 +38,15 @@ type SumTypeInfo = {
 /// not rebuild it from the complete constructor lookup.
 type IndexedSumTypeRegistry = Map<string, SumTypeInfo>
 
-/// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
+/// Variant lookup - maps variant names to (type name, type params, tag index, field types)
 /// Type params are the generic type parameters of the containing sum type
-type VariantLookup = Map<string, (string * string list * int * Type option)>
+type VariantLookup = Map<string, (string * string list * int * Type list)>
 
 let internal tryFindVariant
     (constructorReference: ConstructorReference)
     (variantName: string)
     (variantLookup: VariantLookup)
-    : (string * string list * int * Type option) option =
+    : (string * string list * int * Type list) option =
     match constructorReferenceTypeName constructorReference with
     | None -> Map.tryFind variantName variantLookup
     | Some constructorTypeName ->
@@ -148,8 +148,6 @@ let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (ty
         TFunction (List.map (applySubstWithSeen seen subst) paramTypes, applySubstWithSeen seen subst returnType)
     | TTuple elemTypes ->
         TTuple (List.map (applySubstWithSeen seen subst) elemTypes)
-    | TEnumFields fieldTypes ->
-        TEnumFields (List.map (applySubstWithSeen seen subst) fieldTypes)
     | TRecord (name, typeArgs) ->
         TRecord (name, List.map (applySubstWithSeen seen subst) typeArgs)
     | TList elemType ->
@@ -178,7 +176,6 @@ let rec internal applyTypeArguments (subst: Substitution) (typ: Type) : Type =
     | TFunction (paramTypes, returnType) ->
         TFunction (List.map (applyTypeArguments subst) paramTypes, applyTypeArguments subst returnType)
     | TTuple elemTypes -> TTuple (List.map (applyTypeArguments subst) elemTypes)
-    | TEnumFields fieldTypes -> TEnumFields (List.map (applyTypeArguments subst) fieldTypes)
     | TRecord (name, typeArgs) -> TRecord (name, List.map (applyTypeArguments subst) typeArgs)
     | TList elemType -> TList (applyTypeArguments subst elemType)
     | TStream elemType -> TStream (applyTypeArguments subst elemType)
@@ -201,8 +198,6 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
         collectTypeVarsInType returnType withParams
     | TTuple elemTypes ->
         elemTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | TEnumFields fieldTypes ->
-        fieldTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | TRecord (_, typeArgs) ->
         typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
     | TSum (_, typeArgs) ->
@@ -264,8 +259,6 @@ let rec internal resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : 
         TFunction (List.map (resolveAliasTargetType aliasReg) paramTypes, resolveAliasTargetType aliasReg returnType)
     | TTuple elemTypes ->
         TTuple (List.map (resolveAliasTargetType aliasReg) elemTypes)
-    | TEnumFields fieldTypes ->
-        TEnumFields (List.map (resolveAliasTargetType aliasReg) fieldTypes)
     | TList elemType ->
         TList (resolveAliasTargetType aliasReg elemType)
     | TStream elemType ->
@@ -385,7 +378,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
     | RecordAccess (record, fieldName) ->
         RecordAccess (applySubstToExpr subst record, fieldName)
     | Constructor (typeName, variantName, payload) ->
-        Constructor (typeName, variantName, Option.map (applySubstToExpr subst) payload)
+        Constructor (typeName, variantName, List.map (applySubstToExpr subst) payload)
     | Match (scrutinee, cases) ->
         Match (applySubstToExpr subst scrutinee,
                cases |> List.map (fun mc ->
@@ -455,8 +448,6 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
         TFunction (List.map (resolveType aliasReg) paramTypes, resolveType aliasReg returnType)
     | TTuple elemTypes ->
         TTuple (List.map (resolveType aliasReg) elemTypes)
-    | TEnumFields fieldTypes ->
-        TEnumFields (List.map (resolveType aliasReg) fieldTypes)
     | TList elemType ->
         TList (resolveType aliasReg elemType)
     | TStream elemType ->
@@ -483,7 +474,7 @@ let internal indexSumTypeRegistry
     : IndexedSumTypeRegistry =
     variantLookup
     |> Map.fold
-        (fun indexed lookupName (typeName, typeParams, tag, payload) ->
+        (fun indexed lookupName (typeName, typeParams, tag, fields) ->
             let qualifiedPrefix = $"{typeName}."
             if not (lookupName.StartsWith qualifiedPrefix) then
                 indexed
@@ -491,7 +482,7 @@ let internal indexSumTypeRegistry
                 let variant = {
                     Name = lookupName.Substring qualifiedPrefix.Length
                     Tag = tag
-                    Payload = payload
+                    Fields = fields
                 }
                 match Map.tryFind typeName indexed with
                 | None ->
@@ -527,8 +518,6 @@ let internal canonicalizeBareSumTypeRefsWithNames
             TFunction (List.map canonicalize paramTypes, canonicalize returnType)
         | TTuple elemTypes ->
             TTuple (List.map canonicalize elemTypes)
-        | TEnumFields fieldTypes ->
-            TEnumFields (List.map canonicalize fieldTypes)
         | TList elemType ->
             TList (canonicalize elemType)
         | TStream elemType ->
@@ -561,7 +550,6 @@ let internal canonicalizeDeclaredTypeRefsWithSumTypeNames
         | TFunction (parameterTypes, returnType) ->
             TFunction (List.map canonicalize parameterTypes, canonicalize returnType)
         | TTuple elementTypes -> TTuple (List.map canonicalize elementTypes)
-        | TEnumFields fieldTypes -> TEnumFields (List.map canonicalize fieldTypes)
         | TList elementType -> TList (canonicalize elementType)
         | TStream elementType -> TStream (canonicalize elementType)
         | TDict (keyType, valueType) -> TDict (canonicalize keyType, canonicalize valueType)

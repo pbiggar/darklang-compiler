@@ -54,7 +54,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             match tryPatternVariant variantName with
             | Some (typeName, _, _, _) ->
                 variantLookup
-                |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
+                |> Map.exists (fun _ (tName, _, _, fields) -> tName = typeName && not (List.isEmpty fields))
             | None -> false
 
         // Check if pattern always matches (wildcard or variable)
@@ -69,12 +69,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // reject a value; literal and nested patterns therefore remain partial.
         let constructorPatternCoverage (pattern: AST.Pattern) : int option =
             match scrutType, pattern with
-            | AST.TSum (typeName, _), AST.PConstructor (constructorName, payloadPattern) ->
-                match tryFindVariant (CheckedAST.resolvedConstructorReference typeName) constructorName variantLookup, payloadPattern with
-                | Some (variantTypeName, _, tag, None), None when variantTypeName = typeName ->
-                    Some tag
-                | Some (variantTypeName, _, tag, Some _), Some innerPattern
-                    when variantTypeName = typeName && patternAlwaysMatches innerPattern ->
+            | AST.TSum (typeName, _), AST.PConstructor (constructorName, fieldPatterns) ->
+                match tryFindVariant (CheckedAST.resolvedConstructorReference typeName) constructorName variantLookup with
+                | Some (variantTypeName, _, tag, fieldTypes)
+                    when variantTypeName = typeName
+                         && List.length fieldPatterns = List.length fieldTypes
+                         && List.forall patternAlwaysMatches fieldPatterns ->
                     Some tag
                 | _ ->
                     None
@@ -147,23 +147,19 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 |> Result.map (fun (bodyExpr, vg2) ->
                     let expr = ANF.Let (tempId, ANF.Atom scrutAtom, bodyExpr)
                     (expr, vg2))
-            | AST.PConstructor (constructorName, payloadPattern) ->
-                match payloadPattern with
-                | None -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-                | Some innerPattern ->
+            | AST.PConstructor (constructorName, fieldPatterns) ->
+                match fieldPatterns with
+                | [] -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                | _ ->
                     match tryFindVariantForType constructorName scrutType variantLookup with
-                    | Some (_, _, _, None) ->
-                        // Constructor arity mismatch behaves as non-matching.
-                        // Do not introduce payload bindings in this branch body.
-                        toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-                    | Some (_, typeParams, _, Some payloadTypeTemplate) ->
+                    | Some (_, typeParams, _, fieldTypeTemplates) ->
                         // Extract payload from heap-allocated variant
                         // Variant layout: [tag:8][payload:8], so payload is at index 1
                         let (payloadVar, vg1) = ANF.freshVar vg
                         let (typedPayloadVar, vg2) = ANF.freshVar vg1
                         let payloadExpr = ANF.TupleGet (scrutAtom, 1)
                         // Apply type substitution if scrutType has type args
-                        let payloadType =
+                        let fieldTypes =
                             match scrutType with
                             | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
                                 let subst = List.zip typeParams typeArgs |> Map.ofList
@@ -176,9 +172,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     | AST.TSum (name, args) -> AST.TSum (name, List.map substitute args)
                                     | AST.TFunction (args, ret) -> AST.TFunction (List.map substitute args, substitute ret)
                                     | _ -> t
-                                substitute payloadTypeTemplate
-                            | _ -> payloadTypeTemplate
-                            |> canonicalizeBareSumTypeRefs variantLookup
+                                List.map substitute fieldTypeTemplates
+                            | _ -> fieldTypeTemplates
+                            |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+
+                        let innerPattern, payloadType =
+                            match fieldPatterns, fieldTypes with
+                            | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
+                            | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
 
                         let typedPayloadExpr = ANF.TypedAtom (ANF.Var payloadVar, payloadType)
                         extractAndCompileBody innerPattern body (ANF.Var typedPayloadVar) payloadType currentEnv vg2
@@ -247,11 +248,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let elemTypes =
                             match sourceType with
                             | AST.TTuple types when List.length types = List.length innerPatterns -> types
-                            | AST.TEnumFields types when List.length types = List.length innerPatterns -> types
                             | _ -> unknownElemTypes
 
                         collectFromTuple innerPatterns elemTypes 0 env bindings vg
-                    | AST.PConstructor (constructorName, payloadPattern) ->
+                    | AST.PConstructor (constructorName, fieldPatterns) ->
                         let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                             match typ with
                             | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -263,42 +263,39 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                             | _ -> typ
 
-                        let resolvePayloadType (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type option, string> =
+                        let resolveFieldTypes (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
                             match tryFindVariantForType constructorName scrutineeType variantLookup with
-                            | Some (_, typeParams, _, Some payloadTypeTemplate) ->
-                                let payloadType =
+                            | Some (_, typeParams, _, fieldTypeTemplates) ->
+                                let fieldTypes =
                                     match scrutineeType with
                                     | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
                                         let subst = List.zip typeParams typeArgs |> Map.ofList
-                                        substituteType subst payloadTypeTemplate
-                                    | _ -> payloadTypeTemplate
-                                Ok (Some payloadType)
-                            | Some (_, _, _, None) ->
-                                Ok None
+                                        List.map (substituteType subst) fieldTypeTemplates
+                                    | _ -> fieldTypeTemplates
+                                Ok fieldTypes
                             | None ->
                                 Error $"Unknown constructor '{constructorName}' in pattern"
 
-                        match payloadPattern with
-                        | None -> Ok (env, bindings, vg)
-                        | Some innerPat ->
-                            resolvePayloadType constructorName sourceType
-                            |> Result.bind (fun payloadType ->
-                                match payloadType with
-                                | None ->
-                                    // Constructor arity mismatch should not bind payload.
-                                    Ok (env, bindings, vg)
-                                | Some concretePayloadType ->
+                        match fieldPatterns with
+                        | [] -> Ok (env, bindings, vg)
+                        | _ ->
+                            resolveFieldTypes constructorName sourceType
+                            |> Result.bind (fun fieldTypes ->
+                                let innerPat, concretePayloadType =
+                                    match fieldPatterns, fieldTypes with
+                                    | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
+                                    | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
                                     // Extract payload (at index 1) and recursively collect
-                                    let (payloadVar, vg1) = ANF.freshVar vg
-                                    let payloadExpr = ANF.TupleGet (sourceAtom, 1)
-                                    let payloadBinding = (payloadVar, payloadExpr)
-                                    collectPatternBindings
-                                        innerPat
-                                        (ANF.Var payloadVar)
-                                        concretePayloadType
-                                        env
-                                        (payloadBinding :: bindings)
-                                        vg1)
+                                let (payloadVar, vg1) = ANF.freshVar vg
+                                let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                                let payloadBinding = (payloadVar, payloadExpr)
+                                collectPatternBindings
+                                    innerPat
+                                    (ANF.Var payloadVar)
+                                    concretePayloadType
+                                    env
+                                    (payloadBinding :: bindings)
+                                    vg1)
                     | AST.PList innerPatterns ->
                         // Extract element type from list type
                         let elemType =
@@ -400,10 +397,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let tupleElemTypesResult =
                         match tupleType with
                         | AST.TTuple types when List.length types >= List.length tupPats -> Ok types
-                        | AST.TEnumFields types when List.length types >= List.length tupPats -> Ok types
                         | AST.TTuple types ->
-                            Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
-                        | AST.TEnumFields types ->
                             Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
                         | _ ->
                             Error $"Tuple pattern expects tuple elements, got {typeToString tupleType}"
@@ -693,8 +687,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 match pat with
                 | AST.PTuple innerPatterns ->
                     match patType with
-                    | AST.TTuple elemTypes
-                    | AST.TEnumFields elemTypes ->
+                    | AST.TTuple elemTypes ->
                         List.length innerPatterns <> List.length elemTypes
                         || List.exists2 patternDefinitelyCannotMatchType innerPatterns elemTypes
                     | AST.TVar _ -> false
@@ -754,11 +747,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let elemTypes =
                         match sourceType with
                         | AST.TTuple types when List.length types = List.length innerPatterns -> types
-                        | AST.TEnumFields types when List.length types = List.length innerPatterns -> types
                         | AST.TTuple types ->
-                            Crash.crash
-                                $"collectBindings(PTuple): expected {List.length innerPatterns} tuple elements, got {List.length types}"
-                        | AST.TEnumFields types ->
                             Crash.crash
                                 $"collectBindings(PTuple): expected {List.length innerPatterns} tuple elements, got {List.length types}"
                         | _ ->
@@ -778,7 +767,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             Crash.crash
                                 $"collectBindings(PTuple): missing tuple element type at index {idx}; {remaining} pattern elements remain"
                     collectFromTuple innerPatterns elemTypes 0 env bindings vg
-                | AST.PConstructor (constructorName, payloadPattern) ->
+                | AST.PConstructor (constructorName, fieldPatterns) ->
                     let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                         match typ with
                         | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -790,43 +779,36 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                         | _ -> typ
 
-                    let resolvePayloadType (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type option, string> =
+                    let resolveFieldTypes (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
                         match tryFindVariantForType constructorName scrutineeType variantLookup with
-                        | Some (_, typeParams, _, Some payloadTypeTemplate) ->
-                            let payloadType =
+                        | Some (_, typeParams, _, fieldTypeTemplates) ->
+                            let fieldTypes =
                                 match scrutineeType with
                                 | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
                                     let subst = List.zip typeParams typeArgs |> Map.ofList
-                                    substituteType subst payloadTypeTemplate
-                                | _ -> payloadTypeTemplate
-                                |> canonicalizeBareSumTypeRefs variantLookup
-                                |> function
-                                    | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
-                                    | other -> other
-
-                            Ok (Some payloadType)
-                        | Some (_, _, _, None) ->
-                            Ok None
+                                    List.map (substituteType subst) fieldTypeTemplates
+                                | _ -> fieldTypeTemplates
+                                |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                            Ok fieldTypes
                         | None ->
                             Error $"Unknown constructor '{constructorName}' in pattern"
 
-                    match payloadPattern with
-                    | None -> Ok (env, bindings, vg)
-                    | Some innerPat ->
-                        resolvePayloadType constructorName sourceType
-                        |> Result.bind (fun payloadType ->
-                            match payloadType with
-                            | None ->
-                                // Constructor arity mismatch should not bind payload.
-                                Ok (env, bindings, vg)
-                            | Some concretePayloadType ->
-                                let (payloadVar, vg1) = ANF.freshVar vg
-                                let payloadExpr = ANF.TupleGet (sourceAtom, 1)
-                                collectBindings
-                                    innerPat
-                                    (ANF.Var payloadVar)
-                                    concretePayloadType
-                                    env
+                    match fieldPatterns with
+                    | [] -> Ok (env, bindings, vg)
+                    | _ ->
+                        resolveFieldTypes constructorName sourceType
+                        |> Result.bind (fun fieldTypes ->
+                            let innerPat, concretePayloadType =
+                                match fieldPatterns, fieldTypes with
+                                | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
+                                | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
+                            let (payloadVar, vg1) = ANF.freshVar vg
+                            let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                            collectBindings
+                                innerPat
+                                (ANF.Var payloadVar)
+                                concretePayloadType
+                                env
                                     ((payloadVar, payloadExpr) :: bindings)
                                     vg1)
                 | AST.PList innerPatterns ->
@@ -1019,29 +1001,22 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let (cmpVar, vg1) = ANF.freshVar vg
                     let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.FloatLiteral f)
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PConstructor (variantName, payloadPattern) ->
+            | AST.PConstructor (variantName, fieldPatterns) ->
                 match tryPatternVariant variantName with
-                | Some (_, _, tag, variantPayloadType) ->
-                    let arityMismatch =
-                        match payloadPattern, variantPayloadType with
-                        | None, None -> false
-                        | Some _, Some _ -> false
-                        | _ -> true
-
-                    if arityMismatch then
-                        // Constructor arity mismatch in pattern should not match.
-                        let (cmpVar, vg1) = ANF.freshVar vg
-                        let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
-                        Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-                    elif typeHasAnyPayload variantName then
+                | Some (_, _, tag, _) ->
+                    if typeHasAnyPayload variantName then
                         // Mixed or payload-carrying sum type: tag is stored in heap at index 0.
                         let (tagVar, vg1) = ANF.freshVar vg
                         let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
                         let (tagCmpVar, vg2) = ANF.freshVar vg1
                         let tagCmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 (int64 tag)))
 
-                        match payloadPattern, variantPayloadType with
-                        | Some innerPattern, Some _ ->
+                        match fieldPatterns with
+                        | _ :: _ ->
+                            let innerPattern =
+                                match fieldPatterns with
+                                | [fieldPattern] -> fieldPattern
+                                | _ -> AST.PTuple fieldPatterns
                             // Extract payload and check inner pattern if needed.
                             let (payloadVar, vg3) = ANF.freshVar vg2
                             let payloadLoadExpr = ANF.TupleGet (scrutAtom, 1)
@@ -1059,23 +1034,17 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                         @ innerBindings
                                         @ [(andVar, andExpr)]
                                     Some (ANF.Var andVar, allBindings, vg5))
-                        | None, None ->
+                        | [] ->
                             // Nullary variant in a payload-mixed sum type: only check tag.
                             Ok (Some (ANF.Var tagCmpVar, [(tagVar, tagLoadExpr); (tagCmpVar, tagCmpExpr)], vg2))
-                        | _ ->
-                            // Already handled by arityMismatch guard above.
-                            Error "Internal error: inconsistent constructor arity handling"
                     else
                         // Simple enum (no payload variants in the type): scrutinee IS the tag.
-                        match payloadPattern with
-                        | Some _ ->
-                            let (cmpVar, vg1) = ANF.freshVar vg
-                            let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
-                            Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-                        | None ->
+                        match fieldPatterns with
+                        | [] ->
                             let (cmpVar, vg1) = ANF.freshVar vg
                             let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 (int64 tag)))
                             Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                        | _ -> Error "Type checking accepted fields for a nullary constructor"
                 | None -> Error $"Unknown constructor in pattern: {variantName}"
             | AST.PTuple innerPatterns ->
                 // Tuple patterns with literals need to compare each element
@@ -1154,8 +1123,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             | AST.PVar _ -> true
             | AST.PTuple patterns ->
                 patterns |> List.exists patternBindsVariables
-            | AST.PConstructor (_, payloadPattern) ->
-                payloadPattern |> Option.exists patternBindsVariables
+            | AST.PConstructor (_, fields) ->
+                fields |> List.exists patternBindsVariables
             | AST.PList patterns ->
                 patterns |> List.exists patternBindsVariables
             | AST.PListCons (headPatterns, tailPattern) ->
@@ -1178,35 +1147,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 )
             | _ -> typ
 
-        let resolvePayloadTypeForStaticPatternCheck
-            (constructorName: string)
-            (scrutineeType: AST.Type)
-            : AST.Type option option =
-            match tryFindVariantForType constructorName scrutineeType variantLookup with
-            | None -> None
-            | Some (sumTypeName, typeParams, _, payloadTypeTemplateOpt) ->
-                let payloadTypeOpt =
-                    match payloadTypeTemplateOpt with
-                    | None -> None
-                    | Some payloadTypeTemplate ->
-                        let payloadType =
-                            match scrutineeType with
-                            | AST.TSum (scrutineeSumTypeName, typeArgs)
-                                when scrutineeSumTypeName = sumTypeName
-                                     && List.length typeParams = List.length typeArgs ->
-                                let subst = List.zip typeParams typeArgs |> Map.ofList
-                                substituteTypeForStaticPatternCheck subst payloadTypeTemplate
-                            | _ ->
-                                payloadTypeTemplate
-                        Some payloadType
-                Some payloadTypeOpt
-
         let rec patternStaticallyCannotMatchType (pattern: AST.Pattern) (sourceType: AST.Type) : bool =
             match pattern with
             | AST.PTuple innerPatterns ->
                 match sourceType with
-                | AST.TTuple elemTypes
-                | AST.TEnumFields elemTypes ->
+                | AST.TTuple elemTypes ->
                     if List.length elemTypes <> List.length innerPatterns then
                         true
                     else
@@ -1216,7 +1161,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | AST.TVar _
                 | AST.TRuntimeError -> false
                 | _ -> true
-            | AST.PConstructor (constructorName, payloadPatternOpt) ->
+            | AST.PConstructor (constructorName, fieldPatterns) ->
                 match sourceType with
                 | AST.TVar _
                 | AST.TRuntimeError -> false
@@ -1224,24 +1169,21 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | AST.TRecord (_, typeArgs) ->
                     match tryFindVariantForType constructorName sourceType variantLookup with
                     | None -> true
-                    | Some (_, typeParams, _, payloadTypeOpt) ->
-                        match payloadPatternOpt, payloadTypeOpt with
-                        | None, None -> false
-                        | Some innerPattern, Some payloadType ->
+                    | Some (_, typeParams, _, fieldTypes) ->
+                        if List.length fieldPatterns <> List.length fieldTypes then
+                            true
+                        else
                             let subst =
                                 if List.length typeParams = List.length typeArgs then
                                     List.zip typeParams typeArgs |> Map.ofList
                                 else
                                     Map.empty
-                            let concretePayloadType =
-                                payloadType
+                            List.zip fieldPatterns fieldTypes
+                            |> List.exists (fun (fieldPattern, fieldType) ->
+                                fieldType
                                 |> applySubstToType subst
                                 |> canonicalizeBareSumTypeRefs variantLookup
-                                |> function
-                                    | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
-                                    | other -> other
-                            patternStaticallyCannotMatchType innerPattern concretePayloadType
-                        | _ -> true
+                                |> patternStaticallyCannotMatchType fieldPattern)
                 | _ -> true
             | AST.PList innerPatterns ->
                 match sourceType with
@@ -1315,8 +1257,6 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     match sourceType with
                     | AST.TTuple types when List.length types = List.length patterns ->
                         Some types
-                    | AST.TEnumFields types when List.length types = List.length patterns ->
-                        Some types
                     | AST.TVar sourceTypeVar ->
                         Some (
                             patterns
@@ -1354,7 +1294,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 loop rest (idx + 1) env' bindings' vg')
 
                     loop (List.zip patterns elemTypes) 0 env bindings vg
-            | AST.PConstructor (constructorName, payloadPattern) ->
+            | AST.PConstructor (constructorName, fieldPatterns) ->
                 let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                     match typ with
                     | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -1365,42 +1305,37 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | AST.TSum (name, args) -> AST.TSum (name, List.map (substituteType subst) args)
                     | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                     | _ -> typ
-                let resolvePayloadType (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type option, string> =
+                let resolveFieldTypes (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
                     match tryFindVariantForType constructorName scrutineeType variantLookup with
-                    | Some (_, typeParams, _, Some payloadTypeTemplate) ->
-                        let payloadType =
+                    | Some (_, typeParams, _, fieldTypeTemplates) ->
+                        let fieldTypes =
                             match scrutineeType with
                             | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
                                 let subst = List.zip typeParams typeArgs |> Map.ofList
-                                substituteType subst payloadTypeTemplate
-                            | _ -> payloadTypeTemplate
-                            |> canonicalizeBareSumTypeRefs variantLookup
-
-                        Ok (Some payloadType)
-                    | Some (_, _, _, None) ->
-                        Ok None
+                                List.map (substituteType subst) fieldTypeTemplates
+                            | _ -> fieldTypeTemplates
+                            |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                        Ok fieldTypes
                     | None ->
                         Error $"Unknown constructor '{constructorName}' in pattern"
-                match payloadPattern with
-                | None -> Ok (env, bindings, vg)
-                | Some innerPattern ->
-                    resolvePayloadType constructorName sourceType
-                    |> Result.bind (fun payloadType ->
-                        match payloadType with
-                        | None ->
-                            // Constructor arity mismatch behaves as a non-match and
-                            // contributes no payload bindings.
-                            Ok (env, bindings, vg)
-                        | Some concretePayloadType ->
-                            let (payloadVar, vg1) = ANF.freshVar vg
-                            let payloadExpr = ANF.TupleGet (sourceAtom, 1)
-                            collectNestedPatternBindings
-                                innerPattern
-                                (ANF.Var payloadVar)
-                                concretePayloadType
-                                env
-                                (bindings @ [ (payloadVar, payloadExpr) ])
-                                vg1)
+                match fieldPatterns with
+                | [] -> Ok (env, bindings, vg)
+                | _ ->
+                    resolveFieldTypes constructorName sourceType
+                    |> Result.bind (fun fieldTypes ->
+                        let innerPattern, concretePayloadType =
+                            match fieldPatterns, fieldTypes with
+                            | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
+                            | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
+                        let (payloadVar, vg1) = ANF.freshVar vg
+                        let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                        collectNestedPatternBindings
+                            innerPattern
+                            (ANF.Var payloadVar)
+                            concretePayloadType
+                            env
+                            (bindings @ [ (payloadVar, payloadExpr) ])
+                            vg1)
             | AST.PList patterns ->
                 let elemTypeResult =
                     match sourceType with
@@ -1514,10 +1449,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let tupleElemTypesResult =
                         match tupleType with
                         | AST.TTuple types when List.length types >= List.length tupPats -> Ok types
-                        | AST.TEnumFields types when List.length types >= List.length tupPats -> Ok types
                         | AST.TTuple types ->
-                            Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
-                        | AST.TEnumFields types ->
                             Error $"Tuple pattern expects {List.length tupPats} elements but got {List.length types}"
                         | _ ->
                             Error $"Tuple pattern expects tuple elements, got {typeToString tupleType}"
@@ -2548,13 +2480,15 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 |> Option.map (fun rendered ->
                     let joined = String.concat ", " rendered
                     $"[{joined}]")
-            | CheckedAST.Constructor (constructorReference, variantName, payload) ->
+            | CheckedAST.Constructor (constructorReference, variantName, fields) ->
                 let fullName = $"{constructorReference.TypeName}.{variantName}"
-                match payload with
-                | None -> Some fullName
-                | Some payloadExpr ->
-                    formatMatchValueForError payloadExpr
-                    |> Option.map (fun payloadText -> $"{fullName}({payloadText})")
+                match fields with
+                | [] -> Some fullName
+                | _ ->
+                    formatAll fields []
+                    |> Option.map (fun rendered ->
+                        let fieldText = String.concat ", " rendered
+                        $"{fullName}({fieldText})")
             | _ -> None
 
         let makeNoMatchingCaseFallback (vg: ANF.VarGen) : ANF.AExpr * ANF.VarGen =

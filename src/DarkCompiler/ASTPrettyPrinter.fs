@@ -76,8 +76,6 @@ let rec private formatType (typ: Type) : string =
             | _ -> formatType elemType
         let elemText = elemTypes |> List.map formatElement |> String.concat " * "
         $"({elemText})"
-    | TEnumFields fieldTypes ->
-        fieldTypes |> List.map formatType |> String.concat " * "
     | TRecord (name, []) -> formatIdentifierPath name
     | TRecord (name, typeArgs) ->
         let argsText = typeArgs |> List.map formatType |> String.concat ", "
@@ -214,7 +212,7 @@ let rec private isAtomicExpr (expr: Expr) : bool =
     | DictLiteral _
     | RecordLiteral _
     | ListLiteral _
-    | Constructor (_, _, None) -> true
+    | Constructor (_, _, []) -> true
     | TupleAccess (tupleExpr, _) -> isAtomicExpr tupleExpr
     | RecordAccess (recordExpr, _) -> isAtomicExpr recordExpr
     | _ -> false
@@ -245,10 +243,17 @@ let rec private formatPattern (pattern: Pattern) : string =
     | PUnit -> "()"
     | PWildcard -> "_"
     | PVar name -> formatIdentifierSegment name
-    | PConstructor (name, None) -> formatIdentifierPath name
-    | PConstructor (name, Some payload) ->
-        let payloadText = formatPattern payload
-        $"{formatIdentifierPath name} {payloadText}"
+    | PConstructor (name, []) -> formatIdentifierPath name
+    | PConstructor (name, [field]) ->
+        let fieldText = formatPattern field
+        match field with
+        | PTuple _ -> $"{formatIdentifierPath name} ({fieldText})"
+        | _ -> $"{formatIdentifierPath name} {fieldText}"
+    | PConstructor (name, fields) ->
+        fields
+        |> List.map formatPattern
+        |> String.concat ", "
+        |> fun fieldText -> $"{formatIdentifierPath name}({fieldText})"
     | POr alternatives ->
         alternatives
         |> NonEmptyList.toList
@@ -296,7 +301,7 @@ let rec private formatPattern (pattern: Pattern) : string =
             | PListCons _ -> $"({formatted})"
             // Constructor payloads are whitespace-delimited and parse a
             // complete pattern, so grouping keeps the outer cons outside the payload.
-            | PConstructor (_, Some _) -> $"({formatted})"
+            | PConstructor (_, _ :: _) -> $"({formatted})"
             | _ -> formatted
         head
         |> List.map formatHeadPattern
@@ -332,7 +337,7 @@ let rec private formatExpr (expr: Expr) : string =
         let argText = formatExpr arg
         match arg with
         | _ when isNegativeNumericLiteral arg -> $"({argText})"
-        | Constructor (_, _, None) -> $"({argText})"
+        | Constructor (_, _, []) -> $"({argText})"
         | TupleLiteral _ -> $"({argText})"
         | Call _
         | TypeApp _
@@ -412,7 +417,7 @@ let rec private formatExpr (expr: Expr) : string =
             | Call _
             | TypeApp _
             | Apply _ | IndirectApply _
-            | Constructor (_, _, None) -> true
+            | Constructor (_, _, []) -> true
             | _ -> false
         let isNumericLiteralExpr (expr: Expr) : bool =
             match expr with
@@ -553,18 +558,21 @@ let rec private formatExpr (expr: Expr) : string =
             | _ ->
                 parenthesizeIfNeeded recordExpr recordBaseText
         $"{recordText}.{formatIdentifierSegment fieldName}"
-    | Constructor (constructorReference, variantName, payload) ->
+    | Constructor (constructorReference, variantName, fields) ->
         let fullName =
             let formattedVariantName = formatIdentifierSegment variantName
             match constructorReferenceTypeName constructorReference with
             | None -> formattedVariantName
             | Some typeName ->
                 $"{formatIdentifierPath typeName}.{formattedVariantName}"
-        match payload with
-        | None -> fullName
-        | Some payloadExpr ->
-            let payloadText = formatAppArg payloadExpr
-            $"{fullName} {payloadText}"
+        match fields with
+        | [] -> fullName
+        | [field] -> $"{fullName} {formatAppArg field}"
+        | _ ->
+            fields
+            |> List.map formatExpr
+            |> String.concat ", "
+            |> fun fieldText -> $"{fullName}({fieldText})"
     | Match (scrutinee, cases) ->
         let scrutineeText = formatExpr scrutinee
         let formatCaseBody (body: Expr) : string =
@@ -674,10 +682,11 @@ let private formatTypeDef (typeDef: TypeDef) : string =
         let variantsText =
             variants
             |> List.map (fun variant ->
-                match variant.Payload with
-                | None -> formatIdentifierSegment variant.Name
-                | Some payloadType ->
-                    $"{formatIdentifierSegment variant.Name} of {formatType payloadType}")
+                match variant.Fields with
+                | [] -> formatIdentifierSegment variant.Name
+                | fields ->
+                    let fieldsText = fields |> List.map formatType |> String.concat " * "
+                    $"{formatIdentifierSegment variant.Name} of {fieldsText}")
             |> String.concat " | "
         let leadingBar = "| "
         $"type {formatIdentifierSegment name}{formatTypeParams typeParams} = {leadingBar}{variantsText}"

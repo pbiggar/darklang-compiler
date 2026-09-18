@@ -181,45 +181,47 @@ let rec internal buildEqHelperExpr
                 |> Option.map (fun info ->
                     info.Variants
                     |> List.map (fun variant ->
-                        let concretePayloadOpt =
-                            match variant.Payload with
-                            | Some payloadType when List.length info.TypeParams = List.length sumTypeArgs ->
-                                let subst = List.zip info.TypeParams sumTypeArgs |> Map.ofList
-                                Some (resolveType aliasReg (applySubst subst payloadType))
-                            | Some payloadType ->
-                                Some (resolveType aliasReg payloadType)
-                            | None ->
-                                None
-                        ($"{sumTypeName}.{variant.Name}", variant.Tag, concretePayloadOpt)))
+                        let concreteFields =
+                            let subst =
+                                if List.length info.TypeParams = List.length sumTypeArgs then
+                                    List.zip info.TypeParams sumTypeArgs |> Map.ofList
+                                else
+                                    Map.empty
+                            variant.Fields
+                            |> List.map (applySubst subst >> resolveType aliasReg)
+                        ($"{sumTypeName}.{variant.Name}", variant.Tag, concreteFields)))
                 |> Option.defaultValue []
 
             let variantCases =
                 variantsForType
-                |> List.map (fun (variantName, tag, payloadTypeOpt) ->
-                    match payloadTypeOpt with
-                    | None ->
+                |> List.map (fun (variantName, tag, fieldTypes) ->
+                    match fieldTypes with
+                    | [] ->
                         let pairPattern =
-                            PTuple [PConstructor (variantName, None); PConstructor (variantName, None)]
+                            PTuple [PConstructor (variantName, []); PConstructor (variantName, [])]
                         makeSimpleMatchCase pairPattern (BoolLiteral true)
-                    | Some payloadType ->
-                        let leftPayloadVar = $"__dark_eq_helper_left_payload_{tag}"
-                        let rightPayloadVar = $"__dark_eq_helper_right_payload_{tag}"
-                        let payloadEqExpr =
-                            buildEqHelperExpr
-                                aliasReg
-                                typeReg
-                                variantLookup
-                                indexedSumTypeReg
-                                UseHelperCall
-                                payloadType
-                                (Var leftPayloadVar)
-                                (Var rightPayloadVar)
+                    | _ ->
+                        let leftFields = fieldTypes |> List.mapi (fun index _ -> $"__dark_eq_helper_left_field_{tag}_{index}")
+                        let rightFields = fieldTypes |> List.mapi (fun index _ -> $"__dark_eq_helper_right_field_{tag}_{index}")
+                        let fieldEqExpr =
+                            List.zip3 fieldTypes leftFields rightFields
+                            |> List.map (fun (fieldType, leftField, rightField) ->
+                                buildEqHelperExpr
+                                    aliasReg
+                                    typeReg
+                                    variantLookup
+                                    indexedSumTypeReg
+                                    UseHelperCall
+                                    fieldType
+                                    (Var leftField)
+                                    (Var rightField))
+                            |> chainAndExpr
                         let pairPattern =
                             PTuple [
-                                PConstructor (variantName, Some (PVar leftPayloadVar))
-                                PConstructor (variantName, Some (PVar rightPayloadVar))
+                                PConstructor (variantName, List.map PVar leftFields)
+                                PConstructor (variantName, List.map PVar rightFields)
                             ]
-                        makeSimpleMatchCase pairPattern payloadEqExpr)
+                        makeSimpleMatchCase pairPattern fieldEqExpr)
 
             let defaultCase = makeSimpleMatchCase PWildcard (BoolLiteral false)
             let sumPairVar = "__dark_eq_helper_sum_pair"

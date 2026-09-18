@@ -66,9 +66,10 @@ let rec internal matchPatternBindingTypes
             |> List.fold (fun current (innerPattern, elementType) ->
                 merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
         | _ -> Map.empty
-    | AST.PConstructor (variantName, payloadPattern) ->
-        match Map.tryFind variantName variantLookup, payloadPattern with
-        | Some (typeName, typeParameters, _, Some payloadType), Some innerPattern ->
+    | AST.PConstructor (variantName, fieldPatterns) ->
+        match Map.tryFind variantName variantLookup with
+        | Some (typeName, typeParameters, _, fieldTypes)
+            when List.length fieldPatterns = List.length fieldTypes ->
             let substitution =
                 match scrutineeType with
                 | AST.TSum (scrutineeTypeName, typeArguments)
@@ -76,13 +77,14 @@ let rec internal matchPatternBindingTypes
                          && List.length typeParameters = List.length typeArguments ->
                     List.zip typeParameters typeArguments |> Map.ofList
                 | _ -> Map.empty
-            matchPatternBindingTypes
-                typeReg
-                variantLookup
-                innerPattern
-                (match applySubstToType substitution payloadType with
-                 | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
-                 | other -> other)
+            List.zip fieldPatterns fieldTypes
+            |> List.fold (fun current (fieldPattern, fieldType) ->
+                merge current
+                    (matchPatternBindingTypes
+                        typeReg
+                        variantLookup
+                        fieldPattern
+                        (applySubstToType substitution fieldType))) Map.empty
         | _ -> Map.empty
     | AST.PList patterns ->
         match scrutineeType with
@@ -158,8 +160,8 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string> =
         let updateVars = updates |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
         Set.union recordVars updateVars
     | CheckedAST.RecordAccess (record, _) -> freeVars record bound
-    | CheckedAST.Constructor (_, _, payload) ->
-        payload |> Option.map (fun e -> freeVars e bound) |> Option.defaultValue Set.empty
+    | CheckedAST.Constructor (_, _, fields) ->
+        fields |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
     | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeVars = freeVars scrutinee bound
         let caseVars =
@@ -253,9 +255,10 @@ let rec simpleInferType
                 List.zip innerPats elemTypes
                 |> List.fold (fun acc (pat, typ) -> mergeBindings acc (extractPatternBindings pat typ)) Map.empty
             | _ -> Map.empty
-        | AST.PConstructor (variantName, payloadPat) ->
-            match Map.tryFind variantName variantLookup, payloadPat with
-            | Some (typeName, typeParams, _, Some payloadType), Some pat ->
+        | AST.PConstructor (variantName, fieldPatterns) ->
+            match Map.tryFind variantName variantLookup with
+            | Some (typeName, typeParams, _, fieldTypes)
+                when List.length fieldPatterns = List.length fieldTypes ->
                 let subst =
                     match scrutType with
                     | AST.TSum (scrutTypeName, typeArgs)
@@ -263,11 +266,10 @@ let rec simpleInferType
                              && List.length typeParams = List.length typeArgs ->
                         List.zip typeParams typeArgs |> Map.ofList
                     | _ -> Map.empty
-                extractPatternBindings
-                    pat
-                    (match applySubstToType subst payloadType with
-                     | AST.TEnumFields fieldTypes -> AST.TTuple fieldTypes
-                     | other -> other)
+                List.zip fieldPatterns fieldTypes
+                |> List.fold (fun current (fieldPattern, fieldType) ->
+                    mergeBindings current
+                        (extractPatternBindings fieldPattern (applySubstToType subst fieldType))) Map.empty
             | _ -> Map.empty
         | AST.PList innerPats ->
             match scrutType with
@@ -406,32 +408,36 @@ let rec simpleInferType
                     | None -> fieldTypePattern)
             | None -> None
         | _ -> None
-    | CheckedAST.Constructor (constructorReference, variantName, payload) ->
-        // Sum type constructor has the sum type; infer generic args from payload when possible.
+    | CheckedAST.Constructor (constructorReference, variantName, fields) ->
+        // Sum type constructor has the sum type; infer generic args from fields when possible.
         match tryFindVariant constructorReference variantName variantLookup with
-        | Some (sumTypeName, typeParams, _, payloadPattern) ->
+        | Some (sumTypeName, typeParams, _, fieldPatterns) ->
             let defaultTypeArgs = typeParams |> List.map AST.TVar
-            match payloadPattern, payload with
-            | Some expectedPayloadType, Some payloadExpr ->
-                match simpleInferType payloadExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
-                | Some actualPayloadType ->
-                    match matchTypePattern expectedPayloadType actualPayloadType with
-                    | Ok bindings ->
-                        match consolidateTypeBindings bindings with
-                        | Ok subst ->
-                            let typeArgs =
+            if List.length fieldPatterns <> List.length fields then
+                Some (AST.TSum (sumTypeName, defaultTypeArgs))
+            else
+                List.zip fieldPatterns fields
+                |> List.map (fun (fieldPattern, fieldExpr) ->
+                    simpleInferType fieldExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
+                    |> Option.bind (fun actualFieldType ->
+                        match matchTypePattern fieldPattern actualFieldType with
+                        | Ok bindings -> Some bindings
+                        | Error _ -> None))
+                |> fun inferred ->
+                    if inferred |> List.exists Option.isNone then
+                        Some (AST.TSum (sumTypeName, defaultTypeArgs))
+                    else
+                        inferred
+                        |> List.choose id
+                        |> List.concat
+                        |> consolidateTypeBindings
+                        |> function
+                            | Ok subst ->
                                 typeParams
                                 |> List.map (fun typeParam ->
                                     Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
-                            Some (AST.TSum (sumTypeName, typeArgs))
-                        | Error _ ->
-                            Some (AST.TSum (sumTypeName, defaultTypeArgs))
-                    | Error _ ->
-                        Some (AST.TSum (sumTypeName, defaultTypeArgs))
-                | None ->
-                    Some (AST.TSum (sumTypeName, defaultTypeArgs))
-            | _ ->
-                Some (AST.TSum (sumTypeName, defaultTypeArgs))
+                                |> fun typeArgs -> Some (AST.TSum (sumTypeName, typeArgs))
+                            | Error _ -> Some (AST.TSum (sumTypeName, defaultTypeArgs))
         | None ->
             Some (AST.TSum (constructorReference.TypeName, []))
     | CheckedAST.BinOp (op, left, right) ->

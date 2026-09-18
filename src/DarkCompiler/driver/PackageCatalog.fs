@@ -125,7 +125,7 @@ let private constructor
     (caseName: string)
     (payload: AST.Expr option)
     : AST.Expr =
-    AST.Constructor (AST.UnresolvedConstructor (Some typeName), caseName, payload)
+    AST.Constructor (AST.UnresolvedConstructor (Some typeName), caseName, Option.toList payload)
 
 let private packageHashExpr (hash: string) : AST.Expr =
     constructor

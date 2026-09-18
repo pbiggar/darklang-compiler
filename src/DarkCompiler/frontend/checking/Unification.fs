@@ -140,19 +140,6 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
                     | _, Error e -> Error e) (Ok [])
         | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Tuple type
         | _ -> Error $"Expected tuple, got {typeToString actual}"
-    | TEnumFields patternFields ->
-        match actual with
-        | TTuple actualFields when List.length patternFields = List.length actualFields ->
-            List.zip patternFields actualFields
-            |> List.map (fun (patternField, actualField) -> matchTypes patternField actualField)
-            |> List.fold (fun acc result ->
-                match acc, result with
-                | Ok bindings, Ok more -> Ok (bindings @ more)
-                | Error err, _ -> Error err
-                | _, Error err -> Error err) (Ok [])
-        | TTuple actualFields ->
-            Error $"Enum field arity mismatch: expected {List.length patternFields}, got {List.length actualFields}"
-        | _ -> Error $"Expected {List.length patternFields} enum fields, got {typeToString actual}"
     | TDict (patternKey, patternValue) ->
         match actual with
         | TDict (actualKey, actualValue) ->
@@ -197,7 +184,6 @@ let typesCompatibleWithAliases (aliasReg: AliasRegistry) (expected: Type) (actua
         | TFunction (parameters, result) ->
             TFunction (List.map nominalComparisonType parameters, nominalComparisonType result)
         | TTuple types -> TTuple (List.map nominalComparisonType types)
-        | TEnumFields types -> TEnumFields (List.map nominalComparisonType types)
         | TList inner -> TList (nominalComparisonType inner)
         | TDict (keyType, valueType) ->
             TDict (nominalComparisonType keyType, nominalComparisonType valueType)
@@ -264,7 +250,6 @@ let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type
                 List.map nominalComparisonType parameterTypes,
                 nominalComparisonType returnType)
         | TTuple elementTypes -> TTuple (List.map nominalComparisonType elementTypes)
-        | TEnumFields fieldTypes -> TEnumFields (List.map nominalComparisonType fieldTypes)
         | TList elementType -> TList (nominalComparisonType elementType)
         | TDict (keyType, valueType) ->
             TDict (nominalComparisonType keyType, nominalComparisonType valueType)

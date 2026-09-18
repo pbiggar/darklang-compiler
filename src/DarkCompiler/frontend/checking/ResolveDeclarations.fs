@@ -206,8 +206,8 @@ let rec private collectDeclarationCalls (expr: Expr) : Set<string> =
     | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> combine
     | RecordLiteral (_, entries) -> entries |> List.map snd |> combine
     | RecordUpdate (record, fields) -> combine (record :: (fields |> List.map snd))
-    | Constructor (_, _, payload) ->
-        payload |> Option.map collectDeclarationCalls |> Option.defaultValue Set.empty
+    | Constructor (_, _, fields) ->
+        fields |> List.map collectDeclarationCalls |> Set.unionMany
     | Match (scrutinee, cases) ->
         let caseCalls =
             cases
@@ -363,7 +363,6 @@ let internal resolveProgramNames
             ResultList.traverse recurse parameterTypes
             |> Result.bind (fun parameters' -> recurse returnType |> Result.map (fun ret -> TFunction (parameters', ret)))
         | TTuple elementTypes -> ResultList.traverse recurse elementTypes |> Result.map TTuple
-        | TEnumFields fieldTypes -> ResultList.traverse recurse fieldTypes |> Result.map TEnumFields
         | TList elementType -> recurse elementType |> Result.map TList
         | TStream elementType -> recurse elementType |> Result.map TStream
         | TDict (keyType, valueType) ->
@@ -376,7 +375,7 @@ let internal resolveProgramNames
     let rec patternBoundNames pattern =
         match pattern with
         | PVar name -> Set.singleton name
-        | PConstructor (_, payload) -> payload |> Option.map patternBoundNames |> Option.defaultValue Set.empty
+        | PConstructor (_, fields) -> fields |> List.map patternBoundNames |> Set.unionMany
         | PTuple patterns | PList patterns -> patterns |> List.map patternBoundNames |> Set.unionMany
         | PListCons (heads, tail) -> Set.union (heads |> List.map patternBoundNames |> Set.unionMany) (patternBoundNames tail)
         | POr alternatives -> alternatives |> NonEmptyList.head |> patternBoundNames
@@ -387,14 +386,13 @@ let internal resolveProgramNames
     let rec resolvePattern localNames pattern =
         let recurse = resolvePattern localNames
         match pattern with
-        | PConstructor (name, payload) ->
+        | PConstructor (name, fields) ->
             // Pattern constructor identity is selected against the scrutinee's
             // sum type by the pattern checker; equal case names in other types
             // are therefore not an ambiguity at this syntax-only traversal.
-            payload
-            |> Option.map recurse
-            |> ResultList.sequenceOption
-            |> Result.map (fun payload' -> PConstructor (name, payload'))
+            fields
+            |> ResultList.traverse recurse
+            |> Result.map (fun fields' -> PConstructor (name, fields'))
         | PTuple patterns -> ResultList.traverse recurse patterns |> Result.map PTuple
         | PList patterns -> ResultList.traverse recurse patterns |> Result.map PList
         | PListCons (heads, tail) ->
@@ -423,17 +421,16 @@ let internal resolveProgramNames
                 ResultList.traverse resolveTypeRefs typeArgs
                 |> Result.bind (fun types' -> resolveArgs args |> Result.map (fun args' -> TypeApp (resolvedName, types', args'))))
         | FuncRef name -> resolveName NameResolution.ResolutionContext.Callable localNames name |> Result.map FuncRef
-        | Constructor (constructorReference, variantName, payload) ->
+        | Constructor (constructorReference, variantName, fields) ->
             let resolvedConstructor (resolvedName: string) =
                 let segments = resolvedName.Split('.') |> Array.toList
                 match List.rev segments with
                 | caseName :: reversedTypeName ->
                     let resolvedTypeName = reversedTypeName |> List.rev |> String.concat "."
-                    payload
-                    |> Option.map recurse
-                    |> ResultList.sequenceOption
-                    |> Result.map (fun payload' ->
-                        Constructor (resolvedConstructorReference resolvedTypeName, caseName, payload'))
+                    fields
+                    |> ResultList.traverse recurse
+                    |> Result.map (fun fields' ->
+                        Constructor (resolvedConstructorReference resolvedTypeName, caseName, fields'))
                 | [] -> Error (GenericError "Resolved constructor name contained no segments")
             let spelling =
                 match constructorReferenceTypeName constructorReference with
@@ -463,10 +460,9 @@ let internal resolveProgramNames
                     // Preserve a genuine ambiguity until the expected sum type
                     // is available during type checking. Key's broad case names
                     // do not shadow a single pre-existing constructor identity.
-                    payload
-                    |> Option.map recurse
-                    |> ResultList.sequenceOption
-                    |> Result.map (fun payload' -> Constructor (constructorReference, variantName, payload'))
+                    fields
+                    |> ResultList.traverse recurse
+                    |> Result.map (fun fields' -> Constructor (constructorReference, variantName, fields'))
             | Error error -> Error error
         | Let (pattern, value, body) ->
             recurse value
@@ -614,7 +610,12 @@ let internal resolveProgramNames
         | RecordDef (name, typeParams, fields) ->
             fields |> ResultList.traverse (fun (field, typ) -> resolveTypeRefs typ |> Result.map (fun typ' -> (field, typ'))) |> Result.map (fun fields' -> RecordDef (name, typeParams, fields'))
         | SumTypeDef (name, typeParams, variants) ->
-            variants |> ResultList.traverse (fun variant -> variant.Payload |> Option.map resolveTypeRefs |> ResultList.sequenceOption |> Result.map (fun payload -> { variant with Payload = payload })) |> Result.map (fun variants' -> SumTypeDef (name, typeParams, variants'))
+            variants
+            |> ResultList.traverse (fun variant ->
+                variant.Fields
+                |> ResultList.traverse resolveTypeRefs
+                |> Result.map (fun fields -> { variant with Fields = fields }))
+            |> Result.map (fun variants' -> SumTypeDef (name, typeParams, variants'))
         | TypeAlias (name, typeParams, targetType) -> resolveTypeRefs targetType |> Result.map (fun target' -> TypeAlias (name, typeParams, target'))
 
     let resolveTopLevel topLevel =

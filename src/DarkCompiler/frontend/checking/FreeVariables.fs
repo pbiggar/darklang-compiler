@@ -73,8 +73,8 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         Set.union recordFree updatesFree
     | RecordAccess (record, _) ->
         collectFreeVars record bound
-    | Constructor (_, _, payload) ->
-        payload |> Option.map (fun e -> collectFreeVars e bound) |> Option.defaultValue Set.empty
+    | Constructor (_, _, fields) ->
+        fields |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
     | Match (scrutinee, cases) ->
         let scrutineeFree = collectFreeVars scrutinee bound
         let casesFree = cases |> List.map (fun matchCase ->
@@ -142,8 +142,8 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
     | PString _
     | PChar _
     | PFloat _ -> Set.empty
-    | PConstructor (_, None) -> Set.empty
-    | PConstructor (_, Some payload) -> collectPatternBindings payload
+    | PConstructor (_, fields) ->
+        fields |> List.map collectPatternBindings |> List.fold Set.union Set.empty
     | PTuple patterns ->
         patterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
     | PList patterns ->

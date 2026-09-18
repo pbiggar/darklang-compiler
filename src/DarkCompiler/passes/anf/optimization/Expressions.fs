@@ -76,7 +76,6 @@ let private isRecordProjectionCSEType (fieldType: AST.Type) : bool =
     | AST.TRuntimeError
     | AST.TFunction _
     | AST.TTuple _
-    | AST.TEnumFields _
     | AST.TRecord _
     | AST.TSum _
     | AST.TList _

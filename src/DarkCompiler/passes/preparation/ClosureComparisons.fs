@@ -248,7 +248,7 @@ let rec internal rewriteRecursiveSelfReferences (selfName: string) (expr: Checke
     | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
-    | CheckedAST.Constructor (reference, name, payload) -> CheckedAST.Constructor (reference, name, Option.map recurse payload)
+    | CheckedAST.Constructor (reference, name, fields) -> CheckedAST.Constructor (reference, name, List.map recurse fields)
     | CheckedAST.ListLiteral values -> CheckedAST.ListLiteral (List.map recurse values)
     | CheckedAST.Apply (func, args) -> CheckedAST.Apply (recurse func, mapArgs args)
     | CheckedAST.IndirectApply (func, args) -> CheckedAST.IndirectApply (recurse func, mapArgs args)
@@ -290,7 +290,7 @@ let rec internal rewriteLiftedSelfCalls (liftedName: string) (expr: CheckedAST.E
     | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
-    | CheckedAST.Constructor (reference, name, payload) -> CheckedAST.Constructor (reference, name, Option.map recurse payload)
+    | CheckedAST.Constructor (reference, name, fields) -> CheckedAST.Constructor (reference, name, List.map recurse fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (recurse scrutinee, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
     | CheckedAST.ListLiteral values -> CheckedAST.ListLiteral (List.map recurse values)

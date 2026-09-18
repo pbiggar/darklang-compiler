@@ -48,8 +48,8 @@ let internal tryDecodeInternalTypeApp (expr: Expr) : InternalTypeApp option =
 
 let internal sumTypeHasPayload (variantLookup: VariantLookup) (sumTypeName: string) : bool =
     variantLookup
-    |> Map.exists (fun _ (variantTypeName, _, _, payloadTypeOpt) ->
-        variantTypeName = sumTypeName && payloadTypeOpt.IsSome)
+    |> Map.exists (fun _ (variantTypeName, _, _, fields) ->
+        variantTypeName = sumTypeName && not (List.isEmpty fields))
 
 /// Parsed source names are initially represented as TRecord. Canonicalize
 /// names owned by the variant registry before constructing equality plans.
@@ -62,9 +62,6 @@ let rec internal canonicalEqualityType (variantLookup: VariantLookup) (typ: Type
     | TRecord (name, typeArgs) -> TRecord (name, List.map canonical typeArgs)
     | TSum (name, typeArgs) -> TSum (name, List.map canonical typeArgs)
     | TTuple elementTypes -> TTuple (List.map canonical elementTypes)
-    // Multi-field enum payloads use the tuple runtime representation and must
-    // receive the same structural comparison plan as source tuples.
-    | TEnumFields fieldTypes -> TTuple (List.map canonical fieldTypes)
     | TList elementType -> TList (canonical elementType)
     | TDict (keyType, valueType) -> TDict (canonical keyType, canonical valueType)
     | TFunction (parameterTypes, returnType) ->
@@ -99,7 +96,7 @@ let internal validateJsonTargetType
             | TUnit | TBool | TInt8 | TUInt8 | TInt16 | TUInt16 | TInt32 | TUInt32
             | TInt64 | TUInt64 | TInt128 | TUInt128 | TInt | TFloat64 | TChar | TString | TDateTime -> Ok ()
             | TSum ("Uuid", []) -> Ok ()
-            | TTuple types | TEnumFields types -> validateAll types
+            | TTuple types -> validateAll types
             | TList inner -> validate visited inner
             | TDict (TString, inner) -> validate visited inner
             | TRecord (name, typeArgs) ->
@@ -117,7 +114,7 @@ let internal validateJsonTargetType
                     | Error _ -> unsupported typ
                     | Ok subst ->
                         info.Variants
-                        |> List.choose (fun variant -> Option.map (applySubst subst) variant.Payload)
+                        |> List.collect (fun variant -> List.map (applySubst subst) variant.Fields)
                         |> validateAll
             | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TDict _ -> unsupported typ
     validate Set.empty targetType
@@ -241,8 +238,7 @@ let private equalityComparableType
             | TFloat64 | TChar | TString | TDateTime -> true
             | TFunction (parameterTypes, returnType) ->
                 List.forall recurse parameterTypes && recurse returnType
-            | TTuple elementTypes
-            | TEnumFields elementTypes ->
+            | TTuple elementTypes ->
                 List.forall recurse elementTypes
             | TList elementType ->
                 recurse elementType
@@ -273,9 +269,8 @@ let private equalityComparableType
                             Map.empty
                     info.Variants
                     |> List.forall (fun variant ->
-                        variant.Payload
-                        |> Option.map (fun payload -> recurse (applySubst subst payload))
-                        |> Option.defaultValue true)
+                        variant.Fields
+                        |> List.forall (fun field -> recurse (applySubst subst field)))
             | TBlob -> true
             | TRawPtr | TRuntimeError -> false
 
@@ -301,8 +296,7 @@ let internal canonicalSortableType
             | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
             | TFloat64 | TChar | TString | TDateTime -> true
-            | TTuple elementTypes
-            | TEnumFields elementTypes -> List.forall recurse elementTypes
+            | TTuple elementTypes -> List.forall recurse elementTypes
             | TList elementType -> recurse elementType
             | TStream _ -> false
             | TDict (keyType, valueType) -> recurse keyType && recurse valueType
@@ -326,9 +320,8 @@ let internal canonicalSortableType
                             Map.empty
                     info.Variants
                     |> List.forall (fun variant ->
-                        variant.Payload
-                        |> Option.map (fun payload -> recurse (applySubst subst payload))
-                        |> Option.defaultValue true)
+                        variant.Fields
+                        |> List.forall (fun field -> recurse (applySubst subst field)))
             | TDict _ | TFunction _ | TBlob | TRawPtr | TRuntimeError -> false
 
     sortable Set.empty typ
@@ -353,8 +346,7 @@ let internal dictKeyAdmissibleType
             | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
             | TFloat64 | TChar | TString | TDateTime -> true
-            | TTuple elementTypes
-            | TEnumFields elementTypes -> List.forall recurse elementTypes
+            | TTuple elementTypes -> List.forall recurse elementTypes
             | TList elementType -> recurse elementType
             | TDict (keyType, valueType) -> recurse keyType && recurse valueType
             | TRecord (recordName, typeArgs) ->
@@ -379,9 +371,8 @@ let internal dictKeyAdmissibleType
                             Map.empty
                     info.Variants
                     |> List.forall (fun variant ->
-                        variant.Payload
-                        |> Option.map (fun payload -> recurse (applySubst subst payload))
-                        |> Option.defaultValue true)
+                        variant.Fields
+                        |> List.forall (fun field -> recurse (applySubst subst field)))
             | TFunction _ | TStream _ | TBlob | TRawPtr | TRuntimeError -> false
 
     admissible Set.empty typ
@@ -467,8 +458,6 @@ let rec private reconcileComparisonTypes
                 |> Option.map (fun valueType -> TDict (keyType, valueType)))
         | TTuple leftElements, TTuple rightElements ->
             reconcileMany leftElements rightElements [] |> Option.map TTuple
-        | TEnumFields leftFields, TEnumFields rightFields ->
-            reconcileMany leftFields rightFields [] |> Option.map TEnumFields
         | TRecord (leftName, leftArgs), TRecord (rightName, rightArgs)
             when leftName = rightName ->
             reconcileMany leftArgs rightArgs []

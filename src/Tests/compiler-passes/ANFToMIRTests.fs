@@ -18,8 +18,8 @@ let testBuildVariantRegistryRejectsInconsistentTypeParams () : TestResult =
     try
         let variantLookup : LoweringPrimitives.VariantLookup =
             Map.empty
-            |> Map.add "Some" ("Option", ["a"], 0, Some (AST.TVar "a"))
-            |> Map.add "None" ("Option", [], 1, None)
+            |> Map.add "Some" ("Option", ["a"], 0, [AST.TVar "a"])
+            |> Map.add "None" ("Option", [], 1, [])
 
         let actual = ANF_to_MIR.buildVariantRegistry variantLookup
         Error $"Expected inconsistent type parameters to crash, got: {actual}"

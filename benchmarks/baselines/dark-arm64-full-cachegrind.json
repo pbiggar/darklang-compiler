@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-18T18:13:14+00:00",
+  "generated_at": "2026-09-18T20:26:22+00:00",
   "compiler": {
-    "commit": "1cf3cdaf7b836ecdbd1fcf60374f6ffb5b00aa82",
-    "subject": "Persist Herdr configuration in dev image"
+    "commit": "1ea60810f10e81e8a282a20600549962497ba1a6",
+    "subject": "Merge commit '86a26c383b243d8306bdbe8de5c62c5b38fc45eb' into HEAD"
   },
   "benchmarks": [
     {
@@ -126,7 +126,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 5864163839
+      "instructions": 5864163741
     },
     {
       "name": "warden",

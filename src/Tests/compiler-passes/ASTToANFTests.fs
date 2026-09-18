@@ -26,7 +26,7 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
     let env : VarEnv =
         Map.ofList [("x", (ANF.TempId 0, AST.TSum ("MissingType", [])))]
 
-    let pattern = AST.PConstructor ("MissingCtor", Some (AST.PVar "payload"))
+    let pattern = AST.PConstructor ("MissingCtor", [AST.PVar "payload"])
 
     match AST.NonEmptyList.tryFromList [pattern] with
     | None -> Error "NonEmptyList.tryFromList returned None for a non-empty list"

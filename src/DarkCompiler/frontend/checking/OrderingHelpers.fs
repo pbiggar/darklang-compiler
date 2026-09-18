@@ -198,44 +198,44 @@ let rec internal buildCompareHelperExpr
             |> Option.map (fun info ->
                 info.Variants
                 |> List.map (fun variant ->
-                    let concretePayload =
-                        match variant.Payload with
-                        | Some payload when List.length info.TypeParams = List.length sumTypeArgs ->
-                            Some (resolveType aliasReg (applySubst (List.zip info.TypeParams sumTypeArgs |> Map.ofList) payload))
-                        | Some payload -> Some (resolveType aliasReg payload)
-                        | None -> None
-                    (variant.Name, $"{sumTypeName}.{variant.Name}", concretePayload))
+                    let subst =
+                        if List.length info.TypeParams = List.length sumTypeArgs then
+                            List.zip info.TypeParams sumTypeArgs |> Map.ofList
+                        else
+                            Map.empty
+                    let concreteFields = variant.Fields |> List.map (applySubst subst >> resolveType aliasReg)
+                    (variant.Name, $"{sumTypeName}.{variant.Name}", concreteFields))
                 |> List.sortBy (fun (caseName, _, _) -> caseName))
             |> Option.defaultValue []
         let cases =
             variants
-            |> List.collect (fun (leftCaseName, leftVariant, leftPayload) ->
+            |> List.collect (fun (leftCaseName, leftVariant, leftFields) ->
                 variants
-                |> List.map (fun (rightCaseName, rightVariant, rightPayload) ->
+                |> List.map (fun (rightCaseName, rightVariant, rightFields) ->
                     let order = System.String.CompareOrdinal(leftCaseName, rightCaseName)
-                    match leftPayload, rightPayload, order with
-                    | None, None, 0 ->
+                    match leftFields, rightFields, order with
+                    | [], [], 0 ->
                         makeSimpleMatchCase
-                            (PTuple [PConstructor (leftVariant, None); PConstructor (rightVariant, None)])
+                            (PTuple [PConstructor (leftVariant, []); PConstructor (rightVariant, [])])
                             (comparisonResultLiteral 0L)
-                    | Some payloadType, Some _, 0 ->
-                        let leftPayloadName = "__dark_compare_sum_left_payload"
-                        let rightPayloadName = "__dark_compare_sum_right_payload"
+                    | fieldTypes, _, 0 ->
+                        let leftNames = fieldTypes |> List.mapi (fun index _ -> $"__dark_compare_sum_left_field_{index}")
+                        let rightNames = fieldTypes |> List.mapi (fun index _ -> $"__dark_compare_sum_right_field_{index}")
+                        let comparisons =
+                            List.zip3 fieldTypes leftNames rightNames
+                            |> List.map (fun (fieldType, leftName, rightName) ->
+                                callHelper fieldType (Var leftName) (Var rightName))
                         makeSimpleMatchCase
                             (PTuple [
-                                PConstructor (leftVariant, Some (PVar leftPayloadName))
-                                PConstructor (rightVariant, Some (PVar rightPayloadName))
+                                PConstructor (leftVariant, List.map PVar leftNames)
+                                PConstructor (rightVariant, List.map PVar rightNames)
                             ])
-                            (callHelper payloadType (Var leftPayloadName) (Var rightPayloadName))
+                            (chainCompareExprs comparisons)
                     | _ ->
                         let leftPattern =
-                            match leftPayload with
-                            | None -> PConstructor (leftVariant, None)
-                            | Some _ -> PConstructor (leftVariant, Some PWildcard)
+                            PConstructor (leftVariant, List.map (fun _ -> PWildcard) leftFields)
                         let rightPattern =
-                            match rightPayload with
-                            | None -> PConstructor (rightVariant, None)
-                            | Some _ -> PConstructor (rightVariant, Some PWildcard)
+                            PConstructor (rightVariant, List.map (fun _ -> PWildcard) rightFields)
                         makeSimpleMatchCase
                             (PTuple [leftPattern; rightPattern])
                             (comparisonResultLiteral (if order < 0 then -1L else 1L))))

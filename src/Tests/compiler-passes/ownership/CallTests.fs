@@ -249,8 +249,8 @@ let testGenericPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
         TypeReg = Map.empty
         VariantLookup =
             Map.ofList [
-                ("Left", ("Phantom", ["a"], 0, None))
-                ("Right", ("Phantom", ["a"], 1, None))
+                ("Left", ("Phantom", ["a"], 0, []))
+                ("Right", ("Phantom", ["a"], 1, []))
             ]
         SumShapeReg =
             Map.ofList [
@@ -354,8 +354,8 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
         TypeReg = Map.empty
         VariantLookup =
             Map.ofList [
-                ("Empty", ("Payload", [], 0, None))
-                ("SomePayload", ("Payload", [], 1, Some AST.TString))
+                ("Empty", ("Payload", [], 0, []))
+                ("SomePayload", ("Payload", [], 1, [AST.TString]))
             ]
         SumShapeReg =
             Map.ofList [

@@ -465,10 +465,10 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             let typeEnv = typeEnvFromVarEnv env
             inferTypeCore sumTypeNames argExpr typeEnv typeReg variantLookup funcReg moduleRegistry
             |> Result.bind (fun argType ->
-                let lookupVariantInfo (expectedTypeName: string) (variantName: string) : Result<int * AST.Type option, string> =
+                let lookupVariantInfo (expectedTypeName: string) (variantName: string) : Result<int * AST.Type list, string> =
                     match Map.tryFind variantName variantLookup with
-                    | Some (typeName, _, tag, payloadTypeOpt) when typeName = expectedTypeName ->
-                        Ok (tag, payloadTypeOpt)
+                    | Some (typeName, _, tag, fieldTypes) when typeName = expectedTypeName ->
+                        Ok (tag, fieldTypes)
                     | Some (typeName, _, _, _) ->
                         Error $"Builtin.unwrap expected variant {variantName} in {expectedTypeName}, got {typeName}"
                     | None ->
@@ -526,15 +526,15 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         buildUnwrapExpr successTag valueType "Cannot unwrap None")
                 | AST.TSum ("Stdlib.Option.Option", []) ->
                     lookupVariantInfo "Stdlib.Option.Option" "Some"
-                    |> Result.bind (fun (successTag, payloadTypeOpt) ->
+                    |> Result.bind (fun (successTag, fieldTypes) ->
                         let payloadTypeResult =
                             match argExpr with
-                            | CheckedAST.Constructor (_, "Some", Some payloadExpr) ->
+                            | CheckedAST.Constructor (_, "Some", [payloadExpr]) ->
                                 inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                             | _ ->
-                                match payloadTypeOpt with
-                                | Some payloadType -> Ok payloadType
-                                | None -> Ok AST.TUnit
+                                match fieldTypes with
+                                | [payloadType] -> Ok payloadType
+                                | _ -> Ok AST.TUnit
                         payloadTypeResult
                         |> Result.bind (fun payloadType ->
                             buildUnwrapExpr successTag payloadType "Cannot unwrap None"))
@@ -543,7 +543,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     |> Result.bind (fun (successTag, _) ->
                         let failureMessage =
                             match argExpr with
-                            | CheckedAST.Constructor (_, "Error", Some payloadExpr) ->
+                            | CheckedAST.Constructor (_, "Error", [payloadExpr]) ->
                                 match unwrapErrorPayloadToString payloadExpr with
                                 | Some payloadText -> $"Cannot unwrap Error: {payloadText}"
                                 | None -> "Cannot unwrap Error"
@@ -552,18 +552,18 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         buildUnwrapExpr successTag okType failureMessage)
                 | AST.TSum ("Stdlib.Result.Result", []) ->
                     lookupVariantInfo "Stdlib.Result.Result" "Ok"
-                    |> Result.bind (fun (successTag, payloadTypeOpt) ->
+                    |> Result.bind (fun (successTag, fieldTypes) ->
                         let payloadTypeResult =
                             match argExpr with
-                            | CheckedAST.Constructor (_, "Ok", Some payloadExpr) ->
+                            | CheckedAST.Constructor (_, "Ok", [payloadExpr]) ->
                                 inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                             | _ ->
-                                match payloadTypeOpt with
-                                | Some payloadType -> Ok payloadType
-                                | None -> Ok AST.TUnit
+                                match fieldTypes with
+                                | [payloadType] -> Ok payloadType
+                                | _ -> Ok AST.TUnit
                         let failureMessage =
                             match argExpr with
-                            | CheckedAST.Constructor (_, "Error", Some payloadExpr) ->
+                            | CheckedAST.Constructor (_, "Error", [payloadExpr]) ->
                                 match unwrapErrorPayloadToString payloadExpr with
                                 | Some payloadText -> $"Cannot unwrap Error: {payloadText}"
                                 | None -> "Cannot unwrap Error"
@@ -939,7 +939,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             | _ ->
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
-    | CheckedAST.Constructor (constructorTypeName, variantName, payload) ->
+    | CheckedAST.Constructor (constructorTypeName, variantName, fields) ->
         match tryFindVariant constructorTypeName variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
@@ -949,13 +949,14 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             // Note: We get typeName from variantLookup, not from AST (which may be empty)
             let typeHasPayloadVariants =
                 variantLookup
-                |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
+                |> Map.exists (fun _ (tName, _, _, variantFields) ->
+                    tName = typeName && not (List.isEmpty variantFields))
 
-            match payload with
-            | None when not typeHasPayloadVariants ->
+            match fields with
+            | [] when not typeHasPayloadVariants ->
                 // Pure enum type (no payloads anywhere): return tag as an integer
                 Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 (int64 tag))), varGen)
-            | None ->
+            | [] ->
                 // No payload but type has other variants with payloads
                 // Heap-allocate as [tag, 0] for uniform 2-element structure
                 // This enables consistent structural equality comparison
@@ -965,8 +966,12 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 let tupleExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
                 let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
                 Ok (finalExpr, varGen1)
-            | Some payloadExpr ->
+            | _ ->
                 // Variant with payload: allocate [tag, payload] on heap
+                let payloadExpr =
+                    match fields with
+                    | [field] -> field
+                    | _ -> CheckedAST.TupleLiteral fields
                 toANFBoundAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
                 |> Result.map (fun (payloadSetupExpr, payloadAtom, varGen1) ->
                     let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))

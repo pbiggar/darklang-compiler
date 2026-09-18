@@ -244,7 +244,7 @@ let private buildRegistriesInternal
                         AST.constructorRuntimeIdentity typeName variant.Name
                     else
                         ordinal
-                let info = (typeName, typeParams, tag, variant.Payload)
+                let info = (typeName, typeParams, tag, variant.Fields)
                 let withBare =
                     if Map.containsKey variant.Name typeLookup then typeLookup
                     else Map.add variant.Name info typeLookup
@@ -254,12 +254,12 @@ let private buildRegistriesInternal
 
     let variantLookup : VariantLookup =
         rawVariantLookup
-        |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
+        |> Map.map (fun _ (typeName, typeParams, tag, fieldTypes) ->
             (typeName,
              typeParams,
              tag,
-             payloadType
-             |> Option.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)))
+             fieldTypes
+             |> List.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)))
 
     let recordNames = typeRegBase |> Map.keys |> Set.ofSeq
     let typeReg =

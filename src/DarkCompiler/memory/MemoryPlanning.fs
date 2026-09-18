@@ -35,9 +35,6 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TTuple elemTypes ->
         let fieldShapes = elemTypes |> List.map (rcShapeOfType typeReg)
         FixedBlock (List.length elemTypes * 8, fieldShapes)
-    | AST.TEnumFields fieldTypes ->
-        let fieldShapes = fieldTypes |> List.map (rcShapeOfType typeReg)
-        FixedBlock (List.length fieldTypes * 8, fieldShapes)
     | AST.TRecord (name, _) ->
         match Map.tryFind name typeReg with
         | Some fields ->
@@ -81,7 +78,6 @@ let private collectTypeVarsInOrder (typ: AST.Type) : string list =
         match t with
         | AST.TVar name -> [name]
         | AST.TTuple elemTypes -> elemTypes |> List.collect collect
-        | AST.TEnumFields fieldTypes -> fieldTypes |> List.collect collect
         | AST.TRecord (_, typeArgs) -> typeArgs |> List.collect collect
         | AST.TList elemType -> collect elemType
         | AST.TStream elemType -> collect elemType
@@ -129,8 +125,6 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
         | None -> typ
     | AST.TTuple elemTypes ->
         AST.TTuple (elemTypes |> List.map (applyRcShapeTypeSubstitution subst))
-    | AST.TEnumFields fieldTypes ->
-        AST.TEnumFields (fieldTypes |> List.map (applyRcShapeTypeSubstitution subst))
     | AST.TRecord (name, typeArgs) ->
         AST.TRecord (name, typeArgs |> List.map (applyRcShapeTypeSubstitution subst))
     | AST.TList elemType ->
@@ -179,8 +173,6 @@ let rcShapeOfTypeWithSums
         match t with
         | AST.TTuple elemTypes ->
             FixedBlock (List.length elemTypes * 8, elemTypes |> List.map (classify expandingSums))
-        | AST.TEnumFields fieldTypes ->
-            FixedBlock (List.length fieldTypes * 8, fieldTypes |> List.map (classify expandingSums))
         | AST.TRecord (name, typeArgs) ->
             match Map.tryFind name typeReg with
             | Some fields ->

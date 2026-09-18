@@ -48,15 +48,14 @@ let private collectDirectEqHelperDeps
             |> Map.tryFind sumTypeName
             |> Option.map (fun info ->
                 info.Variants
-                |> List.choose (fun variant ->
-                    match variant.Payload with
-                    | Some payloadType when List.length info.TypeParams = List.length sumTypeArgs ->
-                        let subst = List.zip info.TypeParams sumTypeArgs |> Map.ofList
-                        addIfHelperType (applySubst subst payloadType)
-                    | Some payloadType ->
-                        addIfHelperType payloadType
-                    | None ->
-                        None))
+                |> List.collect (fun variant ->
+                    let subst =
+                        if List.length info.TypeParams = List.length sumTypeArgs then
+                            List.zip info.TypeParams sumTypeArgs |> Map.ofList
+                        else
+                            Map.empty
+                    variant.Fields
+                    |> List.choose (applySubst subst >> addIfHelperType)))
             |> Option.defaultValue []
         | _ ->
             []
@@ -86,8 +85,7 @@ let rec internal ensureEqHelperForType
         | TList elementType -> referencesKnownNominals elementType
         | TDict (keyType, valueType) ->
             referencesKnownNominals keyType && referencesKnownNominals valueType
-        | TTuple elementTypes
-        | TEnumFields elementTypes -> List.forall referencesKnownNominals elementTypes
+        | TTuple elementTypes -> List.forall referencesKnownNominals elementTypes
         | TFunction (parameterTypes, returnType) ->
             List.forall referencesKnownNominals parameterTypes
             && referencesKnownNominals returnType
@@ -177,12 +175,13 @@ let private collectDirectCompareHelperDeps
             |> Map.tryFind sumTypeName
             |> Option.map (fun info ->
                 info.Variants
-                |> List.choose (fun variant ->
-                    match variant.Payload with
-                    | Some payload when List.length info.TypeParams = List.length sumTypeArgs ->
-                        Some (resolveType aliasReg (applySubst (List.zip info.TypeParams sumTypeArgs |> Map.ofList) payload))
-                    | Some payload -> Some (resolveType aliasReg payload)
-                    | None -> None))
+                |> List.collect (fun variant ->
+                    let subst =
+                        if List.length info.TypeParams = List.length sumTypeArgs then
+                            List.zip info.TypeParams sumTypeArgs |> Map.ofList
+                        else
+                            Map.empty
+                    variant.Fields |> List.map (applySubst subst >> resolveType aliasReg)))
             |> Option.defaultValue []
         | _ -> []
     deps |> List.distinctBy compareHelperName
@@ -291,7 +290,7 @@ let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (ex
     | RecordUpdate (recordExpr, updates) ->
         Set.union (recurse recordExpr) (updates |> List.map snd |> collectFromExprs)
     | RecordAccess (recordExpr, _) -> recurse recordExpr
-    | Constructor (_, _, payload) -> payload |> Option.map recurse |> Option.defaultValue Set.empty
+    | Constructor (_, _, fields) -> fields |> List.map recurse |> List.fold Set.union Set.empty
     | Match (scrutinee, cases) ->
         let caseTypes =
             cases
@@ -370,8 +369,10 @@ let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: E
             (updates |> List.map snd |> collectFromExprs)
     | RecordAccess (recordExpr, _) ->
         collectEqHelperTypesFromExpr aliasReg recordExpr
-    | Constructor (_, _, payload) ->
-        payload |> Option.map (collectEqHelperTypesFromExpr aliasReg) |> Option.defaultValue Set.empty
+    | Constructor (_, _, fields) ->
+        fields
+        |> List.map (collectEqHelperTypesFromExpr aliasReg)
+        |> List.fold Set.union Set.empty
     | Match (scrutinee, cases) ->
         let scrutineeTypes = collectEqHelperTypesFromExpr aliasReg scrutinee
         let caseTypes =

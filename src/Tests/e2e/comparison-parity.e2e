@@ -153,5 +153,5 @@ Stdlib.notEquals (Stdlib.Blob.fromList ([])) (Stdlib.Blob.fromList ([])) = true
 // Public wrapper calls retain the compiler's intentional AOT mismatch timing.
 Stdlib.equals 'a' "a" = error="Type variable a$0 has conflicting inferences: Char vs String"
 Stdlib.notEquals 1L 1.0 = error="Type mismatch in float literal: expected Int64, got Float"
-Stdlib.equals ComparisonOnlyA ComparisonOnlyB = error="Type mismatch in constructor ComparisonOnlyA: expected a$0, got ComparisonNominalA"
+Stdlib.equals ComparisonOnlyA ComparisonOnlyB = error="Type mismatch in constructor ComparisonOnlyB: expected ComparisonNominalA, got ComparisonNominalB"
 Stdlib.notEquals (ComparisonRecordA { value = 1L }) (ComparisonRecordB { value = 1L }) = error="Type mismatch in record literal: expected ComparisonRecordA, got ComparisonRecordB"

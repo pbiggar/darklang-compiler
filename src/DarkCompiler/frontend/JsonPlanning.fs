@@ -106,7 +106,6 @@ let rec private structuralTypeKey (typ: Type) : string =
     | TStream elementType -> encodeTypes "stream" [elementType]
     | TDict (keyType, valueType) -> encodeTypes "dict" [keyType; valueType]
     | TTuple elementTypes -> encodeTypes "tuple" elementTypes
-    | TEnumFields fieldTypes -> encodeTypes "enum-fields" fieldTypes
     | TRecord (name, typeArgs) ->
         let encodedName = encodeText "record" name
         let encodedArgs = encodeTypes "args" typeArgs
@@ -142,7 +141,7 @@ let private makeCase pattern body =
     { Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }
 
 let private constructor owner caseName payload =
-    Constructor ({ TypeName = owner }, caseName, payload)
+    Constructor ({ TypeName = owner }, caseName, Option.toList payload)
 
 let private tuplePayload values = TupleLiteral values |> Some
 let private ok value = constructor "Stdlib.Result.Result" "Ok" (Some value)
@@ -217,7 +216,7 @@ let rec private typeReference typ =
     | TRecord (name, typeArgs)
     | TSum (name, typeArgs) -> custom name typeArgs
     | TVar name -> unary "TVariable" (StringLiteral name)
-    | TTuple [] | TTuple [_] | TEnumFields _ | TRawPtr | TRuntimeError | TDict _ ->
+    | TTuple [] | TTuple [_] | TRawPtr | TRuntimeError | TDict _ ->
         unary "TVariable" (StringLiteral (CheckingDiagnostics.typeToString typ))
 
 let private cantMatch typ raw path =
@@ -233,8 +232,8 @@ let private cantMatch typ raw path =
 let private rawSource source raw = call "Stdlib.Json.__copyRaw" [source; raw]
 
 let private resultCases okName okBody errorName =
-    [ makeCase (PConstructor ("Ok", Some (PVar okName))) okBody
-      makeCase (PConstructor ("Error", Some (PVar errorName))) (error (Var errorName)) ]
+    [ makeCase (PConstructor ("Ok", [PVar okName])) okBody
+      makeCase (PConstructor ("Error", [PVar errorName])) (error (Var errorName)) ]
 
 let private applySubstitution subst typ =
     let rec apply typ =
@@ -243,7 +242,6 @@ let private applySubstitution subst typ =
         | TList inner -> TList (apply inner)
         | TDict (keyType, valueType) -> TDict (apply keyType, apply valueType)
         | TTuple types -> TTuple (List.map apply types)
-        | TEnumFields types -> TEnumFields (List.map apply types)
         | TFunction (parameters, result) -> TFunction (List.map apply parameters, apply result)
         | TRecord (name, typeArgs) -> TRecord (name, List.map apply typeArgs)
         | TSum (name, typeArgs) -> TSum (name, List.map apply typeArgs)
@@ -273,7 +271,6 @@ let private resolveJsonType (env: Env) typ =
         | TRecord (name, typeArgs) -> resolveNamed (fun n args -> TRecord (n, args)) name typeArgs
         | TSum (name, typeArgs) -> resolveNamed (fun n args -> TSum (n, args)) name typeArgs
         | TTuple types -> TTuple (List.map resolve types)
-        | TEnumFields types -> TEnumFields (List.map resolve types)
         | TList inner -> TList (resolve inner)
         | TDict (keyType, valueType) -> TDict (resolve keyType, resolve valueType)
         | TFunction (parameters, result) -> TFunction (List.map resolve parameters, resolve result)
@@ -296,11 +293,6 @@ let private canonicalCodecTypeKey (env: Env) (rootType: Type) : string =
             |> List.map (encode visiting)
             |> String.concat ","
             |> fun elements -> $"tuple({elements})"
-        | TEnumFields fieldTypes ->
-            fieldTypes
-            |> List.map (encode visiting)
-            |> String.concat ","
-            |> fun fields -> $"enum-fields({fields})"
         | TFunction (parameters, result) ->
             let parameters = parameters |> List.map (encode visiting) |> String.concat ","
             $"fn({parameters})->{encode visiting result}"
@@ -341,11 +333,11 @@ let private canonicalCodecTypeKey (env: Env) (rootType: Type) : string =
                             info.Variants
                             |> List.sortBy (fun variant -> variant.Tag)
                             |> List.map (fun variant ->
-                                let payload =
-                                    variant.Payload
-                                    |> Option.map (applySubstitution subst >> encode visiting)
-                                    |> Option.defaultValue "none"
-                                $"{variant.Tag}:{variant.Name}:{payload}")
+                                let fields =
+                                    variant.Fields
+                                    |> List.map (applySubstitution subst >> encode visiting)
+                                    |> String.concat ","
+                                $"{variant.Tag}:{variant.Name}:[{fields}]")
                             |> String.concat ","
                         $"{identity}<{args}>[{variants}]"
         | other -> structuralTypeKey other
@@ -532,8 +524,8 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                     match remaining with
                     | [] -> Ok (List.rev acc, current)
                     | variant :: rest ->
-                        match variant.Payload with
-                        | None ->
+                        match variant.Fields with
+                        | [] ->
                             let body =
                                 writer
                                 |> writerBeginObject
@@ -541,17 +533,11 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                                 |> writerBeginArray
                                 |> writerEndArray
                                 |> writerEndObject
-                            loop rest current (makeCase (PConstructor (variant.Name, None)) body :: acc)
-                        | Some payloadType ->
-                            let concrete = applySubstitution subst payloadType |> resolveJsonType env
-                            let payloadName = $"__payload_{variant.Tag}"
-                            let fields =
-                                match concrete with
-                                | TEnumFields fieldTypes ->
-                                    fieldTypes
-                                    |> List.mapi (fun index fieldType ->
-                                        (fieldType, TupleAccess (Var payloadName, index)))
-                                | _ -> [(concrete, Var payloadName)]
+                            loop rest current (makeCase (PConstructor (variant.Name, [])) body :: acc)
+                        | fieldTypes ->
+                            let concreteFields = fieldTypes |> List.map (applySubstitution subst >> resolveJsonType env)
+                            let fieldNames = fieldTypes |> List.mapi (fun index _ -> $"__field_{variant.Tag}_{index}")
+                            let fields = List.zip concreteFields (List.map Var fieldNames)
                             let initialWriter =
                                 writer
                                 |> writerBeginObject
@@ -567,10 +553,10 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                                 (Ok (initialWriter, current))
                             |> Result.bind (fun (encoded, next) ->
                                 let body = encoded |> writerEndArray |> writerEndObject
-                                loop rest next (makeCase (PConstructor (variant.Name, Some (PVar payloadName))) body :: acc))
+                                loop rest next (makeCase (PConstructor (variant.Name, List.map PVar fieldNames)) body :: acc))
                 loop (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
                 |> Result.map (fun (cases, nextState) -> (Match (value, cases), nextState)))
-    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TEnumFields _
+    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _
     | TDict _ ->
         Error
             $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
@@ -579,8 +565,8 @@ let private optionDecoder typ functionName =
     let failure = cantMatch typ (rawSource (Var "__source") (Var "__view")) (Var "__path")
     Match (
         call functionName [Var "__source"; Var "__view"],
-        [ makeCase (PConstructor ("Some", Some (PVar "__value"))) (ok (Var "__value"))
-          makeCase (PConstructor ("None", None)) failure ])
+        [ makeCase (PConstructor ("Some", [PVar "__value"])) (ok (Var "__value"))
+          makeCase (PConstructor ("None", [])) failure ])
 
 let rec private ensureDecoder (env: Env) typ state : Result<string * State, string> =
     let typ = resolveJsonType env typ
@@ -762,12 +748,7 @@ and private decodeEnumCase
                 "Field"
                 (Some (StringLiteral variant.Name)))
     let fieldTypes =
-        match variant.Payload with
-        | None -> []
-        | Some payload ->
-            match applySubstitution subst payload |> resolveJsonType env with
-            | TEnumFields fields -> fields
-            | field -> [field]
+        variant.Fields |> List.map (applySubstitution subst >> resolveJsonType env)
     let rawNames = fieldTypes |> List.mapi (fun index _ -> $"__enum_raw_{variant.Tag}_{index}")
     let valueNames = fieldTypes |> List.mapi (fun index _ -> $"__enum_value_{variant.Tag}_{index}")
     let decodedItems count =
@@ -785,12 +766,7 @@ and private decodeEnumCase
             (fieldType, Var rawNames[index], argumentPath, valueNames[index]))
     let constructed =
         let values = valueNames |> List.map Var
-        let payload =
-            match values with
-            | [] -> None
-            | [value] -> Some value
-            | _ -> Some (TupleLiteral values)
-        constructor typeName variant.Name payload |> ok
+        Constructor ({ TypeName = typeName }, variant.Name, values) |> ok
     let exactResult = sequenceDecoded env (decodedItems fieldTypes.Length) (fun _ -> constructed) state
     exactResult
     |> Result.bind (fun (exactBody, exactState) ->
@@ -839,7 +815,7 @@ and private decodeEnumCase
                     Match (
                         call "Stdlib.Json.__arrayItems" [Var "__source"; Var "__case_raw"],
                         [ makeCase
-                              (PConstructor ("Some", Some (PVar "__enum_args")))
+                              (PConstructor ("Some", [PVar "__enum_args"]))
                               arrayBody
                           makeCase PWildcard (cantMatch typ (rawSource (Var "__source") (Var "__case_raw")) casePath) ])
                 (body, finalState))))
@@ -891,7 +867,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
         |> Result.map (fun (decoded, nextState) ->
             (Match (
                 call "Stdlib.Json.__arrayItems" [Var "__source"; Var "__view"],
-                [ makeCase (PConstructor ("Some", Some (PList patterns))) decoded
+                [ makeCase (PConstructor ("Some", [PList patterns])) decoded
                   makeCase PWildcard failure ]),
              nextState))
     | TRecord (typeName, typeArgs) ->
@@ -936,9 +912,9 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                                 let one = Match (decoded, resultCases $"__field_{fieldName}" tail "__field_error")
                                 (Match (
                                     matches,
-                                    [ makeCase (PConstructor ("None", None)) missing
+                                    [ makeCase (PConstructor ("None", [])) missing
                                       makeCase
-                                        (PConstructor ("Some", Some (PVar "__field_raw")))
+                                        (PConstructor ("Some", [PVar "__field_raw"]))
                                         (If (
                                             call "Stdlib.Json.__viewIsDuplicate" [Var "__field_raw"],
                                             duplicate,
@@ -948,7 +924,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 |> Result.map (fun (decoded, nextState) ->
                     (Match (
                         call "Stdlib.Json.__objectFieldMap" [Var "__source"; Var "__view"],
-                        [ makeCase (PConstructor ("Some", Some (PVar "__object_field_map"))) decoded
+                        [ makeCase (PConstructor ("Some", [PVar "__object_field_map"])) decoded
                           makeCase PWildcard failure ]),
                      nextState)))
     | TDict (TString, valueType) ->
@@ -958,7 +934,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
             (Match (
                 call "Stdlib.Json.__objectFields" [Var "__source"; Var "__view"],
                 [ makeCase
-                      (PConstructor ("Some", Some (PVar "__object_fields")))
+                      (PConstructor ("Some", [PVar "__object_fields"]))
                       (call dictDecoder [Var "__source"; Var "__object_fields"; Var "__path"; empty])
                   makeCase PWildcard failure ]),
              nextState))
@@ -997,18 +973,18 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                     let objectBody =
                         Match (
                             call "Stdlib.Json.__enumCandidate" [Var "__source"; Var "__view"],
-                            [ makeCase (PConstructor ("EnumNoFields", None)) failure
+                            [ makeCase (PConstructor ("EnumNoFields", [])) failure
                               makeCase
                                   (PConstructor (
                                       "EnumOneField",
-                                      Some (PTuple [PVar "__case_name"; PVar "__case_raw"])))
+                                      [PVar "__case_name"; PVar "__case_raw"]))
                                   checkedOneField
                               makeCase
-                                  (PConstructor ("EnumManyFields", Some (PVar "__case_names")))
+                                  (PConstructor ("EnumManyFields", [PVar "__case_names"]))
                                   tooMany
                               makeCase PWildcard failure ])
                     (objectBody, nextState)))
-    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TEnumFields _ | TDict _ ->
+    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TDict _ ->
         Error $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
 
 let rec private mapExpr rewrite expr =
@@ -1037,7 +1013,7 @@ let rec private mapExpr rewrite expr =
         | RecordLiteral (name, fields) -> RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
         | RecordUpdate (record, fields) -> RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
         | RecordAccess (record, field) -> RecordAccess (recurse record, field)
-        | Constructor (reference, name, payload) -> Constructor (reference, name, Option.map recurse payload)
+        | Constructor (reference, name, fields) -> Constructor (reference, name, List.map recurse fields)
         | Match (value, cases) ->
             Match (recurse value, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
         | ListLiteral values -> ListLiteral (List.map recurse values)
@@ -1076,7 +1052,7 @@ let rewriteProgramWithSession
                     entries |> List.fold (fun state (key, value) -> capture value (capture key state)) collected
                 | RecordLiteral (_, fields) -> fields |> List.fold (fun s (_, e) -> capture e s) collected
                 | RecordUpdate (record, fields) -> fields |> List.fold (fun s (_, e) -> capture e s) (capture record collected)
-                | Constructor (_, _, payload) -> payload |> Option.map (fun e -> capture e collected) |> Option.defaultValue collected
+                | Constructor (_, _, fields) -> fields |> List.fold (fun state field -> capture field state) collected
                 | Match (value, cases) -> cases |> List.fold (fun s case -> capture case.Body (case.Guard |> Option.map (fun g -> capture g s) |> Option.defaultValue s)) (capture value collected)
                 | Lambda (_, _, body) -> capture body collected
                 | Apply (fn, values) | IndirectApply (fn, values) -> NonEmptyList.toList values |> List.fold (fun s e -> capture e s) (capture fn collected)
@@ -1200,10 +1176,10 @@ let rewriteProgramWithSession
                             Match (
                                 Var "__json_parse_result",
                                 [ makeCase
-                                      (PConstructor ("Ok", Some (PVar "__json_view")))
+                                      (PConstructor ("Ok", [PVar "__json_view"]))
                                       (call (decoderName concrete) [Var "__json_source"; Var "__json_view"; rootPath])
                                   makeCase
-                                      (PConstructor ("Error", Some PWildcard))
+                                      (PConstructor ("Error", [PWildcard]))
                                       (constructor "Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ])))
                 | _ -> expr
             let rewritten =

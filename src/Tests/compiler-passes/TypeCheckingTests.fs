@@ -96,8 +96,8 @@ let rec countMatches (expr: CheckedAST.Expr) : int =
             recordExpr :: (updates |> List.map snd)
         | CheckedAST.RecordAccess (recordExpr, _) ->
             [recordExpr]
-        | CheckedAST.Constructor (_, _, payload) ->
-            payload |> Option.toList
+        | CheckedAST.Constructor (_, _, fields) ->
+            fields
         | CheckedAST.Match (scrutinee, cases) ->
             scrutinee :: (cases |> List.map (fun c -> c.Body))
         | CheckedAST.Lambda (_, _, body) ->
@@ -121,8 +121,8 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
                 "ChoiceTc",
                 ["a"; "b"],
                 [
-                    { Name = "ChoiceLeftTc"; Payload = Some (TVar "a") }
-                    { Name = "ChoiceRightTc"; Payload = Some (TVar "b") }
+                    { Name = "ChoiceLeftTc"; Fields = [TVar "a"] }
+                    { Name = "ChoiceRightTc"; Fields = [TVar "b"] }
                 ]
             )
         )
@@ -130,10 +130,10 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
     let eqExpr =
         Let (
             LPVariable "a",
-            Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", Some (Int64Literal 1L)),
+            Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", [Int64Literal 1L]),
             Let (
                 LPVariable "b",
-                Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", Some (Int64Literal 1L)),
+                Constructor (UnresolvedConstructor (Some "ChoiceTc"), "ChoiceLeftTc", [Int64Literal 1L]),
                 BinOp (Eq, Var "a", Var "b")
             )
         )
@@ -256,9 +256,9 @@ let private expectDeclarationError (program: Program) (expectedMessage: string) 
 
 let testDuplicateNominalTypeDeclarationUsesLastOverlay () : TestResult =
     let program = Program [
-        TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "A"; Payload = None }]))
-        TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "B"; Payload = None }]))
-        Expression (Constructor (UnresolvedConstructor (Some "DuplicateNominalTc"), "B", None))
+        TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "A"; Fields = [] }]))
+        TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "B"; Fields = [] }]))
+        Expression (Constructor (UnresolvedConstructor (Some "DuplicateNominalTc"), "B", []))
     ]
     match checkPublicProgram program with
     | Ok (TSum ("DuplicateNominalTc", []), _) -> Ok ()
@@ -271,7 +271,7 @@ let testDuplicateConstructorDeclarationRejected () : TestResult =
             SumTypeDef (
                 "DuplicateCaseTc",
                 [],
-                [{ Name = "SameCaseTc"; Payload = None }; { Name = "SameCaseTc"; Payload = Some TInt64 }]
+                [{ Name = "SameCaseTc"; Fields = [] }; { Name = "SameCaseTc"; Fields = [TInt64] }]
             )
         )
         Expression UnitLiteral
@@ -280,11 +280,11 @@ let testDuplicateConstructorDeclarationRejected () : TestResult =
 
 let testDuplicateAndUndeclaredTypeParametersRejected () : TestResult =
     let duplicateProgram = Program [
-        TypeDef (SumTypeDef ("DuplicateParamTc", ["a"; "a"], [{ Name = "ParamCaseTc"; Payload = Some (TVar "a") }]))
+        TypeDef (SumTypeDef ("DuplicateParamTc", ["a"; "a"], [{ Name = "ParamCaseTc"; Fields = [TVar "a"] }]))
         Expression UnitLiteral
     ]
     let undeclaredProgram = Program [
-        TypeDef (SumTypeDef ("UndeclaredParamTc", ["a"], [{ Name = "ParamCaseTc"; Payload = Some (TVar "b") }]))
+        TypeDef (SumTypeDef ("UndeclaredParamTc", ["a"], [{ Name = "ParamCaseTc"; Fields = [TVar "b"] }]))
         Expression UnitLiteral
     ]
     expectDeclarationError duplicateProgram "Duplicate type parameter: a in DuplicateParamTc"
@@ -304,18 +304,18 @@ let testInvalidDeclarationTypeReferencesRejected () : TestResult =
             SumTypeDef (
                 "UnknownPayloadTc",
                 [],
-                [{ Name = "UnknownPayloadCaseTc"; Payload = Some (TRecord ("MissingTypeTc", [])) }]
+                [{ Name = "UnknownPayloadCaseTc"; Fields = [TRecord ("MissingTypeTc", [])] }]
             )
         )
         Expression UnitLiteral
     ]
     let wrongArity = Program [
-        TypeDef (SumTypeDef ("GenericTargetTc", ["a"], [{ Name = "GenericTargetCaseTc"; Payload = None }]))
+        TypeDef (SumTypeDef ("GenericTargetTc", ["a"], [{ Name = "GenericTargetCaseTc"; Fields = [] }]))
         TypeDef (
             SumTypeDef (
                 "WrongArityTc",
                 [],
-                [{ Name = "WrongArityCaseTc"; Payload = Some (TSum ("GenericTargetTc", [])) }]
+                [{ Name = "WrongArityCaseTc"; Fields = [TSum ("GenericTargetTc", [])] }]
             )
         )
         Expression UnitLiteral
@@ -326,8 +326,8 @@ let testInvalidDeclarationTypeReferencesRejected () : TestResult =
 
 let testConstructorIdentityCollisionRejected () : TestResult =
     Program [
-        TypeDef (SumTypeDef ("CollisionType151Tc", [], [{ Name = "CollisionCaseTc"; Payload = None }]))
-        TypeDef (SumTypeDef ("CollisionType155Tc", [], [{ Name = "CollisionCaseTc"; Payload = None }]))
+        TypeDef (SumTypeDef ("CollisionType151Tc", [], [{ Name = "CollisionCaseTc"; Fields = [] }]))
+        TypeDef (SumTypeDef ("CollisionType155Tc", [], [{ Name = "CollisionCaseTc"; Fields = [] }]))
         Expression UnitLiteral
     ]
     |> fun program ->

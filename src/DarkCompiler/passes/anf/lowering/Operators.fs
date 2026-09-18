@@ -263,8 +263,8 @@ let rec generateStructuralEquality
     | AST.TSum (typeName, _) ->
         let hasAnyPayload =
             variantLookup
-            |> Map.exists (fun _ (tName, _, _, payloadType) ->
-                tName = typeName && payloadType.IsSome)
+            |> Map.exists (fun _ (tName, _, _, fields) ->
+                tName = typeName && not (List.isEmpty fields))
 
         if not hasAnyPayload then
             let (cmpVar, vg') = ANF.freshVar varGen

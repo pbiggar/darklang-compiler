@@ -53,12 +53,12 @@ let internal checkResolvedProgramInternal
     // of mapping and merging the complete base registry again.
     let canonicalProgramVariantLookup =
         declarationSummary.VariantLookup
-        |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
+        |> Map.map (fun _ (typeName, typeParams, tag, fieldTypes) ->
             (typeName,
              typeParams,
              tag,
-             payloadType
-             |> Option.map (canonicalizeBareSumTypeRefsWithNames availableSumTypeNames)))
+             fieldTypes
+             |> List.map (canonicalizeBareSumTypeRefsWithNames availableSumTypeNames)))
 
     let canonicalVariantLookup =
         match baseEnv with

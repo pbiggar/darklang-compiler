@@ -63,8 +63,8 @@ let rec private materializeHelperCallsInExpr
         RecordUpdate (recurse recordExpr, updates |> List.map (fun (name, updateExpr) -> (name, recurse updateExpr)))
     | RecordAccess (recordExpr, fieldName) ->
         RecordAccess (recurse recordExpr, fieldName)
-    | Constructor (typeName, variantName, payload) ->
-        Constructor (typeName, variantName, payload |> Option.map recurse)
+    | Constructor (typeName, variantName, fields) ->
+        Constructor (typeName, variantName, fields |> List.map recurse)
     | Match (scrutinee, cases) ->
         Match (
             recurse scrutinee,

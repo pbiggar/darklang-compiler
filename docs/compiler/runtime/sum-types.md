@@ -58,12 +58,14 @@ OneTuple.OneTuple (1L, "one")
 
 ## Declaration and resolution model
 
-`AST.TEnumFields` preserves the difference between several enum fields and one
-tuple field. `AST.ConstructorReference` represents an unqualified reference,
-a source-qualified reference, or a resolved declaring module and type without
-an empty-string sentinel. Type checking predeclares all type names, validates
-type and case duplicates, generic parameters, empty declarations, and field
-duplicates, then resolves each constructor to its nominal declaring type.
+Constructor declarations, expressions, and patterns store their ordered fields
+directly as lists. An empty list is a nullary case, multiple list elements are
+multiple constructor fields, and a tuple type or expression in a singleton list
+is one tuple field. `AST.ConstructorReference` represents an unqualified
+reference, a source-qualified reference, or a resolved declaring module and
+type without an empty-string sentinel. Type checking predeclares all type names,
+validates type and case duplicates, generic parameters, empty declarations, and
+field duplicates, then resolves each constructor to its nominal declaring type.
 
 Case names may repeat in different types. An unqualified reference is rejected
 when more than one visible nominal type owns the case; qualification selects a

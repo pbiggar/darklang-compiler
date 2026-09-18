@@ -66,7 +66,7 @@ and Expr =
     | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
     | RecordUpdate of record:Expr * updates:(string * Expr) list
     | RecordAccess of record:Expr * fieldName:string
-    | Constructor of reference:ConstructorReference * variantName:string * payload:Expr option
+    | Constructor of reference:ConstructorReference * variantName:string * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list
     | ListLiteral of Expr list
     | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:AST.Type option * body:Expr
@@ -267,11 +267,11 @@ let rec ofTypedExpr (location: string) (expr: AST.Expr) : Result<Expr, string> =
         map2 (fun record updates -> RecordUpdate (record, updates)) (convert record) (convertFields updates)
     | AST.RecordAccess (record, fieldName) ->
         convert record |> Result.map (fun value -> RecordAccess (value, fieldName))
-    | AST.Constructor (reference, variantName, payload) ->
+    | AST.Constructor (reference, variantName, fields) ->
         map2
-            (fun reference payload -> Constructor (reference, variantName, payload))
+            (fun reference fields -> Constructor (reference, variantName, fields))
             (convertConstructorReference location reference)
-            (payload |> Option.map convert |> sequenceOption)
+            (convertList fields)
     | AST.Match (scrutinee, cases) ->
         let convertCase (case: AST.MatchCase) : Result<MatchCase, string> =
             map2

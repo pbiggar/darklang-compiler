@@ -378,8 +378,6 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
             match tryGetType ctx tid with
             | Some (AST.TTuple elemTypes) when index < List.length elemTypes ->
                 Some (List.item index elemTypes)
-            | Some (AST.TEnumFields fieldTypes) when index < List.length fieldTypes ->
-                Some (List.item index fieldTypes)
             | Some (AST.TRecord (typeName, _)) ->
                 // Record fields - look up field type
                 match Map.tryFind typeName ctx.TypeReg with

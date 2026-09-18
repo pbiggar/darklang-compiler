@@ -100,7 +100,7 @@ let rec private containsIndirectApply (expr: CheckedAST.Expr) : bool =
     | CheckedAST.RecordUpdate (record, updates) ->
         containsIndirectApply record || (updates |> List.map snd |> anyExpr)
     | CheckedAST.RecordAccess (record, _) -> containsIndirectApply record
-    | CheckedAST.Constructor (_, _, payload) -> Option.exists containsIndirectApply payload
+    | CheckedAST.Constructor (_, _, fields) -> List.exists containsIndirectApply fields
     | CheckedAST.Match (scrutinee, cases) ->
         containsIndirectApply scrutinee
         || (cases
@@ -147,8 +147,7 @@ let private collectEscapingFunctionParams
                 collect visited elementType
             | AST.TDict (keyType, valueType) ->
                 Set.union (collect visited keyType) (collect visited valueType)
-            | AST.TTuple elementTypes
-            | AST.TEnumFields elementTypes ->
+            | AST.TTuple elementTypes ->
                 collectMany elementTypes
             | AST.TRecord (typeName, typeArgs) ->
                 match Map.tryFind typeName typeReg with
@@ -163,18 +162,16 @@ let private collectEscapingFunctionParams
             | AST.TSum (typeName, typeArgs) ->
                 variantLookup
                 |> Map.toList
-                |> List.choose (fun (_, (declaredTypeName, typeParams, _, payloadType)) ->
+                |> List.collect (fun (_, (declaredTypeName, typeParams, _, fieldTypes)) ->
                     if declaredTypeName <> typeName then
-                        None
+                        []
                     else
-                        payloadType
-                        |> Option.map (fun payload ->
-                            let substitution =
-                                if List.length typeParams = List.length typeArgs then
-                                    List.zip typeParams typeArgs |> Map.ofList
-                                else
-                                    Map.empty
-                            applySubstToType substitution payload))
+                        let substitution =
+                            if List.length typeParams = List.length typeArgs then
+                                List.zip typeParams typeArgs |> Map.ofList
+                            else
+                                Map.empty
+                        fieldTypes |> List.map (applySubstToType substitution))
                 |> List.distinct
                 |> collectMany
             | AST.TInt64 | AST.TInt128 | AST.TInt | AST.TInt32 | AST.TInt16 | AST.TInt8
@@ -194,7 +191,7 @@ let prepareLambdaLiftBaseTypes
     let sumTypeNames = sumTypeNamesFromVariantLookup baseVariantLookup
     let canonicalVariantLookup =
         baseVariantLookup
-        |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
+        |> Map.map (fun _ (typeName, typeParams, tag, fieldTypes) ->
             let isCatalogBoundaryType =
                 typeName.StartsWith("Darklang.LanguageTools.ProgramTypes.")
                 || typeName.StartsWith("Darklang.LanguageTools.RuntimeTypes.")
@@ -202,10 +199,10 @@ let prepareLambdaLiftBaseTypes
              typeParams,
              tag,
              if isCatalogBoundaryType then
-                 payloadType
-                 |> Option.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)
+                 fieldTypes
+                 |> List.map (canonicalizeBareSumTypeRefsWithNames sumTypeNames)
              else
-                 payloadType))
+                 fieldTypes))
     let recordNames = baseTypeReg |> Map.keys |> Set.ofSeq
     let canonicalTypeReg =
         baseTypeReg
@@ -270,7 +267,7 @@ let rec liftLambdasInProgram
                         AST.constructorRuntimeIdentity typeName variant.Name
                     else
                         ordinal
-                let info = (typeName, typeParams, tag, variant.Payload)
+                let info = (typeName, typeParams, tag, variant.Fields)
                 let withBare =
                     if Map.containsKey variant.Name typeLookup then typeLookup
                     else Map.add variant.Name info typeLookup
@@ -285,7 +282,7 @@ let rec liftLambdasInProgram
             baseVariantLookup
         else
             rawMergedVariantLookup
-            |> Map.map (fun _ (typeName, typeParams, tag, payloadType) ->
+            |> Map.map (fun _ (typeName, typeParams, tag, fieldTypes) ->
                 let isCatalogBoundaryType =
                     typeName.StartsWith("Darklang.LanguageTools.ProgramTypes.")
                     || typeName.StartsWith("Darklang.LanguageTools.RuntimeTypes.")
@@ -293,10 +290,10 @@ let rec liftLambdasInProgram
                  typeParams,
                  tag,
                  if isCatalogBoundaryType then
-                     payloadType
-                     |> Option.map (canonicalizeBareSumTypeRefsWithNames mergedSumTypeNames)
+                     fieldTypes
+                     |> List.map (canonicalizeBareSumTypeRefsWithNames mergedSumTypeNames)
                  else
-                     payloadType))
+                     fieldTypes))
     let canonicalMergedTypeReg =
         if Map.isEmpty typeReg && Map.isEmpty variantLookup then
             baseTypeReg
@@ -486,7 +483,7 @@ and collectFuncRefsInExpr (expr: CheckedAST.Expr) (knownFuncs: Map<string, (stri
             entries |> List.collect (fun (key, value) -> [key; value]) |> collectChildren
         | CheckedAST.RecordLiteral (_, fields) -> fields |> List.map snd |> collectChildren
         | CheckedAST.RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd))
-        | CheckedAST.Constructor (_, _, payload) -> payload |> Option.map (collect bound) |> Option.defaultValue []
+        | CheckedAST.Constructor (_, _, fields) -> fields |> List.collect (collect bound)
         | CheckedAST.Match (scrutinee, cases) ->
             collect bound scrutinee
             @ (cases
@@ -576,8 +573,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: CheckedAST.Expr) : Ch
         | CheckedAST.RecordUpdate (record, fields) ->
             CheckedAST.RecordUpdate (replace bound record, fields |> List.map (fun (name, value) -> (name, replace bound value)))
         | CheckedAST.RecordAccess (value, field) -> CheckedAST.RecordAccess (replace bound value, field)
-        | CheckedAST.Constructor (typeName, variant, payload) ->
-            CheckedAST.Constructor (typeName, variant, payload |> Option.map (replace bound))
+        | CheckedAST.Constructor (typeName, variant, fields) ->
+            CheckedAST.Constructor (typeName, variant, fields |> List.map (replace bound))
         | CheckedAST.Match (scrutinee, cases) ->
             let cases' =
                 cases

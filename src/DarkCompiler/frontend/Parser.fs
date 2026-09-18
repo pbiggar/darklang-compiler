@@ -1042,7 +1042,7 @@ let parseRecordFields (tokens: Token list) (acc: (string * Type) list) : Result<
 
 /// Parse sum type variants: Variant1 | Variant2 of Type | ...
 /// Returns list of variants and remaining tokens
-let private parseVariantPayloadType (tokens: Token list) : Result<Type * Token list, string> =
+let private parseVariantFieldTypes (tokens: Token list) : Result<Type list * Token list, string> =
     let rec stripLabels (expectLabel: bool) (remainingTokens: Token list) (acc: Token list) : Token list =
         match remainingTokens with
         | TIdent _ :: TColon :: rest when expectLabel ->
@@ -1063,13 +1063,13 @@ let private parseVariantPayloadType (tokens: Token list) : Result<Type * Token l
     parseType normalizedTokens
     |> Result.map (fun (payloadType, remaining) ->
         match isParenthesizedField, payloadType with
-        | false, TTuple fields -> (TEnumFields fields, remaining)
-        | _ -> (payloadType, remaining))
+        | false, TTuple fields -> (fields, remaining)
+        | _ -> ([payloadType], remaining))
 
-let private parseVariantPayloadTypeWithContext
+let private parseVariantFieldTypesWithContext
     (typeParamSet: Set<string>)
     (tokens: Token list)
-    : Result<Type * Token list, string> =
+    : Result<Type list * Token list, string> =
     let rec stripLabels (expectLabel: bool) (remainingTokens: Token list) (acc: Token list) : Token list =
         match remainingTokens with
         | TIdent _ :: TColon :: rest when expectLabel ->
@@ -1090,16 +1090,16 @@ let private parseVariantPayloadTypeWithContext
     parseTypeWithContext typeParamSet normalizedTokens
     |> Result.map (fun (payloadType, remaining) ->
         match isParenthesizedField, payloadType with
-        | false, TTuple fields -> (TEnumFields fields, remaining)
-        | _ -> (payloadType, remaining))
+        | false, TTuple fields -> (fields, remaining)
+        | _ -> ([payloadType], remaining))
 
 let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
     match tokens with
     | TIdent variantName :: TOf :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Variant with payload: Variant of Type
-        parseVariantPayloadType rest
-        |> Result.bind (fun (payloadType, afterType) ->
-            let variant = { Name = variantName; Payload = Some payloadType }
+        parseVariantFieldTypes rest
+        |> Result.bind (fun (fields, afterType) ->
+            let variant = { Name = variantName; Fields = fields }
             match afterType with
             | TBar :: rest' ->
                 // More variants
@@ -1109,7 +1109,7 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
                 Ok (List.rev (variant :: acc), afterType))
     | TIdent variantName :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Simple enum variant (no payload)
-        let variant = { Name = variantName; Payload = None }
+        let variant = { Name = variantName; Fields = [] }
         match rest with
         | TBar :: rest' ->
             // More variants
@@ -1126,9 +1126,9 @@ let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) 
     match tokens with
     | TIdent variantName :: TOf :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Variant with payload: Variant of Type
-        parseVariantPayloadTypeWithContext typeParamSet rest
-        |> Result.bind (fun (payloadType, afterType) ->
-            let variant = { Name = variantName; Payload = Some payloadType }
+        parseVariantFieldTypesWithContext typeParamSet rest
+        |> Result.bind (fun (fields, afterType) ->
+            let variant = { Name = variantName; Fields = fields }
             match afterType with
             | TBar :: rest' ->
                 // More variants
@@ -1138,7 +1138,7 @@ let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) 
                 Ok (List.rev (variant :: acc), afterType))
     | TIdent variantName :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
         // Simple enum variant (no payload)
-        let variant = { Name = variantName; Payload = None }
+        let variant = { Name = variantName; Fields = [] }
         match rest with
         | TBar :: rest' ->
             // More variants
@@ -1177,9 +1177,9 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 // Accept the established unbarred first payload variant form:
                 // `type Result = Ok of value | Error of error`.
                 let typeParamSet = Set.ofList typeParams
-                parseVariantPayloadTypeWithContext typeParamSet bodyRest
-                |> Result.bind (fun (payloadType, afterType) ->
-                    let firstVariant = { Name = variantName; Payload = Some payloadType }
+                parseVariantFieldTypesWithContext typeParamSet bodyRest
+                |> Result.bind (fun (fields, afterType) ->
+                    let firstVariant = { Name = variantName; Fields = fields }
                     match afterType with
                     | TBar :: rest' ->
                         parseVariantsWithContext typeParams rest' [firstVariant]
@@ -1189,7 +1189,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                         Ok (SumTypeDef (typeName, typeParams, [firstVariant]), afterType))
             | TEquals :: TIdent variantName :: TBar :: bodyRest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
                 // Accept the corresponding unbarred first nullary variant.
-                let firstVariant = { Name = variantName; Payload = None }
+                let firstVariant = { Name = variantName; Fields = [] }
                 parseVariantsWithContext typeParams bodyRest [firstVariant]
                 |> Result.map (fun (variants, remaining) ->
                     (SumTypeDef (typeName, typeParams, variants), remaining))
@@ -1460,21 +1460,25 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
             parseListPattern rest []
         | TIdent typeName :: TLBrace :: _ when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             Error "Record patterns are not supported"
-        | TIdent name :: TAdjacentLParen :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
-            // Upstream constructor patterns accept an adjacent parenthesized
-            // payload. The parentheses group one payload pattern; commas inside
-            // them form that payload's tuple pattern.
-            parseTuplePattern rest []
-            |> Result.map (fun (payloadPattern, remaining) ->
-                (PConstructor (name, Some payloadPattern), remaining))
+        | TIdent name :: (TAdjacentLParen | TLParen) :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
+            let rec parseFields remaining acc =
+                parsePattern remaining
+                |> Result.bind (fun (field, afterField) ->
+                    match afterField with
+                    | TComma :: afterComma -> parseFields afterComma (field :: acc)
+                    | TRParen :: afterParen -> Ok (List.rev (field :: acc), afterParen)
+                    | _ -> Error "Expected ',' or ')' after constructor pattern field")
+            parseFields rest []
+            |> Result.map (fun (fields, remaining) ->
+                (PConstructor (name, fields), remaining))
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor pattern, optionally with a space-applied payload: Some x
             if canStartPatternPayload rest then
                 parsePattern rest
                 |> Result.map (fun (payloadPattern, remaining) ->
-                    (PConstructor (name, Some payloadPattern), remaining))
+                    (PConstructor (name, [payloadPattern]), remaining))
             else
-                Ok (PConstructor (name, None), rest)
+                Ok (PConstructor (name, []), rest)
         | TIdent name :: rest ->
             // Variable pattern: x (binds the value)
             Ok (PVar name, rest)
@@ -1680,11 +1684,8 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | Call (funcName, args) -> Call (funcName, NonEmptyList.snoc args argExpr)
         | TypeApp (funcName, typeArgs, args) ->
             TypeApp (funcName, typeArgs, NonEmptyList.snoc args argExpr)
-        | Constructor (typeName, variantName, None) -> Constructor (typeName, variantName, Some argExpr)
-        | Constructor (typeName, variantName, Some (TupleLiteral existingFields)) ->
-            Constructor (typeName, variantName, Some (TupleLiteral (existingFields @ [argExpr])))
-        | Constructor (typeName, variantName, Some existingField) ->
-            Constructor (typeName, variantName, Some (TupleLiteral [existingField; argExpr]))
+        | Constructor (typeName, variantName, fields) ->
+            Constructor (typeName, variantName, fields @ [argExpr])
         | Apply (funcExpr, existingArgs) ->
             match funcExpr with
             // Preserve uncurried lambda applications as a single Apply node
@@ -1965,12 +1966,8 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                                     TypeApp (funcName, typeArgs, NonEmptyList.singleton leftExpr)
                                 | _ ->
                                     TypeApp (funcName, typeArgs, NonEmptyList.cons leftExpr args)
-                            | Constructor (reference, variantName, None) ->
-                                Constructor (reference, variantName, Some leftExpr)
-                            | Constructor (reference, variantName, Some (TupleLiteral fields)) ->
-                                Constructor (reference, variantName, Some (TupleLiteral (leftExpr :: fields)))
-                            | Constructor (reference, variantName, Some field) ->
-                                Constructor (reference, variantName, Some (TupleLiteral [leftExpr; field]))
+                            | Constructor (reference, variantName, fields) ->
+                                Constructor (reference, variantName, leftExpr :: fields)
                             | _ ->
                                 // Lambda or other expression: apply left to it
                                 Apply (right, NonEmptyList.singleton leftExpr)
@@ -2290,7 +2287,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 // normal left association: `f None None` is a two-argument call,
                 // while a leading `Some value` still applies value to Some.
                 // Parenthesized constructor syntax is handled by parsePostfix.
-                Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, None), afterQualified)
+                Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, []), afterQualified)
             | TLParen :: TRParen :: rest ->
                 // Qualified unit-argument call: Stdlib.Module.fn ()
                 Ok (Call (fullName, NonEmptyList.singleton UnitLiteral), rest)
@@ -2344,7 +2341,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             | Ok _ ->
                 Error $"Expected record literal after type arguments for '{typeName}'"
             | Error _ ->
-                Ok (Constructor (UnresolvedConstructor None, typeName, None), TLt :: typeArgsStart)
+                Ok (Constructor (UnresolvedConstructor None, typeName, []), TLt :: typeArgsStart)
         | TIdent "Dict" :: TLBrace :: rest ->
             parseDictLiteralFields rest []
         | TIdent typeName :: TLBrace :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
@@ -2353,7 +2350,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             // Constructor payloads use the same left-associative application
             // path as every other callable expression.
-            Ok (Constructor (UnresolvedConstructor None, name, None), rest)
+            Ok (Constructor (UnresolvedConstructor None, name, []), rest)
         | TIdent name :: rest ->
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)
@@ -2637,13 +2634,21 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | TRParen :: tail -> hasTopLevelComma (depth - 1) tail
                 | _ :: tail -> hasTopLevelComma depth tail
 
+            let rec parseConstructorFields remaining acc =
+                parseExpr remaining
+                |> Result.bind (fun (field, afterField) ->
+                    match afterField with
+                    | TComma :: afterComma -> parseConstructorFields afterComma (field :: acc)
+                    | TRParen :: afterParen -> Ok (List.rev (field :: acc), afterParen)
+                    | _ -> Error "Expected ',' or ')' after constructor field")
+
             match expr, rest with
             | _, TRParen :: _ ->
                 Error "Parenthesized call syntax is not supported; use 'f ()'"
-            | Constructor _, _ ->
-                // Upstream constructor expressions retain `Type.Variant(a, b)`;
-                // parse the parenthesized fields as their tuple payload.
-                Ok (expr, TLParen :: rest)
+            | Constructor (reference, variantName, existingFields), _ ->
+                parseConstructorFields rest []
+                |> Result.bind (fun (fields, remaining) ->
+                    parsePostfix (Constructor (reference, variantName, existingFields @ fields)) remaining)
             | _, _ when hasTopLevelComma 0 rest ->
                 Error "Parenthesized call syntax is not supported; use 'f a b'"
             | _, _ ->
@@ -2753,10 +2758,9 @@ let private validateNoInternalIdentifier (name: string) : Result<unit, string> =
 let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
     match pattern with
     | PVar name -> validateNoInternalIdentifier name
-    | PConstructor (_, payload) ->
-        match payload with
-        | None -> Ok ()
-        | Some inner -> validatePattern inner
+    | PConstructor (_, fields) ->
+        fields
+        |> List.fold (fun acc field -> Result.bind (fun () -> validatePattern field) acc) (Ok ())
     | PTuple patterns ->
         patterns
         |> List.fold (fun acc p -> Result.bind (fun () -> validatePattern p) acc) (Ok ())
@@ -2848,10 +2852,9 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         |> Result.bind (fun () ->
             updates |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ()))
     | RecordAccess (recordExpr, _) -> validateExpr recordExpr
-    | Constructor (_, _, payload) ->
-        match payload with
-        | None -> Ok ()
-        | Some inner -> validateExpr inner
+    | Constructor (_, _, fields) ->
+        fields
+        |> List.fold (fun acc field -> Result.bind (fun () -> validateExpr field) acc) (Ok ())
     | Match (scrutinee, cases) ->
         let validateCase (case: MatchCase) : Result<unit, string> =
             let patternsResult =

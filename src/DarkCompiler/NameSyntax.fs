@@ -388,7 +388,8 @@ let private assignParsedRecursiveIdentities (Program topLevels) : Program =
         | RecordUpdate (record, fields) ->
             RecordUpdate (child 0 record, fields |> List.mapi (fun index (field, value) -> (field, child (index + 1) value)))
         | RecordAccess (record, field) -> RecordAccess (child 0 record, field)
-        | Constructor (reference, name, payload) -> Constructor (reference, name, payload |> Option.map (child 0))
+        | Constructor (reference, name, fields) ->
+            Constructor (reference, name, fields |> List.mapi child)
         | Match (scrutinee, cases) ->
             Match (
                 child 0 scrutinee,

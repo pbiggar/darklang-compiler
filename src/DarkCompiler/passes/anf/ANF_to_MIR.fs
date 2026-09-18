@@ -28,7 +28,12 @@ module ANF_to_MIR
 open ResultList
 
 /// Helper to create VariantInfo record
-let private mkVariantInfo (name: string) (tag: int) (payload: AST.Type option) : MIR.VariantInfo =
+let private mkVariantInfo (name: string) (tag: int) (fields: AST.Type list) : MIR.VariantInfo =
+    let payload =
+        match fields with
+        | [] -> None
+        | [field] -> Some field
+        | _ -> Some (AST.TTuple fields)
     { MIR.VariantInfo.Name = name; MIR.VariantInfo.Tag = tag; MIR.VariantInfo.Payload = payload }
 
 /// Helper to create TypeVariants record

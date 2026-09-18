@@ -78,8 +78,8 @@ let rec private collectHelperTypes
     | CheckedAST.RecordLiteral (_, entries) -> entries |> List.map snd |> combine
     | CheckedAST.RecordUpdate (record, updates) ->
         combine (record :: (updates |> List.map snd))
-    | CheckedAST.Constructor (_, _, payload) ->
-        payload |> Option.map collect |> Option.defaultValue (Set.empty, Set.empty)
+    | CheckedAST.Constructor (_, _, fields) ->
+        combine fields
     | CheckedAST.Match (scrutinee, cases) ->
         let caseExpressions =
             cases
@@ -154,8 +154,8 @@ let rec private rewriteHelperCalls
     | CheckedAST.RecordUpdate (record, updates) ->
         CheckedAST.RecordUpdate (recurse record, updates |> List.map (fun (name, value) -> name, recurse value))
     | CheckedAST.RecordAccess (record, fieldName) -> CheckedAST.RecordAccess (recurse record, fieldName)
-    | CheckedAST.Constructor (reference, variantName, payload) ->
-        CheckedAST.Constructor (reference, variantName, Option.map recurse payload)
+    | CheckedAST.Constructor (reference, variantName, fields) ->
+        CheckedAST.Constructor (reference, variantName, List.map recurse fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (
             recurse scrutinee,

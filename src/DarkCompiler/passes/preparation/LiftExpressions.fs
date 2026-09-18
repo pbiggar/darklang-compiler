@@ -122,12 +122,9 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
     | CheckedAST.RecordAccess (record, fieldName) ->
         liftLambdasInExpr record state
         |> Result.map (fun (record', state') -> (CheckedAST.RecordAccess (record', fieldName), state'))
-    | CheckedAST.Constructor (typeName, variantName, payload) ->
-        match payload with
-        | None -> Ok (expr, state)
-        | Some p ->
-            liftLambdasInExpr p state
-            |> Result.map (fun (p', state') -> (CheckedAST.Constructor (typeName, variantName, Some p'), state'))
+    | CheckedAST.Constructor (typeName, variantName, fields) ->
+        liftLambdasInList fields state
+        |> Result.map (fun (fields', state') -> (CheckedAST.Constructor (typeName, variantName, fields'), state'))
     | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeType =
             simpleInferType

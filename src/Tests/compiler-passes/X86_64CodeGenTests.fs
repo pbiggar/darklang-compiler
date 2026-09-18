@@ -42,8 +42,7 @@ let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegist
         typeArgs
         |> List.map inferFixtureVariantsFromType
         |> List.fold mergeFixtureVariantRegistries self
-    | AST.TTuple fields
-    | AST.TEnumFields fields ->
+    | AST.TTuple fields ->
         fields
         |> List.map inferFixtureVariantsFromType
         |> List.fold mergeFixtureVariantRegistries Map.empty

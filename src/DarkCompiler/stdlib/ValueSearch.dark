@@ -44,8 +44,8 @@ let findByType<'value> (branchId: String) (targetNamespace: String) (targetTypeH
     let runtimeHash = Darklang.LanguageTools.RuntimeTypes.Hash.Hash (Darklang.LanguageTools.ProgramTypes.hashToString targetTypeHash) in
     let valueType =
         Darklang.LanguageTools.RuntimeTypes.ValueType.Known (
-            Darklang.LanguageTools.RuntimeTypes.KnownType.KTCustomType (
-                (Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName.Package runtimeHash,
-                 []))) in
+            Darklang.LanguageTools.RuntimeTypes.KnownType.KTCustomType(
+                Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName.Package runtimeHash,
+                [])) in
     let valueHashes = Builtin.pmFindValuesByValueType valueType in
     Darklang.Stdlib.ValueSearch.__filterValues<value> branchId namespaceParts valueHashes

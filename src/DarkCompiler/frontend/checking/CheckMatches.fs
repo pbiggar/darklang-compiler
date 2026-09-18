@@ -100,10 +100,10 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
             | PChar _ -> ensureLiteralType TChar
             | PFloat _ -> ensureLiteralType TFloat64
             | PVar name -> Ok [(name, patternType)]
-            | PConstructor (variantName, payloadPattern) ->
+            | PConstructor (variantName, fieldPatterns) ->
                 match Map.tryFind variantName variantLookup with
                 | None -> Error (GenericError $"Unknown variant in pattern: {variantName}")
-                | Some (typeName, typeParams, _, payloadType) ->
+                | Some (typeName, typeParams, _, fieldTypes) ->
                     // Get type arguments from scrutinee type to substitute into payload type
                     let typeArgs =
                         match patternType with
@@ -115,32 +115,32 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                             List.zip typeParams typeArgs |> Map.ofList
                         else
                             Map.empty
-                    match payloadPattern, payloadType with
-                    | None, None -> Ok []
-                    | None, Some _ ->
-                        // Pattern omitted payload for a payload-carrying variant.
-                        // Treat as a non-binding pattern; match lowering will make it non-matching.
-                        Ok []
-                    | Some innerPattern, Some pType ->
-                        // Apply substitution to get concrete payload type
-                        let concretePayloadType =
-                            pType
-                            |> applySubst subst
-                            |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
-                            |> function
-                                | TEnumFields fieldTypes -> TTuple fieldTypes
-                                | other -> other
-
-                        extractPatternBindings innerPattern concretePayloadType allowNoMatchForKnownListLengthMismatch
-                    | Some _, None ->
-                        // Pattern supplied payload for a nullary variant.
-                        // Treat as a non-binding pattern; match lowering will make it non-matching.
-                        Ok []
+                    if List.length fieldPatterns <> List.length fieldTypes then
+                        Error (
+                            GenericError
+                                $"Expected {List.length fieldTypes} fields in {typeName}.`{variantName}` pattern, but got {List.length fieldPatterns}"
+                        )
+                    else
+                        List.zip fieldPatterns fieldTypes
+                        |> List.map (fun (fieldPattern, fieldType) ->
+                            let concreteFieldType =
+                                fieldType
+                                |> applySubst subst
+                                |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
+                            extractPatternBindings
+                                fieldPattern
+                                concreteFieldType
+                                allowNoMatchForKnownListLengthMismatch)
+                        |> List.fold (fun acc result ->
+                            match acc, result with
+                            | Ok bindings, Ok more -> Ok (bindings @ more)
+                            | Error error, _ -> Error error
+                            | _, Error error -> Error error) (Ok [])
             | PTuple patterns ->
                 let rec containsVariableBinding (innerPattern: Pattern) : bool =
                     match innerPattern with
                     | PVar _ -> true
-                    | PConstructor (_, Some payloadPattern) -> containsVariableBinding payloadPattern
+                    | PConstructor (_, fields) -> List.exists containsVariableBinding fields
                     | PTuple nestedPatterns
                     | PList nestedPatterns ->
                         nestedPatterns |> List.exists containsVariableBinding
@@ -164,8 +164,6 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 match resolvedPatternType with
                 | TTuple elementTypes when List.length patterns = List.length elementTypes ->
                     collectTupleBindingsWithTypes elementTypes
-                | TEnumFields elementTypes when List.length patterns = List.length elementTypes ->
-                    collectTupleBindingsWithTypes elementTypes
                 | TVar tupleTypeVar ->
                     let unresolvedElementTypes =
                         patterns
@@ -174,9 +172,6 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 | TTuple _ ->
                     // Tuple arity mismatch in pattern should be treated as a non-match.
                     // Match lowering emits a false condition for this pattern shape.
-                    Ok []
-                | TEnumFields _ ->
-                    // As above, a field-count mismatch is a non-matching enum case.
                     Ok []
                 | _ ->
                     if isRuntimeErrorType resolvedPatternType then
@@ -370,10 +365,8 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 []
             | PVar name ->
                 [name]
-            | PConstructor (_, payloadOpt) ->
-                match payloadOpt with
-                | Some payloadPattern -> patternBindingNames payloadPattern
-                | None -> []
+            | PConstructor (_, fields) ->
+                fields |> List.collect patternBindingNames
             | PTuple patterns
             | PList patterns ->
                 patterns |> List.collect patternBindingNames
@@ -517,17 +510,16 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                             patternDefinitelyMatchesExpr innerPattern innerValue)
                     let tailStatus = patternDefinitelyMatchesExpr tailPattern (ListLiteral tailValues)
                     combinePatternMatchStatuses (headStatuses @ [tailStatus])
-            | PConstructor (patternVariantName, patternPayload), Constructor (_, valueVariantName, valuePayload) ->
+            | PConstructor (patternVariantName, patternFields), Constructor (_, valueVariantName, valueFields) ->
                 if not (variantNamesMatch patternVariantName valueVariantName) then
                     Some false
+                elif List.length patternFields <> List.length valueFields then
+                    Some false
                 else
-                    match patternPayload, valuePayload with
-                    | None, None ->
-                        Some true
-                    | Some patternPayloadExpr, Some valuePayloadExpr ->
-                        patternDefinitelyMatchesExpr patternPayloadExpr valuePayloadExpr
-                    | _ ->
-                        Some false
+                    List.zip patternFields valueFields
+                    |> List.map (fun (fieldPattern, fieldValue) ->
+                        patternDefinitelyMatchesExpr fieldPattern fieldValue)
+                    |> combinePatternMatchStatuses
             | _ ->
                 None
 
@@ -581,8 +573,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
             | PVar _, _
             | PWildcard, _
             | PUnit, TUnit -> true
-            | PTuple patterns, TTuple elementTypes
-            | PTuple patterns, TEnumFields elementTypes when List.length patterns = List.length elementTypes ->
+            | PTuple patterns, TTuple elementTypes when List.length patterns = List.length elementTypes ->
                 List.zip patterns elementTypes
                 |> List.forall (fun (innerPattern, elementType) ->
                     patternCoversType innerPattern elementType)
@@ -621,29 +612,26 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
             || rightName = $"{leftName}.{lastNameSegment leftName}"
             || leftName = $"{rightName}.{lastNameSegment rightName}"
 
-        let instantiateVariantPayloadForExhaustiveness
+        let instantiateVariantFieldsForExhaustiveness
             (typeParams: string list)
             (typeArgs: Type list)
-            (payloadType: Type option)
-            : Type option =
+            (fieldTypes: Type list)
+            : Type list =
             let substitution =
                 if List.length typeParams = List.length typeArgs then
                     List.zip typeParams typeArgs |> Map.ofList
                 else
                     Map.empty
-            payloadType
-            |> Option.map (fun payload ->
-                payload
+            fieldTypes
+            |> List.map (fun field ->
+                field
                 |> applySubst substitution
-                |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
-                |> function
-                    | TEnumFields fields -> TTuple fields
-                    | other -> other)
+                |> canonicalizeBareSumTypeRefsWithNames sumTypeNames)
 
         let variantsForExhaustiveness
             (sumTypeName: string)
             (sumTypeArgs: Type list)
-            : (string * Type option) list =
+            : (string * Type list) list =
             let sumInfo =
                 match Map.tryFind sumTypeName indexedSumTypeReg with
                 | Some info -> Some info
@@ -661,10 +649,10 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 info.Variants
                 |> List.map (fun variant ->
                     (variant.Name,
-                     instantiateVariantPayloadForExhaustiveness
+                     instantiateVariantFieldsForExhaustiveness
                          info.TypeParams
                          sumTypeArgs
-                         variant.Payload))
+                         variant.Fields))
 
         // Tuple matches are decision matrices. Split each finite head type
         // into its public constructors, then prove that the remaining
@@ -697,18 +685,18 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     let variants = variantsForExhaustiveness sumTypeName sumTypeArgs
                     variants <> []
                     && variants
-                       |> List.forall (fun (variantName, payloadType) ->
+                       |> List.forall (fun (variantName, fieldTypes) ->
                            let rowsForVariant =
                                rows
                                |> List.choose (function
                                    | (PWildcard | PVar _) :: rest -> Some rest
-                                   | PConstructor (patternName, patternPayload) :: rest
+                                   | PConstructor (patternName, fieldPatterns) :: rest
                                        when variantNamesMatchForExhaustiveness patternName variantName ->
-                                           match patternPayload, payloadType with
-                                           | None, None -> Some rest
-                                           | Some payloadPattern, Some payloadType
-                                               when payloadPatternCoversType payloadPattern payloadType -> Some rest
-                                           | _ -> None
+                                           if List.length fieldPatterns = List.length fieldTypes
+                                              && List.forall2 payloadPatternCoversType fieldPatterns fieldTypes then
+                                               Some rest
+                                           else
+                                               None
                                    | _ -> None)
                            tupleDecisionMatrixIsExhaustive restTypes rowsForVariant)
                 | _ ->
@@ -760,34 +748,25 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     | [] -> false
                     | minimum :: _ ->
                         [0 .. minimum - 1] |> List.forall (fun length -> Set.contains length exactLengths)
-                | TTuple elementTypes
-                | TEnumFields elementTypes ->
+                | TTuple elementTypes ->
                     tupleMatchIsExhaustive elementTypes patterns
                 | TSum (sumTypeName, sumTypeArgs) ->
                     let variants = variantsForExhaustiveness sumTypeName sumTypeArgs
                     variants <> []
                     && variants
-                       |> List.forall (fun (variantName, payloadType) ->
-                           let matchingPayloads =
+                       |> List.forall (fun (variantName, fieldTypes) ->
+                           let matchingFields =
                                patterns
                                |> List.choose (function
-                                   | PConstructor (patternName, payloadPattern)
+                                   | PConstructor (patternName, fieldPatterns)
                                        when variantNamesMatchForExhaustiveness patternName variantName ->
-                                           Some payloadPattern
+                                           Some fieldPatterns
                                    | _ -> None)
-                           match payloadType with
-                           | None -> matchingPayloads |> List.exists Option.isNone
-                           | Some payload ->
-                               let coversPayloadDirectly =
-                                   matchingPayloads
-                                   |> List.exists (function
-                                       | Some payloadPattern ->
-                                           payloadPatternCoversType payloadPattern payload
-                                       | None -> false)
-                               coversPayloadDirectly
-                               || (matchingPayloads
-                                   |> List.choose id
-                                   |> patternsCoverType payload))
+                           matchingFields
+                           |> List.exists (fun fields ->
+                               List.length fields = List.length fieldTypes
+                               && List.forall2 payloadPatternCoversType fields fieldTypes)
+                           || tupleDecisionMatrixIsExhaustive fieldTypes matchingFields)
                 | _ -> false
 
         let rec listPatternCoverage (elementType: Type) (pattern: Pattern) : Set<int> * int option =

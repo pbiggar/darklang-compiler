@@ -83,9 +83,6 @@ let rcSourceTypeFingerprint (sourceType: AST.Type) : string =
         | AST.TTuple elementTypes ->
             addByte 20uy
             addTypes elementTypes
-        | AST.TEnumFields fieldTypes ->
-            addByte 21uy
-            addTypes fieldTypes
         | AST.TRecord (name, typeArgs) ->
             addByte 22uy
             addString name

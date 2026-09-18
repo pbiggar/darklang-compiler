@@ -29,8 +29,6 @@ let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Typ
             AST.TFunction (List.map canonicalize paramTypes, canonicalize returnType)
         | AST.TTuple elemTypes ->
             AST.TTuple (List.map canonicalize elemTypes)
-        | AST.TEnumFields fieldTypes ->
-            AST.TEnumFields (List.map canonicalize fieldTypes)
         | AST.TList elemType ->
             AST.TList (canonicalize elemType)
         | AST.TStream elemType ->
@@ -58,8 +56,6 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
             AST.TFunction (List.map canonicalize paramTypes, canonicalize returnType)
         | AST.TTuple elemTypes ->
             AST.TTuple (List.map canonicalize elemTypes)
-        | AST.TEnumFields fieldTypes ->
-            AST.TEnumFields (List.map canonicalize fieldTypes)
         | AST.TList elemType ->
             AST.TList (canonicalize elemType)
         | AST.TStream elemType ->

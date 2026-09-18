@@ -531,7 +531,11 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 |> List.map (fun variant ->
                                                     ({ Name = variant.Name
                                                        Tag = variant.Tag
-                                                       Payload = variant.Payload }
+                                                       Payload =
+                                                           match variant.Fields with
+                                                           | [] -> None
+                                                           | [field] -> Some field
+                                                           | fields -> Some (AST.TTuple fields) }
                                                         : LIR.VariantInfo)) }
                                                 : LIR.TypeVariants))
                                     let allocatedProgram =

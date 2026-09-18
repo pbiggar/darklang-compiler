@@ -673,11 +673,11 @@ module TypeErrors =
     | TwoArgs of Int64 * Int64
 
   // enum with more pattern params than actual args
-  #compileerror="Non-exhaustive match expression for TestType"
+  #compileerror="Expected 0 fields in TestType.`NoArgs` pattern, but got 1"
   (match TestType.NoArgs with
    | NoArgs _ -> "wrong number") = error="No matching case found for value TypeErrors.TestType.NoArgs in match expression"
   // enum with fewer pattern params than actual args
-  #compileerror="Non-exhaustive match expression for TestType"
+  #compileerror="Expected 1 fields in TestType.`OneArg` pattern, but got 0"
   (match TestType.OneArg 1L with
    | OneArg -> "wrong number") = error="No matching case found for value TypeErrors.TestType.OneArg(1) in match expression"
   // TODO implement MPIgnored

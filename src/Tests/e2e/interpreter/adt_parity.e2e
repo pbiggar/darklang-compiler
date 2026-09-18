@@ -40,6 +40,10 @@ ParityArityFew.ParityArityFew 1L = error="Expected 2 fields in ParityArityFew.`P
 type ParityArityMany = | ParityArityMany of Int64 * String
 ParityArityMany.ParityArityMany 1L "one" true = error="Expected 2 fields in ParityArityMany.`ParityArityMany`, but got 3"
 
+// Constructor patterns preserve field arity instead of treating all fields as one tuple payload.
+type ParityPatternArity = | ParityPatternArity of Int64 * String
+match ParityPatternArity.ParityPatternArity 1L "one" with | ParityPatternArity payload -> payload = compileerror="Expected 2 fields in ParityPatternArity.`ParityPatternArity` pattern, but got 1"
+
 // A case name is ambiguous when more than one visible type declares it.
 type ParityAmbiguousLeft = | SharedParityCase
 type ParityAmbiguousRight = | SharedParityCase

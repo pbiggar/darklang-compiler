@@ -70,8 +70,6 @@ let rec typeToString (t: Type) : string =
     | TTuple elemTypes ->
         let elemsStr = elemTypes |> List.map typeToString |> String.concat ", "
         $"({elemsStr})"
-    | TEnumFields fieldTypes ->
-        fieldTypes |> List.map typeToString |> String.concat " * "
     | TRecord (name, []) -> name
     | TRecord (name, typeArgs) ->
         let argsStr = typeArgs |> List.map typeToString |> String.concat ", "
@@ -227,7 +225,7 @@ let rec internal substituteInterpolationLiteral (name: string) (literal: Expr) (
     | RecordLiteral (typeName, fields) -> RecordLiteral (typeName, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordUpdate (record, updates) -> RecordUpdate (recurse record, updates |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordAccess (record, field) -> RecordAccess (recurse record, field)
-    | Constructor (typeName, variantName, payload) -> Constructor (typeName, variantName, Option.map recurse payload)
+    | Constructor (typeName, variantName, fields) -> Constructor (typeName, variantName, List.map recurse fields)
     | Match (scrutinee, cases) ->
         Match (
             recurse scrutinee,
@@ -278,9 +276,9 @@ let private variantNameEndsWith (suffix: string) (variantName: string) : bool =
 
 let internal isKnownFailureConstructorExpr (expr: Expr) : bool =
     match expr with
-    | Constructor (_, variantName, None) when variantNameEndsWith "None" variantName ->
+    | Constructor (_, variantName, []) when variantNameEndsWith "None" variantName ->
         true
-    | Constructor (_, variantName, Some _) when variantNameEndsWith "Error" variantName ->
+    | Constructor (_, variantName, _ :: _) when variantNameEndsWith "Error" variantName ->
         true
     | _ ->
         false
@@ -584,7 +582,6 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
     | TFunction (paramTypes, retType) ->
         TFunction (List.map (applyTypeVarRenaming subst) paramTypes, applyTypeVarRenaming subst retType)
     | TTuple elems -> TTuple (List.map (applyTypeVarRenaming subst) elems)
-    | TEnumFields fields -> TEnumFields (List.map (applyTypeVarRenaming subst) fields)
     | TSum (name, args) -> TSum (name, List.map (applyTypeVarRenaming subst) args)
     | TRecord (name, args) -> TRecord (name, List.map (applyTypeVarRenaming subst) args)
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt

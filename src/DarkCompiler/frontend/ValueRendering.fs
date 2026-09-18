@@ -65,7 +65,6 @@ let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
         | TDict (keyType, valueType) -> TDict (apply keyType, apply valueType)
         | TFunction (paramTypes, returnType) -> TFunction (List.map apply paramTypes, apply returnType)
         | TTuple elemTypes -> TTuple (List.map apply elemTypes)
-        | TEnumFields fieldTypes -> TEnumFields (List.map apply fieldTypes)
         | TRecord (name, typeArgs) -> TRecord (name, List.map apply typeArgs)
         | TSum (name, typeArgs) -> TSum (name, List.map apply typeArgs)
         | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
@@ -106,7 +105,6 @@ let rec private canonicalRenderType (env: RenderEnv) (typ: Type) : Type =
     | TRecord (name, typeArgs) -> TRecord (name, List.map canonical typeArgs)
     | TSum (name, typeArgs) -> TSum (name, List.map canonical typeArgs)
     | TTuple elementTypes -> TTuple (List.map canonical elementTypes)
-    | TEnumFields fieldTypes -> TEnumFields (List.map canonical fieldTypes)
     | TList elementType -> TList (canonical elementType)
     | TDict (keyType, valueType) -> TDict (canonical keyType, canonical valueType)
     | TFunction (parameterTypes, returnType) ->
@@ -282,8 +280,6 @@ and private renderBody
             |> List.mapi (fun index expr -> if index = 0 then [expr] else [StringLiteral ", "; expr])
             |> List.concat
         (concat (StringLiteral "(" :: separated @ [StringLiteral ")"]), nextState)
-    | TEnumFields _ ->
-        Crash.crash "TEnumFields is declaration metadata and cannot be rendered as a value type"
     | TList elemType ->
         let (itemsName, nextState) = ensureListItemsRenderer env elemType state
         let typeName = CheckingDiagnostics.typeToString typ
@@ -333,7 +329,6 @@ and private renderBody
                         | TDict (key, value) -> collect key @ collect value
                         | TFunction (parameters, result) -> List.collect collect parameters @ collect result
                         | TTuple elems -> List.collect collect elems
-                        | TEnumFields fields -> List.collect collect fields
                         | TRecord (_, args) | TSum (_, args) -> List.collect collect args
                         | _ -> []
                     collect fieldType)
@@ -391,22 +386,17 @@ and private renderBody
                 match remaining with
                 | [] -> (List.rev acc, currentState)
                 | variant :: rest ->
-                    match variant.Payload with
-                    | None ->
-                        let case = makeCase (PConstructor (variant.Name, None)) (StringLiteral $"{typeText}.{variant.Name}")
+                    match variant.Fields with
+                    | [] ->
+                        let case = makeCase (PConstructor (variant.Name, [])) (StringLiteral $"{typeText}.{variant.Name}")
                         buildCases rest currentState (case :: acc)
-                    | Some payloadType ->
-                        let concreteType = applySubstitution subst payloadType
-                        let payloadName = $"__payload_{variant.Tag}"
+                    | fieldTypes ->
+                        let concreteTypes = fieldTypes |> List.map (applySubstitution subst)
+                        let fieldNames = fieldTypes |> List.mapi (fun index _ -> $"__field_{variant.Tag}_{index}")
                         let (renderedFields, nextState) =
-                            match concreteType with
-                            | TEnumFields fieldTypes ->
-                                fieldTypes
-                                |> List.mapi (fun index fieldType -> (fieldType, TupleAccess (Var payloadName, index)))
-                                |> fun items -> renderDelimited env items currentState
-                            | _ ->
-                                let (rendered, nextState) = renderCall env concreteType (Var payloadName) currentState
-                                ([rendered], nextState)
+                            List.zip concreteTypes fieldNames
+                            |> List.map (fun (fieldType, fieldName) -> (fieldType, Var fieldName))
+                            |> fun items -> renderDelimited env items currentState
                         let separated =
                             renderedFields
                             |> List.mapi (fun index rendered ->
@@ -414,7 +404,7 @@ and private renderBody
                             |> List.concat
                         let body =
                             concat (StringLiteral $"{typeText}.{variant.Name}(" :: separated @ [StringLiteral ")"])
-                        let case = makeCase (PConstructor (variant.Name, Some (PVar payloadName))) body
+                        let case = makeCase (PConstructor (variant.Name, List.map PVar fieldNames)) body
                         buildCases rest nextState (case :: acc)
             let (cases, nextState) = buildCases (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
             (Match (value, cases), nextState)

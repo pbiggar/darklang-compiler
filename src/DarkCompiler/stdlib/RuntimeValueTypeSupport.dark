@@ -8,7 +8,7 @@ let __isCustomTypeWithNoTypeArguments (valueType: Darklang.LanguageTools.Runtime
     match valueType with
     | Known knownType ->
         match knownType with
-        | KTCustomType ((fqTypeName, typeArguments)) ->
+        | KTCustomType (fqTypeName, typeArguments) ->
             match fqTypeName with
             | Package runtimeHash ->
                 Stdlib.List.length typeArguments == 0 &&

@@ -133,7 +133,7 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
             collectChildren (entries |> List.collect (fun (key, value) -> [key; value])) constraints
         | RecordLiteral (_, fields) -> collectChildren (fields |> List.map snd) constraints
         | RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd)) constraints
-        | Constructor (_, _, payload) -> payload |> Option.map (fun value -> collect None value constraints) |> Option.defaultValue constraints
+        | Constructor (_, _, fields) -> collectChildren fields constraints
         | Match (scrutinee, cases) ->
             let afterScrutinee = collect None scrutinee constraints
             cases

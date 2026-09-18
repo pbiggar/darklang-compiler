@@ -63,9 +63,6 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TTuple elemTypes ->
         let elemsStr = elemTypes |> List.map typeToMangledName |> String.concat "_"
         $"tup{List.length elemTypes}_{elemsStr}"
-    | AST.TEnumFields fieldTypes ->
-        let fieldsStr = fieldTypes |> List.map typeToMangledName |> String.concat "_"
-        $"enumfields_{fieldsStr}"
     | AST.TRecord (name, []) -> name
     | AST.TRecord (name, typeArgs) ->
         let argsStr = typeArgs |> List.map typeToMangledName |> String.concat "_"
@@ -87,7 +84,6 @@ let rec containsTypeVar (t: AST.Type) : bool =
     | AST.TFunction (paramTypes, retType) ->
         List.exists containsTypeVar paramTypes || containsTypeVar retType
     | AST.TTuple elemTypes -> List.exists containsTypeVar elemTypes
-    | AST.TEnumFields fieldTypes -> List.exists containsTypeVar fieldTypes
     | AST.TRecord (_, typeArgs) -> List.exists containsTypeVar typeArgs
     | AST.TSum (_, typeArgs) -> List.exists containsTypeVar typeArgs
     | AST.TList elemType -> containsTypeVar elemType
