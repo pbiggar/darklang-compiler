@@ -135,12 +135,26 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             | AST.PListCons (heads, _) -> List.exists headNeedsStages heads
             | _ -> false
 
+        let rec patternBindsVariables (pattern: AST.Pattern) : bool =
+            match pattern with
+            | AST.PVar _ -> true
+            | AST.PConstructor (_, fields)
+            | AST.PTuple fields
+            | AST.PList fields -> List.exists patternBindsVariables fields
+            | AST.PListCons (heads, tail) ->
+                List.exists patternBindsVariables heads || patternBindsVariables tail
+            | AST.POr alternatives ->
+                alternatives |> AST.NonEmptyList.head |> patternBindsVariables
+            | _ -> false
+
         let rec extractAndCompileBody (pattern: AST.Pattern) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
             // Recursively collect all variable bindings from a pattern
             // Returns: updated env, list of bindings, updated vargen
             // sourceType is the type of the source being matched, used to get correct element types
             let rec collectPatternBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match pat with
+                | _ when not (patternBindsVariables pat) ->
+                    Ok (env, bindings, vg)
                 | AST.POr alternatives ->
                     collectPatternBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
                 | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
@@ -389,6 +403,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 // sourceType is the type of the source being matched, used to get correct element types
                 let rec collectPatternBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                     match pat with
+                    | _ when not (patternBindsVariables pat) ->
+                        Ok (env, bindings, vg)
                     | AST.POr alternatives ->
                         collectPatternBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
                     | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
@@ -2700,6 +2716,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let staged = prependBindings [(elemVar, ANF.TupleGet (scrutAtom, index))] elemStages
                             elements rest (index + 1) vg2 (acc @ staged))
                 elements innerPatterns 0 vg []
+            | AST.PList [] ->
+                // The empty skew-list is the zero tagged pointer; avoid a
+                // full length traversal for the hottest list base case.
+                let (emptyCmpVar, vg1) = ANF.freshVar vg
+                let emptyCmp =
+                    ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 0L))
+                Ok ([([(emptyCmpVar, emptyCmp)], ANF.Var emptyCmpVar)], vg1)
             | AST.PList _ | AST.PListCons _ ->
                 // A list pattern below the top of an arm (in a tuple, a payload) was
                 // one flat length test, so `("Stdlib" :: _, x)` matched every
@@ -2749,11 +2772,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 heads rest (ANF.Var tailVar) vg5 (acc @ staged @ [(tailLoads, ANF.BoolLiteral true)])
                             else
                                 heads rest (ANF.Var tailVar) vg5 (acc @ staged))
-                if count = 0 && tailPattern.IsNone then
-                    // `[]`: the length test alone.
-                    Ok ([lengthStage], vg2)
-                else
-                    heads headPatterns scrutAtom vg2 [lengthStage]
+                heads headPatterns scrutAtom vg2 [lengthStage]
             | _ ->
                 buildPatternComparison pattern scrutAtom patType vg
                 |> Result.map (function

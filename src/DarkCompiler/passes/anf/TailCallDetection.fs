@@ -129,6 +129,7 @@ let private extendBorrowRoots
 let private tailCallArgTempIds
     (aliasRoots: Map<TempId, TempId>)
     (borrowRoots: Map<TempId, Set<TempId>>)
+    (retainedBorrowRoots: Set<TempId>)
     (cexpr: CExpr)
     : Set<TempId> =
     let addAtom (temps: Set<TempId>) (atom: Atom) : Set<TempId> =
@@ -136,9 +137,12 @@ let private tailCallArgTempIds
         | Var tid ->
             let root = canonicalTempId aliasRoots tid
             let borrowed =
-                Map.tryFind tid borrowRoots
-                |> Option.orElse (Map.tryFind root borrowRoots)
-                |> Option.defaultValue Set.empty
+                if Set.contains root retainedBorrowRoots then
+                    Set.empty
+                else
+                    Map.tryFind tid borrowRoots
+                    |> Option.orElse (Map.tryFind root borrowRoots)
+                    |> Option.defaultValue Set.empty
             temps |> Set.add root |> Set.union borrowed
         | _ -> temps
     match cexpr with
@@ -263,6 +267,7 @@ let rec detectTailCalls
     (inTailPosition: bool)
     (aliasRoots: Map<TempId, TempId>)
     (borrowRoots: Map<TempId, Set<TempId>>)
+    (retainedBorrowRoots: Set<TempId>)
     (expr: AExpr)
     : AExpr =
     match expr with
@@ -272,9 +277,9 @@ let rec detectTailCalls
     | Jump _ -> expr
     | Join (parameter, continuation, entry) ->
         let continuation' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots continuation
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots retainedBorrowRoots continuation
         let entry' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots entry
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots retainedBorrowRoots entry
         Join (parameter, continuation', entry')
 
     | Let (tempId, cexpr, body) ->
@@ -283,7 +288,7 @@ let rec detectTailCalls
         if inTailPosition && isCallExpr cexpr && isReturnOf tempId body then
             // This is a tail call! Convert the call to tail call variant
             let tailCall = convertToTailCall cexpr
-            let tailArgTemps = tailCallArgTempIds aliasRoots borrowRoots tailCall
+            let tailArgTemps = tailCallArgTempIds aliasRoots borrowRoots retainedBorrowRoots tailCall
             let (movableDecs, remainingBody) = collectMovableDecPrefix aliasRoots tailArgTemps body
             let transferredBody =
                 match tailCall with
@@ -310,13 +315,27 @@ let rec detectTailCalls
                 let borrowRoots' = extendBorrowRoots aliasRoots borrowRoots tempId cexpr
                 let body' =
                     detectTailCalls
-                        currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots' borrowRoots' body
+                        currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots' borrowRoots' retainedBorrowRoots body
                 Let (tempId, cexpr, body')
         else
             // Not a tail call - recurse into body
             // Body is in tail position if current expression is
             let aliasRoots' = extendAliasRoots aliasRoots tempId cexpr
             let borrowRoots' = extendBorrowRoots aliasRoots borrowRoots tempId cexpr
+            // A retain gives a projected managed value ownership independent
+            // of its source until the matching release consumes that retain.
+            let retainedBorrowRoots' =
+                match cexpr with
+                | RefCountInc (Var retainedTemp, _, _, _)
+                | RefCountIncString (Var retainedTemp)
+                | RefCountIncBlob (Var retainedTemp) ->
+                    Set.add (canonicalTempId aliasRoots retainedTemp) retainedBorrowRoots
+                | RefCountDec (Var releasedTemp, _, _, _)
+                | RefCountDecString (Var releasedTemp)
+                | RefCountDecBlob (Var releasedTemp) ->
+                    Set.remove (canonicalTempId aliasRoots releasedTemp) retainedBorrowRoots
+                | _ ->
+                    retainedBorrowRoots
             let releasedTemps' =
                 match cexpr with
                 | RefCountDec (Var releasedTemp, _, _, _)
@@ -327,15 +346,15 @@ let rec detectTailCalls
                     releasedTemps
             let body' =
                 detectTailCalls
-                    currentFuncName isCurrentMember typedParams ownedParams releasedTemps' inTailPosition aliasRoots' borrowRoots' body
+                    currentFuncName isCurrentMember typedParams ownedParams releasedTemps' inTailPosition aliasRoots' borrowRoots' retainedBorrowRoots' body
             Let (tempId, cexpr, body')
 
     | If (cond, thenBranch, elseBranch) ->
         // If expression: both branches are in tail position if If is
         let thenBranch' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots thenBranch
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots retainedBorrowRoots thenBranch
         let elseBranch' =
-            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots elseBranch
+            detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots retainedBorrowRoots elseBranch
         If (cond, thenBranch', elseBranch')
 
 /// Detect tail calls in a function
@@ -377,7 +396,7 @@ let private detectTailCallsInFunctionWithRegistry
             | _ -> false
         let body' =
             detectTailCalls
-                func.Name isCurrentMember func.TypedParams ownedParams Set.empty true Map.empty Map.empty func.Body
+                func.Name isCurrentMember func.TypedParams ownedParams Set.empty true Map.empty Map.empty Set.empty func.Body
         { func with Body = body' }
 
 let detectTailCallsInFunction (func: Function) : Function =

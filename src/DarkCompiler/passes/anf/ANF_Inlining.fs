@@ -25,7 +25,7 @@ module ANF_Inlining
 
 /// The most continuation nodes an inlined callee with several returns may copy
 /// (copies = returns - 1 times the continuation size) before the call is left.
-let private maxContinuationCopy = 64
+let private maxContinuationCopy = 1024
 
 open MemoryModel
 
@@ -915,12 +915,16 @@ let rec inlineInExpr (scope: InlineScope) (funcs: Map<string, FunctionInfo>) (co
             // several returns (a match, a chain of ifs) gets a join instead:
             // splicing the continuation into each return copies it, and a chain
             // of such calls (a derived record equality is fourteen of them) grows
-            // as the product of the return counts. A join carries an Int64 or a
-            // Bool (RefCountInsertion.verifyJoinInterfaces), and the verifier
-            // wants the jumped atom's inferred type to match, which an Int64
-            // result may not (a temp typed by an unresolved variable); Bool
-            // results do, and they are the equality helpers that blew up.
-            let joinable = info.Func.ReturnType = AST.TBool
+            // as the product of the return counts. The join boundary accepts
+            // concrete immediate scalar values; managed values and unresolved
+            // variables use the bounded-copy fallback below.
+            let joinable =
+                match info.Func.ReturnType with
+                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+                | AST.TBool | AST.TDateTime | AST.TUnit
+                | AST.TRawPtr -> true
+                | _ -> false
             let returns = countReturns inlinedBody'
             let rec continuationSize (expr: AExpr) : int =
                 match expr with
@@ -930,11 +934,14 @@ let rec inlineInExpr (scope: InlineScope) (funcs: Map<string, FunctionInfo>) (co
                 | If (_, thenBranch, elseBranch) -> 1 + continuationSize thenBranch + continuationSize elseBranch
             if returns <= 1 then
                 (substituteReturn tid body' inlinedBody', varGen''')
-            elif joinable then
-                (Join ({ Id = tid; Type = info.Func.ReturnType }, body', returnsToJumps tid inlinedBody'), varGen''')
             elif continuationSize body' * (returns - 1) <= maxContinuationCopy then
-                // Copying a small continuation into each return is cheap.
+                // Copying a small continuation keeps the straight-line form
+                // that later passes optimize best.
                 (substituteReturn tid body' inlinedBody', varGen''')
+            elif joinable then
+                // A join bounds large scalar continuations without retaining
+                // a call at the hot site.
+                (Join ({ Id = tid; Type = info.Func.ReturnType }, body', returnsToJumps tid inlinedBody'), varGen''')
             else
                 // Not joinable and the copies would be large: leave the call. A
                 // derived JSON serializer over a record of Options grew from 66

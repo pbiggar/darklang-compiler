@@ -302,7 +302,14 @@ let verifyJoinInterfaces (ctx: TypeContext) (program: Program) : Result<unit, st
             |> Result.bind (fun () -> check visible joins canReturn yes)
             |> Result.bind (fun () -> check visible joins canReturn no)
         | Join (parameter, continuation, entry) ->
-            if parameter.Type <> AST.TInt64 && parameter.Type <> AST.TBool then
+            let supportedBlockArgument =
+                match parameter.Type with
+                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+                | AST.TBool | AST.TDateTime | AST.TUnit
+                | AST.TRawPtr -> true
+                | _ -> false
+            if not supportedBlockArgument then
                 Error $"ANF join interface: managed or unsupported block argument {parameter.Type}"
             elif Set.contains parameter.Id visible || Map.containsKey parameter.Id joins then
                 Error $"ANF join interface: target {parameter.Id} shadows an enclosing identity"

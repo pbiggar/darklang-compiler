@@ -20,6 +20,12 @@ let tests = [
             Let (TempId 2, Atom joinValue,
                 Join (joinParameter, Return (Var (TempId 2)),
                     Join ({ Id = TempId 3; Type = AST.TBool }, Jump (TempId 1, joinValue), Jump (TempId 3, BoolLiteral true))))))
+    "Join verifier accepts immediate scalar block arguments", (fun () ->
+        verifyJoin (
+            Join (
+                { Id = TempId 3; Type = AST.TInt8 },
+                Return joinValue,
+                Jump (TempId 3, IntLiteral (Int8 1y)))))
     "Join verifier rejects branch-local continuation capture", rejectsJoin "outside lexical scope"
         (Join (joinParameter, Return (Var (TempId 2)), Let (TempId 2, Atom joinValue, Jump (TempId 1, joinValue))))
     "Join verifier rejects parameter use in entry", rejectsJoin "outside lexical scope"
