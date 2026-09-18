@@ -23,6 +23,10 @@
 
 module ANF_Inlining
 
+/// The most continuation nodes an inlined callee with several returns may copy
+/// (copies = returns - 1 times the continuation size) before the call is left.
+let private maxContinuationCopy = 1024
+
 open MemoryModel
 
 open ANF
@@ -497,6 +501,28 @@ let buildExternalCandidateInfoMap
         else
             candidates) Map.empty
 
+/// How many `Return`s an expression has: the number of copies of the
+/// continuation `substituteReturn` would make.
+let rec private countReturns (expr: AExpr) : int =
+    match expr with
+    | Jump _ -> 0
+    | Return _ -> 1
+    | Let (_, _, body) -> countReturns body
+    | Join (_, continuation, entry) -> countReturns continuation + countReturns entry
+    | If (_, thenBranch, elseBranch) -> countReturns thenBranch + countReturns elseBranch
+
+/// Every `Return atom` becomes `Jump (target, atom)`: the inlined body enters a
+/// join whose continuation is the caller's rest.
+let rec private returnsToJumps (target: TempId) (expr: AExpr) : AExpr =
+    match expr with
+    | Jump _ -> expr
+    | Return atom -> Jump (target, atom)
+    | Let (tid, cexpr, body) -> Let (tid, cexpr, returnsToJumps target body)
+    | Join (parameter, continuation, entry) ->
+        Join (parameter, returnsToJumps target continuation, returnsToJumps target entry)
+    | If (cond, thenBranch, elseBranch) ->
+        If (cond, returnsToJumps target thenBranch, returnsToJumps target elseBranch)
+
 /// Substitute Return with a continuation expression
 /// This replaces `Return atom` with a binding and continues with the rest
 let rec substituteReturn (resultTid: TempId) (continuation: AExpr) (expr: AExpr) : AExpr =
@@ -885,8 +911,42 @@ let rec inlineInExpr (scope: InlineScope) (funcs: Map<string, FunctionInfo>) (co
             let (inlinedBody, varGen'') = inlineCallBody info args varGen'
             let (inlinedBody', varGen''') =
                 inlineInExpr scope funcs config (depth + 1) varGen'' inlinedBody
-            let result = substituteReturn tid body' inlinedBody'
-            (result, varGen''')
+            // A body with one return takes the continuation in place. One with
+            // several returns (a match, a chain of ifs) gets a join instead:
+            // splicing the continuation into each return copies it, and a chain
+            // of such calls (a derived record equality is fourteen of them) grows
+            // as the product of the return counts. The join boundary accepts
+            // concrete immediate scalar values; managed values and unresolved
+            // variables use the bounded-copy fallback below.
+            let joinable =
+                match info.Func.ReturnType with
+                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+                | AST.TBool | AST.TDateTime | AST.TUnit
+                | AST.TRawPtr -> true
+                | _ -> false
+            let returns = countReturns inlinedBody'
+            let rec continuationSize (expr: AExpr) : int =
+                match expr with
+                | Jump _ | Return _ -> 1
+                | Let (_, _, body) -> 1 + continuationSize body
+                | Join (_, continuation, entry) -> 1 + continuationSize continuation + continuationSize entry
+                | If (_, thenBranch, elseBranch) -> 1 + continuationSize thenBranch + continuationSize elseBranch
+            if returns <= 1 then
+                (substituteReturn tid body' inlinedBody', varGen''')
+            elif continuationSize body' * (returns - 1) <= maxContinuationCopy then
+                // Copying a small continuation keeps the straight-line form
+                // that later passes optimize best.
+                (substituteReturn tid body' inlinedBody', varGen''')
+            elif joinable then
+                // A join bounds large scalar continuations without retaining
+                // a call at the hot site.
+                (Join ({ Id = tid; Type = info.Func.ReturnType }, body', returnsToJumps tid inlinedBody'), varGen''')
+            else
+                // Not joinable and the copies would be large: leave the call. A
+                // derived JSON serializer over a record of Options grew from 66
+                // to 430,000 nodes this way.
+                (Let (tid, Call (funcName, args), body'), varGen''')
         | _ ->
             // Don't inline - continue processing body
             let (body', varGen') = inlineInExpr scope funcs config depth varGen body

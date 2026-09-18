@@ -45,6 +45,7 @@ and Token =
     | TPlus
     | TPlusPlus    // ++ (string concatenation)
     | TMinus
+    | TSpacedMinus // `-` followed by whitespace: subtraction, never a negative literal
     | TStar
     | TSlash
     | TLParen
@@ -64,6 +65,7 @@ and Token =
     | TColon       // : (type annotation)
     | TComma       // , (parameter separator)
     | TSemicolon   // ; (canonical list separator)
+    | TStatementSeparator // between two statements of one block, from the layout pass
     | TDot         // . (tuple/record access)
     | TLBrace      // { (record literal)
     | TRBrace      // } (record literal)
@@ -326,6 +328,7 @@ let rec lex (input: string) : Result<Token list, string> =
         | '+' :: '+' :: rest -> lexHelper rest (TPlusPlus :: acc)
         | '+' :: rest -> lexHelper rest (TPlus :: acc)
         | '-' :: '>' :: rest -> lexHelper rest (TArrow :: acc)
+        | '-' :: ((' ' | '\t' | '\n' | '\r') :: _ as rest) -> lexHelper rest (TSpacedMinus :: acc)
         | '-' :: rest -> lexHelper rest (TMinus :: acc)
         | '=' :: '>' :: _ -> Error "Dark syntax does not use '=>'; use 'fun <args> -> <body>'"
         | '*' :: rest -> lexHelper rest (TStar :: acc)
@@ -353,6 +356,7 @@ let rec lex (input: string) : Result<Token list, string> =
         | '@' :: rest -> lexHelper rest (TAt :: acc)
         | ',' :: rest -> lexHelper rest (TComma :: acc)
         | ';' :: rest -> lexHelper rest (TSemicolon :: acc)
+        | '\u0002' :: rest -> lexHelper rest (TStatementSeparator :: acc)
         | '.' :: rest -> lexHelper rest (TDot :: acc)
         | '=' :: '=' :: rest -> lexHelper rest (TEqEq :: acc)
         | '=' :: rest -> lexHelper rest (TEquals :: acc)
@@ -597,6 +601,11 @@ let rec lex (input: string) : Result<Token list, string> =
                     else
                         let str = System.String(List.rev chars |> List.toArray)
                         Ok (str, '"' :: remaining)  // Put " back for caller to detect end
+                // `{{` and `}}` are literal braces, as in the interpreter.
+                | '{' :: '{' :: remaining ->
+                    collectLiteralPart remaining ('{' :: chars)
+                | '}' :: '}' :: remaining ->
+                    collectLiteralPart remaining ('}' :: chars)
                 | '{' :: remaining ->
                     let str = System.String(List.rev chars |> List.toArray)
                     Ok (str, '{' :: remaining)  // Put { back for caller to detect expression
@@ -634,6 +643,14 @@ let rec lex (input: string) : Result<Token list, string> =
 
             // Parse all parts and build InterpPart list
             let rec parseInterpParts (cs: char list) (parts: InterpPart list) : Result<InterpPart list * char list, string> =
+                let literalPart () =
+                    match collectLiteralPart cs [] with
+                    | Ok (str, afterLit) ->
+                        if str = "" then
+                            parseInterpParts afterLit parts
+                        else
+                            parseInterpParts afterLit (InterpText (normalize str) :: parts)
+                    | Error err -> Error err
                 match cs with
                 | '"' :: '"' :: '"' :: remaining when isTripleQuoted ->
                     // End of triple-quoted interpolated string
@@ -641,6 +658,7 @@ let rec lex (input: string) : Result<Token list, string> =
                 | '"' :: remaining when not isTripleQuoted ->
                     // End of interpolated string
                     Ok (List.rev parts, remaining)
+                | '{' :: '{' :: _ -> literalPart ()
                 | '{' :: remaining ->
                     // Expression part - collect chars and lex them
                     match collectExprChars remaining 0 [] with
@@ -653,15 +671,7 @@ let rec lex (input: string) : Result<Token list, string> =
                             parseInterpParts afterExpr (InterpTokens tokens' :: parts)
                         | Error err -> Error $"Error in interpolated expression: {err}"
                     | Error err -> Error err
-                | _ ->
-                    // Literal part
-                    match collectLiteralPart cs [] with
-                    | Ok (str, afterLit) ->
-                        if str = "" then
-                            parseInterpParts afterLit parts
-                        else
-                            parseInterpParts afterLit (InterpText (normalize str) :: parts)
-                    | Error err -> Error err
+                | _ -> literalPart ()
 
             match parseInterpParts contentStart [] with
             | Ok (parts, remaining) ->
@@ -1460,6 +1470,10 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
             parseListPattern rest []
         | TIdent typeName :: TLBrace :: _ when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
             Error "Record patterns are not supported"
+        | TIdent name :: (TAdjacentLParen | TLParen) :: TRParen :: rest
+            when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
+            // `Ok()` and `Ok ()` both spell a constructor with one Unit field.
+            Ok (PConstructor (name, [PUnit]), rest)
         | TIdent name :: (TAdjacentLParen | TLParen) :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
             let rec parseFields remaining acc =
                 parsePattern remaining
@@ -1472,9 +1486,11 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
             |> Result.map (fun (fields, remaining) ->
                 (PConstructor (name, fields), remaining))
         | TIdent name :: rest when name.Length > 0 && System.Char.IsUpper(name.[0]) ->
-            // Constructor pattern, optionally with a space-applied payload: Some x
+            // Constructor pattern, optionally with a space-applied payload: Some x.
+            // The payload is one pattern without a cons tail: `Some x :: rest` is
+            // `(Some x) :: rest`, as in the interpreter, not `Some (x :: rest)`.
             if canStartPatternPayload rest then
-                parsePattern rest
+                parsePatternBase rest
                 |> Result.map (fun (payloadPattern, remaining) ->
                     (PConstructor (name, [payloadPattern]), remaining))
             else
@@ -1642,6 +1658,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TUInt128 _ :: _
         | TFloat _ :: _
         | TStringLit _ :: _
+        | TInterpString _ :: _
         | TCharLit _ :: _
         | TTrue :: _
         | TFalse :: _
@@ -1783,7 +1800,18 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
 
         trySplits [] functionTokens None
 
+    /// An expression, then the statements the layout pass found after it in the
+    /// same block, as a Sequence.
     and parseExpr (toks: Token list) : Result<Expr * Token list, string> =
+        parseSingleExpr toks
+        |> Result.bind (fun (expr, remaining) ->
+            match remaining with
+            | TStatementSeparator :: rest ->
+                parseExpr rest
+                |> Result.map (fun (next, remaining') -> (Sequence (expr, next), remaining'))
+            | _ -> Ok (expr, remaining))
+
+    and parseSingleExpr (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TSemicolon :: rest ->
             parseExpr rest
@@ -2050,7 +2078,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     parseMultiplicative rest
                     |> Result.bind (fun (right, remaining') ->
                         parseAdditiveRest (BinOp (Add, leftExpr, right)) remaining')
-                | TMinus :: rest ->
+                | (TMinus | TSpacedMinus) :: rest ->
                     parseMultiplicative rest
                     |> Result.bind (fun (right, remaining') ->
                         parseAdditiveRest (BinOp (Sub, leftExpr, right)) remaining')
@@ -2109,7 +2137,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             Ok (Int32Literal System.Int32.MinValue, rest)
         | TMinus :: TInt32 n :: rest -> Ok (Int32Literal (-n), rest)
         | TMinus :: TFloat f :: rest -> Ok (FloatLiteral (-f), rest)
-        | TMinus :: rest ->
+        | (TMinus | TSpacedMinus) :: rest ->
             // For non-literal expressions, use UnaryOp
             parseUnary rest
             |> Result.map (fun (expr, remaining) -> (UnaryOp (Neg, expr), remaining))
@@ -2643,6 +2671,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     | _ -> Error "Expected ',' or ')' after constructor field")
 
             match expr, rest with
+            | Constructor _, TRParen :: afterUnit ->
+                // `Type.Variant()`: the interpreter's spelling of a unit payload.
+                parsePostfix (appendCallArg expr UnitLiteral) afterUnit
             | _, TRParen :: _ ->
                 Error "Parenthesized call syntax is not supported; use 'f ()'"
             | Constructor (reference, variantName, existingFields), _ ->
@@ -2951,76 +2982,221 @@ let private insertTopLevelValueLayoutSeparators (input: string) : string =
             loop nextActive rest (rewritten :: acc)
     loop None lines []
 
-/// Materialize the implicit `in` that terminates a newline-delimited
-/// lambda-valued let. Without source columns, both the lambda body and its
-/// continuation are legal space applications and no token-only split can
-/// recover the intended boundary.
-let private insertLambdaLetLayoutSeparators (input: string) : string =
+/// Materialize what the interpreter's parser reads from columns and this one
+/// cannot, since the lexer discards them: the implicit `in` that terminates a
+/// newline-delimited value let, and the boundary between two statements of one
+/// block. `let a = f x` followed by `g a` lexes as `let a = f x g a`; the
+/// token-only fallback that tries every split is quadratic per let and picks the
+/// wrong split whenever the glued form parses. Likewise `print a` over `print b`
+/// lexes as `print a print b`. The boundary is the indentation: a line at or
+/// left of a `let` is its body; a line at the indent of the block it is in is
+/// the next statement, marked with a private separator the lexer turns into
+/// TStatementSeparator. Nested function lets and explicit `in` are left to the
+/// next pass and the source respectively.
+let private insertValueLetLayoutSeparators (input: string) : string =
     let lines = input.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n') |> Array.toList
     let leadingSpaces (line: string) = line.Length - line.TrimStart().Length
     let isSignificant (line: string) =
         let trimmed = line.Trim()
         trimmed <> "" && not (trimmed.StartsWith("//"))
-    let nextSignificant lines = lines |> List.tryFind isSignificant
-    let tryLambdaLetIndent (line: string) (remaining: string list) : int option =
-        let letIndex = line.IndexOf("let ", System.StringComparison.Ordinal)
-        let equalsIndex = line.IndexOf('=', max 0 letIndex)
-        if letIndex < 0 || equalsIndex < letIndex then
-            None
-        else
-            let declarationHead = line.Substring(letIndex + 4, equalsIndex - letIndex - 4)
-            let rhs = line.Substring(equalsIndex + 1).TrimStart()
-            if declarationHead.Contains("(") || declarationHead.Contains("<") then
-                None
-            elif rhs.TrimEnd().EndsWith(" in") then
-                None
-            elif rhs.StartsWith("fun ") then
-                Some letIndex
-            elif rhs = "" then
-                match nextSignificant remaining with
-                | Some next when
-                    leadingSpaces next > letIndex
-                    && next.TrimStart().StartsWith("fun ") -> Some letIndex
-                | _ -> None
+    // The line without a trailing `// comment` (quote-aware, so a `//` inside a
+    // string literal stays).
+    let code (line: string) =
+        let rec scan index inString escaped =
+            if index >= line.Length then line
             else
-                None
+                let c = line.[index]
+                if inString then
+                    scan (index + 1) (not (c = '"' && not escaped)) (c = '\\' && not escaped)
+                elif c = '"' then scan (index + 1) true false
+                elif c = '/' && index + 1 < line.Length && line.[index + 1] = '/' then
+                    line.Substring(0, index)
+                else scan (index + 1) false false
+        (scan 0 false false).TrimEnd()
+    // The column of a `let` that begins the line's code, looking past prefixes an
+    // earlier pass may have put there (`; `, `in `) and opening parentheses. A
+    // `let` later in the line, as in a string literal, is not a declaration.
+    let leadingLetColumn (line: string) : int option =
+        let rec skip index =
+            if index >= line.Length then index
+            else
+                match line.[index] with
+                | ' ' | '\t' | '(' | '\u0002' -> skip (index + 1)
+                | 'i' when line.Substring(index).StartsWith("in ") -> skip (index + 3)
+                | ';' -> skip (index + 1)
+                | _ -> index
+        let column = skip 0
+        if line.Substring(column).StartsWith("let ") then Some column else None
+    let content (line: string) =
+        match leadingLetColumn line with
+        | Some column -> line.Substring(column)
+        | None -> line.TrimStart()
+    let tryValueLetIndent (line: string) : int option =
+        match leadingLetColumn line with
+        | None -> None
+        | Some column ->
+            let trimmed = line.Substring(column)
+            let afterLet = trimmed.Substring(4).TrimStart()
+            let nameEnd = afterLet.IndexOfAny([|' '; '('; '<'; '='|])
+            let isFunctionLet =
+                nameEnd > 0
+                && (let afterName = afterLet.Substring(nameEnd).TrimStart()
+                    afterName.StartsWith("(") || afterName.StartsWith("<"))
+            // A function header whose parameters start on the next line has no
+            // `=` here; a value let always has one on its first line.
+            if isFunctionLet || not (afterLet.Contains("=")) then None
+            else Some column
 
+    // One column of tolerance: a test corpus writes `(let x = ...` with the body
+    // on the next line aligned one past the paren, and the DSL strips the paren.
     let rec closeCompleted indent active prefixes =
         match active with
         | declarationIndent :: rest when indent <= declarationIndent + 1 ->
             closeCompleted indent rest ("in " :: prefixes)
         | _ -> (active, prefixes |> List.rev |> String.concat "")
 
-    let rec loop active remaining acc =
+    // A line ending in an operator or an opener continues onto the next line
+    // whatever that line's indentation, so the next line is not a let body.
+    let continues (line: string) =
+        let trimmed = code line
+        [ "++"; "+"; "-"; "*"; "/"; "%"; "|>"; "&&"; "||"; "=="; "!="; "<="; ">="
+          "<"; ">"; "="; "->"; "("; "["; "{"; ","; "then"; "else"; "with" ]
+        |> List.exists (fun op -> trimmed.EndsWith(op))
+    // A line ending in one of these starts a block on the next line.
+    let opensBlock (line: string) =
+        let trimmed = code line
+        [ "="; "->"; "then"; "else" ] |> List.exists (fun op -> trimmed.EndsWith(op))
+    // A line that starts with a closer, an operator or a match arm belongs to the
+    // expression above it, whatever its column.
+    let continued (line: string) =
+        let trimmed = line.TrimStart()
+        [ "}"; ")"; "]"; "|>"; "|"; "++"; "+"; "-"; "*"; "/"; "%"; "&&"; "||"; "::"
+          "=="; "!="; "<="; ">="; "<"; ">"; ","; "then"; "else"; "elif"; "with" ]
+        |> List.exists (fun op -> trimmed.StartsWith(op))
+    let isDeclaration (line: string) =
+        let trimmed = content line
+        trimmed.StartsWith("type ") || trimmed.StartsWith("val ") || trimmed.StartsWith("module ")
+
+    let rec loop active (blocks: int list) (previousOpens: bool) (previousContinues: bool) (previousEndsIn: bool) remaining acc =
         match remaining with
         | [] -> acc |> List.rev |> String.concat "\n"
         | line :: rest when not (isSignificant line) ->
-            loop active rest (line :: acc)
+            loop active blocks previousOpens previousContinues previousEndsIn rest (line :: acc)
         | line :: rest ->
             let indent = leadingSpaces line
-            let explicitIn = line.TrimStart().StartsWith("in ")
+            let explicitIn =
+                let trimmed = line.Trim()
+                trimmed = "in" || trimmed.StartsWith("in ")
             let (remainingActive, prefix) =
                 if explicitIn then
                     match active with
                     | _ :: outer -> (outer, "")
                     | [] -> ([], "")
+                elif previousContinues || continued line then
+                    (active, "")
                 else
                     closeCompleted indent active []
+            // Blocks deeper than this line are over; a line after an opener starts one.
+            let blocks = blocks |> List.filter (fun b -> b <= indent)
+            let (blocks, statementPrefix) =
+                if previousOpens && indent > 0 then
+                    ((match blocks with
+                      | top :: _ when top = indent -> blocks
+                      | _ -> indent :: blocks), "")
+                else
+                    match blocks with
+                    | top :: _ when
+                        top = indent
+                        && indent > 0
+                        && prefix = ""
+                        && not explicitIn
+                        && not previousEndsIn
+                        && not previousContinues
+                        && not (continued line)
+                        && not (isDeclaration line)
+                        && not (line.TrimStart().StartsWith("; ")) -> (blocks, "\u0002 ")
+                    | _ -> (blocks, "")
+            let prefix = statementPrefix + prefix
             let rewritten =
                 if prefix = "" then line
                 else line.Substring(0, indent) + prefix + line.Substring(indent)
+            let leadingLet = tryValueLetIndent line
             let nextActive =
-                match tryLambdaLetIndent line rest with
+                match leadingLet with
                 | Some declarationIndent -> declarationIndent :: remainingActive
                 | None -> remainingActive
-            loop nextActive rest (rewritten :: acc)
-    loop [] lines []
+            // Every explicit `in` on the line closes a let: one of the line's own
+            // if one is still open at that point (`let a = .. in let b = .. in ..`
+            // nets to zero; a let inside parentheses is over at the `)`), else the
+            // innermost open above it. A leading `in` was taken above.
+            let activeAfterExplicitIn =
+                let text = code line
+                let isWordAt index length =
+                    (index = 0 || not (System.Char.IsLetterOrDigit text.[index - 1]) && text.[index - 1] <> '_')
+                    && (index + length >= text.Length
+                        || (not (System.Char.IsLetterOrDigit text.[index + length]) && text.[index + length] <> '_'))
+                let rec scan index depth (locals: int list) (pops: int) =
+                    if index >= text.Length then pops
+                    elif text.[index] = '"' then
+                        // skip a string literal
+                        let rec close i escaped =
+                            if i >= text.Length then i
+                            elif escaped then close (i + 1) false
+                            elif text.[i] = '\\' then close (i + 1) true
+                            elif text.[i] = '"' then i + 1
+                            else close (i + 1) false
+                        scan (close (index + 1) false) depth locals pops
+                    elif text.[index] = '\'' then
+                        // a char literal ('x' or '\x'); a lone quote is a type parameter
+                        let skip =
+                            if index + 2 < text.Length && text.[index + 2] = '\'' then 3
+                            elif index + 3 < text.Length && text.[index + 1] = '\\' && text.[index + 3] = '\'' then 4
+                            else 1
+                        scan (index + skip) depth locals pops
+                    elif text.[index] = '(' || text.[index] = '[' || text.[index] = '{' then
+                        scan (index + 1) (depth + 1) locals pops
+                    elif text.[index] = ')' || text.[index] = ']' || text.[index] = '}' then
+                        let depth = depth - 1
+                        scan (index + 1) depth (locals |> List.filter (fun d -> d <= depth)) pops
+                    elif text.Substring(index).StartsWith("let") && isWordAt index 3 then
+                        scan (index + 3) depth (depth :: locals) pops
+                    elif text.Substring(index).StartsWith("in") && isWordAt index 2 then
+                        match locals with
+                        | _ :: rest -> scan (index + 2) depth rest pops
+                        | [] -> scan (index + 2) depth locals (pops + 1)
+                    else scan (index + 1) depth locals pops
+                // The leading let is on `active` already, so the scan starts past
+                // it and its `in` pops from there; a leading `in` was taken above.
+                let start =
+                    match leadingLet with
+                    | Some column -> column + 3
+                    | None -> 0
+                let pops = scan start 0 [] 0 - (if explicitIn then 1 else 0)
+                let rec drop n active =
+                    match n, active with
+                    | n, _ :: outer when n > 0 -> drop (n - 1) outer
+                    | _ -> active
+                drop pops nextActive
+            let endsIn = (code line).EndsWith(" in")
+            loop activeAfterExplicitIn blocks (opensBlock line) (continues line) endsIn rest (rewritten :: acc)
+    loop [] [] false false false lines []
 
 let private insertNestedFunctionLayoutSeparators (input: string) : string =
     let lines = input.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n') |> Array.toList
     let leadingSpaces (line: string) = line.Length - line.TrimStart().Length
     let tryFunctionIndent (line: string) : int option =
-        let letIndex = line.IndexOf("let ", System.StringComparison.Ordinal)
+        // Only a `let` that starts the line (after an `in` the value-let pass
+        // put there) declares anything; one inside a string literal does not.
+        let rec skip index =
+            if index >= line.Length then index
+            else
+                match line.[index] with
+                | ' ' | '\t' | '(' | '\u0002' | ';' -> skip (index + 1)
+                | 'i' when line.Substring(index).StartsWith("in ") -> skip (index + 3)
+                | _ -> index
+        let letIndex =
+            let column = skip 0
+            if line.Substring(column).StartsWith("let ") then column else -1
         if letIndex < 0 then None
         else
             let afterLet = line.Substring(letIndex + 4).TrimStart()
@@ -3031,7 +3207,12 @@ let private insertNestedFunctionLayoutSeparators (input: string) : string =
             if nameEnd <= 0 then None
             else
                 let afterName = afterLet.Substring(nameEnd).TrimStart()
-                if afterName.StartsWith("(") || afterName.StartsWith("<") then Some letIndex
+                // The declaration's column is the `let`'s own unless only a
+                // prefix from the value-let pass stands before it.
+                let column =
+                    if line.Substring(0, letIndex).Trim().Trim('\u0002').Trim() = "in" then leadingSpaces line
+                    else letIndex
+                if afterName.StartsWith("(") || afterName.StartsWith("<") then Some column
                 else None
 
     let rec closeCompletedLayouts (indent: int) (active: int list) (prefix: string) =
@@ -3097,24 +3278,50 @@ let private preserveIndentedMatchBoundaries (input: string) : string =
         let trimmed = line.Trim()
         trimmed <> "" && not (trimmed.StartsWith("//"))
     let nextSignificant remaining = remaining |> List.tryFind isSignificant
+    // An arm whose body (the deeper lines after its `->`) holds a match, wherever
+    // in the body: after a `let`, inside a `let`. Without the parentheses the
+    // nested match would take the outer match's later arms as its own, and the
+    // outer match then reads as non-exhaustive.
     let isCaseWithNestedMatch (line: string) (remaining: string list) =
         let trimmed = line.TrimStart()
+        let caseIndent = leadingSpaces line
+        let rec bodyHasMatch (lines: string list) =
+            match lines with
+            | [] -> false
+            | l :: rest when not (isSignificant l) -> bodyHasMatch rest
+            | l :: rest ->
+                if leadingSpaces l <= caseIndent then false
+                else
+                    let t = l.TrimStart()
+                    t.StartsWith("match ") || t.Contains(" match ") || t.StartsWith("|") || bodyHasMatch rest
         trimmed.StartsWith("|")
-        && trimmed.Contains("->")
-        && (match nextSignificant remaining with
-            | Some next ->
-                leadingSpaces next > leadingSpaces line
-                && next.TrimStart().StartsWith("match ")
-            | None -> false)
+        && trimmed.TrimEnd().EndsWith("->")
+        && bodyHasMatch remaining
     let rec closeCompleted indent active closers =
         match active with
         | caseIndent :: rest when indent <= caseIndent -> closeCompleted indent rest (" )" :: closers)
         | _ -> (active, closers)
+    // The closers go onto the body's last line, before a trailing `in` if it has
+    // one: as their own line after `... in` they would follow the `in` and take
+    // the let's body with them.
+    let rec closeOnLastLine (closers: string list) (acc: string list) =
+        match closers, acc with
+        | [], _ -> acc
+        | _, [] -> (String.concat "" closers) :: []
+        | _, last :: earlier when not (isSignificant last) ->
+            last :: closeOnLastLine closers earlier
+        | _, last :: earlier ->
+            let trimmedEnd = last.TrimEnd()
+            let closing = String.concat "" closers
+            let rewritten =
+                if trimmedEnd.EndsWith(" in") then trimmedEnd.Substring(0, trimmedEnd.Length - 3) + closing + " in"
+                else trimmedEnd + closing
+            rewritten :: earlier
     let rec loop active remaining acc =
         match remaining with
         | [] ->
             let closing = active |> List.map (fun _ -> " )")
-            (List.rev acc) @ closing |> String.concat "\n"
+            List.rev (closeOnLastLine closing acc) |> String.concat "\n"
         | line :: rest ->
             let (remainingActive, closers) =
                 if isSignificant line then closeCompleted (leadingSpaces line) active [] else (active, [])
@@ -3122,8 +3329,17 @@ let private preserveIndentedMatchBoundaries (input: string) : string =
                 if isCaseWithNestedMatch line rest then line + " (" else line
             let nextActive =
                 if isCaseWithNestedMatch line rest then leadingSpaces line :: remainingActive else remainingActive
-            loop nextActive rest (rewritten :: (closers @ acc))
+            loop nextActive rest (rewritten :: closeOnLastLine closers acc)
     loop [] lines []
+
+/// The layout passes alone: what the lexer is handed for a unit body. Exposed so
+/// the passes can be tested and inspected without a lex.
+let normalizeLayout (sourceBody: string) : string =
+    sourceBody
+    |> insertValueLetLayoutSeparators
+    |> insertNestedFunctionLayoutSeparators
+    |> insertTopLevelValueLayoutSeparators
+    |> preserveIndentedMatchBoundaries
 
 let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.ParsedSource, string> =
     let rec extractModules source modules =
@@ -3131,12 +3347,7 @@ let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.
         | Some (moduleName, body) -> extractModules body (moduleName :: modules)
         | None -> (List.rev modules, source)
     let (sourceModules, sourceBody) = extractModules input []
-    let sourceBody =
-        sourceBody
-        |> insertLambdaLetLayoutSeparators
-        |> insertNestedFunctionLayoutSeparators
-        |> insertTopLevelValueLayoutSeparators
-        |> preserveIndentedMatchBoundaries
+    let sourceBody = normalizeLayout sourceBody
     lex sourceBody
     |> Result.bind parse
     |> Result.map (NameSyntax.wrapModules sourceModules)

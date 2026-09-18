@@ -552,16 +552,21 @@ let internal formatLegacyParamTypeError
 
 /// Freshen type parameters - generate new unique names for each type param
 /// Returns (fresh type params, substitution map from old to fresh names)
-/// Uses index-based naming for deterministic compilation (no global state)
+/// Uses deterministic function scope and index naming (no global state).
 let freshenTypeParamsAvoiding
+    (scopeName: string option)
     (unavailableNames: Set<string>)
     (typeParams: string list)
     : string list * Map<string, string> =
     let freshName index baseName =
         let rec find suffix =
+            let scopedBase =
+                match scopeName with
+                | Some scope -> $"{baseName}${scope}${index}"
+                | None -> $"{baseName}${index}"
             let candidate =
-                if suffix = 0 then $"{baseName}${index}"
-                else $"{baseName}${index}${suffix}"
+                if suffix = 0 then scopedBase
+                else $"{scopedBase}${suffix}"
             if Set.contains candidate unavailableNames then find (suffix + 1)
             else candidate
         find 0

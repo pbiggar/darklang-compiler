@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-18T21:44:53+00:00",
+  "generated_at": "2026-09-18T22:46:33+00:00",
   "compiler": {
-    "commit": "176101cd6ace2e37e8b0ff7c2834f03e4edba00d",
-    "subject": "Certify unique ownership across HIR boundaries"
+    "commit": "4569b3ddc80f31015bd5283557a80b791ace0c37",
+    "subject": "Preserve PR fixes without benchmark regressions"
   },
   "benchmarks": [
     {
@@ -30,7 +30,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 51754909
+      "instructions": 51730209
     },
     {
       "name": "factorial",
@@ -46,7 +46,7 @@
     },
     {
       "name": "fft",
-      "instructions": 407131790
+      "instructions": 407131151
     },
     {
       "name": "fib",
@@ -54,7 +54,7 @@
     },
     {
       "name": "huffman",
-      "instructions": 518408776
+      "instructions": 518434255
     },
     {
       "name": "leibniz",
@@ -106,7 +106,7 @@
     },
     {
       "name": "regex_lite",
-      "instructions": 77891592
+      "instructions": 77891424
     },
     {
       "name": "spectral_norm",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 5864163741
+      "instructions": 5864163666
     },
     {
       "name": "warden",
-      "instructions": 47041843
+      "instructions": 47043559
     }
   ]
 }

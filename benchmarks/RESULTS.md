@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-18T21:44:53+00:00
+**Snapshot timestamp:** 2026-09-18T22:46:33+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `176101cd6ace2e37e8b0ff7c2834f03e4edba00d` - Certify unique ownership across HIR boundaries
+**Compiler commit:** `4569b3ddc80f31015bd5283557a80b791ace0c37` - Preserve PR fixes without benchmark regressions
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -16,13 +16,13 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | ackermann | 145,114,139 (1.62x) | 89,558,784 | - | - | - | - |
 | binary_trees | 11,053,080 (0.17x) | 63,993,594 | - | - | - | - |
 | collatz | 70,194,400 (0.91x) | 76,735,737 | - | - | - | - |
-| edigits | 51,754,909 (75.1x) | 688,749 | - | - | - | - |
+| edigits | 51,730,209 (75.1x) | 688,749 | - | - | - | - |
 | factorial | 63,468 (0.07x) | 970,290 | - | - | - | - |
 | fannkuch | 233,405,899 (133x) | 1,760,885 | - | - | - | - |
 | fasta | 154,617,366 (225x) | 686,768 | - | - | - | - |
-| fft | 407,131,790 (896x) | 454,262 | - | - | - | - |
+| fft | 407,131,151 (896x) | 454,262 | - | - | - | - |
 | fib | 8,268,587 (1.37x) | 6,054,417 | - | - | - | - |
-| huffman | 518,408,776 (181x) | 2,868,263 | - | - | - | - |
+| huffman | 518,434,255 (181x) | 2,868,263 | - | - | - | - |
 | leibniz | 17,006,831 (1.19x) | 14,258,894 | - | - | - | - |
 | mandelbrot | 15,227,450 (1.21x) | 12,557,270 | - | - | - | - |
 | matmul | 42,560,591 (65.5x) | 649,416 | - | - | - | - |
@@ -35,10 +35,10 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | primes | 1,673,435 (1.33x) | 1,260,125 | - | - | - | - |
 | quicksort | 188,808,249 (31.0x) | 6,095,209 | - | - | - | - |
 | raytracer | 47,323,918 (11.6x) | 4,067,427 | - | - | - | - |
-| regex_lite | 77,891,592 (190x) | 409,856 | - | - | - | - |
+| regex_lite | 77,891,424 (190x) | 409,856 | - | - | - | - |
 | spectral_norm | 916,603,990 (179x) | 5,106,524 | - | - | - | - |
 | string_equality | 1,219,845 (0.82x) | 1,479,564 | - | - | - | - |
 | sum_to_n | 62,009 (0.24x) | 260,246 | - | - | - | - |
 | tak | 48,017,024 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 5,864,163,741 (13951x) | 420,354 | - | - | - | - |
-| warden | 47,041,843 (174x) | 270,345 | - | - | - | - |
+| tinytemplate | 5,864,163,666 (13951x) | 420,354 | - | - | - | - |
+| warden | 47,043,559 (174x) | 270,345 | - | - | - | - |
