@@ -107,15 +107,16 @@ let join<'a> (option: Stdlib.Option.Option<Stdlib.Option.Option<a>>) : Stdlib.Op
     | None -> None
 
 let combine<'a> (options: List<Stdlib.Option.Option<a>>) : Stdlib.Option.Option<List<a>> =
-    match options with
-    | [] -> Some ([])
-    | option :: rest ->
-        match option with
-        | None -> None
-        | Some value ->
-            match Stdlib.Option.combine<a> rest with
-            | None -> None
-            | Some values -> Some (Stdlib.List.push<a> values value)
+    // Built back to front and reversed once: `List.append acc [value]` copies the accumulator every
+    // element, so this was quadratic in the interpreter before it adopted this implementation.
+    let folded =
+        Stdlib.List.fold options (Some ([])) (fun acc option ->
+            Stdlib.Option.andThen2 acc option (fun acc value ->
+                Some (Stdlib.List.push acc value))) in
+
+    match folded with
+    | Some values -> Some (Stdlib.List.reverse values)
+    | None -> None
 
 let values<'a> (options: List<Stdlib.Option.Option<a>>) : List<a> =
     match options with

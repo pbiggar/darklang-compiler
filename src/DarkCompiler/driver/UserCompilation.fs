@@ -557,9 +557,27 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             userRegistries.RecordFieldsReg
                                         )
                                     let freshProgramContextIdentity = box allocatedProgramFuncs
-                                    let startProgramFuncs, otherProgramFuncs =
-                                        reachableProgramFuncs
+                                    let startProgramFuncs, otherUserFuncs =
+                                        retainedUserFuncs
                                         |> List.partition (fun func -> func.Name = "_start")
+                                    let userFunctionGroups : CodeGen.FunctionGroup list =
+                                        otherUserFuncs
+                                        |> List.fold
+                                            (fun runsRev func ->
+                                                let isDependency = Set.contains func.Name dependencyNames
+                                                match runsRev with
+                                                | (runIsDependency, funcsRev) :: rest when runIsDependency = isDependency ->
+                                                    (runIsDependency, func :: funcsRev) :: rest
+                                                | _ -> (isDependency, [func]) :: runsRev)
+                                            []
+                                        |> List.rev
+                                        |> List.map (fun (isDependency, funcsRev) -> {
+                                            ContextIdentity =
+                                                if isDependency then dependencyIdentity
+                                                else freshProgramContextIdentity
+                                            ReusableAcrossCompilations = false
+                                            Functions = List.rev funcsRev
+                                        })
                                     let functionGroups : CodeGen.FunctionGroup list =
                                         [
                                             {
@@ -572,17 +590,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 ReusableAcrossCompilations = true
                                                 Functions = reachableStdlib
                                             }
-                                            {
-                                                ContextIdentity = freshProgramContextIdentity
-                                                ReusableAcrossCompilations = false
-                                                Functions = otherProgramFuncs
-                                            }
-                                            {
-                                                ContextIdentity = dependencyIdentity
-                                                ReusableAcrossCompilations = false
-                                                Functions = reachableDependencyFuncs
-                                            }
                                         ]
+                                        @ userFunctionGroups
                                         |> List.filter (fun group -> not (List.isEmpty group.Functions))
                                     if shouldDumpIR plan.Verbosity plan.Options.DumpLIR then
                                         printLIRProgram plan.Options "=== LIR (After Register Allocation) ===" allocatedProgram

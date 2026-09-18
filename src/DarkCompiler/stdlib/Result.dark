@@ -110,15 +110,18 @@ let toOption<'t, 'e> (result: Stdlib.Result.Result<t, e>) : Stdlib.Option.Option
     | Error _ -> None
 
 let collect<'t, 'e> (results: List<Stdlib.Result.Result<t, e>>) : Stdlib.Result.Result<List<t>, e> =
-    match results with
-    | [] -> Ok ([])
-    | result :: rest ->
-        match result with
-        | Error error -> Error error
-        | Ok value ->
-            match Stdlib.Result.collect<t, e> rest with
-            | Error error -> Error error
-            | Ok values -> Ok (Stdlib.List.push<t> values value)
+    // Built back to front with `push` and reversed once. `pushBack` copies the accumulator, so the
+    // interpreter adopted this implementation to keep collection linear in the list length.
+    let folded =
+        Stdlib.List.fold results (Ok ([])) (fun acc result ->
+            match (acc, result) with
+            | (Ok acc, Ok result) -> Ok (Stdlib.List.push acc result)
+            | (Ok _, Error error) -> Error error
+            | (Error error, _) -> Error error) in
+
+    match folded with
+    | Ok values -> Ok (Stdlib.List.reverse values)
+    | Error error -> Error error
 
 let join<'t, 'e> (result: Stdlib.Result.Result<Stdlib.Result.Result<t, e>, e>) : Stdlib.Result.Result<t, e> =
     match result with

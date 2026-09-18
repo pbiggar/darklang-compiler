@@ -123,3 +123,6 @@ let x = Stdlib.Option.Option.None in Stdlib.Option.isSome (Stdlib.Option.withDef
 
 // Result
 let x = Stdlib.Option.Option.None in Stdlib.Result.isOk (Stdlib.Option.withDefault x (Stdlib.Result.Result.Ok 42L)) = true
+
+// Large combines follow the interpreter's stack-safe fold implementation.
+let options = Stdlib.List.repeatUnsafe 100000 (Stdlib.Option.Option.Some 1L) in match Stdlib.Option.combine options with | Some values -> Stdlib.List.length values | None -> 0 = 100000 isolated=true
