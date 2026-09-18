@@ -70,7 +70,7 @@ let private testLoweredBudget () =
 let private rejectsOwnership operations () =
     let result: HIR.Value = { Id = HIR.ValueId 1000; Type = AST.TInt64 }
     let block : ListRegion.OwnedBlock =
-        { Body = { Parameters = Map.empty; Operations = List.concat operations; Result = result } }
+        { Body = { Parameters = []; Operations = List.concat operations; Result = result } }
     match VerifyListOwnership.verifyBlockOwnership block with
     | Error _ -> Ok ()
     | Ok () -> Error "Ownership verifier accepted an invalid lifetime"
@@ -91,7 +91,7 @@ let private manyBranches count =
         (List.foldBack (fun index body -> bind $"branch{index}" (choice (fold (CheckedAST.Var "xs")) (CheckedAST.Int64Literal 7L)) body) [1 .. count] (fold (CheckedAST.Var "xs")))
 let private ownedBlock releases operations : ListRegion.OwnedBlock =
     let result: HIR.Value = { Id = HIR.ValueId 1001; Type = AST.TInt64 }
-    { Body = { Parameters = Map.empty; Operations = drops releases @ List.concat operations; Result = result } }
+    { Body = { Parameters = []; Operations = drops releases @ List.concat operations; Result = result } }
 let private ownedBranch yes no : ListRegion.OwnedOperation list =
     let result: HIR.Value = { Id = HIR.ValueId 1002; Type = AST.TInt64 }
     let condition: HIR.Operand = { Expression = CheckedAST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }

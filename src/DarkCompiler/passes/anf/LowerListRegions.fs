@@ -215,5 +215,6 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
 
     let initialValues =
         block.Body.Parameters
-        |> Map.fold (fun values name parameter -> Map.add parameter.Id (lookup "root parameter" name env) values) Map.empty
+        |> List.fold (fun values parameter ->
+            Map.add parameter.Value.Id (lookup "root parameter" parameter.Name env) values) Map.empty
     verify region |> Result.bind (fun () -> lowerBlock initialValues Map.empty vg block)

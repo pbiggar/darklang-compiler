@@ -156,9 +156,7 @@ let verifyFunction
         |> Option.map fst
     let managedParameters =
         root.Body.Parameters
-        |> Map.values
-        |> Seq.choose managed
-        |> Seq.toList
+        |> List.choose (fun parameter -> managed parameter.Value)
     match duplicateParameter with
     | Some id -> Error (DuplicateParameter id)
     | None when Set.ofList parameterIds <> Set.ofList managedParameters

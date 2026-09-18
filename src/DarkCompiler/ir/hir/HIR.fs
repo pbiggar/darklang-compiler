@@ -39,12 +39,27 @@ type Operation<'leaf, 'block> =
     | Call of FunctionCall
     | Branch of result: Value * condition: Operand * ifTrue: 'block * ifFalse: 'block
 
+/// Parameters retain source names for operand resolution and declaration order
+/// for function-call signature alignment. Value identities remain the semantic
+/// authority after construction.
+type Parameter = {
+    Name: string
+    Value: Value
+}
+
 /// Each branch produces the binding consumed by the enclosing continuation.
 /// Keeping the continuation in this sequence avoids duplicating it per path.
 type Block<'operation> = {
-    Parameters: Map<string, Value>
+    Parameters: Parameter list
     Operations: 'operation list
     Result: Value
+}
+
+/// A normalized function owns one ordered entry block. Its typed signature is
+/// derived from the parameter and result values rather than duplicated here.
+type Function<'block> = {
+    Name: string
+    Body: 'block
 }
 
 /// Effects constrain reordering independently of ownership. Owned-storage
