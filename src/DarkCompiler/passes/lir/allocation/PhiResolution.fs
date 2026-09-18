@@ -16,76 +16,41 @@ open SpillOperands
 let generateFloatMoveInstrsWithAllocation
     (moves: (LIR.FReg * LIR.FReg) list)
     (floatAllocation: FAllocationResult) : LIR.Instr list =
-
-    if List.isEmpty moves then []
-    else
-        // Map FVirtual to physical register ID using allocation
-        let fregToPhysId (freg: LIR.FReg) : int =
-            match freg with
-            | LIR.FPhysical p -> physFPRegToInt p
-            | LIR.FVirtual 1000 -> 18  // D18 (left temp for binary ops) - fixed
-            | LIR.FVirtual 1001 -> 17  // D17 (right temp for binary ops) - fixed
-            | LIR.FVirtual 2000 -> 16  // D16 (cycle resolution temp) - fixed
-            | LIR.FVirtual n when n >= 3000 && n < 4000 ->
-                19 + ((n - 3000) % 8)  // D19-D26 (call arg temps) - fixed
-            | LIR.FVirtual id ->
-                // Look up in allocation
-                match tryFloatAllocation floatAllocation id with
-                | Some physReg -> physFPRegToInt physReg
-                | None ->
-                    // Fallback to old modulo mapping for unallocated VRegs
-                    // This can happen for VRegs that weren't in the CFG (e.g., dead code)
-                    if id >= 0 && id <= 7 then 2 + id  // D2-D9 for params 0-7
-                    elif id < 10000 then
-                        let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15; 27; 28; 29; 30; 31 |]
-                        tempRegs[(id - 8) % 13]
-                    else
-                        let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15; 27; 28; 29; 30; 31 |]
-                        tempRegs[((id - 10000) + 7) % 13]
-
-        // Convert moves to physical register IDs for cycle detection
-        let physMoves = moves |> List.map (fun (dest, src) -> (fregToPhysId dest, fregToPhysId src))
-
-        let getSrcPhysId (src: int) : int option = Some src
-
-        let actions = ParallelMoves.resolve physMoves getSrcPhysId
-
-        // Convert actions back to FMov instructions using original FRegs
-        let maxPhysId =
-            physMoves
-            |> List.fold (fun acc (destId, srcId) -> max acc (max destId srcId)) 0
-        let destMap = Array.create (maxPhysId + 1) None
-        let srcMap = Array.create (maxPhysId + 1) None
-        for (dest, src) in moves do
-            let destId = fregToPhysId dest
-            let srcId = fregToPhysId src
-            if destId <= maxPhysId then destMap.[destId] <- Some dest
-            if srcId <= maxPhysId then srcMap.[srcId] <- Some src
-
-        actions
-        |> List.collect (fun action ->
-            match action with
-            | ParallelMoves.SaveToTemp physId ->
-                if physId >= 0 && physId < srcMap.Length then
-                    match srcMap.[physId] with
-                    | Some srcFreg -> [LIR.FMov (LIR.FVirtual 2000, srcFreg)]
-                    | None -> []
-                else
-                    []
-            | ParallelMoves.Move (destPhysId, srcPhysId) ->
-                if destPhysId >= 0 && destPhysId < destMap.Length && srcPhysId >= 0 && srcPhysId < srcMap.Length then
-                    match destMap.[destPhysId], srcMap.[srcPhysId] with
-                    | Some destFreg, Some srcFreg -> [LIR.FMov (destFreg, srcFreg)]
-                    | _ -> []
-                else
-                    []
-            | ParallelMoves.MoveFromTemp destPhysId ->
-                if destPhysId >= 0 && destPhysId < destMap.Length then
-                    match destMap.[destPhysId] with
-                    | Some destFreg -> [LIR.FMov (destFreg, LIR.FVirtual 2000)]
-                    | None -> []
-                else
-                    [])
+    let location = function
+        | LIR.FPhysical reg -> FPhysReg reg
+        | LIR.FVirtual id ->
+            match tryFloatAllocation floatAllocation id with
+            | Some allocated -> allocated
+            | None -> Crash.crash $"Float phi move vreg {id} has no allocation"
+    let locatedMoves = moves |> List.map (fun (dest, src) -> (location dest, location src))
+    let sourceLocation source =
+        match source with
+        | FRematerialized _ -> None
+        | FPhysReg _ | FStackSlot _ -> Some source
+    let loadInto target = function
+        | FPhysReg src -> [LIR.FMov (target, LIR.FPhysical src)]
+        | FStackSlot slot -> [LIR.FSpillLoad (target, slot)]
+        | FRematerialized value -> [LIR.FLoad (target, value)]
+    let moveTo dest src =
+        match dest, src with
+        | FPhysReg reg, source -> loadInto (LIR.FPhysical reg) source
+        | FStackSlot slot, FPhysReg reg -> [LIR.FSpillStore (slot, LIR.FPhysical reg)]
+        | FStackSlot slot, FStackSlot sourceSlot ->
+            [ LIR.FSpillLoad (floatAllocation.SpillScratchLeft, sourceSlot)
+              LIR.FSpillStore (slot, floatAllocation.SpillScratchLeft) ]
+        | FStackSlot slot, FRematerialized value ->
+            [ LIR.FLoad (floatAllocation.SpillScratchLeft, value)
+              LIR.FSpillStore (slot, floatAllocation.SpillScratchLeft) ]
+        | FRematerialized _, _ -> Crash.crash "A rematerialized Float cannot be a phi destination"
+    ParallelMoves.resolve locatedMoves sourceLocation
+    |> List.collect (function
+        | ParallelMoves.SaveToTemp source -> loadInto floatAllocation.SpillScratchRight source
+        | ParallelMoves.Move (dest, src) -> moveTo dest src
+        | ParallelMoves.MoveFromTemp dest ->
+            match dest, floatAllocation.SpillScratchRight with
+            | FPhysReg reg, scratch -> [LIR.FMov (LIR.FPhysical reg, scratch)]
+            | FStackSlot slot, scratch -> [LIR.FSpillStore (slot, scratch)]
+            | FRematerialized _, _ -> Crash.crash "A rematerialized Float cannot be a phi destination")
 
 // ============================================================================
 // Phi Resolution

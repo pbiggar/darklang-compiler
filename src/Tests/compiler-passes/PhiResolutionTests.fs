@@ -86,7 +86,10 @@ let countFloatMoves (block: BasicBlock) : int =
 let emptyFloatAllocation : FloatAllocation.FAllocationResult =
     { Domain = { Ids = [||]; IndexOf = [||]; IndexOffset = 0; WordCount = 0 }
       Allocations = [||]
-      UsedCalleeSavedF = [] }
+      StackSize = 0
+      UsedCalleeSavedF = []
+      SpillScratchLeft = LIR.FVirtual 1000
+      SpillScratchRight = LIR.FVirtual 1001 }
 
 let buildAllocationResult
     (domain: AllocationModel.VRegDomain)

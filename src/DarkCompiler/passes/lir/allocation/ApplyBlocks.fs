@@ -124,7 +124,8 @@ let private applyToPreparedBlock
     let mutable remainingArgMoveBacking = preparation.ArgMoveBackingRegs
 
     let appendOneAllocated (instr: LIR.Instr) : unit =
-        allocatedInstrs.Add(applyFloatAllocationToInstr floatAllocation instr)
+        for allocated in applyFloatAllocationToInstrs floatAllocation instr do
+            allocatedInstrs.Add(allocated)
 
     let appendAllocated (instrs: LIR.Instr list) : unit =
         for instr in instrs do

@@ -49,6 +49,7 @@ let private allocateRegistersInternal
     (swOpt: System.Diagnostics.Stopwatch option)
     (func: LIR.Function)
     : LIR.Function * RegisterAllocationTiming list =
+    let scheduledCFG = scheduleFloatLoadsInCFG func.CFG
     // Precompute parameter info with separate int/float counters (AAPCS64)
     // Needed for entry defs and float allocation.
     let paramsWithTypes = func.TypedParams |> List.map (fun tp -> (tp.Reg, tp.Type))
@@ -87,7 +88,7 @@ let private allocateRegistersInternal
             | LIR.Virtual id -> Some (id, paramIdx)
             | LIR.Physical _ -> None)
 
-    let (blockIndex, blocks) = buildBlockIndex func.CFG
+    let (blockIndex, blocks) = buildBlockIndex scheduledCFG
 
     // Step 1: Classify instructions once, then solve both liveness domains together.
     let ((classifiedBlocks, domain, livenessBits, floatDomain, floatLiveness), timings) =
@@ -157,6 +158,7 @@ let private allocateRegistersInternal
         timePhase swOpt "RegAlloc: Float Allocation" timings (fun () ->
             chordalFloatAllocationWithLiveness
                 (allocatableFloatRegsFor arch)
+                result.StackSize
                 blockIndex
                 blocks
                 classifiedBlocks
@@ -320,9 +322,9 @@ let private allocateRegistersInternal
             // IMPORTANT: Apply float allocation to param copy instructions since they were generated
             // before applyFloatAllocationToCFG ran and still contain FVirtual registers
             let allocatedFloatParamCopyInstrs =
-                floatParamCopyInstrs |> List.map (applyFloatAllocationToInstr floatAllocation)
+                floatParamCopyInstrs |> List.collect (applyFloatAllocationToInstrs floatAllocation)
             let allocatedEntryEdgePhiInstrs =
-                entryEdgePhiInstrs |> List.map (applyFloatAllocationToInstr floatAllocation)
+                entryEdgePhiInstrs |> List.collect (applyFloatAllocationToInstrs floatAllocation)
 
             let updatedBlocks = Array.copy allocatedBlocks
             let entryBlock = updatedBlocks.[blockIndex.EntryIndex]
@@ -333,7 +335,7 @@ let private allocateRegistersInternal
 
             updatedBlocks.[blockIndex.EntryIndex] <- entryBlockWithCopies
             let cfgWithParamCopies : LIR.CFG =
-                { Entry = func.CFG.Entry; Blocks = blocksToMap blockIndex updatedBlocks }
+                { Entry = scheduledCFG.Entry; Blocks = blocksToMap blockIndex updatedBlocks }
 
             // Step 10: Set integer parameters to their calling convention registers.
             // AAPCS64 uses separate counters for X and D argument registers; floats are
@@ -355,7 +357,7 @@ let private allocateRegistersInternal
         Name = func.Name
         TypedParams = allocatedTypedParams
         CFG = cfgWithParamCopies
-        StackSize = result.StackSize
+        StackSize = floatAllocation.StackSize
         UsedCalleeSaved = result.UsedCalleeSaved
         CodegenFacts = func.CodegenFacts
     }

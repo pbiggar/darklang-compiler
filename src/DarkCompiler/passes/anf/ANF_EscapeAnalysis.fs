@@ -4,9 +4,6 @@
 // tuple and record allocations only when their complete lexical use set is
 // projections, aliases, or the representation-only source of a record clone.
 // Managed fields and every unmodelled use retain the ordinary heap allocation.
-// Float scalarization is deferred until the float register allocator can spill
-// longer live ranges, but uniquely owned Float record clone chains reuse their
-// existing allocation in place.
 
 module ANF_EscapeAnalysis
 
@@ -27,6 +24,7 @@ let private isScalarType (typ: AST.Type) : bool =
     | AST.TUInt32
     | AST.TUInt64
     | AST.TBool
+    | AST.TFloat64
     | AST.TDateTime
     | AST.TUnit
     | AST.TRuntimeError -> true
@@ -36,11 +34,10 @@ let private atomIsScalar (scalarTemps: Set<TempId>) (atom: Atom) : bool =
     match atom with
     | UnitLiteral
     | IntLiteral _
-    | BoolLiteral _ -> true
+    | BoolLiteral _
+    | FloatLiteral _ -> true
     | Var id -> Set.contains id scalarTemps
-    | StringLiteral _
-    | FloatLiteral _
-    | FuncRef _ -> false
+    | StringLiteral _ | FuncRef _ -> false
 
 let private atomsUseTracked (tracked: Set<TempId>) (atoms: Atom list) : bool =
     tracked
@@ -55,7 +52,8 @@ let rec private exprUsesTracked (tracked: Set<TempId>) (expr: AExpr) : bool =
     | Return atom -> atomsUseTracked tracked [atom]
     | Jump (_, atom) -> atomsUseTracked tracked [atom]
     | Join (parameter, continuation, entry) ->
-        exprUsesTracked (Set.remove parameter.Id tracked) continuation || exprUsesTracked tracked entry
+        exprUsesTracked (Set.remove parameter.Id tracked) continuation
+        || exprUsesTracked tracked entry
     | Let (_, cexpr, body) ->
         cexprUsesTracked tracked cexpr || exprUsesTracked tracked body
     | If (condition, thenBranch, elseBranch) ->
@@ -63,13 +61,9 @@ let rec private exprUsesTracked (tracked: Set<TempId>) (expr: AExpr) : bool =
         || exprUsesTracked tracked thenBranch
         || exprUsesTracked tracked elseBranch
 
-let private isImmediateFieldType (typ: AST.Type) : bool =
-    typ = AST.TFloat64 || isScalarType typ
-
 /// Rewrite the sole consuming clone of a uniquely local immediate record to
-/// reuse its source block. Projections and transparent aliases may precede the
-/// clone; every other use, branch, or later reference conservatively rejects
-/// reuse.
+/// reuse its source block. Running this after scalar replacement preserves the
+/// allocation-free cases while retaining reuse for escaping clone chains.
 let rec private reuseUniqueRecordClone
     (sourceDescriptor: RecordDescriptor)
     (tracked: Set<TempId>)
@@ -86,10 +80,10 @@ let rec private reuseUniqueRecordClone
             None
     | Let (boundId, Atom (Var sourceId), body) when Set.contains sourceId tracked ->
         reuseUniqueRecordClone sourceDescriptor (Set.add boundId tracked) body
-        |> Option.map (fun body -> Let (boundId, Atom (Var sourceId), body))
+        |> Option.map (fun rewritten -> Let (boundId, Atom (Var sourceId), rewritten))
     | Let (boundId, TypedAtom (Var sourceId, typ), body) when Set.contains sourceId tracked ->
         reuseUniqueRecordClone sourceDescriptor (Set.add boundId tracked) body
-        |> Option.map (fun body -> Let (boundId, TypedAtom (Var sourceId, typ), body))
+        |> Option.map (fun rewritten -> Let (boundId, TypedAtom (Var sourceId, typ), rewritten))
     | Let (boundId, cexpr, body) ->
         let isProjection =
             match cexpr with
@@ -97,28 +91,30 @@ let rec private reuseUniqueRecordClone
             | _ -> false
         if isProjection || not (cexprUsesTracked tracked cexpr) then
             reuseUniqueRecordClone sourceDescriptor tracked body
-            |> Option.map (fun body -> Let (boundId, cexpr, body))
+            |> Option.map (fun rewritten -> Let (boundId, cexpr, rewritten))
         else
             None
 
-let private reuseEligibleRecordClone
-    (boundId: TempId)
-    (cexpr: CExpr)
-    (body: AExpr)
-    : AExpr =
-    let descriptor =
+let rec private reuseFloatRecordClones (expr: AExpr) : AExpr =
+    match expr with
+    | Jump _ | Return _ -> expr
+    | Join (parameter, continuation, entry) ->
+        Join (parameter, reuseFloatRecordClones continuation, reuseFloatRecordClones entry)
+    | If (condition, thenBranch, elseBranch) ->
+        If (condition, reuseFloatRecordClones thenBranch, reuseFloatRecordClones elseBranch)
+    | Let (boundId, cexpr, body) ->
+        let body = reuseFloatRecordClones body
         match cexpr with
         | RecordAlloc (descriptor, _)
         | RecordClone (descriptor, _, _)
-        | RecordReuse (descriptor, _, _) -> Some descriptor
-        | _ -> None
-    match descriptor with
-    | Some descriptor
-        when descriptor.Fields |> List.forall (snd >> isImmediateFieldType)
-             && descriptor.Fields |> List.exists (snd >> (=) AST.TFloat64) ->
-        reuseUniqueRecordClone descriptor (Set.singleton boundId) body
-        |> Option.defaultValue body
-    | _ -> body
+        | RecordReuse (descriptor, _, _)
+            when descriptor.Fields |> List.forall (snd >> isScalarType)
+                 && descriptor.Fields |> List.exists (snd >> (=) AST.TFloat64) ->
+            let rewritten =
+                reuseUniqueRecordClone descriptor (Set.singleton boundId) body
+                |> Option.defaultValue body
+            Let (boundId, cexpr, rewritten)
+        | _ -> Let (boundId, cexpr, body)
 
 /// Prove that an allocation and every alias derived from it stay inside the
 /// local projection/clone boundary. Calls and storage are rejected by the
@@ -253,7 +249,6 @@ let rec private scalarReplaceExpr
         let aggregate = Map.find sourceId aggregates
         scalarReplaceExpr returnTypes scalarTemps (Map.add boundId aggregate aggregates) body
     | Let (boundId, cexpr, body) ->
-        let body = reuseEligibleRecordClone boundId cexpr body
         let rewrittenCExpr = rewriteProjection aggregates cexpr
         match tryScalarAggregate scalarTemps rewrittenCExpr with
         | Some aggregate when hasOnlyLocalAggregateUses (Set.singleton boundId) body ->
@@ -283,7 +278,9 @@ let private scalarReplaceFunction
         |> List.choose (fun param -> if isScalarType param.Type then Some param.Id else None)
         |> Set.ofList
     { func with
-        Body = scalarReplaceExpr returnTypes scalarParams Map.empty func.Body }
+        Body =
+            scalarReplaceExpr returnTypes scalarParams Map.empty func.Body
+            |> reuseFloatRecordClones }
 
 let scalarReplaceProgram (Program (functions, mainExpr): Program) : Program =
     let returnTypes =
@@ -293,4 +290,5 @@ let scalarReplaceProgram (Program (functions, mainExpr): Program) : Program =
     Program (
         functions |> List.map (scalarReplaceFunction returnTypes),
         scalarReplaceExpr returnTypes Set.empty Map.empty mainExpr
+        |> reuseFloatRecordClones
     )

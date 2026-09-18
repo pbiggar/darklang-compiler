@@ -201,6 +201,12 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.FLoad (dest, value) ->
         ARM64EmitFloatingPoint.emitFLoad ctx dest value
 
+    | LIR.FSpillLoad (dest, stackSlot) ->
+        ARM64EmitFloatingPoint.emitFSpillLoad ctx dest stackSlot
+
+    | LIR.FSpillStore (stackSlot, src) ->
+        ARM64EmitFloatingPoint.emitFSpillStore ctx stackSlot src
+
     | LIR.FAdd (dest, left, right) ->
         ARM64EmitFloatingPoint.emitFAdd ctx dest left right
 

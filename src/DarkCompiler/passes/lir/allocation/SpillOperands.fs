@@ -19,15 +19,6 @@ let internal tryAllocation (allocation: AllocationResult) (vregId: int) : Alloca
         let idx = domain.IndexOf.[offset]
         if idx >= 0 then allocation.Allocations.[idx] else None
 
-let internal tryFloatAllocation (floatAllocation: FAllocationResult) (fvregId: int) : LIR.PhysFPReg option =
-    let domain = floatAllocation.Domain
-    let offset = fvregId - domain.IndexOffset
-    if offset < 0 || offset >= domain.IndexOf.Length then
-        None
-    else
-        let idx = domain.IndexOf.[offset]
-        if idx >= 0 then floatAllocation.Allocations.[idx] else None
-
 /// Get the caller-saved physical registers that contain live values
 let getLiveCallerSavedRegs (allocation: AllocationResult) (liveVRegs: BitSet) : LIR.PhysReg list =
     let used = Array.create 7 false
@@ -55,7 +46,9 @@ let getLiveCallerSavedFloatRegs
     let used = Array.create 16 false
     Bitset.iterIndices liveFVRegs (fun idx ->
         match floatAllocation.Allocations.[idx] with
-        | Some reg -> used.[physFPRegToInt reg] <- true
+        | Some (FPhysReg reg) -> used.[physFPRegToInt reg] <- true
+        | Some (FStackSlot _)
+        | Some (FRematerialized _)
         | None -> ())
     callerSaved
     |> List.filter (fun reg -> used.[physFPRegToInt reg])

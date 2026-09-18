@@ -98,6 +98,8 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.FPhi _
     | LIR.FMov _
     | LIR.FLoad _
+    | LIR.FSpillLoad _
+    | LIR.FSpillStore _
     | LIR.FAdd _
     | LIR.FSub _
     | LIR.FMul _

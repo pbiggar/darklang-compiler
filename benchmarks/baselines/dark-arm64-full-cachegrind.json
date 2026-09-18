@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-18T20:26:22+00:00",
+  "generated_at": "2026-09-18T21:44:53+00:00",
   "compiler": {
-    "commit": "1ea60810f10e81e8a282a20600549962497ba1a6",
-    "subject": "Merge commit '86a26c383b243d8306bdbe8de5c62c5b38fc45eb' into HEAD"
+    "commit": "176101cd6ace2e37e8b0ff7c2834f03e4edba00d",
+    "subject": "Certify unique ownership across HIR boundaries"
   },
   "benchmarks": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "name": "fft",
-      "instructions": 407133425
+      "instructions": 407131790
     },
     {
       "name": "fib",
@@ -58,7 +58,7 @@
     },
     {
       "name": "leibniz",
-      "instructions": 17006832
+      "instructions": 17006831
     },
     {
       "name": "mandelbrot",
@@ -78,7 +78,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 14537331
+      "instructions": 14537330
     },
     {
       "name": "nqueen",
@@ -90,11 +90,11 @@
     },
     {
       "name": "pisum",
-      "instructions": 812478
+      "instructions": 812477
     },
     {
       "name": "primes",
-      "instructions": 1678434
+      "instructions": 1673435
     },
     {
       "name": "quicksort",
@@ -102,7 +102,7 @@
     },
     {
       "name": "raytracer",
-      "instructions": 51734416
+      "instructions": 47323918
     },
     {
       "name": "regex_lite",
@@ -110,7 +110,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 931017197
+      "instructions": 916603990
     },
     {
       "name": "string_equality",

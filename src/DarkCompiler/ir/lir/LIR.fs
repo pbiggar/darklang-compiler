@@ -155,6 +155,8 @@ type Instr =
     | FPhi of dest:FReg * sources:(FReg * Label) list
     | FMov of dest:FReg * src:FReg
     | FLoad of dest:FReg * floatValue:float
+    | FSpillLoad of dest:FReg * stackSlot:int
+    | FSpillStore of stackSlot:int * src:FReg
     | FAdd of dest:FReg * left:FReg * right:FReg
     | FSub of dest:FReg * left:FReg * right:FReg
     | FMul of dest:FReg * left:FReg * right:FReg

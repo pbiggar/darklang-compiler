@@ -208,6 +208,10 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRFReg dest} <- FMov({prettyPrintLIRFReg src})"
     | LIR.FLoad (dest, value) ->
         $"{prettyPrintLIRFReg dest} <- FLoad(float[{value}])"
+    | LIR.FSpillLoad (dest, stackSlot) ->
+        $"{prettyPrintLIRFReg dest} <- FSpillLoad(Stack {stackSlot})"
+    | LIR.FSpillStore (stackSlot, src) ->
+        $"FSpillStore(Stack {stackSlot}, {prettyPrintLIRFReg src})"
     | LIR.FAdd (dest, left, right) ->
         $"{prettyPrintLIRFReg dest} <- FAdd({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
     | LIR.FSub (dest, left, right) ->

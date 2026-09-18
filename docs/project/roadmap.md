@@ -17,9 +17,6 @@ compiler bugs belong in [known issues](known-issues.md).
   unsupported-line denysets. Do not preserve dated failure counts here.
 - Validate the compiler against the existing package repository and turn each
   discovered incompatibility into a focused test or compatibility-ledger item.
-- Establish or reject the reported high-register-pressure spill risk. The old
-  claim had no minimal reproduction; retain it as an investigation target, not
-  as a confirmed compiler bug.
 
 ## Longer-term direction
 

@@ -5,6 +5,7 @@ module X64EmitFloatingPoint
 open X64Operands
 open X64CodeGenTypes
 open X64FieldReferenceCounts
+open X64InstructionContext
 
 let internal emitFArgMoves (ctx: FuncCtx) (moves: (LIR.PhysFPReg * LIR.FReg) list) : Result<X86_64.Instr list, string> =
     // Float arguments are parallel moves: a source may be overwritten by an
@@ -60,6 +61,18 @@ let internal emitFLoad (ctx: FuncCtx) (dest: LIR.FReg) (value: float) : Result<X
         let bits = System.BitConverter.DoubleToInt64Bits(value)
         Ok (loadImm64 scratch bits @ [X86_64.MOVQ_from_gp (d, scratch)])
     | _ -> Error "FLoad with virtual FP register"
+
+let internal emitFSpillLoad (ctx: FuncCtx) (dest: LIR.FReg) (stackSlot: int) : Result<X86_64.Instr list, string> =
+    match dest with
+    | LIR.FPhysical destPhys ->
+        Ok [X86_64.MOVSD_load (lirFRegToX86 destPhys, X86_64.RBP, int32 (adjustStackOffset ctx stackSlot))]
+    | _ -> Error "FSpillLoad with virtual FP register"
+
+let internal emitFSpillStore (ctx: FuncCtx) (stackSlot: int) (src: LIR.FReg) : Result<X86_64.Instr list, string> =
+    match src with
+    | LIR.FPhysical srcPhys ->
+        Ok [X86_64.MOVSD_store (X86_64.RBP, int32 (adjustStackOffset ctx stackSlot), lirFRegToX86 srcPhys)]
+    | _ -> Error "FSpillStore with virtual FP register"
 
 let internal emitFAdd (ctx: FuncCtx) (dest: LIR.FReg) (left: LIR.FReg) (right: LIR.FReg) : Result<X86_64.Instr list, string> =
     match dest, left, right with

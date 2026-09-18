@@ -192,6 +192,7 @@ let internal applyCSEWithEffectFreeCallsAndTopology
                     (instr :: instrs, exprMap, exported, ch)
                 | FloatSqrt _
                 | FloatAbs _
+                | FloatNeg _
                 | Int64ToFloat _
                 | FloatToInt64 _
                 | FloatToBits _ ->
@@ -199,11 +200,6 @@ let internal applyCSEWithEffectFreeCallsAndTopology
                     // scalar loads remain reusable locally. Preserve the bounded
                     // direct-call and cross-block live-range policy.
                     (instr :: instrs, clearDirectCallAvailability exprMap, emptyExprAvailability, ch)
-                | FloatNeg _ ->
-                    // FloatNeg is memory-transparent, but retaining unrelated
-                    // loads across the long negated reductions in nbody exceeds
-                    // the current non-spilling float-register allocator.
-                    (instr :: instrs, clearHeapLoadAndDirectCallAvailability exprMap, emptyExprAvailability, ch)
                 | _ ->
                     // Do not extend a new cross-block live range across calls,
                     // allocations, memory operations, or other runtime lowering.

@@ -119,6 +119,47 @@ let a = 1L in let b = 2L in let c = 3L in let d = 4L in let e = 5L in let f = 6L
 let floatAcrossCall (r: Float) : Float = let list = [1L, 2L, 3L] in let _ = Stdlib.List.length list in r + 1.0
 floatAcrossCall 2.0 = 3.0
 
+// More simultaneously live Float values than the allocatable set must spill and reload.
+let floatSpill18 (seed: Float) : Float =
+    let f01 = seed + 1.0 in let f02 = seed + 2.0 in let f03 = seed + 3.0 in
+    let f04 = seed + 4.0 in let f05 = seed + 5.0 in let f06 = seed + 6.0 in
+    let f07 = seed + 7.0 in let f08 = seed + 8.0 in let f09 = seed + 9.0 in
+    let f10 = seed + 10.0 in let f11 = seed + 11.0 in let f12 = seed + 12.0 in
+    let f13 = seed + 13.0 in let f14 = seed + 14.0 in let f15 = seed + 15.0 in
+    let f16 = seed + 16.0 in let f17 = seed + 17.0 in let f18 = seed + 18.0 in
+    f01 + f02 + f03 + f04 + f05 + f06 + f07 + f08 + f09
+    + f10 + f11 + f12 + f13 + f14 + f15 + f16 + f17 + f18
+
+floatSpill18 1.0 = 189.0
+
+// Spilled Float values and a Float phi must survive control-flow edges.
+let floatSpillAcrossBranch (seed: Float) (chooseLeft: Bool) : Float =
+    let f01 = seed + 1.0 in let f02 = seed + 2.0 in let f03 = seed + 3.0 in
+    let f04 = seed + 4.0 in let f05 = seed + 5.0 in let f06 = seed + 6.0 in
+    let f07 = seed + 7.0 in let f08 = seed + 8.0 in let f09 = seed + 9.0 in
+    let f10 = seed + 10.0 in let f11 = seed + 11.0 in let f12 = seed + 12.0 in
+    let f13 = seed + 13.0 in let f14 = seed + 14.0 in let f15 = seed + 15.0 in
+    let selected = if chooseLeft then seed + 16.0 else seed + 20.0 in
+    f01 + f02 + f03 + f04 + f05 + f06 + f07 + f08
+    + f09 + f10 + f11 + f12 + f13 + f14 + f15 + selected
+
+floatSpillAcrossBranch 1.0 true = 152.0
+floatSpillAcrossBranch 1.0 false = 156.0
+
+// Register-resident and spilled Float values must both survive a native call.
+let floatSpillAcrossCall (seed: Float) : Float =
+    let f01 = seed + 1.0 in let f02 = seed + 2.0 in let f03 = seed + 3.0 in
+    let f04 = seed + 4.0 in let f05 = seed + 5.0 in let f06 = seed + 6.0 in
+    let f07 = seed + 7.0 in let f08 = seed + 8.0 in let f09 = seed + 9.0 in
+    let f10 = seed + 10.0 in let f11 = seed + 11.0 in let f12 = seed + 12.0 in
+    let f13 = seed + 13.0 in let f14 = seed + 14.0 in let f15 = seed + 15.0 in
+    let f16 = seed + 16.0 in
+    let _ = Stdlib.List.length [1L, 2L, 3L] in
+    f01 + f02 + f03 + f04 + f05 + f06 + f07 + f08
+    + f09 + f10 + f11 + f12 + f13 + f14 + f15 + f16
+
+floatSpillAcrossCall 1.0 = 152.0
+
 
 // ===================================================================
 // Live Interval Computation Tests

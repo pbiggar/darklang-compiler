@@ -106,28 +106,25 @@ left on the generic closure path.
 ## Escape analysis and scalar replacement
 
 `passes/anf/ANF_EscapeAnalysis.fs` removes fixed-layout tuple and record
-allocations whose fields are non-floating immediate scalar values and whose
+allocations whose fields are immediate scalar values, including Float64, and whose
 complete lexical use set consists only of projections, local aliases, and
 representation-only record-clone sources. Escaping clones retain their own
 allocation even when an eligible source allocation is removed.
 
 Returns, calls, closure capture, storage, raw operations, managed fields, and
-unknown uses preserve scalar-replacement allocations. Float aggregates remain
-excluded from scalar replacement because extending their field live ranges can
-exceed the current non-spilling Float register allocator. However, a locally
-allocated record whose fields are all immediate and include Float64 may
-transfer its unique ownership to a sole later clone. The clone overwrites that
-block in place after any projections, including through transparent local
-aliases, avoiding a new allocation without extending Float live ranges.
-Focused tests cover accepted projection, alias, and clone-chain shapes plus the
-conservative call, later-use, managed-field, and branch boundaries.
+unknown uses preserve scalar-replacement allocations. Escaping clones retain
+their own allocation while eligible Float source and intermediate aggregates
+are scalar-replaced. After scalar replacement, a remaining uniquely owned
+Float record may still transfer its allocation to a sole escaping clone.
+Focused tests cover projection, alias, clone-chain, and branch shapes plus the
+conservative call and managed-field boundaries.
 
 ## MIR optimization
 
 `passes/mir/MIR_Optimize.fs` and `src/Tests/optimization/mir.opt` own:
 
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
-- barrier-aware exact scalar heap-load reuse through `FloatSqrt`, `FloatAbs`,
+- barrier-aware exact scalar heap-load reuse through `FloatSqrt`, `FloatAbs`, `FloatNeg`,
   `Int64ToFloat`, `FloatToInt64`, and `FloatToBits` locally, without exporting
   availability into dominated blocks;
 - bounded recursive-loop unrolling, tail recursion modulo wrapping Int64
@@ -137,9 +134,7 @@ conservative call, later-use, managed-field, and branch boundaries.
 - linear basic-block merging with typed phi repair.
 
 Memory, allocation, ownership, unknown-call, managed-result, and aliasing
-barriers remain conservative unless a focused proof says otherwise. `FloatNeg`
-remains a load-availability boundary because extending loads across long
-negated reductions exceeds the current non-spilling Float register allocator.
+barriers remain conservative unless a focused proof says otherwise.
 
 Before ANF, semantic HIR leaf operations carry typed effect and alias
 contracts. These contracts currently drive list-region verification and

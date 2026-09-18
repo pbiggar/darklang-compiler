@@ -199,7 +199,7 @@ let testManagedRecordPreservesAllocation () : TestResult =
     if containsAggregateAllocation body then Ok ()
     else Error "Expected record with managed fields to be preserved"
 
-let testFloatRecordPreservesAllocation () : TestResult =
+let testFloatRecordIsScalarReplaced () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
         Let (
@@ -208,10 +208,10 @@ let testFloatRecordPreservesAllocation () : TestResult =
             Let (TempId 1, RecordGet (descriptor, Var (TempId 0), 0), Return (Var (TempId 1)))
         )
         |> optimizeBody
-    if containsAggregateAllocation body then Ok ()
-    else Error "Expected Float record to remain allocated until Float spilling is supported"
+    if not (containsAggregateAllocation body) then Ok ()
+    else Error "Expected projection-only Float record to be scalar-replaced"
 
-let testUniqueFloatRecordCloneReusesSourceAllocation () : TestResult =
+let testFloatRecordCloneScalarizesSourceAllocation () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
         Let (
@@ -226,9 +226,9 @@ let testUniqueFloatRecordCloneReusesSourceAllocation () : TestResult =
         |> optimizeBody
     match aggregateAllocationCount body with
     | 1 -> Ok ()
-    | count -> Error $"Expected unique Float clone reuse to retain one allocation, got {count}"
+    | count -> Error $"Expected the Float clone source to be scalar-replaced, got {count} allocations"
 
-let testFloatRecordCloneAliasChainReusesAllocation () : TestResult =
+let testFloatRecordCloneAliasChainScalarizesIntermediates () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
         Let (
@@ -251,9 +251,9 @@ let testFloatRecordCloneAliasChainReusesAllocation () : TestResult =
         |> optimizeBody
     match aggregateAllocationCount body with
     | 1 -> Ok ()
-    | count -> Error $"Expected Float clone alias chain to reuse one allocation, got {count}"
+    | count -> Error $"Expected Float clone aliases to scalarize before the escaping allocation, got {count}"
 
-let testFloatRecordProjectionBeforeClonePermitsReuse () : TestResult =
+let testFloatRecordProjectionBeforeCloneScalarizesSource () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
         Let (
@@ -270,10 +270,10 @@ let testFloatRecordProjectionBeforeClonePermitsReuse () : TestResult =
             )
         )
         |> optimizeBody
-    if aggregateAllocationCount body = 1 && containsRecordReuse body then Ok ()
-    else Error $"Expected projections before a Float clone to permit reuse, got {body}"
+    if aggregateAllocationCount body = 1 && not (containsRecordReuse body) then Ok ()
+    else Error $"Expected the projected Float clone source to be scalar-replaced, got {body}"
 
-let testFloatRecordUseAfterCloneRejectsReuse () : TestResult =
+let testFloatRecordUseAfterCloneRetainsEscapingSource () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
         Let (
@@ -286,8 +286,8 @@ let testFloatRecordUseAfterCloneRejectsReuse () : TestResult =
             )
         )
         |> optimizeBody
-    if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
-    else Error $"Expected a source use after its clone to reject reuse, got {body}"
+    if aggregateAllocationCount body = 1 && not (containsRecordReuse body) then Ok ()
+    else Error $"Expected only the escaping Float source allocation to remain, got {body}"
 
 let testFloatRecordCallBeforeCloneRejectsReuse () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
@@ -327,7 +327,7 @@ let testManagedFloatRecordRejectsReuse () : TestResult =
     if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
     else Error $"Expected a record with a managed field to reject reuse, got {body}"
 
-let testFloatRecordAliasUseAfterCloneRejectsReuse () : TestResult =
+let testFloatRecordAliasUseAfterCloneRetainsEscapingSource () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
         Let (
@@ -344,10 +344,10 @@ let testFloatRecordAliasUseAfterCloneRejectsReuse () : TestResult =
             )
         )
         |> optimizeBody
-    if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
-    else Error $"Expected a source-alias use after a Float clone to reject reuse, got {body}"
+    if aggregateAllocationCount body = 1 && not (containsRecordReuse body) then Ok ()
+    else Error $"Expected only the escaping aliased Float source allocation to remain, got {body}"
 
-let testFloatRecordBranchClonesRejectReuse () : TestResult =
+let testFloatRecordBranchClonesScalarizeSharedSource () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
         Let (
@@ -368,8 +368,8 @@ let testFloatRecordBranchClonesRejectReuse () : TestResult =
             )
         )
         |> optimizeBody
-    if aggregateAllocationCount body = 3 && not (containsRecordReuse body) then Ok ()
-    else Error $"Expected branch-local Float clones to reject reuse, got {body}"
+    if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
+    else Error $"Expected the shared Float source to be scalar-replaced before branch clones, got {body}"
 
 let tests =
     [ ("Scalar record projection removes allocation", testScalarRecordProjectionRemovesAllocation)
@@ -381,12 +381,12 @@ let tests =
       ("Closure-captured record preserves allocation", testRecordCapturedByClosurePreservesAllocation)
       ("Branch-local record projections remove allocation", testBranchLocalProjectionsRemoveAllocation)
       ("Managed record preserves allocation", testManagedRecordPreservesAllocation)
-      ("Float record preserves allocation", testFloatRecordPreservesAllocation)
-      ("Unique Float record clone reuses source allocation", testUniqueFloatRecordCloneReusesSourceAllocation)
-      ("Float record clone alias chain reuses allocation", testFloatRecordCloneAliasChainReusesAllocation)
-      ("Float record projection before clone permits reuse", testFloatRecordProjectionBeforeClonePermitsReuse)
-      ("Float record use after clone rejects reuse", testFloatRecordUseAfterCloneRejectsReuse)
+      ("Float record is scalar-replaced", testFloatRecordIsScalarReplaced)
+      ("Float record clone scalarizes source allocation", testFloatRecordCloneScalarizesSourceAllocation)
+      ("Float record clone alias chain scalarizes intermediates", testFloatRecordCloneAliasChainScalarizesIntermediates)
+      ("Float record projection before clone scalarizes source", testFloatRecordProjectionBeforeCloneScalarizesSource)
+      ("Float record use after clone retains escaping source", testFloatRecordUseAfterCloneRetainsEscapingSource)
       ("Float record call before clone rejects reuse", testFloatRecordCallBeforeCloneRejectsReuse)
       ("Managed Float record rejects reuse", testManagedFloatRecordRejectsReuse)
-      ("Float record alias use after clone rejects reuse", testFloatRecordAliasUseAfterCloneRejectsReuse)
-      ("Float record branch clones reject reuse", testFloatRecordBranchClonesRejectReuse) ]
+      ("Float record alias use after clone retains escaping source", testFloatRecordAliasUseAfterCloneRetainsEscapingSource)
+      ("Float record branch clones scalarize shared source", testFloatRecordBranchClonesScalarizeSharedSource) ]

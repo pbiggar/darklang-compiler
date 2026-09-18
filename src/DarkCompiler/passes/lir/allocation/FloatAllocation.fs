@@ -1,4 +1,4 @@
-// FloatAllocation.fs - Allocate floating registers and apply their physical mapping.
+// FloatAllocation.fs - Schedule, allocate, spill, and materialize floating-point values.
 
 module FloatAllocation
 
@@ -9,43 +9,39 @@ open RegisterInterference
 open RegisterCoalescing
 open RegisterColoring
 
-// ============================================================================
-// Float Register Allocation
-// ============================================================================
+let floatCallerSavedRegs : LIR.PhysFPReg list =
+    [ LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7 ]
 
-/// Float caller-saved registers (D0-D7)
-let floatCallerSavedRegs : LIR.PhysFPReg list = [
-    LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7
-]
+let floatCalleeSavedRegs : LIR.PhysFPReg list =
+    [ LIR.D8; LIR.D9; LIR.D10; LIR.D11; LIR.D12; LIR.D13; LIR.D14; LIR.D15 ]
 
-/// Float callee-saved registers (D8-D15)
-let floatCalleeSavedRegs : LIR.PhysFPReg list = [
-    LIR.D8; LIR.D9; LIR.D10; LIR.D11; LIR.D12; LIR.D13; LIR.D14; LIR.D15
-]
+let allocatableFloatRegs : LIR.PhysFPReg list =
+    floatCallerSavedRegs @ floatCalleeSavedRegs
 
-/// All allocatable float registers - caller-saved first, then callee-saved
-let allocatableFloatRegs : LIR.PhysFPReg list = floatCallerSavedRegs @ floatCalleeSavedRegs
+let allocatableFloatRegsFor (arch: Platform.Arch) : LIR.PhysFPReg list =
+    match arch with
+    | Platform.ARM64 -> allocatableFloatRegs
+    | Platform.X86_64 -> allocatableFloatRegs |> List.take 14
 
-/// Both backends expose the complete abstract D0-D15 register set. Backend-local
-/// scratch operations must preserve any physical register they borrow.
-let allocatableFloatRegsFor (_arch: Platform.Arch) : LIR.PhysFPReg list =
-    allocatableFloatRegs
-
-/// AArch64 preserves D8-D15 across calls, while the System V x86-64 ABI treats
-/// every XMM register as caller-saved.
 let floatCallerSavedRegsFor (arch: Platform.Arch) : LIR.PhysFPReg list =
     match arch with
     | Platform.X86_64 -> allocatableFloatRegsFor arch
     | Platform.ARM64 -> floatCallerSavedRegs
 
-/// Float allocation result
+type FAllocation =
+    | FPhysReg of LIR.PhysFPReg
+    | FStackSlot of int
+    | FRematerialized of float
+
 type FAllocationResult = {
     Domain: VRegDomain
-    Allocations: LIR.PhysFPReg option array
+    Allocations: FAllocation option array
+    StackSize: int
     UsedCalleeSavedF: LIR.PhysFPReg list
+    SpillScratchLeft: LIR.FReg
+    SpillScratchRight: LIR.FReg
 }
 
-/// Convert physical FP register to integer for graph coloring
 let physFPRegToInt (reg: LIR.PhysFPReg) : int =
     match reg with
     | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
@@ -53,32 +49,134 @@ let physFPRegToInt (reg: LIR.PhysFPReg) : int =
     | LIR.D8 -> 8 | LIR.D9 -> 9 | LIR.D10 -> 10 | LIR.D11 -> 11
     | LIR.D12 -> 12 | LIR.D13 -> 13 | LIR.D14 -> 14 | LIR.D15 -> 15
 
-/// Convert float coloring result to allocation
-let floatColoringToAllocation (colorResult: ColoringResult) (registers: LIR.PhysFPReg list) : FAllocationResult =
-    let domain = colorResult.Domain
-    let n = domain.Ids.Length
-    let allocations = Array.create n None
-    let mutable usedCalleeSaved : LIR.PhysFPReg list = []
+let tryFloatAllocation (allocation: FAllocationResult) (fvregId: int) : FAllocation option =
+    match tryIndexOf allocation.Domain fvregId with
+    | Some idx -> allocation.Allocations.[idx]
+    | None -> None
 
-    for idx in 0 .. n - 1 do
+let private alignTo16 (size: int) : int =
+    if size = 0 then 0 else ((size + 15) / 16) * 16
+
+let private rematerializableFloatLoads (blocks: LIR.BasicBlock array) : Map<int, float> =
+    blocks
+    |> Array.fold (fun values block ->
+        block.Instrs
+        |> List.fold (fun values instr ->
+            match instr with
+            | LIR.FLoad (LIR.FVirtual id, value) -> Map.add id value values
+            | _ -> values) values) Map.empty
+
+let private allocateSpillSlots
+    (graph: InterferenceGraph)
+    (spills: BitSet)
+    (rematerializable: Map<int, float>)
+    : Map<int, int> * int =
+    let spillIndices =
+        [ for idx in 0 .. graph.Domain.Ids.Length - 1 do
+            if Bitset.containsIndex idx spills
+               && not (Map.containsKey graph.Domain.Ids.[idx] rematerializable) then
+                yield idx ]
+    let firstAvailableColor (used: Set<int>) : int =
+        let rec find candidate =
+            if Set.contains candidate used then find (candidate + 1) else candidate
+        find 0
+    let assignments =
+        spillIndices
+        |> List.fold (fun assigned idx ->
+            let used =
+                assigned
+                |> Map.fold (fun colors neighborIdx color ->
+                    if Bitset.containsIndex neighborIdx graph.Neighbors.[idx] then
+                        Set.add color colors
+                    else colors) Set.empty
+            Map.add idx (firstAvailableColor used) assigned) Map.empty
+    let slotCount =
+        assignments |> Map.fold (fun count _ color -> max count (color + 1)) 0
+    (assignments, slotCount)
+
+let private floatColoringToAllocation
+    (graph: InterferenceGraph)
+    (colorResult: ColoringResult)
+    (registers: LIR.PhysFPReg list)
+    (initialStackSize: int)
+    (rematerializable: Map<int, float>)
+    : FAllocationResult =
+    let (spillSlots, spillSlotCount) =
+        allocateSpillSlots graph colorResult.Spills rematerializable
+    let allocationAt idx =
         match colorResult.Colors.[idx] with
-        | Some color ->
-            if color < List.length registers then
-                let reg = List.item color registers
-                allocations.[idx] <- Some reg
-                if List.contains reg floatCalleeSavedRegs && not (List.contains reg usedCalleeSaved) then
-                    usedCalleeSaved <- reg :: usedCalleeSaved
-        | None -> ()
-
-    { Domain = domain
+        | Some color when color < List.length registers ->
+            Some (FPhysReg (List.item color registers))
+        | _ when Bitset.containsIndex idx colorResult.Spills ->
+            match Map.tryFind colorResult.Domain.Ids.[idx] rematerializable with
+            | Some value -> Some (FRematerialized value)
+            | None ->
+                match Map.tryFind idx spillSlots with
+                | Some slotColor -> Some (FStackSlot (-(initialStackSize + (slotColor + 1) * 8)))
+                | None -> Crash.crash $"Missing Float spill slot for domain index {idx}"
+        | _ -> None
+    let allocations = Array.init colorResult.Domain.Ids.Length allocationAt
+    let usedCalleeSaved =
+        allocations
+        |> Array.choose (function
+            | Some (FPhysReg reg) when List.contains reg floatCalleeSavedRegs -> Some reg
+            | _ -> None)
+        |> Array.distinct
+        |> Array.sort
+        |> Array.toList
+    let (spillScratchLeft, spillScratchRight) =
+        if List.contains LIR.D15 registers then
+            (LIR.FVirtual 1000, LIR.FVirtual 1001)
+        else
+            (LIR.FPhysical LIR.D14, LIR.FPhysical LIR.D15)
+    { Domain = colorResult.Domain
       Allocations = allocations
-      UsedCalleeSavedF = usedCalleeSaved |> List.sort }
+      StackSize = alignTo16 (initialStackSize + spillSlotCount * 8)
+      UsedCalleeSavedF = usedCalleeSaved
+      SpillScratchLeft = spillScratchLeft
+      SpillScratchRight = spillScratchRight }
 
-/// Run chordal graph coloring for float register allocation
-/// additionalVRegs: FVirtual IDs that must be allocated (e.g., float parameters)
-/// even if they don't appear in the CFG instructions
+/// Move pure Float literal loads immediately before their first local use. Loads
+/// used only on CFG edges retain their original dominating position.
+let scheduleFloatLoadsInBlock (block: LIR.BasicBlock) : LIR.BasicBlock =
+    let indexed = block.Instrs |> List.indexed
+    let loads =
+        indexed
+        |> List.choose (fun (idx, instr) ->
+            match instr with
+            | LIR.FLoad (LIR.FVirtual id, _) -> Some (id, (idx, instr))
+            | _ -> None)
+        |> Map.ofList
+    let firstUses =
+        indexed
+        |> List.fold (fun uses (idx, instr) ->
+            getUsedFVRegs instr
+            |> List.fold (fun result id ->
+                if Map.containsKey id result then result else Map.add id idx result) uses) Map.empty
+    let moves =
+        loads
+        |> Map.fold (fun scheduled id (loadIdx, instr) ->
+            match Map.tryFind id firstUses with
+            | Some useIdx when useIdx > loadIdx -> Map.add loadIdx (useIdx, instr) scheduled
+            | _ -> scheduled) Map.empty
+    let loadsAtUse =
+        moves
+        |> Map.fold (fun byUse _ (useIdx, instr) ->
+            let existing = Map.tryFind useIdx byUse |> Option.defaultValue []
+            Map.add useIdx (existing @ [instr]) byUse) Map.empty
+    let scheduledInstrs =
+        indexed
+        |> List.collect (fun (idx, instr) ->
+            let before = Map.tryFind idx loadsAtUse |> Option.defaultValue []
+            if Map.containsKey idx moves then before else before @ [instr])
+    { block with Instrs = scheduledInstrs }
+
+let scheduleFloatLoadsInCFG (cfg: LIR.CFG) : LIR.CFG =
+    { cfg with Blocks = cfg.Blocks |> Map.map (fun _ block -> scheduleFloatLoadsInBlock block) }
+
 let internal chordalFloatAllocationWithLiveness
     (registers: LIR.PhysFPReg list)
+    (initialStackSize: int)
     (blockIndex: BlockIndex)
     (blocks: LIR.BasicBlock array)
     (classifiedBlocks: ClassifiedBlock array)
@@ -89,138 +187,197 @@ let internal chordalFloatAllocationWithLiveness
     : FAllocationResult =
     let graph =
         buildFloatInterferenceGraphBitsetWithLiveness
-            blockIndex
-            classifiedBlocks
-            domain
-            livenessBits
-            additionalVRegs
-    // Add additional VRegs (like float params) as isolated vertices if not already in graph
-    let graphWithParams : InterferenceGraph =
+            blockIndex classifiedBlocks domain livenessBits additionalVRegs
+    let graphWithParams =
         { graph with Vertices = Bitset.union graph.Vertices additionalVRegs }
     if Bitset.isEmpty graphWithParams.Vertices then
-        // No float registers used - return empty allocation
         { Domain = domain
           Allocations = Array.create domain.Ids.Length None
-          UsedCalleeSavedF = [] }
+          StackSize = initialStackSize
+          UsedCalleeSavedF = []
+          SpillScratchLeft = LIR.FVirtual 1000
+          SpillScratchRight = LIR.FVirtual 1001 }
     else
         let phiPairs = collectFPhiPairs blocks
         let movePairs = dedupePairs ((collectFPhiSourceMovePairs blocks) @ phiPairs)
         let phiIds =
             phiPairs
-            |> List.fold (fun acc (destId, sourceId) ->
-                acc |> Set.add destId |> Set.add sourceId) Set.empty
-        // Preserve the ABI register of parameters participating in an FPhi.
-        // Otherwise hard coalescing can displace an already zero-copy return
-        // value merely to remove an invariant backedge move.
+            |> List.fold (fun ids (destId, sourceId) -> ids |> Set.add destId |> Set.add sourceId) Set.empty
         let phiParamPrecolors =
-            paramPrecolors
-            |> List.filter (fun (vregId, _) -> Set.contains vregId phiIds)
+            paramPrecolors |> List.filter (fun (vregId, _) -> Set.contains vregId phiIds)
         let colorResult =
-            chordalGraphColor
-                graphWithParams
-                phiParamPrecolors
-                (List.length registers)
-                phiPairs
-                movePairs
-        floatColoringToAllocation colorResult registers
+            chordalGraphColor graphWithParams phiParamPrecolors (List.length registers) phiPairs movePairs
+        floatColoringToAllocation
+            graphWithParams colorResult registers initialStackSize (rematerializableFloatLoads blocks)
 
-/// Run chordal graph coloring for float register allocation
-/// additionalVRegs: FVirtual IDs that must be allocated (e.g., float parameters)
-/// even if they don't appear in the CFG instructions
 let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocationResult =
-    let (blockIndex, blocks) = buildBlockIndex cfg
+    let scheduledCFG = scheduleFloatLoadsInCFG cfg
+    let (blockIndex, blocks) = buildBlockIndex scheduledCFG
     let classifiedBlocks = classifyBlocks blocks
     let (domain, livenessBits) =
         computeFloatLivenessBitsFromFacts blockIndex classifiedBlocks additionalVRegs
-    let additionalBits = vregBitsFromList domain additionalVRegs
     chordalFloatAllocationWithLiveness
-        allocatableFloatRegs
-        blockIndex
-        blocks
-        classifiedBlocks
-        additionalBits
-        []
-        domain
-        livenessBits
+        allocatableFloatRegs 0 blockIndex blocks classifiedBlocks
+        (vregBitsFromList domain additionalVRegs) [] domain livenessBits
 
-/// Apply float allocation to an FReg, converting FVirtual to FPhysical
-let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =
+let private isFixedFReg = function
+    | LIR.FVirtual 1000 | LIR.FVirtual 1001 | LIR.FVirtual 2000 -> true
+    | LIR.FVirtual n when n >= 3000 && n < 4000 -> true
+    | _ -> false
+
+let applyFloatAllocationToFReg (allocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =
     match freg with
-    | LIR.FPhysical _ -> freg  // Already physical
-    | LIR.FVirtual 1000 -> freg  // Fixed temp - keep as is, CodeGen handles it
-    | LIR.FVirtual 1001 -> freg  // Fixed temp
-    | LIR.FVirtual 2000 -> freg  // Fixed temp
-    | LIR.FVirtual n when n >= 3000 && n < 4000 -> freg  // Call arg temps - fixed
+    | LIR.FPhysical _ -> freg
+    | _ when isFixedFReg freg -> freg
     | LIR.FVirtual id ->
-        match tryIndexOf floatAllocation.Domain id with
-        | Some idx ->
-            match floatAllocation.Allocations.[idx] with
-            | Some physReg -> LIR.FPhysical physReg
-            | None -> Crash.crash $"Float register allocation bug: FVirtual {id} not found in allocation"
+        match tryFloatAllocation allocation id with
+        | Some (FPhysReg reg) -> LIR.FPhysical reg
+        | Some (FStackSlot _) -> Crash.crash $"Spilled Float vreg {id} requires instruction repair"
+        | Some (FRematerialized _) -> Crash.crash $"Rematerialized Float vreg {id} requires instruction repair"
         | None -> Crash.crash $"Float register allocation bug: FVirtual {id} not found in allocation"
 
-/// Apply float allocation to an instruction
-let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR.Instr) : LIR.Instr =
-    let applyF = applyFloatAllocationToFReg floatAllocation
+let private materializeUse
+    (allocation: FAllocationResult)
+    (scratch: LIR.FReg)
+    (freg: LIR.FReg)
+    : LIR.Instr list * LIR.FReg =
+    match freg with
+    | LIR.FPhysical _ -> ([], freg)
+    | _ when isFixedFReg freg -> ([], freg)
+    | LIR.FVirtual id ->
+        match tryFloatAllocation allocation id with
+        | Some (FPhysReg reg) -> ([], LIR.FPhysical reg)
+        | Some (FStackSlot slot) ->
+            ([LIR.FSpillLoad (scratch, slot)], scratch)
+        | Some (FRematerialized value) ->
+            ([LIR.FLoad (scratch, value)], scratch)
+        | None -> Crash.crash $"Float register allocation bug: FVirtual {id} not found in allocation"
+
+let private destination
+    (allocation: FAllocationResult)
+    (scratch: LIR.FReg)
+    (freg: LIR.FReg)
+    : LIR.FReg * (LIR.Instr list -> LIR.Instr list) =
+    match freg with
+    | LIR.FPhysical _ -> (freg, id)
+    | _ when isFixedFReg freg -> (freg, id)
+    | LIR.FVirtual id ->
+        match tryFloatAllocation allocation id with
+        | Some (FPhysReg reg) -> (LIR.FPhysical reg, fun instrs -> instrs)
+        | Some (FStackSlot slot) ->
+            (scratch, fun instrs -> instrs @ [LIR.FSpillStore (slot, scratch)])
+        | Some (FRematerialized _) ->
+            Crash.crash $"Only Float literal loads may define rematerialized vreg {id}"
+        | None -> Crash.crash $"Float register allocation bug: FVirtual {id} not found in allocation"
+
+let private physFPRegAsGPReg = function
+    | LIR.D0 -> LIR.X0 | LIR.D1 -> LIR.X1 | LIR.D2 -> LIR.X2 | LIR.D3 -> LIR.X3
+    | LIR.D4 -> LIR.X4 | LIR.D5 -> LIR.X5 | LIR.D6 -> LIR.X6 | LIR.D7 -> LIR.X7
+    | LIR.D8 -> LIR.X8 | LIR.D9 -> LIR.X9 | LIR.D10 -> LIR.X10 | LIR.D11 -> LIR.X11
+    | LIR.D12 -> LIR.X12 | LIR.D13 -> LIR.X13 | LIR.D14 -> LIR.X14 | LIR.D15 -> LIR.X15
+
+let private applyFloatArgMoves
+    (allocation: FAllocationResult)
+    (moves: (LIR.PhysFPReg * LIR.FReg) list)
+    : LIR.Instr list =
+    let located =
+        moves
+        |> List.map (fun (dest, src) ->
+            let source =
+                match src with
+                | LIR.FPhysical reg -> FPhysReg reg
+                | LIR.FVirtual id ->
+                    match tryFloatAllocation allocation id with
+                    | Some value -> value
+                    | None -> Crash.crash $"Float argument source {id} has no allocation"
+            (dest, source))
+    let sourceRegister = function
+        | FPhysReg reg -> Some reg
+        | FStackSlot _ | FRematerialized _ -> None
+    ParallelMoves.resolve located sourceRegister
+    |> List.collect (function
+        | ParallelMoves.SaveToTemp reg -> [LIR.FMov (allocation.SpillScratchRight, LIR.FPhysical reg)]
+        | ParallelMoves.Move (dest, FPhysReg src) -> [LIR.FMov (LIR.FPhysical dest, LIR.FPhysical src)]
+        | ParallelMoves.Move (dest, FStackSlot slot) -> [LIR.FSpillLoad (LIR.FPhysical dest, slot)]
+        | ParallelMoves.Move (dest, FRematerialized value) -> [LIR.FLoad (LIR.FPhysical dest, value)]
+        | ParallelMoves.MoveFromTemp dest -> [LIR.FMov (LIR.FPhysical dest, allocation.SpillScratchRight)])
+
+let applyFloatAllocationToInstrs
+    (allocation: FAllocationResult)
+    (instr: LIR.Instr)
+    : LIR.Instr list =
+    let unary dest src makeInstr =
+        let (loads, allocatedSrc) = materializeUse allocation allocation.SpillScratchLeft src
+        let (allocatedDest, finish) = destination allocation allocation.SpillScratchLeft dest
+        finish (loads @ [makeInstr allocatedDest allocatedSrc])
+    let binary dest left right makeInstr =
+        let (leftLoads, allocatedLeft) = materializeUse allocation allocation.SpillScratchLeft left
+        let (rightLoads, allocatedRight) = materializeUse allocation allocation.SpillScratchRight right
+        let (allocatedDest, finish) = destination allocation allocation.SpillScratchLeft dest
+        finish (leftLoads @ rightLoads @ [makeInstr allocatedDest allocatedLeft allocatedRight])
+    let useOne src makeInstr =
+        let (loads, allocatedSrc) = materializeUse allocation allocation.SpillScratchLeft src
+        loads @ [makeInstr allocatedSrc]
     match instr with
-    | LIR.FMov (dest, src) -> LIR.FMov (applyF dest, applyF src)
-    | LIR.FAdd (dest, left, right) -> LIR.FAdd (applyF dest, applyF left, applyF right)
-    | LIR.FSub (dest, left, right) -> LIR.FSub (applyF dest, applyF left, applyF right)
-    | LIR.FMul (dest, left, right) -> LIR.FMul (applyF dest, applyF left, applyF right)
-    | LIR.FDiv (dest, left, right) -> LIR.FDiv (applyF dest, applyF left, applyF right)
-    | LIR.FNeg (dest, src) -> LIR.FNeg (applyF dest, applyF src)
-    | LIR.FAbs (dest, src) -> LIR.FAbs (applyF dest, applyF src)
-    | LIR.FSqrt (dest, src) -> LIR.FSqrt (applyF dest, applyF src)
-    | LIR.FCmp (left, right) -> LIR.FCmp (applyF left, applyF right)
-    | LIR.FLoad (dest, value) -> LIR.FLoad (applyF dest, value)
-    | LIR.Int64ToFloat (dest, src) -> LIR.Int64ToFloat (applyF dest, src)
-    | LIR.FloatToInt64 (dest, src) -> LIR.FloatToInt64 (dest, applyF src)
-    | LIR.FloatToBits (dest, src) -> LIR.FloatToBits (dest, applyF src)
-    | LIR.FpToGp (dest, src) -> LIR.FpToGp (dest, applyF src)
-    | LIR.GpToFp (dest, src) -> LIR.GpToFp (applyF dest, src)
-    | LIR.PrintFloat freg -> LIR.PrintFloat (applyF freg)
-    | LIR.PrintFloatNoNewline freg -> LIR.PrintFloatNoNewline (applyF freg)
+    | LIR.FMov (dest, src) -> unary dest src (fun d s -> LIR.FMov (d, s))
+    | LIR.FLoad (dest, value) when isFixedFReg dest -> [LIR.FLoad (dest, value)]
+    | LIR.FLoad (LIR.FVirtual id, value) ->
+        match tryFloatAllocation allocation id with
+        | Some (FPhysReg reg) -> [LIR.FLoad (LIR.FPhysical reg, value)]
+        | Some (FStackSlot slot) ->
+            [ LIR.FLoad (allocation.SpillScratchLeft, value)
+              LIR.FSpillStore (slot, allocation.SpillScratchLeft) ]
+        | Some (FRematerialized _) -> []
+        | None -> Crash.crash $"Float literal destination {id} has no allocation"
+    | LIR.FLoad (dest, value) -> [LIR.FLoad (dest, value)]
+    | LIR.FSpillLoad _ | LIR.FSpillStore _ -> [instr]
+    | LIR.FAdd (dest, left, right) -> binary dest left right (fun d l r -> LIR.FAdd (d, l, r))
+    | LIR.FSub (dest, left, right) -> binary dest left right (fun d l r -> LIR.FSub (d, l, r))
+    | LIR.FMul (dest, left, right) -> binary dest left right (fun d l r -> LIR.FMul (d, l, r))
+    | LIR.FDiv (dest, left, right) -> binary dest left right (fun d l r -> LIR.FDiv (d, l, r))
+    | LIR.FNeg (dest, src) -> unary dest src (fun d s -> LIR.FNeg (d, s))
+    | LIR.FAbs (dest, src) -> unary dest src (fun d s -> LIR.FAbs (d, s))
+    | LIR.FSqrt (dest, src) -> unary dest src (fun d s -> LIR.FSqrt (d, s))
+    | LIR.FCmp (left, right) ->
+        let (leftLoads, allocatedLeft) = materializeUse allocation allocation.SpillScratchLeft left
+        let (rightLoads, allocatedRight) = materializeUse allocation allocation.SpillScratchRight right
+        leftLoads @ rightLoads @ [LIR.FCmp (allocatedLeft, allocatedRight)]
+    | LIR.Int64ToFloat (dest, src) ->
+        let (allocatedDest, finish) = destination allocation allocation.SpillScratchLeft dest
+        finish [LIR.Int64ToFloat (allocatedDest, src)]
+    | LIR.GpToFp (dest, src) ->
+        let (allocatedDest, finish) = destination allocation allocation.SpillScratchLeft dest
+        finish [LIR.GpToFp (allocatedDest, src)]
+    | LIR.FloatToInt64 (dest, src) -> useOne src (fun s -> LIR.FloatToInt64 (dest, s))
+    | LIR.FloatToBits (dest, src) -> useOne src (fun s -> LIR.FloatToBits (dest, s))
+    | LIR.FpToGp (dest, src) -> useOne src (fun s -> LIR.FpToGp (dest, s))
+    | LIR.PrintFloat src -> useOne src LIR.PrintFloat
+    | LIR.PrintFloatNoNewline src -> useOne src LIR.PrintFloatNoNewline
+    | LIR.FloatToString (dest, src) -> useOne src (fun s -> LIR.FloatToString (dest, s))
+    | LIR.Sleep (effectId, src) -> useOne src (fun s -> LIR.Sleep (effectId, s))
+    | LIR.FArgMoves moves -> applyFloatArgMoves allocation moves
     | LIR.FPhi (dest, sources) ->
-        LIR.FPhi (applyF dest, sources |> List.map (fun (src, label) -> (applyF src, label)))
-    | LIR.FArgMoves moves ->
-        LIR.FArgMoves (moves |> List.map (fun (physReg, src) -> (physReg, applyF src)))
-    | LIR.FloatToString (dest, value) -> LIR.FloatToString (dest, applyF value)
-    | LIR.Sleep (effectId, delayMs) -> LIR.Sleep (effectId, applyF delayMs)
-    // HeapStore with float value: the Virtual register ID is shared with FVirtual
-    // We need to apply float allocation to convert Virtual(n) to the allocated physical register
-    | LIR.HeapStore (addr, offset, LIR.Reg (LIR.Virtual vregId), Some AST.TFloat64) ->
-        // Convert Virtual to the allocated FPhysical if it's in the float mapping
-        let allocatedFReg = applyF (LIR.FVirtual vregId)
-        // Convert the FReg back to a Virtual/Physical Reg for HeapStore
-        let allocatedReg =
-            match allocatedFReg with
-            | LIR.FPhysical physFReg ->
-                // Convert physical float reg to physical GP reg (for HeapStore operand format)
-                // The actual STR_fp instruction will be generated in CodeGen based on valueType
-                let physReg =
-                    match physFReg with
-                    | LIR.D0 -> LIR.X0 | LIR.D1 -> LIR.X1 | LIR.D2 -> LIR.X2 | LIR.D3 -> LIR.X3
-                    | LIR.D4 -> LIR.X4 | LIR.D5 -> LIR.X5 | LIR.D6 -> LIR.X6 | LIR.D7 -> LIR.X7
-                    | LIR.D8 -> LIR.X8 | LIR.D9 -> LIR.X9 | LIR.D10 -> LIR.X10 | LIR.D11 -> LIR.X11
-                    | LIR.D12 -> LIR.X12 | LIR.D13 -> LIR.X13 | LIR.D14 -> LIR.X14 | LIR.D15 -> LIR.X15
-                LIR.Physical physReg
-            | LIR.FVirtual n -> LIR.Virtual n
-        LIR.HeapStore (addr, offset, LIR.Reg allocatedReg, Some AST.TFloat64)
-    | _ -> instr  // Non-float instructions unchanged
+        [LIR.FPhi (applyFloatAllocationToFReg allocation dest,
+                   sources |> List.map (fun (src, label) -> (applyFloatAllocationToFReg allocation src, label)))]
+    | LIR.HeapStore (addr, offset, LIR.Reg (LIR.Virtual id), Some AST.TFloat64) ->
+        let (loads, allocated) = materializeUse allocation allocation.SpillScratchLeft (LIR.FVirtual id)
+        match allocated with
+        | LIR.FPhysical reg ->
+            loads @ [LIR.HeapStore (addr, offset, LIR.Reg (LIR.Physical (physFPRegAsGPReg reg)), Some AST.TFloat64)]
+        | LIR.FVirtual scratchId ->
+            loads @ [LIR.HeapStore (addr, offset, LIR.Reg (LIR.Virtual scratchId), Some AST.TFloat64)]
+    | _ -> [instr]
 
-/// Apply float allocation to a basic block
-let applyFloatAllocationToBlock (floatAllocation: FAllocationResult) (block: LIR.BasicBlock) : LIR.BasicBlock =
-    { block with Instrs = block.Instrs |> List.map (applyFloatAllocationToInstr floatAllocation) }
+let applyFloatAllocationToBlock (allocation: FAllocationResult) (block: LIR.BasicBlock) : LIR.BasicBlock =
+    { block with Instrs = block.Instrs |> List.collect (applyFloatAllocationToInstrs allocation) }
 
-/// Apply float allocation to basic blocks
 let applyFloatAllocationToBlocks
-    (floatAllocation: FAllocationResult)
+    (allocation: FAllocationResult)
     (blocks: LIR.BasicBlock array)
     : LIR.BasicBlock array =
-    blocks |> Array.map (applyFloatAllocationToBlock floatAllocation)
+    blocks |> Array.map (applyFloatAllocationToBlock allocation)
 
-/// Apply float allocation to a CFG
-let applyFloatAllocationToCFG (floatAllocation: FAllocationResult) (cfg: LIR.CFG) : LIR.CFG =
+let applyFloatAllocationToCFG (allocation: FAllocationResult) (cfg: LIR.CFG) : LIR.CFG =
     let (blockIndex, blocks) = buildBlockIndex cfg
-    let updatedBlocks = applyFloatAllocationToBlocks floatAllocation blocks
+    let updatedBlocks = applyFloatAllocationToBlocks allocation blocks
     { cfg with Blocks = blocksToMap blockIndex updatedBlocks }

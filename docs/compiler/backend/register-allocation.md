@@ -119,6 +119,14 @@ When a virtual register is spilled:
 2. Load from stack slot before each use
 3. Uses scratch registers X11-X13 for spill loads
 
+Float spills use backend-specific scratch registers for repair. ARM64 retains
+all of D0-D15 for coloring and uses D17-D18 as scratch registers; x86_64
+reserves abstract D14-D15 because the architecture exposes only sixteen XMM
+registers. Noninterfering Float spills share stack slots, and spilled literal
+loads are rematerialized at their uses instead of being stored. Pure Float
+literal loads are also scheduled immediately before their first local use
+before liveness is solved, reducing avoidable pressure.
+
 ## Stack Frame Layout
 
 ```
@@ -150,11 +158,15 @@ registers that are actually live across the call.
 
 ## Float Register Allocation
 
-Float values use a separate register file (D0-D15). The allocator tracks:
+Float values use a separate register file. ARM64 colors D0-D15; x86_64 colors
+D0-D13 and reserves D14-D15 for spill repair. The allocator tracks:
 - Instructions that define float results (FloatSqrt, FloatAbs, IntToFloat, etc.)
 - Instructions that use float operands (FloatToInt, comparison of floats)
 
 Float registers D0-D7 are caller-saved and saved/restored around calls when live.
+Values that do not color are assigned shared stack slots or, for literal loads,
+rematerialized at each use. Spill repair also covers phi edges, argument moves,
+heap stores, and values live across calls.
 
 ## Coalescing
 

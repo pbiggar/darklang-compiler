@@ -294,6 +294,8 @@ let isPureLoopInstr (instr: Instr) : bool =
     | Uxtw _
     | FMov _
     | FLoad _
+    | FSpillLoad _
+    | FSpillStore _
     | FAdd _
     | FSub _
     | FMul _
@@ -1082,6 +1084,8 @@ let private foldRegUses folder state (instr: Instr) =
     | FPhi _
     | FMov _
     | FLoad _
+    | FSpillLoad _
+    | FSpillStore _
     | FAdd _
     | FSub _
     | FMul _

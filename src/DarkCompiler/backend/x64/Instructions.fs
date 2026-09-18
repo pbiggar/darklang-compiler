@@ -179,6 +179,12 @@ let internal translateInstr
     | LIR.FLoad (dest, value) ->
         X64EmitFloatingPoint.emitFLoad ctx dest value
 
+    | LIR.FSpillLoad (dest, stackSlot) ->
+        X64EmitFloatingPoint.emitFSpillLoad ctx dest stackSlot
+
+    | LIR.FSpillStore (stackSlot, src) ->
+        X64EmitFloatingPoint.emitFSpillStore ctx stackSlot src
+
     | LIR.FAdd (dest, left, right) ->
         X64EmitFloatingPoint.emitFAdd ctx dest left right
 

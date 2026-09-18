@@ -18,6 +18,10 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         // Skip them here - they will be removed and converted to FMov at predecessor exits.
         []
 
+    | LIR.FSpillLoad _
+    | LIR.FSpillStore _ ->
+        [instr]
+
     | LIR.Mov (dest, src) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let (srcOp, srcLoads) = applyToOperand mapping src LIR.X12

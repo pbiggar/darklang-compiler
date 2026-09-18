@@ -568,6 +568,7 @@ let testCseDoesNotExportNonScalarBinaryTypes () : TestResult =
 let private pureScalarInstructionCases = [
     ("FloatSqrt", fun dest src -> FloatSqrt (dest, src))
     ("FloatAbs", fun dest src -> FloatAbs (dest, src))
+    ("FloatNeg", fun dest src -> FloatNeg (dest, src))
     ("Int64ToFloat", fun dest src -> Int64ToFloat (dest, src))
     ("FloatToInt64", fun dest src -> FloatToInt64 (dest, src))
     ("FloatToBits", fun dest src -> FloatToBits (dest, src))

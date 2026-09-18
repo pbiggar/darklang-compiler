@@ -76,6 +76,26 @@ let internal emitFLoad (ctx: CodeGenContext) (dest: LIR.FReg) (value: float) : R
                 ARM64Symbolic.LDR_fp (destReg, ARM64Symbolic.X9, 0s)        // Load float from [X9]
             ])
 
+let private floatStackAddress (stackSlot: int) : Result<ARM64Symbolic.Instr list, string> =
+    if stackSlot < 0 && -stackSlot <= 4095 then
+        Ok [ARM64Symbolic.SUB_imm (ARM64Symbolic.X10, ARM64Symbolic.X29, uint16 (-stackSlot))]
+    elif stackSlot >= 0 && stackSlot <= 4095 then
+        Ok [ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X29, uint16 stackSlot)]
+    else
+        Error $"Float stack offset {stackSlot} exceeds supported range (-4095 to +4095)"
+
+let internal emitFSpillLoad (ctx: CodeGenContext) (dest: LIR.FReg) (stackSlot: int) : Result<ARM64Symbolic.Instr list, string> =
+    lirFRegToARM64FReg dest
+    |> Result.bind (fun destReg ->
+        floatStackAddress stackSlot
+        |> Result.map (fun address -> address @ [ARM64Symbolic.LDR_fp (destReg, ARM64Symbolic.X10, 0s)]))
+
+let internal emitFSpillStore (ctx: CodeGenContext) (stackSlot: int) (src: LIR.FReg) : Result<ARM64Symbolic.Instr list, string> =
+    lirFRegToARM64FReg src
+    |> Result.bind (fun srcReg ->
+        floatStackAddress stackSlot
+        |> Result.map (fun address -> address @ [ARM64Symbolic.STR_fp (srcReg, ARM64Symbolic.X10, 0s)]))
+
 let internal emitFAdd (ctx: CodeGenContext) (dest: LIR.FReg) (left: LIR.FReg) (right: LIR.FReg) : Result<ARM64Symbolic.Instr list, string> =
     lirFRegToARM64FReg dest
     |> Result.bind (fun destReg ->
