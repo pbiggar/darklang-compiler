@@ -1,0 +1,60 @@
+// HttpClient.dark - copied upstream pure HTTP client types and header helpers.
+
+module Stdlib.HttpClient
+
+
+type BadHeader =
+  // Occurs whrn a header key is empty. eg. [ ("", "") ]
+  | EmptyKey
+  | InvalidContentType
+
+type BadUrlDetails =
+  /// Occurs when the URI scheme is not allowed. eg. "ftp://darklang.com"
+  | UnsupportedProtocol
+  /// Occurs when the host is not allowed. eg. "http://0"
+  | InvalidHost
+  /// Occurs when the URI does not conform to the format specified by RFC 2396. eg. "{ ] nonsense ^#( :"
+  | InvalidUri
+  /// Occurs when the request contains invalid headers. eg.A request to "http://google.com" with [("Metadata-Flavor", "Google")] header
+  | InvalidRequest
+
+type RequestError =
+  | BadUrl of Stdlib.HttpClient.BadUrlDetails
+  /// Occurs when the request is cancelled due to a timeout
+  | Timeout
+  | BadHeader of Stdlib.HttpClient.BadHeader
+  /// Occurs when there's an issue connecting to the endpoint or an I/O error. eg. network error, DNS failure, certifivate validation error, etc.
+  | NetworkError
+  /// Occurs when the request method is not invalid.
+  | BadMethod
+
+/// The response from a HTTP request
+type Response =
+  { statusCode: Int
+    headers: List<(String * String)>
+    body: Blob }
+
+
+/// A streaming HTTP response. Headers arrive immediately; `body` is a
+/// lazy `Stream<UInt8>` that pulls bytes as they arrive on the wire.
+/// The underlying HTTP response is released when the stream is
+/// drained to completion or `Stdlib.Stream.close`d.
+type StreamResponse =
+  { statusCode: Int
+    headers: List<(String * String)>
+    body: Stream<UInt8> }
+
+/// Returns an authorization header created using HTTP basic auth.
+let basicAuth
+  (username: String)
+  (password: String)
+  : Stdlib.Result.Result<(String * String), String> =
+  if Stdlib.String.contains username "-" then
+    Stdlib.Result.Result.Error "Username cannot contain a hyphen"
+  else
+    let encoded = Stdlib.String.base64Encode (username ++ ":" ++ password) in
+    Stdlib.Result.Result.Ok(("authorization", "basic " ++ encoded))
+
+/// Returns an authorization header carrying `token`.
+let bearerToken (token: String) : (String * String) =
+  ("authorization", ("bearer " ++ token))

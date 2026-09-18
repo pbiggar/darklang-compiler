@@ -178,6 +178,60 @@ let __graphemeLength (value: String) : Int64 =
 let length (value: String) : Int =
     Stdlib.Int.fromInt64 (Stdlib.String.__graphemeLength value)
 
+let __isWideCodepoint (codepoint: Int64) : Bool =
+    (codepoint >= 4352L && codepoint <= 4607L) ||
+    (codepoint >= 9001L && codepoint <= 9002L) ||
+    (codepoint >= 11904L && codepoint <= 42191L) ||
+    (codepoint >= 44032L && codepoint <= 55203L) ||
+    (codepoint >= 63744L && codepoint <= 64255L) ||
+    (codepoint >= 65040L && codepoint <= 65131L) ||
+    (codepoint >= 65281L && codepoint <= 65376L) ||
+    (codepoint >= 65504L && codepoint <= 65510L) ||
+    (codepoint >= 127744L && codepoint <= 129791L) ||
+    (codepoint >= 131072L && codepoint <= 262141L)
+
+let __scalarDisplayWidth (codepoint: Int64) : Int64 =
+    let category = Unicode.generalCategory codepoint in
+    if category == Unicode.Data.GeneralCategory.Mn ||
+       category == Unicode.Data.GeneralCategory.Me ||
+       category == Unicode.Data.GeneralCategory.Cc ||
+       category == Unicode.Data.GeneralCategory.Cf then 0L
+    else if Stdlib.String.__isWideCodepoint codepoint then 2L
+    else 1L
+
+let __clusterDisplayWidthLoop
+    (codepoints: List<Int64>)
+    (widest: Int64)
+    (regionalIndicators: Int64)
+    (hasEmojiVariationSelector: Bool)
+    : Int64 =
+    match codepoints with
+    | [] ->
+        if regionalIndicators >= 2L then 2L
+        else if hasEmojiVariationSelector && widest == 1L then 2L
+        else widest
+    | codepoint :: rest ->
+        let width = Stdlib.String.__scalarDisplayWidth codepoint in
+        let regional = if codepoint >= 127462L && codepoint <= 127487L then regionalIndicators + 1L else regionalIndicators in
+        Stdlib.String.__clusterDisplayWidthLoop
+            rest
+            (if width > widest then width else widest)
+            regional
+            (hasEmojiVariationSelector || codepoint == 65039L)
+
+let __clusterDisplayWidth (cluster: String) : Int64 =
+    Stdlib.String.__clusterDisplayWidthLoop (Stdlib.String.__toCodepoints cluster) 0L 0L false
+
+let __displayWidthGraphemes (graphemes: List<String>) (total: Int64) : Int64 =
+    match graphemes with
+    | [] -> total
+    | cluster :: rest ->
+        Stdlib.String.__displayWidthGraphemes rest (total + Stdlib.String.__clusterDisplayWidth cluster)
+
+/// How many cells `value` occupies in a fixed-width grid.
+let displayWidth (value: String) : Int =
+    Stdlib.Int.fromInt64 (Stdlib.String.__displayWidthGraphemes (Stdlib.String.__toGraphemes value) 0L)
+
 let isEmpty (value: String) : Bool = Stdlib.String.__byteLength value == 0L
 
 let __intToInt64 (value: Int) : Int64 =

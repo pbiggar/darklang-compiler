@@ -63,6 +63,21 @@ scalar through those generated Unicode tables. `Char.toCodepoint` returns
 `Some` only when the EGC contains exactly one Unicode scalar, matching the
 interpreter distinction between a character cluster and a codepoint.
 
+## Display width and styled terminal text
+
+`String.displayWidth` measures Unicode extended grapheme clusters in terminal
+cells: combining and control scalars contribute zero, East Asian and emoji
+clusters contribute two, regional-indicator pairs form one two-cell flag, and
+VS16 promotes a narrow text glyph to emoji width. Pretty rendering uses this
+cell count when deciding whether a group fits.
+
+`Stdlib.Cli.Tui.Text.styledWidth`, `clipToWidth`, and `clipMarked` copy the
+terminal-row behavior pinned at darklang/dark revision
+`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. SGR sequences occupy no cells and
+are retained by clipping; other escapes and control characters are discarded.
+Clipping never splits an extended grapheme cluster, and `clipMarked` reserves
+one cell for an ellipsis except when the requested width is below two.
+
 ## Regex contract
 
 Regex operations are `isMatch`, `find`, `findAll`, `replace`, `replaceAll`, and

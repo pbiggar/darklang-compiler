@@ -48,8 +48,9 @@ The detailed language comparisons cover [bindings](language/bindings.md),
 [conditionals and sequences](language/conditionals-and-sequences.md), and
 [recursion](language/recursion.md).
 
-The standard-library ledgers include the generic [Dict contract](stdlib/dicts.md)
-and the [List contract](stdlib/lists.md).
+The standard-library ledgers include the generic [Dict contract](stdlib/dicts.md),
+the [List contract](stdlib/lists.md), and the
+[Pretty-printing contract](stdlib/pretty.md).
 
 ## Validator skip reasons
 

@@ -1,0 +1,18 @@
+// copied_pure_surfaces.e2e - Focused coverage for copied upstream pure stdlib surfaces.
+
+Stdlib.Pretty.render 4 (Stdlib.Pretty.group (Stdlib.Pretty.vsep [Stdlib.Pretty.text "a", Stdlib.Pretty.text "b", Stdlib.Pretty.text "c"])) = "a\nb\nc"
+Stdlib.Pretty.render 80 (Stdlib.Pretty.join [Stdlib.Pretty.text "a", Stdlib.Pretty.text "b"] (Stdlib.Pretty.text ", ")) = "a, b"
+Stdlib.Pretty.render 3 (Stdlib.Pretty.group (Stdlib.Pretty.vsep [Stdlib.Pretty.styled "<<" "ab" ">>", Stdlib.Pretty.styled "<<" "cd" ">>"])) = "<<ab>>\n<<cd>>"
+Stdlib.String.displayWidth "日本語" = 6
+Stdlib.Cli.Tui.Text.styledWidth "\u001b[31mred\u001b[0m" = 3
+Stdlib.Cli.Tui.Text.clipMarked "\u001b[31mred\u001b[0m" 2 = "\u001b[31mr…"
+Stdlib.Cli.Tui.Text.clipToWidth "a\r\nb" 2 = "ab"
+
+Stdlib.HttpClient.bearerToken "token" = ("authorization", "bearer token")
+Stdlib.HttpClient.basicAuth "username" "password" = Stdlib.Result.Result.Ok(("authorization", "basic dXNlcm5hbWU6cGFzc3dvcmQ="))
+
+let handler = Stdlib.HttpServer.get "/ping" (fun req -> Stdlib.Http.response (Stdlib.String.toBlob "") 200) in (handler.route, handler.method) = ("/ping", "GET")
+let request = Stdlib.Http.Request { url = "/"; headers = [("X-Http-Method", "POST")]; body = Stdlib.Blob.empty } in Stdlib.HttpServer.getMethod request = "POST"
+
+let source = "data: hello\n\n" in let bytes = Stdlib.Blob.toList (Stdlib.Blob.fromString source) in let stream = Stdlib.Stream.fromList (bytes) in Stdlib.Stream.toList (Stdlib.HttpClient.Sse.parse stream) = [Stdlib.HttpClient.Sse.Event { data = "hello"; eventType = ""; id = "" }]
+let source = "id: 42\ndata: one\n\ndata: two\n\n" in let bytes = Stdlib.Blob.toList (Stdlib.Blob.fromString source) in let stream = Stdlib.Stream.fromList (bytes) in Stdlib.Stream.toList (Stdlib.HttpClient.Sse.parse stream) = [Stdlib.HttpClient.Sse.Event { data = "one"; eventType = ""; id = "42" }, Stdlib.HttpClient.Sse.Event { data = "two"; eventType = ""; id = "42" }]

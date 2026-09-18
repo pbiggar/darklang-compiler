@@ -1,0 +1,23 @@
+// HttpServer.dark - copied upstream pure HTTP route constructors and method lookup.
+
+module Stdlib.HttpServer
+
+// HTTP Server functionality for Darklang
+
+/// An HTTP handler definition
+type Handler =
+  { route: String
+    method: String
+    handler: Stdlib.Http.Request -> Stdlib.Http.Response }
+
+/// A GET route, so a handler table reads as routes rather than record boilerplate.
+let get (route: String) (fn: Stdlib.Http.Request -> Stdlib.Http.Response) : Stdlib.HttpServer.Handler =
+  Stdlib.HttpServer.Handler { route = route; method = "GET"; handler = fn }
+
+/// A POST route. See <fn Stdlib.HttpServer.get>.
+let post (route: String) (fn: Stdlib.Http.Request -> Stdlib.Http.Response) : Stdlib.HttpServer.Handler =
+  Stdlib.HttpServer.Handler { route = route; method = "POST"; handler = fn }
+
+/// Get the HTTP method from a request (from x-http-method header)
+let getMethod (req: Stdlib.Http.Request) : String =
+  Stdlib.Http.Request.header req "x-http-method" |> Stdlib.Option.withDefault "GET"

@@ -1,0 +1,49 @@
+// CliTuiTextEscape.dark - escape-sequence scanning for copied upstream terminal text helpers.
+
+module Stdlib.Cli.Tui.Text
+
+let __isCsiFinal (cluster: Char) : Bool =
+    match Stdlib.Char.toCodepoint cluster with
+    | Some codepoint -> codepoint >= 64 && codepoint <= 126
+    | None -> false
+
+let __isControl (cluster: Char) : Bool =
+    match Stdlib.Char.toCodepoint cluster with
+    | None -> ("" ++ cluster) == "\r\n"
+    | Some codepoint -> codepoint < 32 || (codepoint >= 127 && codepoint <= 159)
+
+let __isEscape (cluster: Char) : Bool =
+    match Stdlib.Char.toCodepoint cluster with
+    | Some codepoint -> codepoint == 27
+    | None -> false
+
+let __scanCsi
+    (remaining: List<Char>)
+    (validParams: Bool)
+    (sequence: String)
+    : (List<Char> * Stdlib.Option.Option<String>) =
+    match remaining with
+    | [] -> ([], None)
+    | cluster :: rest ->
+        if Stdlib.Cli.Tui.Text.__isCsiFinal cluster then
+            let sgr =
+                if cluster == 'm' && validParams then Some (sequence ++ cluster)
+                else None in
+            (rest, sgr)
+        else
+            let valid =
+                validParams &&
+                (Stdlib.Char.isDigit cluster || cluster == ';' || cluster == ':') in
+            Stdlib.Cli.Tui.Text.__scanCsi rest valid (sequence ++ cluster)
+
+let __skipEscape
+    (escape: Char)
+    (remaining: List<Char>)
+    : (List<Char> * Stdlib.Option.Option<String>) =
+    match remaining with
+    | [] -> (remaining, None)
+    | first :: rest ->
+        if first == '[' then
+            Stdlib.Cli.Tui.Text.__scanCsi rest true ("" ++ escape ++ "[")
+        else
+            (remaining, None)

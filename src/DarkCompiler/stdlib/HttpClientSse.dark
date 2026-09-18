@@ -1,0 +1,148 @@
+// HttpClientSse.dark - upstream server-sent event types and parser.
+
+module Stdlib.HttpClient.Sse
+
+/// A parsed Server-Sent Event.
+type Event =
+    { data: String
+      eventType: String
+      id: String }
+
+/// Intermediate state threaded through parsing.
+type ParseState =
+    { lastId: String
+      currentLines: List<String>
+      currentLine: List<UInt8> }
+
+/// Split a `field: value` line into its two parts.
+let splitField (line: String) : (String * String) =
+    match Stdlib.String.indexOf line ":" with
+    | None -> (line, "")
+    | Some idx ->
+        let field = Stdlib.String.slice line 0 idx in
+        let afterColon = Stdlib.String.slice line (idx + 1) (Stdlib.String.length line) in
+        let value =
+            if Stdlib.String.startsWith afterColon " " then
+                Stdlib.String.dropFirst afterColon 1
+            else
+                afterColon in
+        (field, value)
+
+/// Fold one SSE line into an accumulating block.
+let applyLine
+    (data: String)
+    (eventType: String)
+    (id: String)
+    (hasData: Bool)
+    (line: String)
+    : (String * String * String * Bool) =
+    if Stdlib.String.isEmpty line then
+        (data, eventType, id, hasData)
+    else if Stdlib.String.startsWith line ":" then
+        (data, eventType, id, hasData)
+    else
+        let (field, value) = Stdlib.HttpClient.Sse.splitField line in
+        if field == "data" then
+            let newData = if hasData then data ++ "\n" ++ value else value in
+            (newData, eventType, id, true)
+        else if field == "event" then
+            (data, value, id, hasData)
+        else if field == "id" then
+            (data, eventType, value, hasData)
+        else
+            (data, eventType, id, hasData)
+
+/// Build an Event from one accumulated block when it contains data.
+let tryEmitBlock
+    (lines: List<String>)
+    (lastId: String)
+    : Stdlib.Option.Option<Stdlib.HttpClient.Sse.Event> =
+    let (data, eventType, id, hasData) =
+        Stdlib.List.fold lines (("", "", lastId, false)) (fun acc line ->
+            let (d, e, i, h) = acc in
+            Stdlib.HttpClient.Sse.applyLine d e i h line) in
+    if hasData then
+        Some (Stdlib.HttpClient.Sse.Event { data = data; eventType = eventType; id = id })
+    else
+        None
+
+let __nextByte (bytes: Stream<UInt8>) : Stdlib.Option.Option<UInt8> =
+    Stdlib.Stream.next<UInt8> bytes
+
+let __eventWithNextState
+    (event: Stdlib.HttpClient.Sse.Event)
+    : (Stdlib.HttpClient.Sse.Event * Stdlib.HttpClient.Sse.ParseState) =
+    let nextState =
+        Stdlib.HttpClient.Sse.ParseState
+            { lastId = event.id; currentLines = []; currentLine = [] } in
+    (event, nextState)
+
+let __emitBlock
+    (lines: List<String>)
+    (lastId: String)
+    : Stdlib.Option.Option<(Stdlib.HttpClient.Sse.Event * Stdlib.HttpClient.Sse.ParseState)> =
+    Stdlib.Option.map
+        (Stdlib.HttpClient.Sse.tryEmitBlock lines lastId)
+        Stdlib.HttpClient.Sse.__eventWithNextState
+
+let __finish
+    (state: Stdlib.HttpClient.Sse.ParseState)
+    : Stdlib.Option.Option<(Stdlib.HttpClient.Sse.Event * Stdlib.HttpClient.Sse.ParseState)> =
+    let pending =
+        if Stdlib.List.isEmpty state.currentLine then
+            state.currentLines
+        else
+            let tailLine =
+                match Stdlib.Blob.toString (Stdlib.Blob.fromList state.currentLine) with
+                | Ok s -> s
+                | Error _ -> "" in
+            Stdlib.List.append state.currentLines [tailLine] in
+    if Stdlib.List.isEmpty pending then
+        None
+    else
+        Stdlib.HttpClient.Sse.__emitBlock pending state.lastId
+
+/// Pull bytes until a complete event terminator arrives, then emit it.
+let pullNextEvent
+    (bytes: Stream<UInt8>)
+    (state: Stdlib.HttpClient.Sse.ParseState)
+    : Stdlib.Option.Option<(Stdlib.HttpClient.Sse.Event * Stdlib.HttpClient.Sse.ParseState)> =
+    match Stdlib.HttpClient.Sse.__nextByte bytes with
+    | None -> Stdlib.HttpClient.Sse.__finish state
+    | Some b ->
+        if b == 10uy then
+            let line =
+                match Stdlib.Blob.toString (Stdlib.Blob.fromList state.currentLine) with
+                | Ok s -> s
+                | Error _ -> "" in
+            if Stdlib.String.isEmpty line then
+                match Stdlib.HttpClient.Sse.__emitBlock state.currentLines state.lastId with
+                | Some completed -> Some completed
+                | None ->
+                    let nextState =
+                        Stdlib.HttpClient.Sse.ParseState
+                            { lastId = state.lastId; currentLines = []; currentLine = [] } in
+                    Stdlib.HttpClient.Sse.pullNextEvent bytes nextState
+            else
+                let nextState =
+                    Stdlib.HttpClient.Sse.ParseState
+                        { lastId = state.lastId
+                          currentLines = Stdlib.List.append state.currentLines [line]
+                          currentLine = [] } in
+                Stdlib.HttpClient.Sse.pullNextEvent bytes nextState
+        else
+            let nextState =
+                Stdlib.HttpClient.Sse.ParseState
+                    { lastId = state.lastId
+                      currentLines = state.currentLines
+                      currentLine = Stdlib.List.append state.currentLine [b] } in
+            Stdlib.HttpClient.Sse.pullNextEvent bytes nextState
+
+/// Parse an SSE byte stream into a stream of Events.
+let parse (bytes: Stream<UInt8>) : Stream<Stdlib.HttpClient.Sse.Event> =
+    let initial =
+        Stdlib.HttpClient.Sse.ParseState
+            { lastId = ""; currentLines = []; currentLine = [] } in
+    Stdlib.Stream.unfold<Stdlib.HttpClient.Sse.ParseState, Stdlib.HttpClient.Sse.Event>
+        initial
+        (fun state -> Stdlib.HttpClient.Sse.pullNextEvent bytes state)
