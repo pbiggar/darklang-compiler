@@ -207,6 +207,37 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string> =
 
 /// Simple type inference for lambda lifting - infers types of simple expressions
 /// This allows let-bound variables to be captured in nested lambdas
+/// Two types the checker already proved compatible, where either may still
+/// carry what a literal leaves open (`[]` is a List<t>, `None` an Option<t>):
+/// the concrete side wins at every position; two variables keep the first; a
+/// real shape mismatch is None.
+let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type option =
+    let reconcileAll (lefts: AST.Type list) (rights: AST.Type list) : AST.Type list option =
+        if List.length lefts <> List.length rights then None
+        else
+            List.zip lefts rights
+            |> List.fold (fun reconciled (l, r) ->
+                reconciled |> Option.bind (fun acc -> reconcileBranchTypes l r |> Option.map (fun t -> t :: acc))) (Some [])
+            |> Option.map List.rev
+    if left = right then Some left
+    else
+        match left, right with
+        | AST.TVar _, concrete
+        | concrete, AST.TVar _ -> Some concrete
+        | AST.TRuntimeError, concrete
+        | concrete, AST.TRuntimeError -> Some concrete
+        | AST.TSum (leftName, leftArgs), AST.TSum (rightName, rightArgs) when leftName = rightName ->
+            reconcileAll leftArgs rightArgs |> Option.map (fun args -> AST.TSum (leftName, args))
+        | AST.TRecord (leftName, leftArgs), AST.TRecord (rightName, rightArgs) when leftName = rightName ->
+            reconcileAll leftArgs rightArgs |> Option.map (fun args -> AST.TRecord (leftName, args))
+        | AST.TList l, AST.TList r -> reconcileBranchTypes l r |> Option.map AST.TList
+        | AST.TTuple ls, AST.TTuple rs -> reconcileAll ls rs |> Option.map AST.TTuple
+        | AST.TDict (lk, lv), AST.TDict (rk, rv) ->
+            reconcileBranchTypes lk rk |> Option.bind (fun k -> reconcileBranchTypes lv rv |> Option.map (fun v -> AST.TDict (k, v)))
+        | AST.TFunction (largs, lret), AST.TFunction (rargs, rret) ->
+            reconcileAll largs rargs |> Option.bind (fun args -> reconcileBranchTypes lret rret |> Option.map (fun ret -> AST.TFunction (args, ret)))
+        | _ -> None
+
 let rec simpleInferType
     (expr: CheckedAST.Expr)
     (typeEnv: Map<string, AST.Type>)
@@ -350,6 +381,12 @@ let rec simpleInferType
         | Some (AST.TTuple elemTypes) when index >= 0 && index < List.length elemTypes ->
             Some (List.item index elemTypes)
         | _ -> None
+    | CheckedAST.ListLiteral [] ->
+        // Open at the element: reconciled against the other arm or branch.
+        Some (AST.TList (AST.TVar "__empty_list_elem"))
+    | CheckedAST.ListLiteral (first :: _) ->
+        simpleInferType first typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
+        |> Option.map AST.TList
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
         Some (AST.TDict (keyType, valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
@@ -488,25 +525,6 @@ let rec simpleInferType
             // Fall back to funcReturnTypes for non-generic or arity mismatch
             Map.tryFind funcName funcReturnTypes
     | CheckedAST.If (_, thenExpr, elseExpr) ->
-        let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type option =
-            if left = right then Some left
-            else
-                match left, right with
-                | AST.TVar _, concrete
-                | concrete, AST.TVar _ -> Some concrete
-                | AST.TRuntimeError, concrete
-                | concrete, AST.TRuntimeError -> Some concrete
-                | AST.TSum (leftName, leftArgs), AST.TSum (rightName, rightArgs)
-                    when leftName = rightName && List.length leftArgs = List.length rightArgs ->
-                    List.zip leftArgs rightArgs
-                    |> List.fold (fun reconciled (leftArg, rightArg) ->
-                        reconciled
-                        |> Option.bind (fun args ->
-                            reconcileBranchTypes leftArg rightArg
-                            |> Option.map (fun arg -> arg :: args))) (Some [])
-                    |> Option.map (List.rev >> fun args -> AST.TSum (leftName, args))
-                | _ -> None
-
         match simpleInferType thenExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup,
               simpleInferType elseExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
         | Some thenType, Some elseType when thenType = elseType -> Some thenType
@@ -535,10 +553,13 @@ let rec simpleInferType
                     | None -> typeEnv
                 simpleInferType mc.Body caseEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup)
         if List.forall Option.isSome caseTypes then
+            // Arms agree up to what a literal leaves open: `[]` is a List<t> next
+            // to a List<Int64> arm, `None` an Option<t> next to a Some.
             let types = caseTypes |> List.choose id
             match types with
-            | first :: rest when rest |> List.forall (fun t -> t = first) -> Some first
-            | _ -> None
+            | first :: rest ->
+                rest |> List.fold (fun merged t -> merged |> Option.bind (fun m -> reconcileBranchTypes m t)) (Some first)
+            | [] -> None
         else
             None
     | CheckedAST.Lambda (parameters, returnAnnotation, body) ->

@@ -39,3 +39,18 @@ let inlineJoinSample (x: Int64) : InlineJoinRecord =
 inlineJoinSample 1L == inlineJoinSample 1L = true
 inlineJoinSample 1L == inlineJoinSample 2L = false
 [inlineJoinSample 1L, inlineJoinSample 2L] == [inlineJoinSample 1L, inlineJoinSample 2L] = true
+
+// A lambda whose arms differ only in what a literal leaves open infers: `[]`
+// is a List<t> next to a List<Int64> arm (90 fns in darklang/dark had a
+// "could not infer return type for lambda body" from this).
+let lambdaEmptyListArm (xs: List<Int64>) : List<Int64> =
+  let g = (fun ys -> if Stdlib.List.isEmpty ys then [] else Stdlib.List.reverse ys)
+  g xs
+lambdaEmptyListArm [1L, 2L] = [2L, 1L]
+lambdaEmptyListArm [] = []
+
+let lambdaEmptyListMatch (xs: List<String>) : List<String> =
+  let g = (fun ys -> match ys with | [] -> [] | y :: rest -> [y])
+  g xs
+lambdaEmptyListMatch ["a", "b"] = ["a"]
+lambdaEmptyListMatch [] = []
