@@ -28,6 +28,7 @@ mutation/results/checkpoint.txt
 mutation/results/mutation_sites.txt
 mutation/results/report.txt
 mutation/results/results.csv
+/fuzz-results/
 
 # Output files
 *.exe
