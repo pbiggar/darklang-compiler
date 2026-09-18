@@ -154,6 +154,19 @@ let private cexprReleasesAnyAlias (aliases: Set<TempId>) (cexpr: CExpr) : bool =
     | _ ->
         false
 
+let private terminalPrintConsumesReturnedAlias
+    (aliases: Set<TempId>)
+    (cexpr: CExpr)
+    (nextBody: ReturnAnnotatedExpr)
+    : bool =
+    match cexpr, nextBody with
+    | Print (atom, _), RReturn (Var returnedId, _)
+        when Set.contains returnedId aliases ->
+        aliases
+        |> Set.exists (fun target -> ANFEffects.atomUsesTemp target atom)
+    | _ ->
+        false
+
 /// Once ownership is transferred into an aggregate, do not permit observable
 /// work before that aggregate is returned. This preserves internal refcount
 /// probes while allowing nested tuple/record/closure construction suffixes.
@@ -169,6 +182,8 @@ let rec private aggregateFlowsDirectlyToReturn
             match tryOwnershipPreservingAliasSource nextExpr with
             | Some sourceId when Set.contains sourceId aliases ->
                 loop (Set.add nextId aliases) nextBody
+            | _ when terminalPrintConsumesReturnedAlias aliases nextExpr nextBody ->
+                loop aliases nextBody
             | _ ->
                 aggregateAliasFieldCount aliases nextExpr > 0
                 && aggregateFlowsDirectlyToReturn nextId nextBody

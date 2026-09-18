@@ -247,7 +247,8 @@ ANF pipeline or a complete Perceus implementation. The next boundaries are:
 2. Extend the typed block/value-contract foundation into a general semantic HIR
    with primitive effect/alias/ownership contracts and general block interfaces;
    layout/destruction metadata independent of ANF; stage verifiers throughout
-   the pipeline. Generated printing must precede general ownership elaboration.
+   the pipeline. Generated result printing now precedes ANF ownership
+   elaboration; whole-function HIR must retain that established boundary.
 3. Carry the registered HIR call boundary through whole-function construction,
    then add representation interfaces, bounded specialization, explicit
    conversion profitability, recursive solving, and cache identities.

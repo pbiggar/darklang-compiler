@@ -68,13 +68,26 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     ModuleRegistry = userOnly.ModuleRegistry
                     RecursiveMembers = userOnly.RecursiveMembers
                 }
-                match buildAnf 0 coverageOptions sw userRegistries ANF_Inlining.defaultConfig Map.empty userOnly.NonInlineableFunctionNames (entryFunction :: userOnly.UserFunctions) false None with
-                | Error err -> Error err
-                | Ok (userFunctions, _typeMap) ->
-                    match PrintInsertion.insertPrintInEntry "_start" boundaryProgramType userFunctions with
-                    | Error err -> Error $"Print insertion error: {err}"
-                    | Ok printedFunctions ->
-                        let tcoFunctions = applyTco 0 coverageOptions sw userRegistries.RecursiveMembers printedFunctions None
-                        let reachableStdlibNames =
-                            ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph tcoFunctions
-                        Ok reachableStdlibNames
+                PrintInsertion.insertPrintInEntry
+                    "_start"
+                    boundaryProgramType
+                    (entryFunction :: userOnly.UserFunctions)
+                |> Result.mapError (fun err -> $"Print insertion error: {err}")
+                |> Result.bind (fun printedFunctions ->
+                    buildAnf
+                        0
+                        coverageOptions
+                        sw
+                        userRegistries
+                        ANF_Inlining.defaultConfig
+                        Map.empty
+                        userOnly.NonInlineableFunctionNames
+                        printedFunctions
+                        false
+                        None)
+                |> Result.map (fun (userFunctions, _typeMap) ->
+                    let tcoFunctions =
+                        applyTco 0 coverageOptions sw userRegistries.RecursiveMembers userFunctions None
+                    ANFDeadCodeElimination.getReachableStdlib
+                        stdlib.StdlibANFCallGraph
+                        tcoFunctions)

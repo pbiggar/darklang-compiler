@@ -154,6 +154,19 @@ let rec insertRCWithAnalysis
                 applyLetFrames ctx frames (If (cond, thenBranch', elseBranch'), varGen2, types2)
             (finalExpr, finalVarGen, finalTypes)
 
+        | RLet (tempId, (Print _ as printExpr), RReturn (atom, returned), _) ->
+            // Generated result printing consumes the returned root after
+            // lowering. Finalize every other ownership obligation first,
+            // matching the ordinary return boundary while keeping the output
+            // effect visible to ownership analysis.
+            let printed = Let (tempId, printExpr, Return atom)
+            let typesWithPrint = Map.add tempId AST.TUnit types
+            let (withParamIncs, varGen1, types1) =
+                insertParamIncsAtReturn ctx paramIncs returned printed varGen typesWithPrint
+            let (withDecs, varGen2, types2) =
+                insertReturnDecs returnDecs withParamIncs varGen1 types1
+            applyLetFrames ctx frames (withDecs, varGen2, types2)
+
         | RLet (tempId, cexpr, bodyInfo, _) ->
             let (TempId tempIdInt) = tempId
 

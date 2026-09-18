@@ -76,9 +76,9 @@ The intended general pipeline is checked AST → semantic HIR → storage IR →
 IR → ANF → MIR → LIR → target instructions. The first three stages currently
 cover only closed list regions; their generalization is implementation work,
 not accomplished by moving files. Do not create empty future stages or duplicate
-ownership authorities. Generated printing must precede general ownership
-elaboration. Changes to aliasing and lifetime after elaboration require proof
-preservation and verification.
+ownership authorities. Generated result printing already precedes ANF ownership
+elaboration; general HIR must preserve that ordering. Changes to aliasing and
+lifetime after elaboration require proof preservation and verification.
 
 ## Shared HIR and ownership interfaces
 
@@ -138,9 +138,11 @@ opaque source evaluation, then infer and carry unique boundary modes through
 loops and escaping boundaries. The verifier does not insert runtime uniqueness
 tests or model constructor reset tokens. General managed arguments still need
 lowering through ANF and RC insertion. ANF lifetime insertion remains
-authoritative outside these regions; moving generated printing before general
-ownership is a separate semantic migration. No empty future passes or
-compatibility IR conversions are added.
+authoritative outside these regions. Generated result printing is an explicit
+consuming effect before that boundary; ownership insertion finalizes unrelated
+cleanup before the effect and instruction lowering emits the printed root's
+shape-specific release. No empty future passes or compatibility IR conversions
+are added.
 
 Each refactoring chunk preserves algorithms, evaluation order, and emitted-code
 behavior. Semantic migrations require focused failing E2E coverage before their
