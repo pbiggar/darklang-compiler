@@ -11,6 +11,12 @@ type Block = private Block of HIR.Block<HIR.Operation<HIR.PrimitiveContract, Blo
 
 type ConstructionError =
     | CannotInferExpression of functionName: string * message: string
+    | InconsistentCallSignature of functionName: string * target: string
+
+type CallContracts = {
+    ExternalSignature: string -> HIR.FunctionSignature option
+    Contract: string -> (HIR.FunctionCall -> HIR.PrimitiveContract) option
+}
 
 type private State = {
     Values: Map<string, HIR.Value>
@@ -20,16 +26,28 @@ type private State = {
 
 let body (Block block) = block
 
-let verificationDialect : VerifyHIR.Dialect<HIR.PrimitiveContract, Block> = {
+let verificationDialect (calls: CallContracts) : VerifyHIR.Dialect<HIR.PrimitiveContract, Block> = {
     Body = body
     Leaf = id
-    CallSignature = fun _ -> None
-    CallContract = fun _ -> None
+    CallSignature = calls.ExternalSignature
+    CallContract = fun call ->
+        calls.Contract call.Target
+        |> Option.map (fun contract -> contract call)
 }
 
-let constructFunction
+let private signatureOfCheckedFunction (definition: CheckedAST.FunctionDef) : HIR.FunctionSignature = {
+    Parameters =
+        definition.Params
+        |> AST.NonEmptyList.toList
+        |> List.map snd
+    Result = definition.ReturnType
+}
+
+let private constructWithSignatures
     (infer: Map<string, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
     (dependencies: CheckedAST.Expr -> Set<string>)
+    (calls: CallContracts)
+    (callSignature: string -> HIR.FunctionSignature option)
     (definition: CheckedAST.FunctionDef)
     : Result<HIR.Function<Block>, ConstructionError> =
     let parameterValues, nextId =
@@ -108,7 +126,40 @@ let constructFunction
                     let result, next = fresh expected nextAfterFalse
                     let branch = HIR.Branch (result, condition, trueBlock, falseBlock)
                     result, { next with Operations = branch :: state.Operations }))
+        | CheckedAST.Call (target, arguments) ->
+            match callSignature target, calls.Contract target with
+            | Some signature, Some _ ->
+                let arguments = AST.NonEmptyList.toList arguments
+                if List.length arguments <> List.length signature.Parameters
+                   || signature.Result <> expected then
+                    Error (InconsistentCallSignature (definition.Name, target))
+                else
+                    normalizeArguments state target signature.Parameters arguments
+                    |> Result.map (fun (arguments, afterArguments) ->
+                        let result, next = fresh signature.Result afterArguments
+                        let operation = HIR.Call {
+                            Target = target
+                            Arguments = arguments
+                            Result = result
+                        }
+                        result, { next with Operations = operation :: afterArguments.Operations })
+            | _ -> opaque state expression expected
         | _ -> opaque state expression expected
+    and normalizeArguments state target parameterTypes arguments =
+        match parameterTypes, arguments with
+        | [], [] -> Ok ([], state)
+        | parameterType :: parameterTypes, argument :: arguments ->
+            inferExpression state argument
+            |> Result.bind (fun argumentType ->
+                if argumentType <> parameterType then
+                    Error (InconsistentCallSignature (definition.Name, target))
+                else
+                    normalize state parameterType argument
+                    |> Result.bind (fun (value, afterArgument) ->
+                        let next = { afterArgument with Values = state.Values }
+                        normalizeArguments next target parameterTypes arguments
+                        |> Result.map (fun (values, finalState) -> value :: values, finalState)))
+        | _ -> Error (InconsistentCallSignature (definition.Name, target))
     let initial = {
         Values = values
         Operations = []
@@ -125,11 +176,25 @@ let constructFunction
             }
         })
 
-let constructFunctions infer dependencies definitions =
+let constructFunction infer dependencies calls (definition: CheckedAST.FunctionDef) =
+    let internalSignature target =
+        if target = definition.Name then Some (signatureOfCheckedFunction definition)
+        else calls.ExternalSignature target
+    constructWithSignatures infer dependencies calls internalSignature definition
+
+let constructFunctions infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
+    let internalSignatures =
+        definitions
+        |> List.map (fun definition -> definition.Name, signatureOfCheckedFunction definition)
+        |> Map.ofList
+    let callSignature target =
+        match Map.tryFind target internalSignatures with
+        | Some signature -> Some signature
+        | None -> calls.ExternalSignature target
     definitions
     |> List.fold (fun result definition ->
         result
         |> Result.bind (fun functions ->
-            constructFunction infer dependencies definition
+            constructWithSignatures infer dependencies calls callSignature definition
             |> Result.map (fun functionDefinition -> functionDefinition :: functions))) (Ok [])
     |> Result.map List.rev
