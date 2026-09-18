@@ -252,7 +252,7 @@ let buildStdlibWithTrace
                         returnTypes
                 let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = defaultOptions
-                match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Set.empty stdlibFunctions false passTimingRecorder with
+                match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions false passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, typeMap) ->
@@ -306,6 +306,8 @@ let buildStdlibWithTrace
                             AllocatedFunctions = allocatedFuncs
                             StdlibCallGraph = stdlibCallGraph
                             StdlibANFFunctions = stdlibFuncMap
+                            StdlibANFOptimizationCandidates =
+                                stdlibFunctions |> List.map (fun func -> (func.Name, func)) |> Map.ofList
                             StdlibInlineCandidates = stdlibInlineCandidates
                             StdlibANFCallGraph = stdlibANFCallGraph
                             StdlibTypeMap = typeMap
@@ -442,7 +444,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = defaultOptions
                         let sw = Stopwatch.StartNew()
-                        buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Set.empty anfFuncs false passTimingRecorder
+                        buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, typeMap) ->
                             let tcoFunctions = applyTco 0 stdlibOptions sw registries.RecursiveMembers anfFunctions passTimingRecorder
                             let newAnfFuncMap =
@@ -471,6 +473,11 @@ let buildStdlibSpecializations
                                     Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
                                 let mergedStdlibAnfFunctions =
                                     Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibANFFunctions newAnfFuncMap
+                                let mergedOptimizationCandidates =
+                                    anfFuncs
+                                    |> List.fold
+                                        (fun acc func -> Map.add func.Name func acc)
+                                        stdlib.StdlibANFOptimizationCandidates
                                 let newInlineCandidateMap =
                                     anfFuncs
                                     |> ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig
@@ -509,6 +516,7 @@ let buildStdlibSpecializations
                                         AllocatedFunctions = allLirFuncs
                                         StdlibCallGraph = stdlibCallGraph
                                         StdlibANFFunctions = mergedStdlibAnfFunctions
+                                        StdlibANFOptimizationCandidates = mergedOptimizationCandidates
                                         StdlibInlineCandidates = mergedStdlibInlineCandidates
                                         StdlibANFCallGraph = stdlibAnfCallGraph
                                         StdlibTypeMap = mergedStdlibTypeMap

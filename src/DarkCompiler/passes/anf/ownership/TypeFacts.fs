@@ -441,6 +441,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | DictToRawPtr _ -> Some AST.TRawPtr
     | RawPtrToDict (_, _, dictType) -> Some dictType
     | ListToRawPtr _ -> Some AST.TRawPtr
+    | FixedBlockToRawPtr _ -> Some AST.TRawPtr
     | RawPtrToList (_, _, listType) -> Some listType
     // Dynamic buffer refcount intrinsics
     | RefCountIncString _ -> Some AST.TUnit  // Returns unit

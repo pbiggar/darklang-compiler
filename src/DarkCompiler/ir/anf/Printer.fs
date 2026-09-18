@@ -169,6 +169,8 @@ let private prettyPrintANFCExpr = function
         $"RawPtrToDict({prettyPrintANFAtom ptr}, {prettyPrintANFAtom tag}) : {dictType}"
     | ANF.ListToRawPtr list ->
         $"ListToRawPtr({prettyPrintANFAtom list})"
+    | ANF.FixedBlockToRawPtr value ->
+        $"FixedBlockToRawPtr({prettyPrintANFAtom value})"
     | ANF.RawPtrToList (ptr, tag, listType) ->
         $"RawPtrToList({prettyPrintANFAtom ptr}, {prettyPrintANFAtom tag}) : {listType}"
     | ANF.FloatSqrt atom ->

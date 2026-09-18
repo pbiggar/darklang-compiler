@@ -268,6 +268,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.DictToRawPtr dict -> maxTempIdInAtom dict
     | ANF.RawPtrToDict (ptr, tag, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom tag)
     | ANF.ListToRawPtr list -> maxTempIdInAtom list
+    | ANF.FixedBlockToRawPtr value -> maxTempIdInAtom value
     | ANF.RawPtrToList (ptr, tag, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom tag)
     | ANF.FloatSqrt atom -> maxTempIdInAtom atom
     | ANF.FloatAbs atom -> maxTempIdInAtom atom
@@ -577,6 +578,7 @@ let private inferSimpleCExprDestType
     | ANF.BlobToRawPtr _
     | ANF.DictToRawPtr _
     | ANF.ListToRawPtr _ -> Some AST.TRawPtr
+    | ANF.FixedBlockToRawPtr _ -> Some AST.TRawPtr
     | ANF.RawPtrToString _ -> Some AST.TString
     | ANF.RawPtrToBlob _ -> Some AST.TBlob
     | ANF.RawPtrToInt128 _ -> Some AST.TInt128
@@ -670,6 +672,7 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.DictToRawPtr _ -> "DictToRawPtr"
     | ANF.RawPtrToDict _ -> "RawPtrToDict"
     | ANF.ListToRawPtr _ -> "ListToRawPtr"
+    | ANF.FixedBlockToRawPtr _ -> "FixedBlockToRawPtr"
     | ANF.RawPtrToList _ -> "RawPtrToList"
     | ANF.RefCountIncString _ -> "RefCountIncString"
     | ANF.RefCountDecString _ -> "RefCountDecString"
@@ -1364,6 +1367,9 @@ let rec convertExpr
                 | ANF.ListToRawPtr listAtom ->
                     atomToOperand builder listAtom
                     |> Result.map (fun listOp -> [MIR.ListToRawPtr (destReg, listOp)])
+                | ANF.FixedBlockToRawPtr valueAtom ->
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.Mov (destReg, valueOp, Some AST.TRawPtr)])
                 | ANF.RawPtrToList (ptrAtom, tagAtom, _listType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->

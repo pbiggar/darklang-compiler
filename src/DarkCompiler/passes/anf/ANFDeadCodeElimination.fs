@@ -99,6 +99,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RawPtrToDict (ptr, tag, _) ->
         extractFromAtom ptr @ extractFromAtom tag
     | ANF.ListToRawPtr list -> extractFromAtom list
+    | ANF.FixedBlockToRawPtr value -> extractFromAtom value
     | ANF.RawPtrToList (ptr, tag, _) ->
         extractFromAtom ptr @ extractFromAtom tag
     | ANF.RefCountIncString atom -> extractFromAtom atom

@@ -31,10 +31,11 @@ from Git history.
   forwarding, projection-only scalar tuple and record replacement, unique Float
   record-clone allocation reuse, and unused ANF binding elimination.
 - **Loops and control flow:** bounded recursive-loop unrolling, tail recursion
-  modulo wrapping addition or multiplication, effect-free call and Float-load
-  hoisting, affine induction reduction, factor-two counted-loop unrolling,
-  same-target and redundant-successor branches, fallthrough block placement,
-  and linear block merging.
+  modulo native-width wrapping addition, recursive-left subtraction,
+  multiplication, or immutable list/sum/record constructors; effect-free call
+  and Float-load hoisting, affine induction reduction, factor-two counted-loop
+  unrolling, same-target and redundant-successor branches, fallthrough block
+  placement, and linear block merging.
 - **Instruction selection and allocation:** ARM64 bit-clear fusion, addition
   with a single-use negation, dead multiply-subtract and Float-copy fusion,
   ARM64 entry-parameter copy elimination, and floating-point phi coalescing.
@@ -127,9 +128,9 @@ conservative call and managed-field boundaries.
 - barrier-aware exact scalar heap-load reuse through `FloatSqrt`, `FloatAbs`, `FloatNeg`,
   `Int64ToFloat`, `FloatToInt64`, and `FloatToBits` locally, without exporting
   availability into dominated blocks;
-- bounded recursive-loop unrolling, tail recursion modulo wrapping Int64
-  addition or multiplication, effect-free call hoisting, affine induction
-  reduction, and narrow counted-loop unrolling;
+- bounded recursive-loop unrolling, tail recursion modulo wrapping native
+  integer operations or immutable constructors, effect-free call hoisting,
+  affine induction reduction, and narrow counted-loop unrolling;
 - same-target and redundant-successor branch elimination; and
 - linear basic-block merging with typed phi repair.
 

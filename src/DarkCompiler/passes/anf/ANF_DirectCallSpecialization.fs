@@ -137,6 +137,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | RawPtrToUInt128 atom
     | DictToRawPtr atom
     | ListToRawPtr atom
+    | FixedBlockToRawPtr atom
     | RefCountIncString atom
     | RefCountDecString atom
     | RefCountIncBlob atom
@@ -421,6 +422,7 @@ let private rewriteCExpr
     | DictToRawPtr atom -> DictToRawPtr (rewrite atom)
     | RawPtrToDict (ptr, tag, typ) -> RawPtrToDict (rewrite ptr, rewrite tag, typ)
     | ListToRawPtr atom -> ListToRawPtr (rewrite atom)
+    | FixedBlockToRawPtr atom -> FixedBlockToRawPtr (rewrite atom)
     | RawPtrToList (ptr, tag, typ) -> RawPtrToList (rewrite ptr, rewrite tag, typ)
     | RefCountIncString atom -> RefCountIncString (rewrite atom)
     | RefCountDecString atom -> RefCountDecString (rewrite atom)

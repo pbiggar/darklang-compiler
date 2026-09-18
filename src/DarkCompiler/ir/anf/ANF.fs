@@ -217,6 +217,7 @@ type CExpr =
     | DictToRawPtr of dict:Atom                 // Strip Dict tag bits, returning RawPtr
     | RawPtrToDict of ptr:Atom * tag:Atom * dictType:AST.Type  // Re-tag RawPtr as Dict
     | ListToRawPtr of list:Atom                 // Strip List tag bits, returning RawPtr
+    | FixedBlockToRawPtr of value:Atom          // Borrow an untagged fixed-block payload pointer
     | RawPtrToList of ptr:Atom * tag:Atom * listType:AST.Type  // Re-tag RawPtr as List
     // Dynamic buffer reference counting at the value pointer
     | RefCountIncString of Atom               // Increment string ref count

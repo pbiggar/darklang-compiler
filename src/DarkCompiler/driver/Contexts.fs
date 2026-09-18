@@ -147,6 +147,9 @@ type StdlibResult = {
     StdlibCallGraph: Map<string, Set<string>>
     /// Stdlib ANF functions indexed by name (for coverage analysis)
     StdlibANFFunctions: Map<string, ANF.Function>
+    /// Pre-reference-count bodies available to optimizations that introduce
+    /// calls to already-monomorphized stdlib helpers.
+    StdlibANFOptimizationCandidates: Map<string, ANF.Function>
     /// Pre-reference-count stdlib ANF functions available as user inlining candidates
     StdlibInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>
     /// Call graph at ANF level (for coverage analysis reachability)

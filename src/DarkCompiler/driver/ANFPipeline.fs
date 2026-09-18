@@ -51,6 +51,7 @@ let internal buildAnf
     (registries: AST_to_ANF.Registries)
     (inliningConfig: ANF_Inlining.InliningConfig)
     (externalInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>)
+    (externalOptimizationFunctions: Map<string, ANF.Function>)
     (nonInlineableFunctionNames: Set<string>)
     (functions: ANF.Function list)
     (specializeInternalSignatures: bool)
@@ -74,13 +75,26 @@ let internal buildAnf
     if shouldDumpIR verbosity options.DumpANF then
         printANFProgram options "=== ANF (before optimization) ===" anfProgram
     let anfOptStart = sw.Elapsed.TotalMilliseconds
+    let singletonRecursiveNames =
+        registries.RecursiveMembers
+        |> Map.toSeq
+        |> Seq.choose (fun (name, memberInfo) ->
+            match memberInfo.Typed.Resolved.Availability with
+            | AST.SelfRecursiveMember -> Some name
+            | _ -> None)
+        |> Set.ofSeq
     let anfOptimizeContext : ANFConstants.OptimizeContext =
         { TypeReg = registries.RecordFieldsReg
           RecordTypeParams = registries.RecordTypeParamsReg
           SumShapeReg = registries.RcSumShapeReg }
     let anfOptimized =
         if shouldRunANFOptimize anfOptions then
-            ANF_Optimize.optimizeProgramWithOptions anfOptimizeContext anfOptions anfProgram
+            ANF_Optimize.optimizeProgramWithOptionsAndExternalFunctions
+                anfOptimizeContext
+                anfOptions
+                singletonRecursiveNames
+                externalOptimizationFunctions
+                anfProgram
         else
             anfProgram
     let anfOptElapsed = sw.Elapsed.TotalMilliseconds - anfOptStart

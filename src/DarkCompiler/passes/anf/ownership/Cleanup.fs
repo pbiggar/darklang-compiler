@@ -100,11 +100,12 @@ let internal functionParamReturnTransfersOwnedAccumulator
     | true, 2, AST.TList _ -> true
     | _ -> false
 
-/// Recognize a record parameter used as the sole returned accumulator of a
-/// direct self-recursive loop. The function keeps its own reference to this
-/// parameter so each backedge can release the previous record before adopting
-/// the freshly-owned replacement.
-let internal isInternalRecordTailAccumulator
+/// Recognize a managed parameter used as the sole returned accumulator of a
+/// direct self-recursive loop. The caller restricts this proof to RC-managed
+/// shapes. The function keeps its own reference to the parameter so each
+/// backedge can release the previous value before adopting its freshly-owned
+/// replacement.
+let internal isInternalOwnedTailAccumulator
     (func: Function)
     (paramIndex: int)
     (param: TypedParam)
@@ -143,8 +144,13 @@ let internal isInternalRecordTailAccumulator
             let (elseValid, elseRecurses) = analyze aliases elseBranch
             (thenValid && elseValid, thenRecurses || elseRecurses)
 
-    match param.Type, func.ReturnType with
-    | AST.TRecord _, returnType when returnType = param.Type ->
+    let supportedAccumulator =
+        match param.Type with
+        | AST.TRecord _ -> true
+        | _ -> func.Name.Contains("$trmo")
+
+    match func.ReturnType with
+    | returnType when supportedAccumulator && returnType = param.Type ->
         let (valid, recurses) = analyze Map.empty func.Body
         valid && recurses
     | _ ->

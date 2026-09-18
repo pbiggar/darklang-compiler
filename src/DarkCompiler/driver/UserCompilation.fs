@@ -228,6 +228,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 userRegistries
                                 ANF_Inlining.defaultConfig
                                 plan.ExternalInlineCandidates
+                                plan.Stdlib.StdlibANFOptimizationCandidates
                                 userOnly.NonInlineableFunctionNames
                                 dependencyFunctions
                                 true
@@ -318,6 +319,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         userRegistries
                                         ANF_Inlining.defaultConfig
                                         plan.ExternalInlineCandidates
+                                        plan.Stdlib.StdlibANFOptimizationCandidates
                                         userOnly.NonInlineableFunctionNames
                                         preparedFunctions
                                         true
@@ -375,6 +377,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         sw
                                         startRegistries
                                         ANF_Inlining.defaultConfig
+                                        Map.empty
                                         Map.empty
                                         Set.empty
                                         [startFunction]
@@ -530,10 +533,15 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                  not (Set.contains func.Name retainedStdlibNames)))
                                         | Platform.ARM64Backend _ ->
                                             (reachableStdlib @ finalUserFuncs, finalUserFuncs)
+                                    let loweredDependencyNames =
+                                        allocatedDependencyFuncs
+                                        |> List.map (fun func -> func.Name)
+                                        |> Set.ofList
+                                        |> Set.union dependencyNames
                                     let reachableDependencyFuncs, reachableProgramFuncs =
                                         retainedUserFuncs
                                         |> List.partition (fun func ->
-                                            Set.contains func.Name dependencyNames)
+                                            Set.contains func.Name loweredDependencyNames)
                                     let lirVariantRegistry : LIR.VariantRegistry =
                                         userEnv.IndexedSumTypeReg
                                         |> Map.map (fun _ info ->

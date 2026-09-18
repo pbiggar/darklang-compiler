@@ -89,6 +89,7 @@ let internal mustPreserveEvaluation (context: OptimizeContext) (cexpr: CExpr) : 
     | DictToRawPtr _ -> false
     | RawPtrToDict _ -> false
     | ListToRawPtr _ -> false
+    | FixedBlockToRawPtr _ -> false
     | RawPtrToList _ -> false
     | FloatSqrt _ -> false  // Pure float operation
     | FloatAbs _ -> false   // Pure float operation
@@ -190,6 +191,7 @@ let internal addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | DictToRawPtr dict -> addAtomUse dict uses
     | RawPtrToDict (ptr, tag, _) -> uses |> addAtomUse ptr |> addAtomUse tag
     | ListToRawPtr list -> addAtomUse list uses
+    | FixedBlockToRawPtr value -> addAtomUse value uses
     | RawPtrToList (ptr, tag, _) -> uses |> addAtomUse ptr |> addAtomUse tag
     | FloatSqrt atom -> addAtomUse atom uses
     | FloatAbs atom -> addAtomUse atom uses
@@ -242,6 +244,7 @@ let cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | RawPtrToUInt128 atom
     | DictToRawPtr atom
     | ListToRawPtr atom
+    | FixedBlockToRawPtr atom
     | FloatSqrt atom
     | FloatAbs atom
     | FloatNeg atom
