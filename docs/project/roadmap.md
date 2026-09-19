@@ -7,6 +7,8 @@ compiler bugs belong in [known issues](known-issues.md).
 
 ## Current work
 
+- Complete compiler-selected in-place mutation using the
+  [Perceus-style optimization checklist](perceus-checklist.md).
 - Deepen the memory-management matrix described in the
   [x86-64 backend status](../compiler/backend/x64.md), especially recursive
   HAMT payloads, allocator reuse, and the shared raw-memory policy.
