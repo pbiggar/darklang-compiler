@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-19T00:25:19+00:00",
+  "generated_at": "2026-09-19T01:58:35+00:00",
   "compiler": {
-    "commit": "f1044dce22da9fd61d82381c3a68dcd0709ada53",
-    "subject": "Merge commit '4e3661fa29b6f42d5ae53ba90690ce6f8c9d2258' into HEAD"
+    "commit": "af37672ff07befde4f5328f0f1ab430f0c2dd3a9",
+    "subject": "Merge commit 'ba37fe420324f3f05cc7c422b980ab2146341356' into HEAD"
   },
   "benchmarks": [
     {
@@ -30,7 +30,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 51647135
+      "instructions": 51664643
     },
     {
       "name": "factorial",
@@ -38,7 +38,7 @@
     },
     {
       "name": "fannkuch",
-      "instructions": 233405381
+      "instructions": 233405451
     },
     {
       "name": "fasta",
@@ -46,7 +46,7 @@
     },
     {
       "name": "fft",
-      "instructions": 379239729
+      "instructions": 347587074
     },
     {
       "name": "fib",
@@ -54,7 +54,7 @@
     },
     {
       "name": "huffman",
-      "instructions": 517411575
+      "instructions": 486099995
     },
     {
       "name": "leibniz",
@@ -74,7 +74,7 @@
     },
     {
       "name": "myers_diff",
-      "instructions": 4636797057
+      "instructions": 2524084555
     },
     {
       "name": "nbody",
@@ -106,15 +106,15 @@
     },
     {
       "name": "regex_lite",
-      "instructions": 77836260
+      "instructions": 72586765
     },
     {
       "name": "spectral_norm",
-      "instructions": 916369316
+      "instructions": 916414064
     },
     {
       "name": "string_equality",
-      "instructions": 1193987
+      "instructions": 1181233
     },
     {
       "name": "sum_to_n",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 5861933907
+      "instructions": 5561197103
     },
     {
       "name": "warden",
-      "instructions": 47028040
+      "instructions": 46197296
     }
   ]
 }
