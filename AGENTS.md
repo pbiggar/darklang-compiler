@@ -137,6 +137,7 @@ Tests: ✅ <passed>/<total> passed — `<exact command>`
 Benchmarks: ✅ no regression vs task parent, ratio <ratio>
   - Parent gate: `./benchmarks/run_benchmarks.sh --verify-parent full`
 Other validation: ✅ <result> — `<exact command>`
+Worktree: `<absolute task worktree path>`
 Working tree: ✅ clean
 Notes: <residual risk, preserved pre-existing changes, or other useful context>
 ```
