@@ -17,7 +17,10 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
 
 ## Rules
 
-1. Work on a task-specific branch and worktree.
+1. By default, work on a task-specific branch and worktree. For repository
+   utility work, or work performed through an interactive process with a coding
+   agent, keep all related work in the current worktree instead; do not create
+   or move to another worktree during that process.
 2. Commit a clean HEAD before handing work off.
 3. Task agents use `./land`, not raw status inspection, for handoff. A runner/operator may use `mergetrain status --json`; its queue-level `next_action` is not a judgment about any task branch's readiness.
 4. Land every named finished branch in the requested order with `./land --task "TASK"`; the script resolves the branch and worktree and enqueues the exact commit with bounded unattended approval. Success is the single line `queued`. After that line, do not inspect the job, poll status, wait for deployment, or report a later outcome. If it exits with `Landing handoff is pending`, report only `Merge train: ⏳ handoff pending`; do not use `❌ not ready`, explain the train state, or volunteer to recover another job.
