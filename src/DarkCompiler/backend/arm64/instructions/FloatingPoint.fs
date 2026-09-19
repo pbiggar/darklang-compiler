@@ -120,6 +120,17 @@ let internal emitFMul (ctx: CodeGenContext) (dest: LIR.FReg) (left: LIR.FReg) (r
             lirFRegToARM64FReg right
             |> Result.map (fun rightReg -> [ARM64Symbolic.FMUL (destReg, leftReg, rightReg)])))
 
+let internal emitFMadd (ctx: CodeGenContext) (dest: LIR.FReg) (left: LIR.FReg) (right: LIR.FReg) (addend: LIR.FReg) : Result<ARM64Symbolic.Instr list, string> =
+    lirFRegToARM64FReg dest
+    |> Result.bind (fun destReg ->
+        lirFRegToARM64FReg left
+        |> Result.bind (fun leftReg ->
+            lirFRegToARM64FReg right
+            |> Result.bind (fun rightReg ->
+                lirFRegToARM64FReg addend
+                |> Result.map (fun addendReg ->
+                    [ARM64Symbolic.FMADD (destReg, leftReg, rightReg, addendReg)]))))
+
 let internal emitFDiv (ctx: CodeGenContext) (dest: LIR.FReg) (left: LIR.FReg) (right: LIR.FReg) : Result<ARM64Symbolic.Instr list, string> =
     lirFRegToARM64FReg dest
     |> Result.bind (fun destReg ->

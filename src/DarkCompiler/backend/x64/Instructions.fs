@@ -21,7 +21,7 @@ let internal translateInstr
         X64EmitInteger.emitStore ctx stackSlot src
 
     | LIR.Add (dest, left, right) ->
-        X64EmitInteger.emitAdd ctx dest left right
+        X64EmitInteger.emitAdd ctx comparisonContext dest left right
 
     | LIR.Sub (dest, left, right) ->
         X64EmitInteger.emitSub ctx dest left right
@@ -43,6 +43,9 @@ let internal translateInstr
 
     | LIR.Cset (dest, cond) ->
         X64EmitInteger.emitCset ctx comparisonContext dest cond
+
+    | LIR.Select (dest, whenTrue, whenFalse, cond) ->
+        X64EmitInteger.emitSelect ctx comparisonContext dest whenTrue whenFalse cond
 
     | LIR.And (dest, left, right) ->
         X64EmitInteger.emitAnd ctx dest left right
@@ -187,6 +190,9 @@ let internal translateInstr
 
     | LIR.FAdd (dest, left, right) ->
         X64EmitFloatingPoint.emitFAdd ctx dest left right
+
+    | LIR.FMadd _ ->
+        Error "x64 codegen: FMadd is not selected for the baseline SSE2 target"
 
     | LIR.FSub (dest, left, right) ->
         X64EmitFloatingPoint.emitFSub ctx dest left right

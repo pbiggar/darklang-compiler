@@ -40,6 +40,7 @@ type FAllocationResult = {
     UsedCalleeSavedF: LIR.PhysFPReg list
     SpillScratchLeft: LIR.FReg
     SpillScratchRight: LIR.FReg
+    SpillScratchThird: LIR.FReg
 }
 
 let physFPRegToInt (reg: LIR.PhysFPReg) : int =
@@ -124,17 +125,18 @@ let private floatColoringToAllocation
         |> Array.distinct
         |> Array.sort
         |> Array.toList
-    let (spillScratchLeft, spillScratchRight) =
+    let (spillScratchLeft, spillScratchRight, spillScratchThird) =
         if List.contains LIR.D15 registers then
-            (LIR.FVirtual 1000, LIR.FVirtual 1001)
+            (LIR.FVirtual 1000, LIR.FVirtual 1001, LIR.FVirtual 1002)
         else
-            (LIR.FPhysical LIR.D14, LIR.FPhysical LIR.D15)
+            (LIR.FPhysical LIR.D14, LIR.FPhysical LIR.D15, LIR.FVirtual 1002)
     { Domain = colorResult.Domain
       Allocations = allocations
       StackSize = alignTo16 (initialStackSize + spillSlotCount * 8)
       UsedCalleeSavedF = usedCalleeSaved
       SpillScratchLeft = spillScratchLeft
-      SpillScratchRight = spillScratchRight }
+      SpillScratchRight = spillScratchRight
+      SpillScratchThird = spillScratchThird }
 
 /// Move pure Float literal loads immediately before their first local use. Loads
 /// used only on CFG edges retain their original dominating position.
@@ -196,7 +198,8 @@ let internal chordalFloatAllocationWithLiveness
           StackSize = initialStackSize
           UsedCalleeSavedF = []
           SpillScratchLeft = LIR.FVirtual 1000
-          SpillScratchRight = LIR.FVirtual 1001 }
+          SpillScratchRight = LIR.FVirtual 1001
+          SpillScratchThird = LIR.FVirtual 1002 }
     else
         let phiPairs = collectFPhiPairs blocks
         let movePairs = dedupePairs ((collectFPhiSourceMovePairs blocks) @ phiPairs)
@@ -221,7 +224,7 @@ let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocat
         (vregBitsFromList domain additionalVRegs) [] domain livenessBits
 
 let private isFixedFReg = function
-    | LIR.FVirtual 1000 | LIR.FVirtual 1001 | LIR.FVirtual 2000 -> true
+    | LIR.FVirtual 1000 | LIR.FVirtual 1001 | LIR.FVirtual 1002 | LIR.FVirtual 2000 -> true
     | LIR.FVirtual n when n >= 3000 && n < 4000 -> true
     | _ -> false
 
@@ -315,6 +318,12 @@ let applyFloatAllocationToInstrs
         let (rightLoads, allocatedRight) = materializeUse allocation allocation.SpillScratchRight right
         let (allocatedDest, finish) = destination allocation allocation.SpillScratchLeft dest
         finish (leftLoads @ rightLoads @ [makeInstr allocatedDest allocatedLeft allocatedRight])
+    let ternary dest left right third makeInstr =
+        let (leftLoads, allocatedLeft) = materializeUse allocation allocation.SpillScratchLeft left
+        let (rightLoads, allocatedRight) = materializeUse allocation allocation.SpillScratchRight right
+        let (thirdLoads, allocatedThird) = materializeUse allocation allocation.SpillScratchThird third
+        let (allocatedDest, finish) = destination allocation allocation.SpillScratchLeft dest
+        finish (leftLoads @ rightLoads @ thirdLoads @ [makeInstr allocatedDest allocatedLeft allocatedRight allocatedThird])
     let useOne src makeInstr =
         let (loads, allocatedSrc) = materializeUse allocation allocation.SpillScratchLeft src
         loads @ [makeInstr allocatedSrc]
@@ -334,6 +343,7 @@ let applyFloatAllocationToInstrs
     | LIR.FAdd (dest, left, right) -> binary dest left right (fun d l r -> LIR.FAdd (d, l, r))
     | LIR.FSub (dest, left, right) -> binary dest left right (fun d l r -> LIR.FSub (d, l, r))
     | LIR.FMul (dest, left, right) -> binary dest left right (fun d l r -> LIR.FMul (d, l, r))
+    | LIR.FMadd (dest, left, right, addend) -> ternary dest left right addend (fun d l r a -> LIR.FMadd (d, l, r, a))
     | LIR.FDiv (dest, left, right) -> binary dest left right (fun d l r -> LIR.FDiv (d, l, r))
     | LIR.FNeg (dest, src) -> unary dest src (fun d s -> LIR.FNeg (d, s))
     | LIR.FAbs (dest, src) -> unary dest src (fun d s -> LIR.FAbs (d, s))

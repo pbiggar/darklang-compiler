@@ -82,6 +82,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Msub({prettyPrintLIRReg mulLeft}, {prettyPrintLIRReg mulRight}, {prettyPrintLIRReg sub})"
     | LIR.Madd (dest, mulLeft, mulRight, add) ->
         $"{prettyPrintLIRReg dest} <- Madd({prettyPrintLIRReg mulLeft}, {prettyPrintLIRReg mulRight}, {prettyPrintLIRReg add})"
+    | LIR.Select (dest, whenTrue, whenFalse, cond) ->
+        $"{prettyPrintLIRReg dest} <- Select({cond}, {prettyPrintLIRReg whenTrue}, {prettyPrintLIRReg whenFalse})"
     | LIR.Cmp (left, right) ->
         $"Cmp({prettyPrintLIRReg left}, {prettyPrintLIROperand right})"
     | LIR.Cset (dest, cond) ->
@@ -218,6 +220,8 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRFReg dest} <- FSub({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
     | LIR.FMul (dest, left, right) ->
         $"{prettyPrintLIRFReg dest} <- FMul({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
+    | LIR.FMadd (dest, left, right, addend) ->
+        $"{prettyPrintLIRFReg dest} <- FMadd({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right}, {prettyPrintLIRFReg addend})"
     | LIR.FDiv (dest, left, right) ->
         $"{prettyPrintLIRFReg dest} <- FDiv({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
     | LIR.FNeg (dest, src) ->

@@ -13,6 +13,22 @@ directNegate 42L = -42L
 directNegate (-42L) = 42L
 directNegate (-9223372036854775808L) = -9223372036854775808L
 
+// Backend combining must preserve values across the arithmetic, selection,
+// addressing, and adjacent-field shapes selected by each native target.
+let fusedFloatArithmetic (a: Float) (b: Float) (c: Float) : Float =
+  (a * b) + c
+fusedFloatArithmetic 1.25 8.0 0.5 = 10.5
+
+let selectScalar (condition: Bool) (whenTrue: Int64) (whenFalse: Int64) : Int64 =
+  if condition then whenTrue else whenFalse
+selectScalar true 41L 7L = 41L
+selectScalar false 41L 7L = 7L
+
+type CombiningPair = { first: Int64; second: Int64 }
+let combineAdjacentFields (pair: CombiningPair) (scale: Int64) : Int64 =
+  pair.first + (pair.second * scale)
+combineAdjacentFields (CombiningPair { first = 11L; second = 13L }) 4L = 63L
+
 // A statically positive divisor uses the specialized Euclidean correction.
 let positiveConstantModulo (x: Int64) : Int64 = x % 10L
 positiveConstantModulo (-21L) = 9L

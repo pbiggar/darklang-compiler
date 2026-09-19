@@ -421,6 +421,24 @@ let testPeepholeFallsThroughToTrueTarget () : TestResult =
             |> String.concat "; "
         Error $"Expected inverted branch with true-target fallthrough, got {rendered}"
 
+let testPeepholeCombinesOperandsAndMemoryPairs () : TestResult =
+    let before = [
+        ARM64Symbolic.LSL_imm (ARM64.X9, ARM64.X2, 3)
+        ARM64Symbolic.ADD_reg (ARM64.X0, ARM64.X1, ARM64.X9)
+        ARM64Symbolic.SXTW (ARM64.X10, ARM64.X3)
+        ARM64Symbolic.ADD_reg (ARM64.X4, ARM64.X5, ARM64.X10)
+        ARM64Symbolic.STR (ARM64.X11, ARM64.SP, 16s)
+        ARM64Symbolic.STR (ARM64.X13, ARM64.SP, 24s)
+    ]
+    let expected = [
+        ARM64Symbolic.ADD_shifted (ARM64.X0, ARM64.X1, ARM64.X2, 3)
+        ARM64Symbolic.ADD_extended (ARM64.X4, ARM64.X5, ARM64.X3, ARM64.ExtendSXTW)
+        ARM64Symbolic.STP (ARM64.X11, ARM64.X13, ARM64.SP, 16s)
+    ]
+    match ARM64Peephole.peepholeOptimize before with
+    | actual when actual = expected -> Ok ()
+    | actual -> Error $"Expected shifted/extended operands and paired memory operations, got {actual}"
+
 let testArm64FLoadEncodableConstantsUseImmediate () : TestResult =
     let program =
         makeSimpleProgramWithVariants

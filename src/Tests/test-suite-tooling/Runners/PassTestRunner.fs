@@ -183,6 +183,8 @@ let prettyPrintARM64Instr = function
         $"ADD_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64Symbolic.ADD_shifted (dest, src1, src2, shift) ->
         $"ADD_shifted({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2}, LSL #{shift})"
+    | ARM64Symbolic.ADD_extended (dest, src1, src2, extend) ->
+        $"ADD_extended({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2}, {extend})"
     | ARM64Symbolic.SUB_imm (dest, src, imm) ->
         $"SUB_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {imm})"
     | ARM64Symbolic.SUB_imm12 (dest, src, imm) ->
@@ -191,6 +193,8 @@ let prettyPrintARM64Instr = function
         $"SUB_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64Symbolic.SUB_shifted (dest, src1, src2, shift) ->
         $"SUB_shifted({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2}, LSL #{shift})"
+    | ARM64Symbolic.SUB_extended (dest, src1, src2, extend) ->
+        $"SUB_extended({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2}, {extend})"
     | ARM64Symbolic.SUBS_imm (dest, src, imm) ->
         $"SUBS_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {imm})"
     | ARM64Symbolic.MUL (dest, src1, src2) ->
@@ -219,6 +223,8 @@ let prettyPrintARM64Instr = function
         $"CMP_reg({prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64Symbolic.CSET (dest, cond) ->
         $"CSET({prettyPrintARM64Reg dest}, {cond})"
+    | ARM64Symbolic.CSEL (dest, whenTrue, whenFalse, cond) ->
+        $"CSEL({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg whenTrue}, {prettyPrintARM64Reg whenFalse}, {cond})"
     | ARM64Symbolic.AND_reg (dest, src1, src2) ->
         $"AND_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64Symbolic.BIC_reg (dest, src1, src2) ->
@@ -325,6 +331,8 @@ let prettyPrintARM64Instr = function
         $"FSUB({dest}, {src1}, {src2})"
     | ARM64Symbolic.FMUL (dest, src1, src2) ->
         $"FMUL({dest}, {src1}, {src2})"
+    | ARM64Symbolic.FMADD (dest, src1, src2, addend) ->
+        $"FMADD({dest}, {src1}, {src2}, {addend})"
     | ARM64Symbolic.FDIV (dest, src1, src2) ->
         $"FDIV({dest}, {src1}, {src2})"
     | ARM64Symbolic.FNEG (dest, src) ->

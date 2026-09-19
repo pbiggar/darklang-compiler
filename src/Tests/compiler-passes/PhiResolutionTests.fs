@@ -89,7 +89,8 @@ let emptyFloatAllocation : FloatAllocation.FAllocationResult =
       StackSize = 0
       UsedCalleeSavedF = []
       SpillScratchLeft = LIR.FVirtual 1000
-      SpillScratchRight = LIR.FVirtual 1001 }
+      SpillScratchRight = LIR.FVirtual 1001
+      SpillScratchThird = LIR.FVirtual 1002 }
 
 let buildAllocationResult
     (domain: AllocationModel.VRegDomain)

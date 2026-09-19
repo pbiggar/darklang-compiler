@@ -81,6 +81,10 @@ type Condition =
     | LS   // Lower than or same (unsigned)
     | HS   // Higher than or same (unsigned)
 
+type Extend =
+    | ExtendUXTB | ExtendUXTH | ExtendUXTW
+    | ExtendSXTB | ExtendSXTH | ExtendSXTW
+
 /// ARM64 instruction types
 type Instr =
     | MOVZ of dest:Reg * imm:uint16 * shift:int  // Move with zero
@@ -89,10 +93,12 @@ type Instr =
     | ADD_imm of dest:Reg * src:Reg * imm:uint16
     | ADD_reg of dest:Reg * src1:Reg * src2:Reg
     | ADD_shifted of dest:Reg * src1:Reg * src2:Reg * shift:int  // ADD with shifted register: dest = src1 + (src2 << shift)
+    | ADD_extended of dest:Reg * src1:Reg * src2:Reg * extend:Extend
     | SUB_imm of dest:Reg * src:Reg * imm:uint16
     | SUB_imm12 of dest:Reg * src:Reg * imm:uint16  // SUB with shift=12, value = imm * 4096
     | SUB_reg of dest:Reg * src1:Reg * src2:Reg
     | SUB_shifted of dest:Reg * src1:Reg * src2:Reg * shift:int  // SUB with shifted register: dest = src1 - (src2 << shift)
+    | SUB_extended of dest:Reg * src1:Reg * src2:Reg * extend:Extend
     | SUBS_imm of dest:Reg * src:Reg * imm:uint16  // SUB and set flags (for fused SUB+CMP)
     | MUL of dest:Reg * src1:Reg * src2:Reg
     | SDIV of dest:Reg * src1:Reg * src2:Reg
@@ -102,6 +108,7 @@ type Instr =
     | CMP_imm of src:Reg * imm:uint16  // Compare with immediate (sets condition flags)
     | CMP_reg of src1:Reg * src2:Reg  // Compare registers (sets condition flags)
     | CSET of dest:Reg * cond:Condition  // Set register to 1 if condition, 0 otherwise
+    | CSEL of dest:Reg * whenTrue:Reg * whenFalse:Reg * cond:Condition
     | AND_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise AND
     | BIC_reg of dest:Reg * src1:Reg * src2:Reg  // Bit clear: dest = src1 AND NOT src2
     | AND_imm of dest:Reg * src:Reg * imm:uint64  // Bitwise AND with immediate (bitmask)
@@ -161,6 +168,7 @@ type Instr =
     | FADD of dest:FReg * src1:FReg * src2:FReg      // FP add: dest = src1 + src2
     | FSUB of dest:FReg * src1:FReg * src2:FReg      // FP sub: dest = src1 - src2
     | FMUL of dest:FReg * src1:FReg * src2:FReg      // FP mul: dest = src1 * src2
+    | FMADD of dest:FReg * src1:FReg * src2:FReg * addend:FReg
     | FDIV of dest:FReg * src1:FReg * src2:FReg      // FP div: dest = src1 / src2
     | FNEG of dest:FReg * src:FReg                   // FP negate: dest = -src
     | FABS of dest:FReg * src:FReg                   // FP absolute value: dest = |src|

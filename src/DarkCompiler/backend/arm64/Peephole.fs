@@ -31,6 +31,8 @@ let private registerLifetimeStep
     | ARM64Symbolic.UMOV_byte (dest, _)
     | ARM64Symbolic.FCVTZS (dest, _) ->
         classify [] [dest]
+    | ARM64Symbolic.CSEL (dest, whenTrue, whenFalse, _) ->
+        classify [whenTrue; whenFalse] [dest]
     | ARM64Symbolic.MOVK (dest, _, _) ->
         classify [dest] [dest]
     | ARM64Symbolic.ADD_imm (dest, src, _)
@@ -67,7 +69,9 @@ let private registerLifetimeStep
     | ARM64Symbolic.ASR_reg (dest, src1, src2) ->
         classify [src1; src2] [dest]
     | ARM64Symbolic.ADD_shifted (dest, src1, src2, _)
-    | ARM64Symbolic.SUB_shifted (dest, src1, src2, _) ->
+    | ARM64Symbolic.SUB_shifted (dest, src1, src2, _)
+    | ARM64Symbolic.ADD_extended (dest, src1, src2, _)
+    | ARM64Symbolic.SUB_extended (dest, src1, src2, _) ->
         classify [src1; src2] [dest]
     | ARM64Symbolic.MSUB (dest, src1, src2, src3)
     | ARM64Symbolic.MADD (dest, src1, src2, src3) ->
@@ -107,6 +111,7 @@ let private registerLifetimeStep
     | ARM64Symbolic.FADD _
     | ARM64Symbolic.FSUB _
     | ARM64Symbolic.FMUL _
+    | ARM64Symbolic.FMADD _
     | ARM64Symbolic.FDIV _
     | ARM64Symbolic.FNEG _
     | ARM64Symbolic.FABS _
@@ -258,26 +263,56 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
         // Remove branch to next instruction
         | ARM64Symbolic.B_label target :: ARM64Symbolic.Label lbl :: rest when target = lbl ->
             optimize (ARM64Symbolic.Label lbl :: acc) rest
-        // Fuse LSL_imm + ADD_reg into ADD_shifted: dest = src1 + (src2 << shift)
-        // Pattern: LSL_imm temp, x, shift; ADD_reg dest, x, temp → ADD_shifted dest, x, x, shift
+        // Fold a dead shifted value into either register position of addition.
         | ARM64Symbolic.LSL_imm (lslDest, lslSrc, shift) :: ARM64Symbolic.ADD_reg (addDest, addSrc1, addSrc2) :: rest
-            when lslDest = addSrc2 && lslSrc = addSrc1 ->
+            when lslDest = addSrc2
+                 && addSrc1 <> lslDest
+                 && (addDest = lslDest || overwrittenBeforeReadOrEnd lslDest rest) ->
             optimize (ARM64Symbolic.ADD_shifted (addDest, addSrc1, lslSrc, shift) :: acc) rest
-        // Fuse LSL_imm + ADD_reg (commutative): ADD_reg dest, temp, x → ADD_shifted dest, x, x, shift
         | ARM64Symbolic.LSL_imm (lslDest, lslSrc, shift) :: ARM64Symbolic.ADD_reg (addDest, addSrc1, addSrc2) :: rest
-            when lslDest = addSrc1 && lslSrc = addSrc2 ->
+            when lslDest = addSrc1
+                 && addSrc2 <> lslDest
+                 && (addDest = lslDest || overwrittenBeforeReadOrEnd lslDest rest) ->
             optimize (ARM64Symbolic.ADD_shifted (addDest, addSrc2, lslSrc, shift) :: acc) rest
-        // Fuse LSL_imm + SUB_reg into SUB_shifted: dest = shifted - src
-        // Pattern: LSL_imm temp, x, shift; SUB_reg dest, temp, x → SUB_shifted dest, temp, x, 0 then adjust
-        // Actually for n = 2^k - 1: x * n = (x << k) - x, so SUB dest, shifted, x
-        // We need: SUB_shifted dest, (x << shift), x, 0 but that's not quite right...
-        // For x * 7 = (x << 3) - x: LSL temp, x, 3; SUB dest, temp, x
-        // This becomes: dest = temp - x = (x << 3) - x
-        // ARM64 SUB_shifted is: dest = src1 - (src2 << shift)
-        // So we need: dest = (x << 3) - x which is dest = (x << 3) - (x << 0)
-        // That's not directly expressible with SUB_shifted... but we can use:
-        // SUB dest, temp, x where temp = x << 3, which is two instructions
-        // Actually let's skip SUB fusion for now since it doesn't map cleanly to SUB_shifted
+        | ARM64Symbolic.LSL_imm (lslDest, lslSrc, shift) :: ARM64Symbolic.SUB_reg (subDest, subSrc1, subSrc2) :: rest
+            when lslDest = subSrc2
+                 && subSrc1 <> lslDest
+                 && (subDest = lslDest || overwrittenBeforeReadOrEnd lslDest rest) ->
+            optimize (ARM64Symbolic.SUB_shifted (subDest, subSrc1, lslSrc, shift) :: acc) rest
+        // Fold zero/sign extensions into the extended-register add form.
+        | (ARM64Symbolic.UXTB (extended, src) as extension) :: ARM64Symbolic.ADD_reg (dest, left, right) :: rest
+        | (ARM64Symbolic.UXTH (extended, src) as extension) :: ARM64Symbolic.ADD_reg (dest, left, right) :: rest
+        | (ARM64Symbolic.UXTW (extended, src) as extension) :: ARM64Symbolic.ADD_reg (dest, left, right) :: rest
+        | (ARM64Symbolic.SXTB (extended, src) as extension) :: ARM64Symbolic.ADD_reg (dest, left, right) :: rest
+        | (ARM64Symbolic.SXTH (extended, src) as extension) :: ARM64Symbolic.ADD_reg (dest, left, right) :: rest
+        | (ARM64Symbolic.SXTW (extended, src) as extension) :: ARM64Symbolic.ADD_reg (dest, left, right) :: rest
+            when (extended = right || extended = left)
+                 && left <> right
+                 && (dest = extended || overwrittenBeforeReadOrEnd extended rest) ->
+            let baseReg = if extended = right then left else right
+            let extend =
+                match extension with
+                | ARM64Symbolic.UXTB _ -> ARM64.ExtendUXTB | ARM64Symbolic.UXTH _ -> ARM64.ExtendUXTH | ARM64Symbolic.UXTW _ -> ARM64.ExtendUXTW
+                | ARM64Symbolic.SXTB _ -> ARM64.ExtendSXTB | ARM64Symbolic.SXTH _ -> ARM64.ExtendSXTH | ARM64Symbolic.SXTW _ -> ARM64.ExtendSXTW
+                | _ -> Crash.crash "ARM64 extension combine received a non-extension"
+            optimize (ARM64Symbolic.ADD_extended (dest, baseReg, src, extend) :: acc) rest
+        // Pair aligned stack-frame stores. Restrict this to SP-relative memory:
+        // arbitrary heap/runtime stores can carry ordering and provenance that
+        // are not represented in the symbolic instruction stream.
+        | ARM64Symbolic.STR (src1, addr1, offset1)
+            :: ARM64Symbolic.STR (src2, addr2, offset2)
+            :: rest
+            when addr1 = ARM64.SP && addr2 = ARM64.SP
+                 && int offset2 = int offset1 + 8 && int offset1 % 16 = 0
+                 && int offset1 >= 0 && int offset1 <= 504 ->
+            optimize (ARM64Symbolic.STP (src1, src2, ARM64Symbolic.SP, offset1) :: acc) rest
+        | ARM64Symbolic.STR_fp (src1, addr1, offset1)
+            :: ARM64Symbolic.STR_fp (src2, addr2, offset2)
+            :: rest
+            when addr1 = ARM64.SP && addr2 = ARM64.SP
+                 && int offset2 = int offset1 + 8 && int offset1 % 16 = 0
+                 && int offset1 >= 0 && int offset1 <= 504 ->
+            optimize (ARM64Symbolic.STP_fp (src1, src2, ARM64Symbolic.SP, offset1) :: acc) rest
         | instr :: rest ->
             optimize (instr :: acc) rest
     optimize [] instrs

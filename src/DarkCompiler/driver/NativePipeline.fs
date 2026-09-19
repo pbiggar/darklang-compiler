@@ -195,7 +195,7 @@ let private compileMirToLir
             else
                 lirFuncs
                 |> LIR_Peephole.optimizeConstantReturnCallsInFunctions
-                |> List.map LIR_Peephole.optimizeFunction
+                |> List.map (LIR_Peephole.optimizeFunctionFor arch)
         let lirOptElapsed = sw.Elapsed.TotalMilliseconds - lirOptStart
         recordPassTiming passTimingRecorder "LIR Peephole" lirOptElapsed
         if verbosity >= 2 then

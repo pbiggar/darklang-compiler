@@ -86,6 +86,7 @@ type Instr =
     | MOVSX_word of dest:Reg * src:Reg                    // MOVSX reg, reg16 (sign-extend word)
     | MOVSXD of dest:Reg * src:Reg                        // MOVSXD reg64, reg32 (sign-extend dword)
     | LEA of dest:Reg * baseAddr:Reg * offset:int32       // LEA reg, [base + offset]
+    | LEA_index of dest:Reg * baseAddr:Reg * index:Reg * scale:int * offset:int32
     | LEA_rip of dest:Reg * label:string                  // LEA reg, [RIP + label]
     // Stack operations
     | PUSH of Reg
@@ -93,8 +94,10 @@ type Instr =
     // Arithmetic
     | ADD_imm of dest:Reg * imm:int32
     | ADD_reg of dest:Reg * src:Reg
+    | ADD_load of dest:Reg * baseAddr:Reg * offset:int32
     | SUB_imm of dest:Reg * imm:int32
     | SUB_reg of dest:Reg * src:Reg
+    | SUB_load of dest:Reg * baseAddr:Reg * offset:int32
     | IMUL_reg of dest:Reg * src:Reg                      // Signed multiply: dest = dest * src
     | IMUL_imm of dest:Reg * src:Reg * imm:int32          // Signed multiply: dest = src * imm
     | IDIV of src:Reg                                     // Signed divide: RDX:RAX / src → RAX=quot, RDX=rem
@@ -108,6 +111,7 @@ type Instr =
     | CMP_reg of src1:Reg * src2:Reg
     | TEST_reg of src1:Reg * src2:Reg                     // TEST reg, reg (AND without storing, sets flags)
     | SETcc of cond:Condition * dest:Reg                  // Set byte to 0/1 based on condition
+    | CMOVcc of cond:Condition * dest:Reg * src:Reg       // Conditional register move
     // Bitwise
     | AND_imm of dest:Reg * imm:int32
     | AND_reg of dest:Reg * src:Reg

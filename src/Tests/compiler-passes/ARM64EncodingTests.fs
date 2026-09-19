@@ -90,6 +90,22 @@ let testMOVZMOVKSequence () : TestResult =
     | _ ->
         Error "MOVZ/MOVK sequence: unexpected encoding length"
 
+let testCombinedInstructionEncoding () : TestResult =
+    let cases = [
+        (CSEL (X0, X1, X2, EQ), 0x9A820020u, "CSEL")
+        (FMADD (D0, D1, D2, D3), 0x1F420C20u, "FMADD")
+        (ADD_extended (X0, X1, X2, ExtendSXTW), 0x8B22C020u, "ADD extended")
+    ]
+    let rec check remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (instr, expected, name) :: rest ->
+            match encode instr with
+            | [actual] when actual = expected -> check rest
+            | [actual] -> Error $"{name}: expected 0x{expected:X8}, got 0x{actual:X8}"
+            | words -> Error $"{name}: expected one word, got {List.length words}"
+    check cases
+
 let private expectCrash (name: string) (f: unit -> unit) : TestResult =
     try
         f ()
@@ -303,6 +319,7 @@ let tests = [
     ("encodeReg", testEncodeReg)
     ("MOVK shift encoding", testMOVKShiftEncoding)
     ("MOVZ+MOVK sequence", testMOVZMOVKSequence)
+    ("combined instruction encoding", testCombinedInstructionEncoding)
     ("unsigned memory offsets reject invalid values", testUnsignedMemoryOffsetsRejectInvalidValues)
     ("signed pair offsets reject invalid values", testSignedPairOffsetsRejectInvalidValues)
     ("arithmetic immediates reject out-of-range values", testArithmeticImmediatesRejectOutOfRangeValues)

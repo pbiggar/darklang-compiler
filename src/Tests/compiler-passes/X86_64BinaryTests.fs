@@ -66,6 +66,22 @@ let testElfIdentHelper () : Result<unit, string> =
     else
         Error "ELF ident helper produced unexpected bytes"
 
+let testCombinedInstructionEncodings () : Result<unit, string> =
+    let cases = [
+        (LEA_index (RAX, RBX, RCX, 4, 8), [|0x48uy; 0x8Duy; 0x44uy; 0x8Buy; 0x08uy|], "indexed LEA")
+        (ADD_load (RAX, RBP, -8), [|0x48uy; 0x03uy; 0x45uy; 0xF8uy|], "memory ADD")
+        (SUB_load (R9, R12, 16), [|0x4Duy; 0x2Buy; 0x4Cuy; 0x24uy; 0x10uy|], "memory SUB")
+        (CMOVcc (NE, R10, R11), [|0x4Duy; 0x0Fuy; 0x45uy; 0xD3uy|], "conditional move")
+    ]
+    let rec check remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (instr, expected, name) :: rest ->
+            let actual = encodeInstruction instr
+            if actual = expected then check rest
+            else Error $"{name}: expected {expected}, got {actual}"
+    check cases
+
 /// Run an ELF binary, using the pinned QEMU when on a different architecture.
 /// Returns the exit code.
 let internal runElfBinary (binary: byte array) : Result<int, string> =
@@ -124,6 +140,7 @@ let testExecuteElf () : Result<unit, string> =
 
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("ELF ident helper", testElfIdentHelper)
+    ("x64 combined instruction encodings", testCombinedInstructionEncodings)
     ("Generate x86-64 ELF", testGenerateElf)
     ("Execute x86-64 ELF", testExecuteElf)
 ]
