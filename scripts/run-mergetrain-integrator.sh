@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-mergetrain-integrator.sh - Land auto-approved trains and ask Codex to repair conflicts.
+# run-mergetrain-integrator.sh - Land auto-approved trains and repair recoverable failures.
 
 set -euo pipefail
 
@@ -14,8 +14,9 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Continuously validate and deploy auto-approved merge-train jobs. When a job is
-blocked by a merge conflict or local non-fast-forward update, invoke Codex once
-for that exact job revision, verify its committed repair, and retry the job.
+blocked by a merge conflict, local non-fast-forward update, or an unrecorded
+benchmark improvement, invoke Codex once for that exact job revision, verify
+its committed repair, and retry the job.
 
 Options:
   --repo PATH          Repository whose merge-train queue is processed.
@@ -30,9 +31,10 @@ Options:
   -h, --help           Show this help and exit.
 
 The integrator processes only jobs enqueued with --auto. It stops for manual
-jobs, unknown states, non-conflict failures, or a repeated Codex repair attempt.
-Daemon and Codex output stays in log files. The console reports readable phase
-changes and bounded failure summaries, with color when attached to a terminal.
+jobs, unknown states, non-recoverable failures, or a repeated Codex repair
+attempt. Daemon and Codex output stays in log files. The console reports
+readable phase changes and bounded failure summaries, with color when attached
+to a terminal.
 
 Example:
   $0 --repo /Users/paulbiggar/projects/c4d-for-dcb
@@ -186,12 +188,27 @@ print(summary[:500] + ("…" if len(summary) > 500 else ""))
 PY
 }
 
+failed_gate_name() {
+  python3 -c '
+import json
+import re
+import sys
+
+payload = json.load(sys.stdin)
+for event in reversed(payload.get("events", [])):
+    match = re.fullmatch(r"Failed gate [0-9]+/[0-9]+: (.+)", str(event.get("message", "")))
+    if event.get("state") == "failure" and match:
+        print(match.group(1))
+        break
+'
+}
+
 repair_job() {
   local snapshot="$1"
   local daemon_output="$2"
   local job_id details category reason worktree branch old_head attempt_marker output_file
   local current_branch new_head dirty git_common_dir codex_log daemon_log inspect_log
-  local summary retry_log
+  local summary retry_log failed_gate repair_instructions failure_label
 
   job_id="$(json_value next_action.target_job_id <<<"$snapshot")"
   if [[ -z "$job_id" ]]; then
@@ -221,9 +238,46 @@ repair_job() {
   daemon_log="$attempt_dir/$job_id-${old_head:-unknown}.daemon.log"
   mv "$daemon_output" "$daemon_log"
   branch="$(json_value job.branch <<<"$details")"
-  log_run "Repairing job #$job_id ($branch) after ${category//_/ }"
+  failure_label="${category//_/ }"
   case "$category" in
     merge_conflict|semantic_conflict)
+      repair_instructions="$(cat <<'EOF'
+Resolve the rebase without discarding either source change.
+
+Special generated-benchmark rule: if the rebase conflicts in
+benchmarks/RESULTS.md, do not hand-merge it, choose ours/theirs, or edit its
+conflict markers. First resolve the source changes, then run
+./benchmarks/run_benchmarks.sh full in recording mode from the rebased tree.
+That run must prove an aggregate improvement, advance the canonical Dark
+snapshot, and regenerate benchmarks/RESULTS.md; stage the regenerated benchmark
+files. If it fails or does not replace the conflicted RESULTS.md, abort the
+rebase so failed recording artifacts are not committed, and explain that the
+required improvement was not established.
+EOF
+)"
+      ;;
+    gate_failed)
+      failed_gate="$(failed_gate_name <<<"$details")"
+      if [[ "$failed_gate" != benchmarks ]]; then
+        log_error "Job #$job_id needs operator attention ($category); refusing an automatic repair"
+        log_info "Daemon log: $daemon_log"
+        exit 1
+      fi
+      failure_label="benchmark gate failure"
+      repair_instructions="$(cat <<'EOF'
+The read-only integration benchmark gate reran the complete suite and found
+that the canonical benchmark files do not describe this candidate. Run
+./benchmarks/run_benchmarks.sh full in recording mode from the rebased tree.
+The recording command is the decision boundary: it must compare with the
+snapshot from the integration parent and must not advance it on a regression.
+
+If the run improves the aggregate result, commit the regenerated benchmark files,
+including benchmarks/RESULTS.md. If the recording run reports a regression,
+produces no tracked benchmark change, or cannot complete, do not
+commit or retry it; restore the branch to its original clean commit and explain
+the blocker. Never manufacture, hand-edit, or select an older generated result.
+EOF
+)"
       ;;
     push_rejected)
       if [[ "$reason" != *non-fast-forward* ]]; then
@@ -231,6 +285,12 @@ repair_job() {
         log_info "Daemon log: $daemon_log"
         exit 1
       fi
+      repair_instructions="$(cat <<'EOF'
+Rebase the task branch onto the current configured integration ref, preserving
+both sides of the change, then run the repository's required verification and
+commit the repaired result.
+EOF
+)"
       ;;
     *)
       log_error "Job #$job_id needs operator attention ($category); refusing an automatic repair"
@@ -238,6 +298,7 @@ repair_job() {
       exit 1
       ;;
   esac
+  log_run "Repairing job #$job_id ($branch) after $failure_label"
 
   worktree="$(json_value job.worktree_path <<<"$details")"
   if [[ -z "$worktree" || -z "$branch" || -z "$old_head" || ! -d "$worktree" ]]; then
@@ -271,18 +332,10 @@ repair_job() {
 Read and follow AGENTS.md and the repository documentation. The mergetrain
 inspection JSON is provided on stdin. Fetch the configured integration ref,
 rebase this task branch onto it, understand both sides of any conflict, and
-resolve it without discarding either change. Work only in this job's owning
-worktree. Run all relevant verification and commit the repair.
+follow the repair instructions below. Work only in this job's owning worktree.
+Run all relevant verification and commit the repair.
 
-Special generated-benchmark rule: if the rebase conflicts in
-benchmarks/RESULTS.md, do not hand-merge it, choose ours/theirs, or edit its
-conflict markers. First resolve the source changes, then run
-./benchmarks/run_benchmarks.sh full in recording mode from the rebased tree.
-That run must prove an aggregate improvement, advance the canonical Dark
-snapshot, and regenerate benchmarks/RESULTS.md; stage the regenerated benchmark
-files. If it fails or does not replace the conflicted RESULTS.md, abort the
-rebase so failed recording artifacts are not committed, and explain that the
-required improvement was not established.
+$repair_instructions
 
 For this recovery run, do not invoke ./land. Do not push, deploy, enqueue,
 retry, reconcile, cancel, dismiss, or modify mergetrain queue state; the

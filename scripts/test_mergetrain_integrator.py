@@ -98,11 +98,26 @@ elif command == "inspect":
     branch = subprocess.check_output(
         ["git", "-C", repo, "branch", "--show-current"], text=True
     ).strip()
+    category = os.environ.get("INTEGRATOR_TEST_FAILURE_CATEGORY", "merge_conflict")
+    failed_gate = os.environ.get("INTEGRATOR_TEST_FAILED_GATE", "")
+    events = []
+    if failed_gate:
+        events.append({
+            "id": 211,
+            "phase": "gating",
+            "state": "failure",
+            "message": f"Failed gate 4/4: {failed_gate}",
+            "detail": "exit_code=1",
+        })
     print(json.dumps({
         "job": {"worktree_path": repo, "branch": branch, "head_sha": head},
-        "outcome": {"failure_category": "merge_conflict", "message": "conflict"},
+        "outcome": {"failure_category": category, "message": "failed train gate"},
+        "events": events,
     }))
 else:
+    retry_marker = os.environ.get("INTEGRATOR_TEST_RETRY_MARKER")
+    if retry_marker:
+        pathlib.Path(retry_marker).write_text("called\\n", encoding="utf-8")
     print(json.dumps({"job": {"id": 4}}))
 """,
             encoding="utf-8",
@@ -120,6 +135,21 @@ pathlib.Path(os.environ["INTEGRATOR_TEST_CODEX_ARGS"]).write_text(
     "\\n".join(sys.argv), encoding="utf-8"
 )
 output_index = sys.argv.index("--output-last-message") + 1
+if os.environ.get("INTEGRATOR_TEST_CODEX_SUCCESS") == "1":
+    repo = pathlib.Path(sys.argv[sys.argv.index("-C") + 1])
+    generated = repo / "recorded-benchmark.txt"
+    generated.write_text("recorded\\n", encoding="utf-8")
+    import subprocess
+    subprocess.run(["git", "add", generated.name], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "Record integrated benchmark improvement"],
+        cwd=repo,
+        check=True,
+    )
+    pathlib.Path(sys.argv[output_index]).write_text(
+        "Recorded benchmark improvement.\\n", encoding="utf-8"
+    )
+    raise SystemExit(0)
 pathlib.Path(sys.argv[output_index]).write_text(
     "Could not resolve safely. Manual semantic decision required.\\n",
     encoding="utf-8",
@@ -137,6 +167,7 @@ raise SystemExit(1)
         environment["INTEGRATOR_TEST_REPO"] = str(repo)
         environment["INTEGRATOR_TEST_CODEX_ARGS"] = str(root / "codex-args.txt")
         environment["INTEGRATOR_TEST_PROGRESS_FILE"] = str(root / "progress.txt")
+        environment["INTEGRATOR_TEST_RETRY_MARKER"] = str(root / "retry-called.txt")
         environment["INTEGRATOR_SCRIPT"] = str(
             source_root / "scripts" / "run-mergetrain-integrator.sh"
         )
@@ -251,6 +282,117 @@ raise SystemExit(1)
             daemon_logs = list(attempts.glob("daemon-failed-*.log"))
             self.assertEqual(len(daemon_logs), 1)
             self.assertIn("daemon noise 0", daemon_logs[0].read_text(encoding="utf-8"))
+
+    def test_benchmark_gate_failure_requests_recording_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_FAILURE_CATEGORY"] = "gate_failed"
+            environment["INTEGRATOR_TEST_FAILED_GATE"] = "benchmarks"
+
+            completed = subprocess.run(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "attempts"),
+                    "--once",
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            self.assertIn("after benchmark gate failure", completed.stderr)
+            codex_args = Path(environment["INTEGRATOR_TEST_CODEX_ARGS"]).read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("./benchmarks/run_benchmarks.sh full", codex_args)
+            self.assertIn("commit the regenerated benchmark files", codex_args)
+            self.assertIn("If the recording run reports a regression", codex_args)
+
+    def test_non_benchmark_gate_failure_is_not_automatically_repaired(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_FAILURE_CATEGORY"] = "gate_failed"
+            environment["INTEGRATOR_TEST_FAILED_GATE"] = "tests"
+
+            completed = subprocess.run(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "attempts"),
+                    "--once",
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            self.assertIn(
+                "needs operator attention (gate_failed)", completed.stderr
+            )
+            self.assertFalse(
+                Path(environment["INTEGRATOR_TEST_CODEX_ARGS"]).exists()
+            )
+
+    def test_recorded_benchmark_improvement_retries_the_new_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            old_head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+            ).strip()
+            environment["INTEGRATOR_TEST_FAILURE_CATEGORY"] = "gate_failed"
+            environment["INTEGRATOR_TEST_FAILED_GATE"] = "benchmarks"
+            environment["INTEGRATOR_TEST_CODEX_SUCCESS"] = "1"
+
+            completed = subprocess.run(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "attempts"),
+                    "--once",
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("Retried job #4 after Codex committed a repair", completed.stderr)
+            new_head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+            ).strip()
+            self.assertNotEqual(new_head, old_head)
+            self.assertEqual(
+                Path(environment["INTEGRATOR_TEST_RETRY_MARKER"]).read_text(
+                    encoding="utf-8"
+                ),
+                "called\n",
+            )
+
+    def test_merge_train_requires_recorded_benchmark_results(self) -> None:
+        source_root = Path(__file__).resolve().parent.parent
+        config = (source_root / ".mergetrain.yaml").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "run: ./benchmarks/run_benchmarks.sh --verify-fresh full", config
+        )
+        self.assertNotIn(
+            "run: ./benchmarks/run_benchmarks.sh --verify full", config
+        )
 
     def test_successful_idle_tick_reports_readable_status_without_subprocess_noise(
         self,

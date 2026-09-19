@@ -86,9 +86,13 @@ When a compiler change improves aggregate full-profile performance, run
 Dark snapshot and generated `benchmarks/RESULTS.md`; commit
 `benchmarks/BASELINES.md` only for an audited Rust refresh. Recording advances
 only on improvement and leaves the stronger snapshot/results on regression.
-Integration uses `--verify-fresh` and stops if a known improvement has not been
-recorded. An incompatible or missing snapshot requires
-one successful `--reset-dark-baseline` full run; partial, targeted,
+Integration reruns every queued candidate with `--verify-fresh`. A regression
+fails the gate. When a candidate improves on the integration parent's snapshot,
+the read-only gate deliberately fails and the integrator rebases the owning
+branch, runs the full suite in recording mode, commits the regenerated snapshot
+and `RESULTS.md`, and retries that new exact commit. The retry must reproduce
+the recorded result before deployment. An incompatible or missing snapshot
+requires one successful `--reset-dark-baseline` full run; partial, targeted,
 `all`, hyperfine, and failed runs cannot reset it. Audited Rust refreshes remain
 separate via `--refresh-baseline=rust`.
 
