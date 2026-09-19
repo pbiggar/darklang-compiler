@@ -8,6 +8,9 @@
 //   test_name
 //   ---INPUT---
 //   source code
+// or:
+//   ---STDLIB-FUNCTION---
+//   fully qualified prebuilt stdlib function name
 //   ---EXPECTED---
 //   exact IR output
 
@@ -22,10 +25,14 @@ type IRStage =
     | MIR      // After MIR optimization (SSA-based)
     | LIR      // After LIR peephole optimization
 
+type OptimizationInput =
+    | Source of string
+    | StdlibFunction of string
+
 /// Optimization test specification
 type OptimizationTest = {
     Name: string
-    Source: string
+    Input: OptimizationInput
     ExpectedIR: string
     Stage: IRStage
     SourceFile: string
@@ -34,6 +41,7 @@ type OptimizationTest = {
 type private SectionName =
     | Name
     | Input
+    | StdlibFunctionSection
     | Expected
 
 type private ParseState = {
@@ -48,23 +56,35 @@ let private tryParseSectionName (sectionName: string) : Result<SectionName, stri
     match sectionName with
     | "NAME" -> Ok Name
     | "INPUT" -> Ok Input
+    | "STDLIB-FUNCTION" -> Ok StdlibFunctionSection
     | "EXPECTED" -> Ok Expected
     | unknown -> Error $"Unknown optimization section: {unknown}"
 
 /// Parse a single test from sections
 let private parseTest (stage: IRStage) (filePath: string) (sections: Map<SectionName, string>) : Result<OptimizationTest, string> =
-    match Map.tryFind Name sections, Map.tryFind Input sections, Map.tryFind Expected sections with
-    | Some name, Some input, Some expected ->
+    match Map.tryFind Name sections, Map.tryFind Input sections, Map.tryFind StdlibFunctionSection sections, Map.tryFind Expected sections with
+    | Some name, Some input, None, Some expected ->
         Ok {
             Name = name.Trim()
-            Source = input.Trim()
+            Input = Source (input.Trim())
             ExpectedIR = expected.Trim()
             Stage = stage
             SourceFile = filePath
         }
-    | None, _, _ -> Error "Missing NAME section"
-    | _, None, _ -> Error "Missing INPUT section"
-    | _, _, None -> Error "Missing EXPECTED section"
+    | Some name, None, Some functionName, Some expected when stage = ANF ->
+        Ok {
+            Name = name.Trim()
+            Input = StdlibFunction (functionName.Trim())
+            ExpectedIR = expected.Trim()
+            Stage = stage
+            SourceFile = filePath
+        }
+    | None, _, _, _ -> Error "Missing NAME section"
+    | _, Some _, Some _, _ -> Error "INPUT and STDLIB-FUNCTION cannot be combined"
+    | _, None, Some _, _ when stage <> ANF -> Error "STDLIB-FUNCTION is supported only for ANF optimization tests"
+    | _, None, None, _ -> Error "Missing INPUT or STDLIB-FUNCTION section"
+    | _, _, _, None -> Error "Missing EXPECTED section"
+    | _, _, _, _ -> Error "Invalid optimization test sections"
 
 /// Parse multiple tests from a single file
 /// Tests are separated by ---NAME--- sections

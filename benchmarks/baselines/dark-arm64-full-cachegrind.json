@@ -10,127 +10,127 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-19T12:48:03+00:00",
+  "generated_at": "2026-09-19T18:59:17+00:00",
   "compiler": {
-    "commit": "12510e3f126627f5121f12d167434f6f049c7506",
-    "subject": "Make semantic function identities collision-free"
+    "commit": "00b50d971232bdf54e37aa60f6ddb84996453bf2",
+    "subject": "Merge job #138: own persistent dictionary loop frontiers"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 145107203
+      "instructions": 145107565
     },
     {
       "name": "binary_trees",
-      "instructions": 11046646
+      "instructions": 11047008
     },
     {
       "name": "collatz",
-      "instructions": 70193541
+      "instructions": 70193722
     },
     {
       "name": "edigits",
-      "instructions": 49904322
+      "instructions": 49904684
     },
     {
       "name": "factorial",
-      "instructions": 59005
+      "instructions": 59367
     },
     {
       "name": "fannkuch",
-      "instructions": 220629862
+      "instructions": 220630043
     },
     {
       "name": "fasta",
-      "instructions": 21444709
+      "instructions": 21444890
     },
     {
       "name": "fft",
-      "instructions": 19971086
+      "instructions": 20156068
     },
     {
       "name": "fib",
-      "instructions": 8265766
+      "instructions": 8265947
     },
     {
       "name": "huffman",
-      "instructions": 411968764
+      "instructions": 411969307
     },
     {
       "name": "leibniz",
-      "instructions": 17006465
+      "instructions": 17006646
     },
     {
       "name": "mandelbrot",
-      "instructions": 15222005
+      "instructions": 15222367
     },
     {
       "name": "matmul",
-      "instructions": 42560364
+      "instructions": 42560545
     },
     {
       "name": "merkletrees",
-      "instructions": 3870994
+      "instructions": 3871356
     },
     {
       "name": "myers_diff",
-      "instructions": 205029664
+      "instructions": 205030207
     },
     {
       "name": "nbody",
-      "instructions": 14535980
+      "instructions": 14536161
     },
     {
       "name": "nqueen",
-      "instructions": 7417604
+      "instructions": 7417785
     },
     {
       "name": "nsieve",
-      "instructions": 131108232
+      "instructions": 131108594
     },
     {
       "name": "pisum",
-      "instructions": 808014
+      "instructions": 808376
     },
     {
       "name": "primes",
-      "instructions": 1672085
+      "instructions": 1672266
     },
     {
       "name": "quicksort",
-      "instructions": 176619573
+      "instructions": 176619935
     },
     {
       "name": "raytracer",
-      "instructions": 47317991
+      "instructions": 47318353
     },
     {
       "name": "regex_lite",
-      "instructions": 64887050
+      "instructions": 64887412
     },
     {
       "name": "spectral_norm",
-      "instructions": 264941144
+      "instructions": 264941506
     },
     {
       "name": "string_equality",
-      "instructions": 1178270
+      "instructions": 1178632
     },
     {
       "name": "sum_to_n",
-      "instructions": 58037
+      "instructions": 58399
     },
     {
       "name": "tak",
-      "instructions": 48004384
+      "instructions": 48005108
     },
     {
       "name": "tinytemplate",
-      "instructions": 371292451
+      "instructions": 310047074
     },
     {
       "name": "warden",
-      "instructions": 44213596
+      "instructions": 44213958
     }
   ]
 }

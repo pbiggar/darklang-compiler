@@ -250,6 +250,7 @@ Stdlib.String.trim "  hello" = "hello"
 Stdlib.String.trim "hello  " = "hello"
 Stdlib.String.trim "   " = ""
 Stdlib.String.trim "" = ""
+Stdlib.String.trim "\t\n\u000B\u000C\r hello \t\n\u000B\u000C\r" = "hello"
 
 // Unicode trim tests
 Stdlib.String.trim "     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   " = "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿"
@@ -270,6 +271,7 @@ Stdlib.String.trimStart "  hello  " = "hello  "
 Stdlib.String.trimStart "hello" = "hello"
 Stdlib.String.trimStart "" = ""
 Stdlib.String.trimStart "      " = ""
+Stdlib.String.trimStart "\t\n\u000B\u000C\r hello \t" = "hello \t"
 
 // Unicode trimStart tests
 Stdlib.String.trimStart "     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   " = "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   "
@@ -290,6 +292,7 @@ Stdlib.String.trimEnd "  hello  " = "  hello"
 Stdlib.String.trimEnd "hello" = "hello"
 Stdlib.String.trimEnd "" = ""
 Stdlib.String.trimEnd "      " = ""
+Stdlib.String.trimEnd "\t hello \t\n\u000B\u000C\r" = "\t hello"
 
 // Unicode trimEnd tests
 Stdlib.String.trimEnd "     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   " = "     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿"

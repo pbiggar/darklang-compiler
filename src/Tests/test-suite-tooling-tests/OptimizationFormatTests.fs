@@ -34,7 +34,7 @@ let testParseCRLFOptimizationFile () : TestResult =
 
     withTempFile content (fun path ->
         match parseTestFile ANF path with
-        | Ok [ test ] when test.Name = "fold_add" && test.Source = "1 + 2" && test.ExpectedIR = "return 3" ->
+        | Ok [ test ] when test.Name = "fold_add" && test.Input = Source "1 + 2" && test.ExpectedIR = "return 3" ->
             Ok ()
         | Ok tests ->
             Error $"Expected one parsed CRLF optimization test, got {List.length tests}"
@@ -64,9 +64,47 @@ let testUnknownOptimizationSectionFails () : TestResult =
         | Error msg ->
             Error $"Expected unknown section error, got: {msg}")
 
+let testParseStdlibFunctionOptimization () : TestResult =
+    let content =
+        [
+            "---NAME---"
+            "stdlib_strength_reduction"
+            "---STDLIB-FUNCTION---"
+            "Darklang.Stdlib.Int64.__powerLoop"
+            "---EXPECTED---"
+            "Function Darklang.Stdlib.Int64.__powerLoop:"
+        ]
+        |> String.concat "\n"
+
+    withTempFile content (fun path ->
+        match parseTestFile ANF path with
+        | Ok [ test ] when test.Input = StdlibFunction "Darklang.Stdlib.Int64.__powerLoop" -> Ok ()
+        | Ok tests -> Error $"Expected one parsed stdlib optimization test, got {List.length tests}"
+        | Error msg -> Error $"Expected stdlib optimization test to parse, got: {msg}")
+
+let testStdlibFunctionRejectsNonANFStage () : TestResult =
+    let content =
+        [
+            "---NAME---"
+            "invalid_stdlib_stage"
+            "---STDLIB-FUNCTION---"
+            "Darklang.Stdlib.Int64.__powerLoop"
+            "---EXPECTED---"
+            "unused"
+        ]
+        |> String.concat "\n"
+
+    withTempFile content (fun path ->
+        match parseTestFile MIR path with
+        | Error msg when msg.Contains("supported only for ANF") -> Ok ()
+        | Ok _ -> Error "Expected a MIR stdlib-function fixture to fail"
+        | Error msg -> Error $"Expected the stage diagnostic, got: {msg}")
+
 let tests = [
     ("parse CRLF optimization file", testParseCRLFOptimizationFile)
     ("unknown optimization section fails", testUnknownOptimizationSectionFails)
+    ("parse stdlib function optimization", testParseStdlibFunctionOptimization)
+    ("stdlib function optimization rejects non-ANF stage", testStdlibFunctionRejectsNonANFStage)
 ]
 
 let runAll () : TestResult =

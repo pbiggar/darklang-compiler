@@ -166,6 +166,17 @@ let getOptimizedANF (stdlib: CompilationContexts.StdlibResult) (source: string) 
                 // Pretty-print the result
                 Ok (formatANFForOptimizationTest syntheticMain optimized)
 
+let getOptimizedStdlibANF (stdlib: CompilationContexts.StdlibResult) (functionName: string) : Result<string, string> =
+    match Map.tryFind functionName stdlib.StdlibANFFunctions with
+    | None -> Error $"Prebuilt stdlib ANF function not found: {functionName}"
+    | Some func ->
+        let functionNames =
+            stdlib.StdlibANFFunctions
+            |> Map.values
+            |> Seq.map (fun candidate -> (candidate.Id, candidate.Name))
+            |> Map.ofSeq
+        Ok (formatANFFunction functionNames func)
+
 /// Compile source and get MIR after optimization
 let getOptimizedMIR (stdlib: CompilationContexts.StdlibResult) (source: string) : Result<string, string> =
     match parseOptimizationSource source with
@@ -259,10 +270,12 @@ let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
 /// Run a single optimization test
 let runOptimizationTest (stdlib: CompilationContexts.StdlibResult) (test: OptimizationTest) : OptimizationTestResult =
     let irResult =
-        match test.Stage with
-        | ANF -> getOptimizedANF stdlib test.Source
-        | MIR -> getOptimizedMIR stdlib test.Source
-        | LIR -> getOptimizedLIR stdlib test.Source
+        match test.Stage, test.Input with
+        | ANF, Source source -> getOptimizedANF stdlib source
+        | ANF, StdlibFunction functionName -> getOptimizedStdlibANF stdlib functionName
+        | MIR, Source source -> getOptimizedMIR stdlib source
+        | LIR, Source source -> getOptimizedLIR stdlib source
+        | MIR, StdlibFunction _ | LIR, StdlibFunction _ -> Error "STDLIB-FUNCTION is supported only for ANF optimization tests"
 
     match irResult with
     | Error e ->

@@ -269,6 +269,10 @@ let formatANF (ANF.Program (functions, mainExpr)) : string =
     else
         funcStrs + "\n\nMain:\n" + mainStr
 
+/// Format one ANF function while resolving calls against the supplied names.
+let formatANFFunction (functionNames: Map<AST.FunctionId, string>) (func: ANF.Function) : string =
+    $"Function {func.Name}:\n{prettyPrintANFExpr functionNames func.Body}"
+
 /// Format only matching ANF functions, optionally as a compact inventory.
 let formatANFDump (filter: string option) (summary: bool) (ANF.Program (functions, mainExpr)) : string =
     let selected = functions |> List.filter (fun func -> functionNameMatches filter func.Name)

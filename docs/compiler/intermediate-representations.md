@@ -50,6 +50,9 @@ See
 [compiler-selected list arrays](runtime/list-array-reuse.md) for its boundary
 and the remaining general ownership work.
 
+The distinction between source-semantic IDs and these IR-local value/register
+IDs is documented in [compiler identities](identities.md).
+
 Primitive effect sets distinguish conservative opaque-source evaluation,
 allocation, failure, user-code invocation, and reads or writes of
 compiler-owned storage. Empty sets are effect-free.
@@ -185,7 +188,7 @@ type Operand =
     | FloatSymbol of float  // Float value (resolved to pool later)
     | StringSymbol of string // String value (resolved to pool later)
     | Register of VReg
-    | FuncAddr of string   // Function address
+    | FuncAddr of AST.FunctionId // Function address
 
 type Instr =
     | Mov of dest:VReg * src:Operand
