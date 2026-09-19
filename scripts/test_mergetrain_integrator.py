@@ -380,7 +380,7 @@ raise SystemExit(1)
             )
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("Retried job #4 after Codex committed a repair", completed.stderr)
+            self.assertIn("Job #4: Retried after Codex committed a repair", completed.stderr)
             new_head = subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=repo, text=True
             ).strip()
