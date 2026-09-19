@@ -389,13 +389,16 @@ let rec simpleInferType
                     |> List.map (fun (fieldName, fieldType) ->
                         (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
 
-                let fieldMap = Map.ofList fields
+                let fieldMap =
+                    fields
+                    |> List.map (fun (field, value) -> AST.fieldIndex field, value)
+                    |> Map.ofList
                 let typeParams = recordInfo.TypeParams
                 let rec inferBindings remaining acc =
                     match remaining with
                     | [] -> Some acc
-                    | (fieldName, expectedFieldType) :: rest ->
-                        match Map.tryFind fieldName fieldMap with
+                    | (fieldIndex, expectedFieldType) :: rest ->
+                        match Map.tryFind fieldIndex fieldMap with
                         | None -> inferBindings rest acc
                         | Some fieldExpr ->
                             match simpleInferType fieldExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
@@ -407,7 +410,7 @@ let rec simpleInferType
                                 | Ok newBindings -> inferBindings rest (acc @ newBindings)
                                 | Error _ -> inferBindings rest acc
 
-                match inferBindings expectedFields [] with
+                match inferBindings (expectedFields |> List.map snd |> List.indexed) [] with
                 | None ->
                     Some (AST.TRecord (typeName, []))
                 | Some bindings ->

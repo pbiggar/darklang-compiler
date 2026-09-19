@@ -470,8 +470,8 @@ and Expr =
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
     | DictLiteral of keyType:Type * valueType:Type * entries:(Expr * Expr) list
-    | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
-    | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
+    | RecordLiteral of reference:RecordReference * fields:(RecordFieldReference * Expr) list
+    | RecordUpdate of record:Expr * updates:(RecordFieldReference * Expr) list // { record with x = 1, y = 2 }
     | RecordAccess of record:Expr * field:RecordFieldReference        // p.x, p.y
     | Constructor of reference:ConstructorReference * variantName:string * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2

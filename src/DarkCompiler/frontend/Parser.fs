@@ -2519,7 +2519,12 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                         // Record update: { record with field = value, ... }
                         parseRecordUpdateFields afterWith []
                         |> Result.map (fun (updates, remaining) ->
-                            (RecordUpdate (recordExpr, updates), remaining))
+                            (RecordUpdate (
+                                recordExpr,
+                                updates
+                                |> List.map (fun (name, value) ->
+                                    unresolvedRecordFieldReference name, value)
+                             ), remaining))
                     | _ -> Error "Record update requires 'with' keyword: use '{ record with field = value, ... }'")
         | TLBracket :: rest ->
             // List literal: [1L; 2L; 3L] or []
@@ -2545,7 +2550,14 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         match toks with
         | TRBrace :: rest ->
             // Empty record or end of fields
-            Ok (RecordLiteral (reference, List.rev acc), rest)
+            Ok (
+                RecordLiteral (
+                    reference,
+                    List.rev acc
+                    |> List.map (fun (name, value) -> unresolvedRecordFieldReference name, value)
+                ),
+                rest
+            )
         | TIdent fieldName :: TEquals :: rest ->
             parseExpr rest
             |> Result.bind (fun (value, remaining) ->
@@ -2558,7 +2570,14 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     parseRecordLiteralFieldsWithTypeName reference remaining ((fieldName, value) :: acc)
                 | TRBrace :: rest' ->
                     // End of record
-                    Ok (RecordLiteral (reference, List.rev ((fieldName, value) :: acc)), rest')
+                    Ok (
+                        RecordLiteral (
+                            reference,
+                            List.rev ((fieldName, value) :: acc)
+                            |> List.map (fun (name, value) -> unresolvedRecordFieldReference name, value)
+                        ),
+                        rest'
+                    )
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
 

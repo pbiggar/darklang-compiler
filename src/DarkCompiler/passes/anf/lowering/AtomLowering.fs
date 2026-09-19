@@ -90,12 +90,22 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
         else if isBuiltinBlobEmptyName name then
             Ok (ANF.StringLiteral "", [], varGen)
         else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
-            toAtomCore sumTypeNames inertScopes
-                (CheckedAST.RecordLiteral (
-                    { TypeName = "Darklang.LanguageTools.PackageManager.PickContext"; TypeArgs = [] },
-                    [("currentModule", CheckedAST.ListLiteral [])]
-                ))
-                varGen env typeReg variantLookup funcReg moduleRegistry
+            let typeName = "Darklang.LanguageTools.PackageManager.PickContext"
+            match Map.tryFind typeName typeReg with
+            | Some recordInfo ->
+                let (resultVar, nextVarGen) = ANF.freshVar varGen
+                let reference : CheckedAST.RecordReference =
+                    { TypeName = typeName; TypeArgs = [] }
+                Ok (
+                    ANF.Var resultVar,
+                    [ resultVar,
+                      ANF.RecordAlloc (
+                          recordDescriptor reference recordInfo,
+                          [ANF.IntLiteral (ANF.Int64 0L)]
+                      ) ],
+                    nextVarGen
+                )
+            | None -> Error $"Unknown record type: {typeName}"
         else if name = "Darklang.Stdlib.List.empty" || name = "Darklang.Stdlib.List.empty_v0" then
             Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
         else
@@ -549,31 +559,31 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
         let typeName = reference.TypeName
         // Evaluate field expressions in source order, independently of the
         // declaration-order tuple layout used for the record value.
-        let fieldOrder =
+        let fieldCount =
             match Map.tryFind typeName typeReg with
-            | Some recordInfo -> recordInfo.Fields |> List.map fst
+            | Some recordInfo -> List.length recordInfo.Fields
             | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
 
         let rec convertFields remaining vg acc =
             match remaining with
             | [] -> Ok (List.rev acc, vg)
-            | (fieldName, fieldExpr) :: rest ->
+            | (fieldId, fieldExpr) :: rest ->
                 toAtomCore sumTypeNames inertScopes fieldExpr vg env typeReg variantLookup funcReg moduleRegistry
                 |> Result.bind (fun (fieldAtom, fieldBindings, vg') ->
-                    convertFields rest vg' ((fieldName, fieldAtom, fieldBindings) :: acc))
+                    convertFields rest vg' ((fieldId, fieldAtom, fieldBindings) :: acc))
 
         convertFields fields varGen []
         |> Result.map (fun (convertedFields, varGen1) ->
-            let atomByName =
+            let atomByIndex =
                 convertedFields
-                |> List.map (fun (fieldName, atom, _) -> (fieldName, atom))
+                |> List.map (fun (fieldId, atom, _) -> (AST.fieldIndex fieldId, atom))
                 |> Map.ofList
             let orderedAtoms =
-                fieldOrder
-                |> List.map (fun fieldName ->
-                    match Map.tryFind fieldName atomByName with
+                [0 .. fieldCount - 1]
+                |> List.map (fun fieldIndex ->
+                    match Map.tryFind fieldIndex atomByIndex with
                     | Some atom -> atom
-                    | None -> Crash.crash $"Record literal '{typeName}' is missing field '{fieldName}' after type checking")
+                    | None -> Crash.crash $"Record literal '{typeName}' is missing field slot {fieldIndex} after type checking")
             let sourceBindings =
                 convertedFields |> List.collect (fun (_, _, bindings) -> bindings)
             let (tempVar, varGen2) = ANF.freshVar varGen1
@@ -602,16 +612,16 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                         let rec convertUpdates remaining vg acc =
                             match remaining with
                             | [] -> Ok (List.rev acc, vg)
-                            | (fieldName, updateExpr) :: rest ->
+                            | (fieldId, updateExpr) :: rest ->
                                 toAtomCore sumTypeNames inertScopes updateExpr vg env typeReg variantLookup funcReg moduleRegistry
                                 |> Result.bind (fun (updateAtom, updateBindings, vg') ->
-                                    convertUpdates rest vg' ((fieldName, updateAtom, updateBindings) :: acc))
+                                    convertUpdates rest vg' ((fieldId, updateAtom, updateBindings) :: acc))
 
                         convertUpdates updates varGen1 []
                         |> Result.map (fun (convertedUpdates, varGen2) ->
                             let updateAtoms =
                                 convertedUpdates
-                                |> List.map (fun (fieldName, atom, _) -> (fieldName, atom))
+                                |> List.map (fun (fieldId, atom, _) -> (AST.fieldIndex fieldId, atom))
                                 |> Map.ofList
                             let updateBindings =
                                 convertedUpdates |> List.collect (fun (_, _, bindings) -> bindings)
@@ -619,7 +629,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                                 typeFields
                                 |> List.mapi (fun index (fieldName, _) -> (index, fieldName))
                                 |> List.fold (fun (atoms, bindings, vg) (index, fieldName) ->
-                                    match Map.tryFind fieldName updateAtoms with
+                                    match Map.tryFind index updateAtoms with
                                     | Some atom -> (atom :: atoms, bindings, vg)
                                     | None ->
                                         let (fieldVar, vg') = ANF.freshVar vg

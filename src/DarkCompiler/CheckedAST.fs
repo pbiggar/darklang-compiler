@@ -90,8 +90,8 @@ and Expr =
     | TupleLiteral of Expr list
     | TupleAccess of tuple:Expr * index:int
     | DictLiteral of keyType:AST.Type * valueType:AST.Type * entries:(Expr * Expr) list
-    | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
-    | RecordUpdate of record:Expr * updates:(string * Expr) list
+    | RecordLiteral of reference:RecordReference * fields:(AST.FieldId * Expr) list
+    | RecordUpdate of record:Expr * updates:(AST.FieldId * Expr) list
     | RecordAccess of record:Expr * field:AST.FieldId
     | Constructor of reference:ConstructorReference * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list
@@ -236,6 +236,9 @@ let tryFindConstructorId typeName name symbols =
     Map.tryFind (typeName, name) symbols.ConstructorIds
 let fieldInfo id symbols = Map.tryFind id symbols.FieldNames
 
+let tryFindFieldId typeName name symbols =
+    Map.tryFind (typeName, name) symbols.FieldIds
+
 let sameSymbolNamespace first second =
     obj.ReferenceEquals(first.NamespaceToken, second.NamespaceToken)
 
@@ -362,9 +365,9 @@ let importTopLevels
         | DictLiteral (keyType, valueType, entries) ->
             DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> mapExpr key, mapExpr value))
         | RecordLiteral (reference, fields) ->
-            RecordLiteral (reference, fields |> List.map (fun (name, value) -> name, mapExpr value))
+            RecordLiteral (reference, fields |> List.map (fun (field, value) -> mapFieldId field, mapExpr value))
         | RecordUpdate (record, fields) ->
-            RecordUpdate (mapExpr record, fields |> List.map (fun (name, value) -> name, mapExpr value))
+            RecordUpdate (mapExpr record, fields |> List.map (fun (field, value) -> mapFieldId field, mapExpr value))
         | RecordAccess (record, field) -> RecordAccess (mapExpr record, mapFieldId field)
         | Constructor (reference, fields) ->
             Constructor (
@@ -739,11 +742,18 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
             |> Result.map (fun (second', following) -> (first', second', following)))
     let convertFields fields currentSymbols =
         fields
-        |> List.fold (fun result (name, value) ->
+        |> List.fold (fun result (reference: AST.RecordFieldReference, value) ->
             result
             |> Result.bind (fun (converted, state) ->
-                convert state value
-                |> Result.map (fun (value', next) -> ((name, value') :: converted, next)))) (Ok ([], currentSymbols))
+                match reference.ResolvedTypeName, reference.ResolvedFieldIndex with
+                | Some typeName, Some fieldIndex ->
+                    let (fieldId, state) =
+                        internField typeName reference.SourceFieldName fieldIndex state
+                    convert state value
+                    |> Result.map (fun (value', next) -> ((fieldId, value') :: converted, next))
+                | _ ->
+                    conversionError location "record field has no resolved owner and declaration slot"))
+            (Ok ([], currentSymbols))
         |> Result.map (fun (converted, state) -> (List.rev converted, state))
     match expr with
     | AST.UnitLiteral -> Ok (UnitLiteral, symbols)
@@ -991,6 +1001,16 @@ let ofTypedProgram
         |> Map.fold (fun symbols lookupName (typeName, _, tag, _) ->
             let variantName = lookupName.Split('.') |> Array.last
             internConstructor typeName variantName tag symbols |> snd) initialSymbols
+    let initialSymbols =
+        topLevels
+        |> List.fold (fun symbols topLevel ->
+            match topLevel with
+            | AST.TypeDef (AST.RecordDef (typeName, _, fields)) ->
+                fields
+                |> List.indexed
+                |> List.fold (fun symbols (index, (fieldName, _)) ->
+                    internField typeName fieldName index symbols |> snd) symbols
+            | _ -> symbols) initialSymbols
     let convertTopLevel symbols topLevel =
         match topLevel with
         | AST.FunctionDef funcDef ->

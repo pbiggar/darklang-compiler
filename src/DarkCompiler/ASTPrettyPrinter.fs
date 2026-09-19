@@ -539,8 +539,8 @@ let rec private formatExpr (expr: Expr) : string =
     | RecordLiteral (reference, fields) ->
         let fieldsText =
             fields
-            |> List.map (fun (name, value) ->
-                $"{formatIdentifierSegment name} = {formatExpr value}")
+            |> List.map (fun (reference, value) ->
+                $"{formatIdentifierSegment reference.SourceFieldName} = {formatExpr value}")
             |> String.concat ", "
         let typeArgsText =
             match reference.TypeArgs with
@@ -555,8 +555,8 @@ let rec private formatExpr (expr: Expr) : string =
         let recordText = formatExpr recordExpr
         let updatesText =
             updates
-            |> List.map (fun (name, value) ->
-                $"{formatIdentifierSegment name} = {formatExpr value}")
+            |> List.map (fun (reference, value) ->
+                $"{formatIdentifierSegment reference.SourceFieldName} = {formatExpr value}")
             |> String.concat ", "
         $"{{ {recordText} with {updatesText} }}"
     | RecordAccess (recordExpr, fieldName) ->

@@ -298,9 +298,9 @@ let private materializeReachablePackageValueCatalog
                 AST.RecordLiteral (
                     AST.unresolvedRecordReference "Darklang.LanguageTools.ProgramTypes.PackageLocation" [],
                     [
-                        ("owner", AST.StringLiteral location.Owner)
-                        ("modules", location.Modules |> List.map AST.StringLiteral |> AST.ListLiteral)
-                        ("name", AST.StringLiteral location.Name)
+                        (AST.unresolvedRecordFieldReference "owner", AST.StringLiteral location.Owner)
+                        (AST.unresolvedRecordFieldReference "modules", location.Modules |> List.map AST.StringLiteral |> AST.ListLiteral)
+                        (AST.unresolvedRecordFieldReference "name", AST.StringLiteral location.Name)
                     ]
                 )
             let locationCases =

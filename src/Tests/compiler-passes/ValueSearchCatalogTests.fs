@@ -28,8 +28,8 @@ let private errorValue (errno: int) (message: string) =
     AST.RecordLiteral (
         AST.unresolvedRecordReference "Darklang.Stdlib.Cli.Posix.Error" [],
         [
-            ("errno", AST.BigIntLiteral (BigInteger errno))
-            ("message", AST.StringLiteral message)
+            (AST.unresolvedRecordFieldReference "errno", AST.BigIntLiteral (BigInteger errno))
+            (AST.unresolvedRecordFieldReference "message", AST.StringLiteral message)
         ]
     )
 

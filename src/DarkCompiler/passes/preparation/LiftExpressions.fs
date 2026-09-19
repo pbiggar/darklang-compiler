@@ -488,8 +488,8 @@ and liftLambdasInList (exprs: CheckedAST.Expr list) (state: LiftState) : Result<
     loop exprs state []
 
 /// Helper to lift lambdas in record fields
-and liftLambdasInFields (fields: (string * CheckedAST.Expr) list) (state: LiftState) : Result<(string * CheckedAST.Expr) list * LiftState, string> =
-    let rec loop (remaining: (string * CheckedAST.Expr) list) (state: LiftState) (acc: (string * CheckedAST.Expr) list) =
+and liftLambdasInFields (fields: (AST.FieldId * CheckedAST.Expr) list) (state: LiftState) : Result<(AST.FieldId * CheckedAST.Expr) list * LiftState, string> =
+    let rec loop (remaining: (AST.FieldId * CheckedAST.Expr) list) (state: LiftState) (acc: (AST.FieldId * CheckedAST.Expr) list) =
         match remaining with
         | [] -> Ok (List.rev acc, state)
         | (name, e) :: rest ->

@@ -176,6 +176,11 @@ let private constructorPattern (env: Env) owner caseName fields =
     | Some id -> PConstructor (id, fields)
     | None -> Crash.crash $"JSON constructor pattern was not interned: {owner}.{caseName}"
 
+let private fieldId (env: Env) owner fieldName =
+    match tryFindFieldId owner fieldName env.Symbols with
+    | Some id -> id
+    | None -> Crash.crash $"Generated JSON record field was not interned: {owner}.{fieldName}"
+
 let private tuplePayload values = TupleLiteral values |> Some
 let private ok env value = constructor env "Darklang.Stdlib.Result.Result" "Ok" (Some value)
 let private error env value = constructor env "Darklang.Stdlib.Result.Result" "Error" (Some value)
@@ -217,7 +222,8 @@ let rec private typeReference env typ =
                     TypeName = "Darklang.LanguageTools.RuntimeTypes.NameResolution"
                     TypeArgs = [fqNameType]
                 },
-                ["originalName", originalName; "resolved", resolved])
+                [ fieldId env "Darklang.LanguageTools.RuntimeTypes.NameResolution" "originalName", originalName
+                  fieldId env "Darklang.LanguageTools.RuntimeTypes.NameResolution" "resolved", resolved ])
         constructor env owner "TCustomType" (tuplePayload [resolution; ListLiteral (List.map (typeReference env) typeArgs)])
     match typ with
     | TUnit -> nullary "TUnit"
@@ -1069,7 +1075,8 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                                 (constructor env "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some (StringLiteral fieldName)))
                         decodeCall env concrete source (Local fieldRawId) fieldPath current
                         |> Result.bind (fun (decoded, next) ->
-                            build rest next ((fieldName, Local fieldValueId) :: decodedFields)
+                            let id = fieldId env typeName fieldName
+                            build rest next ((id, Local fieldValueId) :: decodedFields)
                             |> Result.map (fun (tail, finalState) ->
                                 let missing = constructor env "Darklang.Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; path]) |> error env
                                 let duplicate = constructor env "Darklang.Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; path]) |> error env
@@ -1355,11 +1362,18 @@ let rewriteProgramWithSession
         |> fun (serializers, parsers) -> (List.distinct serializers, List.distinct parsers)
 
     let hasJsonCalls = not (List.isEmpty serializerTypes && List.isEmpty parserTypes)
+    let planningSymbols =
+        env.IndexedTypeReg
+        |> Map.fold (fun current typeName recordInfo ->
+            recordInfo.Fields
+            |> List.indexed
+            |> List.fold (fun current (index, (fieldName, _)) ->
+                internField typeName fieldName index current |> snd) current) symbols
     let planningEnv = {
         Records = env.IndexedTypeReg
         Sums = if hasJsonCalls then env.IndexedSumTypeReg else Map.empty
         Aliases = env.AliasReg
-        Symbols = symbols
+        Symbols = planningSymbols
     }
 
     let mergeArtifact (state: State) (functions: FunctionDef list) : Result<State, string> =
@@ -1408,7 +1422,7 @@ let rewriteProgramWithSession
                 |> List.fold (fun result typ ->
                     result
                     |> Result.bind (fun state -> ensureSerializer planningEnv typ state |> Result.map snd))
-                    (Ok { Functions = Map.empty; Symbols = symbols })
+                    (Ok { Functions = Map.empty; Symbols = planningSymbols })
             parserTypes
             |> List.fold (fun result typ ->
                 result
@@ -1418,7 +1432,7 @@ let rewriteProgramWithSession
                 serializerTypes
                 |> List.fold (fun result typ ->
                     result |> Result.bind (planCached "serialize" ensureSerializer typ))
-                    (Ok { Functions = Map.empty; Symbols = symbols })
+                    (Ok { Functions = Map.empty; Symbols = planningSymbols })
             parserTypes
             |> List.fold (fun result typ ->
                 result |> Result.bind (planCached "parse" ensureDecoder typ)) serializersPlanned

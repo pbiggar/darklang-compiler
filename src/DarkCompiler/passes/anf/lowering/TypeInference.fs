@@ -59,17 +59,20 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                     |> List.map (fun (fieldName, fieldType) ->
                         (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
 
-                let fieldMap = Map.ofList fields
+                let fieldMap =
+                    fields
+                    |> List.map (fun (field, value) -> AST.fieldIndex field, value)
+                    |> Map.ofList
                 let typeParams = recordInfo.TypeParams
 
                 let rec inferBindings
-                    (remainingFields: (string * AST.Type) list)
+                    (remainingFields: (int * AST.Type) list)
                     (accBindings: (string * AST.Type) list)
                     : Result<(string * AST.Type) list, string> =
                     match remainingFields with
                     | [] -> Ok accBindings
-                    | (fieldName, expectedFieldType) :: rest ->
-                        match Map.tryFind fieldName fieldMap with
+                    | (fieldIndex, expectedFieldType) :: rest ->
+                        match Map.tryFind fieldIndex fieldMap with
                         | None ->
                             // Type checker should have enforced completeness already.
                             inferBindings rest accBindings
@@ -82,7 +85,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                                 |> Result.bind (fun newBindings ->
                                     inferBindings rest (accBindings @ newBindings)))
 
-                inferBindings expectedFields []
+                inferBindings (expectedFields |> List.map snd |> List.indexed) []
                 |> Result.bind consolidateTypeBindings
                 |> Result.map (fun subst ->
                     let typeArgs =

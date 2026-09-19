@@ -1187,8 +1187,8 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                 | Some recordInfo ->
                     let normalizedUpdates =
                         updates
-                        |> List.map (fun (name, value) ->
-                            (if name = "___" then "" else name), value)
+                        |> List.map (fun (reference, value) ->
+                            (if reference.SourceFieldName = "___" then "" else reference.SourceFieldName), value)
 
                     match normalizedUpdates |> List.tryFind (fst >> (=) "") with
                     | Some _ -> Error (GenericError "Empty key in record update")
@@ -1217,7 +1217,14 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                                         checkExpr updateExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some expectedFieldType)
                                         |> Result.bind (fun (actualType, updateExpr') ->
                                             if typesCompatibleWithAliases aliasReg expectedFieldType actualType then
-                                                checkUpdates rest ((fname, updateExpr') :: accUpdates)
+                                                let fieldIndex =
+                                                    recordInfo.Fields
+                                                    |> List.tryFindIndex (fst >> (=) fname)
+                                                    |> Option.defaultWith (fun () ->
+                                                        Crash.crash $"Validated record field '{fname}' has no declaration slot")
+                                                let reference =
+                                                    resolvedRecordFieldReference typeName fname fieldIndex
+                                                checkUpdates rest ((reference, updateExpr') :: accUpdates)
                                             else
                                                 Error (TypeMismatch (expectedFieldType, actualType, $"field {fname} in record update")))
                                     | None ->
