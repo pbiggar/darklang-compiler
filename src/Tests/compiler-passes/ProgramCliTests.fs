@@ -77,16 +77,18 @@ let testBatchCompileParsesIndependentOutputs () : TestResult =
                "second.out" |]
     with
     | Ok (Program.BatchCommand options) ->
-        let items = fst options.Items :: snd options.Items
-        match items with
-        | [ first; second ] when
-            options.Verbosity = Program.Quiet
-            && first.SourceFile = "first.dark"
-            && first.OutputFile = "first.out"
-            && second.SourceFile = "second.dark"
-            && second.OutputFile = "second.out" ->
-            Ok ()
-        | _ -> Error $"Unexpected batch compile items: {items}"
+        match options.Input with
+        | Program.CommandLineItems items ->
+            match fst items :: snd items with
+            | [ first; second ] when
+                options.Verbosity = Program.Quiet
+                && first.SourceFile = "first.dark"
+                && first.OutputFile = "first.out"
+                && second.SourceFile = "second.dark"
+                && second.OutputFile = "second.out" ->
+                Ok ()
+            | items -> Error $"Unexpected batch compile items: {items}"
+        | Program.ManifestFile path -> Error $"Expected command-line items, got manifest {path}"
     | Ok command -> Error $"Expected batch command, got: {command}"
     | Error error -> Error $"Expected batch command to parse, got: {error}"
 
@@ -95,6 +97,23 @@ let testBatchCompileRejectsMissingOutput () : TestResult =
     | Error error when error.Contains "output path" -> Ok ()
     | Error error -> Error $"Expected missing-output guidance, got: {error}"
     | Ok _ -> Error "Expected an unmatched batch source to be rejected"
+
+let testBatchManifestKeepGoingParses () : TestResult =
+    match
+        Program.parseCommand
+            [| "--batch"
+               "--manifest"
+               "compile-items.json"
+               "--keep-going"
+               "--report"
+               "compile-report.jsonl" |]
+    with
+    | Ok (Program.BatchCommand options) ->
+        match options.Input, options.ReportPath with
+        | Program.ManifestFile "compile-items.json", Some "compile-report.jsonl" when options.KeepGoing -> Ok ()
+        | _ -> Error $"Unexpected manifest batch options: {options}"
+    | Ok command -> Error $"Expected batch command, got: {command}"
+    | Error error -> Error $"Expected manifest batch compilation to parse, got: {error}"
 
 let testBatchCompileAllowsCompilerOwnedSources () : TestResult =
     match
@@ -119,5 +138,6 @@ let tests = [
     ("reject empty IR dump values", testEmptyIRDumpValuesRejected)
     ("parse independent batch compile outputs", testBatchCompileParsesIndependentOutputs)
     ("reject batch source without output", testBatchCompileRejectsMissingOutput)
+    ("parse keep-going manifest batch", testBatchManifestKeepGoingParses)
     ("allow compiler-owned sources in batch mode", testBatchCompileAllowsCompilerOwnedSources)
 ]

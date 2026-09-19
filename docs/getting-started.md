@@ -82,6 +82,12 @@ Batch mode accepts one or more `SOURCE OUTPUT` pairs after `--`. Every pair is
 compiled and linked independently, but the process reuses one prepared standard
 library across all pairs.
 
+Large or labeled batches can use `--manifest FILE`, where `FILE` is a JSON
+array of `{ "kind", "name", "source", "output" }` objects. Add
+`--keep-going` to attempt later items after a failure and `--report FILE` to
+write one JSON result per line. The process prepares the standard library once
+for the complete batch.
+
 ## Dump intermediate representations
 
 ```bash
