@@ -88,7 +88,13 @@ elif command == "inspect":
             {"id": 206, "message": "Deploying train", "detail": "", "state": "active"},
             {"id": 207, "message": "Deployed train", "detail": "", "state": "success"},
         ]
-        merge_event = {"id": 195 + job_id, "message": f"Merged task/progress-{job_id}", "detail": "", "state": "success"}
+        merge_event = {
+            "id": 195 + job_id,
+            "job_id": job_id,
+            "message": f"Merged task/progress-{job_id}",
+            "detail": "",
+            "state": "success",
+        }
         limits = (1, 3, 4, 5)
         events = [shared_events[0], merge_event, *shared_events[1:limits[stage_index]]]
         print(json.dumps({"events": events, "job": {"id": job_id}}, indent=2))
@@ -166,8 +172,9 @@ raise SystemExit(1)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertIn("Assembling train with 2 job(s)", completed.stderr)
             self.assertEqual(completed.stderr.count("Assembling train with 2 job(s)"), 1)
-            self.assertIn("Merged task/progress-7", completed.stderr)
-            self.assertIn("Merged task/progress-8", completed.stderr)
+            self.assertIn("Job #7: Merged task/progress-7", completed.stderr)
+            self.assertIn("Job #8: Merged task/progress-8", completed.stderr)
+            self.assertNotIn("Job #7: Assembling train", completed.stderr)
             self.assertIn("Running gate 1/1: tests — ./run-tests --ai", completed.stderr)
             self.assertIn("Passed gate 1/1: tests — ./run-tests --ai", completed.stderr)
             self.assertIn("Deploying train", completed.stderr)
@@ -197,13 +204,15 @@ raise SystemExit(1)
             self.assertEqual(completed.returncode, 1)
             self.assertEqual(completed.stdout, "")
             self.assertIn("Integrator started", completed.stderr)
-            self.assertIn("Repairing job #4", completed.stderr)
-            self.assertIn("Starting Codex repair", completed.stderr)
-            self.assertIn("Codex repair failed for job #4 (merge_conflict)", completed.stderr)
-            self.assertIn("Codex summary: Could not resolve safely.", completed.stderr)
-            self.assertIn("Final message:", completed.stderr)
-            self.assertIn("Full execution log:", completed.stderr)
-            self.assertIn("Daemon log:", completed.stderr)
+            self.assertIn("Job #4: Repairing task/test after merge conflict", completed.stderr)
+            self.assertIn("Job #4: Starting Codex repair", completed.stderr)
+            self.assertIn("Job #4: Codex repair failed (merge_conflict)", completed.stderr)
+            self.assertIn(
+                "Job #4: Codex summary: Could not resolve safely.", completed.stderr
+            )
+            self.assertIn("Job #4: Final message:", completed.stderr)
+            self.assertIn("Job #4: Full execution log:", completed.stderr)
+            self.assertIn("Job #4: Daemon log:", completed.stderr)
             self.assertNotIn("codex noise", completed.stderr)
             self.assertNotIn("daemon noise", completed.stderr)
             codex_logs = list(attempts.glob("4-*.codex.log"))
