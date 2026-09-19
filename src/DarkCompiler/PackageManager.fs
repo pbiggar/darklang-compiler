@@ -563,7 +563,16 @@ let private renderEntity (entity: LocatedEntity) : Result<ResolvedSource, string
                     | Some parameters, Some typeParams, Some returnType, Some body ->
                         let renderParameter parameter =
                             match tryField "name" parameter, tryField "typ" parameter with
-                            | Some name, Some typ -> stringValue name |> Result.bind (fun n -> renderType typ |> Result.map (fun t -> n, $"({n}: {t})"))
+                            | Some name, Some typ ->
+                                stringValue name
+                                |> Result.bind (fun rawName ->
+                                    let sourceName =
+                                        rawName
+                                        |> NameSyntax.identifierFromText
+                                        |> NameSyntax.formatIdentifier
+                                    renderType typ
+                                    |> Result.map (fun renderedType ->
+                                        sourceName, $"({sourceName}: {renderedType})"))
                             | _ -> Error "Invalid package function parameter"
                         ResultList.mapResults renderParameter (arrayItems parameters)
                         |> Result.bind (fun renderedParameters ->
@@ -708,7 +717,7 @@ let private sourceCandidates (AST.Program topLevels) : string list =
         | AST.TypeDef (AST.SumTypeDef (_, _, variants)) ->
             variants |> List.collect (fun variant -> List.collect typeNames variant.Fields)
         | AST.TypeDef (AST.TypeAlias (_, _, target)) -> typeNames target
-        | AST.Expression expression -> expressionNames expression)
+        | AST.Expression (_, expression) -> expressionNames expression)
     |> List.filter (fun name -> name.Contains '.')
     |> List.collect (fun name ->
         let parts = name.Split('.') |> Array.toList
