@@ -537,12 +537,15 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                 | None ->
                     // Check if it's a monomorphized intrinsic (e.g., __raw_get_i64)
                     // These are raw memory operations that work with 8-byte values
+                    let functionId = funcName
+                    let missingFunctionIdentity = Option.isNone displayName
                     let funcName =
                         displayName
-                        |> Option.defaultWith (fun () ->
-                            Crash.crash
-                                $"Function identity {AST.functionIdValue funcName} is absent from lowering registries")
-                    if funcName.StartsWith("__raw_get_") then
+                        |> Option.defaultValue
+                            $"__missing_function_identity_{AST.functionIdValue funcName}"
+                    if missingFunctionIdentity then
+                        Error $"Function identity {AST.functionIdValue functionId} is absent from lowering registries"
+                    elif funcName.StartsWith("__raw_get_") then
                         // Preserve the monomorphized return type; defaulting to Int64 can
                         // incorrectly mark pattern-match branches as impossible.
                         let suffix = funcName.Substring("__raw_get_".Length)

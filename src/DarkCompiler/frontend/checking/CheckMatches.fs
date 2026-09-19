@@ -824,6 +824,20 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
         // Returns (resultType, transformedCases)
         let rec resolvePatternConstructors (patternType: Type) (pattern: Pattern) : Pattern =
             let recurse = resolvePatternConstructors
+            let resolveFields typeParams fieldTypes fields =
+                let typeArgs =
+                    match resolveType aliasReg patternType with
+                    | TSum (_, args) -> args
+                    | _ -> []
+                let subst =
+                    if List.length typeParams = List.length typeArgs then
+                        List.zip typeParams typeArgs |> Map.ofList
+                    else Map.empty
+                let concreteFieldTypes = fieldTypes |> List.map (applySubst subst)
+                if List.length fields = List.length concreteFieldTypes then
+                    List.map2 recurse concreteFieldTypes fields
+                else
+                    List.map (recurse TRuntimeError) fields
             match pattern with
             | PConstructor (variantName, fields) ->
                 let resolved =
@@ -834,23 +848,28 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     | _ -> Map.tryFind variantName variantLookup
                 match resolved with
                 | Some (typeName, typeParams, tag, fieldTypes) ->
-                    let typeArgs =
-                        match resolveType aliasReg patternType with
-                        | TSum (_, args) -> args
-                        | _ -> []
-                    let subst =
-                        if List.length typeParams = List.length typeArgs then
-                            List.zip typeParams typeArgs |> Map.ofList
-                        else Map.empty
-                    let concreteFieldTypes = fieldTypes |> List.map (applySubst subst)
-                    let fields' =
-                        if List.length fields = List.length concreteFieldTypes then
-                            List.map2 recurse concreteFieldTypes fields
-                        else
-                            List.map (recurse TRuntimeError) fields
-                    PResolvedConstructor (typeName, variantName, tag, fields')
+                    let prefix = $"{typeName}."
+                    let canonicalVariantName =
+                        if variantName.StartsWith(prefix) then
+                            variantName.Substring(prefix.Length)
+                        else variantName
+                    PResolvedConstructor (
+                        typeName,
+                        canonicalVariantName,
+                        tag,
+                        resolveFields typeParams fieldTypes fields
+                    )
                 | None -> Crash.crash $"Validated constructor pattern '{variantName}' was not resolved"
-            | PResolvedConstructor _ -> pattern
+            | PResolvedConstructor (typeName, variantName, tag, fields) ->
+                match Map.tryFind $"{typeName}.{variantName}" variantLookup with
+                | Some (_, typeParams, _, fieldTypes) ->
+                    PResolvedConstructor (
+                        typeName,
+                        variantName,
+                        tag,
+                        resolveFields typeParams fieldTypes fields
+                    )
+                | None -> Crash.crash $"Resolved constructor pattern '{typeName}.{variantName}' was not found"
             | PTuple patterns ->
                 match resolveType aliasReg patternType with
                 | TTuple types when List.length types = List.length patterns ->

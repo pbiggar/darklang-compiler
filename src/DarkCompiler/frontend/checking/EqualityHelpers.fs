@@ -189,7 +189,7 @@ let rec internal buildEqHelperExpr
                                     Map.empty
                             variant.Fields
                             |> List.map (applySubst subst >> resolveType aliasReg)
-                        ($"{sumTypeName}.{variant.Name}", variant.Tag, concreteFields)))
+                        (variant.Name, variant.Tag, concreteFields)))
                 |> Option.defaultValue []
 
             let variantCases =
@@ -197,8 +197,10 @@ let rec internal buildEqHelperExpr
                 |> List.map (fun (variantName, tag, fieldTypes) ->
                     match fieldTypes with
                     | [] ->
+                        let constructor fields =
+                            PResolvedConstructor (sumTypeName, variantName, tag, fields)
                         let pairPattern =
-                            PTuple [PConstructor (variantName, []); PConstructor (variantName, [])]
+                            PTuple [constructor []; constructor []]
                         makeSimpleMatchCase pairPattern (BoolLiteral true)
                     | _ ->
                         let leftFields = fieldTypes |> List.mapi (fun index _ -> $"__dark_eq_helper_left_field_{tag}_{index}")
@@ -216,10 +218,12 @@ let rec internal buildEqHelperExpr
                                     (Var leftField)
                                     (Var rightField))
                             |> chainAndExpr
+                        let constructor fields =
+                            PResolvedConstructor (sumTypeName, variantName, tag, fields)
                         let pairPattern =
                             PTuple [
-                                PConstructor (variantName, List.map PVar leftFields)
-                                PConstructor (variantName, List.map PVar rightFields)
+                                constructor (List.map PVar leftFields)
+                                constructor (List.map PVar rightFields)
                             ]
                         makeSimpleMatchCase pairPattern fieldEqExpr)
 

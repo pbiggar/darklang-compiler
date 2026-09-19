@@ -18,9 +18,11 @@ let private binding = function
     | "b" -> AST.bindingId 1
     | "c" -> AST.bindingId 2
     | "aAlias" -> AST.bindingId 3
+    | "scalar" -> AST.bindingId 4
+    | "escape" -> AST.bindingId 5
     | name -> Crash.crash $"Unsupported ownership fixture binding {name}"
 let private bindingName id =
-    ["a"; "b"; "c"; "aAlias"]
+    ["a"; "b"; "c"; "aAlias"; "scalar"; "escape"]
     |> List.tryFind (fun name -> binding name = id)
     |> Option.defaultWith (fun () -> Crash.crash "Unsupported ownership fixture binding identity")
 let private value name : HIR.Value = { Id = identity name; Type = AST.TInt64 }

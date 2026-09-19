@@ -740,8 +740,28 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
 /// Replace TypeApp with Call across a program using a registry (drops generic defs)
 let replaceTypeAppsInProgramWithRegistry (specRegistry: SpecRegistry) (program: CheckedAST.Program) : Result<CheckedAST.Program, string> =
     let program = materializeFunctionComparisons program
-    let symbols = CheckedAST.programSymbols program
+    let initialSymbols = CheckedAST.programSymbols program
     let topLevels = CheckedAST.programTopLevels program
+    let replacementNames =
+        topLevels
+        |> List.map (function
+            | CheckedAST.FunctionDef functionDef -> collectTypeAppsFromFunc initialSymbols functionDef
+            | CheckedAST.Expression expression -> collectTypeApps initialSymbols expression
+            | CheckedAST.ValueDef valueDef -> collectTypeApps initialSymbols valueDef.Body
+            | CheckedAST.TypeDef _ -> Set.empty)
+        |> Set.unionMany
+        |> Set.fold (fun names specialization ->
+            match Map.tryFind specialization specRegistry with
+            | Some name -> Set.add name names
+            | None ->
+                let (functionName, typeArgs) = specialization
+                if isIntrinsicTypeAppName functionName
+                   || isGenericKeyIntrinsicName functionName then
+                    Set.add (specName functionName typeArgs) names
+                else names) Set.empty
+    let symbols =
+        replacementNames
+        |> Set.fold (fun symbols name -> CheckedAST.internFunction name symbols |> snd) initialSymbols
     let rec loop (remaining: CheckedAST.TopLevel list) (acc: CheckedAST.TopLevel list) : Result<CheckedAST.Program, string> =
         match remaining with
         | [] -> Ok (CheckedAST.Program (symbols, List.rev acc))
