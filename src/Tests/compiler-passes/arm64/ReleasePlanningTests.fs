@@ -279,7 +279,7 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
           CodegenFacts = None }
     let prepared =
         LIR.Program (
-            [ makeFunction "User.owns"; makeFunction "Stdlib.List.borrows" ],
+            [ makeFunction "User.owns"; makeFunction "Darklang.Stdlib.List.borrows" ],
             variants,
             Map.empty)
         |> ARM64PrepareFunctions.prepareARM64Program

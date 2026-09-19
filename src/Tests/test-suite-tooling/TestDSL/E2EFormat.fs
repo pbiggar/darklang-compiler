@@ -215,8 +215,10 @@ let private tryParseBuiltinErrorExpectation (exp: string) : Result<string option
     let helperPrefixes = [
         "Builtin.testDerrorMessage"
         "Stdlib.Builtin.testDerrorMessage"
+        "Darklang.Stdlib.Builtin.testDerrorMessage"
         "Builtin.testDerrorSqlMessage"
         "Stdlib.Builtin.testDerrorSqlMessage"
+        "Darklang.Stdlib.Builtin.testDerrorSqlMessage"
     ]
     let matchingPrefix =
         helperPrefixes

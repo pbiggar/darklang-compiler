@@ -1255,9 +1255,9 @@ let testTaggedListRefCountDecClosurePayloadInStdlibFunction () : Result<unit, st
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let program =
         runInNamedFunction
-            "Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64"
+            "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64"
             [
-                LIR.ClosureAlloc (LIR.Physical LIR.X2, "Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64", [])
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
                 LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 2L)

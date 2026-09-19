@@ -19,7 +19,7 @@ let private testStdlibANFStrengthReduction
     (stdlib: CompilationContexts.StdlibResult)
     ()
     : TestResult =
-    match Map.tryFind "Stdlib.Int64.__powerLoop" stdlib.StdlibANFFunctions with
+    match Map.tryFind "Darklang.Stdlib.Int64.__powerLoop" stdlib.StdlibANFFunctions with
     | None -> Error "Missing Stdlib.Int64.__powerLoop from prebuilt stdlib ANF"
     | Some powerLoop ->
         if containsBinOp Mod powerLoop.Body then

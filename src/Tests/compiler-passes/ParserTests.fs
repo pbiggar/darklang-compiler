@@ -43,7 +43,7 @@ let private testSubtractionFollowsParenthesizedCall () : TestResult =
     match Parser.parseString true source with
     | Ok (Program [FunctionDef definition]) ->
         match definition.Body with
-        | BinOp (Sub, Call ("Stdlib.String.__byteLength", args), Int64Literal 1L)
+        | BinOp (Sub, Call ("Darklang.Stdlib.String.__byteLength", args), Int64Literal 1L)
             when NonEmptyList.toList args = [Var "value"] -> Ok ()
         | body -> Error $"Expected subtraction from a one-argument call, got {body}"
     | Ok program -> Error $"Expected one function declaration, got {program}"
@@ -55,7 +55,7 @@ let private testNegativeLiteralRemainsAFunctionArgument () : TestResult =
     match Parser.parseString true source with
     | Ok (Program [FunctionDef definition]) ->
         match definition.Body with
-        | Call ("Stdlib.String.__byteLength", args)
+        | Call ("Darklang.Stdlib.String.__byteLength", args)
             when NonEmptyList.toList args = [Var "value"; Int64Literal -1L] -> Ok ()
         | body -> Error $"Expected a negative second argument, got {body}"
     | Ok program -> Error $"Expected one function declaration, got {program}"

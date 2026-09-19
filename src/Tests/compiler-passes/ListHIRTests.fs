@@ -5,10 +5,10 @@ module ListHIRTests
 let private call name args = CheckedAST.Call (name, AST.NonEmptyList.fromList args)
 let private bind name value body = CheckedAST.Let (CheckedAST.LPVariable name, value, body)
 let private values count = CheckedAST.ListLiteral ([1 .. count] |> List.map (int64 >> CheckedAST.Int64Literal))
-let private map input = call "Stdlib.List.map_i64_i64" [input; CheckedAST.Closure ("mapCallback", [])]
-let private reverse input = call "Stdlib.List.reverse_i64" [input]
-let private fold input = call "Stdlib.List.fold_i64_i64" [input; CheckedAST.Int64Literal 0L; CheckedAST.Closure ("foldCallback", [])]
-let private repeat = call "Stdlib.List.repeatUnsafe_i64" [CheckedAST.BigIntLiteral 3I; CheckedAST.Int64Literal 7L]
+let private map input = call "Darklang.Stdlib.List.map_i64_i64" [input; CheckedAST.Closure ("mapCallback", [])]
+let private reverse input = call "Darklang.Stdlib.List.reverse_i64" [input]
+let private fold input = call "Darklang.Stdlib.List.fold_i64_i64" [input; CheckedAST.Int64Literal 0L; CheckedAST.Closure ("foldCallback", [])]
+let private repeat = call "Darklang.Stdlib.List.repeatUnsafe_i64" [CheckedAST.BigIntLiteral 3I; CheckedAST.Int64Literal 7L]
 let private bytes constant : ListRegion.AllocationBytes = { ConstantBytes = constant; RuntimeBuffers = Map.empty }
 let private runtimeBytes constant terms : ListRegion.AllocationBytes = { ConstantBytes = constant; RuntimeBuffers = Map.ofList terms }
 
@@ -16,9 +16,9 @@ let private functions : TypeRegistries.FunctionRegistry =
     Map.ofList [
         "mapCallback", AST.TFunction ([AST.TRawPtr; AST.TInt64], AST.TInt64)
         "foldCallback", AST.TFunction ([AST.TRawPtr; AST.TInt64; AST.TInt64], AST.TInt64)
-        "Stdlib.List.map_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64)], AST.TList AST.TInt64)
-        "Stdlib.List.reverse_i64", AST.TFunction ([AST.TList AST.TInt64], AST.TList AST.TInt64)
-        "Stdlib.List.fold_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TInt64; AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)], AST.TInt64)
+        "Darklang.Stdlib.List.map_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64)], AST.TList AST.TInt64)
+        "Darklang.Stdlib.List.reverse_i64", AST.TFunction ([AST.TList AST.TInt64], AST.TList AST.TInt64)
+        "Darklang.Stdlib.List.fold_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TInt64; AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)], AST.TInt64)
     ]
 
 let private extractWithParameters parameterTypes expression =
@@ -157,7 +157,7 @@ let tests = [
         | None -> Error "Expected a region with sixty-four scalar joins"
         | Some region -> region |> SelectListStorage.selectStorage |> ElaborateListOwnership.elaborateOwnership |> VerifyListOwnership.verify)
     "List HIR rejects list-valued branch joins", rejects (bind "xs" (values 3) (bind "selected" (choice (reverse (CheckedAST.Var "xs")) (CheckedAST.Var "xs")) (fold (CheckedAST.Var "selected"))))
-    "List HIR rejects branch callbacks hiding aliases", rejects (bind "xs" (values 3) (choice (fold (call "Stdlib.List.map_i64_i64" [CheckedAST.Var "xs"; CheckedAST.Closure ("mapCallback", [CheckedAST.Var "xs"])])) (CheckedAST.Int64Literal 7L)))
+    "List HIR rejects branch callbacks hiding aliases", rejects (bind "xs" (values 3) (choice (fold (call "Darklang.Stdlib.List.map_i64_i64" [CheckedAST.Var "xs"; CheckedAST.Closure ("mapCallback", [CheckedAST.Var "xs"])])) (CheckedAST.Int64Literal 7L)))
     "List HIR consumes independently on mutually exclusive paths", checkBudget branchUses (ListRegion.Conditional (allocated, ListRegion.Complete { zero with ReusedTransforms = 1; Releases = 1 }, ListRegion.Complete { zero with ReusedTransforms = 1; Releases = 1 }, ListRegion.Complete zero))
     "List HIR preserves a source needed after the join", checkBudget branchJoin (ListRegion.Conditional (allocated, ListRegion.Complete { allocated with Copies = 1; Releases = 1 }, ListRegion.Complete zero, ListRegion.Complete { zero with Releases = 1 }))
     "List HIR releases unused inputs on the other edge", checkBudget (bind "xs" (values 3) (choice (fold (CheckedAST.Var "xs")) (CheckedAST.Int64Literal 7L))) (ListRegion.Conditional (allocated, ListRegion.Complete { zero with Releases = 1 }, ListRegion.Complete { zero with Releases = 1 }, ListRegion.Complete zero))
@@ -186,7 +186,7 @@ let tests = [
         | Some _ -> Error "A scalar wrapper admitted a borrowed list parameter")
     "List HIR declares primitive effects and alias provenance", testPrimitiveContracts
     "List HIR rejects managed elements", rejects (bind "xs" (CheckedAST.ListLiteral [CheckedAST.StringLiteral "a"]) (CheckedAST.Int64Literal 0L))
-    "List HIR rejects callbacks capturing region lists", rejects (bind "xs" (values 3) (fold (call "Stdlib.List.map_i64_i64" [CheckedAST.Var "xs"; CheckedAST.Closure ("mapCallback", [CheckedAST.Var "xs"])])))
+    "List HIR rejects callbacks capturing region lists", rejects (bind "xs" (values 3) (fold (call "Darklang.Stdlib.List.map_i64_i64" [CheckedAST.Var "xs"; CheckedAST.Closure ("mapCallback", [CheckedAST.Var "xs"])])))
     "List HIR verifier rejects duplicate drop", rejectsOwnership [construct [root; root]]
     "List HIR verifier rejects leaked roots", rejectsOwnership [construct []]
     "List HIR verifier rejects reused identities", rejectsOwnership [construct [root]; construct [root]]

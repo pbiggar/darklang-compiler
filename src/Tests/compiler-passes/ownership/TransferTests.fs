@@ -14,7 +14,7 @@ let testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator () : TestResult 
     let sourceListType = AST.TList AST.TInt64
     let mappedListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
     let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
-    let helperName = "Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
+    let helperName = "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
         Map.ofList [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
@@ -49,7 +49,7 @@ let testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator () : TestResult 
     let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
 
     if hasRefCountIncForTemp accParam transformed.Body then
-        Error "Stdlib.List.__mapHelper should transfer its owned accumulator return without retaining it"
+        Error "Darklang.Stdlib.List.__mapHelper should transfer its owned accumulator return without retaining it"
     else
         Ok ()
 
@@ -57,9 +57,9 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
     let sourceListType = AST.TList AST.TInt64
     let mappedListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
     let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
-    let helperName = "Stdlib.List.__mapHelper"
-    let specializedHelperName = "Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
-    let pushBackName = "Stdlib.List.__pushBack_fn_i64_to_i64"
+    let helperName = "Darklang.Stdlib.List.__mapHelper"
+    let specializedHelperName = "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
+    let pushBackName = "Darklang.Stdlib.List.__pushBack_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
         Map.ofList [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
@@ -115,7 +115,7 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
     if hasRefCountDecForTemp accParam transformed.Body then
         Ok ()
     else
-        Error "Stdlib.List.__mapHelper self tail-call should release the replaced owned accumulator"
+        Error "Darklang.Stdlib.List.__mapHelper self tail-call should release the replaced owned accumulator"
 
 let private testBorrowedProjectionRecursiveArgsAreRetained (recursiveCExpr: string -> Atom list -> CExpr) : TestResult =
     let state1Type = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64]
@@ -433,7 +433,7 @@ let testMapHelperClosureProducingCallRetainsBorrowedSource () : TestResult =
     let sourceListType = AST.TList AST.TInt64
     let mappedListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
     let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
-    let helperName = "Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
+    let helperName = "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
         Map.ofList [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
@@ -482,7 +482,7 @@ let testMapHelperClosureSourceToValueKeepsSourceBorrowed () : TestResult =
     let sourceListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
     let mappedListType = AST.TList AST.TInt64
     let mapperType = AST.TFunction ([AST.TFunction ([AST.TInt64], AST.TInt64)], AST.TInt64)
-    let helperName = "Stdlib.List.__mapHelper_fn_i64_to_i64_i64"
+    let helperName = "Darklang.Stdlib.List.__mapHelper_fn_i64_to_i64_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
         Map.ofList [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
@@ -517,9 +517,9 @@ let testMapHelperClosureSourceToValueKeepsSourceBorrowed () : TestResult =
     let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
 
     if hasRefCountIncForTemp sourceParam transformed.Body then
-        Error "Stdlib.List.__mapHelper over closure source to value should not retain an unreturned borrowed source parameter"
+        Error "Darklang.Stdlib.List.__mapHelper over closure source to value should not retain an unreturned borrowed source parameter"
     elif hasRefCountDecForTemp sourceParam transformed.Body then
-        Error "Stdlib.List.__mapHelper over closure source to value should not release a borrowed source parameter"
+        Error "Darklang.Stdlib.List.__mapHelper over closure source to value should not release a borrowed source parameter"
     else
         Ok ()
 
@@ -527,7 +527,7 @@ let testClosurePushBackRetainsImmediateClosureCallResult () : TestResult =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let makerType = AST.TFunction ([AST.TInt64], closureType)
     let listType = AST.TList closureType
-    let pushBackName = "Stdlib.List.__pushBack_fn_i64_to_i64"
+    let pushBackName = "Darklang.Stdlib.List.__pushBack_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
         Map.ofList [
             ("makeClosure", makerType)

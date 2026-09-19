@@ -152,7 +152,7 @@ let testInliningUnderscoreFunctionName () : TestResult =
 let testExternalInlineCandidateRemovesShiftCall () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibShiftLeft =
-        { Name = "Stdlib.Int64.shiftLeft"
+        { Name = "Darklang.Stdlib.Int64.shiftLeft"
           TypedParams = [param]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -165,7 +165,7 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
     let main =
         Let (
             TempId 2,
-            Call ("Stdlib.Int64.shiftLeft", [intAtom 41L]),
+            Call ("Darklang.Stdlib.Int64.shiftLeft", [intAtom 41L]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -173,7 +173,7 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
             ANF_Inlining.defaultConfig
             (externalCandidates [stdlibShiftLeft])
             (Program ([], main))
-    if containsCall "Stdlib.Int64.shiftLeft" inlinedMain then
+    if containsCall "Darklang.Stdlib.Int64.shiftLeft" inlinedMain then
         Error "Expected external shift wrapper to be inlined, but Call remained in main expression"
     else
         Ok ()
@@ -181,7 +181,7 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
 let testExcludedLocalFunctionRemainsCall () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let lateExternalSpecialization =
-        { Name = "Stdlib.List.pushBack__String"
+        { Name = "Darklang.Stdlib.List.pushBack__String"
           TypedParams = [param]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -211,7 +211,7 @@ let testExcludedLocalFunctionRemainsCall () : TestResult =
 let testExternalInlineCandidateRemovesFloatConversionCall () : TestResult =
     let param = { Id = TempId 0; Type = AST.TFloat64 }
     let stdlibFloatConversion =
-        { Name = "Stdlib.Float.__toInt64ForInliningTest"
+        { Name = "Darklang.Stdlib.Float.__toInt64ForInliningTest"
           TypedParams = [param]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -240,7 +240,7 @@ let testExternalInlineCandidateRemovesFloatConversionCall () : TestResult =
 let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibAllocate =
-        { Name = "Stdlib.Test.allocate"
+        { Name = "Darklang.Stdlib.Test.allocate"
           TypedParams = [param]
           ReturnType = AST.TRawPtr
           ReturnOwnership = OwnedReturn
@@ -253,7 +253,7 @@ let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
     let main =
         Let (
             TempId 2,
-            Call ("Stdlib.Test.allocate", [intAtom 41L]),
+            Call ("Darklang.Stdlib.Test.allocate", [intAtom 41L]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -261,7 +261,7 @@ let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
             ANF_Inlining.defaultConfig
             (externalCandidates [stdlibAllocate])
             (Program ([], main))
-    if containsCall "Stdlib.Test.allocate" inlinedMain then
+    if containsCall "Darklang.Stdlib.Test.allocate" inlinedMain then
         Ok ()
     else
         Error "Expected external raw allocation candidate to remain a call"
@@ -269,7 +269,7 @@ let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
 let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibAbs =
-        { Name = "Stdlib.Int64.abs"
+        { Name = "Darklang.Stdlib.Int64.abs"
           TypedParams = [param]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -286,7 +286,7 @@ let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
     let main =
         Let (
             TempId 2,
-            Call ("Stdlib.Int64.abs", [intAtom 41L]),
+            Call ("Darklang.Stdlib.Int64.abs", [intAtom 41L]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -294,7 +294,7 @@ let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
             ANF_Inlining.defaultConfig
             (externalCandidates [stdlibAbs])
             (Program ([], main))
-    if containsCall "Stdlib.Int64.abs" inlinedMain then
+    if containsCall "Darklang.Stdlib.Int64.abs" inlinedMain then
         Ok ()
     else
         Error "Expected external control-flow stdlib candidate to remain a call"
@@ -302,7 +302,7 @@ let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
 let testExternalInliningHonorsCallerBudget () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibShiftLeft =
-        { Name = "Stdlib.Int64.shiftLeft"
+        { Name = "Darklang.Stdlib.Int64.shiftLeft"
           TypedParams = [param]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -319,14 +319,14 @@ let testExternalInliningHonorsCallerBudget () : TestResult =
             calls
                 (remaining - 1)
                 (nextTid + 1)
-                (Let (TempId nextTid, Call ("Stdlib.Int64.shiftLeft", [intAtom 1L]), body))
+                (Let (TempId nextTid, Call ("Darklang.Stdlib.Int64.shiftLeft", [intAtom 1L]), body))
     let main = calls 9 2 (Return (Var (TempId 10)))
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
             ANF_Inlining.defaultConfig
             (externalCandidates [stdlibShiftLeft])
             (Program ([], main))
-    let remainingCalls = countCalls "Stdlib.Int64.shiftLeft" inlinedMain
+    let remainingCalls = countCalls "Darklang.Stdlib.Int64.shiftLeft" inlinedMain
     if remainingCalls = 9 then
         Ok ()
     else
@@ -334,7 +334,7 @@ let testExternalInliningHonorsCallerBudget () : TestResult =
 
 let testExternalConstantCandidateBypassesCallerBudget () : TestResult =
     let tagFunction =
-        { Name = "Stdlib.__FingerTree.__TAG_SINGLE"
+        { Name = "Darklang.Stdlib.__FingerTree.__TAG_SINGLE"
           TypedParams = []
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -346,14 +346,14 @@ let testExternalConstantCandidateBypassesCallerBudget () : TestResult =
             calls
                 (remaining - 1)
                 (nextTid + 1)
-                (Let (TempId nextTid, Call ("Stdlib.__FingerTree.__TAG_SINGLE", []), body))
+                (Let (TempId nextTid, Call ("Darklang.Stdlib.__FingerTree.__TAG_SINGLE", []), body))
     let main = calls 9 2 (Return (Var (TempId 10)))
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
             ANF_Inlining.defaultConfig
             (ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig [tagFunction])
             (Program ([], main))
-    if containsCall "Stdlib.__FingerTree.__TAG_SINGLE" inlinedMain then
+    if containsCall "Darklang.Stdlib.__FingerTree.__TAG_SINGLE" inlinedMain then
         Error "Expected zero-argument external constant candidate to inline even when caller exceeds external budget"
     else
         Ok ()

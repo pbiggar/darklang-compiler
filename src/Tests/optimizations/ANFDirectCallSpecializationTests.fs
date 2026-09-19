@@ -424,16 +424,16 @@ let testConstructionValuesCreateClones () : TestResult =
         checkCase
             "wideValue"
             AST.TInt128
-            (Call ("Stdlib.Int128.__fromWords", [IntLiteral (UInt64 1UL); IntLiteral (UInt64 0UL)]))
-            (Call ("Stdlib.Int128.__fromWords", [IntLiteral (UInt64 2UL); IntLiteral (UInt64 0UL)]))
+            (Call ("Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 1UL); IntLiteral (UInt64 0UL)]))
+            (Call ("Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 2UL); IntLiteral (UInt64 0UL)]))
     let uint128Result =
         Result.bind
             (fun () ->
                 checkCase
                     "unsignedWideValue"
                     AST.TUInt128
-                    (Call ("Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 3UL); IntLiteral (UInt64 0UL)]))
-                    (Call ("Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 4UL); IntLiteral (UInt64 0UL)])))
+                    (Call ("Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 3UL); IntLiteral (UInt64 0UL)]))
+                    (Call ("Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 4UL); IntLiteral (UInt64 0UL)])))
             int128Result
     let tupleResult =
         Result.bind

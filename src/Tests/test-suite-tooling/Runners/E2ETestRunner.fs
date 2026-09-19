@@ -43,7 +43,7 @@ let private buildValueComparisonExpr (lhsExpr: Expr) (rhsExpr: Expr) : Expr =
     if isFloatExpectedExpr rhsExpr then
         // For float value tests, compare with epsilon tolerance.
         let absDiff =
-            Call ("Stdlib.Float.absoluteValue", NonEmptyList.singleton (BinOp (Sub, lhsExpr, rhsExpr)))
+            Call ("Darklang.Stdlib.Float.absoluteValue", NonEmptyList.singleton (BinOp (Sub, lhsExpr, rhsExpr)))
         BinOp (Lt, absDiff, FloatLiteral valueFloatEpsilon)
     else
         BinOp (Eq, lhsExpr, rhsExpr)
