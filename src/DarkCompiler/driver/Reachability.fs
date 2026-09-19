@@ -88,6 +88,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         Map.empty
                         userOnly.NonInlineableFunctionNames
                         printedFunctions
+                        userOnly.OwnershipContracts
                         false
                         None)
                 |> Result.map (fun (userFunctions, _typeMap) ->

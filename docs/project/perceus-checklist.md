@@ -47,9 +47,14 @@ representation and safety boundaries are documented in
   which is invoked by production whole-function analysis and returns the
   materialization, iteration history, and structural cache descriptors. These
   foundation stages alone are not expected to improve runtime performance.
-- [ ] **Carry ownership through lowering.** Preserve contracts through calls,
+- [x] **Carry ownership through lowering.** Preserve contracts through calls,
   returns, branches, tail calls, ANF, and native code generation. Integrate with
-  reference counting so ownership is neither duplicated nor lost.
+  reference counting so ownership is neither duplicated nor lost. Scheduled
+  groups now lower to real ANF clones with recursive and selected calls routed
+  to their specialized symbols. Their positional contracts travel with the
+  conversion result, keep those symbols out of incompatible inlining, extend
+  the function registry, and are revalidated at the RC boundary before the
+  ordinary native ABI erases the proof metadata.
 - [ ] **Allow optimized storage across function boundaries.** Let compatible
   specialized functions accept and return compiler-selected arrays. Define
   representation compatibility explicitly, preserve the public language

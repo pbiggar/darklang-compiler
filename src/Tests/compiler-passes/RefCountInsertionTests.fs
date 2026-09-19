@@ -104,5 +104,6 @@ let tests = [
     ("pure enum binding does not get automatic dec", testPureEnumBindingDoesNotGetAutomaticDec)
     ("generic pure enum binding does not get automatic dec", testGenericPureEnumBindingDoesNotGetAutomaticDec)
     ("program RC fresh temps follow existing program temps", testProgramRcFreshTempsFollowExistingProgramTemps)
+    ("program RC rejects drifted ownership contracts", testProgramRcRejectsDriftedOwnershipContract)
     ("bare sum type refs are canonicalized for RC source types", testBareSumTypeRefsAreCanonicalizedForRcSourceTypes)
 ]

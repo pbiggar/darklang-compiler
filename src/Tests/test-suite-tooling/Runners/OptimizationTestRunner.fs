@@ -77,6 +77,7 @@ let private convertTypedProgram (typedAst: CheckedAST.Program) : Result<AST_to_A
                 |> Result.map (fun (anfExpr, _) ->
                     {
                         Program = ANF.Program (anfFuncs, anfExpr)
+                        OwnershipContracts = Map.empty
                         RecursiveMembers = registries.RecursiveMembers
                         TypeReg = registries.TypeReg
                         RecordFieldsReg = registries.RecordFieldsReg
